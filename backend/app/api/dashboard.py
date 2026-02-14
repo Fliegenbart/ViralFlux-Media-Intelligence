@@ -11,7 +11,10 @@ from app.models.database import (
     GoogleTrendsData,
     GrippeWebData,
     MLForecast,
-    WeatherData
+    WeatherData,
+    InventoryLevel,
+    LLMRecommendation,
+    SchoolHolidays
 )
 
 logger = logging.getLogger(__name__)
@@ -23,71 +26,115 @@ async def get_dashboard_overview(
     days_back: int = 30,
     db: Session = Depends(get_db)
 ):
-    """
-    Hole Dashboard-Übersicht mit allen wichtigen Metriken.
-    
-    Args:
-        days_back: Anzahl Tage zurück für historische Daten
-    """
+    """Full dashboard overview with all metrics."""
     logger.info(f"Fetching dashboard overview for last {days_back} days")
-    
     start_date = datetime.now() - timedelta(days=days_back)
-    
-    # 1. Aktuelle Viruslast (letzte verfügbare Daten)
+
+    # 1. Current viral loads
     current_viral_loads = {}
     for virus in ['Influenza A', 'Influenza B', 'SARS-CoV-2', 'RSV A']:
         latest = db.query(WastewaterAggregated).filter(
             WastewaterAggregated.virus_typ == virus
         ).order_by(WastewaterAggregated.datum.desc()).first()
-        
+
         if latest:
             current_viral_loads[virus] = {
                 "value": latest.viruslast,
                 "date": latest.datum,
                 "trend": _calculate_trend(db, virus)
             }
-    
-    # 2. Google Trends Top Keywords
+
+    # 2. Google Trends
     top_trends = db.query(
         GoogleTrendsData.keyword,
         func.avg(GoogleTrendsData.interest_score).label('avg_score')
     ).filter(
         GoogleTrendsData.datum >= start_date
-    ).group_by(
-        GoogleTrendsData.keyword
-    ).order_by(
+    ).group_by(GoogleTrendsData.keyword).order_by(
         func.avg(GoogleTrendsData.interest_score).desc()
     ).limit(5).all()
-    
-    # 3. ARE Inzidenz (aktuell)
+
+    # 3. ARE Inzidenz
     latest_are = db.query(GrippeWebData).filter(
         GrippeWebData.erkrankung_typ == 'ARE',
         GrippeWebData.bundesland.is_(None)
     ).order_by(GrippeWebData.datum.desc()).first()
-    
-    # 4. Aktuelle Prognose-Summary
+
+    # 4. Forecast summary
     forecast_summary = {}
-    for virus in ['Influenza A', 'Influenza B', 'SARS-CoV-2']:
-        forecast = db.query(MLForecast).filter(
+    for virus in ['Influenza A', 'Influenza B', 'SARS-CoV-2', 'RSV A']:
+        forecasts = db.query(MLForecast).filter(
             MLForecast.virus_typ == virus,
             MLForecast.forecast_date >= datetime.now()
         ).order_by(MLForecast.forecast_date.asc()).limit(14).all()
-        
-        if forecast:
+
+        if forecasts:
             forecast_summary[virus] = {
-                "days": len(forecast),
-                "trend": "steigend" if forecast[-1].predicted_value > forecast[0].predicted_value else "fallend",
-                "confidence": forecast[0].confidence
+                "days": len(forecasts),
+                "trend": "steigend" if forecasts[-1].predicted_value > forecasts[0].predicted_value else "fallend",
+                "confidence": forecasts[0].confidence,
+                "next_7d": round(forecasts[min(6, len(forecasts)-1)].predicted_value, 1),
+                "next_14d": round(forecasts[-1].predicted_value, 1) if len(forecasts) >= 14 else None,
+                "model_version": forecasts[0].model_version
             }
-    
-    # 5. Wetter (aktuell)
+
+    # 5. Weather
     latest_weather = db.query(WeatherData).order_by(
         WeatherData.datum.desc()
     ).limit(5).all()
-    
     avg_temp = sum(w.temperatur for w in latest_weather) / len(latest_weather) if latest_weather else 0
     avg_humidity = sum(w.luftfeuchtigkeit for w in latest_weather) / len(latest_weather) if latest_weather else 0
-    
+
+    # 6. Inventory overview
+    inventory = {}
+    subq = db.query(
+        InventoryLevel.test_typ,
+        func.max(InventoryLevel.datum).label('max_datum')
+    ).group_by(InventoryLevel.test_typ).subquery()
+
+    latest_inv = db.query(InventoryLevel).join(
+        subq,
+        (InventoryLevel.test_typ == subq.c.test_typ) &
+        (InventoryLevel.datum == subq.c.max_datum)
+    ).all()
+
+    for inv in latest_inv:
+        fill_pct = (inv.aktueller_bestand / inv.max_bestand * 100) if inv.max_bestand else 0
+        status = "critical" if fill_pct < 20 else "warning" if fill_pct < 40 else "good"
+        inventory[inv.test_typ] = {
+            "current": inv.aktueller_bestand,
+            "min": inv.min_bestand,
+            "max": inv.max_bestand,
+            "recommended": inv.empfohlener_bestand,
+            "lead_time_days": inv.lieferzeit_tage,
+            "fill_percentage": round(fill_pct, 1),
+            "status": status
+        }
+
+    # 7. Latest recommendations
+    latest_recs = db.query(LLMRecommendation).order_by(
+        LLMRecommendation.created_at.desc()
+    ).limit(4).all()
+
+    recommendations = [
+        {
+            "id": r.id,
+            "text": r.recommendation_text,
+            "action": r.suggested_action,
+            "confidence": r.confidence_score,
+            "approved": r.approved,
+            "created_at": r.created_at.isoformat()
+        }
+        for r in latest_recs
+    ]
+
+    # 8. Active holidays
+    now = datetime.now()
+    active_holidays = db.query(SchoolHolidays).filter(
+        SchoolHolidays.start_datum <= now,
+        SchoolHolidays.end_datum >= now
+    ).all()
+
     return {
         "current_viral_loads": current_viral_loads,
         "top_trends": [
@@ -103,6 +150,14 @@ async def get_dashboard_overview(
             "avg_temperature": round(avg_temp, 1),
             "avg_humidity": round(avg_humidity, 1)
         },
+        "inventory": inventory,
+        "recommendations": recommendations,
+        "active_holidays": [
+            {"bundesland": h.bundesland, "typ": h.ferien_typ}
+            for h in active_holidays
+        ],
+        "has_forecasts": len(forecast_summary) > 0,
+        "has_inventory": len(inventory) > 0,
         "timestamp": datetime.utcnow()
     }
 
@@ -111,37 +166,32 @@ async def get_dashboard_overview(
 async def get_timeseries_data(
     virus_typ: str,
     days_back: int = 90,
+    include_forecast: bool = True,
     db: Session = Depends(get_db)
 ):
-    """
-    Hole Zeitreihen-Daten für einen Virustyp.
-    
-    Args:
-        virus_typ: Virustyp (z.B. 'Influenza A')
-        days_back: Anzahl Tage zurück
-    """
+    """Time series data for a virus type with optional forecast."""
     logger.info(f"Fetching timeseries for {virus_typ}")
-    
     start_date = datetime.now() - timedelta(days=days_back)
-    
-    # Abwasser-Daten
+
     wastewater = db.query(WastewaterAggregated).filter(
         WastewaterAggregated.virus_typ == virus_typ,
         WastewaterAggregated.datum >= start_date
     ).order_by(WastewaterAggregated.datum.asc()).all()
-    
-    # ML Prognose
-    forecast = db.query(MLForecast).filter(
-        MLForecast.virus_typ == virus_typ,
-        MLForecast.forecast_date >= datetime.now()
-    ).order_by(MLForecast.forecast_date.asc()).limit(14).all()
-    
+
+    forecast = []
+    if include_forecast:
+        forecast = db.query(MLForecast).filter(
+            MLForecast.virus_typ == virus_typ,
+            MLForecast.forecast_date >= datetime.now()
+        ).order_by(MLForecast.forecast_date.asc()).limit(14).all()
+
     return {
         "virus_typ": virus_typ,
         "historical": [
             {
-                "date": w.datum,
+                "date": w.datum.isoformat(),
                 "viral_load": w.viruslast,
+                "normalized": w.viruslast_normalisiert,
                 "prediction": w.vorhersage,
                 "upper_bound": w.obere_schranke,
                 "lower_bound": w.untere_schranke
@@ -150,10 +200,10 @@ async def get_timeseries_data(
         ],
         "forecast": [
             {
-                "date": f.forecast_date,
-                "predicted_value": f.predicted_value,
-                "upper_bound": f.upper_bound,
-                "lower_bound": f.lower_bound,
+                "date": f.forecast_date.isoformat(),
+                "predicted_value": round(f.predicted_value, 1),
+                "upper_bound": round(f.upper_bound, 1) if f.upper_bound else None,
+                "lower_bound": round(f.lower_bound, 1) if f.lower_bound else None,
                 "confidence": f.confidence
             }
             for f in forecast
@@ -166,30 +216,19 @@ async def get_trends_heatmap(
     days_back: int = 30,
     db: Session = Depends(get_db)
 ):
-    """
-    Hole Google Trends Heatmap-Daten.
-    
-    Returns:
-        Matrix von Keywords x Zeitpunkte mit Scores
-    """
-    logger.info("Fetching trends heatmap data")
-    
+    """Google Trends heatmap data."""
     start_date = datetime.now() - timedelta(days=days_back)
-    
     trends = db.query(GoogleTrendsData).filter(
         GoogleTrendsData.datum >= start_date
-    ).order_by(
-        GoogleTrendsData.datum.asc()
-    ).all()
-    
-    # Gruppiere nach Datum und Keyword
+    ).order_by(GoogleTrendsData.datum.asc()).all()
+
     heatmap_data = {}
     for trend in trends:
         date_str = trend.datum.strftime('%Y-%m-%d')
         if date_str not in heatmap_data:
             heatmap_data[date_str] = {}
         heatmap_data[date_str][trend.keyword] = trend.interest_score
-    
+
     return {
         "heatmap": heatmap_data,
         "keywords": list(set(t.keyword for t in trends)),
@@ -197,23 +236,51 @@ async def get_trends_heatmap(
     }
 
 
+@router.get("/sparkline/{virus_typ}")
+async def get_sparkline_data(
+    virus_typ: str,
+    days: int = 30,
+    db: Session = Depends(get_db)
+):
+    """Compact sparkline data for virus cards."""
+    start_date = datetime.now() - timedelta(days=days)
+
+    data = db.query(
+        WastewaterAggregated.datum,
+        WastewaterAggregated.viruslast
+    ).filter(
+        WastewaterAggregated.virus_typ == virus_typ,
+        WastewaterAggregated.datum >= start_date
+    ).order_by(WastewaterAggregated.datum.asc()).all()
+
+    return {
+        "virus_typ": virus_typ,
+        "data": [{"d": d.datum.strftime('%m-%d'), "v": round(d.viruslast, 0)} for d in data]
+    }
+
+
 def _calculate_trend(db: Session, virus_typ: str) -> str:
-    """Berechne Trend (steigend/fallend/stabil) für einen Virustyp."""
+    """Calculate trend for a virus type."""
     last_7_days = db.query(WastewaterAggregated).filter(
         WastewaterAggregated.virus_typ == virus_typ
     ).order_by(WastewaterAggregated.datum.desc()).limit(7).all()
-    
+
     if len(last_7_days) < 2:
         return "stabil"
-    
-    recent = sum(d.viruslast for d in last_7_days[:3] if d.viruslast) / 3
-    older = sum(d.viruslast for d in last_7_days[4:] if d.viruslast) / 3
-    
+
+    recent_vals = [d.viruslast for d in last_7_days[:3] if d.viruslast]
+    older_vals = [d.viruslast for d in last_7_days[4:] if d.viruslast]
+
+    if not recent_vals or not older_vals:
+        return "stabil"
+
+    recent = sum(recent_vals) / len(recent_vals)
+    older = sum(older_vals) / len(older_vals)
+
     change = (recent - older) / older if older > 0 else 0
-    
+
     if change > 0.1:
         return "steigend"
     elif change < -0.1:
         return "fallend"
-    else:
-        return "stabil"
+    return "stabil"

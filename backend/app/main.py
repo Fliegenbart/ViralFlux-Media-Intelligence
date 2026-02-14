@@ -112,9 +112,12 @@ async def get_status(db: Session = Depends(get_db)):
 
 
 # Import API routes
-from app.api import dashboard, ingest
+from app.api import dashboard, ingest, forecast, recommendations, inventory
 app.include_router(dashboard.router, prefix="/api/v1/dashboard", tags=["Dashboard"])
 app.include_router(ingest.router, prefix="/api/v1/ingest", tags=["Data Ingestion"])
+app.include_router(forecast.router, prefix="/api/v1/forecast", tags=["ML Forecast"])
+app.include_router(recommendations.router, prefix="/api/v1/recommendations", tags=["Recommendations"])
+app.include_router(inventory.router, prefix="/api/v1/inventory", tags=["Inventory"])
 
 
 if __name__ == "__main__":

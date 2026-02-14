@@ -147,7 +147,7 @@ class ForecastService:
         df['trends_ma7'] = df['trends_score'].rolling(window=7, min_periods=1).mean()
         
         # NaN entfernen
-        df = df.fillna(method='bfill').fillna(method='ffill')
+        df = df.bfill().ffill()
         
         logger.info(f"Training data prepared: {len(df)} rows, {len(df.columns)} features")
         return df

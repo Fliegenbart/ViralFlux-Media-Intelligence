@@ -60,23 +60,28 @@ async def get_dashboard_overview(
         GrippeWebData.bundesland.is_(None)
     ).order_by(GrippeWebData.datum.desc()).first()
 
-    # 4. Forecast summary
+    # 4. Forecast summary (show all 14 days from latest run, not just future)
     forecast_summary = {}
     for virus in ['Influenza A', 'Influenza B', 'SARS-CoV-2', 'RSV A']:
-        forecasts = db.query(MLForecast).filter(
-            MLForecast.virus_typ == virus,
-            MLForecast.forecast_date >= datetime.now()
-        ).order_by(MLForecast.forecast_date.asc()).limit(14).all()
+        latest_run = db.query(MLForecast).filter(
+            MLForecast.virus_typ == virus
+        ).order_by(MLForecast.created_at.desc()).first()
 
-        if forecasts:
-            forecast_summary[virus] = {
-                "days": len(forecasts),
-                "trend": "steigend" if forecasts[-1].predicted_value > forecasts[0].predicted_value else "fallend",
-                "confidence": forecasts[0].confidence,
-                "next_7d": round(forecasts[min(6, len(forecasts)-1)].predicted_value, 1),
-                "next_14d": round(forecasts[-1].predicted_value, 1) if len(forecasts) >= 14 else None,
-                "model_version": forecasts[0].model_version
-            }
+        if latest_run:
+            forecasts = db.query(MLForecast).filter(
+                MLForecast.virus_typ == virus,
+                MLForecast.created_at >= latest_run.created_at - timedelta(seconds=10)
+            ).order_by(MLForecast.forecast_date.asc()).limit(14).all()
+
+            if forecasts:
+                forecast_summary[virus] = {
+                    "days": len(forecasts),
+                    "trend": "steigend" if forecasts[-1].predicted_value > forecasts[0].predicted_value else "fallend",
+                    "confidence": forecasts[0].confidence,
+                    "next_7d": round(forecasts[min(6, len(forecasts)-1)].predicted_value, 1),
+                    "next_14d": round(forecasts[-1].predicted_value, 1) if len(forecasts) >= 14 else None,
+                    "model_version": forecasts[0].model_version
+                }
 
     # 5. Weather
     latest_weather = db.query(WeatherData).order_by(
@@ -180,10 +185,15 @@ async def get_timeseries_data(
 
     forecast = []
     if include_forecast:
-        forecast = db.query(MLForecast).filter(
-            MLForecast.virus_typ == virus_typ,
-            MLForecast.forecast_date >= datetime.now()
-        ).order_by(MLForecast.forecast_date.asc()).limit(14).all()
+        # Get all forecasts from the latest run (not just future ones)
+        latest_run = db.query(MLForecast).filter(
+            MLForecast.virus_typ == virus_typ
+        ).order_by(MLForecast.created_at.desc()).first()
+        if latest_run:
+            forecast = db.query(MLForecast).filter(
+                MLForecast.virus_typ == virus_typ,
+                MLForecast.created_at >= latest_run.created_at - timedelta(seconds=10)
+            ).order_by(MLForecast.forecast_date.asc()).limit(14).all()
 
     return {
         "virus_typ": virus_typ,

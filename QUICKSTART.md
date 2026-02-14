@@ -1,4 +1,4 @@
-# 🚀 Quick Start Guide - VirusRadar Pro
+# 🚀 Quick Start Guide - LabPulse Pro
 
 ## 5-Minuten Setup
 

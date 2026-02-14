@@ -1,10 +1,10 @@
-# 🦠 VirusRadar Pro
+# 🧪 LabPulse Pro
 
 **Intelligentes Frühwarnsystem für Labordiagnostik mit KI-gestützter Bedarfsprognose**
 
 ## 📋 Überblick
 
-VirusRadar Pro ist ein professionelles Prognosesystem für Labordiagnostik-Unternehmen, das durch die Kombination von Abwasserdaten, Krankheitsmeldungen, Google Trends und Wetterdaten einen 14-Tage-Vorlauf für die Bedarfsplanung von Testkits ermöglicht.
+LabPulse Pro ist ein professionelles Prognosesystem für Labordiagnostik-Unternehmen, das durch die Kombination von Abwasserdaten, Krankheitsmeldungen, Google Trends und Wetterdaten einen 14-Tage-Vorlauf für die Bedarfsplanung von Testkits ermöglicht.
 
 ### Kernfeatures
 

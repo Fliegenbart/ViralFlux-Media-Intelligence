@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 import logging
 
 from app.core.config import get_settings
-from app.models.database import WastewaterAggregated
+from app.models.database import WastewaterAggregated, WastewaterData
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -18,6 +18,7 @@ class AmelagIngestionService:
 
     BASE_URL = settings.RKI_AMELAG_URL
     AGGREGIERT_URL = f"{BASE_URL}/amelag_aggregierte_kurve.tsv"
+    EINZELSTANDORTE_URL = f"{BASE_URL}/amelag_einzelstandorte.tsv"
 
     def __init__(self, db: Session):
         self.db = db
@@ -85,28 +86,105 @@ class AmelagIngestionService:
         logger.info(f"Imported {count} new aggregated records")
         return count
 
+    def fetch_einzelstandorte(self) -> pd.DataFrame:
+        """Lade Einzelstandort-Daten (pro Klaeranlage/Bundesland) von GitHub."""
+        logger.info(f"Fetching AMELAG Einzelstandorte from {self.EINZELSTANDORTE_URL}")
+
+        response = requests.get(self.EINZELSTANDORTE_URL, timeout=120)
+        response.raise_for_status()
+
+        df = pd.read_csv(
+            StringIO(response.text),
+            sep='\t',
+            parse_dates=['datum'],
+            na_values=['NA', 'na', ''],
+        )
+
+        for col in ['viruslast', 'viruslast_normalisiert', 'vorhersage',
+                     'obere_schranke', 'untere_schranke', 'einwohner']:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors='coerce')
+
+        if 'unter_bg' in df.columns:
+            df['unter_bg'] = df['unter_bg'].map({'ja': True, 'nein': False})
+
+        logger.info(f"Loaded {len(df)} Einzelstandort rows, {df['standort'].nunique()} sites, {df['bundesland'].nunique()} Bundeslaender")
+        return df
+
+    def import_einzelstandorte(self, df: pd.DataFrame) -> int:
+        """Importiere Einzelstandort-Daten in die Datenbank."""
+        count = 0
+
+        for _, row in df.iterrows():
+            datum = row['datum']
+            virus_typ = row['typ']
+            standort = row['standort']
+            viruslast = row.get('viruslast')
+
+            if pd.isna(viruslast):
+                continue
+
+            existing = self.db.query(WastewaterData).filter(
+                WastewaterData.datum == datum,
+                WastewaterData.virus_typ == virus_typ,
+                WastewaterData.standort == standort
+            ).first()
+
+            vals = {
+                'bundesland': row.get('bundesland', ''),
+                'viruslast': float(viruslast),
+                'viruslast_normalisiert': float(row['viruslast_normalisiert']) if pd.notna(row.get('viruslast_normalisiert')) else None,
+                'vorhersage': float(row['vorhersage']) if pd.notna(row.get('vorhersage')) else None,
+                'obere_schranke': float(row['obere_schranke']) if pd.notna(row.get('obere_schranke')) else None,
+                'untere_schranke': float(row['untere_schranke']) if pd.notna(row.get('untere_schranke')) else None,
+                'einwohner': int(row['einwohner']) if pd.notna(row.get('einwohner')) else None,
+                'unter_bg': bool(row['unter_bg']) if pd.notna(row.get('unter_bg')) else None,
+            }
+
+            if existing:
+                for k, v in vals.items():
+                    setattr(existing, k, v)
+            else:
+                data = WastewaterData(datum=datum, virus_typ=virus_typ, standort=standort, **vals)
+                self.db.add(data)
+                count += 1
+
+        self.db.commit()
+        logger.info(f"Imported {count} new Einzelstandort records")
+        return count
+
     def run_full_import(self) -> dict:
-        """Führe kompletten Import durch (nur aggregierte Daten)."""
-        logger.info("Starting AMELAG import...")
+        """Fuehre kompletten Import durch (aggregiert + Einzelstandorte)."""
+        logger.info("Starting AMELAG full import...")
 
+        results = {}
+
+        # Aggregierte Daten
         try:
-            df = self.fetch_aggregiert()
-            count = self.import_aggregiert(df)
-
-            result = {
-                "success": True,
-                "aggregiert_imported": count,
-                "total_rows_fetched": len(df),
-                "virus_types": df['typ'].unique().tolist(),
-                "timestamp": datetime.utcnow().isoformat()
-            }
-            logger.info(f"AMELAG import completed: {count} new records")
-            return result
-
+            df_agg = self.fetch_aggregiert()
+            count_agg = self.import_aggregiert(df_agg)
+            results["aggregiert"] = {"success": True, "imported": count_agg, "fetched": len(df_agg)}
         except Exception as e:
-            logger.error(f"AMELAG import failed: {e}")
-            return {
-                "success": False,
-                "error": str(e),
-                "timestamp": datetime.utcnow().isoformat()
+            logger.error(f"Aggregiert import failed: {e}")
+            results["aggregiert"] = {"success": False, "error": str(e)}
+
+        # Einzelstandorte
+        try:
+            df_einzel = self.fetch_einzelstandorte()
+            count_einzel = self.import_einzelstandorte(df_einzel)
+            results["einzelstandorte"] = {
+                "success": True,
+                "imported": count_einzel,
+                "fetched": len(df_einzel),
+                "standorte": int(df_einzel['standort'].nunique()),
+                "bundeslaender": int(df_einzel['bundesland'].nunique()),
             }
+        except Exception as e:
+            logger.error(f"Einzelstandorte import failed: {e}")
+            results["einzelstandorte"] = {"success": False, "error": str(e)}
+
+        return {
+            "success": results.get("aggregiert", {}).get("success", False),
+            "results": results,
+            "timestamp": datetime.utcnow().isoformat()
+        }

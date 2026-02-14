@@ -1,8 +1,8 @@
-# 🏗️ VirusRadar Pro - System Architecture
+# 🏗️ LabPulse Pro - System Architecture
 
 ## Overview
 
-VirusRadar Pro ist ein dreischichtiges System (Data, ML, Frontend) mit folgenden Kernkomponenten:
+LabPulse Pro ist ein dreischichtiges System (Data, ML, Frontend) mit folgenden Kernkomponenten:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐

@@ -52,7 +52,7 @@ async def startup_event():
 @app.on_event("shutdown")
 async def shutdown_event():
     """Cleanup on shutdown."""
-    logger.info("Shutting down VirusRadar Pro...")
+    logger.info("Shutting down LabPulse Pro...")
 
 
 @app.get("/")
@@ -112,12 +112,14 @@ async def get_status(db: Session = Depends(get_db)):
 
 
 # Import API routes
-from app.api import dashboard, ingest, forecast, recommendations, inventory
+from app.api import dashboard, ingest, forecast, recommendations, inventory, map_data, ordering
 app.include_router(dashboard.router, prefix="/api/v1/dashboard", tags=["Dashboard"])
 app.include_router(ingest.router, prefix="/api/v1/ingest", tags=["Data Ingestion"])
 app.include_router(forecast.router, prefix="/api/v1/forecast", tags=["ML Forecast"])
 app.include_router(recommendations.router, prefix="/api/v1/recommendations", tags=["Recommendations"])
 app.include_router(inventory.router, prefix="/api/v1/inventory", tags=["Inventory"])
+app.include_router(map_data.router, prefix="/api/v1/map", tags=["Map Data"])
+app.include_router(ordering.router, prefix="/api/v1/ordering", tags=["Ordering"])
 
 
 if __name__ == "__main__":

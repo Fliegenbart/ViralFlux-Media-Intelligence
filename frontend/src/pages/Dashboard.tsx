@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
-  AreaChart, Area, LineChart, Line, BarChart, Bar,
+  Area, Line,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend,
-  ResponsiveContainer, ReferenceLine, ComposedChart,
-  Cell
+  ResponsiveContainer, ComposedChart,
 } from 'recharts';
 import { format } from 'date-fns';
 import { de } from 'date-fns/locale';
@@ -144,15 +144,18 @@ const Sparkline: React.FC<{ data: SparklinePoint[]; color: string }> = ({ data, 
 
 // ─── Dashboard Component ────────────────────────────────────────────────────
 const Dashboard: React.FC = () => {
+  const navigate = useNavigate();
   const [data, setData] = useState<DashboardData | null>(null);
   const [selectedVirus, setSelectedVirus] = useState('Influenza A');
-  const [timeseries, setTimeseries] = useState<{ historical: TimeseriesPoint[]; forecast: ForecastPoint[] } | null>(null);
+  const [timeseries, setTimeseries] = useState<{ historical: TimeseriesPoint[]; forecast: ForecastPoint[]; inventory?: Array<{ date: string; bestand: number; min_bestand: number; max_bestand: number; empfohlen: number }>; test_typ?: string } | null>(null);
   const [sparklines, setSparklines] = useState<Record<string, SparklinePoint[]>>({});
   const [showForecast, setShowForecast] = useState(true);
   const [loading, setLoading] = useState(true);
   const [forecastLoading, setForecastLoading] = useState(false);
   const [recsLoading, setRecsLoading] = useState(false);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
+  const [stockoutData, setStockoutData] = useState<any>(null);
+  const [orderLoading, setOrderLoading] = useState(false);
 
   // Fetch dashboard overview
   const fetchOverview = useCallback(async () => {
@@ -250,6 +253,36 @@ const Dashboard: React.FC = () => {
     }
   };
 
+  // Fetch stockout analysis
+  const fetchStockout = useCallback(async () => {
+    try {
+      const res = await fetch('/api/v1/ordering/stockout-analysis');
+      if (res.ok) setStockoutData(await res.json());
+    } catch (_) {}
+  }, []);
+
+  useEffect(() => { fetchStockout(); }, [fetchStockout]);
+
+  // Generate and download SAP orders
+  const downloadSAPOrders = async () => {
+    setOrderLoading(true);
+    try {
+      const res = await fetch('/api/v1/ordering/export-sap');
+      if (!res.ok) throw new Error('Export failed');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `LabPulse_Bestellung_${new Date().toISOString().slice(0,10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error('SAP export error:', e);
+    } finally {
+      setOrderLoading(false);
+    }
+  };
+
   // Approve recommendation
   const approveRec = async (id: number) => {
     try {
@@ -260,23 +293,50 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  // Build chart data
+  // Build chart data with inventory overlay
   const chartData = React.useMemo(() => {
     if (!timeseries) return [];
-    const hist = (timeseries.historical || []).map((d) => ({
-      date: format(new Date(d.date), 'dd. MMM', { locale: de }),
-      rawDate: d.date,
-      'Messwert': d.viral_load,
-      'RKI Prognose': d.prediction,
-    }));
+
+    // Parse inventory data into a date-sorted lookup
+    const invEntries = (timeseries.inventory || []).map(inv => ({
+      date: new Date(inv.date).getTime(),
+      bestand: inv.bestand,
+      min_bestand: inv.min_bestand,
+    })).sort((a, b) => a.date - b.date);
+
+    // Forward-fill function: find latest inventory value <= given date
+    const getInventoryAt = (dateStr: string) => {
+      if (invEntries.length === 0) return null;
+      const ts = new Date(dateStr).getTime();
+      let best = invEntries[0]; // fallback to first entry
+      for (const inv of invEntries) {
+        if (inv.date <= ts) best = inv;
+        else break;
+      }
+      return best;
+    };
+
+    const hist = (timeseries.historical || []).map((d) => {
+      const inv = getInventoryAt(d.date);
+      return {
+        date: format(new Date(d.date), 'dd. MMM', { locale: de }),
+        rawDate: d.date,
+        'Messwert': d.viral_load,
+        'RKI Prognose': d.prediction,
+        ...(inv ? { 'Bestand': inv.bestand, 'Min-Bestand': inv.min_bestand } : {}),
+      };
+    });
+
     if (showForecast && timeseries.forecast && timeseries.forecast.length > 0) {
       const last = hist.length > 0 ? hist[hist.length - 1] : null;
+      const lastInv = invEntries.length > 0 ? invEntries[invEntries.length - 1] : null;
       const forecasts = timeseries.forecast.map((d) => ({
         date: format(new Date(d.date), 'dd. MMM', { locale: de }),
         rawDate: d.date,
         'ML Prognose': d.predicted_value,
         'Obergrenze': d.upper_bound,
         'Untergrenze': d.lower_bound,
+        ...(lastInv ? { 'Bestand': lastInv.bestand, 'Min-Bestand': lastInv.min_bestand } : {}),
       }));
       // Connect last historical to first forecast
       if (last && forecasts.length > 0) {
@@ -308,11 +368,18 @@ const Dashboard: React.FC = () => {
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
             </div>
             <div>
-              <h1 className="text-xl font-bold text-white tracking-tight">VirusRadar Pro</h1>
+              <h1 className="text-xl font-bold text-white tracking-tight">LabPulse Pro</h1>
               <p className="text-xs text-slate-400">Intelligentes Fruehwarnsystem fuer Labordiagnostik</p>
             </div>
           </div>
           <div className="flex items-center gap-6">
+            <button
+              onClick={() => navigate('/map')}
+              className="px-3 py-1.5 text-xs font-medium rounded-lg transition-all hover:bg-slate-700"
+              style={{ color: '#94a3b8', border: '1px solid #334155' }}
+            >
+              Deutschlandkarte
+            </button>
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
               <span className="text-xs text-slate-400">System aktiv</span>
@@ -381,9 +448,10 @@ const Dashboard: React.FC = () => {
         <div className="card p-6 fade-in">
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h2 className="text-lg font-bold text-white">{selectedVirus} — Viruslast-Verlauf</h2>
+              <h2 className="text-lg font-bold text-white">{selectedVirus} — Viruslast vs. Testkit-Bestand</h2>
               <p className="text-xs text-slate-500 mt-1">
-                Abwasserdaten (AMELAG) {showForecast && data?.has_forecasts ? '+ ML-Prognose (Prophet)' : ''}
+                Abwasserdaten (AMELAG) {showForecast && data?.has_forecasts ? '+ ML-Prognose' : ''}
+                {timeseries?.test_typ ? ` | Bestand: ${timeseries.test_typ}` : ''}
               </p>
             </div>
             <div className="flex items-center gap-4">
@@ -411,8 +479,8 @@ const Dashboard: React.FC = () => {
             </div>
           </div>
 
-          <ResponsiveContainer width="100%" height={380}>
-            <ComposedChart data={chartData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+          <ResponsiveContainer width="100%" height={400}>
+            <ComposedChart data={chartData} margin={{ top: 5, right: 60, left: 10, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
               <XAxis
                 dataKey="date"
@@ -420,10 +488,23 @@ const Dashboard: React.FC = () => {
                 tickLine={{ stroke: '#334155' }}
                 interval="preserveStartEnd"
               />
+              {/* Left Y-axis: Viruslast */}
               <YAxis
+                yAxisId="left"
                 tick={{ fill: '#64748b', fontSize: 11 }}
                 tickLine={{ stroke: '#334155' }}
                 tickFormatter={(v: number) => fmt(v)}
+                label={{ value: 'Genkopien/L', angle: -90, position: 'insideLeft', style: { fill: '#64748b', fontSize: 10 }, offset: 0 }}
+              />
+              {/* Right Y-axis: Testkit-Bestand */}
+              <YAxis
+                yAxisId="right"
+                orientation="right"
+                tick={{ fill: '#06b6d4', fontSize: 11 }}
+                tickLine={{ stroke: '#06b6d4' }}
+                axisLine={{ stroke: '#06b6d4', strokeOpacity: 0.4 }}
+                tickFormatter={(v: number) => v >= 1000 ? (v / 1000).toFixed(1) + 'K' : String(v)}
+                label={{ value: 'Testkits', angle: 90, position: 'insideRight', style: { fill: '#06b6d4', fontSize: 10 }, offset: 0 }}
               />
               <Tooltip
                 contentStyle={{
@@ -434,7 +515,12 @@ const Dashboard: React.FC = () => {
                 }}
                 labelStyle={{ color: '#f1f5f9' }}
                 itemStyle={{ color: '#94a3b8' }}
-                formatter={(value: number) => [value?.toFixed(0) + ' Genkopien/L', '']}
+                formatter={(value: number, name: string) => {
+                  if (name === 'Bestand' || name === 'Min-Bestand') {
+                    return [value?.toLocaleString('de-DE') + ' Testkits', name];
+                  }
+                  return [value?.toFixed(0) + ' Genkopien/L', name];
+                }}
               />
               <Legend
                 wrapperStyle={{ paddingTop: 16 }}
@@ -443,6 +529,7 @@ const Dashboard: React.FC = () => {
               {/* Confidence band */}
               {showForecast && (
                 <Area
+                  yAxisId="left"
                   type="monotone"
                   dataKey="Obergrenze"
                   stroke="none"
@@ -453,6 +540,7 @@ const Dashboard: React.FC = () => {
               )}
               {showForecast && (
                 <Area
+                  yAxisId="left"
                   type="monotone"
                   dataKey="Untergrenze"
                   stroke="none"
@@ -461,7 +549,32 @@ const Dashboard: React.FC = () => {
                   legendType="none"
                 />
               )}
+              {/* Bestand area (right axis) */}
+              <Area
+                yAxisId="right"
+                type="stepAfter"
+                dataKey="Bestand"
+                stroke="#06b6d4"
+                strokeWidth={2}
+                fill="#06b6d4"
+                fillOpacity={0.06}
+                dot={false}
+                connectNulls
+              />
+              {/* Min-Bestand reference line (right axis) */}
               <Line
+                yAxisId="right"
+                type="stepAfter"
+                dataKey="Min-Bestand"
+                stroke="#ef4444"
+                strokeWidth={1}
+                strokeDasharray="4 2"
+                dot={false}
+                connectNulls
+                legendType="none"
+              />
+              <Line
+                yAxisId="left"
                 type="monotone"
                 dataKey="Messwert"
                 stroke={VIRUS_COLORS[selectedVirus] || '#3b82f6'}
@@ -470,6 +583,7 @@ const Dashboard: React.FC = () => {
                 connectNulls={false}
               />
               <Line
+                yAxisId="left"
                 type="monotone"
                 dataKey="RKI Prognose"
                 stroke="#64748b"
@@ -480,6 +594,7 @@ const Dashboard: React.FC = () => {
               />
               {showForecast && (
                 <Line
+                  yAxisId="left"
                   type="monotone"
                   dataKey="ML Prognose"
                   stroke="#f59e0b"
@@ -504,24 +619,101 @@ const Dashboard: React.FC = () => {
         {/* ── Row 3: Inventory + Recommendations ── */}
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
 
-          {/* Testkit-Bestand */}
+          {/* Testkit-Bestand + Stockout Analysis */}
           <div className="card p-6 fade-in">
             <div className="flex items-center justify-between mb-5">
               <div>
-                <h2 className="text-lg font-bold text-white">Testkit-Bestand</h2>
-                <p className="text-xs text-slate-500 mt-1">Aktueller Lagerbestand vs. Kapazitaet</p>
+                <h2 className="text-lg font-bold text-white">Testkit-Bestand &amp; Nachbestellung</h2>
+                <p className="text-xs text-slate-500 mt-1">Praediktive Bestandssteuerung mit ML-Prognose</p>
               </div>
-              {!data?.has_inventory && (
-                <button
-                  onClick={seedInventory}
-                  className="px-3 py-1.5 text-xs font-medium rounded-lg bg-slate-700 text-slate-300 hover:bg-slate-600 transition"
-                >
-                  Demo-Daten laden
-                </button>
-              )}
+              <div className="flex items-center gap-2">
+                {!data?.has_inventory && (
+                  <button
+                    onClick={seedInventory}
+                    className="px-3 py-1.5 text-xs font-medium rounded-lg bg-slate-700 text-slate-300 hover:bg-slate-600 transition"
+                  >
+                    Demo-Daten laden
+                  </button>
+                )}
+                {data?.has_inventory && (
+                  <button
+                    onClick={downloadSAPOrders}
+                    disabled={orderLoading}
+                    className="px-3 py-1.5 text-xs font-semibold rounded-lg transition-all"
+                    style={{
+                      background: orderLoading ? '#334155' : 'linear-gradient(135deg, #10b981, #059669)',
+                      color: 'white',
+                      opacity: orderLoading ? 0.6 : 1
+                    }}
+                  >
+                    {orderLoading ? 'Exportiere...' : 'SAP-Bestellung exportieren'}
+                  </button>
+                )}
+              </div>
             </div>
 
-            {data?.has_inventory && data.inventory ? (
+            {/* Stockout Alert Banner */}
+            {stockoutData && stockoutData.critical_items > 0 && (
+              <div className="mb-4 p-3 rounded-lg flex items-center gap-3" style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)' }}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0zM12 9v4M12 17h.01"/></svg>
+                <div>
+                  <span className="text-sm font-bold text-red-400">{stockoutData.critical_items} kritische{stockoutData.critical_items > 1 ? ' Artikel' : 'r Artikel'}</span>
+                  <span className="text-xs text-slate-400 ml-2">|</span>
+                  <span className="text-xs text-slate-400 ml-2">{stockoutData.items_needing_reorder} Nachbestellungen empfohlen</span>
+                </div>
+              </div>
+            )}
+
+            {data?.has_inventory && stockoutData?.analyses ? (
+              <div className="space-y-3">
+                {stockoutData.analyses.map((item: any) => (
+                  <div key={item.test_typ} className="slide-in p-3 rounded-lg" style={{ background: '#0f172a', border: '1px solid #334155' }}>
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-slate-300 font-medium">{item.test_typ}</span>
+                        <span className={`badge badge-${item.risk_level === 'critical' ? 'critical' : item.risk_level === 'high' ? 'high' : item.risk_level === 'medium' ? 'warning' : 'good'}`}>
+                          {item.risk_level}
+                        </span>
+                      </div>
+                      <span className="text-sm font-bold text-white">{item.current_stock.toLocaleString('de-DE')} St.</span>
+                    </div>
+                    <div className="relative h-2.5 rounded-full overflow-hidden mb-2" style={{ background: '#334155' }}>
+                      <div
+                        className="absolute top-0 bottom-0 w-0.5"
+                        style={{ left: `${(item.min_stock / item.max_stock) * 100}%`, background: '#ef4444', opacity: 0.6, zIndex: 2 }}
+                      />
+                      <div
+                        className="h-full rounded-full transition-all duration-700"
+                        style={{
+                          width: `${Math.min((item.current_stock / item.max_stock) * 100, 100)}%`,
+                          background: item.risk_level === 'critical' ? '#ef4444' : item.risk_level === 'high' ? '#f59e0b' : '#10b981'
+                        }}
+                      />
+                    </div>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-slate-500">
+                        Stockout in <strong className={item.days_until_stockout < 14 ? 'text-red-400' : 'text-slate-400'}>{item.days_until_stockout.toFixed(0)} Tagen</strong>
+                      </span>
+                      <span className="text-slate-500">
+                        Verbrauch: {item.adjusted_daily_consumption}/Tag
+                        {item.forecast_multiplier !== 1.0 && (
+                          <span className={item.forecast_multiplier > 1 ? 'text-amber-400 ml-1' : 'text-green-400 ml-1'}>
+                            ({item.forecast_multiplier.toFixed(1)}x ML)
+                          </span>
+                        )}
+                      </span>
+                    </div>
+                    {item.needs_reorder && (
+                      <div className="mt-2 pt-2 flex items-center justify-between" style={{ borderTop: '1px solid #334155' }}>
+                        <span className="text-xs text-amber-400 font-medium">
+                          Empfehlung: {item.optimal_order_quantity.toLocaleString('de-DE')} St. nachbestellen
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : data?.has_inventory ? (
               <div className="space-y-4">
                 {Object.entries(data.inventory).map(([name, inv]) => (
                   <div key={name} className="slide-in">
@@ -533,30 +725,8 @@ const Dashboard: React.FC = () => {
                       </div>
                     </div>
                     <div className="relative h-3 rounded-full overflow-hidden" style={{ background: '#334155' }}>
-                      {/* Min threshold marker */}
-                      <div
-                        className="absolute top-0 bottom-0 w-0.5"
-                        style={{
-                          left: `${(inv.min / inv.max) * 100}%`,
-                          background: '#ef4444',
-                          opacity: 0.6,
-                          zIndex: 2
-                        }}
-                      />
-                      {/* Fill bar */}
-                      <div
-                        className="h-full rounded-full transition-all duration-700"
-                        style={{
-                          width: `${Math.min(inv.fill_percentage, 100)}%`,
-                          background: inv.status === 'critical' ? '#ef4444' :
-                                     inv.status === 'warning' ? '#f59e0b' : '#10b981'
-                        }}
-                      />
-                    </div>
-                    <div className="flex justify-between mt-1">
-                      <span className="text-[10px] text-slate-600">0</span>
-                      <span className="text-[10px] text-slate-600">Min: {inv.min}</span>
-                      <span className="text-[10px] text-slate-600">Max: {inv.max.toLocaleString('de-DE')}</span>
+                      <div className="absolute top-0 bottom-0 w-0.5" style={{ left: `${(inv.min / inv.max) * 100}%`, background: '#ef4444', opacity: 0.6, zIndex: 2 }} />
+                      <div className="h-full rounded-full transition-all duration-700" style={{ width: `${Math.min(inv.fill_percentage, 100)}%`, background: inv.status === 'critical' ? '#ef4444' : inv.status === 'warning' ? '#f59e0b' : '#10b981' }} />
                     </div>
                   </div>
                 ))}
@@ -769,7 +939,7 @@ const Dashboard: React.FC = () => {
 
       {/* ── Footer ── */}
       <footer className="mt-8 py-4 text-center text-xs text-slate-600" style={{ borderTop: '1px solid #1e293b' }}>
-        VirusRadar Pro v1.0 &mdash; Intelligentes Fruehwarnsystem fuer Labordiagnostik
+        LabPulse Pro v1.0 &mdash; Intelligentes Fruehwarnsystem fuer Labordiagnostik
       </footer>
     </div>
   );

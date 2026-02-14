@@ -167,6 +167,14 @@ async def get_dashboard_overview(
     }
 
 
+VIRUS_TEST_MAP = {
+    'Influenza A': 'Influenza A/B Schnelltest',
+    'Influenza B': 'Influenza A/B Schnelltest',
+    'SARS-CoV-2': 'SARS-CoV-2 PCR',
+    'RSV A': 'RSV Schnelltest',
+}
+
+
 @router.get("/timeseries/{virus_typ}")
 async def get_timeseries_data(
     virus_typ: str,
@@ -174,7 +182,7 @@ async def get_timeseries_data(
     include_forecast: bool = True,
     db: Session = Depends(get_db)
 ):
-    """Time series data for a virus type with optional forecast."""
+    """Time series data for a virus type with optional forecast and inventory."""
     logger.info(f"Fetching timeseries for {virus_typ}")
     start_date = datetime.now() - timedelta(days=days_back)
 
@@ -195,8 +203,37 @@ async def get_timeseries_data(
                 MLForecast.created_at >= latest_run.created_at - timedelta(seconds=10)
             ).order_by(MLForecast.forecast_date.asc()).limit(14).all()
 
+    # Inventory history for corresponding test type
+    test_typ = VIRUS_TEST_MAP.get(virus_typ)
+    inventory_history = []
+    if test_typ:
+        inv_records = db.query(InventoryLevel).filter(
+            InventoryLevel.test_typ == test_typ,
+            InventoryLevel.datum >= start_date
+        ).order_by(InventoryLevel.datum.asc()).all()
+
+        if not inv_records:
+            # Fallback: get latest inventory entry regardless of date
+            latest_inv = db.query(InventoryLevel).filter(
+                InventoryLevel.test_typ == test_typ
+            ).order_by(InventoryLevel.datum.desc()).first()
+            if latest_inv:
+                inv_records = [latest_inv]
+
+        inventory_history = [
+            {
+                "date": inv.datum.isoformat(),
+                "bestand": inv.aktueller_bestand,
+                "min_bestand": inv.min_bestand,
+                "max_bestand": inv.max_bestand,
+                "empfohlen": inv.empfohlener_bestand,
+            }
+            for inv in inv_records
+        ]
+
     return {
         "virus_typ": virus_typ,
+        "test_typ": test_typ,
         "historical": [
             {
                 "date": w.datum.isoformat(),
@@ -217,7 +254,8 @@ async def get_timeseries_data(
                 "confidence": f.confidence
             }
             for f in forecast
-        ]
+        ],
+        "inventory": inventory_history,
     }
 
 

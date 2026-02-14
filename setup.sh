@@ -1,11 +1,11 @@
 #!/bin/bash
 
-# VirusRadar Pro - Setup Script
+# LabPulse Pro - Setup Script
 # Dieses Script richtet das komplette Projekt ein
 
 set -e
 
-echo "🦠 VirusRadar Pro - Setup"
+echo "🧪 LabPulse Pro - Setup"
 echo "=========================="
 echo ""
 

@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     """Application configuration settings."""
     
     # App Info
-    APP_NAME: str = "VirusRadar Pro"
+    APP_NAME: str = "LabPulse Pro"
     APP_VERSION: str = "1.0.0"
     ENVIRONMENT: str = "development"
     

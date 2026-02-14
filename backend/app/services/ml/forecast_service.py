@@ -117,6 +117,15 @@ class ForecastService:
         y = df['y'].values
         n = len(y)
 
+        # Detect data frequency (median days between data points)
+        date_diffs = df['ds'].diff().dt.days.dropna()
+        data_freq_days = int(date_diffs.median()) if len(date_diffs) > 0 else 7
+        data_freq_days = max(1, min(data_freq_days, 14))  # Clamp to 1-14
+        logger.info(f"Detected data frequency: {data_freq_days} days")
+
+        # Number of forecast steps at native frequency to cover forecast_days
+        n_steps = max(2, self.forecast_days // data_freq_days + 1)
+
         # ── Method 1: Holt-Winters Exponential Smoothing ──
         try:
             seasonal_periods = min(52, n // 2) if n >= 8 else None
@@ -135,13 +144,12 @@ class ForecastService:
                     initialization_method='estimated'
                 )
             hw_fit = hw_model.fit(optimized=True)
-            hw_forecast = hw_fit.forecast(self.forecast_days)
+            hw_forecast = hw_fit.forecast(n_steps)
         except Exception as e:
             logger.warning(f"Holt-Winters failed, using simple trend: {e}")
-            # Fallback: linear extrapolation
-            hw_forecast = np.full(self.forecast_days, y[-1])
-            slope = (y[-1] - y[max(0, -5)]) / min(5, n)
-            hw_forecast = np.array([y[-1] + slope * (i + 1) for i in range(self.forecast_days)])
+            recent = y[-min(5, n):]
+            slope = (recent[-1] - recent[0]) / max(len(recent) - 1, 1)
+            hw_forecast = np.array([y[-1] + slope * (i + 1) for i in range(n_steps)])
 
         # ── Method 2: Ridge regression on features ──
         try:
@@ -153,38 +161,30 @@ class ForecastService:
                 ridge = Ridge(alpha=1.0)
                 ridge.fit(X, y)
 
-                # Predict forward by rolling the features
                 ridge_forecast = []
                 last_row = df[available_features].iloc[-1].values.copy()
                 last_vals = list(y[-5:])
 
-                for i in range(self.forecast_days):
+                for i in range(n_steps):
                     pred = ridge.predict(last_row.reshape(1, -1))[0]
                     ridge_forecast.append(pred)
                     last_vals.append(pred)
-                    # Update lag features
                     if 'lag1' in available_features:
-                        idx = available_features.index('lag1')
-                        last_row[idx] = pred
+                        last_row[available_features.index('lag1')] = pred
                     if 'lag2' in available_features:
-                        idx = available_features.index('lag2')
-                        last_row[idx] = last_vals[-2] if len(last_vals) >= 2 else pred
+                        last_row[available_features.index('lag2')] = last_vals[-2] if len(last_vals) >= 2 else pred
                     if 'lag3' in available_features:
-                        idx = available_features.index('lag3')
-                        last_row[idx] = last_vals[-3] if len(last_vals) >= 3 else pred
+                        last_row[available_features.index('lag3')] = last_vals[-3] if len(last_vals) >= 3 else pred
                     if 'ma3' in available_features:
-                        idx = available_features.index('ma3')
-                        last_row[idx] = np.mean(last_vals[-3:])
+                        last_row[available_features.index('ma3')] = np.mean(last_vals[-3:])
                     if 'ma5' in available_features:
-                        idx = available_features.index('ma5')
-                        last_row[idx] = np.mean(last_vals[-5:])
+                        last_row[available_features.index('ma5')] = np.mean(last_vals[-5:])
                     if 'roc' in available_features:
-                        idx = available_features.index('roc')
-                        last_row[idx] = (pred - last_vals[-2]) / last_vals[-2] if len(last_vals) >= 2 and last_vals[-2] != 0 else 0
+                        prev = last_vals[-2] if len(last_vals) >= 2 else 1
+                        last_row[available_features.index('roc')] = (pred - prev) / prev if prev != 0 else 0
 
                 ridge_forecast = np.array(ridge_forecast)
 
-                # Feature importance from Ridge coefficients
                 feature_importance = {}
                 for fname, coef in zip(available_features, ridge.coef_):
                     feature_importance[fname] = round(abs(float(coef)) / (np.sum(np.abs(ridge.coef_)) + 1e-9), 3)
@@ -198,39 +198,58 @@ class ForecastService:
 
         # ── Ensemble: 60% Holt-Winters + 40% Ridge ──
         ensemble = 0.6 * hw_forecast + 0.4 * ridge_forecast
-
-        # Ensure non-negative
         ensemble = np.maximum(ensemble, 0)
 
-        # Confidence intervals based on historical residuals
+        # Confidence intervals
         if n >= 5:
             residuals = np.diff(y[-min(20, n):])
             std = np.std(residuals) if len(residuals) > 1 else np.std(y) * 0.1
         else:
             std = np.std(y) * 0.1
 
-        z = 1.96  # ~95% CI
-        lower = ensemble - z * std * np.sqrt(np.arange(1, self.forecast_days + 1))
-        upper = ensemble + z * std * np.sqrt(np.arange(1, self.forecast_days + 1))
+        z = 1.96
+        lower = ensemble - z * std * np.sqrt(np.arange(1, n_steps + 1))
+        upper = ensemble + z * std * np.sqrt(np.arange(1, n_steps + 1))
         lower = np.maximum(lower, 0)
 
-        # Build forecast dates
+        # Interpolate native-frequency forecasts to daily for 14 days
         last_date = df['ds'].max()
-        forecast_dates = [last_date + timedelta(days=i + 1) for i in range(self.forecast_days)]
+        native_dates = [last_date + timedelta(days=data_freq_days * (i + 1)) for i in range(n_steps)]
+
+        # Build daily dates for the full forecast period
+        daily_dates = [last_date + timedelta(days=i + 1) for i in range(self.forecast_days)]
+
+        # Interpolate ensemble values to daily
+        native_days = np.array([(d - last_date).days for d in native_dates])
+        daily_days = np.array([(d - last_date).days for d in daily_dates])
+
+        # Add the last known point for smooth interpolation
+        interp_x = np.concatenate([[0], native_days])
+        interp_y = np.concatenate([[y[-1]], ensemble])
+        interp_lower = np.concatenate([[y[-1]], lower])
+        interp_upper = np.concatenate([[y[-1]], upper])
+
+        daily_ensemble = np.interp(daily_days, interp_x, interp_y)
+        daily_lower = np.interp(daily_days, interp_x, interp_lower)
+        daily_upper = np.interp(daily_days, interp_x, interp_upper)
+
+        daily_ensemble = np.maximum(daily_ensemble, 0)
+        daily_lower = np.maximum(daily_lower, 0)
 
         forecast_records = []
         for i in range(self.forecast_days):
             forecast_records.append({
-                'ds': forecast_dates[i],
-                'yhat': float(ensemble[i]),
-                'yhat_lower': float(lower[i]),
-                'yhat_upper': float(upper[i])
+                'ds': daily_dates[i],
+                'yhat': float(daily_ensemble[i]),
+                'yhat_lower': float(daily_lower[i]),
+                'yhat_upper': float(daily_upper[i])
             })
 
         result = {
             "virus_typ": virus_typ,
             "training_samples": n,
             "forecast_days": self.forecast_days,
+            "data_frequency_days": data_freq_days,
             "forecast": forecast_records,
             "feature_importance": feature_importance,
             "model_version": "hw_ridge_v1",
@@ -238,7 +257,7 @@ class ForecastService:
             "timestamp": datetime.utcnow()
         }
 
-        logger.info(f"Forecast completed for {virus_typ}: {self.forecast_days} days, {n} training samples")
+        logger.info(f"Forecast completed for {virus_typ}: {self.forecast_days} daily points from {n_steps} native-freq steps ({data_freq_days}d)")
         return result
 
     def save_forecast(self, forecast_data: Dict):

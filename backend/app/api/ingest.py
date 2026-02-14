@@ -94,7 +94,7 @@ async def run_trends_import(
 async def run_weather_import(db: Session = Depends(get_db)):
     """Importiere aktuelle Wetterdaten."""
     weather = WeatherService(db)
-    return weather.run_full_import(include_forecast=False)
+    return weather.run_full_import(include_forecast=True)
 
 
 @router.post("/holidays")

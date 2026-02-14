@@ -56,14 +56,45 @@ class WeatherService:
             'datum': datetime.utcnow()
         }
 
+    def fetch_forecast(self, city: dict, days: int = 8) -> list:
+        """Hole Wettervorhersage (5-Tage/3h-Intervalle, Free API)."""
+        url = f"{self.BASE_URL}/forecast"
+        params = {
+            'lat': city['lat'],
+            'lon': city['lon'],
+            'appid': self.api_key,
+            'units': 'metric',
+            'lang': 'de',
+            'cnt': min(days, 5) * 8  # 8 Datenpunkte pro Tag (3h), max 5 Tage bei Free API
+        }
+
+        response = requests.get(url, params=params, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+
+        forecasts = []
+        for item in data['list']:
+            forecasts.append({
+                'city': city['name'],
+                'datum': datetime.fromtimestamp(item['dt']),
+                'temperatur': item['main']['temp'],
+                'gefuehlte_temperatur': item['main']['feels_like'],
+                'luftfeuchtigkeit': item['main']['humidity'],
+                'luftdruck': item['main']['pressure'],
+                'wetter_beschreibung': item['weather'][0]['description'],
+                'wind_geschwindigkeit': item['wind']['speed']
+            })
+
+        logger.info(f"Fetched {len(forecasts)} forecast points for {city['name']}")
+        return forecasts
+
     def import_weather_data(self, weather_data: dict):
         """Importiere einen Wetterdatensatz in die Datenbank."""
         data = WeatherData(**weather_data)
         self.db.add(data)
-        self.db.commit()
 
-    def run_full_import(self, include_forecast: bool = False):
-        """Führe Import für alle Städte durch."""
+    def run_full_import(self, include_forecast: bool = True):
+        """Führe Import für alle Städte durch inkl. 8-Tage-Forecast."""
         if not self._has_valid_key():
             logger.warning("No valid OpenWeather API key configured, skipping weather import")
             return {
@@ -72,23 +103,34 @@ class WeatherService:
                 "timestamp": datetime.utcnow().isoformat()
             }
 
-        logger.info(f"Starting weather import for {len(self.CITIES)} cities...")
+        logger.info(f"Starting weather import for {len(self.CITIES)} cities (forecast={include_forecast})...")
         imported = 0
         errors = []
 
         for city in self.CITIES:
             try:
+                # Aktuelles Wetter
                 current = self.fetch_current_weather(city)
                 self.import_weather_data(current)
                 imported += 1
+
+                # 8-Tage Forecast
+                if include_forecast:
+                    forecasts = self.fetch_forecast(city, days=8)
+                    for fc in forecasts:
+                        self.import_weather_data(fc)
+                        imported += 1
+
                 logger.info(f"Weather: {city['name']} = {current['temperatur']}°C")
             except Exception as e:
                 logger.error(f"Weather fetch failed for {city['name']}: {e}")
                 errors.append(f"{city['name']}: {e}")
 
+        self.db.commit()
+
         return {
             "success": imported > 0,
-            "cities_imported": imported,
-            "errors": errors,
+            "records_imported": imported,
+            "errors": errors if errors else None,
             "timestamp": datetime.utcnow().isoformat()
         }

@@ -134,7 +134,7 @@ class GanzimmunData(Base):
     anzahl_tests = Column(Integer)
     positive_ergebnisse = Column(Integer)
     region = Column(String)
-    metadata = Column(JSON)  # Flexibel für zusätzliche Daten
+    extra_data = Column(JSON)  # Flexibel für zusätzliche Daten
     created_at = Column(DateTime, default=datetime.utcnow)
 
 

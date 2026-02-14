@@ -111,12 +111,9 @@ async def get_status(db: Session = Depends(get_db)):
     }
 
 
-# Import API routes (werden später erstellt)
-# from app.api import dashboard, forecast, data, recommendations
-# app.include_router(dashboard.router, prefix="/api/v1/dashboard", tags=["Dashboard"])
-# app.include_router(forecast.router, prefix="/api/v1/forecast", tags=["Forecasting"])
-# app.include_router(data.router, prefix="/api/v1/data", tags=["Data"])
-# app.include_router(recommendations.router, prefix="/api/v1/recommendations", tags=["Recommendations"])
+# Import API routes
+from app.api import dashboard
+app.include_router(dashboard.router, prefix="/api/v1/dashboard", tags=["Dashboard"])
 
 
 if __name__ == "__main__":

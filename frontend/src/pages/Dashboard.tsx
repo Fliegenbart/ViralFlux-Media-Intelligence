@@ -32,8 +32,11 @@ const Dashboard: React.FC = () => {
   const fetchDashboardData = async () => {
     try {
       const response = await fetch('/api/v1/dashboard/overview');
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const result = await response.json();
-      setData(result);
+      if (result.current_viral_loads) {
+        setData(result);
+      }
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
     } finally {
@@ -44,8 +47,11 @@ const Dashboard: React.FC = () => {
   const fetchTimeseriesData = async () => {
     try {
       const response = await fetch(`/api/v1/dashboard/timeseries/${selectedVirus}`);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const result = await response.json();
-      setTimeseriesData(result);
+      if (result.historical) {
+        setTimeseriesData(result);
+      }
     } catch (error) {
       console.error('Error fetching timeseries:', error);
     }
@@ -99,9 +105,25 @@ const Dashboard: React.FC = () => {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
+        {!data && (
+          <div className="bg-white rounded-lg shadow p-8 mb-8 text-center">
+            <div className="text-5xl mb-4">🔬</div>
+            <h2 className="text-xl font-bold text-gray-900 mb-2">Dashboard bereit</h2>
+            <p className="text-gray-600 mb-4">
+              Noch keine Messdaten in der Datenbank. Starte den Daten-Import, um das Dashboard mit
+              Abwasser-Viruslast, Google Trends und Wetterinformationen zu befüllen.
+            </p>
+            <div className="inline-flex items-center px-4 py-2 bg-blue-50 text-blue-700 rounded-lg text-sm">
+              API Status: <a href="/health" className="ml-1 underline">Health Check</a>
+              <span className="mx-2">|</span>
+              <a href="/docs" className="underline">API Dokumentation</a>
+            </div>
+          </div>
+        )}
+
         {/* Aktuelle Viruslast - Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          {data && Object.entries(data.current_viral_loads).map(([virus, info]) => (
+          {data && data.current_viral_loads && Object.entries(data.current_viral_loads).map(([virus, info]) => (
             <div
               key={virus}
               className={`bg-white rounded-lg shadow p-6 cursor-pointer transition-all hover:shadow-lg ${
@@ -133,7 +155,7 @@ const Dashboard: React.FC = () => {
           <h2 className="text-xl font-bold text-gray-900 mb-4">
             {selectedVirus} - Viruslast & 14-Tage-Prognose
           </h2>
-          {timeseriesData && (
+          {timeseriesData && timeseriesData.historical && timeseriesData.forecast && (
             <ResponsiveContainer width="100%" height={400}>
               <AreaChart
                 data={[
@@ -201,7 +223,7 @@ const Dashboard: React.FC = () => {
             <h2 className="text-xl font-bold text-gray-900 mb-4">
               📊 Google Trends Top Keywords
             </h2>
-            {data && (
+            {data && data.top_trends && data.top_trends.length > 0 && (
               <div className="space-y-4">
                 {data.top_trends.map((trend, idx) => (
                   <div key={idx} className="flex items-center justify-between">
@@ -230,7 +252,7 @@ const Dashboard: React.FC = () => {
               <h2 className="text-xl font-bold text-gray-900 mb-4">
                 🌡️ Wetter (Ø Deutschland)
               </h2>
-              {data && (
+              {data && data.weather && (
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <div className="text-sm text-gray-600">Temperatur</div>

@@ -1,0 +1,97 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database mit TimescaleDB Extension
+  db:
+    image: timescale/timescaledb:latest-pg15
+    container_name: virusradar_db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-virusradar}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+      POSTGRES_DB: ${POSTGRES_DB:-virusradar_db}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/init-db.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-virusradar}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - virusradar_network
+
+  # Backend FastAPI
+  backend:
+    build:
+      context: ./backend
+      dockerfile: ../docker/Dockerfile.backend
+    container_name: virusradar_backend
+    environment:
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=${POSTGRES_USER:-virusradar}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-changeme}
+      - POSTGRES_DB=${POSTGRES_DB:-virusradar_db}
+      - OPENWEATHER_API_KEY=${OPENWEATHER_API_KEY}
+      - OLLAMA_URL=${OLLAMA_URL}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-llama2}
+      - SECRET_KEY=${SECRET_KEY}
+      - ENVIRONMENT=${ENVIRONMENT:-development}
+    volumes:
+      - ./backend:/app
+      - ./data:/app/data
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    networks:
+      - virusradar_network
+
+  # Frontend React
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: ../docker/Dockerfile.frontend
+    container_name: virusradar_frontend
+    environment:
+      - REACT_APP_API_URL=http://localhost:8000
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    command: npm start
+    networks:
+      - virusradar_network
+
+  # Nginx Reverse Proxy (für Produktion)
+  nginx:
+    image: nginx:alpine
+    container_name: virusradar_nginx
+    profiles:
+      - production
+    volumes:
+      - ./docker/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./frontend/build:/usr/share/nginx/html:ro
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - backend
+      - frontend
+    networks:
+      - virusradar_network
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  virusradar_network:
+    driver: bridge

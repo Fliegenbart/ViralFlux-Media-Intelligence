@@ -2,13 +2,14 @@ import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
-from prophet import Prophet
+from statsmodels.tsa.holtwinters import ExponentialSmoothing
+from sklearn.linear_model import Ridge
 import logging
 from typing import Dict, List
 
 from app.models.database import (
-    WastewaterAggregated, 
-    GoogleTrendsData, 
+    WastewaterAggregated,
+    GoogleTrendsData,
     WeatherData,
     SchoolHolidays,
     GrippeWebData,
@@ -21,249 +22,236 @@ settings = get_settings()
 
 
 class ForecastService:
-    """ML-basierter Prognosedienst mit Prophet."""
-    
+    """ML-basierter Prognosedienst mit Holt-Winters + Ridge Regression."""
+
     def __init__(self, db: Session):
         self.db = db
         self.forecast_days = settings.FORECAST_DAYS
         self.confidence_level = settings.CONFIDENCE_LEVEL
-    
+
     def prepare_training_data(
-        self, 
+        self,
         virus_typ: str = 'Influenza A',
         lookback_days: int = 900
     ) -> pd.DataFrame:
-        """
-        Bereite Trainingsdaten vor mit allen Features.
-        
-        Features:
-        - Viruslast (Abwasser) - Hauptziel
-        - Google Trends Score
-        - ARE/ILI Inzidenzen
-        - Temperatur, Luftfeuchtigkeit
-        - Schulferien (Binär)
-        - Lag Features (7, 14 Tage)
-        
-        Args:
-            virus_typ: Virustyp für Prognose
-            lookback_days: Anzahl Tage zurück für Training
-        
-        Returns:
-            DataFrame mit allen Features
-        """
+        """Prepare training data with all features."""
         logger.info(f"Preparing training data for {virus_typ}")
-        
         start_date = datetime.now() - timedelta(days=lookback_days)
-        
-        # 1. Abwasser-Viruslast (Ziel-Variable)
+
+        # 1. Wastewater viral load (target)
         wastewater = self.db.query(WastewaterAggregated).filter(
             WastewaterAggregated.virus_typ == virus_typ,
             WastewaterAggregated.datum >= start_date
         ).all()
-        
+
         df = pd.DataFrame([{
             'ds': w.datum,
             'y': w.viruslast,
             'viruslast_normalized': w.viruslast_normalisiert
         } for w in wastewater])
-        
+
         if df.empty:
             logger.warning(f"No wastewater data found for {virus_typ}")
             return pd.DataFrame()
-        
+
         df = df.sort_values('ds').reset_index(drop=True)
-        
-        # 2. Google Trends - Durchschnitt über relevante Keywords
+        df['ds'] = pd.to_datetime(df['ds'])
+
+        # 2. Google Trends
         trends_keywords = ['Grippe', 'Erkältung', 'Fieber']
         trends = self.db.query(GoogleTrendsData).filter(
             GoogleTrendsData.keyword.in_(trends_keywords),
             GoogleTrendsData.datum >= start_date
         ).all()
-        
+
         trends_df = pd.DataFrame([{
-            'ds': t.datum,
-            'keyword': t.keyword,
+            'ds': pd.to_datetime(t.datum),
             'interest_score': t.interest_score
         } for t in trends])
-        
+
         if not trends_df.empty:
-            # Durchschnitt über alle Keywords pro Tag
             trends_avg = trends_df.groupby('ds')['interest_score'].mean().reset_index()
             trends_avg.columns = ['ds', 'trends_score']
             df = df.merge(trends_avg, on='ds', how='left')
         else:
             df['trends_score'] = 0
-        
-        # 3. GrippeWeb ARE Inzidenzen
-        grippeweb = self.db.query(GrippeWebData).filter(
-            GrippeWebData.erkrankung_typ == 'ARE',
-            GrippeWebData.datum >= start_date,
-            GrippeWebData.bundesland.is_(None)  # Bundesweit
-        ).all()
-        
-        grippeweb_df = pd.DataFrame([{
-            'ds': g.datum,
-            'are_inzidenz': g.inzidenz
-        } for g in grippeweb])
-        
-        if not grippeweb_df.empty:
-            df = df.merge(grippeweb_df, on='ds', how='left')
-        else:
-            df['are_inzidenz'] = 0
-        
-        # 4. Wetterdaten - Durchschnitt über Städte
-        weather = self.db.query(WeatherData).filter(
-            WeatherData.datum >= start_date
-        ).all()
-        
-        weather_df = pd.DataFrame([{
-            'ds': w.datum.date(),
-            'temperatur': w.temperatur,
-            'luftfeuchtigkeit': w.luftfeuchtigkeit
-        } for w in weather])
-        
-        if not weather_df.empty:
-            weather_avg = weather_df.groupby('ds').agg({
-                'temperatur': 'mean',
-                'luftfeuchtigkeit': 'mean'
-            }).reset_index()
-            weather_avg['ds'] = pd.to_datetime(weather_avg['ds'])
-            df = df.merge(weather_avg, on='ds', how='left')
-        else:
-            df['temperatur'] = 15  # Default
-            df['luftfeuchtigkeit'] = 70  # Default
-        
-        # 5. Schulferien (Binär)
-        df['schulferien'] = df['ds'].apply(
-            lambda d: 1 if self._is_holiday(d) else 0
-        )
-        
-        # 6. Lag Features (Viruslast vor 7 und 14 Tagen)
-        df['viruslast_lag7'] = df['y'].shift(7)
-        df['viruslast_lag14'] = df['y'].shift(14)
-        
-        # 7. Moving Averages
-        df['viruslast_ma7'] = df['y'].rolling(window=7, min_periods=1).mean()
-        df['trends_ma7'] = df['trends_score'].rolling(window=7, min_periods=1).mean()
-        
-        # NaN entfernen
+
+        # 3. School holidays
+        df['schulferien'] = df['ds'].apply(lambda d: 1 if self._is_holiday(d) else 0)
+
+        # 4. Lag features
+        df['lag1'] = df['y'].shift(1)
+        df['lag2'] = df['y'].shift(2)
+        df['lag3'] = df['y'].shift(3)
+
+        # 5. Moving averages
+        df['ma3'] = df['y'].rolling(window=3, min_periods=1).mean()
+        df['ma5'] = df['y'].rolling(window=5, min_periods=1).mean()
+
+        # 6. Rate of change
+        df['roc'] = df['y'].pct_change()
+
+        # Fill NaN
         df = df.bfill().ffill()
-        
+
         logger.info(f"Training data prepared: {len(df)} rows, {len(df.columns)} features")
         return df
-    
-    def _is_holiday(self, datum: datetime) -> bool:
-        """Prüfe ob Datum in Schulferien liegt."""
+
+    def _is_holiday(self, datum) -> bool:
+        """Check if date falls in school holidays."""
         return self.db.query(SchoolHolidays).filter(
             SchoolHolidays.start_datum <= datum,
             SchoolHolidays.end_datum >= datum
         ).first() is not None
-    
-    def train_and_forecast(
-        self, 
-        virus_typ: str = 'Influenza A'
-    ) -> Dict:
-        """
-        Trainiere Prophet-Modell und erstelle Prognose.
-        
-        Args:
-            virus_typ: Virustyp für Prognose
-        
-        Returns:
-            Dict mit Prognose-Daten
-        """
-        logger.info(f"Training Prophet model for {virus_typ}")
-        
-        # Trainingsdaten vorbereiten
+
+    def train_and_forecast(self, virus_typ: str = 'Influenza A') -> Dict:
+        """Train model and generate 14-day forecast using Holt-Winters + Ridge."""
+        logger.info(f"Training forecast model for {virus_typ}")
+
         df = self.prepare_training_data(virus_typ=virus_typ)
-        
-        if df.empty or len(df) < 14:
-            logger.error(f"Insufficient data for training ({len(df)} rows)")
+
+        if df.empty or len(df) < 10:
+            logger.error(f"Insufficient data for training ({len(df) if not df.empty else 0} rows)")
             return {"error": "Insufficient training data"}
-        
-        # Prophet-Modell initialisieren (Daten sind wöchentlich, nicht täglich)
-        model = Prophet(
-            daily_seasonality=False,
-            weekly_seasonality=False,
-            yearly_seasonality=True,
-            changepoint_prior_scale=0.1,
-            interval_width=self.confidence_level,
-            seasonality_mode='multiplicative'
-        )
-        
-        # Regressoren hinzufügen
-        regressors = [
-            'trends_score',
-            'are_inzidenz',
-            'temperatur',
-            'luftfeuchtigkeit',
-            'schulferien',
-            'viruslast_lag7',
-            'viruslast_lag14',
-            'trends_ma7'
-        ]
-        
-        for regressor in regressors:
-            if regressor in df.columns:
-                model.add_regressor(regressor)
-        
-        # Modell trainieren
-        logger.info("Fitting Prophet model...")
-        model.fit(df[['ds', 'y'] + [r for r in regressors if r in df.columns]])
-        
-        # Zukünftige Daten vorbereiten
-        future = model.make_future_dataframe(
-            periods=self.forecast_days,
-            freq='D'
-        )
-        
-        # Regressoren für Zukunft vorbereiten
-        # (Vereinfachung: Letzte bekannte Werte verwenden)
-        for regressor in regressors:
-            if regressor in df.columns:
-                last_value = df[regressor].iloc[-1]
-                future[regressor] = last_value
-        
-        # Prognose erstellen
-        logger.info("Generating forecast...")
-        forecast = model.predict(future)
-        
-        # Nur zukünftige Werte
-        forecast_future = forecast[forecast['ds'] > df['ds'].max()]
-        
-        # Feature Importance (approximiert)
-        feature_importance = {}
-        for regressor in regressors:
-            if regressor in df.columns:
-                # Korrelation mit Ziel-Variable
-                corr = df[['y', regressor]].corr().iloc[0, 1]
-                feature_importance[regressor] = abs(corr)
-        
+
+        y = df['y'].values
+        n = len(y)
+
+        # ── Method 1: Holt-Winters Exponential Smoothing ──
+        try:
+            seasonal_periods = min(52, n // 2) if n >= 8 else None
+            if seasonal_periods and seasonal_periods >= 2:
+                hw_model = ExponentialSmoothing(
+                    y,
+                    trend='add',
+                    seasonal='add',
+                    seasonal_periods=seasonal_periods,
+                    initialization_method='estimated'
+                )
+            else:
+                hw_model = ExponentialSmoothing(
+                    y,
+                    trend='add',
+                    initialization_method='estimated'
+                )
+            hw_fit = hw_model.fit(optimized=True)
+            hw_forecast = hw_fit.forecast(self.forecast_days)
+        except Exception as e:
+            logger.warning(f"Holt-Winters failed, using simple trend: {e}")
+            # Fallback: linear extrapolation
+            hw_forecast = np.full(self.forecast_days, y[-1])
+            slope = (y[-1] - y[max(0, -5)]) / min(5, n)
+            hw_forecast = np.array([y[-1] + slope * (i + 1) for i in range(self.forecast_days)])
+
+        # ── Method 2: Ridge regression on features ──
+        try:
+            feature_cols = ['lag1', 'lag2', 'lag3', 'ma3', 'ma5', 'trends_score', 'schulferien', 'roc']
+            available_features = [c for c in feature_cols if c in df.columns]
+
+            if len(available_features) >= 2:
+                X = df[available_features].values
+                ridge = Ridge(alpha=1.0)
+                ridge.fit(X, y)
+
+                # Predict forward by rolling the features
+                ridge_forecast = []
+                last_row = df[available_features].iloc[-1].values.copy()
+                last_vals = list(y[-5:])
+
+                for i in range(self.forecast_days):
+                    pred = ridge.predict(last_row.reshape(1, -1))[0]
+                    ridge_forecast.append(pred)
+                    last_vals.append(pred)
+                    # Update lag features
+                    if 'lag1' in available_features:
+                        idx = available_features.index('lag1')
+                        last_row[idx] = pred
+                    if 'lag2' in available_features:
+                        idx = available_features.index('lag2')
+                        last_row[idx] = last_vals[-2] if len(last_vals) >= 2 else pred
+                    if 'lag3' in available_features:
+                        idx = available_features.index('lag3')
+                        last_row[idx] = last_vals[-3] if len(last_vals) >= 3 else pred
+                    if 'ma3' in available_features:
+                        idx = available_features.index('ma3')
+                        last_row[idx] = np.mean(last_vals[-3:])
+                    if 'ma5' in available_features:
+                        idx = available_features.index('ma5')
+                        last_row[idx] = np.mean(last_vals[-5:])
+                    if 'roc' in available_features:
+                        idx = available_features.index('roc')
+                        last_row[idx] = (pred - last_vals[-2]) / last_vals[-2] if len(last_vals) >= 2 and last_vals[-2] != 0 else 0
+
+                ridge_forecast = np.array(ridge_forecast)
+
+                # Feature importance from Ridge coefficients
+                feature_importance = {}
+                for fname, coef in zip(available_features, ridge.coef_):
+                    feature_importance[fname] = round(abs(float(coef)) / (np.sum(np.abs(ridge.coef_)) + 1e-9), 3)
+            else:
+                ridge_forecast = hw_forecast.copy()
+                feature_importance = {}
+        except Exception as e:
+            logger.warning(f"Ridge regression failed: {e}")
+            ridge_forecast = hw_forecast.copy()
+            feature_importance = {}
+
+        # ── Ensemble: 60% Holt-Winters + 40% Ridge ──
+        ensemble = 0.6 * hw_forecast + 0.4 * ridge_forecast
+
+        # Ensure non-negative
+        ensemble = np.maximum(ensemble, 0)
+
+        # Confidence intervals based on historical residuals
+        if n >= 5:
+            residuals = np.diff(y[-min(20, n):])
+            std = np.std(residuals) if len(residuals) > 1 else np.std(y) * 0.1
+        else:
+            std = np.std(y) * 0.1
+
+        z = 1.96  # ~95% CI
+        lower = ensemble - z * std * np.sqrt(np.arange(1, self.forecast_days + 1))
+        upper = ensemble + z * std * np.sqrt(np.arange(1, self.forecast_days + 1))
+        lower = np.maximum(lower, 0)
+
+        # Build forecast dates
+        last_date = df['ds'].max()
+        forecast_dates = [last_date + timedelta(days=i + 1) for i in range(self.forecast_days)]
+
+        forecast_records = []
+        for i in range(self.forecast_days):
+            forecast_records.append({
+                'ds': forecast_dates[i],
+                'yhat': float(ensemble[i]),
+                'yhat_lower': float(lower[i]),
+                'yhat_upper': float(upper[i])
+            })
+
         result = {
             "virus_typ": virus_typ,
-            "training_samples": len(df),
+            "training_samples": n,
             "forecast_days": self.forecast_days,
-            "forecast": forecast_future[['ds', 'yhat', 'yhat_lower', 'yhat_upper']].to_dict('records'),
+            "forecast": forecast_records,
             "feature_importance": feature_importance,
-            "model_version": "prophet_v1",
+            "model_version": "hw_ridge_v1",
+            "confidence": float(self.confidence_level),
             "timestamp": datetime.utcnow()
         }
-        
-        logger.info(f"Forecast completed for {virus_typ}: {len(forecast_future)} days")
+
+        logger.info(f"Forecast completed for {virus_typ}: {self.forecast_days} days, {n} training samples")
         return result
-    
+
     def save_forecast(self, forecast_data: Dict):
-        """Speichere Prognose in Datenbank."""
+        """Save forecast to database."""
         logger.info("Saving forecast to database...")
-        
         count = 0
+
         for item in forecast_data['forecast']:
-            # Prüfe ob bereits existiert
             existing = self.db.query(MLForecast).filter(
                 MLForecast.forecast_date == item['ds'],
                 MLForecast.virus_typ == forecast_data['virus_typ']
             ).first()
-            
+
             if existing:
                 existing.predicted_value = item['yhat']
                 existing.lower_bound = item['yhat_lower']
@@ -284,24 +272,25 @@ class ForecastService:
                 )
                 self.db.add(forecast_record)
                 count += 1
-        
+
         self.db.commit()
         logger.info(f"Saved {count} new forecast records")
         return count
-    
+
     def run_forecasts_for_all_viruses(self):
-        """Erstelle Prognosen für alle relevanten Viren."""
-        virus_types = ['Influenza A', 'Influenza B', 'SARS-CoV-2', 'RSV A', 'RSV B']
-        
+        """Run forecasts for all relevant virus types."""
+        virus_types = ['Influenza A', 'Influenza B', 'SARS-CoV-2', 'RSV A']
+
         results = {}
         for virus in virus_types:
             logger.info(f"Processing forecast for {virus}...")
-            forecast = self.train_and_forecast(virus_typ=virus)
-            
-            if 'error' not in forecast:
-                self.save_forecast(forecast)
+            try:
+                forecast = self.train_and_forecast(virus_typ=virus)
+                if 'error' not in forecast:
+                    self.save_forecast(forecast)
                 results[virus] = forecast
-            else:
-                results[virus] = forecast
-        
+            except Exception as e:
+                logger.error(f"Forecast failed for {virus}: {e}")
+                results[virus] = {"error": str(e)}
+
         return results

@@ -112,8 +112,9 @@ async def get_status(db: Session = Depends(get_db)):
 
 
 # Import API routes
-from app.api import dashboard
+from app.api import dashboard, ingest
 app.include_router(dashboard.router, prefix="/api/v1/dashboard", tags=["Dashboard"])
+app.include_router(ingest.router, prefix="/api/v1/ingest", tags=["Data Ingestion"])
 
 
 if __name__ == "__main__":

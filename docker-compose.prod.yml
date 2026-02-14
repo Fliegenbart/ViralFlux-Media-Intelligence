@@ -35,7 +35,7 @@ services:
       - OLLAMA_MODEL=${OLLAMA_MODEL:-llama2}
       - SECRET_KEY=${SECRET_KEY:-virusradar-prod-secret-key-change-me-2026}
       - ENVIRONMENT=production
-      - ALLOWED_ORIGINS=https://labpulse.belegsync.com
+      - ALLOWED_ORIGINS=https://labpulse.belegsync.com,http://5.9.106.75:8501
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
@@ -53,6 +53,7 @@ services:
     restart: unless-stopped
     ports:
       - "172.17.0.1:18080:80"
+      - "0.0.0.0:8501:80"
     depends_on:
       - backend
     networks:

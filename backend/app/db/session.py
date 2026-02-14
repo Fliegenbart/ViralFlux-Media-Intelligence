@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.pool import QueuePool
 from contextlib import contextmanager
@@ -28,8 +28,14 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 def init_db():
     """Initialize database - create all tables."""
     logger.info("Creating database tables...")
-    Base.metadata.create_all(bind=engine)
-    logger.info("Database tables created successfully.")
+    try:
+        Base.metadata.create_all(bind=engine)
+        logger.info("Database tables created successfully.")
+    except Exception as e:
+        if "already exists" in str(e):
+            logger.info("Database tables already exist, skipping creation.")
+        else:
+            raise
 
 
 def get_db() -> Generator[Session, None, None]:
@@ -73,7 +79,7 @@ async def check_db_connection() -> bool:
     """Check if database connection is healthy."""
     try:
         with get_db_context() as db:
-            db.execute("SELECT 1")
+            db.execute(text("SELECT 1"))
         return True
     except Exception as e:
         logger.error(f"Database connection check failed: {e}")

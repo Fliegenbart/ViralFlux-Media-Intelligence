@@ -11,9 +11,9 @@ settings = get_settings()
 
 
 class WeatherService:
-    """Service zum Abrufen von Wetterdaten via OpenWeather API."""
+    """Service zum Abrufen von Wetterdaten via OpenWeather OneCall 3.0 API."""
 
-    BASE_URL = "https://api.openweathermap.org/data/2.5"
+    ONECALL_URL = "https://api.openweathermap.org/data/3.0/onecall"
 
     CITIES = [
         {"name": "Berlin", "lat": 52.52, "lon": 13.41},
@@ -30,71 +30,28 @@ class WeatherService:
     def _has_valid_key(self) -> bool:
         return self.api_key and self.api_key not in ('placeholder', 'your-openweather-api-key-here', '')
 
-    def fetch_current_weather(self, city: dict) -> dict:
-        """Hole aktuelle Wetterdaten für eine Stadt."""
-        url = f"{self.BASE_URL}/weather"
-        params = {
-            'lat': city['lat'],
-            'lon': city['lon'],
-            'appid': self.api_key,
-            'units': 'metric',
-            'lang': 'de'
-        }
-
-        response = requests.get(url, params=params, timeout=10)
-        response.raise_for_status()
-        data = response.json()
-
-        return {
-            'city': city['name'],
-            'temperatur': data['main']['temp'],
-            'gefuehlte_temperatur': data['main']['feels_like'],
-            'luftfeuchtigkeit': data['main']['humidity'],
-            'luftdruck': data['main']['pressure'],
-            'wetter_beschreibung': data['weather'][0]['description'],
-            'wind_geschwindigkeit': data['wind']['speed'],
-            'datum': datetime.utcnow()
-        }
-
-    def fetch_forecast(self, city: dict, days: int = 8) -> list:
-        """Hole Wettervorhersage (5-Tage/3h-Intervalle, Free API)."""
-        url = f"{self.BASE_URL}/forecast"
+    def fetch_onecall(self, city: dict) -> dict:
+        """Fetch current + 8-day forecast via OneCall 3.0 API."""
         params = {
             'lat': city['lat'],
             'lon': city['lon'],
             'appid': self.api_key,
             'units': 'metric',
             'lang': 'de',
-            'cnt': min(days, 5) * 8  # 8 Datenpunkte pro Tag (3h), max 5 Tage bei Free API
+            'exclude': 'minutely,alerts'
         }
 
-        response = requests.get(url, params=params, timeout=10)
+        response = requests.get(self.ONECALL_URL, params=params, timeout=15)
         response.raise_for_status()
-        data = response.json()
-
-        forecasts = []
-        for item in data['list']:
-            forecasts.append({
-                'city': city['name'],
-                'datum': datetime.fromtimestamp(item['dt']),
-                'temperatur': item['main']['temp'],
-                'gefuehlte_temperatur': item['main']['feels_like'],
-                'luftfeuchtigkeit': item['main']['humidity'],
-                'luftdruck': item['main']['pressure'],
-                'wetter_beschreibung': item['weather'][0]['description'],
-                'wind_geschwindigkeit': item['wind']['speed']
-            })
-
-        logger.info(f"Fetched {len(forecasts)} forecast points for {city['name']}")
-        return forecasts
+        return response.json()
 
     def import_weather_data(self, weather_data: dict):
-        """Importiere einen Wetterdatensatz in die Datenbank."""
+        """Import a single weather record into the database."""
         data = WeatherData(**weather_data)
         self.db.add(data)
 
     def run_full_import(self, include_forecast: bool = True):
-        """Führe Import für alle Städte durch inkl. 8-Tage-Forecast."""
+        """Import current weather + 8-day daily forecast for all cities."""
         if not self._has_valid_key():
             logger.warning("No valid OpenWeather API key configured, skipping weather import")
             return {
@@ -109,19 +66,54 @@ class WeatherService:
 
         for city in self.CITIES:
             try:
-                # Aktuelles Wetter
-                current = self.fetch_current_weather(city)
-                self.import_weather_data(current)
+                data = self.fetch_onecall(city)
+
+                # Current weather
+                current = data.get('current', {})
+                self.import_weather_data({
+                    'city': city['name'],
+                    'datum': datetime.utcnow(),
+                    'temperatur': current.get('temp'),
+                    'gefuehlte_temperatur': current.get('feels_like'),
+                    'luftfeuchtigkeit': current.get('humidity'),
+                    'luftdruck': current.get('pressure'),
+                    'wetter_beschreibung': current.get('weather', [{}])[0].get('description', ''),
+                    'wind_geschwindigkeit': current.get('wind_speed'),
+                })
                 imported += 1
 
-                # 8-Tage Forecast
+                # 8-day daily forecast
                 if include_forecast:
-                    forecasts = self.fetch_forecast(city, days=8)
-                    for fc in forecasts:
-                        self.import_weather_data(fc)
+                    for day in data.get('daily', []):
+                        self.import_weather_data({
+                            'city': city['name'],
+                            'datum': datetime.fromtimestamp(day['dt']),
+                            'temperatur': day['temp']['day'],
+                            'gefuehlte_temperatur': day['feels_like']['day'],
+                            'luftfeuchtigkeit': day.get('humidity'),
+                            'luftdruck': day.get('pressure'),
+                            'wetter_beschreibung': day.get('weather', [{}])[0].get('description', ''),
+                            'wind_geschwindigkeit': day.get('wind_speed'),
+                        })
                         imported += 1
 
-                logger.info(f"Weather: {city['name']} = {current['temperatur']}°C")
+                # Hourly forecast (next 48h) - take every 3h
+                for i, hour in enumerate(data.get('hourly', [])):
+                    if i % 3 != 0:
+                        continue
+                    self.import_weather_data({
+                        'city': city['name'],
+                        'datum': datetime.fromtimestamp(hour['dt']),
+                        'temperatur': hour.get('temp'),
+                        'gefuehlte_temperatur': hour.get('feels_like'),
+                        'luftfeuchtigkeit': hour.get('humidity'),
+                        'luftdruck': hour.get('pressure'),
+                        'wetter_beschreibung': hour.get('weather', [{}])[0].get('description', ''),
+                        'wind_geschwindigkeit': hour.get('wind_speed'),
+                    })
+                    imported += 1
+
+                logger.info(f"Weather: {city['name']} = {current.get('temp')}°C, {current.get('weather', [{}])[0].get('description', '')}")
             except Exception as e:
                 logger.error(f"Weather fetch failed for {city['name']}: {e}")
                 errors.append(f"{city['name']}: {e}")

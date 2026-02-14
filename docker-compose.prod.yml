@@ -52,7 +52,7 @@ services:
     container_name: virusradar_frontend
     restart: unless-stopped
     ports:
-      - "127.0.0.1:18080:80"
+      - "172.17.0.1:18080:80"
     depends_on:
       - backend
     networks:

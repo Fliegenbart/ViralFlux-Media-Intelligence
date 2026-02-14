@@ -31,7 +31,7 @@ class ForecastService:
     def prepare_training_data(
         self, 
         virus_typ: str = 'Influenza A',
-        lookback_days: int = 180
+        lookback_days: int = 900
     ) -> pd.DataFrame:
         """
         Bereite Trainingsdaten vor mit allen Features.
@@ -177,17 +177,18 @@ class ForecastService:
         # Trainingsdaten vorbereiten
         df = self.prepare_training_data(virus_typ=virus_typ)
         
-        if df.empty or len(df) < 30:
+        if df.empty or len(df) < 14:
             logger.error(f"Insufficient data for training ({len(df)} rows)")
             return {"error": "Insufficient training data"}
         
-        # Prophet-Modell initialisieren
+        # Prophet-Modell initialisieren (Daten sind wöchentlich, nicht täglich)
         model = Prophet(
-            daily_seasonality=True,
-            weekly_seasonality=True,
+            daily_seasonality=False,
+            weekly_seasonality=False,
             yearly_seasonality=True,
-            changepoint_prior_scale=0.05,  # Flexibilität für Trend-Änderungen
-            interval_width=self.confidence_level
+            changepoint_prior_scale=0.1,
+            interval_width=self.confidence_level,
+            seasonality_mode='multiplicative'
         )
         
         # Regressoren hinzufügen

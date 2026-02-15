@@ -78,6 +78,7 @@ services:
     container_name: virusradar_frontend_prod
     ports:
       - "18080:80"
+      - "8501:80"
     depends_on:
       - backend
     restart: unless-stopped

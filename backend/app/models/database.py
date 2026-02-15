@@ -70,6 +70,26 @@ class GrippeWebData(Base):
     )
 
 
+class AREKonsultation(Base):
+    """RKI ARE-Konsultationsinzidenz — Arztbesuche wegen akuter Atemwegserkrankungen."""
+    __tablename__ = "are_konsultation"
+
+    id = Column(Integer, primary_key=True, index=True)
+    datum = Column(DateTime, nullable=False, index=True)
+    kalenderwoche = Column(Integer, nullable=False)
+    saison = Column(String, nullable=False)
+    altersgruppe = Column(String, nullable=False)
+    bundesland = Column(String, nullable=False)
+    bundesland_id = Column(Integer)
+    konsultationsinzidenz = Column(Integer, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        Index('idx_are_konsult_date_age', 'datum', 'altersgruppe'),
+        Index('idx_are_konsult_bundesland', 'bundesland', 'kalenderwoche'),
+    )
+
+
 class GoogleTrendsData(Base):
     """Google Trends Suchanfragen-Daten."""
     __tablename__ = "google_trends_data"
@@ -300,3 +320,19 @@ class UploadHistory(Base):
     error_message = Column(String)
     summary = Column(JSON)
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+
+class LabConfiguration(Base):
+    """Gelernte Gewichte (Global oder pro Mandant)."""
+    __tablename__ = "lab_configurations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    is_global_default = Column(Boolean, default=False, index=True)
+    weight_bio = Column(Float, default=0.35)
+    weight_market = Column(Float, default=0.35)
+    weight_psycho = Column(Float, default=0.10)
+    weight_context = Column(Float, default=0.20)
+    last_calibration_date = Column(DateTime, default=datetime.utcnow)
+    calibration_source = Column(String)
+    correlation_score = Column(Float)
+    analyzed_days = Column(Integer)

@@ -49,6 +49,7 @@ class Settings(BaseSettings):
     # Data Sources
     RKI_AMELAG_URL: str = "https://raw.githubusercontent.com/robert-koch-institut/Abwassersurveillance_AMELAG/main"
     RKI_GRIPPEWEB_URL: str = "https://raw.githubusercontent.com/robert-koch-institut/GrippeWeb_Daten_des_Wochenberichts/main"
+    RKI_ARE_KONSULTATION_URL: str = "https://raw.githubusercontent.com/robert-koch-institut/ARE-Konsultationsinzidenz/main/ARE-Konsultationsinzidenz.tsv"
     
     # ML Settings
     FORECAST_DAYS: int = 14

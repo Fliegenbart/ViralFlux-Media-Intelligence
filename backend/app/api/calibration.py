@@ -136,3 +136,19 @@ async def download_template():
         media_type="text/csv",
         headers={"Content-Disposition": "attachment; filename=labpulse_kalibrierung_vorlage.csv"},
     )
+
+
+@router.post("/analyze-global")
+async def analyze_global_correlations(
+    virus_typ: str = Query(default="Influenza A"),
+    days_back: int = Query(default=1095, description="Rückblick in Tagen (Default: 3 Jahre)"),
+    db: Session = Depends(get_db),
+):
+    """Globale Kalibrierung: Optimiert System-Gewichte auf Basis historischer Daten.
+
+    Nutzt interne Verkaufsdaten (wenn verfügbar) oder RKI-Abwasserdaten als Fallback.
+    Standard-Rückblick: 1095 Tage (3 Jahre) für robuste saisonale Analyse.
+    """
+    from app.services.ml.backtester import BacktestService
+    service = BacktestService(db)
+    return service.run_global_calibration(virus_typ=virus_typ, days_back=days_back)

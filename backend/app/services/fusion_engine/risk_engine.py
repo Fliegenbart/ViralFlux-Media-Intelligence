@@ -28,6 +28,7 @@ from app.models.database import (
     WastewaterAggregated, GoogleTrendsData, WeatherData,
     SchoolHolidays, GanzimmunData, MLForecast,
     OutbreakScore as OutbreakScoreModel,
+    AREKonsultation, LabConfiguration,
 )
 from app.core.config import get_settings
 
@@ -55,6 +56,7 @@ class DailyInputData:
     wastewater_load: float          # RKI/AMELAG (normiert auf Max-Last des Jahres)
     internal_positivity_rate: float # Ganz Immun Labordaten (z.B. 0.15 für 15%)
     internal_baseline_delta: float  # Abweichung zur historischen Baseline (z-Score)
+    are_consultation_signal: float  # RKI ARE-Konsultationsinzidenz (0.0-1.0)
 
     # --- MARKET LAYER (Die Versorgungs-Realität) ---
     bfarm_shortage_count: int       # Anzahl relevanter Engpässe (Antibiotika/Saft)
@@ -99,11 +101,25 @@ class RiskEngine:
         self._meta_learner = None
         self._load_meta_learner()
 
-        # ─── The Recipe ─────────────────────────────────────────
-        self.WEIGHT_BIO = 0.35
-        self.WEIGHT_MARKET = 0.35
-        self.WEIGHT_PSYCHO = 0.10
-        self.WEIGHT_CONTEXT = 0.20
+        # ─── Gewichte: aus LabConfiguration oder Heuristik ─────
+        config = self.db.query(LabConfiguration).filter_by(
+            is_global_default=True
+        ).first()
+
+        if config:
+            self.WEIGHT_BIO = config.weight_bio
+            self.WEIGHT_MARKET = config.weight_market
+            self.WEIGHT_PSYCHO = config.weight_psycho
+            self.WEIGHT_CONTEXT = config.weight_context
+            logger.info(
+                f"RiskEngine: Gelernte Gewichte geladen "
+                f"(Basis: {config.analyzed_days} Tage, R²={config.correlation_score})"
+            )
+        else:
+            self.WEIGHT_BIO = 0.35
+            self.WEIGHT_MARKET = 0.35
+            self.WEIGHT_PSYCHO = 0.10
+            self.WEIGHT_CONTEXT = 0.20
 
         self.PANIC_THRESHOLD = 80.0
         self.SHORTAGE_CRITICAL_LIMIT = 5
@@ -191,6 +207,40 @@ class RiskEngine:
         z_score = (current_rate - hist_mean) / hist_std
 
         return z_score
+
+    def _normalize_are_consultation(self) -> float:
+        """ARE-Konsultationsinzidenz normalisieren (0.0-1.0).
+
+        Strategie: Perzentil-Rang innerhalb derselben KW über alle Saisons.
+        Dadurch wird Saisonalität automatisch berücksichtigt.
+        """
+        latest = self.db.query(AREKonsultation).filter(
+            AREKonsultation.altersgruppe == '00+',
+            AREKonsultation.bundesland == 'Bundesweit',
+        ).order_by(AREKonsultation.datum.desc()).first()
+
+        if not latest or not latest.konsultationsinzidenz:
+            return 0.0
+
+        current_value = latest.konsultationsinzidenz
+        current_week = latest.kalenderwoche
+
+        historical = self.db.query(AREKonsultation.konsultationsinzidenz).filter(
+            AREKonsultation.kalenderwoche == current_week,
+            AREKonsultation.altersgruppe == '00+',
+            AREKonsultation.bundesland == 'Bundesweit',
+        ).all()
+
+        values = sorted([h[0] for h in historical if h[0] is not None])
+
+        if len(values) < 3:
+            return min(current_value / 8200.0, 1.0)
+
+        # bisect_right: gleiche Werte zählen als "darunter"
+        from bisect import bisect_right
+        rank = bisect_right(values, current_value)
+        # rank / len → 0.33 für niedrigsten von 3, 1.0 für höchsten
+        return min(rank / len(values), 1.0)
 
     def _get_shortage_count(self, shortage_signals: dict | None) -> int:
         """Anzahl kritischer Medikamenten-Engpässe."""
@@ -375,6 +425,7 @@ class RiskEngine:
             wastewater_load=self._normalize_wastewater(virus_typ),
             internal_positivity_rate=self._get_internal_positivity_rate(virus_typ),
             internal_baseline_delta=self._get_baseline_delta(virus_typ),
+            are_consultation_signal=self._normalize_are_consultation(),
             bfarm_shortage_count=self._get_shortage_count(shortage_signals),
             order_velocity_index=order_velocity,
             google_search_volume=self._normalize_trends(),
@@ -392,12 +443,21 @@ class RiskEngine:
     def _calculate_sub_scores(self, data: DailyInputData) -> Dict[str, float]:
         """Berechnet die 4 Dimensionen (jeweils 0.0-1.0)."""
 
-        # 1. BIO SCORE (RKI Abwasser + interne Labordaten)
-        # internal_positivity_rate * 5.0 skaliert: 20% Positivrate → ~1.0
-        bio_score = (
-            data.wastewater_load * 0.5 +
-            data.internal_positivity_rate * 5.0 * 0.5
-        )
+        # 1. BIO SCORE (RKI Abwasser + interne Labordaten + ARE-Konsultation)
+        are = data.are_consultation_signal
+        if are > 0:
+            # 3-Signal: Abwasser + Labor + ARE-Konsultation
+            bio_score = (
+                data.wastewater_load * 0.40 +
+                data.internal_positivity_rate * 5.0 * 0.35 +
+                are * 0.25
+            )
+        else:
+            # Fallback: Original 2-Signal wenn keine ARE-Daten
+            bio_score = (
+                data.wastewater_load * 0.5 +
+                data.internal_positivity_rate * 5.0 * 0.5
+            )
 
         # 2. MARKET SCORE (Engpässe + Bestellgeschwindigkeit)
         # Engpässe linear bis 5, darüber gedeckelt
@@ -751,6 +811,7 @@ class RiskEngine:
                 "context": round(scores['context'], 3),
                 # Einzelsignale (backward compat)
                 "wastewater": round(input_data.wastewater_load, 3),
+                "are_consultation": round(input_data.are_consultation_signal, 3),
                 "drug_shortage": round(shortage_norm, 3),
                 "prophet_trend": round(prophet_baseline, 3),
                 "search_trends": round(input_data.google_search_volume, 3),

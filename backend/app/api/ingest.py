@@ -38,6 +38,16 @@ def _run_import_all():
             results["grippeweb"] = {"success": False, "error": str(e)}
 
     with get_db_context() as db:
+        # 2b. ARE-Konsultationsinzidenz (syndromische Surveillance)
+        try:
+            from app.services.data_ingest.are_konsultation_service import AREKonsultationIngestionService
+            are = AREKonsultationIngestionService(db)
+            results["are_konsultation"] = are.run_full_import()
+        except Exception as e:
+            logger.error(f"ARE-Konsultation import failed: {e}")
+            results["are_konsultation"] = {"success": False, "error": str(e)}
+
+    with get_db_context() as db:
         # 3. Schulferien (ferien-api.de, alle 16 Bundesländer)
         try:
             holidays = SchoolHolidaysService(db)
@@ -91,6 +101,14 @@ async def run_grippeweb_import(db: Session = Depends(get_db)):
     """Importiere GrippeWeb ARE/ILI Surveillance-Daten."""
     from app.services.data_ingest.grippeweb_service import GrippeWebIngestionService
     service = GrippeWebIngestionService(db)
+    return service.run_full_import()
+
+
+@router.post("/are-konsultation")
+async def run_are_konsultation_import(db: Session = Depends(get_db)):
+    """Importiere RKI ARE-Konsultationsinzidenz Daten."""
+    from app.services.data_ingest.are_konsultation_service import AREKonsultationIngestionService
+    service = AREKonsultationIngestionService(db)
     return service.run_full_import()
 
 

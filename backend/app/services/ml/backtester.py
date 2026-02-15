@@ -20,6 +20,8 @@ from app.models.database import (
     GoogleTrendsData,
     WeatherData,
     SchoolHolidays,
+    AREKonsultation,
+    LabConfiguration,
 )
 
 logger = logging.getLogger(__name__)
@@ -144,18 +146,62 @@ class BacktestService:
         ).count()
         return count > 0
 
+    def _are_consultation_at_date(self, target: datetime) -> float:
+        """ARE-Konsultationsinzidenz-Signal an target_date (0-1).
+
+        Weekly data is forward-filled: most recent ARE reading on or before
+        target_date, then percentile-ranked against same-week historical values.
+        """
+        latest = self.db.query(AREKonsultation).filter(
+            AREKonsultation.altersgruppe == '00+',
+            AREKonsultation.bundesland == 'Bundesweit',
+            AREKonsultation.datum <= target,
+        ).order_by(AREKonsultation.datum.desc()).first()
+
+        if not latest or not latest.konsultationsinzidenz:
+            return 0.0
+
+        current_value = latest.konsultationsinzidenz
+        current_week = latest.kalenderwoche
+
+        # Only use data available at target_date (no future leak)
+        historical = self.db.query(AREKonsultation.konsultationsinzidenz).filter(
+            AREKonsultation.kalenderwoche == current_week,
+            AREKonsultation.altersgruppe == '00+',
+            AREKonsultation.bundesland == 'Bundesweit',
+            AREKonsultation.datum <= target,
+        ).all()
+
+        values = sorted([h[0] for h in historical if h[0] is not None])
+
+        if len(values) < 3:
+            return min(current_value / 8200.0, 1.0)
+
+        from bisect import bisect_right
+        rank = bisect_right(values, current_value)
+        return min(rank / len(values), 1.0)
+
     def _compute_sub_scores_at_date(
         self, target: datetime, virus_typ: str
     ) -> dict[str, float]:
         """Berechnet die 4 Dimensions-Scores an einem historischen Datum."""
         wastewater = self._wastewater_at_date(target, virus_typ)
         positivity = self._positivity_rate_at_date(target, virus_typ)
+        are_consultation = self._are_consultation_at_date(target)
         trends = self._trends_at_date(target)
         weather = self._weather_risk_at_date(target)
         school_start = self._school_start_at_date(target)
 
-        # BIO = wastewater + lab positivity
-        bio = min(wastewater * 0.5 + positivity * 5.0 * 0.5, 1.0)
+        # BIO = wastewater + lab positivity + ARE consultation (graceful degradation)
+        if are_consultation > 0:
+            bio = min(
+                wastewater * 0.40 +
+                positivity * 5.0 * 0.35 +
+                are_consultation * 0.25,
+                1.0
+            )
+        else:
+            bio = min(wastewater * 0.5 + positivity * 5.0 * 0.5, 1.0)
 
         # MARKET = placeholder (order velocity needs customer-specific data)
         market = 0.0
@@ -175,6 +221,7 @@ class BacktestService:
             "context": round(context, 4),
             "school_start": school_start,
             "wastewater_raw": round(wastewater, 4),
+            "are_consultation_raw": round(are_consultation, 4),
             "weather_raw": round(weather, 4),
         }
 
@@ -357,3 +404,119 @@ Verwende einen sachlichen, vertrauenswürdigen Ton."""
                 f"ist \"{factor_names[dominant]}\" ({weights[dominant]*100:.0f}%). "
                 f"Wir empfehlen, das Modell mit diesen optimierten Gewichten zu kalibrieren."
             )
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Globale Kalibrierung (3 Jahre, RKI-Fallback)
+    # ─────────────────────────────────────────────────────────────────────────
+
+    def run_global_calibration(
+        self, virus_typ: str = "Influenza A", days_back: int = 1095
+    ) -> dict:
+        """Trainiert Gewichte über 3 Jahre. Nutzt interne Daten oder RKI-Fallback.
+
+        Priorität 1: Interne Verkaufsdaten (GanzimmunData)
+        Priorität 2: RKI Abwasserdaten (epidemiologischer Modus)
+        """
+        logger.info(
+            f"Starte globale Kalibrierung: {virus_typ}, "
+            f"Rückblick={days_back} Tage ({days_back / 365:.1f} Jahre)"
+        )
+
+        start_date = datetime.now() - timedelta(days=days_back)
+
+        # 1. Interne Daten prüfen
+        internal_data = self.db.query(GanzimmunData).filter(
+            GanzimmunData.test_typ.ilike(f"%{virus_typ}%"),
+            GanzimmunData.datum >= start_date,
+        ).order_by(GanzimmunData.datum.asc()).all()
+
+        target_source = "INTERNAL_SALES"
+
+        # 2. Fallback auf RKI Abwasserdaten
+        if not internal_data or len(internal_data) < 50:
+            logger.info(
+                "Keine ausreichenden internen Daten. "
+                "Trainiere gegen RKI Abwasserdaten."
+            )
+            target_source = "RKI_WASTEWATER"
+
+            rki_data = self.db.query(WastewaterAggregated).filter(
+                WastewaterAggregated.virus_typ == virus_typ,
+                WastewaterAggregated.datum >= start_date,
+            ).order_by(WastewaterAggregated.datum.asc()).all()
+
+            if not rki_data:
+                return {
+                    "error": "Weder interne noch RKI Daten für Analyse verfügbar."
+                }
+
+            df = pd.DataFrame([{
+                'datum': d.datum,
+                'menge': d.viruslast,
+            } for d in rki_data if d.viruslast])
+        else:
+            df = pd.DataFrame([{
+                'datum': d.datum,
+                'menge': d.anzahl_tests,
+            } for d in internal_data])
+
+        if len(df) < 5:
+            return {"error": f"Zu wenig Datenpunkte ({len(df)}) für Kalibrierung."}
+
+        # 3. Simulation & Training (nutzt existierende run_calibration Logik)
+        result = self.run_calibration(df, virus_typ=virus_typ)
+
+        if "error" in result:
+            return result
+
+        new_weights = result["optimized_weights"]
+        metrics = result["metrics"]
+
+        # 4. Speichern als Global Default
+        self._save_global_defaults(
+            new_weights, metrics["r2_score"], len(df)
+        )
+
+        message = (
+            f"Analyse über {len(df)} Datenpunkte "
+            f"({len(df) / 365 * 7:.1f} Wochen) abgeschlossen. "
+            f"Basis: {target_source}. "
+            f"Neue Gewichtung: Bio {new_weights['bio'] * 100:.0f}%, "
+            f"Markt {new_weights['market'] * 100:.0f}%, "
+            f"Psycho {new_weights['psycho'] * 100:.0f}%, "
+            f"Kontext {new_weights['context'] * 100:.0f}%."
+        )
+
+        return {
+            "status": "success",
+            "calibration_source": target_source,
+            "period_days": days_back,
+            "data_points": len(df),
+            "new_weights": new_weights,
+            "metrics": metrics,
+            "message": message,
+        }
+
+    def _save_global_defaults(
+        self, weights: dict, score: float, days_count: int
+    ):
+        """Speichere optimierte Gewichte als Global Default."""
+        config = self.db.query(LabConfiguration).filter_by(
+            is_global_default=True
+        ).first()
+
+        if not config:
+            config = LabConfiguration(is_global_default=True)
+            self.db.add(config)
+
+        config.weight_bio = weights.get('bio', 0.35)
+        config.weight_market = weights.get('market', 0.35)
+        config.weight_psycho = weights.get('psycho', 0.10)
+        config.weight_context = weights.get('context', 0.20)
+        config.correlation_score = score
+        config.analyzed_days = days_count
+        config.last_calibration_date = datetime.utcnow()
+        config.calibration_source = "GLOBAL_AUTO_3Y"
+
+        self.db.commit()
+        logger.info(f"Globale System-Defaults aktualisiert (R²={score:.2f})")

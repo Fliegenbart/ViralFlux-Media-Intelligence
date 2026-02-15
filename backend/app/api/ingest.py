@@ -56,7 +56,7 @@ def _run_import_all():
             results["trends"] = {"success": False, "error": str(e)}
 
     with get_db_context() as db:
-        # 5. Wetterdaten (optional, braucht API Key)
+        # 5. Wetterdaten (BrightSky / DWD, kein API Key nötig)
         try:
             weather = WeatherService(db)
             results["weather"] = weather.run_full_import(include_forecast=True)
@@ -110,9 +110,37 @@ async def run_trends_import(
 
 @router.post("/weather")
 async def run_weather_import(db: Session = Depends(get_db)):
-    """Importiere aktuelle Wetterdaten."""
+    """Importiere aktuelle Wetterdaten (BrightSky / DWD)."""
     weather = WeatherService(db)
     return weather.run_full_import(include_forecast=True)
+
+
+@router.post("/weather/backfill")
+async def run_weather_backfill(
+    background_tasks: BackgroundTasks,
+    start: str = "2024-01-01",
+    end: str = None,
+):
+    """Historische Wetterdaten nachladen (BrightSky / DWD).
+
+    Default: 2024-01-01 bis heute. Läuft im Hintergrund (~5 Min für 2 Jahre).
+    """
+    from datetime import datetime as dt
+
+    start_date = dt.fromisoformat(start)
+    end_date = dt.fromisoformat(end) if end else dt.now()
+
+    def _backfill():
+        with get_db_context() as db:
+            weather = WeatherService(db)
+            weather.backfill_history(start_date, end_date)
+
+    background_tasks.add_task(_backfill)
+    return {
+        "status": "backfill_started",
+        "date_range": f"{start_date.date()} bis {end_date.date()}",
+        "message": "Historische DWD-Wetterdaten werden im Hintergrund geladen.",
+    }
 
 
 @router.post("/holidays")

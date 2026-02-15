@@ -1,6 +1,8 @@
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 from sqlalchemy.orm import Session
 import logging
 from datetime import datetime
@@ -111,8 +113,13 @@ async def get_status(db: Session = Depends(get_db)):
     }
 
 
+# Rate Limiting (slowapi)
+from app.api.public_api import limiter
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 # Import API routes
-from app.api import dashboard, ingest, forecast, recommendations, inventory, map_data, ordering, drug_shortage, outbreak_score, marketing, data_import
+from app.api import dashboard, ingest, forecast, recommendations, inventory, map_data, ordering, drug_shortage, outbreak_score, marketing, data_import, public_api, calibration
 app.include_router(dashboard.router, prefix="/api/v1/dashboard", tags=["Dashboard"])
 app.include_router(ingest.router, prefix="/api/v1/ingest", tags=["Data Ingestion"])
 app.include_router(forecast.router, prefix="/api/v1/forecast", tags=["ML Forecast"])
@@ -124,6 +131,8 @@ app.include_router(drug_shortage.router, prefix="/api/v1/drug-shortage", tags=["
 app.include_router(outbreak_score.router, prefix="/api/v1/outbreak-score", tags=["Outbreak Score"])
 app.include_router(marketing.router, prefix="/api/v1/marketing", tags=["Marketing"])
 app.include_router(data_import.router, prefix="/api/v1/data-import", tags=["Data Import"])
+app.include_router(public_api.router, prefix="/api/v1/public", tags=["Public API"])
+app.include_router(calibration.router, prefix="/api/v1/calibration", tags=["Calibration"])
 
 
 if __name__ == "__main__":

@@ -1,165 +1,285 @@
+"""WeatherService — DWD-Wetterdaten via BrightSky API.
+
+Quelle: https://api.brightsky.dev/ (Open Source, DWD-Daten, kostenlos, kein API Key)
+Liefert stündliche Beobachtungen + MOSMIX-Prognosen für ganz Deutschland.
+Historische Daten ab ~2015 verfügbar.
+"""
+
 import requests
-from datetime import datetime
+from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 import logging
 
-from app.core.config import get_settings
 from app.models.database import WeatherData
 
 logger = logging.getLogger(__name__)
-settings = get_settings()
+
+BRIGHTSKY_BASE = "https://api.brightsky.dev"
+
+# 5 größte deutsche Städte (repräsentativ für Nord/Süd/West/Ost/Mitte)
+CITIES = [
+    {"name": "Berlin", "lat": 52.52, "lon": 13.41},
+    {"name": "Hamburg", "lat": 53.55, "lon": 9.99},
+    {"name": "München", "lat": 48.14, "lon": 11.58},
+    {"name": "Köln", "lat": 50.94, "lon": 6.96},
+    {"name": "Frankfurt", "lat": 50.11, "lon": 8.68},
+]
 
 
 class WeatherService:
-    """Service zum Abrufen von Wetterdaten via OpenWeather OneCall 3.0 API."""
-
-    ONECALL_URL = "https://api.openweathermap.org/data/3.0/onecall"
-
-    CITIES = [
-        {"name": "Berlin", "lat": 52.52, "lon": 13.41},
-        {"name": "Hamburg", "lat": 53.55, "lon": 9.99},
-        {"name": "München", "lat": 48.14, "lon": 11.58},
-        {"name": "Köln", "lat": 50.94, "lon": 6.96},
-        {"name": "Frankfurt", "lat": 50.11, "lon": 8.68},
-    ]
+    """DWD-Wetterdaten via BrightSky (kostenlos, kein API Key)."""
 
     def __init__(self, db: Session):
         self.db = db
-        self.api_key = settings.OPENWEATHER_API_KEY
 
-    def _has_valid_key(self) -> bool:
-        return self.api_key and self.api_key not in ('placeholder', 'your-openweather-api-key-here', '')
+    # ─── BrightSky API Calls ────────────────────────────────────────────────
 
-    def fetch_onecall(self, city: dict) -> dict:
-        """Fetch current + 8-day forecast via OneCall 3.0 API."""
+    def _fetch_weather(self, city: dict, date_str: str, last_date_str: str) -> list[dict]:
+        """Stündliche Beobachtungen für einen Zeitraum abrufen."""
+        url = f"{BRIGHTSKY_BASE}/weather"
         params = {
-            'lat': city['lat'],
-            'lon': city['lon'],
-            'appid': self.api_key,
-            'units': 'metric',
-            'lang': 'de',
-            'exclude': 'minutely,alerts'
+            "lat": city["lat"],
+            "lon": city["lon"],
+            "date": date_str,
+            "last_date": last_date_str,
         }
+        try:
+            resp = requests.get(url, params=params, timeout=30)
+            resp.raise_for_status()
+            return resp.json().get("weather", [])
+        except requests.RequestException as e:
+            logger.warning(f"BrightSky Fehler ({city['name']}, {date_str}): {e}")
+            return []
 
-        response = requests.get(self.ONECALL_URL, params=params, timeout=15)
-        response.raise_for_status()
-        return response.json()
+    def _fetch_current(self, city: dict) -> dict | None:
+        """Aktuelles Wetter für eine Stadt."""
+        url = f"{BRIGHTSKY_BASE}/current_weather"
+        params = {"lat": city["lat"], "lon": city["lon"]}
+        try:
+            resp = requests.get(url, params=params, timeout=15)
+            resp.raise_for_status()
+            return resp.json().get("weather")
+        except requests.RequestException as e:
+            logger.warning(f"BrightSky current_weather Fehler ({city['name']}): {e}")
+            return None
 
-    def import_weather_data(self, weather_data: dict):
-        """Import a single weather record into the database."""
-        data = WeatherData(**weather_data)
-        self.db.add(data)
+    # ─── Aggregation: Stundenwerte → Tagesdurchschnitt ──────────────────────
 
-    def _cleanup_stale_forecasts(self, city_name: str):
-        """Remove existing forecast records for a city that are in the future."""
-        self.db.query(WeatherData).filter(
-            WeatherData.city == city_name,
-            WeatherData.data_type.in_(['DAILY_FORECAST', 'HOURLY_FORECAST']),
-            WeatherData.datum >= datetime.utcnow(),
-        ).delete(synchronize_session=False)
+    def _aggregate_day(self, hourly_records: list[dict], city_name: str, day: datetime) -> dict:
+        """24 Stundenwerte zu einem Tagesdatensatz aggregieren."""
 
-    def run_full_import(self, include_forecast: bool = True):
-        """Import current weather + 8-day daily forecast for all cities."""
-        if not self._has_valid_key():
-            logger.warning("No valid OpenWeather API key configured, skipping weather import")
-            return {
-                "success": False,
-                "error": "No valid OPENWEATHER_API_KEY configured",
-                "timestamp": datetime.utcnow().isoformat()
-            }
+        def avg(key):
+            vals = [r[key] for r in hourly_records if r.get(key) is not None]
+            return round(sum(vals) / len(vals), 1) if vals else None
 
-        logger.info(f"Starting weather import for {len(self.CITIES)} cities (forecast={include_forecast})...")
-        imported = 0
-        errors = []
+        def total(key):
+            vals = [r[key] for r in hourly_records if r.get(key) is not None]
+            return round(sum(vals), 1) if vals else None
 
-        for city in self.CITIES:
-            try:
-                # Clean old forecast data before re-import
-                if include_forecast:
-                    self._cleanup_stale_forecasts(city['name'])
+        # Wind: BrightSky liefert km/h → umrechnen in m/s
+        wind_kmh = avg("wind_speed")
+        wind_ms = round(wind_kmh / 3.6, 1) if wind_kmh is not None else None
 
-                data = self.fetch_onecall(city)
+        # UV-Proxy aus Sonnenstunden + Wolkenbedeckung
+        sunshine_min = total("sunshine") or 0
+        cloud_pct = avg("cloud_cover") or 50
+        sunshine_h = sunshine_min / 60.0
+        # Max UV im Sommer ~8, Winter ~2; Proxy: sunshine_h skaliert
+        month = day.month
+        seasonal_max_uv = {1: 1.5, 2: 2.5, 3: 4, 4: 5.5, 5: 7, 6: 8,
+                          7: 8, 8: 7, 9: 5, 10: 3, 11: 1.5, 12: 1}
+        max_uv = seasonal_max_uv.get(month, 4)
+        # Mehr Sonne + weniger Wolken = höherer UV
+        uv_proxy = min(max_uv, (sunshine_h / 10.0) * max_uv * (1 - cloud_pct / 200.0))
 
-                # Current weather
-                current = data.get('current', {})
-                rain_current = current.get('rain')
-                snow_current = current.get('snow')
-                self.import_weather_data({
-                    'city': city['name'],
-                    'datum': datetime.utcnow(),
-                    'temperatur': current.get('temp'),
-                    'gefuehlte_temperatur': current.get('feels_like'),
-                    'luftfeuchtigkeit': current.get('humidity'),
-                    'luftdruck': current.get('pressure'),
-                    'wetter_beschreibung': current.get('weather', [{}])[0].get('description', ''),
-                    'wind_geschwindigkeit': current.get('wind_speed'),
-                    'uv_index': current.get('uvi'),
-                    'wolken': current.get('clouds'),
-                    'taupunkt': current.get('dew_point'),
-                    'regen_mm': rain_current.get('1h') if isinstance(rain_current, dict) else None,
-                    'schnee_mm': snow_current.get('1h') if isinstance(snow_current, dict) else None,
-                    'niederschlag_wahrscheinlichkeit': None,
-                    'data_type': 'CURRENT',
-                })
-                imported += 1
+        # Condition → Beschreibung
+        conditions = [r.get("condition", "") for r in hourly_records if r.get("condition")]
+        dominant_condition = max(set(conditions), key=conditions.count) if conditions else "unknown"
 
-                # 8-day daily forecast
-                if include_forecast:
-                    for day in data.get('daily', []):
-                        self.import_weather_data({
-                            'city': city['name'],
-                            'datum': datetime.fromtimestamp(day['dt']),
-                            'temperatur': day['temp']['day'],
-                            'gefuehlte_temperatur': day['feels_like']['day'],
-                            'luftfeuchtigkeit': day.get('humidity'),
-                            'luftdruck': day.get('pressure'),
-                            'wetter_beschreibung': day.get('weather', [{}])[0].get('description', ''),
-                            'wind_geschwindigkeit': day.get('wind_speed'),
-                            'uv_index': day.get('uvi'),
-                            'wolken': day.get('clouds'),
-                            'niederschlag_wahrscheinlichkeit': day.get('pop'),
-                            'regen_mm': day.get('rain'),
-                            'schnee_mm': day.get('snow'),
-                            'taupunkt': day.get('dew_point'),
-                            'data_type': 'DAILY_FORECAST',
-                        })
-                        imported += 1
-
-                # Hourly forecast (next 48h) - take every 3h
-                for i, hour in enumerate(data.get('hourly', [])):
-                    if i % 3 != 0:
-                        continue
-                    rain_hour = hour.get('rain')
-                    snow_hour = hour.get('snow')
-                    self.import_weather_data({
-                        'city': city['name'],
-                        'datum': datetime.fromtimestamp(hour['dt']),
-                        'temperatur': hour.get('temp'),
-                        'gefuehlte_temperatur': hour.get('feels_like'),
-                        'luftfeuchtigkeit': hour.get('humidity'),
-                        'luftdruck': hour.get('pressure'),
-                        'wetter_beschreibung': hour.get('weather', [{}])[0].get('description', ''),
-                        'wind_geschwindigkeit': hour.get('wind_speed'),
-                        'uv_index': hour.get('uvi'),
-                        'wolken': hour.get('clouds'),
-                        'niederschlag_wahrscheinlichkeit': hour.get('pop'),
-                        'regen_mm': rain_hour.get('1h') if isinstance(rain_hour, dict) else None,
-                        'schnee_mm': snow_hour.get('1h') if isinstance(snow_hour, dict) else None,
-                        'taupunkt': hour.get('dew_point'),
-                        'data_type': 'HOURLY_FORECAST',
-                    })
-                    imported += 1
-
-                logger.info(f"Weather: {city['name']} = {current.get('temp')}°C, {current.get('weather', [{}])[0].get('description', '')}")
-            except Exception as e:
-                logger.error(f"Weather fetch failed for {city['name']}: {e}")
-                errors.append(f"{city['name']}: {e}")
-
-        self.db.commit()
+        # Precipitation: Regen vs. Schnee
+        temp = avg("temperature") or 5
+        precip_total = total("precipitation") or 0
+        regen = precip_total if temp > 1 else 0
+        schnee = precip_total if temp <= 1 else 0
 
         return {
-            "success": imported > 0,
-            "records_imported": imported,
-            "errors": errors if errors else None,
-            "timestamp": datetime.utcnow().isoformat()
+            "city": city_name,
+            "datum": day.replace(hour=12, minute=0, second=0),
+            "temperatur": avg("temperature"),
+            "gefuehlte_temperatur": None,  # BrightSky liefert kein feels_like
+            "luftfeuchtigkeit": avg("relative_humidity"),
+            "luftdruck": avg("pressure_msl"),
+            "wetter_beschreibung": dominant_condition,
+            "wind_geschwindigkeit": wind_ms,
+            "uv_index": round(uv_proxy, 1),
+            "wolken": cloud_pct,
+            "niederschlag_wahrscheinlichkeit": None,
+            "regen_mm": regen,
+            "schnee_mm": schnee,
+            "taupunkt": avg("dew_point"),
+            "data_type": "DAILY_OBSERVATION",
+        }
+
+    # ─── Import-Methoden ────────────────────────────────────────────────────
+
+    def _upsert_weather(self, record: dict):
+        """Wetterdatensatz einfügen oder aktualisieren."""
+        existing = self.db.query(WeatherData).filter(
+            WeatherData.city == record["city"],
+            WeatherData.datum == record["datum"],
+            WeatherData.data_type == record["data_type"],
+        ).first()
+
+        if existing:
+            for key, val in record.items():
+                if key not in ("city", "datum", "data_type") and val is not None:
+                    setattr(existing, key, val)
+        else:
+            self.db.add(WeatherData(**record))
+
+    def import_day(self, city: dict, day: datetime) -> bool:
+        """Einen Tag für eine Stadt importieren (24h Aggregat)."""
+        date_str = day.strftime("%Y-%m-%d")
+        next_day = (day + timedelta(days=1)).strftime("%Y-%m-%d")
+
+        records = self._fetch_weather(city, date_str, next_day)
+        if not records:
+            return False
+
+        daily = self._aggregate_day(records, city["name"], day)
+        self._upsert_weather(daily)
+        return True
+
+    def import_current(self) -> int:
+        """Aktuelles Wetter für alle Städte importieren."""
+        count = 0
+        for city in CITIES:
+            current = self._fetch_current(city)
+            if not current:
+                continue
+
+            wind_kmh = current.get("wind_speed_60") or current.get("wind_speed_30") or 0
+            humidity = current.get("relative_humidity")
+            cloud = current.get("cloud_cover")
+
+            record = {
+                "city": city["name"],
+                "datum": datetime.utcnow().replace(minute=0, second=0, microsecond=0),
+                "temperatur": current.get("temperature"),
+                "gefuehlte_temperatur": None,
+                "luftfeuchtigkeit": humidity,
+                "luftdruck": current.get("pressure_msl"),
+                "wetter_beschreibung": current.get("condition", ""),
+                "wind_geschwindigkeit": round(wind_kmh / 3.6, 1) if wind_kmh else None,
+                "uv_index": None,  # Wird beim nächsten Tagesaggregat gesetzt
+                "wolken": cloud,
+                "niederschlag_wahrscheinlichkeit": None,
+                "regen_mm": current.get("precipitation_60"),
+                "schnee_mm": None,
+                "taupunkt": current.get("dew_point"),
+                "data_type": "CURRENT",
+            }
+            self._upsert_weather(record)
+            count += 1
+            logger.info(f"Weather: {city['name']} = {current.get('temperature')}°C, {current.get('condition')}")
+
+        self.db.commit()
+        return count
+
+    def backfill_history(self, start_date: datetime, end_date: datetime) -> dict:
+        """Historische Tageswerte für alle Städte nachladen.
+
+        BrightSky liefert DWD-Beobachtungsdaten ab ~2015.
+        Empfohlen: start_date=2024-01-01 für Backtesting-Relevanz.
+        """
+        logger.info(f"Weather Backfill: {start_date.date()} bis {end_date.date()} für {len(CITIES)} Städte")
+
+        total_imported = 0
+        total_skipped = 0
+        errors = []
+
+        for city in CITIES:
+            city_count = 0
+            current_day = start_date
+
+            while current_day <= end_date:
+                # Prüfe ob schon vorhanden
+                exists = self.db.query(WeatherData).filter(
+                    WeatherData.city == city["name"],
+                    WeatherData.datum >= current_day.replace(hour=0),
+                    WeatherData.datum <= current_day.replace(hour=23, minute=59),
+                    WeatherData.data_type == "DAILY_OBSERVATION",
+                ).first()
+
+                if exists:
+                    total_skipped += 1
+                    current_day += timedelta(days=1)
+                    continue
+
+                try:
+                    if self.import_day(city, current_day):
+                        city_count += 1
+                        total_imported += 1
+                except Exception as e:
+                    errors.append(f"{city['name']} {current_day.date()}: {e}")
+
+                current_day += timedelta(days=1)
+
+                # Commit alle 30 Tage (Speicher schonen)
+                if city_count > 0 and city_count % 30 == 0:
+                    self.db.commit()
+
+            self.db.commit()
+            logger.info(f"Backfill {city['name']}: {city_count} Tage importiert")
+
+        result = {
+            "success": total_imported > 0 or total_skipped > 0,
+            "imported": total_imported,
+            "skipped": total_skipped,
+            "errors": errors[:10] if errors else None,
+            "cities": len(CITIES),
+            "date_range": f"{start_date.date()} bis {end_date.date()}",
+            "timestamp": datetime.utcnow().isoformat(),
+        }
+
+        total_in_db = self.db.query(WeatherData).count()
+        result["total_in_db"] = total_in_db
+
+        logger.info(f"Weather Backfill fertig: {total_imported} neu, {total_skipped} übersprungen, {total_in_db} gesamt")
+        return result
+
+    def run_full_import(self, include_forecast: bool = True) -> dict:
+        """Täglicher Import: aktuelles Wetter + letzte 7 Tage Backfill.
+
+        Ersetzt den alten OpenWeather-Import. Kein API Key nötig.
+        """
+        logger.info("Starting BrightSky weather import...")
+        results = {}
+
+        # 1. Aktuelles Wetter
+        try:
+            current_count = self.import_current()
+            results["current"] = {"imported": current_count}
+        except Exception as e:
+            logger.error(f"Current weather import failed: {e}")
+            results["current"] = {"error": str(e)}
+
+        # 2. Letzte 7 Tage nachladen (falls Lücken)
+        try:
+            end = datetime.now()
+            start = end - timedelta(days=7)
+            backfill = self.backfill_history(start, end)
+            results["backfill_7d"] = backfill
+        except Exception as e:
+            logger.error(f"7-day backfill failed: {e}")
+            results["backfill_7d"] = {"error": str(e)}
+
+        total_in_db = self.db.query(WeatherData).count()
+        return {
+            "success": True,
+            "source": "BrightSky (DWD)",
+            "total_in_db": total_in_db,
+            "details": results,
+            "timestamp": datetime.utcnow().isoformat(),
         }

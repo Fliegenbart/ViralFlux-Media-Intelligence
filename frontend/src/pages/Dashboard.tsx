@@ -616,6 +616,13 @@ const Dashboard: React.FC = () => {
               Datenimport
             </button>
             <button
+              onClick={() => navigate('/calibration')}
+              className="px-3 py-1.5 text-xs font-medium rounded-lg transition-all hover:bg-slate-700"
+              style={{ color: '#f59e0b', border: '1px solid #f59e0b40' }}
+            >
+              Kalibrierung
+            </button>
+            <button
               onClick={() => navigate('/map')}
               className="px-3 py-1.5 text-xs font-medium rounded-lg transition-all hover:bg-slate-700"
               style={{ color: '#94a3b8', border: '1px solid #334155' }}

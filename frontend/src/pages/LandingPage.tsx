@@ -59,11 +59,18 @@ const LandingPage: React.FC = () => {
               Dashboard starten
             </button>
             <button
+              onClick={() => navigate('/vertriebsradar')}
+              className="px-8 py-3.5 text-base font-semibold rounded-xl text-white transition-all hover:scale-105"
+              style={{ background: 'rgba(245,158,11,0.15)', color: '#f59e0b', border: '1px solid rgba(245,158,11,0.3)' }}
+            >
+              Vertriebsradar
+            </button>
+            <button
               onClick={() => navigate('/map')}
               className="px-8 py-3.5 text-base font-semibold rounded-xl transition-all hover:scale-105"
               style={{ background: 'rgba(255,255,255,0.05)', color: '#94a3b8', border: '1px solid #334155' }}
             >
-              Deutschlandkarte ansehen
+              Deutschlandkarte
             </button>
           </div>
         </div>
@@ -76,7 +83,7 @@ const LandingPage: React.FC = () => {
             { value: '20%', label: 'Weniger Lagerkosten', sub: 'durch prädiktive Bestelloptimierung' },
             { value: '100%', label: 'Stockout-Prävention', sub: 'ML-gestützte Bedarfsprognose' },
             { value: '14', label: 'Tage Prognose-Horizont', sub: 'Holt-Winters + Ridge Ensemble' },
-            { value: '5+', label: 'Datenquellen integriert', sub: 'RKI, Google Trends, OpenWeather, ...' },
+            { value: '8+', label: 'Datenquellen integriert', sub: 'RKI, BfArM, Google Trends, OpenWeather, ...' },
           ].map((kpi, i) => (
             <div key={i} className="text-center">
               <div className="text-3xl md:text-4xl font-extrabold text-white mb-1">{kpi.value}</div>
@@ -94,7 +101,7 @@ const LandingPage: React.FC = () => {
             Was LabPulse Pro einzigartig macht
           </h2>
           <p className="text-lg text-slate-400 max-w-2xl mx-auto">
-            Drei Säulen für die vollautomatisierte Laborsteuerung
+            Fünf Säulen für die vollautomatisierte Laborsteuerung
           </p>
         </div>
 
@@ -106,13 +113,13 @@ const LandingPage: React.FC = () => {
             </div>
             <h3 className="text-xl font-bold text-white mb-3">Epidemiologische Früherkennung</h3>
             <p className="text-slate-400 leading-relaxed mb-4">
-              Echtzeit-Integration von RKI-Abwasserdaten (AMELAG), Google Trends, Wetterdaten und Schulferien.
+              Echtzeit-Integration von RKI-Abwasserdaten (AMELAG), GrippeWeb, Google Trends, Wetterdaten und Schulferien.
               Erkennung von Ausbrüchen <strong className="text-slate-300">2-3 Wochen vor</strong> dem klinischen Peak.
             </p>
             <ul className="space-y-2 text-sm text-slate-500">
               <li className="flex items-center gap-2"><span className="text-blue-400">&#10003;</span> 160+ Kläranlagen bundesweit</li>
               <li className="flex items-center gap-2"><span className="text-blue-400">&#10003;</span> 16 Bundesländer Heatmap</li>
-              <li className="flex items-center gap-2"><span className="text-blue-400">&#10003;</span> 8 Virus-Typen Monitoring</li>
+              <li className="flex items-center gap-2"><span className="text-blue-400">&#10003;</span> ARE/ILI Surveillance (GrippeWeb)</li>
             </ul>
           </div>
 
@@ -128,7 +135,7 @@ const LandingPage: React.FC = () => {
             </p>
             <ul className="space-y-2 text-sm text-slate-500">
               <li className="flex items-center gap-2"><span className="text-amber-400">&#10003;</span> 14-Tage Forecast pro Virus</li>
-              <li className="flex items-center gap-2"><span className="text-amber-400">&#10003;</span> Feature Importance Analyse</li>
+              <li className="flex items-center gap-2"><span className="text-amber-400">&#10003;</span> Fusion Engine Outbreak Score</li>
               <li className="flex items-center gap-2"><span className="text-amber-400">&#10003;</span> Automatische Saisonbereinigung</li>
             </ul>
           </div>
@@ -150,6 +157,41 @@ const LandingPage: React.FC = () => {
             </ul>
           </div>
         </div>
+
+        {/* Row 2: Neue Features */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mt-8">
+          {/* USP 4: Lieferengpassmeldung */}
+          <div className="card p-8 hover:scale-[1.02] transition-transform">
+            <div className="w-14 h-14 rounded-2xl flex items-center justify-center mb-6" style={{ background: 'rgba(239,68,68,0.15)' }}>
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            </div>
+            <h3 className="text-xl font-bold text-white mb-3">BfArM Lieferengpass-Monitoring</h3>
+            <p className="text-slate-400 leading-relaxed mb-4">
+              Automatische Analyse der BfArM-Lieferengpassmeldungen. Erkennung von <strong className="text-slate-300">Antibiotika-, Atemwegs- und Fiebermittel-Engpässen</strong> mit Risiko-Scoring und Wellentyp-Klassifikation.
+            </p>
+            <ul className="space-y-2 text-sm text-slate-500">
+              <li className="flex items-center gap-2"><span className="text-red-400">&#10003;</span> BfArM CSV-Import und Analyse</li>
+              <li className="flex items-center gap-2"><span className="text-red-400">&#10003;</span> Pädiatrie-Warnungen</li>
+              <li className="flex items-center gap-2"><span className="text-red-400">&#10003;</span> Fusion mit Outbreak Score</li>
+            </ul>
+          </div>
+
+          {/* USP 5: Vertriebsradar */}
+          <div className="card p-8 hover:scale-[1.02] transition-transform">
+            <div className="w-14 h-14 rounded-2xl flex items-center justify-center mb-6" style={{ background: 'rgba(245,158,11,0.15)' }}>
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 1 10 10"/><circle cx="12" cy="12" r="3"/><path d="M12 9v-4"/></svg>
+            </div>
+            <h3 className="text-xl font-bold text-white mb-3">KI-Vertriebsradar</h3>
+            <p className="text-slate-400 leading-relaxed mb-4">
+              Automatische Erkennung von Vertriebschancen aus <strong className="text-slate-300">Lieferengpässen, Wetter/UV-Daten und Bestellverhalten</strong>. Generiert priorisierte Sales Pitches und CRM-fertiges JSON.
+            </p>
+            <ul className="space-y-2 text-sm text-slate-500">
+              <li className="flex items-center gap-2"><span className="text-amber-400">&#10003;</span> 3 Opportunity-Detektoren</li>
+              <li className="flex items-center gap-2"><span className="text-amber-400">&#10003;</span> Automatische Sales Pitches</li>
+              <li className="flex items-center gap-2"><span className="text-amber-400">&#10003;</span> CRM-JSON Export</li>
+            </ul>
+          </div>
+        </div>
       </section>
 
       {/* ── How it works ── */}
@@ -157,21 +199,22 @@ const LandingPage: React.FC = () => {
         <div className="max-w-[1400px] mx-auto px-6">
           <div className="text-center mb-16">
             <h2 className="text-3xl md:text-4xl font-extrabold text-white mb-4">So funktioniert LabPulse Pro</h2>
-            <p className="text-lg text-slate-400">Von externen Daten zur automatisierten Laborbeschaffung in 4 Schritten</p>
+            <p className="text-lg text-slate-400">Von externen Daten zu automatisierten Entscheidungen in 5 Schritten</p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-5">
             {[
-              { step: '01', title: 'Daten sammeln', desc: 'Automatischer Import von RKI AMELAG, Google Trends, OpenWeather und Schulferien-Daten', color: '#3b82f6' },
-              { step: '02', title: 'Analysieren', desc: 'ML-Modell erkennt Muster, berechnet regionale Trends und 14-Tage-Prognosen', color: '#8b5cf6' },
-              { step: '03', title: 'Empfehlen', desc: 'Automatische Bestandsanalyse, Stockout-Simulation und Bestellvorschläge', color: '#f59e0b' },
-              { step: '04', title: 'Handeln', desc: 'One-Click SAP/ERP-Export, standortübergreifende Transfer-Empfehlungen', color: '#10b981' },
+              { step: '01', title: 'Daten sammeln', desc: 'RKI AMELAG, GrippeWeb, BfArM-Engpässe, Google Trends, Wetter + UV-Index', color: '#3b82f6' },
+              { step: '02', title: 'Fusion Engine', desc: 'Alle Signale fließen in den Outbreak Score (0-100) mit Konfidenz-Bewertung', color: '#8b5cf6' },
+              { step: '03', title: 'Prognose', desc: 'ML-Modell berechnet 14-Tage-Vorhersagen und Stockout-Risiken', color: '#f59e0b' },
+              { step: '04', title: 'Vertriebsradar', desc: 'KI erkennt Vertriebschancen aus Engpässen, UV-Daten und Bestellverhalten', color: '#ef4444' },
+              { step: '05', title: 'Handeln', desc: 'SAP-Export, CRM-Push, automatische Bestellvorschläge und Sales Pitches', color: '#10b981' },
             ].map((s, i) => (
               <div key={i} className="relative p-6 rounded-xl" style={{ background: '#0f172a', border: '1px solid #334155' }}>
                 <div className="text-5xl font-extrabold mb-4" style={{ color: s.color, opacity: 0.2 }}>{s.step}</div>
                 <h3 className="text-lg font-bold text-white mb-2">{s.title}</h3>
                 <p className="text-sm text-slate-400 leading-relaxed">{s.desc}</p>
-                {i < 3 && (
+                {i < 4 && (
                   <div className="hidden md:block absolute top-1/2 -right-4 w-8 text-center text-slate-600 text-2xl" style={{ transform: 'translateY(-50%)' }}>&#8594;</div>
                 )}
               </div>
@@ -185,13 +228,16 @@ const LandingPage: React.FC = () => {
         <div className="text-center mb-16">
           <h2 className="text-3xl md:text-4xl font-extrabold text-white mb-4">Integrierte Datenquellen</h2>
         </div>
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-6">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
           {[
-            { name: 'RKI AMELAG', desc: 'Abwasser-Monitoring', icon: '🧬' },
+            { name: 'RKI AMELAG', desc: 'Abwasser-Surveillance', icon: '🧬' },
+            { name: 'GrippeWeb', desc: 'ARE/ILI Inzidenz', icon: '🏥' },
+            { name: 'BfArM', desc: 'Lieferengpassmeldungen', icon: '💊' },
             { name: 'Google Trends', desc: 'Suchverhalten', icon: '📊' },
-            { name: 'OpenWeather', desc: 'Wetterdaten', icon: '🌡' },
+            { name: 'OpenWeather', desc: 'Wetter + UV-Index', icon: '🌡' },
             { name: 'Schulferien', desc: 'Ferienzeiten', icon: '📅' },
-            { name: 'GrippeWeb', desc: 'ARE-Surveillance', icon: '🏥' },
+            { name: 'ERP/SAP', desc: 'Bestelldaten', icon: '📦' },
+            { name: 'Fusion Engine', desc: 'Outbreak Score', icon: '🔬' },
           ].map((src, i) => (
             <div key={i} className="card p-5 text-center">
               <div className="text-3xl mb-3">{src.icon}</div>
@@ -226,7 +272,7 @@ const LandingPage: React.FC = () => {
       <footer className="py-8 text-center text-sm text-slate-600" style={{ borderTop: '1px solid #1e293b' }}>
         <div className="max-w-[1400px] mx-auto px-6">
           <p>LabPulse Pro v1.0 &mdash; Intelligentes Frühwarnsystem für Labordiagnostik</p>
-          <p className="text-xs text-slate-700 mt-2">Powered by RKI AMELAG, Google Trends, OpenWeather, Holt-Winters + Ridge ML</p>
+          <p className="text-xs text-slate-700 mt-2">Powered by RKI AMELAG, GrippeWeb, BfArM, Google Trends, OpenWeather, Fusion Engine ML</p>
         </div>
       </footer>
     </div>

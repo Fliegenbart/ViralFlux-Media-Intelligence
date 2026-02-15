@@ -1,4 +1,4 @@
-"""Outbreak Score API — Ganz Immun Fusion Engine.
+"""Outbreak Score API — Fusion Engine.
 
 Endpoints für den Outbreak Risk Score, Prophet-Vorhersagen,
 historische Labordaten-Import und Meta-Learner-Training.
@@ -41,7 +41,7 @@ async def get_outbreak_score(
     virus_typ: str = "Influenza A",
     db: Session = Depends(get_db),
 ):
-    """Aktuellen Ganz Immun Outbreak Score berechnen.
+    """Aktuellen Outbreak Score berechnen.
 
     Schnelle Berechnung aus gecachten/gespeicherten Daten.
     Prophet-Prognosen werden aus der DB gelesen (nicht neu berechnet).

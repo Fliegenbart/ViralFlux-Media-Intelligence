@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 import logging
 from datetime import datetime
 
+import threading
 from app.core.config import get_settings
 from app.db.session import init_db, get_db, check_db_connection
 
@@ -49,6 +50,21 @@ async def startup_event():
     except Exception as e:
         logger.error(f"Database initialization failed: {e}")
         raise
+
+    # BfArM Lieferengpass-Daten im Hintergrund laden (non-blocking)
+    def _bfarm_startup():
+        try:
+            from app.services.data_ingest.bfarm_service import BfarmIngestionService
+            service = BfarmIngestionService()
+            result = service.run_full_import()
+            logger.info(
+                f"BfArM Startup-Pull: {result.get('relevant_records', 0)} Meldungen, "
+                f"Score {result.get('risk_score', 0)}"
+            )
+        except Exception as e:
+            logger.warning(f"BfArM Startup-Pull fehlgeschlagen (nicht kritisch): {e}")
+
+    threading.Thread(target=_bfarm_startup, daemon=True).start()
 
 
 @app.on_event("shutdown")

@@ -74,6 +74,15 @@ def _run_import_all():
             logger.error(f"Weather import failed: {e}")
             results["weather"] = {"success": False, "error": str(e)}
 
+    # 6. BfArM Lieferengpass-Daten (statische CSV, kein API-Key)
+    try:
+        from app.services.data_ingest.bfarm_service import BfarmIngestionService
+        bfarm = BfarmIngestionService()
+        results["bfarm"] = bfarm.run_full_import()
+    except Exception as e:
+        logger.error(f"BfArM import failed: {e}")
+        results["bfarm"] = {"success": False, "error": str(e)}
+
     logger.info(f"=== Full data import completed: {results} ===")
     return results
 
@@ -166,3 +175,11 @@ async def run_holidays_import(db: Session = Depends(get_db)):
     """Importiere Schulferien-Daten."""
     holidays = SchoolHolidaysService(db)
     return holidays.run_full_import()
+
+
+@router.post("/bfarm")
+async def run_bfarm_import():
+    """Importiere aktuelle BfArM Lieferengpass-Daten (statische CSV)."""
+    from app.services.data_ingest.bfarm_service import BfarmIngestionService
+    service = BfarmIngestionService()
+    return service.run_full_import()

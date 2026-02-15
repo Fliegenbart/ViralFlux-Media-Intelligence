@@ -21,10 +21,12 @@ _cached_shortage_signals: dict | None = None
 
 
 def _get_shortage_signals() -> dict | None:
-    """Drug-Shortage-Signale aus dem Cache oder vom Analyzer holen."""
+    """Drug-Shortage-Signale aus Cache, Analyzer oder BfArM Auto-Pull."""
     global _cached_shortage_signals
     if _cached_shortage_signals:
         return _cached_shortage_signals
+
+    # Versuch 1: Bestehender Analyzer (manueller Upload)
     try:
         from app.api.drug_shortage import _analyzer
         if _analyzer and _analyzer.df is not None and not _analyzer.df.empty:
@@ -33,6 +35,17 @@ def _get_shortage_signals() -> dict | None:
             return signals
     except Exception:
         pass
+
+    # Versuch 2: Cached Signals vom BfArM Auto-Pull Service
+    try:
+        from app.services.data_ingest.bfarm_service import get_cached_signals
+        cached = get_cached_signals()
+        if cached:
+            _cached_shortage_signals = cached
+            return cached
+    except Exception:
+        pass
+
     return None
 
 

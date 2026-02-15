@@ -14,12 +14,13 @@ from app.models.database import MarketingOpportunity
 from .detectors.resource_scarcity import ResourceScarcityDetector
 from .detectors.seasonal_deficiency import SeasonalDeficiencyDetector
 from .detectors.predictive_sales_spike import PredictiveSalesSpikeDetector
+from .detectors.weather_forecast import WeatherForecastDetector
 from .pitch_generator import PitchGenerator
 from .product_matcher import ProductMatcher
 
 logger = logging.getLogger(__name__)
 
-SYSTEM_VERSION = "GanzImmun-Predictor-v2.1"
+SYSTEM_VERSION = "LabPulse-Predictor-v2.1"
 
 
 class MarketingOpportunityEngine:
@@ -31,6 +32,7 @@ class MarketingOpportunityEngine:
             ResourceScarcityDetector(db),
             SeasonalDeficiencyDetector(db),
             PredictiveSalesSpikeDetector(db),
+            WeatherForecastDetector(db),
         ]
         self.pitch_generator = PitchGenerator()
         self.product_matcher = ProductMatcher(db)

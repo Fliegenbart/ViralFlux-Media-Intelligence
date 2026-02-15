@@ -38,7 +38,7 @@ def _run_import_all():
             results["grippeweb"] = {"success": False, "error": str(e)}
 
     with get_db_context() as db:
-        # 3. Schulferien (statische Daten)
+        # 3. Schulferien (ferien-api.de, alle 16 Bundesländer)
         try:
             holidays = SchoolHolidaysService(db)
             results["holidays"] = holidays.run_full_import()
@@ -59,7 +59,7 @@ def _run_import_all():
         # 5. Wetterdaten (optional, braucht API Key)
         try:
             weather = WeatherService(db)
-            results["weather"] = weather.run_full_import(include_forecast=False)
+            results["weather"] = weather.run_full_import(include_forecast=True)
         except Exception as e:
             logger.error(f"Weather import failed: {e}")
             results["weather"] = {"success": False, "error": str(e)}

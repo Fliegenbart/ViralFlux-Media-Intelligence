@@ -50,6 +50,14 @@ class WeatherService:
         data = WeatherData(**weather_data)
         self.db.add(data)
 
+    def _cleanup_stale_forecasts(self, city_name: str):
+        """Remove existing forecast records for a city that are in the future."""
+        self.db.query(WeatherData).filter(
+            WeatherData.city == city_name,
+            WeatherData.data_type.in_(['DAILY_FORECAST', 'HOURLY_FORECAST']),
+            WeatherData.datum >= datetime.utcnow(),
+        ).delete(synchronize_session=False)
+
     def run_full_import(self, include_forecast: bool = True):
         """Import current weather + 8-day daily forecast for all cities."""
         if not self._has_valid_key():
@@ -66,10 +74,16 @@ class WeatherService:
 
         for city in self.CITIES:
             try:
+                # Clean old forecast data before re-import
+                if include_forecast:
+                    self._cleanup_stale_forecasts(city['name'])
+
                 data = self.fetch_onecall(city)
 
                 # Current weather
                 current = data.get('current', {})
+                rain_current = current.get('rain')
+                snow_current = current.get('snow')
                 self.import_weather_data({
                     'city': city['name'],
                     'datum': datetime.utcnow(),
@@ -80,6 +94,12 @@ class WeatherService:
                     'wetter_beschreibung': current.get('weather', [{}])[0].get('description', ''),
                     'wind_geschwindigkeit': current.get('wind_speed'),
                     'uv_index': current.get('uvi'),
+                    'wolken': current.get('clouds'),
+                    'taupunkt': current.get('dew_point'),
+                    'regen_mm': rain_current.get('1h') if isinstance(rain_current, dict) else None,
+                    'schnee_mm': snow_current.get('1h') if isinstance(snow_current, dict) else None,
+                    'niederschlag_wahrscheinlichkeit': None,
+                    'data_type': 'CURRENT',
                 })
                 imported += 1
 
@@ -96,6 +116,12 @@ class WeatherService:
                             'wetter_beschreibung': day.get('weather', [{}])[0].get('description', ''),
                             'wind_geschwindigkeit': day.get('wind_speed'),
                             'uv_index': day.get('uvi'),
+                            'wolken': day.get('clouds'),
+                            'niederschlag_wahrscheinlichkeit': day.get('pop'),
+                            'regen_mm': day.get('rain'),
+                            'schnee_mm': day.get('snow'),
+                            'taupunkt': day.get('dew_point'),
+                            'data_type': 'DAILY_FORECAST',
                         })
                         imported += 1
 
@@ -103,6 +129,8 @@ class WeatherService:
                 for i, hour in enumerate(data.get('hourly', [])):
                     if i % 3 != 0:
                         continue
+                    rain_hour = hour.get('rain')
+                    snow_hour = hour.get('snow')
                     self.import_weather_data({
                         'city': city['name'],
                         'datum': datetime.fromtimestamp(hour['dt']),
@@ -113,6 +141,12 @@ class WeatherService:
                         'wetter_beschreibung': hour.get('weather', [{}])[0].get('description', ''),
                         'wind_geschwindigkeit': hour.get('wind_speed'),
                         'uv_index': hour.get('uvi'),
+                        'wolken': hour.get('clouds'),
+                        'niederschlag_wahrscheinlichkeit': hour.get('pop'),
+                        'regen_mm': rain_hour.get('1h') if isinstance(rain_hour, dict) else None,
+                        'schnee_mm': snow_hour.get('1h') if isinstance(snow_hour, dict) else None,
+                        'taupunkt': hour.get('dew_point'),
+                        'data_type': 'HOURLY_FORECAST',
                     })
                     imported += 1
 

@@ -88,6 +88,45 @@ TEMPLATES = {
             "call_to_action": "Sofortversand anbieten",
         },
     },
+    "WEATHER_FORECAST": {
+        "low_sunshine_forecast": {
+            "headline_email": (
+                "8-Tage-Prognose: Keine Sonne in Sicht — Vitamin-D-Screening jetzt ansprechen"
+            ),
+            "script_phone": (
+                "Guten Tag, kurzer Hinweis aus unserer Wetterdaten-Analyse: "
+                "Die nächsten {low_days} von {total_days} Tagen zeigen einen UV-Index unter {uv_threshold} — "
+                "das bedeutet, Ihre Patienten können kein Vitamin D bilden. "
+                "Jetzt ist der ideale Zeitpunkt, um bei Risikopatienten ein 25-OH-Vitamin-D "
+                "Screening anzubieten, bevor die Beschwerden einsetzen."
+            ),
+            "call_to_action": "Vitamin-D Screening proaktiv anbieten",
+        },
+        "nasskalt_forecast": {
+            "headline_email": (
+                "Nasskalte Woche voraus: Erkältungswelle vorbereiten"
+            ),
+            "script_phone": (
+                "Laut unserer Prognose stehen {nasskalt_days} nasskalte Tage bevor — "
+                "ideal für eine Erkältungswelle. Jetzt ist der richtige Zeitpunkt, "
+                "Ihre Vorräte an respiratorischen Schnelltests aufzustocken, "
+                "damit Sie im Ansturm handlungsfähig bleiben."
+            ),
+            "call_to_action": "Atemwegs-Schnelltests bevorraten",
+        },
+        "extreme_cold_forecast": {
+            "headline_email": (
+                "Extremkälte-Warnung: Infektionswelle steht bevor"
+            ),
+            "script_phone": (
+                "Achtung: Die Wetterprognose zeigt {extreme_days} Tage mit "
+                "Temperaturen bis zu {min_temp}°C. Erfahrungsgemäß steigt die "
+                "Infektionsrate in solchen Phasen stark an. Haben Sie genügend "
+                "CRP-Tests und Multiplex-Panels auf Lager?"
+            ),
+            "call_to_action": "Diagnostik-Vorräte sichern",
+        },
+    },
 }
 
 # Kategorie-Übersetzungen
@@ -117,6 +156,8 @@ class PitchGenerator:
             return self._generate_seasonal(context)
         elif opportunity_type == "PREDICTIVE_SALES_SPIKE":
             return self._generate_spike(context)
+        elif opportunity_type == "WEATHER_FORECAST":
+            return self._generate_weather_forecast(context)
         else:
             return {
                 "headline_email": "Neue Vertriebschance erkannt",
@@ -168,6 +209,28 @@ class PitchGenerator:
                 ),
                 "call_to_action": template["call_to_action"],
             }
+
+    def _generate_weather_forecast(self, ctx: dict) -> dict:
+        condition = ctx.get("_condition", "low_sunshine_forecast")
+        template = TEMPLATES["WEATHER_FORECAST"].get(
+            condition, TEMPLATES["WEATHER_FORECAST"]["low_sunshine_forecast"]
+        )
+
+        format_vars = {
+            "low_days": ctx.get("_low_days", 0),
+            "total_days": ctx.get("_total_days", 8),
+            "uv_threshold": 3.0,
+            "avg_uv": ctx.get("_avg_uv", "niedrig"),
+            "nasskalt_days": ctx.get("_nasskalt_days", 0),
+            "extreme_days": ctx.get("_extreme_days", 0),
+            "min_temp": ctx.get("_min_temp", "sehr niedrig"),
+        }
+
+        return {
+            "headline_email": template["headline_email"].format(**format_vars),
+            "script_phone": template["script_phone"].format(**format_vars),
+            "call_to_action": template["call_to_action"],
+        }
 
     def _generate_spike(self, ctx: dict) -> dict:
         template = TEMPLATES["PREDICTIVE_SALES_SPIKE"]["default"]

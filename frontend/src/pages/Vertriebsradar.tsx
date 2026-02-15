@@ -33,6 +33,7 @@ const TYPE_CONFIG: Record<string, { label: string; color: string; icon: string }
   SEASONAL_DEFICIENCY: { label: 'Saisonal', color: '#f59e0b', icon: 'M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z' },
   PREDICTIVE_SALES_SPIKE: { label: 'Nachfrage', color: '#8b5cf6', icon: 'M2.25 18L9 11.25l4.306 4.307a11.95 11.95 0 015.814-5.519l2.74-1.22m0 0l-5.94-2.28m5.94 2.28l-2.28 5.941' },
   DIFFERENTIAL_DIAGNOSIS: { label: 'Differenzial', color: '#06b6d4', icon: 'M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3M14.25 3.104c.251.023.501.05.75.082M19.8 15.3l-1.57.393A9.065 9.065 0 0112 15a9.065 9.065 0 00-6.23.693L5 14.5m14.8.8l1.402 1.402c1.232 1.232.65 3.318-1.067 3.611A48.309 48.309 0 0112 21c-2.773 0-5.491-.235-8.135-.687-1.718-.293-2.3-2.379-1.067-3.61L5 14.5' },
+  WEATHER_FORECAST: { label: 'Wetterprognose', color: '#0ea5e9', icon: 'M2.25 15a4.5 4.5 0 004.5 4.5H18a3.75 3.75 0 001.332-7.257 3 3 0 00-3.758-3.848 5.25 5.25 0 00-10.233 2.33A4.502 4.502 0 002.25 15z' },
 };
 
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
@@ -123,7 +124,7 @@ const Vertriebsradar: React.FC = () => {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `GanzImmun_CRM_Export_${new Date().toISOString().slice(0, 10)}.json`;
+      a.download = `LabPulse_CRM_Export_${new Date().toISOString().slice(0, 10)}.json`;
       a.click();
       URL.revokeObjectURL(url);
       await fetchOpportunities();
@@ -172,7 +173,7 @@ const Vertriebsradar: React.FC = () => {
               </div>
               <div>
                 <h1 className="text-xl font-bold text-white tracking-tight">Vertriebsradar</h1>
-                <p className="text-xs text-slate-400">KI-gesteuerte Vertriebschancen für Ganz Immun</p>
+                <p className="text-xs text-slate-400">KI-gesteuerte Vertriebschancen</p>
               </div>
             </div>
           </div>
@@ -521,7 +522,7 @@ const Vertriebsradar: React.FC = () => {
 
       {/* ── Footer ── */}
       <footer className="mt-8 py-4 text-center text-xs text-slate-600" style={{ borderTop: '1px solid #1e293b' }}>
-        LabPulse Pro &mdash; Vertriebsradar v1.0 &mdash; Ganz Immun Diagnostics AG
+        LabPulse Pro &mdash; Vertriebsradar v1.0 &mdash; LabPulse Pro
       </footer>
     </div>
   );

@@ -191,6 +191,10 @@ const Dashboard: React.FC = () => {
   const [data, setData] = useState<DashboardData | null>(null);
   const [selectedVirus, setSelectedVirus] = useState('Influenza A');
   const [timeseries, setTimeseries] = useState<{ historical: TimeseriesPoint[]; forecast: ForecastPoint[]; inventory?: Array<{ date: string; bestand: number; min_bestand: number; max_bestand: number; empfohlen: number }>; test_typ?: string } | null>(null);
+  const [allTimeseries, setAllTimeseries] = useState<Record<string, TimeseriesPoint[]>>({});
+  const [zoomStart, setZoomStart] = useState<number | null>(null);
+  const [zoomEnd, setZoomEnd] = useState<number | null>(null);
+  const pinchRef = React.useRef<{ dist: number; start: number; end: number } | null>(null);
   const [sparklines, setSparklines] = useState<Record<string, SparklinePoint[]>>({});
   const [showForecast, setShowForecast] = useState(true);
   const [loading, setLoading] = useState(true);
@@ -236,6 +240,22 @@ const Dashboard: React.FC = () => {
       console.error('Timeseries fetch error:', e);
     }
   }, [selectedVirus, showForecast]);
+
+  // Fetch timeseries for ALL viruses (multi-curve chart)
+  const fetchAllTimeseries = useCallback(async () => {
+    const viruses = ['Influenza A', 'Influenza B', 'SARS-CoV-2', 'RSV A'];
+    const results: Record<string, TimeseriesPoint[]> = {};
+    await Promise.all(viruses.map(async (v) => {
+      try {
+        const res = await fetch(`/api/v1/dashboard/timeseries/${encodeURIComponent(v)}?include_forecast=false&days_back=90`);
+        if (res.ok) {
+          const json = await res.json();
+          results[v] = json.historical || [];
+        }
+      } catch (_) {}
+    }));
+    setAllTimeseries(results);
+  }, []);
 
   // Fetch sparklines for all viruses
   const fetchSparklines = useCallback(async () => {
@@ -311,9 +331,10 @@ const Dashboard: React.FC = () => {
   useEffect(() => {
     fetchOverview();
     fetchSparklines();
+    fetchAllTimeseries();
     fetchDrugShortageSignals();
     fetchOutbreakScore();
-  }, [fetchOverview, fetchSparklines, fetchDrugShortageSignals, fetchOutbreakScore]);
+  }, [fetchOverview, fetchSparklines, fetchAllTimeseries, fetchDrugShortageSignals, fetchOutbreakScore]);
 
   useEffect(() => {
     fetchTimeseries();
@@ -322,6 +343,20 @@ const Dashboard: React.FC = () => {
   useEffect(() => {
     if (showGrippeWeb) fetchGrippeWebTimeseries();
   }, [showGrippeWeb, fetchGrippeWebTimeseries]);
+
+  // Re-fetch all data when page becomes visible (user returns to tab)
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        fetchOverview();
+        fetchAllTimeseries();
+        fetchSparklines();
+        fetchOutbreakScore();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, [fetchOverview, fetchAllTimeseries, fetchSparklines, fetchOutbreakScore]);
 
   // Run ML forecast
   const runForecast = async () => {
@@ -406,22 +441,21 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  // Build chart data with inventory overlay
+  // Build chart data for SELECTED virus + forecast/inventory
   const chartData = React.useMemo(() => {
-    if (!timeseries) return [];
+    const points = allTimeseries[selectedVirus] || timeseries?.historical || [];
 
-    // Parse inventory data into a date-sorted lookup
-    const invEntries = (timeseries.inventory || []).map(inv => ({
+    // Inventory forward-fill
+    const invEntries = (timeseries?.inventory || []).map(inv => ({
       date: new Date(inv.date).getTime(),
       bestand: inv.bestand,
       min_bestand: inv.min_bestand,
     })).sort((a, b) => a.date - b.date);
 
-    // Forward-fill function: find latest inventory value <= given date
     const getInventoryAt = (dateStr: string) => {
       if (invEntries.length === 0) return null;
       const ts = new Date(dateStr).getTime();
-      let best = invEntries[0]; // fallback to first entry
+      let best = invEntries[0];
       for (const inv of invEntries) {
         if (inv.date <= ts) best = inv;
         else break;
@@ -429,7 +463,7 @@ const Dashboard: React.FC = () => {
       return best;
     };
 
-    const hist = (timeseries.historical || []).map((d) => {
+    const hist = points.map((d) => {
       const inv = getInventoryAt(d.date);
       return {
         date: format(new Date(d.date), 'dd. MMM', { locale: de }),
@@ -440,7 +474,7 @@ const Dashboard: React.FC = () => {
       };
     });
 
-    if (showForecast && timeseries.forecast && timeseries.forecast.length > 0) {
+    if (showForecast && timeseries?.forecast && timeseries.forecast.length > 0) {
       const last = hist.length > 0 ? hist[hist.length - 1] : null;
       const lastInv = invEntries.length > 0 ? invEntries[invEntries.length - 1] : null;
       const forecasts = timeseries.forecast.map((d) => ({
@@ -451,14 +485,95 @@ const Dashboard: React.FC = () => {
         'Untergrenze': d.lower_bound,
         ...(lastInv ? { 'Bestand': lastInv.bestand, 'Min-Bestand': lastInv.min_bestand } : {}),
       }));
-      // Connect last historical to first forecast
       if (last && forecasts.length > 0) {
         forecasts[0] = { ...forecasts[0], 'Messwert': last['Messwert'] } as any;
       }
       return [...hist, ...forecasts];
     }
     return hist;
-  }, [timeseries, showForecast]);
+  }, [allTimeseries, selectedVirus, timeseries, showForecast]);
+
+  // Zoomed slice of chart data
+  const visibleData = React.useMemo(() => {
+    if (zoomStart !== null && zoomEnd !== null) {
+      return chartData.slice(zoomStart, zoomEnd + 1);
+    }
+    return chartData;
+  }, [chartData, zoomStart, zoomEnd]);
+
+  // Reset zoom when virus changes
+  useEffect(() => {
+    setZoomStart(null);
+    setZoomEnd(null);
+  }, [selectedVirus]);
+
+  // Scroll-to-zoom handler
+  const handleChartWheel = useCallback((e: React.WheelEvent) => {
+    if (chartData.length < 5) return;
+    e.preventDefault();
+    const total = chartData.length;
+    const start = zoomStart ?? 0;
+    const end = zoomEnd ?? total - 1;
+    const range = end - start;
+
+    const step = Math.max(1, Math.ceil(range * 0.12));
+    const delta = e.deltaY > 0 ? step : -step;
+    const newRange = range + delta * 2;
+
+    if (newRange >= total - 1) {
+      setZoomStart(null);
+      setZoomEnd(null);
+      return;
+    }
+    if (newRange < 4) return;
+
+    const center = Math.round((start + end) / 2);
+    const ns = Math.max(0, center - Math.round(newRange / 2));
+    const ne = Math.min(total - 1, ns + newRange);
+    setZoomStart(ns);
+    setZoomEnd(ne);
+  }, [chartData.length, zoomStart, zoomEnd]);
+
+  // Pinch-to-zoom handlers
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    if (e.touches.length === 2) {
+      const dist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY,
+      );
+      pinchRef.current = {
+        dist,
+        start: zoomStart ?? 0,
+        end: zoomEnd ?? chartData.length - 1,
+      };
+    }
+  }, [zoomStart, zoomEnd, chartData.length]);
+
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    if (e.touches.length === 2 && pinchRef.current) {
+      e.preventDefault();
+      const newDist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY,
+      );
+      const scale = pinchRef.current.dist / newDist;
+      const origRange = pinchRef.current.end - pinchRef.current.start;
+      const newRange = Math.max(4, Math.round(origRange * scale));
+      const total = chartData.length;
+
+      if (newRange >= total - 1) {
+        setZoomStart(null);
+        setZoomEnd(null);
+        return;
+      }
+
+      const center = Math.round((pinchRef.current.start + pinchRef.current.end) / 2);
+      const ns = Math.max(0, center - Math.round(newRange / 2));
+      const ne = Math.min(total - 1, ns + newRange);
+      setZoomStart(ns);
+      setZoomEnd(ne);
+    }
+  }, [chartData.length]);
 
   if (loading) {
     return (
@@ -492,6 +607,13 @@ const Dashboard: React.FC = () => {
               style={{ color: '#f59e0b', border: '1px solid #f59e0b40' }}
             >
               Vertriebsradar
+            </button>
+            <button
+              onClick={() => navigate('/datenimport')}
+              className="px-3 py-1.5 text-xs font-medium rounded-lg transition-all hover:bg-slate-700"
+              style={{ color: '#10b981', border: '1px solid #10b98140' }}
+            >
+              Datenimport
             </button>
             <button
               onClick={() => navigate('/map')}
@@ -543,7 +665,7 @@ const Dashboard: React.FC = () => {
                   </div>
                 </div>
                 <div>
-                  <div className="text-xs text-slate-400 uppercase tracking-wider mb-1">Ganz Immun Outbreak Score</div>
+                  <div className="text-xs text-slate-400 uppercase tracking-wider mb-1">Outbreak Score</div>
                   <div className="flex items-center gap-2">
                     <span className={`text-lg font-bold ${
                       outbreakScore.overall_risk_level === 'RED' ? 'text-red-400'
@@ -817,13 +939,26 @@ const Dashboard: React.FC = () => {
         <div className="card p-6 fade-in">
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h2 className="text-lg font-bold text-white">{selectedVirus} — Viruslast vs. Testkit-Bestand</h2>
+              <h2 className="text-lg font-bold text-white">
+                <span style={{ color: VIRUS_COLORS[selectedVirus] }}>{selectedVirus}</span> — Viruslast vs. Testkit-Bestand
+              </h2>
               <p className="text-xs text-slate-500 mt-1">
                 Abwasserdaten (AMELAG) {showForecast && data?.has_forecasts ? '+ ML-Prognose' : ''}
                 {timeseries?.test_typ ? ` | Bestand: ${timeseries.test_typ}` : ''}
+                {zoomStart !== null ? ' | Scroll/Pinch zum Zoomen' : ''}
               </p>
             </div>
             <div className="flex items-center gap-4">
+              {/* Zoom Reset */}
+              {zoomStart !== null && (
+                <button
+                  onClick={() => { setZoomStart(null); setZoomEnd(null); }}
+                  className="px-3 py-1.5 text-xs font-medium rounded-lg transition-all hover:bg-slate-600"
+                  style={{ background: '#334155', color: '#94a3b8' }}
+                >
+                  Zoom zurücksetzen
+                </button>
+              )}
               {/* Forecast Toggle */}
               <div className="flex items-center gap-3">
                 <span className="text-xs text-slate-400">ML-Prognose</span>
@@ -848,8 +983,14 @@ const Dashboard: React.FC = () => {
             </div>
           </div>
 
+          <div
+            onWheel={handleChartWheel}
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            style={{ touchAction: 'pan-y' }}
+          >
           <ResponsiveContainer width="100%" height={400}>
-            <ComposedChart data={chartData} margin={{ top: 5, right: 60, left: 10, bottom: 5 }}>
+            <ComposedChart data={visibleData} margin={{ top: 5, right: 60, left: 10, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
               <XAxis
                 dataKey="date"
@@ -975,6 +1116,7 @@ const Dashboard: React.FC = () => {
               )}
             </ComposedChart>
           </ResponsiveContainer>
+          </div>
 
           {!data?.has_forecasts && (
             <div className="mt-4 p-4 rounded-lg text-center" style={{ background: '#334155', border: '1px dashed #475569' }}>

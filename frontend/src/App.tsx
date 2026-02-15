@@ -4,6 +4,7 @@ import LandingPage from './pages/LandingPage';
 import Dashboard from './pages/Dashboard';
 import GermanyMap from './pages/GermanyMap';
 import Vertriebsradar from './pages/Vertriebsradar';
+import Datenimport from './pages/Datenimport';
 import './index.css';
 
 const App: React.FC = () => {
@@ -14,6 +15,7 @@ const App: React.FC = () => {
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/map" element={<GermanyMap />} />
         <Route path="/vertriebsradar" element={<Vertriebsradar />} />
+        <Route path="/datenimport" element={<Datenimport />} />
       </Routes>
     </Router>
   );

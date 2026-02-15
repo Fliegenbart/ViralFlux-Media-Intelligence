@@ -101,10 +101,17 @@ class WeatherData(Base):
     wetter_beschreibung = Column(String)
     wind_geschwindigkeit = Column(Float)  # m/s
     uv_index = Column(Float)  # UV-Index (0-11+)
+    wolken = Column(Float)  # Cloud cover % (0-100)
+    niederschlag_wahrscheinlichkeit = Column(Float)  # Probability of precipitation (0-1)
+    regen_mm = Column(Float)  # Rain volume mm
+    schnee_mm = Column(Float)  # Snow volume mm
+    taupunkt = Column(Float)  # Dew point °C
+    data_type = Column(String, default="CURRENT")  # CURRENT, DAILY_FORECAST, HOURLY_FORECAST
     created_at = Column(DateTime, default=datetime.utcnow)
 
     __table_args__ = (
         Index('idx_weather_date_city', 'datum', 'city'),
+        Index('idx_weather_data_type', 'data_type'),
     )
 
 
@@ -276,3 +283,20 @@ class ProductCatalog(Base):
     applicable_conditions = Column(JSON)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class UploadHistory(Base):
+    """Upload-Verlauf für Datenimport-Seite."""
+    __tablename__ = "upload_history"
+
+    id = Column(Integer, primary_key=True, index=True)
+    filename = Column(String, nullable=False)
+    upload_type = Column(String, nullable=False)  # "lab_results" or "orders"
+    file_format = Column(String)  # "csv" or "xlsx"
+    row_count = Column(Integer)
+    date_range_start = Column(DateTime)
+    date_range_end = Column(DateTime)
+    status = Column(String, default="success")  # success, error, partial
+    error_message = Column(String)
+    summary = Column(JSON)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)

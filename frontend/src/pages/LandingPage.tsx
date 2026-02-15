@@ -37,17 +37,17 @@ const LandingPage: React.FC = () => {
           <h1 className="text-5xl md:text-7xl font-extrabold text-white tracking-tight leading-tight mb-6">
             Vom reaktiven Labor zur<br />
             <span style={{ background: 'linear-gradient(135deg, #3b82f6, #8b5cf6, #06b6d4)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-              praediktiven High-Performance-Einheit
+              prädiktiven High-Performance-Einheit
             </span>
           </h1>
 
           <p className="text-xl text-slate-400 max-w-3xl mx-auto mb-4 leading-relaxed">
-            LabPulse ist nicht nur ein Corona-Dashboard. Es ist das <strong className="text-white">SAP fuer die operative Laborsteuerung</strong>.
+            LabPulse ist nicht nur ein Corona-Dashboard. Es ist das <strong className="text-white">SAP für die operative Laborsteuerung</strong>.
             Wir nutzen externe epidemiologische Daten, um die interne Supply-Chain und Personalplanung
             vollautomatisch zu justieren.
           </p>
           <p className="text-lg text-slate-500 max-w-2xl mx-auto mb-12">
-            Wir verwandeln reaktive Labore in praediktive High-Performance-Einheiten.
+            Wir verwandeln reaktive Labore in prädiktive High-Performance-Einheiten.
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
@@ -73,8 +73,8 @@ const LandingPage: React.FC = () => {
       <div style={{ background: '#1e293b', borderTop: '1px solid #334155', borderBottom: '1px solid #334155' }}>
         <div className="max-w-[1400px] mx-auto px-6 py-8 grid grid-cols-2 md:grid-cols-4 gap-8">
           {[
-            { value: '20%', label: 'Weniger Lagerkosten', sub: 'durch praediktive Bestelloptimierung' },
-            { value: '100%', label: 'Stockout-Praevention', sub: 'ML-gestuetzte Bedarfsprognose' },
+            { value: '20%', label: 'Weniger Lagerkosten', sub: 'durch prädiktive Bestelloptimierung' },
+            { value: '100%', label: 'Stockout-Prävention', sub: 'ML-gestützte Bedarfsprognose' },
             { value: '14', label: 'Tage Prognose-Horizont', sub: 'Holt-Winters + Ridge Ensemble' },
             { value: '5+', label: 'Datenquellen integriert', sub: 'RKI, Google Trends, OpenWeather, ...' },
           ].map((kpi, i) => (
@@ -94,7 +94,7 @@ const LandingPage: React.FC = () => {
             Was LabPulse Pro einzigartig macht
           </h2>
           <p className="text-lg text-slate-400 max-w-2xl mx-auto">
-            Drei Saeulen fuer die vollautomatisierte Laborsteuerung
+            Drei Säulen für die vollautomatisierte Laborsteuerung
           </p>
         </div>
 
@@ -104,14 +104,14 @@ const LandingPage: React.FC = () => {
             <div className="w-14 h-14 rounded-2xl flex items-center justify-center mb-6" style={{ background: 'rgba(59,130,246,0.15)' }}>
               <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
             </div>
-            <h3 className="text-xl font-bold text-white mb-3">Epidemiologische Frueherkennung</h3>
+            <h3 className="text-xl font-bold text-white mb-3">Epidemiologische Früherkennung</h3>
             <p className="text-slate-400 leading-relaxed mb-4">
               Echtzeit-Integration von RKI-Abwasserdaten (AMELAG), Google Trends, Wetterdaten und Schulferien.
-              Erkennung von Ausbruechen <strong className="text-slate-300">2-3 Wochen vor</strong> dem klinischen Peak.
+              Erkennung von Ausbrüchen <strong className="text-slate-300">2-3 Wochen vor</strong> dem klinischen Peak.
             </p>
             <ul className="space-y-2 text-sm text-slate-500">
-              <li className="flex items-center gap-2"><span className="text-blue-400">&#10003;</span> 160+ Klaeranlagen bundesweit</li>
-              <li className="flex items-center gap-2"><span className="text-blue-400">&#10003;</span> 16 Bundeslaender Heatmap</li>
+              <li className="flex items-center gap-2"><span className="text-blue-400">&#10003;</span> 160+ Kläranlagen bundesweit</li>
+              <li className="flex items-center gap-2"><span className="text-blue-400">&#10003;</span> 16 Bundesländer Heatmap</li>
               <li className="flex items-center gap-2"><span className="text-blue-400">&#10003;</span> 8 Virus-Typen Monitoring</li>
             </ul>
           </div>
@@ -121,9 +121,9 @@ const LandingPage: React.FC = () => {
             <div className="w-14 h-14 rounded-2xl flex items-center justify-center mb-6" style={{ background: 'rgba(245,158,11,0.15)' }}>
               <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
             </div>
-            <h3 className="text-xl font-bold text-white mb-3">ML-gestuetzte Prognose</h3>
+            <h3 className="text-xl font-bold text-white mb-3">ML-gestützte Prognose</h3>
             <p className="text-slate-400 leading-relaxed mb-4">
-              Holt-Winters + Ridge Regression Ensemble-Modell fuer praezise 14-Tage-Vorhersagen.
+              Holt-Winters + Ridge Regression Ensemble-Modell für präzise 14-Tage-Vorhersagen.
               Automatische Bedarfsberechnung mit <strong className="text-slate-300">Konfidenzintervallen</strong>.
             </p>
             <ul className="space-y-2 text-sm text-slate-500">
@@ -145,8 +145,8 @@ const LandingPage: React.FC = () => {
             </p>
             <ul className="space-y-2 text-sm text-slate-500">
               <li className="flex items-center gap-2"><span className="text-green-400">&#10003;</span> SAP MM CSV-Export</li>
-              <li className="flex items-center gap-2"><span className="text-green-400">&#10003;</span> Praediktive Sicherheitsbestaende</li>
-              <li className="flex items-center gap-2"><span className="text-green-400">&#10003;</span> Standort-uebergreifende Transfers</li>
+              <li className="flex items-center gap-2"><span className="text-green-400">&#10003;</span> Prädiktive Sicherheitsbestände</li>
+              <li className="flex items-center gap-2"><span className="text-green-400">&#10003;</span> Standort-übergreifende Transfers</li>
             </ul>
           </div>
         </div>
@@ -164,8 +164,8 @@ const LandingPage: React.FC = () => {
             {[
               { step: '01', title: 'Daten sammeln', desc: 'Automatischer Import von RKI AMELAG, Google Trends, OpenWeather und Schulferien-Daten', color: '#3b82f6' },
               { step: '02', title: 'Analysieren', desc: 'ML-Modell erkennt Muster, berechnet regionale Trends und 14-Tage-Prognosen', color: '#8b5cf6' },
-              { step: '03', title: 'Empfehlen', desc: 'Automatische Bestandsanalyse, Stockout-Simulation und Bestellvorschlaege', color: '#f59e0b' },
-              { step: '04', title: 'Handeln', desc: 'One-Click SAP/ERP-Export, standortuebergreifende Transfer-Empfehlungen', color: '#10b981' },
+              { step: '03', title: 'Empfehlen', desc: 'Automatische Bestandsanalyse, Stockout-Simulation und Bestellvorschläge', color: '#f59e0b' },
+              { step: '04', title: 'Handeln', desc: 'One-Click SAP/ERP-Export, standortübergreifende Transfer-Empfehlungen', color: '#10b981' },
             ].map((s, i) => (
               <div key={i} className="relative p-6 rounded-xl" style={{ background: '#0f172a', border: '1px solid #334155' }}>
                 <div className="text-5xl font-extrabold mb-4" style={{ color: s.color, opacity: 0.2 }}>{s.step}</div>
@@ -206,7 +206,7 @@ const LandingPage: React.FC = () => {
       <section className="py-24" style={{ background: 'linear-gradient(135deg, rgba(59,130,246,0.1), rgba(139,92,246,0.1))' }}>
         <div className="max-w-[800px] mx-auto px-6 text-center">
           <h2 className="text-3xl md:text-4xl font-extrabold text-white mb-6">
-            Bereit fuer praediktive Laborsteuerung?
+            Bereit für prädiktive Laborsteuerung?
           </h2>
           <p className="text-lg text-slate-400 mb-8">
             Starten Sie jetzt mit LabPulse Pro und senken Sie Ihre Lagerkosten um 20%
@@ -225,7 +225,7 @@ const LandingPage: React.FC = () => {
       {/* ── Footer ── */}
       <footer className="py-8 text-center text-sm text-slate-600" style={{ borderTop: '1px solid #1e293b' }}>
         <div className="max-w-[1400px] mx-auto px-6">
-          <p>LabPulse Pro v1.0 &mdash; Intelligentes Fruehwarnsystem fuer Labordiagnostik</p>
+          <p>LabPulse Pro v1.0 &mdash; Intelligentes Frühwarnsystem für Labordiagnostik</p>
           <p className="text-xs text-slate-700 mt-2">Powered by RKI AMELAG, Google Trends, OpenWeather, Holt-Winters + Ridge ML</p>
         </div>
       </footer>

@@ -48,10 +48,53 @@ interface Recommendation {
   created_at: string;
 }
 
+interface GrippeWebItem {
+  value: number | null;
+  date: string | null;
+  kalenderwoche: number;
+  trend: string;
+}
+
+interface DrugShortageSignals {
+  risk_score: number;
+  total_active: number;
+  wave_type: string;
+  categories: Record<string, number>;
+  pediatric_count: number;
+  pediatric_alert: boolean;
+  summary: string;
+}
+
+interface GrippeWebTimeseriesPoint {
+  date: string;
+  kalenderwoche: number;
+  inzidenz: number;
+  meldungen: number | null;
+}
+
+interface OutbreakScoreData {
+  overall_score: number;
+  overall_risk_level: string;
+  per_virus: Record<string, {
+    final_risk_score: number;
+    risk_level: string;
+    leading_indicator: string;
+    confidence_numeric: number;
+    confidence_level: string;
+    phase: string;
+    data_source_mode: string;
+    baseline_correction: string;
+    component_scores: Record<string, number | null>;
+    contributions: Record<string, number>;
+  }>;
+  timestamp: string;
+}
+
 interface DashboardData {
   current_viral_loads: Record<string, ViralLoad>;
   top_trends: Array<{ keyword: string; score: number }>;
   are_inzidenz: { value: number | null; date: string | null };
+  grippeweb: Record<string, GrippeWebItem>;
   forecast_summary: Record<string, ForecastSummary>;
   weather: { avg_temperature: number; avg_humidity: number };
   inventory: Record<string, InventoryItem>;
@@ -156,6 +199,14 @@ const Dashboard: React.FC = () => {
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
   const [stockoutData, setStockoutData] = useState<any>(null);
   const [orderLoading, setOrderLoading] = useState(false);
+  const [expandedRec, setExpandedRec] = useState<number | null>(null);
+  const [showGrippeWeb, setShowGrippeWeb] = useState(false);
+  const [selectedGrippeWeb, setSelectedGrippeWeb] = useState<'ARE' | 'ILI'>('ARE');
+  const [grippeWebSeries, setGrippeWebSeries] = useState<GrippeWebTimeseriesPoint[]>([]);
+  const [drugShortageData, setDrugShortageData] = useState<DrugShortageSignals | null>(null);
+  const [drugShortageLoading, setDrugShortageLoading] = useState(false);
+  const [outbreakScore, setOutbreakScore] = useState<OutbreakScoreData | null>(null);
+  const [outbreakLoading, setOutbreakLoading] = useState(false);
 
   // Fetch dashboard overview
   const fetchOverview = useCallback(async () => {
@@ -202,14 +253,75 @@ const Dashboard: React.FC = () => {
     setSparklines(results);
   }, []);
 
+  // Fetch GrippeWeb timeseries
+  const fetchGrippeWebTimeseries = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/v1/dashboard/grippeweb-timeseries?erkrankung=${selectedGrippeWeb}&weeks_back=52`);
+      if (res.ok) {
+        const result = await res.json();
+        setGrippeWebSeries(result.data || []);
+      }
+    } catch (e) {
+      console.error('GrippeWeb fetch error:', e);
+    }
+  }, [selectedGrippeWeb]);
+
+  // Fetch Drug Shortage signals
+  const fetchDrugShortageSignals = useCallback(async () => {
+    try {
+      const res = await fetch('/api/v1/drug-shortage/signals');
+      if (res.ok) {
+        const result = await res.json();
+        setDrugShortageData(result);
+      }
+    } catch (_) {}
+  }, []);
+
+  // Fetch Outbreak Score
+  const fetchOutbreakScore = useCallback(async () => {
+    try {
+      const res = await fetch('/api/v1/outbreak-score/all');
+      if (res.ok) {
+        const result = await res.json();
+        setOutbreakScore(result);
+      }
+    } catch (e) {
+      console.error('Outbreak score fetch error:', e);
+    }
+  }, []);
+
+  // Upload Drug Shortage CSV
+  const uploadDrugShortageCSV = async (file: File) => {
+    setDrugShortageLoading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch('/api/v1/drug-shortage/upload', { method: 'POST', body: formData });
+      if (res.ok) {
+        const result = await res.json();
+        setDrugShortageData(result.signals);
+      }
+    } catch (e) {
+      console.error('Drug shortage upload error:', e);
+    } finally {
+      setDrugShortageLoading(false);
+    }
+  };
+
   useEffect(() => {
     fetchOverview();
     fetchSparklines();
-  }, [fetchOverview, fetchSparklines]);
+    fetchDrugShortageSignals();
+    fetchOutbreakScore();
+  }, [fetchOverview, fetchSparklines, fetchDrugShortageSignals, fetchOutbreakScore]);
 
   useEffect(() => {
     fetchTimeseries();
   }, [fetchTimeseries]);
+
+  useEffect(() => {
+    if (showGrippeWeb) fetchGrippeWebTimeseries();
+  }, [showGrippeWeb, fetchGrippeWebTimeseries]);
 
   // Run ML forecast
   const runForecast = async () => {
@@ -220,6 +332,7 @@ const Dashboard: React.FC = () => {
       setTimeout(async () => {
         await fetchOverview();
         await fetchTimeseries();
+        await fetchOutbreakScore();
         setForecastLoading(false);
       }, 5000);
     } catch (e) {
@@ -369,10 +482,17 @@ const Dashboard: React.FC = () => {
             </div>
             <div>
               <h1 className="text-xl font-bold text-white tracking-tight">LabPulse Pro</h1>
-              <p className="text-xs text-slate-400">Intelligentes Fruehwarnsystem fuer Labordiagnostik</p>
+              <p className="text-xs text-slate-400">Intelligentes Frühwarnsystem für Labordiagnostik</p>
             </div>
           </div>
           <div className="flex items-center gap-6">
+            <button
+              onClick={() => navigate('/vertriebsradar')}
+              className="px-3 py-1.5 text-xs font-medium rounded-lg transition-all hover:bg-slate-700"
+              style={{ color: '#f59e0b', border: '1px solid #f59e0b40' }}
+            >
+              Vertriebsradar
+            </button>
             <button
               onClick={() => navigate('/map')}
               className="px-3 py-1.5 text-xs font-medium rounded-lg transition-all hover:bg-slate-700"
@@ -392,6 +512,102 @@ const Dashboard: React.FC = () => {
       </header>
 
       <main className="max-w-[1600px] mx-auto px-6 py-6 space-y-6">
+
+        {/* ── Outbreak Score Banner ── */}
+        {outbreakScore && (
+          <div className="card p-6 fade-in" style={{
+            background: outbreakScore.overall_risk_level === 'RED'
+              ? 'linear-gradient(135deg, rgba(239,68,68,0.15), rgba(30,41,59,1))'
+              : outbreakScore.overall_risk_level === 'YELLOW'
+              ? 'linear-gradient(135deg, rgba(245,158,11,0.15), rgba(30,41,59,1))'
+              : 'linear-gradient(135deg, rgba(16,185,129,0.12), rgba(30,41,59,1))',
+            border: `1px solid ${outbreakScore.overall_risk_level === 'RED' ? '#ef4444' : outbreakScore.overall_risk_level === 'YELLOW' ? '#f59e0b' : '#10b981'}40`,
+          }}>
+            <div className="flex items-center gap-8 flex-wrap">
+              {/* Gauge */}
+              <div className="flex items-center gap-6">
+                <div className="relative" style={{ width: 100, height: 100 }}>
+                  <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
+                    <circle cx="50" cy="50" r="42" fill="none" stroke="#334155" strokeWidth="8" />
+                    <circle
+                      cx="50" cy="50" r="42" fill="none"
+                      stroke={outbreakScore.overall_risk_level === 'RED' ? '#ef4444' : outbreakScore.overall_risk_level === 'YELLOW' ? '#f59e0b' : '#10b981'}
+                      strokeWidth="8"
+                      strokeDasharray={`${outbreakScore.overall_score * 2.64} 264`}
+                      strokeLinecap="round"
+                    />
+                  </svg>
+                  <div className="absolute inset-0 flex flex-col items-center justify-center">
+                    <span className="text-2xl font-black text-white">{outbreakScore.overall_score}</span>
+                    <span className="text-[9px] text-slate-400 -mt-0.5">von 100</span>
+                  </div>
+                </div>
+                <div>
+                  <div className="text-xs text-slate-400 uppercase tracking-wider mb-1">Ganz Immun Outbreak Score</div>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-lg font-bold ${
+                      outbreakScore.overall_risk_level === 'RED' ? 'text-red-400'
+                      : outbreakScore.overall_risk_level === 'YELLOW' ? 'text-amber-400'
+                      : 'text-green-400'
+                    }`}>
+                      {outbreakScore.overall_risk_level === 'RED' ? 'Hohes Risiko'
+                       : outbreakScore.overall_risk_level === 'YELLOW' ? 'Mittleres Risiko'
+                       : 'Niedriges Risiko'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Per-Virus Breakdown */}
+              <div className="flex-1 grid grid-cols-2 xl:grid-cols-4 gap-3">
+                {outbreakScore.per_virus && Object.entries(outbreakScore.per_virus).map(([virus, vs]) => {
+                  if ('error' in vs) return null;
+                  const color = vs.risk_level === 'RED' ? '#ef4444' : vs.risk_level === 'YELLOW' ? '#f59e0b' : '#10b981';
+                  return (
+                    <div key={virus} className="p-3 rounded-lg" style={{ background: '#0f172a', border: '1px solid #334155' }}>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-xs text-slate-400 truncate">{virus}</span>
+                        <span className="text-sm font-bold" style={{ color }}>{vs.final_risk_score}</span>
+                      </div>
+                      {/* Mini bar */}
+                      <div className="h-1.5 rounded-full overflow-hidden" style={{ background: '#334155' }}>
+                        <div className="h-full rounded-full transition-all duration-700" style={{ width: `${vs.final_risk_score}%`, background: color }} />
+                      </div>
+                      <div className="flex items-center justify-between mt-1.5">
+                        <span className="text-[10px] text-slate-500">{vs.leading_indicator}</span>
+                        <span className="text-[10px] text-slate-500">
+                          {vs.confidence_level} | Phase {vs.phase}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Component breakdown */}
+              {outbreakScore.per_virus?.[selectedVirus] && !('error' in outbreakScore.per_virus[selectedVirus]) && (
+                <div className="w-48 space-y-1.5">
+                  <div className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Signal-Beitrag ({selectedVirus.split(' ')[0]})</div>
+                  {Object.entries(outbreakScore.per_virus[selectedVirus].contributions || {}).map(([name, val]) => (
+                    <div key={name} className="flex items-center gap-2">
+                      <span className="text-[10px] text-slate-400 w-24 truncate">{name}</span>
+                      <div className="flex-1 h-1 rounded-full overflow-hidden" style={{ background: '#334155' }}>
+                        <div className="h-full rounded-full" style={{
+                          width: `${Math.min(val as number, 100)}%`,
+                          background: (val as number) > 5 ? '#3b82f6' : '#475569'
+                        }} />
+                      </div>
+                      <span className="text-[10px] text-slate-500 w-6 text-right">{(val as number).toFixed(0)}</span>
+                    </div>
+                  ))}
+                  {outbreakScore.per_virus[selectedVirus].data_source_mode === 'ESTIMATED_FROM_ORDERS' && (
+                    <div className="text-[9px] text-amber-400 mt-1">Basierend auf Verkaufszahlen</div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* ── Row 1: Virus Load Cards ── */}
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
@@ -444,6 +660,159 @@ const Dashboard: React.FC = () => {
           })}
         </div>
 
+        {/* ── GrippeWeb + Drug Shortage Cards ── */}
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+          {/* ARE Card */}
+          {data?.grippeweb?.ARE && (
+            <div
+              className={`card p-5 cursor-pointer fade-in ${showGrippeWeb && selectedGrippeWeb === 'ARE' ? 'card-selected' : ''}`}
+              onClick={() => {
+                if (showGrippeWeb && selectedGrippeWeb === 'ARE') {
+                  setShowGrippeWeb(false);
+                } else {
+                  setShowGrippeWeb(true);
+                  setSelectedGrippeWeb('ARE');
+                }
+              }}
+              style={{ borderLeft: '3px solid #f59e0b' }}
+            >
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full" style={{ background: '#f59e0b' }}></div>
+                  <span className="text-sm font-medium text-slate-300">ARE (Atemwegserkrankungen)</span>
+                </div>
+                <span className="text-xs font-mono px-2 py-0.5 rounded" style={{ background: '#f59e0b20', color: '#f59e0b' }}>GrippeWeb</span>
+              </div>
+              <div className="flex items-end justify-between">
+                <div>
+                  <div className="text-3xl font-bold text-white tracking-tight">
+                    {data.grippeweb.ARE.value !== null ? (data.grippeweb.ARE.value / 1000).toFixed(1) : '—'}
+                  </div>
+                  <div className="text-xs text-slate-500 mt-1">Inzidenz pro 100.000 (×1K)</div>
+                </div>
+                <div className="text-right">
+                  <div className="text-lg font-bold" style={{ color: trendColor(data.grippeweb.ARE.trend) }}>
+                    {trendArrow(data.grippeweb.ARE.trend)}
+                  </div>
+                  <div className="text-xs" style={{ color: trendColor(data.grippeweb.ARE.trend) }}>
+                    KW {data.grippeweb.ARE.kalenderwoche}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ILI Card */}
+          {data?.grippeweb?.ILI && (
+            <div
+              className={`card p-5 cursor-pointer fade-in ${showGrippeWeb && selectedGrippeWeb === 'ILI' ? 'card-selected' : ''}`}
+              onClick={() => {
+                if (showGrippeWeb && selectedGrippeWeb === 'ILI') {
+                  setShowGrippeWeb(false);
+                } else {
+                  setShowGrippeWeb(true);
+                  setSelectedGrippeWeb('ILI');
+                }
+              }}
+              style={{ borderLeft: '3px solid #ec4899' }}
+            >
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full" style={{ background: '#ec4899' }}></div>
+                  <span className="text-sm font-medium text-slate-300">ILI (Influenza-like Illness)</span>
+                </div>
+                <span className="text-xs font-mono px-2 py-0.5 rounded" style={{ background: '#ec489920', color: '#ec4899' }}>GrippeWeb</span>
+              </div>
+              <div className="flex items-end justify-between">
+                <div>
+                  <div className="text-3xl font-bold text-white tracking-tight">
+                    {data.grippeweb.ILI.value !== null ? data.grippeweb.ILI.value.toFixed(1) : '—'}
+                  </div>
+                  <div className="text-xs text-slate-500 mt-1">Inzidenz pro 100.000</div>
+                </div>
+                <div className="text-right">
+                  <div className="text-lg font-bold" style={{ color: trendColor(data.grippeweb.ILI.trend) }}>
+                    {trendArrow(data.grippeweb.ILI.trend)}
+                  </div>
+                  <div className="text-xs" style={{ color: trendColor(data.grippeweb.ILI.trend) }}>
+                    KW {data.grippeweb.ILI.kalenderwoche}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Drug Shortage Card */}
+          <div
+            className="card p-5 fade-in"
+            style={{ borderLeft: '3px solid #ef4444' }}
+          >
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full" style={{ background: '#ef4444' }}></div>
+                <span className="text-sm font-medium text-slate-300">Lieferengpässe (BfArM)</span>
+              </div>
+              <label className="text-xs font-mono px-2 py-0.5 rounded cursor-pointer transition hover:opacity-80" style={{ background: '#ef444420', color: '#ef4444' }}>
+                {drugShortageLoading ? '...' : 'CSV laden'}
+                <input
+                  type="file"
+                  accept=".csv"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) uploadDrugShortageCSV(file);
+                    e.target.value = '';
+                  }}
+                />
+              </label>
+            </div>
+            {drugShortageData ? (
+              <div>
+                <div className="flex items-end justify-between">
+                  <div>
+                    <div className="text-3xl font-bold tracking-tight" style={{
+                      color: drugShortageData.risk_score > 60 ? '#ef4444' : drugShortageData.risk_score > 30 ? '#f59e0b' : '#10b981'
+                    }}>
+                      {drugShortageData.risk_score}
+                    </div>
+                    <div className="text-xs text-slate-500 mt-1">Risiko-Score (0–100)</div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-sm font-medium text-slate-300">{drugShortageData.total_active}</div>
+                    <div className="text-xs text-slate-500">aktive Engpässe</div>
+                  </div>
+                </div>
+                <div className="mt-3 pt-3 space-y-1" style={{ borderTop: '1px solid #334155' }}>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-slate-500">Wellentyp</span>
+                    <span className="text-slate-300 font-medium">{drugShortageData.wave_type}</span>
+                  </div>
+                  {drugShortageData.pediatric_alert && (
+                    <div className="text-xs text-amber-400 font-medium mt-1">
+                      Pädiatrie-Warnung: {drugShortageData.pediatric_count} Engpässe
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-3">
+                <p className="text-xs text-slate-500">BfArM CSV hochladen für Analyse</p>
+              </div>
+            )}
+          </div>
+
+          {/* GrippeWeb placeholder / no-data card */}
+          {!data?.grippeweb?.ARE && !data?.grippeweb?.ILI && (
+            <div className="card p-5 fade-in" style={{ borderLeft: '3px solid #475569' }}>
+              <div className="flex items-center gap-2 mb-3">
+                <div className="w-3 h-3 rounded-full" style={{ background: '#475569' }}></div>
+                <span className="text-sm font-medium text-slate-400">GrippeWeb (RKI)</span>
+              </div>
+              <p className="text-xs text-slate-500">Keine GrippeWeb-Daten. Import via Datenquellen starten.</p>
+            </div>
+          )}
+        </div>
+
         {/* ── Row 2: Main Chart + Forecast Toggle ── */}
         <div className="card p-6 fade-in">
           <div className="flex items-center justify-between mb-6">
@@ -474,7 +843,7 @@ const Dashboard: React.FC = () => {
                   opacity: forecastLoading ? 0.6 : 1
                 }}
               >
-                {forecastLoading ? 'Berechne...' : 'Prophet ausfuehren'}
+                {forecastLoading ? 'Berechne...' : 'Prophet ausführen'}
               </button>
             </div>
           </div>
@@ -610,8 +979,68 @@ const Dashboard: React.FC = () => {
           {!data?.has_forecasts && (
             <div className="mt-4 p-4 rounded-lg text-center" style={{ background: '#334155', border: '1px dashed #475569' }}>
               <p className="text-sm text-slate-400">
-                Noch keine ML-Prognose vorhanden. Klicke "Prophet ausfuehren" um eine 14-Tage-Prognose zu erstellen.
+                Noch keine ML-Prognose vorhanden. Klicke "Prophet ausführen" um eine 14-Tage-Prognose zu erstellen.
               </p>
+            </div>
+          )}
+
+          {/* GrippeWeb sub-chart */}
+          {showGrippeWeb && grippeWebSeries.length > 0 && (
+            <div className="mt-4 pt-4" style={{ borderTop: '1px solid #334155' }}>
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-3">
+                  <h3 className="text-sm font-bold text-white">
+                    GrippeWeb — {selectedGrippeWeb === 'ARE' ? 'Atemwegserkrankungen' : 'Influenza-like Illness'}
+                  </h3>
+                  <div className="flex items-center gap-1">
+                    <button
+                      className={`px-2 py-0.5 text-xs rounded-l ${selectedGrippeWeb === 'ARE' ? 'bg-amber-500/20 text-amber-400 font-medium' : 'bg-slate-700 text-slate-400'}`}
+                      onClick={() => setSelectedGrippeWeb('ARE')}
+                    >ARE</button>
+                    <button
+                      className={`px-2 py-0.5 text-xs rounded-r ${selectedGrippeWeb === 'ILI' ? 'bg-pink-500/20 text-pink-400 font-medium' : 'bg-slate-700 text-slate-400'}`}
+                      onClick={() => setSelectedGrippeWeb('ILI')}
+                    >ILI</button>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowGrippeWeb(false)}
+                  className="text-xs text-slate-500 hover:text-slate-300 transition"
+                >Ausblenden</button>
+              </div>
+              <ResponsiveContainer width="100%" height={160}>
+                <ComposedChart data={grippeWebSeries.map(d => ({
+                  ...d,
+                  label: `KW ${d.kalenderwoche}`,
+                }))} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                  <XAxis
+                    dataKey="label"
+                    tick={{ fill: '#64748b', fontSize: 10 }}
+                    tickLine={{ stroke: '#334155' }}
+                    interval="preserveStartEnd"
+                  />
+                  <YAxis
+                    tick={{ fill: '#64748b', fontSize: 10 }}
+                    tickLine={{ stroke: '#334155' }}
+                    tickFormatter={(v: number) => v >= 1000 ? (v / 1000).toFixed(1) + 'K' : String(v.toFixed(0))}
+                  />
+                  <Tooltip
+                    contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8 }}
+                    labelStyle={{ color: '#f1f5f9' }}
+                    formatter={(value: number) => [value?.toFixed(1) + ' pro 100.000', 'Inzidenz']}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="inzidenz"
+                    stroke={selectedGrippeWeb === 'ARE' ? '#f59e0b' : '#ec4899'}
+                    strokeWidth={2}
+                    fill={selectedGrippeWeb === 'ARE' ? '#f59e0b' : '#ec4899'}
+                    fillOpacity={0.1}
+                    dot={false}
+                  />
+                </ComposedChart>
+              </ResponsiveContainer>
             </div>
           )}
         </div>
@@ -624,7 +1053,7 @@ const Dashboard: React.FC = () => {
             <div className="flex items-center justify-between mb-5">
               <div>
                 <h2 className="text-lg font-bold text-white">Testkit-Bestand &amp; Nachbestellung</h2>
-                <p className="text-xs text-slate-500 mt-1">Praediktive Bestandssteuerung mit ML-Prognose</p>
+                <p className="text-xs text-slate-500 mt-1">Prädiktive Bestandssteuerung mit ML-Prognose</p>
               </div>
               <div className="flex items-center gap-2">
                 {!data?.has_inventory && (
@@ -760,9 +1189,12 @@ const Dashboard: React.FC = () => {
             </div>
 
             {data?.recommendations && data.recommendations.length > 0 ? (
-              <div className="space-y-3 max-h-[400px] overflow-y-auto pr-1">
+              <div className="space-y-3 max-h-[500px] overflow-y-auto pr-1" style={{ scrollbarWidth: 'thin' }}>
                 {data.recommendations.map((rec) => {
                   const priority = rec.action?.priority || 'normal';
+                  const isExpanded = expandedRec === rec.id;
+                  const textClean = rec.text.replace(/\*\*/g, '');
+                  const isLong = textClean.length > 200;
                   return (
                     <div key={rec.id} className="p-4 rounded-lg slide-in" style={{ background: '#0f172a', border: '1px solid #334155' }}>
                       <div className="flex items-start justify-between mb-2">
@@ -788,9 +1220,20 @@ const Dashboard: React.FC = () => {
                           )}
                         </div>
                       </div>
-                      <div className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap" style={{ maxHeight: 120, overflow: 'hidden' }}>
-                        {rec.text.replace(/\*\*/g, '').substring(0, 300)}{rec.text.length > 300 ? '...' : ''}
+                      <div
+                        className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap"
+                        style={isExpanded ? {} : { maxHeight: 80, overflow: 'hidden', maskImage: isLong ? 'linear-gradient(to bottom, black 60%, transparent 100%)' : undefined, WebkitMaskImage: isLong ? 'linear-gradient(to bottom, black 60%, transparent 100%)' : undefined }}
+                      >
+                        {isExpanded ? textClean : textClean.substring(0, 250)}
                       </div>
+                      {isLong && (
+                        <button
+                          onClick={() => setExpandedRec(isExpanded ? null : rec.id)}
+                          className="text-xs text-blue-400 hover:text-blue-300 mt-1 transition"
+                        >
+                          {isExpanded ? 'Weniger anzeigen' : 'Mehr anzeigen...'}
+                        </button>
+                      )}
                       <div className="flex items-center justify-between mt-2 pt-2" style={{ borderTop: '1px solid #334155' }}>
                         <span className="text-[10px] text-slate-600">
                           Konfidenz: {(rec.confidence * 100).toFixed(0)}%
@@ -807,7 +1250,7 @@ const Dashboard: React.FC = () => {
               <div className="p-8 text-center rounded-lg" style={{ background: '#0f172a' }}>
                 <p className="text-sm text-slate-500 mb-3">Noch keine Empfehlungen generiert</p>
                 <p className="text-xs text-slate-600">
-                  Klicke "Empfehlungen generieren" nach dem Ausfuehren der Prophet-Prognose.
+                  Klicke "Empfehlungen generieren" nach dem Ausführen der Prophet-Prognose.
                 </p>
               </div>
             )}
@@ -849,7 +1292,7 @@ const Dashboard: React.FC = () => {
 
           {/* Forecast Summary */}
           <div className="card p-6 fade-in">
-            <h2 className="text-lg font-bold text-white mb-4">Prognose-Uebersicht</h2>
+            <h2 className="text-lg font-bold text-white mb-4">Prognose-Übersicht</h2>
             <p className="text-xs text-slate-500 mb-4">Prophet ML-Modell (14 Tage)</p>
             {data?.has_forecasts && data.forecast_summary ? (
               <div className="space-y-4">
@@ -875,7 +1318,7 @@ const Dashboard: React.FC = () => {
               </div>
             ) : (
               <div className="p-8 text-center rounded-lg" style={{ background: '#0f172a' }}>
-                <p className="text-sm text-slate-500">Prognose ausfuehren fuer Details</p>
+                <p className="text-sm text-slate-500">Prognose ausführen für Details</p>
               </div>
             )}
           </div>
@@ -911,6 +1354,18 @@ const Dashboard: React.FC = () => {
                   <span className="text-green-400">aktiv</span>
                 </div>
                 <div className="flex justify-between text-slate-400">
+                  <span>GrippeWeb (RKI)</span>
+                  <span className={data?.grippeweb?.ARE ? 'text-green-400' : 'text-slate-600'}>
+                    {data?.grippeweb?.ARE ? 'aktiv' : 'keine Daten'}
+                  </span>
+                </div>
+                <div className="flex justify-between text-slate-400">
+                  <span>BfArM Engpässe</span>
+                  <span className={drugShortageData ? 'text-green-400' : 'text-slate-600'}>
+                    {drugShortageData ? 'geladen' : 'nicht geladen'}
+                  </span>
+                </div>
+                <div className="flex justify-between text-slate-400">
                   <span>Google Trends</span>
                   <span className="text-green-400">aktiv</span>
                 </div>
@@ -930,6 +1385,12 @@ const Dashboard: React.FC = () => {
                     {data?.has_forecasts ? 'aktiv' : 'nicht gestartet'}
                   </span>
                 </div>
+                <div className="flex justify-between text-slate-400">
+                  <span>Fusion Engine</span>
+                  <span className={outbreakScore ? 'text-green-400' : 'text-slate-600'}>
+                    {outbreakScore ? `Score: ${outbreakScore.overall_score}` : 'berechne...'}
+                  </span>
+                </div>
               </div>
             </div>
           </div>
@@ -939,7 +1400,7 @@ const Dashboard: React.FC = () => {
 
       {/* ── Footer ── */}
       <footer className="mt-8 py-4 text-center text-xs text-slate-600" style={{ borderTop: '1px solid #1e293b' }}>
-        LabPulse Pro v1.0 &mdash; Intelligentes Fruehwarnsystem fuer Labordiagnostik
+        LabPulse Pro v1.0 &mdash; Intelligentes Frühwarnsystem für Labordiagnostik
       </footer>
     </div>
   );

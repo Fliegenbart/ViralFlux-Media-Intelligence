@@ -54,11 +54,32 @@ async def get_dashboard_overview(
         func.avg(GoogleTrendsData.interest_score).desc()
     ).limit(5).all()
 
-    # 3. ARE Inzidenz
-    latest_are = db.query(GrippeWebData).filter(
-        GrippeWebData.erkrankung_typ == 'ARE',
-        GrippeWebData.bundesland.is_(None)
-    ).order_by(GrippeWebData.datum.desc()).first()
+    # 3. GrippeWeb ARE + ILI Inzidenz
+    grippeweb_data = {}
+    for erkrankung in ['ARE', 'ILI']:
+        latest_gw = db.query(GrippeWebData).filter(
+            GrippeWebData.erkrankung_typ == erkrankung,
+            GrippeWebData.altersgruppe == '00+',
+            GrippeWebData.bundesland.is_(None),
+        ).order_by(GrippeWebData.datum.desc()).first()
+
+        previous_gw = db.query(GrippeWebData).filter(
+            GrippeWebData.erkrankung_typ == erkrankung,
+            GrippeWebData.altersgruppe == '00+',
+            GrippeWebData.bundesland.is_(None),
+        ).order_by(GrippeWebData.datum.desc()).offset(1).first()
+
+        if latest_gw:
+            gw_trend = "stabil"
+            if previous_gw and previous_gw.inzidenz and latest_gw.inzidenz:
+                gw_change = (latest_gw.inzidenz - previous_gw.inzidenz) / previous_gw.inzidenz if previous_gw.inzidenz > 0 else 0
+                gw_trend = "steigend" if gw_change > 0.05 else "fallend" if gw_change < -0.05 else "stabil"
+            grippeweb_data[erkrankung] = {
+                "value": latest_gw.inzidenz,
+                "date": latest_gw.datum,
+                "kalenderwoche": latest_gw.kalenderwoche,
+                "trend": gw_trend,
+            }
 
     # 4. Forecast summary (show all 14 days from latest run, not just future)
     forecast_summary = {}
@@ -147,9 +168,10 @@ async def get_dashboard_overview(
             for t in top_trends
         ],
         "are_inzidenz": {
-            "value": latest_are.inzidenz if latest_are else None,
-            "date": latest_are.datum if latest_are else None
+            "value": grippeweb_data.get('ARE', {}).get('value'),
+            "date": grippeweb_data.get('ARE', {}).get('date'),
         },
+        "grippeweb": grippeweb_data,
         "forecast_summary": forecast_summary,
         "weather": {
             "avg_temperature": round(avg_temp, 1),
@@ -304,6 +326,38 @@ async def get_sparkline_data(
     return {
         "virus_typ": virus_typ,
         "data": [{"d": d.datum.strftime('%m-%d'), "v": round(d.viruslast, 0)} for d in data]
+    }
+
+
+@router.get("/grippeweb-timeseries")
+async def get_grippeweb_timeseries(
+    erkrankung: str = "ARE",
+    altersgruppe: str = "00+",
+    weeks_back: int = 52,
+    db: Session = Depends(get_db)
+):
+    """GrippeWeb ARE/ILI timeseries for charting."""
+    start_date = datetime.now() - timedelta(weeks=weeks_back)
+
+    data = db.query(GrippeWebData).filter(
+        GrippeWebData.erkrankung_typ == erkrankung,
+        GrippeWebData.altersgruppe == altersgruppe,
+        GrippeWebData.bundesland.is_(None),
+        GrippeWebData.datum >= start_date
+    ).order_by(GrippeWebData.datum.asc()).all()
+
+    return {
+        "erkrankung": erkrankung,
+        "altersgruppe": altersgruppe,
+        "data": [
+            {
+                "date": d.datum.isoformat(),
+                "kalenderwoche": d.kalenderwoche,
+                "inzidenz": d.inzidenz,
+                "meldungen": d.anzahl_meldungen,
+            }
+            for d in data
+        ]
     }
 
 

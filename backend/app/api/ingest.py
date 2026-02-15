@@ -28,7 +28,17 @@ def _run_import_all():
             results["amelag"] = {"success": False, "error": str(e)}
 
     with get_db_context() as db:
-        # 2. Schulferien (statische Daten)
+        # 2. GrippeWeb ARE/ILI Daten
+        try:
+            from app.services.data_ingest.grippeweb_service import GrippeWebIngestionService
+            grippeweb = GrippeWebIngestionService(db)
+            results["grippeweb"] = grippeweb.run_full_import()
+        except Exception as e:
+            logger.error(f"GrippeWeb import failed: {e}")
+            results["grippeweb"] = {"success": False, "error": str(e)}
+
+    with get_db_context() as db:
+        # 3. Schulferien (statische Daten)
         try:
             holidays = SchoolHolidaysService(db)
             results["holidays"] = holidays.run_full_import()
@@ -37,7 +47,7 @@ def _run_import_all():
             results["holidays"] = {"success": False, "error": str(e)}
 
     with get_db_context() as db:
-        # 3. Google Trends (best-effort, kann rate-limited sein)
+        # 4. Google Trends (best-effort, kann rate-limited sein)
         try:
             trends = GoogleTrendsService(db)
             results["trends"] = trends.run_full_import(months=3)
@@ -46,7 +56,7 @@ def _run_import_all():
             results["trends"] = {"success": False, "error": str(e)}
 
     with get_db_context() as db:
-        # 4. Wetterdaten (optional, braucht API Key)
+        # 5. Wetterdaten (optional, braucht API Key)
         try:
             weather = WeatherService(db)
             results["weather"] = weather.run_full_import(include_forecast=False)
@@ -74,6 +84,14 @@ async def run_amelag_import(db: Session = Depends(get_db)):
     """Importiere nur AMELAG Abwasserdaten."""
     amelag = AmelagIngestionService(db)
     return amelag.run_full_import()
+
+
+@router.post("/grippeweb")
+async def run_grippeweb_import(db: Session = Depends(get_db)):
+    """Importiere GrippeWeb ARE/ILI Surveillance-Daten."""
+    from app.services.data_ingest.grippeweb_service import GrippeWebIngestionService
+    service = GrippeWebIngestionService(db)
+    return service.run_full_import()
 
 
 @router.post("/trends")

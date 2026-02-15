@@ -79,6 +79,7 @@ class WeatherService:
                     'luftdruck': current.get('pressure'),
                     'wetter_beschreibung': current.get('weather', [{}])[0].get('description', ''),
                     'wind_geschwindigkeit': current.get('wind_speed'),
+                    'uv_index': current.get('uvi'),
                 })
                 imported += 1
 
@@ -94,6 +95,7 @@ class WeatherService:
                             'luftdruck': day.get('pressure'),
                             'wetter_beschreibung': day.get('weather', [{}])[0].get('description', ''),
                             'wind_geschwindigkeit': day.get('wind_speed'),
+                            'uv_index': day.get('uvi'),
                         })
                         imported += 1
 
@@ -110,6 +112,7 @@ class WeatherService:
                         'luftdruck': hour.get('pressure'),
                         'wetter_beschreibung': hour.get('weather', [{}])[0].get('description', ''),
                         'wind_geschwindigkeit': hour.get('wind_speed'),
+                        'uv_index': hour.get('uvi'),
                     })
                     imported += 1
 

@@ -100,8 +100,9 @@ class WeatherData(Base):
     luftdruck = Column(Float)  # hPa
     wetter_beschreibung = Column(String)
     wind_geschwindigkeit = Column(Float)  # m/s
+    uv_index = Column(Float)  # UV-Index (0-11+)
     created_at = Column(DateTime, default=datetime.utcnow)
-    
+
     __table_args__ = (
         Index('idx_weather_date_city', 'datum', 'city'),
     )
@@ -201,7 +202,7 @@ class AuditLog(Base):
 class InventoryLevel(Base):
     """Lagerbestände (ganzimmun)."""
     __tablename__ = "inventory_levels"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     datum = Column(DateTime, nullable=False, index=True)
     test_typ = Column(String, nullable=False)
@@ -212,3 +213,66 @@ class InventoryLevel(Base):
     lieferzeit_tage = Column(Integer)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class OutbreakScore(Base):
+    """Ganz Immun Outbreak Risk Score — Fusion Engine Ergebnis."""
+    __tablename__ = "outbreak_scores"
+
+    id = Column(Integer, primary_key=True, index=True)
+    datum = Column(DateTime, nullable=False, index=True)
+    virus_typ = Column(String, nullable=False)
+    final_risk_score = Column(Float, nullable=False)
+    risk_level = Column(String)          # GREEN, YELLOW, RED
+    leading_indicator = Column(String)
+    confidence_level = Column(String)    # Sehr Hoch, Hoch, Mittel, Niedrig
+    confidence_numeric = Column(Float)
+    component_scores = Column(JSON)      # Aufschlüsselung aller Signale
+    data_source_mode = Column(String)    # FULL, ESTIMATED_FROM_ORDERS
+    phase = Column(String)               # A (heuristisch) oder B (KI-gesteuert)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        Index('idx_outbreak_date_virus', 'datum', 'virus_typ'),
+    )
+
+
+class MarketingOpportunity(Base):
+    """Marketing/Sales Opportunities aus der MarketingOpportunityEngine."""
+    __tablename__ = "marketing_opportunities"
+
+    id = Column(Integer, primary_key=True, index=True)
+    opportunity_id = Column(String, unique=True, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    opportunity_type = Column(String, nullable=False)
+    status = Column(String, default="NEW")
+    urgency_score = Column(Float, nullable=False)
+    region_target = Column(JSON)
+    trigger_source = Column(String)
+    trigger_event = Column(String)
+    trigger_details = Column(JSON)
+    trigger_detected_at = Column(DateTime)
+    target_audience = Column(JSON)
+    sales_pitch = Column(JSON)
+    suggested_products = Column(JSON)
+    expires_at = Column(DateTime)
+    exported_at = Column(DateTime)
+
+    __table_args__ = (
+        Index('idx_opportunity_type_status', 'opportunity_type', 'status'),
+        Index('idx_opportunity_urgency', 'urgency_score'),
+    )
+
+
+class ProductCatalog(Base):
+    """Produktkatalog für Marketing-Opportunity Produktempfehlungen."""
+    __tablename__ = "product_catalog"
+
+    id = Column(Integer, primary_key=True, index=True)
+    sku = Column(String, unique=True, nullable=False)
+    name = Column(String, nullable=False)
+    category = Column(String)
+    applicable_types = Column(JSON)
+    applicable_conditions = Column(JSON)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)

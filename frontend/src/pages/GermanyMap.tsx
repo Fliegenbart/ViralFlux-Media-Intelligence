@@ -197,7 +197,7 @@ const GermanyMap: React.FC = () => {
                   <div className="text-4xl mb-4">🗺</div>
                   <p className="text-slate-400 mb-2">Keine regionalen Daten vorhanden</p>
                   <p className="text-sm text-slate-500 max-w-md">
-                    Importiere zuerst die AMELAG Einzelstandort-Daten ueber
+                    Importiere zuerst die AMELAG Einzelstandort-Daten über
                     <code className="px-1.5 py-0.5 mx-1 rounded text-xs" style={{ background: '#334155', color: '#94a3b8' }}>
                       POST /api/v1/ingest/amelag
                     </code>

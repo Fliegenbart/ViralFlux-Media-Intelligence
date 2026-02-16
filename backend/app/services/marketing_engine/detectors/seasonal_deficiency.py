@@ -10,17 +10,9 @@ import logging
 
 from .base_detector import OpportunityDetector
 from app.models.database import WeatherData
+from app.services.data_ingest.weather_service import CITY_STATE_MAP
 
 logger = logging.getLogger(__name__)
-
-# Stadt → Bundesland Mapping
-CITY_STATE_MAP = {
-    "Berlin": "Berlin",
-    "Hamburg": "Hamburg",
-    "München": "Bayern",
-    "Köln": "Nordrhein-Westfalen",
-    "Frankfurt": "Hessen",
-}
 
 UV_LOW_THRESHOLD = 3.0
 UV_MIN_CONSECUTIVE_DAYS = 14

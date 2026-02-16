@@ -17,14 +17,50 @@ logger = logging.getLogger(__name__)
 
 BRIGHTSKY_BASE = "https://api.brightsky.dev"
 
-# 5 größte deutsche Städte (repräsentativ für Nord/Süd/West/Ost/Mitte)
+# 16 Landeshauptstädte — flächendeckende Abdeckung für ganz Deutschland
 CITIES = [
-    {"name": "Berlin", "lat": 52.52, "lon": 13.41},
+    # Nord
+    {"name": "Kiel", "lat": 54.32, "lon": 10.14},
     {"name": "Hamburg", "lat": 53.55, "lon": 9.99},
+    {"name": "Schwerin", "lat": 53.63, "lon": 11.41},
+    {"name": "Bremen", "lat": 53.08, "lon": 8.80},
+    {"name": "Hannover", "lat": 52.37, "lon": 9.74},
+    # Ost
+    {"name": "Berlin", "lat": 52.52, "lon": 13.41},
+    {"name": "Potsdam", "lat": 52.40, "lon": 13.07},
+    {"name": "Magdeburg", "lat": 52.13, "lon": 11.63},
+    {"name": "Dresden", "lat": 51.05, "lon": 13.74},
+    {"name": "Erfurt", "lat": 50.98, "lon": 11.03},
+    # West
+    {"name": "Düsseldorf", "lat": 51.23, "lon": 6.78},
+    {"name": "Saarbrücken", "lat": 49.23, "lon": 7.00},
+    # Mitte
+    {"name": "Wiesbaden", "lat": 50.08, "lon": 8.24},
+    {"name": "Mainz", "lat": 50.00, "lon": 8.27},
+    # Süd
+    {"name": "Stuttgart", "lat": 48.78, "lon": 9.18},
     {"name": "München", "lat": 48.14, "lon": 11.58},
-    {"name": "Köln", "lat": 50.94, "lon": 6.96},
-    {"name": "Frankfurt", "lat": 50.11, "lon": 8.68},
 ]
+
+# Stadt → Bundesland Mapping (global, wird auch von Detektoren importiert)
+CITY_STATE_MAP = {
+    "Kiel": "Schleswig-Holstein",
+    "Hamburg": "Hamburg",
+    "Schwerin": "Mecklenburg-Vorpommern",
+    "Bremen": "Bremen",
+    "Hannover": "Niedersachsen",
+    "Berlin": "Berlin",
+    "Potsdam": "Brandenburg",
+    "Magdeburg": "Sachsen-Anhalt",
+    "Dresden": "Sachsen",
+    "Erfurt": "Thüringen",
+    "Düsseldorf": "Nordrhein-Westfalen",
+    "Saarbrücken": "Saarland",
+    "Wiesbaden": "Hessen",
+    "Mainz": "Rheinland-Pfalz",
+    "Stuttgart": "Baden-Württemberg",
+    "München": "Bayern",
+}
 
 
 class WeatherService:
@@ -187,6 +223,55 @@ class WeatherService:
         self.db.commit()
         return count
 
+    def import_forecast(self) -> int:
+        """8-Tage-Prognose (MOSMIX) für alle Städte importieren.
+
+        BrightSky liefert MOSMIX-Forecast-Daten wenn das Datum in der Zukunft liegt.
+        Wir holen morgen bis +8 Tage, aggregieren pro Tag und speichern als DAILY_FORECAST.
+        """
+        count = 0
+        tomorrow = (datetime.utcnow() + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+        end = tomorrow + timedelta(days=8)
+
+        for city in CITIES:
+            date_str = tomorrow.strftime("%Y-%m-%d")
+            end_str = end.strftime("%Y-%m-%d")
+
+            records = self._fetch_weather(city, date_str, end_str)
+            if not records:
+                logger.warning(f"Forecast: Keine MOSMIX-Daten für {city['name']}")
+                continue
+
+            # Gruppiere nach Tag
+            by_day: dict[str, list] = {}
+            for r in records:
+                ts = r.get("timestamp", "")[:10]
+                if ts not in by_day:
+                    by_day[ts] = []
+                by_day[ts].append(r)
+
+            for day_str, hourly in by_day.items():
+                if len(hourly) < 6:
+                    continue  # Zu wenige Stundenwerte für sinnvolles Aggregat
+                day = datetime.strptime(day_str, "%Y-%m-%d")
+                daily = self._aggregate_day(hourly, city["name"], day)
+                daily["data_type"] = "DAILY_FORECAST"
+
+                # Precipitation probability aus MOSMIX (falls verfügbar)
+                pop_vals = [r.get("precipitation_probability") for r in hourly
+                            if r.get("precipitation_probability") is not None]
+                if pop_vals:
+                    daily["niederschlag_wahrscheinlichkeit"] = round(sum(pop_vals) / len(pop_vals), 1)
+
+                self._upsert_weather(daily)
+                count += 1
+
+            logger.debug(f"Forecast {city['name']}: {len(by_day)} Tage")
+
+        self.db.commit()
+        logger.info(f"Forecast Import: {count} Tages-Prognosen für {len(CITIES)} Städte")
+        return count
+
     def backfill_history(self, start_date: datetime, end_date: datetime) -> dict:
         """Historische Tageswerte für alle Städte nachladen.
 
@@ -274,6 +359,15 @@ class WeatherService:
         except Exception as e:
             logger.error(f"7-day backfill failed: {e}")
             results["backfill_7d"] = {"error": str(e)}
+
+        # 3. 8-Tage-Forecast (MOSMIX)
+        if include_forecast:
+            try:
+                forecast_count = self.import_forecast()
+                results["forecast"] = {"imported": forecast_count}
+            except Exception as e:
+                logger.error(f"Forecast import failed: {e}")
+                results["forecast"] = {"error": str(e)}
 
         total_in_db = self.db.query(WeatherData).count()
         return {

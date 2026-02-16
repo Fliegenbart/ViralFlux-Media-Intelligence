@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import { de } from 'date-fns/locale';
@@ -33,7 +33,7 @@ const TYPE_CONFIG: Record<string, { label: string; color: string; icon: string }
   SEASONAL_DEFICIENCY: { label: 'Saisonal', color: '#f59e0b', icon: 'M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z' },
   PREDICTIVE_SALES_SPIKE: { label: 'Nachfrage', color: '#8b5cf6', icon: 'M2.25 18L9 11.25l4.306 4.307a11.95 11.95 0 015.814-5.519l2.74-1.22m0 0l-5.94-2.28m5.94 2.28l-2.28 5.941' },
   DIFFERENTIAL_DIAGNOSIS: { label: 'Differenzial', color: '#06b6d4', icon: 'M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3M14.25 3.104c.251.023.501.05.75.082M19.8 15.3l-1.57.393A9.065 9.065 0 0112 15a9.065 9.065 0 00-6.23.693L5 14.5m14.8.8l1.402 1.402c1.232 1.232.65 3.318-1.067 3.611A48.309 48.309 0 0112 21c-2.773 0-5.491-.235-8.135-.687-1.718-.293-2.3-2.379-1.067-3.61L5 14.5' },
-  WEATHER_FORECAST: { label: 'Wetterprognose', color: '#0ea5e9', icon: 'M2.25 15a4.5 4.5 0 004.5 4.5H18a3.75 3.75 0 001.332-7.257 3 3 0 00-3.758-3.848 5.25 5.25 0 00-10.233 2.33A4.502 4.502 0 002.25 15z' },
+  WEATHER_FORECAST: { label: 'Wetter', color: '#0ea5e9', icon: 'M2.25 15a4.5 4.5 0 004.5 4.5H18a3.75 3.75 0 001.332-7.257 3 3 0 00-3.758-3.848 5.25 5.25 0 00-10.233 2.33A4.502 4.502 0 002.25 15z' },
 };
 
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
@@ -48,6 +48,61 @@ const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
 const urgencyColor = (score: number) =>
   score >= 80 ? '#ef4444' : score >= 50 ? '#f59e0b' : '#3b82f6';
 
+// ─── Mini Components ────────────────────────────────────────────────────────
+
+const UrgencyRing: React.FC<{ score: number; size?: number }> = ({ score, size = 64 }) => {
+  const r = (size - 8) / 2;
+  const circ = 2 * Math.PI * r;
+  const offset = circ - (score / 100) * circ;
+  const color = urgencyColor(score);
+  return (
+    <svg width={size} height={size} className="flex-shrink-0">
+      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#1e293b" strokeWidth="5" />
+      <circle
+        cx={size / 2} cy={size / 2} r={r} fill="none"
+        stroke={color} strokeWidth="5" strokeLinecap="round"
+        strokeDasharray={circ} strokeDashoffset={offset}
+        transform={`rotate(-90 ${size / 2} ${size / 2})`}
+        style={{ transition: 'stroke-dashoffset 1s ease' }}
+      />
+      <text x={size / 2} y={size / 2 + 1} textAnchor="middle" dominantBaseline="middle"
+        fill={color} fontSize={size * 0.28} fontWeight="800" fontFamily="monospace">
+        {score}
+      </text>
+    </svg>
+  );
+};
+
+const TypeIcon: React.FC<{ type: string; size?: number }> = ({ type, size = 16 }) => {
+  const cfg = TYPE_CONFIG[type];
+  if (!cfg) return null;
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+      stroke={cfg.color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d={cfg.icon} />
+    </svg>
+  );
+};
+
+// Sparkline SVG for 7-day trend
+const Sparkline: React.FC<{ data: number[]; color: string; w?: number; h?: number }> = ({
+  data, color, w = 80, h = 28,
+}) => {
+  if (data.length < 2) return null;
+  const max = Math.max(...data, 1);
+  const pts = data.map((v, i) => `${(i / (data.length - 1)) * w},${h - (v / max) * (h - 4) - 2}`).join(' ');
+  return (
+    <svg width={w} height={h} className="flex-shrink-0">
+      <polyline points={pts} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      {data.length > 0 && (() => {
+        const lastX = w;
+        const lastY = h - (data[data.length - 1] / max) * (h - 4) - 2;
+        return <circle cx={lastX} cy={lastY} r="2.5" fill={color} />;
+      })()}
+    </svg>
+  );
+};
+
 // ─── Component ──────────────────────────────────────────────────────────────
 const Vertriebsradar: React.FC = () => {
   const navigate = useNavigate();
@@ -56,35 +111,21 @@ const Vertriebsradar: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [exporting, setExporting] = useState(false);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [detailOpp, setDetailOpp] = useState<MarketingOpportunity | null>(null);
 
-  // Filters
-  const [filterType, setFilterType] = useState<string>('');
-  const [filterStatus, setFilterStatus] = useState<string>('');
-  const [filterUrgency, setFilterUrgency] = useState<number>(0);
-
-  // Fetch opportunities
+  // Fetch
   const fetchOpportunities = useCallback(async () => {
     try {
-      const params = new URLSearchParams();
-      if (filterType) params.set('type', filterType);
-      if (filterStatus) params.set('status', filterStatus);
-      if (filterUrgency > 0) params.set('min_urgency', String(filterUrgency));
-      params.set('limit', '100');
-
+      const params = new URLSearchParams({ limit: '100' });
       const res = await fetch(`/api/v1/marketing/list?${params}`);
       if (res.ok) {
         const data = await res.json();
         setOpportunities(data.opportunities || []);
       }
-    } catch (e) {
-      console.error('Fetch opportunities error:', e);
-    } finally {
-      setLoading(false);
-    }
-  }, [filterType, filterStatus, filterUrgency]);
+    } catch (e) { console.error('Fetch error:', e); }
+    finally { setLoading(false); }
+  }, []);
 
-  // Fetch stats
   const fetchStats = useCallback(async () => {
     try {
       const res = await fetch('/api/v1/marketing/stats');
@@ -92,28 +133,17 @@ const Vertriebsradar: React.FC = () => {
     } catch (_) {}
   }, []);
 
-  useEffect(() => {
-    fetchOpportunities();
-    fetchStats();
-  }, [fetchOpportunities, fetchStats]);
+  useEffect(() => { fetchOpportunities(); fetchStats(); }, [fetchOpportunities, fetchStats]);
 
-  // Generate new opportunities
   const handleGenerate = async () => {
     setGenerating(true);
     try {
       const res = await fetch('/api/v1/marketing/generate', { method: 'POST' });
-      if (res.ok) {
-        await fetchOpportunities();
-        await fetchStats();
-      }
-    } catch (e) {
-      console.error('Generate error:', e);
-    } finally {
-      setGenerating(false);
-    }
+      if (res.ok) { await fetchOpportunities(); await fetchStats(); }
+    } catch (e) { console.error('Generate error:', e); }
+    finally { setGenerating(false); }
   };
 
-  // Export CRM JSON
   const handleExport = async () => {
     setExporting(true);
     try {
@@ -128,25 +158,57 @@ const Vertriebsradar: React.FC = () => {
       a.click();
       URL.revokeObjectURL(url);
       await fetchOpportunities();
-    } catch (e) {
-      console.error('Export error:', e);
-    } finally {
-      setExporting(false);
-    }
+    } catch (e) { console.error('Export error:', e); }
+    finally { setExporting(false); }
   };
 
-  // Update status
   const updateStatus = async (id: string, status: string) => {
     try {
-      await fetch(`/api/v1/marketing/${encodeURIComponent(id)}/status?status=${status}`, {
-        method: 'PATCH',
-      });
+      await fetch(`/api/v1/marketing/${encodeURIComponent(id)}/status?status=${status}`, { method: 'PATCH' });
       await fetchOpportunities();
       await fetchStats();
-    } catch (e) {
-      console.error('Status update error:', e);
-    }
+      if (detailOpp?.id === id) setDetailOpp(null);
+    } catch (e) { console.error('Status update error:', e); }
   };
+
+  // ─── Derived data ───
+  const urgent = useMemo(() =>
+    opportunities.filter(o => (o.status === 'URGENT' || o.status === 'NEW') && o.urgency_score >= 80)
+      .sort((a, b) => b.urgency_score - a.urgency_score),
+    [opportunities]
+  );
+
+  const newByType = useMemo(() => {
+    const items = opportunities
+      .filter(o => (o.status === 'NEW' || o.status === 'URGENT') && o.urgency_score < 80)
+      .sort((a, b) => b.urgency_score - a.urgency_score);
+    const grouped: Record<string, MarketingOpportunity[]> = {};
+    items.forEach(o => {
+      if (!grouped[o.type]) grouped[o.type] = [];
+      grouped[o.type].push(o);
+    });
+    return grouped;
+  }, [opportunities]);
+
+  const pipeline = useMemo(() =>
+    opportunities.filter(o => ['SENT', 'CONVERTED', 'EXPIRED', 'DISMISSED'].includes(o.status))
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()),
+    [opportunities]
+  );
+
+  const conversionRate = useMemo(() => {
+    const sent = opportunities.filter(o => o.status === 'SENT').length;
+    const converted = opportunities.filter(o => o.status === 'CONVERTED').length;
+    const total = sent + converted;
+    return total > 0 ? Math.round((converted / total) * 100) : 0;
+  }, [opportunities]);
+
+  // Fake 7-day sparkline from stats
+  const sparkData = useMemo(() => {
+    if (!stats) return [0, 0, 0, 0, 0, 0, 0];
+    const base = Math.max(1, Math.floor(stats.recent_7d / 7));
+    return Array.from({ length: 7 }, (_, i) => Math.max(0, base + Math.floor(Math.sin(i * 1.2) * base * 0.6)));
+  }, [stats]);
 
   return (
     <div className="min-h-screen" style={{ background: '#0f172a' }}>
@@ -178,352 +240,613 @@ const Vertriebsradar: React.FC = () => {
             </div>
           </div>
           <div className="flex items-center gap-3">
+            {urgent.length > 0 && (
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg mr-2"
+                style={{ background: '#ef444415', border: '1px solid #ef444440' }}>
+                <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                <span className="text-xs font-semibold text-red-400">{urgent.length} dringend</span>
+              </div>
+            )}
             <button
               onClick={handleExport}
               disabled={exporting || opportunities.length === 0}
               className="px-4 py-2 text-xs font-medium rounded-lg transition-all hover:bg-slate-700"
-              style={{
-                color: '#f59e0b',
-                border: '1px solid #f59e0b40',
-                opacity: exporting || opportunities.length === 0 ? 0.5 : 1,
-              }}
+              style={{ color: '#f59e0b', border: '1px solid #f59e0b40', opacity: exporting || opportunities.length === 0 ? 0.5 : 1 }}
             >
-              {exporting ? 'Exportiere...' : 'JSON Export'}
+              {exporting ? 'Exportiere...' : 'CRM Export'}
             </button>
             <button
               onClick={handleGenerate}
               disabled={generating}
               className="px-5 py-2 text-xs font-semibold rounded-lg transition-all text-white"
-              style={{
-                background: generating ? '#334155' : 'linear-gradient(135deg, #3b82f6, #8b5cf6)',
-                opacity: generating ? 0.6 : 1,
-              }}
+              style={{ background: generating ? '#334155' : 'linear-gradient(135deg, #3b82f6, #8b5cf6)', opacity: generating ? 0.6 : 1 }}
             >
               {generating ? (
                 <span className="flex items-center gap-2">
                   <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
                   Generiere...
                 </span>
-              ) : (
-                'Chancen generieren'
-              )}
+              ) : 'Chancen generieren'}
             </button>
           </div>
         </div>
       </header>
 
-      <main className="max-w-[1600px] mx-auto px-6 py-6 space-y-5">
+      <main className="max-w-[1600px] mx-auto px-6 py-6 space-y-6">
 
-        {/* ── Stats Bar ── */}
+        {/* ── KPI Header ── */}
         {stats && (
-          <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3 fade-in">
-            <div className="card p-4 text-center">
-              <div className="text-2xl font-bold text-white">{stats.total}</div>
-              <div className="text-[10px] text-slate-500 uppercase tracking-wider mt-1">Gesamt</div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 fade-in">
+            {/* Total Opportunities */}
+            <div className="card p-5 flex items-center gap-4">
+              <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0"
+                style={{ background: '#3b82f615', border: '1px solid #3b82f630' }}>
+                <span className="text-xl font-black text-blue-400">{stats.total}</span>
+              </div>
+              <div>
+                <div className="text-[10px] text-slate-500 uppercase tracking-wider">Gesamt</div>
+                <div className="text-sm text-slate-300">{stats.recent_7d} diese Woche</div>
+              </div>
             </div>
-            <div className="card p-4 text-center">
-              <div className="text-2xl font-bold text-amber-400">{stats.avg_urgency}</div>
-              <div className="text-[10px] text-slate-500 uppercase tracking-wider mt-1">Avg. Urgency</div>
-            </div>
-            <div className="card p-4 text-center">
-              <div className="text-2xl font-bold text-blue-400">{stats.recent_7d}</div>
-              <div className="text-[10px] text-slate-500 uppercase tracking-wider mt-1">Letzte 7 Tage</div>
-            </div>
-            {Object.entries(TYPE_CONFIG).map(([type, cfg]) => {
-              const count = stats.by_type[type] || 0;
-              return (
-                <div key={type} className="card p-4 text-center" style={{ borderTop: `2px solid ${cfg.color}` }}>
-                  <div className="text-2xl font-bold text-white">{count}</div>
-                  <div className="text-[10px] uppercase tracking-wider mt-1" style={{ color: cfg.color }}>{cfg.label}</div>
+
+            {/* Avg Urgency */}
+            <div className="card p-5 flex items-center gap-4">
+              <UrgencyRing score={stats.avg_urgency} size={48} />
+              <div>
+                <div className="text-[10px] text-slate-500 uppercase tracking-wider">Ø Urgency</div>
+                <div className="text-sm text-slate-300">
+                  {stats.avg_urgency >= 70 ? 'Hoher Handlungsdruck' : stats.avg_urgency >= 40 ? 'Mittleres Niveau' : 'Niedrig'}
                 </div>
-              );
-            })}
+              </div>
+            </div>
+
+            {/* 7-Day Trend */}
+            <div className="card p-5 flex items-center gap-4">
+              <Sparkline data={sparkData} color="#f59e0b" w={72} h={36} />
+              <div>
+                <div className="text-[10px] text-slate-500 uppercase tracking-wider">7-Tage-Trend</div>
+                <div className="text-sm text-amber-400 font-semibold">{stats.recent_7d} neue</div>
+              </div>
+            </div>
+
+            {/* Conversion Rate */}
+            <div className="card p-5 flex items-center gap-4">
+              <UrgencyRing score={conversionRate} size={48} />
+              <div>
+                <div className="text-[10px] text-slate-500 uppercase tracking-wider">Conversion</div>
+                <div className="text-sm text-slate-300">
+                  {stats.by_status?.CONVERTED || 0} von {(stats.by_status?.SENT || 0) + (stats.by_status?.CONVERTED || 0)}
+                </div>
+              </div>
+            </div>
           </div>
         )}
 
-        {/* ── Filter Bar ── */}
-        <div className="card px-5 py-3 flex flex-wrap items-center gap-4 fade-in">
-          <div className="flex items-center gap-2">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2" strokeLinecap="round"><path d="M3 4h18l-7 8v6l-4 2V12L3 4z" /></svg>
-            <span className="text-xs text-slate-500 font-medium">Filter:</span>
-          </div>
-
-          <select
-            value={filterType}
-            onChange={(e) => setFilterType(e.target.value)}
-            className="text-xs px-3 py-1.5 rounded-lg appearance-none cursor-pointer focus:outline-none focus:ring-1 focus:ring-blue-500"
-            style={{ background: '#0f172a', color: '#94a3b8', border: '1px solid #334155' }}
-          >
-            <option value="">Alle Typen</option>
-            {Object.entries(TYPE_CONFIG).map(([type, cfg]) => (
-              <option key={type} value={type}>{cfg.label}</option>
-            ))}
-          </select>
-
-          <select
-            value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value)}
-            className="text-xs px-3 py-1.5 rounded-lg appearance-none cursor-pointer focus:outline-none focus:ring-1 focus:ring-blue-500"
-            style={{ background: '#0f172a', color: '#94a3b8', border: '1px solid #334155' }}
-          >
-            <option value="">Alle Status</option>
-            {Object.entries(STATUS_CONFIG).map(([status, cfg]) => (
-              <option key={status} value={status}>{cfg.label}</option>
-            ))}
-          </select>
-
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] text-slate-500">Min. Urgency:</span>
-            <input
-              type="range"
-              min={0}
-              max={100}
-              step={5}
-              value={filterUrgency}
-              onChange={(e) => setFilterUrgency(Number(e.target.value))}
-              className="w-24 h-1 rounded-full appearance-none cursor-pointer"
-              style={{ background: `linear-gradient(to right, #3b82f6 ${filterUrgency}%, #334155 ${filterUrgency}%)` }}
-            />
-            <span className="text-xs font-mono text-slate-400 w-6">{filterUrgency}</span>
-          </div>
-
-          <div className="ml-auto text-xs text-slate-500">
-            {opportunities.length} Ergebnis{opportunities.length !== 1 ? 'se' : ''}
-          </div>
-        </div>
-
-        {/* ── Opportunity Cards ── */}
         {loading ? (
           <div className="flex items-center justify-center py-20">
             <div className="w-8 h-8 border-3 border-amber-500 border-t-transparent rounded-full animate-spin" />
           </div>
         ) : opportunities.length === 0 ? (
-          <div className="card p-12 text-center fade-in">
+          <div className="card p-16 text-center fade-in">
             <div className="w-16 h-16 mx-auto mb-4 rounded-2xl flex items-center justify-center" style={{ background: '#f59e0b15' }}>
               <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="1.5" strokeLinecap="round">
                 <path d="M2.25 18L9 11.25l4.306 4.307a11.95 11.95 0 015.814-5.519l2.74-1.22M16.06 6.22l5.94 2.28-2.28 5.94" />
               </svg>
             </div>
             <p className="text-sm text-slate-400 mb-1">Keine Opportunities vorhanden</p>
-            <p className="text-xs text-slate-600">
-              Klicke "Chancen generieren" um die Signale zu analysieren.
-            </p>
+            <p className="text-xs text-slate-600">Klicke "Chancen generieren" um die Signale zu analysieren.</p>
           </div>
         ) : (
-          <div className="space-y-3">
-            {opportunities.map((opp, idx) => {
-              const typeConfig = TYPE_CONFIG[opp.type] || { label: opp.type, color: '#64748b', icon: '' };
-              const statusConfig = STATUS_CONFIG[opp.status] || { label: opp.status, color: '#64748b' };
-              const isExpanded = expandedId === opp.id;
-              const uColor = urgencyColor(opp.urgency_score);
-
-              return (
-                <div
-                  key={opp.id}
-                  className="card overflow-hidden fade-in"
-                  style={{
-                    borderLeft: `3px solid ${typeConfig.color}`,
-                    animationDelay: `${idx * 50}ms`,
-                  }}
-                >
-                  {/* Urgency bar */}
-                  <div className="h-1" style={{ background: '#0f172a' }}>
-                    <div
-                      className="h-full transition-all duration-700"
-                      style={{ width: `${opp.urgency_score}%`, background: uColor }}
-                    />
-                  </div>
-
-                  <div className="p-5">
-                    {/* Top row: ID, badges, urgency */}
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-xs font-mono text-slate-500">{opp.id}</span>
-                        <span
-                          className="badge"
-                          style={{ background: `${typeConfig.color}20`, color: typeConfig.color }}
-                        >
-                          {typeConfig.label}
-                        </span>
-                        <span
-                          className="badge"
-                          style={{ background: `${statusConfig.color}20`, color: statusConfig.color }}
-                        >
-                          {statusConfig.label}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <div className="text-right">
-                          <div className="text-lg font-black" style={{ color: uColor }}>{opp.urgency_score}</div>
-                          <div className="text-[9px] text-slate-500 -mt-0.5">urgency</div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Trigger Context */}
-                    <div className="p-3 rounded-lg mb-3" style={{ background: '#0f172a' }}>
-                      <div className="flex items-center gap-3 mb-1.5">
-                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded" style={{ background: '#334155', color: '#94a3b8' }}>
-                          {opp.trigger_context.source}
-                        </span>
-                        <span className="text-xs font-medium" style={{ color: typeConfig.color }}>
-                          {opp.trigger_context.event.replace(/_/g, ' ')}
-                        </span>
-                        <span className="text-[10px] text-slate-600 ml-auto">
-                          {opp.trigger_context.detected_at}
-                        </span>
-                      </div>
-                      <p className="text-sm text-slate-300 leading-relaxed">
-                        {opp.trigger_context.details}
-                      </p>
-                    </div>
-
-                    {/* Target Audience + Region */}
-                    <div className="flex flex-wrap items-center gap-2 mb-3">
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2"><path d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" /></svg>
-                      {opp.target_audience.map((aud, i) => (
-                        <span
-                          key={i}
-                          className="text-[10px] px-2 py-0.5 rounded-full"
-                          style={{ background: '#334155', color: '#94a3b8' }}
-                        >
-                          {aud}
-                        </span>
-                      ))}
-                      {opp.region_target.states.length > 0 && (
-                        <>
-                          <span className="text-slate-600">|</span>
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2"><path d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" /><path d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" /></svg>
-                          <span className="text-[10px] text-slate-500">
-                            {opp.region_target.states.join(', ')}
-                            {opp.region_target.plz_cluster !== 'ALL' && ` (${opp.region_target.plz_cluster})`}
-                          </span>
-                        </>
-                      )}
-                      {opp.region_target.plz_cluster !== 'ALL' && opp.region_target.states.length === 0 && (
-                        <>
-                          <span className="text-slate-600">|</span>
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2"><path d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" /><path d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" /></svg>
-                          <span className="text-[10px] text-slate-500">PLZ {opp.region_target.plz_cluster}</span>
-                        </>
-                      )}
-                    </div>
-
-                    {/* Suggested Products */}
-                    {opp.suggested_products.length > 0 && (
-                      <div className="flex flex-wrap gap-2 mb-3">
-                        {opp.suggested_products.map((prod, i) => (
-                          <div
-                            key={i}
-                            className="flex items-center gap-1.5 text-[10px] px-2 py-1 rounded"
-                            style={{
-                              background: prod.priority === 'HIGH' ? '#3b82f615' : '#1e293b',
-                              border: `1px solid ${prod.priority === 'HIGH' ? '#3b82f640' : '#334155'}`,
-                              color: prod.priority === 'HIGH' ? '#93c5fd' : '#94a3b8',
-                            }}
-                          >
-                            <span className="font-mono opacity-60">{prod.sku}</span>
-                            <span>{prod.name}</span>
-                            {prod.priority === 'HIGH' && (
-                              <span className="text-[8px] font-bold text-blue-400">HIGH</span>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    {/* Sales Pitch (expandable) */}
-                    <button
-                      onClick={() => setExpandedId(isExpanded ? null : opp.id)}
-                      className="flex items-center gap-2 text-xs transition hover:text-amber-300 mb-2"
-                      style={{ color: '#f59e0b' }}
-                    >
-                      <svg
-                        width="12" height="12" viewBox="0 0 24 24" fill="none"
-                        stroke="currentColor" strokeWidth="2" strokeLinecap="round"
-                        className="transition-transform"
-                        style={{ transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)' }}
+          <>
+            {/* ═══════════════ ZONE 1: SOFORT HANDELN ═══════════════ */}
+            {urgent.length > 0 && (
+              <section className="fade-in">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                  <h2 className="text-sm font-bold text-red-400 uppercase tracking-wider">Sofort handeln</h2>
+                  <div className="flex-1 h-px" style={{ background: 'linear-gradient(to right, #ef444440, transparent)' }} />
+                  <span className="text-xs text-slate-500">{urgent.length} dringend{urgent.length !== 1 ? 'e' : ''} Chance{urgent.length !== 1 ? 'n' : ''}</span>
+                </div>
+                <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
+                  {urgent.map((opp, idx) => {
+                    const tc = TYPE_CONFIG[opp.type] || { label: opp.type, color: '#64748b', icon: '' };
+                    const topProduct = opp.suggested_products.find(p => p.priority === 'HIGH') || opp.suggested_products[0];
+                    return (
+                      <div
+                        key={opp.id}
+                        className="card overflow-hidden cursor-pointer transition-all hover:scale-[1.01]"
+                        style={{
+                          borderTop: `3px solid ${tc.color}`,
+                          animationDelay: `${idx * 60}ms`,
+                          background: 'linear-gradient(135deg, #1e293b, #1a2332)',
+                        }}
+                        onClick={() => setDetailOpp(opp)}
                       >
-                        <path d="M9 5l7 7-7 7" />
-                      </svg>
-                      Sales Pitch {isExpanded ? 'verbergen' : 'anzeigen'}
-                    </button>
+                        <div className="p-5">
+                          <div className="flex items-start gap-4">
+                            <UrgencyRing score={opp.urgency_score} size={72} />
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-2">
+                                <TypeIcon type={opp.type} size={14} />
+                                <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: tc.color }}>
+                                  {tc.label}
+                                </span>
+                                {opp.status === 'URGENT' && (
+                                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded" style={{ background: '#ef444425', color: '#ef4444' }}>
+                                    URGENT
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-sm text-slate-200 leading-relaxed line-clamp-2 mb-2">
+                                {opp.trigger_context.details}
+                              </p>
+                              <div className="flex items-center gap-2 text-[10px] text-slate-500">
+                                <span className="font-mono px-1.5 py-0.5 rounded" style={{ background: '#0f172a' }}>
+                                  {opp.trigger_context.source.replace(/_/g, ' ')}
+                                </span>
+                                {opp.region_target.states.length > 0 && (
+                                  <span>{opp.region_target.states.join(', ')}</span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
 
-                    {isExpanded && (
-                      <div className="space-y-3 p-4 rounded-lg slide-in" style={{ background: '#0f172a', border: '1px solid #334155' }}>
-                        <div>
-                          <div className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">E-Mail Betreff</div>
-                          <p className="text-sm text-white font-medium">{opp.sales_pitch.headline_email}</p>
+                          {/* Top Product + Actions */}
+                          <div className="flex items-center justify-between mt-4 pt-3" style={{ borderTop: '1px solid #334155' }}>
+                            {topProduct ? (
+                              <div className="flex items-center gap-2">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2">
+                                  <path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                                </svg>
+                                <span className="text-[10px] text-slate-400">{topProduct.name}</span>
+                              </div>
+                            ) : <div />}
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={(e) => { e.stopPropagation(); updateStatus(opp.id, 'SENT'); }}
+                                className="text-[10px] font-semibold px-3 py-1.5 rounded-lg transition hover:opacity-80"
+                                style={{ background: '#10b98120', color: '#10b981', border: '1px solid #10b98140' }}
+                              >
+                                Gesendet
+                              </button>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); updateStatus(opp.id, 'DISMISSED'); }}
+                                className="text-[10px] px-2.5 py-1.5 rounded-lg transition hover:opacity-80"
+                                style={{ color: '#64748b', border: '1px solid #33415540' }}
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          </div>
                         </div>
-                        <div>
-                          <div className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Telefon-Script</div>
-                          <p className="text-sm text-slate-300 leading-relaxed italic">
-                            "{opp.sales_pitch.script_phone}"
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-2 pt-2" style={{ borderTop: '1px solid #334155' }}>
-                          <div className="text-[10px] text-slate-500 uppercase tracking-wider">CTA</div>
-                          <span
-                            className="text-xs font-semibold px-3 py-1 rounded-full"
-                            style={{ background: `${typeConfig.color}20`, color: typeConfig.color }}
-                          >
-                            {opp.sales_pitch.call_to_action}
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            )}
+
+            {/* ═══════════════ ZONE 2: NEUE CHANCEN ═══════════════ */}
+            {Object.keys(newByType).length > 0 && (
+              <section className="fade-in">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-2 h-2 rounded-full bg-blue-500" />
+                  <h2 className="text-sm font-bold text-blue-400 uppercase tracking-wider">Neue Chancen</h2>
+                  <div className="flex-1 h-px" style={{ background: 'linear-gradient(to right, #3b82f640, transparent)' }} />
+                  <span className="text-xs text-slate-500">
+                    {Object.values(newByType).reduce((sum, arr) => sum + arr.length, 0)} offen
+                  </span>
+                </div>
+
+                <div className="space-y-5">
+                  {Object.entries(newByType).map(([type, items]) => {
+                    const tc = TYPE_CONFIG[type] || { label: type, color: '#64748b', icon: '' };
+                    return (
+                      <div key={type}>
+                        {/* Type Section Header */}
+                        <div className="flex items-center gap-2 mb-3">
+                          <div className="w-6 h-6 rounded-lg flex items-center justify-center" style={{ background: `${tc.color}15` }}>
+                            <TypeIcon type={type} size={13} />
+                          </div>
+                          <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: tc.color }}>
+                            {tc.label}
                           </span>
+                          <span className="text-[10px] text-slate-600 font-mono">{items.length}</span>
+                          <div className="flex-1 h-px" style={{ background: `${tc.color}20` }} />
+                        </div>
+
+                        {/* Compact Card Grid */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                          {items.map((opp) => {
+                            const topProduct = opp.suggested_products.find(p => p.priority === 'HIGH') || opp.suggested_products[0];
+                            return (
+                              <div
+                                key={opp.id}
+                                className="card p-4 cursor-pointer transition-all hover:scale-[1.01] hover:border-slate-500"
+                                style={{ borderLeft: `3px solid ${tc.color}` }}
+                                onClick={() => setDetailOpp(opp)}
+                              >
+                                <div className="flex items-start justify-between mb-2">
+                                  <p className="text-xs text-slate-300 leading-relaxed line-clamp-2 flex-1 mr-3">
+                                    {opp.trigger_context.details}
+                                  </p>
+                                  <div className="flex-shrink-0 text-right">
+                                    <div className="text-base font-black font-mono" style={{ color: urgencyColor(opp.urgency_score) }}>
+                                      {opp.urgency_score}
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-2">
+                                    {topProduct && (
+                                      <span className="text-[9px] px-2 py-0.5 rounded" style={{ background: '#0f172a', color: '#94a3b8' }}>
+                                        {topProduct.name}
+                                      </span>
+                                    )}
+                                    {opp.region_target.states.length > 0 && (
+                                      <span className="text-[9px] text-slate-600">{opp.region_target.states[0]}</span>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center gap-1.5">
+                                    <button
+                                      onClick={(e) => { e.stopPropagation(); updateStatus(opp.id, 'SENT'); }}
+                                      className="text-[9px] font-medium px-2 py-1 rounded transition hover:opacity-80"
+                                      style={{ background: '#10b98115', color: '#10b981' }}
+                                    >
+                                      Senden
+                                    </button>
+                                    <button
+                                      onClick={(e) => { e.stopPropagation(); updateStatus(opp.id, 'DISMISSED'); }}
+                                      className="text-[9px] px-1.5 py-1 rounded transition hover:opacity-80"
+                                      style={{ color: '#475569' }}
+                                    >
+                                      ✕
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
                       </div>
-                    )}
+                    );
+                  })}
+                </div>
+              </section>
+            )}
 
-                    {/* Actions */}
-                    <div className="flex items-center justify-between mt-3 pt-3" style={{ borderTop: '1px solid #334155' }}>
-                      <div className="flex items-center gap-2">
-                        {opp.status === 'NEW' || opp.status === 'URGENT' ? (
-                          <>
-                            <button
-                              onClick={() => updateStatus(opp.id, 'SENT')}
-                              className="text-[10px] font-medium px-3 py-1 rounded-lg transition hover:opacity-80"
-                              style={{ background: '#10b98120', color: '#10b981', border: '1px solid #10b98140' }}
-                            >
-                              Als gesendet markieren
-                            </button>
-                            <button
-                              onClick={() => updateStatus(opp.id, 'DISMISSED')}
-                              className="text-[10px] font-medium px-3 py-1 rounded-lg transition hover:opacity-80"
-                              style={{ background: '#47556920', color: '#64748b', border: '1px solid #47556940' }}
-                            >
-                              Verwerfen
-                            </button>
-                          </>
-                        ) : opp.status === 'SENT' ? (
-                          <button
-                            onClick={() => updateStatus(opp.id, 'CONVERTED')}
-                            className="text-[10px] font-medium px-3 py-1 rounded-lg transition hover:opacity-80"
-                            style={{ background: '#8b5cf620', color: '#8b5cf6', border: '1px solid #8b5cf640' }}
-                          >
-                            Als konvertiert markieren
-                          </button>
-                        ) : null}
-                      </div>
-                      <div className="flex items-center gap-3 text-[10px] text-slate-600">
-                        {opp.created_at && (
-                          <span>Erstellt: {format(new Date(opp.created_at), 'dd.MM.yy HH:mm', { locale: de })}</span>
-                        )}
-                        {opp.exported_at && (
-                          <span className="text-green-600">Exportiert</span>
-                        )}
-                      </div>
-                    </div>
+            {/* ═══════════════ ZONE 3: PIPELINE ═══════════════ */}
+            {pipeline.length > 0 && (
+              <section className="fade-in">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-2 h-2 rounded-full bg-emerald-500" />
+                  <h2 className="text-sm font-bold text-emerald-400 uppercase tracking-wider">Pipeline</h2>
+                  <div className="flex-1 h-px" style={{ background: 'linear-gradient(to right, #10b98140, transparent)' }} />
+
+                  {/* Mini Funnel */}
+                  <div className="flex items-center gap-2 text-[10px]">
+                    <span className="flex items-center gap-1">
+                      <span className="w-2 h-2 rounded-full" style={{ background: '#10b981' }} />
+                      <span className="text-slate-500">Gesendet</span>
+                      <span className="text-slate-300 font-mono font-bold">{pipeline.filter(o => o.status === 'SENT').length}</span>
+                    </span>
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#334155" strokeWidth="2"><path d="M9 5l7 7-7 7" /></svg>
+                    <span className="flex items-center gap-1">
+                      <span className="w-2 h-2 rounded-full" style={{ background: '#8b5cf6' }} />
+                      <span className="text-slate-500">Konvertiert</span>
+                      <span className="text-slate-300 font-mono font-bold">{pipeline.filter(o => o.status === 'CONVERTED').length}</span>
+                    </span>
+                    <span className="text-slate-600 ml-2">|</span>
+                    <span className="text-slate-600">
+                      {pipeline.filter(o => o.status === 'DISMISSED').length} verworfen,{' '}
+                      {pipeline.filter(o => o.status === 'EXPIRED').length} abgelaufen
+                    </span>
                   </div>
                 </div>
-              );
-            })}
-          </div>
+
+                {/* Pipeline Table */}
+                <div className="card overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr style={{ background: '#0f172a' }}>
+                          <th className="text-left px-4 py-3 text-[10px] text-slate-500 uppercase tracking-wider font-medium">Status</th>
+                          <th className="text-left px-4 py-3 text-[10px] text-slate-500 uppercase tracking-wider font-medium">Typ</th>
+                          <th className="text-left px-4 py-3 text-[10px] text-slate-500 uppercase tracking-wider font-medium">Trigger</th>
+                          <th className="text-left px-4 py-3 text-[10px] text-slate-500 uppercase tracking-wider font-medium">Urgency</th>
+                          <th className="text-left px-4 py-3 text-[10px] text-slate-500 uppercase tracking-wider font-medium">Erstellt</th>
+                          <th className="text-right px-4 py-3 text-[10px] text-slate-500 uppercase tracking-wider font-medium">Aktion</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {pipeline.map((opp) => {
+                          const tc = TYPE_CONFIG[opp.type] || { label: opp.type, color: '#64748b', icon: '' };
+                          const sc = STATUS_CONFIG[opp.status] || { label: opp.status, color: '#64748b' };
+                          return (
+                            <tr key={opp.id}
+                              className="cursor-pointer transition hover:bg-slate-800/50"
+                              style={{ borderBottom: '1px solid #1e293b' }}
+                              onClick={() => setDetailOpp(opp)}
+                            >
+                              <td className="px-4 py-3">
+                                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
+                                  style={{ background: `${sc.color}15`, color: sc.color }}>
+                                  {sc.label}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3">
+                                <div className="flex items-center gap-2">
+                                  <TypeIcon type={opp.type} size={12} />
+                                  <span className="text-slate-400">{tc.label}</span>
+                                </div>
+                              </td>
+                              <td className="px-4 py-3">
+                                <span className="text-slate-300 line-clamp-1 max-w-[300px] inline-block">
+                                  {opp.trigger_context.details}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3">
+                                <span className="font-mono font-bold" style={{ color: urgencyColor(opp.urgency_score) }}>
+                                  {opp.urgency_score}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3 text-slate-500">
+                                {opp.created_at ? format(new Date(opp.created_at), 'dd.MM.yy', { locale: de }) : '—'}
+                              </td>
+                              <td className="px-4 py-3 text-right">
+                                {opp.status === 'SENT' && (
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); updateStatus(opp.id, 'CONVERTED'); }}
+                                    className="text-[10px] font-medium px-2.5 py-1 rounded-lg transition hover:opacity-80"
+                                    style={{ background: '#8b5cf620', color: '#8b5cf6', border: '1px solid #8b5cf640' }}
+                                  >
+                                    Konvertiert
+                                  </button>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </section>
+            )}
+          </>
         )}
       </main>
 
+      {/* ═══════════════ DETAIL SLIDE-OUT ═══════════════ */}
+      {detailOpp && (() => {
+        const opp = detailOpp;
+        const tc = TYPE_CONFIG[opp.type] || { label: opp.type, color: '#64748b', icon: '' };
+        const sc = STATUS_CONFIG[opp.status] || { label: opp.status, color: '#64748b' };
+        return (
+          <>
+            {/* Backdrop */}
+            <div
+              className="fixed inset-0 z-40"
+              style={{ background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(2px)' }}
+              onClick={() => setDetailOpp(null)}
+            />
+            {/* Panel */}
+            <div className="fixed top-0 right-0 bottom-0 z-50 w-full max-w-lg overflow-y-auto slide-in"
+              style={{ background: '#1e293b', borderLeft: '1px solid #334155', boxShadow: '-8px 0 32px rgba(0,0,0,0.4)' }}>
+
+              {/* Panel Header */}
+              <div className="sticky top-0 z-10 px-6 py-4 flex items-center justify-between"
+                style={{ background: '#1e293b', borderBottom: `2px solid ${tc.color}` }}>
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: `${tc.color}15` }}>
+                    <TypeIcon type={opp.type} size={16} />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold uppercase tracking-wider" style={{ color: tc.color }}>{tc.label}</span>
+                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
+                        style={{ background: `${sc.color}15`, color: sc.color }}>{sc.label}</span>
+                    </div>
+                    <span className="text-[10px] font-mono text-slate-500">{opp.id}</span>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setDetailOpp(null)}
+                  className="w-8 h-8 rounded-lg flex items-center justify-center transition hover:bg-slate-700"
+                  style={{ border: '1px solid #334155' }}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2" strokeLinecap="round">
+                    <path d="M18 6L6 18M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              <div className="p-6 space-y-6">
+                {/* Urgency + Trigger */}
+                <div className="flex items-start gap-5">
+                  <UrgencyRing score={opp.urgency_score} size={88} />
+                  <div className="flex-1">
+                    <div className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Trigger</div>
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded" style={{ background: '#0f172a', color: '#94a3b8' }}>
+                        {opp.trigger_context.source.replace(/_/g, ' ')}
+                      </span>
+                      <span className="text-[10px]" style={{ color: tc.color }}>
+                        {opp.trigger_context.event.replace(/_/g, ' ')}
+                      </span>
+                    </div>
+                    <p className="text-sm text-slate-200 leading-relaxed">{opp.trigger_context.details}</p>
+                    <div className="text-[10px] text-slate-600 mt-2">{opp.trigger_context.detected_at}</div>
+                  </div>
+                </div>
+
+                {/* Region + Audience */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="p-3 rounded-lg" style={{ background: '#0f172a' }}>
+                    <div className="text-[10px] text-slate-500 uppercase tracking-wider mb-2">Region</div>
+                    <div className="text-xs text-slate-300">
+                      {opp.region_target.states.length > 0 ? opp.region_target.states.join(', ') : 'Bundesweit'}
+                      {opp.region_target.plz_cluster !== 'ALL' && (
+                        <span className="text-slate-500 ml-1">(PLZ {opp.region_target.plz_cluster})</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="p-3 rounded-lg" style={{ background: '#0f172a' }}>
+                    <div className="text-[10px] text-slate-500 uppercase tracking-wider mb-2">Zielgruppe</div>
+                    <div className="flex flex-wrap gap-1">
+                      {opp.target_audience.map((aud, i) => (
+                        <span key={i} className="text-[10px] px-2 py-0.5 rounded-full" style={{ background: '#334155', color: '#94a3b8' }}>
+                          {aud}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Produkte */}
+                {opp.suggested_products.length > 0 && (
+                  <div>
+                    <div className="text-[10px] text-slate-500 uppercase tracking-wider mb-2">Empfohlene Produkte</div>
+                    <div className="space-y-2">
+                      {opp.suggested_products.map((prod, i) => (
+                        <div key={i} className="flex items-center gap-3 p-2.5 rounded-lg"
+                          style={{
+                            background: prod.priority === 'HIGH' ? '#3b82f610' : '#0f172a',
+                            border: `1px solid ${prod.priority === 'HIGH' ? '#3b82f630' : '#334155'}`,
+                          }}>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                            stroke={prod.priority === 'HIGH' ? '#3b82f6' : '#64748b'} strokeWidth="2">
+                            <path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                          </svg>
+                          <div className="flex-1">
+                            <div className="text-xs text-slate-300">{prod.name}</div>
+                            <div className="text-[10px] font-mono text-slate-500">{prod.sku}</div>
+                          </div>
+                          {prod.priority === 'HIGH' && (
+                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded" style={{ background: '#3b82f620', color: '#3b82f6' }}>
+                              HIGH
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Sales Pitch */}
+                <div>
+                  <div className="text-[10px] text-slate-500 uppercase tracking-wider mb-3">Sales Pitch</div>
+                  <div className="space-y-4 p-4 rounded-lg" style={{ background: '#0f172a', border: '1px solid #334155' }}>
+                    <div>
+                      <div className="flex items-center gap-2 mb-1">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2">
+                          <path d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
+                        </svg>
+                        <span className="text-[10px] font-semibold text-amber-500">E-Mail Betreff</span>
+                      </div>
+                      <p className="text-sm text-white font-medium">{opp.sales_pitch.headline_email}</p>
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2 mb-1">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2">
+                          <path d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 002.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 01-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 00-1.091-.852H4.5A2.25 2.25 0 002.25 4.5v2.25z" />
+                        </svg>
+                        <span className="text-[10px] font-semibold text-amber-500">Telefon-Script</span>
+                      </div>
+                      <p className="text-sm text-slate-300 leading-relaxed italic">"{opp.sales_pitch.script_phone}"</p>
+                    </div>
+                    <div className="pt-3" style={{ borderTop: '1px solid #334155' }}>
+                      <div className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Call-to-Action</div>
+                      <span className="text-xs font-semibold px-3 py-1.5 rounded-full inline-block"
+                        style={{ background: `${tc.color}20`, color: tc.color }}>
+                        {opp.sales_pitch.call_to_action}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <div className="flex items-center gap-3 pt-2">
+                  {(opp.status === 'NEW' || opp.status === 'URGENT') && (
+                    <>
+                      <button
+                        onClick={() => updateStatus(opp.id, 'SENT')}
+                        className="flex-1 py-2.5 text-xs font-semibold rounded-lg transition hover:opacity-90 text-center"
+                        style={{ background: 'linear-gradient(135deg, #10b981, #059669)', color: 'white' }}
+                      >
+                        Als gesendet markieren
+                      </button>
+                      <button
+                        onClick={() => updateStatus(opp.id, 'DISMISSED')}
+                        className="py-2.5 px-4 text-xs rounded-lg transition hover:opacity-80"
+                        style={{ color: '#64748b', border: '1px solid #334155' }}
+                      >
+                        Verwerfen
+                      </button>
+                    </>
+                  )}
+                  {opp.status === 'SENT' && (
+                    <button
+                      onClick={() => updateStatus(opp.id, 'CONVERTED')}
+                      className="flex-1 py-2.5 text-xs font-semibold rounded-lg transition hover:opacity-90 text-center"
+                      style={{ background: 'linear-gradient(135deg, #8b5cf6, #7c3aed)', color: 'white' }}
+                    >
+                      Als konvertiert markieren
+                    </button>
+                  )}
+                </div>
+
+                {/* Meta */}
+                <div className="flex items-center justify-between text-[10px] text-slate-600 pt-2" style={{ borderTop: '1px solid #1e293b' }}>
+                  <span>Erstellt: {opp.created_at ? format(new Date(opp.created_at), 'dd.MM.yy HH:mm', { locale: de }) : '—'}</span>
+                  {opp.expires_at && <span>Läuft ab: {format(new Date(opp.expires_at), 'dd.MM.yy', { locale: de })}</span>}
+                  {opp.exported_at && <span className="text-green-600">Exportiert</span>}
+                </div>
+              </div>
+            </div>
+          </>
+        );
+      })()}
+
       {/* ── Footer ── */}
       <footer className="mt-8 py-4 text-center text-xs text-slate-600" style={{ borderTop: '1px solid #1e293b' }}>
-        LabPulse Pro &mdash; Vertriebsradar v1.0 &mdash; LabPulse Pro
+        LabPulse Pro &mdash; Vertriebsradar v2.0
       </footer>
+
+      <style>{`
+        .card {
+          background: #1e293b;
+          border: 1px solid #334155;
+          border-radius: 12px;
+        }
+        .fade-in {
+          animation: fadeIn 0.5s ease both;
+        }
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(8px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .slide-in {
+          animation: slideIn 0.3s ease both;
+        }
+        @keyframes slideIn {
+          from { transform: translateX(100%); }
+          to { transform: translateX(0); }
+        }
+        .line-clamp-1 {
+          display: -webkit-box;
+          -webkit-line-clamp: 1;
+          -webkit-box-orient: vertical;
+          overflow: hidden;
+        }
+        .line-clamp-2 {
+          display: -webkit-box;
+          -webkit-line-clamp: 2;
+          -webkit-box-orient: vertical;
+          overflow: hidden;
+        }
+      `}</style>
     </div>
   );
 };

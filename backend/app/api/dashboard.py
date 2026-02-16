@@ -108,8 +108,10 @@ async def get_dashboard_overview(
     latest_weather = db.query(WeatherData).order_by(
         WeatherData.datum.desc()
     ).limit(5).all()
-    avg_temp = sum(w.temperatur for w in latest_weather) / len(latest_weather) if latest_weather else 0
-    avg_humidity = sum(w.luftfeuchtigkeit for w in latest_weather) / len(latest_weather) if latest_weather else 0
+    temps = [w.temperatur for w in latest_weather if w.temperatur is not None]
+    humids = [w.luftfeuchtigkeit for w in latest_weather if w.luftfeuchtigkeit is not None]
+    avg_temp = sum(temps) / len(temps) if temps else 0
+    avg_humidity = sum(humids) / len(humids) if humids else 0
 
     # 6. Inventory overview
     inventory = {}

@@ -339,7 +339,8 @@ class RiskEngine:
         if not latest:
             return 0.3
 
-        avg_temp = sum(w.temperatur for w in latest) / len(latest)
+        temps = [w.temperatur for w in latest if w.temperatur is not None]
+        avg_temp = sum(temps) / len(temps) if temps else 5.0
         avg_uv = sum(w.uv_index or 0 for w in latest) / len(latest)
         avg_humidity = sum(w.luftfeuchtigkeit or 60 for w in latest) / len(latest)
 

@@ -1,7 +1,36 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import {
+  Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
+  ResponsiveContainer, ComposedChart,
+} from 'recharts';
+import { format, parseISO } from 'date-fns';
+import { de } from 'date-fns/locale';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
+interface CalibrationResult {
+  metrics: {
+    r2_score: number;
+    correlation: number;
+    correlation_pct: number;
+    mae: number;
+    data_points: number;
+    date_range: { start: string; end: string };
+  };
+  default_weights: Record<string, number>;
+  optimized_weights: Record<string, number>;
+  llm_insight: string;
+  chart_data: Array<{
+    date: string;
+    real_qty: number;
+    predicted_qty: number;
+    bio: number;
+    psycho: number;
+    context: number;
+  }>;
+  error?: string;
+}
+
 interface PreviewData {
   filename: string;
   total_rows: number;
@@ -20,6 +49,7 @@ interface UploadResult {
   row_count: number;
   date_range: { start: string | null; end: string | null };
   import_result: Record<string, number>;
+  calibration?: CalibrationResult | null;
 }
 
 interface UploadHistoryEntry {
@@ -97,6 +127,16 @@ const STATUS_STYLES: Record<string, { label: string; bg: string; color: string }
 };
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
+
+const AMBER = '#f59e0b';
+const AMBER_DIM = '#f59e0b40';
+const WEIGHT_LABELS: Record<string, string> = {
+  bio: 'Biologisch',
+  market: 'Marktdaten',
+  psycho: 'Suchverhalten',
+  context: 'Kontext',
+};
+const WEIGHT_KEYS = ['bio', 'market', 'psycho', 'context'];
 
 // ─── Component ──────────────────────────────────────────────────────────────
 const Datenimport: React.FC = () => {
@@ -502,7 +542,9 @@ const Datenimport: React.FC = () => {
                   style={{ borderColor: `${cfg.color} transparent ${cfg.colorDim} ${cfg.colorDim}` }}
                 />
               </div>
-              <span className="text-xs text-slate-400">Daten werden importiert...</span>
+              <span className="text-xs text-slate-400">
+                {type === 'orders' ? 'Daten werden importiert & kalibriert...' : 'Daten werden importiert...'}
+              </span>
             </div>
           )}
 
@@ -554,9 +596,127 @@ const Datenimport: React.FC = () => {
                   ))}
                 </div>
               </div>
+              {/* Inline Calibration Results (nur bei Orders) */}
+              {type === 'orders' && zone.result?.calibration && !zone.result.calibration.error && (() => {
+                const cal = zone.result!.calibration!;
+                const pct = cal.metrics.correlation_pct;
+                const scoreCol = pct >= 70 ? '#10b981' : pct >= 50 ? '#f59e0b' : '#ef4444';
+                const circumference = 2 * Math.PI * 42;
+                const dashOffset = circumference - (pct / 100) * circumference;
+                const chartData = cal.chart_data?.map(d => ({
+                  ...d,
+                  dateLabel: (() => { try { return format(parseISO(d.date), 'MMM yy', { locale: de }); } catch { return d.date; } })(),
+                })) || [];
+
+                return (
+                  <div
+                    className="rounded-lg mt-3 overflow-hidden"
+                    style={{ border: `1px solid ${AMBER_DIM}`, background: '#f59e0b06' }}
+                  >
+                    {/* Header */}
+                    <div className="px-4 py-2.5 flex items-center gap-2" style={{ borderBottom: `1px solid ${AMBER_DIM}` }}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={AMBER} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M12 2l2.09 6.26L20.18 10l-6.09 1.74L12 18l-2.09-6.26L3.82 10l6.09-1.74L12 2z" />
+                      </svg>
+                      <span className="text-xs font-semibold" style={{ color: AMBER }}>Auto-Kalibrierung</span>
+                      <span className="text-[10px] text-slate-600 ml-auto">{cal.metrics.data_points} Datenpunkte</span>
+                    </div>
+
+                    <div className="p-4">
+                      {/* Score + Weights Row */}
+                      <div className="flex gap-5 mb-4">
+                        {/* Score Ring */}
+                        <div className="flex flex-col items-center flex-shrink-0">
+                          <div className="relative" style={{ width: 100, height: 100 }}>
+                            <svg viewBox="0 0 100 100" className="w-full h-full" style={{ transform: 'rotate(-90deg)' }}>
+                              <circle cx="50" cy="50" r="42" fill="none" stroke="#334155" strokeWidth="6" />
+                              <circle cx="50" cy="50" r="42" fill="none" stroke={scoreCol} strokeWidth="6"
+                                strokeLinecap="round" strokeDasharray={circumference} strokeDashoffset={dashOffset}
+                                style={{ transition: 'stroke-dashoffset 1.5s ease-out' }} />
+                            </svg>
+                            <div className="absolute inset-0 flex flex-col items-center justify-center">
+                              <span className="text-2xl font-black text-white">{pct.toFixed(0)}</span>
+                              <span className="text-[9px] text-slate-400 -mt-0.5">% Match</span>
+                            </div>
+                          </div>
+                          <div className="text-[9px] text-slate-600 mt-1.5 text-center">
+                            R² = {cal.metrics.r2_score.toFixed(3)}
+                          </div>
+                        </div>
+
+                        {/* Weight Bars */}
+                        <div className="flex-1 space-y-2.5 min-w-0">
+                          {WEIGHT_KEYS.map(key => {
+                            const defVal = (cal.default_weights[key] ?? 0) * 100;
+                            const optVal = (cal.optimized_weights[key] ?? 0) * 100;
+                            return (
+                              <div key={key}>
+                                <div className="flex items-center justify-between mb-1">
+                                  <span className="text-[10px] text-slate-400">{WEIGHT_LABELS[key]}</span>
+                                  <div className="flex items-center gap-2 text-[10px]">
+                                    <span className="text-slate-600">{defVal.toFixed(0)}%</span>
+                                    <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#475569" strokeWidth="2">
+                                      <path d="M5 12h14M12 5l7 7-7 7" />
+                                    </svg>
+                                    <span style={{ color: AMBER, fontWeight: 600 }}>{optVal.toFixed(0)}%</span>
+                                  </div>
+                                </div>
+                                <div className="space-y-0.5">
+                                  <div className="h-1.5 rounded-full overflow-hidden" style={{ background: '#0f172a' }}>
+                                    <div className="h-full rounded-full" style={{ width: `${defVal}%`, background: '#475569', transition: 'width 0.7s' }} />
+                                  </div>
+                                  <div className="h-1.5 rounded-full overflow-hidden" style={{ background: '#0f172a' }}>
+                                    <div className="h-full rounded-full" style={{ width: `${optVal}%`, background: AMBER, transition: 'width 0.7s' }} />
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Chart */}
+                      {chartData.length > 0 && (
+                        <div className="rounded-lg p-3 mb-3" style={{ background: '#0f172a', border: '1px solid #334155' }}>
+                          <div className="text-[10px] text-slate-500 mb-2">Bestellungen vs. Vorhersage</div>
+                          <ResponsiveContainer width="100%" height={180}>
+                            <ComposedChart data={chartData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
+                              <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                              <XAxis dataKey="dateLabel" tick={{ fill: '#64748b', fontSize: 9 }} tickLine={{ stroke: '#334155' }} interval="preserveStartEnd" />
+                              <YAxis tick={{ fill: '#64748b', fontSize: 9 }} tickLine={{ stroke: '#334155' }} width={40} />
+                              <Tooltip
+                                contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8, fontSize: 11 }}
+                                labelStyle={{ color: '#f1f5f9' }}
+                                itemStyle={{ color: '#94a3b8' }}
+                              />
+                              <Legend wrapperStyle={{ paddingTop: 8 }} formatter={(v: string) => <span style={{ color: '#94a3b8', fontSize: 10 }}>{v}</span>} />
+                              <Line type="monotone" dataKey="real_qty" name="Bestellungen" stroke="#3b82f6" strokeWidth={1.5} dot={false} connectNulls />
+                              <Line type="monotone" dataKey="predicted_qty" name="Vorhersage" stroke={AMBER} strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls />
+                            </ComposedChart>
+                          </ResponsiveContainer>
+                        </div>
+                      )}
+
+                      {/* LLM Insight */}
+                      {cal.llm_insight && (
+                        <div className="rounded-lg px-3 py-2.5" style={{ background: '#0f172a', border: `1px solid ${AMBER_DIM}` }}>
+                          <div className="flex items-center gap-1.5 mb-1.5">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={AMBER} strokeWidth="2">
+                              <path d="M12 2l2.09 6.26L20.18 10l-6.09 1.74L12 18l-2.09-6.26L3.82 10l6.09-1.74L12 2z" />
+                            </svg>
+                            <span className="text-[10px] font-medium" style={{ color: AMBER }}>KI-Analyse</span>
+                          </div>
+                          <p className="text-[11px] text-slate-400 leading-relaxed">{cal.llm_insight}</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+
               <button
                 onClick={() => resetZone(type)}
-                className="w-full py-2 rounded-lg text-xs font-medium text-slate-400 transition-colors hover:text-slate-200"
+                className="w-full py-2 rounded-lg text-xs font-medium text-slate-400 transition-colors hover:text-slate-200 mt-3"
                 style={{ background: '#0f172a', border: '1px solid #334155' }}
               >
                 Weitere Datei hochladen
@@ -621,7 +781,7 @@ const Datenimport: React.FC = () => {
                 Datenimport
               </h1>
               <p className="text-[11px] text-slate-500 mt-0.5">
-                Historische Daten hochladen — fließt in Confidence Score ein
+                Historische Daten hochladen — automatische Kalibrierung nach Bestelldaten-Upload
               </p>
             </div>
           </div>
@@ -636,6 +796,12 @@ const Datenimport: React.FC = () => {
             </svg>
             <span className="px-2 py-0.5 rounded" style={{ background: '#0f172a', border: '1px solid #334155' }}>
               Fusion Engine
+            </span>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#475569" strokeWidth="2">
+              <path d="M5 12h14M12 5l7 7-7 7" />
+            </svg>
+            <span className="px-2 py-0.5 rounded" style={{ background: '#f59e0b10', border: '1px solid #f59e0b30', color: '#f59e0b' }}>
+              Kalibrierung
             </span>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#475569" strokeWidth="2">
               <path d="M5 12h14M12 5l7 7-7 7" />

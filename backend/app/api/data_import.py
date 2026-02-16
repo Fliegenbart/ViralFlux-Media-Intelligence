@@ -22,6 +22,27 @@ router = APIRouter()
 
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
 
+# Mapping: article_id keywords → virus type for auto-calibration
+_ARTICLE_TO_VIRUS = {
+    "influenza": "Influenza A",
+    "sars": "SARS-CoV-2",
+    "covid": "SARS-CoV-2",
+    "rsv": "RSV A",
+}
+
+
+def _infer_virus_type(df: pd.DataFrame) -> str:
+    """Infer dominant virus type from article_id column."""
+    if "article_id" not in df.columns:
+        return "Influenza A"
+    article_counts = df.groupby("article_id")["quantity"].sum()
+    for aid in article_counts.sort_values(ascending=False).index:
+        lower = str(aid).lower()
+        for keyword, virus in _ARTICLE_TO_VIRUS.items():
+            if keyword in lower:
+                return virus
+    return "Influenza A"
+
 
 def _read_file_to_df(content: bytes, filename: str) -> pd.DataFrame:
     """Read CSV or Excel file content into a DataFrame.
@@ -175,7 +196,43 @@ async def upload_orders(
             db, file.filename, "orders", df, result, "order_date"
         )
 
-        return {"success": True, **summary, "import_result": result}
+        # Auto-Kalibrierung: Bestelldaten aggregieren → BacktestService
+        calibration_result = None
+        try:
+            cal_df = (
+                df.groupby("order_date")["quantity"]
+                .sum()
+                .reset_index()
+            )
+            cal_df.columns = ["datum", "menge"]
+            cal_df = cal_df.dropna(subset=["datum", "menge"])
+
+            if len(cal_df) >= 5:
+                from app.services.ml.backtester import BacktestService
+
+                virus_typ = _infer_virus_type(df)
+                backtest = BacktestService(db)
+                calibration_result = backtest.run_calibration(
+                    cal_df, virus_typ=virus_typ
+                )
+                logger.info(
+                    f"Auto-Kalibrierung: R²={calibration_result.get('metrics', {}).get('r2_score', '?')}, "
+                    f"Virus={virus_typ}, Punkte={len(cal_df)}"
+                )
+            else:
+                logger.info(
+                    f"Auto-Kalibrierung übersprungen: nur {len(cal_df)} Datenpunkte (min. 5)"
+                )
+        except Exception as e:
+            logger.warning(f"Auto-Kalibrierung fehlgeschlagen (nicht kritisch): {e}")
+            calibration_result = {"error": str(e)}
+
+        return {
+            "success": True,
+            **summary,
+            "import_result": result,
+            "calibration": calibration_result,
+        }
     except Exception as e:
         logger.error(f"Orders import failed: {e}")
         _record_upload(

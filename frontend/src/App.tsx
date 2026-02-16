@@ -5,7 +5,6 @@ import Dashboard from './pages/Dashboard';
 import GermanyMap from './pages/GermanyMap';
 import Vertriebsradar from './pages/Vertriebsradar';
 import Datenimport from './pages/Datenimport';
-import Calibration from './pages/Calibration';
 import './index.css';
 
 const App: React.FC = () => {
@@ -17,7 +16,6 @@ const App: React.FC = () => {
         <Route path="/map" element={<GermanyMap />} />
         <Route path="/vertriebsradar" element={<Vertriebsradar />} />
         <Route path="/datenimport" element={<Datenimport />} />
-        <Route path="/calibration" element={<Calibration />} />
       </Routes>
     </Router>
   );

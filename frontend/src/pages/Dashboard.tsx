@@ -616,13 +616,6 @@ const Dashboard: React.FC = () => {
               Datenimport
             </button>
             <button
-              onClick={() => navigate('/calibration')}
-              className="px-3 py-1.5 text-xs font-medium rounded-lg transition-all hover:bg-slate-700"
-              style={{ color: '#f59e0b', border: '1px solid #f59e0b40' }}
-            >
-              Kalibrierung
-            </button>
-            <button
               onClick={() => navigate('/map')}
               className="px-3 py-1.5 text-xs font-medium rounded-lg transition-all hover:bg-slate-700"
               style={{ color: '#94a3b8', border: '1px solid #334155' }}
@@ -645,12 +638,14 @@ const Dashboard: React.FC = () => {
         {/* ── Outbreak Score Banner ── */}
         {outbreakScore && (
           <div className="card p-6 fade-in" style={{
-            background: outbreakScore.overall_risk_level === 'RED'
+            background: outbreakScore.overall_risk_level === 'BLACK'
+              ? 'linear-gradient(135deg, rgba(220,38,38,0.25), rgba(30,41,59,1))'
+              : outbreakScore.overall_risk_level === 'RED'
               ? 'linear-gradient(135deg, rgba(239,68,68,0.15), rgba(30,41,59,1))'
               : outbreakScore.overall_risk_level === 'YELLOW'
               ? 'linear-gradient(135deg, rgba(245,158,11,0.15), rgba(30,41,59,1))'
               : 'linear-gradient(135deg, rgba(16,185,129,0.12), rgba(30,41,59,1))',
-            border: `1px solid ${outbreakScore.overall_risk_level === 'RED' ? '#ef4444' : outbreakScore.overall_risk_level === 'YELLOW' ? '#f59e0b' : '#10b981'}40`,
+            border: `1px solid ${outbreakScore.overall_risk_level === 'BLACK' ? '#dc2626' : outbreakScore.overall_risk_level === 'RED' ? '#ef4444' : outbreakScore.overall_risk_level === 'YELLOW' ? '#f59e0b' : '#10b981'}40`,
           }}>
             <div className="flex items-center gap-8 flex-wrap">
               {/* Gauge */}
@@ -660,7 +655,7 @@ const Dashboard: React.FC = () => {
                     <circle cx="50" cy="50" r="42" fill="none" stroke="#334155" strokeWidth="8" />
                     <circle
                       cx="50" cy="50" r="42" fill="none"
-                      stroke={outbreakScore.overall_risk_level === 'RED' ? '#ef4444' : outbreakScore.overall_risk_level === 'YELLOW' ? '#f59e0b' : '#10b981'}
+                      stroke={outbreakScore.overall_risk_level === 'BLACK' ? '#dc2626' : outbreakScore.overall_risk_level === 'RED' ? '#ef4444' : outbreakScore.overall_risk_level === 'YELLOW' ? '#f59e0b' : '#10b981'}
                       strokeWidth="8"
                       strokeDasharray={`${outbreakScore.overall_score * 2.64} 264`}
                       strokeLinecap="round"
@@ -675,11 +670,13 @@ const Dashboard: React.FC = () => {
                   <div className="text-xs text-slate-400 uppercase tracking-wider mb-1">Outbreak Score</div>
                   <div className="flex items-center gap-2">
                     <span className={`text-lg font-bold ${
-                      outbreakScore.overall_risk_level === 'RED' ? 'text-red-400'
+                      outbreakScore.overall_risk_level === 'BLACK' ? 'text-red-600'
+                      : outbreakScore.overall_risk_level === 'RED' ? 'text-red-400'
                       : outbreakScore.overall_risk_level === 'YELLOW' ? 'text-amber-400'
                       : 'text-green-400'
                     }`}>
-                      {outbreakScore.overall_risk_level === 'RED' ? 'Hohes Risiko'
+                      {outbreakScore.overall_risk_level === 'BLACK' ? 'Kritisches Risiko'
+                       : outbreakScore.overall_risk_level === 'RED' ? 'Hohes Risiko'
                        : outbreakScore.overall_risk_level === 'YELLOW' ? 'Mittleres Risiko'
                        : 'Niedriges Risiko'}
                     </span>
@@ -691,7 +688,7 @@ const Dashboard: React.FC = () => {
               <div className="flex-1 grid grid-cols-2 xl:grid-cols-4 gap-3">
                 {outbreakScore.per_virus && Object.entries(outbreakScore.per_virus).map(([virus, vs]) => {
                   if ('error' in vs) return null;
-                  const color = vs.risk_level === 'RED' ? '#ef4444' : vs.risk_level === 'YELLOW' ? '#f59e0b' : '#10b981';
+                  const color = vs.risk_level === 'BLACK' ? '#dc2626' : vs.risk_level === 'RED' ? '#ef4444' : vs.risk_level === 'YELLOW' ? '#f59e0b' : '#10b981';
                   return (
                     <div key={virus} className="p-3 rounded-lg" style={{ background: '#0f172a', border: '1px solid #334155' }}>
                       <div className="flex items-center justify-between mb-1.5">

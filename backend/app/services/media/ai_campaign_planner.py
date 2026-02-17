@@ -131,13 +131,13 @@ class AiCampaignPlanner:
             "options": {
                 "temperature": 0.2,
                 "top_p": 0.9,
-                "num_predict": 800,
+                "num_predict": 450,
             },
         }
         response = requests.post(
             f"{self.ollama_url}/api/generate",
             json=payload,
-            timeout=90,
+            timeout=8,
         )
         response.raise_for_status()
         data = response.json()

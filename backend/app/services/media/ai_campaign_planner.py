@@ -67,10 +67,6 @@ _CAMPAIGN_PLAN_SCHEMA: dict[str, Any] = {
         "budget_shift_pct",
         "activation_window_days",
         "channel_plan",
-        "keyword_clusters",
-        "creative_angles",
-        "kpi_targets",
-        "next_steps",
         "compliance_hinweis",
     ],
 }
@@ -175,7 +171,9 @@ class AiCampaignPlanner:
         return (
             "Du bist ein Senior Media Planner für Pharma-Brand-Cases.\n"
             "Erzeuge NUR valides JSON ohne Markdown, ohne Erklaertexte.\n"
-            "Sprache: Deutsch. Konservativ formulieren (kein Heilversprechen).\n\n"
+            "Sprache: Deutsch. Konservativ formulieren (kein Heilversprechen).\n"
+            "Output-Felder: campaign_name, objective, budget_shift_pct, activation_window_days, channel_plan, keyword_clusters, creative_angles, kpi_targets, next_steps, compliance_hinweis.\n"
+            "Kuerze: message_angle <= 7 Worte; keyword_clusters max 4; creative_angles max 3; kpi_secondary max 2; next_steps max 3; success_criteria 1 Satz.\n\n"
             f"Brand: {brand}\n"
             f"Produkt: {product}\n"
             f"Kampagnenziel: {campaign_goal}\n"
@@ -186,22 +184,6 @@ class AiCampaignPlanner:
             f"Woechentliches Budget (EUR): {weekly_budget:.2f}\n"
             f"Erlaubter Shift-Bereich (%): {min_shift} bis {max_shift}\n"
             f"Kanal-Default-Mix: {json.dumps(channel_mix, ensure_ascii=True)}\n\n"
-            "Wichtig: Antworte kompakt (max. 4 channel_plan Eintraege, max. 6 Keywords, max. 6 Creative Angles, max. 4 Next Steps).\n"
-            "Output-Schema (strict):\n"
-            "{\n"
-            '  "campaign_name": "string",\n'
-            '  "objective": "string",\n'
-            '  "budget_shift_pct": number,\n'
-            '  "activation_window_days": integer,\n'
-            '  "channel_plan": [\n'
-            '    {"channel":"string","share_pct":number,"message_angle":"string","kpi_primary":"string","kpi_secondary":["string"]}\n'
-            "  ],\n"
-            '  "keyword_clusters": ["string"],\n'
-            '  "creative_angles": ["string"],\n'
-            '  "kpi_targets": {"primary_kpi":"string","secondary_kpis":["string"],"success_criteria":"string"},\n'
-            '  "next_steps": [{"task":"string","owner":"string","eta":"string"}],\n'
-            '  "compliance_hinweis": "string"\n'
-            "}\n"
         )
 
     def _call_ollama(self, prompt: str) -> tuple[str, str]:
@@ -217,14 +199,14 @@ class AiCampaignPlanner:
                 "options": {
                     "temperature": 0.2,
                     "top_p": 0.9,
-                    "num_predict": 120,
+                    "num_predict": 240,
                 },
             }
             try:
                 response = requests.post(
                     f"{self.ollama_url}/api/generate",
                     json=payload,
-                    timeout=30,
+                    timeout=35,
                 )
                 if response.status_code == 404 and "model" in response.text.lower():
                     last_error = ValueError(
@@ -301,6 +283,69 @@ class AiCampaignPlanner:
                 for channel, share in channel_default.items()
             ]
 
+        playbook_key = str(playbook_candidate.get("playbook_key") or "").upper()
+        keyword_defaults: dict[str, list[str]] = {
+            "MYCOPLASMA_JAEGER": [
+                "husten geht nicht weg",
+                "hartnaeckiger husten",
+                "reizhusten nachts",
+            ],
+            "SUPPLY_SHOCK_ATTACK": [
+                "alternative bei engpass",
+                "antibiotika lieferengpass",
+                "pflanzlich schleimloeser",
+            ],
+            "WETTER_REFLEX": [
+                "nasskaltes wetter",
+                "erkaeltung vorbeugen",
+                "immunsystem staerken",
+            ],
+            "ALLERGIE_BREMSE": [
+                "heuschnupfen",
+                "pollenflug",
+                "allergie statt erkaeltung",
+            ],
+        }
+        creative_defaults: dict[str, list[str]] = {
+            "MYCOPLASMA_JAEGER": [
+                "Dauerhusten: symptomnah",
+                "Bronchien: Schleim loesen",
+                "Nacht: Reizhusten lindern",
+            ],
+            "SUPPLY_SHOCK_ATTACK": [
+                "Jetzt verfuegbar trotz Engpass",
+                "Pflanzliche Alternative",
+                "Apotheken-Naehe: sofort finden",
+            ],
+            "WETTER_REFLEX": [
+                "Schietwetter: praeventiv",
+                "Alltag: Schutzschild-Story",
+                "Kalt+Nass: situatives Motiv",
+            ],
+            "ALLERGIE_BREMSE": [
+                "Allergie vs. Infekt trennen",
+                "Budget sparen bei False Positives",
+                "Negativ-Keywords / Pause",
+            ],
+        }
+        default_next_steps = [
+            {"task": "Kampagnenstruktur im Ad-Setup anlegen", "owner": "Media Ops", "eta": "T+0"},
+            {"task": "Creatives mit Compliance abstimmen", "owner": "Account Lead", "eta": "T+1"},
+            {"task": "KPI-Dashboard fuer Daily Monitoring aktivieren", "owner": "Analytics", "eta": "T+1"},
+        ]
+
+        keyword_clusters = ai_plan.get("keyword_clusters")
+        if not isinstance(keyword_clusters, list) or not keyword_clusters:
+            keyword_clusters = keyword_defaults.get(playbook_key, [])
+
+        creative_angles = ai_plan.get("creative_angles")
+        if not isinstance(creative_angles, list) or not creative_angles:
+            creative_angles = creative_defaults.get(playbook_key, [])
+
+        next_steps = ai_plan.get("next_steps")
+        if not isinstance(next_steps, list) or not next_steps:
+            next_steps = default_next_steps
+
         return {
             "campaign_name": ai_plan.get("campaign_name") or (
                 f"{playbook_candidate.get('playbook_title')} | {playbook_candidate.get('region_name')}"
@@ -309,14 +354,14 @@ class AiCampaignPlanner:
             "budget_shift_pct": float(ai_plan.get("budget_shift_pct") or playbook_candidate.get("budget_shift_pct") or 0.0),
             "activation_window_days": int(ai_plan.get("activation_window_days") or 10),
             "channel_plan": plan_channels,
-            "keyword_clusters": ai_plan.get("keyword_clusters") or [],
-            "creative_angles": ai_plan.get("creative_angles") or [],
+            "keyword_clusters": keyword_clusters,
+            "creative_angles": creative_angles,
             "kpi_targets": ai_plan.get("kpi_targets") or {
                 "primary_kpi": "Qualified Visits",
                 "secondary_kpis": ["CTR", "CPM"],
                 "success_criteria": "Steigende Nachfrageabdeckung in Triggerregionen",
             },
-            "next_steps": ai_plan.get("next_steps") or [],
+            "next_steps": next_steps,
             "compliance_hinweis": ai_plan.get("compliance_hinweis")
             or "Hinweis: Aussagen konservativ formulieren (z. B. 'kann', 'Backtest-basiert').",
         }

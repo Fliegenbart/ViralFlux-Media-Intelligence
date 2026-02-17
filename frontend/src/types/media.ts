@@ -23,6 +23,9 @@ export interface CampaignPreview {
   primary_kpi?: string;
   recommended_product?: string;
   mapping_status?: string;
+  playbook_key?: string;
+  playbook_title?: string;
+  ai_generation_status?: string;
 }
 
 export interface RecommendationCard {
@@ -60,6 +63,18 @@ export interface RecommendationCard {
     drivers?: Array<{ label: string; strength_pct: number }>;
     trigger_event?: string;
   };
+  playbook_key?: string;
+  playbook_title?: string;
+  trigger_snapshot?: {
+    source?: string;
+    event?: string;
+    details?: string;
+    lead_time_days?: number;
+    values?: Record<string, number | string | boolean>;
+  };
+  guardrail_notes?: string[];
+  ai_generation_status?: string;
+  strategy_mode?: string;
   campaign_preview?: CampaignPreview;
   detail_url?: string;
   created_at?: string | null;
@@ -111,6 +126,20 @@ export interface CampaignPack {
     support_points?: string[];
     compliance_note?: string;
   };
+  playbook?: {
+    key?: string;
+    title?: string;
+    kind?: string;
+    message_direction?: string;
+    condition_key?: string;
+  };
+  trigger_snapshot?: {
+    source?: string;
+    event?: string;
+    details?: string;
+    lead_time_days?: number;
+    values?: Record<string, number | string | boolean>;
+  };
   trigger_evidence?: {
     source?: string;
     event?: string;
@@ -140,6 +169,39 @@ export interface CampaignPack {
     impact_probability?: number;
     drivers?: Array<{ label: string; strength_pct: number }>;
     trigger_event?: string;
+  };
+  ai_plan?: {
+    campaign_name?: string;
+    objective?: string;
+    budget_shift_pct?: number;
+    activation_window_days?: number;
+    channel_plan?: CampaignChannelPlanItem[];
+    keyword_clusters?: string[];
+    creative_angles?: string[];
+    kpi_targets?: {
+      primary_kpi?: string;
+      secondary_kpis?: string[];
+      success_criteria?: string;
+    };
+    next_steps?: Array<{
+      task?: string;
+      owner?: string;
+      eta?: string;
+    }>;
+    compliance_hinweis?: string;
+  };
+  guardrail_report?: {
+    passed?: boolean;
+    notes?: string[];
+    applied_fixes?: string[];
+  };
+  ai_meta?: {
+    generated_at?: string;
+    model?: string;
+    provider?: string;
+    status?: string;
+    fallback_used?: boolean;
+    error?: string;
   };
   execution_checklist?: Array<{
     task?: string;

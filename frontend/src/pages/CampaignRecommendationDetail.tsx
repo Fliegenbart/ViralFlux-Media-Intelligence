@@ -38,6 +38,7 @@ const CampaignRecommendationDetail: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [statusSaving, setStatusSaving] = useState(false);
+  const [regenSaving, setRegenSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [detail, setDetail] = useState<RecommendationDetail | null>(null);
 
@@ -212,6 +213,26 @@ const CampaignRecommendationDetail: React.FC = () => {
     }
   };
 
+  const regenerateAiPlan = async () => {
+    if (!id) return;
+    setRegenSaving(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/v1/media/recommendations/${encodeURIComponent(id)}/regenerate-ai`, {
+        method: 'POST',
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.detail || `HTTP ${res.status}`);
+      }
+      await loadDetail();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Unbekannter Fehler');
+    } finally {
+      setRegenSaving(false);
+    }
+  };
+
   if (loading) {
     return <div className="max-w-[1200px] mx-auto px-4 sm:px-6 py-8 text-slate-400">Lade Kampagnen-Detail...</div>;
   }
@@ -328,6 +349,9 @@ const CampaignRecommendationDetail: React.FC = () => {
               <button onClick={saveCampaign} className="media-button" disabled={saving}>
                 {saving ? 'Speichere...' : 'Kampagnenplan speichern'}
               </button>
+              <button onClick={regenerateAiPlan} className="media-button secondary" disabled={regenSaving}>
+                {regenSaving ? 'Regeneriere...' : 'Regenerate AI'}
+              </button>
             </div>
           </div>
 
@@ -349,10 +373,16 @@ const CampaignRecommendationDetail: React.FC = () => {
         <div className="space-y-6">
           <div className="card p-5 space-y-3">
             <h2 className="text-sm font-semibold text-white">Trigger-Evidenz (read-only)</h2>
+            {detail.playbook_title && (
+              <div className="inline-flex text-[11px] px-2 py-1 rounded-full bg-cyan-500/15 text-cyan-300 border border-cyan-400/30">
+                {detail.playbook_title}
+              </div>
+            )}
             <div className="text-xs text-slate-400">Quelle: {detail.trigger_evidence?.source || '-'}</div>
             <div className="text-xs text-slate-400">Event: {detail.trigger_evidence?.event || '-'}</div>
             <div className="text-xs text-slate-400">Lead-Time: {detail.trigger_evidence?.lead_time_days ?? '-'} Tage</div>
             <div className="text-xs text-slate-400">Confidence: {detail.trigger_evidence?.confidence ? `${Math.round(detail.trigger_evidence.confidence * 100)}%` : '-'}</div>
+            <div className="text-xs text-slate-400">AI Status: {detail.ai_generation_status || detail.campaign_pack?.ai_meta?.status || '-'}</div>
             <div className="text-xs text-slate-400">
               PeixEpiScore: {detail.peix_context?.score ?? detail.campaign_pack?.peix_context?.score ?? '-'}
               {' '}({detail.peix_context?.band ?? detail.campaign_pack?.peix_context?.band ?? '-'})
@@ -368,6 +398,27 @@ const CampaignRecommendationDetail: React.FC = () => {
                   .slice(0, 3)
                   .map((driver) => `${driver.label} ${driver.strength_pct}%`)
                   .join(' · ')}
+              </div>
+            )}
+          </div>
+
+          <div className="card p-5 space-y-3">
+            <h2 className="text-sm font-semibold text-white">KI-Plan</h2>
+            <div className="text-xs text-slate-400">
+              Modell: {detail.campaign_pack?.ai_meta?.model || '-'} · Provider: {detail.campaign_pack?.ai_meta?.provider || '-'}
+            </div>
+            <div className="text-xs text-slate-400">
+              Fallback: {detail.campaign_pack?.ai_meta?.fallback_used ? 'Ja' : 'Nein'}
+            </div>
+            <div className="text-xs text-slate-400">
+              Keywords: {(detail.campaign_pack?.ai_plan?.keyword_clusters || []).slice(0, 4).join(' · ') || '-'}
+            </div>
+            <div className="text-xs text-slate-300">
+              Creatives: {(detail.campaign_pack?.ai_plan?.creative_angles || []).slice(0, 3).join(' · ') || '-'}
+            </div>
+            {Array.isArray(detail.campaign_pack?.guardrail_report?.applied_fixes) && (detail.campaign_pack?.guardrail_report?.applied_fixes?.length || 0) > 0 && (
+              <div className="rounded-lg px-3 py-2 text-[11px] bg-amber-500/10 text-amber-300 border border-amber-400/30">
+                Guardrails: {(detail.campaign_pack?.guardrail_report?.applied_fixes || []).slice(0, 3).join(' · ')}
               </div>
             )}
           </div>

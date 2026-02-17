@@ -120,6 +120,8 @@ const MediaCockpit: React.FC = () => {
   const [product, setProduct] = useState('GeloMyrtol forte');
   const [goal, setGoal] = useState('Top-of-Mind vor Erkältungswelle');
   const [weeklyBudget, setWeeklyBudget] = useState(120000);
+  const [strategyMode] = useState('PLAYBOOK_AI');
+  const [maxCards, setMaxCards] = useState(4);
   const [recStatusFilter, setRecStatusFilter] = useState<string>('all');
   const [recBrandFilter, setRecBrandFilter] = useState<string>('');
   const [recMinUrgency, setRecMinUrgency] = useState<number>(0);
@@ -249,6 +251,9 @@ const MediaCockpit: React.FC = () => {
           campaign_goal: goal,
           weekly_budget: weeklyBudget,
           channel_pool: ['programmatic', 'social', 'search', 'ctv'],
+          strategy_mode: strategyMode,
+          max_cards: maxCards,
+          virus_typ: virus,
         }),
       });
       const data = await res.json();
@@ -543,11 +548,17 @@ const MediaCockpit: React.FC = () => {
           <div className="space-y-6">
             <div className="card p-5">
               <h2 className="text-lg font-semibold text-white mb-4">KI Action Cards</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-3 mb-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-6 gap-3 mb-3">
                 <input value={brand} onChange={(e) => setBrand(e.target.value)} className="media-input" placeholder="Brand" />
                 <input value={product} onChange={(e) => setProduct(e.target.value)} className="media-input" placeholder="Produkt" />
                 <input value={goal} onChange={(e) => setGoal(e.target.value)} className="media-input" placeholder="Kampagnenziel" />
                 <input value={weeklyBudget} onChange={(e) => setWeeklyBudget(Number(e.target.value))} className="media-input" type="number" placeholder="Budget" />
+                <select className="media-input" value={maxCards} onChange={(e) => setMaxCards(Number(e.target.value))}>
+                  <option value={1}>1 Card</option>
+                  <option value={2}>2 Cards</option>
+                  <option value={3}>3 Cards</option>
+                  <option value={4}>4 Cards</option>
+                </select>
                 <button onClick={triggerRecommendations} className="media-button" disabled={recLoading}>
                   {recLoading ? 'Berechne...' : 'Empfehlungen erzeugen'}
                 </button>
@@ -606,6 +617,24 @@ const MediaCockpit: React.FC = () => {
                     <span className="text-xs text-slate-500">{card.type}</span>
                     <span className="text-xs text-emerald-400">Conf. {Math.round((card.confidence || 0) * 100)}%</span>
                   </div>
+                  <div className="mb-2 flex items-center gap-2 flex-wrap">
+                    {card.playbook_title && (
+                      <span className="text-[11px] px-2 py-0.5 rounded-full bg-cyan-500/15 text-cyan-300 border border-cyan-400/30">
+                        {card.playbook_title}
+                      </span>
+                    )}
+                    {card.ai_generation_status && (
+                      <span
+                        className={`text-[11px] px-2 py-0.5 rounded-full border ${
+                          card.ai_generation_status === 'success'
+                            ? 'bg-emerald-500/15 text-emerald-300 border-emerald-400/30'
+                            : 'bg-amber-500/15 text-amber-300 border-amber-400/30'
+                        }`}
+                      >
+                        AI: {card.ai_generation_status}
+                      </span>
+                    )}
+                  </div>
                   <h3 className="text-base text-white font-semibold">{card.campaign_name || `${card.brand} · ${card.product}`}</h3>
                   <p className="text-xs text-slate-500 mb-2">Status: {card.status} · Urgency: {Math.round(card.urgency_score || 0)}</p>
                   <div className="mb-2 text-xs">
@@ -647,10 +676,20 @@ const MediaCockpit: React.FC = () => {
                     Aktivierung: {card.campaign_preview?.activation_window?.start ? format(parseISO(card.campaign_preview.activation_window.start), 'dd.MM.yy', { locale: de }) : '-'}{' '}
                     bis {card.campaign_preview?.activation_window?.end ? format(parseISO(card.campaign_preview.activation_window.end), 'dd.MM.yy', { locale: de }) : '-'}
                   </div>
+                  {card.trigger_snapshot?.event && (
+                    <div className="mb-2 text-xs text-slate-400">
+                      Trigger: {card.trigger_snapshot.event}
+                    </div>
+                  )}
                   <div className="mb-2 text-xs text-slate-400">{card.reason || 'Epidemiologischer Trigger'}</div>
                   {card.mapping_reason && (
                     <div className="mb-3 text-xs text-amber-300/90">
                       Mapping ({card.mapping_rule_source || 'auto'}): {card.mapping_reason}
+                    </div>
+                  )}
+                  {Array.isArray(card.guardrail_notes) && card.guardrail_notes.length > 0 && (
+                    <div className="mb-3 text-[11px] text-slate-500">
+                      Guardrails: {card.guardrail_notes.slice(0, 2).join(' · ')}
                     </div>
                   )}
                   <div className="text-xs text-slate-500">

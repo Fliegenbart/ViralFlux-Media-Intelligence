@@ -14,6 +14,7 @@ from app.models.database import (
     GoogleTrendsData,
     MarketingOpportunity,
     NotaufnahmeSyndromData,
+    PollenData,
     SurvstatWeeklyData,
     WastewaterAggregated,
     WastewaterData,
@@ -56,6 +57,7 @@ SOURCE_SLA_DAYS = {
     "notaufnahme": 2,
     "survstat": 14,
     "weather": 2,
+    "pollen": 2,
     "google_trends": 4,
     "bfarm_shortage": 7,
 }
@@ -287,6 +289,20 @@ class MediaCockpitService:
                 values.append(temp_factor * 0.45 + uv_factor * 0.35 + hum_factor * 0.20)
             weather_risk = (sum(values) / len(values)) * 100.0
 
+        latest_pollen_date = self.db.query(func.max(PollenData.datum)).scalar()
+        pollen_signal = 0.0
+        pollen_type = "Pollen"
+        if latest_pollen_date:
+            pollen_row = self.db.query(
+                PollenData.pollen_type,
+                func.max(PollenData.pollen_index).label("max_index"),
+            ).filter(
+                PollenData.datum == latest_pollen_date,
+            ).group_by(PollenData.pollen_type).order_by(func.max(PollenData.pollen_index).desc()).first()
+            if pollen_row:
+                pollen_signal = min(100.0, max(0.0, float(pollen_row.max_index or 0.0) / 3.0 * 100.0))
+                pollen_type = pollen_row.pollen_type or "Pollen"
+
         tiles = [
             {
                 "id": "peix_national",
@@ -368,6 +384,15 @@ class MediaCockpitService:
                 "data_source": "Wetter",
             },
             {
+                "id": "pollen",
+                "title": "Pollen-Trigger",
+                "value": round(pollen_signal, 1),
+                "unit": "/100",
+                "subtitle": f"DWD ({pollen_type})",
+                "impact_probability": round(pollen_signal, 1),
+                "data_source": "DWD Pollen",
+            },
+            {
                 "id": "trends",
                 "title": "Google Trends Infekt",
                 "value": round(float(trends_avg or 0.0), 1),
@@ -386,6 +411,7 @@ class MediaCockpitService:
             "survstat": "survstat",
             "bfarm": "bfarm_shortage",
             "weather": "weather",
+            "pollen": "pollen",
             "trends": "google_trends",
             "peix_national": "wastewater",
             "map_top_region": "wastewater",
@@ -421,6 +447,8 @@ class MediaCockpitService:
             activation = campaign_payload.get("activation_window") or {}
             product_mapping = campaign_payload.get("product_mapping") or {}
             peix_context = campaign_payload.get("peix_context") or {}
+            playbook = campaign_payload.get("playbook") or {}
+            ai_meta = campaign_payload.get("ai_meta") or {}
             status = LEGACY_TO_WORKFLOW.get(str(row.status or "").upper(), row.status or "DRAFT")
             recommended_product = product_mapping.get("recommended_product") or row.product or "Atemwegslinie"
 
@@ -454,6 +482,12 @@ class MediaCockpitService:
                 "condition_key": product_mapping.get("condition_key"),
                 "condition_label": product_mapping.get("condition_label"),
                 "mapping_candidate_product": product_mapping.get("candidate_product"),
+                "playbook_key": row.playbook_key or playbook.get("key"),
+                "playbook_title": playbook.get("title"),
+                "strategy_mode": row.strategy_mode or campaign_payload.get("strategy_mode"),
+                "trigger_snapshot": campaign_payload.get("trigger_snapshot"),
+                "guardrail_notes": (campaign_payload.get("guardrail_report") or {}).get("applied_fixes") or [],
+                "ai_generation_status": ai_meta.get("status"),
                 "campaign_name": campaign.get("campaign_name"),
                 "primary_kpi": measurement.get("primary_kpi"),
                 "peix_context": peix_context,
@@ -616,6 +650,7 @@ class MediaCockpitService:
             "survstat": _max_date_for(SurvstatWeeklyData, "available_time", "week_start", "created_at"),
             "notaufnahme": _max_date_for(NotaufnahmeSyndromData, "datum", "created_at"),
             "weather": _max_date_for(WeatherData, "available_time", "datum", "created_at"),
+            "pollen": _max_date_for(PollenData, "available_time", "datum", "created_at"),
             "google_trends": _max_date_for(GoogleTrendsData, "available_time", "datum", "created_at"),
             "bfarm_shortage": bfarm_freshness,
             "marketing": _max_date_for(MarketingOpportunity, "updated_at", "created_at"),
@@ -630,6 +665,7 @@ class MediaCockpitService:
             "notaufnahme": "RKI/AKTIN Notaufnahme",
             "survstat": "RKI SURVSTAT",
             "weather": "DWD/BrightSky Wetter",
+            "pollen": "DWD Pollen",
             "google_trends": "Google Trends",
             "bfarm_shortage": "BfArM Engpässe",
         }

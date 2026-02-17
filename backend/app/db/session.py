@@ -41,6 +41,8 @@ _RUNTIME_SCHEMA_UPDATES = {
         "activation_end": "TIMESTAMP",
         "recommendation_reason": "VARCHAR",
         "campaign_payload": "JSON",
+        "playbook_key": "VARCHAR",
+        "strategy_mode": "VARCHAR",
         "updated_at": "TIMESTAMP",
     },
     "brand_products": {
@@ -57,6 +59,13 @@ _RUNTIME_SCHEMA_UPDATES = {
         "notes": "VARCHAR",
         "updated_at": "TIMESTAMP",
     },
+    "pollen_data": {
+        "available_time": "TIMESTAMP",
+        "region_code": "VARCHAR",
+        "pollen_type": "VARCHAR",
+        "pollen_index": "DOUBLE PRECISION",
+        "source": "VARCHAR",
+    },
 }
 
 _RUNTIME_INDEX_UPDATES = {
@@ -70,6 +79,8 @@ _RUNTIME_INDEX_UPDATES = {
     "marketing_opportunities": [
         ("idx_marketing_opportunities_brand", "brand"),
         ("idx_marketing_opportunities_product", "product"),
+        ("idx_marketing_opportunities_playbook_key", "playbook_key"),
+        ("idx_marketing_opportunities_strategy_mode", "strategy_mode"),
         ("idx_marketing_opportunities_updated_at", "updated_at"),
     ],
     "brand_products": [
@@ -83,6 +94,11 @@ _RUNTIME_INDEX_UPDATES = {
         ("idx_pcm_rule_source", "rule_source"),
         ("idx_pcm_is_approved", "is_approved"),
         ("idx_pcm_updated_at", "updated_at"),
+    ],
+    "pollen_data": [
+        ("idx_pollen_available_time", "available_time"),
+        ("idx_pollen_region_code", "region_code"),
+        ("idx_pollen_type", "pollen_type"),
     ],
 }
 

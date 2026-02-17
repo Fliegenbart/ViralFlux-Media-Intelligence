@@ -13,6 +13,7 @@ from app.services.data_ingest.survstat_service import SurvstatIngestionService
 from app.services.data_ingest.trends_service import GoogleTrendsService
 from app.services.data_ingest.weather_service import WeatherService
 from app.services.data_ingest.holidays_service import SchoolHolidaysService
+from app.services.data_ingest.pollen_service import PollenService
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -88,6 +89,15 @@ def _run_import_all():
         except Exception as e:
             logger.error(f"Weather import failed: {e}")
             results["weather"] = {"success": False, "error": str(e)}
+
+    with get_db_context() as db:
+        # 6b. DWD Pollen (Allergie-Bremse)
+        try:
+            pollen = PollenService(db)
+            results["pollen"] = pollen.run_full_import()
+        except Exception as e:
+            logger.error(f"Pollen import failed: {e}")
+            results["pollen"] = {"success": False, "error": str(e)}
 
     # 7. BfArM Lieferengpass-Daten (statische CSV, kein API-Key)
     try:
@@ -227,6 +237,13 @@ async def run_weather_import(db: Session = Depends(get_db)):
     """Importiere aktuelle Wetterdaten (BrightSky / DWD)."""
     weather = WeatherService(db)
     return weather.run_full_import(include_forecast=True)
+
+
+@router.post("/pollen")
+async def run_pollen_import(db: Session = Depends(get_db)):
+    """Importiere aktuelle DWD-Pollenwerte."""
+    service = PollenService(db)
+    return service.run_full_import()
 
 
 @router.post("/weather/backfill")

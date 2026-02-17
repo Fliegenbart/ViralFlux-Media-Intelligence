@@ -216,6 +216,9 @@ const Datenimport: React.FC = () => {
   const [survstatUploading, setSurvstatUploading] = useState(false);
   const [survstatResult, setSurvstatResult] = useState<any | null>(null);
   const [survstatError, setSurvstatError] = useState<string | null>(null);
+  const [pollenLoading, setPollenLoading] = useState(false);
+  const [pollenResult, setPollenResult] = useState<any | null>(null);
+  const [pollenError, setPollenError] = useState<string | null>(null);
   const [catalogRefreshing, setCatalogRefreshing] = useState(false);
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [catalogError, setCatalogError] = useState<string | null>(null);
@@ -424,6 +427,24 @@ const Datenimport: React.FC = () => {
       setSurvstatUploading(false);
     }
   }, [survstatFiles, fetchHistory]);
+
+  const runPollenImport = useCallback(async () => {
+    setPollenLoading(true);
+    setPollenError(null);
+    setPollenResult(null);
+    try {
+      const res = await fetch('/api/v1/ingest/pollen', { method: 'POST' });
+      const data = await res.json().catch(() => ({ detail: `HTTP ${res.status}` }));
+      if (!res.ok || data.error || data.detail) {
+        throw new Error(data.error || data.detail || `HTTP ${res.status}`);
+      }
+      setPollenResult(data);
+    } catch (e: any) {
+      setPollenError(e.message || 'Pollen-Import fehlgeschlagen');
+    } finally {
+      setPollenLoading(false);
+    }
+  }, []);
 
   // ─── File Validation ────────────────────────────────────────────────
   const validateFile = (file: File): string | null => {
@@ -1359,6 +1380,68 @@ const Datenimport: React.FC = () => {
                 <div>Verarbeitet: {survstatResult.files_parsed}/{survstatResult.files_received} Dateien</div>
                 <div>Datensätze: {survstatResult.records_total} | Neu: {survstatResult.imported} | Aktualisiert: {survstatResult.updated}</div>
                 <div>Letzte Kalenderwoche: {survstatResult.latest_week || '—'}</div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* ─── DWD Pollen Ingest ────────────────────────── */}
+        <div
+          className="rounded-xl overflow-hidden mb-8"
+          style={{
+            background: '#1e293b',
+            border: '1px solid #334155',
+            animation: 'fadeSlideUp 0.5s ease-out 0.18s both',
+          }}
+        >
+          <div
+            className="px-5 py-3.5 flex items-center justify-between"
+            style={{ borderBottom: '1px solid #33415580' }}
+          >
+            <div className="flex items-center gap-2.5">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 2v20M2 12h20" />
+              </svg>
+              <span className="text-sm font-medium text-slate-200">DWD Pollen-Import (direkt)</span>
+            </div>
+            <span className="text-[10px] px-2 py-0.5 rounded font-medium" style={{ color: '#f59e0b', background: '#f59e0b20' }}>
+              Allergie-Bremse
+            </span>
+          </div>
+
+          <div className="p-5 space-y-3">
+            <div className="text-[11px] text-slate-500">
+              Lädt aktuelle DWD-Pollenwerte direkt in die Datenbank und aktiviert den Pollen-Trigger im Cockpit.
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-center">
+              <button
+                onClick={runPollenImport}
+                disabled={pollenLoading}
+                className="py-2 rounded-lg text-xs font-medium text-white transition-opacity hover:opacity-90"
+                style={{
+                  background: pollenLoading ? '#334155' : 'linear-gradient(135deg, #f59e0b, #d97706)',
+                  opacity: pollenLoading ? 0.7 : 1,
+                }}
+              >
+                {pollenLoading ? 'Importiere...' : 'Pollen jetzt laden'}
+              </button>
+              <div className="text-[11px] text-slate-500">
+                Quelle: <span className="text-slate-300">DWD OpenData (s31fg.json)</span>
+              </div>
+              <div className="text-[11px] text-slate-500">
+                Status: <span className="text-slate-300">{pollenResult ? 'aktualisiert' : 'bereit'}</span>
+              </div>
+            </div>
+            {pollenError && (
+              <div className="rounded-lg px-3 py-2 text-[11px]" style={{ background: '#ef444410', border: '1px solid #ef444430', color: '#f87171' }}>
+                {pollenError}
+              </div>
+            )}
+            {pollenResult && (
+              <div className="rounded-lg px-3 py-2 text-[11px]" style={{ background: '#0f172a', border: '1px solid #334155', color: '#94a3b8' }}>
+                <div>Datensätze: {pollenResult.records_total} | Neu: {pollenResult.inserted} | Aktualisiert: {pollenResult.updated}</div>
+                <div>Regionen: {(pollenResult.regions || []).join(', ') || '—'}</div>
+                <div>Letztes Quell-Update: {pollenResult.last_update ? fmtDateTime(pollenResult.last_update) : '—'}</div>
               </div>
             )}
           </div>

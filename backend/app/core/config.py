@@ -51,7 +51,11 @@ class Settings(BaseSettings):
     RKI_GRIPPEWEB_URL: str = "https://raw.githubusercontent.com/robert-koch-institut/GrippeWeb_Daten_des_Wochenberichts/main"
     RKI_ARE_KONSULTATION_URL: str = "https://raw.githubusercontent.com/robert-koch-institut/ARE-Konsultationsinzidenz/main/ARE-Konsultationsinzidenz.tsv"
     RKI_NOTAUFNAHME_URL: str = "https://raw.githubusercontent.com/robert-koch-institut/Daten_der_Notaufnahmesurveillance/main"
+    DWD_POLLEN_URL: str = "https://opendata.dwd.de/climate_environment/health/alerts/s31fg.json"
     SURVSTAT_LOCAL_DIR: str = "/app/data/raw/survstat"
+
+    # Media AI
+    MEDIA_AI_PLAYBOOKS_ENABLED: bool = True
     
     # ML Settings
     FORECAST_DAYS: int = 14

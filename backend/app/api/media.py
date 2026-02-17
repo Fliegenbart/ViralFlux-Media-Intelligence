@@ -47,6 +47,9 @@ class RecommendationGenerateRequest(BaseModel):
     weekly_budget: float = Field(default=100000.0, ge=0)
     channel_pool: List[str] = Field(default_factory=lambda: ["programmatic", "social", "search", "ctv"])
     region_scope: Optional[List[str]] = None
+    strategy_mode: str = Field(default="PLAYBOOK_AI")
+    max_cards: int = Field(default=4, ge=1, le=8)
+    virus_typ: str = Field(default="Influenza A")
 
 
 class RecommendationOpenRegionRequest(BaseModel):
@@ -115,6 +118,9 @@ async def generate_media_recommendations(
         weekly_budget=payload.weekly_budget,
         channel_pool=payload.channel_pool,
         region_scope=payload.region_scope,
+        strategy_mode=payload.strategy_mode,
+        max_cards=payload.max_cards,
+        virus_typ=payload.virus_typ,
     )
 
     cards = [_to_card_response(card) for card in generated.get("cards", [])]
@@ -125,6 +131,13 @@ async def generate_media_recommendations(
         "top_card_id": generated.get("top_card_id"),
         "auto_open_url": generated.get("auto_open_url"),
     }
+
+
+@router.get("/playbooks/catalog")
+async def get_playbook_catalog(db: Session = Depends(get_db)):
+    """Liefert aktiven Playbook-Katalog inkl. Triggerrahmen."""
+    engine = MarketingOpportunityEngine(db)
+    return engine.get_playbook_catalog()
 
 
 @router.post("/recommendations/open-region")
@@ -165,6 +178,9 @@ async def open_or_create_region_recommendation(
         weekly_budget=payload.weekly_budget,
         channel_pool=["programmatic", "social", "search", "ctv"],
         region_scope=[region_code],
+        strategy_mode="PLAYBOOK_AI",
+        max_cards=4,
+        virus_typ=payload.virus_typ,
     )
     generated_cards = [_to_card_response(card, include_preview=True) for card in generated.get("cards", [])]
     generated_cards.sort(key=lambda item: (item.get("urgency_score", 0), item.get("confidence", 0)), reverse=True)
@@ -303,6 +319,23 @@ async def update_media_recommendation_status(
     return result
 
 
+@router.post("/recommendations/{opportunity_id}/regenerate-ai")
+async def regenerate_media_recommendation_ai(
+    opportunity_id: str,
+    db: Session = Depends(get_db),
+):
+    """Regeneriert KI-Plan (nur ai_* Bereiche im Campaign Payload)."""
+    engine = MarketingOpportunityEngine(db)
+    result = engine.regenerate_ai_plan(opportunity_id)
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
+    return {
+        **_to_card_response(result, include_preview=True),
+        "campaign_pack": result.get("campaign_payload") or {},
+        "trigger_evidence": result.get("trigger_evidence"),
+    }
+
+
 @router.post("/products/refresh")
 async def refresh_media_products(
     brand: str = Query(default="gelo"),
@@ -378,6 +411,8 @@ def _to_card_response(opp: dict[str, Any], include_preview: bool = True) -> dict
     measurement = campaign_pack.get("measurement_plan") or {}
     product_mapping = campaign_pack.get("product_mapping") or {}
     peix_context = campaign_pack.get("peix_context") or {}
+    playbook = campaign_pack.get("playbook") or {}
+    ai_meta = campaign_pack.get("ai_meta") or {}
     region_codes = _extract_region_codes_from_card_payload(opp, campaign_pack)
     recommended_product = (
         opp.get("recommended_product")
@@ -402,7 +437,11 @@ def _to_card_response(opp: dict[str, Any], include_preview: bool = True) -> dict
             "end": opp.get("activation_end") or (preview.get("activation_window") or {}).get("end"),
         },
         "reason": opp.get("recommendation_reason") or (opp.get("trigger_context") or {}).get("event"),
-        "confidence": round(min(0.98, max(0.45, float(opp.get("urgency_score") or 50.0) / 100.0)), 2),
+        "confidence": (
+            round(float(opp.get("confidence")), 2)
+            if opp.get("confidence") is not None
+            else round(min(0.98, max(0.45, float(opp.get("urgency_score") or 50.0) / 100.0)), 2)
+        ),
         "detail_url": opp.get("detail_url") or f"/dashboard/recommendations/{opp.get('id')}",
         "created_at": opp.get("created_at"),
         "updated_at": opp.get("updated_at"),
@@ -416,6 +455,12 @@ def _to_card_response(opp: dict[str, Any], include_preview: bool = True) -> dict
         "mapping_candidate_product": opp.get("mapping_candidate_product") or product_mapping.get("candidate_product"),
         "mapping_rule_source": opp.get("rule_source") or product_mapping.get("rule_source"),
         "peix_context": opp.get("peix_context") or peix_context,
+        "playbook_key": opp.get("playbook_key") or playbook.get("key"),
+        "playbook_title": opp.get("playbook_title") or playbook.get("title"),
+        "trigger_snapshot": opp.get("trigger_snapshot") or campaign_pack.get("trigger_snapshot"),
+        "guardrail_notes": opp.get("guardrail_notes") or (campaign_pack.get("guardrail_report") or {}).get("applied_fixes") or [],
+        "ai_generation_status": opp.get("ai_generation_status") or ai_meta.get("status"),
+        "strategy_mode": opp.get("strategy_mode") or campaign_pack.get("strategy_mode"),
     }
 
     if include_preview:
@@ -427,6 +472,9 @@ def _to_card_response(opp: dict[str, Any], include_preview: bool = True) -> dict
             "recommended_product": recommended_product,
             "mapping_status": card.get("mapping_status"),
             "peix_context": card.get("peix_context"),
+            "playbook_key": card.get("playbook_key"),
+            "playbook_title": card.get("playbook_title"),
+            "ai_generation_status": card.get("ai_generation_status"),
         }
 
     return card

@@ -206,6 +206,26 @@ class WeatherData(Base):
     )
 
 
+class PollenData(Base):
+    """DWD Pollenflugdaten (manueller Ingest via OpenData JSON)."""
+    __tablename__ = "pollen_data"
+
+    id = Column(Integer, primary_key=True, index=True)
+    datum = Column(DateTime, nullable=False, index=True)
+    available_time = Column(DateTime, nullable=True, index=True)
+    region_code = Column(String, nullable=False, index=True)  # Bundesland-Code (BW, BY, ...)
+    pollen_type = Column(String, nullable=False, index=True)  # Birke, Graeser, ...
+    pollen_index = Column(Float, nullable=False)  # 0.0 - 3.0 (DWD-Skala)
+    source = Column(String, nullable=False, default="DWD")
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+    __table_args__ = (
+        Index('idx_pollen_region_date', 'region_code', 'datum'),
+        Index('idx_pollen_type_date', 'pollen_type', 'datum'),
+        Index('uq_pollen_region_type_date', 'region_code', 'pollen_type', 'datum', unique=True),
+    )
+
+
 class SchoolHolidays(Base):
     """Schulferien-Kalender."""
     __tablename__ = "school_holidays"
@@ -362,6 +382,8 @@ class MarketingOpportunity(Base):
     activation_end = Column(DateTime)
     recommendation_reason = Column(String)
     campaign_payload = Column(JSON)
+    playbook_key = Column(String, index=True)
+    strategy_mode = Column(String, default="PLAYBOOK_AI", index=True)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, index=True)
     expires_at = Column(DateTime)
     exported_at = Column(DateTime)
@@ -370,6 +392,7 @@ class MarketingOpportunity(Base):
         Index('idx_opportunity_type_status', 'opportunity_type', 'status'),
         Index('idx_opportunity_urgency', 'urgency_score'),
         Index('idx_opportunity_brand_status', 'brand', 'status'),
+        Index('idx_opportunity_playbook', 'playbook_key'),
     )
 
 

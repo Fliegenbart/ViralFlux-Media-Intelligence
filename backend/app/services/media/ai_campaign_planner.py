@@ -67,7 +67,6 @@ _CAMPAIGN_PLAN_SCHEMA: dict[str, Any] = {
         "budget_shift_pct",
         "activation_window_days",
         "channel_plan",
-        "compliance_hinweis",
     ],
 }
 
@@ -172,7 +171,7 @@ class AiCampaignPlanner:
             "Du bist ein Senior Media Planner für Pharma-Brand-Cases.\n"
             "Erzeuge NUR valides JSON ohne Markdown, ohne Erklaertexte.\n"
             "Sprache: Deutsch. Konservativ formulieren (kein Heilversprechen).\n"
-            "Output-Felder: campaign_name, objective, budget_shift_pct, activation_window_days, channel_plan, keyword_clusters, creative_angles, kpi_targets, next_steps, compliance_hinweis.\n"
+            "Output-Felder: campaign_name, objective, budget_shift_pct, activation_window_days, channel_plan, keyword_clusters, creative_angles, kpi_targets, next_steps.\n"
             "Kuerze: message_angle <= 7 Worte; keyword_clusters max 4; creative_angles max 3; kpi_secondary max 2; next_steps max 3; success_criteria 1 Satz.\n\n"
             f"Brand: {brand}\n"
             f"Produkt: {product}\n"

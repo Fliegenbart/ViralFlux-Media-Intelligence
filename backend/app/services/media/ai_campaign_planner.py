@@ -36,30 +36,6 @@ _CAMPAIGN_PLAN_SCHEMA: dict[str, Any] = {
                 "required": ["channel", "share_pct", "message_angle", "kpi_primary", "kpi_secondary"],
             },
         },
-        "keyword_clusters": {"type": "array", "items": {"type": "string"}},
-        "creative_angles": {"type": "array", "items": {"type": "string"}},
-        "kpi_targets": {
-            "type": "object",
-            "properties": {
-                "primary_kpi": {"type": "string"},
-                "secondary_kpis": {"type": "array", "items": {"type": "string"}},
-                "success_criteria": {"type": "string"},
-            },
-            "required": ["primary_kpi", "secondary_kpis", "success_criteria"],
-        },
-        "next_steps": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "task": {"type": "string"},
-                    "owner": {"type": "string"},
-                    "eta": {"type": "string"},
-                },
-                "required": ["task", "owner", "eta"],
-            },
-        },
-        "compliance_hinweis": {"type": "string"},
     },
     "required": [
         "campaign_name",
@@ -171,8 +147,8 @@ class AiCampaignPlanner:
             "Du bist ein Senior Media Planner für Pharma-Brand-Cases.\n"
             "Erzeuge NUR valides JSON ohne Markdown, ohne Erklaertexte.\n"
             "Sprache: Deutsch. Konservativ formulieren (kein Heilversprechen).\n"
-            "Output-Felder: campaign_name, objective, budget_shift_pct, activation_window_days, channel_plan, keyword_clusters, creative_angles, kpi_targets, next_steps.\n"
-            "Kuerze: message_angle <= 7 Worte; keyword_clusters max 4; creative_angles max 3; kpi_secondary max 2; next_steps max 3; success_criteria 1 Satz.\n\n"
+            "Output-Felder: campaign_name, objective, budget_shift_pct, activation_window_days, channel_plan.\n"
+            "Kuerze: message_angle <= 7 Worte; kpi_secondary max 2.\n\n"
             f"Brand: {brand}\n"
             f"Produkt: {product}\n"
             f"Kampagnenziel: {campaign_goal}\n"
@@ -198,14 +174,14 @@ class AiCampaignPlanner:
                 "options": {
                     "temperature": 0.2,
                     "top_p": 0.9,
-                    "num_predict": 240,
+                    "num_predict": 180,
                 },
             }
             try:
                 response = requests.post(
                     f"{self.ollama_url}/api/generate",
                     json=payload,
-                    timeout=35,
+                    timeout=25,
                 )
                 if response.status_code == 404 and "model" in response.text.lower():
                     last_error = ValueError(

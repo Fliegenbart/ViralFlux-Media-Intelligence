@@ -486,12 +486,29 @@ const MediaCockpit: React.FC = () => {
                       <div key={item.source_key} className="rounded-lg px-3 py-2" style={{ background: 'rgba(15,23,42,0.65)' }}>
                         <div className="flex items-center justify-between">
                           <span className="text-xs text-slate-300">{item.label}</span>
-                          <span className={`text-xs font-semibold ${item.is_live ? 'text-emerald-400' : 'text-red-400'}`}>
-                            {item.is_live ? 'LIVE' : 'STALE'}
-                          </span>
+                          <div className="flex items-center gap-2">
+                            <span
+                              className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${
+                                item.feed_reachable ? 'text-emerald-400 bg-emerald-500/10' : 'text-red-400 bg-red-500/10'
+                              }`}
+                            >
+                              Feed {item.feed_reachable ? 'erreichbar' : 'nicht erreichbar'}
+                            </span>
+                            <span
+                              className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${
+                                item.is_live ? 'text-emerald-400 bg-emerald-500/10' : 'text-red-400 bg-red-500/10'
+                              }`}
+                            >
+                              Datenstand {item.is_live ? 'aktuell' : item.last_updated ? 'älter' : 'kein Datum'}
+                            </span>
+                          </div>
                         </div>
                         <div className="text-[11px] text-slate-500 mt-1">
-                          {item.last_updated ? `Stand: ${format(parseISO(item.last_updated), 'dd.MM.yyyy HH:mm', { locale: de })}` : 'Kein Zeitstempel'}
+                          {item.last_updated
+                            ? `Messdatum: ${format(parseISO(item.last_updated), 'dd.MM.yyyy HH:mm', { locale: de })}`
+                            : 'Messdatum: kein Zeitstempel'}
+                          {' · '}
+                          {item.age_days !== null && item.age_days !== undefined ? `Alter: ${item.age_days.toFixed(1)} Tage` : 'Alter: -'}
                           {' · '}SLA {item.sla_days}d
                         </div>
                       </div>

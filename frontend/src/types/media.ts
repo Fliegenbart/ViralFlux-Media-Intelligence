@@ -188,6 +188,9 @@ export interface SourceStatusItem {
   last_updated?: string | null;
   age_days?: number | null;
   sla_days: number;
+  feed_reachable?: boolean;
+  feed_status_color?: 'green' | 'red';
+  freshness_state?: 'live' | 'stale' | 'no_data';
   is_live: boolean;
   status_color: 'green' | 'red';
 }

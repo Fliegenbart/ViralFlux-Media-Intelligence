@@ -652,6 +652,7 @@ class MediaCockpitService:
                 age_days = max(0.0, (now - parsed).total_seconds() / 86400.0)
 
             is_live = bool(parsed is not None and age_days is not None and age_days <= float(sla_days))
+            feed_reachable = parsed is not None
             if is_live:
                 live_count += 1
 
@@ -661,6 +662,9 @@ class MediaCockpitService:
                 "last_updated": parsed.isoformat() if parsed else None,
                 "age_days": round(age_days, 2) if age_days is not None else None,
                 "sla_days": sla_days,
+                "feed_reachable": feed_reachable,
+                "feed_status_color": "green" if feed_reachable else "red",
+                "freshness_state": "live" if is_live else ("stale" if parsed else "no_data"),
                 "is_live": is_live,
                 "status_color": "green" if is_live else "red",
             })

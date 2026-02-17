@@ -158,9 +158,28 @@ class PollenService:
         if not rows:
             return 0, 0
 
+        # DWD payload kann dieselbe Kombination mehrfach liefern (z. B. durch Teilregionen).
+        # Vor DB-Write auf eindeutige Keys reduzieren, sonst kollidiert der Unique-Index.
+        deduped: dict[tuple[str, str, datetime], dict[str, Any]] = {}
+        for row in rows:
+            key = (
+                str(row["region_code"]).strip().upper(),
+                str(row["pollen_type"]).strip().lower(),
+                row["datum"],
+            )
+            current = deduped.get(key)
+            if current is None:
+                deduped[key] = row
+                continue
+
+            current_ts = current.get("available_time") or datetime.min
+            row_ts = row.get("available_time") or datetime.min
+            if row_ts >= current_ts:
+                deduped[key] = row
+
         inserted = 0
         updated = 0
-        for record in rows:
+        for record in deduped.values():
             existing = (
                 self.db.query(PollenData)
                 .filter(

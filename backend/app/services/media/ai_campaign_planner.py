@@ -41,7 +41,7 @@ class AiCampaignPlanner:
         )
 
         try:
-            raw = self._call_ollama(prompt)
+            raw, used_model = self._call_ollama(prompt)
             ai_plan = self._parse_json_response(raw)
             if not isinstance(ai_plan, dict):
                 raise ValueError("Ollama Antwort ist kein JSON-Objekt.")
@@ -51,7 +51,7 @@ class AiCampaignPlanner:
                 "ai_plan": normalized,
                 "ai_meta": {
                     "generated_at": datetime.utcnow().isoformat() + "Z",
-                    "model": self.model,
+                    "model": used_model,
                     "provider": "ollama_local",
                     "fallback_used": False,
                 },
@@ -122,29 +122,70 @@ class AiCampaignPlanner:
             "}\n"
         )
 
-    def _call_ollama(self, prompt: str) -> str:
-        payload = {
-            "model": self.model,
-            "prompt": prompt,
-            "stream": False,
-            "format": "json",
-            "options": {
-                "temperature": 0.2,
-                "top_p": 0.9,
-                "num_predict": 450,
-            },
-        }
-        response = requests.post(
-            f"{self.ollama_url}/api/generate",
-            json=payload,
-            timeout=8,
-        )
-        response.raise_for_status()
-        data = response.json()
-        text = data.get("response")
-        if not text:
-            raise ValueError("Leere Ollama-Antwort.")
-        return str(text).strip()
+    def _call_ollama(self, prompt: str) -> tuple[str, str]:
+        candidate_models = self._resolve_model_candidates()
+        last_error: Exception | None = None
+
+        for model_name in candidate_models:
+            payload = {
+                "model": model_name,
+                "prompt": prompt,
+                "stream": False,
+                "format": "json",
+                "options": {
+                    "temperature": 0.2,
+                    "top_p": 0.9,
+                    "num_predict": 450,
+                },
+            }
+            try:
+                response = requests.post(
+                    f"{self.ollama_url}/api/generate",
+                    json=payload,
+                    timeout=8,
+                )
+                if response.status_code == 404 and "model" in response.text.lower():
+                    last_error = ValueError(
+                        f"Ollama Modell nicht vorhanden: {model_name}"
+                    )
+                    continue
+                response.raise_for_status()
+                data = response.json()
+                text = data.get("response")
+                if not text:
+                    raise ValueError("Leere Ollama-Antwort.")
+                return str(text).strip(), model_name
+            except Exception as exc:
+                last_error = exc
+                logger.warning(
+                    "Ollama generate fehlgeschlagen (model=%s): %s",
+                    model_name,
+                    exc,
+                )
+
+        if last_error is not None:
+            raise last_error
+        raise ValueError("Kein verfuegbares Ollama-Modell gefunden.")
+
+    def _resolve_model_candidates(self) -> list[str]:
+        """Configured model first, then discovered local models from /api/tags."""
+        candidates: list[str] = []
+        configured = (self.model or "").strip()
+        if configured:
+            candidates.append(configured)
+
+        try:
+            response = requests.get(f"{self.ollama_url}/api/tags", timeout=4)
+            response.raise_for_status()
+            payload = response.json() or {}
+            for entry in payload.get("models") or []:
+                model_name = str(entry.get("name") or "").strip()
+                if model_name and model_name not in candidates:
+                    candidates.append(model_name)
+        except Exception as exc:
+            logger.warning("Ollama /api/tags nicht lesbar: %s", exc)
+
+        return candidates or ["qwen2.5:7b"]
 
     @staticmethod
     def _parse_json_response(raw: str) -> dict[str, Any]:

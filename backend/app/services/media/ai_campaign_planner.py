@@ -135,14 +135,14 @@ class AiCampaignPlanner:
                 "options": {
                     "temperature": 0.2,
                     "top_p": 0.9,
-                    "num_predict": 450,
+                    "num_predict": 300,
                 },
             }
             try:
                 response = requests.post(
                     f"{self.ollama_url}/api/generate",
                     json=payload,
-                    timeout=8,
+                    timeout=12,
                 )
                 if response.status_code == 404 and "model" in response.text.lower():
                     last_error = ValueError(

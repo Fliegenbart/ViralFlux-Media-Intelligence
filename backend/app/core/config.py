@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     """Application configuration settings."""
     
     # App Info
-    APP_NAME: str = "LabPulse Pro"
+    APP_NAME: str = "ViralFlux Media Intelligence"
     APP_VERSION: str = "1.0.0"
     ENVIRONMENT: str = "development"
     
@@ -50,6 +50,7 @@ class Settings(BaseSettings):
     RKI_AMELAG_URL: str = "https://raw.githubusercontent.com/robert-koch-institut/Abwassersurveillance_AMELAG/main"
     RKI_GRIPPEWEB_URL: str = "https://raw.githubusercontent.com/robert-koch-institut/GrippeWeb_Daten_des_Wochenberichts/main"
     RKI_ARE_KONSULTATION_URL: str = "https://raw.githubusercontent.com/robert-koch-institut/ARE-Konsultationsinzidenz/main/ARE-Konsultationsinzidenz.tsv"
+    RKI_NOTAUFNAHME_URL: str = "https://raw.githubusercontent.com/robert-koch-institut/Daten_der_Notaufnahmesurveillance/main"
     
     # ML Settings
     FORECAST_DAYS: int = 14

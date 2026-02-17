@@ -55,6 +55,14 @@ interface GrippeWebItem {
   trend: string;
 }
 
+interface NotaufnahmeItem {
+  value: number | null;
+  date: string | null;
+  ed_count: number | null;
+  expected_value: number | null;
+  trend: string;
+}
+
 interface DrugShortageSignals {
   risk_score: number;
   total_active: number;
@@ -70,6 +78,16 @@ interface GrippeWebTimeseriesPoint {
   kalenderwoche: number;
   inzidenz: number;
   meldungen: number | null;
+}
+
+interface NotaufnahmeTimeseriesPoint {
+  date: string;
+  relative_cases: number | null;
+  relative_cases_7day_ma: number | null;
+  expected_value: number | null;
+  expected_lowerbound: number | null;
+  expected_upperbound: number | null;
+  ed_count: number | null;
 }
 
 interface OutbreakScoreData {
@@ -95,6 +113,7 @@ interface DashboardData {
   top_trends: Array<{ keyword: string; score: number }>;
   are_inzidenz: { value: number | null; date: string | null };
   grippeweb: Record<string, GrippeWebItem>;
+  notaufnahme: Record<string, NotaufnahmeItem>;
   forecast_summary: Record<string, ForecastSummary>;
   weather: { avg_temperature: number; avg_humidity: number };
   inventory: Record<string, InventoryItem>;
@@ -207,6 +226,9 @@ const Dashboard: React.FC = () => {
   const [showGrippeWeb, setShowGrippeWeb] = useState(false);
   const [selectedGrippeWeb, setSelectedGrippeWeb] = useState<'ARE' | 'ILI'>('ARE');
   const [grippeWebSeries, setGrippeWebSeries] = useState<GrippeWebTimeseriesPoint[]>([]);
+  const [showNotaufnahme, setShowNotaufnahme] = useState(false);
+  const [selectedNotaufnahme, setSelectedNotaufnahme] = useState<'ARI' | 'ILI' | 'COVID'>('ARI');
+  const [notaufnahmeSeries, setNotaufnahmeSeries] = useState<NotaufnahmeTimeseriesPoint[]>([]);
   const [drugShortageData, setDrugShortageData] = useState<DrugShortageSignals | null>(null);
   const [drugShortageLoading, setDrugShortageLoading] = useState(false);
   const [outbreakScore, setOutbreakScore] = useState<OutbreakScoreData | null>(null);
@@ -286,6 +308,19 @@ const Dashboard: React.FC = () => {
     }
   }, [selectedGrippeWeb]);
 
+  // Fetch Notaufnahme timeseries
+  const fetchNotaufnahmeTimeseries = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/v1/dashboard/notaufnahme-timeseries?syndrome=${selectedNotaufnahme}&days_back=365`);
+      if (res.ok) {
+        const result = await res.json();
+        setNotaufnahmeSeries(result.data || []);
+      }
+    } catch (e) {
+      console.error('Notaufnahme fetch error:', e);
+    }
+  }, [selectedNotaufnahme]);
+
   // Fetch Drug Shortage signals
   const fetchDrugShortageSignals = useCallback(async () => {
     try {
@@ -343,6 +378,10 @@ const Dashboard: React.FC = () => {
   useEffect(() => {
     if (showGrippeWeb) fetchGrippeWebTimeseries();
   }, [showGrippeWeb, fetchGrippeWebTimeseries]);
+
+  useEffect(() => {
+    if (showNotaufnahme) fetchNotaufnahmeTimeseries();
+  }, [showNotaufnahme, fetchNotaufnahmeTimeseries]);
 
   // Re-fetch all data when page becomes visible (user returns to tab)
   useEffect(() => {
@@ -421,7 +460,7 @@ const Dashboard: React.FC = () => {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `LabPulse_Bestellung_${new Date().toISOString().slice(0,10)}.csv`;
+      a.download = `ViralFlux_MediaPlan_${new Date().toISOString().slice(0,10)}.csv`;
       a.click();
       URL.revokeObjectURL(url);
     } catch (e) {
@@ -596,8 +635,8 @@ const Dashboard: React.FC = () => {
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
             </div>
             <div>
-              <h1 className="text-xl font-bold text-white tracking-tight">LabPulse Pro</h1>
-              <p className="text-xs text-slate-400">Intelligentes Frühwarnsystem für Labordiagnostik</p>
+              <h1 className="text-xl font-bold text-white tracking-tight">ViralFlux Media Intelligence</h1>
+              <p className="text-xs text-slate-400">Predictive Pharma Media Activation für PEIX</p>
             </div>
           </div>
           <div className="flex items-center gap-6">
@@ -927,14 +966,51 @@ const Dashboard: React.FC = () => {
             )}
           </div>
 
-          {/* GrippeWeb placeholder / no-data card */}
-          {!data?.grippeweb?.ARE && !data?.grippeweb?.ILI && (
+          {/* Notaufnahme card */}
+          {data?.notaufnahme?.ARI ? (
+            <div
+              className={`card p-5 cursor-pointer fade-in ${showNotaufnahme && selectedNotaufnahme === 'ARI' ? 'card-selected' : ''}`}
+              onClick={() => {
+                if (showNotaufnahme && selectedNotaufnahme === 'ARI') {
+                  setShowNotaufnahme(false);
+                } else {
+                  setShowNotaufnahme(true);
+                  setSelectedNotaufnahme('ARI');
+                }
+              }}
+              style={{ borderLeft: '3px solid #06b6d4' }}
+            >
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full" style={{ background: '#06b6d4' }}></div>
+                  <span className="text-sm font-medium text-slate-300">Notaufnahme ARI</span>
+                </div>
+                <span className="text-xs font-mono px-2 py-0.5 rounded" style={{ background: '#06b6d420', color: '#06b6d4' }}>AKTIN/RKI</span>
+              </div>
+              <div className="flex items-end justify-between">
+                <div>
+                  <div className="text-3xl font-bold text-white tracking-tight">
+                    {data.notaufnahme.ARI.value !== null ? data.notaufnahme.ARI.value.toFixed(2) : '—'}
+                  </div>
+                  <div className="text-xs text-slate-500 mt-1">Relativer Anteil (%)</div>
+                </div>
+                <div className="text-right">
+                  <div className="text-lg font-bold" style={{ color: trendColor(data.notaufnahme.ARI.trend) }}>
+                    {trendArrow(data.notaufnahme.ARI.trend)}
+                  </div>
+                  <div className="text-xs text-slate-500">
+                    {data.notaufnahme.ARI.ed_count ?? '—'} Notaufnahmen
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
             <div className="card p-5 fade-in" style={{ borderLeft: '3px solid #475569' }}>
               <div className="flex items-center gap-2 mb-3">
                 <div className="w-3 h-3 rounded-full" style={{ background: '#475569' }}></div>
-                <span className="text-sm font-medium text-slate-400">GrippeWeb (RKI)</span>
+                <span className="text-sm font-medium text-slate-400">Notaufnahmesurveillance</span>
               </div>
-              <p className="text-xs text-slate-500">Keine GrippeWeb-Daten. Import via Datenquellen starten.</p>
+              <p className="text-xs text-slate-500">Keine Notaufnahme-Daten. Import via Datenquellen starten.</p>
             </div>
           )}
         </div>
@@ -944,11 +1020,11 @@ const Dashboard: React.FC = () => {
           <div className="flex items-center justify-between mb-6">
             <div>
               <h2 className="text-lg font-bold text-white">
-                <span style={{ color: VIRUS_COLORS[selectedVirus] }}>{selectedVirus}</span> — Viruslast vs. Testkit-Bestand
+                <span style={{ color: VIRUS_COLORS[selectedVirus] }}>{selectedVirus}</span> — Signalverlauf vs. Aktivierungsindex
               </h2>
               <p className="text-xs text-slate-500 mt-1">
                 Abwasserdaten (AMELAG) {showForecast && data?.has_forecasts ? '+ ML-Prognose' : ''}
-                {timeseries?.test_typ ? ` | Bestand: ${timeseries.test_typ}` : ''}
+                {timeseries?.test_typ ? ` | Zielcluster: ${timeseries.test_typ}` : ''}
                 {zoomStart !== null ? ' | Scroll/Pinch zum Zoomen' : ''}
               </p>
             </div>
@@ -1010,7 +1086,7 @@ const Dashboard: React.FC = () => {
                 tickFormatter={(v: number) => fmt(v)}
                 label={{ value: 'Genkopien/L', angle: -90, position: 'insideLeft', style: { fill: '#64748b', fontSize: 10 }, offset: 0 }}
               />
-              {/* Right Y-axis: Testkit-Bestand */}
+              {/* Right Y-axis: Aktivierungsindex */}
               <YAxis
                 yAxisId="right"
                 orientation="right"
@@ -1018,7 +1094,7 @@ const Dashboard: React.FC = () => {
                 tickLine={{ stroke: '#06b6d4' }}
                 axisLine={{ stroke: '#06b6d4', strokeOpacity: 0.4 }}
                 tickFormatter={(v: number) => v >= 1000 ? (v / 1000).toFixed(1) + 'K' : String(v)}
-                label={{ value: 'Testkits', angle: 90, position: 'insideRight', style: { fill: '#06b6d4', fontSize: 10 }, offset: 0 }}
+                label={{ value: 'Aktivierungsindex', angle: 90, position: 'insideRight', style: { fill: '#06b6d4', fontSize: 10 }, offset: 0 }}
               />
               <Tooltip
                 contentStyle={{
@@ -1031,7 +1107,7 @@ const Dashboard: React.FC = () => {
                 itemStyle={{ color: '#94a3b8' }}
                 formatter={(value: number, name: string) => {
                   if (name === 'Bestand' || name === 'Min-Bestand') {
-                    return [value?.toLocaleString('de-DE') + ' Testkits', name];
+                    return [value?.toLocaleString('de-DE') + ' Punkte', name];
                   }
                   return [value?.toFixed(0) + ' Genkopien/L', name];
                 }}
@@ -1063,7 +1139,7 @@ const Dashboard: React.FC = () => {
                   legendType="none"
                 />
               )}
-              {/* Bestand area (right axis) */}
+              {/* Activation area (right axis) */}
               <Area
                 yAxisId="right"
                 type="stepAfter"
@@ -1075,7 +1151,7 @@ const Dashboard: React.FC = () => {
                 dot={false}
                 connectNulls
               />
-              {/* Min-Bestand reference line (right axis) */}
+              {/* Min-Activation reference line (right axis) */}
               <Line
                 yAxisId="right"
                 type="stepAfter"
@@ -1189,17 +1265,94 @@ const Dashboard: React.FC = () => {
               </ResponsiveContainer>
             </div>
           )}
+
+          {/* Notaufnahme sub-chart */}
+          {showNotaufnahme && notaufnahmeSeries.length > 0 && (
+            <div className="mt-4 pt-4" style={{ borderTop: '1px solid #334155' }}>
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-3">
+                  <h3 className="text-sm font-bold text-white">
+                    Notaufnahmesurveillance — {selectedNotaufnahme}
+                  </h3>
+                  <div className="flex items-center gap-1">
+                    <button
+                      className={`px-2 py-0.5 text-xs rounded-l ${selectedNotaufnahme === 'ARI' ? 'bg-cyan-500/20 text-cyan-400 font-medium' : 'bg-slate-700 text-slate-400'}`}
+                      onClick={() => setSelectedNotaufnahme('ARI')}
+                    >ARI</button>
+                    <button
+                      className={`px-2 py-0.5 text-xs ${selectedNotaufnahme === 'ILI' ? 'bg-cyan-500/20 text-cyan-400 font-medium' : 'bg-slate-700 text-slate-400'}`}
+                      onClick={() => setSelectedNotaufnahme('ILI')}
+                    >ILI</button>
+                    <button
+                      className={`px-2 py-0.5 text-xs rounded-r ${selectedNotaufnahme === 'COVID' ? 'bg-cyan-500/20 text-cyan-400 font-medium' : 'bg-slate-700 text-slate-400'}`}
+                      onClick={() => setSelectedNotaufnahme('COVID')}
+                    >COVID</button>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowNotaufnahme(false)}
+                  className="text-xs text-slate-500 hover:text-slate-300 transition"
+                >Ausblenden</button>
+              </div>
+              <ResponsiveContainer width="100%" height={180}>
+                <ComposedChart data={notaufnahmeSeries.map(d => ({
+                  ...d,
+                  value: d.relative_cases_7day_ma ?? d.relative_cases,
+                  label: format(new Date(d.date), 'dd.MM', { locale: de }),
+                }))} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                  <XAxis
+                    dataKey="label"
+                    tick={{ fill: '#64748b', fontSize: 10 }}
+                    tickLine={{ stroke: '#334155' }}
+                    interval="preserveStartEnd"
+                  />
+                  <YAxis
+                    tick={{ fill: '#64748b', fontSize: 10 }}
+                    tickLine={{ stroke: '#334155' }}
+                    tickFormatter={(v: number) => `${v.toFixed(1)}%`}
+                  />
+                  <Tooltip
+                    contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8 }}
+                    labelStyle={{ color: '#f1f5f9' }}
+                    formatter={(value: number, name: string) => [value?.toFixed(2) + '%', name]}
+                  />
+                  <Legend
+                    wrapperStyle={{ paddingTop: 8 }}
+                    formatter={(value: string) => <span style={{ color: '#94a3b8', fontSize: 11 }}>{value}</span>}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="value"
+                    name="7-Tage-Mittel"
+                    stroke="#06b6d4"
+                    strokeWidth={2}
+                    dot={false}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="expected_value"
+                    name="Erwartungswert"
+                    stroke="#94a3b8"
+                    strokeDasharray="5 3"
+                    strokeWidth={1.5}
+                    dot={false}
+                  />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </div>
+          )}
         </div>
 
-        {/* ── Row 3: Inventory + Recommendations ── */}
+        {/* ── Row 3: Activation + Recommendations ── */}
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
 
-          {/* Testkit-Bestand + Stockout Analysis */}
+          {/* Media Activation + Opportunity Analysis */}
           <div className="card p-6 fade-in">
             <div className="flex items-center justify-between mb-5">
               <div>
-                <h2 className="text-lg font-bold text-white">Testkit-Bestand &amp; Nachbestellung</h2>
-                <p className="text-xs text-slate-500 mt-1">Prädiktive Bestandssteuerung mit ML-Prognose</p>
+                <h2 className="text-lg font-bold text-white">Media Activation &amp; Budgetsteuerung</h2>
+                <p className="text-xs text-slate-500 mt-1">Prädiktive Triggersteuerung mit ML-Signalen</p>
               </div>
               <div className="flex items-center gap-2">
                 {!data?.has_inventory && (
@@ -1207,7 +1360,7 @@ const Dashboard: React.FC = () => {
                     onClick={seedInventory}
                     className="px-3 py-1.5 text-xs font-medium rounded-lg bg-slate-700 text-slate-300 hover:bg-slate-600 transition"
                   >
-                    Demo-Daten laden
+                    Aktivierungsdaten laden
                   </button>
                 )}
                 {data?.has_inventory && (
@@ -1221,7 +1374,7 @@ const Dashboard: React.FC = () => {
                       opacity: orderLoading ? 0.6 : 1
                     }}
                   >
-                    {orderLoading ? 'Exportiere...' : 'SAP-Bestellung exportieren'}
+                    {orderLoading ? 'Exportiere...' : 'Media-Plan exportieren'}
                   </button>
                 )}
               </div>
@@ -1232,9 +1385,9 @@ const Dashboard: React.FC = () => {
               <div className="mb-4 p-3 rounded-lg flex items-center gap-3" style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)' }}>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0zM12 9v4M12 17h.01"/></svg>
                 <div>
-                  <span className="text-sm font-bold text-red-400">{stockoutData.critical_items} kritische{stockoutData.critical_items > 1 ? ' Artikel' : 'r Artikel'}</span>
+                  <span className="text-sm font-bold text-red-400">{stockoutData.critical_items} kritische{stockoutData.critical_items > 1 ? ' Signale' : 's Signal'}</span>
                   <span className="text-xs text-slate-400 ml-2">|</span>
-                  <span className="text-xs text-slate-400 ml-2">{stockoutData.items_needing_reorder} Nachbestellungen empfohlen</span>
+                  <span className="text-xs text-slate-400 ml-2">{stockoutData.items_needing_reorder} Budget-Aktionen empfohlen</span>
                 </div>
               </div>
             )}
@@ -1250,7 +1403,7 @@ const Dashboard: React.FC = () => {
                           {item.risk_level}
                         </span>
                       </div>
-                      <span className="text-sm font-bold text-white">{item.current_stock.toLocaleString('de-DE')} St.</span>
+                      <span className="text-sm font-bold text-white">{item.current_stock.toLocaleString('de-DE')} pts</span>
                     </div>
                     <div className="relative h-2.5 rounded-full overflow-hidden mb-2" style={{ background: '#334155' }}>
                       <div
@@ -1281,7 +1434,7 @@ const Dashboard: React.FC = () => {
                     {item.needs_reorder && (
                       <div className="mt-2 pt-2 flex items-center justify-between" style={{ borderTop: '1px solid #334155' }}>
                         <span className="text-xs text-amber-400 font-medium">
-                          Empfehlung: {item.optimal_order_quantity.toLocaleString('de-DE')} St. nachbestellen
+                          Empfehlung: Budget-Shift {item.optimal_order_quantity.toLocaleString('de-DE')} pts
                         </span>
                       </div>
                     )}
@@ -1308,7 +1461,7 @@ const Dashboard: React.FC = () => {
               </div>
             ) : (
               <div className="p-8 text-center rounded-lg" style={{ background: '#0f172a' }}>
-                <p className="text-sm text-slate-500">Keine Bestandsdaten vorhanden</p>
+                <p className="text-sm text-slate-500">Keine Aktivierungsdaten vorhanden</p>
               </div>
             )}
           </div>
@@ -1506,6 +1659,12 @@ const Dashboard: React.FC = () => {
                   </span>
                 </div>
                 <div className="flex justify-between text-slate-400">
+                  <span>Notaufnahme (RKI/AKTIN)</span>
+                  <span className={data?.notaufnahme?.ARI ? 'text-green-400' : 'text-slate-600'}>
+                    {data?.notaufnahme?.ARI ? 'aktiv' : 'keine Daten'}
+                  </span>
+                </div>
+                <div className="flex justify-between text-slate-400">
                   <span>BfArM Engpässe</span>
                   <span className={drugShortageData ? 'text-green-400' : 'text-slate-600'}>
                     {drugShortageData ? 'geladen' : 'nicht geladen'}
@@ -1546,7 +1705,7 @@ const Dashboard: React.FC = () => {
 
       {/* ── Footer ── */}
       <footer className="mt-8 py-4 text-center text-xs text-slate-600" style={{ borderTop: '1px solid #1e293b' }}>
-        LabPulse Pro v1.0 &mdash; Intelligentes Frühwarnsystem für Labordiagnostik
+        ViralFlux Media Intelligence v1.0 &mdash; Predictive Pharma Media Activation
       </footer>
     </div>
   );

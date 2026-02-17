@@ -89,7 +89,7 @@ class OllamaRecommendationService:
     
     def _build_prompt(self, context: Dict) -> str:
         """Baue Prompt für Ollama."""
-        prompt = f"""Du bist ein Experte für Labordiagnostik und hilfst dabei, Lagerbestände zu optimieren.
+        prompt = f"""Du bist ein Experte für Pharma-Media-Steuerung und hilfst dabei, Aktivierungsbudgets datengetrieben zu optimieren.
 
 Analysiere folgende Daten und gib eine präzise Handlungsempfehlung:
 
@@ -103,11 +103,11 @@ Analysiere folgende Daten und gib eine präzise Handlungsempfehlung:
 - In 14 Tagen: {context['prognose_14_tage']:.1f} Genkopien/L (Änderung: {((context['prognose_14_tage'] / context['aktuelle_viruslast']) - 1) * 100:.1f}%)
 - Konfidenz: {context['confidence'] * 100:.0f}%
 
-**Lagerbestand:**
-- Aktuell: {context['aktueller_bestand']} Tests
-- Mindestbestand: {context['min_bestand']} Tests
-- Lieferzeit: {context['lieferzeit_tage']} Tage
-- Ø Verbrauch: {context['historischer_verbrauch']} Tests/Woche
+**Media-Aktivierung:**
+- Aktueller Aktivierungsindex: {context['aktueller_bestand']} Punkte
+- Mindestniveau: {context['min_bestand']} Punkte
+- Umsetzungsvorlauf: {context['lieferzeit_tage']} Tage
+- Historische Intensität: {context['historischer_verbrauch']} Punkte/Woche
 
 **Zusatzinformationen:**
 - Google Trends Score: {context['google_trends']}/100
@@ -117,11 +117,11 @@ Analysiere folgende Daten und gib eine präzise Handlungsempfehlung:
 **Aufgabe:**
 Erstelle eine fundierte Empfehlung mit:
 1. Kurzer Situationsanalyse (2-3 Sätze)
-2. Konkreter Handlungsempfehlung (z.B. "Bestellung von X Tests")
+2. Konkreter Handlungsempfehlung (z.B. "Budget-Shift von X Punkten")
 3. Begründung basierend auf den Daten
 4. Zeitrahmen für die Umsetzung
 
-Antworte professionell und präzise. Fokussiere auf die wichtigsten Erkenntnisse.
+Antworte professionell und präzise. Fokussiere auf die wichtigsten Erkenntnisse für Agentur- und Brand-Teams.
 """
         return prompt
     

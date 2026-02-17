@@ -24,7 +24,7 @@ settings = get_settings()
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
-    description="Intelligentes Frühwarnsystem für Labordiagnostik mit KI-gestützter Bedarfsprognose"
+    description="Behördlich getriebene Media-Intelligence für Pharma-Marken mit 14-Tage-Frühsignal"
 )
 
 # CORS Middleware
@@ -70,7 +70,7 @@ async def startup_event():
 @app.on_event("shutdown")
 async def shutdown_event():
     """Cleanup on shutdown."""
-    logger.info("Shutting down LabPulse Pro...")
+    logger.info("Shutting down ViralFlux Media Intelligence...")
 
 
 @app.get("/")
@@ -103,7 +103,12 @@ async def health_check():
 @app.get("/api/v1/status")
 async def get_status(db: Session = Depends(get_db)):
     """Get system status and data freshness."""
-    from app.models.database import WastewaterAggregated, GoogleTrendsData, MLForecast
+    from app.models.database import (
+        WastewaterAggregated,
+        GoogleTrendsData,
+        MLForecast,
+        NotaufnahmeSyndromData,
+    )
     
     # Check latest data timestamps
     latest_wastewater = db.query(WastewaterAggregated).order_by(
@@ -117,13 +122,18 @@ async def get_status(db: Session = Depends(get_db)):
     latest_forecast = db.query(MLForecast).order_by(
         MLForecast.created_at.desc()
     ).first()
+
+    latest_notaufnahme = db.query(NotaufnahmeSyndromData).order_by(
+        NotaufnahmeSyndromData.created_at.desc()
+    ).first()
     
     return {
         "status": "operational",
         "data_freshness": {
             "wastewater": latest_wastewater.created_at if latest_wastewater else None,
             "google_trends": latest_trends.created_at if latest_trends else None,
-            "ml_forecast": latest_forecast.created_at if latest_forecast else None
+            "ml_forecast": latest_forecast.created_at if latest_forecast else None,
+            "notaufnahme": latest_notaufnahme.created_at if latest_notaufnahme else None,
         },
         "timestamp": datetime.utcnow()
     }

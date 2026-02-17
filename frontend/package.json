@@ -1,8 +1,8 @@
 {
-  "name": "virusradar-pro-frontend",
+  "name": "viralflux-media-frontend",
   "version": "1.0.0",
   "private": true,
-  "description": "LabPulse Pro - Frontend Dashboard",
+  "description": "ViralFlux Media Intelligence - Frontend Dashboard",
   "dependencies": {
     "@testing-library/jest-dom": "^5.17.0",
     "@testing-library/react": "^13.4.0",

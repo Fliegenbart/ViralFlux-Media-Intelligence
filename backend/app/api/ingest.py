@@ -5,6 +5,7 @@ import logging
 
 from app.db.session import get_db, get_db_context
 from app.services.data_ingest.amelag_service import AmelagIngestionService
+from app.services.data_ingest.notaufnahme_service import NotaufnahmeIngestionService
 from app.services.data_ingest.trends_service import GoogleTrendsService
 from app.services.data_ingest.weather_service import WeatherService
 from app.services.data_ingest.holidays_service import SchoolHolidaysService
@@ -48,7 +49,16 @@ def _run_import_all():
             results["are_konsultation"] = {"success": False, "error": str(e)}
 
     with get_db_context() as db:
-        # 3. Schulferien (ferien-api.de, alle 16 Bundesländer)
+        # 3. Notaufnahmesurveillance (AKTIN/RKI)
+        try:
+            notaufnahme = NotaufnahmeIngestionService(db)
+            results["notaufnahme"] = notaufnahme.run_full_import()
+        except Exception as e:
+            logger.error(f"Notaufnahme import failed: {e}")
+            results["notaufnahme"] = {"success": False, "error": str(e)}
+
+    with get_db_context() as db:
+        # 4. Schulferien (ferien-api.de, alle 16 Bundesländer)
         try:
             holidays = SchoolHolidaysService(db)
             results["holidays"] = holidays.run_full_import()
@@ -57,7 +67,7 @@ def _run_import_all():
             results["holidays"] = {"success": False, "error": str(e)}
 
     with get_db_context() as db:
-        # 4. Google Trends (best-effort, kann rate-limited sein)
+        # 5. Google Trends (best-effort, kann rate-limited sein)
         try:
             trends = GoogleTrendsService(db)
             results["trends"] = trends.run_full_import(months=3)
@@ -66,7 +76,7 @@ def _run_import_all():
             results["trends"] = {"success": False, "error": str(e)}
 
     with get_db_context() as db:
-        # 5. Wetterdaten (BrightSky / DWD, kein API Key nötig)
+        # 6. Wetterdaten (BrightSky / DWD, kein API Key nötig)
         try:
             weather = WeatherService(db)
             results["weather"] = weather.run_full_import(include_forecast=True)
@@ -74,7 +84,7 @@ def _run_import_all():
             logger.error(f"Weather import failed: {e}")
             results["weather"] = {"success": False, "error": str(e)}
 
-    # 6. BfArM Lieferengpass-Daten (statische CSV, kein API-Key)
+    # 7. BfArM Lieferengpass-Daten (statische CSV, kein API-Key)
     try:
         from app.services.data_ingest.bfarm_service import BfarmIngestionService
         bfarm = BfarmIngestionService()
@@ -118,6 +128,13 @@ async def run_are_konsultation_import(db: Session = Depends(get_db)):
     """Importiere RKI ARE-Konsultationsinzidenz Daten."""
     from app.services.data_ingest.are_konsultation_service import AREKonsultationIngestionService
     service = AREKonsultationIngestionService(db)
+    return service.run_full_import()
+
+
+@router.post("/notaufnahme")
+async def run_notaufnahme_import(db: Session = Depends(get_db)):
+    """Importiere RKI/AKTIN Notaufnahmesurveillance Daten."""
+    service = NotaufnahmeIngestionService(db)
     return service.run_full_import()
 
 

@@ -106,6 +106,7 @@ def _build_contributing_factors(components: dict) -> list[ContributingFactor]:
     """Build qualitative factor list from component scores."""
     factor_map = [
         ("Wastewater Load", "wastewater"),
+        ("Emergency Visits", "notaufnahme"),
         ("Drug Availability", "drug_shortage"),
         ("Search Behavior", "search_trends"),
         ("Weather Conditions", "environment"),

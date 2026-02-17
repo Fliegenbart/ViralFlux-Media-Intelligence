@@ -10,6 +10,7 @@ from app.models.database import (
     WastewaterAggregated,
     GoogleTrendsData,
     GrippeWebData,
+    NotaufnahmeSyndromData,
     MLForecast,
     WeatherData,
     InventoryLevel,
@@ -79,6 +80,51 @@ async def get_dashboard_overview(
                 "date": latest_gw.datum,
                 "kalenderwoche": latest_gw.kalenderwoche,
                 "trend": gw_trend,
+            }
+
+    # 3b. Notaufnahmesurveillance (RKI/AKTIN)
+    notaufnahme_data = {}
+    for syndrome in ['ARI', 'ILI', 'COVID']:
+        latest_no = db.query(NotaufnahmeSyndromData).filter(
+            NotaufnahmeSyndromData.syndrome == syndrome,
+            NotaufnahmeSyndromData.age_group == '00+',
+            NotaufnahmeSyndromData.ed_type == 'all',
+        ).order_by(NotaufnahmeSyndromData.datum.desc()).first()
+
+        previous_no = db.query(NotaufnahmeSyndromData).filter(
+            NotaufnahmeSyndromData.syndrome == syndrome,
+            NotaufnahmeSyndromData.age_group == '00+',
+            NotaufnahmeSyndromData.ed_type == 'all',
+        ).order_by(NotaufnahmeSyndromData.datum.desc()).offset(1).first()
+
+        if latest_no:
+            latest_value = (
+                latest_no.relative_cases_7day_ma
+                if latest_no.relative_cases_7day_ma is not None
+                else latest_no.relative_cases
+            )
+            previous_value = None
+            if previous_no:
+                previous_value = (
+                    previous_no.relative_cases_7day_ma
+                    if previous_no.relative_cases_7day_ma is not None
+                    else previous_no.relative_cases
+                )
+
+            no_trend = "stabil"
+            if previous_value is not None and latest_value is not None:
+                no_change = (
+                    (latest_value - previous_value) / previous_value
+                    if previous_value > 0 else 0
+                )
+                no_trend = "steigend" if no_change > 0.05 else "fallend" if no_change < -0.05 else "stabil"
+
+            notaufnahme_data[syndrome] = {
+                "value": latest_value,
+                "date": latest_no.datum,
+                "ed_count": latest_no.ed_count,
+                "expected_value": latest_no.expected_value,
+                "trend": no_trend,
             }
 
     # 4. Forecast summary (show all 14 days from latest run, not just future)
@@ -174,6 +220,7 @@ async def get_dashboard_overview(
             "date": grippeweb_data.get('ARE', {}).get('date'),
         },
         "grippeweb": grippeweb_data,
+        "notaufnahme": notaufnahme_data,
         "forecast_summary": forecast_summary,
         "weather": {
             "avg_temperature": round(avg_temp, 1),
@@ -357,6 +404,47 @@ async def get_grippeweb_timeseries(
                 "kalenderwoche": d.kalenderwoche,
                 "inzidenz": d.inzidenz,
                 "meldungen": d.anzahl_meldungen,
+            }
+            for d in data
+        ]
+    }
+
+
+@router.get("/notaufnahme-timeseries")
+async def get_notaufnahme_timeseries(
+    syndrome: str = "ARI",
+    age_group: str = "00+",
+    ed_type: str = "all",
+    days_back: int = 365,
+    db: Session = Depends(get_db)
+):
+    """Notaufnahmesurveillance timeseries for charting."""
+    syndrome = syndrome.upper()
+    if syndrome not in {"ARI", "SARI", "ILI", "COVID", "GI"}:
+        raise HTTPException(status_code=400, detail="Unsupported syndrome")
+
+    start_date = datetime.now() - timedelta(days=days_back)
+
+    data = db.query(NotaufnahmeSyndromData).filter(
+        NotaufnahmeSyndromData.syndrome == syndrome,
+        NotaufnahmeSyndromData.age_group == age_group,
+        NotaufnahmeSyndromData.ed_type == ed_type,
+        NotaufnahmeSyndromData.datum >= start_date
+    ).order_by(NotaufnahmeSyndromData.datum.asc()).all()
+
+    return {
+        "syndrome": syndrome,
+        "age_group": age_group,
+        "ed_type": ed_type,
+        "data": [
+            {
+                "date": d.datum.isoformat(),
+                "relative_cases": d.relative_cases,
+                "relative_cases_7day_ma": d.relative_cases_7day_ma,
+                "expected_value": d.expected_value,
+                "expected_lowerbound": d.expected_lowerbound,
+                "expected_upperbound": d.expected_upperbound,
+                "ed_count": d.ed_count,
             }
             for d in data
         ]

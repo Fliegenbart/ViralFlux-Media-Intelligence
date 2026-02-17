@@ -368,7 +368,7 @@ class BacktestService:
             "context": "Kontextfaktoren (Wetter + Schulferien)",
         }
 
-        prompt = f"""Du bist ein Senior Data Scientist bei LabPulse Pro.
+        prompt = f"""Du bist ein Senior Data Scientist bei ViralFlux Media Intelligence.
 Du hast eine Regressionsanalyse der historischen Bestellungen eines Labors durchgeführt.
 
 Harte Fakten:
@@ -400,7 +400,7 @@ Verwende einen sachlichen, vertrauenswürdigen Ton."""
             logger.warning(f"LLM Insight fehlgeschlagen: {e}")
             return (
                 f"Die Analyse von {n_samples} Datenpunkten zeigt eine "
-                f"{abs(correlation)*100:.0f}%ige Korrelation zwischen LabPulse-Signalen "
+                f"{abs(correlation)*100:.0f}%ige Korrelation zwischen ViralFlux-Signalen "
                 f"und Ihren tatsächlichen Bestellungen. Der stärkste Einflussfaktor "
                 f"ist \"{factor_names[dominant]}\" ({weights[dominant]*100:.0f}%). "
                 f"Wir empfehlen, das Modell mit diesen optimierten Gewichten zu kalibrieren."

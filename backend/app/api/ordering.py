@@ -298,7 +298,7 @@ async def export_sap_orders(db: Session = Depends(get_db)):
     return StreamingResponse(
         io.BytesIO(output.getvalue().encode('utf-8-sig')),
         media_type='text/csv',
-        headers={'Content-Disposition': f'attachment; filename=LabPulse_Bestellung_{datetime.utcnow().strftime("%Y%m%d_%H%M")}.csv'}
+        headers={'Content-Disposition': f'attachment; filename=ViralFlux_MediaPlan_{datetime.utcnow().strftime("%Y%m%d_%H%M")}.csv'}
     )
 
 

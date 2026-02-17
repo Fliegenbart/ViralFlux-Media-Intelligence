@@ -1,11 +1,11 @@
-# 🚀 Quick Start Guide - LabPulse Pro
+# 🚀 Quick Start Guide - ViralFlux Media Intelligence
 
 ## 5-Minuten Setup
 
 ### 1. Repository klonen
 ```bash
 git clone <your-repo-url>
-cd virusradar-pro
+cd viralflux-media
 ```
 
 ### 2. Umgebungsvariablen konfigurieren
@@ -39,13 +39,13 @@ http://localhost:8000/docs
 
 **B) Führe den ersten Datenimport durch:**
 
-1. Gehe zu `/api/v1/data/import/all` (POST)
+1. Gehe zu `/api/v1/ingest/run-all` (POST)
 2. Klicke auf "Try it out" → "Execute"
 3. Warte ~2-3 Minuten
 
 Oder via curl:
 ```bash
-curl -X POST http://localhost:8000/api/v1/data/import/all
+curl -X POST http://localhost:8000/api/v1/ingest/run-all
 ```
 
 **C) Öffne das Dashboard:**
@@ -210,7 +210,7 @@ ssh user@your-hetzner-server
 
 # Repository klonen
 git clone <repo-url>
-cd virusradar-pro
+cd viralflux-media
 
 # Produktions-Setup
 docker-compose -f docker-compose.prod.yml up -d

@@ -29,6 +29,7 @@ from app.models.database import (
     SchoolHolidays, GanzimmunData, MLForecast,
     OutbreakScore as OutbreakScoreModel,
     AREKonsultation, LabConfiguration,
+    NotaufnahmeSyndromData,
 )
 from app.core.config import get_settings
 
@@ -57,6 +58,7 @@ class DailyInputData:
     internal_positivity_rate: float # Ganz Immun Labordaten (z.B. 0.15 für 15%)
     internal_baseline_delta: float  # Abweichung zur historischen Baseline (z-Score)
     are_consultation_signal: float  # RKI ARE-Konsultationsinzidenz (0.0-1.0)
+    notaufnahme_signal: float       # RKI/AKTIN Notaufnahme-Surveillance (0.0-1.0)
 
     # --- MARKET LAYER (Die Versorgungs-Realität) ---
     bfarm_shortage_count: int       # Anzahl relevanter Engpässe (Antibiotika/Saft)
@@ -240,6 +242,64 @@ class RiskEngine:
         from bisect import bisect_right
         rank = bisect_right(values, current_value)
         # rank / len → 0.33 für niedrigsten von 3, 1.0 für höchsten
+        return min(rank / len(values), 1.0)
+
+    @staticmethod
+    def _map_virus_to_notaufnahme_syndrome(virus_typ: str) -> str:
+        """Map tracked virus types to the closest Notaufnahme syndrome."""
+        mapping = {
+            'Influenza A': 'ILI',
+            'Influenza B': 'ILI',
+            'SARS-CoV-2': 'COVID',
+            'RSV A': 'ARI',
+        }
+        return mapping.get(virus_typ, 'ARI')
+
+    def _normalize_notaufnahme_signal(self, virus_typ: str) -> float:
+        """Notaufnahme-Signal normalisieren (0.0-1.0) per Perzentil-Rang."""
+        syndrome = self._map_virus_to_notaufnahme_syndrome(virus_typ)
+
+        latest = self.db.query(NotaufnahmeSyndromData).filter(
+            NotaufnahmeSyndromData.syndrome == syndrome,
+            NotaufnahmeSyndromData.age_group == '00+',
+            NotaufnahmeSyndromData.ed_type == 'all',
+        ).order_by(NotaufnahmeSyndromData.datum.desc()).first()
+
+        if not latest:
+            return 0.0
+
+        current_value = (
+            latest.relative_cases_7day_ma
+            if latest.relative_cases_7day_ma is not None
+            else latest.relative_cases
+        )
+        if current_value is None:
+            return 0.0
+
+        three_years_ago = datetime.now() - timedelta(days=365 * 3)
+        historical = self.db.query(
+            NotaufnahmeSyndromData.relative_cases_7day_ma,
+            NotaufnahmeSyndromData.relative_cases,
+        ).filter(
+            NotaufnahmeSyndromData.syndrome == syndrome,
+            NotaufnahmeSyndromData.age_group == '00+',
+            NotaufnahmeSyndromData.ed_type == 'all',
+            NotaufnahmeSyndromData.datum >= three_years_ago,
+        ).all()
+
+        values = []
+        for rel_ma, rel in historical:
+            value = rel_ma if rel_ma is not None else rel
+            if value is not None:
+                values.append(value)
+        values = sorted(values)
+
+        # Fallback für dünne Historie (typisch relative_cases im Bereich ~0-20)
+        if len(values) < 14:
+            return min(current_value / 20.0, 1.0)
+
+        from bisect import bisect_right
+        rank = bisect_right(values, current_value)
         return min(rank / len(values), 1.0)
 
     def _get_shortage_count(self, shortage_signals: dict | None) -> int:
@@ -427,6 +487,7 @@ class RiskEngine:
             internal_positivity_rate=self._get_internal_positivity_rate(virus_typ),
             internal_baseline_delta=self._get_baseline_delta(virus_typ),
             are_consultation_signal=self._normalize_are_consultation(),
+            notaufnahme_signal=self._normalize_notaufnahme_signal(virus_typ),
             bfarm_shortage_count=self._get_shortage_count(shortage_signals),
             order_velocity_index=order_velocity,
             google_search_volume=self._normalize_trends(),
@@ -444,17 +505,30 @@ class RiskEngine:
     def _calculate_sub_scores(self, data: DailyInputData) -> Dict[str, float]:
         """Berechnet die 4 Dimensionen (jeweils 0.0-1.0)."""
 
-        # 1. BIO SCORE (RKI Abwasser + interne Labordaten + ARE-Konsultation)
+        # 1. BIO SCORE (RKI Abwasser + interne Labordaten + syndromische Signale)
         are = data.are_consultation_signal
-        if are > 0:
-            # 3-Signal: Abwasser + Labor + ARE-Konsultation
+        notaufnahme = data.notaufnahme_signal
+
+        if are > 0 and notaufnahme > 0:
             bio_score = (
-                data.wastewater_load * 0.40 +
-                data.internal_positivity_rate * 5.0 * 0.35 +
-                are * 0.25
+                data.wastewater_load * 0.35 +
+                data.internal_positivity_rate * 5.0 * 0.30 +
+                are * 0.20 +
+                notaufnahme * 0.15
+            )
+        elif are > 0:
+            bio_score = (
+                data.wastewater_load * 0.42 +
+                data.internal_positivity_rate * 5.0 * 0.38 +
+                are * 0.20
+            )
+        elif notaufnahme > 0:
+            bio_score = (
+                data.wastewater_load * 0.42 +
+                data.internal_positivity_rate * 5.0 * 0.38 +
+                notaufnahme * 0.20
             )
         else:
-            # Fallback: Original 2-Signal wenn keine ARE-Daten
             bio_score = (
                 data.wastewater_load * 0.5 +
                 data.internal_positivity_rate * 5.0 * 0.5
@@ -813,6 +887,7 @@ class RiskEngine:
                 # Einzelsignale (backward compat)
                 "wastewater": round(input_data.wastewater_load, 3),
                 "are_consultation": round(input_data.are_consultation_signal, 3),
+                "notaufnahme": round(input_data.notaufnahme_signal, 3),
                 "drug_shortage": round(shortage_norm, 3),
                 "prophet_trend": round(prophet_baseline, 3),
                 "search_trends": round(input_data.google_search_volume, 3),

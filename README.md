@@ -1,26 +1,26 @@
-# 🧪 LabPulse Pro
+# 📡 ViralFlux Media Intelligence
 
-**Intelligentes Frühwarnsystem für Labordiagnostik mit KI-gestützter Bedarfsprognose**
+**Predictive Pharma Media Activation für PEIX und seine Healthcare-Marken**
 
 ## 📋 Überblick
 
-LabPulse Pro ist ein professionelles Prognosesystem für Labordiagnostik-Unternehmen, das durch die Kombination von Abwasserdaten, Krankheitsmeldungen, Google Trends und Wetterdaten einen 14-Tage-Vorlauf für die Bedarfsplanung von Testkits ermöglicht.
+ViralFlux Media Intelligence ist ein datengetriebenes Frühwarn- und Aktivierungssystem für Pharma-Media. Die Plattform kombiniert behördliche Signale (RKI, BfArM, DWD), erkennt regionale Nachfragewellen bis zu 14 Tage früher und steuert Budgets sowie Kampagnenausspielung in Echtzeit.
 
 ### Kernfeatures
 
-- 📊 **Multi-Source Data Integration**: RKI Abwasserdaten, GrippeWeb, Google Trends, Wetterdaten, Schulferien
-- 🤖 **Predictive Analytics**: Prophet ML-Modell mit Multi-Variate-Features
-- 🧠 **LLM-Empfehlungen**: Ollama-gestützte, natürlichsprachige Handlungsempfehlungen
-- 🎯 **14-Tage-Vorlauf**: Früherkennung durch Abwasser-Surveillance
-- ✅ **ANNEx 22 Compliant**: Human-in-the-Loop, vollständiger Audit Trail
-- 📈 **Professional Dashboard**: React-basierte, moderne UI
+- 📊 **Signal Fusion**: RKI AMELAG, GrippeWeb, Notaufnahmesurveillance, Google Trends, Wetter, BfArM
+- 🎯 **14-Tage-Vorsprung**: Frühsignale vor klassischen Abverkaufsindikatoren
+- 📍 **Regionale Steuerung**: PLZ-nahe Trigger für Budget-Shifts
+- 📦 **Konkurrenz-Radar**: BfArM-Engpasssignale als Aktivierungshebel
+- 🧠 **LLM-Briefings**: Agentur- und Sales-fähige Handlungsempfehlungen
+- 📈 **Dashboard**: Echtzeitansicht für Trigger, Risiken und Kampagnenfenster
 
 ## 🏗️ Architektur
 
 ```
 ┌─────────────────────────────────────────────────────┐
 │              Datenquellen                            │
-│  RKI AMELAG | GrippeWeb | Google Trends | Weather   │
+│  RKI AMELAG | GrippeWeb | Notaufnahme | BfArM | DWD | Trends │
 └────────────────────┬────────────────────────────────┘
                      │
                      v
@@ -55,7 +55,7 @@ LabPulse Pro ist ein professionelles Prognosesystem für Labordiagnostik-Unterne
 ```bash
 # Repository klonen
 git clone <your-repo-url>
-cd virusradar-pro
+cd viralflux-media
 
 # Umgebungsvariablen konfigurieren
 cp .env.example .env
@@ -80,6 +80,10 @@ Die App läuft dann auf:
 - **Backend API**: http://localhost:8000
 - **API Docs**: http://localhost:8000/docs
 
+## 🎙️ Elevator Pitch
+
+\"Wir sehen Erkältungswellen bis zu 14 Tage früher als klassische Marktindikatoren und steuern Media-Budgets automatisch in die Regionen mit anrollendem Bedarf. Für Marken wie GeloMyrtol bedeutet das: mehr Share of Voice zur richtigen Zeit, weniger Streuverlust in gesunden Regionen und offensive Aktivierung bei Lieferengpässen der Konkurrenz.\"
+
 ## 📊 Datenquellen
 
 ### 1. RKI AMELAG (Abwassersurveillance)
@@ -93,22 +97,27 @@ Die App läuft dann auf:
 - **Update**: Wöchentlich
 - **Daten**: ARE/ILI Inzidenzen nach Region und Alter
 
-### 3. Google Trends
+### 3. RKI/AKTIN Notaufnahmesurveillance
+- **Quelle**: `github.com/robert-koch-institut/Daten_der_Notaufnahmesurveillance`
+- **Update**: Täglich (bis Vorvortag)
+- **Daten**: ARI, SARI, ILI, COVID, GI (relativer Anteil + Erwartungswerte)
+
+### 4. Google Trends
 - **Library**: pytrends
 - **Keywords**: Erkältung, Grippe, Schnupfen, Fieber, etc.
 - **Geo**: Deutschland
 
-### 4. OpenWeather API
+### 5. OpenWeather API
 - **Daten**: Temperatur, Luftfeuchtigkeit, Wettervorhersage
 - **Relevanz**: Einfluss auf Atemwegserkrankungen
 
-### 5. Schulferien
+### 6. Schulferien
 - **Quelle**: API oder statische Daten
 - **Relevanz**: Erkrankungsrückgang in Ferienzeiten
 
-### 6. Interne ganzimmun-Daten (Optional)
+### 7. Interne Kundendaten (Optional)
 - **Schnittstelle vorbereitet**: CSV/API Import
-- **Daten**: Historische Testverkäufe, Ergebnisse
+- **Daten**: Sales, Media-KPIs, CRM/Region-Segmente
 
 ## 🤖 ML Pipeline
 
@@ -128,20 +137,20 @@ Die App läuft dann auf:
 
 ### Ollama LLM
 - **Modell**: Läuft auf deinem Hetzner Server
-- **Funktion**: Natürlichsprachige Empfehlungen
-- **Kontext**: Aktuelle Daten + ML-Prognose + Lagerbestand
+- **Funktion**: Agentur- und Kundenbriefings in natürlicher Sprache
+- **Kontext**: Aktuelle Signale + Prognose + Aktivierungsfenster
 
 ## 📁 Projektstruktur
 
 ```
-virusradar-pro/
+viralflux-media/
 ├── backend/
 │   ├── app/
 │   │   ├── api/          # API Endpoints
 │   │   ├── core/         # Config, Security
 │   │   ├── models/       # SQLAlchemy Models
 │   │   ├── services/     # Business Logic
-│   │   │   ├── data_ingest/    # RKI, Trends, Weather
+│   │   │   ├── data_ingest/    # RKI (AMELAG/GrippeWeb/Notaufnahme), Trends, Weather
 │   │   │   ├── ml/             # Prophet, Training
 │   │   │   └── llm/            # Ollama Integration
 │   │   └── db/           # Database Setup
@@ -180,7 +189,7 @@ OLLAMA_URL=http://your-hetzner-server:11434
 # Security
 SECRET_KEY=<generate-secure-key>
 
-# Optional: ganzimmun Data
+# Optional: Kundendaten
 GANZIMMUN_API_URL=<optional>
 GANZIMMUN_API_KEY=<optional>
 ```
@@ -205,7 +214,7 @@ ssh user@your-hetzner-server
 
 # Repository klonen
 git clone <repo-url>
-cd virusradar-pro
+cd viralflux-media
 
 # Produktion starten
 docker-compose -f docker-compose.prod.yml up -d
@@ -249,14 +258,15 @@ Hauptendpoints:
 - `POST /api/v1/recommendations` - LLM-Empfehlung
 - `GET /api/v1/data/wastewater` - Abwasserdaten
 - `GET /api/v1/data/trends` - Google Trends
+- `POST /api/v1/ingest/notaufnahme` - Notaufnahmesurveillance Import
 
 ## 🤝 Support & Contribution
 
-Entwickelt für **ganzimmun** als professionelles Frühwarnsystem.
+Entwickelt als **PEIX Service-Plattform** für Pharma- und Healthcare-Marken.
 
 ## 📄 Lizenz
 
-Proprietary - © 2026 ganzimmun
+Proprietary - © 2026 PEIX / ViralFlux
 
 ---
 

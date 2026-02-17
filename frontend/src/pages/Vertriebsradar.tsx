@@ -154,7 +154,7 @@ const Vertriebsradar: React.FC = () => {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `LabPulse_CRM_Export_${new Date().toISOString().slice(0, 10)}.json`;
+      a.download = `ViralFlux_CRM_Export_${new Date().toISOString().slice(0, 10)}.json`;
       a.click();
       URL.revokeObjectURL(url);
       await fetchOpportunities();
@@ -811,7 +811,7 @@ const Vertriebsradar: React.FC = () => {
 
       {/* ── Footer ── */}
       <footer className="mt-8 py-4 text-center text-xs text-slate-600" style={{ borderTop: '1px solid #1e293b' }}>
-        LabPulse Pro &mdash; Vertriebsradar v2.0
+        ViralFlux Media Intelligence &mdash; Vertriebsradar v2.0
       </footer>
 
       <style>{`

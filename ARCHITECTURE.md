@@ -1,13 +1,13 @@
-# 🏗️ LabPulse Pro - System Architecture
+# 🏗️ ViralFlux Media Intelligence - System Architecture
 
 ## Overview
 
-LabPulse Pro ist ein dreischichtiges System (Data, ML, Frontend) mit folgenden Kernkomponenten:
+ViralFlux Media Intelligence ist ein dreischichtiges System (Data, ML, Frontend) für predictive Pharma-Media-Steuerung mit folgenden Kernkomponenten:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                    DATA SOURCES LAYER                        │
-│  RKI AMELAG │ GrippeWeb │ Google Trends │ Weather │ Ferien  │
+│  RKI AMELAG │ GrippeWeb │ Notaufnahme │ BfArM │ Trends │ Weather │ Ferien │
 └──────────────────────────┬──────────────────────────────────┘
                            │
                            v
@@ -76,6 +76,12 @@ AmelagIngestionService.run_full_import()
     ├─ Store in WastewaterData / WastewaterAggregated
     └─ Log success/failure
 
+NotaufnahmeIngestionService.run_full_import()
+    ├─ Fetch TSV from GitHub (Syndrome + Standorte)
+    ├─ Parse & Validate
+    ├─ Store in NotaufnahmeSyndromData / NotaufnahmeStandort
+    └─ Log success/failure
+
 GoogleTrendsService.run_full_import()
     ├─ Fetch via pytrends (Rate-Limited)
     ├─ Process keyword chunks (max 5/request)
@@ -101,7 +107,7 @@ ForecastService.run_forecasts_for_all_viruses()
     ↓
 For each virus (Influenza A/B, SARS-CoV-2, RSV):
     ├─ prepare_training_data(lookback=180 days)
-    │   ├─ Fetch: Wastewater, Trends, Weather, GrippeWeb, Holidays
+    │   ├─ Fetch: Wastewater, Trends, Weather, GrippeWeb, Notaufnahme, Holidays
     │   ├─ Feature Engineering: Lag-7, Lag-14, MA-7
     │   └─ Output: DataFrame with 15+ features
     │
@@ -136,7 +142,7 @@ OllamaRecommendationService.generate_recommendation()
 
 ```
 GET  /api/v1/dashboard/overview
-     └─ Aggregiert: Viruslast, Trends, ARE, Wetter
+     └─ Aggregiert: Viruslast, Trends, ARE, Notaufnahme, Wetter
 
 GET  /api/v1/dashboard/timeseries/{virus}
      └─ Historische Daten + Forecast
@@ -150,8 +156,11 @@ POST /api/v1/recommendations/generate
 POST /api/v1/recommendations/{id}/approve
      └─ Human Approval (ANNEx 22)
 
-POST /api/v1/data/import/all
-     └─ Manueller Datenimport
+POST /api/v1/ingest/run-all
+     └─ Manueller Vollimport aller Datenquellen
+
+POST /api/v1/ingest/notaufnahme
+     └─ Notaufnahmesurveillance Import (RKI/AKTIN)
 ```
 
 ---
@@ -184,6 +193,17 @@ POST /api/v1/data/import/all
 - `id`, `datum`, `kalenderwoche`, `erkrankung_typ`
 - `altersgruppe`, `bundesland`, `inzidenz`
 - Index: (datum, erkrankung_typ)
+
+**notaufnahme_syndrome_data**
+- `id`, `datum`, `ed_type`, `age_group`, `syndrome`
+- `relative_cases`, `relative_cases_7day_ma`, `expected_value`
+- `expected_lowerbound`, `expected_upperbound`, `ed_count`
+- Index: (datum, syndrome), (syndrome, ed_type, age_group)
+
+**notaufnahme_standorte**
+- `id`, `ik_number`, `ed_name`, `ed_type`, `level_of_care`
+- `state`, `state_id`, `latitude`, `longitude`
+- Index: (ik_number), (state, ed_type)
 
 ### ML & LLM Tabellen
 
@@ -367,6 +387,7 @@ Internet
 ├─────────────────────────────────────────┤
 │  06:00  RKI AMELAG Import               │
 │  06:10  RKI GrippeWeb Import            │
+│  06:15  RKI/AKTIN Notaufnahme Import    │
 │  06:20  Google Trends Import            │
 │  06:30  Weather Update                  │
 │  07:00  ML Forecasts Generation         │

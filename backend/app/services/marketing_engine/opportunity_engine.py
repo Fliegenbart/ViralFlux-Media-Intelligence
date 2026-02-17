@@ -20,7 +20,7 @@ from .product_matcher import ProductMatcher
 
 logger = logging.getLogger(__name__)
 
-SYSTEM_VERSION = "LabPulse-Predictor-v2.1"
+SYSTEM_VERSION = "ViralFlux-Media-v2.1"
 
 
 class MarketingOpportunityEngine:

@@ -74,7 +74,7 @@ services:
 
   # Frontend Production (nginx serving built React + API proxy)
   frontend-prod:
-    image: virusradar-pro-frontend
+    image: viralflux-media-frontend
     container_name: virusradar_frontend_prod
     ports:
       - "18080:80"

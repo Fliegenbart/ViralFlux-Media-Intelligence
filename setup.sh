@@ -1,11 +1,11 @@
 #!/bin/bash
 
-# LabPulse Pro - Setup Script
+# ViralFlux Media Intelligence - Setup Script
 # Dieses Script richtet das komplette Projekt ein
 
 set -e
 
-echo "🧪 LabPulse Pro - Setup"
+echo "📡 ViralFlux Media Intelligence - Setup"
 echo "=========================="
 echo ""
 

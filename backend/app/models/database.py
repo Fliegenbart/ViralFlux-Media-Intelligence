@@ -90,6 +90,49 @@ class AREKonsultation(Base):
     )
 
 
+class NotaufnahmeSyndromData(Base):
+    """RKI/AKTIN Notaufnahmesurveillance Zeitreihen (Syndrome)."""
+    __tablename__ = "notaufnahme_syndrome_data"
+
+    id = Column(Integer, primary_key=True, index=True)
+    datum = Column(DateTime, nullable=False, index=True)
+    ed_type = Column(String, nullable=False)      # all, central, pediatric
+    age_group = Column(String, nullable=False)    # 00+, 0-4, ...
+    syndrome = Column(String, nullable=False)     # ARI, SARI, ILI, COVID, GI
+    relative_cases = Column(Float)
+    relative_cases_7day_ma = Column(Float)
+    expected_value = Column(Float)
+    expected_lowerbound = Column(Float)
+    expected_upperbound = Column(Float)
+    ed_count = Column(Integer)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        Index('idx_notaufnahme_date_syndrome', 'datum', 'syndrome'),
+        Index('idx_notaufnahme_filters', 'syndrome', 'ed_type', 'age_group'),
+    )
+
+
+class NotaufnahmeStandort(Base):
+    """RKI/AKTIN Notaufnahmesurveillance Standort-Metadaten."""
+    __tablename__ = "notaufnahme_standorte"
+
+    id = Column(Integer, primary_key=True, index=True)
+    ik_number = Column(String, unique=True, nullable=False, index=True)
+    ed_name = Column(String)
+    ed_type = Column(String)
+    level_of_care = Column(String)
+    state = Column(String)
+    state_id = Column(String)
+    latitude = Column(Float)
+    longitude = Column(Float)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        Index('idx_notaufnahme_state_type', 'state', 'ed_type'),
+    )
+
+
 class GoogleTrendsData(Base):
     """Google Trends Suchanfragen-Daten."""
     __tablename__ = "google_trends_data"

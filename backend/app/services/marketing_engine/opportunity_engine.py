@@ -7,6 +7,7 @@ persistiert Opportunities und liefert CRM-faehiges JSON.
 from __future__ import annotations
 
 from datetime import datetime, timedelta
+import time
 from typing import Any
 import logging
 
@@ -266,8 +267,15 @@ class MarketingOpportunityEngine:
         candidates = selection.get("selected") or []
         cards: list[dict[str, Any]] = []
         now = datetime.utcnow()
+        ai_disabled = False
+        started = time.monotonic()
 
         for candidate in candidates:
+            # Guard against long-running multi-card generation: once Ollama times out,
+            # skip further calls and use deterministic templates to keep API responsive.
+            if time.monotonic() - started > 110:
+                ai_disabled = True
+
             playbook_key = str(candidate.get("playbook_key") or "")
             cfg = PLAYBOOK_CATALOG.get(playbook_key) or {}
             if not playbook_key or not cfg:
@@ -302,7 +310,12 @@ class MarketingOpportunityEngine:
                 product=selected_product,
                 campaign_goal=campaign_goal,
                 weekly_budget=weekly_budget,
+                skip_ollama=ai_disabled,
             )
+            if ai_generated.get("ai_generation_status") != "success":
+                err = str((ai_generated.get("ai_meta") or {}).get("error") or "").lower()
+                if "read timed out" in err or "connect timeout" in err or "connection" in err:
+                    ai_disabled = True
             guarded = self.guardrails.apply(
                 playbook_key=playbook_key,
                 ai_plan=ai_generated.get("ai_plan") or {},

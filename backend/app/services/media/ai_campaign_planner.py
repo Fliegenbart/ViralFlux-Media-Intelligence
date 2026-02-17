@@ -15,6 +15,66 @@ from app.core.config import get_settings
 logger = logging.getLogger(__name__)
 settings = get_settings()
 
+_CAMPAIGN_PLAN_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "campaign_name": {"type": "string"},
+        "objective": {"type": "string"},
+        "budget_shift_pct": {"type": "number"},
+        "activation_window_days": {"type": "integer"},
+        "channel_plan": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "channel": {"type": "string"},
+                    "share_pct": {"type": "number"},
+                    "message_angle": {"type": "string"},
+                    "kpi_primary": {"type": "string"},
+                    "kpi_secondary": {"type": "array", "items": {"type": "string"}},
+                },
+                "required": ["channel", "share_pct", "message_angle", "kpi_primary", "kpi_secondary"],
+            },
+        },
+        "keyword_clusters": {"type": "array", "items": {"type": "string"}},
+        "creative_angles": {"type": "array", "items": {"type": "string"}},
+        "kpi_targets": {
+            "type": "object",
+            "properties": {
+                "primary_kpi": {"type": "string"},
+                "secondary_kpis": {"type": "array", "items": {"type": "string"}},
+                "success_criteria": {"type": "string"},
+            },
+            "required": ["primary_kpi", "secondary_kpis", "success_criteria"],
+        },
+        "next_steps": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "task": {"type": "string"},
+                    "owner": {"type": "string"},
+                    "eta": {"type": "string"},
+                },
+                "required": ["task", "owner", "eta"],
+            },
+        },
+        "compliance_hinweis": {"type": "string"},
+    },
+    "required": [
+        "campaign_name",
+        "objective",
+        "budget_shift_pct",
+        "activation_window_days",
+        "channel_plan",
+        "keyword_clusters",
+        "creative_angles",
+        "kpi_targets",
+        "next_steps",
+        "compliance_hinweis",
+    ],
+}
+
 
 class AiCampaignPlanner:
     """Generiert strukturierte Kampagnenplaene via lokalem Ollama."""
@@ -31,7 +91,28 @@ class AiCampaignPlanner:
         product: str,
         campaign_goal: str,
         weekly_budget: float,
+        skip_ollama: bool = False,
     ) -> dict[str, Any]:
+        if skip_ollama:
+            fallback = self._deterministic_fallback(
+                playbook_candidate=playbook_candidate,
+                campaign_goal=campaign_goal,
+                brand=brand,
+                product=product,
+                weekly_budget=weekly_budget,
+            )
+            return {
+                "ai_generation_status": "fallback_template",
+                "ai_plan": fallback,
+                "ai_meta": {
+                    "generated_at": datetime.utcnow().isoformat() + "Z",
+                    "model": self.model,
+                    "provider": "ollama_local",
+                    "fallback_used": True,
+                    "error": "skipped_ollama_after_previous_failure",
+                },
+            }
+
         prompt = self._build_prompt(
             playbook_candidate=playbook_candidate,
             brand=brand,
@@ -132,11 +213,11 @@ class AiCampaignPlanner:
                 "model": model_name,
                 "prompt": prompt,
                 "stream": False,
-                "format": "json",
+                "format": _CAMPAIGN_PLAN_SCHEMA,
                 "options": {
                     "temperature": 0.2,
                     "top_p": 0.9,
-                    "num_predict": 160,
+                    "num_predict": 120,
                 },
             }
             try:

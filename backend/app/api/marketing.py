@@ -9,6 +9,15 @@ from app.db.session import get_db
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
+_WORKFLOW_TO_LEGACY = {
+    "DRAFT": "NEW",
+    "READY": "NEW",
+    "APPROVED": "SENT",
+    "ACTIVATED": "CONVERTED",
+    "DISMISSED": "DISMISSED",
+    "EXPIRED": "EXPIRED",
+}
+
 
 @router.post("/generate")
 async def generate_opportunities(db: Session = Depends(get_db)):
@@ -27,6 +36,7 @@ async def generate_opportunities(db: Session = Depends(get_db)):
 async def list_opportunities(
     type: str = None,
     status: str = None,
+    brand: str = None,
     min_urgency: float = None,
     limit: int = 50,
     db: Session = Depends(get_db),
@@ -42,10 +52,22 @@ async def list_opportunities(
     opportunities = engine.get_opportunities(
         type_filter=type,
         status_filter=status,
+        brand_filter=brand,
         min_urgency=min_urgency,
         limit=limit,
+        normalize_status=True,
     )
-    return {"total": len(opportunities), "opportunities": opportunities}
+
+    # Legacy-kompatible Ausgabe für bestehende Vertriebsradar-UI.
+    legacy_opps = []
+    for opp in opportunities:
+        copy = dict(opp)
+        workflow_status = opp.get("status")
+        copy["workflow_status"] = workflow_status
+        copy["status"] = _WORKFLOW_TO_LEGACY.get(workflow_status, workflow_status)
+        legacy_opps.append(copy)
+
+    return {"total": len(legacy_opps), "opportunities": legacy_opps}
 
 
 @router.get("/stats")
@@ -54,7 +76,18 @@ async def get_stats(db: Session = Depends(get_db)):
     from app.services.marketing_engine.opportunity_engine import MarketingOpportunityEngine
 
     engine = MarketingOpportunityEngine(db)
-    return engine.get_stats()
+    stats = engine.get_stats()
+    by_status = stats.get("by_status", {})
+    legacy = {
+        "NEW": by_status.get("DRAFT", 0) + by_status.get("READY", 0),
+        "SENT": by_status.get("APPROVED", 0),
+        "CONVERTED": by_status.get("ACTIVATED", 0),
+        "EXPIRED": by_status.get("EXPIRED", 0),
+        "DISMISSED": by_status.get("DISMISSED", 0),
+    }
+    stats["by_status_workflow"] = by_status
+    stats["by_status"] = legacy
+    return stats
 
 
 @router.get("/export/crm")
@@ -79,10 +112,14 @@ async def get_opportunity(opportunity_id: str, db: Session = Depends(get_db)):
     from app.services.marketing_engine.opportunity_engine import MarketingOpportunityEngine
 
     engine = MarketingOpportunityEngine(db)
-    results = engine.get_opportunities()
+    results = engine.get_opportunities(normalize_status=True)
     for opp in results:
         if opp.get("id") == opportunity_id:
-            return opp
+            copy = dict(opp)
+            workflow_status = opp.get("status")
+            copy["workflow_status"] = workflow_status
+            copy["status"] = _WORKFLOW_TO_LEGACY.get(workflow_status, workflow_status)
+            return copy
 
     raise HTTPException(status_code=404, detail=f"Opportunity {opportunity_id} nicht gefunden")
 
@@ -95,7 +132,9 @@ async def update_status(
 ):
     """Status einer Opportunity aktualisieren.
 
-    Erlaubte Werte: NEW, URGENT, SENT, CONVERTED, EXPIRED, DISMISSED
+    Erlaubte Werte:
+    - Legacy: NEW, URGENT, SENT, CONVERTED, EXPIRED, DISMISSED
+    - Workflow: DRAFT, READY, APPROVED, ACTIVATED, DISMISSED, EXPIRED
     """
     from app.services.marketing_engine.opportunity_engine import MarketingOpportunityEngine
 
@@ -105,4 +144,7 @@ async def update_status(
     if "error" in result:
         raise HTTPException(status_code=400, detail=result["error"])
 
+    workflow_status = result.get("new_status")
+    result["workflow_status"] = workflow_status
+    result["new_status"] = _WORKFLOW_TO_LEGACY.get(workflow_status, workflow_status)
     return result

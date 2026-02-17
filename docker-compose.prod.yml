@@ -53,7 +53,20 @@ services:
     restart: unless-stopped
     ports:
       - "172.17.0.1:18080:80"
-      - "0.0.0.0:8501:80"
+    depends_on:
+      - backend
+    networks:
+      - virusradar_network
+
+  frontend-staging:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.frontend
+    container_name: virusradar_frontend_staging
+    restart: unless-stopped
+    profiles: ["staging"]
+    ports:
+      - "172.17.0.1:18081:80"
     depends_on:
       - backend
     networks:

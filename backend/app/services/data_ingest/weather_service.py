@@ -142,6 +142,7 @@ class WeatherService:
         return {
             "city": city_name,
             "datum": day.replace(hour=12, minute=0, second=0),
+            "available_time": day.replace(hour=23, minute=59, second=0),
             "temperatur": avg("temperature"),
             "gefuehlte_temperatur": None,  # BrightSky liefert kein feels_like
             "luftfeuchtigkeit": avg("relative_humidity"),
@@ -168,10 +169,16 @@ class WeatherService:
         ).first()
 
         if existing:
+            incoming_available = record.get("available_time")
+            if incoming_available is not None:
+                if existing.available_time is None or incoming_available < existing.available_time:
+                    existing.available_time = incoming_available
             for key, val in record.items():
-                if key not in ("city", "datum", "data_type") and val is not None:
+                if key not in ("city", "datum", "data_type", "available_time") and val is not None:
                     setattr(existing, key, val)
         else:
+            if record.get("available_time") is None:
+                record["available_time"] = datetime.utcnow()
             self.db.add(WeatherData(**record))
 
     def import_day(self, city: dict, day: datetime) -> bool:
@@ -202,6 +209,7 @@ class WeatherService:
             record = {
                 "city": city["name"],
                 "datum": datetime.utcnow().replace(minute=0, second=0, microsecond=0),
+                "available_time": datetime.utcnow(),
                 "temperatur": current.get("temperature"),
                 "gefuehlte_temperatur": None,
                 "luftfeuchtigkeit": humidity,
@@ -256,6 +264,7 @@ class WeatherService:
                 day = datetime.strptime(day_str, "%Y-%m-%d")
                 daily = self._aggregate_day(hourly, city["name"], day)
                 daily["data_type"] = "DAILY_FORECAST"
+                daily["available_time"] = datetime.utcnow()
 
                 # Precipitation probability aus MOSMIX (falls verfügbar)
                 pop_vals = [r.get("precipitation_probability") for r in hourly

@@ -7,7 +7,7 @@ Datenquelle: https://github.com/robert-koch-institut/ARE-Konsultationsinzidenz
 import pandas as pd
 import requests
 from io import StringIO
-from datetime import datetime
+from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 import logging
 
@@ -22,6 +22,7 @@ class AREKonsultationIngestionService:
     """Service zum Importieren von RKI ARE-Konsultationsinzidenz Daten."""
 
     DATA_URL = settings.RKI_ARE_KONSULTATION_URL
+    AVAILABILITY_DELAY_DAYS = 7
 
     def __init__(self, db: Session):
         self.db = db
@@ -87,6 +88,7 @@ class AREKonsultationIngestionService:
 
         for _, row in df.iterrows():
             datum = row['datum']
+            available_time = datum + timedelta(days=self.AVAILABILITY_DELAY_DAYS)
             saison = row['Saison']
             altersgruppe = row['Altersgruppe']
             bundesland = row['Bundesland']
@@ -113,10 +115,13 @@ class AREKonsultationIngestionService:
             if existing:
                 for k, v in vals.items():
                     setattr(existing, k, v)
+                if getattr(existing, "available_time", None) is None:
+                    existing.available_time = available_time
                 updated += 1
             else:
                 data = AREKonsultation(
                     datum=datum,
+                    available_time=available_time,
                     altersgruppe=altersgruppe,
                     bundesland=bundesland,
                     **vals,

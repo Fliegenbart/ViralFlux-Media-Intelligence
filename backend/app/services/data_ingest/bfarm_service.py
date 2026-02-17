@@ -22,6 +22,8 @@ logger = logging.getLogger(__name__)
 # Globaler Cache für die letzte Analyse
 _last_signals: dict | None = None
 _last_analyzer: DrugShortageAnalyzer | None = None
+_last_refresh_attempt: datetime | None = None
+_AUTO_REFRESH_RETRY_MINUTES = 30
 
 
 class BfarmIngestionService:
@@ -84,5 +86,27 @@ class BfarmIngestionService:
 
 
 def get_cached_signals() -> dict | None:
-    """Gibt die zuletzt gecachten BfArM-Signale zurück."""
-    return _last_signals
+    """Gibt gecachte BfArM-Signale zurück und lädt bei Cache-Miss einmal automatisch nach."""
+    global _last_signals, _last_refresh_attempt
+
+    if _last_signals is not None:
+        return _last_signals
+
+    now = datetime.utcnow()
+    if _last_refresh_attempt is not None:
+        age_minutes = (now - _last_refresh_attempt).total_seconds() / 60.0
+        if age_minutes < _AUTO_REFRESH_RETRY_MINUTES:
+            return None
+
+    _last_refresh_attempt = now
+
+    try:
+        logger.info("BfArM cache miss: starte einmaligen Auto-Refresh.")
+        result = BfarmIngestionService().run_full_import()
+        if result.get("success"):
+            return _last_signals
+        logger.warning("BfArM Auto-Refresh fehlgeschlagen: %s", result)
+    except Exception as exc:  # pragma: no cover - defensive fallback
+        logger.warning("BfArM Auto-Refresh Exception: %s", exc)
+
+    return None

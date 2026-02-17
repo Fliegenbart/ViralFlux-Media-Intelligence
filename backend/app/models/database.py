@@ -14,6 +14,7 @@ class WastewaterData(Base):
     standort = Column(String, nullable=False)
     bundesland = Column(String, nullable=False)
     datum = Column(DateTime, nullable=False, index=True)
+    available_time = Column(DateTime, nullable=True, index=True)
     virus_typ = Column(String, nullable=False)  # SARS-CoV-2, Influenza A, etc.
     viruslast = Column(Float)
     viruslast_normalisiert = Column(Float)
@@ -36,6 +37,7 @@ class WastewaterAggregated(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     datum = Column(DateTime, nullable=False, index=True)
+    available_time = Column(DateTime, nullable=True, index=True)
     virus_typ = Column(String, nullable=False)
     n_standorte = Column(Integer)  # Anzahl Standorte
     anteil_bev = Column(Float)  # Anteil Bevölkerung
@@ -76,6 +78,7 @@ class AREKonsultation(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     datum = Column(DateTime, nullable=False, index=True)
+    available_time = Column(DateTime, nullable=True, index=True)
     kalenderwoche = Column(Integer, nullable=False)
     saison = Column(String, nullable=False)
     altersgruppe = Column(String, nullable=False)
@@ -133,12 +136,36 @@ class NotaufnahmeStandort(Base):
     )
 
 
+class SurvstatWeeklyData(Base):
+    """SURVSTAT RKI Meldeinzidenzen je Woche/Bundesland/Krankheit."""
+    __tablename__ = "survstat_weekly_data"
+
+    id = Column(Integer, primary_key=True, index=True)
+    week_label = Column(String, nullable=False, index=True)  # YYYY_WW
+    week_start = Column(DateTime, nullable=False, index=True)  # Montag der ISO-Woche
+    available_time = Column(DateTime, nullable=True, index=True)
+    year = Column(Integer, nullable=False, index=True)
+    week = Column(Integer, nullable=False)
+    bundesland = Column(String, nullable=False)
+    disease = Column(String, nullable=False)
+    incidence = Column(Float)
+    source_file = Column(String)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        Index('idx_survstat_week_state', 'week_label', 'bundesland'),
+        Index('idx_survstat_disease_week', 'disease', 'week_start'),
+        Index('uq_survstat_week_state_disease', 'week_label', 'bundesland', 'disease', unique=True),
+    )
+
+
 class GoogleTrendsData(Base):
     """Google Trends Suchanfragen-Daten."""
     __tablename__ = "google_trends_data"
     
     id = Column(Integer, primary_key=True, index=True)
     datum = Column(DateTime, nullable=False, index=True)
+    available_time = Column(DateTime, nullable=True, index=True)
     keyword = Column(String, nullable=False)
     region = Column(String, default="DE")  # Deutschland
     interest_score = Column(Integer)  # 0-100
@@ -156,6 +183,7 @@ class WeatherData(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     datum = Column(DateTime, nullable=False, index=True)
+    available_time = Column(DateTime, nullable=True, index=True)
     city = Column(String, nullable=False)
     temperatur = Column(Float)  # °C
     gefuehlte_temperatur = Column(Float)  # °C
@@ -201,6 +229,7 @@ class GanzimmunData(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     datum = Column(DateTime, nullable=False, index=True)
+    available_time = Column(DateTime, nullable=True, index=True)
     test_typ = Column(String, nullable=False)
     anzahl_tests = Column(Integer)
     positive_ergebnisse = Column(Integer)
@@ -325,12 +354,69 @@ class MarketingOpportunity(Base):
     target_audience = Column(JSON)
     sales_pitch = Column(JSON)
     suggested_products = Column(JSON)
+    brand = Column(String, index=True)
+    product = Column(String, index=True)
+    budget_shift_pct = Column(Float)
+    channel_mix = Column(JSON)
+    activation_start = Column(DateTime)
+    activation_end = Column(DateTime)
+    recommendation_reason = Column(String)
+    campaign_payload = Column(JSON)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, index=True)
     expires_at = Column(DateTime)
     exported_at = Column(DateTime)
 
     __table_args__ = (
         Index('idx_opportunity_type_status', 'opportunity_type', 'status'),
         Index('idx_opportunity_urgency', 'urgency_score'),
+        Index('idx_opportunity_brand_status', 'brand', 'status'),
+    )
+
+
+class BrandProduct(Base):
+    """Externer Marken-Produktkatalog (z. B. Gelo Produktseite)."""
+    __tablename__ = "brand_products"
+
+    id = Column(Integer, primary_key=True, index=True)
+    brand = Column(String, nullable=False, index=True)
+    product_name = Column(String, nullable=False, index=True)
+    source_url = Column(String, nullable=False)
+    source_hash = Column(String, nullable=False)
+    active = Column(Boolean, default=True, index=True)
+    extra_data = Column(JSON)
+    last_seen_at = Column(DateTime, default=datetime.utcnow, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, index=True)
+
+    __table_args__ = (
+        Index('idx_brand_products_brand_active', 'brand', 'active'),
+        Index('uq_brand_products_brand_name', 'brand', 'product_name', unique=True),
+    )
+
+
+class ProductConditionMapping(Base):
+    """Auto+Review Mapping Produkt -> Lageklasse."""
+    __tablename__ = "product_condition_mapping"
+
+    id = Column(Integer, primary_key=True, index=True)
+    brand = Column(String, nullable=False, index=True)
+    product_id = Column(Integer, ForeignKey("brand_products.id"), nullable=False, index=True)
+    condition_key = Column(String, nullable=False, index=True)
+    rule_source = Column(String, nullable=False, default="auto", index=True)  # auto | hard_rule
+    fit_score = Column(Float, nullable=False, default=0.0)
+    mapping_reason = Column(String)
+    is_approved = Column(Boolean, default=False, index=True)
+    priority = Column(Integer, default=0)
+    notes = Column(String)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, index=True)
+
+    product = relationship("BrandProduct")
+
+    __table_args__ = (
+        Index('idx_pcm_brand_condition', 'brand', 'condition_key'),
+        Index('idx_pcm_brand_approved', 'brand', 'is_approved'),
+        Index('uq_pcm_product_condition', 'product_id', 'condition_key', unique=True),
     )
 
 
@@ -379,3 +465,60 @@ class LabConfiguration(Base):
     calibration_source = Column(String)
     correlation_score = Column(Float)
     analyzed_days = Column(Integer)
+
+
+class BacktestRun(Base):
+    """Persistierte Backtest-Läufe für Twin-Mode (Market + Customer)."""
+    __tablename__ = "backtest_runs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    run_id = Column(String, unique=True, nullable=False, index=True)
+    mode = Column(String, nullable=False, index=True)  # MARKET_CHECK, CUSTOMER_CHECK
+    status = Column(String, nullable=False, default="success", index=True)
+    virus_typ = Column(String, nullable=False, index=True)
+    target_source = Column(String, nullable=False, index=True)
+    target_key = Column(String)
+    target_label = Column(String)
+    strict_vintage_mode = Column(Boolean, default=True)
+    horizon_days = Column(Integer, default=14)
+    min_train_points = Column(Integer, default=20)
+    parameters = Column(JSON)
+    metrics = Column(JSON)
+    baseline_metrics = Column(JSON)
+    improvement_vs_baselines = Column(JSON)
+    optimized_weights = Column(JSON)
+    proof_text = Column(String)
+    llm_insight = Column(String)
+    lead_lag = Column(JSON)
+    chart_points = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+    __table_args__ = (
+        Index('idx_backtest_mode_created', 'mode', 'created_at'),
+        Index('idx_backtest_target_created', 'target_source', 'created_at'),
+    )
+
+
+class BacktestPoint(Base):
+    """Zeitpunkte eines Backtest-Runs (für Charts und Auditing)."""
+    __tablename__ = "backtest_points"
+
+    id = Column(Integer, primary_key=True, index=True)
+    run_id = Column(String, ForeignKey("backtest_runs.run_id"), nullable=False, index=True)
+    date = Column(DateTime, nullable=False, index=True)
+    region = Column(String, nullable=True, index=True)
+    real_qty = Column(Float)
+    predicted_qty = Column(Float)
+    baseline_persistence = Column(Float)
+    baseline_seasonal = Column(Float)
+    bio = Column(Float)
+    psycho = Column(Float)
+    context = Column(Float)
+    extra = Column(JSON)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+    backtest_run = relationship("BacktestRun")
+
+    __table_args__ = (
+        Index('idx_backtest_points_run_date', 'run_id', 'date'),
+    )

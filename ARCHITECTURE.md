@@ -142,7 +142,7 @@ OllamaRecommendationService.generate_recommendation()
 
 ```
 GET  /api/v1/dashboard/overview
-     └─ Aggregiert: Viruslast, Trends, ARE, Notaufnahme, Wetter
+     └─ Aggregiert: Viruslast, Trends, ARE, Notaufnahme, SURVSTAT, Wetter
 
 GET  /api/v1/dashboard/timeseries/{virus}
      └─ Historische Daten + Forecast
@@ -161,6 +161,12 @@ POST /api/v1/ingest/run-all
 
 POST /api/v1/ingest/notaufnahme
      └─ Notaufnahmesurveillance Import (RKI/AKTIN)
+
+POST /api/v1/ingest/survstat-local
+     └─ Lokaler SURVSTAT Wochenimport (manuell)
+
+POST /api/v1/calibration/simulate-market
+     └─ Twin-Mode Markt-Check (RKI_ARE oder SURVSTAT Targets)
 ```
 
 ---
@@ -204,6 +210,11 @@ POST /api/v1/ingest/notaufnahme
 - `id`, `ik_number`, `ed_name`, `ed_type`, `level_of_care`
 - `state`, `state_id`, `latitude`, `longitude`
 - Index: (ik_number), (state, ed_type)
+
+**survstat_weekly_data**
+- `id`, `week_label`, `week_start`, `year`, `week`
+- `bundesland`, `disease`, `incidence`, `source_file`
+- Index: (week_label, bundesland), (disease, week_start)
 
 ### ML & LLM Tabellen
 

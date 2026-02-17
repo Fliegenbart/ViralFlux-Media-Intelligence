@@ -8,7 +8,7 @@ ViralFlux Media Intelligence ist ein datengetriebenes Frühwarn- und Aktivierung
 
 ### Kernfeatures
 
-- 📊 **Signal Fusion**: RKI AMELAG, GrippeWeb, Notaufnahmesurveillance, Google Trends, Wetter, BfArM
+- 📊 **Signal Fusion**: RKI AMELAG, GrippeWeb, Notaufnahmesurveillance, SURVSTAT, Google Trends, Wetter, BfArM
 - 🎯 **14-Tage-Vorsprung**: Frühsignale vor klassischen Abverkaufsindikatoren
 - 📍 **Regionale Steuerung**: PLZ-nahe Trigger für Budget-Shifts
 - 📦 **Konkurrenz-Radar**: BfArM-Engpasssignale als Aktivierungshebel
@@ -20,7 +20,7 @@ ViralFlux Media Intelligence ist ein datengetriebenes Frühwarn- und Aktivierung
 ```
 ┌─────────────────────────────────────────────────────┐
 │              Datenquellen                            │
-│  RKI AMELAG | GrippeWeb | Notaufnahme | BfArM | DWD | Trends │
+│  RKI AMELAG | GrippeWeb | Notaufnahme | SURVSTAT | BfArM | DWD | Trends │
 └────────────────────┬────────────────────────────────┘
                      │
                      v
@@ -102,20 +102,26 @@ Die App läuft dann auf:
 - **Update**: Täglich (bis Vorvortag)
 - **Daten**: ARI, SARI, ILI, COVID, GI (relativer Anteil + Erwartungswerte)
 
-### 4. Google Trends
+### 4. RKI SURVSTAT (manueller Weekly Import)
+- **Quelle**: SURVSTAT Exportdateien (CSV/TSV, UTF-16)
+- **Update**: Manuell, Woche für Woche
+- **Daten**: Meldeinzidenzen nach Bundesland + Krankheitsbild (inkl. Gesamt)
+- **Import**: `POST /api/v1/ingest/survstat-local?folder_path=/pfad/zum/ordner`
+
+### 5. Google Trends
 - **Library**: pytrends
 - **Keywords**: Erkältung, Grippe, Schnupfen, Fieber, etc.
 - **Geo**: Deutschland
 
-### 5. OpenWeather API
+### 6. OpenWeather API
 - **Daten**: Temperatur, Luftfeuchtigkeit, Wettervorhersage
 - **Relevanz**: Einfluss auf Atemwegserkrankungen
 
-### 6. Schulferien
+### 7. Schulferien
 - **Quelle**: API oder statische Daten
 - **Relevanz**: Erkrankungsrückgang in Ferienzeiten
 
-### 7. Interne Kundendaten (Optional)
+### 8. Interne Kundendaten (Optional)
 - **Schnittstelle vorbereitet**: CSV/API Import
 - **Daten**: Sales, Media-KPIs, CRM/Region-Segmente
 
@@ -150,7 +156,7 @@ viralflux-media/
 │   │   ├── core/         # Config, Security
 │   │   ├── models/       # SQLAlchemy Models
 │   │   ├── services/     # Business Logic
-│   │   │   ├── data_ingest/    # RKI (AMELAG/GrippeWeb/Notaufnahme), Trends, Weather
+│   │   │   ├── data_ingest/    # RKI (AMELAG/GrippeWeb/Notaufnahme/SURVSTAT), Trends, Weather
 │   │   │   ├── ml/             # Prophet, Training
 │   │   │   └── llm/            # Ollama Integration
 │   │   └── db/           # Database Setup
@@ -259,6 +265,8 @@ Hauptendpoints:
 - `GET /api/v1/data/wastewater` - Abwasserdaten
 - `GET /api/v1/data/trends` - Google Trends
 - `POST /api/v1/ingest/notaufnahme` - Notaufnahmesurveillance Import
+- `POST /api/v1/ingest/survstat-local` - Lokaler SURVSTAT Wochenimport
+- `POST /api/v1/calibration/simulate-market` - Twin-Mode Markt-Check (RKI ARE/SURVSTAT)
 
 ## 🤝 Support & Contribution
 

@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 import logging
 
 from app.db.session import get_db
-from app.models.database import WastewaterData, MLForecast, InventoryLevel
+from app.models.database import WastewaterData
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -127,17 +127,52 @@ async def get_regional_timeseries(
     }
 
 
-@router.get("/transfer-suggestions/{virus_typ}")
-async def get_transfer_suggestions(
+def _build_activation_suggestions(regional_rows, latest_date, virus_typ: str) -> dict:
+    if not regional_rows:
+        return {"suggestions": [], "virus_typ": virus_typ, "date": latest_date.isoformat()}
+
+    sorted_regions = sorted(regional_rows, key=lambda r: r.avg_viruslast or 0, reverse=True)
+    max_val = sorted_regions[0].avg_viruslast if sorted_regions else 1
+    hotspots = [r for r in sorted_regions if r.avg_viruslast and r.avg_viruslast > max_val * 0.7]
+
+    suggestions = []
+    for hot in hotspots[:5]:
+        shift = min(40.0, max(10.0, (hot.avg_viruslast / (max_val or 1)) * 35.0))
+        suggestions.append({
+            "region": hot.bundesland,
+            "region_name": BUNDESLAND_NAMES.get(hot.bundesland, hot.bundesland),
+            # Legacy-Felder für alte Frontends
+            "from_region": "BUDGET_POOL",
+            "from_name": "Nationales Budget",
+            "to_region": hot.bundesland,
+            "to_name": BUNDESLAND_NAMES.get(hot.bundesland, hot.bundesland),
+            "test_typ": "MediaBudget",
+            "reason": (
+                f"{BUNDESLAND_NAMES.get(hot.bundesland, hot.bundesland)} liegt im oberen "
+                f"Viruslast-Cluster ({round(hot.avg_viruslast, 1)})."
+            ),
+            "priority": "high" if hot.avg_viruslast > max_val * 0.85 else "medium",
+            "budget_shift_pct": round(shift, 1),
+            "channel_mix": {
+                "programmatic": 45,
+                "social": 30,
+                "search": 25,
+            },
+        })
+
+    return {
+        "virus_typ": virus_typ,
+        "suggestions": suggestions,
+        "date": latest_date.isoformat(),
+    }
+
+
+@router.get("/activation-suggestions/{virus_typ}")
+async def get_activation_suggestions(
     virus_typ: str,
     db: Session = Depends(get_db)
 ):
-    """Suggest inventory transfers between locations based on regional virus activity."""
-    from app.api.dashboard import VIRUS_TEST_MAP
-
-    test_typ = VIRUS_TEST_MAP.get(virus_typ)
-    if not test_typ:
-        return {"suggestions": [], "virus_typ": virus_typ}
+    """Media Activation Suggestions auf Basis regionaler Virusaktivität."""
 
     # Get regional virus data
     latest_date = db.query(func.max(WastewaterData.datum)).filter(
@@ -155,32 +190,13 @@ async def get_transfer_suggestions(
         WastewaterData.datum == latest_date,
     ).group_by(WastewaterData.bundesland).all()
 
-    if not regional:
-        return {"suggestions": [], "virus_typ": virus_typ}
+    return _build_activation_suggestions(regional, latest_date, virus_typ)
 
-    # Sort by intensity
-    sorted_regions = sorted(regional, key=lambda r: r.avg_viruslast or 0, reverse=True)
-    max_val = sorted_regions[0].avg_viruslast if sorted_regions else 1
 
-    suggestions = []
-    hotspots = [r for r in sorted_regions if r.avg_viruslast and r.avg_viruslast > max_val * 0.7]
-    low_regions = [r for r in sorted_regions if r.avg_viruslast and r.avg_viruslast < max_val * 0.3]
-
-    for hot in hotspots[:3]:
-        for low in low_regions[:2]:
-            suggestions.append({
-                "from_region": low.bundesland,
-                "from_name": BUNDESLAND_NAMES.get(low.bundesland, low.bundesland),
-                "to_region": hot.bundesland,
-                "to_name": BUNDESLAND_NAMES.get(hot.bundesland, hot.bundesland),
-                "reason": f"{BUNDESLAND_NAMES.get(hot.bundesland, hot.bundesland)} hat {round(hot.avg_viruslast / (low.avg_viruslast or 1), 1)}x hoehere Viruslast",
-                "priority": "high" if hot.avg_viruslast > max_val * 0.85 else "medium",
-                "test_typ": test_typ,
-            })
-
-    return {
-        "virus_typ": virus_typ,
-        "test_typ": test_typ,
-        "suggestions": suggestions[:5],
-        "date": latest_date.isoformat(),
-    }
+@router.get("/transfer-suggestions/{virus_typ}")
+async def get_transfer_suggestions(
+    virus_typ: str,
+    db: Session = Depends(get_db)
+):
+    """Legacy-Alias: liefert jetzt Activation-Suggestions statt Transferlogik."""
+    return await get_activation_suggestions(virus_typ=virus_typ, db=db)

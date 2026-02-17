@@ -77,8 +77,20 @@ services:
     image: viralflux-media-frontend
     container_name: virusradar_frontend_prod
     ports:
-      - "18080:80"
-      - "8501:80"
+      - "172.17.0.1:18080:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - virusradar_network
+
+  frontend-staging:
+    image: viralflux-media-frontend
+    container_name: virusradar_frontend_staging
+    profiles:
+      - staging
+    ports:
+      - "172.17.0.1:18081:80"
     depends_on:
       - backend
     restart: unless-stopped

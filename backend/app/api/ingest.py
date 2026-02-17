@@ -1,17 +1,22 @@
-from fastapi import APIRouter, Depends, BackgroundTasks
+from fastapi import APIRouter, Depends, BackgroundTasks, UploadFile, File, HTTPException
 from sqlalchemy.orm import Session
 from datetime import datetime
+from tempfile import TemporaryDirectory
+from pathlib import Path
 import logging
 
 from app.db.session import get_db, get_db_context
+from app.core.config import get_settings
 from app.services.data_ingest.amelag_service import AmelagIngestionService
 from app.services.data_ingest.notaufnahme_service import NotaufnahmeIngestionService
+from app.services.data_ingest.survstat_service import SurvstatIngestionService
 from app.services.data_ingest.trends_service import GoogleTrendsService
 from app.services.data_ingest.weather_service import WeatherService
 from app.services.data_ingest.holidays_service import SchoolHolidaysService
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+settings = get_settings()
 
 
 def _run_import_all():
@@ -136,6 +141,71 @@ async def run_notaufnahme_import(db: Session = Depends(get_db)):
     """Importiere RKI/AKTIN Notaufnahmesurveillance Daten."""
     service = NotaufnahmeIngestionService(db)
     return service.run_full_import()
+
+
+@router.post("/survstat-local")
+async def run_survstat_local_import(
+    folder_path: str | None = None,
+    db: Session = Depends(get_db),
+):
+    """Importiere lokale SURVSTAT-Dateien (manuell, Woche für Woche)."""
+    service = SurvstatIngestionService(db)
+    target_path = folder_path or settings.SURVSTAT_LOCAL_DIR
+    return service.run_local_import(target_path)
+
+
+@router.post("/survstat-upload")
+async def run_survstat_upload_import(
+    files: list[UploadFile] = File(...),
+    db: Session = Depends(get_db),
+):
+    """Importiert manuell hochgeladene SURVSTAT Wochen-Dateien (YYYY_WW.csv)."""
+    if not files:
+        raise HTTPException(status_code=400, detail="Keine Dateien übergeben.")
+
+    service = SurvstatIngestionService(db)
+    all_records = []
+    errors = []
+    parsed_files = 0
+
+    with TemporaryDirectory(prefix="survstat_upload_") as tmp_dir:
+        base = Path(tmp_dir)
+        for upload in files:
+            filename = (upload.filename or "").strip()
+            if not filename:
+                errors.append({"file": "<unknown>", "error": "Leerer Dateiname"})
+                continue
+
+            if not filename.lower().endswith(".csv"):
+                errors.append({"file": filename, "error": "Nur .csv Dateien erlaubt"})
+                continue
+
+            target = base / filename
+            content = await upload.read()
+            target.write_bytes(content)
+
+            try:
+                records = service.parse_file(target)
+                all_records.extend(records)
+                parsed_files += 1
+            except Exception as exc:
+                logger.warning(f"SURVSTAT Upload parse failed for {filename}: {exc}")
+                errors.append({"file": filename, "error": str(exc)})
+
+    inserted, updated = service.import_records(all_records)
+    latest_week = service._latest_week_label(all_records)
+
+    return {
+        "success": inserted + updated > 0 and len(errors) == 0,
+        "files_received": len(files),
+        "files_parsed": parsed_files,
+        "records_total": len(all_records),
+        "imported": inserted,
+        "updated": updated,
+        "latest_week": latest_week,
+        "errors": errors,
+        "timestamp": datetime.utcnow().isoformat(),
+    }
 
 
 @router.post("/trends")

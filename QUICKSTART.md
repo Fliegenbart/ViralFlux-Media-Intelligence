@@ -115,22 +115,34 @@ Der automatische Import läuft täglich um 6:00 Uhr (konfigurierbar in .env)
 
 **Alle Datenquellen:**
 ```bash
-curl -X POST http://localhost:8000/api/v1/data/import/all
+curl -X POST http://localhost:8000/api/v1/ingest/run-all
 ```
 
 **Einzelne Quellen:**
 ```bash
 # RKI Abwasser
-curl -X POST http://localhost:8000/api/v1/data/import/amelag
+curl -X POST http://localhost:8000/api/v1/ingest/amelag
 
 # Google Trends
-curl -X POST http://localhost:8000/api/v1/data/import/trends
+curl -X POST http://localhost:8000/api/v1/ingest/trends
 
 # Wetter
-curl -X POST http://localhost:8000/api/v1/data/import/weather
+curl -X POST http://localhost:8000/api/v1/ingest/weather
 
 # Schulferien
-curl -X POST http://localhost:8000/api/v1/data/import/holidays
+curl -X POST http://localhost:8000/api/v1/ingest/holidays
+
+# SURVSTAT (lokaler Wochenimport)
+# Optional: Dateien zuerst im Projekt ablegen
+mkdir -p data/raw/survstat
+cp /pfad/zu/deinen_survstat/*.csv data/raw/survstat/
+
+# Danach Import triggern
+curl -X POST "http://localhost:8000/api/v1/ingest/survstat-local?folder_path=/Users/davidwegener/Downloads/survstat-weitere"
+
+# Twin-Mode Demo: Markt-Check ohne Kundendaten (Walk-forward)
+curl -X POST "http://localhost:8000/api/v1/calibration/simulate-market?target=RKI_ARE&virus_typ=Influenza%20A&days_back=730&horizon_days=14&min_train_points=20&strict_vintage_mode=true"
+curl -X POST "http://localhost:8000/api/v1/calibration/simulate-market?target=MYCOPLASMA&virus_typ=Influenza%20A&days_back=730&horizon_days=14&min_train_points=20&strict_vintage_mode=true"
 ```
 
 ---
@@ -138,7 +150,7 @@ curl -X POST http://localhost:8000/api/v1/data/import/holidays
 ## ML Prognosen erstellen
 
 ```bash
-curl -X POST http://localhost:8000/api/v1/forecast/generate
+curl -X POST http://localhost:8000/api/v1/forecast/run
 ```
 
 ---

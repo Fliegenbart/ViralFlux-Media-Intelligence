@@ -11,6 +11,7 @@ from app.models.database import (
     GoogleTrendsData,
     GrippeWebData,
     NotaufnahmeSyndromData,
+    SurvstatWeeklyData,
     MLForecast,
     WeatherData,
     InventoryLevel,
@@ -127,6 +128,72 @@ async def get_dashboard_overview(
                 "trend": no_trend,
             }
 
+    # 3c. SURVSTAT (RKI) — manuell importierte Wochenwerte
+    survstat_data = {}
+    latest_surv_week = db.query(func.max(SurvstatWeeklyData.week_start)).filter(
+        SurvstatWeeklyData.bundesland == "Gesamt"
+    ).scalar()
+
+    if latest_surv_week:
+        latest_surv_rows = db.query(SurvstatWeeklyData).filter(
+            SurvstatWeeklyData.week_start == latest_surv_week,
+            SurvstatWeeklyData.bundesland == "Gesamt",
+        ).all()
+
+        prev_surv_week = db.query(func.max(SurvstatWeeklyData.week_start)).filter(
+            SurvstatWeeklyData.bundesland == "Gesamt",
+            SurvstatWeeklyData.week_start < latest_surv_week,
+        ).scalar()
+
+        prev_map: dict[str, float | None] = {}
+        if prev_surv_week:
+            prev_rows = db.query(SurvstatWeeklyData).filter(
+                SurvstatWeeklyData.week_start == prev_surv_week,
+                SurvstatWeeklyData.bundesland == "Gesamt",
+            ).all()
+            prev_map = {
+                row.disease: row.incidence
+                for row in prev_rows
+            }
+
+        latest_map = {
+            row.disease: row
+            for row in latest_surv_rows
+            if row.incidence is not None
+        }
+
+        top_non_all = sorted(
+            [row for row in latest_surv_rows if row.disease != "All" and row.incidence is not None],
+            key=lambda row: row.incidence or 0.0,
+            reverse=True,
+        )
+
+        selected_diseases: list[str] = []
+        if "All" in latest_map:
+            selected_diseases.append("All")
+        selected_diseases.extend([row.disease for row in top_non_all[:2]])
+
+        if not selected_diseases:
+            selected_diseases = [
+                row.disease for row in sorted(
+                    [r for r in latest_surv_rows if r.incidence is not None],
+                    key=lambda r: r.incidence or 0.0,
+                    reverse=True,
+                )[:3]
+            ]
+
+        for disease in dict.fromkeys(selected_diseases):
+            latest_row = latest_map.get(disease)
+            if not latest_row:
+                continue
+            survstat_data[disease] = {
+                "value": latest_row.incidence,
+                "week_label": latest_row.week_label,
+                "week_start": latest_row.week_start,
+                "bundesland": latest_row.bundesland,
+                "trend": _calculate_relative_trend(latest_row.incidence, prev_map.get(disease)),
+            }
+
     # 4. Forecast summary (show all 14 days from latest run, not just future)
     forecast_summary = {}
     for virus in ['Influenza A', 'Influenza B', 'SARS-CoV-2', 'RSV A']:
@@ -221,6 +288,7 @@ async def get_dashboard_overview(
         },
         "grippeweb": grippeweb_data,
         "notaufnahme": notaufnahme_data,
+        "survstat": survstat_data,
         "forecast_summary": forecast_summary,
         "weather": {
             "avg_temperature": round(avg_temp, 1),
@@ -451,6 +519,47 @@ async def get_notaufnahme_timeseries(
     }
 
 
+@router.get("/survstat-timeseries")
+async def get_survstat_timeseries(
+    disease: str = "All",
+    bundesland: str = "Gesamt",
+    weeks_back: int = 52,
+    db: Session = Depends(get_db)
+):
+    """SURVSTAT Wochen-Zeitreihe für ein Krankheitsbild."""
+    latest_week = db.query(func.max(SurvstatWeeklyData.week_start)).filter(
+        SurvstatWeeklyData.disease == disease,
+        SurvstatWeeklyData.bundesland == bundesland,
+    ).scalar()
+
+    if not latest_week:
+        return {
+            "disease": disease,
+            "bundesland": bundesland,
+            "data": [],
+        }
+
+    start_date = latest_week - timedelta(weeks=weeks_back)
+    data = db.query(SurvstatWeeklyData).filter(
+        SurvstatWeeklyData.disease == disease,
+        SurvstatWeeklyData.bundesland == bundesland,
+        SurvstatWeeklyData.week_start >= start_date,
+    ).order_by(SurvstatWeeklyData.week_start.asc()).all()
+
+    return {
+        "disease": disease,
+        "bundesland": bundesland,
+        "data": [
+            {
+                "week_label": row.week_label,
+                "week_start": row.week_start.isoformat(),
+                "incidence": row.incidence,
+            }
+            for row in data
+        ],
+    }
+
+
 def _calculate_trend(db: Session, virus_typ: str) -> str:
     """Calculate trend for a virus type."""
     last_7_days = db.query(WastewaterAggregated).filter(
@@ -474,5 +583,20 @@ def _calculate_trend(db: Session, virus_typ: str) -> str:
     if change > 0.1:
         return "steigend"
     elif change < -0.1:
+        return "fallend"
+    return "stabil"
+
+
+def _calculate_relative_trend(latest: float | None, previous: float | None) -> str:
+    """Trend zwischen zwei Messwerten mit +/-5%-Band."""
+    if latest is None or previous is None:
+        return "stabil"
+    if previous <= 0:
+        return "steigend" if latest > 0 else "stabil"
+
+    delta = (latest - previous) / previous
+    if delta > 0.05:
+        return "steigend"
+    if delta < -0.05:
         return "fallend"
     return "stabil"

@@ -45,6 +45,7 @@ echo -e "   ${GREEN}✓ Docker Compose gefunden${NC}"
 # 3. Daten-Verzeichnisse erstellen
 echo -e "\n${YELLOW}3. Erstelle Daten-Verzeichnisse...${NC}"
 mkdir -p data/raw
+mkdir -p data/raw/survstat
 mkdir -p data/processed
 echo -e "   ${GREEN}✓ Verzeichnisse erstellt${NC}"
 

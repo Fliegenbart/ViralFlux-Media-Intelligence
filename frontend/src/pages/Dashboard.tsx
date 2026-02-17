@@ -63,6 +63,14 @@ interface NotaufnahmeItem {
   trend: string;
 }
 
+interface SurvstatItem {
+  value: number | null;
+  week_label: string | null;
+  week_start: string | null;
+  bundesland: string;
+  trend: string;
+}
+
 interface DrugShortageSignals {
   risk_score: number;
   total_active: number;
@@ -90,6 +98,12 @@ interface NotaufnahmeTimeseriesPoint {
   ed_count: number | null;
 }
 
+interface SurvstatTimeseriesPoint {
+  week_label: string;
+  week_start: string;
+  incidence: number | null;
+}
+
 interface OutbreakScoreData {
   overall_score: number;
   overall_risk_level: string;
@@ -114,6 +128,7 @@ interface DashboardData {
   are_inzidenz: { value: number | null; date: string | null };
   grippeweb: Record<string, GrippeWebItem>;
   notaufnahme: Record<string, NotaufnahmeItem>;
+  survstat: Record<string, SurvstatItem>;
   forecast_summary: Record<string, ForecastSummary>;
   weather: { avg_temperature: number; avg_humidity: number };
   inventory: Record<string, InventoryItem>;
@@ -172,6 +187,20 @@ const trendArrow = (t: string) =>
 const trendColor = (t: string) =>
   t === 'steigend' ? '#ef4444' : t === 'fallend' ? '#10b981' : '#94a3b8';
 
+const shortDiseaseLabel = (name: string) => {
+  if (name === 'All') return 'Gesamt';
+  const stripped = name.replace(/\s*\(.*?\)\s*/g, '').trim();
+  if (stripped.length <= 28) return stripped;
+  return stripped.slice(0, 28) + '...';
+};
+
+const weekFromLabel = (weekLabel: string | null | undefined) => {
+  if (!weekLabel) return 'KW -';
+  const parts = weekLabel.split('_');
+  if (parts.length !== 2) return weekLabel;
+  return `KW ${parts[1]}/${parts[0]}`;
+};
+
 // ─── Mini Sparkline ─────────────────────────────────────────────────────────
 const Sparkline: React.FC<{ data: SparklinePoint[]; color: string }> = ({ data, color }) => {
   if (!data || data.length < 2) return null;
@@ -229,6 +258,9 @@ const Dashboard: React.FC = () => {
   const [showNotaufnahme, setShowNotaufnahme] = useState(false);
   const [selectedNotaufnahme, setSelectedNotaufnahme] = useState<'ARI' | 'ILI' | 'COVID'>('ARI');
   const [notaufnahmeSeries, setNotaufnahmeSeries] = useState<NotaufnahmeTimeseriesPoint[]>([]);
+  const [showSurvstat, setShowSurvstat] = useState(false);
+  const [selectedSurvstat, setSelectedSurvstat] = useState<string>('All');
+  const [survstatSeries, setSurvstatSeries] = useState<SurvstatTimeseriesPoint[]>([]);
   const [drugShortageData, setDrugShortageData] = useState<DrugShortageSignals | null>(null);
   const [drugShortageLoading, setDrugShortageLoading] = useState(false);
   const [outbreakScore, setOutbreakScore] = useState<OutbreakScoreData | null>(null);
@@ -321,6 +353,22 @@ const Dashboard: React.FC = () => {
     }
   }, [selectedNotaufnahme]);
 
+  // Fetch SURVSTAT timeseries
+  const fetchSurvstatTimeseries = useCallback(async () => {
+    if (!selectedSurvstat) return;
+    try {
+      const res = await fetch(
+        `/api/v1/dashboard/survstat-timeseries?disease=${encodeURIComponent(selectedSurvstat)}&bundesland=Gesamt&weeks_back=52`
+      );
+      if (res.ok) {
+        const result = await res.json();
+        setSurvstatSeries(result.data || []);
+      }
+    } catch (e) {
+      console.error('SURVSTAT fetch error:', e);
+    }
+  }, [selectedSurvstat]);
+
   // Fetch Drug Shortage signals
   const fetchDrugShortageSignals = useCallback(async () => {
     try {
@@ -383,6 +431,19 @@ const Dashboard: React.FC = () => {
     if (showNotaufnahme) fetchNotaufnahmeTimeseries();
   }, [showNotaufnahme, fetchNotaufnahmeTimeseries]);
 
+  useEffect(() => {
+    if (showSurvstat) fetchSurvstatTimeseries();
+  }, [showSurvstat, fetchSurvstatTimeseries]);
+
+  useEffect(() => {
+    if (!data?.survstat) return;
+    const diseases = Object.keys(data.survstat);
+    if (diseases.length === 0) return;
+    if (!diseases.includes(selectedSurvstat)) {
+      setSelectedSurvstat(diseases[0]);
+    }
+  }, [data, selectedSurvstat]);
+
   // Re-fetch all data when page becomes visible (user returns to tab)
   useEffect(() => {
     const handleVisibility = () => {
@@ -391,11 +452,12 @@ const Dashboard: React.FC = () => {
         fetchAllTimeseries();
         fetchSparklines();
         fetchOutbreakScore();
+        if (showSurvstat) fetchSurvstatTimeseries();
       }
     };
     document.addEventListener('visibilitychange', handleVisibility);
     return () => document.removeEventListener('visibilitychange', handleVisibility);
-  }, [fetchOverview, fetchAllTimeseries, fetchSparklines, fetchOutbreakScore]);
+  }, [fetchOverview, fetchAllTimeseries, fetchSparklines, fetchOutbreakScore, showSurvstat, fetchSurvstatTimeseries]);
 
   // Run ML forecast
   const runForecast = async () => {
@@ -613,6 +675,8 @@ const Dashboard: React.FC = () => {
       setZoomEnd(ne);
     }
   }, [chartData.length]);
+
+  const hasSurvstat = !!data?.survstat && Object.keys(data.survstat).length > 0;
 
   if (loading) {
     return (
@@ -1013,6 +1077,59 @@ const Dashboard: React.FC = () => {
               <p className="text-xs text-slate-500">Keine Notaufnahme-Daten. Import via Datenquellen starten.</p>
             </div>
           )}
+
+          {/* SURVSTAT cards (dynamic, top diseases from latest week) */}
+          {hasSurvstat && Object.entries(data!.survstat).map(([disease, item]) => (
+            <div
+              key={`survstat-${disease}`}
+              className={`card p-5 cursor-pointer fade-in ${showSurvstat && selectedSurvstat === disease ? 'card-selected' : ''}`}
+              onClick={() => {
+                if (showSurvstat && selectedSurvstat === disease) {
+                  setShowSurvstat(false);
+                } else {
+                  setShowSurvstat(true);
+                  setSelectedSurvstat(disease);
+                }
+              }}
+              style={{ borderLeft: '3px solid #22c55e' }}
+            >
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ background: '#22c55e' }}></div>
+                  <span className="text-sm font-medium text-slate-300 truncate" title={disease}>
+                    SURVSTAT {shortDiseaseLabel(disease)}
+                  </span>
+                </div>
+                <span className="text-xs font-mono px-2 py-0.5 rounded" style={{ background: '#22c55e20', color: '#22c55e' }}>RKI</span>
+              </div>
+              <div className="flex items-end justify-between">
+                <div>
+                  <div className="text-3xl font-bold text-white tracking-tight">
+                    {item.value !== null ? item.value.toFixed(2) : '—'}
+                  </div>
+                  <div className="text-xs text-slate-500 mt-1">Meldeinzidenz</div>
+                </div>
+                <div className="text-right">
+                  <div className="text-lg font-bold" style={{ color: trendColor(item.trend) }}>
+                    {trendArrow(item.trend)}
+                  </div>
+                  <div className="text-xs text-slate-500">
+                    {weekFromLabel(item.week_label)}
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+
+          {!hasSurvstat && (
+            <div className="card p-5 fade-in" style={{ borderLeft: '3px solid #475569' }}>
+              <div className="flex items-center gap-2 mb-3">
+                <div className="w-3 h-3 rounded-full" style={{ background: '#475569' }}></div>
+                <span className="text-sm font-medium text-slate-400">SURVSTAT (RKI)</span>
+              </div>
+              <p className="text-xs text-slate-500">Keine SURVSTAT-Daten. Manuell via `/api/v1/ingest/survstat-local` importieren.</p>
+            </div>
+          )}
         </div>
 
         {/* ── Row 2: Main Chart + Forecast Toggle ── */}
@@ -1342,6 +1459,66 @@ const Dashboard: React.FC = () => {
               </ResponsiveContainer>
             </div>
           )}
+
+          {/* SURVSTAT sub-chart */}
+          {showSurvstat && survstatSeries.length > 0 && (
+            <div className="mt-4 pt-4" style={{ borderTop: '1px solid #334155' }}>
+              <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
+                <div className="flex items-center gap-3 flex-wrap">
+                  <h3 className="text-sm font-bold text-white">
+                    SURVSTAT — {shortDiseaseLabel(selectedSurvstat)}
+                  </h3>
+                  <div className="flex items-center gap-1 flex-wrap">
+                    {Object.keys(data?.survstat || {}).map((disease) => (
+                      <button
+                        key={`survstat-switch-${disease}`}
+                        className={`px-2 py-0.5 text-xs rounded ${selectedSurvstat === disease ? 'bg-green-500/20 text-green-400 font-medium' : 'bg-slate-700 text-slate-400'}`}
+                        onClick={() => setSelectedSurvstat(disease)}
+                        title={disease}
+                      >
+                        {shortDiseaseLabel(disease)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowSurvstat(false)}
+                  className="text-xs text-slate-500 hover:text-slate-300 transition"
+                >Ausblenden</button>
+              </div>
+              <ResponsiveContainer width="100%" height={180}>
+                <ComposedChart data={survstatSeries.map(d => ({
+                  ...d,
+                  label: weekFromLabel(d.week_label),
+                }))} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                  <XAxis
+                    dataKey="label"
+                    tick={{ fill: '#64748b', fontSize: 10 }}
+                    tickLine={{ stroke: '#334155' }}
+                    interval="preserveStartEnd"
+                  />
+                  <YAxis
+                    tick={{ fill: '#64748b', fontSize: 10 }}
+                    tickLine={{ stroke: '#334155' }}
+                    tickFormatter={(v: number) => v.toFixed(2)}
+                  />
+                  <Tooltip
+                    contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8 }}
+                    labelStyle={{ color: '#f1f5f9' }}
+                    formatter={(value: number) => [value?.toFixed(2), 'Meldeinzidenz']}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="incidence"
+                    stroke="#22c55e"
+                    strokeWidth={2}
+                    dot={false}
+                  />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </div>
+          )}
         </div>
 
         {/* ── Row 3: Activation + Recommendations ── */}
@@ -1662,6 +1839,12 @@ const Dashboard: React.FC = () => {
                   <span>Notaufnahme (RKI/AKTIN)</span>
                   <span className={data?.notaufnahme?.ARI ? 'text-green-400' : 'text-slate-600'}>
                     {data?.notaufnahme?.ARI ? 'aktiv' : 'keine Daten'}
+                  </span>
+                </div>
+                <div className="flex justify-between text-slate-400">
+                  <span>SURVSTAT (RKI)</span>
+                  <span className={hasSurvstat ? 'text-green-400' : 'text-slate-600'}>
+                    {hasSurvstat ? 'aktiv' : 'keine Daten'}
                   </span>
                 </div>
                 <div className="flex justify-between text-slate-400">

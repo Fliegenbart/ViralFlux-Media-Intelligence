@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 import requests
 from io import StringIO
-from datetime import datetime
+from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 import logging
 
@@ -19,6 +19,7 @@ class AmelagIngestionService:
     BASE_URL = settings.RKI_AMELAG_URL
     AGGREGIERT_URL = f"{BASE_URL}/amelag_aggregierte_kurve.tsv"
     EINZELSTANDORTE_URL = f"{BASE_URL}/amelag_einzelstandorte.tsv"
+    AVAILABILITY_DELAY_DAYS = 2
 
     def __init__(self, db: Session):
         self.db = db
@@ -52,6 +53,7 @@ class AmelagIngestionService:
 
         for _, row in df.iterrows():
             datum = row['datum']
+            available_time = datum + timedelta(days=self.AVAILABILITY_DELAY_DAYS)
             virus_typ = row['typ']
             viruslast = row.get('viruslast')
 
@@ -77,8 +79,15 @@ class AmelagIngestionService:
             if existing:
                 for k, v in vals.items():
                     setattr(existing, k, v)
+                if getattr(existing, "available_time", None) is None:
+                    existing.available_time = available_time
             else:
-                data = WastewaterAggregated(datum=datum, virus_typ=virus_typ, **vals)
+                data = WastewaterAggregated(
+                    datum=datum,
+                    available_time=available_time,
+                    virus_typ=virus_typ,
+                    **vals,
+                )
                 self.db.add(data)
                 count += 1
 
@@ -117,6 +126,7 @@ class AmelagIngestionService:
 
         for _, row in df.iterrows():
             datum = row['datum']
+            available_time = datum + timedelta(days=self.AVAILABILITY_DELAY_DAYS)
             virus_typ = row['typ']
             standort = row['standort']
             viruslast = row.get('viruslast')
@@ -144,8 +154,16 @@ class AmelagIngestionService:
             if existing:
                 for k, v in vals.items():
                     setattr(existing, k, v)
+                if getattr(existing, "available_time", None) is None:
+                    existing.available_time = available_time
             else:
-                data = WastewaterData(datum=datum, virus_typ=virus_typ, standort=standort, **vals)
+                data = WastewaterData(
+                    datum=datum,
+                    available_time=available_time,
+                    virus_typ=virus_typ,
+                    standort=standort,
+                    **vals,
+                )
                 self.db.add(data)
                 count += 1
 

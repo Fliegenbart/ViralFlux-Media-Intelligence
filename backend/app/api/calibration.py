@@ -17,6 +17,14 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 VALID_VIRUS_TYPES = {"Influenza A", "Influenza B", "SARS-CoV-2", "RSV A"}
+VALID_MARKET_TARGETS = {
+    "RKI_ARE",
+    "SURVSTAT",
+    "MYCOPLASMA",
+    "KEUCHHUSTEN",
+    "PNEUMOKOKKEN",
+    "H_INFLUENZAE",
+}
 
 
 def _read_upload(content: bytes, filename: str) -> pd.DataFrame:
@@ -152,3 +160,43 @@ async def analyze_global_correlations(
     from app.services.ml.backtester import BacktestService
     service = BacktestService(db)
     return service.run_global_calibration(virus_typ=virus_typ, days_back=days_back)
+
+
+@router.post("/simulate-market")
+async def simulate_market_correlation(
+    target: str = Query(
+        default="RKI_ARE",
+        description="Proxy-Target: RKI_ARE, SURVSTAT, MYCOPLASMA, KEUCHHUSTEN, PNEUMOKOKKEN",
+    ),
+    virus_typ: str = Query(default="Influenza A"),
+    days_back: int = Query(default=730, description="Rückblick in Tagen (Default: 2 Jahre)"),
+    horizon_days: int = Query(default=14, description="Forecast-Horizont in Tagen (Default: 14)"),
+    min_train_points: int = Query(default=20, description="Mindestanzahl Trainingspunkte je Fold"),
+    strict_vintage_mode: bool = Query(
+        default=True,
+        description="Wenn true: nur Daten verwenden, die zum Forecast-Zeitpunkt verfügbar waren",
+    ),
+    db: Session = Depends(get_db),
+):
+    """Demo-Modus: Markt-Simulation ohne Kundendaten gegen RKI-Proxy-Wahrheit."""
+    if virus_typ not in VALID_VIRUS_TYPES:
+        virus_typ = "Influenza A"
+
+    target_key = (target or "RKI_ARE").strip().upper()
+    if target_key not in VALID_MARKET_TARGETS and not target_key.startswith("SURVSTAT:"):
+        return {
+            "error": f"Ungültiges target '{target}'.",
+            "allowed_targets": sorted(VALID_MARKET_TARGETS),
+            "hint": "Optional auch SURVSTAT:<Suchbegriff> (z.B. SURVSTAT:Mycoplasma)",
+        }
+
+    from app.services.ml.backtester import BacktestService
+    service = BacktestService(db)
+    return service.run_market_simulation(
+        virus_typ=virus_typ,
+        target_source=target_key,
+        days_back=days_back,
+        horizon_days=horizon_days,
+        min_train_points=min_train_points,
+        strict_vintage_mode=strict_vintage_mode,
+    )

@@ -1,6 +1,6 @@
 from pytrends.request import TrendReq
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 import logging
 import time
@@ -20,6 +20,7 @@ class GoogleTrendsService:
         "Corona Test",
         "Husten",
     ]
+    AVAILABILITY_DELAY_DAYS = 3
 
     def __init__(self, db: Session):
         self.db = db
@@ -52,6 +53,9 @@ class GoogleTrendsService:
         count = 0
 
         for date, row in df.iterrows():
+            available_time = pd.to_datetime(date).to_pydatetime() + timedelta(
+                days=self.AVAILABILITY_DELAY_DAYS
+            )
             for keyword in df.columns:
                 interest_score = row[keyword]
                 if pd.isna(interest_score):
@@ -65,9 +69,12 @@ class GoogleTrendsService:
 
                 if existing:
                     existing.interest_score = int(interest_score)
+                    if getattr(existing, "available_time", None) is None:
+                        existing.available_time = available_time
                 else:
                     data = GoogleTrendsData(
                         datum=date,
+                        available_time=available_time,
                         keyword=keyword,
                         region=region,
                         interest_score=int(interest_score),

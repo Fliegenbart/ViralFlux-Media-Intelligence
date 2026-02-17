@@ -6,11 +6,93 @@ const cardStyle: React.CSSProperties = {
   border: '1px solid #24324a',
 };
 
+const CONTACT_EMAIL = 'sales@peix.de';
+
+const COPY = {
+  nav: {
+    brandTitle: 'PEIX | ViralFlux Media Intelligence',
+    brandSubtitle: 'Service-Plattform für Predictive Pharma Media',
+    primaryCta: 'Beratungsgespräch starten',
+    secondaryCta: 'Live-Demo ansehen',
+  },
+  hero: {
+    badge: 'Bis zu 14 Tage Lead - verifiziert im Markt-Backtest',
+    titleTop: 'Media-Budgets steuern,',
+    titleBottom: 'bevor die Nachfragewelle sichtbar wird.',
+    subtitle:
+      'Viele Kampagnen reagieren zu spät auf Abverkaufs- und Indexdaten. ViralFlux nutzt behördliche Trigger, um Aktivierung regional früher und effizienter zu planen.',
+    chips: ['bis zu 14 Tage Lead', 'regionale Aktivierung', 'BfArM-Engpass-Signal'],
+  },
+  valueCards: [
+    {
+      title: 'Timing-Vorteil für Marken',
+      text: 'Abwasser- und Surveillance-Signale können steigenden Bedarf vor klassischen Marktdaten anzeigen. So wird Budget in frühe Nachfragefenster verschoben.',
+    },
+    {
+      title: 'Effizienz im Budget-Shift',
+      text: 'Regionale Unterschiede werden sichtbar. Hoher Bedarf wird priorisiert, Low-Demand-Regionen werden entlastet - bei gleichem Gesamtbudget.',
+    },
+    {
+      title: 'Wettbewerbsfenster erkennen',
+      text: 'BfArM-Engpasssignale werden als Trigger genutzt. Wenn Wettbewerber nicht lieferfähig sind, kann die Verfügbarkeitskommunikation gezielt hochgefahren werden.',
+    },
+  ],
+  proof: {
+    title: 'So belegen wir die Wirksamkeit',
+    intro:
+      'ViralFlux kombiniert Markt-Proxy-Backtests mit optionalem Kundenabgleich. Dadurch entsteht ein belastbarer Startpunkt, auch ohne initiale Sales-Datenfreigabe.',
+    modes: [
+      {
+        title: 'Mode A: Markt-Check',
+        text: 'Ohne Kundendaten. Vergleich unseres Signals mit öffentlichen Proxy-Reihen (z. B. RKI ARE, SURVSTAT).',
+      },
+      {
+        title: 'Mode B: Realitäts-Check',
+        text: 'Mit CSV-Upload. Ihre Verkaufs- oder Bestellhistorie wird gegen ViralFlux-Signale gespiegelt, inklusive Lead/Lag und Baseline-Vergleich.',
+      },
+    ],
+    sources:
+      'Datenbasis: AMELAG, RKI ARE, SURVSTAT, Notaufnahme, Wetter und BfArM-Engpassmeldungen.',
+  },
+  offer: {
+    title: 'Nächster Schritt: PEIX Discovery + POC',
+    intro:
+      'Der Einstieg ist klar strukturiert und ohne Integrationsrisiko möglich. Ziel ist eine belastbare Entscheidung für einen Pilot je Marke.',
+    steps: [
+      '30-min Discovery Call mit Zielregionen, Markenfokus und Budgetrahmen.',
+      'Markt-Backtest-Demo im Cockpit mit öffentlichen Datenquellen.',
+      'Optionaler Kunden-CSV-Check zur Validierung von Korrelation und Lead-Zeit.',
+    ],
+    primaryCta: 'Jetzt Gespräch anfragen',
+    secondaryCta: 'Direkt ins Media-Cockpit',
+  },
+  footer: 'PEIX ViralFlux Media Intelligence © 2026 - Predictive Service für Pharma Healthcare Marketing',
+};
+
+const buildMailtoLink = () => {
+  const subject = 'POC Anfrage ViralFlux Media Intelligence';
+  const body = [
+    'Hallo PEIX Team,',
+    '',
+    'wir möchten ein kurzes Beratungsgespräch zu ViralFlux vereinbaren.',
+    '',
+    'Marke/Produkt:',
+    'Regionen:',
+    'Zielbild (z. B. Awareness, Effizienz, Wettbewerbsfenster):',
+    'Gewünschter Termin:',
+    '',
+    'Viele Grüße',
+  ].join('\n');
+
+  return `mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+};
+
 const LandingPage: React.FC = () => {
   const navigate = useNavigate();
+  const mailtoLink = buildMailtoLink();
 
   return (
-    <div className="min-h-screen" style={{ background: '#091222' }}>
+    <div className="min-h-screen overflow-x-hidden" style={{ background: '#091222' }}>
       <div
         className="absolute inset-0 opacity-30"
         style={{
@@ -20,37 +102,37 @@ const LandingPage: React.FC = () => {
         }}
       />
 
-      <nav className="relative max-w-[1240px] mx-auto px-6 py-6 flex items-center justify-between" style={{ zIndex: 10 }}>
-        <div className="flex items-center gap-3">
+      <nav className="relative max-w-[1240px] mx-auto px-4 sm:px-6 py-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4" style={{ zIndex: 10 }}>
+        <div className="flex items-center gap-3 w-full sm:w-auto">
           <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #0ea5e9, #3b82f6)' }}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
               <path d="M3 12h4l2-4 3 8 2-4h7" />
             </svg>
           </div>
           <div>
-            <div className="text-white font-bold tracking-tight">ViralFlux Media Intelligence</div>
-            <div className="text-[11px] text-slate-400">by PEIX - Predictive Pharma Media</div>
+            <div className="text-white font-bold tracking-tight">{COPY.nav.brandTitle}</div>
+            <div className="text-[11px] text-slate-400">{COPY.nav.brandSubtitle}</div>
           </div>
         </div>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => navigate('/vertriebsradar')}
-            className="px-4 py-2 text-xs font-semibold rounded-lg"
+        <div className="flex w-full sm:w-auto flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
+          <a
+            href={mailtoLink}
+            className="px-4 py-2 text-xs font-semibold rounded-lg text-center whitespace-nowrap"
             style={{ color: '#f59e0b', border: '1px solid #f59e0b55', background: 'rgba(245,158,11,0.08)' }}
           >
-            Use Cases
-          </button>
+            {COPY.nav.primaryCta}
+          </a>
           <button
             onClick={() => navigate('/dashboard')}
-            className="px-4 py-2 text-xs font-semibold rounded-lg text-white"
+            className="px-4 py-2 text-xs font-semibold rounded-lg text-white text-center whitespace-nowrap"
             style={{ background: 'linear-gradient(135deg, #0ea5e9, #3b82f6)' }}
           >
-            Demo öffnen
+            {COPY.nav.secondaryCta}
           </button>
         </div>
       </nav>
 
-      <main className="relative max-w-[1240px] mx-auto px-6 pb-16" style={{ zIndex: 5 }}>
+      <main className="relative max-w-[1240px] mx-auto px-4 sm:px-6 pb-16" style={{ zIndex: 5 }}>
         <section className="pt-12 pb-12 text-center">
           <div
             className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold mb-6"
@@ -60,115 +142,91 @@ const LandingPage: React.FC = () => {
               background: 'rgba(14,165,233,0.1)',
             }}
           >
-            14-Tage-Frühsignal für pharmazeutische Media-Activation
+            {COPY.hero.badge}
           </div>
 
           <h1 className="text-4xl md:text-6xl font-extrabold leading-[1.05] text-white tracking-tight">
-            Weg vom Rückspiegel.
+            {COPY.hero.titleTop}
             <br />
-            Hin zu Echtzeit-Media auf
-            <span style={{ color: '#38bdf8' }}> behördlich validierten Triggern.</span>
+            <span style={{ color: '#38bdf8' }}>{COPY.hero.titleBottom}</span>
           </h1>
 
-          <p className="mt-6 text-lg text-slate-300 max-w-4xl mx-auto leading-relaxed">
-            PEIX nutzt <strong className="text-white">ViralFlux</strong>, um für Marken wie
-            <strong className="text-white"> GeloMyrtol</strong> Budgets automatisch dort hochzufahren,
-            wo die Welle anrollt - und sie dort einzusparen, wo kein Bedarf entsteht.
-          </p>
-        </section>
+          <p className="mt-6 text-lg text-slate-300 max-w-4xl mx-auto leading-relaxed">{COPY.hero.subtitle}</p>
 
-        <section className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-          <div className="lg:col-span-2 rounded-2xl p-6" style={cardStyle}>
-            <div className="text-xs uppercase tracking-widest text-slate-500 mb-3">Elevator Pitch (30 Sekunden)</div>
-            <blockquote className="text-slate-200 leading-relaxed text-[15px] md:text-base">
-              "Wussten Sie, dass wir eine Erkältungswelle 14 Tage früher sehen als jede Apotheke und jede Google-Suche?
-              <br /><br />
-              Aktuell steuern fast alle Pharma-Kampagnen nach dem Rückspiegel-Prinzip. Sie reagieren auf Verkaufszahlen oder Grippe-Indizes, wenn die Welle schon da ist.
-              <br /><br />
-              Unsere Engine ViralFlux nutzt behördliche Abwasserdaten, RKI-Meldedaten und Wetterprognosen als Live-Trigger für Ihren Media-Einkauf.
-              <br /><br />
-              Das bedeutet für GeloMyrtol: Wir fahren Ihre Budgets vollautomatisch dort hoch, wo die Welle anrollt - und sparen es dort ein, wo alle gesund sind.
-              <br /><br />
-              Und der Clou: Über BfArM-Daten erkennen wir sogar, wenn die Konkurrenz lieferunfähig ist, und schalten dann Sofort-verfügbar-Kampagnen frei."
-            </blockquote>
-          </div>
-
-          <div className="rounded-2xl p-6" style={cardStyle}>
-            <div className="text-xs uppercase tracking-widest text-slate-500 mb-3">Für PEIX Kunden</div>
-            <div className="space-y-3 text-sm text-slate-300">
-              <div className="p-3 rounded-lg" style={{ background: '#0b1527', border: '1px solid #233149' }}>
-                <div className="text-cyan-400 font-semibold">Case</div>
-                <div>GeloMyrtol</div>
+          <div className="mt-7 flex flex-wrap justify-center gap-2">
+            {COPY.hero.chips.map((chip) => (
+              <div
+                key={chip}
+                className="px-3 py-1.5 rounded-full text-xs font-semibold text-slate-200"
+                style={{ border: '1px solid #2d3e5e', background: '#0b1527' }}
+              >
+                {chip}
               </div>
-              <div className="p-3 rounded-lg" style={{ background: '#0b1527', border: '1px solid #233149' }}>
-                <div className="text-cyan-400 font-semibold">Signal-Lead</div>
-                <div>bis zu 14 Tage</div>
-              </div>
-              <div className="p-3 rounded-lg" style={{ background: '#0b1527', border: '1px solid #233149' }}>
-                <div className="text-cyan-400 font-semibold">Steuerung</div>
-                <div>PLZ-genaue Budget-Shift-Logik</div>
-              </div>
-              <div className="p-3 rounded-lg" style={{ background: '#0b1527', border: '1px solid #233149' }}>
-                <div className="text-cyan-400 font-semibold">Differenzierung</div>
-                <div>Behördlich validiert statt Bauchgefühl</div>
-              </div>
-            </div>
+            ))}
           </div>
         </section>
 
         <section className="mb-10">
-          <h2 className="text-2xl md:text-3xl font-extrabold text-white mb-4">Key Selling Points fürs Deck</h2>
+          <h2 className="text-2xl md:text-3xl font-extrabold text-white mb-4">Warum das für Brand Manager relevant ist</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-            <article className="rounded-2xl p-5" style={cardStyle}>
-              <div className="text-xs text-cyan-400 font-semibold mb-2">1. Zeit-Vorteil (Bio-Layer)</div>
-              <p className="text-sm text-slate-300 leading-relaxed">
-                AMELAG erkennt Infektionsdynamik, bevor Abverkaufsdaten reagieren.
-                Ergebnis: Top-of-Mind-Präsenz für GeloMyrtol, bevor der erste Leidensdruck entsteht.
-              </p>
-            </article>
+            {COPY.valueCards.map((card) => (
+              <article key={card.title} className="rounded-2xl p-5" style={cardStyle}>
+                <div className="text-xs text-cyan-400 font-semibold mb-2">{card.title}</div>
+                <p className="text-sm text-slate-300 leading-relaxed">{card.text}</p>
+              </article>
+            ))}
+          </div>
+        </section>
 
-            <article className="rounded-2xl p-5" style={cardStyle}>
-              <div className="text-xs text-cyan-400 font-semibold mb-2">2. Konkurrenz-Radar (Market-Layer)</div>
-              <p className="text-sm text-slate-300 leading-relaxed">
-                Der Resource-Scarcity-Detector scannt BfArM täglich.
-                Bei Lieferengpässen der Konkurrenz startet ViralFlux automatisch verfügbarkeitsgetriebene Kampagnen.
-              </p>
-            </article>
+        <section className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-10">
+          <div className="lg:col-span-2 rounded-2xl p-6" style={cardStyle}>
+            <div className="text-xs uppercase tracking-widest text-slate-500 mb-3">{COPY.proof.title}</div>
+            <p className="text-slate-200 text-sm leading-relaxed mb-4">{COPY.proof.intro}</p>
 
-            <article className="rounded-2xl p-5" style={cardStyle}>
-              <div className="text-xs text-cyan-400 font-semibold mb-2">3. Symptom-Check (Context-Layer)</div>
-              <p className="text-sm text-slate-300 leading-relaxed">
-                Wetter, Pollen und Feinstaub verhindern False Positives.
-                ViralFlux unterscheidet Allergie-Lagen von infektiösen Lagen und steuert Budgets entsprechend.
-              </p>
-            </article>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {COPY.proof.modes.map((mode) => (
+                <div key={mode.title} className="rounded-lg p-4" style={{ background: '#0b1527', border: '1px solid #233149' }}>
+                  <div className="text-cyan-400 text-xs font-semibold mb-2">{mode.title}</div>
+                  <p className="text-sm text-slate-300 leading-relaxed">{mode.text}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-2xl p-6" style={cardStyle}>
+            <div className="text-xs uppercase tracking-widest text-slate-500 mb-3">Methodische Grundlage</div>
+            <p className="text-sm text-slate-300 leading-relaxed">{COPY.proof.sources}</p>
           </div>
         </section>
 
         <section className="rounded-2xl p-6 md:p-8" style={{ ...cardStyle, background: 'linear-gradient(135deg, rgba(14,165,233,0.14), rgba(17,27,45,0.95))' }}>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
             <div>
-              <h3 className="text-2xl font-extrabold text-white mb-2">Nächster Schritt für PEIX</h3>
-              <p className="text-slate-200 text-sm leading-relaxed">
-                Wir bauen ViralFlux von einem Bestandsmonitor auf ein dediziertes
-                Pharma-Media-Activation-System um: Trigger, Segmentierung, Budget-Routing,
-                Creative-Playbooks und Agentur-Reporting aus einer Plattform.
-              </p>
+              <h3 className="text-2xl font-extrabold text-white mb-2">{COPY.offer.title}</h3>
+              <p className="text-slate-200 text-sm leading-relaxed mb-3">{COPY.offer.intro}</p>
+              <ol className="space-y-2 text-sm text-slate-200">
+                {COPY.offer.steps.map((step) => (
+                  <li key={step} className="flex gap-2">
+                    <span className="text-cyan-300 font-semibold mt-0.5">•</span>
+                    <span>{step}</span>
+                  </li>
+                ))}
+              </ol>
             </div>
-            <div className="flex gap-3 md:justify-end">
+            <div className="flex gap-3 md:justify-end flex-wrap">
+              <a
+                href={mailtoLink}
+                className="px-5 py-3 rounded-xl text-sm font-semibold"
+                style={{ color: '#ffffff', background: 'linear-gradient(135deg, #f59e0b, #d97706)' }}
+              >
+                {COPY.offer.primaryCta}
+              </a>
               <button
                 onClick={() => navigate('/dashboard')}
                 className="px-5 py-3 rounded-xl text-sm font-semibold text-white"
                 style={{ background: 'linear-gradient(135deg, #0ea5e9, #2563eb)' }}
               >
-                ViralFlux Dashboard
-              </button>
-              <button
-                onClick={() => navigate('/datenimport')}
-                className="px-5 py-3 rounded-xl text-sm font-semibold"
-                style={{ color: '#cbd5e1', border: '1px solid #4b5a75', background: '#0b1527' }}
-              >
-                Data & Trigger Setup
+                {COPY.offer.secondaryCta}
               </button>
             </div>
           </div>
@@ -176,7 +234,7 @@ const LandingPage: React.FC = () => {
       </main>
 
       <footer className="relative py-8 text-center text-xs text-slate-500" style={{ borderTop: '1px solid #1c2a42' }}>
-        ViralFlux Media Intelligence © 2026 - PEIX Service Platform für Pharma Healthcare Marketing
+        {COPY.footer}
       </footer>
     </div>
   );

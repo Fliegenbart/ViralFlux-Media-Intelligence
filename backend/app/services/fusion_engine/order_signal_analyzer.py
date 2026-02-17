@@ -46,6 +46,7 @@ class OrderSignalAnalyzer:
 
             entry = GanzimmunData(
                 datum=datum,
+                available_time=datum,
                 test_typ=article_id,
                 anzahl_tests=quantity,
                 positive_ergebnisse=None,  # Keine Testergebnisse bei Bestellungen

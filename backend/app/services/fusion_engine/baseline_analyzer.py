@@ -7,7 +7,7 @@ dem historischen Normalzustand.
 
 import pandas as pd
 import numpy as np
-from datetime import datetime
+from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 import logging
 
@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 
 class BaselineAnalyzer:
     """Analyse interner historischer Labordaten (Ground Truth)."""
+    AVAILABILITY_DELAY_DAYS = 2
 
     def __init__(self, db: Session):
         self.db = db
@@ -33,6 +34,7 @@ class BaselineAnalyzer:
 
         for _, row in df.iterrows():
             datum = pd.to_datetime(row['datum'])
+            available_time = datum + timedelta(days=self.AVAILABILITY_DELAY_DAYS)
             test_typ = row['test_type']
             total = int(row['total_tests'])
             positive = int(row['positive_tests'])
@@ -51,10 +53,13 @@ class BaselineAnalyzer:
                 existing.positive_ergebnisse = positive
                 if region:
                     existing.region = region
+                if getattr(existing, "available_time", None) is None:
+                    existing.available_time = available_time
                 count_updated += 1
             else:
                 entry = GanzimmunData(
                     datum=datum,
+                    available_time=available_time,
                     test_typ=test_typ,
                     anzahl_tests=total,
                     positive_ergebnisse=positive,

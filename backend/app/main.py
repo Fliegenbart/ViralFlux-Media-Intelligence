@@ -108,6 +108,7 @@ async def get_status(db: Session = Depends(get_db)):
         GoogleTrendsData,
         MLForecast,
         NotaufnahmeSyndromData,
+        SurvstatWeeklyData,
     )
     
     # Check latest data timestamps
@@ -126,6 +127,10 @@ async def get_status(db: Session = Depends(get_db)):
     latest_notaufnahme = db.query(NotaufnahmeSyndromData).order_by(
         NotaufnahmeSyndromData.created_at.desc()
     ).first()
+
+    latest_survstat = db.query(SurvstatWeeklyData).order_by(
+        SurvstatWeeklyData.created_at.desc()
+    ).first()
     
     return {
         "status": "operational",
@@ -134,6 +139,7 @@ async def get_status(db: Session = Depends(get_db)):
             "google_trends": latest_trends.created_at if latest_trends else None,
             "ml_forecast": latest_forecast.created_at if latest_forecast else None,
             "notaufnahme": latest_notaufnahme.created_at if latest_notaufnahme else None,
+            "survstat": latest_survstat.created_at if latest_survstat else None,
         },
         "timestamp": datetime.utcnow()
     }
@@ -145,7 +151,23 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # Import API routes
-from app.api import dashboard, ingest, forecast, recommendations, inventory, map_data, ordering, drug_shortage, outbreak_score, marketing, data_import, public_api, calibration
+from app.api import (
+    dashboard,
+    ingest,
+    forecast,
+    recommendations,
+    inventory,
+    map_data,
+    ordering,
+    drug_shortage,
+    outbreak_score,
+    marketing,
+    data_import,
+    public_api,
+    calibration,
+    media,
+    backtest,
+)
 app.include_router(dashboard.router, prefix="/api/v1/dashboard", tags=["Dashboard"])
 app.include_router(ingest.router, prefix="/api/v1/ingest", tags=["Data Ingestion"])
 app.include_router(forecast.router, prefix="/api/v1/forecast", tags=["ML Forecast"])
@@ -156,9 +178,11 @@ app.include_router(ordering.router, prefix="/api/v1/ordering", tags=["Ordering"]
 app.include_router(drug_shortage.router, prefix="/api/v1/drug-shortage", tags=["Drug Shortage"])
 app.include_router(outbreak_score.router, prefix="/api/v1/outbreak-score", tags=["Outbreak Score"])
 app.include_router(marketing.router, prefix="/api/v1/marketing", tags=["Marketing"])
+app.include_router(media.router, prefix="/api/v1/media", tags=["Media"])
 app.include_router(data_import.router, prefix="/api/v1/data-import", tags=["Data Import"])
 app.include_router(public_api.router, prefix="/api/v1/public", tags=["Public API"])
 app.include_router(calibration.router, prefix="/api/v1/calibration", tags=["Calibration"])
+app.include_router(backtest.router, prefix="/api/v1/backtest", tags=["Backtest"])
 
 
 if __name__ == "__main__":

@@ -69,6 +69,7 @@ Thumbs.db
 coverage/
 .coverage
 htmlcov/
+output/
 
 # TypeScript
 *.tsbuildinfo

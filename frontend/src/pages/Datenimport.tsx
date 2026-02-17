@@ -6,6 +6,7 @@ import {
 } from 'recharts';
 import { format, parseISO } from 'date-fns';
 import { de } from 'date-fns/locale';
+import { CatalogProduct, ProductConditionMapping } from '../types/media';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 interface CalibrationResult {
@@ -28,6 +29,41 @@ interface CalibrationResult {
     psycho: number;
     context: number;
   }>;
+  error?: string;
+}
+
+interface MarketSimulationResult {
+  mode: string;
+  virus_typ: string;
+  target_source: string;
+  target_key: string;
+  target_label: string;
+  proof_text: string;
+  llm_insight: string;
+  metrics: {
+    r2_score: number;
+    correlation: number;
+    correlation_pct: number;
+    mae: number;
+    data_points: number;
+    date_range: { start: string; end: string };
+  };
+  optimized_weights: Record<string, number>;
+  chart_data: Array<{
+    date: string;
+    real_qty: number;
+    predicted_qty: number;
+    bio: number;
+    psycho: number;
+    context: number;
+  }>;
+  lead_lag?: {
+    best_lag_points: number;
+    best_lag_days: number;
+    lag_step_days: number;
+    lag_correlation: number;
+    bio_leads_target: boolean;
+  };
   error?: string;
 }
 
@@ -65,7 +101,21 @@ interface UploadHistoryEntry {
   created_at: string;
 }
 
+interface BacktestRunEntry {
+  run_id: string;
+  mode: string;
+  target_source: string;
+  virus_typ: string;
+  metrics: {
+    r2_score?: number;
+    correlation_pct?: number;
+    mae?: number;
+  };
+  created_at: string;
+}
+
 type UploadType = 'orders' | 'lab_results';
+type MarketTarget = 'RKI_ARE' | 'MYCOPLASMA' | 'KEUCHHUSTEN' | 'PNEUMOKOKKEN';
 
 interface ZoneState {
   file: File | null;
@@ -137,6 +187,13 @@ const WEIGHT_LABELS: Record<string, string> = {
   context: 'Kontext',
 };
 const WEIGHT_KEYS = ['bio', 'market', 'psycho', 'context'];
+const MARKET_TARGET_OPTIONS: Array<{ value: MarketTarget; label: string }> = [
+  { value: 'RKI_ARE', label: 'RKI ARE (Markt)' },
+  { value: 'MYCOPLASMA', label: 'SURVSTAT Mycoplasma' },
+  { value: 'KEUCHHUSTEN', label: 'SURVSTAT Keuchhusten' },
+  { value: 'PNEUMOKOKKEN', label: 'SURVSTAT Pneumokokken' },
+];
+const VIRUS_OPTIONS = ['Influenza A', 'Influenza B', 'SARS-CoV-2', 'RSV A'];
 
 // ─── Component ──────────────────────────────────────────────────────────────
 const Datenimport: React.FC = () => {
@@ -147,11 +204,32 @@ const Datenimport: React.FC = () => {
   });
   const [history, setHistory] = useState<UploadHistoryEntry[]>([]);
   const [historyLoading, setHistoryLoading] = useState(true);
+  const [marketTarget, setMarketTarget] = useState<MarketTarget>('RKI_ARE');
+  const [marketVirus, setMarketVirus] = useState('Influenza A');
+  const [marketDaysBack, setMarketDaysBack] = useState(730);
+  const [marketLoading, setMarketLoading] = useState(false);
+  const [marketResult, setMarketResult] = useState<MarketSimulationResult | null>(null);
+  const [marketError, setMarketError] = useState<string | null>(null);
+  const [backtestRuns, setBacktestRuns] = useState<BacktestRunEntry[]>([]);
+  const [backtestRunsLoading, setBacktestRunsLoading] = useState(false);
+  const [survstatFiles, setSurvstatFiles] = useState<File[]>([]);
+  const [survstatUploading, setSurvstatUploading] = useState(false);
+  const [survstatResult, setSurvstatResult] = useState<any | null>(null);
+  const [survstatError, setSurvstatError] = useState<string | null>(null);
+  const [catalogRefreshing, setCatalogRefreshing] = useState(false);
+  const [catalogLoading, setCatalogLoading] = useState(false);
+  const [catalogError, setCatalogError] = useState<string | null>(null);
+  const [catalogResult, setCatalogResult] = useState<any | null>(null);
+  const [catalogProducts, setCatalogProducts] = useState<CatalogProduct[]>([]);
+  const [conditionMappings, setConditionMappings] = useState<ProductConditionMapping[]>([]);
+  const [mappingSaving, setMappingSaving] = useState<number | null>(null);
 
-  const fileInputRefs = {
-    orders: useRef<HTMLInputElement>(null),
-    lab_results: useRef<HTMLInputElement>(null),
-  };
+  const ordersInputRef = useRef<HTMLInputElement>(null);
+  const labResultsInputRef = useRef<HTMLInputElement>(null);
+  const getFileInputRef = useCallback(
+    (type: UploadType) => (type === 'orders' ? ordersInputRef : labResultsInputRef),
+    []
+  );
 
   // ─── Zone State Helper ──────────────────────────────────────────────
   const updateZone = useCallback((type: UploadType, patch: Partial<ZoneState>) => {
@@ -174,6 +252,178 @@ const Datenimport: React.FC = () => {
   }, []);
 
   useEffect(() => { fetchHistory(); }, [fetchHistory]);
+
+  const fetchBacktestRuns = useCallback(async () => {
+    setBacktestRunsLoading(true);
+    try {
+      const res = await fetch('/api/v1/backtest/runs?limit=15');
+      if (res.ok) {
+        const data = await res.json();
+        setBacktestRuns(data.runs || []);
+      }
+    } catch (e) {
+      console.error('Fetch backtest runs error:', e);
+    } finally {
+      setBacktestRunsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { fetchBacktestRuns(); }, [fetchBacktestRuns]);
+
+  const fetchProductCatalog = useCallback(async () => {
+    setCatalogLoading(true);
+    setCatalogError(null);
+    try {
+      const [productsRes, mappingRes] = await Promise.all([
+        fetch('/api/v1/media/products?brand=gelo'),
+        fetch('/api/v1/media/product-mapping?brand=gelo'),
+      ]);
+
+      if (!productsRes.ok) {
+        throw new Error(`Produktkatalog konnte nicht geladen werden (HTTP ${productsRes.status})`);
+      }
+      if (!mappingRes.ok) {
+        throw new Error(`Mapping-Liste konnte nicht geladen werden (HTTP ${mappingRes.status})`);
+      }
+
+      const productsData = await productsRes.json();
+      const mappingData = await mappingRes.json();
+      setCatalogProducts(productsData.products || []);
+      setConditionMappings(mappingData.mappings || []);
+    } catch (e: any) {
+      setCatalogError(e.message || 'Produktkatalog konnte nicht geladen werden.');
+    } finally {
+      setCatalogLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchProductCatalog();
+  }, [fetchProductCatalog]);
+
+  const refreshProductCatalog = useCallback(async () => {
+    setCatalogRefreshing(true);
+    setCatalogError(null);
+    setCatalogResult(null);
+    try {
+      const res = await fetch('/api/v1/media/products/refresh?brand=gelo', { method: 'POST' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.detail || `HTTP ${res.status}`);
+      }
+      setCatalogResult(data);
+      await fetchProductCatalog();
+    } catch (e: any) {
+      setCatalogError(e.message || 'Produkt-Refresh fehlgeschlagen');
+    } finally {
+      setCatalogRefreshing(false);
+    }
+  }, [fetchProductCatalog]);
+
+  const saveMappingReview = useCallback(async (mapping: ProductConditionMapping) => {
+    setMappingSaving(mapping.mapping_id);
+    setCatalogError(null);
+    try {
+      const res = await fetch(`/api/v1/media/product-mapping/${mapping.mapping_id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          is_approved: mapping.is_approved,
+          priority: Number(mapping.priority || 0),
+          notes: mapping.notes || null,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.detail || `HTTP ${res.status}`);
+      }
+      setConditionMappings((prev) => prev.map((row) => (
+        row.mapping_id === mapping.mapping_id
+          ? {
+              ...row,
+              is_approved: data.is_approved,
+              priority: data.priority,
+              notes: data.notes,
+              updated_at: data.updated_at,
+            }
+          : row
+      )));
+    } catch (e: any) {
+      setCatalogError(e.message || 'Mapping konnte nicht gespeichert werden.');
+    } finally {
+      setMappingSaving(null);
+    }
+  }, []);
+
+  const updateLocalMapping = useCallback(
+    (mappingId: number, patch: Partial<ProductConditionMapping>) => {
+      setConditionMappings((prev) => prev.map((row) => (
+        row.mapping_id === mappingId
+          ? { ...row, ...patch }
+          : row
+      )));
+    },
+    []
+  );
+
+  const runMarketSimulation = useCallback(async () => {
+    setMarketLoading(true);
+    setMarketError(null);
+
+    try {
+      const qs = new URLSearchParams({
+        target_source: marketTarget,
+        virus_typ: marketVirus,
+        days_back: String(marketDaysBack),
+      });
+      const res = await fetch(`/api/v1/backtest/market?${qs.toString()}`, {
+        method: 'POST',
+      });
+
+      const result = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+      if (!res.ok || result.error) {
+        throw new Error(result.error || `HTTP ${res.status}`);
+      }
+
+      setMarketResult(result);
+      fetchBacktestRuns();
+    } catch (e: any) {
+      setMarketError(e.message || 'Markt-Simulation fehlgeschlagen');
+      setMarketResult(null);
+    } finally {
+      setMarketLoading(false);
+    }
+  }, [marketTarget, marketVirus, marketDaysBack, fetchBacktestRuns]);
+
+  const uploadSurvstatWeekly = useCallback(async () => {
+    if (survstatFiles.length === 0) {
+      setSurvstatError('Bitte mindestens eine SURVSTAT Datei auswählen.');
+      return;
+    }
+
+    setSurvstatUploading(true);
+    setSurvstatError(null);
+    setSurvstatResult(null);
+
+    try {
+      const form = new FormData();
+      survstatFiles.forEach((f) => form.append('files', f));
+      const res = await fetch('/api/v1/ingest/survstat-upload', {
+        method: 'POST',
+        body: form,
+      });
+      const data = await res.json().catch(() => ({ detail: `HTTP ${res.status}` }));
+      if (!res.ok || data.error || data.detail) {
+        throw new Error(data.error || data.detail || `HTTP ${res.status}`);
+      }
+      setSurvstatResult(data);
+      fetchHistory();
+    } catch (e: any) {
+      setSurvstatError(e.message || 'SURVSTAT Upload fehlgeschlagen');
+    } finally {
+      setSurvstatUploading(false);
+    }
+  }, [survstatFiles, fetchHistory]);
 
   // ─── File Validation ────────────────────────────────────────────────
   const validateFile = (file: File): string | null => {
@@ -238,10 +488,11 @@ const Datenimport: React.FC = () => {
   // ─── Reset Zone ─────────────────────────────────────────────────────
   const resetZone = useCallback((type: UploadType) => {
     updateZone(type, { ...INITIAL_ZONE });
-    if (fileInputRefs[type].current) {
-      fileInputRefs[type].current!.value = '';
+    const ref = getFileInputRef(type);
+    if (ref.current) {
+      ref.current.value = '';
     }
-  }, [updateZone]);
+  }, [updateZone, getFileInputRef]);
 
   // ─── Drag & Drop Handlers ──────────────────────────────────────────
   const handleDragOver = (type: UploadType) => (e: React.DragEvent) => {
@@ -302,6 +553,11 @@ const Datenimport: React.FC = () => {
         ' ' + d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
     } catch { return iso; }
   };
+
+  const marketChartData = marketResult?.chart_data?.map(d => ({
+    ...d,
+    dateLabel: (() => { try { return format(parseISO(d.date), 'MMM yy', { locale: de }); } catch { return d.date; } })(),
+  })) || [];
 
   // ─── Render Upload Zone ─────────────────────────────────────────────
   const renderZone = (type: UploadType) => {
@@ -384,10 +640,10 @@ const Datenimport: React.FC = () => {
               onDragOver={handleDragOver(type)}
               onDragLeave={handleDragLeave(type)}
               onDrop={handleDrop(type)}
-              onClick={() => fileInputRefs[type].current?.click()}
+              onClick={() => getFileInputRef(type).current?.click()}
             >
               <input
-                ref={fileInputRefs[type]}
+                ref={getFileInputRef(type)}
                 type="file"
                 accept=".csv,.xlsx"
                 className="hidden"
@@ -815,6 +1071,485 @@ const Datenimport: React.FC = () => {
 
       {/* ─── Main Content ────────────────────────────────────────── */}
       <main className="max-w-[1400px] mx-auto px-6 py-8">
+
+        {/* ─── Twin-Mode Proof Engine ─────────────────────────── */}
+        <div
+          className="rounded-xl overflow-hidden mb-8"
+          style={{
+            background: '#1e293b',
+            border: '1px solid #334155',
+            animation: 'fadeSlideUp 0.5s ease-out both',
+          }}
+        >
+          <div
+            className="px-5 py-3.5 flex items-center justify-between"
+            style={{ borderBottom: '1px solid #33415580', background: '#3b82f608' }}
+          >
+            <div className="flex items-center gap-2.5">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M2 12h4l3 8 4-16 3 8h6" />
+              </svg>
+              <span className="text-sm font-medium text-slate-200">Proof Engine: Markt-Simulation</span>
+            </div>
+            <span
+              className="text-[10px] px-2 py-0.5 rounded font-medium"
+              style={{ color: '#3b82f6', background: '#3b82f620' }}
+            >
+              Twin-Mode Backtest
+            </span>
+          </div>
+
+          <div className="p-5">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3 mb-4">
+              <div>
+                <div className="text-[10px] text-slate-500 mb-1">Proxy-Target</div>
+                <select
+                  value={marketTarget}
+                  onChange={(e) => setMarketTarget(e.target.value as MarketTarget)}
+                  className="w-full px-3 py-2 rounded-lg text-xs"
+                  style={{ background: '#0f172a', color: '#cbd5e1', border: '1px solid #334155' }}
+                >
+                  {MARKET_TARGET_OPTIONS.map(opt => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <div className="text-[10px] text-slate-500 mb-1">Signal-Fokus</div>
+                <select
+                  value={marketVirus}
+                  onChange={(e) => setMarketVirus(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg text-xs"
+                  style={{ background: '#0f172a', color: '#cbd5e1', border: '1px solid #334155' }}
+                >
+                  {VIRUS_OPTIONS.map(opt => (
+                    <option key={opt} value={opt}>{opt}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <div className="text-[10px] text-slate-500 mb-1">Zeitraum</div>
+                <select
+                  value={marketDaysBack}
+                  onChange={(e) => setMarketDaysBack(Number(e.target.value))}
+                  className="w-full px-3 py-2 rounded-lg text-xs"
+                  style={{ background: '#0f172a', color: '#cbd5e1', border: '1px solid #334155' }}
+                >
+                  <option value={365}>12 Monate</option>
+                  <option value={730}>24 Monate</option>
+                  <option value={1095}>36 Monate</option>
+                </select>
+              </div>
+
+              <div className="flex items-end">
+                <button
+                  onClick={runMarketSimulation}
+                  disabled={marketLoading}
+                  className="w-full py-2 rounded-lg text-xs font-medium text-white transition-opacity hover:opacity-90"
+                  style={{
+                    background: marketLoading ? '#334155' : 'linear-gradient(135deg, #3b82f6, #0ea5e9)',
+                    opacity: marketLoading ? 0.7 : 1,
+                  }}
+                >
+                  {marketLoading ? 'Berechne...' : 'Markt-Simulation starten'}
+                </button>
+              </div>
+            </div>
+
+            {marketError && (
+              <div
+                className="rounded-lg px-4 py-2.5 mb-3 flex items-center gap-2"
+                style={{ background: '#ef444410', border: '1px solid #ef444430' }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2">
+                  <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
+                </svg>
+                <span className="text-[11px] text-red-400">{marketError}</span>
+              </div>
+            )}
+
+            {!marketResult && !marketError && (
+              <div className="rounded-lg px-4 py-3 text-[11px] text-slate-500" style={{ background: '#0f172a', border: '1px solid #334155' }}>
+                Demo-Modus ohne Kundendaten: vergleicht ViralFlux-Signal mit offiziellen RKI-Markt-Proxys.
+              </div>
+            )}
+
+            {marketResult && !marketResult.error && (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                  <div className="rounded-lg p-3" style={{ background: '#0f172a', border: '1px solid #334155' }}>
+                    <div className="text-[10px] text-slate-500">Korrelation</div>
+                    <div className="text-xl font-bold text-white mt-1">{marketResult.metrics.correlation_pct.toFixed(1)}%</div>
+                  </div>
+                  <div className="rounded-lg p-3" style={{ background: '#0f172a', border: '1px solid #334155' }}>
+                    <div className="text-[10px] text-slate-500">R²</div>
+                    <div className="text-xl font-bold text-white mt-1">{marketResult.metrics.r2_score.toFixed(3)}</div>
+                  </div>
+                  <div className="rounded-lg p-3" style={{ background: '#0f172a', border: '1px solid #334155' }}>
+                    <div className="text-[10px] text-slate-500">Lead/Lag</div>
+                    <div
+                      className="text-xl font-bold mt-1"
+                      style={{
+                        color: (marketResult.lead_lag?.best_lag_days || 0) > 0
+                          ? '#10b981'
+                          : (marketResult.lead_lag?.best_lag_days || 0) < 0
+                          ? '#f59e0b'
+                          : '#94a3b8',
+                      }}
+                    >
+                      {marketResult.lead_lag?.best_lag_days ?? 0} Tage
+                    </div>
+                  </div>
+                  <div className="rounded-lg p-3" style={{ background: '#0f172a', border: '1px solid #334155' }}>
+                    <div className="text-[10px] text-slate-500">Datenpunkte</div>
+                    <div className="text-xl font-bold text-white mt-1">{marketResult.metrics.data_points}</div>
+                  </div>
+                </div>
+
+                <div className="rounded-lg px-3 py-2.5" style={{ background: '#0f172a', border: '1px solid #334155' }}>
+                  <div className="text-[10px] text-slate-500 mb-1">{marketResult.target_label}</div>
+                  <p className="text-[11px] text-slate-300 leading-relaxed">{marketResult.proof_text}</p>
+                </div>
+
+                {marketChartData.length > 0 && (
+                  <div className="rounded-lg p-3" style={{ background: '#0f172a', border: '1px solid #334155' }}>
+                    <div className="text-[10px] text-slate-500 mb-2">Proxy-Markt (Ist) vs. ViralFlux-Simulation</div>
+                    <ResponsiveContainer width="100%" height={210}>
+                      <ComposedChart data={marketChartData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                        <XAxis dataKey="dateLabel" tick={{ fill: '#64748b', fontSize: 9 }} tickLine={{ stroke: '#334155' }} interval="preserveStartEnd" />
+                        <YAxis tick={{ fill: '#64748b', fontSize: 9 }} tickLine={{ stroke: '#334155' }} width={40} />
+                        <Tooltip
+                          contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8, fontSize: 11 }}
+                          labelStyle={{ color: '#f1f5f9' }}
+                          itemStyle={{ color: '#94a3b8' }}
+                        />
+                        <Legend wrapperStyle={{ paddingTop: 8 }} formatter={(v: string) => <span style={{ color: '#94a3b8', fontSize: 10 }}>{v}</span>} />
+                        <Line type="monotone" dataKey="real_qty" name="Proxy-Markt (Ist)" stroke="#ef4444" strokeWidth={1.8} dot={false} connectNulls />
+                        <Line type="monotone" dataKey="predicted_qty" name="ViralFlux-Simulation" stroke="#3b82f6" strokeWidth={1.8} strokeDasharray="5 3" dot={false} connectNulls />
+                      </ComposedChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
+
+                {marketResult.llm_insight && (
+                  <div className="rounded-lg px-3 py-2.5" style={{ background: '#3b82f608', border: '1px solid #3b82f630' }}>
+                    <div className="text-[10px] text-blue-400 mb-1">Storyline für Pitch</div>
+                    <p className="text-[11px] text-slate-300 leading-relaxed">{marketResult.llm_insight}</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="rounded-lg p-3 mt-4" style={{ background: '#0f172a', border: '1px solid #334155' }}>
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-[10px] text-slate-400 uppercase tracking-wider">Backtest Run-Historie</div>
+                <button
+                  onClick={fetchBacktestRuns}
+                  className="text-[10px] text-slate-500 hover:text-slate-300 transition-colors"
+                >
+                  Aktualisieren
+                </button>
+              </div>
+
+              {backtestRunsLoading ? (
+                <div className="text-[11px] text-slate-500 py-4 text-center">Lade Runs...</div>
+              ) : backtestRuns.length === 0 ? (
+                <div className="text-[11px] text-slate-600 py-4 text-center">Noch keine persistierten Backtests.</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-[10px]">
+                    <thead>
+                      <tr style={{ borderBottom: '1px solid #334155' }}>
+                        <th className="py-1.5 text-left text-slate-500 font-medium">Zeit</th>
+                        <th className="py-1.5 text-left text-slate-500 font-medium">Mode</th>
+                        <th className="py-1.5 text-left text-slate-500 font-medium">Target</th>
+                        <th className="py-1.5 text-left text-slate-500 font-medium">Virus</th>
+                        <th className="py-1.5 text-right text-slate-500 font-medium">R²</th>
+                        <th className="py-1.5 text-right text-slate-500 font-medium">Corr%</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {backtestRuns.map((run) => (
+                        <tr key={run.run_id} style={{ borderBottom: '1px solid #1e293b' }}>
+                          <td className="py-1.5 text-slate-400">
+                            {run.created_at ? format(parseISO(run.created_at), 'dd.MM.yy HH:mm', { locale: de }) : '—'}
+                          </td>
+                          <td className="py-1.5 text-slate-300">{run.mode}</td>
+                          <td className="py-1.5 text-slate-400">{run.target_source}</td>
+                          <td className="py-1.5 text-slate-400">{run.virus_typ}</td>
+                          <td className="py-1.5 text-right text-slate-200">{run.metrics?.r2_score ?? '—'}</td>
+                          <td className="py-1.5 text-right text-slate-200">{run.metrics?.correlation_pct ?? '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* ─── SURVSTAT Weekly Upload ────────────────────────── */}
+        <div
+          className="rounded-xl overflow-hidden mb-8"
+          style={{
+            background: '#1e293b',
+            border: '1px solid #334155',
+            animation: 'fadeSlideUp 0.5s ease-out 0.15s both',
+          }}
+        >
+          <div
+            className="px-5 py-3.5 flex items-center justify-between"
+            style={{ borderBottom: '1px solid #33415580' }}
+          >
+            <div className="flex items-center gap-2.5">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="7 10 12 15 17 10" />
+                <line x1="12" y1="15" x2="12" y2="3" />
+              </svg>
+              <span className="text-sm font-medium text-slate-200">SURVSTAT Wochenimport (manuell)</span>
+            </div>
+            <span className="text-[10px] px-2 py-0.5 rounded font-medium" style={{ color: '#10b981', background: '#10b98120' }}>
+              YYYY_WW.csv
+            </span>
+          </div>
+
+          <div className="p-5 space-y-3">
+            <div className="text-[11px] text-slate-500">
+              Lade wöchentlich neue SURVSTAT Exporte hoch (mehrere Dateien möglich). Dateinamen müssen dem Muster <span className="font-mono text-slate-400">2026_08.csv</span> entsprechen.
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-center">
+              <input
+                type="file"
+                multiple
+                accept=".csv"
+                onChange={(e) => setSurvstatFiles(Array.from(e.target.files || []))}
+                className="w-full px-3 py-2 rounded-lg text-xs"
+                style={{ background: '#0f172a', color: '#cbd5e1', border: '1px solid #334155' }}
+              />
+              <button
+                onClick={uploadSurvstatWeekly}
+                disabled={survstatUploading || survstatFiles.length === 0}
+                className="py-2 rounded-lg text-xs font-medium text-white transition-opacity hover:opacity-90"
+                style={{
+                  background: survstatUploading ? '#334155' : 'linear-gradient(135deg, #10b981, #059669)',
+                  opacity: survstatUploading || survstatFiles.length === 0 ? 0.7 : 1,
+                }}
+              >
+                {survstatUploading ? 'Importiere...' : 'SURVSTAT importieren'}
+              </button>
+              <div className="text-[11px] text-slate-500">
+                Ausgewählt: <span className="text-slate-300">{survstatFiles.length}</span> Datei(en)
+              </div>
+            </div>
+
+            {survstatError && (
+              <div className="rounded-lg px-3 py-2 text-[11px]" style={{ background: '#ef444410', border: '1px solid #ef444430', color: '#f87171' }}>
+                {survstatError}
+              </div>
+            )}
+
+            {survstatResult && (
+              <div className="rounded-lg px-3 py-2 text-[11px]" style={{ background: '#0f172a', border: '1px solid #334155', color: '#94a3b8' }}>
+                <div>Verarbeitet: {survstatResult.files_parsed}/{survstatResult.files_received} Dateien</div>
+                <div>Datensätze: {survstatResult.records_total} | Neu: {survstatResult.imported} | Aktualisiert: {survstatResult.updated}</div>
+                <div>Letzte Kalenderwoche: {survstatResult.latest_week || '—'}</div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* ─── Produktkatalog + Mapping Review ───────────────────── */}
+        <div
+          className="rounded-xl overflow-hidden mb-8"
+          style={{
+            background: '#1e293b',
+            border: '1px solid #334155',
+            animation: 'fadeSlideUp 0.5s ease-out 0.2s both',
+          }}
+        >
+          <div
+            className="px-5 py-3.5 flex flex-wrap items-center justify-between gap-3"
+            style={{ borderBottom: '1px solid #33415580', background: '#0ea5e908' }}
+          >
+            <div className="flex items-center gap-2.5">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 6h18M3 12h18M3 18h18" />
+              </svg>
+              <span className="text-sm font-medium text-slate-200">Gelo Produktkatalog + Lage-Mapping</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={fetchProductCatalog}
+                className="text-[11px] px-3 py-1.5 rounded-lg"
+                style={{ background: '#0f172a', border: '1px solid #334155', color: '#94a3b8' }}
+              >
+                Neu laden
+              </button>
+              <button
+                onClick={refreshProductCatalog}
+                disabled={catalogRefreshing}
+                className="text-[11px] px-3 py-1.5 rounded-lg font-medium text-white transition-opacity hover:opacity-90"
+                style={{
+                  background: catalogRefreshing ? '#334155' : 'linear-gradient(135deg, #0ea5e9, #0284c7)',
+                  opacity: catalogRefreshing ? 0.7 : 1,
+                }}
+              >
+                {catalogRefreshing ? 'Aktualisiere...' : 'Produkte refreshen'}
+              </button>
+            </div>
+          </div>
+
+          <div className="p-5 space-y-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-[11px]">
+              <div className="rounded-lg px-3 py-2" style={{ background: '#0f172a', border: '1px solid #334155' }}>
+                Produkte gesamt: <span className="text-slate-200 font-medium">{catalogProducts.length}</span>
+              </div>
+              <div className="rounded-lg px-3 py-2" style={{ background: '#0f172a', border: '1px solid #334155' }}>
+                Aktiv: <span className="text-slate-200 font-medium">{catalogProducts.filter((p) => p.active).length}</span>
+              </div>
+              <div className="rounded-lg px-3 py-2" style={{ background: '#0f172a', border: '1px solid #334155' }}>
+                Mapping gesamt: <span className="text-slate-200 font-medium">{conditionMappings.length}</span>
+              </div>
+              <div className="rounded-lg px-3 py-2" style={{ background: '#0f172a', border: '1px solid #334155' }}>
+                Pending: <span className="text-amber-300 font-medium">{conditionMappings.filter((m) => !m.is_approved).length}</span>
+              </div>
+            </div>
+
+            {catalogError && (
+              <div className="rounded-lg px-3 py-2 text-[11px]" style={{ background: '#ef444410', border: '1px solid #ef444430', color: '#f87171' }}>
+                {catalogError}
+              </div>
+            )}
+
+            {catalogResult && (
+              <div className="rounded-lg px-3 py-2 text-[11px]" style={{ background: '#0f172a', border: '1px solid #334155', color: '#94a3b8' }}>
+                <div>
+                  Refresh: +{catalogResult?.counts?.added ?? 0} neu | {catalogResult?.counts?.updated ?? 0} aktualisiert | {catalogResult?.counts?.removed ?? 0} deaktiviert
+                </div>
+                <div>
+                  Laufzeit: {catalogResult?.run_timestamp ? fmtDateTime(catalogResult.run_timestamp) : '—'}
+                </div>
+              </div>
+            )}
+
+            <div>
+              <div className="text-[11px] text-slate-500 mb-2">Aktiver Produktkatalog</div>
+              <div className="flex flex-wrap gap-2">
+                {catalogProducts.map((product) => (
+                  <span
+                    key={product.id}
+                    className="text-[10px] px-2 py-1 rounded-full"
+                    style={{
+                      background: product.active ? '#10b98120' : '#47556930',
+                      color: product.active ? '#6ee7b7' : '#94a3b8',
+                      border: `1px solid ${product.active ? '#10b98140' : '#47556970'}`,
+                    }}
+                  >
+                    {product.product_name}
+                  </span>
+                ))}
+                {!catalogLoading && catalogProducts.length === 0 && (
+                  <span className="text-[11px] text-slate-500">Noch keine Produkte geladen.</span>
+                )}
+              </div>
+            </div>
+
+            <div>
+              <div className="text-[11px] text-slate-500 mb-2">Review: Produkt-zu-Lage-Mappings</div>
+              {catalogLoading ? (
+                <div className="rounded-lg px-3 py-4 text-center text-[11px] text-slate-500" style={{ background: '#0f172a', border: '1px solid #334155' }}>
+                  Lade Mapping-Liste...
+                </div>
+              ) : (
+                <div className="overflow-x-auto rounded-lg" style={{ border: '1px solid #334155' }}>
+                  <table className="w-full text-[10px]">
+                    <thead>
+                      <tr style={{ background: '#0f172a', borderBottom: '1px solid #334155' }}>
+                        <th className="px-3 py-2 text-left font-medium text-slate-500">Produkt</th>
+                        <th className="px-3 py-2 text-left font-medium text-slate-500">Lageklasse</th>
+                        <th className="px-3 py-2 text-left font-medium text-slate-500">Regeltyp</th>
+                        <th className="px-3 py-2 text-right font-medium text-slate-500">Fit</th>
+                        <th className="px-3 py-2 text-center font-medium text-slate-500">Freigabe</th>
+                        <th className="px-3 py-2 text-right font-medium text-slate-500">Priority</th>
+                        <th className="px-3 py-2 text-left font-medium text-slate-500">Notiz</th>
+                        <th className="px-3 py-2 text-right font-medium text-slate-500">Aktion</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {conditionMappings.map((mapping, idx) => (
+                        <tr
+                          key={mapping.mapping_id}
+                          style={{
+                            background: idx % 2 === 0 ? '#1e293b' : '#1a2536',
+                            borderBottom: '1px solid #33415530',
+                          }}
+                        >
+                          <td className="px-3 py-2 text-slate-200">{mapping.product_name}</td>
+                          <td className="px-3 py-2 text-slate-400">{mapping.condition_label}</td>
+                          <td className="px-3 py-2 text-slate-400">{mapping.rule_source || 'auto'}</td>
+                          <td className="px-3 py-2 text-right text-slate-300">{(mapping.fit_score * 100).toFixed(1)}%</td>
+                          <td className="px-3 py-2 text-center">
+                            <input
+                              type="checkbox"
+                              checked={mapping.is_approved}
+                              onChange={(e) => updateLocalMapping(mapping.mapping_id, { is_approved: e.target.checked })}
+                            />
+                          </td>
+                          <td className="px-3 py-2">
+                            <input
+                              type="number"
+                              value={mapping.priority}
+                              onChange={(e) => updateLocalMapping(mapping.mapping_id, { priority: Number(e.target.value) })}
+                              className="w-20 px-2 py-1 rounded text-[10px]"
+                              style={{ background: '#0f172a', border: '1px solid #334155', color: '#cbd5e1' }}
+                            />
+                          </td>
+                          <td className="px-3 py-2">
+                            <input
+                              type="text"
+                              value={mapping.notes || ''}
+                              onChange={(e) => updateLocalMapping(mapping.mapping_id, { notes: e.target.value })}
+                              placeholder="Review-Notiz"
+                              className="w-full px-2 py-1 rounded text-[10px]"
+                              style={{ background: '#0f172a', border: '1px solid #334155', color: '#cbd5e1' }}
+                            />
+                          </td>
+                          <td className="px-3 py-2 text-right">
+                            <button
+                              onClick={() => saveMappingReview(mapping)}
+                              disabled={mappingSaving === mapping.mapping_id}
+                              className="text-[10px] px-2 py-1 rounded"
+                              style={{
+                                background: mappingSaving === mapping.mapping_id ? '#334155' : '#0ea5e940',
+                                color: '#7dd3fc',
+                                border: '1px solid #0ea5e980',
+                              }}
+                            >
+                              {mappingSaving === mapping.mapping_id ? 'Speichert...' : 'Speichern'}
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                      {conditionMappings.length === 0 && (
+                        <tr>
+                          <td colSpan={8} className="px-3 py-4 text-center text-[11px] text-slate-500">
+                            Keine Mappings vorhanden. Bitte erst "Produkte refreshen" ausführen.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
 
         {/* Upload Zones */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-10">

@@ -105,6 +105,7 @@ class AiCampaignPlanner:
             f"Woechentliches Budget (EUR): {weekly_budget:.2f}\n"
             f"Erlaubter Shift-Bereich (%): {min_shift} bis {max_shift}\n"
             f"Kanal-Default-Mix: {json.dumps(channel_mix, ensure_ascii=True)}\n\n"
+            "Wichtig: Antworte kompakt (max. 4 channel_plan Eintraege, max. 6 Keywords, max. 6 Creative Angles, max. 4 Next Steps).\n"
             "Output-Schema (strict):\n"
             "{\n"
             '  "campaign_name": "string",\n'
@@ -135,14 +136,14 @@ class AiCampaignPlanner:
                 "options": {
                     "temperature": 0.2,
                     "top_p": 0.9,
-                    "num_predict": 300,
+                    "num_predict": 160,
                 },
             }
             try:
                 response = requests.post(
                     f"{self.ollama_url}/api/generate",
                     json=payload,
-                    timeout=12,
+                    timeout=30,
                 )
                 if response.status_code == 404 and "model" in response.text.lower():
                     last_error = ValueError(

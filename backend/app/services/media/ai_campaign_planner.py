@@ -34,6 +34,7 @@ _CAMPAIGN_PLAN_SCHEMA: dict[str, Any] = {
                     "kpi_secondary": {"type": "array", "items": {"type": "string"}},
                 },
                 "required": ["channel", "share_pct", "message_angle", "kpi_primary", "kpi_secondary"],
+                "additionalProperties": False,
             },
         },
     },
@@ -44,6 +45,7 @@ _CAMPAIGN_PLAN_SCHEMA: dict[str, Any] = {
         "activation_window_days",
         "channel_plan",
     ],
+    "additionalProperties": False,
 }
 
 
@@ -174,14 +176,14 @@ class AiCampaignPlanner:
                 "options": {
                     "temperature": 0.2,
                     "top_p": 0.9,
-                    "num_predict": 180,
+                    "num_predict": 140,
                 },
             }
             try:
                 response = requests.post(
                     f"{self.ollama_url}/api/generate",
                     json=payload,
-                    timeout=25,
+                    timeout=20,
                 )
                 if response.status_code == 404 and "model" in response.text.lower():
                     last_error = ValueError(

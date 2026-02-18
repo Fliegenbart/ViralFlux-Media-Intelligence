@@ -424,6 +424,32 @@ const CampaignRecommendationDetail: React.FC = () => {
           </div>
 
           <div className="card p-5 space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="text-sm font-semibold text-white">Botschaft (HWG)</h2>
+              <div className="text-[11px] text-slate-500">
+                Copy-Status: <span className="text-slate-200 font-semibold">{detail.campaign_pack?.message_framework?.copy_status || '-'}</span>
+              </div>
+            </div>
+            <div className="text-xs text-slate-300">
+              Hero: <span className="text-slate-200 font-semibold">{detail.campaign_pack?.message_framework?.hero_message || '-'}</span>
+            </div>
+            {Array.isArray(detail.campaign_pack?.message_framework?.support_points) && (detail.campaign_pack?.message_framework?.support_points?.length || 0) > 0 && (
+              <div className="text-xs text-slate-400 leading-relaxed">
+                Support: {(detail.campaign_pack?.message_framework?.support_points || []).slice(0, 4).join(' · ')}
+              </div>
+            )}
+            <div className="text-xs text-slate-400">
+              CTA: {detail.campaign_pack?.message_framework?.cta || '-'}
+            </div>
+            <div className="text-[11px] text-slate-500 leading-relaxed">
+              Compliance: {detail.campaign_pack?.message_framework?.compliance_note || '-'}
+            </div>
+            <div className="text-[11px] text-slate-500">
+              Library: {detail.campaign_pack?.message_framework?.library_source || '-'} {detail.campaign_pack?.message_framework?.library_version ? `· ${detail.campaign_pack?.message_framework?.library_version}` : ''}
+            </div>
+          </div>
+
+          <div className="card p-5 space-y-3">
             <h2 className="text-sm font-semibold text-white">Quick Facts</h2>
             <div className="text-xs text-slate-400">Region: {detail.campaign_pack?.targeting?.region_scope || '-'}</div>
             <div className="text-xs text-slate-400">Urgency Score: {detail.urgency_score ?? '-'}</div>

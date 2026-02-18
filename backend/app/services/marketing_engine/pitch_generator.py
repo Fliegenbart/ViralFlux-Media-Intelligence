@@ -1,6 +1,11 @@
-"""PitchGenerator — Sales-Pitch-Generierung (LLM-first, Template-Fallback).
+"""PitchGenerator — Gelo OTC Copy (LLM-first, deterministic fallback).
 
-UI erwartet:
+This codebase is scoped to consumer OTC marketing for Gelo products.
+Hard rules:
+- HWG compliance (no healing promises, no guarantees, no "side-effect free").
+- No lab diagnostics sales copy.
+
+UI expects:
   sales_pitch = {headline_email, script_phone, call_to_action}
 """
 
@@ -8,128 +13,67 @@ from __future__ import annotations
 
 import json
 import logging
+from typing import Any
 
-from app.services.llm.vllm_service import generate_text, generate_text_sync
+from app.services.llm.vllm_service import generate_text_sync
 from app.services.media.campaign_guardrails import HWG_SYSTEM_PROMPT, check_hwg_compliance
+from app.services.media.message_library import select_gelo_message_pack
 
 logger = logging.getLogger(__name__)
 
 
-TEMPLATES = {
+TEMPLATES: dict[str, dict[str, Any]] = {
     "RESOURCE_SCARCITY": {
-        "Antibiotika": {
-            "headline_email": ("Wichtiger Hinweis: {wave_type}-Engpass bei {category_de}"),
-            "script_phone": (
-                "Guten Tag, wir sehen im System, dass {top_drug} derzeit auf 'Defekt' steht. "
-                "Bevor Sie Restbestände auf Verdacht nutzen: Mit einem CRP-Schnelltest "
-                "filtern Sie virale Infekte sofort raus und sparen Antibiotika für die "
-                "wirklich bakteriellen Fälle. Sollen wir Ihren Bestand aufstocken?"
-            ),
-            "call_to_action": "CRP-Diagnostik sichern",
-        },
-        "Atemwege": {
-            "headline_email": ("Atemwegsmedikamenten-Engpass: Gezielte Diagnostik statt Blindtherapie"),
-            "script_phone": (
-                "Kurze Info: Mehrere Atemwegsmedikamente sind aktuell nicht lieferbar. "
-                "Mit einem Multiplex-PCR-Panel können Sie den Erreger identifizieren "
-                "und gezielt die verfügbaren Alternativen einsetzen. "
-                "Wir haben Panels auf Lager."
-            ),
-            "call_to_action": "Multiplex PCR Panel bestellen",
-        },
-        "Fieber_Schmerz": {
-            "headline_email": ("Ibuprofen/Paracetamol knapp: Differentialdiagnose wird wichtiger"),
-            "script_phone": (
-                "Weil Fieber- und Schmerzmittel derzeit schwer verfügbar sind, "
-                "wird eine saubere Differentialdiagnose umso wichtiger. "
-                "Haben Sie genug Laborkapazität für CRP und Blutbild?"
-            ),
-            "call_to_action": "Laborkapazität prüfen",
-        },
-    },
-    "SEASONAL_DEFICIENCY": {
         "default": {
-            "headline_email": ("Patienten müde & infektanfällig? Der Wetterbericht liefert den Grund."),
+            "headline_email": "Engpass-Signal im Markt: jetzt konservativ kommunizieren",
             "script_phone": (
-                "Kurze Info aus unserer Datenanalyse: In Ihrer Region hatten wir "
-                "seit über {consecutive_days} Tagen keine vitaminwirksame UV-Strahlung. "
-                "Wenn Ihre Patienten über 'Winterblues' klagen, ist es wahrscheinlich "
-                "ein Vitamin-D-Mangel. Wir haben dafür Infomaterial für Ihr Wartezimmer."
+                "Kurzer Hinweis aus unserer Marktbeobachtung: In Ihrer Region gibt es aktuell Engpasssignale. "
+                "Empfehlung: Verfuegbarkeit und konservative, symptomnahe Kommunikation betonen "
+                "(ohne Heilversprechen). Soll die Aktivierung in den betroffenen Regionen priorisiert werden?"
             ),
-            "call_to_action": "Vitamin-D Laborkapazität prüfen",
-        },
-        "cold_fallback": {
-            "headline_email": ("Kälteperiode: Vitamin-D-Screening für Risikopatienten"),
-            "script_phone": (
-                "Bei den aktuellen Temperaturen ({avg_temperature}°C Durchschnitt) "
-                "und fehlender Sonneneinstrahlung steigt das Risiko für Vitamin-D-Mangel. "
-                "Besonders bei älteren Patienten und chronisch Kranken empfehlen wir "
-                "ein Screening."
-            ),
-            "call_to_action": "Vitamin-D-Screening-Kit anfragen",
-        },
+            "call_to_action": "Aktivierung priorisieren",
+        }
     },
     "PREDICTIVE_SALES_SPIKE": {
         "default": {
-            "headline_email": ("Hohe Nachfrage in {region}: {article_name} jetzt sichern"),
+            "headline_email": "Nachfrage-Signal: {product_or_article} in {region} priorisieren",
             "script_phone": (
-                "Ich rufe an, weil wir in {region} seit gestern einen massiven "
-                "Ansturm auf {article_name} sehen — Ihre Nachbarpraxen decken sich "
-                "gerade ein. {velocity_info} "
-                "Sollen wir noch schnell eine Lieferung losschicken, "
-                "bevor wir Lieferzeiten bekommen?"
+                "Wir sehen ein klares Nachfrage-/Velocity-Signal fuer {product_or_article}. "
+                "{velocity_info} "
+                "Empfehlung: Budget und Sichtbarkeit in den betroffenen Regionen kurzfristig anheben, "
+                "mit konservativen symptomnahen Botschaften (HWG-konform)."
             ),
-            "call_to_action": "Sofortversand anbieten",
-        },
+            "call_to_action": "Kampagne ausspielen",
+        }
     },
     "WEATHER_FORECAST": {
-        "low_sunshine_forecast": {
-            "headline_email": ("8-Tage-Prognose: Keine Sonne in Sicht — Vitamin-D-Screening jetzt ansprechen"),
+        "immun_support": {
+            "headline_email": "Weniger Sonne voraus: Immun-Support im Alltag positionieren",
             "script_phone": (
-                "Guten Tag, kurzer Hinweis aus unserer Wetterdaten-Analyse: "
-                "Die nächsten {low_days} von {total_days} Tagen zeigen einen UV-Index unter {uv_threshold} — "
-                "das bedeutet, Ihre Patienten können kein Vitamin D bilden. "
-                "Jetzt ist der ideale Zeitpunkt, um bei Risikopatienten ein 25-OH-Vitamin-D "
-                "Screening anzubieten, bevor die Beschwerden einsetzen."
+                "Die Wetterprognose zeigt mehrere Tage mit niedriger UV-Intensitaet. "
+                "Konservatives Signal fuer saisonale Belastung: Jetzt ist ein gutes Zeitfenster, "
+                "um 'Immunsystem im Alltag unterstuetzen' zu positionieren (ohne Therapieanweisungen)."
             ),
-            "call_to_action": "Vitamin-D Screening proaktiv anbieten",
+            "call_to_action": "Praeventive Aktivierung starten",
         },
-        "nasskalt_forecast": {
-            "headline_email": ("Nasskalte Woche voraus: Erkältungswelle vorbereiten"),
+        "erkaltung_akut": {
+            "headline_email": "Nasskalt voraus: Erkältung im Anflug, jetzt sichtbar werden",
             "script_phone": (
-                "Laut unserer Prognose stehen {nasskalt_days} nasskalte Tage bevor — "
-                "ideal für eine Erkältungswelle. Jetzt ist der richtige Zeitpunkt, "
-                "Ihre Vorräte an respiratorischen Schnelltests aufzustocken, "
-                "damit Sie im Ansturm handlungsfähig bleiben."
+                "Die Prognose zeigt mehrere nasskalte Tage. Erfahrungsgemaess steigt in solchen Phasen "
+                "das Erkältungs-Interesse. Empfehlung: symptomnahe, konservative Botschaften ausspielen "
+                "und regionale Flights priorisieren."
             ),
-            "call_to_action": "Atemwegs-Schnelltests bevorraten",
+            "call_to_action": "Regional aktivieren",
         },
-        "extreme_cold_forecast": {
-            "headline_email": ("Extremkälte-Warnung: Infektionswelle steht bevor"),
+        "default": {
+            "headline_email": "Wetter-Trigger erkannt: konservativ und symptomnah aktivieren",
             "script_phone": (
-                "Achtung: Die Wetterprognose zeigt {extreme_days} Tage mit "
-                "Temperaturen bis zu {min_temp}°C. Erfahrungsgemäß steigt die "
-                "Infektionsrate in solchen Phasen stark an. Haben Sie genügend "
-                "CRP-Tests und Multiplex-Panels auf Lager?"
+                "Ein Wetter-Trigger deutet auf ein moegliches Nachfragefenster hin. "
+                "Empfehlung: regional priorisieren und Copy streng HWG-konform halten."
             ),
-            "call_to_action": "Diagnostik-Vorräte sichern",
+            "call_to_action": "Empfehlung pruefen",
         },
     },
-}
-
-# Kategorie-Übersetzungen
-CATEGORY_DE = {
-    "Antibiotika": "Antibiotika",
-    "Atemwege": "Atemwegsmedikamenten",
-    "Fieber_Schmerz": "Fieber-/Schmerzmitteln",
-}
-
-WAVE_TYPE_DE = {
-    "Bacterial": "Bakterielle Welle",
-    "Respiratory_Viral": "Respiratorische Viruswelle",
-    "General_Infection": "Allgemeine Infektionswelle",
-    "Mixed": "Gemischte Welle",
-    "None": "Unbestimmt",
 }
 
 
@@ -150,59 +94,54 @@ def _parse_json_response(raw: str) -> dict | None:
 
 
 class PitchGenerator:
-    """Generiert Sales-Pitch-Texte (LLM-first; deterministic fallback)."""
+    """Generiert consumer-OTC Pitches (LLM-first; deterministic fallback)."""
 
     def generate(self, opportunity_type: str, context: dict) -> dict:
-        """Erzeugt Sales Pitch basierend auf Typ und Kontext."""
-        llm_pitch = self._generate_llm_sales_pitch(opportunity_type=opportunity_type, context=context)
+        llm_pitch = self._generate_llm_pitch(opportunity_type=opportunity_type, context=context or {})
         if llm_pitch:
             return llm_pitch
 
         # fallback: deterministic templates
         if opportunity_type == "RESOURCE_SCARCITY":
-            return self._generate_scarcity(context)
-        elif opportunity_type == "SEASONAL_DEFICIENCY":
-            return self._generate_seasonal(context)
-        elif opportunity_type == "PREDICTIVE_SALES_SPIKE":
-            return self._generate_spike(context)
-        elif opportunity_type == "WEATHER_FORECAST":
-            return self._generate_weather_forecast(context)
-        else:
-            return {
-                "headline_email": "Neue Vertriebschance erkannt",
-                "script_phone": "Wir haben eine relevante Marktveränderung festgestellt.",
-                "call_to_action": "Kontaktieren Sie uns",
-            }
+            return self._generate_resource_scarcity(context or {})
+        if opportunity_type == "PREDICTIVE_SALES_SPIKE":
+            return self._generate_sales_spike(context or {})
+        if opportunity_type == "WEATHER_FORECAST":
+            return self._generate_weather(context or {})
 
-    async def generate_pitch(self, product_name: str, target_audience: str, context_data: dict) -> str:
-        """Generiert einen kurzen Marketing-Pitch (Text) über den lokalen vLLM Endpunkt."""
-        user_prompt = (
-            f"Erstelle einen kurzen Marketing-Pitch für das Produkt '{product_name}'.\n"
-            f"Zielgruppe: {target_audience}.\n"
-            f"Aktuelle Datenlage (Wetter/Pollen/RKI): {context_data}."
+        return {
+            "headline_email": "Neue Aktivierungs-Chance erkannt",
+            "script_phone": "Wir haben ein relevantes, triggerbasiertes Bedarfssignal erkannt.",
+            "call_to_action": "Empfehlung pruefen",
+        }
+
+    def _generate_llm_pitch(self, *, opportunity_type: str, context: dict) -> dict | None:
+        brand = str(context.get("brand") or "Gelo")
+        product = str(context.get("product") or context.get("_article_id") or "Gelo Produkt")
+        region = str((context.get("region_target") or {}).get("plz_cluster") or "DE")
+        condition_key = str(context.get("_condition") or "erkaltung_akut")
+
+        pack = select_gelo_message_pack(
+            brand=brand,
+            product=product,
+            condition_key=condition_key,
+            playbook_key=None,
+            region_code=None,
+            trigger_event=str((context.get("trigger_context") or {}).get("event") or ""),
         )
+        hints = pack.to_prompt_hints()
 
-        messages = [
-            {"role": "system", "content": HWG_SYSTEM_PROMPT},
-            {"role": "user", "content": user_prompt},
-        ]
-
-        generated_pitch = await generate_text(messages=messages, temperature=0.3)
-        if not check_hwg_compliance(generated_pitch):
-            logger.warning("HWG blockiert in PitchGenerator für %s", product_name)
-            return "Aus rechtlichen Gründen (HWG) wurde dieser Text blockiert. Bitte manuell anpassen."
-        return generated_pitch
-
-    def _generate_llm_sales_pitch(self, *, opportunity_type: str, context: dict) -> dict | None:
         prompt = (
-            "Erstelle einen kurzen Sales Pitch für ein B2B Labordiagnostik-Angebot.\n"
+            "Erstelle einen kurzen Marketing-Pitch fuer ein OTC-Produkt (Gelo) fuer den deutschen Markt.\n"
+            "Hard Rules (HWG): Keine Heilversprechen, keine Garantien, keine Nebenwirkungsfreiheit.\n"
             "Output: NUR valides JSON (eine Zeile, ohne Markdown) mit Keys:\n"
             '- "headline_email" (max 120 Zeichen),\n'
-            '- "script_phone" (max 400 Zeichen),\n'
+            '- "script_phone" (max 420 Zeichen),\n'
             '- "call_to_action" (max 60 Zeichen).\n'
-            "Sprache: Deutsch. Konservativ, keine Heilversprechen oder Garantien.\n\n"
+            "Sprache: Deutsch. Konservativ und professionell.\n\n"
             f"Opportunity-Type: {opportunity_type}\n"
-            f"Context: {json.dumps(context or {}, ensure_ascii=True)}\n"
+            f"Region/Context: {json.dumps(context, ensure_ascii=True)}\n"
+            f"Copy-Hints (deterministisch, nicht erfinden): {json.dumps(hints, ensure_ascii=True)}\n"
         )
 
         messages = [
@@ -223,7 +162,7 @@ class PitchGenerator:
 
         combined = f"{headline}\n{script}\n{cta}"
         if not check_hwg_compliance(combined):
-            logger.warning("HWG blockiert LLM Sales-Pitch (type=%s)", opportunity_type)
+            logger.warning("HWG blockiert LLM Pitch (type=%s)", opportunity_type)
             return None
 
         return {
@@ -232,92 +171,33 @@ class PitchGenerator:
             "call_to_action": cta,
         }
 
-    def _generate_scarcity(self, ctx: dict) -> dict:
-        category = ctx.get("_category", "Antibiotika")
-        template = TEMPLATES["RESOURCE_SCARCITY"].get(
-            category, TEMPLATES["RESOURCE_SCARCITY"]["Antibiotika"]
-        )
-
-        top_drugs = ctx.get("_top_drugs", [])
-        top_drug = top_drugs[0] if top_drugs else "verschiedene Präparate"
-        wave_type = WAVE_TYPE_DE.get(ctx.get("_wave_type", "None"), "Unbestimmt")
-        category_de = CATEGORY_DE.get(category, category)
-
+    def _generate_resource_scarcity(self, ctx: dict) -> dict:
+        template = TEMPLATES["RESOURCE_SCARCITY"]["default"]
         return {
-            "headline_email": template["headline_email"].format(
-                wave_type=wave_type,
-                category_de=category_de,
-            ),
-            "script_phone": template["script_phone"].format(
-                top_drug=top_drug,
-            ),
+            "headline_email": template["headline_email"],
+            "script_phone": template["script_phone"],
             "call_to_action": template["call_to_action"],
         }
 
-    def _generate_seasonal(self, ctx: dict) -> dict:
-        consecutive_days = ctx.get("_consecutive_days", 0)
-        avg_temp = ctx.get("_avg_temperature", None)
-
-        if consecutive_days > 0:
-            template = TEMPLATES["SEASONAL_DEFICIENCY"]["default"]
-            return {
-                "headline_email": template["headline_email"],
-                "script_phone": template["script_phone"].format(
-                    consecutive_days=consecutive_days,
-                ),
-                "call_to_action": template["call_to_action"],
-            }
-        else:
-            template = TEMPLATES["SEASONAL_DEFICIENCY"]["cold_fallback"]
-            return {
-                "headline_email": template["headline_email"],
-                "script_phone": template["script_phone"].format(
-                    avg_temperature=avg_temp or "niedrig",
-                ),
-                "call_to_action": template["call_to_action"],
-            }
-
-    def _generate_weather_forecast(self, ctx: dict) -> dict:
-        condition = ctx.get("_condition", "low_sunshine_forecast")
-        template = TEMPLATES["WEATHER_FORECAST"].get(
-            condition, TEMPLATES["WEATHER_FORECAST"]["low_sunshine_forecast"]
-        )
-
-        format_vars = {
-            "low_days": ctx.get("_low_days", 0),
-            "total_days": ctx.get("_total_days", 8),
-            "uv_threshold": 3.0,
-            "avg_uv": ctx.get("_avg_uv", "niedrig"),
-            "nasskalt_days": ctx.get("_nasskalt_days", 0),
-            "extreme_days": ctx.get("_extreme_days", 0),
-            "min_temp": ctx.get("_min_temp", "sehr niedrig"),
-        }
-
-        return {
-            "headline_email": template["headline_email"].format(**format_vars),
-            "script_phone": template["script_phone"].format(**format_vars),
-            "call_to_action": template["call_to_action"],
-        }
-
-    def _generate_spike(self, ctx: dict) -> dict:
+    def _generate_sales_spike(self, ctx: dict) -> dict:
         template = TEMPLATES["PREDICTIVE_SALES_SPIKE"]["default"]
-        article_id = ctx.get("_article_id", "Testkits")
-        velocity = ctx.get("_velocity", 0)
-        plz = ctx.get("region_target", {}).get("plz_cluster", "Ihrer Region")
-        region = plz if plz != "ALL" else "Ihrer Region"
-
-        velocity_info = f"Die Bestellungen sind um {abs(velocity) * 100:.0f}% gestiegen in 48h."
-
+        region = str((ctx.get("region_target") or {}).get("plz_cluster") or "DE")
+        article = str(ctx.get("_article_id") or "Produkt")
+        velocity = float(ctx.get("_velocity") or 0.0)
+        velocity_info = f"Signalstaerke: {abs(velocity) * 100:.0f}%."
         return {
-            "headline_email": template["headline_email"].format(
-                region=region,
-                article_name=article_id,
-            ),
-            "script_phone": template["script_phone"].format(
-                region=region,
-                article_name=article_id,
-                velocity_info=velocity_info,
-            ),
+            "headline_email": template["headline_email"].format(product_or_article=article, region=region),
+            "script_phone": template["script_phone"].format(product_or_article=article, region=region, velocity_info=velocity_info),
+            "call_to_action": template["call_to_action"],
+        }
+
+    def _generate_weather(self, ctx: dict) -> dict:
+        condition = str(ctx.get("_condition") or "default")
+        templates = TEMPLATES["WEATHER_FORECAST"]
+        template = templates.get(condition) or templates["default"]
+        return {
+            "headline_email": template["headline_email"],
+            "script_phone": template["script_phone"],
             "call_to_action": template["call_to_action"],
         }
 

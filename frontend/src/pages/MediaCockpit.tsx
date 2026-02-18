@@ -361,6 +361,14 @@ const MediaCockpit: React.FC = () => {
                 {v}
               </button>
             ))}
+            <button
+              onClick={() => switchTab('recommendations')}
+              className="tab-chip"
+              style={{ borderColor: 'rgba(125,211,252,0.45)', color: '#7dd3fc' }}
+              title="Direkt zu den Kampagnenvorschlaegen (KI-Empfehlungen)"
+            >
+              Kampagnenvorschlaege
+            </button>
             <button onClick={() => navigate('/data-integration')} className="tab-chip">Integrationen</button>
           </div>
         </div>

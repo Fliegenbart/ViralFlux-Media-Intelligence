@@ -1,0 +1,288 @@
+{
+  "version": "2026-02-18",
+  "brand": "gelo",
+  "defaults": {
+    "conditions": {
+      "bronchitis_husten": {
+        "message_direction": "Hartnaeckiger Husten und festsitzender Schleim: wieder frei durchatmen (konservativ formuliert).",
+        "hero_messages": [
+          "Wenn Husten fest sitzt: wieder frei durchatmen.",
+          "Hartnaeckiger Husten? Schleim loesen und durchatmen."
+        ],
+        "support_points": [
+          "Symptomnah, alltagstauglich, konservativ formuliert",
+          "Regionale Aktivierung bei messbarem Bedarfssignal",
+          "Keine Heilversprechen, keine Garantien"
+        ],
+        "creative_angles": [
+          "Tagsueber aktiv trotz Husten",
+          "Durchatmen im Alltag",
+          "Schleim loesen: sanftes Narrativ"
+        ],
+        "keyword_clusters": [
+          "husten schleim loesen",
+          "hartnaeckiger husten",
+          "husten der nicht weggeht",
+          "verschleimt bronchien"
+        ],
+        "cta_pool": [
+          "In der Apotheke beraten lassen",
+          "Mehr erfahren",
+          "Jetzt informieren"
+        ],
+        "compliance_note": "Hinweis: Aussagen konservativ, symptomorientiert und ohne Heilversprechen formulieren."
+      },
+      "sinusitis_nebenhoehlen": {
+        "message_direction": "Nebenhoehlen-Druck, verstopfte Nase: wieder leichter durch den Tag (konservativ).",
+        "hero_messages": [
+          "Wenn die Nebenhoehlen druecken: wieder leichter durch den Tag.",
+          "Verstopfte Nase und Druck? Sanft entlasten."
+        ],
+        "support_points": [
+          "Symptome lindern, Wohlbefinden unterstuetzen",
+          "Regionale Aktivierung bei Wetterumschwung/Kaelte",
+          "Keine Garantieversprechen"
+        ],
+        "creative_angles": [
+          "Kopf frei bekommen",
+          "Wetterumschwung: Nebenhoehlen entlasten",
+          "Alltagstaugliche Erleichterung"
+        ],
+        "keyword_clusters": [
+          "nebenhoehlen druck",
+          "sinusitis symptome",
+          "verstopfte nase druck kopf",
+          "stirndruck erkaltung"
+        ],
+        "cta_pool": [
+          "In der Apotheke nachfragen",
+          "Jetzt informieren",
+          "Tipps entdecken"
+        ],
+        "compliance_note": "Hinweis: Keine Aussagen zu 'heilt'/'schnell weg' etc.; nur lindernd/unterstuetzend."
+      },
+      "halsschmerz_heiserkeit": {
+        "message_direction": "Halskratzen und Heiserkeit: Stimme beruhigen, gut durch den Tag (konservativ).",
+        "hero_messages": [
+          "Wenn der Hals kratzt: Stimme beruhigen und durch den Tag.",
+          "Heiser? Den Hals wohltuend beruhigen."
+        ],
+        "support_points": [
+          "Wohltuend und schutzend positionieren",
+          "Konservativ, ohne Heilversprechen",
+          "Ziel: Symptom-Relief und Alltag"
+        ],
+        "creative_angles": [
+          "Stimme im Meeting",
+          "Hals beruhigen unterwegs",
+          "Wohltuender Schutzfilm-Narrativ (konservativ)"
+        ],
+        "keyword_clusters": [
+          "halsschmerzen was tun",
+          "halskratzen",
+          "heiserkeit",
+          "stimme weg"
+        ],
+        "cta_pool": [
+          "Jetzt informieren",
+          "In der Apotheke beraten lassen",
+          "Mehr erfahren"
+        ],
+        "compliance_note": "Hinweis: Keine Nebenwirkungsfreiheit versprechen; claims vorsichtig und symptomnah."
+      },
+      "rhinitis_trockene_nase": {
+        "message_direction": "Trockene/irritierte Nasenschleimhaut: pflegen und befeuchten (konservativ).",
+        "hero_messages": [
+          "Trockene Nase? Sanft pflegen und befeuchten.",
+          "Wenn die Nase gereizt ist: Nasenschleimhaut schuetzen."
+        ],
+        "support_points": [
+          "Pflege- und Schutz-Narrativ",
+          "Passend bei trockener Luft/Heizungsluft",
+          "Keine Heilversprechen"
+        ],
+        "creative_angles": [
+          "Heizungsluft: Nase pflegen",
+          "Unterwegs in trockener Luft",
+          "Sanftes Pflegeversprechen"
+        ],
+        "keyword_clusters": [
+          "trockene nase",
+          "nasenschleimhaut pflegen",
+          "nase brennt trocken",
+          "heizungsluft nase"
+        ],
+        "cta_pool": [
+          "Mehr erfahren",
+          "Tipps entdecken",
+          "In der Apotheke nachfragen"
+        ],
+        "compliance_note": "Hinweis: Aussagen auf Pflege/Befeuchtung begrenzen, keine medizinischen Garantien."
+      },
+      "immun_support": {
+        "message_direction": "Immunsystem im Alltag unterstuetzen: gut vorbereitet durch die Saison (konservativ).",
+        "hero_messages": [
+          "Gut vorbereitet durch die Saison: Immunsystem im Alltag unterstuetzen.",
+          "Wenn draussen alles laeuft: Immunsupport im Alltag."
+        ],
+        "support_points": [
+          "Praeventiv, ohne Therapie-Anweisungen",
+          "Alltag und Resilienz, nicht 'Behandlung'",
+          "Konservativ formulieren"
+        ],
+        "creative_angles": [
+          "Saisonwechsel: vorbereitet sein",
+          "Alltagsroutine",
+          "Resilienz-Story"
+        ],
+        "keyword_clusters": [
+          "immunsystem staerken",
+          "abwehrkraefte",
+          "saisonwechsel gesund bleiben",
+          "infekte vorbeugen tipps"
+        ],
+        "cta_pool": [
+          "Jetzt informieren",
+          "Mehr erfahren",
+          "Tipps entdecken"
+        ],
+        "compliance_note": "Hinweis: Keine Supplement-/Therapieanweisung; nur unterstuetzend/praeventiv formulieren."
+      },
+      "erkaltung_akut": {
+        "message_direction": "Erkaeltung im Anflug: Symptome fruehzeitig lindern und Alltag stabil halten (konservativ).",
+        "hero_messages": [
+          "Erkaeltung im Anflug? Symptome fruehzeitig lindern.",
+          "Wenn's dich erwischt: alltagstauglich und konservativ gegen Symptome."
+        ],
+        "support_points": [
+          "Timing: frueh aktivieren, bevor Peak",
+          "Symptomorientiert, ohne Heilversprechen",
+          "Regionaler Trigger statt Streuverlust"
+        ],
+        "creative_angles": [
+          "Frueh dran statt spaet reagieren",
+          "Alltag trotz Infekt",
+          "Schnupfen/Husten/Heiserkeit (symptomnah)"
+        ],
+        "keyword_clusters": [
+          "erkaeltung erste anzeichen",
+          "was hilft bei erkaeltung",
+          "schnupfen husten heiser",
+          "erkaeltung symptome lindern"
+        ],
+        "cta_pool": [
+          "Jetzt informieren",
+          "In der Apotheke beraten lassen",
+          "Mehr erfahren"
+        ],
+        "compliance_note": "Hinweis: Keine Aussagen wie 'heilt'/'sofort weg'; nur lindernd/unterstuetzend."
+      }
+    }
+  },
+  "products": {
+    "gelomyrtol forte": {
+      "conditions": {
+        "bronchitis_husten": {
+          "message_direction": "Bei Husten mit festsitzendem Schleim: wieder frei durchatmen (konservativ).",
+          "hero_messages": [
+            "Wenn Husten fest sitzt: wieder frei durchatmen.",
+            "Schleim loesen, durchatmen, weitergehen."
+          ],
+          "creative_angles": [
+            "Durchatmen im Alltag",
+            "Symptomnah ohne Uebertreibung",
+            "Sanftes Erleichterungs-Narrativ"
+          ],
+          "keyword_clusters": [
+            "schleim loesen",
+            "husten verschleimt",
+            "bronchien schleim",
+            "husten mit schleim"
+          ]
+        },
+        "sinusitis_nebenhoehlen": {
+          "message_direction": "Wenn die Nebenhoehlen druecken: leichter durch den Tag (konservativ).",
+          "hero_messages": [
+            "Nebenhoehlen-Druck? Wieder leichter durch den Tag.",
+            "Wenn die Nase dicht ist: entlasten und durchatmen."
+          ],
+          "keyword_clusters": [
+            "nebenhoehlen entlasten",
+            "sinusitis druck",
+            "verstopfte nase druck",
+            "druck im kopf erkaeltung"
+          ]
+        }
+      }
+    },
+    "gelorevoice": {
+      "conditions": {
+        "halsschmerz_heiserkeit": {
+          "message_direction": "Heiserkeit und Halskratzen: Stimme wohltuend beruhigen (konservativ).",
+          "hero_messages": [
+            "Wenn die Stimme streikt: den Hals wohltuend beruhigen.",
+            "Halskratzen? Stimme sanft begleiten."
+          ],
+          "keyword_clusters": [
+            "heiserkeit",
+            "halsschmerzen",
+            "halskratzen",
+            "stimme weg"
+          ]
+        }
+      }
+    },
+    "gelositin": {
+      "conditions": {
+        "rhinitis_trockene_nase": {
+          "message_direction": "Trockene Nase: pflegen, befeuchten, schuetzen (konservativ).",
+          "hero_messages": [
+            "Trockene Nase? Sanft pflegen und befeuchten.",
+            "Wenn Heizungsluft nervt: Nasenschleimhaut schuetzen."
+          ],
+          "keyword_clusters": [
+            "trockene nase pflege",
+            "nasenschleimhaut befeuchten",
+            "nase brennt trocken",
+            "heizungsluft nase trocken"
+          ]
+        }
+      }
+    },
+    "gelovital": {
+      "conditions": {
+        "immun_support": {
+          "message_direction": "Immunsystem im Alltag unterstuetzen: gut vorbereitet durch die Saison (konservativ).",
+          "hero_messages": [
+            "Alltag im Griff: Immunsystem unterstuetzen.",
+            "Gut vorbereitet durch die Saison."
+          ],
+          "keyword_clusters": [
+            "abwehrkraefte",
+            "immunsystem",
+            "saisonwechsel",
+            "gesund durch winter"
+          ]
+        }
+      }
+    },
+    "geloprosed": {
+      "conditions": {
+        "erkaltung_akut": {
+          "message_direction": "Erkaeltung im Anflug: symptomorientiert und konservativ kommunizieren.",
+          "hero_messages": [
+            "Erkaeltung im Anflug? Fruehzeitig gegen Symptome.",
+            "Wenn's dich erwischt: symptomnah durch den Tag."
+          ],
+          "keyword_clusters": [
+            "erkaeltung erste anzeichen",
+            "schnupfen husten heiser",
+            "was hilft bei erkaeltung",
+            "erkaeltung symptome"
+          ]
+        }
+      }
+    }
+  }
+}
+

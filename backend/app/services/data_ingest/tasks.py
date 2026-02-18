@@ -155,6 +155,7 @@ def process_erp_sales_sync(self, payload: Dict[str, Any]) -> Dict[str, Any]:
     try:
         product_id = str(payload.get("product_id", "")).strip()
         region_code = str(payload.get("region_code", "")).strip()
+        source_system = str(payload.get("source_system") or "").strip().lower() or "unknown"
         units_sold = int(payload.get("units_sold"))
         revenue = float(payload.get("revenue"))
 
@@ -179,6 +180,7 @@ def process_erp_sales_sync(self, payload: Dict[str, Any]) -> Dict[str, Any]:
 
         extra_data = {
             "source": "erp_sales_sync",
+            "source_system": source_system,
             "units_sold": units_sold,
             "revenue": revenue,
             "region_code": region_code,
@@ -234,7 +236,7 @@ def process_erp_sales_sync(self, payload: Dict[str, Any]) -> Dict[str, Any]:
 
         logger.info(
             f"ERP sales sync persisted: product_id={product_id} region={region_code} "
-            f"units_sold={units_sold} revenue={revenue} ts={ts.isoformat()} "
+            f"system={source_system} units_sold={units_sold} revenue={revenue} ts={ts.isoformat()} "
             f"(inserted={inserted}, updated={updated})"
         )
         return _json_safe(
@@ -242,6 +244,7 @@ def process_erp_sales_sync(self, payload: Dict[str, Any]) -> Dict[str, Any]:
                 "status": "success",
                 "inserted": inserted,
                 "updated": updated,
+                "source_system": source_system,
                 "product_id": product_id,
                 "region_code": region_code,
                 "units_sold": units_sold,

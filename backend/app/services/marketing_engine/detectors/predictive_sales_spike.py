@@ -1,7 +1,7 @@
-"""PredictiveSalesSpikeDetector — Order-Velocity-Surge → Kunden warnen.
+"""PredictiveSalesSpikeDetector — Sales/Velocity Spike → OTC Aktivierung.
 
 Nutzt den OrderSignalAnalyzer, um Artikel mit stark steigender
-Bestellgeschwindigkeit zu identifizieren und betroffene Kunden zu warnen.
+Bestellgeschwindigkeit zu identifizieren und die Aktivierung zu priorisieren.
 """
 
 from datetime import datetime
@@ -13,10 +13,27 @@ logger = logging.getLogger(__name__)
 
 # Artikel-ID → Lesbarer Name + PLZ-Mapping
 ARTICLE_DISPLAY = {
-    "Influenza A/B Schnelltest": {"short": "INF-AB", "category": "influenza_spike"},
-    "SARS-CoV-2 PCR": {"short": "COV2-PCR", "category": "covid_spike"},
-    "RSV Schnelltest": {"short": "RSV", "category": "rsv_spike"},
+    "GeloMyrtol forte": {"short": "GMF", "condition": "bronchitis_husten"},
+    "GeloRevoice": {"short": "REV", "condition": "halsschmerz_heiserkeit"},
+    "GeloSitin": {"short": "SIT", "condition": "rhinitis_trockene_nase"},
+    "GeloVital": {"short": "VIT", "condition": "immun_support"},
+    "GeloProsed": {"short": "PRO", "condition": "erkaltung_akut"},
 }
+
+
+def _infer_condition(product_id: str) -> str:
+    s = (product_id or "").strip().lower()
+    if not s:
+        return "erkaltung_akut"
+    if "revoice" in s or "t onsil" in s or "tonsil" in s:
+        return "halsschmerz_heiserkeit"
+    if "sitin" in s or "nase" in s or "rhinitis" in s:
+        return "rhinitis_trockene_nase"
+    if "myrtol" in s or "muc" in s or "bronch" in s or "husten" in s:
+        return "bronchitis_husten"
+    if "vital" in s or "immun" in s:
+        return "immun_support"
+    return "erkaltung_akut"
 
 
 class PredictiveSalesSpikeDetector(OpportunityDetector):
@@ -53,7 +70,7 @@ class PredictiveSalesSpikeDetector(OpportunityDetector):
 
             display = ARTICLE_DISPLAY.get(article_id, {})
             short_name = display.get("short", article_id[:8])
-            condition = display.get("category", "general_spike")
+            condition = display.get("condition") or _infer_condition(article_id)
 
             current_orders = vel_data.get("current_week_orders", 0)
             previous_orders = vel_data.get("previous_week_orders", 0)
@@ -81,9 +98,7 @@ class PredictiveSalesSpikeDetector(OpportunityDetector):
                     ),
                     "detected_at": datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ"),
                 },
-                "target_audience": [
-                    f"Bestandskunden ohne Bestellung in den letzten 7 Tagen"
-                ],
+                "target_audience": ["Konsumenten (OTC)", "Apotheken-nahe Zielgruppen"],
                 "_condition": condition,
                 "_article_id": article_id,
                 "_velocity": velocity,

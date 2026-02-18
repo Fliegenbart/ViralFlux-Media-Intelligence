@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 type IntegrationStatus = 'connected' | 'degraded' | 'disconnected';
@@ -32,34 +32,84 @@ const STATUS_UI: Record<IntegrationStatus, { label: string; dot: string; badgeBg
   },
 };
 
+type IntegrationStatusResponse = {
+  sap?: { last_sync_at: string | null };
+  ims?: { last_sync_at: string | null };
+  any?: { last_sync_at: string | null };
+};
+
+const parseDate = (s: string | null | undefined) => {
+  if (!s) return null;
+  const d = new Date(s);
+  return Number.isNaN(d.getTime()) ? null : d;
+};
+
+const computeStatus = (last: Date | null): IntegrationStatus => {
+  if (!last) return 'disconnected';
+  const ageMs = Date.now() - last.getTime();
+  const hours = ageMs / (1000 * 60 * 60);
+  if (hours <= 48) return 'connected';
+  if (hours <= 24 * 7) return 'degraded';
+  return 'disconnected';
+};
+
+const fmtLast = (d: Date | null) => {
+  if (!d) return 'Noch nie';
+  try {
+    return d.toLocaleString('de-DE', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+  } catch (_) {
+    return d.toISOString();
+  }
+};
+
 const DataIntegration: React.FC = () => {
   const navigate = useNavigate();
+  const [status, setStatus] = useState<IntegrationStatusResponse | null>(null);
 
   const lastSync = useMemo(() => {
-    // Intentionally not auto-claiming connectivity:
-    // Real ERP/IMS systems push data *to us* via webhook. Until the first real push,
-    // we must not display "Connected".
-    return 'Noch nie';
+    const anyLast = parseDate(status?.any?.last_sync_at ?? null);
+    return fmtLast(anyLast);
+  }, [status]);
+
+  useEffect(() => {
+    let alive = true;
+    const load = async () => {
+      try {
+        const res = await fetch('/api/webhooks/integrations/status');
+        if (!res.ok) return;
+        const data = (await res.json()) as IntegrationStatusResponse;
+        if (alive) setStatus(data);
+      } catch (_) {}
+    };
+    load();
+    const id = window.setInterval(load, 30_000);
+    return () => {
+      alive = false;
+      window.clearInterval(id);
+    };
   }, []);
+
+  const sapLast = parseDate(status?.sap?.last_sync_at ?? null);
+  const imsLast = parseDate(status?.ims?.last_sync_at ?? null);
 
   const integrations: Integration[] = useMemo(
     () => [
       {
         name: 'SAP ERP',
         system: 'sap',
-        status: 'disconnected',
-        lastSuccessfulSync: lastSync,
+        status: computeStatus(sapLast),
+        lastSuccessfulSync: fmtLast(sapLast),
         description: 'Nicht direkt angebunden. SAP muss die Daten via M2M-Webhook an ViralFlux pushen.',
       },
       {
         name: 'IMS Health',
         system: 'ims',
-        status: 'disconnected',
-        lastSuccessfulSync: lastSync,
+        status: computeStatus(imsLast),
+        lastSuccessfulSync: fmtLast(imsLast),
         description: 'Nicht direkt angebunden. IMS/ETL muss die Daten via M2M-Webhook an ViralFlux pushen.',
       },
     ],
-    [lastSync]
+    [sapLast, imsLast]
   );
 
   return (

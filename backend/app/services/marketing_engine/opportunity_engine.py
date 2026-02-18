@@ -18,13 +18,13 @@ from app.core.config import get_settings
 from app.models.database import MarketingOpportunity
 from app.services.media.ai_campaign_planner import AiCampaignPlanner
 from app.services.media.campaign_guardrails import CampaignGuardrails
+from app.services.media.message_library import select_gelo_message_pack
 from app.services.media.product_catalog_service import ProductCatalogService
 from app.services.media.peix_score_service import PeixEpiScoreService
 from app.services.media.playbook_engine import PLAYBOOK_CATALOG, PlaybookEngine
 
 from .detectors.predictive_sales_spike import PredictiveSalesSpikeDetector
 from .detectors.resource_scarcity import ResourceScarcityDetector
-from .detectors.seasonal_deficiency import SeasonalDeficiencyDetector
 from .detectors.weather_forecast import WeatherForecastDetector
 from .pitch_generator import PitchGenerator
 from .product_matcher import ProductMatcher
@@ -96,7 +96,6 @@ class MarketingOpportunityEngine:
         self.db = db
         self.detectors = [
             ResourceScarcityDetector(db),
-            SeasonalDeficiencyDetector(db),
             PredictiveSalesSpikeDetector(db),
             WeatherForecastDetector(db),
         ]
@@ -304,8 +303,34 @@ class MarketingOpportunityEngine:
             )
             selected_product = product_mapping.get("recommended_product") or product
 
+            trigger_snapshot = candidate.get("trigger_snapshot") or {}
+            pack = select_gelo_message_pack(
+                brand=brand,
+                product=selected_product,
+                condition_key=condition_key,
+                playbook_key=playbook_key,
+                region_code=region_code,
+                trigger_event=str(trigger_snapshot.get("event") or ""),
+            )
+            enriched_candidate = {
+                **candidate,
+                "message_direction": pack.message_direction,
+                "copy_pack": {
+                    "status": pack.status,
+                    "message_direction": pack.message_direction,
+                    "hero_message": pack.hero_message,
+                    "support_points": pack.support_points,
+                    "creative_angles": pack.creative_angles,
+                    "keyword_clusters": pack.keyword_clusters,
+                    "cta": pack.cta,
+                    "compliance_note": pack.compliance_note,
+                    "library_version": pack.library_version,
+                    "library_source": pack.library_source,
+                },
+            }
+
             ai_generated = self.ai_planner.generate_plan(
-                playbook_candidate=candidate,
+                playbook_candidate=enriched_candidate,
                 brand=brand,
                 product=selected_product,
                 campaign_goal=campaign_goal,
@@ -345,7 +370,7 @@ class MarketingOpportunityEngine:
                 "band": candidate.get("peix_band"),
                 "impact_probability": round(float(candidate.get("impact_probability") or 0.0), 1),
                 "drivers": candidate.get("peix_drivers") or [],
-                "trigger_event": (candidate.get("trigger_snapshot") or {}).get("event"),
+                "trigger_event": str(trigger_snapshot.get("event") or ""),
             }
 
             campaign_payload = self._build_campaign_pack(
@@ -368,7 +393,7 @@ class MarketingOpportunityEngine:
             self._merge_ai_playbook_payload(
                 campaign_payload=campaign_payload,
                 playbook_key=playbook_key,
-                candidate=candidate,
+                candidate=enriched_candidate,
                 ai_plan=ai_plan,
                 ai_generated=ai_generated,
                 guardrail_report=guardrail_report,
@@ -380,13 +405,18 @@ class MarketingOpportunityEngine:
                 condition_key=condition_key,
             )
 
+            # Enforce deterministic OTC message framework (avoid LLM drift/hallucinations).
+            if "message_framework" not in campaign_payload or not isinstance(campaign_payload["message_framework"], dict):
+                campaign_payload["message_framework"] = {}
+            campaign_payload["message_framework"].update(pack.to_framework())
+
             self._enrich_opportunity_for_media(
                 opportunity_id=opp_id,
                 brand=brand,
                 product=selected_product,
                 budget_shift_pct=budget_shift_pct,
                 channel_mix=channel_mix,
-                reason=(candidate.get("trigger_snapshot") or {}).get("event") or playbook_key,
+                reason=str(trigger_snapshot.get("event") or "") or playbook_key,
                 campaign_payload=campaign_payload,
                 status=workflow_status,
                 activation_start=self._parse_iso_datetime(activation_window.get("start")),
@@ -429,10 +459,11 @@ class MarketingOpportunityEngine:
                     "detail_url": f"/dashboard/recommendations/{opp_id}",
                     "playbook_key": playbook_key,
                     "playbook_title": cfg.get("title"),
-                    "trigger_snapshot": candidate.get("trigger_snapshot"),
+                    "trigger_snapshot": trigger_snapshot,
                     "guardrail_notes": guardrail_notes,
                     "ai_generation_status": ai_generated.get("ai_generation_status"),
                     "strategy_mode": "PLAYBOOK_AI",
+                    "copy_status": pack.status,
                 }
             )
 

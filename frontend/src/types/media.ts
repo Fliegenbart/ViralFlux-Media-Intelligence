@@ -125,6 +125,10 @@ export interface CampaignPack {
     hero_message?: string;
     support_points?: string[];
     compliance_note?: string;
+    cta?: string;
+    copy_status?: string;
+    library_version?: string;
+    library_source?: string;
   };
   playbook?: {
     key?: string;

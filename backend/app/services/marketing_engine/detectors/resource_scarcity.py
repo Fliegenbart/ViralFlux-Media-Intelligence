@@ -1,11 +1,9 @@
-"""ResourceScarcityDetector — BfArM-Lieferengpässe → Diagnostik-Opportunities.
+"""ResourceScarcityDetector — BfArM-Lieferengpässe → OTC Supply-Shock Opportunities.
 
 Nutzt den DrugShortageAnalyzer Singleton, um aus Medikamenten-Engpässen
-Vertriebschancen für diagnostische Produkte abzuleiten.
+Marketing-/Media-Chancen abzuleiten (konservativ, ohne Heilversprechen).
 
-Logik: Antibiotika-Engpass → CRP-/PCT-Tests empfehlen (viral/bakteriell differenzieren)
-       Atemwege-Engpass  → Multiplex PCR empfehlen (Erreger identifizieren)
-       Fieber-Engpass    → Blutbild empfehlen (Differentialdiagnostik)
+Logik: Engpasssignale → Verfuegbarkeit/Alternative betonen + Timing fuer symptomnahe Kommunikation.
 """
 
 from datetime import datetime
@@ -18,22 +16,22 @@ logger = logging.getLogger(__name__)
 # Mapping: Engpass-Kategorie → Opportunity-Kontext
 CATEGORY_MAP = {
     "Antibiotika": {
-        "condition": "antibiotika_shortage",
-        "audience": ["Pädiater", "Hausärzte"],
+        "condition": "erkaltung_akut",
+        "audience": ["Familien", "Eltern", "Erwachsene"],
         "event": "CRITICAL_SHORTAGE_ANTIBIOTICS",
-        "rationale": "Antibiotika-Engpass erfordert präzise viral/bakterielle Differenzierung",
+        "rationale": "Antibiotika-Engpass: konservative Aktivierung fuer symptomnahe OTC-Alternativen/Support.",
     },
     "Atemwege": {
-        "condition": "atemwege_shortage",
-        "audience": ["Allgemeinmediziner", "Pädiater", "Pneumologen"],
+        "condition": "bronchitis_husten",
+        "audience": ["Erwachsene", "Pendler", "Familien"],
         "event": "CRITICAL_SHORTAGE_RESPIRATORY",
-        "rationale": "Atemwegsmedikamenten-Engpass — Erreger-Identifikation wird kritisch",
+        "rationale": "Atemwegs-Engpass: Verfuegbarkeit und Alternative (konservativ) ausspielen.",
     },
     "Fieber_Schmerz": {
-        "condition": "fieber_shortage",
-        "audience": ["Hausärzte", "Internisten"],
+        "condition": "erkaltung_akut",
+        "audience": ["Erwachsene", "Familien"],
         "event": "CRITICAL_SHORTAGE_FEVER",
-        "rationale": "Fieber-/Schmerzmittel-Engpass — Differentialdiagnostik notwendig",
+        "rationale": "Fieber/Schmerz-Engpass: Timing fuer konservative, symptomnahe Kommunikation.",
     },
 }
 

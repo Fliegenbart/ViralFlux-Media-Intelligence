@@ -67,8 +67,10 @@ const DataIntegration: React.FC = () => {
   const [status, setStatus] = useState<IntegrationStatusResponse | null>(null);
 
   const lastSync = useMemo(() => {
-    const anyLast = parseDate(status?.any?.last_sync_at ?? null);
-    return fmtLast(anyLast);
+    const sap = parseDate(status?.sap?.last_sync_at ?? null);
+    const ims = parseDate(status?.ims?.last_sync_at ?? null);
+    const best = sap && ims ? (sap > ims ? sap : ims) : sap || ims;
+    return fmtLast(best);
   }, [status]);
 
   useEffect(() => {

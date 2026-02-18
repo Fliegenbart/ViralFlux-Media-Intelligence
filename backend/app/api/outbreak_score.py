@@ -59,7 +59,7 @@ async def get_outbreak_score(
     Schnelle Berechnung aus gecachten/gespeicherten Daten.
     Prophet-Prognosen werden aus der DB gelesen (nicht neu berechnet).
     """
-    from app.services.fusion_engine.risk_engine import RiskEngine
+    from app.services.fusion_engine.risk_engine_legacy import RiskEngine
 
     engine = RiskEngine(db)
     shortage = _get_shortage_signals()
@@ -73,7 +73,7 @@ async def get_outbreak_score(
 @router.get("/all")
 async def get_all_outbreak_scores(db: Session = Depends(get_db)):
     """Outbreak Scores für alle Virus-Typen berechnen."""
-    from app.services.fusion_engine.risk_engine import RiskEngine
+    from app.services.fusion_engine.risk_engine_legacy import RiskEngine
 
     engine = RiskEngine(db)
     shortage = _get_shortage_signals()
@@ -88,7 +88,7 @@ async def get_score_history(
     db: Session = Depends(get_db),
 ):
     """Historische Outbreak Scores abrufen."""
-    from app.services.fusion_engine.risk_engine import RiskEngine
+    from app.services.fusion_engine.risk_engine_legacy import RiskEngine
 
     engine = RiskEngine(db)
     return engine.get_score_history(virus_typ=virus_typ, days=days)
@@ -104,7 +104,7 @@ async def compute_with_prophet(
 
     Trainiert Prophet neu und berechnet dann den Score.
     """
-    from app.services.fusion_engine.risk_engine import RiskEngine
+    from app.services.fusion_engine.risk_engine_legacy import RiskEngine
     from app.services.fusion_engine.prophet_predictor import ProphetPredictor
 
     prophet_result = None
@@ -143,7 +143,7 @@ async def train_meta_learner(
     db: Session = Depends(get_db),
 ):
     """XGBoost Meta-Learner trainieren (Phase B aktivieren)."""
-    from app.services.fusion_engine.risk_engine import RiskEngine
+    from app.services.fusion_engine.risk_engine_legacy import RiskEngine
 
     engine = RiskEngine(db)
     return engine.train_meta_learner(virus_typ=virus_typ)

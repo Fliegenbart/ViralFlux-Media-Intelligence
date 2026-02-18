@@ -22,6 +22,20 @@ services:
     networks:
       - virusradar_network
 
+  redis:
+    image: redis:7-alpine
+    container_name: viralflux_redis
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - virusradar_network
+
   # Backend FastAPI
   backend:
     build:
@@ -36,6 +50,8 @@ services:
       - POSTGRES_DB=${POSTGRES_DB:-virusradar_db}
       - OPENWEATHER_API_KEY=${OPENWEATHER_API_KEY}
       - VLLM_BASE_URL=${VLLM_BASE_URL:-http://localhost:8000/v1}
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
       - SECRET_KEY=${SECRET_KEY}
       - ENVIRONMENT=${ENVIRONMENT:-development}
     volumes:
@@ -47,6 +63,37 @@ services:
       db:
         condition: service_healthy
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    networks:
+      - virusradar_network
+
+  celery_worker:
+    build:
+      context: ./backend
+      dockerfile: ../docker/Dockerfile.backend
+    container_name: viralflux_celery_worker
+    # Der Worker lauscht auf neue Jobs in der Queue (--concurrency steuert, wie viele Jobs parallel laufen)
+    command: celery -A app.core.celery_app worker --loglevel=info --concurrency=2
+    volumes:
+      - ./backend:/app
+      - ./data:/app/data
+    environment:
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=${POSTGRES_USER:-virusradar}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-changeme}
+      - POSTGRES_DB=${POSTGRES_DB:-virusradar_db}
+      - OPENWEATHER_API_KEY=${OPENWEATHER_API_KEY}
+      - SECRET_KEY=${SECRET_KEY}
+      - ENVIRONMENT=${ENVIRONMENT:-development}
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - VLLM_BASE_URL=${VLLM_BASE_URL:-http://host.docker.internal:8000/v1} # Greift auf lokalen vLLM zu
+    depends_on:
+      redis:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+    restart: unless-stopped
     networks:
       - virusradar_network
 

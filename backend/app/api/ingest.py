@@ -1,4 +1,14 @@
-from fastapi import APIRouter, Depends, BackgroundTasks, UploadFile, File, HTTPException
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Body,
+    Depends,
+    File,
+    HTTPException,
+    UploadFile,
+    status,
+)
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from datetime import datetime
 from tempfile import TemporaryDirectory
@@ -7,6 +17,7 @@ import logging
 
 from app.db.session import get_db, get_db_context
 from app.core.config import get_settings
+from app.core.celery_app import celery_app
 from app.services.data_ingest.amelag_service import AmelagIngestionService
 from app.services.data_ingest.notaufnahme_service import NotaufnahmeIngestionService
 from app.services.data_ingest.survstat_service import SurvstatIngestionService
@@ -14,113 +25,72 @@ from app.services.data_ingest.trends_service import GoogleTrendsService
 from app.services.data_ingest.weather_service import WeatherService
 from app.services.data_ingest.holidays_service import SchoolHolidaysService
 from app.services.data_ingest.pollen_service import PollenService
+from app.services.data_ingest.tasks import run_full_ingestion_pipeline
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 settings = get_settings()
 
+class IngestRequest(BaseModel):
+    region_code: str = "ALL"
 
-def _run_import_all():
-    """Background task: alle Datenquellen importieren."""
-    logger.info("=== Starting full data import ===")
-    results = {}
 
-    with get_db_context() as db:
-        # 1. AMELAG Abwasserdaten (Hauptdatenquelle)
-        try:
-            amelag = AmelagIngestionService(db)
-            results["amelag"] = amelag.run_full_import()
-        except Exception as e:
-            logger.error(f"AMELAG import failed: {e}")
-            results["amelag"] = {"success": False, "error": str(e)}
-
-    with get_db_context() as db:
-        # 2. GrippeWeb ARE/ILI Daten
-        try:
-            from app.services.data_ingest.grippeweb_service import GrippeWebIngestionService
-            grippeweb = GrippeWebIngestionService(db)
-            results["grippeweb"] = grippeweb.run_full_import()
-        except Exception as e:
-            logger.error(f"GrippeWeb import failed: {e}")
-            results["grippeweb"] = {"success": False, "error": str(e)}
-
-    with get_db_context() as db:
-        # 2b. ARE-Konsultationsinzidenz (syndromische Surveillance)
-        try:
-            from app.services.data_ingest.are_konsultation_service import AREKonsultationIngestionService
-            are = AREKonsultationIngestionService(db)
-            results["are_konsultation"] = are.run_full_import()
-        except Exception as e:
-            logger.error(f"ARE-Konsultation import failed: {e}")
-            results["are_konsultation"] = {"success": False, "error": str(e)}
-
-    with get_db_context() as db:
-        # 3. Notaufnahmesurveillance (AKTIN/RKI)
-        try:
-            notaufnahme = NotaufnahmeIngestionService(db)
-            results["notaufnahme"] = notaufnahme.run_full_import()
-        except Exception as e:
-            logger.error(f"Notaufnahme import failed: {e}")
-            results["notaufnahme"] = {"success": False, "error": str(e)}
-
-    with get_db_context() as db:
-        # 4. Schulferien (ferien-api.de, alle 16 Bundesländer)
-        try:
-            holidays = SchoolHolidaysService(db)
-            results["holidays"] = holidays.run_full_import()
-        except Exception as e:
-            logger.error(f"Holidays import failed: {e}")
-            results["holidays"] = {"success": False, "error": str(e)}
-
-    with get_db_context() as db:
-        # 5. Google Trends (best-effort, kann rate-limited sein)
-        try:
-            trends = GoogleTrendsService(db)
-            results["trends"] = trends.run_full_import(months=3)
-        except Exception as e:
-            logger.error(f"Google Trends import failed: {e}")
-            results["trends"] = {"success": False, "error": str(e)}
-
-    with get_db_context() as db:
-        # 6. Wetterdaten (BrightSky / DWD, kein API Key nötig)
-        try:
-            weather = WeatherService(db)
-            results["weather"] = weather.run_full_import(include_forecast=True)
-        except Exception as e:
-            logger.error(f"Weather import failed: {e}")
-            results["weather"] = {"success": False, "error": str(e)}
-
-    with get_db_context() as db:
-        # 6b. DWD Pollen (Allergie-Bremse)
-        try:
-            pollen = PollenService(db)
-            results["pollen"] = pollen.run_full_import()
-        except Exception as e:
-            logger.error(f"Pollen import failed: {e}")
-            results["pollen"] = {"success": False, "error": str(e)}
-
-    # 7. BfArM Lieferengpass-Daten (statische CSV, kein API-Key)
+def _enqueue_full_ingestion(region_code: str) -> str:
     try:
-        from app.services.data_ingest.bfarm_service import BfarmIngestionService
-        bfarm = BfarmIngestionService()
-        results["bfarm"] = bfarm.run_full_import()
-    except Exception as e:
-        logger.error(f"BfArM import failed: {e}")
-        results["bfarm"] = {"success": False, "error": str(e)}
+        task = run_full_ingestion_pipeline.delay(region_code=region_code)
+        return task.id
+    except Exception as exc:
+        logger.error(f"Celery enqueue failed: {exc}")
+        raise HTTPException(
+            status_code=503,
+            detail="Celery Broker nicht erreichbar. Bitte Redis/Worker starten.",
+        ) from exc
 
-    logger.info(f"=== Full data import completed: {results} ===")
-    return results
 
-
-@router.post("/run-all")
-async def run_full_import(background_tasks: BackgroundTasks):
-    """Starte vollständigen Datenimport im Hintergrund."""
-    background_tasks.add_task(_run_import_all)
+@router.post("/run-all", status_code=status.HTTP_202_ACCEPTED)
+async def run_full_import(
+    request: IngestRequest = Body(default_factory=IngestRequest),
+):
+    """Starte vollständigen Datenimport asynchron (Celery) und gib ein Ticket zurück."""
+    task_id = _enqueue_full_ingestion(request.region_code)
     return {
-        "status": "import_started",
-        "message": "Datenimport läuft im Hintergrund. Prüfe /health und /api/v1/status für Fortschritt.",
-        "timestamp": datetime.utcnow()
+        "message": "Ingestion Pipeline gestartet",
+        "task_id": task_id,
+        "status_url": f"/api/v1/ingest/status/{task_id}",
     }
+
+
+@router.post("/trigger", status_code=status.HTTP_202_ACCEPTED)
+async def trigger_ingestion(
+    request: IngestRequest = Body(default_factory=IngestRequest),
+):
+    """Alias für /run-all (kompatibel mit Celery Ticketing)."""
+    task_id = _enqueue_full_ingestion(request.region_code)
+    return {
+        "message": "Ingestion Pipeline gestartet",
+        "task_id": task_id,
+        "status_url": f"/api/v1/ingest/status/{task_id}",
+    }
+
+
+@router.get("/status/{task_id}")
+async def get_ingestion_status(task_id: str):
+    """Frontend Polling Endpoint für Task Status + Progress Meta."""
+    task_result = celery_app.AsyncResult(task_id)
+
+    response: dict = {
+        "task_id": task_id,
+        "status": task_result.status,  # PENDING, STARTED, PROGRESS, SUCCESS, FAILURE
+    }
+
+    if task_result.status == "PROGRESS":
+        response["meta"] = task_result.info
+    elif task_result.status == "SUCCESS":
+        response["result"] = task_result.result
+    elif task_result.status == "FAILURE":
+        response["error"] = str(task_result.info)
+
+    return response
 
 
 @router.post("/amelag")

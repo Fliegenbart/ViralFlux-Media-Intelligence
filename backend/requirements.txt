@@ -31,6 +31,8 @@ openai>=1.14.0
 
 # Background Tasks
 apscheduler==3.10.4
+celery[redis]>=5.3.6
+redis>=5.0.1
 
 # Logging & Monitoring
 python-json-logger==2.0.7

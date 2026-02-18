@@ -18,6 +18,18 @@ services:
     networks:
       - virusradar_network
 
+  redis:
+    image: redis:7-alpine
+    container_name: viralflux_redis
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - virusradar_network
+
   backend:
     build:
       context: ./backend
@@ -32,6 +44,8 @@ services:
       - POSTGRES_DB=${POSTGRES_DB:-virusradar_db}
       - OPENWEATHER_API_KEY=${OPENWEATHER_API_KEY:-placeholder}
       - VLLM_BASE_URL=${VLLM_BASE_URL:-http://host.docker.internal:8000/v1}
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
       - SECRET_KEY=${SECRET_KEY:-viralflux-prod-secret-key-change-me-2026}
       - ENVIRONMENT=production
       - ALLOWED_ORIGINS=https://labpulse.belegsync.com,http://5.9.106.75:8501
@@ -40,7 +54,38 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2
+    networks:
+      - virusradar_network
+
+  celery_worker:
+    build:
+      context: ./backend
+      dockerfile: ../docker/Dockerfile.backend
+    container_name: viralflux_celery_worker
+    restart: unless-stopped
+    command: celery -A app.core.celery_app worker --loglevel=info --concurrency=2
+    environment:
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=${POSTGRES_USER:-virusradar}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-changeme}
+      - POSTGRES_DB=${POSTGRES_DB:-virusradar_db}
+      - OPENWEATHER_API_KEY=${OPENWEATHER_API_KEY:-placeholder}
+      - VLLM_BASE_URL=${VLLM_BASE_URL:-http://host.docker.internal:8000/v1}
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - SECRET_KEY=${SECRET_KEY:-viralflux-prod-secret-key-change-me-2026}
+      - ENVIRONMENT=production
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     networks:
       - virusradar_network
 

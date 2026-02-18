@@ -33,7 +33,7 @@ _CAMPAIGN_PLAN_SCHEMA: dict[str, Any] = {
                     "kpi_primary": {"type": "string"},
                     "kpi_secondary": {"type": "array", "items": {"type": "string"}},
                 },
-                "required": ["channel", "share_pct", "message_angle", "kpi_primary", "kpi_secondary"],
+                "required": ["channel", "share_pct"],
                 "additionalProperties": False,
             },
         },
@@ -150,7 +150,7 @@ class AiCampaignPlanner:
             "Erzeuge NUR valides JSON ohne Markdown, ohne Erklaertexte.\n"
             "Sprache: Deutsch. Konservativ formulieren (kein Heilversprechen).\n"
             "Output-Felder: campaign_name, objective, budget_shift_pct, activation_window_days, channel_plan.\n"
-            "Kuerze: message_angle <= 7 Worte; kpi_secondary max 2.\n\n"
+            "Output: kompaktes JSON in EINER Zeile (kein Pretty-Print).\n\n"
             f"Brand: {brand}\n"
             f"Produkt: {product}\n"
             f"Kampagnenziel: {campaign_goal}\n"
@@ -176,14 +176,14 @@ class AiCampaignPlanner:
                 "options": {
                     "temperature": 0.2,
                     "top_p": 0.9,
-                    "num_predict": 140,
+                    "num_predict": 120,
                 },
             }
             try:
                 response = requests.post(
                     f"{self.ollama_url}/api/generate",
                     json=payload,
-                    timeout=20,
+                    timeout=25,
                 )
                 if response.status_code == 404 and "model" in response.text.lower():
                     last_error = ValueError(

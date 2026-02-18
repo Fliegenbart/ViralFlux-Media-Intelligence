@@ -55,6 +55,9 @@ class Settings(BaseSettings):
 
     # Media AI
     MEDIA_AI_PLAYBOOKS_ENABLED: bool = True
+    MEDIA_AI_ASYNC_REFINEMENT_ENABLED: bool = True
+    MEDIA_AI_BULK_REFINE_TOP_N: int = 3
+    MEDIA_AI_REFINEMENT_POLL_HINT_SECONDS: int = 5
     
     # ML Settings
     FORECAST_DAYS: int = 14

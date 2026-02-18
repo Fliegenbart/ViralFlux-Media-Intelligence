@@ -10,7 +10,10 @@ celery_app = Celery(
     "viralflux_worker",
     broker=BROKER_URL,
     backend=RESULT_BACKEND,
-    include=["app.services.data_ingest.tasks"],  # Hintergrund-Jobs
+    include=[
+        "app.services.data_ingest.tasks",
+        "app.services.media.tasks",
+    ],  # Hintergrund-Jobs
 )
 
 # Celery CLI expects a top-level `app` attribute for `celery -A ...`
@@ -25,4 +28,3 @@ celery_app.conf.update(
     timezone="Europe/Berlin",
     enable_utc=True,
 )
-

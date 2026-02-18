@@ -8,6 +8,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from app.core.celery_app import celery_app
+from app.core.config import get_settings
 from app.db.session import get_db
 from app.services.marketing_engine.opportunity_engine import MarketingOpportunityEngine
 from app.services.media.cockpit_service import MediaCockpitService
@@ -15,9 +17,11 @@ from app.services.media.product_catalog_service import (
     DEFAULT_GELO_SOURCE_URL,
     ProductCatalogService,
 )
+from app.services.media.tasks import refine_recommendation_ai_task
 
 
 router = APIRouter()
+settings = get_settings()
 
 BUNDESLAND_NAMES = {
     "BW": "Baden-Württemberg",
@@ -124,12 +128,36 @@ async def generate_media_recommendations(
     )
 
     cards = [_to_card_response(card) for card in generated.get("cards", [])]
+    cards.sort(key=lambda item: (item.get("urgency_score", 0), item.get("confidence", 0)), reverse=True)
+    top_card_id = generated.get("top_card_id") or (cards[0].get("id") if cards else None)
+
+    refinement_mode = "disabled"
+    refinement_tasks: list[dict[str, str]] = []
+    refinement_poll_hint_seconds = max(1, int(settings.MEDIA_AI_REFINEMENT_POLL_HINT_SECONDS or 5))
+    top_n = max(0, int(settings.MEDIA_AI_BULK_REFINE_TOP_N or 3))
+
+    if settings.MEDIA_AI_ASYNC_REFINEMENT_ENABLED:
+        refinement_mode = "async_top3"
+        for card in cards[:top_n]:
+            card_id = str(card.get("id") or "").strip()
+            if not card_id:
+                continue
+            try:
+                task = refine_recommendation_ai_task.delay(opportunity_id=card_id)
+                refinement_tasks.append({"card_id": card_id, "task_id": task.id})
+            except Exception:
+                # Keep generate endpoint responsive; card remains available without async refinement.
+                continue
+
     return {
         "meta": generated.get("meta", {}),
         "total_cards": generated.get("total_cards", len(cards)),
         "cards": cards,
-        "top_card_id": generated.get("top_card_id"),
+        "top_card_id": top_card_id,
         "auto_open_url": generated.get("auto_open_url"),
+        "refinement_mode": refinement_mode,
+        "refinement_tasks": refinement_tasks,
+        "refinement_poll_hint_seconds": refinement_poll_hint_seconds,
     }
 
 
@@ -245,6 +273,25 @@ async def list_media_recommendations(
         "total": len(cards),
         "cards": cards,
     }
+
+
+@router.get("/recommendations/refinement-task/{task_id}")
+async def get_media_recommendation_refinement_task_status(task_id: str):
+    """Polling endpoint for async AI refinement task status."""
+    task_result = celery_app.AsyncResult(task_id)
+
+    response: dict[str, Any] = {
+        "task_id": task_id,
+        "status": task_result.status,
+    }
+    if task_result.status == "SUCCESS":
+        response["result"] = task_result.result
+    elif task_result.status == "FAILURE":
+        response["error"] = str(task_result.info)
+    elif task_result.info is not None:
+        response["meta"] = task_result.info
+
+    return response
 
 
 @router.post("/recommendations/backfill-peix")

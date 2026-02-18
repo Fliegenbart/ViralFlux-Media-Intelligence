@@ -85,6 +85,21 @@ interface CockpitResponse {
   data_freshness: Record<string, string | null>;
 }
 
+type RefinementTaskStatus = 'PENDING' | 'STARTED' | 'SUCCESS' | 'FAILURE' | 'PROGRESS';
+
+interface RefinementTaskState {
+  card_id: string;
+  task_id: string;
+  status: RefinementTaskStatus;
+  result?: {
+    opportunity_id?: string;
+    success?: boolean;
+    ai_generation_status?: string;
+    updated_at?: string;
+  };
+  error?: string;
+}
+
 const intensityColor = (intensity: number) => {
   const a = 0.2 + Math.min(1, Math.max(0, intensity)) * 0.8;
   return `rgba(27, 83, 155, ${a})`;
@@ -125,6 +140,11 @@ const MediaCockpit: React.FC = () => {
 
   const [recLoading, setRecLoading] = useState(false);
   const [recCards, setRecCards] = useState<RecommendationCard[]>([]);
+  const [highlightCardId, setHighlightCardId] = useState<string | null>(null);
+  const [refinementTasks, setRefinementTasks] = useState<RefinementTaskState[]>([]);
+  const [refinementPollSeconds, setRefinementPollSeconds] = useState(5);
+  const [refinementStartedAt, setRefinementStartedAt] = useState<number | null>(null);
+  const [refinementNotice, setRefinementNotice] = useState<string | null>(null);
   const [brand, setBrand] = useState('GeloMyrtol');
   const [product, setProduct] = useState('GeloMyrtol forte');
   const [goal, setGoal] = useState('Top-of-Mind vor Erkältungswelle');
@@ -221,6 +241,60 @@ const MediaCockpit: React.FC = () => {
     }
   }, [tab, loadRecommendations]);
 
+  useEffect(() => {
+    if (!refinementStartedAt || refinementTasks.length === 0) return;
+
+    const openTasks = refinementTasks.filter((task) => task.status !== 'SUCCESS' && task.status !== 'FAILURE');
+    if (openTasks.length === 0) {
+      setRefinementStartedAt(null);
+      setRefinementNotice('KI-Verfeinerung abgeschlossen.');
+      void loadRecommendations();
+      return;
+    }
+
+    if (Date.now() - refinementStartedAt > 120000) {
+      setRefinementStartedAt(null);
+      setRefinementNotice('KI-Verfeinerung dauert länger als erwartet. Bitte Liste manuell aktualisieren.');
+      return;
+    }
+
+    const timer = window.setTimeout(async () => {
+      try {
+        const updates = await Promise.all(
+          openTasks.map(async (task) => {
+            const res = await fetch(`/api/v1/media/recommendations/refinement-task/${encodeURIComponent(task.task_id)}`);
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) {
+              return {
+                task_id: task.task_id,
+                status: 'FAILURE',
+                error: data.detail || `HTTP ${res.status}`,
+              };
+            }
+            return data;
+          })
+        );
+
+        setRefinementTasks((prev) =>
+          prev.map((task) => {
+            const update = updates.find((item) => item.task_id === task.task_id);
+            if (!update) return task;
+            return {
+              ...task,
+              status: String(update.status || task.status) as RefinementTaskStatus,
+              result: update.result || task.result,
+              error: update.error || task.error,
+            };
+          })
+        );
+      } catch (e) {
+        console.error('Refinement polling error', e);
+      }
+    }, Math.max(1, refinementPollSeconds) * 1000);
+
+    return () => window.clearTimeout(timer);
+  }, [refinementTasks, refinementStartedAt, refinementPollSeconds, loadRecommendations]);
+
   const switchTab = (next: 'map' | 'recommendations' | 'backtest') => {
     setTab(next);
     setParams({ tab: next });
@@ -258,6 +332,10 @@ const MediaCockpit: React.FC = () => {
 
   const triggerRecommendations = async () => {
     setRecLoading(true);
+    setRefinementNotice(null);
+    setRefinementTasks([]);
+    setRefinementStartedAt(null);
+    setHighlightCardId(null);
     try {
       const res = await fetch('/api/v1/media/recommendations/generate', {
         method: 'POST',
@@ -273,23 +351,45 @@ const MediaCockpit: React.FC = () => {
           virus_typ: virus,
         }),
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.detail || `HTTP ${res.status}`);
+      }
       const sorted = [...(data.cards || [])].sort((a, b) => {
         const urgencyDelta = Number(b.urgency_score || 0) - Number(a.urgency_score || 0);
         if (urgencyDelta !== 0) return urgencyDelta;
         return Number(b.confidence || 0) - Number(a.confidence || 0);
       });
       setRecCards(sorted);
-      if (data?.auto_open_url) {
-        navigate(data.auto_open_url);
-      } else if (data?.top_card_id) {
-        navigate(`/dashboard/recommendations/${encodeURIComponent(data.top_card_id)}`);
-      } else {
-        await loadRecommendations();
+
+      const topCardId = String(data?.top_card_id || sorted[0]?.id || '').trim();
+      if (topCardId) {
+        setHighlightCardId(topCardId);
+      }
+
+      const taskRefs = Array.isArray(data?.refinement_tasks) ? data.refinement_tasks : [];
+      const pollHint = Math.max(1, Number(data?.refinement_poll_hint_seconds || 5));
+      setRefinementPollSeconds(pollHint);
+
+      if (taskRefs.length > 0) {
+        setRefinementTasks(
+          taskRefs
+            .filter((item: any) => item?.card_id && item?.task_id)
+            .map((item: any) => ({
+              card_id: String(item.card_id),
+              task_id: String(item.task_id),
+              status: 'PENDING' as RefinementTaskStatus,
+            }))
+        );
+        setRefinementStartedAt(Date.now());
+        setRefinementNotice(`KI verfeinert ${taskRefs.length} Top-Card(s) im Hintergrund...`);
+      } else if (sorted.length > 0) {
+        setRefinementNotice('Cards erzeugt. Keine asynchrone KI-Verfeinerung gestartet.');
       }
       await loadCockpit();
     } catch (e) {
       console.error('Generate recommendation error', e);
+      setRefinementNotice('Generierung fehlgeschlagen. Bitte erneut versuchen.');
     } finally {
       setRecLoading(false);
     }
@@ -351,6 +451,37 @@ const MediaCockpit: React.FC = () => {
       dateLabel: row.date ? format(parseISO(row.date), 'dd.MM.yy', { locale: de }) : row.date,
     }));
   }, [marketRun]);
+
+  const refinementByCard = useMemo(() => {
+    const map = new Map<string, RefinementTaskState>();
+    refinementTasks.forEach((task) => {
+      map.set(task.card_id, task);
+    });
+    return map;
+  }, [refinementTasks]);
+
+  const refinementBadge = (card: RecommendationCard) => {
+    const task = refinementByCard.get(card.id);
+    if (!task) return null;
+
+    if (task.status === 'PENDING') return { label: 'KI queued', tone: 'queued' as const };
+    if (task.status === 'STARTED' || task.status === 'PROGRESS') return { label: 'KI läuft', tone: 'running' as const };
+    if (task.status === 'FAILURE') return { label: 'KI failed', tone: 'failed' as const };
+    if (task.status === 'SUCCESS') {
+      const aiStatus = String(task.result?.ai_generation_status || '').toLowerCase();
+      if (aiStatus === 'fallback_template') return { label: 'KI fallback', tone: 'fallback' as const };
+      return { label: 'KI success', tone: 'success' as const };
+    }
+    return null;
+  };
+
+  const refinementBadgeStyle = (tone: 'queued' | 'running' | 'success' | 'fallback' | 'failed') => {
+    if (tone === 'queued') return { background: 'rgba(148,163,184,0.2)', color: '#cbd5e1' };
+    if (tone === 'running') return { background: 'rgba(56,189,248,0.2)', color: '#7dd3fc' };
+    if (tone === 'success') return { background: 'rgba(34,197,94,0.2)', color: '#86efac' };
+    if (tone === 'fallback') return { background: 'rgba(245,158,11,0.2)', color: '#fcd34d' };
+    return { background: 'rgba(239,68,68,0.2)', color: '#fca5a5' };
+  };
 
   const renderTileValue = (tile: BentoTile) => {
     if (tile.value === null || tile.value === undefined || tile.value === '') return '-';
@@ -439,7 +570,7 @@ const MediaCockpit: React.FC = () => {
                       disabled={recLoading}
                       className="px-3 py-1.5 text-xs font-semibold rounded-full transition hover:brightness-110 disabled:opacity-60"
                       style={{ background: 'linear-gradient(135deg, #22c55e, #10b981)', color: '#052e1b' }}
-                      title="Erzeugt (falls noetig) neue Cards und oeffnet die Top-Empfehlung"
+                      title="Erzeugt neue Cards und startet KI-Verfeinerung asynchron"
                     >
                       {recLoading ? 'Berechne...' : 'Jetzt Cards erzeugen'}
                     </button>
@@ -763,9 +894,18 @@ const MediaCockpit: React.FC = () => {
                     className="px-4 py-2 text-xs font-bold rounded-lg transition hover:brightness-110 disabled:opacity-60"
                     style={{ background: 'linear-gradient(135deg, #22c55e, #10b981)', color: '#052e1b' }}
                     disabled={recLoading}
-                    title="Erzeugt neue Cards (falls noetig) und oeffnet die Top-Empfehlung"
+                    title="Erzeugt neue Cards und startet KI-Verfeinerung asynchron"
                   >
                     {recLoading ? 'Berechne...' : 'Empfehlungen erzeugen'}
+                  </button>
+                  <button
+                    onClick={() => highlightCardId && navigate(`/dashboard/recommendations/${encodeURIComponent(highlightCardId)}`)}
+                    className="px-4 py-2 text-xs font-semibold rounded-lg transition hover:bg-slate-700 disabled:opacity-60"
+                    style={{ border: '1px solid rgba(148,163,184,0.25)', color: '#e2e8f0' }}
+                    disabled={!highlightCardId}
+                    title="Oeffnet die aktuell priorisierte Top-Empfehlung"
+                  >
+                    Top-Empfehlung öffnen
                   </button>
                   <button
                     onClick={loadRecommendations}
@@ -784,6 +924,15 @@ const MediaCockpit: React.FC = () => {
                   </button>
                 </div>
               </div>
+
+              {refinementNotice && (
+                <div
+                  className="mt-4 rounded-lg px-3 py-2 text-xs"
+                  style={{ background: 'rgba(15,23,42,0.65)', border: '1px solid #334155', color: '#94a3b8' }}
+                >
+                  {refinementNotice}
+                </div>
+              )}
 
               {showTechDetails && (
                 <div className="mt-5 space-y-3">
@@ -849,75 +998,102 @@ const MediaCockpit: React.FC = () => {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-              {recCards.map((card) => (
-                <button
-                  key={card.id}
-                  type="button"
-                  onClick={() => navigate(`/dashboard/recommendations/${encodeURIComponent(card.id)}`)}
-                  className="card p-5 text-left hover:brightness-110 transition"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="text-[10px] text-slate-500 uppercase tracking-wider">KI-Erkenntnis</div>
-                      <div className="text-base font-bold text-white mt-1 truncate">
-                        {card.playbook_title || card.campaign_preview?.playbook_title || card.campaign_name || `${card.brand} · ${card.product}`}
+              {recCards.map((card) => {
+                const isHighlighted = highlightCardId === card.id;
+                const badge = refinementBadge(card);
+                return (
+                  <button
+                    key={card.id}
+                    type="button"
+                    onClick={() => navigate(`/dashboard/recommendations/${encodeURIComponent(card.id)}`)}
+                    className="card p-5 text-left hover:brightness-110 transition"
+                    style={
+                      isHighlighted
+                        ? {
+                            border: '1px solid rgba(34,197,94,0.7)',
+                            boxShadow: '0 0 0 1px rgba(34,197,94,0.25), 0 10px 30px rgba(16,185,129,0.12)',
+                          }
+                        : undefined
+                    }
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <div className="text-[10px] text-slate-500 uppercase tracking-wider">KI-Erkenntnis</div>
+                          {isHighlighted && (
+                            <span className="px-2 py-0.5 text-[10px] rounded-full" style={{ background: 'rgba(34,197,94,0.2)', color: '#86efac' }}>
+                              Top-Empfehlung
+                            </span>
+                          )}
+                          {badge && (
+                            <span
+                              className="px-2 py-0.5 text-[10px] rounded-full"
+                              style={refinementBadgeStyle(badge.tone)}
+                            >
+                              {badge.label}
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-base font-bold text-white mt-1 truncate">
+                          {card.playbook_title || card.campaign_preview?.playbook_title || card.campaign_name || `${card.brand} · ${card.product}`}
+                        </div>
+                        <div className="text-xs text-slate-400 mt-1 line-clamp-2">{card.reason || card.trigger_snapshot?.details || 'Signal erkannt.'}</div>
                       </div>
-                      <div className="text-xs text-slate-400 mt-1 line-clamp-2">{card.reason || card.trigger_snapshot?.details || 'Signal erkannt.'}</div>
-                    </div>
-                    <div className="flex-shrink-0 text-right">
-                      <div className="text-[10px] text-slate-500 uppercase tracking-wider">Urgency</div>
-                      <div className="text-sm font-bold text-slate-200 mt-1">{Math.round(card.urgency_score || 0)}</div>
-                      {card.confidence !== undefined && (
-                        <div className="text-[11px] text-emerald-300 mt-1">Conf {Math.round((card.confidence || 0) * 100)}%</div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="mt-4 grid grid-cols-2 gap-3">
-                    <div className="rounded-lg p-3" style={{ background: 'rgba(15,23,42,0.7)', border: '1px solid #334155' }}>
-                      <div className="text-[10px] text-slate-500 uppercase tracking-wider">Produkt</div>
-                      <div className="text-sm font-semibold text-white mt-1 truncate" title={card.recommended_product || card.product}>
-                        {card.recommended_product || card.product}
+                      <div className="flex-shrink-0 text-right">
+                        <div className="text-[10px] text-slate-500 uppercase tracking-wider">Urgency</div>
+                        <div className="text-sm font-bold text-slate-200 mt-1">{Math.round(card.urgency_score || 0)}</div>
+                        {card.confidence !== undefined && (
+                          <div className="text-[11px] text-emerald-300 mt-1">Conf {Math.round((card.confidence || 0) * 100)}%</div>
+                        )}
                       </div>
-                      <div className="text-[11px] text-slate-500 mt-1">HWG-safe Copy Pack</div>
                     </div>
-                    <div className="rounded-lg p-3" style={{ background: 'rgba(15,23,42,0.7)', border: '1px solid #334155' }}>
-                      <div className="text-[10px] text-slate-500 uppercase tracking-wider">Budget</div>
-                      <div className="text-sm font-semibold text-white mt-1">
-                        +{card.budget_shift_pct}%{' '}
-                        <span className="text-slate-400">
-                          ({card.campaign_preview?.budget?.shift_value_eur ? eur(card.campaign_preview.budget.shift_value_eur) : 'Shift'})
-                        </span>
+
+                    <div className="mt-4 grid grid-cols-2 gap-3">
+                      <div className="rounded-lg p-3" style={{ background: 'rgba(15,23,42,0.7)', border: '1px solid #334155' }}>
+                        <div className="text-[10px] text-slate-500 uppercase tracking-wider">Produkt</div>
+                        <div className="text-sm font-semibold text-white mt-1 truncate" title={card.recommended_product || card.product}>
+                          {card.recommended_product || card.product}
+                        </div>
+                        <div className="text-[11px] text-slate-500 mt-1">HWG-safe Copy Pack</div>
                       </div>
-                      <div className="text-[11px] text-slate-500 mt-1">KPI: {card.primary_kpi || card.campaign_preview?.primary_kpi || '-'}</div>
+                      <div className="rounded-lg p-3" style={{ background: 'rgba(15,23,42,0.7)', border: '1px solid #334155' }}>
+                        <div className="text-[10px] text-slate-500 uppercase tracking-wider">Budget</div>
+                        <div className="text-sm font-semibold text-white mt-1">
+                          +{card.budget_shift_pct}%{' '}
+                          <span className="text-slate-400">
+                            ({card.campaign_preview?.budget?.shift_value_eur ? eur(card.campaign_preview.budget.shift_value_eur) : 'Shift'})
+                          </span>
+                        </div>
+                        <div className="text-[11px] text-slate-500 mt-1">KPI: {card.primary_kpi || card.campaign_preview?.primary_kpi || '-'}</div>
+                      </div>
                     </div>
-                  </div>
 
-                  <div className="mt-4 flex items-center justify-between gap-3">
-                    <div className="text-[11px] text-slate-500">
-                      Status: <span className="text-slate-300">{String(card.status || 'DRAFT')}</span>
-                      {showTechDetails && (
-                        <>
-                          {' · '}
-                          <span className="text-slate-400">{mappingLabel(card.mapping_status)}</span>
-                        </>
-                      )}
+                    <div className="mt-4 flex items-center justify-between gap-3">
+                      <div className="text-[11px] text-slate-500">
+                        Status: <span className="text-slate-300">{String(card.status || 'DRAFT')}</span>
+                        {showTechDetails && (
+                          <>
+                            {' · '}
+                            <span className="text-slate-400">{mappingLabel(card.mapping_status)}</span>
+                          </>
+                        )}
+                      </div>
+                      <span
+                        className="px-3 py-1.5 text-xs font-bold rounded-lg"
+                        style={{ background: 'linear-gradient(135deg, #22c55e, #10b981)', color: '#052e1b' }}
+                      >
+                        Aktivieren
+                      </span>
                     </div>
-                    <span
-                      className="px-3 py-1.5 text-xs font-bold rounded-lg"
-                      style={{ background: 'linear-gradient(135deg, #22c55e, #10b981)', color: '#052e1b' }}
-                    >
-                      Aktivieren
-                    </span>
-                  </div>
 
-                  {showTechDetails && (
-                    <div className="mt-3 text-xs text-slate-500">
-                      Kanalmix: {Object.entries(card.channel_mix || {}).map(([k, v]) => `${k} ${v}%`).join(' · ')}
-                    </div>
-                  )}
-                </button>
-              ))}
+                    {showTechDetails && (
+                      <div className="mt-3 text-xs text-slate-500">
+                        Kanalmix: {Object.entries(card.channel_mix || {}).map(([k, v]) => `${k} ${v}%`).join(' · ')}
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
               {recCards.length === 0 && <div className="text-slate-500 text-sm">Noch keine Action Cards vorhanden.</div>}
             </div>
           </div>

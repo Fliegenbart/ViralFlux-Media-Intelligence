@@ -705,18 +705,18 @@ const Dashboard: React.FC = () => {
           </div>
           <div className="flex items-center gap-6">
             <button
-              onClick={() => navigate('/vertriebsradar')}
+              onClick={() => navigate('/sales-radar')}
               className="px-3 py-1.5 text-xs font-medium rounded-lg transition-all hover:bg-slate-700"
               style={{ color: '#f59e0b', border: '1px solid #f59e0b40' }}
             >
               Vertriebsradar
             </button>
             <button
-              onClick={() => navigate('/datenimport')}
+              onClick={() => navigate('/data-integration')}
               className="px-3 py-1.5 text-xs font-medium rounded-lg transition-all hover:bg-slate-700"
               style={{ color: '#10b981', border: '1px solid #10b98140' }}
             >
-              Datenimport
+              Integrationen
             </button>
             <button
               onClick={() => navigate('/map')}

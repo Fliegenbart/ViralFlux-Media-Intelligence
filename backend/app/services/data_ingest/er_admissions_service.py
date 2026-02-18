@@ -1,6 +1,6 @@
-"""Notaufnahmesurveillance Ingestion Service — RKI/AKTIN Syndromdaten.
+"""ER admissions surveillance ingestion service (RKI/AKTIN).
 
-Datenquelle: https://github.com/robert-koch-institut/Daten_der_Notaufnahmesurveillance
+Source: https://github.com/robert-koch-institut/Daten_der_Notaufnahmesurveillance
 """
 
 from datetime import datetime
@@ -18,19 +18,19 @@ logger = logging.getLogger(__name__)
 settings = get_settings()
 
 
-class NotaufnahmeIngestionService:
-    """Service zum Importieren der RKI/AKTIN Notaufnahmesurveillance."""
+class ERAdmissionsIngestionService:
+    """Ingest RKI/AKTIN ER admissions surveillance datasets (Syndromdaten)."""
 
     BASE_URL = settings.RKI_NOTAUFNAHME_URL
     SYNDROME_URL = f"{BASE_URL}/Notaufnahmesurveillance_Zeitreihen_Syndrome.tsv"
-    STANDORTE_URL = f"{BASE_URL}/Notaufnahmesurveillance_Standorte.tsv"
+    FACILITIES_URL = f"{BASE_URL}/Notaufnahmesurveillance_Standorte.tsv"
 
     def __init__(self, db: Session):
         self.db = db
 
-    def fetch_syndrome_data(self) -> pd.DataFrame:
-        """Lade Syndrom-Zeitreihen von GitHub."""
-        logger.info(f"Fetching Notaufnahme syndrome data from {self.SYNDROME_URL}")
+    def fetch_syndrome_timeseries(self) -> pd.DataFrame:
+        """Fetch syndrome time series TSV from GitHub."""
+        logger.info(f"Fetching ER admissions syndrome data from {self.SYNDROME_URL}")
 
         response = requests.get(self.SYNDROME_URL, timeout=180)
         response.raise_for_status()
@@ -56,7 +56,7 @@ class NotaufnahmeIngestionService:
         }
         missing = required_cols - set(df.columns)
         if missing:
-            raise ValueError(f"Notaufnahme-Syndromdaten fehlen Spalten: {sorted(missing)}")
+            raise ValueError(f"ER admissions syndrome dataset is missing columns: {sorted(missing)}")
 
         df['datum'] = pd.to_datetime(df['date'], errors='coerce')
         df = df[df['datum'].notna()].copy()
@@ -72,14 +72,14 @@ class NotaufnahmeIngestionService:
             df[col] = pd.to_numeric(df[col], errors='coerce')
 
         logger.info(
-            f"Loaded Notaufnahme syndromes: {len(df)} rows, "
+            f"Loaded ER admissions syndromes: {len(df)} rows, "
             f"syndromes={sorted(df['syndrome'].dropna().unique().tolist())}, "
             f"ed_types={sorted(df['ed_type'].dropna().unique().tolist())}"
         )
         return df
 
-    def import_syndrome_data(self, df: pd.DataFrame) -> tuple[int, int]:
-        """Importiere Syndrom-Zeitreihen in die DB (Upsert)."""
+    def upsert_syndrome_timeseries(self, df: pd.DataFrame) -> tuple[int, int]:
+        """Upsert syndrome time series into the DB."""
         if df.empty:
             return 0, 0
 
@@ -136,14 +136,14 @@ class NotaufnahmeIngestionService:
                 inserted += 1
 
         self.db.commit()
-        logger.info(f"Notaufnahme syndromes import: {inserted} new, {updated} updated")
+        logger.info(f"ER admissions syndromes import: {inserted} new, {updated} updated")
         return inserted, updated
 
-    def fetch_standorte(self) -> pd.DataFrame:
-        """Lade Standortdaten der angeschlossenen Notaufnahmen."""
-        logger.info(f"Fetching Notaufnahme standorte from {self.STANDORTE_URL}")
+    def fetch_facilities(self) -> pd.DataFrame:
+        """Fetch facility metadata TSV from GitHub."""
+        logger.info(f"Fetching ER admissions facilities from {self.FACILITIES_URL}")
 
-        response = requests.get(self.STANDORTE_URL, timeout=120)
+        response = requests.get(self.FACILITIES_URL, timeout=120)
         response.raise_for_status()
 
         df = pd.read_csv(
@@ -165,19 +165,19 @@ class NotaufnahmeIngestionService:
         }
         missing = required_cols - set(df.columns)
         if missing:
-            raise ValueError(f"Notaufnahme-Standortdaten fehlen Spalten: {sorted(missing)}")
+            raise ValueError(f"ER admissions facilities dataset is missing columns: {sorted(missing)}")
 
         df['latitude'] = pd.to_numeric(df['latitude'], errors='coerce')
         df['longitude'] = pd.to_numeric(df['longitude'], errors='coerce')
 
         logger.info(
-            f"Loaded Notaufnahme standorte: {len(df)} rows, "
+            f"Loaded ER admissions facilities: {len(df)} rows, "
             f"states={df['state'].nunique()}, types={df['ed_type'].nunique()}"
         )
         return df
 
-    def import_standorte(self, df: pd.DataFrame) -> tuple[int, int]:
-        """Importiere Standortdaten in die DB (Upsert)."""
+    def upsert_facilities(self, df: pd.DataFrame) -> tuple[int, int]:
+        """Upsert facility metadata into the DB."""
         if df.empty:
             return 0, 0
 
@@ -220,17 +220,17 @@ class NotaufnahmeIngestionService:
                 inserted += 1
 
         self.db.commit()
-        logger.info(f"Notaufnahme standorte import: {inserted} new, {updated} updated")
+        logger.info(f"ER admissions facilities import: {inserted} new, {updated} updated")
         return inserted, updated
 
     def run_full_import(self) -> dict:
-        """Führe kompletten Notaufnahme-Import durch."""
-        logger.info("Starting Notaufnahme full import...")
+        """Run full ER admissions ingestion."""
+        logger.info("Starting ER admissions full import...")
         results = {}
 
         try:
-            syndromes = self.fetch_syndrome_data()
-            inserted, updated = self.import_syndrome_data(syndromes)
+            syndromes = self.fetch_syndrome_timeseries()
+            inserted, updated = self.upsert_syndrome_timeseries(syndromes)
             results['syndromes'] = {
                 "success": True,
                 "imported": inserted,
@@ -240,21 +240,21 @@ class NotaufnahmeIngestionService:
                 "latest_date": syndromes['datum'].max().isoformat() if not syndromes.empty else None,
             }
         except Exception as e:
-            logger.error(f"Notaufnahme syndromes import failed: {e}")
+            logger.error(f"ER admissions syndromes import failed: {e}")
             results['syndromes'] = {"success": False, "error": str(e)}
 
         try:
-            standorte = self.fetch_standorte()
-            inserted, updated = self.import_standorte(standorte)
+            facilities = self.fetch_facilities()
+            inserted, updated = self.upsert_facilities(facilities)
             results['standorte'] = {
                 "success": True,
                 "imported": inserted,
                 "updated": updated,
-                "fetched": len(standorte),
-                "bundeslaender": int(standorte['state'].nunique()),
+                "fetched": len(facilities),
+                "bundeslaender": int(facilities['state'].nunique()),
             }
         except Exception as e:
-            logger.error(f"Notaufnahme standorte import failed: {e}")
+            logger.error(f"ER admissions facilities import failed: {e}")
             results['standorte'] = {"success": False, "error": str(e)}
 
         return {

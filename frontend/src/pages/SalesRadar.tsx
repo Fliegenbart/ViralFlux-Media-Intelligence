@@ -104,7 +104,7 @@ const Sparkline: React.FC<{ data: number[]; color: string; w?: number; h?: numbe
 };
 
 // ─── Component ──────────────────────────────────────────────────────────────
-const Vertriebsradar: React.FC = () => {
+const SalesRadar: React.FC = () => {
   const navigate = useNavigate();
   const [opportunities, setOpportunities] = useState<MarketingOpportunity[]>([]);
   const [stats, setStats] = useState<OpportunityStats | null>(null);
@@ -851,4 +851,4 @@ const Vertriebsradar: React.FC = () => {
   );
 };
 
-export default Vertriebsradar;
+export default SalesRadar;

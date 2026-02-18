@@ -361,7 +361,7 @@ const MediaCockpit: React.FC = () => {
                 {v}
               </button>
             ))}
-            <button onClick={() => navigate('/datenimport')} className="tab-chip">Datenimport</button>
+            <button onClick={() => navigate('/data-integration')} className="tab-chip">Integrationen</button>
           </div>
         </div>
       </header>

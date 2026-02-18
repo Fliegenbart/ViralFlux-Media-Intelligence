@@ -20,7 +20,7 @@ from app.core.config import get_settings
 from app.core.celery_app import celery_app
 from app.api.deps import get_current_admin
 from app.services.data_ingest.amelag_service import AmelagIngestionService
-from app.services.data_ingest.notaufnahme_service import NotaufnahmeIngestionService
+from app.services.data_ingest.er_admissions_service import ERAdmissionsIngestionService
 from app.services.data_ingest.survstat_service import SurvstatIngestionService
 from app.services.data_ingest.trends_service import GoogleTrendsService
 from app.services.data_ingest.weather_service import WeatherService
@@ -122,7 +122,7 @@ async def run_are_konsultation_import(db: Session = Depends(get_db)):
 @router.post("/notaufnahme")
 async def run_notaufnahme_import(db: Session = Depends(get_db)):
     """Importiere RKI/AKTIN Notaufnahmesurveillance Daten."""
-    service = NotaufnahmeIngestionService(db)
+    service = ERAdmissionsIngestionService(db)
     return service.run_full_import()
 
 

@@ -163,6 +163,7 @@ from app.api import (
     outbreak_score,
     marketing,
     data_import,
+    webhooks,
     public_api,
     calibration,
     media,
@@ -181,6 +182,7 @@ app.include_router(outbreak_score.router, prefix="/api/v1/outbreak-score", tags=
 app.include_router(marketing.router, prefix="/api/v1/marketing", tags=["Marketing"])
 app.include_router(media.router, prefix="/api/v1/media", tags=["Media"])
 app.include_router(data_import.router, prefix="/api/v1/data-import", tags=["Data Import"])
+app.include_router(webhooks.router)
 app.include_router(public_api.router, prefix="/api/v1/public", tags=["Public API"])
 app.include_router(calibration.router, prefix="/api/v1/calibration", tags=["Calibration"])
 app.include_router(backtest.router, prefix="/api/v1/backtest", tags=["Backtest"])

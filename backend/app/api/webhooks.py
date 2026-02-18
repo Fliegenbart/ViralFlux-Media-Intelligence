@@ -37,7 +37,8 @@ def verify_api_key(x_api_key: str = Header(..., alias="X-API-Key")) -> None:
 class ERPSalesPayload(BaseModel):
     """Normalized ERP/IMS sales payload (strict)."""
 
-    model_config = ConfigDict(extra="forbid", strict=True)
+    # We forbid unknown fields but still allow ISO-8601 strings for `timestamp`.
+    model_config = ConfigDict(extra="forbid")
 
     product_id: str = Field(min_length=1, max_length=128)
     region_code: str = Field(min_length=1, max_length=32)
@@ -89,4 +90,3 @@ async def get_webhook_task_status(
         response["error"] = str(task_result.info)
 
     return response
-

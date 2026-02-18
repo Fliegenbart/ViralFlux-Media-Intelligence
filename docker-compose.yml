@@ -93,6 +93,8 @@ services:
         condition: service_healthy
       db:
         condition: service_healthy
+    healthcheck:
+      disable: true
     restart: unless-stopped
     networks:
       - virusradar_network

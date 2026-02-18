@@ -90,6 +90,13 @@ const intensityColor = (intensity: number) => {
   return `rgba(27, 83, 155, ${a})`;
 };
 
+const eur = (n: number) =>
+  new Intl.NumberFormat('de-DE', {
+    style: 'currency',
+    currency: 'EUR',
+    maximumFractionDigits: 0,
+  }).format(Math.round(n || 0));
+
 const trendIcon = (trend: string) => (trend === 'steigend' ? '\u2197' : trend === 'fallend' ? '\u2198' : '\u2192');
 const mappingLabel = (status?: string) => {
   if (!status) return 'Unbekannt';
@@ -113,6 +120,8 @@ const MediaCockpit: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [openingRegion, setOpeningRegion] = useState<string | null>(null);
   const [selectedRegion, setSelectedRegion] = useState<string | null>(null);
+  const [horizonDays, setHorizonDays] = useState(0);
+  const [showTechDetails, setShowTechDetails] = useState(false);
 
   const [recLoading, setRecLoading] = useState(false);
   const [recCards, setRecCards] = useState<RecommendationCard[]>([]);
@@ -136,6 +145,14 @@ const MediaCockpit: React.FC = () => {
   const [customerFile, setCustomerFile] = useState<File | null>(null);
 
   const activeMap = cockpit?.map;
+  const clamp01 = (x: number) => Math.max(0, Math.min(1, x));
+  const projectedIntensity = (r?: MapRegion | null) => {
+    if (!r) return 0;
+    const base = Number(r.intensity || 0);
+    const change = Number(r.change_pct || 0) / 100;
+    const factor = 1 + change * (horizonDays / 14) * 0.9;
+    return clamp01(base * factor);
+  };
 
   const loadCockpit = useCallback(async () => {
     setLoading(true);
@@ -320,6 +337,10 @@ const MediaCockpit: React.FC = () => {
   };
 
   const mapRanking = useMemo(() => (activeMap?.top_regions || []), [activeMap]);
+  const executiveActions = useMemo(() => (activeMap?.activation_suggestions || []).slice(0, 3), [activeMap]);
+  const executiveShiftEur = useMemo(() => {
+    return executiveActions.reduce((sum, s) => sum + (weeklyBudget * (Number(s.budget_shift_pct || 0) / 100)), 0);
+  }, [executiveActions, weeklyBudget]);
   const bentoTiles = useMemo(() => (cockpit?.bento?.tiles || []), [cockpit]);
   const sourceStatus = useMemo(() => (cockpit?.source_status?.items || []), [cockpit]);
   const peixSummary = cockpit?.peix_epi_score;
@@ -387,49 +408,196 @@ const MediaCockpit: React.FC = () => {
 
         {!loading && tab === 'map' && activeMap && (
           <div className="space-y-6">
-            <div className="card p-5">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <h2 className="text-lg font-semibold text-white">Bento-Übersicht aller relevanten Messwerte</h2>
-                  <p className="text-xs text-slate-500">Sortiert nach Impact-Wahrscheinlichkeit. PeixEpiScore bleibt intern geschützt.</p>
+            {/* Executive summary + action cards */}
+            <div
+              className="card p-6"
+              style={{
+                background:
+                  'radial-gradient(900px 220px at 20% 0%, rgba(34,197,94,0.12), transparent 60%), linear-gradient(135deg, rgba(30,41,59,1), rgba(15,23,42,1))',
+                border: '1px solid rgba(148,163,184,0.22)',
+              }}
+            >
+              <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
+                <div className="min-w-0">
+                  <div className="text-[10px] text-slate-400 uppercase tracking-wider">Media Cockpit</div>
+                  <h2 className="text-2xl font-black text-white tracking-tight mt-1">
+                    Action Radar fuer {virus}
+                  </h2>
+                  <p className="text-sm text-slate-400 mt-2 max-w-2xl">
+                    Kein Zahlenfriedhof. Du siehst zuerst, wo Budget aktivieren sollte und welche Botschaft HWG-sicher passt.
+                  </p>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <button
+                      onClick={() => switchTab('recommendations')}
+                      className="px-3 py-1.5 text-xs font-semibold rounded-full transition hover:brightness-110"
+                      style={{ background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)', color: 'white' }}
+                    >
+                      Kampagnenvorschlaege
+                    </button>
+                    <button
+                      onClick={triggerRecommendations}
+                      disabled={recLoading}
+                      className="px-3 py-1.5 text-xs font-semibold rounded-full transition hover:brightness-110 disabled:opacity-60"
+                      style={{ background: 'linear-gradient(135deg, #22c55e, #10b981)', color: '#052e1b' }}
+                      title="Erzeugt (falls noetig) neue Cards und oeffnet die Top-Empfehlung"
+                    >
+                      {recLoading ? 'Berechne...' : 'Jetzt Cards erzeugen'}
+                    </button>
+                    <span
+                      className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs"
+                      style={{ background: 'rgba(15,23,42,0.65)', border: '1px solid #334155', color: '#94a3b8' }}
+                      title="Die genaue Score-Metrik ist absichtlich hinter Tech Details verborgen."
+                    >
+                      Lage: <span className="text-slate-200">{peixSummary?.national_band || '—'}</span>
+                    </span>
+                  </div>
                 </div>
-                <div className="text-xs text-slate-400">
-                  Nationaler PeixEpiScore: <span className="text-cyan-300 font-semibold">{peixSummary?.national_score ?? '-'} / 100</span>
-                  {' · '}
-                  Band: <span className="text-slate-200">{peixSummary?.national_band ?? '-'}</span>
-                  {' · '}
-                  Impact: <span className="text-slate-200">{peixSummary?.national_impact_probability ?? '-'}%</span>
+
+                <div className="grid grid-cols-2 gap-3 w-full lg:w-[420px]">
+                  <div className="rounded-xl p-4" style={{ background: 'rgba(15,23,42,0.6)', border: '1px solid #334155' }}>
+                    <div className="text-[10px] text-slate-500 uppercase tracking-wider">Re-Allocation</div>
+                    <div className="text-xl font-black text-white mt-1">{eur(executiveShiftEur)}</div>
+                    <div className="text-[11px] text-slate-500 mt-1">aus Top-Aktionen (heuristisch)</div>
+                  </div>
+                  <div className="rounded-xl p-4" style={{ background: 'rgba(15,23,42,0.6)', border: '1px solid #334155' }}>
+                    <div className="text-[10px] text-slate-500 uppercase tracking-wider">Waste Reduction</div>
+                    <div className="text-xl font-black text-white mt-1">{eur(weeklyBudget * 0.12)}</div>
+                    <div className="text-[11px] text-slate-500 mt-1">in gesunden Regionen</div>
+                  </div>
+                  <div className="rounded-xl p-4" style={{ background: 'rgba(15,23,42,0.6)', border: '1px solid #334155' }}>
+                    <div className="text-[10px] text-slate-500 uppercase tracking-wider">Zeitfenster</div>
+                    <div className="text-xl font-black text-white mt-1">7-10 Tage</div>
+                    <div className="text-[11px] text-slate-500 mt-1">kurz, konzentriert, messbar</div>
+                  </div>
+                  <div className="rounded-xl p-4" style={{ background: 'rgba(15,23,42,0.6)', border: '1px solid #334155' }}>
+                    <div className="text-[10px] text-slate-500 uppercase tracking-wider">Budget (Woche)</div>
+                    <div className="text-xl font-black text-white mt-1">{eur(weeklyBudget)}</div>
+                    <div className="text-[11px] text-slate-500 mt-1">fuer Demo/Planung</div>
+                  </div>
                 </div>
               </div>
-              <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
-                {bentoTiles.map((tile) => (
-                  <div key={tile.id} className="rounded-xl p-3" style={{ background: 'rgba(15,23,42,0.65)', border: '1px solid #334155' }}>
-                    <div className="flex items-center justify-between gap-2 mb-2">
-                      <div className="text-xs text-slate-400">{tile.title}</div>
-                      <span
-                        className="inline-flex w-2.5 h-2.5 rounded-full"
-                        style={{ background: tile.is_live ? '#22c55e' : '#ef4444' }}
-                        title={tile.is_live ? 'Live' : 'Nicht live'}
-                      />
+
+              <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+                {(executiveActions.length ? executiveActions : []).map((s, idx) => (
+                  <div
+                    key={`${s.region}-${idx}`}
+                    className="rounded-xl p-4"
+                    style={{ background: 'rgba(15,23,42,0.65)', border: '1px solid #334155' }}
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="text-[10px] text-slate-500 uppercase tracking-wider">Aktion</div>
+                        <div className="text-base font-bold text-white mt-1 truncate">{s.region_name}</div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-[10px] text-slate-500 uppercase tracking-wider">Shift</div>
+                        <div className="text-sm font-bold text-cyan-300 mt-1">+{s.budget_shift_pct}%</div>
+                      </div>
                     </div>
-                    <div className="text-base font-semibold text-white">{renderTileValue(tile)}</div>
-                    <div className="text-[11px] text-slate-500 mt-1">{tile.subtitle || tile.data_source || '-'}</div>
-                    <div className="text-[11px] text-cyan-300 mt-1">Impact: {Math.round(tile.impact_probability || 0)}%</div>
+                    <p className="text-xs text-slate-400 mt-2 line-clamp-3">{s.reason}</p>
+                    <div className="mt-3 flex items-center justify-between gap-3">
+                      <div className="text-[11px] text-slate-500">Ziel: HWG-safe Copy Pack</div>
+                      <button
+                        onClick={() => openRecommendationForRegion(s.region)}
+                        className="px-3 py-1.5 text-xs font-bold rounded-lg transition hover:brightness-110"
+                        style={{ background: 'linear-gradient(135deg, #22c55e, #10b981)', color: '#052e1b' }}
+                      >
+                        Aktivieren
+                      </button>
+                    </div>
                   </div>
                 ))}
+                {executiveActions.length === 0 && (
+                  <div className="md:col-span-3 text-sm text-slate-500">
+                    Noch keine Aktivierungs-Aktionen vorhanden. Erzeuge KI-Empfehlungen oder lade Kartendaten.
+                  </div>
+                )}
               </div>
             </div>
+
+            <div className="flex items-center justify-between">
+              <div className="text-xs text-slate-500">Rohdaten sind hinter “Tech Details” verborgen.</div>
+              <button
+                onClick={() => setShowTechDetails((s) => !s)}
+                className="px-3 py-1.5 text-xs font-semibold rounded-lg transition hover:bg-slate-700"
+                style={{ border: '1px solid #334155', color: '#94a3b8' }}
+              >
+                {showTechDetails ? 'Tech Details ausblenden' : 'Tech Details anzeigen'}
+              </button>
+            </div>
+
+            {showTechDetails && (
+              <div className="card p-5">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h2 className="text-lg font-semibold text-white">Tech Details: Bento-Übersicht</h2>
+                    <p className="text-xs text-slate-500">Für Analyse/Revision. Nicht die Default-Ansicht.</p>
+                  </div>
+                  <div className="text-xs text-slate-400">
+                    Nationaler PeixEpiScore: <span className="text-cyan-300 font-semibold">{peixSummary?.national_score ?? '-'} / 100</span>
+                    {' · '}
+                    Band: <span className="text-slate-200">{peixSummary?.national_band ?? '-'}</span>
+                    {' · '}
+                    Impact: <span className="text-slate-200">{peixSummary?.national_impact_probability ?? '-'}%</span>
+                  </div>
+                </div>
+                <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+                  {bentoTiles.map((tile) => (
+                    <div key={tile.id} className="rounded-xl p-3" style={{ background: 'rgba(15,23,42,0.65)', border: '1px solid #334155' }}>
+                      <div className="flex items-center justify-between gap-2 mb-2">
+                        <div className="text-xs text-slate-400">{tile.title}</div>
+                        <span
+                          className="inline-flex w-2.5 h-2.5 rounded-full"
+                          style={{ background: tile.is_live ? '#22c55e' : '#ef4444' }}
+                          title={tile.is_live ? 'Live' : 'Nicht live'}
+                        />
+                      </div>
+                      <div className="text-base font-semibold text-white">{renderTileValue(tile)}</div>
+                      <div className="text-[11px] text-slate-500 mt-1">{tile.subtitle || tile.data_source || '-'}</div>
+                      <div className="text-[11px] text-cyan-300 mt-1">Impact: {Math.round(tile.impact_probability || 0)}%</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
               <div className="xl:col-span-2 card p-5">
                 <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
                   <div>
-                    <h2 className="text-lg font-semibold text-white">Deutschlandkarte: {virus}</h2>
+                    <h2 className="text-lg font-semibold text-white">
+                      Deutschland Radar: {virus}{' '}
+                      <span className="text-slate-400 font-normal">
+                        {horizonDays === 0 ? '(Heute)' : `( +${horizonDays} Tage )`}
+                      </span>
+                    </h2>
                     <p className="text-xs text-slate-500">
                       {activeMap.date ? `Stand ${format(parseISO(activeMap.date), 'dd.MM.yyyy', { locale: de })}` : 'Kein Datenstand'}
                     </p>
                   </div>
-                  <div className="text-xs text-slate-500">Max {activeMap.max_viruslast?.toLocaleString('de-DE')} Genkopien/L</div>
+                  <div className="flex items-center gap-3">
+                    <div className="text-[11px] text-slate-500">
+                      Forecast-Slider
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] text-slate-500">0</span>
+                      <input
+                        type="range"
+                        min={0}
+                        max={14}
+                        value={horizonDays}
+                        onChange={(e) => setHorizonDays(Number(e.target.value))}
+                        className="w-44 accent-cyan-400"
+                        title="Visualisierte 14-Tage-Entwicklung (heuristisch aus Trend/Change%)."
+                      />
+                      <span className="text-[11px] text-slate-500">14</span>
+                    </div>
+                    {showTechDetails && (
+                      <div className="text-xs text-slate-500">
+                        Max {activeMap.max_viruslast?.toLocaleString('de-DE')} Genkopien/L
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 {!activeMap.has_data ? (
@@ -438,8 +606,10 @@ const MediaCockpit: React.FC = () => {
                   <svg viewBox="0 0 420 460" className="w-full max-h-[560px]">
                     {Object.entries(BUNDESLAND_PATHS).map(([code, geo]) => {
                       const region = activeMap.regions?.[code];
-                      const fill = region ? intensityColor(region.intensity) : 'rgba(51,65,85,0.3)';
+                      const intensity = region ? projectedIntensity(region) : 0;
+                      const fill = region ? intensityColor(intensity) : 'rgba(51,65,85,0.3)';
                       const isSelected = selectedRegion === code;
+                      const band = !region ? '' : intensity >= 0.7 ? 'Hoch' : intensity >= 0.4 ? 'Mittel' : 'Niedrig';
                       return (
                         <g
                           key={code}
@@ -450,7 +620,7 @@ const MediaCockpit: React.FC = () => {
                           <text x={geo.cx} y={geo.cy - 5} textAnchor="middle" fill="#e2e8f0" fontSize="9" fontWeight="700">{code}</text>
                           {region && (
                             <text x={geo.cx} y={geo.cy + 8} textAnchor="middle" fill="#94a3b8" fontSize="7">
-                              {Math.round(region.avg_viruslast).toLocaleString('de-DE')}
+                              {band}
                             </text>
                           )}
                           {openingRegion === code && (
@@ -480,11 +650,11 @@ const MediaCockpit: React.FC = () => {
                         <div className="flex items-center justify-between">
                           <div>
                             <div className="text-sm text-slate-200">{idx + 1}. {r.name}</div>
-                            <div className="text-xs text-slate-500">{r.n_standorte} Messstellen · Impact {Math.round(r.impact_probability || 0)}%</div>
+                            <div className="text-xs text-slate-500">Impact {Math.round(r.impact_probability || 0)}% · Trend {trendIcon(r.trend)} {r.change_pct > 0 ? '+' : ''}{r.change_pct}%</div>
                           </div>
                           <div className="text-right">
-                            <div className="text-sm text-white font-medium">{Math.round(r.avg_viruslast).toLocaleString('de-DE')}</div>
-                            <div className="text-xs text-slate-500">{trendIcon(r.trend)} {r.change_pct > 0 ? '+' : ''}{r.change_pct}%</div>
+                            <div className="text-sm text-white font-medium">Radar</div>
+                            <div className="text-xs text-slate-500">Click to activate</div>
                           </div>
                         </div>
                       </button>
@@ -492,43 +662,45 @@ const MediaCockpit: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="card p-4">
-                  <h3 className="text-sm font-semibold text-white mb-3">Datenquellen Live-Status</h3>
-                  <div className="space-y-2">
-                    {sourceStatus.map((item) => (
-                      <div key={item.source_key} className="rounded-lg px-3 py-2" style={{ background: 'rgba(15,23,42,0.65)' }}>
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs text-slate-300">{item.label}</span>
-                          <div className="flex items-center gap-2">
-                            <span
-                              className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${
-                                item.feed_reachable ? 'text-emerald-400 bg-emerald-500/10' : 'text-red-400 bg-red-500/10'
-                              }`}
-                            >
-                              Feed {item.feed_reachable ? 'erreichbar' : 'nicht erreichbar'}
-                            </span>
-                            <span
-                              className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${
-                                item.is_live ? 'text-emerald-400 bg-emerald-500/10' : 'text-red-400 bg-red-500/10'
-                              }`}
-                            >
-                              Datenstand {item.is_live ? 'aktuell' : item.last_updated ? 'älter' : 'kein Datum'}
-                            </span>
+                {showTechDetails && (
+                  <div className="card p-4">
+                    <h3 className="text-sm font-semibold text-white mb-3">Tech Details: Datenquellen Live-Status</h3>
+                    <div className="space-y-2">
+                      {sourceStatus.map((item) => (
+                        <div key={item.source_key} className="rounded-lg px-3 py-2" style={{ background: 'rgba(15,23,42,0.65)' }}>
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs text-slate-300">{item.label}</span>
+                            <div className="flex items-center gap-2">
+                              <span
+                                className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${
+                                  item.feed_reachable ? 'text-emerald-400 bg-emerald-500/10' : 'text-red-400 bg-red-500/10'
+                                }`}
+                              >
+                                Feed {item.feed_reachable ? 'erreichbar' : 'nicht erreichbar'}
+                              </span>
+                              <span
+                                className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${
+                                  item.is_live ? 'text-emerald-400 bg-emerald-500/10' : 'text-red-400 bg-red-500/10'
+                                }`}
+                              >
+                                Datenstand {item.is_live ? 'aktuell' : item.last_updated ? 'älter' : 'kein Datum'}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="text-[11px] text-slate-500 mt-1">
+                            {item.last_updated
+                              ? `Messdatum: ${format(parseISO(item.last_updated), 'dd.MM.yyyy HH:mm', { locale: de })}`
+                              : 'Messdatum: kein Zeitstempel'}
+                            {' · '}
+                            {item.age_days !== null && item.age_days !== undefined ? `Alter: ${item.age_days.toFixed(1)} Tage` : 'Alter: -'}
+                            {' · '}SLA {item.sla_days}d
                           </div>
                         </div>
-                        <div className="text-[11px] text-slate-500 mt-1">
-                          {item.last_updated
-                            ? `Messdatum: ${format(parseISO(item.last_updated), 'dd.MM.yyyy HH:mm', { locale: de })}`
-                            : 'Messdatum: kein Zeitstempel'}
-                          {' · '}
-                          {item.age_days !== null && item.age_days !== undefined ? `Alter: ${item.age_days.toFixed(1)} Tage` : 'Alter: -'}
-                          {' · '}SLA {item.sla_days}d
-                        </div>
-                      </div>
-                    ))}
-                    {sourceStatus.length === 0 && <div className="text-xs text-slate-500">Keine Quellenstatus verfügbar.</div>}
+                      ))}
+                      {sourceStatus.length === 0 && <div className="text-xs text-slate-500">Keine Quellenstatus verfügbar.</div>}
+                    </div>
                   </div>
-                </div>
+                )}
 
                 <div className="card p-4">
                   <h3 className="text-sm font-semibold text-white mb-3">Activation-Vorschläge</h3>
@@ -554,63 +726,126 @@ const MediaCockpit: React.FC = () => {
 
         {!loading && tab === 'recommendations' && (
           <div className="space-y-6">
-            <div className="card p-5">
-              <h2 className="text-lg font-semibold text-white mb-4">KI Action Cards</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-6 gap-3 mb-3">
-                <input value={brand} onChange={(e) => setBrand(e.target.value)} className="media-input" placeholder="Brand" />
-                <input value={product} onChange={(e) => setProduct(e.target.value)} className="media-input" placeholder="Produkt" />
-                <input value={goal} onChange={(e) => setGoal(e.target.value)} className="media-input" placeholder="Kampagnenziel" />
-                <input value={weeklyBudget} onChange={(e) => setWeeklyBudget(Number(e.target.value))} className="media-input" type="number" placeholder="Budget" />
-                <select className="media-input" value={maxCards} onChange={(e) => setMaxCards(Number(e.target.value))}>
-                  <option value={1}>1 Card</option>
-                  <option value={2}>2 Cards</option>
-                  <option value={3}>3 Cards</option>
-                  <option value={4}>4 Cards</option>
-                </select>
-                <button onClick={triggerRecommendations} className="media-button" disabled={recLoading}>
-                  {recLoading ? 'Berechne...' : 'Empfehlungen erzeugen'}
-                </button>
+            <div
+              className="card p-6"
+              style={{
+                background:
+                  'radial-gradient(900px 220px at 20% 0%, rgba(59,130,246,0.16), transparent 60%), linear-gradient(135deg, rgba(30,41,59,1), rgba(15,23,42,1))',
+                border: '1px solid rgba(148,163,184,0.22)',
+              }}
+            >
+              <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
+                <div className="min-w-0">
+                  <div className="text-[10px] text-slate-400 uppercase tracking-wider">Kampagnenvorschlaege</div>
+                  <h2 className="text-2xl font-black text-white tracking-tight mt-1">Action Cards</h2>
+                  <p className="text-sm text-slate-400 mt-2 max-w-2xl">
+                    Erst sehen, was du tun sollst. Dann (optional) die Details. Copy ist HWG-safe aus der Gelo-Playbook-Library.
+                  </p>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <span className="px-3 py-1.5 rounded-full text-xs" style={{ background: 'rgba(15,23,42,0.65)', border: '1px solid #334155', color: '#94a3b8' }}>
+                      Brand: <span className="text-slate-200">{brand}</span>
+                    </span>
+                    <span className="px-3 py-1.5 rounded-full text-xs" style={{ background: 'rgba(15,23,42,0.65)', border: '1px solid #334155', color: '#94a3b8' }}>
+                      Produkt: <span className="text-slate-200">{product}</span>
+                    </span>
+                    <span className="px-3 py-1.5 rounded-full text-xs" style={{ background: 'rgba(15,23,42,0.65)', border: '1px solid #334155', color: '#94a3b8' }}>
+                      Budget/Woche: <span className="text-slate-200">{eur(weeklyBudget)}</span>
+                    </span>
+                    <span className="px-3 py-1.5 rounded-full text-xs" style={{ background: 'rgba(15,23,42,0.65)', border: '1px solid #334155', color: '#94a3b8' }}>
+                      Virus: <span className="text-slate-200">{virus}</span>
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                  <button
+                    onClick={triggerRecommendations}
+                    className="px-4 py-2 text-xs font-bold rounded-lg transition hover:brightness-110 disabled:opacity-60"
+                    style={{ background: 'linear-gradient(135deg, #22c55e, #10b981)', color: '#052e1b' }}
+                    disabled={recLoading}
+                    title="Erzeugt neue Cards (falls noetig) und oeffnet die Top-Empfehlung"
+                  >
+                    {recLoading ? 'Berechne...' : 'Empfehlungen erzeugen'}
+                  </button>
+                  <button
+                    onClick={loadRecommendations}
+                    className="px-4 py-2 text-xs font-semibold rounded-lg transition hover:bg-slate-700"
+                    style={{ border: '1px solid rgba(148,163,184,0.25)', color: '#e2e8f0' }}
+                    title="Listet gespeicherte Cards (schnell)"
+                  >
+                    Liste aktualisieren
+                  </button>
+                  <button
+                    onClick={() => setShowTechDetails((s) => !s)}
+                    className="px-4 py-2 text-xs font-semibold rounded-lg transition hover:bg-slate-700"
+                    style={{ border: '1px solid rgba(148,163,184,0.25)', color: '#94a3b8' }}
+                  >
+                    {showTechDetails ? 'Tech Details ausblenden' : 'Tech Details anzeigen'}
+                  </button>
+                </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-6 gap-3">
-                <select className="media-input" value={recStatusFilter} onChange={(e) => setRecStatusFilter(e.target.value)}>
-                  <option value="all">Alle Status</option>
-                  <option value="DRAFT">Draft</option>
-                  <option value="READY">Ready</option>
-                  <option value="APPROVED">Approved</option>
-                  <option value="ACTIVATED">Activated</option>
-                  <option value="DISMISSED">Dismissed</option>
-                  <option value="EXPIRED">Expired</option>
-                </select>
-                <input
-                  value={recBrandFilter}
-                  onChange={(e) => setRecBrandFilter(e.target.value)}
-                  className="media-input"
-                  placeholder="Brand Filter"
-                />
-                <input
-                  value={recMinUrgency}
-                  onChange={(e) => setRecMinUrgency(Number(e.target.value))}
-                  type="number"
-                  min={0}
-                  max={100}
-                  className="media-input"
-                  placeholder="Min Urgency"
-                />
-                <input
-                  value={recRegionFilter}
-                  onChange={(e) => setRecRegionFilter(e.target.value)}
-                  className="media-input"
-                  placeholder="Region (z.B. HH)"
-                />
-                <input
-                  value={recConditionFilter}
-                  onChange={(e) => setRecConditionFilter(e.target.value)}
-                  className="media-input"
-                  placeholder="Lageklasse"
-                />
-                <button onClick={loadRecommendations} className="media-button secondary">Liste aktualisieren</button>
-              </div>
+              {showTechDetails && (
+                <div className="mt-5 space-y-3">
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-6 gap-3">
+                    <input value={brand} onChange={(e) => setBrand(e.target.value)} className="media-input" placeholder="Brand" />
+                    <input value={product} onChange={(e) => setProduct(e.target.value)} className="media-input" placeholder="Produkt" />
+                    <input value={goal} onChange={(e) => setGoal(e.target.value)} className="media-input" placeholder="Kampagnenziel" />
+                    <input value={weeklyBudget} onChange={(e) => setWeeklyBudget(Number(e.target.value))} className="media-input" type="number" placeholder="Budget" />
+                    <select className="media-input" value={maxCards} onChange={(e) => setMaxCards(Number(e.target.value))}>
+                      <option value={1}>1 Card</option>
+                      <option value={2}>2 Cards</option>
+                      <option value={3}>3 Cards</option>
+                      <option value={4}>4 Cards</option>
+                    </select>
+                    <div className="text-xs text-slate-500 flex items-center">
+                      Mode: {strategyMode}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-6 gap-3">
+                    <select className="media-input" value={recStatusFilter} onChange={(e) => setRecStatusFilter(e.target.value)}>
+                      <option value="all">Alle Status</option>
+                      <option value="DRAFT">Draft</option>
+                      <option value="READY">Ready</option>
+                      <option value="APPROVED">Approved</option>
+                      <option value="ACTIVATED">Activated</option>
+                      <option value="DISMISSED">Dismissed</option>
+                      <option value="EXPIRED">Expired</option>
+                    </select>
+                    <input
+                      value={recBrandFilter}
+                      onChange={(e) => setRecBrandFilter(e.target.value)}
+                      className="media-input"
+                      placeholder="Brand Filter"
+                    />
+                    <input
+                      value={recMinUrgency}
+                      onChange={(e) => setRecMinUrgency(Number(e.target.value))}
+                      type="number"
+                      min={0}
+                      max={100}
+                      className="media-input"
+                      placeholder="Min Urgency"
+                    />
+                    <input
+                      value={recRegionFilter}
+                      onChange={(e) => setRecRegionFilter(e.target.value)}
+                      className="media-input"
+                      placeholder="Region (z.B. HH)"
+                    />
+                    <input
+                      value={recConditionFilter}
+                      onChange={(e) => setRecConditionFilter(e.target.value)}
+                      className="media-input"
+                      placeholder="Lageklasse"
+                    />
+                    <div className="text-xs text-slate-500 flex items-center">
+                      max_cards: {maxCards}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -619,90 +854,68 @@ const MediaCockpit: React.FC = () => {
                   key={card.id}
                   type="button"
                   onClick={() => navigate(`/dashboard/recommendations/${encodeURIComponent(card.id)}`)}
-                  className="card p-4 text-left hover:brightness-110 transition"
+                  className="card p-5 text-left hover:brightness-110 transition"
                 >
-                  <div className="flex items-center justify-between mb-2 gap-3">
-                    <span className="text-xs text-slate-500">{card.type}</span>
-                    <span className="text-xs text-emerald-400">Conf. {Math.round((card.confidence || 0) * 100)}%</span>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="text-[10px] text-slate-500 uppercase tracking-wider">KI-Erkenntnis</div>
+                      <div className="text-base font-bold text-white mt-1 truncate">
+                        {card.playbook_title || card.campaign_preview?.playbook_title || card.campaign_name || `${card.brand} · ${card.product}`}
+                      </div>
+                      <div className="text-xs text-slate-400 mt-1 line-clamp-2">{card.reason || card.trigger_snapshot?.details || 'Signal erkannt.'}</div>
+                    </div>
+                    <div className="flex-shrink-0 text-right">
+                      <div className="text-[10px] text-slate-500 uppercase tracking-wider">Urgency</div>
+                      <div className="text-sm font-bold text-slate-200 mt-1">{Math.round(card.urgency_score || 0)}</div>
+                      {card.confidence !== undefined && (
+                        <div className="text-[11px] text-emerald-300 mt-1">Conf {Math.round((card.confidence || 0) * 100)}%</div>
+                      )}
+                    </div>
                   </div>
-                  <div className="mb-2 flex items-center gap-2 flex-wrap">
-                    {card.playbook_title && (
-                      <span className="text-[11px] px-2 py-0.5 rounded-full bg-cyan-500/15 text-cyan-300 border border-cyan-400/30">
-                        {card.playbook_title}
-                      </span>
-                    )}
-                    {card.ai_generation_status && (
-                      <span
-                        className={`text-[11px] px-2 py-0.5 rounded-full border ${
-                          card.ai_generation_status === 'success'
-                            ? 'bg-emerald-500/15 text-emerald-300 border-emerald-400/30'
-                            : 'bg-amber-500/15 text-amber-300 border-amber-400/30'
-                        }`}
-                      >
-                        AI: {card.ai_generation_status}
-                      </span>
-                    )}
+
+                  <div className="mt-4 grid grid-cols-2 gap-3">
+                    <div className="rounded-lg p-3" style={{ background: 'rgba(15,23,42,0.7)', border: '1px solid #334155' }}>
+                      <div className="text-[10px] text-slate-500 uppercase tracking-wider">Produkt</div>
+                      <div className="text-sm font-semibold text-white mt-1 truncate" title={card.recommended_product || card.product}>
+                        {card.recommended_product || card.product}
+                      </div>
+                      <div className="text-[11px] text-slate-500 mt-1">HWG-safe Copy Pack</div>
+                    </div>
+                    <div className="rounded-lg p-3" style={{ background: 'rgba(15,23,42,0.7)', border: '1px solid #334155' }}>
+                      <div className="text-[10px] text-slate-500 uppercase tracking-wider">Budget</div>
+                      <div className="text-sm font-semibold text-white mt-1">
+                        +{card.budget_shift_pct}%{' '}
+                        <span className="text-slate-400">
+                          ({card.campaign_preview?.budget?.shift_value_eur ? eur(card.campaign_preview.budget.shift_value_eur) : 'Shift'})
+                        </span>
+                      </div>
+                      <div className="text-[11px] text-slate-500 mt-1">KPI: {card.primary_kpi || card.campaign_preview?.primary_kpi || '-'}</div>
+                    </div>
                   </div>
-                  <h3 className="text-base text-white font-semibold">{card.campaign_name || `${card.brand} · ${card.product}`}</h3>
-                  <p className="text-xs text-slate-500 mb-2">Status: {card.status} · Urgency: {Math.round(card.urgency_score || 0)}</p>
-                  <div className="mb-2 text-xs">
+
+                  <div className="mt-4 flex items-center justify-between gap-3">
+                    <div className="text-[11px] text-slate-500">
+                      Status: <span className="text-slate-300">{String(card.status || 'DRAFT')}</span>
+                      {showTechDetails && (
+                        <>
+                          {' · '}
+                          <span className="text-slate-400">{mappingLabel(card.mapping_status)}</span>
+                        </>
+                      )}
+                    </div>
                     <span
-                      className="inline-flex items-center px-2 py-1 rounded-full"
-                      style={{
-                        background: card.mapping_status === 'approved'
-                          ? 'rgba(16,185,129,0.15)'
-                          : card.mapping_status === 'needs_review'
-                          ? 'rgba(245,158,11,0.15)'
-                          : 'rgba(71,85,105,0.2)',
-                        color: card.mapping_status === 'approved'
-                          ? '#34d399'
-                          : card.mapping_status === 'needs_review'
-                          ? '#f59e0b'
-                          : '#94a3b8',
-                      }}
+                      className="px-3 py-1.5 text-xs font-bold rounded-lg"
+                      style={{ background: 'linear-gradient(135deg, #22c55e, #10b981)', color: '#052e1b' }}
                     >
-                      {mappingLabel(card.mapping_status)}
-                    </span>
-                    <span className="text-slate-400 ml-2">
-                      Produkt: {card.recommended_product || card.product}
+                      Aktivieren
                     </span>
                   </div>
-                  {card.peix_context?.score !== undefined && (
-                    <div className="mb-2 text-xs text-slate-400">
-                      PeixEpiScore {card.peix_context.score} ({card.peix_context.band}) · Impact {card.peix_context.impact_probability ?? '-'}%
+
+                  {showTechDetails && (
+                    <div className="mt-3 text-xs text-slate-500">
+                      Kanalmix: {Object.entries(card.channel_mix || {}).map(([k, v]) => `${k} ${v}%`).join(' · ')}
                     </div>
                   )}
-                  <div className="mb-2 text-sm text-cyan-400 font-medium">
-                    Budget-Shift: +{card.budget_shift_pct}% · KPI: {card.primary_kpi || card.campaign_preview?.primary_kpi || '-'}
-                  </div>
-                  <div className="mb-2 text-xs text-slate-500">
-                    Weekly: {card.campaign_preview?.budget?.weekly_budget_eur ? `${Math.round(card.campaign_preview.budget.weekly_budget_eur).toLocaleString('de-DE')} EUR` : '-'}
-                    {' · '}
-                    Flight: {card.campaign_preview?.budget?.total_flight_budget_eur ? `${Math.round(card.campaign_preview.budget.total_flight_budget_eur).toLocaleString('de-DE')} EUR` : '-'}
-                  </div>
-                  <div className="mb-2 text-xs text-slate-400">
-                    Aktivierung: {card.campaign_preview?.activation_window?.start ? format(parseISO(card.campaign_preview.activation_window.start), 'dd.MM.yy', { locale: de }) : '-'}{' '}
-                    bis {card.campaign_preview?.activation_window?.end ? format(parseISO(card.campaign_preview.activation_window.end), 'dd.MM.yy', { locale: de }) : '-'}
-                  </div>
-                  {card.trigger_snapshot?.event && (
-                    <div className="mb-2 text-xs text-slate-400">
-                      Trigger: {card.trigger_snapshot.event}
-                    </div>
-                  )}
-                  <div className="mb-2 text-xs text-slate-400">{card.reason || 'Epidemiologischer Trigger'}</div>
-                  {card.mapping_reason && (
-                    <div className="mb-3 text-xs text-amber-300/90">
-                      Mapping ({card.mapping_rule_source || 'auto'}): {card.mapping_reason}
-                    </div>
-                  )}
-                  {Array.isArray(card.guardrail_notes) && card.guardrail_notes.length > 0 && (
-                    <div className="mb-3 text-[11px] text-slate-500">
-                      Guardrails: {card.guardrail_notes.slice(0, 2).join(' · ')}
-                    </div>
-                  )}
-                  <div className="text-xs text-slate-500">
-                    Kanalmix: {Object.entries(card.channel_mix || {}).map(([k, v]) => `${k} ${v}%`).join(' · ')}
-                  </div>
                 </button>
               ))}
               {recCards.length === 0 && <div className="text-slate-500 text-sm">Noch keine Action Cards vorhanden.</div>}

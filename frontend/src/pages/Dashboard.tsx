@@ -7,6 +7,7 @@ import {
 } from 'recharts';
 import { format } from 'date-fns';
 import { de } from 'date-fns/locale';
+import { RecommendationCard as MediaRecommendationCard } from '../types/media';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 interface ViralLoad {
@@ -181,6 +182,13 @@ const fmt = (n: number) => {
   return n.toFixed(0);
 };
 
+const eur = (n: number) =>
+  new Intl.NumberFormat('de-DE', {
+    style: 'currency',
+    currency: 'EUR',
+    maximumFractionDigits: 0,
+  }).format(Math.round(n || 0));
+
 const trendArrow = (t: string) =>
   t === 'steigend' ? '\u2197' : t === 'fallend' ? '\u2198' : '\u2192';
 
@@ -238,6 +246,9 @@ const Dashboard: React.FC = () => {
   const navigate = useNavigate();
   const [data, setData] = useState<DashboardData | null>(null);
   const [selectedVirus, setSelectedVirus] = useState('Influenza A');
+  const [topActions, setTopActions] = useState<MediaRecommendationCard[]>([]);
+  const [actionsLoading, setActionsLoading] = useState(false);
+  const [showTechDetails, setShowTechDetails] = useState(false);
   const [timeseries, setTimeseries] = useState<{ historical: TimeseriesPoint[]; forecast: ForecastPoint[]; inventory?: Array<{ date: string; bestand: number; min_bestand: number; max_bestand: number; empfohlen: number }>; test_typ?: string } | null>(null);
   const [allTimeseries, setAllTimeseries] = useState<Record<string, TimeseriesPoint[]>>({});
   const [zoomStart, setZoomStart] = useState<number | null>(null);
@@ -265,6 +276,30 @@ const Dashboard: React.FC = () => {
   const [drugShortageLoading, setDrugShortageLoading] = useState(false);
   const [outbreakScore, setOutbreakScore] = useState<OutbreakScoreData | null>(null);
   const [outbreakLoading, setOutbreakLoading] = useState(false);
+
+  const fetchTopActions = useCallback(async () => {
+    setActionsLoading(true);
+    try {
+      const qs = new URLSearchParams({
+        limit: '3',
+        with_campaign_preview: 'true',
+      });
+      const res = await fetch(`/api/v1/media/recommendations/list?${qs.toString()}`);
+      if (!res.ok) return;
+      const json = await res.json();
+      const cards = (json.cards || []) as MediaRecommendationCard[];
+      const sorted = [...cards].sort((a, b) => {
+        const u = Number(b.urgency_score || 0) - Number(a.urgency_score || 0);
+        if (u !== 0) return u;
+        return Number(b.confidence || 0) - Number(a.confidence || 0);
+      });
+      setTopActions(sorted.slice(0, 3));
+    } catch (e) {
+      console.error('Top actions fetch error:', e);
+    } finally {
+      setActionsLoading(false);
+    }
+  }, []);
 
   // Fetch dashboard overview
   const fetchOverview = useCallback(async () => {
@@ -417,7 +452,8 @@ const Dashboard: React.FC = () => {
     fetchAllTimeseries();
     fetchDrugShortageSignals();
     fetchOutbreakScore();
-  }, [fetchOverview, fetchSparklines, fetchAllTimeseries, fetchDrugShortageSignals, fetchOutbreakScore]);
+    fetchTopActions();
+  }, [fetchOverview, fetchSparklines, fetchAllTimeseries, fetchDrugShortageSignals, fetchOutbreakScore, fetchTopActions]);
 
   useEffect(() => {
     fetchTimeseries();
@@ -677,6 +713,25 @@ const Dashboard: React.FC = () => {
   }, [chartData.length]);
 
   const hasSurvstat = !!data?.survstat && Object.keys(data.survstat).length > 0;
+  const assumedWeeklyBudget = 120000;
+  const reallocateEur = topActions.reduce((sum, c) => {
+    const shift = c.campaign_preview?.budget?.shift_value_eur;
+    if (typeof shift === 'number') return sum + shift;
+    const pct = Number(c.budget_shift_pct || 0);
+    return sum + (assumedWeeklyBudget * pct) / 100;
+  }, 0);
+  const wasteReductionEur = Math.round(Math.max(0, assumedWeeklyBudget * 0.12));
+  const opportunityEur = Math.round(Math.max(0, reallocateEur));
+  const situationLabel =
+    outbreakScore?.overall_risk_level === 'BLACK'
+      ? 'Kritisches Signal (Handlungsdruck sehr hoch)'
+      : outbreakScore?.overall_risk_level === 'RED'
+        ? 'Hohes Signal (jetzt aktivieren)'
+        : outbreakScore?.overall_risk_level === 'YELLOW'
+          ? 'Moderates Signal (Fenster beobachten)'
+          : outbreakScore
+            ? 'Entspannt (Budget effizienter verteilen)'
+            : 'Lagebild wird geladen...';
 
   if (loading) {
     return (
@@ -738,6 +793,182 @@ const Dashboard: React.FC = () => {
 
       <main className="max-w-[1600px] mx-auto px-6 py-6 space-y-6">
 
+        {/* ── Business-First Header (Actionable) ── */}
+        <div
+          className="card p-6 fade-in"
+          style={{
+            background:
+              'radial-gradient(900px 220px at 20% 0%, rgba(56,189,248,0.18), transparent 60%), linear-gradient(135deg, rgba(30,41,59,1), rgba(15,23,42,1))',
+            border: '1px solid rgba(148,163,184,0.22)',
+          }}
+        >
+          <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
+            <div className="min-w-0">
+              <div className="text-[10px] text-slate-400 uppercase tracking-wider">Heute</div>
+              <h2 className="text-2xl font-black text-white tracking-tight mt-1">
+                Entscheidungen statt Rohdaten
+              </h2>
+              <p className="text-sm text-slate-400 mt-2 max-w-2xl">
+                3 Action Cards mit Produkt, Budget und HWG-sicherer Botschaft. Details zu Inzidenzen und Scores sind absichtlich versteckt.
+              </p>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <span
+                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs"
+                  style={{
+                    background: 'rgba(59,130,246,0.12)',
+                    border: '1px solid rgba(59,130,246,0.25)',
+                    color: '#93c5fd',
+                  }}
+                >
+                  Lagebild: <span className="text-slate-200">{situationLabel}</span>
+                </span>
+                <button
+                  onClick={() => navigate('/dashboard?tab=recommendations')}
+                  className="px-3 py-1.5 text-xs font-semibold rounded-full transition hover:brightness-110"
+                  style={{ background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)', color: 'white' }}
+                >
+                  Kampagnenvorschlaege oeffnen
+                </button>
+                <button
+                  onClick={() => navigate('/map')}
+                  className="px-3 py-1.5 text-xs font-semibold rounded-full transition hover:bg-slate-700"
+                  style={{ border: '1px solid rgba(148,163,184,0.25)', color: '#e2e8f0' }}
+                >
+                  Radar-Karte (+14 Tage)
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 w-full lg:w-[420px]">
+              <div className="rounded-xl p-4" style={{ background: 'rgba(15,23,42,0.6)', border: '1px solid #334155' }}>
+                <div className="text-[10px] text-slate-500 uppercase tracking-wider">Waste Reduction</div>
+                <div className="text-xl font-black text-white mt-1">{eur(wasteReductionEur)}</div>
+                <div className="text-[11px] text-slate-500 mt-1">einsparbar (gesunde Regionen)</div>
+              </div>
+              <div className="rounded-xl p-4" style={{ background: 'rgba(15,23,42,0.6)', border: '1px solid #334155' }}>
+                <div className="text-[10px] text-slate-500 uppercase tracking-wider">Re-Allocation</div>
+                <div className="text-xl font-black text-white mt-1">{eur(opportunityEur)}</div>
+                <div className="text-[11px] text-slate-500 mt-1">Budget mit Timing-Fit</div>
+              </div>
+              <div className="rounded-xl p-4" style={{ background: 'rgba(15,23,42,0.6)', border: '1px solid #334155' }}>
+                <div className="text-[10px] text-slate-500 uppercase tracking-wider">Empfohlene Flight</div>
+                <div className="text-xl font-black text-white mt-1">7-10 Tage</div>
+                <div className="text-[11px] text-slate-500 mt-1">kurz, konzentriert, messbar</div>
+              </div>
+              <div className="rounded-xl p-4" style={{ background: 'rgba(15,23,42,0.6)', border: '1px solid #334155' }}>
+                <div className="text-[10px] text-slate-500 uppercase tracking-wider">Scope</div>
+                <div className="text-xl font-black text-white mt-1">Gelo OTC</div>
+                <div className="text-[11px] text-slate-500 mt-1">HWG Guardrails aktiv</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          {(actionsLoading ? Array.from({ length: 3 }).map((_, i) => ({ id: `skeleton-${i}` })) : topActions).map((card: any, idx: number) => {
+            if (!card || !card.id) return null;
+            if (String(card.id).startsWith('skeleton-')) {
+              return (
+                <div
+                  key={card.id}
+                  className="card p-5"
+                  style={{ background: 'linear-gradient(135deg, rgba(30,41,59,1), rgba(15,23,42,1))', border: '1px solid rgba(148,163,184,0.15)' }}
+                >
+                  <div className="h-3 w-32 rounded bg-slate-700/60 mb-3" />
+                  <div className="h-5 w-2/3 rounded bg-slate-700/50 mb-2" />
+                  <div className="h-3 w-full rounded bg-slate-700/40 mb-6" />
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="h-16 rounded bg-slate-800/50" />
+                    <div className="h-16 rounded bg-slate-800/50" />
+                  </div>
+                  <div className="mt-4 h-9 rounded bg-slate-700/40" />
+                </div>
+              );
+            }
+
+            const shiftPct = Number(card.campaign_preview?.budget?.shift_pct ?? card.budget_shift_pct ?? 0);
+            const shiftVal = typeof card.campaign_preview?.budget?.shift_value_eur === 'number'
+              ? card.campaign_preview?.budget?.shift_value_eur
+              : (assumedWeeklyBudget * shiftPct) / 100;
+            const title = card.campaign_preview?.playbook_title || card.condition_label || 'Kampagnenvorschlag';
+            const region = card.region || (card.region_codes && card.region_codes[0]) || 'DE';
+            const product = card.campaign_preview?.recommended_product || card.recommended_product || card.product;
+            const kpi = card.campaign_preview?.primary_kpi || card.primary_kpi || 'KPI';
+            const reason = card.reason || card.trigger_snapshot?.details || 'Signal erkannt. Empfehlung erzeugt.';
+            const detailUrl = card.detail_url || `/dashboard/recommendations/${encodeURIComponent(card.id)}`;
+
+            return (
+              <div
+                key={card.id}
+                className="card p-5 fade-in"
+                style={{
+                  background: 'linear-gradient(135deg, rgba(30,41,59,1), rgba(15,23,42,1))',
+                  border: '1px solid rgba(148,163,184,0.18)',
+                  animationDelay: `${idx * 70}ms`,
+                }}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="text-[10px] text-slate-500 uppercase tracking-wider">KI-Erkenntnis</div>
+                    <div className="text-base font-bold text-white mt-1 truncate">{title}</div>
+                    <div className="text-xs text-slate-400 mt-1 line-clamp-2">{reason}</div>
+                  </div>
+                  <div className="flex-shrink-0 text-right">
+                    <div className="text-[10px] text-slate-500 uppercase tracking-wider">Region</div>
+                    <div className="text-sm font-bold text-slate-200 mt-1">{region}</div>
+                  </div>
+                </div>
+
+                <div className="mt-4 grid grid-cols-2 gap-3">
+                  <div className="rounded-lg p-3" style={{ background: 'rgba(15,23,42,0.7)', border: '1px solid #334155' }}>
+                    <div className="text-[10px] text-slate-500 uppercase tracking-wider">Produkt</div>
+                    <div className="text-sm font-semibold text-white mt-1 truncate" title={product}>{product}</div>
+                    <div className="text-[11px] text-slate-500 mt-1">HWG-safe Copy Pack</div>
+                  </div>
+                  <div className="rounded-lg p-3" style={{ background: 'rgba(15,23,42,0.7)', border: '1px solid #334155' }}>
+                    <div className="text-[10px] text-slate-500 uppercase tracking-wider">Budget</div>
+                    <div className="text-sm font-semibold text-white mt-1">
+                      +{shiftPct}% <span className="text-slate-400">({eur(shiftVal)})</span>
+                    </div>
+                    <div className="text-[11px] text-slate-500 mt-1">KPI: {kpi}</div>
+                  </div>
+                </div>
+
+                <div className="mt-4 flex items-center justify-between gap-3">
+                  <div className="text-[11px] text-slate-500">
+                    Status: <span className="text-slate-300">{String(card.status || 'DRAFT')}</span>
+                  </div>
+                  <button
+                    onClick={() => navigate(detailUrl)}
+                    className="px-4 py-2 text-xs font-bold rounded-lg transition hover:brightness-110"
+                    style={{ background: 'linear-gradient(135deg, #22c55e, #10b981)', color: '#052e1b' }}
+                  >
+                    Aktivieren
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+          {!actionsLoading && topActions.length === 0 && (
+            <div className="lg:col-span-3 card p-6 text-sm text-slate-400" style={{ border: '1px dashed rgba(148,163,184,0.25)' }}>
+              Noch keine Action Cards vorhanden. Wechsle in das Media Cockpit und klicke auf “Empfehlungen erzeugen”.
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center justify-between">
+          <div className="text-xs text-slate-500">Tech Details sind standardmaessig verborgen.</div>
+          <button
+            onClick={() => setShowTechDetails((s) => !s)}
+            className="px-3 py-1.5 text-xs font-semibold rounded-lg transition hover:bg-slate-700"
+            style={{ border: '1px solid #334155', color: '#94a3b8' }}
+          >
+            {showTechDetails ? 'Tech Details ausblenden' : 'Tech Details anzeigen'}
+          </button>
+        </div>
+
+        {showTechDetails && (
+          <>
         {/* ── Outbreak Score Banner ── */}
         {outbreakScore && (
           <div className="card p-6 fade-in" style={{
@@ -925,11 +1156,11 @@ const Dashboard: React.FC = () => {
                   </div>
                   <div className="text-xs" style={{ color: trendColor(data.grippeweb.ARE.trend) }}>
                     KW {data.grippeweb.ARE.kalenderwoche}
-                  </div>
                 </div>
               </div>
             </div>
-          )}
+          </div>
+        )}
 
           {/* ILI Card */}
           {data?.grippeweb?.ILI && (
@@ -1883,6 +2114,9 @@ const Dashboard: React.FC = () => {
             </div>
           </div>
         </div>
+
+          </>
+        )}
 
       </main>
 

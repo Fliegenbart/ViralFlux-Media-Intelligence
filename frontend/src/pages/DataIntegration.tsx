@@ -123,7 +123,7 @@ const DataIntegration: React.FC = () => {
               onClick={() => navigate('/dashboard')}
               className="w-10 h-10 rounded-xl flex items-center justify-center transition hover:bg-slate-700"
               style={{ border: '1px solid #334155' }}
-              aria-label="Zurueck zum Dashboard"
+              aria-label="Zurueck ins Media Cockpit"
             >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2" strokeLinecap="round">
                 <path d="M19 12H5M12 19l-7-7 7-7" />

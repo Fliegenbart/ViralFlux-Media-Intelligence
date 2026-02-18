@@ -123,7 +123,7 @@ const LandingPage: React.FC = () => {
             {COPY.nav.primaryCta}
           </a>
           <button
-            onClick={() => navigate('/dashboard')}
+            onClick={() => navigate('/dashboard?tab=map')}
             className="px-4 py-2 text-xs font-semibold rounded-lg text-white text-center whitespace-nowrap"
             style={{ background: 'linear-gradient(135deg, #0ea5e9, #3b82f6)' }}
           >

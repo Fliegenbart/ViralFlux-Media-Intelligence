@@ -112,6 +112,7 @@ const SalesRadar: React.FC = () => {
   const [generating, setGenerating] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [detailOpp, setDetailOpp] = useState<MarketingOpportunity | null>(null);
+  const [showTechDetails, setShowTechDetails] = useState(false);
 
   // Fetch
   const fetchOpportunities = useCallback(async () => {
@@ -274,8 +275,84 @@ const SalesRadar: React.FC = () => {
 
       <main className="max-w-[1600px] mx-auto px-6 py-6 space-y-6">
 
+        {/* ── Business-First: Top Actions ── */}
+        <div
+          className="card p-6 fade-in"
+          style={{
+            background:
+              'radial-gradient(900px 220px at 20% 0%, rgba(245,158,11,0.14), transparent 60%), linear-gradient(135deg, rgba(30,41,59,1), rgba(15,23,42,1))',
+            border: '1px solid rgba(148,163,184,0.22)',
+          }}
+        >
+          <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
+            <div className="min-w-0">
+              <div className="text-[10px] text-slate-400 uppercase tracking-wider">Heute</div>
+              <h2 className="text-2xl font-black text-white tracking-tight mt-1">Top Aktionen (Marketing)</h2>
+              <p className="text-sm text-slate-400 mt-2 max-w-2xl">
+                Fokus auf “Was tun wir jetzt?” Rohscores, Tabellen und Export-Details sind hinter Tech Details versteckt.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowTechDetails((s) => !s)}
+                className="px-3 py-1.5 text-xs font-semibold rounded-lg transition hover:bg-slate-700"
+                style={{ border: '1px solid #334155', color: '#94a3b8' }}
+              >
+                {showTechDetails ? 'Tech Details ausblenden' : 'Tech Details anzeigen'}
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-5 grid grid-cols-1 md:grid-cols-3 gap-4">
+            {(urgent.slice(0, 3).length ? urgent.slice(0, 3) : [null, null, null]).map((opp: any, idx: number) => {
+              if (!opp) {
+                return (
+                  <div key={`s-${idx}`} className="rounded-xl p-4" style={{ background: 'rgba(15,23,42,0.65)', border: '1px solid #334155' }}>
+                    <div className="h-3 w-24 bg-slate-700/60 rounded mb-3" />
+                    <div className="h-5 w-2/3 bg-slate-700/50 rounded mb-2" />
+                    <div className="h-3 w-full bg-slate-700/40 rounded mb-6" />
+                    <div className="h-9 bg-slate-700/30 rounded" />
+                  </div>
+                );
+              }
+              const tc = TYPE_CONFIG[opp.type] || { label: opp.type, color: '#64748b', icon: '' };
+              const topProduct = opp.suggested_products?.find((p: any) => p.priority === 'HIGH') || opp.suggested_products?.[0];
+              const region = opp.region_target?.states?.length ? opp.region_target.states.join(', ') : 'Bundesweit';
+              return (
+                <div key={opp.id} className="rounded-xl p-4" style={{ background: 'rgba(15,23,42,0.65)', border: '1px solid #334155' }}>
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="text-[10px] uppercase tracking-wider font-bold" style={{ color: tc.color }}>
+                        {tc.label}
+                      </div>
+                      <div className="text-base font-bold text-white mt-1 line-clamp-2">{opp.trigger_context?.details}</div>
+                      <div className="text-xs text-slate-500 mt-1">
+                        Region: <span className="text-slate-300">{region}</span>
+                      </div>
+                    </div>
+                    <div className="flex-shrink-0 text-right">
+                      <div className="text-[10px] text-slate-500 uppercase tracking-wider">Produkt</div>
+                      <div className="text-sm font-bold text-slate-200 mt-1">{topProduct?.name || '—'}</div>
+                    </div>
+                  </div>
+                  <div className="mt-4 flex items-center justify-between gap-3">
+                    <div className="text-[11px] text-slate-500">Output: HWG-safe Copy + CTA</div>
+                    <button
+                      onClick={() => setDetailOpp(opp)}
+                      className="px-4 py-2 text-xs font-bold rounded-lg transition hover:brightness-110"
+                      style={{ background: 'linear-gradient(135deg, #22c55e, #10b981)', color: '#052e1b' }}
+                    >
+                      Aktivieren
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
         {/* ── KPI Header ── */}
-        {stats && (
+        {showTechDetails && stats && (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 fade-in">
             {/* Total Opportunities */}
             <div className="card p-5 flex items-center gap-4">
@@ -427,7 +504,7 @@ const SalesRadar: React.FC = () => {
             )}
 
             {/* ═══════════════ ZONE 2: NEUE CHANCEN ═══════════════ */}
-            {Object.keys(newByType).length > 0 && (
+            {showTechDetails && Object.keys(newByType).length > 0 && (
               <section className="fade-in">
                 <div className="flex items-center gap-3 mb-4">
                   <div className="w-2 h-2 rounded-full bg-blue-500" />
@@ -517,7 +594,7 @@ const SalesRadar: React.FC = () => {
             )}
 
             {/* ═══════════════ ZONE 3: PIPELINE ═══════════════ */}
-            {pipeline.length > 0 && (
+            {showTechDetails && pipeline.length > 0 && (
               <section className="fade-in">
                 <div className="flex items-center gap-3 mb-4">
                   <div className="w-2 h-2 rounded-full bg-emerald-500" />

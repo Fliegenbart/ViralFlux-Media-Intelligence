@@ -74,6 +74,8 @@ const GermanyMap: React.FC = () => {
   const [regionData, setRegionData] = useState<Record<string, RegionData>>({});
   const [transfers, setTransfers] = useState<TransferSuggestion[]>([]);
   const [selectedRegion, setSelectedRegion] = useState<string | null>(null);
+  const [horizonDays, setHorizonDays] = useState(0);
+  const [showTechDetails, setShowTechDetails] = useState(false);
   const [regionTimeseries, setRegionTimeseries] = useState<Array<{ date: string; viruslast: number }>>([]);
   const [hasData, setHasData] = useState(false);
   const [maxViruslast, setMaxViruslast] = useState(0);
@@ -127,6 +129,14 @@ const GermanyMap: React.FC = () => {
   }, [selectedRegion, fetchRegionTimeseries]);
 
   const baseColor = VIRUS_COLORS[selectedVirus] || '#3b82f6';
+  const clamp01 = (x: number) => Math.max(0, Math.min(1, x));
+  const projectedIntensity = (region?: RegionData | null) => {
+    if (!region) return 0;
+    const base = Number(region.intensity || 0);
+    const change = Number(region.change_pct || 0) / 100;
+    const factor = 1 + change * (horizonDays / 14) * 0.9;
+    return clamp01(base * factor);
+  };
 
   return (
     <div className="min-h-screen" style={{ background: '#0f172a' }}>
@@ -143,7 +153,7 @@ const GermanyMap: React.FC = () => {
               </div>
               <div>
                 <h1 className="text-xl font-bold text-white tracking-tight">Deutschlandkarte</h1>
-                <p className="text-xs text-slate-400">Regionale Viruslast-Verteilung + Transfer-Empfehlungen</p>
+                <p className="text-xs text-slate-400">Radar-Map mit +14 Tage Forecast-Slider (Business-first)</p>
               </div>
             </div>
           </div>
@@ -173,21 +183,38 @@ const GermanyMap: React.FC = () => {
           <div className="xl:col-span-2 card p-6">
             <div className="flex items-center justify-between mb-4">
               <div>
-                <h2 className="text-lg font-bold text-white">{selectedVirus} - Viruslast nach Bundesland</h2>
+                <h2 className="text-lg font-bold text-white">
+                  Deutschland Radar: {selectedVirus}{' '}
+                  <span className="text-slate-400 font-normal">
+                    {horizonDays === 0 ? '(Heute)' : `( +${horizonDays} Tage )`}
+                  </span>
+                </h2>
                 <p className="text-xs text-slate-500 mt-1">
                   {dataDate ? `Stand: ${format(new Date(dataDate), 'dd. MMMM yyyy', { locale: de })}` : 'Lade Daten...'}
-                  {maxViruslast > 0 ? ` | Max: ${fmt(maxViruslast)} Genkopien/L` : ''}
+                  {showTechDetails && maxViruslast > 0 ? ` | Max: ${fmt(maxViruslast)} Genkopien/L` : ''}
                 </p>
               </div>
-              {/* Legend */}
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-slate-500">Niedrig</span>
-                <div className="flex">
-                  {[0.1, 0.3, 0.5, 0.7, 0.9].map((v) => (
-                    <div key={v} className="w-5 h-3" style={{ background: intensityToColor(v, baseColor) }} />
-                  ))}
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setShowTechDetails((s) => !s)}
+                  className="px-3 py-1.5 text-xs font-semibold rounded-lg transition hover:bg-slate-700"
+                  style={{ border: '1px solid #334155', color: '#94a3b8' }}
+                >
+                  {showTechDetails ? 'Tech Details ausblenden' : 'Tech Details anzeigen'}
+                </button>
+                <div className="hidden sm:flex items-center gap-2">
+                  <span className="text-[11px] text-slate-500">0</span>
+                  <input
+                    type="range"
+                    min={0}
+                    max={14}
+                    value={horizonDays}
+                    onChange={(e) => setHorizonDays(Number(e.target.value))}
+                    className="w-40 accent-cyan-400"
+                    title="Visualisierte 14-Tage-Entwicklung (heuristisch aus Trend/Change%)."
+                  />
+                  <span className="text-[11px] text-slate-500">14</span>
                 </div>
-                <span className="text-xs text-slate-500">Hoch</span>
               </div>
             </div>
 
@@ -208,9 +235,10 @@ const GermanyMap: React.FC = () => {
               <svg viewBox="0 0 420 460" className="w-full max-h-[500px]" style={{ filter: 'drop-shadow(0 4px 12px rgba(0,0,0,0.3))' }}>
                 {Object.entries(BUNDESLAND_PATHS).map(([code, path]) => {
                   const region = regionData[code];
-                  const intensity = region?.intensity || 0;
+                  const intensity = projectedIntensity(region);
                   const isSelected = selectedRegion === code;
                   const fillColor = region ? intensityToColor(intensity, baseColor) : 'rgba(51,65,85,0.3)';
+                  const band = !region ? '' : intensity >= 0.7 ? 'Hoch' : intensity >= 0.4 ? 'Mittel' : 'Niedrig';
 
                   return (
                     <g key={code} className="cursor-pointer" onClick={() => setSelectedRegion(code === selectedRegion ? null : code)}>
@@ -239,7 +267,7 @@ const GermanyMap: React.FC = () => {
                           fill={intensity > 0.5 ? '#ddd' : '#64748b'}
                           fontSize="7"
                         >
-                          {fmt(region.avg_viruslast)}
+                          {band}
                         </text>
                       )}
                       {region && (
@@ -271,18 +299,41 @@ const GermanyMap: React.FC = () => {
 
                 <div className="grid grid-cols-2 gap-4 mb-4">
                   <div className="p-3 rounded-lg" style={{ background: '#0f172a' }}>
-                    <div className="text-xl font-bold text-white">{fmt(regionData[selectedRegion].avg_viruslast)}</div>
-                    <div className="text-xs text-slate-500">Genkopien/L</div>
+                    <div className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Radar Level</div>
+                    <div className="text-xl font-bold text-white">
+                      {(() => {
+                        const i = projectedIntensity(regionData[selectedRegion]);
+                        return i >= 0.7 ? 'Hoch' : i >= 0.4 ? 'Mittel' : 'Niedrig';
+                      })()}
+                    </div>
+                    <div className="text-[11px] text-slate-600 mt-1">Qualitativ (Default)</div>
                   </div>
                   <div className="p-3 rounded-lg" style={{ background: '#0f172a' }}>
+                    <div className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Trend</div>
                     <div className="text-xl font-bold" style={{ color: regionData[selectedRegion].trend === 'steigend' ? '#ef4444' : regionData[selectedRegion].trend === 'fallend' ? '#10b981' : '#94a3b8' }}>
+                      {regionData[selectedRegion].trend === 'steigend' ? '\u2197' : regionData[selectedRegion].trend === 'fallend' ? '\u2198' : '\u2192'}{' '}
                       {regionData[selectedRegion].change_pct > 0 ? '+' : ''}{regionData[selectedRegion].change_pct}%
                     </div>
-                    <div className="text-xs text-slate-500">Woche-zu-Woche</div>
+                    <div className="text-[11px] text-slate-600 mt-1">14-Tage Radar nutzt Trend</div>
                   </div>
                 </div>
 
-                {regionTimeseries.length > 0 && (
+                {showTechDetails && (
+                  <div className="grid grid-cols-2 gap-4 mb-4">
+                    <div className="p-3 rounded-lg" style={{ background: '#0f172a' }}>
+                      <div className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Rohwert</div>
+                      <div className="text-xl font-bold text-white">{fmt(regionData[selectedRegion].avg_viruslast)}</div>
+                      <div className="text-xs text-slate-500">Genkopien/L</div>
+                    </div>
+                    <div className="p-3 rounded-lg" style={{ background: '#0f172a' }}>
+                      <div className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Messstellen</div>
+                      <div className="text-xl font-bold text-white">{regionData[selectedRegion].n_standorte}</div>
+                      <div className="text-xs text-slate-500">n</div>
+                    </div>
+                  </div>
+                )}
+
+                {showTechDetails && regionTimeseries.length > 0 && (
                   <div>
                     <p className="text-xs text-slate-500 mb-2">Verlauf (letzte 90 Tage)</p>
                     <ResponsiveContainer width="100%" height={120}>
@@ -323,7 +374,12 @@ const GermanyMap: React.FC = () => {
                         </div>
                       </div>
                       <div className="text-right">
-                        <div className="text-sm font-bold text-white">{fmt(region.avg_viruslast)}</div>
+                        <div className="text-sm font-bold text-white">
+                          {(() => {
+                            const ii = projectedIntensity(region);
+                            return ii >= 0.7 ? 'Hoch' : ii >= 0.4 ? 'Mittel' : 'Niedrig';
+                          })()}
+                        </div>
                         <div className="text-xs" style={{ color: region.trend === 'steigend' ? '#ef4444' : region.trend === 'fallend' ? '#10b981' : '#64748b' }}>
                           {region.trend === 'steigend' ? '\u2197' : region.trend === 'fallend' ? '\u2198' : '\u2192'} {region.change_pct > 0 ? '+' : ''}{region.change_pct}%
                         </div>
@@ -333,17 +389,17 @@ const GermanyMap: React.FC = () => {
               </div>
             </div>
 
-            {/* Transfer Suggestions */}
+            {/* Budget Shift Suggestions (Legacy endpoint; UI is media-first) */}
             <div className="card p-6">
-              <h3 className="text-sm font-bold text-white mb-1">Transfer-Empfehlungen</h3>
-              <p className="text-xs text-slate-500 mb-4">Testkits zwischen Standorten verschieben</p>
+              <h3 className="text-sm font-bold text-white mb-1">Budget-Shifts (Pilot)</h3>
+              <p className="text-xs text-slate-500 mb-4">Heuristische Vorschlaege, um Budget in Regionen mit hohem Timing-Fit zu schieben</p>
               {transfers.length > 0 ? (
                 <div className="space-y-3">
                   {transfers.map((t, i) => (
                     <div key={i} className="p-3 rounded-lg" style={{ background: '#0f172a', border: '1px solid #334155' }}>
                       <div className="flex items-center gap-2 mb-2">
                         <span className={`badge badge-${t.priority}`}>{t.priority}</span>
-                        <span className="text-xs text-slate-500">{t.test_typ}</span>
+                        <span className="text-xs text-slate-500">Signal: {t.test_typ}</span>
                       </div>
                       <div className="flex items-center gap-2 text-sm">
                         <span className="text-slate-400">{t.from_name}</span>

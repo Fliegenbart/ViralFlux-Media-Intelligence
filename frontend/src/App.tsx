@@ -11,7 +11,8 @@ const App: React.FC = () => {
   return (
     <Router>
       <Routes>
-        <Route path="/" element={<LandingPage />} />
+        <Route path="/" element={<Navigate to="/dashboard" replace />} />
+        <Route path="/welcome" element={<LandingPage />} />
         <Route path="/dashboard" element={<MediaCockpit />} />
         <Route path="/dashboard/recommendations/:id" element={<CampaignRecommendationDetail />} />
         <Route path="/map" element={<Navigate to="/dashboard?tab=map" replace />} />

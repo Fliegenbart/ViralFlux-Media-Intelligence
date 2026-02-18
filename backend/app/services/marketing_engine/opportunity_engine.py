@@ -266,7 +266,10 @@ class MarketingOpportunityEngine:
         candidates = selection.get("selected") or []
         cards: list[dict[str, Any]] = []
         now = datetime.utcnow()
-        ai_disabled = False
+        # Bulk generation must stay fast/reliable for dashboards. We therefore
+        # default to deterministic fallback plans and reserve LLM usage for
+        # per-card regeneration flows.
+        ai_disabled = True
         started = time.monotonic()
 
         for candidate in candidates:
@@ -337,10 +340,8 @@ class MarketingOpportunityEngine:
                 weekly_budget=weekly_budget,
                 skip_ollama=ai_disabled,
             )
-            if ai_generated.get("ai_generation_status") != "success":
-                err = str((ai_generated.get("ai_meta") or {}).get("error") or "").lower()
-                if "read timed out" in err or "connect timeout" in err or "connection" in err:
-                    ai_disabled = True
+            # Note: ai_disabled stays True in bulk mode. Single-card regeneration
+            # can use vLLM if desired.
             guarded = self.guardrails.apply(
                 playbook_key=playbook_key,
                 ai_plan=ai_generated.get("ai_plan") or {},
@@ -819,12 +820,30 @@ class MarketingOpportunityEngine:
         if not channel_mix:
             channel_mix = cfg.get("default_mix") or {}
 
+        trigger_snapshot = payload.get("trigger_snapshot") or payload.get("trigger_evidence") or {}
+        condition_key = (
+            playbook.get("condition_key")
+            or (payload.get("product_mapping") or {}).get("condition_key")
+            or cfg.get("condition_key")
+            or "erkaltung_akut"
+        )
+
+        # Deterministic OTC copy guardrails for the card detail.
+        pack = select_gelo_message_pack(
+            brand=row.brand or "gelo",
+            product=row.product or "gelomyrtol forte",
+            condition_key=str(condition_key),
+            playbook_key=playbook_key,
+            region_code=region_code,
+            trigger_event=str(trigger_snapshot.get("event") or ""),
+        )
+
         candidate = {
             "playbook_key": playbook_key,
             "playbook_title": cfg.get("title"),
             "playbook_kind": cfg.get("kind"),
-            "condition_key": (playbook.get("condition_key") or (payload.get("product_mapping") or {}).get("condition_key")),
-            "message_direction": playbook.get("message_direction") or cfg.get("message_direction"),
+            "condition_key": str(condition_key),
+            "message_direction": pack.message_direction,
             "region_code": region_code,
             "region_name": self._region_label(region_code),
             "impact_probability": float(peix_context.get("impact_probability") or 0.0),
@@ -839,6 +858,18 @@ class MarketingOpportunityEngine:
             "channels": cfg.get("channels") or [],
             "shift_bounds": {"min": cfg.get("shift_min"), "max": cfg.get("shift_max")},
             "trigger_snapshot": trigger_snapshot,
+            "copy_pack": {
+                "status": pack.status,
+                "message_direction": pack.message_direction,
+                "hero_message": pack.hero_message,
+                "support_points": pack.support_points,
+                "creative_angles": pack.creative_angles,
+                "keyword_clusters": pack.keyword_clusters,
+                "cta": pack.cta,
+                "compliance_note": pack.compliance_note,
+                "library_version": pack.library_version,
+                "library_source": pack.library_source,
+            },
         }
 
         weekly_budget = float(budget_plan.get("weekly_budget_eur") or 0.0)
@@ -863,6 +894,12 @@ class MarketingOpportunityEngine:
             "status": generated.get("ai_generation_status"),
             "regenerated_at": datetime.utcnow().isoformat() + "Z",
         }
+
+        # Enforce deterministic OTC message framework (avoid LLM drift/hallucinations).
+        if "message_framework" not in payload or not isinstance(payload["message_framework"], dict):
+            payload["message_framework"] = {}
+        payload["message_framework"].update(pack.to_framework())
+
         row.campaign_payload = payload
         row.strategy_mode = row.strategy_mode or "PLAYBOOK_AI"
         row.playbook_key = row.playbook_key or playbook_key

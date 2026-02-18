@@ -28,7 +28,7 @@ ViralFlux Media Intelligence ist ein datengetriebenes Frühwarn- und Aktivierung
 │        Backend (FastAPI + PostgreSQL)                │
 │  • Data Ingestion Pipeline                           │
 │  • Prophet ML Forecasting                            │
-│  • Ollama LLM Integration                            │
+│  • vLLM (OpenAI-kompatibel) LLM Integration          │
 │  • TimescaleDB für Zeitreihen                        │
 └────────────────────┬────────────────────────────────┘
                      │
@@ -48,7 +48,7 @@ ViralFlux Media Intelligence ist ein datengetriebenes Frühwarn- und Aktivierung
 - Docker & Docker Compose
 - Node.js 18+
 - Python 3.11+
-- Ollama Server (läuft bereits auf Hetzner)
+- vLLM Server (OpenAI-kompatibel, läuft lokal auf Hetzner)
 
 ### Installation
 
@@ -141,7 +141,7 @@ Die App läuft dann auf:
   - Confidence Intervals (95%)
   - Feature Importance
 
-### Ollama LLM
+### vLLM (lokal, OpenAI-kompatibel)
 - **Modell**: Läuft auf deinem Hetzner Server
 - **Funktion**: Agentur- und Kundenbriefings in natürlicher Sprache
 - **Kontext**: Aktuelle Signale + Prognose + Aktivierungsfenster
@@ -158,7 +158,7 @@ viralflux-media/
 │   │   ├── services/     # Business Logic
 │   │   │   ├── data_ingest/    # RKI (AMELAG/GrippeWeb/Notaufnahme/SURVSTAT), Trends, Weather
 │   │   │   ├── ml/             # Prophet, Training
-│   │   │   └── llm/            # Ollama Integration
+│   │   │   └── llm/            # vLLM Integration
 │   │   └── db/           # Database Setup
 │   ├── tests/
 │   └── requirements.txt
@@ -190,7 +190,7 @@ POSTGRES_DB=virusradar_db
 
 # APIs
 OPENWEATHER_API_KEY=<your-key>
-OLLAMA_URL=http://your-hetzner-server:11434
+VLLM_BASE_URL=http://localhost:8000/v1
 
 # Security
 SECRET_KEY=<generate-secure-key>

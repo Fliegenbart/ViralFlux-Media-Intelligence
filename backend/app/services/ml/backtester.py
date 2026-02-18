@@ -1253,7 +1253,7 @@ class BacktestService:
         n_samples: int,
         virus_typ: str,
     ) -> str:
-        """LLM-Erklärung der Kalibrierungsergebnisse via Ollama."""
+        """LLM-Erklärung der Kalibrierungsergebnisse via lokalem vLLM."""
         dominant = max(weights, key=weights.get)
         weakest = min(weights, key=weights.get)
 
@@ -1289,9 +1289,16 @@ Schlage vor, das Modell mit diesen neuen Gewichten zu kalibrieren.
 Verwende einen sachlichen, vertrauenswürdigen Ton."""
 
         try:
-            from app.services.llm.ollama_service import OllamaRecommendationService
-            llm = OllamaRecommendationService(self.db)
-            return llm._call_ollama(prompt)
+            from app.services.llm.vllm_service import generate_text_sync
+
+            messages = [
+                {"role": "system", "content": "Du bist ein hilfreicher Assistent."},
+                {"role": "user", "content": prompt},
+            ]
+            text = generate_text_sync(messages=messages, temperature=0.2)
+            if text.startswith("FEHLER:"):
+                raise RuntimeError(text)
+            return text
         except Exception as e:
             logger.warning(f"LLM Insight fehlgeschlagen: {e}")
             return (

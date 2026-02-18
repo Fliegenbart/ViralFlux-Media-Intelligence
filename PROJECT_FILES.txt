@@ -18,7 +18,7 @@
 ./backend/app/services/data_ingest/trends_service.py
 ./backend/app/services/data_ingest/weather_service.py
 ./backend/app/services/llm/__init__.py
-./backend/app/services/llm/ollama_service.py
+./backend/app/services/llm/vllm_service.py
 ./backend/app/services/ml/__init__.py
 ./backend/app/services/ml/forecast_service.py
 ./backend/{app/__init__.py

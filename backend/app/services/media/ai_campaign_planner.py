@@ -1,4 +1,4 @@
-"""AI Campaign Planner (Ollama-only) fuer Playbook-Kampagnenplaene."""
+"""AI Campaign Planner via strictly local vLLM (OpenAI-compatible API)."""
 
 from __future__ import annotations
 
@@ -7,13 +7,10 @@ import json
 import logging
 from typing import Any
 
-import requests
-
-from app.core.config import get_settings
-
+from app.services.llm.vllm_service import generate_text, generate_text_sync
+from app.services.media.campaign_guardrails import HWG_SYSTEM_PROMPT, check_hwg_compliance
 
 logger = logging.getLogger(__name__)
-settings = get_settings()
 
 _CAMPAIGN_PLAN_SCHEMA: dict[str, Any] = {
     "type": "object",
@@ -49,12 +46,35 @@ _CAMPAIGN_PLAN_SCHEMA: dict[str, Any] = {
 }
 
 
+class AICampaignPlanner:
+    """Einfacher Text-Planer (Banner-Aufhänger), HWG-gesichert."""
+
+    async def plan_campaign(self, region: str, outbreak_score: float) -> str:
+        user_prompt = (
+            f"Plane eine Kampagnen-Strategie für die Region {region}. "
+            f"Aktueller Erkältungs-Score (0-100): {outbreak_score}. "
+            f"Schreibe 3 kurze Aufhänger für Bannerwerbung."
+        )
+
+        messages = [
+            {"role": "system", "content": HWG_SYSTEM_PROMPT},
+            {"role": "user", "content": user_prompt},
+        ]
+
+        strategy_text = await generate_text(messages=messages, temperature=0.2)
+
+        if not check_hwg_compliance(strategy_text):
+            logger.warning("HWG blockiert in AICampaignPlanner für %s", region)
+            return "Aus rechtlichen Gründen (HWG) wurde diese Kampagnenplanung blockiert. Bitte manuell anpassen."
+
+        return strategy_text
+
+
 class AiCampaignPlanner:
-    """Generiert strukturierte Kampagnenplaene via lokalem Ollama."""
+    """Generiert strukturierte Kampagnenplaene via strikt lokalem vLLM."""
 
     def __init__(self) -> None:
-        self.ollama_url = settings.OLLAMA_URL.rstrip("/")
-        self.model = settings.OLLAMA_MODEL
+        self.model = "Qwen/Qwen2.5-VL-7B-Instruct-AWQ"
 
     def generate_plan(
         self,
@@ -66,6 +86,7 @@ class AiCampaignPlanner:
         weekly_budget: float,
         skip_ollama: bool = False,
     ) -> dict[str, Any]:
+        # Backwards-compatible flag-name (skip_ollama) but now means "skip LLM".
         if skip_ollama:
             fallback = self._deterministic_fallback(
                 playbook_candidate=playbook_candidate,
@@ -80,9 +101,9 @@ class AiCampaignPlanner:
                 "ai_meta": {
                     "generated_at": datetime.utcnow().isoformat() + "Z",
                     "model": self.model,
-                    "provider": "ollama_local",
+                    "provider": "vllm_local",
                     "fallback_used": True,
-                    "error": "skipped_ollama_after_previous_failure",
+                    "error": "skipped_llm_after_previous_failure",
                 },
             }
 
@@ -95,18 +116,23 @@ class AiCampaignPlanner:
         )
 
         try:
-            raw, used_model = self._call_ollama(prompt)
+            raw = self._call_vllm(prompt)
             ai_plan = self._parse_json_response(raw)
             if not isinstance(ai_plan, dict):
-                raise ValueError("Ollama Antwort ist kein JSON-Objekt.")
+                raise ValueError("LLM Antwort ist kein JSON-Objekt.")
+
+            # quick compliance check on raw string (before normalization)
+            if not check_hwg_compliance(raw):
+                raise ValueError("HWG Blocklist in LLM Rohantwort getriggert.")
+
             normalized = self._normalize_plan(ai_plan, playbook_candidate, campaign_goal)
             return {
                 "ai_generation_status": "success",
                 "ai_plan": normalized,
                 "ai_meta": {
                     "generated_at": datetime.utcnow().isoformat() + "Z",
-                    "model": used_model,
-                    "provider": "ollama_local",
+                    "model": self.model,
+                    "provider": "vllm_local",
                     "fallback_used": False,
                 },
             }
@@ -125,7 +151,7 @@ class AiCampaignPlanner:
                 "ai_meta": {
                     "generated_at": datetime.utcnow().isoformat() + "Z",
                     "model": self.model,
-                    "provider": "ollama_local",
+                    "provider": "vllm_local",
                     "fallback_used": True,
                     "error": str(exc),
                 },
@@ -149,7 +175,7 @@ class AiCampaignPlanner:
             "Du bist ein Senior Media Planner für Pharma-Brand-Cases.\n"
             "Erzeuge NUR valides JSON ohne Markdown, ohne Erklaertexte.\n"
             "Sprache: Deutsch. Konservativ formulieren (kein Heilversprechen).\n"
-            "Output-Felder: campaign_name, objective, budget_shift_pct, activation_window_days, channel_plan.\n"
+            "Output-Felder: campaign_name, objective, budget_shift_pct, activation_window_days, channel_plan, keyword_clusters, creative_angles, kpi_targets, next_steps, compliance_hinweis.\n"
             "Output: kompaktes JSON in EINER Zeile (kein Pretty-Print).\n\n"
             f"Brand: {brand}\n"
             f"Produkt: {product}\n"
@@ -163,70 +189,12 @@ class AiCampaignPlanner:
             f"Kanal-Default-Mix: {json.dumps(channel_mix, ensure_ascii=True)}\n\n"
         )
 
-    def _call_ollama(self, prompt: str) -> tuple[str, str]:
-        candidate_models = self._resolve_model_candidates()
-        last_error: Exception | None = None
-
-        for model_name in candidate_models:
-            payload = {
-                "model": model_name,
-                "prompt": prompt,
-                "stream": False,
-                "format": _CAMPAIGN_PLAN_SCHEMA,
-                "options": {
-                    "temperature": 0.2,
-                    "top_p": 0.9,
-                    "num_predict": 120,
-                },
-            }
-            try:
-                response = requests.post(
-                    f"{self.ollama_url}/api/generate",
-                    json=payload,
-                    timeout=25,
-                )
-                if response.status_code == 404 and "model" in response.text.lower():
-                    last_error = ValueError(
-                        f"Ollama Modell nicht vorhanden: {model_name}"
-                    )
-                    continue
-                response.raise_for_status()
-                data = response.json()
-                text = data.get("response")
-                if not text:
-                    raise ValueError("Leere Ollama-Antwort.")
-                return str(text).strip(), model_name
-            except Exception as exc:
-                last_error = exc
-                logger.warning(
-                    "Ollama generate fehlgeschlagen (model=%s): %s",
-                    model_name,
-                    exc,
-                )
-
-        if last_error is not None:
-            raise last_error
-        raise ValueError("Kein verfuegbares Ollama-Modell gefunden.")
-
-    def _resolve_model_candidates(self) -> list[str]:
-        """Configured model first, then discovered local models from /api/tags."""
-        candidates: list[str] = []
-        configured = (self.model or "").strip()
-        if configured:
-            candidates.append(configured)
-
-        try:
-            response = requests.get(f"{self.ollama_url}/api/tags", timeout=4)
-            response.raise_for_status()
-            payload = response.json() or {}
-            for entry in payload.get("models") or []:
-                model_name = str(entry.get("name") or "").strip()
-                if model_name and model_name not in candidates:
-                    candidates.append(model_name)
-        except Exception as exc:
-            logger.warning("Ollama /api/tags nicht lesbar: %s", exc)
-
-        return candidates or ["qwen2.5:7b"]
+    def _call_vllm(self, prompt: str) -> str:
+        messages = [
+            {"role": "system", "content": HWG_SYSTEM_PROMPT},
+            {"role": "user", "content": prompt},
+        ]
+        return generate_text_sync(messages=messages, temperature=0.2).strip()
 
     @staticmethod
     def _parse_json_response(raw: str) -> dict[str, Any]:
@@ -399,3 +367,4 @@ class AiCampaignPlanner:
             ],
             "compliance_hinweis": "Backtest-basierte, konservative Aussagen verwenden; keine Heilversprechen.",
         }
+

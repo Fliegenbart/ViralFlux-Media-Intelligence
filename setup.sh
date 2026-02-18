@@ -21,7 +21,7 @@ if [ ! -f .env ]; then
     cp .env.example .env
     echo -e "   ${YELLOW}⚠️  Bitte .env mit deinen API-Keys bearbeiten!${NC}"
     echo "   - OPENWEATHER_API_KEY"
-    echo "   - OLLAMA_URL"
+    echo "   - VLLM_BASE_URL"
     echo "   - SECRET_KEY (generiere mit: openssl rand -hex 32)"
     read -p "   Drücke Enter wenn du .env konfiguriert hast..."
 else

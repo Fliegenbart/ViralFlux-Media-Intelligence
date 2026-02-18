@@ -1,21 +1,55 @@
-"""Guardrails fuer AI-generierte Campaign-Plans."""
+"""Guardrails fuer AI-generierte Campaign-Plans und HWG-Compliance."""
 
 from __future__ import annotations
 
+import logging
 import re
 from typing import Any
 
 from app.services.media.playbook_engine import PLAYBOOK_CATALOG
 
+logger = logging.getLogger(__name__)
 
-_BANNED_PHRASES = [
+# Deterministischer System Prompt, um das Modell "einzuzäunen"
+HWG_SYSTEM_PROMPT = """Du bist ein hochqualifizierter, juristisch geschulter Medical Copywriter für den deutschen Pharma-Markt (Marke Gelo).
+Deine absolute, unverrückbare Basis ist das Heilmittelwerbegesetz (HWG).
+Du darfst NIEMALS Heilversprechen machen.
+Du darfst NIEMALS Garantien abgeben oder von Nebenwirkungsfreiheit sprechen.
+Nutze ausschließlich lindernde, unterstützende und wohltuende Formulierungen (z.B. "unterstützt die Heilung", "lindert die Symptome", "befreit spürbar", "hilft bei").
+Verhalte dich stets objektiv, professionell und wissenschaftlich fundiert.
+"""
+
+# Hardcoded Regex-Blockliste als finale Sicherung (falls die KI halluziniert)
+HWG_BLOCKLIST = [
     r"\bheilt\b",
-    r"\bheilung\b",
+    r"\bHeilung\b",
     r"\bgarantiert\b",
-    r"\b100%\b",
-    r"\bsicher wirksam\b",
-    r"\bsofort(?:ige)? heilung\b",
+    r"\bsofortige\s+Heilung\b",
+    r"100\s*%",
+    r"\bWundermittel\b",
+    r"\bnebenwirkungsfrei\b",
+    r"\bmacht\s+gesund\b",
+    r"\bsicher\s+wirksam\b",
 ]
+
+
+def check_hwg_compliance(text: str) -> bool:
+    """
+    Prüft, ob der generierte Text gegen das Heilmittelwerbegesetz (HWG) verstößt.
+    Gibt True zurück (Safe), wenn kein Regelverstoß gefunden wurde.
+    """
+    if not text:
+        return False
+
+    for pattern in HWG_BLOCKLIST:
+        if re.search(pattern, text, re.IGNORECASE):
+            logger.warning(f"HWG Guardrail ausgelöst! Verbotenes Muster: {pattern}")
+            return False
+
+    return True
+
+
+_BANNED_PHRASES = list(dict.fromkeys(HWG_BLOCKLIST))
 
 
 class CampaignGuardrails:
@@ -84,6 +118,20 @@ class CampaignGuardrails:
             report["applied_fixes"].append("compliance_hinweis um konservative Claim-Regel erweitert.")
         safe_plan["compliance_hinweis"] = compliance
 
+        # Final-Check (sollte nach Sanitizing i.d.R. OK sein)
+        combined = " ".join(
+            str(v)
+            for v in (
+                safe_plan.get("campaign_name"),
+                safe_plan.get("objective"),
+                safe_plan.get("compliance_hinweis"),
+            )
+            if v
+        )
+        if combined and not check_hwg_compliance(combined):
+            report["passed"] = False
+            report["notes"].append("HWG Final-Check fehlgeschlagen (nach Sanitizing).")
+
         return {
             "ai_plan": safe_plan,
             "guardrail_report": report,
@@ -118,7 +166,15 @@ class CampaignGuardrails:
             )
 
         if not items:
-            items = [{"channel": "programmatic", "share_pct": 100.0, "message_angle": "Kontextbasiertes Timing", "kpi_primary": "CTR", "kpi_secondary": ["CPM"]}]
+            items = [
+                {
+                    "channel": "programmatic",
+                    "share_pct": 100.0,
+                    "message_angle": "Kontextbasiertes Timing",
+                    "kpi_primary": "CTR",
+                    "kpi_secondary": ["CPM"],
+                }
+            ]
             total = 100.0
             report["applied_fixes"].append("Leerer channel_plan auf programmatic 100% gesetzt.")
 
@@ -189,3 +245,4 @@ class CampaignGuardrails:
                         touched = True
             if touched:
                 report["applied_fixes"].append("Claim-Sanitizing auf channel_plan.message_angle angewendet.")
+

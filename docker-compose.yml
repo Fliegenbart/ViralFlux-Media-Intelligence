@@ -35,8 +35,7 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-changeme}
       - POSTGRES_DB=${POSTGRES_DB:-virusradar_db}
       - OPENWEATHER_API_KEY=${OPENWEATHER_API_KEY}
-      - OLLAMA_URL=${OLLAMA_URL}
-      - OLLAMA_MODEL=${OLLAMA_MODEL:-llama2}
+      - VLLM_BASE_URL=${VLLM_BASE_URL:-http://localhost:8000/v1}
       - SECRET_KEY=${SECRET_KEY}
       - ENVIRONMENT=${ENVIRONMENT:-development}
     volumes:

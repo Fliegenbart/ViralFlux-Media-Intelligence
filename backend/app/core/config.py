@@ -30,9 +30,8 @@ class Settings(BaseSettings):
     GANZIMMUN_API_URL: str | None = None
     GANZIMMUN_API_KEY: str | None = None
     
-    # Ollama
-    OLLAMA_URL: str = "http://localhost:11434"
-    OLLAMA_MODEL: str = "llama2"
+    # vLLM (OpenAI-compatible, strictly local)
+    VLLM_BASE_URL: str = "http://localhost:8000/v1"
     
     # Security
     SECRET_KEY: str

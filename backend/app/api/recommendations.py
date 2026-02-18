@@ -156,6 +156,8 @@ async def generate_recommendations(
     db: Session = Depends(get_db)
 ):
     """Generate LLM recommendations for all virus types."""
+    from app.services.llm.vllm_service import generate_text
+
     results = {}
     virus_test_map = {
         "Influenza A": "Influenza A/B Schnelltest",
@@ -169,14 +171,40 @@ async def generate_recommendations(
             forecast_ctx = _build_forecast_context(db, virus)
             inventory_ctx = _build_inventory_context(db, test_typ)
 
-            # Try Ollama first, fallback to rule-based
             try:
-                from app.services.llm.ollama_service import OllamaRecommendationService
-                llm = OllamaRecommendationService(db)
-                rec = llm.generate_recommendation(forecast_ctx, inventory_ctx)
+                # vLLM (OpenAI-compatible, strictly local) first, fallback to rule-based.
+                base = _generate_rule_based_recommendation(forecast_ctx, inventory_ctx)
+
+                prompt = (
+                    "Du bist ein Senior Data Scientist bei ViralFlux Media Intelligence.\n"
+                    "Schreibe eine professionelle Empfehlung (Deutsch) basierend auf den Daten.\n"
+                    "Keine Heilversprechen. Keine Garantien. Fokus: operative Planung.\n\n"
+                    f"Virus: {forecast_ctx.get('virus_typ')}\n"
+                    f"Aktuelle Viruslast: {forecast_ctx.get('current_viral_load')}\n"
+                    f"Trend: {forecast_ctx.get('trend')}\n"
+                    f"Forecast 7d: {forecast_ctx.get('forecast_7d')}\n"
+                    f"Forecast 14d: {forecast_ctx.get('forecast_14d')}\n"
+                    f"Konfidenz: {forecast_ctx.get('confidence')}\n\n"
+                    f"Bestand: {inventory_ctx.get('current_stock')}\n"
+                    f"Mindestbestand: {inventory_ctx.get('min_stock')}\n"
+                    f"Lieferzeit (Tage): {inventory_ctx.get('lead_time_days')}\n"
+                    f"Ø Verbrauch/Woche: {inventory_ctx.get('avg_consumption')}\n\n"
+                    "Output: 4 kurze Abschnitte: Situationsanalyse, Prognose, Lagerbestand, Handlungsempfehlung."
+                )
+
+                messages = [
+                    {"role": "system", "content": "Du bist ein hilfreicher Assistent."},
+                    {"role": "user", "content": prompt},
+                ]
+                llm_text = await generate_text(messages=messages, temperature=0.3)
+                if llm_text.startswith("FEHLER:"):
+                    raise RuntimeError(llm_text)
+
+                rec = dict(base)
+                rec["recommendation_text"] = llm_text
                 rec["source"] = "llm"
             except Exception as e:
-                logger.warning(f"Ollama unavailable for {virus}, using rule-based: {e}")
+                logger.warning(f"LLM unavailable for {virus}, using rule-based: {e}")
                 rec = _generate_rule_based_recommendation(forecast_ctx, inventory_ctx)
 
             # Save to DB

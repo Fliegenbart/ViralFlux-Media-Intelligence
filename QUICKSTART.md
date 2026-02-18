@@ -16,7 +16,7 @@ nano .env  # oder dein bevorzugter Editor
 
 **Wichtig: Fülle diese Werte aus:**
 - `OPENWEATHER_API_KEY` - Hole dir einen kostenlosen Key von [openweathermap.org](https://openweathermap.org/api)
-- `OLLAMA_URL` - URL zu deinem Hetzner Server (z.B. `http://your-server:11434`)
+- `VLLM_BASE_URL` - URL zu deinem lokalen vLLM Endpunkt (OpenAI-kompatibel), z.B. `http://localhost:8000/v1`
 - `SECRET_KEY` - Generiere mit: `openssl rand -hex 32`
 
 ### 3. Setup ausführen

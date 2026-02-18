@@ -271,7 +271,7 @@ class MarketingOpportunityEngine:
         started = time.monotonic()
 
         for candidate in candidates:
-            # Guard against long-running multi-card generation: once Ollama times out,
+            # Guard against long-running multi-card generation: once vLLM times out,
             # skip further calls and use deterministic templates to keep API responsive.
             if time.monotonic() - started > 110:
                 ai_disabled = True

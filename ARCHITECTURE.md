@@ -15,7 +15,7 @@ ViralFlux Media Intelligence ist ein dreischichtiges System (Data, ML, Frontend)
 │                  BACKEND / API LAYER                         │
 │  ┌────────────────┐  ┌────────────────┐  ┌───────────────┐ │
 │  │ Data Ingestion │  │  ML Pipeline   │  │ LLM Service   │ │
-│  │   Services     │  │    (Prophet)   │  │   (Ollama)    │ │
+│  │   Services     │  │    (Prophet)   │  │    (vLLM)     │ │
 │  └────────────────┘  └────────────────┘  └───────────────┘ │
 │                                                              │
 │  ┌──────────────────────────────────────────────────────┐  │
@@ -44,7 +44,7 @@ ViralFlux Media Intelligence ist ein dreischichtiges System (Data, ML, Frontend)
 - **Framework:** FastAPI 0.109
 - **Database:** PostgreSQL 15 + TimescaleDB
 - **ML:** Prophet 1.1.5, scikit-learn
-- **LLM:** Ollama (selbst gehostet)
+- **LLM:** vLLM (OpenAI-kompatibel, strikt lokal)
 - **Data Processing:** Pandas, NumPy
 - **API Clients:** pytrends, requests, aiohttp
 - **Task Scheduling:** APScheduler
@@ -128,10 +128,10 @@ For each virus (Influenza A/B, SARS-CoV-2, RSV):
 ### 3. LLM Recommendations (on-demand)
 
 ```python
-OllamaRecommendationService.generate_recommendation()
+LLMRecommendationService.generate_recommendation()
     ├─ Build context (forecast + inventory + trends)
     ├─ Generate prompt with structured data
-    ├─ Call Ollama API (llama2 model)
+    ├─ Call vLLM API (OpenAI-compatible, local)
     ├─ Parse response
     ├─ Extract structured action (increase/decrease/maintain)
     └─ save_recommendation(to Database)
@@ -303,7 +303,7 @@ model.add_regressor('trends_ma7')          # Moving Average
 **Data Privacy:**
 - DSGVO-konform
 - Lokale Verarbeitung (kein Cloud-LLM)
-- Ollama läuft auf eigenem Server
+- vLLM läuft lokal auf eigenem Server
 
 ---
 
@@ -359,8 +359,8 @@ Internet
                    └───────────────┘
 
 ┌──────────────────────┐
-│  Ollama (Externe)    │
-│  your-server:11434   │
+│  vLLM (lokal)        │
+│  localhost:8000/v1   │
 └──────────────────────┘
 ```
 

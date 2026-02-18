@@ -5,8 +5,10 @@ from datetime import datetime
 
 from fastapi import APIRouter, Depends, Header, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field
+from sqlalchemy.orm import Session
 
 from app.core.celery_app import celery_app
+from app.db.session import get_db
 from app.services.data_ingest.tasks import process_erp_sales_sync
 
 logger = logging.getLogger(__name__)
@@ -42,6 +44,11 @@ class ERPSalesPayload(BaseModel):
 
     product_id: str = Field(min_length=1, max_length=128)
     region_code: str = Field(min_length=1, max_length=32)
+    source_system: str | None = Field(
+        default=None,
+        max_length=32,
+        description="Optional: identify caller system (e.g. 'sap' or 'ims') for status tracking.",
+    )
     units_sold: int = Field(gt=0, le=50_000_000)
     revenue: float = Field(ge=0, le=50_000_000_000)
     timestamp: datetime
@@ -66,6 +73,55 @@ async def erp_sales_sync(
         "message": "ERP sales sync accepted",
         "task_id": task.id,
         "status_url": f"/api/webhooks/status/{task.id}",
+    }
+
+
+@router.get("/integrations/status")
+async def get_integration_status(db: Session = Depends(get_db)):
+    """Read-only status endpoint for the UI (no secrets).
+
+    We consider an integration "seen" if at least one ERP sales sync was persisted.
+    """
+    from app.models.database import GanzimmunData
+
+    rows = (
+        db.query(GanzimmunData)
+        .filter(GanzimmunData.extra_data.isnot(None))
+        .order_by(GanzimmunData.datum.desc())
+        .limit(500)
+        .all()
+    )
+
+    last_by_system: dict[str, datetime] = {}
+    for row in rows:
+        extra = row.extra_data or {}
+        if not isinstance(extra, dict):
+            continue
+        if str(extra.get("source") or "") != "erp_sales_sync":
+            continue
+        system = str(extra.get("source_system") or "unknown").strip().lower() or "unknown"
+        ts = row.datum
+        if not ts:
+            continue
+        current = last_by_system.get(system)
+        if current is None or ts > current:
+            last_by_system[system] = ts
+
+    def _iso(dt: datetime | None) -> str | None:
+        if not dt:
+            return None
+        # Always return ISO-8601 (UTC naive timestamps are treated as UTC).
+        return dt.isoformat() + ("Z" if dt.tzinfo is None else "")
+
+    sap_ts = last_by_system.get("sap")
+    ims_ts = last_by_system.get("ims")
+    any_ts = max(last_by_system.values()) if last_by_system else None
+
+    return {
+        "sap": {"last_sync_at": _iso(sap_ts)},
+        "ims": {"last_sync_at": _iso(ims_ts)},
+        "unknown": {"last_sync_at": _iso(last_by_system.get("unknown"))},
+        "any": {"last_sync_at": _iso(any_ts)},
     }
 
 

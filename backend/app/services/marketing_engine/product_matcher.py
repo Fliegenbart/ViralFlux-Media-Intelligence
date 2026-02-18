@@ -1,4 +1,4 @@
-"""ProductMatcher — Ordnet Opportunities passende Produkte aus dem Katalog zu.
+"""ProductMatcher — Ordnet Opportunities passende Gelo-OTC Produkte aus dem Katalog zu.
 
 Liest den ProductCatalog aus der DB und matcht basierend auf
 `applicable_types` und `applicable_conditions`.
@@ -11,63 +11,49 @@ from app.models.database import ProductCatalog
 
 logger = logging.getLogger(__name__)
 
-# Seed-Daten für den initialen Produktkatalog
+# Seed-Daten für den initialen Produktkatalog (Gelo OTC).
 SEED_PRODUCTS = [
     {
-        "sku": "GI-CRP-POC-50",
-        "name": "Quantitativer CRP Schnelltest (50er Pack)",
-        "category": "CRP",
-        "applicable_types": ["RESOURCE_SCARCITY", "WEATHER_FORECAST"],
-        "applicable_conditions": ["antibiotika_shortage", "fieber_shortage", "nasskalt_forecast", "extreme_cold_forecast"],
+        "sku": "GELO-GMF",
+        "name": "GeloMyrtol forte",
+        "category": "Atemwege",
+        "applicable_types": ["RESOURCE_SCARCITY", "WEATHER_FORECAST", "PREDICTIVE_SALES_SPIKE"],
+        "applicable_conditions": ["bronchitis_husten", "sinusitis_nebenhoehlen", "erkaltung_akut"],
     },
     {
-        "sku": "GI-PCT-QUANT-25",
-        "name": "Procalcitonin Schnelltest (25er Pack)",
-        "category": "PCT",
-        "applicable_types": ["RESOURCE_SCARCITY"],
-        "applicable_conditions": ["antibiotika_shortage"],
+        "sku": "GELO-GBR",
+        "name": "GeloBronchial",
+        "category": "Atemwege",
+        "applicable_types": ["WEATHER_FORECAST", "PREDICTIVE_SALES_SPIKE"],
+        "applicable_conditions": ["bronchitis_husten", "erkaltung_akut"],
     },
     {
-        "sku": "GI-PCR-RESP-PANEL",
-        "name": "Multiplex PCR Panel Atemwege",
-        "category": "PCR",
-        "applicable_types": ["RESOURCE_SCARCITY", "WEATHER_FORECAST"],
-        "applicable_conditions": ["atemwege_shortage", "nasskalt_forecast", "extreme_cold_forecast"],
+        "sku": "GELO-REV",
+        "name": "GeloRevoice",
+        "category": "Hals",
+        "applicable_types": ["WEATHER_FORECAST", "PREDICTIVE_SALES_SPIKE"],
+        "applicable_conditions": ["halsschmerz_heiserkeit", "erkaltung_akut"],
     },
     {
-        "sku": "GI-BLUTBILD-10",
-        "name": "Differentialblutbild (10er Pack)",
-        "category": "Haematologie",
-        "applicable_types": ["RESOURCE_SCARCITY"],
-        "applicable_conditions": ["fieber_shortage"],
+        "sku": "GELO-SIT",
+        "name": "GeloSitin",
+        "category": "Nase",
+        "applicable_types": ["WEATHER_FORECAST", "PREDICTIVE_SALES_SPIKE"],
+        "applicable_conditions": ["rhinitis_trockene_nase", "erkaltung_akut"],
     },
     {
-        "sku": "LAB-REQ-VITD3",
-        "name": "25-OH-Vitamin-D Laboranforderung",
-        "category": "Vitamin_D",
-        "applicable_types": ["SEASONAL_DEFICIENCY", "WEATHER_FORECAST"],
-        "applicable_conditions": ["low_uv", "low_sunshine_forecast"],
+        "sku": "GELO-VIT",
+        "name": "GeloVital",
+        "category": "Immunsupport",
+        "applicable_types": ["WEATHER_FORECAST", "PREDICTIVE_SALES_SPIKE", "RESOURCE_SCARCITY"],
+        "applicable_conditions": ["immun_support", "erkaltung_akut"],
     },
     {
-        "sku": "GI-INF-AB-RAPID",
-        "name": "Influenza A/B Schnelltest (25er Pack)",
-        "category": "Influenza",
-        "applicable_types": ["PREDICTIVE_SALES_SPIKE", "RESOURCE_SCARCITY", "WEATHER_FORECAST"],
-        "applicable_conditions": ["influenza_spike", "atemwege_shortage", "nasskalt_forecast"],
-    },
-    {
-        "sku": "GI-RSV-AG-25",
-        "name": "RSV Antigen Schnelltest (25er Pack)",
-        "category": "RSV",
-        "applicable_types": ["PREDICTIVE_SALES_SPIKE"],
-        "applicable_conditions": ["rsv_spike"],
-    },
-    {
-        "sku": "GI-COV2-AG-20",
-        "name": "SARS-CoV-2 Antigen Schnelltest (20er Pack)",
-        "category": "COVID",
-        "applicable_types": ["PREDICTIVE_SALES_SPIKE"],
-        "applicable_conditions": ["covid_spike"],
+        "sku": "GELO-PRO",
+        "name": "GeloProsed",
+        "category": "Erkaeltung",
+        "applicable_types": ["WEATHER_FORECAST", "PREDICTIVE_SALES_SPIKE", "RESOURCE_SCARCITY"],
+        "applicable_conditions": ["erkaltung_akut", "rhinitis_trockene_nase", "halsschmerz_heiserkeit"],
     },
 ]
 

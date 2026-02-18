@@ -170,6 +170,11 @@ class AiCampaignPlanner:
         trigger = playbook_candidate.get("trigger_snapshot") or {}
         min_shift = (playbook_candidate.get("shift_bounds") or {}).get("min")
         max_shift = (playbook_candidate.get("shift_bounds") or {}).get("max")
+        copy_pack = playbook_candidate.get("copy_pack") or {}
+        direction = playbook_candidate.get("message_direction") or copy_pack.get("message_direction")
+        hero = copy_pack.get("hero_message")
+        support = copy_pack.get("support_points") or []
+        compliance_note = copy_pack.get("compliance_note")
 
         return (
             "Du bist ein Senior Media Planner für Pharma-Brand-Cases.\n"
@@ -184,6 +189,10 @@ class AiCampaignPlanner:
             f"Region: {playbook_candidate.get('region_name')} ({playbook_candidate.get('region_code')})\n"
             f"PeixEpiScore: {playbook_candidate.get('peix_score')} / Impact {playbook_candidate.get('impact_probability')}%\n"
             f"Trigger: {trigger.get('event')} | {trigger.get('details')}\n"
+            f"Message-Direction (fix): {direction}\n"
+            f"Hero-Message (fix): {hero}\n"
+            f"Support-Points (fix): {json.dumps(support, ensure_ascii=True)}\n"
+            f"Compliance-Hinweis (fix): {compliance_note}\n"
             f"Woechentliches Budget (EUR): {weekly_budget:.2f}\n"
             f"Erlaubter Shift-Bereich (%): {min_shift} bis {max_shift}\n"
             f"Kanal-Default-Mix: {json.dumps(channel_mix, ensure_ascii=True)}\n\n"
@@ -367,4 +376,3 @@ class AiCampaignPlanner:
             ],
             "compliance_hinweis": "Backtest-basierte, konservative Aussagen verwenden; keine Heilversprechen.",
         }
-

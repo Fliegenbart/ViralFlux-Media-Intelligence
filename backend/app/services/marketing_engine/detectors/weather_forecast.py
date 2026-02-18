@@ -1,9 +1,9 @@
-"""WeatherForecastDetector — 8-Tage-Wetterprognose → proaktive Vertriebschancen.
+"""WeatherForecastDetector — 8-Tage-Wetterprognose → proaktive Gelo-OTC Aktivierungs-Chancen.
 
 Analysiert die nächsten 8 Tage Wettervorhersage um:
-1. LOW_SUNSHINE_FORECAST: UV < 3 an meisten Tagen → Vitamin-D Supplementierung
-2. NASSKALT_FORECAST: Kalt (2-10°C) + feucht → Erkältungsrisiko
-3. EXTREME_COLD_FORECAST: Temperatur < -5°C → allgemeines Infektionsrisiko
+1. LOW_SUNSHINE_FORECAST: Wenig Sonne (konservativ) → Immun-Support Positionierung
+2. NASSKALT_FORECAST: Kalt (2-10°C) + feucht → Erkältungs-Trigger
+3. EXTREME_COLD_FORECAST: Temperatur < -5°C → Akut-Trigger (Erkältung im Anflug)
 """
 
 from collections import Counter, defaultdict
@@ -77,7 +77,10 @@ class WeatherForecastDetector(OpportunityDetector):
         return rows
 
     def _detect_low_sunshine(self, forecast_data: list) -> dict | None:
-        """UV < 3 an meisten Tagen → Vitamin-D-Opportunity."""
+        """Wenig Sonne (UV < 3 an vielen Tagen) → konservative Immun-Support Opportunity.
+
+        Hard rule: no supplement/therapy instructions (Vitamin-D etc.).
+        """
         daily_uv = defaultdict(list)
         for row in forecast_data:
             if row.uv_index is not None:
@@ -132,14 +135,14 @@ class WeatherForecastDetector(OpportunityDetector):
                 "source": "OpenWeather_Forecast",
                 "event": "LOW_SUNSHINE_FORECAST",
                 "details": (
-                    f"Wetterprognose: {low_days} von {total_days} Tagen mit UV-Index < {UV_LOW_THRESHOLD} "
-                    f"(Durchschnitt: {avg_uv_overall:.1f}). Vitamin-D-Synthese in den nächsten 8 Tagen "
-                    f"physiologisch nicht möglich — idealer Zeitpunkt für proaktive Ansprache."
+                    f"Wetterprognose: {low_days} von {total_days} Tagen mit sehr niedriger UV-Intensitaet "
+                    f"(Durchschnitt: {avg_uv_overall:.1f}). Konservatives Signal fuer saisonale Belastung "
+                    f"und praeventive Kommunikation (z. B. 'Immunsystem im Alltag unterstuetzen')."
                 ),
                 "detected_at": datetime.now().strftime("%Y-%m-%d"),
             },
-            "target_audience": ["Allgemeinmediziner", "Internisten", "Orthopäden"],
-            "_condition": "low_sunshine_forecast",
+            "target_audience": ["Erwachsene", "Familien", "Praeventionsaffine Zielgruppen"],
+            "_condition": "immun_support",
             "_low_days": low_days,
             "_total_days": total_days,
             "_avg_uv": round(avg_uv_overall, 1),
@@ -202,12 +205,12 @@ class WeatherForecastDetector(OpportunityDetector):
                 "details": (
                     f"Wetterprognose: {nasskalt_days} von {total_days} Tagen mit nasskalten "
                     f"Bedingungen (2-10°C + hohe Feuchtigkeit/Niederschlag). "
-                    f"Erhöhtes Erkältungs- und Infektionsrisiko — respiratorische Diagnostik empfohlen."
+                    f"Erhoehtes Erkaeltungs-Risiko — Timing fuer symptomnahe OTC-Kommunikation."
                 ),
                 "detected_at": datetime.now().strftime("%Y-%m-%d"),
             },
-            "target_audience": ["Allgemeinmediziner", "Internisten", "Pädiater", "HNO-Ärzte"],
-            "_condition": "nasskalt_forecast",
+            "target_audience": ["Erwachsene", "Familien", "Pendler"],
+            "_condition": "erkaltung_akut",
             "_nasskalt_days": nasskalt_days,
             "_total_days": total_days,
         }
@@ -252,12 +255,12 @@ class WeatherForecastDetector(OpportunityDetector):
                 "details": (
                     f"Wetterprognose: {extreme_days} Tage mit Extremkälte "
                     f"(Tiefsttemperatur {min_temp:.1f}°C). "
-                    f"Stark erhöhtes allgemeines Infektionsrisiko."
+                    f"Stark erhoehtes Belastungs-/Erkaeltungs-Risiko (konservatives Signal) — Aktivierungsfenster."
                 ),
                 "detected_at": datetime.now().strftime("%Y-%m-%d"),
             },
-            "target_audience": ["Allgemeinmediziner", "Internisten", "Pädiater"],
-            "_condition": "extreme_cold_forecast",
+            "target_audience": ["Erwachsene", "Familien"],
+            "_condition": "erkaltung_akut",
             "_extreme_days": extreme_days,
             "_min_temp": round(min_temp, 1),
         }

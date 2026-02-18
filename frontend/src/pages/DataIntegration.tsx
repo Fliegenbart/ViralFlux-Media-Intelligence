@@ -36,17 +36,10 @@ const DataIntegration: React.FC = () => {
   const navigate = useNavigate();
 
   const lastSync = useMemo(() => {
-    // Mock-Timestamp: "gestern 23:59" (Berlin), damit das UI nicht von Backend-Abhaengigkeiten blockiert.
-    const now = new Date();
-    const mock = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-    mock.setHours(23, 59, 0, 0);
-    return mock.toLocaleString('de-DE', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+    // Intentionally not auto-claiming connectivity:
+    // Real ERP/IMS systems push data *to us* via webhook. Until the first real push,
+    // we must not display "Connected".
+    return 'Noch nie';
   }, []);
 
   const integrations: Integration[] = useMemo(
@@ -54,16 +47,16 @@ const DataIntegration: React.FC = () => {
       {
         name: 'SAP ERP',
         system: 'sap',
-        status: 'connected',
+        status: 'disconnected',
         lastSuccessfulSync: lastSync,
-        description: 'Automatischer Tages-Sync der Abverkaufs- und Umsatzdaten (M2M).',
+        description: 'Nicht direkt angebunden. SAP muss die Daten via M2M-Webhook an ViralFlux pushen.',
       },
       {
         name: 'IMS Health',
         system: 'ims',
-        status: 'connected',
+        status: 'disconnected',
         lastSuccessfulSync: lastSync,
-        description: 'Automatischer Markt-/Panel-Sync fuer Absatzvergleiche (M2M).',
+        description: 'Nicht direkt angebunden. IMS/ETL muss die Daten via M2M-Webhook an ViralFlux pushen.',
       },
     ],
     [lastSync]
@@ -97,6 +90,17 @@ const DataIntegration: React.FC = () => {
       </header>
 
       <main className="max-w-[1200px] mx-auto px-6 py-6 space-y-6">
+        <section
+          className="rounded-2xl p-4"
+          style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)' }}
+        >
+          <div className="text-xs font-semibold text-amber-200">Hinweis</div>
+          <p className="text-xs text-slate-300 mt-1">
+            SAP ERP und IMS Health sind aktuell nicht automatisch per Connector verbunden. Diese Systeme gelten erst dann als
+            &quot;Verbunden&quot;, wenn sie regelmaessig Daten an unseren Webhook pushen.
+          </p>
+        </section>
+
         <section className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {integrations.map((integration) => {
             const ui = STATUS_UI[integration.status];

@@ -18,6 +18,7 @@ import logging
 from app.db.session import get_db, get_db_context
 from app.core.config import get_settings
 from app.core.celery_app import celery_app
+from app.api.deps import get_current_admin
 from app.services.data_ingest.amelag_service import AmelagIngestionService
 from app.services.data_ingest.notaufnahme_service import NotaufnahmeIngestionService
 from app.services.data_ingest.survstat_service import SurvstatIngestionService
@@ -50,6 +51,7 @@ def _enqueue_full_ingestion(region_code: str) -> str:
 @router.post("/run-all", status_code=status.HTTP_202_ACCEPTED)
 async def run_full_import(
     request: IngestRequest = Body(default_factory=IngestRequest),
+    current_user: dict = Depends(get_current_admin),
 ):
     """Starte vollständigen Datenimport asynchron (Celery) und gib ein Ticket zurück."""
     task_id = _enqueue_full_ingestion(request.region_code)
@@ -63,6 +65,7 @@ async def run_full_import(
 @router.post("/trigger", status_code=status.HTTP_202_ACCEPTED)
 async def trigger_ingestion(
     request: IngestRequest = Body(default_factory=IngestRequest),
+    current_user: dict = Depends(get_current_admin),
 ):
     """Alias für /run-all (kompatibel mit Celery Ticketing)."""
     task_id = _enqueue_full_ingestion(request.region_code)

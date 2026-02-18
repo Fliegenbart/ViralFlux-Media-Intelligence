@@ -152,6 +152,7 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # Import API routes
 from app.api import (
+    auth,
     dashboard,
     ingest,
     forecast,
@@ -168,6 +169,7 @@ from app.api import (
     media,
     backtest,
 )
+app.include_router(auth.router, prefix="/api/auth", tags=["Auth"])
 app.include_router(dashboard.router, prefix="/api/v1/dashboard", tags=["Dashboard"])
 app.include_router(ingest.router, prefix="/api/v1/ingest", tags=["Data Ingestion"])
 app.include_router(forecast.router, prefix="/api/v1/forecast", tags=["ML Forecast"])

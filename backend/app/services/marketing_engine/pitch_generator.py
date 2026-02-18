@@ -11,6 +11,7 @@ UI expects:
 
 from __future__ import annotations
 
+import os
 import json
 import logging
 from typing import Any
@@ -21,6 +22,7 @@ from app.services.media.message_library import select_gelo_message_pack
 
 logger = logging.getLogger(__name__)
 
+LLM_PITCHES_ENABLED = os.getenv("MEDIA_LLM_PITCHES_ENABLED", "0").strip() == "1"
 
 TEMPLATES: dict[str, dict[str, Any]] = {
     "RESOURCE_SCARCITY": {
@@ -97,9 +99,11 @@ class PitchGenerator:
     """Generiert consumer-OTC Pitches (LLM-first; deterministic fallback)."""
 
     def generate(self, opportunity_type: str, context: dict) -> dict:
-        llm_pitch = self._generate_llm_pitch(opportunity_type=opportunity_type, context=context or {})
-        if llm_pitch:
-            return llm_pitch
+        # Default: deterministic only (fast + predictable). Enable LLM explicitly via env.
+        if LLM_PITCHES_ENABLED:
+            llm_pitch = self._generate_llm_pitch(opportunity_type=opportunity_type, context=context or {})
+            if llm_pitch:
+                return llm_pitch
 
         # fallback: deterministic templates
         if opportunity_type == "RESOURCE_SCARCITY":
@@ -200,4 +204,3 @@ class PitchGenerator:
             "script_phone": template["script_phone"],
             "call_to_action": template["call_to_action"],
         }
-

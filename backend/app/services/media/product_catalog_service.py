@@ -93,10 +93,12 @@ CONDITION_KEYWORDS = {
 NAME_HINTS = {
     "gelomyrtol forte": ["bronchitis_husten", "sinusitis_nebenhoehlen"],
     "myrtol": ["bronchitis_husten", "sinusitis_nebenhoehlen"],
+    "myrtol 120mg": ["bronchitis_husten", "sinusitis_nebenhoehlen"],
+    "myrtol 120": ["bronchitis_husten", "sinusitis_nebenhoehlen"],
     "gelobronchial": ["bronchitis_husten"],
     "gelomuc": ["bronchitis_husten"],
     "gelorevoice": ["halsschmerz_heiserkeit"],
-    "gelotonsil": ["halsschmerz_heiserkeit"],
+    "gelotonsil": ["halsschmerz_heiserkeit", "erkaltung_akut"],
     "gelositin": ["rhinitis_trockene_nase"],
     "geloprosed": ["erkaltung_akut", "rhinitis_trockene_nase", "halsschmerz_heiserkeit"],
     "gelovital": ["immun_support"],
@@ -108,6 +110,8 @@ HARD_RULES_BY_PRODUCT = {
     "gelovital": ["immun_support"],
     "geloprosed": ["erkaltung_akut"],
     "gelomyrtol forte": ["bronchitis_husten", "sinusitis_nebenhoehlen"],
+    "myrtol 120mg": ["bronchitis_husten", "sinusitis_nebenhoehlen"],
+    "gelotonsil": ["halsschmerz_heiserkeit", "erkaltung_akut"],
 }
 
 PEDIATRIC_HARD_RULES = {
@@ -116,12 +120,16 @@ PEDIATRIC_HARD_RULES = {
         "myrtol für kinder",
         "myrtol fuer kinder",
         "myrtol junior",
+        "myrtol 120mg",
+        "myrtol 120",
         "gelomyrtol forte",
     ],
     "sinusitis_nebenhoehlen": [
         "myrtol kinder",
         "myrtol für kinder",
         "myrtol fuer kinder",
+        "myrtol 120mg",
+        "myrtol 120",
         "gelomyrtol forte",
     ],
 }

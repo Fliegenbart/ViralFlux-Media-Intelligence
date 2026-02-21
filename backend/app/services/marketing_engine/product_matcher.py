@@ -51,6 +51,20 @@ SEED_PRODUCTS = [
         "applicable_types": ["WEATHER_FORECAST", "PREDICTIVE_SALES_SPIKE", "RESOURCE_SCARCITY"],
         "applicable_conditions": ["erkaltung_akut", "rhinitis_trockene_nase", "halsschmerz_heiserkeit"],
     },
+    {
+        "sku": "GELO-M12",
+        "name": "Myrtol 120mg",
+        "category": "Atemwege",
+        "applicable_types": ["RESOURCE_SCARCITY", "WEATHER_FORECAST", "PREDICTIVE_SALES_SPIKE"],
+        "applicable_conditions": ["bronchitis_husten", "sinusitis_nebenhoehlen"],
+    },
+    {
+        "sku": "GELO-TON",
+        "name": "GeloTonsil",
+        "category": "Hals",
+        "applicable_types": ["WEATHER_FORECAST", "PREDICTIVE_SALES_SPIKE"],
+        "applicable_conditions": ["halsschmerz_heiserkeit", "erkaltung_akut"],
+    },
 ]
 
 

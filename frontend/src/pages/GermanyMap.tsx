@@ -4,7 +4,7 @@ import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'rec
 import { format } from 'date-fns';
 import { de } from 'date-fns/locale';
 
-// Bundesland SVG paths (simplified D3/topojson outlines)
+// TODO(legacy-map): Legacy-Karte mit vereinfachten Pfaden. MediaCockpit nutzt jetzt die echte GeoJSON-Bundeslandkarte.
 const BUNDESLAND_PATHS: Record<string, { d: string; cx: number; cy: number }> = {
   'SH': { d: 'M195,10 L230,5 L250,25 L260,60 L240,80 L215,90 L190,80 L180,55 L185,30Z', cx: 220, cy: 48 },
   'HH': { d: 'M220,90 L240,88 L245,100 L235,108 L218,105Z', cx: 232, cy: 98 },

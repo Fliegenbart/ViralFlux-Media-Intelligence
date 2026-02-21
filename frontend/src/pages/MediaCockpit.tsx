@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, Legend } from 'recharts';
+import { geoMercator, geoPath } from 'd3-geo';
 import { format, parseISO } from 'date-fns';
 import { de } from 'date-fns/locale';
 import {
@@ -10,26 +11,51 @@ import {
   RegionRecommendationRef,
   SourceStatusSummary,
 } from '../types/media';
+import deBundeslaenderGeo from '../assets/maps/de-bundeslaender.geo.json';
 import ProductCatalogPanel from './ProductCatalog';
 
-const BUNDESLAND_PATHS: Record<string, { d: string; cx: number; cy: number }> = {
-  SH: { d: 'M195,10 L230,5 L250,25 L260,60 L240,80 L215,90 L190,80 L180,55 L185,30Z', cx: 220, cy: 48 },
-  HH: { d: 'M220,90 L240,88 L245,100 L235,108 L218,105Z', cx: 232, cy: 98 },
-  MV: { d: 'M260,20 L340,10 L370,30 L365,55 L340,70 L300,75 L270,65 L255,50Z', cx: 315, cy: 42 },
-  HB: { d: 'M190,105 L210,100 L215,115 L200,120 L188,115Z', cx: 202, cy: 110 },
-  NI: { d: 'M140,80 L190,75 L220,90 L225,115 L250,130 L260,165 L230,190 L200,195 L160,185 L130,160 L110,130 L120,100Z', cx: 185, cy: 140 },
-  BB: { d: 'M310,80 L370,85 L385,110 L380,160 L355,185 L310,190 L290,170 L285,130 L295,100Z', cx: 335, cy: 135 },
-  BE: { d: 'M325,120 L345,118 L348,135 L340,142 L322,138Z', cx: 335, cy: 130 },
-  ST: { d: 'M260,130 L290,125 L310,140 L305,185 L280,200 L255,195 L240,175 L245,150Z', cx: 275, cy: 162 },
-  NW: { d: 'M80,170 L140,160 L170,180 L175,215 L160,250 L130,265 L90,255 L65,230 L60,200Z', cx: 118, cy: 215 },
-  HE: { d: 'M150,220 L190,210 L210,230 L205,275 L190,300 L160,305 L140,285 L135,250Z', cx: 172, cy: 260 },
-  TH: { d: 'M220,200 L280,195 L300,215 L295,250 L270,265 L235,260 L215,240Z', cx: 258, cy: 228 },
-  SN: { d: 'M300,200 L365,195 L380,220 L370,255 L340,270 L305,260 L295,235Z', cx: 338, cy: 230 },
-  RP: { d: 'M60,265 L100,255 L125,275 L130,310 L120,340 L90,355 L60,340 L45,310 L48,280Z', cx: 88, cy: 305 },
-  SL: { d: 'M55,345 L80,338 L90,360 L78,375 L55,370Z', cx: 72, cy: 358 },
-  BW: { d: 'M95,340 L145,310 L185,320 L200,355 L190,400 L160,430 L120,435 L85,415 L70,385 L80,360Z', cx: 140, cy: 380 },
-  BY: { d: 'M185,270 L240,260 L290,275 L320,310 L330,360 L310,410 L270,440 L230,445 L195,430 L175,400 L170,350 L175,310Z', cx: 250, cy: 360 },
+interface GeoBundeslandFeature {
+  type: 'Feature';
+  properties?: {
+    code?: string;
+    name?: string;
+  };
+  geometry: any;
+}
+
+interface GeoBundeslandCollection {
+  type: 'FeatureCollection';
+  features: GeoBundeslandFeature[];
+}
+
+interface GeoBundeslandShape {
+  code?: string;
+  name: string;
+  d: string;
+  cx: number;
+  cy: number;
+}
+
+const BUNDESLAND_NAME_TO_CODE: Record<string, string> = {
+  'Baden-Württemberg': 'BW',
+  Bayern: 'BY',
+  Berlin: 'BE',
+  Brandenburg: 'BB',
+  Bremen: 'HB',
+  Hamburg: 'HH',
+  Hessen: 'HE',
+  'Mecklenburg-Vorpommern': 'MV',
+  Niedersachsen: 'NI',
+  'Nordrhein-Westfalen': 'NW',
+  'Rheinland-Pfalz': 'RP',
+  Saarland: 'SL',
+  Sachsen: 'SN',
+  'Sachsen-Anhalt': 'ST',
+  'Schleswig-Holstein': 'SH',
+  Thüringen: 'TH',
 };
+
+const DE_BUNDESLAENDER = deBundeslaenderGeo as GeoBundeslandCollection;
 
 const VIRUS_OPTIONS = ['Influenza A', 'Influenza B', 'SARS-CoV-2', 'RSV A'];
 const TARGET_OPTIONS = [
@@ -189,6 +215,38 @@ const MediaCockpit: React.FC = () => {
     const factor = 1 + change * (horizonDays / 14) * 0.9;
     return clamp01(base * factor);
   };
+  const regionCodeByName = useMemo(() => {
+    const lookup: Record<string, string> = {};
+    Object.entries(activeMap?.regions || {}).forEach(([code, region]) => {
+      if (region?.name) {
+        lookup[region.name.toLowerCase()] = code;
+      }
+    });
+    return lookup;
+  }, [activeMap?.regions]);
+
+  const mapShapes = useMemo(() => {
+    const projection = geoMercator().fitSize([420, 460], DE_BUNDESLAENDER as any);
+    const pathBuilder = geoPath(projection);
+    return DE_BUNDESLAENDER.features
+      .map((feature) => {
+        const props = feature.properties || {};
+        const fallbackCode = props.name ? BUNDESLAND_NAME_TO_CODE[props.name] : undefined;
+        const code = (props.code || fallbackCode || '').toUpperCase() || undefined;
+        const d = pathBuilder(feature as any);
+        if (!d) return null;
+        const [cx, cy] = pathBuilder.centroid(feature as any);
+        if (!Number.isFinite(cx) || !Number.isFinite(cy)) return null;
+        return {
+          code,
+          name: props.name || code || 'Unbekannt',
+          d,
+          cx,
+          cy,
+        } as GeoBundeslandShape;
+      })
+      .filter((shape): shape is GeoBundeslandShape => Boolean(shape));
+  }, []);
 
   const loadCockpit = useCallback(async () => {
     setLoading(true);
@@ -893,20 +951,22 @@ const MediaCockpit: React.FC = () => {
                       <rect x="0" y="0" width="420" height="460" rx="14" fill="rgba(2,6,23,0.3)" />
                       <rect x="0" y="0" width="420" height="460" rx="14" fill="url(#vf-map-grid)" />
 
-                      {Object.entries(BUNDESLAND_PATHS).map(([code, geo]) => {
-                        const region = activeMap.regions?.[code];
+                      {mapShapes.map((shape) => {
+                        const codeFromName = shape.name ? regionCodeByName[shape.name.toLowerCase()] : undefined;
+                        const code = shape.code || codeFromName;
+                        const region = code ? activeMap.regions?.[code] : undefined;
                         const intensity = region ? projectedIntensity(region) : 0;
                         const fill = region ? intensityColor(intensity) : 'rgba(51,65,85,0.28)';
-                        const isSelected = selectedRegion === code;
+                        const isSelected = Boolean(code && selectedRegion === code);
                         const band = !region ? '' : intensity >= 0.7 ? 'Hoch' : intensity >= 0.4 ? 'Mittel' : 'Niedrig';
                         return (
                           <g
-                            key={code}
-                            style={{ cursor: region ? 'pointer' : 'default' }}
-                            onClick={() => region && openRecommendationForRegion(code)}
+                            key={`${shape.name}-${shape.code || 'na'}`}
+                            style={{ cursor: region && code ? 'pointer' : 'default' }}
+                            onClick={() => region && code && openRecommendationForRegion(code)}
                           >
                             <path
-                              d={geo.d}
+                              d={shape.d}
                               fill={fill}
                               stroke={isSelected ? '#67e8f9' : 'rgba(148,163,184,0.7)'}
                               strokeWidth={isSelected ? 2.4 : 1.1}
@@ -914,21 +974,21 @@ const MediaCockpit: React.FC = () => {
                               style={{ transition: 'all 180ms ease' }}
                             />
                             <circle
-                              cx={geo.cx}
-                              cy={geo.cy - 5}
+                              cx={shape.cx}
+                              cy={shape.cy - 5}
                               r={8.5}
                               fill="rgba(2,6,23,0.78)"
                               stroke={isSelected ? 'rgba(103,232,249,0.85)' : 'rgba(100,116,139,0.65)'}
                               strokeWidth={isSelected ? 1.2 : 0.8}
                             />
-                            <text x={geo.cx} y={geo.cy - 2.5} textAnchor="middle" fill="#e2e8f0" fontSize="8" fontWeight="700">{code}</text>
+                            <text x={shape.cx} y={shape.cy - 2.5} textAnchor="middle" fill="#e2e8f0" fontSize="8" fontWeight="700">{code || '--'}</text>
                             {region && (
-                              <text x={geo.cx} y={geo.cy + 11} textAnchor="middle" fill="#94a3b8" fontSize="6.6">
+                              <text x={shape.cx} y={shape.cy + 11} textAnchor="middle" fill="#94a3b8" fontSize="6.6">
                                 {band}
                               </text>
                             )}
                             {openingRegion === code && (
-                              <text x={geo.cx} y={geo.cy + 20} textAnchor="middle" fill="#7dd3fc" fontSize="6">
+                              <text x={shape.cx} y={shape.cy + 20} textAnchor="middle" fill="#7dd3fc" fontSize="6">
                                 oeffne...
                               </text>
                             )}

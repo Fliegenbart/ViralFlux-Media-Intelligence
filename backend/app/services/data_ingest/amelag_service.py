@@ -8,6 +8,7 @@ import logging
 
 from app.core.config import get_settings
 from app.models.database import WastewaterAggregated, WastewaterData
+from app.services.data_ingest.klaeranlage_coordinates import get_coordinates
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -140,6 +141,7 @@ class AmelagIngestionService:
                 WastewaterData.standort == standort
             ).first()
 
+            coords = get_coordinates(standort)
             vals = {
                 'bundesland': row.get('bundesland', ''),
                 'viruslast': float(viruslast),
@@ -149,6 +151,8 @@ class AmelagIngestionService:
                 'untere_schranke': float(row['untere_schranke']) if pd.notna(row.get('untere_schranke')) else None,
                 'einwohner': int(row['einwohner']) if pd.notna(row.get('einwohner')) else None,
                 'unter_bg': bool(row['unter_bg']) if pd.notna(row.get('unter_bg')) else None,
+                'latitude': coords[0] if coords else None,
+                'longitude': coords[1] if coords else None,
             }
 
             if existing:

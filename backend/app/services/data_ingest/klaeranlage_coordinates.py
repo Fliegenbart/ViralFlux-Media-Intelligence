@@ -1,0 +1,210 @@
+"""Statisches Geocoding-Mapping für 169 AMELAG Kläranlagen-Standorte.
+
+Koordinaten via OpenStreetMap/Nominatim geocodiert (Feb 2026).
+Mapping: AMELAG standort-Name → (latitude, longitude).
+
+Bei Standorten mit mehreren Kläranlagen in einer Stadt (z.B. Berlin
+Ruhleben / Schönerlinde / Waßmannsdorf) werden die jeweiligen
+Stadtteile als Koordinate verwendet. Bei identischen Stadt-Namen
+(z.B. Düsseldorf Nord/Süd) wird die Stadt-Mitte verwendet.
+"""
+
+from __future__ import annotations
+
+from typing import Final
+
+STANDORT_COORDINATES: Final[dict[str, tuple[float, float]]] = {
+    # Brandenburg (BB)
+    "Brandenburg an der Havel": (52.410826, 12.549793),
+    "Cottbus": (51.756745, 14.335731),
+    "Frankfurt (Oder)": (52.336536, 14.546694),
+    "Potsdam": (52.400931, 13.05914),
+    # Berlin (BE)
+    "Berlin Ruhleben": (52.503379, 13.338652),
+    "Berlin Schönerlinde": (52.566276, 13.41034),
+    "Berlin Waßmannsdorf": (52.513056, 13.576589),
+    # Baden-Württemberg (BW)
+    "Aalen": (48.837561, 10.092959),
+    "Bad Mergentheim": (49.490791, 9.77317),
+    "Berg": (47.814879, 9.596296),
+    "Donaueschingen": (47.953419, 8.495926),
+    "Eriskirch": (47.628776, 9.530248),
+    "Göppingen": (48.703138, 9.654112),
+    "Heidelberg": (49.409358, 8.694724),
+    "Karlsruhe": (49.00687, 8.40342),
+    "Königsbach": (48.966598, 8.608058),
+    "Leonberg": (48.801298, 9.015003),
+    "Mühlacker-Lomersheim": (48.94874, 8.85921),
+    "Offenburg": (48.469598, 7.942924),
+    "Pforzheim": (48.890934, 8.702551),
+    "Schwäbisch Hall": (49.112431, 9.737125),
+    "Stuttgart": (48.778449, 9.180013),
+    "Tübingen": (48.520326, 9.053596),
+    "Weil am Rhein": (47.605648, 7.612079),
+    # Bayern (BY)
+    "Altötting": (48.226808, 12.675791),
+    "Aschaffenburg": (49.97067, 9.138486),
+    "Augsburg": (48.369034, 10.897952),
+    "Bad Reichenhall": (47.722268, 12.876092),
+    "Bayreuth": (49.944634, 11.574354),
+    "Berchtesgaden": (47.633022, 13.002005),
+    "Ebersberg": (48.078276, 11.969437),
+    "Erlangen": (49.589157, 10.981207),
+    "Freilassing": (47.840972, 12.982391),
+    "Freising": (48.400827, 11.743956),
+    "Glonn": (47.987893, 11.865633),
+    "Grafing": (48.045381, 11.966071),
+    "Hof": (50.318751, 11.916299),
+    "Ingolstadt": (48.763016, 11.42504),
+    "Königsbrunn": (48.267955, 10.888382),
+    "München": (48.137108, 11.575382),
+    "Neu-Ulm": (48.395349, 10.000521),
+    "Nürnberg": (49.453872, 11.077298),
+    "Passau": (48.574823, 13.460974),
+    "Piding": (47.764824, 12.912487),
+    "Regensburg": (49.019533, 12.097487),
+    "Schwabmünchen": (48.180556, 10.757812),
+    "Schweinfurt": (50.049932, 10.233509),
+    "Stadtbergen": (48.366628, 10.844281),
+    "Starnberg": (47.998685, 11.341079),
+    "Straubing": (48.883916, 12.595577),
+    "Teisendorf": (47.849038, 12.821836),
+    "Weiden": (50.029766, 11.232477),
+    "Zusmarshausen": (48.399657, 10.596402),
+    # Bremen (HB)
+    "Bremen": (53.07582, 8.807165),
+    # Hessen (HE)
+    "Büdingen": (50.297235, 9.099083),
+    "Darmstadt": (49.872775, 8.651177),
+    "Frankfurt-Griesheim": (50.110644, 8.682092),
+    "Frankfurt-Niederrad": (50.110644, 8.682092),
+    "Frankfurt-Sindlingen": (50.110644, 8.682092),
+    "Fulda": (50.554233, 9.677045),
+    "Hanau": (50.132881, 8.91698),
+    "Kassel": (51.315783, 9.497848),
+    "Marburg": (50.809011, 8.77047),
+    "Wiesbaden-Biebrich": (50.082038, 8.241656),
+    "Wiesbaden-Stadt": (50.082038, 8.241656),
+    # Hamburg (HH)
+    "Hamburg 01": (53.590905, 9.975376),
+    "Hamburg 02": (53.590905, 9.975376),
+    # Mecklenburg-Vorpommern (MV)
+    "Greifswald": (54.095791, 13.381524),
+    "Neubrandenburg": (53.557446, 13.260278),
+    "Rostock": (54.088671, 12.140021),
+    "Schwerin": (53.62883, 11.414804),
+    # Niedersachsen (NI)
+    "Bramsche": (52.407518, 7.979174),
+    "Braunschweig": (52.264658, 10.523607),
+    "Celle": (52.624056, 10.081052),
+    "Göttingen": (51.532833, 9.935181),
+    "Hannover-Gümmerwald": (52.374478, 9.738553),
+    "Hannover-Herrenhausen": (52.374478, 9.738553),
+    "Hildesheim": (52.152719, 9.951808),
+    "Oldenburg": (53.138975, 8.214602),
+    "Osnabrück": (52.27196, 8.047635),
+    "Wolfsburg": (52.420559, 10.786168),
+    # Nordrhein-Westfalen (NW)
+    "Aachen": (50.776351, 6.083862),
+    "Bielefeld": (52.019101, 8.531007),
+    "Bonn": (50.735262, 7.102463),
+    "Borken": (51.844478, 6.858328),
+    "Bottrop": (51.521581, 6.929204),
+    "Dinslaken": (51.562362, 6.734511),
+    "Dortmund-Deusen": (51.514227, 7.465279),
+    "Dortmund-Scharnhorst": (51.514227, 7.465279),
+    "Duisburg": (51.434999, 6.759562),
+    "Düsseldorf (Nord)": (51.225402, 6.776314),
+    "Düsseldorf (Süd)": (51.225402, 6.776314),
+    "Emschermündung": (51.562362, 6.734511),
+    "Eschweiler": (50.817503, 6.263089),
+    "Gütersloh": (51.916662, 8.404328),
+    "Hagen": (51.358294, 7.473296),
+    "Köln": (50.938361, 6.959974),
+    "Mönchengladbach": (51.194713, 6.435379),
+    "Münster": (51.96251, 7.625188),
+    "Paderborn": (51.717704, 8.752653),
+    "Waldbröl": (50.875181, 7.615948),
+    "Wuppertal": (51.264018, 7.178037),
+    # Rheinland-Pfalz (RP)
+    "Andernach": (50.439192, 7.402315),
+    "Bad Kreuznach": (49.815242, 7.912369),
+    "Germersheim": (49.222275, 8.36659),
+    "Kaiserslautern": (49.443217, 7.768995),
+    "Koblenz": (50.353328, 7.594395),
+    "Landau in der Pfalz": (49.198282, 8.112344),
+    "Ludwigshafen (BASF)": (49.470411, 8.438157),
+    "Mainz": (49.999521, 8.273625),
+    "Montabaur": (50.436222, 7.830249),
+    "Neustadt an der Weinstraße": (49.35398, 8.135002),
+    "Pirmasens-Blümelstal": (49.199696, 7.608785),
+    "Pirmasens-Felsalbe": (49.199696, 7.608785),
+    "Speyer": (49.316555, 8.433615),
+    "Trier": (49.759621, 6.644188),
+    "Worms": (49.630262, 8.36209),
+    "Zweibrücken": (49.248655, 7.364198),
+    # Schleswig-Holstein (SH)
+    "Flensburg": (54.783302, 9.433326),
+    "Grömitz": (54.144109, 10.95885),
+    "Hetlingen": (53.607726, 9.637337),
+    "Husum": (54.485414, 9.053794),
+    "Kellinghusen": (53.949549, 9.7189),
+    "Kiel": (54.322708, 10.135555),
+    "Lübeck": (53.866444, 10.684738),
+    "Ratzeburg": (53.701106, 10.774288),
+    "Schleswig": (54.51851, 9.565328),
+    # Saarland (SL)
+    "Saarbrücken": (49.234362, 6.996379),
+    "Saarlouis": (49.316466, 6.749846),
+    "Wellesweiler": (49.346475, 7.222753),
+    "Wustweiler": (49.398891, 7.037118),
+    # Sachsen (SN)
+    "Bautzen": (51.180913, 14.4276),
+    "Chemnitz": (50.832353, 12.918914),
+    "Dresden": (51.049329, 13.738144),
+    "Döbeln": (51.1167, 13.1167),
+    "Ebersbach": (51.0081, 14.581859),
+    "Grimma": (51.238338, 12.728751),
+    "Görlitz": (51.156318, 14.991018),
+    "Leipzig": (51.340632, 12.374733),
+    "Markkleeberg": (51.278575, 12.371882),
+    "Plauen": (50.495063, 12.134652),
+    "Zittau": (50.896096, 14.806481),
+    # Sachsen-Anhalt (ST)
+    "Bernburg": (51.793966, 11.737385),
+    "Dessau": (51.830996, 12.243072),
+    "Gerwisch": (52.175342, 11.745422),
+    "Halberstadt": (51.895351, 11.052056),
+    "Halle (Saale)": (51.482435, 11.971298),
+    "Köthen": (51.751033, 11.973698),
+    "Naumburg": (51.152565, 11.809919),
+    "Rollsdorf": (51.490461, 11.727566),
+    "Schönebeck": (52.0206, 11.738328),
+    "Silstedt": (51.845728, 10.853099),
+    "Stendal": (52.605078, 11.859428),
+    "Weißenfels": (51.199979, 11.966786),
+    "Zeitz": (51.049164, 12.134999),
+    # Thüringen (TH)
+    "Arnstadt": (50.801327, 10.955632),
+    "Erfurt": (50.977797, 11.028736),
+    "Gera": (50.876553, 12.083267),
+    "Gleisdreieck": (50.977797, 11.028736),
+    "Ilmenau": (50.686769, 10.914238),
+    "Jena": (50.928172, 11.587936),
+    "Leinetal": (51.505157, 10.792532),
+    "Linsenstein": (50.357541, 11.169171),
+    "Meuselwitz": (51.0475, 12.2975),
+    "Nordhausen": (51.505157, 10.792532),
+    "Saalfeld": (50.647914, 11.361004),
+    "Schmalkalden": (50.721364, 10.451047),
+    "Suhl": (50.608652, 10.692644),
+    "Weimar": (50.97933, 11.329792),
+}
+
+
+def get_coordinates(standort: str) -> tuple[float, float] | None:
+    """Lookup Koordinaten für einen AMELAG Kläranlagen-Standort.
+
+    Returns (latitude, longitude) oder None wenn unbekannt.
+    """
+    return STANDORT_COORDINATES.get(standort)

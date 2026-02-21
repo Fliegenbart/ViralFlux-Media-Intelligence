@@ -257,6 +257,51 @@ def process_erp_sales_sync(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         raise RuntimeError(f"ERP sales sync failed: {exc}") from exc
 
 
+@celery_app.task(bind=True, name="backfill_wastewater_coordinates")
+def backfill_wastewater_coordinates(self) -> Dict[str, Any]:
+    """Einmaliger Task: Bestehende wastewater_data Rows mit Koordinaten befüllen.
+
+    Liest alle Rows ohne latitude und setzt die Koordinaten aus dem
+    statischen Kläranlagen-Mapping.
+    """
+    from app.models.database import WastewaterData
+    from app.services.data_ingest.klaeranlage_coordinates import get_coordinates
+
+    logger.info("Wastewater coordinates backfill: Starte...")
+
+    with get_db_context() as db:
+        rows = (
+            db.query(WastewaterData)
+            .filter(WastewaterData.latitude.is_(None))
+            .all()
+        )
+
+        updated = 0
+        unmapped: set[str] = set()
+        for row in rows:
+            coords = get_coordinates(row.standort)
+            if coords:
+                row.latitude = coords[0]
+                row.longitude = coords[1]
+                updated += 1
+            else:
+                unmapped.add(row.standort)
+
+        if updated:
+            db.commit()
+
+    if unmapped:
+        logger.warning("Wastewater backfill: %s unmapped Standorte: %s", len(unmapped), unmapped)
+
+    logger.info("Wastewater backfill: %s rows updated, %s unmapped Standorte", updated, len(unmapped))
+    return _json_safe({
+        "status": "success",
+        "rows_updated": updated,
+        "total_without_coords": len(rows),
+        "unmapped_standorte": sorted(unmapped),
+    })
+
+
 @celery_app.task(bind=True, name="backfill_survstat_from_folder")
 def backfill_survstat_from_folder(
     self,

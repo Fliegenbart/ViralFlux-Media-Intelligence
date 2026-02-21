@@ -22,9 +22,11 @@ class WastewaterData(Base):
     obere_schranke = Column(Float)
     untere_schranke = Column(Float)
     einwohner = Column(Integer)
+    latitude = Column(Float, nullable=True)
+    longitude = Column(Float, nullable=True)
     unter_bg = Column(Boolean)  # Unter Bestimmungsgrenze
     created_at = Column(DateTime, default=datetime.utcnow)
-    
+
     __table_args__ = (
         Index('idx_wastewater_date_virus', 'datum', 'virus_typ'),
         Index('idx_wastewater_location', 'standort', 'bundesland'),

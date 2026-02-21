@@ -207,6 +207,84 @@ async def get_activation_suggestions(
     return _build_activation_suggestions(regional, latest_date, virus_typ)
 
 
+@router.get("/standorte/{virus_typ}")
+async def get_standorte_map(
+    virus_typ: str,
+    db: Session = Depends(get_db),
+):
+    """Kläranlagen-Standorte mit aktueller Viruslast für Karten-Overlay.
+
+    Liefert pro Kläranlage: Koordinaten, aktuelle Viruslast, Trend,
+    angeschlossene Einwohner. Für die Deutschland-Karte als Punkt-Layer.
+    """
+    latest_date = db.query(func.max(WastewaterData.datum)).filter(
+        WastewaterData.virus_typ == virus_typ,
+        WastewaterData.latitude.isnot(None),
+    ).scalar()
+
+    if not latest_date:
+        return {"virus_typ": virus_typ, "standorte": [], "has_data": False}
+
+    # Aktuelle Messwerte
+    current = db.query(WastewaterData).filter(
+        WastewaterData.virus_typ == virus_typ,
+        WastewaterData.datum == latest_date,
+        WastewaterData.latitude.isnot(None),
+    ).all()
+
+    # Vorwoche für Trend
+    prev_date = latest_date - timedelta(days=7)
+    prev_rows = db.query(
+        WastewaterData.standort,
+        WastewaterData.viruslast,
+    ).filter(
+        WastewaterData.virus_typ == virus_typ,
+        WastewaterData.datum >= prev_date - timedelta(days=2),
+        WastewaterData.datum <= prev_date + timedelta(days=2),
+    ).all()
+    prev_map = {r.standort: r.viruslast for r in prev_rows}
+
+    all_values = [r.viruslast for r in current if r.viruslast]
+    max_val = max(all_values) if all_values else 1
+
+    standorte = []
+    for r in current:
+        if not r.viruslast:
+            continue
+
+        prev_val = prev_map.get(r.standort)
+        if prev_val and prev_val > 0:
+            change_pct = ((r.viruslast - prev_val) / prev_val) * 100
+            trend = "steigend" if change_pct > 10 else "fallend" if change_pct < -10 else "stabil"
+        else:
+            change_pct = 0.0
+            trend = "stabil"
+
+        standorte.append({
+            "standort": r.standort,
+            "bundesland": r.bundesland,
+            "latitude": r.latitude,
+            "longitude": r.longitude,
+            "viruslast": round(r.viruslast, 1),
+            "viruslast_normalisiert": round(r.viruslast_normalisiert, 1) if r.viruslast_normalisiert else None,
+            "vorhersage": round(r.vorhersage, 1) if r.vorhersage else None,
+            "einwohner": r.einwohner,
+            "unter_bg": r.unter_bg,
+            "intensity": round(r.viruslast / max_val, 2) if max_val else 0,
+            "trend": trend,
+            "change_pct": round(change_pct, 1),
+        })
+
+    return {
+        "virus_typ": virus_typ,
+        "date": latest_date.isoformat(),
+        "standorte": standorte,
+        "has_data": len(standorte) > 0,
+        "total_standorte": len(standorte),
+        "max_viruslast": round(max_val, 1),
+    }
+
+
 @router.get("/transfer-suggestions/{virus_typ}")
 async def get_transfer_suggestions(
     virus_typ: str,

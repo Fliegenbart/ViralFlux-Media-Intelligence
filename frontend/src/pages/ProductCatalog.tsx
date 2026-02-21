@@ -467,34 +467,34 @@ const ProductCatalogPanel: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="card p-6 bg-gradient-to-br from-violet-50 via-pink-50/30 to-white border-violet-200/30">
+      <div className="card p-6 bg-gradient-to-br from-indigo-50 via-indigo-50/30 to-white border-indigo-200/30">
         <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
           <div>
-            <h2 className="text-2xl font-black text-slate-900 tracking-tight">Produkt-Intelligence</h2>
+            <h2 className="text-2xl font-black text-slate-900 tracking-tight" style={{ fontFamily: "'DM Serif Display', Georgia, serif" }}>Produkt-Intelligence</h2>
             <p className="text-sm text-slate-500 mt-2">Neuer produktbasierter Entscheidungsstrom für Gelo: manuelle Anlage, KI-Match-Status, Review-Flow.</p>
           </div>
           <div className="flex flex-wrap gap-2">
             <button
               onClick={() => setActiveTab('bestand')}
-              className={`px-3 py-1.5 rounded-full text-xs font-semibold ${activeTab === 'bestand' ? 'bg-violet-500 text-white border border-violet-500' : 'bg-slate-100 text-slate-600 border border-slate-200'}`}
+              className={`px-3 py-1.5 rounded-full text-xs font-semibold ${activeTab === 'bestand' ? 'bg-indigo-500 text-white border border-indigo-500' : 'bg-slate-100 text-slate-600 border border-slate-200'}`}
             >
               {tabTitleMap.bestand}
             </button>
             <button
               onClick={() => setActiveTab('anlage')}
-              className={`px-3 py-1.5 rounded-full text-xs font-semibold ${activeTab === 'anlage' ? 'bg-violet-500 text-white border border-violet-500' : 'bg-slate-100 text-slate-600 border border-slate-200'}`}
+              className={`px-3 py-1.5 rounded-full text-xs font-semibold ${activeTab === 'anlage' ? 'bg-indigo-500 text-white border border-indigo-500' : 'bg-slate-100 text-slate-600 border border-slate-200'}`}
             >
               {tabTitleMap.anlage}
             </button>
             <button
               onClick={() => setActiveTab('mapping')}
-              className={`px-3 py-1.5 rounded-full text-xs font-semibold ${activeTab === 'mapping' ? 'bg-violet-500 text-white border border-violet-500' : 'bg-slate-100 text-slate-600 border border-slate-200'}`}
+              className={`px-3 py-1.5 rounded-full text-xs font-semibold ${activeTab === 'mapping' ? 'bg-indigo-500 text-white border border-indigo-500' : 'bg-slate-100 text-slate-600 border border-slate-200'}`}
             >
               {tabTitleMap.mapping}
             </button>
             <button
               onClick={() => setActiveTab('audit')}
-              className={`px-3 py-1.5 rounded-full text-xs font-semibold ${activeTab === 'audit' ? 'bg-violet-500 text-white border border-violet-500' : 'bg-slate-100 text-slate-600 border border-slate-200'}`}
+              className={`px-3 py-1.5 rounded-full text-xs font-semibold ${activeTab === 'audit' ? 'bg-indigo-500 text-white border border-indigo-500' : 'bg-slate-100 text-slate-600 border border-slate-200'}`}
             >
               {tabTitleMap.audit}
             </button>

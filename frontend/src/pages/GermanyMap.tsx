@@ -27,7 +27,7 @@ const BUNDESLAND_PATHS: Record<string, { d: string; cx: number; cy: number }> = 
 
 const VIRUS_COLORS: Record<string, string> = {
   'Influenza A': '#3b82f6',
-  'Influenza B': '#8b5cf6',
+  'Influenza B': '#4338ca',
   'SARS-CoV-2': '#ef4444',
   'RSV A': '#10b981',
 };
@@ -156,11 +156,11 @@ const GermanyMap: React.FC = () => {
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
             </button>
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-gradient-to-br from-blue-500 to-purple-600">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-gradient-to-br from-blue-500 to-indigo-600">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
               </div>
               <div>
-                <h1 className="text-xl font-bold text-slate-900 tracking-tight">Deutschlandkarte</h1>
+                <h1 className="text-xl font-bold text-slate-900 tracking-tight" style={{ fontFamily: "'DM Serif Display', Georgia, serif" }}>Deutschlandkarte</h1>
                 <p className="text-xs text-slate-500">Radar-Map mit +14 Tage Forecast-Slider (Business-first)</p>
               </div>
             </div>
@@ -191,7 +191,7 @@ const GermanyMap: React.FC = () => {
           <div className="xl:col-span-2 card p-6">
             <div className="flex items-center justify-between mb-4">
               <div>
-                <h2 className="text-lg font-bold text-slate-900">
+                <h2 className="text-lg font-bold text-slate-900" style={{ fontFamily: "'DM Serif Display', Georgia, serif" }}>
                   Deutschland Radar: {selectedVirus}{' '}
                   <span className="text-slate-500 font-normal">
                     {horizonDays === 0 ? '(Heute)' : `( +${horizonDays} Tage )`}
@@ -217,7 +217,7 @@ const GermanyMap: React.FC = () => {
                     max={14}
                     value={horizonDays}
                     onChange={(e) => setHorizonDays(Number(e.target.value))}
-                    className="w-40 accent-violet-500"
+                    className="w-40 accent-indigo-500"
                     title="Visualisierte 14-Tage-Entwicklung (heuristisch aus Trend/Change%)."
                   />
                   <span className="text-[11px] text-slate-400">14</span>
@@ -273,7 +273,7 @@ const GermanyMap: React.FC = () => {
                       <path
                         d={path.d}
                         fill={fillColor}
-                        stroke={isSelected ? '#8b5cf6' : '#cbd5e1'}
+                        stroke={isSelected ? '#4338ca' : '#cbd5e1'}
                         strokeWidth={isSelected ? 2.5 : 1}
                         style={{ transition: 'all 0.3s ease' }}
                       />
@@ -539,7 +539,7 @@ const GermanyMap: React.FC = () => {
                       </div>
                       <div className="flex items-center gap-2 text-sm">
                         <span className="text-slate-500">{t.from_name}</span>
-                        <span className="text-violet-500">&#8594;</span>
+                        <span className="text-indigo-500">&#8594;</span>
                         <span className="text-slate-900 font-medium">{t.to_name}</span>
                       </div>
                       <p className="text-xs text-slate-400 mt-1">{t.reason}</p>

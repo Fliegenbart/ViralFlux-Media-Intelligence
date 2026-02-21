@@ -338,13 +338,13 @@ const CampaignRecommendationDetail: React.FC = () => {
   return (
     <div className="max-w-[1200px] mx-auto px-4 sm:px-6 py-6 space-y-6">
       <div className="card decision-header p-5 space-y-4">
-        <button onClick={() => navigate('/dashboard?tab=recommendations')} className="text-xs text-violet-500 hover:text-violet-400">
+        <button onClick={() => navigate('/dashboard?tab=recommendations')} className="text-xs text-indigo-500 hover:text-indigo-400">
           {'<-'} Zurueck zu KI-Empfehlungen
         </button>
 
         <div className="flex flex-wrap gap-3 items-start justify-between">
           <div className="min-w-0">
-            <h1 className="text-xl font-semibold text-slate-900">
+            <h1 className="text-xl font-semibold text-slate-900" style={{ fontFamily: "'DM Serif Display', Georgia, serif" }}>
               {detail.campaign_name || detail.campaign_preview?.campaign_name || `${detail.brand} · ${primaryProduct}`}
             </h1>
             <p className="text-xs text-slate-500 mt-1">
@@ -352,7 +352,7 @@ const CampaignRecommendationDetail: React.FC = () => {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <span className="px-2 py-1 text-[11px] rounded-full bg-violet-500/10 text-violet-600 border border-violet-400/30">
+            <span className="px-2 py-1 text-[11px] rounded-full bg-indigo-500/10 text-indigo-600 border border-indigo-400/30">
               Status: {STATUS_LABELS[status] || status}
             </span>
             <span className={`px-2 py-1 text-[11px] rounded-full ${mappingToneClass(mappingStatus)}`}>
@@ -433,7 +433,7 @@ const CampaignRecommendationDetail: React.FC = () => {
         </div>
 
         <div className="card recommendation-card p-5 space-y-3">
-          <h2 className="text-base font-semibold text-slate-900">C. Daher empfehlen wir</h2>
+          <h2 className="text-base font-semibold text-slate-900" style={{ fontFamily: "'DM Serif Display', Georgia, serif" }}>C. Daher empfehlen wir</h2>
 
           {needsReview && (
             <div className="action-banner-warning text-xs">
@@ -601,7 +601,7 @@ const CampaignRecommendationDetail: React.FC = () => {
               <div className="soft-panel p-4 space-y-2">
                 <h3 className="text-sm font-semibold text-slate-900">Trigger-Evidenz</h3>
                 {detail.playbook_title && (
-                  <div className="inline-flex text-[11px] px-2 py-1 rounded-full bg-violet-500/10 text-violet-600 border border-violet-400/30">
+                  <div className="inline-flex text-[11px] px-2 py-1 rounded-full bg-indigo-500/10 text-indigo-600 border border-indigo-400/30">
                     {detail.playbook_title}
                   </div>
                 )}

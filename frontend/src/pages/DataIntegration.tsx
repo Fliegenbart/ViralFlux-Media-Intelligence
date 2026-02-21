@@ -115,7 +115,7 @@ const DataIntegration: React.FC = () => {
   );
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen" style={{ background: '#faf9f7' }}>
       <header className="bg-white border-b border-slate-200">
         <div className="max-w-[1200px] mx-auto px-6 py-4 flex items-center justify-between gap-4">
           <div className="flex items-center gap-4">
@@ -129,7 +129,7 @@ const DataIntegration: React.FC = () => {
               </svg>
             </button>
             <div>
-              <h1 className="text-xl font-bold text-slate-900 tracking-tight">Enterprise Integrationen</h1>
+              <h1 className="text-xl font-bold text-slate-900 tracking-tight" style={{ fontFamily: "'DM Serif Display', Georgia, serif" }}>Enterprise Integrationen</h1>
               <p className="text-xs text-slate-400">Server-to-Server Sync statt manueller CSV-Uploads</p>
             </div>
           </div>

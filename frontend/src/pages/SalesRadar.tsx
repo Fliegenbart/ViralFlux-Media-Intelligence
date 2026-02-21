@@ -31,7 +31,7 @@ interface OpportunityStats {
 const TYPE_CONFIG: Record<string, { label: string; color: string; icon: string }> = {
   RESOURCE_SCARCITY: { label: 'Engpass', color: '#ef4444', icon: 'M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126z' },
   SEASONAL_DEFICIENCY: { label: 'Saisonal', color: '#f59e0b', icon: 'M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z' },
-  PREDICTIVE_SALES_SPIKE: { label: 'Nachfrage', color: '#8b5cf6', icon: 'M2.25 18L9 11.25l4.306 4.307a11.95 11.95 0 015.814-5.519l2.74-1.22m0 0l-5.94-2.28m5.94 2.28l-2.28 5.941' },
+  PREDICTIVE_SALES_SPIKE: { label: 'Nachfrage', color: '#4338ca', icon: 'M2.25 18L9 11.25l4.306 4.307a11.95 11.95 0 015.814-5.519l2.74-1.22m0 0l-5.94-2.28m5.94 2.28l-2.28 5.941' },
   DIFFERENTIAL_DIAGNOSIS: { label: 'Differenzial', color: '#06b6d4', icon: 'M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3M14.25 3.104c.251.023.501.05.75.082M19.8 15.3l-1.57.393A9.065 9.065 0 0112 15a9.065 9.065 0 00-6.23.693L5 14.5m14.8.8l1.402 1.402c1.232 1.232.65 3.318-1.067 3.611A48.309 48.309 0 0112 21c-2.773 0-5.491-.235-8.135-.687-1.718-.293-2.3-2.379-1.067-3.61L5 14.5' },
   WEATHER_FORECAST: { label: 'Wetter', color: '#0ea5e9', icon: 'M2.25 15a4.5 4.5 0 004.5 4.5H18a3.75 3.75 0 001.332-7.257 3 3 0 00-3.758-3.848 5.25 5.25 0 00-10.233 2.33A4.502 4.502 0 002.25 15z' },
 };
@@ -40,7 +40,7 @@ const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
   NEW: { label: 'Neu', color: '#3b82f6' },
   URGENT: { label: 'Dringend', color: '#ef4444' },
   SENT: { label: 'Gesendet', color: '#10b981' },
-  CONVERTED: { label: 'Konvertiert', color: '#8b5cf6' },
+  CONVERTED: { label: 'Konvertiert', color: '#4338ca' },
   EXPIRED: { label: 'Abgelaufen', color: '#64748b' },
   DISMISSED: { label: 'Verworfen', color: '#475569' },
 };
@@ -234,7 +234,7 @@ const SalesRadar: React.FC = () => {
                 </svg>
               </div>
               <div>
-                <h1 className="text-xl font-bold text-slate-900 tracking-tight">Vertriebsradar</h1>
+                <h1 className="text-xl font-bold text-slate-900 tracking-tight" style={{ fontFamily: "'DM Serif Display', Georgia, serif" }}>Vertriebsradar</h1>
                 <p className="text-xs text-slate-400">KI-gesteuerte Vertriebschancen</p>
               </div>
             </div>
@@ -259,7 +259,7 @@ const SalesRadar: React.FC = () => {
               onClick={handleGenerate}
               disabled={generating}
               className="px-5 py-2 text-xs font-semibold rounded-lg transition-all text-white"
-              style={{ background: generating ? '#cbd5e1' : 'linear-gradient(135deg, #3b82f6, #8b5cf6)', opacity: generating ? 0.6 : 1 }}
+              style={{ background: generating ? '#cbd5e1' : 'linear-gradient(135deg, #3b82f6, #4338ca)', opacity: generating ? 0.6 : 1 }}
             >
               {generating ? (
                 <span className="flex items-center gap-2">
@@ -279,13 +279,13 @@ const SalesRadar: React.FC = () => {
           className="card p-6 fade-in"
           style={{
             background:
-              'radial-gradient(900px 220px at 20% 0%, rgba(139,92,246,0.06), transparent 60%), linear-gradient(135deg, #ffffff, #f8fafc)',
+              'radial-gradient(900px 220px at 20% 0%, rgba(67,56,202,0.06), transparent 60%), linear-gradient(135deg, #ffffff, #f8fafc)',
           }}
         >
           <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
             <div className="min-w-0">
               <div className="text-[10px] text-slate-400 uppercase tracking-wider">Heute</div>
-              <h2 className="text-2xl font-black text-slate-900 tracking-tight mt-1">Top Aktionen (Marketing)</h2>
+              <h2 className="text-2xl font-black text-slate-900 tracking-tight mt-1" style={{ fontFamily: "'DM Serif Display', Georgia, serif" }}>Top Aktionen (Marketing)</h2>
               <p className="text-sm text-slate-500 mt-2 max-w-2xl">
                 Fokus auf "Was tun wir jetzt?" Rohscores, Tabellen und Export-Details sind hinter Tech Details versteckt.
               </p>
@@ -604,7 +604,7 @@ const SalesRadar: React.FC = () => {
                     </span>
                     <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" strokeWidth="2"><path d="M9 5l7 7-7 7" /></svg>
                     <span className="flex items-center gap-1">
-                      <span className="w-2 h-2 rounded-full" style={{ background: '#8b5cf6' }} />
+                      <span className="w-2 h-2 rounded-full" style={{ background: '#4338ca' }} />
                       <span className="text-slate-400">Konvertiert</span>
                       <span className="text-slate-700 font-mono font-bold">{pipeline.filter(o => o.status === 'CONVERTED').length}</span>
                     </span>
@@ -669,7 +669,7 @@ const SalesRadar: React.FC = () => {
                                   <button
                                     onClick={(e) => { e.stopPropagation(); updateStatus(opp.id, 'CONVERTED'); }}
                                     className="text-[10px] font-medium px-2.5 py-1 rounded-lg transition hover:opacity-80"
-                                    style={{ background: '#8b5cf615', color: '#8b5cf6', border: '1px solid #8b5cf630' }}
+                                    style={{ background: '#4338ca15', color: '#4338ca', border: '1px solid #4338ca30' }}
                                   >
                                     Konvertiert
                                   </button>
@@ -856,7 +856,7 @@ const SalesRadar: React.FC = () => {
                     <button
                       onClick={() => updateStatus(opp.id, 'CONVERTED')}
                       className="flex-1 py-2.5 text-xs font-semibold rounded-lg transition hover:opacity-90 text-center"
-                      style={{ background: 'linear-gradient(135deg, #8b5cf6, #7c3aed)', color: 'white' }}
+                      style={{ background: 'linear-gradient(135deg, #4338ca, #4f46e5)', color: 'white' }}
                     >
                       Als konvertiert markieren
                     </button>

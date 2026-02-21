@@ -180,7 +180,7 @@ interface SparklinePoint {
 // ─── Helpers ────────────────────────────────────────────────────────────────
 const VIRUS_COLORS: Record<string, string> = {
   'Influenza A': '#3b82f6',
-  'Influenza B': '#8b5cf6',
+  'Influenza B': '#4338ca',
   'SARS-CoV-2': '#ef4444',
   'RSV A': '#10b981',
 };
@@ -753,7 +753,7 @@ const Dashboard: React.FC = () => {
     return (
       <div className="flex items-center justify-center h-screen bg-slate-50">
         <div className="text-center">
-          <div className="w-12 h-12 border-4 border-violet-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <div className="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
           <div className="text-lg text-slate-500">Lade Dashboard...</div>
         </div>
       </div>
@@ -766,11 +766,11 @@ const Dashboard: React.FC = () => {
       <header className="bg-white border-b border-slate-200">
         <div className="max-w-[1600px] mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #8b5cf6, #ec4899)' }}>
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #4338ca, #4f46e5)' }}>
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
             </div>
             <div>
-              <h1 className="text-xl font-bold text-slate-900 tracking-tight">ViralFlux Media Intelligence</h1>
+              <h1 className="text-xl font-bold text-slate-900 tracking-tight" style={{ fontFamily: "'DM Serif Display', Georgia, serif" }}>ViralFlux Media Intelligence</h1>
               <p className="text-xs text-slate-500">Predictive Pharma Media Activation für PEIX</p>
             </div>
           </div>
@@ -808,12 +808,12 @@ const Dashboard: React.FC = () => {
 
         {/* ── Business-First Header (Actionable) ── */}
         <div
-          className="card p-6 fade-in bg-gradient-to-br from-violet-50 via-white to-pink-50/30 border border-slate-200"
+          className="card p-6 fade-in bg-gradient-to-br from-indigo-50 via-white to-indigo-50/30 border border-slate-200"
         >
           <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
             <div className="min-w-0">
               <div className="text-[10px] text-slate-500 uppercase tracking-wider">Heute</div>
-              <h2 className="text-2xl font-black text-slate-900 tracking-tight mt-1">
+              <h2 className="text-2xl font-black text-slate-900 tracking-tight mt-1" style={{ fontFamily: "'DM Serif Display', Georgia, serif" }}>
                 Entscheidungen statt Rohdaten
               </h2>
               <p className="text-sm text-slate-500 mt-2 max-w-2xl">
@@ -821,14 +821,14 @@ const Dashboard: React.FC = () => {
               </p>
               <div className="mt-4 flex flex-wrap gap-2">
                 <span
-                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs bg-violet-50 border border-violet-200 text-violet-600"
+                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs bg-indigo-50 border border-indigo-200 text-indigo-600"
                 >
                   Lagebild: <span className="text-slate-700">{situationLabel}</span>
                 </span>
                 <button
                   onClick={() => navigate('/dashboard?tab=recommendations')}
                   className="px-3 py-1.5 text-xs font-semibold rounded-full transition hover:brightness-110"
-                  style={{ background: 'linear-gradient(135deg, #8b5cf6, #ec4899)', color: 'white' }}
+                  style={{ background: 'linear-gradient(135deg, #4338ca, #4f46e5)', color: 'white' }}
                 >
                   Kampagnenvorschlaege oeffnen
                 </button>
@@ -1048,7 +1048,7 @@ const Dashboard: React.FC = () => {
                   </div>
                 ))}
                 {peixScore.weights_source === 'calibrated' && (
-                  <div className="text-[9px] text-violet-500 mt-1">Kalibrierte Gewichte (Ridge)</div>
+                  <div className="text-[9px] text-indigo-500 mt-1">Kalibrierte Gewichte (Ridge)</div>
                 )}
               </div>
             </div>
@@ -1161,14 +1161,14 @@ const Dashboard: React.FC = () => {
                   setSelectedGrippeWeb('ILI');
                 }
               }}
-              style={{ borderLeft: '3px solid #ec4899' }}
+              style={{ borderLeft: '3px solid #4338ca' }}
             >
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full" style={{ background: '#ec4899' }}></div>
+                  <div className="w-3 h-3 rounded-full" style={{ background: '#4338ca' }}></div>
                   <span className="text-sm font-medium text-slate-700">ILI (Influenza-like Illness)</span>
                 </div>
-                <span className="text-xs font-mono px-2 py-0.5 rounded" style={{ background: '#ec489920', color: '#ec4899' }}>GrippeWeb</span>
+                <span className="text-xs font-mono px-2 py-0.5 rounded" style={{ background: '#4338ca20', color: '#4338ca' }}>GrippeWeb</span>
               </div>
               <div className="flex items-end justify-between">
                 <div>
@@ -1387,7 +1387,7 @@ const Dashboard: React.FC = () => {
                 disabled={forecastLoading}
                 className="px-4 py-2 text-xs font-medium rounded-lg transition-all"
                 style={{
-                  background: forecastLoading ? '#e2e8f0' : 'linear-gradient(135deg, #8b5cf6, #ec4899)',
+                  background: forecastLoading ? '#e2e8f0' : 'linear-gradient(135deg, #4338ca, #4f46e5)',
                   color: forecastLoading ? '#94a3b8' : 'white',
                   opacity: forecastLoading ? 0.6 : 1
                 }}
@@ -1554,7 +1554,7 @@ const Dashboard: React.FC = () => {
                       onClick={() => setSelectedGrippeWeb('ARE')}
                     >ARE</button>
                     <button
-                      className={`px-2 py-0.5 text-xs rounded-r ${selectedGrippeWeb === 'ILI' ? 'bg-pink-500/20 text-pink-600 font-medium' : 'bg-slate-100 text-slate-500'}`}
+                      className={`px-2 py-0.5 text-xs rounded-r ${selectedGrippeWeb === 'ILI' ? 'bg-indigo-500/20 text-indigo-600 font-medium' : 'bg-slate-100 text-slate-500'}`}
                       onClick={() => setSelectedGrippeWeb('ILI')}
                     >ILI</button>
                   </div>
@@ -1589,9 +1589,9 @@ const Dashboard: React.FC = () => {
                   <Area
                     type="monotone"
                     dataKey="inzidenz"
-                    stroke={selectedGrippeWeb === 'ARE' ? '#f59e0b' : '#ec4899'}
+                    stroke={selectedGrippeWeb === 'ARE' ? '#f59e0b' : '#4338ca'}
                     strokeWidth={2}
-                    fill={selectedGrippeWeb === 'ARE' ? '#f59e0b' : '#ec4899'}
+                    fill={selectedGrippeWeb === 'ARE' ? '#f59e0b' : '#4338ca'}
                     fillOpacity={0.1}
                     dot={false}
                   />
@@ -1906,7 +1906,7 @@ const Dashboard: React.FC = () => {
                           ) : (
                             <button
                               onClick={() => approveRec(rec.id)}
-                              className="text-xs px-2 py-1 rounded bg-violet-50 text-violet-600 hover:bg-violet-100 transition"
+                              className="text-xs px-2 py-1 rounded bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition"
                             >
                               Genehmigen
                             </button>
@@ -1922,7 +1922,7 @@ const Dashboard: React.FC = () => {
                       {isLong && (
                         <button
                           onClick={() => setExpandedRec(isExpanded ? null : rec.id)}
-                          className="text-xs text-violet-500 hover:text-violet-700 mt-1 transition"
+                          className="text-xs text-indigo-500 hover:text-indigo-700 mt-1 transition"
                         >
                           {isExpanded ? 'Weniger anzeigen' : 'Mehr anzeigen...'}
                         </button>
@@ -1960,7 +1960,7 @@ const Dashboard: React.FC = () => {
             {data?.top_trends && data.top_trends.length > 0 ? (
               <div className="space-y-3">
                 {data.top_trends.map((trend, idx) => {
-                  const barColors = ['#3b82f6', '#8b5cf6', '#06b6d4', '#f59e0b', '#10b981'];
+                  const barColors = ['#3b82f6', '#4338ca', '#06b6d4', '#f59e0b', '#10b981'];
                   const barColor = barColors[idx % barColors.length];
                   return (
                     <div key={idx} className="slide-in">

@@ -639,7 +639,7 @@ const MediaCockpit: React.FC = () => {
 
   const refinementBadgeStyle = (tone: 'queued' | 'running' | 'success' | 'fallback' | 'failed') => {
     if (tone === 'queued') return { background: 'rgba(148,163,184,0.15)', color: '#64748b' };
-    if (tone === 'running') return { background: 'rgba(139,92,246,0.12)', color: '#7c3aed' };
+    if (tone === 'running') return { background: 'rgba(67,56,202,0.12)', color: '#4f46e5' };
     if (tone === 'success') return { background: 'rgba(34,197,94,0.12)', color: '#16a34a' };
     if (tone === 'fallback') return { background: 'rgba(245,158,11,0.12)', color: '#d97706' };
     return { background: 'rgba(239,68,68,0.12)', color: '#dc2626' };
@@ -660,7 +660,7 @@ const MediaCockpit: React.FC = () => {
           <div className="flex items-center gap-3">
             <div className="media-logo">VF</div>
             <div>
-              <h1 className="text-xl font-semibold text-slate-900 tracking-tight">ViralFlux Media Cockpit</h1>
+              <h1 className="text-xl font-semibold text-slate-900 tracking-tight" style={{ fontFamily: "'DM Serif Display', Georgia, serif" }}>ViralFlux Media Cockpit</h1>
               <p className="text-xs text-slate-500">Deutschlandkarte + KI-Empfehlungen + Backtest Proof Engine</p>
             </div>
           </div>
@@ -683,7 +683,7 @@ const MediaCockpit: React.FC = () => {
               <p className="text-slate-500 text-xs mt-1">{currentFlowStep.detail}</p>
             </div>
             <div className="text-xs text-slate-400">
-              Fortschritt: <span className="text-violet-500 font-semibold">{flowProgress}/{flowTotal}</span>
+              Fortschritt: <span className="text-indigo-500 font-semibold">{flowProgress}/{flowTotal}</span>
               {productMappingLoading && <span className="ml-2 text-slate-400">· Mapping-Status wird geprüft</span>}
             </div>
           </div>
@@ -720,7 +720,7 @@ const MediaCockpit: React.FC = () => {
               <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
                 <div className="min-w-0">
                   <div className="text-[10px] text-slate-500 uppercase tracking-wider">Media Cockpit</div>
-                  <h2 className="text-2xl font-black text-slate-900 tracking-tight mt-1">
+                  <h2 className="text-2xl font-black text-slate-900 tracking-tight mt-1" style={{ fontFamily: "'DM Serif Display', Georgia, serif" }}>
                     Action Radar fuer {virus}
                   </h2>
                   <p className="text-sm text-slate-500 mt-2 max-w-2xl">
@@ -788,7 +788,7 @@ const MediaCockpit: React.FC = () => {
                       </div>
                       <div className="text-right">
                         <div className="text-[10px] text-slate-400 uppercase tracking-wider">Shift</div>
-                        <div className="text-sm font-bold text-violet-500 mt-1">+{s.budget_shift_pct}%</div>
+                        <div className="text-sm font-bold text-indigo-500 mt-1">+{s.budget_shift_pct}%</div>
                       </div>
                     </div>
                     <p className="text-xs text-slate-500 mt-2 line-clamp-3">{s.reason}</p>
@@ -831,7 +831,7 @@ const MediaCockpit: React.FC = () => {
                   </div>
                   <div className="text-xs text-slate-500 flex flex-col items-start sm:items-end gap-2">
                     <div>
-                      Nationaler PeixEpiScore: <span className="text-violet-500 font-semibold">{peixSummary?.national_score ?? '-'} / 100</span>
+                      Nationaler PeixEpiScore: <span className="text-indigo-500 font-semibold">{peixSummary?.national_score ?? '-'} / 100</span>
                       {' · '}
                       Band: <span className="text-slate-700">{peixSummary?.national_band ?? '-'}</span>
                       {' · '}
@@ -855,7 +855,7 @@ const MediaCockpit: React.FC = () => {
                       </div>
                       <div className="text-base font-semibold text-slate-900">{renderTileValue(tile)}</div>
                       <div className="text-[11px] text-slate-400 mt-1">{tile.subtitle || tile.data_source || '-'}</div>
-                      <div className="text-[11px] text-violet-500 mt-1">Impact: {Math.round(tile.impact_probability || 0)}%</div>
+                      <div className="text-[11px] text-indigo-500 mt-1">Impact: {Math.round(tile.impact_probability || 0)}%</div>
                     </div>
                   ))}
                 </div>
@@ -906,7 +906,7 @@ const MediaCockpit: React.FC = () => {
                         max={14}
                         value={horizonDays}
                         onChange={(e) => setHorizonDays(Number(e.target.value))}
-                        className="w-44 accent-violet-500"
+                        className="w-44 accent-indigo-500"
                         title="Visualisierte 14-Tage-Entwicklung (heuristisch aus Trend/Change%)."
                       />
                       <span className="text-[11px] text-slate-400">14</span>
@@ -928,7 +928,7 @@ const MediaCockpit: React.FC = () => {
                     style={{
                       position: 'relative',
                       background:
-                        'radial-gradient(800px 260px at 12% 0%, rgba(139,92,246,0.06), transparent 58%), linear-gradient(160deg, #ffffff, #f1f5f9)',
+                        'radial-gradient(800px 260px at 12% 0%, rgba(67,56,202,0.06), transparent 58%), linear-gradient(160deg, #ffffff, #f1f5f9)',
                       border: '1px solid rgba(226,232,240,0.9)',
                     }}
                   >
@@ -955,7 +955,7 @@ const MediaCockpit: React.FC = () => {
                           <feDropShadow dx="0" dy="2" stdDeviation="3" floodColor="#94a3b8" floodOpacity="0.2" />
                         </filter>
                         <filter id="vf-selected-glow" x="-30%" y="-30%" width="160%" height="160%">
-                          <feDropShadow dx="0" dy="0" stdDeviation="3" floodColor="#8b5cf6" floodOpacity="0.45" />
+                          <feDropShadow dx="0" dy="0" stdDeviation="3" floodColor="#4338ca" floodOpacity="0.45" />
                         </filter>
                         <pattern id="vf-map-grid" width="14" height="14" patternUnits="userSpaceOnUse">
                           <path d="M 14 0 L 0 0 0 14" fill="none" stroke="rgba(148,163,184,0.2)" strokeWidth="0.6" />
@@ -994,7 +994,7 @@ const MediaCockpit: React.FC = () => {
                             <path
                               d={shape.d}
                               fill={fill}
-                              stroke={isSelected ? '#8b5cf6' : 'rgba(203,213,225,0.9)'}
+                              stroke={isSelected ? '#4338ca' : 'rgba(203,213,225,0.9)'}
                               strokeWidth={isSelected ? 2.4 : 1.1}
                               filter={isSelected ? 'url(#vf-selected-glow)' : 'url(#vf-map-shadow)'}
                               style={{ transition: 'all 180ms ease' }}
@@ -1004,7 +1004,7 @@ const MediaCockpit: React.FC = () => {
                               cy={shape.cy - 5}
                               r={8.5}
                               fill="rgba(255,255,255,0.92)"
-                              stroke={isSelected ? 'rgba(139,92,246,0.85)' : 'rgba(203,213,225,0.7)'}
+                              stroke={isSelected ? 'rgba(67,56,202,0.85)' : 'rgba(203,213,225,0.7)'}
                               strokeWidth={isSelected ? 1.2 : 0.8}
                             />
                             <text x={shape.cx} y={shape.cy - 2.5} textAnchor="middle" fill="#334155" fontSize="8" fontWeight="700">{code || '--'}</text>
@@ -1014,7 +1014,7 @@ const MediaCockpit: React.FC = () => {
                               </text>
                             )}
                             {openingRegion === code && (
-                              <text x={shape.cx} y={shape.cy + 20} textAnchor="middle" fill="#7c3aed" fontSize="6">
+                              <text x={shape.cx} y={shape.cy + 20} textAnchor="middle" fill="#4f46e5" fontSize="6">
                                 oeffne...
                               </text>
                             )}
@@ -1216,7 +1216,7 @@ const MediaCockpit: React.FC = () => {
                       <div key={idx} className="rounded-lg p-3 bg-slate-50 border border-slate-200">
                         <div className="flex items-center justify-between mb-1">
                           <span className="text-sm text-slate-900">{s.region_name}</span>
-                          <span className="text-xs text-violet-600 font-semibold">+{s.budget_shift_pct}%</span>
+                          <span className="text-xs text-indigo-600 font-semibold">+{s.budget_shift_pct}%</span>
                         </div>
                         <p className="text-xs text-slate-500">{s.reason}</p>
                       </div>
@@ -1237,7 +1237,7 @@ const MediaCockpit: React.FC = () => {
               className="card p-6"
               style={{
                 background:
-                  'radial-gradient(900px 220px at 20% 0%, rgba(139,92,246,0.08), transparent 60%), linear-gradient(135deg, #ffffff, #f1f5f9)',
+                  'radial-gradient(900px 220px at 20% 0%, rgba(67,56,202,0.08), transparent 60%), linear-gradient(135deg, #ffffff, #f1f5f9)',
                 border: '1px solid rgba(226,232,240,0.9)',
               }}
             >
@@ -1512,7 +1512,7 @@ const MediaCockpit: React.FC = () => {
                       <Tooltip contentStyle={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }} />
                       <Legend />
                       <Line type="monotone" dataKey="real_qty" stroke="#ef4444" dot={false} name="Proxy (Ist)" />
-                      <Line type="monotone" dataKey="predicted_qty" stroke="#8b5cf6" dot={false} name="ViralFlux" />
+                      <Line type="monotone" dataKey="predicted_qty" stroke="#4338ca" dot={false} name="ViralFlux" />
                       <Line type="monotone" dataKey="baseline_seasonal" stroke="#94a3b8" dot={false} name="Seasonal" />
                     </LineChart>
                   </ResponsiveContainer>

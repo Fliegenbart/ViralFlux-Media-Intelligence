@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, Legend } from 'recharts';
 import { geoMercator, geoPath } from 'd3-geo';
@@ -205,6 +205,7 @@ const MediaCockpit: React.FC = () => {
   const [customerRunning, setCustomerRunning] = useState(false);
   const [runs, setRuns] = useState<any[]>([]);
   const [customerFile, setCustomerFile] = useState<File | null>(null);
+  const hasLoadedCockpitRef = useRef(false);
 
   const activeMap = cockpit?.map;
   const clamp01 = (x: number) => Math.max(0, Math.min(1, x));
@@ -249,17 +250,23 @@ const MediaCockpit: React.FC = () => {
   }, []);
 
   const loadCockpit = useCallback(async () => {
-    setLoading(true);
+    const showBlockingLoading = !hasLoadedCockpitRef.current;
+    if (showBlockingLoading) {
+      setLoading(true);
+    }
     try {
       const qs = new URLSearchParams({ virus_typ: virus, target_source: targetSource });
       const res = await fetch(`/api/v1/media/cockpit?${qs.toString()}`);
       const data = await res.json();
       setCockpit(data);
       setRuns(data?.backtest_summary?.recent_runs || []);
+      hasLoadedCockpitRef.current = true;
     } catch (e) {
       console.error('Cockpit fetch error', e);
     } finally {
-      setLoading(false);
+      if (showBlockingLoading) {
+        setLoading(false);
+      }
     }
   }, [virus, targetSource]);
 

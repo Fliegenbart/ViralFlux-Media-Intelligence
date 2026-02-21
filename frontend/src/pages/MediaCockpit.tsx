@@ -873,7 +873,11 @@ const MediaCockpit: React.FC = () => {
                         {VIRUS_OPTIONS.map((v) => (
                           <button
                             key={v}
-                            onClick={() => setVirus(v)}
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              setVirus(v);
+                            }}
                             className={`tab-chip ${virus === v ? 'active' : ''}`}
                           >
                             {v}

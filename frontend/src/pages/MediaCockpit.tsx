@@ -37,6 +37,21 @@ interface GeoBundeslandShape {
   cy: number;
 }
 
+interface StandortData {
+  standort: string;
+  bundesland: string;
+  latitude: number;
+  longitude: number;
+  viruslast: number;
+  viruslast_normalisiert: number | null;
+  vorhersage: number | null;
+  einwohner: number | null;
+  unter_bg: boolean;
+  intensity: number;
+  trend: string;
+  change_pct: number;
+}
+
 const BUNDESLAND_NAME_TO_CODE: Record<string, string> = {
   'Baden-Württemberg': 'BW',
   Bayern: 'BY',
@@ -142,6 +157,10 @@ const eur = (n: number) =>
   }).format(Math.round(n || 0));
 
 const trendIcon = (trend: string) => (trend === 'steigend' ? '\u2197' : trend === 'fallend' ? '\u2198' : '\u2192');
+const standortRadius = (einwohner: number | null): number => {
+  if (!einwohner || einwohner <= 0) return 2.5;
+  return Math.min(6, Math.max(2, 1 + Math.log10(einwohner) * 0.8));
+};
 const mappingLabel = (status?: string) => {
   if (!status) return 'Unbekannt';
   if (status === 'approved') return 'Freigegeben';
@@ -181,6 +200,10 @@ const MediaCockpit: React.FC = () => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const [horizonDays, setHorizonDays] = useState(0);
   const [showTechDetails, setShowTechDetails] = useState(false);
+  const [showStandorte, setShowStandorte] = useState(false);
+  const [standorteData, setStandorteData] = useState<StandortData[]>([]);
+  const [hoveredStandort, setHoveredStandort] = useState<string | null>(null);
+  const [standortTooltipPos, setStandortTooltipPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [productMappingLoading, setProductMappingLoading] = useState(false);
   const [productMappingCount, setProductMappingCount] = useState(0);
   const [productMappingApprovedCount, setProductMappingApprovedCount] = useState(0);
@@ -231,9 +254,13 @@ const MediaCockpit: React.FC = () => {
     return lookup;
   }, [activeMap?.regions]);
 
+  const mapProjection = useMemo(
+    () => geoMercator().fitSize([420, 460], DE_BUNDESLAENDER as any),
+    [],
+  );
+
   const mapShapes = useMemo(() => {
-    const projection = geoMercator().fitSize([420, 460], DE_BUNDESLAENDER as any);
-    const pathBuilder = geoPath(projection);
+    const pathBuilder = geoPath(mapProjection);
     return DE_BUNDESLAENDER.features
       .map((feature) => {
         const props = feature.properties || {};
@@ -333,6 +360,15 @@ const MediaCockpit: React.FC = () => {
       }
     }
   }, [params, loadProductFlowStatus]);
+
+  // Lazy-load Kläranlagen-Standorte when toggle is on
+  useEffect(() => {
+    if (!showStandorte) return;
+    fetch(`/api/v1/map/standorte/${encodeURIComponent(virus)}`)
+      .then((r) => r.json())
+      .then((d) => setStandorteData(d.standorte || []))
+      .catch(() => setStandorteData([]));
+  }, [showStandorte, virus]);
 
   const loadRecommendations = useCallback(async () => {
     const qs = new URLSearchParams();
@@ -937,6 +973,16 @@ const MediaCockpit: React.FC = () => {
                         Klick auf ein Bundesland öffnet direkt den passenden Kampagnenvorschlag.
                       </div>
                       <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          onClick={() => setShowStandorte((s) => !s)}
+                          className={`px-2.5 py-1 rounded-full text-[10px] font-semibold uppercase tracking-wider transition ${
+                            showStandorte
+                              ? 'bg-indigo-50 text-indigo-600 border border-indigo-300'
+                              : 'bg-white text-slate-500 border border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                          }`}
+                        >
+                          {showStandorte ? 'Messstellen ausblenden' : 'Messstellen anzeigen'}
+                        </button>
                         <span className="px-2 py-1 rounded-full text-[10px] uppercase tracking-wider" style={{ background: 'rgba(34,197,94,0.1)', color: '#16a34a', border: '1px solid rgba(34,197,94,0.25)' }}>
                           Niedrig
                         </span>
@@ -1019,6 +1065,39 @@ const MediaCockpit: React.FC = () => {
                               </text>
                             )}
                           </g>
+                        );
+                      })}
+
+                      {/* Kläranlagen-Standorte Overlay */}
+                      {showStandorte && standorteData.map((s) => {
+                        const projected = mapProjection([s.longitude, s.latitude]);
+                        if (!projected) return null;
+                        const [sx, sy] = projected;
+                        if (sx < 0 || sx > 420 || sy < 0 || sy > 460) return null;
+                        const r = standortRadius(s.einwohner);
+                        const fill = intensityColor(s.intensity);
+                        const isHovered = hoveredStandort === s.standort;
+                        return (
+                          <circle
+                            key={s.standort}
+                            cx={sx}
+                            cy={sy}
+                            r={isHovered ? r + 2 : r}
+                            fill={fill}
+                            stroke="rgba(255,255,255,0.9)"
+                            strokeWidth={1}
+                            style={{ cursor: 'pointer', transition: 'r 120ms ease' }}
+                            onMouseEnter={(e) => {
+                              setHoveredStandort(s.standort);
+                              const rect = mapContainerRef.current?.getBoundingClientRect();
+                              if (rect) setStandortTooltipPos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+                            }}
+                            onMouseMove={(e) => {
+                              const rect = mapContainerRef.current?.getBoundingClientRect();
+                              if (rect) setStandortTooltipPos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+                            }}
+                            onMouseLeave={() => setHoveredStandort(null)}
+                          />
                         );
                       })}
                     </svg>
@@ -1123,6 +1202,48 @@ const MediaCockpit: React.FC = () => {
                                 {tip.recommended_product}
                               </span>
                               <span style={{ fontSize: 10, color: '#94a3b8' }}>Klick für Details</span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
+
+                    {/* Standort-Tooltip */}
+                    {hoveredStandort && (() => {
+                      const s = standorteData.find((d) => d.standort === hoveredStandort);
+                      if (!s) return null;
+                      const containerW = mapContainerRef.current?.offsetWidth || 600;
+                      const flipX = standortTooltipPos.x > containerW - 220;
+                      return (
+                        <div
+                          style={{
+                            position: 'absolute',
+                            left: flipX ? standortTooltipPos.x - 200 : standortTooltipPos.x + 14,
+                            top: standortTooltipPos.y - 10,
+                            zIndex: 60,
+                            pointerEvents: 'none',
+                          }}
+                        >
+                          <div
+                            style={{
+                              background: '#ffffff',
+                              border: '1px solid rgba(99,102,241,0.3)',
+                              borderRadius: 10,
+                              boxShadow: '0 6px 20px rgba(0,0,0,0.1)',
+                              padding: '10px 12px',
+                              minWidth: 180,
+                              maxWidth: 220,
+                            }}
+                          >
+                            <div style={{ fontSize: 12, fontWeight: 700, color: '#0f172a', marginBottom: 2 }}>{s.standort}</div>
+                            <div style={{ fontSize: 10, color: '#94a3b8', marginBottom: 6 }}>{s.bundesland} · {s.einwohner?.toLocaleString('de-DE') || '–'} Einwohner</div>
+                            <div style={{ display: 'flex', gap: 10, fontSize: 11 }}>
+                              <div style={{ color: '#64748b' }}>
+                                Viruslast: <span style={{ fontWeight: 600, color: '#334155' }}>{s.viruslast.toLocaleString('de-DE')}</span>
+                              </div>
+                              <div style={{ color: s.trend === 'steigend' ? '#dc2626' : s.trend === 'fallend' ? '#16a34a' : '#64748b', fontWeight: 600 }}>
+                                {trendIcon(s.trend)} {s.change_pct > 0 ? '+' : ''}{s.change_pct}%
+                              </div>
                             </div>
                           </div>
                         </div>

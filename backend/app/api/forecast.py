@@ -11,7 +11,7 @@ router = APIRouter()
 
 
 def _run_forecasts():
-    """Background task: run Prophet forecasts for all virus types."""
+    """Background task: run stacking forecasts (HW+Ridge+Prophet→XGBoost) for all virus types."""
     logger.info("=== Starting ML forecast run ===")
     with get_db_context() as db:
         service = ForecastService(db)
@@ -22,18 +22,18 @@ def _run_forecasts():
 
 @router.post("/run")
 async def run_forecasts(background_tasks: BackgroundTasks):
-    """Run Prophet ML forecasts for all virus types (background)."""
+    """Run ML stacking forecasts for all virus types (background)."""
     background_tasks.add_task(_run_forecasts)
     return {
         "status": "forecast_started",
-        "message": "Prophet forecasts running in background for all virus types.",
+        "message": "XGBoost stacking forecasts running in background for all virus types.",
         "timestamp": datetime.utcnow()
     }
 
 
 @router.post("/run-sync")
 async def run_forecasts_sync(db: Session = Depends(get_db)):
-    """Run Prophet ML forecasts synchronously (may take 30-60s)."""
+    """Run ML stacking forecasts synchronously (may take 30-60s)."""
     service = ForecastService(db)
     results = {}
     for virus in ['Influenza A', 'Influenza B', 'SARS-CoV-2', 'RSV A']:
@@ -83,7 +83,9 @@ async def get_latest_forecast(
                 "lower_bound": round(f.lower_bound, 1) if f.lower_bound else None,
                 "upper_bound": round(f.upper_bound, 1) if f.upper_bound else None,
                 "confidence": f.confidence,
-                "model_version": f.model_version
+                "model_version": f.model_version,
+                "trend_momentum_7d": round(f.trend_momentum_7d, 4) if f.trend_momentum_7d is not None else None,
+                "outbreak_risk_score": round(f.outbreak_risk_score, 3) if f.outbreak_risk_score is not None else None,
             }
             for f in forecasts
         ],

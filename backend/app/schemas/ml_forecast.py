@@ -13,6 +13,8 @@ class MLForecastBase(BaseModel):
     confidence: float | None = Field(default=None, ge=0, le=1)
     model_version: str | None = None
     features_used: dict[str, Any] | None = None
+    trend_momentum_7d: float | None = None
+    outbreak_risk_score: float | None = Field(default=None, ge=0, le=1)
 
     model_config = ConfigDict(extra="forbid", strict=True)
 
@@ -30,6 +32,8 @@ class MLForecastUpdate(BaseModel):
     confidence: float | None = Field(default=None, ge=0, le=1)
     model_version: str | None = None
     features_used: dict[str, Any] | None = None
+    trend_momentum_7d: float | None = None
+    outbreak_risk_score: float | None = Field(default=None, ge=0, le=1)
 
     model_config = ConfigDict(extra="forbid", strict=True)
 

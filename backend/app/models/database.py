@@ -272,7 +272,9 @@ class MLForecast(Base):
     confidence = Column(Float)  # 0-1
     model_version = Column(String)
     features_used = Column(JSON)  # Welche Features wurden verwendet
-    
+    trend_momentum_7d = Column(Float, nullable=True)  # 7-Tage-Slope (1. Ableitung)
+    outbreak_risk_score = Column(Float, nullable=True)  # 0.0 – 1.0
+
     __table_args__ = (
         Index('idx_forecast_date_virus', 'forecast_date', 'virus_typ'),
     )

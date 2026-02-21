@@ -716,9 +716,23 @@ class RiskEngine:
     def train_meta_learner(self, virus_typ: str = 'Influenza A') -> dict:
         """XGBoost Meta-Learner auf historischen Daten trainieren.
 
+        .. deprecated::
+            Dieses Legacy-Training wird in v3.0 entfernt. Der produktive
+            XGBoost Meta-Learner ist jetzt in
+            ``app.services.ml.forecast_service.ForecastService`` integriert
+            (Stacking-Architektur mit HW + Ridge + Prophet als Base Estimators).
+
         Zielvariable y: tatsächliche Inzidenz (um 14 Tage verschoben).
         Features: Abwasser, Saisonalität.
         """
+        import warnings
+        warnings.warn(
+            "train_meta_learner() ist deprecated. Der produktive XGBoost "
+            "Meta-Learner ist jetzt in forecast_service.ForecastService "
+            "integriert (xgb_stack_v1). Dieses Legacy-Training wird in v3.0 entfernt.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         try:
             from xgboost import XGBRegressor
         except ImportError:

@@ -185,7 +185,7 @@ class PeixEpiScoreService:
                 notaufnahme=not_val,
             )
             virus_scores[v] = {
-                "epi_score": round(epi, 3),
+                "epi_score": round(epi, 2),
                 "weight": v_weight,
                 "contribution": round(epi * v_weight * self._weights["bio"] * 100, 1),
             }
@@ -269,27 +269,27 @@ class PeixEpiScoreService:
 
         context_signals = {
             "forecast": {
-                "value": round(forecast, 3),
+                "value": round(forecast, 2),
                 "weight": self._weights["forecast"],
                 "contribution": round(forecast * self._weights["forecast"] * 100, 1),
             },
             "weather": {
-                "value": round(weather_signal_avg(weather_signal), 3),
+                "value": round(weather_signal_avg(weather_signal), 2),
                 "weight": self._weights["weather"],
                 "contribution": round(weather_signal_avg(weather_signal) * self._weights["weather"] * 100, 1),
             },
             "shortage": {
-                "value": round(shortage, 3),
+                "value": round(shortage, 2),
                 "weight": self._weights["shortage"],
                 "contribution": round(shortage * self._weights["shortage"] * 100, 1),
             },
             "search": {
-                "value": round(search, 3),
+                "value": round(search, 2),
                 "weight": self._weights["search"],
                 "contribution": round(search * self._weights["search"] * 100, 1),
             },
             "baseline": {
-                "value": round(baseline, 3),
+                "value": round(baseline, 2),
                 "weight": self._weights["baseline"],
                 "contribution": round(baseline * self._weights["baseline"] * 100, 1),
             },
@@ -671,7 +671,7 @@ class PeixEpiScoreService:
             label = "Mittel"
         else:
             label = "Niedrig"
-        return round(confidence, 3), label
+        return round(confidence, 2), label
 
 
 def weather_signal_avg(weather_by_region: dict[str, float]) -> float:

@@ -89,7 +89,7 @@ async def get_regional_data(
             "avg_normalisiert": round(r.avg_normalisiert, 1) if r.avg_normalisiert else None,
             "n_standorte": r.n_standorte,
             "einwohner": r.total_einwohner,
-            "intensity": round(r.avg_viruslast / max_val, 3) if max_val else 0,
+            "intensity": round(r.avg_viruslast / max_val, 2) if max_val else 0,
             "trend": trend,
             "change_pct": round(change_pct, 1),
             "tooltip": build_region_tooltip(

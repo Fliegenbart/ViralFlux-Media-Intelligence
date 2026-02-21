@@ -202,7 +202,7 @@ class MediaCockpitService:
                 ),
                 "n_standorte": int(row.n_standorte or 0),
                 "einwohner": int(row.einwohner or 0),
-                "intensity": round(float(row.avg_viruslast) / max_value, 3) if max_value else 0.0,
+                "intensity": round(float(row.avg_viruslast) / max_value, 2) if max_value else 0.0,
                 "trend": trend,
                 "change_pct": round(float(change_pct), 1),
                 "peix_score": peix_entry.get("score_0_100"),

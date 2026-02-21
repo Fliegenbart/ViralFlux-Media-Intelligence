@@ -404,10 +404,27 @@ export interface PeixRegionScore {
   layer_contributions: Record<string, number>;
 }
 
+export interface PeixVirusScoreInfo {
+  epi_score: number;
+  weight: number;
+  contribution: number;
+}
+
+export interface PeixContextSignalInfo {
+  value: number;
+  weight: number;
+  contribution: number;
+}
+
 export interface PeixScoreSummary {
   national_score: number;
   national_band: string;
   national_impact_probability: number;
+  virus_scores?: Record<string, PeixVirusScoreInfo>;
+  context_signals?: Record<string, PeixContextSignalInfo>;
+  confidence?: number;
+  confidence_label?: string;
+  weights_source?: string;
   top_drivers: PeixDriver[];
   regions: Record<string, PeixRegionScore>;
   generated_at: string;

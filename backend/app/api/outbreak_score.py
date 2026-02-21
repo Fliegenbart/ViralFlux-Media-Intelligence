@@ -70,15 +70,39 @@ async def get_outbreak_score(
     )
 
 
+@router.get("/peix-score")
+async def get_peix_score(
+    virus_typ: str = "Influenza A",
+    db: Session = Depends(get_db),
+):
+    """PeixEpiScore v2.0 — Unified Score über alle Viren."""
+    from app.services.media.peix_score_service import PeixEpiScoreService
+
+    service = PeixEpiScoreService(db)
+    return service.build(virus_typ=virus_typ)
+
+
 @router.get("/all")
 async def get_all_outbreak_scores(db: Session = Depends(get_db)):
-    """Outbreak Scores für alle Virus-Typen berechnen."""
-    from app.services.fusion_engine.risk_engine_legacy import RiskEngine
+    """Outbreak Scores für alle Virus-Typen (delegiert an PeixEpiScore)."""
+    from app.services.media.peix_score_service import PeixEpiScoreService
 
-    engine = RiskEngine(db)
-    shortage = _get_shortage_signals()
+    service = PeixEpiScoreService(db)
+    peix = service.build()
 
-    return engine.compute_all_viruses(shortage_signals=shortage)
+    # Backward-kompatible Response-Struktur
+    return {
+        "overall_score": peix["national_score"],
+        "overall_risk_level": peix["national_band"].upper(),
+        "virus_scores": {
+            v: {
+                "score": round(info["epi_score"] * 100, 1),
+                "risk_level": service._score_to_band(info["epi_score"] * 100).upper(),
+            }
+            for v, info in peix.get("virus_scores", {}).items()
+        },
+        "peix_epi_score": peix,
+    }
 
 
 @router.get("/history")

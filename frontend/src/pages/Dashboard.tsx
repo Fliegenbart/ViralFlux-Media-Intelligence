@@ -105,22 +105,38 @@ interface SurvstatTimeseriesPoint {
   incidence: number | null;
 }
 
-interface OutbreakScoreData {
-  overall_score: number;
-  overall_risk_level: string;
-  per_virus: Record<string, {
-    final_risk_score: number;
-    risk_level: string;
-    leading_indicator: string;
-    confidence_numeric: number;
-    confidence_level: string;
-    phase: string;
-    data_source_mode: string;
-    baseline_correction: string;
-    component_scores: Record<string, number | null>;
-    contributions: Record<string, number>;
+interface PeixVirusScore {
+  epi_score: number;
+  weight: number;
+  contribution: number;
+}
+
+interface PeixContextSignal {
+  value: number;
+  weight: number;
+  contribution: number;
+}
+
+interface PeixScoreData {
+  national_score: number;
+  national_band: string;
+  national_impact_probability: number;
+  virus_scores: Record<string, PeixVirusScore>;
+  context_signals: Record<string, PeixContextSignal>;
+  confidence: number;
+  confidence_label: string;
+  weights_source: string;
+  top_drivers: Array<{ label: string; strength_pct: number }>;
+  regions: Record<string, {
+    region_code: string;
+    region_name: string;
+    score_0_100: number;
+    risk_band: string;
+    impact_probability: number;
+    top_drivers: Array<{ label: string; strength_pct: number }>;
+    layer_contributions: Record<string, number>;
   }>;
-  timestamp: string;
+  generated_at: string;
 }
 
 interface DashboardData {
@@ -274,7 +290,7 @@ const Dashboard: React.FC = () => {
   const [survstatSeries, setSurvstatSeries] = useState<SurvstatTimeseriesPoint[]>([]);
   const [drugShortageData, setDrugShortageData] = useState<DrugShortageSignals | null>(null);
   const [drugShortageLoading, setDrugShortageLoading] = useState(false);
-  const [outbreakScore, setOutbreakScore] = useState<OutbreakScoreData | null>(null);
+  const [peixScore, setPeixScore] = useState<PeixScoreData | null>(null);
   const [outbreakLoading, setOutbreakLoading] = useState(false);
 
   const fetchTopActions = useCallback(async () => {
@@ -415,16 +431,16 @@ const Dashboard: React.FC = () => {
     } catch (_) {}
   }, []);
 
-  // Fetch Outbreak Score
-  const fetchOutbreakScore = useCallback(async () => {
+  // Fetch PeixEpiScore
+  const fetchPeixScore = useCallback(async () => {
     try {
-      const res = await fetch('/api/v1/outbreak-score/all');
+      const res = await fetch('/api/v1/outbreak-score/peix-score');
       if (res.ok) {
         const result = await res.json();
-        setOutbreakScore(result);
+        setPeixScore(result);
       }
     } catch (e) {
-      console.error('Outbreak score fetch error:', e);
+      console.error('PeixEpiScore fetch error:', e);
     }
   }, []);
 
@@ -451,9 +467,9 @@ const Dashboard: React.FC = () => {
     fetchSparklines();
     fetchAllTimeseries();
     fetchDrugShortageSignals();
-    fetchOutbreakScore();
+    fetchPeixScore();
     fetchTopActions();
-  }, [fetchOverview, fetchSparklines, fetchAllTimeseries, fetchDrugShortageSignals, fetchOutbreakScore, fetchTopActions]);
+  }, [fetchOverview, fetchSparklines, fetchAllTimeseries, fetchDrugShortageSignals, fetchPeixScore, fetchTopActions]);
 
   useEffect(() => {
     fetchTimeseries();
@@ -487,13 +503,13 @@ const Dashboard: React.FC = () => {
         fetchOverview();
         fetchAllTimeseries();
         fetchSparklines();
-        fetchOutbreakScore();
+        fetchPeixScore();
         if (showSurvstat) fetchSurvstatTimeseries();
       }
     };
     document.addEventListener('visibilitychange', handleVisibility);
     return () => document.removeEventListener('visibilitychange', handleVisibility);
-  }, [fetchOverview, fetchAllTimeseries, fetchSparklines, fetchOutbreakScore, showSurvstat, fetchSurvstatTimeseries]);
+  }, [fetchOverview, fetchAllTimeseries, fetchSparklines, fetchPeixScore, showSurvstat, fetchSurvstatTimeseries]);
 
   // Run ML forecast
   const runForecast = async () => {
@@ -504,7 +520,7 @@ const Dashboard: React.FC = () => {
       setTimeout(async () => {
         await fetchOverview();
         await fetchTimeseries();
-        await fetchOutbreakScore();
+        await fetchPeixScore();
         setForecastLoading(false);
       }, 5000);
     } catch (e) {
@@ -723,13 +739,13 @@ const Dashboard: React.FC = () => {
   const wasteReductionEur = Math.round(Math.max(0, assumedWeeklyBudget * 0.12));
   const opportunityEur = Math.round(Math.max(0, reallocateEur));
   const situationLabel =
-    outbreakScore?.overall_risk_level === 'BLACK'
+    peixScore?.national_band === 'critical'
       ? 'Kritisches Signal (Handlungsdruck sehr hoch)'
-      : outbreakScore?.overall_risk_level === 'RED'
+      : peixScore?.national_band === 'high'
         ? 'Hohes Signal (jetzt aktivieren)'
-        : outbreakScore?.overall_risk_level === 'YELLOW'
+        : peixScore?.national_band === 'elevated'
           ? 'Moderates Signal (Fenster beobachten)'
-          : outbreakScore
+          : peixScore
             ? 'Entspannt (Budget effizienter verteilen)'
             : 'Lagebild wird geladen...';
 
@@ -951,105 +967,94 @@ const Dashboard: React.FC = () => {
 
         {showTechDetails && (
           <>
-        {/* ── Outbreak Score Banner ── */}
-        {outbreakScore && (
-          <div className="card p-6 fade-in" style={{
-            background: outbreakScore.overall_risk_level === 'BLACK'
-              ? 'linear-gradient(135deg, rgba(254,202,202,0.5), rgba(255,255,255,1))'
-              : outbreakScore.overall_risk_level === 'RED'
-              ? 'linear-gradient(135deg, rgba(254,226,226,0.5), rgba(255,255,255,1))'
-              : outbreakScore.overall_risk_level === 'YELLOW'
-              ? 'linear-gradient(135deg, rgba(254,243,199,0.5), rgba(255,255,255,1))'
-              : 'linear-gradient(135deg, rgba(209,250,229,0.5), rgba(255,255,255,1))',
-            border: `1px solid ${outbreakScore.overall_risk_level === 'BLACK' ? '#fca5a5' : outbreakScore.overall_risk_level === 'RED' ? '#fca5a5' : outbreakScore.overall_risk_level === 'YELLOW' ? '#fde68a' : '#a7f3d0'}`,
-          }}>
+        {/* ── PeixEpiScore Banner ── */}
+        {peixScore && (() => {
+          const band = peixScore.national_band;
+          const bandColor = band === 'critical' ? '#dc2626' : band === 'high' ? '#f59e0b' : band === 'elevated' ? '#d97706' : '#10b981';
+          const bandBg = band === 'critical'
+            ? 'linear-gradient(135deg, rgba(254,202,202,0.5), rgba(255,255,255,1))'
+            : band === 'high'
+            ? 'linear-gradient(135deg, rgba(254,243,199,0.5), rgba(255,255,255,1))'
+            : band === 'elevated'
+            ? 'linear-gradient(135deg, rgba(255,251,235,0.5), rgba(255,255,255,1))'
+            : 'linear-gradient(135deg, rgba(209,250,229,0.5), rgba(255,255,255,1))';
+          const bandBorder = band === 'critical' ? '#fca5a5' : band === 'high' ? '#fde68a' : band === 'elevated' ? '#fef3c7' : '#a7f3d0';
+          const bandLabel = band === 'critical' ? 'Kritisches Risiko' : band === 'high' ? 'Hohes Risiko' : band === 'elevated' ? 'Erhöhtes Risiko' : 'Niedriges Risiko';
+          const bandTextClass = band === 'critical' ? 'text-red-600' : band === 'high' ? 'text-amber-500' : band === 'elevated' ? 'text-amber-600' : 'text-emerald-500';
+
+          return (
+          <div className="card p-6 fade-in" style={{ background: bandBg, border: `1px solid ${bandBorder}` }}>
             <div className="flex items-center gap-8 flex-wrap">
               {/* Gauge */}
               <div className="flex items-center gap-6">
                 <div className="relative" style={{ width: 100, height: 100 }}>
                   <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
                     <circle cx="50" cy="50" r="42" fill="none" stroke="#e2e8f0" strokeWidth="8" />
-                    <circle
-                      cx="50" cy="50" r="42" fill="none"
-                      stroke={outbreakScore.overall_risk_level === 'BLACK' ? '#dc2626' : outbreakScore.overall_risk_level === 'RED' ? '#ef4444' : outbreakScore.overall_risk_level === 'YELLOW' ? '#f59e0b' : '#10b981'}
-                      strokeWidth="8"
-                      strokeDasharray={`${outbreakScore.overall_score * 2.64} 264`}
-                      strokeLinecap="round"
-                    />
+                    <circle cx="50" cy="50" r="42" fill="none" stroke={bandColor} strokeWidth="8"
+                      strokeDasharray={`${peixScore.national_score * 2.64} 264`} strokeLinecap="round" />
                   </svg>
                   <div className="absolute inset-0 flex flex-col items-center justify-center">
-                    <span className="text-2xl font-black text-slate-900">{outbreakScore.overall_score}</span>
+                    <span className="text-2xl font-black text-slate-900">{peixScore.national_score}</span>
                     <span className="text-[9px] text-slate-400 -mt-0.5">von 100</span>
                   </div>
                 </div>
                 <div>
-                  <div className="text-xs text-slate-500 uppercase tracking-wider mb-1">Outbreak Score</div>
+                  <div className="text-xs text-slate-500 uppercase tracking-wider mb-1">PeixEpiScore</div>
                   <div className="flex items-center gap-2">
-                    <span className={`text-lg font-bold ${
-                      outbreakScore.overall_risk_level === 'BLACK' ? 'text-red-600'
-                      : outbreakScore.overall_risk_level === 'RED' ? 'text-red-500'
-                      : outbreakScore.overall_risk_level === 'YELLOW' ? 'text-amber-500'
-                      : 'text-emerald-500'
-                    }`}>
-                      {outbreakScore.overall_risk_level === 'BLACK' ? 'Kritisches Risiko'
-                       : outbreakScore.overall_risk_level === 'RED' ? 'Hohes Risiko'
-                       : outbreakScore.overall_risk_level === 'YELLOW' ? 'Mittleres Risiko'
-                       : 'Niedriges Risiko'}
-                    </span>
+                    <span className={`text-lg font-bold ${bandTextClass}`}>{bandLabel}</span>
+                  </div>
+                  <div className="text-[10px] text-slate-400 mt-0.5">
+                    Impact: {peixScore.national_impact_probability}% | Konfidenz: {peixScore.confidence_label}
                   </div>
                 </div>
               </div>
 
               {/* Per-Virus Breakdown */}
               <div className="flex-1 grid grid-cols-2 xl:grid-cols-4 gap-3">
-                {outbreakScore.per_virus && Object.entries(outbreakScore.per_virus).map(([virus, vs]) => {
-                  if ('error' in vs) return null;
-                  const color = vs.risk_level === 'BLACK' ? '#dc2626' : vs.risk_level === 'RED' ? '#ef4444' : vs.risk_level === 'YELLOW' ? '#f59e0b' : '#10b981';
+                {Object.entries(peixScore.virus_scores).map(([virus, vs]) => {
+                  const epiPct = Math.round(vs.epi_score * 100);
+                  const vColor = epiPct >= 75 ? '#dc2626' : epiPct >= 55 ? '#f59e0b' : epiPct >= 35 ? '#d97706' : '#10b981';
                   return (
                     <div key={virus} className="p-3 rounded-lg bg-slate-50 border border-slate-200">
                       <div className="flex items-center justify-between mb-1.5">
                         <span className="text-xs text-slate-500 truncate">{virus}</span>
-                        <span className="text-sm font-bold" style={{ color }}>{vs.final_risk_score}</span>
+                        <span className="text-sm font-bold" style={{ color: vColor }}>{epiPct}</span>
                       </div>
-                      {/* Mini bar */}
                       <div className="h-1.5 rounded-full overflow-hidden bg-slate-200">
-                        <div className="h-full rounded-full transition-all duration-700" style={{ width: `${vs.final_risk_score}%`, background: color }} />
+                        <div className="h-full rounded-full transition-all duration-700" style={{ width: `${epiPct}%`, background: vColor }} />
                       </div>
                       <div className="flex items-center justify-between mt-1.5">
-                        <span className="text-[10px] text-slate-400">{vs.leading_indicator}</span>
-                        <span className="text-[10px] text-slate-400">
-                          {vs.confidence_level} | Phase {vs.phase}
-                        </span>
+                        <span className="text-[10px] text-slate-400">Gewicht: {Math.round(vs.weight * 100)}%</span>
+                        <span className="text-[10px] text-slate-400">+{vs.contribution} Pkt</span>
                       </div>
                     </div>
                   );
                 })}
               </div>
 
-              {/* Component breakdown */}
-              {outbreakScore.per_virus?.[selectedVirus] && !('error' in outbreakScore.per_virus[selectedVirus]) && (
-                <div className="w-48 space-y-1.5">
-                  <div className="text-[10px] text-slate-400 uppercase tracking-wider mb-1">Signal-Beitrag ({selectedVirus.split(' ')[0]})</div>
-                  {Object.entries(outbreakScore.per_virus[selectedVirus].contributions || {}).map(([name, val]) => (
-                    <div key={name} className="flex items-center gap-2">
-                      <span className="text-[10px] text-slate-500 w-24 truncate">{name}</span>
-                      <div className="flex-1 h-1 rounded-full overflow-hidden bg-slate-200">
-                        <div className="h-full rounded-full" style={{
-                          width: `${Math.min(val as number, 100)}%`,
-                          background: (val as number) > 5 ? '#3b82f6' : '#94a3b8'
-                        }} />
-                      </div>
-                      <span className="text-[10px] text-slate-400 w-6 text-right">{(val as number).toFixed(0)}</span>
+              {/* Context signals breakdown */}
+              <div className="w-52 space-y-1.5">
+                <div className="text-[10px] text-slate-400 uppercase tracking-wider mb-1">Signal-Beitrag</div>
+                {Object.entries(peixScore.context_signals).map(([name, sig]) => (
+                  <div key={name} className="flex items-center gap-2">
+                    <span className="text-[10px] text-slate-500 w-20 truncate capitalize">{name === 'shortage' ? 'Versorgung' : name === 'search' ? 'Suchverh.' : name === 'forecast' ? 'Prognose' : name === 'baseline' ? 'Baseline' : 'Wetter'}</span>
+                    <div className="flex-1 h-1 rounded-full overflow-hidden bg-slate-200">
+                      <div className="h-full rounded-full" style={{
+                        width: `${Math.min(sig.value * 100, 100)}%`,
+                        background: sig.value > 0.5 ? '#3b82f6' : '#94a3b8'
+                      }} />
                     </div>
-                  ))}
-                  {outbreakScore.per_virus[selectedVirus].data_source_mode === 'ESTIMATED_FROM_ORDERS' && (
-                    <div className="text-[9px] text-amber-500 mt-1">Basierend auf Verkaufszahlen</div>
-                  )}
-                </div>
-              )}
+                    <span className="text-[10px] text-slate-400 w-8 text-right">{sig.contribution}</span>
+                  </div>
+                ))}
+                {peixScore.weights_source === 'calibrated' && (
+                  <div className="text-[9px] text-violet-500 mt-1">Kalibrierte Gewichte (Ridge)</div>
+                )}
+              </div>
             </div>
           </div>
-        )}
+          );
+        })()}
 
         {/* ── Row 1: Virus Load Cards ── */}
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
@@ -2087,8 +2092,8 @@ const Dashboard: React.FC = () => {
                 </div>
                 <div className="flex justify-between text-slate-500">
                   <span>Fusion Engine</span>
-                  <span className={outbreakScore ? 'text-emerald-500' : 'text-slate-400'}>
-                    {outbreakScore ? `Score: ${outbreakScore.overall_score}` : 'berechne...'}
+                  <span className={peixScore ? 'text-emerald-500' : 'text-slate-400'}>
+                    {peixScore ? `PeixEpiScore: ${peixScore.national_score}` : 'berechne...'}
                   </span>
                 </div>
               </div>

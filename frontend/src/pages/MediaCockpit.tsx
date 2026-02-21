@@ -605,23 +605,6 @@ const MediaCockpit: React.FC = () => {
           <button onClick={() => switchTab('backtest')} className={`media-tab ${tab === 'backtest' ? 'active' : ''}`}>Backtest</button>
         </div>
 
-        {tab === 'map' && (
-          <div className="context-filter-rail">
-            <div className="text-[11px] text-slate-400 uppercase tracking-wider">Virusfilter Lagekarte</div>
-            <div className="flex flex-wrap items-center gap-2">
-              {VIRUS_OPTIONS.map((v) => (
-                <button
-                  key={v}
-                  onClick={() => setVirus(v)}
-                  className={`tab-chip ${virus === v ? 'active' : ''}`}
-                >
-                  {v}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
         <section className="card p-4 focus-card">
           <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
             <div>
@@ -826,11 +809,25 @@ const MediaCockpit: React.FC = () => {
                     <p className="text-xs text-slate-500">
                       {activeMap.date ? `Stand ${format(parseISO(activeMap.date), 'dd.MM.yyyy', { locale: de })}` : 'Kein Datenstand'}
                     </p>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="text-[11px] text-slate-500">
-                      Forecast-Slider
+                    <div className="mt-3">
+                      <div className="text-[10px] text-slate-400 uppercase tracking-wider">VIRUSFILTER LAGEKARTE</div>
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        {VIRUS_OPTIONS.map((v) => (
+                          <button
+                            key={v}
+                            onClick={() => setVirus(v)}
+                            className={`tab-chip ${virus === v ? 'active' : ''}`}
+                          >
+                            {v}
+                          </button>
+                        ))}
+                      </div>
                     </div>
+                  </div>
+                    <div className="flex items-center gap-3">
+                      <div className="text-[11px] text-slate-500">
+                        Forecast-Slider
+                      </div>
                     <div className="flex items-center gap-2">
                       <span className="text-[11px] text-slate-500">0</span>
                       <input
@@ -855,35 +852,100 @@ const MediaCockpit: React.FC = () => {
                 {!activeMap.has_data ? (
                   <div className="py-16 text-center text-slate-500">Keine Kartendaten vorhanden.</div>
                 ) : (
-                  <svg viewBox="0 0 420 460" className="w-full max-h-[560px]">
-                    {Object.entries(BUNDESLAND_PATHS).map(([code, geo]) => {
-                      const region = activeMap.regions?.[code];
-                      const intensity = region ? projectedIntensity(region) : 0;
-                      const fill = region ? intensityColor(intensity) : 'rgba(51,65,85,0.3)';
-                      const isSelected = selectedRegion === code;
-                      const band = !region ? '' : intensity >= 0.7 ? 'Hoch' : intensity >= 0.4 ? 'Mittel' : 'Niedrig';
-                      return (
-                        <g
-                          key={code}
-                          style={{ cursor: region ? 'pointer' : 'default' }}
-                          onClick={() => region && openRecommendationForRegion(code)}
-                        >
-                          <path d={geo.d} fill={fill} stroke={isSelected ? '#7dd3fc' : '#4b5563'} strokeWidth={isSelected ? 2 : 1} />
-                          <text x={geo.cx} y={geo.cy - 5} textAnchor="middle" fill="#e2e8f0" fontSize="9" fontWeight="700">{code}</text>
-                          {region && (
-                            <text x={geo.cx} y={geo.cy + 8} textAnchor="middle" fill="#94a3b8" fontSize="7">
-                              {band}
-                            </text>
-                          )}
-                          {openingRegion === code && (
-                            <text x={geo.cx} y={geo.cy + 18} textAnchor="middle" fill="#7dd3fc" fontSize="6">
-                              öffne...
-                            </text>
-                          )}
-                        </g>
-                      );
-                    })}
-                  </svg>
+                  <div
+                    className="rounded-2xl p-3"
+                    style={{
+                      background:
+                        'radial-gradient(800px 260px at 12% 0%, rgba(14,165,233,0.09), transparent 58%), linear-gradient(160deg, rgba(15,23,42,0.9), rgba(8,17,31,0.86))',
+                      border: '1px solid rgba(51,65,85,0.75)',
+                    }}
+                  >
+                    <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                      <div className="text-[11px] text-slate-400">
+                        Klick auf ein Bundesland öffnet direkt den passenden Kampagnenvorschlag.
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="px-2 py-1 rounded-full text-[10px] uppercase tracking-wider" style={{ background: 'rgba(34,197,94,0.15)', color: '#86efac', border: '1px solid rgba(34,197,94,0.35)' }}>
+                          Niedrig
+                        </span>
+                        <span className="px-2 py-1 rounded-full text-[10px] uppercase tracking-wider" style={{ background: 'rgba(250,204,21,0.15)', color: '#fcd34d', border: '1px solid rgba(250,204,21,0.35)' }}>
+                          Mittel
+                        </span>
+                        <span className="px-2 py-1 rounded-full text-[10px] uppercase tracking-wider" style={{ background: 'rgba(239,68,68,0.15)', color: '#fca5a5', border: '1px solid rgba(239,68,68,0.35)' }}>
+                          Hoch
+                        </span>
+                      </div>
+                    </div>
+
+                    <svg viewBox="0 0 420 460" className="w-full max-h-[560px]">
+                      <defs>
+                        <filter id="vf-map-shadow" x="-20%" y="-20%" width="140%" height="140%">
+                          <feDropShadow dx="0" dy="4" stdDeviation="4" floodColor="#020617" floodOpacity="0.55" />
+                        </filter>
+                        <filter id="vf-selected-glow" x="-30%" y="-30%" width="160%" height="160%">
+                          <feDropShadow dx="0" dy="0" stdDeviation="3" floodColor="#67e8f9" floodOpacity="0.5" />
+                        </filter>
+                        <pattern id="vf-map-grid" width="14" height="14" patternUnits="userSpaceOnUse">
+                          <path d="M 14 0 L 0 0 0 14" fill="none" stroke="rgba(100,116,139,0.18)" strokeWidth="0.6" />
+                        </pattern>
+                      </defs>
+
+                      <rect x="0" y="0" width="420" height="460" rx="14" fill="rgba(2,6,23,0.3)" />
+                      <rect x="0" y="0" width="420" height="460" rx="14" fill="url(#vf-map-grid)" />
+
+                      {Object.entries(BUNDESLAND_PATHS).map(([code, geo]) => {
+                        const region = activeMap.regions?.[code];
+                        const intensity = region ? projectedIntensity(region) : 0;
+                        const fill = region ? intensityColor(intensity) : 'rgba(51,65,85,0.28)';
+                        const isSelected = selectedRegion === code;
+                        const band = !region ? '' : intensity >= 0.7 ? 'Hoch' : intensity >= 0.4 ? 'Mittel' : 'Niedrig';
+                        return (
+                          <g
+                            key={code}
+                            style={{ cursor: region ? 'pointer' : 'default' }}
+                            onClick={() => region && openRecommendationForRegion(code)}
+                          >
+                            <path
+                              d={geo.d}
+                              fill={fill}
+                              stroke={isSelected ? '#67e8f9' : 'rgba(148,163,184,0.7)'}
+                              strokeWidth={isSelected ? 2.4 : 1.1}
+                              filter={isSelected ? 'url(#vf-selected-glow)' : 'url(#vf-map-shadow)'}
+                              style={{ transition: 'all 180ms ease' }}
+                            />
+                            <circle
+                              cx={geo.cx}
+                              cy={geo.cy - 5}
+                              r={8.5}
+                              fill="rgba(2,6,23,0.78)"
+                              stroke={isSelected ? 'rgba(103,232,249,0.85)' : 'rgba(100,116,139,0.65)'}
+                              strokeWidth={isSelected ? 1.2 : 0.8}
+                            />
+                            <text x={geo.cx} y={geo.cy - 2.5} textAnchor="middle" fill="#e2e8f0" fontSize="8" fontWeight="700">{code}</text>
+                            {region && (
+                              <text x={geo.cx} y={geo.cy + 11} textAnchor="middle" fill="#94a3b8" fontSize="6.6">
+                                {band}
+                              </text>
+                            )}
+                            {openingRegion === code && (
+                              <text x={geo.cx} y={geo.cy + 20} textAnchor="middle" fill="#7dd3fc" fontSize="6">
+                                oeffne...
+                              </text>
+                            )}
+                          </g>
+                        );
+                      })}
+                    </svg>
+
+                    <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-500">
+                      <div>
+                        Intensität basiert auf PeixEpiScore + Trendprojektion (0-14 Tage).
+                      </div>
+                      <div>
+                        Aktive Auswahl: <span className="text-slate-300">{selectedRegion || 'keine'}</span>
+                      </div>
+                    </div>
+                  </div>
                 )}
               </div>
 

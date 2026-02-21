@@ -594,35 +594,6 @@ const MediaCockpit: React.FC = () => {
               <p className="text-xs text-slate-400">Deutschlandkarte + KI-Empfehlungen + Backtest Proof Engine</p>
             </div>
           </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            {VIRUS_OPTIONS.map((v) => (
-              <button
-                key={v}
-                onClick={() => setVirus(v)}
-                className={`tab-chip ${virus === v ? 'active' : ''}`}
-              >
-                {v}
-              </button>
-            ))}
-            <button
-              onClick={() => switchTab('recommendations')}
-              className="tab-chip"
-              style={{ borderColor: 'rgba(125,211,252,0.45)', color: '#7dd3fc' }}
-              title="Direkt zu den Kampagnenvorschlaegen (KI-Empfehlungen)"
-            >
-              Kampagnenvorschlaege
-            </button>
-            <button
-              onClick={() => switchTab('product-intel')}
-              className="tab-chip"
-              style={{ borderColor: 'rgba(249, 115, 22, 0.45)', color: '#fb923c' }}
-              title="Produkt-Katalog, KI-Matching und Review-Flow"
-            >
-              Produkt-Intelligence
-            </button>
-            <button onClick={() => navigate('/data-integration')} className="tab-chip">Integrationen</button>
-          </div>
         </div>
       </header>
 
@@ -633,6 +604,23 @@ const MediaCockpit: React.FC = () => {
           <button onClick={() => switchTab('product-intel')} className={`media-tab ${tab === 'product-intel' ? 'active' : ''}`}>Produkt-Intelligence</button>
           <button onClick={() => switchTab('backtest')} className={`media-tab ${tab === 'backtest' ? 'active' : ''}`}>Backtest</button>
         </div>
+
+        {tab === 'map' && (
+          <div className="context-filter-rail">
+            <div className="text-[11px] text-slate-400 uppercase tracking-wider">Virusfilter Lagekarte</div>
+            <div className="flex flex-wrap items-center gap-2">
+              {VIRUS_OPTIONS.map((v) => (
+                <button
+                  key={v}
+                  onClick={() => setVirus(v)}
+                  className={`tab-chip ${virus === v ? 'active' : ''}`}
+                >
+                  {v}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         <section className="card p-4 focus-card">
           <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
@@ -792,12 +780,17 @@ const MediaCockpit: React.FC = () => {
                     <h2 className="text-lg font-semibold text-white">Tech Details: Bento-Übersicht</h2>
                     <p className="text-xs text-slate-500">Für Analyse/Revision. Nicht die Default-Ansicht.</p>
                   </div>
-                  <div className="text-xs text-slate-400">
-                    Nationaler PeixEpiScore: <span className="text-cyan-300 font-semibold">{peixSummary?.national_score ?? '-'} / 100</span>
-                    {' · '}
-                    Band: <span className="text-slate-200">{peixSummary?.national_band ?? '-'}</span>
-                    {' · '}
-                    Impact: <span className="text-slate-200">{peixSummary?.national_impact_probability ?? '-'}%</span>
+                  <div className="text-xs text-slate-400 flex flex-col items-start sm:items-end gap-2">
+                    <div>
+                      Nationaler PeixEpiScore: <span className="text-cyan-300 font-semibold">{peixSummary?.national_score ?? '-'} / 100</span>
+                      {' · '}
+                      Band: <span className="text-slate-200">{peixSummary?.national_band ?? '-'}</span>
+                      {' · '}
+                      Impact: <span className="text-slate-200">{peixSummary?.national_impact_probability ?? '-'}%</span>
+                    </div>
+                    <button onClick={() => navigate('/data-integration')} className="secondary-link-muted">
+                      Integrationen verwalten
+                    </button>
                   </div>
                 </div>
                 <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">

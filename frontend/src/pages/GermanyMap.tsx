@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { format } from 'date-fns';
 import { de } from 'date-fns/locale';
+import { RegionTooltipData } from '../types/media';
 
 // TODO(legacy-map): Legacy-Karte mit vereinfachten Pfaden. MediaCockpit nutzt jetzt die echte GeoJSON-Bundeslandkarte.
 const BUNDESLAND_PATHS: Record<string, { d: string; cx: number; cy: number }> = {
@@ -40,6 +41,7 @@ interface RegionData {
   intensity: number;
   trend: string;
   change_pct: number;
+  tooltip?: RegionTooltipData | null;
 }
 
 interface TransferSuggestion {
@@ -74,6 +76,9 @@ const GermanyMap: React.FC = () => {
   const [regionData, setRegionData] = useState<Record<string, RegionData>>({});
   const [transfers, setTransfers] = useState<TransferSuggestion[]>([]);
   const [selectedRegion, setSelectedRegion] = useState<string | null>(null);
+  const [hoveredRegion, setHoveredRegion] = useState<string | null>(null);
+  const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const mapContainerRef = useRef<HTMLDivElement>(null);
   const [horizonDays, setHorizonDays] = useState(0);
   const [showTechDetails, setShowTechDetails] = useState(false);
   const [regionTimeseries, setRegionTimeseries] = useState<Array<{ date: string; viruslast: number }>>([]);
@@ -234,6 +239,7 @@ const GermanyMap: React.FC = () => {
                 </div>
               </div>
             ) : (
+              <div ref={mapContainerRef} style={{ position: 'relative' }}>
               <svg
                 viewBox="0 0 420 460"
                 className="w-full max-h-[500px]"
@@ -247,7 +253,23 @@ const GermanyMap: React.FC = () => {
                   const band = !region ? '' : intensity >= 0.7 ? 'Hoch' : intensity >= 0.4 ? 'Mittel' : 'Niedrig';
 
                   return (
-                    <g key={code} className="cursor-pointer" onClick={() => setSelectedRegion(code === selectedRegion ? null : code)}>
+                    <g
+                      key={code}
+                      className="cursor-pointer"
+                      onClick={() => setSelectedRegion(code === selectedRegion ? null : code)}
+                      onMouseEnter={(e) => {
+                        if (!region) return;
+                        setHoveredRegion(code);
+                        const rect = mapContainerRef.current?.getBoundingClientRect();
+                        if (rect) setTooltipPos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+                      }}
+                      onMouseMove={(e) => {
+                        if (!region) return;
+                        const rect = mapContainerRef.current?.getBoundingClientRect();
+                        if (rect) setTooltipPos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+                      }}
+                      onMouseLeave={() => setHoveredRegion(null)}
+                    >
                       <path
                         d={path.d}
                         fill={fillColor}
@@ -291,6 +313,113 @@ const GermanyMap: React.FC = () => {
                   );
                 })}
               </svg>
+
+              {/* Hover-Tooltip */}
+              {hoveredRegion && regionData[hoveredRegion]?.tooltip && (() => {
+                const tip = regionData[hoveredRegion].tooltip!;
+                const containerW = mapContainerRef.current?.offsetWidth || 600;
+                const containerH = mapContainerRef.current?.offsetHeight || 500;
+                const flipX = tooltipPos.x > containerW - 380;
+                const flipY = tooltipPos.y > containerH - 200;
+                const bandColors: Record<string, { bg: string; border: string; text: string }> = {
+                  critical: { bg: 'rgba(239,68,68,0.08)', border: 'rgba(239,68,68,0.3)', text: '#dc2626' },
+                  high: { bg: 'rgba(245,158,11,0.08)', border: 'rgba(245,158,11,0.3)', text: '#d97706' },
+                  elevated: { bg: 'rgba(250,204,21,0.08)', border: 'rgba(250,204,21,0.3)', text: '#ca8a04' },
+                  low: { bg: 'rgba(34,197,94,0.08)', border: 'rgba(34,197,94,0.3)', text: '#16a34a' },
+                };
+                const c = bandColors[tip.peix_band] || bandColors.low;
+                return (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      left: flipX ? tooltipPos.x - 360 : tooltipPos.x + 16,
+                      top: flipY ? tooltipPos.y - 180 : tooltipPos.y - 10,
+                      zIndex: 50,
+                      pointerEvents: 'none',
+                      maxWidth: 370,
+                      minWidth: 290,
+                      transition: 'opacity 120ms ease, transform 120ms ease',
+                    }}
+                  >
+                    <div
+                      style={{
+                        background: '#ffffff',
+                        border: `1px solid ${c.border}`,
+                        borderRadius: 12,
+                        boxShadow: '0 8px 32px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06)',
+                        padding: '14px 16px',
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                        <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>{tip.region_name}</div>
+                        <span
+                          style={{
+                            fontSize: 10,
+                            fontWeight: 600,
+                            padding: '2px 8px',
+                            borderRadius: 999,
+                            background: c.bg,
+                            color: c.text,
+                            border: `1px solid ${c.border}`,
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.05em',
+                          }}
+                        >
+                          {tip.urgency_label}
+                        </span>
+                      </div>
+
+                      <div style={{ display: 'flex', gap: 12, marginBottom: 10 }}>
+                        <div style={{ fontSize: 11, color: '#64748b' }}>
+                          Score: <span style={{ fontWeight: 600, color: '#334155' }}>{tip.peix_score?.toFixed(1)}</span>
+                        </div>
+                        <div style={{ fontSize: 11, color: '#64748b' }}>
+                          Impact: <span style={{ fontWeight: 600, color: '#334155' }}>{tip.impact_probability?.toFixed(0)}%</span>
+                        </div>
+                        <div style={{ fontSize: 11, color: '#64748b' }}>
+                          Trend:{' '}
+                          <span style={{ fontWeight: 600, color: tip.trend === 'steigend' ? '#dc2626' : tip.trend === 'fallend' ? '#16a34a' : '#64748b' }}>
+                            {tip.trend === 'steigend' ? '\u2197' : tip.trend === 'fallend' ? '\u2198' : '\u2192'}{' '}
+                            {tip.change_pct > 0 ? '+' : ''}{tip.change_pct}%
+                          </span>
+                        </div>
+                      </div>
+
+                      <div
+                        style={{
+                          fontSize: 12,
+                          lineHeight: '1.55',
+                          color: '#334155',
+                          padding: '8px 10px',
+                          background: 'rgba(248,250,252,0.8)',
+                          borderRadius: 8,
+                          border: '1px solid rgba(226,232,240,0.7)',
+                        }}
+                      >
+                        {tip.recommendation_text}
+                      </div>
+
+                      <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span
+                          style={{
+                            fontSize: 10,
+                            fontWeight: 600,
+                            padding: '3px 8px',
+                            borderRadius: 999,
+                            background: 'linear-gradient(135deg, rgba(34,197,94,0.1), rgba(16,185,129,0.08))',
+                            color: '#16a34a',
+                            border: '1px solid rgba(34,197,94,0.2)',
+                          }}
+                        >
+                          {tip.recommended_product}
+                        </span>
+                        <span style={{ fontSize: 10, color: '#94a3b8' }}>Klick für Details</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+              </div>
             )}
           </div>
 

@@ -6,6 +6,7 @@ import logging
 
 from app.db.session import get_db
 from app.models.database import WastewaterData
+from app.services.media.region_tooltip_service import build_region_tooltip
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -41,6 +42,7 @@ async def get_regional_data(
         func.avg(WastewaterData.viruslast_normalisiert).label('avg_normalisiert'),
         func.count(WastewaterData.standort.distinct()).label('n_standorte'),
         func.sum(WastewaterData.einwohner).label('total_einwohner'),
+        func.avg(WastewaterData.vorhersage).label('avg_vorhersage'),
     ).filter(
         WastewaterData.virus_typ == virus_typ,
         WastewaterData.datum == latest_date,
@@ -76,6 +78,11 @@ async def get_regional_data(
             change_pct = 0
             trend = "stabil"
 
+        # Vorhersage-Delta
+        vorhersage_delta_pct = None
+        if r.avg_vorhersage and r.avg_viruslast and r.avg_viruslast > 0:
+            vorhersage_delta_pct = ((r.avg_vorhersage - r.avg_viruslast) / r.avg_viruslast) * 100
+
         regions[r.bundesland] = {
             "name": BUNDESLAND_NAMES.get(r.bundesland, r.bundesland),
             "avg_viruslast": round(r.avg_viruslast, 1),
@@ -85,6 +92,13 @@ async def get_regional_data(
             "intensity": round(r.avg_viruslast / max_val, 3) if max_val else 0,
             "trend": trend,
             "change_pct": round(change_pct, 1),
+            "tooltip": build_region_tooltip(
+                region_name=BUNDESLAND_NAMES.get(r.bundesland, r.bundesland),
+                virus_typ=virus_typ,
+                trend=trend,
+                change_pct=round(change_pct, 1),
+                vorhersage_delta_pct=vorhersage_delta_pct,
+            ),
         }
 
     return {

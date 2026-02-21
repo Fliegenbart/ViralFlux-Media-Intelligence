@@ -22,6 +22,7 @@ from app.models.database import (
 )
 from app.services.data_ingest.bfarm_service import get_cached_signals
 from app.services.media.peix_score_service import PeixEpiScoreService
+from app.services.media.region_tooltip_service import build_region_tooltip
 
 
 BUNDESLAND_NAMES = {
@@ -141,6 +142,7 @@ class MediaCockpitService:
             func.avg(WastewaterData.viruslast_normalisiert).label("avg_normalized"),
             func.count(WastewaterData.standort.distinct()).label("n_standorte"),
             func.sum(WastewaterData.einwohner).label("einwohner"),
+            func.avg(WastewaterData.vorhersage).label("avg_vorhersage"),
         ).filter(
             WastewaterData.virus_typ == virus_typ,
             WastewaterData.datum == latest_date,
@@ -179,6 +181,17 @@ class MediaCockpitService:
             peix_entry = peix_regions.get(code, {})
             recommendation_ref = region_recommendations.get(code)
 
+            # Vorhersage-Delta berechnen
+            vorhersage_delta_pct = None
+            if (
+                row.avg_vorhersage is not None
+                and row.avg_viruslast is not None
+                and row.avg_viruslast > 0
+            ):
+                vorhersage_delta_pct = (
+                    (row.avg_vorhersage - row.avg_viruslast) / row.avg_viruslast
+                ) * 100.0
+
             payload = {
                 "name": BUNDESLAND_NAMES.get(code, code),
                 "avg_viruslast": round(float(row.avg_viruslast), 1),
@@ -196,6 +209,17 @@ class MediaCockpitService:
                 "peix_band": peix_entry.get("risk_band"),
                 "impact_probability": peix_entry.get("impact_probability"),
                 "recommendation_ref": recommendation_ref,
+                "tooltip": build_region_tooltip(
+                    region_name=BUNDESLAND_NAMES.get(code, code),
+                    virus_typ=virus_typ,
+                    trend=trend,
+                    change_pct=round(float(change_pct), 1),
+                    peix_score=peix_entry.get("score_0_100"),
+                    peix_band=peix_entry.get("risk_band", "low"),
+                    impact_probability=peix_entry.get("impact_probability"),
+                    top_drivers=peix_entry.get("top_drivers"),
+                    vorhersage_delta_pct=vorhersage_delta_pct,
+                ),
             }
             regions[code] = payload
             ranking.append({"code": code, **payload})

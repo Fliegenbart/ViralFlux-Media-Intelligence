@@ -439,6 +439,20 @@ export interface RegionRecommendationRef {
   product?: string;
 }
 
+export interface RegionTooltipData {
+  region_name: string;
+  recommendation_text: string;
+  epi_outlook: string;
+  recommended_product: string;
+  peix_score: number;
+  peix_band: string;
+  impact_probability: number;
+  urgency_label: string;
+  trend: string;
+  change_pct: number;
+  virus_typ: string;
+}
+
 export interface BentoTile {
   id: string;
   title: string;

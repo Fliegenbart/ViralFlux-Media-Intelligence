@@ -1,15 +1,26 @@
 """SURVSTAT Ingestion Service — lokale RKI SURVSTAT-Wochendateien.
 
-Erwartetes Dateiformat:
+Erwartetes Dateiformat (Standard):
 - UTF-16 codierte TSV-Datei (Dateiendung .csv)
 - Zeile 1: "Bundesland", "Krankheit"
 - Zeile 2: "All" + weitere Krankheits-Spalten
 - Zeile 3+: Bundesland-Werte inkl. "Gesamt"
+
+Erweitertes Format (mit Altersgruppen):
+- Zeile 1: "Bundesland", "Altersgruppe", "Krankheit"
+- Zeile 2: Altersgruppe + Krankheits-Spalten
+- Zeile 3+: Bundesland × Altersgruppe × Krankheit
+
+OTC-Filtering:
+Nur Krankheiten aus OTC_RELEVANT_DISEASES werden importiert.
+Alle anderen werden beim Parsing verworfen. Jeder Record erhält
+automatisch seinen disease_cluster (RESPIRATORY, GASTROINTESTINAL,
+PEDIATRIC_SKIN, PARASITES_VECTORS).
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
 import csv
@@ -19,6 +30,10 @@ import re
 from sqlalchemy.orm import Session
 
 from app.models.database import SurvstatWeeklyData
+from app.services.data_ingest.otc_disease_clusters import (
+    disease_to_cluster,
+    is_otc_relevant,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -36,16 +51,22 @@ class _SurvstatRecord:
     disease: str
     incidence: float
     source_file: str
+    disease_cluster: str | None = None
+    age_group: str | None = None
 
 
 class SurvstatIngestionService:
-    """Importiert lokale SURVSTAT-Wochenexports in die Datenbank."""
+    """Importiert lokale SURVSTAT-Wochenexports in die Datenbank.
 
-    def __init__(self, db: Session):
+    Filtert beim Import auf OTC-relevante Krankheiten und weist jedem
+    Record automatisch seinen Makro-Cluster zu.
+    """
+
+    def __init__(self, db: Session) -> None:
         self.db = db
 
     @staticmethod
-    def _clean_text(value) -> str:
+    def _clean_text(value: object) -> str:
         if value is None:
             return ""
         text = str(value).strip().strip('"')
@@ -54,13 +75,12 @@ class SurvstatIngestionService:
         return text
 
     @classmethod
-    def _parse_number(cls, value) -> float | None:
+    def _parse_number(cls, value: object) -> float | None:
         raw = cls._clean_text(value)
         if not raw:
             return None
 
         if "," in raw and "." in raw:
-            # German locale fallback: 1.234,56
             if raw.rfind(",") > raw.rfind("."):
                 raw = raw.replace(".", "").replace(",", ".")
             else:
@@ -91,7 +111,12 @@ class SurvstatIngestionService:
         return week_label, year, week, week_start
 
     def parse_file(self, path: Path) -> list[_SurvstatRecord]:
-        """Parst eine einzelne SURVSTAT-Datei in Long-Format Records."""
+        """Parst eine einzelne SURVSTAT-Datei in Long-Format Records.
+
+        Erkennt automatisch ob das Standardformat (Bundesland × Krankheit)
+        oder das erweiterte Format (Bundesland × Altersgruppe × Krankheit)
+        vorliegt. Filtert auf OTC-relevante Krankheiten.
+        """
         week_label, year, week, week_start = self._parse_week_from_filename(path)
         available_time = week_start + timedelta(days=7)
 
@@ -101,9 +126,15 @@ class SurvstatIngestionService:
         if len(rows) < 3:
             raise ValueError(f"Datei '{path.name}' hat zu wenige Zeilen für den SURVSTAT-Import.")
 
+        # Detect format from header row (row 0)
+        header_meta = [self._clean_text(c).lower() for c in rows[0]]
+        has_age_group = "altersgruppe" in header_meta
+
         header_row = rows[1]
         disease_cols: dict[int, str] = {}
-        for idx in range(1, len(header_row)):
+        start_col = 2 if has_age_group else 1
+
+        for idx in range(start_col, len(header_row)):
             disease = self._clean_text(header_row[idx] if idx < len(header_row) else "")
             if disease:
                 disease_cols[idx] = disease
@@ -112,17 +143,31 @@ class SurvstatIngestionService:
             raise ValueError(f"Datei '{path.name}' enthält keine Krankheits-Spalten in Zeile 2.")
 
         records: list[_SurvstatRecord] = []
+        skipped_non_otc = 0
+
         for row in rows[2:]:
             bundesland = self._clean_text(row[0] if len(row) > 0 else "")
             if not bundesland:
                 continue
 
+            age_group: str | None = None
+            if has_age_group and len(row) > 1:
+                age_group = self._clean_text(row[1]) or None
+
             for col_idx, disease in disease_cols.items():
                 if col_idx >= len(row):
                     continue
+
+                # OTC filter: skip non-relevant diseases early
+                cluster = disease_to_cluster(disease)
+                if cluster is None and disease.lower() != "all":
+                    skipped_non_otc += 1
+                    continue
+
                 incidence = self._parse_number(row[col_idx])
                 if incidence is None:
                     continue
+
                 records.append(
                     _SurvstatRecord(
                         week_label=week_label,
@@ -134,29 +179,34 @@ class SurvstatIngestionService:
                         disease=disease,
                         incidence=incidence,
                         source_file=path.name,
+                        disease_cluster=cluster,
+                        age_group=age_group,
                     )
                 )
 
         logger.info(
-            "SURVSTAT parsed %s: %s records, %s diseases",
+            "SURVSTAT parsed %s: %s OTC records (skipped %s non-OTC), %s diseases%s",
             path.name,
             len(records),
+            skipped_non_otc,
             len({r.disease for r in records}),
+            f", age_groups={has_age_group}" if has_age_group else "",
         )
         return records
 
     def import_records(self, records: list[_SurvstatRecord]) -> tuple[int, int]:
-        """Upsert der SURVSTAT-Records in die DB."""
+        """Upsert der SURVSTAT-Records in die DB mit OTC-Cluster-Mapping."""
         if not records:
             return 0, 0
 
         week_labels = sorted({r.week_label for r in records})
-        existing = self.db.query(SurvstatWeeklyData).filter(
-            SurvstatWeeklyData.week_label.in_(week_labels)
-        ).all()
+        existing = (
+            self.db.query(SurvstatWeeklyData)
+            .filter(SurvstatWeeklyData.week_label.in_(week_labels))
+            .all()
+        )
         existing_map = {
-            (row.week_label, row.bundesland, row.disease): row
-            for row in existing
+            (row.week_label, row.bundesland, row.disease): row for row in existing
         }
 
         inserted = 0
@@ -171,6 +221,8 @@ class SurvstatIngestionService:
                 "week": rec.week,
                 "incidence": rec.incidence,
                 "source_file": rec.source_file,
+                "disease_cluster": rec.disease_cluster,
+                "age_group": rec.age_group,
             }
 
             row = existing_map.get(key)
@@ -195,6 +247,8 @@ class SurvstatIngestionService:
                     disease=rec.disease,
                     incidence=rec.incidence,
                     source_file=rec.source_file,
+                    disease_cluster=rec.disease_cluster,
+                    age_group=rec.age_group,
                 )
                 self.db.add(row)
                 existing_map[key] = row
@@ -204,6 +258,31 @@ class SurvstatIngestionService:
         logger.info("SURVSTAT import: %s new, %s updated", inserted, updated)
         return inserted, updated
 
+    def backfill_clusters(self) -> int:
+        """Nachträgliches Cluster-Mapping für bestehende DB-Rows ohne disease_cluster.
+
+        Einmalig aufrufen nach der Migration, um alle historischen Daten
+        mit ihrem OTC-Cluster zu taggen.
+        """
+        rows = (
+            self.db.query(SurvstatWeeklyData)
+            .filter(SurvstatWeeklyData.disease_cluster.is_(None))
+            .all()
+        )
+
+        updated = 0
+        for row in rows:
+            cluster = disease_to_cluster(row.disease)
+            if cluster:
+                row.disease_cluster = cluster
+                updated += 1
+
+        if updated:
+            self.db.commit()
+
+        logger.info("SURVSTAT backfill: %s rows clustered out of %s unclustered", updated, len(rows))
+        return updated
+
     @staticmethod
     def _latest_week_label(records: list[_SurvstatRecord]) -> str | None:
         if not records:
@@ -212,7 +291,11 @@ class SurvstatIngestionService:
         return latest.week_label
 
     def run_local_import(self, folder_path: str) -> dict:
-        """Importiert alle SURVSTAT-Dateien aus einem lokalen Ordner."""
+        """Importiert alle SURVSTAT-Dateien aus einem lokalen Ordner.
+
+        Filtert automatisch auf OTC-relevante Krankheiten und weist
+        jedem Record seinen disease_cluster zu.
+        """
         base = Path(folder_path).expanduser()
         if not base.exists() or not base.is_dir():
             raise ValueError(f"SURVSTAT-Ordner nicht gefunden: {base}")
@@ -235,11 +318,17 @@ class SurvstatIngestionService:
                 recs = self.parse_file(path)
                 all_records.extend(recs)
                 parsed_files += 1
-            except Exception as exc:  # pragma: no cover - defensive handling
+            except Exception as exc:
                 logger.error("SURVSTAT parse failed for %s: %s", path.name, exc)
                 errors.append({"file": path.name, "error": str(exc)})
 
         inserted, updated = self.import_records(all_records)
+
+        # Count clusters for summary
+        cluster_counts = {}
+        for r in all_records:
+            if r.disease_cluster:
+                cluster_counts[r.disease_cluster] = cluster_counts.get(r.disease_cluster, 0) + 1
 
         return {
             "success": len(all_records) > 0 and len(errors) == 0,
@@ -250,6 +339,7 @@ class SurvstatIngestionService:
             "imported": inserted,
             "updated": updated,
             "latest_week": self._latest_week_label(all_records),
+            "cluster_distribution": cluster_counts,
             "errors": errors,
             "timestamp": datetime.utcnow().isoformat(),
         }

@@ -11,6 +11,8 @@ class SurvstatWeeklyDataBase(BaseModel):
     week: int = Field(..., ge=1, le=53)
     bundesland: str = Field(..., min_length=1)
     disease: str = Field(..., min_length=1)
+    disease_cluster: str | None = None
+    age_group: str | None = None
     incidence: float | None = Field(default=None, ge=0)
     source_file: str | None = None
 
@@ -29,6 +31,8 @@ class SurvstatWeeklyDataUpdate(BaseModel):
     week: int | None = Field(default=None, ge=1, le=53)
     bundesland: str | None = Field(default=None, min_length=1)
     disease: str | None = Field(default=None, min_length=1)
+    disease_cluster: str | None = None
+    age_group: str | None = None
     incidence: float | None = Field(default=None, ge=0)
     source_file: str | None = None
 

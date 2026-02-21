@@ -255,3 +255,53 @@ def process_erp_sales_sync(self, payload: Dict[str, Any]) -> Dict[str, Any]:
     except Exception as exc:
         logger.exception(f"ERP sales sync processing failed: {exc}")
         raise RuntimeError(f"ERP sales sync failed: {exc}") from exc
+
+
+@celery_app.task(bind=True, name="backfill_survstat_from_folder")
+def backfill_survstat_from_folder(
+    self,
+    folder_path: str = "/app/data/raw/survstat/backfill",
+) -> Dict[str, Any]:
+    """Batch-Import historischer SURVSTAT-CSVs mit OTC-Filtering.
+
+    Verarbeitet einen Ordner mit vorab heruntergeladenen RKI SurvStat
+    CSV-Dateien (z.B. 2019_01.csv bis 2026_08.csv). Filtert auf
+    OTC-relevante Krankheiten und weist Cluster zu.
+
+    Kein API-Call — nur lokale Dateien. Rate-Limiting nicht nötig.
+    """
+    from app.services.data_ingest.survstat_service import SurvstatIngestionService
+
+    logger.info(f"SURVSTAT backfill: Starte aus {folder_path}")
+
+    with get_db_context() as db:
+        service = SurvstatIngestionService(db)
+        result = service.run_local_import(folder_path)
+
+    logger.info(
+        "SURVSTAT backfill: %s records, %s imported, %s updated",
+        result.get("records_total", 0),
+        result.get("imported", 0),
+        result.get("updated", 0),
+    )
+    return _json_safe(result)
+
+
+@celery_app.task(bind=True, name="backfill_survstat_clusters")
+def backfill_survstat_clusters(self) -> Dict[str, Any]:
+    """Einmaliger Task: Bestehende SurvStat-Daten mit OTC-Clustern taggen.
+
+    Liest alle Rows ohne disease_cluster und weist ihnen den passenden
+    Cluster zu. Rows, die nicht in der OTC-Whitelist sind, bleiben
+    mit disease_cluster=NULL (können optional gelöscht werden).
+    """
+    from app.services.data_ingest.survstat_service import SurvstatIngestionService
+
+    logger.info("SURVSTAT cluster backfill: Starte...")
+
+    with get_db_context() as db:
+        service = SurvstatIngestionService(db)
+        updated = service.backfill_clusters()
+
+    logger.info("SURVSTAT cluster backfill: %s rows updated", updated)
+    return _json_safe({"status": "success", "rows_clustered": updated})

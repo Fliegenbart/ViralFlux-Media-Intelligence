@@ -148,6 +148,8 @@ class SurvstatWeeklyData(Base):
     week = Column(Integer, nullable=False)
     bundesland = Column(String, nullable=False)
     disease = Column(String, nullable=False)
+    disease_cluster = Column(String, nullable=True, index=True)  # RESPIRATORY, GASTROINTESTINAL, etc.
+    age_group = Column(String, nullable=True)  # "00-04", "05-14", "15+", "Gesamt", etc.
     incidence = Column(Float)
     source_file = Column(String)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -155,6 +157,7 @@ class SurvstatWeeklyData(Base):
     __table_args__ = (
         Index('idx_survstat_week_state', 'week_label', 'bundesland'),
         Index('idx_survstat_disease_week', 'disease', 'week_start'),
+        Index('idx_survstat_cluster_week', 'disease_cluster', 'week_start'),
         Index('uq_survstat_week_state_disease', 'week_label', 'bundesland', 'disease', unique=True),
     )
 

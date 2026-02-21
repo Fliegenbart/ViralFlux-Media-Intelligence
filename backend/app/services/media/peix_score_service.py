@@ -79,9 +79,9 @@ _NOTAUFNAHME_BY_VIRUS = {
 DEFAULT_WEIGHTS = {
     "bio": 0.50,
     "forecast": 0.15,
+    "shortage": 0.15,
     "weather": 0.10,
-    "shortage": 0.10,
-    "search": 0.10,
+    "search": 0.05,
     "baseline": 0.05,
 }
 

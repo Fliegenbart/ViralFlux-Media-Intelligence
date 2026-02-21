@@ -18,6 +18,7 @@ from app.services.media.product_catalog_service import (
     ProductCatalogService,
 )
 from app.services.media.tasks import refine_recommendation_ai_task
+from app.schemas.brand_product import BrandProductCreateInput, BrandProductUpdate
 
 
 router = APIRouter()
@@ -45,7 +46,7 @@ REGION_NAME_TO_CODE = {name.lower(): code for code, name in BUNDESLAND_NAMES.ite
 
 
 class RecommendationGenerateRequest(BaseModel):
-    brand: str = Field(default="GeloMyrtol")
+    brand: str = Field(default="gelo")
     product: str = Field(default="GeloMyrtol forte")
     campaign_goal: str = Field(default="Awareness + Abverkauf")
     weekly_budget: float = Field(default=100000.0, ge=0)
@@ -58,7 +59,7 @@ class RecommendationGenerateRequest(BaseModel):
 
 class RecommendationOpenRegionRequest(BaseModel):
     region_code: str = Field(..., min_length=2)
-    brand: str = Field(default="GeloMyrtol")
+    brand: str = Field(default="gelo")
     product: str = Field(default="GeloMyrtol forte")
     campaign_goal: str = Field(default="Top-of-Mind vor Erkältungswelle")
     weekly_budget: float = Field(default=100000.0, ge=0)
@@ -95,6 +96,15 @@ class ProductMappingUpdateRequest(BaseModel):
     is_approved: Optional[bool] = None
     priority: Optional[int] = Field(default=None, ge=0, le=999)
     notes: Optional[str] = None
+
+
+class ProductConditionLinkRequest(BaseModel):
+    condition_key: str = Field(..., min_length=1)
+    is_approved: bool = False
+    fit_score: float = Field(default=0.8, ge=0.0, le=1.0)
+    priority: int = Field(default=600, ge=0, le=999)
+    mapping_reason: str | None = None
+    notes: str | None = None
 
 
 @router.get("/cockpit")
@@ -320,6 +330,7 @@ async def get_media_recommendation_detail(
         **_to_card_response(item, include_preview=True),
         "campaign_pack": payload,
         "trigger_evidence": item.get("trigger_evidence") or payload.get("trigger_evidence"),
+        "decision_brief": item.get("decision_brief"),
         "target_audience": item.get("target_audience") or [],
         "sales_pitch": item.get("sales_pitch"),
         "suggested_products": item.get("suggested_products") or [],
@@ -387,14 +398,166 @@ async def regenerate_media_recommendation_ai(
 async def refresh_media_products(
     brand: str = Query(default="gelo"),
     source_url: str = Query(default=DEFAULT_GELO_SOURCE_URL),
+    overwrite_rules: bool = Query(default=False),
     db: Session = Depends(get_db),
 ):
     """Manueller Produktkatalog-Refresh aus externer Quelle."""
     service = ProductCatalogService(db)
-    result = service.refresh_brand_catalog(brand=brand, source_url=source_url)
+    result = service.refresh_brand_catalog(
+        brand=brand,
+        source_url=source_url,
+        overwrite_rules=overwrite_rules,
+    )
     if "error" in result:
         raise HTTPException(status_code=400, detail=result["error"])
     return result
+
+
+@router.post("/products")
+async def create_media_product(
+    payload: BrandProductCreateInput,
+    db: Session = Depends(get_db),
+):
+    """Legt ein neues Produkt im Gelo-Katalog manuell an."""
+    service = ProductCatalogService(db)
+    try:
+        attributes = {
+            "sku": payload.sku,
+            "target_segments": payload.target_segments,
+            "conditions": payload.conditions,
+            "forms": payload.forms,
+            "age_min_months": payload.age_min_months,
+            "age_max_months": payload.age_max_months,
+            "audience_mode": payload.audience_mode,
+            "channel_fit": payload.channel_fit,
+            "compliance_notes": payload.compliance_notes,
+        }
+        product = service.create_product(
+            brand=payload.brand,
+            product_name=payload.product_name,
+            source_url=payload.source_url,
+            source_hash=payload.source_hash,
+            active=payload.active,
+            extra_data=None,
+            attributes=attributes,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    return product
+
+
+@router.patch("/products/{product_id}")
+async def update_media_product(
+    product_id: int,
+    payload: BrandProductUpdate,
+    db: Session = Depends(get_db),
+):
+    """Aktualisiert Produktattribute/Metadaten des Katalogs."""
+    service = ProductCatalogService(db)
+    payload_data = payload.model_dump(exclude_unset=True)
+    attribute_fields = {
+        "sku",
+        "target_segments",
+        "conditions",
+        "forms",
+        "age_min_months",
+        "age_max_months",
+        "audience_mode",
+        "channel_fit",
+        "compliance_notes",
+    }
+    attributes = {
+        key: payload_data[key]
+        for key in attribute_fields
+        if key in payload_data
+    }
+    try:
+        updated = service.update_product(
+            product_id=product_id,
+            product_name=payload_data.get("product_name"),
+            source_url=payload_data.get("source_url"),
+            source_hash=payload_data.get("source_hash"),
+            active=payload_data.get("active"),
+            extra_data=payload_data.get("extra_data"),
+            attributes=attributes or None,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    if not updated:
+        raise HTTPException(status_code=404, detail=f"Produkt {product_id} nicht gefunden")
+    return updated
+
+
+@router.delete("/products/{product_id}")
+async def delete_media_product(
+    product_id: int,
+    db: Session = Depends(get_db),
+):
+    """Deaktiviert ein Produkt (Soft-Delete)."""
+    service = ProductCatalogService(db)
+    deleted = service.soft_delete_product(product_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail=f"Produkt {product_id} nicht gefunden")
+    return deleted
+
+
+@router.post("/products/{product_id}/match/run")
+async def run_media_product_match(
+    product_id: int,
+    db: Session = Depends(get_db),
+):
+    """Berechnet Mapping-Regeln für ein einzelnes Produkt neu."""
+    service = ProductCatalogService(db)
+    result = service.run_match_for_product(product_id)
+    if not result:
+        raise HTTPException(status_code=404, detail=f"Produkt {product_id} nicht gefunden")
+    return result
+
+
+@router.post("/products/{product_id}/condition-links")
+async def add_media_product_condition_link(
+    product_id: int,
+    payload: ProductConditionLinkRequest,
+    db: Session = Depends(get_db),
+):
+    """Fügt einen manuellen Lagebezug für ein Produkt hinzu oder passt ihn an."""
+    service = ProductCatalogService(db)
+    try:
+        row = service.upsert_condition_link(
+            product_id=product_id,
+            condition_key=payload.condition_key,
+            is_approved=payload.is_approved,
+            fit_score=payload.fit_score,
+            priority=payload.priority,
+            mapping_reason=payload.mapping_reason,
+            notes=payload.notes,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    if not row:
+        raise HTTPException(status_code=404, detail=f"Produkt {product_id} nicht gefunden")
+    return row
+
+
+@router.get("/products/match-preview")
+async def preview_media_product_match(
+    brand: str = Query(default="gelo"),
+    opportunity_id: str | None = Query(default=None),
+    limit: int = Query(default=50, ge=1, le=200),
+    db: Session = Depends(get_db),
+):
+    """Gibt aktuelle Produkt-Match-Vorschläge für Opportunities zurück."""
+    service = ProductCatalogService(db)
+    try:
+        data = service.preview_matches(
+            brand=brand,
+            opportunity_id=opportunity_id,
+            limit=limit,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    return data
 
 
 @router.get("/products")
@@ -508,6 +671,7 @@ def _to_card_response(opp: dict[str, Any], include_preview: bool = True) -> dict
         "guardrail_notes": opp.get("guardrail_notes") or (campaign_pack.get("guardrail_report") or {}).get("applied_fixes") or [],
         "ai_generation_status": opp.get("ai_generation_status") or ai_meta.get("status"),
         "strategy_mode": opp.get("strategy_mode") or campaign_pack.get("strategy_mode"),
+        "decision_brief": opp.get("decision_brief"),
     }
 
     if include_preview:

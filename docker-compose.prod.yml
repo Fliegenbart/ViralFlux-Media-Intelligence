@@ -47,7 +47,7 @@ services:
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
       - SECRET_KEY=${SECRET_KEY:-viralflux-prod-secret-key-change-me-2026}
       - ENVIRONMENT=production
-      - ALLOWED_ORIGINS=https://labpulse.belegsync.com,http://5.9.106.75:8501
+      - ALLOWED_ORIGINS=https://fluxengine.labpulse.ai,https://www.fluxengine.labpulse.ai,https://labpulse.belegsync.com,http://5.9.106.75:8501
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
@@ -96,10 +96,28 @@ services:
       dockerfile: docker/Dockerfile.frontend
     container_name: virusradar_frontend
     restart: unless-stopped
-    ports:
-      - "172.17.0.1:18080:80"
     depends_on:
       - backend
+    networks:
+      - virusradar_network
+
+  proxy:
+    image: caddy:2.8
+    container_name: virusradar_caddy_proxy
+    restart: unless-stopped
+    depends_on:
+      - frontend
+      - backend
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
+    volumes:
+      - ./docker/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    ports:
+      - "80:80"
+      - "443:443"
     networks:
       - virusradar_network
 
@@ -111,7 +129,7 @@ services:
     restart: unless-stopped
     profiles: ["staging"]
     ports:
-      - "172.17.0.1:18081:80"
+      - "127.0.0.1:18081:80"
     depends_on:
       - backend
     networks:
@@ -120,6 +138,8 @@ services:
 volumes:
   postgres_data:
     driver: local
+  caddy_data:
+  caddy_config:
 
 networks:
   virusradar_network:

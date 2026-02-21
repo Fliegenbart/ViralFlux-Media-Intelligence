@@ -1,0 +1,22 @@
+{
+  # HTTPS automatically via ACME from Let's Encrypt.
+  email admin@labpulse.ai
+}
+
+www.fluxengine.labpulse.ai {
+  redir https://fluxengine.labpulse.ai{uri}
+}
+
+fluxengine.labpulse.ai {
+  @backend_routes {
+    path /api /api/* /api/v1/* /health /docs /docs/* /openapi.json
+  }
+
+  handle @backend_routes {
+    reverse_proxy backend:8000
+  }
+
+  handle {
+    reverse_proxy frontend:80
+  }
+}

@@ -169,7 +169,11 @@ class MarketingOpportunityEngine:
         if status_filter:
             query = query.filter(MarketingOpportunity.status.in_(self._status_filter_values(status_filter)))
         if brand_filter:
-            query = query.filter(MarketingOpportunity.brand == brand_filter)
+            canonical_brand = self._canonical_brand(brand_filter)
+            if canonical_brand == "gelo":
+                query = query.filter(func.lower(MarketingOpportunity.brand).like("%gelo%"))
+            else:
+                query = query.filter(func.lower(MarketingOpportunity.brand) == canonical_brand)
         if min_urgency is not None:
             query = query.filter(MarketingOpportunity.urgency_score >= min_urgency)
 
@@ -304,7 +308,10 @@ class MarketingOpportunityEngine:
                 opportunity=synthetic_opportunity,
                 fallback_product=product,
             )
-            selected_product = product_mapping.get("recommended_product") or product
+            selected_product = self._select_product_for_opportunity(
+                fallback_product=product,
+                product_mapping=product_mapping,
+            )
 
             trigger_snapshot = candidate.get("trigger_snapshot") or {}
             pack = select_gelo_message_pack(
@@ -521,7 +528,10 @@ class MarketingOpportunityEngine:
                 opportunity=opp,
                 fallback_product=product,
             )
-            selected_product = product_mapping.get("recommended_product") or product
+            selected_product = self._select_product_for_opportunity(
+                fallback_product=product,
+                product_mapping=product_mapping,
+            )
 
             activation_window = self._derive_activation_window(urgency)
             campaign_payload = self._build_campaign_pack(
@@ -601,6 +611,23 @@ class MarketingOpportunityEngine:
             "top_card_id": top_card_id,
             "auto_open_url": f"/dashboard/recommendations/{top_card_id}" if top_card_id else None,
         }
+
+    @staticmethod
+    def _select_product_for_opportunity(
+        *,
+        fallback_product: str,
+        product_mapping: dict[str, Any],
+    ) -> str:
+        status = str(product_mapping.get("mapping_status") or "").strip().lower()
+        if status == "approved":
+            recommended = product_mapping.get("recommended_product")
+            if recommended:
+                return str(recommended)
+
+        if status == "not_applicable":
+            return fallback_product or "Produktfreigabe ausstehend"
+
+        return "Produktfreigabe ausstehend"
 
     def backfill_peix_context(self, *, force: bool = False, limit: int = 1000) -> dict[str, Any]:
         """Nachtraegliches Auffuellen von peix_context fuer bestehende Recommendations."""
@@ -1457,7 +1484,7 @@ class MarketingOpportunityEngine:
             return
 
         now = datetime.utcnow()
-        row.brand = brand
+        row.brand = self._canonical_brand(brand) or "gelo"
         row.product = product
         row.status = status
         row.budget_shift_pct = budget_shift_pct
@@ -1489,6 +1516,13 @@ class MarketingOpportunityEngine:
             return "Gesamt"
 
         return REGION_NAME_TO_CODE.get(lower)
+
+    @staticmethod
+    def _canonical_brand(value: str | None) -> str:
+        raw = str(value or "").strip().lower()
+        if "gelo" in raw:
+            return "gelo"
+        return raw
 
     def _region_label(self, region_code: str) -> str:
         if region_code in BUNDESLAND_NAMES:
@@ -1540,6 +1574,262 @@ class MarketingOpportunityEngine:
             "trigger_event": trigger.get("event"),
         }
 
+    @staticmethod
+    def _fact_label(key: str) -> str:
+        raw = str(key or "").strip().replace("_", " ")
+        if not raw:
+            return "Fakt"
+        return raw[:1].upper() + raw[1:]
+
+    @staticmethod
+    def _confidence_pct(raw_confidence: Any, urgency_score: float | None) -> float:
+        parsed: float | None = None
+        if raw_confidence is not None:
+            try:
+                parsed = float(raw_confidence)
+            except (TypeError, ValueError):
+                parsed = None
+
+        if parsed is None:
+            parsed = float(urgency_score or 50.0)
+        elif parsed <= 1.0:
+            parsed = parsed * 100.0
+
+        return round(max(0.0, min(100.0, float(parsed))), 1)
+
+    @staticmethod
+    def _secondary_products(
+        suggested_products: Any,
+        mapping_candidate_product: str | None,
+        primary_product: str | None,
+    ) -> list[str]:
+        primary = str(primary_product or "").strip().lower()
+        out: list[str] = []
+        seen: set[str] = set()
+
+        def add(value: Any) -> None:
+            raw = str(value or "").strip()
+            if not raw:
+                return
+            norm = raw.lower()
+            if primary and norm == primary:
+                return
+            if norm in seen:
+                return
+            seen.add(norm)
+            out.append(raw)
+
+        if isinstance(suggested_products, list):
+            for item in suggested_products:
+                if isinstance(item, str):
+                    add(item)
+                    continue
+                if isinstance(item, dict):
+                    add(item.get("product_name") or item.get("product") or item.get("name"))
+        add(mapping_candidate_product)
+        return out
+
+    def _decision_facts(
+        self,
+        *,
+        trigger_snapshot: dict[str, Any],
+        trigger_evidence: dict[str, Any],
+        peix_context: dict[str, Any],
+        confidence_pct: float,
+    ) -> list[dict[str, Any]]:
+        facts: list[dict[str, Any]] = []
+        source = (
+            trigger_evidence.get("source")
+            or trigger_snapshot.get("source")
+            or "Signal-Fusion"
+        )
+        values = trigger_snapshot.get("values")
+        if isinstance(values, dict):
+            for key in sorted(values.keys()):
+                value = values.get(key)
+                if isinstance(value, (str, int, float, bool)):
+                    facts.append(
+                        {
+                            "key": str(key),
+                            "label": self._fact_label(str(key)),
+                            "value": value,
+                            "source": source,
+                        }
+                    )
+
+        event = trigger_evidence.get("event") or trigger_snapshot.get("event")
+        if event:
+            facts.append(
+                {
+                    "key": "trigger_event",
+                    "label": "Trigger Event",
+                    "value": str(event),
+                    "source": source,
+                }
+            )
+
+        lead_time = trigger_evidence.get("lead_time_days") or trigger_snapshot.get("lead_time_days")
+        if lead_time is not None:
+            facts.append(
+                {
+                    "key": "lead_time_days",
+                    "label": "Modell Lead-Time (Tage)",
+                    "value": lead_time,
+                    "source": source,
+                }
+            )
+
+        score = peix_context.get("score")
+        if score is not None:
+            facts.append(
+                {
+                    "key": "peix_score",
+                    "label": "PeixEpiScore",
+                    "value": score,
+                    "source": "PeixEpiScore",
+                }
+            )
+
+        impact = peix_context.get("impact_probability")
+        if impact is not None:
+            facts.append(
+                {
+                    "key": "impact_probability",
+                    "label": "Impact Probability (%)",
+                    "value": impact,
+                    "source": "PeixEpiScore",
+                }
+            )
+
+        facts.append(
+            {
+                "key": "confidence_pct",
+                "label": "Konfidenz (%)",
+                "value": confidence_pct,
+                "source": source,
+            }
+        )
+
+        return facts
+
+    def _build_decision_brief(
+        self,
+        *,
+        urgency_score: float | None,
+        recommendation_reason: str | None,
+        trigger_context: dict[str, Any],
+        trigger_snapshot: dict[str, Any],
+        trigger_evidence: dict[str, Any],
+        peix_context: dict[str, Any],
+        region_codes: list[str],
+        condition_key: str | None,
+        condition_label: str | None,
+        recommended_product: str | None,
+        mapping_status: str | None,
+        mapping_reason: str | None,
+        mapping_candidate_product: str | None,
+        suggested_products: Any,
+        budget_shift_pct: float | None,
+        budget_shift_pct_fallback: float | None,
+    ) -> dict[str, Any]:
+        primary_region_code = region_codes[0] if region_codes else "Gesamt"
+        primary_region = (
+            "Deutschland"
+            if primary_region_code == "Gesamt"
+            else self._region_label(primary_region_code)
+        )
+        secondary_regions = [
+            self._region_label(code) if code in BUNDESLAND_NAMES else code
+            for code in region_codes[1:]
+        ]
+
+        raw_confidence = trigger_evidence.get("confidence")
+        if raw_confidence is None:
+            raw_confidence = trigger_snapshot.get("confidence")
+        confidence_pct = self._confidence_pct(raw_confidence, urgency_score)
+
+        lead_time_days = trigger_evidence.get("lead_time_days") or trigger_snapshot.get("lead_time_days")
+
+        mapping_status_value = str(mapping_status or "").strip().lower() or "needs_review"
+        action_required = (
+            "review_mapping"
+            if mapping_status_value == "needs_review"
+            else "ready_for_activation"
+        )
+
+        primary_product = str(recommended_product or "").strip() or "Produktfreigabe ausstehend"
+        secondary_products = self._secondary_products(
+            suggested_products=suggested_products,
+            mapping_candidate_product=mapping_candidate_product,
+            primary_product=primary_product,
+        )
+
+        condition_text = str(condition_label or condition_key or "relevante Lageklasse")
+        rationale = (
+            str(mapping_reason or "").strip()
+            or str(recommendation_reason or "").strip()
+            or str(trigger_evidence.get("details") or "").strip()
+            or str(trigger_context.get("event") or "").strip()
+        )
+
+        basis_parts: list[str] = []
+        source_label = trigger_evidence.get("source") or trigger_snapshot.get("source")
+        if source_label:
+            basis_parts.append(str(source_label))
+        event_label = trigger_evidence.get("event") or trigger_snapshot.get("event")
+        if event_label:
+            basis_parts.append(str(event_label).replace("_", " ").lower())
+        score = peix_context.get("score")
+        if score is not None:
+            try:
+                basis_parts.append(f"PeixEpiScore {float(score):.1f}")
+            except (TypeError, ValueError):
+                basis_parts.append(f"PeixEpiScore {score}")
+        if not basis_parts:
+            basis_parts.append("aktuellen epidemiologischen Signalen")
+        basis_text = " / ".join(basis_parts[:3])
+
+        budget_shift = budget_shift_pct if budget_shift_pct is not None else budget_shift_pct_fallback
+
+        summary_sentence = (
+            f"Auf Basis von {basis_text} erwarten wir in den naechsten 7-14 Tagen "
+            f"{condition_text} in {primary_region}; daher empfehlen wir {primary_product}."
+        )
+
+        return {
+            "summary_sentence": summary_sentence,
+            "horizon": {
+                "min_days": 7,
+                "max_days": 14,
+                "model_lead_time_days": lead_time_days,
+            },
+            "facts": self._decision_facts(
+                trigger_snapshot=trigger_snapshot,
+                trigger_evidence=trigger_evidence,
+                peix_context=peix_context,
+                confidence_pct=confidence_pct,
+            ),
+            "expectation": {
+                "condition_key": condition_key,
+                "condition_label": condition_label,
+                "region_codes": region_codes,
+                "impact_probability": peix_context.get("impact_probability"),
+                "peix_score": peix_context.get("score"),
+                "confidence_pct": confidence_pct,
+                "rationale": rationale,
+            },
+            "recommendation": {
+                "primary_product": primary_product,
+                "primary_region": primary_region,
+                "secondary_regions": secondary_regions,
+                "secondary_products": secondary_products,
+                "budget_shift_pct": budget_shift,
+                "mapping_status": mapping_status_value,
+                "mapping_reason": mapping_reason,
+                "action_required": action_required,
+            },
+        }
+
     def _clean_for_output(self, opp: dict) -> dict:
         """Entfernt interne _-Felder fuer den API-Output."""
         return {k: v for k, v in opp.items() if not k.startswith("_")}
@@ -1586,6 +1876,33 @@ class MarketingOpportunityEngine:
                 "campaign_payload": campaign_payload,
             }
         )
+        trigger_context = (
+            m.trigger_details
+            or {
+                "source": m.trigger_source,
+                "event": m.trigger_event,
+                "detected_at": m.trigger_detected_at.isoformat() if m.trigger_detected_at else None,
+            }
+        )
+        recommended_product = product_mapping.get("recommended_product") or m.product
+        decision_brief = self._build_decision_brief(
+            urgency_score=m.urgency_score,
+            recommendation_reason=m.recommendation_reason,
+            trigger_context=trigger_context,
+            trigger_snapshot=campaign_payload.get("trigger_snapshot") or {},
+            trigger_evidence=campaign_payload.get("trigger_evidence") or {},
+            peix_context=peix_context,
+            region_codes=region_codes,
+            condition_key=product_mapping.get("condition_key"),
+            condition_label=product_mapping.get("condition_label"),
+            recommended_product=recommended_product,
+            mapping_status=product_mapping.get("mapping_status"),
+            mapping_reason=product_mapping.get("mapping_reason"),
+            mapping_candidate_product=product_mapping.get("candidate_product"),
+            suggested_products=m.suggested_products,
+            budget_shift_pct=m.budget_shift_pct,
+            budget_shift_pct_fallback=(campaign_payload.get("budget_plan") or {}).get("budget_shift_pct"),
+        )
 
         return {
             "id": m.opportunity_id,
@@ -1594,12 +1911,7 @@ class MarketingOpportunityEngine:
             "legacy_status": WORKFLOW_TO_LEGACY.get(status, m.status),
             "urgency_score": m.urgency_score,
             "region_target": m.region_target,
-            "trigger_context": m.trigger_details
-            or {
-                "source": m.trigger_source,
-                "event": m.trigger_event,
-                "detected_at": m.trigger_detected_at.isoformat() if m.trigger_detected_at else None,
-            },
+            "trigger_context": trigger_context,
             "target_audience": m.target_audience,
             "sales_pitch": m.sales_pitch,
             "suggested_products": m.suggested_products,
@@ -1614,7 +1926,7 @@ class MarketingOpportunityEngine:
             "recommendation_reason": m.recommendation_reason,
             "campaign_payload": campaign_payload,
             "campaign_preview": campaign_preview,
-            "recommended_product": product_mapping.get("recommended_product") or m.product,
+            "recommended_product": recommended_product,
             "mapping_status": product_mapping.get("mapping_status"),
             "mapping_confidence": product_mapping.get("mapping_confidence"),
             "mapping_reason": product_mapping.get("mapping_reason"),
@@ -1630,6 +1942,7 @@ class MarketingOpportunityEngine:
             "guardrail_notes": (campaign_payload.get("guardrail_report") or {}).get("applied_fixes"),
             "ai_generation_status": ai_meta.get("status"),
             "trigger_evidence": (campaign_payload or {}).get("trigger_evidence"),
+            "decision_brief": decision_brief,
             "detail_url": f"/dashboard/recommendations/{m.opportunity_id}",
             "created_at": m.created_at.isoformat() if m.created_at else None,
             "updated_at": m.updated_at.isoformat() if m.updated_at else None,

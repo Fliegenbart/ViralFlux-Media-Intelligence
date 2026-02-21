@@ -11,11 +11,14 @@ const App: React.FC = () => {
   return (
     <Router>
       <Routes>
-        <Route path="/" element={<Navigate to="/dashboard" replace />} />
+        <Route path="/" element={<LandingPage />} />
         <Route path="/welcome" element={<LandingPage />} />
         <Route path="/dashboard" element={<MediaCockpit />} />
         <Route path="/dashboard/recommendations/:id" element={<CampaignRecommendationDetail />} />
+        <Route path="/app" element={<Navigate to="/dashboard" replace />} />
+        <Route path="/cockpit" element={<Navigate to="/dashboard" replace />} />
         <Route path="/map" element={<Navigate to="/dashboard?tab=map" replace />} />
+        <Route path="/products" element={<Navigate to="/dashboard?tab=product-intel" replace />} />
         <Route path="/sales-radar" element={<SalesRadar />} />
         <Route path="/vertriebsradar" element={<Navigate to="/sales-radar" replace />} />
         <Route path="/data-integration" element={<DataIntegration />} />

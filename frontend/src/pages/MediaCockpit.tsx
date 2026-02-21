@@ -10,6 +10,7 @@ import {
   RegionRecommendationRef,
   SourceStatusSummary,
 } from '../types/media';
+import ProductCatalogPanel from './ProductCatalog';
 
 const BUNDESLAND_PATHS: Record<string, { d: string; cx: number; cy: number }> = {
   SH: { d: 'M195,10 L230,5 L250,25 L260,60 L240,80 L215,90 L190,80 L180,55 L185,30Z', cx: 220, cy: 48 },
@@ -121,13 +122,25 @@ const mappingLabel = (status?: string) => {
   return status;
 };
 
+const pillToneClass = (tone?: 'green' | 'amber' | 'red') => {
+  if (tone === 'green') return 'text-emerald-400 bg-emerald-500/10';
+  if (tone === 'amber') return 'text-amber-300 bg-amber-500/10';
+  return 'text-red-400 bg-red-500/10';
+};
+
 const MediaCockpit: React.FC = () => {
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const initialTab = params.get('tab') || 'map';
 
-  const [tab, setTab] = useState<'map' | 'recommendations' | 'backtest'>(
-    initialTab === 'recommendations' || initialTab === 'backtest' ? (initialTab as any) : 'map'
+  const [tab, setTab] = useState<
+    'map' | 'recommendations' | 'backtest' | 'product-intel'
+  >(
+    initialTab === 'recommendations'
+      || initialTab === 'backtest'
+      || initialTab === 'product-intel'
+      ? (initialTab as any)
+      : 'map'
   );
   const [virus, setVirus] = useState('Influenza A');
   const [targetSource, setTargetSource] = useState('RKI_ARE');
@@ -137,6 +150,9 @@ const MediaCockpit: React.FC = () => {
   const [selectedRegion, setSelectedRegion] = useState<string | null>(null);
   const [horizonDays, setHorizonDays] = useState(0);
   const [showTechDetails, setShowTechDetails] = useState(false);
+  const [productMappingLoading, setProductMappingLoading] = useState(false);
+  const [productMappingCount, setProductMappingCount] = useState(0);
+  const [productMappingApprovedCount, setProductMappingApprovedCount] = useState(0);
 
   const [recLoading, setRecLoading] = useState(false);
   const [recCards, setRecCards] = useState<RecommendationCard[]>([]);
@@ -145,7 +161,7 @@ const MediaCockpit: React.FC = () => {
   const [refinementPollSeconds, setRefinementPollSeconds] = useState(5);
   const [refinementStartedAt, setRefinementStartedAt] = useState<number | null>(null);
   const [refinementNotice, setRefinementNotice] = useState<string | null>(null);
-  const [brand, setBrand] = useState('GeloMyrtol');
+  const [brand, setBrand] = useState('gelo');
   const [product, setProduct] = useState('GeloMyrtol forte');
   const [goal, setGoal] = useState('Top-of-Mind vor Erkältungswelle');
   const [weeklyBudget, setWeeklyBudget] = useState(120000);
@@ -200,16 +216,53 @@ const MediaCockpit: React.FC = () => {
     }
   }, []);
 
+  const loadProductFlowStatus = useCallback(async () => {
+    setProductMappingLoading(true);
+    try {
+      const tryEndpoints = ['/api/v1/media/product-mapping?brand=gelo&only_pending=false', '/api/v1/media/product-mapping?brand=GeloMyrtol&only_pending=false'];
+      let payload: any = null;
+      for (const endpoint of tryEndpoints) {
+        const res = await fetch(endpoint);
+        if (res.ok) {
+          payload = await res.json();
+          if (payload) {
+            break;
+          }
+        }
+      }
+      if (!payload) {
+        return;
+      }
+      const rows = Array.isArray(payload?.mappings) ? payload.mappings : [];
+      const approved = rows.filter((row: any) => row?.is_approved === true);
+      setProductMappingCount(rows.length);
+      setProductMappingApprovedCount(approved.length);
+    } catch (e) {
+      console.error('Product mapping status error', e);
+      setProductMappingCount(0);
+      setProductMappingApprovedCount(0);
+    } finally {
+      setProductMappingLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     loadCockpit();
   }, [loadCockpit]);
 
   useEffect(() => {
+    void loadProductFlowStatus();
+  }, [loadProductFlowStatus]);
+
+  useEffect(() => {
     const next = params.get('tab');
-    if (next === 'map' || next === 'recommendations' || next === 'backtest') {
+    if (next === 'map' || next === 'recommendations' || next === 'backtest' || next === 'product-intel') {
       setTab(next);
+      if (next === 'product-intel') {
+        void loadProductFlowStatus();
+      }
     }
-  }, [params]);
+  }, [params, loadProductFlowStatus]);
 
   const loadRecommendations = useCallback(async () => {
     const qs = new URLSearchParams();
@@ -295,7 +348,7 @@ const MediaCockpit: React.FC = () => {
     return () => window.clearTimeout(timer);
   }, [refinementTasks, refinementStartedAt, refinementPollSeconds, loadRecommendations]);
 
-  const switchTab = (next: 'map' | 'recommendations' | 'backtest') => {
+  const switchTab = (next: 'map' | 'recommendations' | 'backtest' | 'product-intel') => {
     setTab(next);
     setParams({ tab: next });
   };
@@ -438,6 +491,45 @@ const MediaCockpit: React.FC = () => {
 
   const mapRanking = useMemo(() => (activeMap?.top_regions || []), [activeMap]);
   const executiveActions = useMemo(() => (activeMap?.activation_suggestions || []).slice(0, 3), [activeMap]);
+  const mapReady = Boolean(activeMap?.has_data);
+  const regionSuggestionReady = Boolean((activeMap?.activation_suggestions || []).length > 0);
+  const recCardsReady = recCards.length > 0;
+  const productMappingReady = productMappingCount > 0 && productMappingApprovedCount > 0;
+  const flowProgress = [mapReady, regionSuggestionReady, recCardsReady, productMappingReady].filter(Boolean).length;
+  const currentFlow = {
+    map: {
+      title: 'Lage analysieren',
+      detail: 'Öffne die Top-Regionen und prüfe den Signalausgleich.',
+      actionLabel: 'Zu den Regionen',
+      actionHint: 'Karte öffnen',
+    },
+    recommendations: {
+      title: 'Kampagnen ableiten',
+      detail: 'Erzeuge Karten und verifiziere den Produktfit pro Region.',
+      actionLabel: 'Empfehlungen erzeugen',
+      actionHint: 'Karten neu berechnen',
+    },
+    'product-intel': {
+      title: 'Produkt-Match freigeben',
+      detail: 'Produktdaten prüfen, Mapping freigeben und erst danach ausspielen.',
+      actionLabel: 'Produkt-Intelligence öffnen',
+      actionHint: 'Zum Produktbereich',
+    },
+    backtest: {
+      title: 'Signale validieren',
+      detail: 'Backtest ausführen, um Lead-Zeit und Korrelation zu prüfen.',
+      actionLabel: 'Markt-Check starten',
+      actionHint: 'Backtest öffnen',
+    },
+  };
+  const currentFlowStep = currentFlow[tab];
+  const flowChips = [
+    { label: 'Schritt 1: Lageanalyse', done: mapReady },
+    { label: 'Schritt 2: Regionen auswählen', done: regionSuggestionReady },
+    { label: 'Schritt 3: Kampagnenkandidaten', done: recCardsReady },
+    { label: 'Schritt 4: Mapping-Freigabe', done: productMappingReady },
+  ];
+  const flowTotal = flowChips.length;
   const executiveShiftEur = useMemo(() => {
     return executiveActions.reduce((sum, s) => sum + (weeklyBudget * (Number(s.budget_shift_pct || 0) / 100)), 0);
   }, [executiveActions, weeklyBudget]);
@@ -521,6 +613,14 @@ const MediaCockpit: React.FC = () => {
             >
               Kampagnenvorschlaege
             </button>
+            <button
+              onClick={() => switchTab('product-intel')}
+              className="tab-chip"
+              style={{ borderColor: 'rgba(249, 115, 22, 0.45)', color: '#fb923c' }}
+              title="Produkt-Katalog, KI-Matching und Review-Flow"
+            >
+              Produkt-Intelligence
+            </button>
             <button onClick={() => navigate('/data-integration')} className="tab-chip">Integrationen</button>
           </div>
         </div>
@@ -530,8 +630,36 @@ const MediaCockpit: React.FC = () => {
         <div className="media-tabs">
           <button onClick={() => switchTab('map')} className={`media-tab ${tab === 'map' ? 'active' : ''}`}>Lagekarte</button>
           <button onClick={() => switchTab('recommendations')} className={`media-tab ${tab === 'recommendations' ? 'active' : ''}`}>KI-Empfehlungen</button>
+          <button onClick={() => switchTab('product-intel')} className={`media-tab ${tab === 'product-intel' ? 'active' : ''}`}>Produkt-Intelligence</button>
           <button onClick={() => switchTab('backtest')} className={`media-tab ${tab === 'backtest' ? 'active' : ''}`}>Backtest</button>
         </div>
+
+        <section className="card p-4 focus-card">
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+            <div>
+              <div className="text-xs text-slate-400 uppercase tracking-wider">Leitplanke</div>
+              <h2 className="text-white text-lg font-bold mt-0.5">{currentFlowStep.title}</h2>
+              <p className="text-slate-400 text-xs mt-1">{currentFlowStep.detail}</p>
+            </div>
+            <div className="text-xs text-slate-500">
+              Fortschritt: <span className="text-cyan-300">{flowProgress}/{flowTotal}</span>
+              {productMappingLoading && <span className="ml-2 text-slate-400">· Mapping-Status wird geprüft</span>}
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-2 mb-3">
+            {flowChips.map((item) => (
+              <span key={item.label} className={`step-chip ${item.done ? 'step-chip-done' : ''}`}>
+                {item.label}
+              </span>
+            ))}
+          </div>
+
+          <div className="rounded-lg p-3 soft-panel">
+            <div className="text-xs text-slate-400 uppercase tracking-wider">Nächster Schritt</div>
+            <div className="text-slate-200 mt-1">{currentFlowStep.actionHint}</div>
+          </div>
+        </section>
 
         {loading && (
           <div className="card p-8 text-center text-slate-400">Lade Media Cockpit...</div>
@@ -803,18 +931,20 @@ const MediaCockpit: React.FC = () => {
                             <span className="text-xs text-slate-300">{item.label}</span>
                             <div className="flex items-center gap-2">
                               <span
-                                className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${
-                                  item.feed_reachable ? 'text-emerald-400 bg-emerald-500/10' : 'text-red-400 bg-red-500/10'
-                                }`}
+                                className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${pillToneClass(item.feed_status_color)}`}
                               >
-                                Feed {item.feed_reachable ? 'erreichbar' : 'nicht erreichbar'}
+                                Feed {item.feed_reachable ? 'mit Daten erreichbar' : 'noch ohne Zeitstempel'}
                               </span>
                               <span
-                                className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${
-                                  item.is_live ? 'text-emerald-400 bg-emerald-500/10' : 'text-red-400 bg-red-500/10'
-                                }`}
+                                className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${pillToneClass(item.status_color)}`}
                               >
-                                Datenstand {item.is_live ? 'aktuell' : item.last_updated ? 'älter' : 'kein Datum'}
+                                Datenstand {
+                                  item.freshness_state === 'live'
+                                    ? 'aktuell'
+                                    : item.freshness_state === 'stale'
+                                      ? 'verzoegert'
+                                      : 'kein Datum'
+                                }
                               </span>
                             </div>
                           </div>
@@ -1190,6 +1320,10 @@ const MediaCockpit: React.FC = () => {
               </div>
             </div>
           </div>
+        )}
+
+        {!loading && tab === 'product-intel' && (
+          <ProductCatalogPanel />
         )}
       </main>
     </div>

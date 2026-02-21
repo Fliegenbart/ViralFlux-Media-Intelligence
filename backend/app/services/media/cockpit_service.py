@@ -52,9 +52,9 @@ LEGACY_TO_WORKFLOW = {
 }
 
 SOURCE_SLA_DAYS = {
-    "wastewater": 7,
+    "wastewater": 10,
     "are_konsultation": 14,
-    "notaufnahme": 2,
+    "notaufnahme": 3,
     "survstat": 14,
     "weather": 2,
     "pollen": 2,
@@ -688,6 +688,11 @@ class MediaCockpitService:
                 age_days = max(0.0, (now - parsed).total_seconds() / 86400.0)
 
             is_live = bool(parsed is not None and age_days is not None and age_days <= float(sla_days))
+            freshness_state = "live" if is_live else ("stale" if parsed else "no_data")
+            if freshness_state == "live":
+                status_color = "green"
+            else:
+                status_color = "amber"
             feed_reachable = parsed is not None
             if is_live:
                 live_count += 1
@@ -699,10 +704,10 @@ class MediaCockpitService:
                 "age_days": round(age_days, 2) if age_days is not None else None,
                 "sla_days": sla_days,
                 "feed_reachable": feed_reachable,
-                "feed_status_color": "green" if feed_reachable else "red",
-                "freshness_state": "live" if is_live else ("stale" if parsed else "no_data"),
+                "feed_status_color": "green" if feed_reachable else "amber",
+                "freshness_state": freshness_state,
                 "is_live": is_live,
-                "status_color": "green" if is_live else "red",
+                "status_color": status_color,
             })
 
         items.sort(key=lambda row: (not row["is_live"], row["source_key"]))

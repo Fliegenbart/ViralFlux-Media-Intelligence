@@ -9,7 +9,7 @@ from datetime import datetime
 
 import threading
 from app.core.config import get_settings
-from app.db.session import get_db, check_db_connection
+from app.db.session import get_db, check_db_connection, init_db
 
 # Setup Logging
 logging.basicConfig(
@@ -43,12 +43,17 @@ async def startup_event():
     logger.info(f"Starting {settings.APP_NAME} v{settings.APP_VERSION}")
     logger.info(f"Environment: {settings.ENVIRONMENT}")
     
-    # Enterprise: DB schema creation is handled exclusively by Alembic migrations.
-    # We only verify connectivity here.
+    # Runtime safety-net: initialize schema when database is empty / fresh
+    # (migrations are still managed separately).
     db_healthy = await check_db_connection()
     if not db_healthy:
         raise RuntimeError("Database connection check failed on startup.")
     logger.info("Database connection verified.")
+    try:
+        init_db()
+        logger.info("Database schema check/initialization completed.")
+    except Exception as e:
+        logger.warning(f"Database schema initialization skipped due error: {e}")
 
     # BfArM Lieferengpass-Daten im Hintergrund laden (non-blocking)
     def _bfarm_startup():

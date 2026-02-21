@@ -81,6 +81,96 @@ export interface RecommendationCard {
   updated_at?: string | null;
 }
 
+export interface ProductAttributePayload {
+  sku?: string | null;
+  target_segments?: string[];
+  conditions?: string[];
+  forms?: string[];
+  age_min_months?: number | null;
+  age_max_months?: number | null;
+  audience_mode?: 'b2c' | 'b2b' | 'both';
+  channel_fit?: string[];
+  compliance_notes?: string | null;
+}
+
+export interface CatalogProduct {
+  id: number;
+  brand: string;
+  product_name: string;
+  active: boolean;
+  source_url?: string;
+  source_hash?: string;
+  last_seen_at?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+  sku?: string | null;
+  target_segments: string[];
+  conditions: string[];
+  forms: string[];
+  age_min_months: number | null;
+  age_max_months: number | null;
+  audience_mode: 'b2c' | 'b2b' | 'both' | string;
+  channel_fit: string[];
+  compliance_notes: string | null;
+  review_state: string;
+  last_change: string | null;
+}
+
+export interface CatalogProductCreateInput {
+  brand: string;
+  product_name: string;
+  source_url?: string;
+  source_hash?: string;
+  active: boolean;
+  sku?: string | null;
+  target_segments: string[];
+  conditions: string[];
+  forms: string[];
+  age_min_months?: number | null;
+  age_max_months?: number | null;
+  audience_mode: 'b2c' | 'b2b' | 'both';
+  channel_fit: string[];
+  compliance_notes?: string | null;
+  extra_data?: Record<string, unknown>;
+}
+
+export interface CatalogProductUpdateInput {
+  brand?: string;
+  product_name?: string;
+  source_url?: string;
+  source_hash?: string;
+  active?: boolean;
+  sku?: string | null;
+  target_segments?: string[];
+  conditions?: string[];
+  forms?: string[];
+  age_min_months?: number | null;
+  age_max_months?: number | null;
+  audience_mode?: 'b2c' | 'b2b' | 'both' | string;
+  channel_fit?: string[];
+  compliance_notes?: string | null;
+  extra_data?: Record<string, unknown>;
+  last_seen_at?: string | null;
+}
+
+export interface ProductMatchCandidate {
+  opportunity_id: string;
+  opportunity_type: string;
+  status: string;
+  region_target?: Record<string, unknown>;
+  urgency_score?: number;
+  trigger_event?: string;
+  candidate_product?: string | null;
+  recommended_product?: string | null;
+  mapping_status: string;
+  mapping_confidence?: number | null;
+  mapping_reason?: string;
+  condition_key?: string;
+  condition_label?: string;
+  rule_source?: string;
+  updated_at?: string | null;
+}
+
 export interface CampaignChannelPlanItem {
   channel: string;
   role: string;
@@ -215,20 +305,51 @@ export interface CampaignPack {
   }>;
 }
 
+export interface DecisionFact {
+  key: string;
+  label: string;
+  value: string | number | boolean | null;
+  source?: string;
+}
+
+export interface DecisionExpectation {
+  condition_key?: string;
+  condition_label?: string;
+  region_codes?: string[];
+  impact_probability?: number;
+  peix_score?: number;
+  confidence_pct?: number;
+  rationale?: string;
+}
+
+export interface DecisionRecommendation {
+  primary_product?: string;
+  primary_region?: string;
+  secondary_regions?: string[];
+  secondary_products?: string[];
+  budget_shift_pct?: number;
+  mapping_status?: string;
+  mapping_reason?: string;
+  action_required?: 'review_mapping' | 'ready_for_activation' | string;
+}
+
+export interface RecommendationDecisionBrief {
+  summary_sentence?: string;
+  horizon?: {
+    min_days?: number;
+    max_days?: number;
+    model_lead_time_days?: number | null;
+  };
+  facts?: DecisionFact[];
+  expectation?: DecisionExpectation;
+  recommendation?: DecisionRecommendation;
+}
+
 export interface RecommendationDetail extends RecommendationCard {
   campaign_pack: CampaignPack;
   trigger_evidence?: CampaignPack['trigger_evidence'];
   target_audience?: string[];
-}
-
-export interface CatalogProduct {
-  id: number;
-  brand: string;
-  product_name: string;
-  active: boolean;
-  source_url?: string;
-  last_seen_at?: string | null;
-  updated_at?: string | null;
+  decision_brief?: RecommendationDecisionBrief;
 }
 
 export interface ProductConditionMapping {
@@ -255,10 +376,10 @@ export interface SourceStatusItem {
   age_days?: number | null;
   sla_days: number;
   feed_reachable?: boolean;
-  feed_status_color?: 'green' | 'red';
+  feed_status_color?: 'green' | 'amber' | 'red';
   freshness_state?: 'live' | 'stale' | 'no_data';
   is_live: boolean;
-  status_color: 'green' | 'red';
+  status_color: 'green' | 'amber' | 'red';
 }
 
 export interface SourceStatusSummary {

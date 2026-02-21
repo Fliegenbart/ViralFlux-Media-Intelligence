@@ -41,9 +41,9 @@ const mappingLabel = (value?: string | null) => {
 
 const mappingToneClass = (value?: string | null) => {
   const normalized = String(value || '').trim().toLowerCase();
-  if (normalized === 'approved') return 'text-emerald-300 bg-emerald-500/15 border border-emerald-500/35';
-  if (normalized === 'needs_review') return 'text-amber-200 bg-amber-500/15 border border-amber-500/35';
-  return 'text-slate-300 bg-slate-700/40 border border-slate-600';
+  if (normalized === 'approved') return 'text-emerald-700 bg-emerald-500/10 border border-emerald-500/30';
+  if (normalized === 'needs_review') return 'text-amber-700 bg-amber-500/10 border border-amber-500/30';
+  return 'text-slate-500 bg-slate-100 border border-slate-300';
 };
 
 const renderFactValue = (value: DecisionFact['value']) => {
@@ -262,21 +262,21 @@ const CampaignRecommendationDetail: React.FC = () => {
   };
 
   if (loading) {
-    return <div className="max-w-[1200px] mx-auto px-4 sm:px-6 py-8 text-slate-400">Lade Kampagnen-Detail...</div>;
+    return <div className="max-w-[1200px] mx-auto px-4 sm:px-6 py-8 bg-slate-50 text-slate-500">Lade Kampagnen-Detail...</div>;
   }
 
   if (error && !detail) {
     return (
-      <div className="max-w-[1200px] mx-auto px-4 sm:px-6 py-8">
-        <div className="card p-5 text-red-400">{error}</div>
+      <div className="max-w-[1200px] mx-auto px-4 sm:px-6 py-8 bg-slate-50">
+        <div className="card p-5 text-red-500">{error}</div>
       </div>
     );
   }
 
   if (!detail) {
     return (
-      <div className="max-w-[1200px] mx-auto px-4 sm:px-6 py-8">
-        <div className="card p-5 text-slate-400">Recommendation nicht gefunden.</div>
+      <div className="max-w-[1200px] mx-auto px-4 sm:px-6 py-8 bg-slate-50">
+        <div className="card p-5 text-slate-500">Recommendation nicht gefunden.</div>
       </div>
     );
   }
@@ -338,21 +338,21 @@ const CampaignRecommendationDetail: React.FC = () => {
   return (
     <div className="max-w-[1200px] mx-auto px-4 sm:px-6 py-6 space-y-6">
       <div className="card decision-header p-5 space-y-4">
-        <button onClick={() => navigate('/dashboard?tab=recommendations')} className="text-xs text-cyan-300 hover:text-cyan-200">
+        <button onClick={() => navigate('/dashboard?tab=recommendations')} className="text-xs text-violet-500 hover:text-violet-400">
           {'<-'} Zurueck zu KI-Empfehlungen
         </button>
 
         <div className="flex flex-wrap gap-3 items-start justify-between">
           <div className="min-w-0">
-            <h1 className="text-xl font-semibold text-white">
+            <h1 className="text-xl font-semibold text-slate-900">
               {detail.campaign_name || detail.campaign_preview?.campaign_name || `${detail.brand} · ${primaryProduct}`}
             </h1>
-            <p className="text-xs text-slate-400 mt-1">
+            <p className="text-xs text-slate-500 mt-1">
               {detail.type} · {detail.brand} · ID {detail.id}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <span className="px-2 py-1 text-[11px] rounded-full bg-cyan-500/15 text-cyan-200 border border-cyan-400/30">
+            <span className="px-2 py-1 text-[11px] rounded-full bg-violet-500/10 text-violet-600 border border-violet-400/30">
               Status: {STATUS_LABELS[status] || status}
             </span>
             <span className={`px-2 py-1 text-[11px] rounded-full ${mappingToneClass(mappingStatus)}`}>
@@ -361,9 +361,9 @@ const CampaignRecommendationDetail: React.FC = () => {
           </div>
         </div>
 
-        <p className="text-sm text-slate-200 leading-relaxed">{summarySentence}</p>
+        <p className="text-sm text-slate-700 leading-relaxed">{summarySentence}</p>
 
-        <div className="decision-rail text-xs text-slate-300">
+        <div className="decision-rail text-xs text-slate-600">
           <span>Horizont: {horizonMin}-{horizonMax} Tage</span>
           {modelLeadTimeDays !== undefined && modelLeadTimeDays !== null && (
             <span>Modell Lead-Time: {modelLeadTimeDays} Tage</span>
@@ -376,9 +376,9 @@ const CampaignRecommendationDetail: React.FC = () => {
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         <div className="card p-5 space-y-3">
-          <h2 className="text-base font-semibold text-white">A. Das sind die Fakten</h2>
+          <h2 className="text-base font-semibold text-slate-900">A. Das sind die Fakten</h2>
           {facts.length === 0 ? (
-            <div className="text-xs text-slate-400">
+            <div className="text-xs text-slate-500">
               Keine quantifizierten Fakten vorhanden. Bitte Trigger-Snapshot pruefen.
             </div>
           ) : (
@@ -404,36 +404,36 @@ const CampaignRecommendationDetail: React.FC = () => {
             </div>
           )}
           {facts.length > 0 && !hasSnapshotFacts && (
-            <div className="text-xs text-slate-500">
+            <div className="text-xs text-slate-400">
               Keine quantifizierten Fakten im Trigger-Snapshot; Interpretation basiert auf Evidenztext und Score-Fusion.
             </div>
           )}
         </div>
 
         <div className="card expectation-card p-5 space-y-3">
-          <h2 className="text-base font-semibold text-white">B. Erwartete Lage in den naechsten 7-14 Tagen</h2>
-          <div className="text-xs text-slate-300">
-            <div>Lageklasse: <span className="text-slate-100 font-semibold">{conditionLabel}</span></div>
+          <h2 className="text-base font-semibold text-slate-900">B. Erwartete Lage in den naechsten 7-14 Tagen</h2>
+          <div className="text-xs text-slate-600">
+            <div>Lageklasse: <span className="text-slate-900 font-semibold">{conditionLabel}</span></div>
             <div className="mt-1">
-              Regionen: <span className="text-slate-100 font-semibold">{expectationRegionCodes.length > 0 ? expectationRegionCodes.join(', ') : primaryRegion}</span>
+              Regionen: <span className="text-slate-900 font-semibold">{expectationRegionCodes.length > 0 ? expectationRegionCodes.join(', ') : primaryRegion}</span>
             </div>
             <div className="mt-1">
-              Impact: <span className="text-slate-100 font-semibold">{impactProbability !== undefined ? `${Number(impactProbability).toFixed(1)}%` : '-'}</span>
+              Impact: <span className="text-slate-900 font-semibold">{impactProbability !== undefined ? `${Number(impactProbability).toFixed(1)}%` : '-'}</span>
             </div>
             <div className="mt-1">
-              PeixEpiScore: <span className="text-slate-100 font-semibold">{peixScore !== undefined ? Number(peixScore).toFixed(1) : '-'}</span>
+              PeixEpiScore: <span className="text-slate-900 font-semibold">{peixScore !== undefined ? Number(peixScore).toFixed(1) : '-'}</span>
             </div>
             <div className="mt-1">
-              Konfidenz: <span className="text-slate-100 font-semibold">{confidencePct !== undefined ? `${Math.round(confidencePct)}%` : '-'}</span>
+              Konfidenz: <span className="text-slate-900 font-semibold">{confidencePct !== undefined ? `${Math.round(confidencePct)}%` : '-'}</span>
             </div>
           </div>
-          <p className="text-xs text-slate-400 leading-relaxed">
+          <p className="text-xs text-slate-500 leading-relaxed">
             {expectation.rationale || detail.mapping_reason || detail.reason || detail.trigger_evidence?.details || '-'}
           </p>
         </div>
 
         <div className="card recommendation-card p-5 space-y-3">
-          <h2 className="text-base font-semibold text-white">C. Daher empfehlen wir</h2>
+          <h2 className="text-base font-semibold text-slate-900">C. Daher empfehlen wir</h2>
 
           {needsReview && (
             <div className="action-banner-warning text-xs">
@@ -447,30 +447,30 @@ const CampaignRecommendationDetail: React.FC = () => {
           )}
 
           <div className="soft-panel p-3">
-            <div className="text-[11px] uppercase tracking-wider text-slate-400">Primaere Empfehlung</div>
-            <div className="text-lg font-semibold text-white mt-1">{primaryProduct}</div>
-            <div className="text-sm text-slate-300 mt-1">Region: {primaryRegion}</div>
+            <div className="text-[11px] uppercase tracking-wider text-slate-500">Primaere Empfehlung</div>
+            <div className="text-lg font-semibold text-slate-900 mt-1">{primaryProduct}</div>
+            <div className="text-sm text-slate-600 mt-1">Region: {primaryRegion}</div>
           </div>
 
-          <div className="grid grid-cols-1 gap-2 text-xs text-slate-300">
+          <div className="grid grid-cols-1 gap-2 text-xs text-slate-600">
             <div>
-              Sekundaere Regionen: <span className="text-slate-100">{secondaryRegions.length > 0 ? secondaryRegions.join(', ') : '-'}</span>
+              Sekundaere Regionen: <span className="text-slate-900">{secondaryRegions.length > 0 ? secondaryRegions.join(', ') : '-'}</span>
             </div>
             <div>
-              Sekundaere Produkte: <span className="text-slate-100">{secondaryProducts.length > 0 ? secondaryProducts.join(', ') : '-'}</span>
+              Sekundaere Produkte: <span className="text-slate-900">{secondaryProducts.length > 0 ? secondaryProducts.join(', ') : '-'}</span>
             </div>
             <div>
-              Budget-Shift: <span className="text-slate-100">{recommendation.budget_shift_pct !== undefined ? `${Number(recommendation.budget_shift_pct).toFixed(1)}%` : `${Number(budgetShiftPct || 0).toFixed(1)}%`}</span>
+              Budget-Shift: <span className="text-slate-900">{recommendation.budget_shift_pct !== undefined ? `${Number(recommendation.budget_shift_pct).toFixed(1)}%` : `${Number(budgetShiftPct || 0).toFixed(1)}%`}</span>
             </div>
             <div>
-              Mapping-Begruendung: <span className="text-slate-100">{recommendation.mapping_reason || detail.mapping_reason || '-'}</span>
+              Mapping-Begruendung: <span className="text-slate-900">{recommendation.mapping_reason || detail.mapping_reason || '-'}</span>
             </div>
           </div>
         </div>
       </div>
 
       <div className="card p-5 space-y-3">
-        <h2 className="text-base font-semibold text-white">Workflow</h2>
+        <h2 className="text-base font-semibold text-slate-900">Workflow</h2>
         <div className="flex flex-wrap gap-2">
           {nextTransitions.map((next) => (
             <button key={next} onClick={() => updateStatus(next)} className="media-button secondary" disabled={statusSaving}>
@@ -478,24 +478,24 @@ const CampaignRecommendationDetail: React.FC = () => {
             </button>
           ))}
           {nextTransitions.length === 0 && (
-            <div className="text-xs text-slate-500">Keine weiteren Status-Transitionen verfuegbar.</div>
+            <div className="text-xs text-slate-400">Keine weiteren Status-Transitionen verfuegbar.</div>
           )}
         </div>
       </div>
 
       <div className="card p-5 space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-base font-semibold text-white">Kampagnenplan bearbeiten</h2>
+          <h2 className="text-base font-semibold text-slate-900">Kampagnenplan bearbeiten</h2>
           <button
             onClick={() => setShowEditor((prev) => !prev)}
-            className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-slate-600 text-slate-200"
+            className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-slate-300 text-slate-700 hover:bg-slate-50"
           >
             {showEditor ? 'Editor ausblenden' : 'Editor einblenden'}
           </button>
         </div>
 
         {!showEditor && (
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-slate-400">
             Editor ist standardmaessig ausgeblendet. Erst die Entscheidungslogik pruefen, dann Kampagnenparameter anpassen.
           </p>
         )}
@@ -503,22 +503,22 @@ const CampaignRecommendationDetail: React.FC = () => {
         {showEditor && (
           <div className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <label className="text-xs text-slate-300">
+              <label className="text-xs text-slate-600">
                 Aktivierung Start
                 <input type="datetime-local" className="media-input mt-1" value={activationStart} onChange={(e) => setActivationStart(e.target.value)} />
               </label>
-              <label className="text-xs text-slate-300">
+              <label className="text-xs text-slate-600">
                 Aktivierung Ende
                 <input type="datetime-local" className="media-input mt-1" value={activationEnd} onChange={(e) => setActivationEnd(e.target.value)} />
               </label>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <label className="text-xs text-slate-300">
+              <label className="text-xs text-slate-600">
                 Wochenbudget (EUR)
                 <input type="number" min={0} className="media-input mt-1" value={weeklyBudget} onChange={(e) => setWeeklyBudget(Number(e.target.value))} />
               </label>
-              <label className="text-xs text-slate-300">
+              <label className="text-xs text-slate-600">
                 Budget-Shift (%)
                 <input type="number" min={0} max={100} className="media-input mt-1" value={budgetShiftPct} onChange={(e) => setBudgetShiftPct(Number(e.target.value))} />
               </label>
@@ -526,7 +526,7 @@ const CampaignRecommendationDetail: React.FC = () => {
 
             <div>
               <div className="flex items-center justify-between mb-2">
-                <h3 className="text-sm font-semibold text-white">Channel-Split</h3>
+                <h3 className="text-sm font-semibold text-slate-900">Channel-Split</h3>
                 <span className={`text-xs ${Math.abs(channelShareSum - 100) <= 0.2 ? 'text-emerald-400' : 'text-amber-400'}`}>
                   Summe: {channelShareSum.toFixed(1)}%
                 </span>
@@ -534,7 +534,7 @@ const CampaignRecommendationDetail: React.FC = () => {
               <div className="space-y-2">
                 {channelPlan.map((row) => (
                   <div key={row.channel} className="grid grid-cols-[1fr_120px] items-center gap-3">
-                    <div className="text-sm text-slate-300">{row.channel.toUpperCase()}</div>
+                    <div className="text-sm text-slate-600">{row.channel.toUpperCase()}</div>
                     <input
                       type="number"
                       min={0}
@@ -550,21 +550,21 @@ const CampaignRecommendationDetail: React.FC = () => {
             </div>
 
             <div className="grid grid-cols-1 gap-3">
-              <label className="text-xs text-slate-300">
+              <label className="text-xs text-slate-600">
                 Primary KPI
                 <input className="media-input mt-1" value={primaryKpi} onChange={(e) => setPrimaryKpi(e.target.value)} />
               </label>
-              <label className="text-xs text-slate-300">
+              <label className="text-xs text-slate-600">
                 Secondary KPIs (comma-separated)
                 <input className="media-input mt-1" value={secondaryKpis} onChange={(e) => setSecondaryKpis(e.target.value)} />
               </label>
-              <label className="text-xs text-slate-300">
+              <label className="text-xs text-slate-600">
                 Success Criteria
                 <textarea className="media-input mt-1 min-h-[90px]" value={successCriteria} onChange={(e) => setSuccessCriteria(e.target.value)} />
               </label>
             </div>
 
-            {error && <div className="text-xs text-red-400">{error}</div>}
+            {error && <div className="text-xs text-red-500">{error}</div>}
 
             <div className="flex flex-wrap gap-2">
               <button onClick={saveCampaign} className="media-button" disabled={saving}>
@@ -580,17 +580,17 @@ const CampaignRecommendationDetail: React.FC = () => {
 
       <div className="card p-5 space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-base font-semibold text-white">Technische Details</h2>
+          <h2 className="text-base font-semibold text-slate-900">Technische Details</h2>
           <button
             onClick={() => setShowTechDetails((prev) => !prev)}
-            className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-slate-600 text-slate-200"
+            className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-slate-300 text-slate-700 hover:bg-slate-50"
           >
             {showTechDetails ? 'Details ausblenden' : 'Details einblenden'}
           </button>
         </div>
 
         {!showTechDetails && (
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-slate-400">
             Trigger-Evidenz, KI-Plan, HWG-Botschaft und Quick-Facts sind standardmaessig ausgeblendet.
           </p>
         )}
@@ -599,37 +599,37 @@ const CampaignRecommendationDetail: React.FC = () => {
           <div className="space-y-4">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <div className="soft-panel p-4 space-y-2">
-                <h3 className="text-sm font-semibold text-white">Trigger-Evidenz</h3>
+                <h3 className="text-sm font-semibold text-slate-900">Trigger-Evidenz</h3>
                 {detail.playbook_title && (
-                  <div className="inline-flex text-[11px] px-2 py-1 rounded-full bg-cyan-500/15 text-cyan-300 border border-cyan-400/30">
+                  <div className="inline-flex text-[11px] px-2 py-1 rounded-full bg-violet-500/10 text-violet-600 border border-violet-400/30">
                     {detail.playbook_title}
                   </div>
                 )}
-                <div className="text-xs text-slate-400">Quelle: {detail.trigger_evidence?.source || '-'}</div>
-                <div className="text-xs text-slate-400">Event: {detail.trigger_evidence?.event || '-'}</div>
-                <div className="text-xs text-slate-400">Lead-Time: {detail.trigger_evidence?.lead_time_days ?? '-'} Tage</div>
-                <div className="text-xs text-slate-400">
+                <div className="text-xs text-slate-500">Quelle: {detail.trigger_evidence?.source || '-'}</div>
+                <div className="text-xs text-slate-500">Event: {detail.trigger_evidence?.event || '-'}</div>
+                <div className="text-xs text-slate-500">Lead-Time: {detail.trigger_evidence?.lead_time_days ?? '-'} Tage</div>
+                <div className="text-xs text-slate-500">
                   Confidence: {detail.trigger_evidence?.confidence ? `${Math.round(detail.trigger_evidence.confidence * 100)}%` : '-'}
                 </div>
-                <p className="text-xs text-slate-300 leading-relaxed">{detail.trigger_evidence?.details || detail.reason || '-'}</p>
+                <p className="text-xs text-slate-600 leading-relaxed">{detail.trigger_evidence?.details || detail.reason || '-'}</p>
               </div>
 
               <div className="soft-panel p-4 space-y-2">
-                <h3 className="text-sm font-semibold text-white">KI-Plan</h3>
-                <div className="text-xs text-slate-400">
+                <h3 className="text-sm font-semibold text-slate-900">KI-Plan</h3>
+                <div className="text-xs text-slate-500">
                   Modell: {detail.campaign_pack?.ai_meta?.model || '-'} · Provider: {detail.campaign_pack?.ai_meta?.provider || '-'}
                 </div>
-                <div className="text-xs text-slate-400">
+                <div className="text-xs text-slate-500">
                   Fallback: {detail.campaign_pack?.ai_meta?.fallback_used ? 'Ja' : 'Nein'}
                 </div>
-                <div className="text-xs text-slate-400">
+                <div className="text-xs text-slate-500">
                   Keywords: {(detail.campaign_pack?.ai_plan?.keyword_clusters || []).slice(0, 4).join(' · ') || '-'}
                 </div>
-                <div className="text-xs text-slate-300">
+                <div className="text-xs text-slate-600">
                   Creatives: {(detail.campaign_pack?.ai_plan?.creative_angles || []).slice(0, 3).join(' · ') || '-'}
                 </div>
                 {Array.isArray(detail.campaign_pack?.guardrail_report?.applied_fixes) && (detail.campaign_pack?.guardrail_report?.applied_fixes?.length || 0) > 0 && (
-                  <div className="rounded-lg px-3 py-2 text-[11px] bg-amber-500/10 text-amber-300 border border-amber-400/30">
+                  <div className="rounded-lg px-3 py-2 text-[11px] bg-amber-500/10 text-amber-700 border border-amber-400/30">
                     Guardrails: {(detail.campaign_pack?.guardrail_report?.applied_fixes || []).slice(0, 3).join(' · ')}
                   </div>
                 )}
@@ -637,35 +637,35 @@ const CampaignRecommendationDetail: React.FC = () => {
 
               <div className="soft-panel p-4 space-y-2">
                 <div className="flex items-center justify-between gap-3">
-                  <h3 className="text-sm font-semibold text-white">Botschaft (HWG)</h3>
-                  <div className="text-[11px] text-slate-500">
-                    Copy-Status: <span className="text-slate-200 font-semibold">{detail.campaign_pack?.message_framework?.copy_status || '-'}</span>
+                  <h3 className="text-sm font-semibold text-slate-900">Botschaft (HWG)</h3>
+                  <div className="text-[11px] text-slate-400">
+                    Copy-Status: <span className="text-slate-700 font-semibold">{detail.campaign_pack?.message_framework?.copy_status || '-'}</span>
                   </div>
                 </div>
-                <div className="text-xs text-slate-300">
-                  Hero: <span className="text-slate-200 font-semibold">{detail.campaign_pack?.message_framework?.hero_message || '-'}</span>
+                <div className="text-xs text-slate-600">
+                  Hero: <span className="text-slate-700 font-semibold">{detail.campaign_pack?.message_framework?.hero_message || '-'}</span>
                 </div>
                 {Array.isArray(detail.campaign_pack?.message_framework?.support_points) && (detail.campaign_pack?.message_framework?.support_points?.length || 0) > 0 && (
-                  <div className="text-xs text-slate-400 leading-relaxed">
+                  <div className="text-xs text-slate-500 leading-relaxed">
                     Support: {(detail.campaign_pack?.message_framework?.support_points || []).slice(0, 4).join(' · ')}
                   </div>
                 )}
-                <div className="text-xs text-slate-400">CTA: {detail.campaign_pack?.message_framework?.cta || '-'}</div>
-                <div className="text-[11px] text-slate-500 leading-relaxed">
+                <div className="text-xs text-slate-500">CTA: {detail.campaign_pack?.message_framework?.cta || '-'}</div>
+                <div className="text-[11px] text-slate-400 leading-relaxed">
                   Compliance: {detail.campaign_pack?.message_framework?.compliance_note || '-'}
                 </div>
               </div>
 
               <div className="soft-panel p-4 space-y-2">
-                <h3 className="text-sm font-semibold text-white">Quick Facts</h3>
-                <div className="text-xs text-slate-400">Region: {detail.campaign_pack?.targeting?.region_scope || detail.region || '-'}</div>
-                <div className="text-xs text-slate-400">Urgency Score: {detail.urgency_score ?? '-'}</div>
-                <div className="text-xs text-slate-400">Empfohlenes Produkt: {detail.recommended_product || detail.product || '-'}</div>
-                <div className="text-xs text-slate-400">Primary KPI: {detail.primary_kpi || detail.campaign_pack?.measurement_plan?.primary_kpi || '-'}</div>
-                <div className="text-xs text-slate-400">
+                <h3 className="text-sm font-semibold text-slate-900">Quick Facts</h3>
+                <div className="text-xs text-slate-500">Region: {detail.campaign_pack?.targeting?.region_scope || detail.region || '-'}</div>
+                <div className="text-xs text-slate-500">Urgency Score: {detail.urgency_score ?? '-'}</div>
+                <div className="text-xs text-slate-500">Empfohlenes Produkt: {detail.recommended_product || detail.product || '-'}</div>
+                <div className="text-xs text-slate-500">Primary KPI: {detail.primary_kpi || detail.campaign_pack?.measurement_plan?.primary_kpi || '-'}</div>
+                <div className="text-xs text-slate-500">
                   Created: {detail.created_at ? format(parseISO(detail.created_at), 'dd.MM.yyyy HH:mm', { locale: de }) : '-'}
                 </div>
-                <div className="text-xs text-slate-400">
+                <div className="text-xs text-slate-500">
                   Updated: {detail.updated_at ? format(parseISO(detail.updated_at), 'dd.MM.yyyy HH:mm', { locale: de }) : '-'}
                 </div>
               </div>
@@ -673,11 +673,11 @@ const CampaignRecommendationDetail: React.FC = () => {
 
             {Array.isArray(detail.campaign_pack?.execution_checklist) && detail.campaign_pack.execution_checklist.length > 0 && (
               <div className="soft-panel p-4 space-y-2">
-                <h3 className="text-sm font-semibold text-white">Execution Checklist</h3>
+                <h3 className="text-sm font-semibold text-slate-900">Execution Checklist</h3>
                 <ul className="space-y-2">
                   {detail.campaign_pack.execution_checklist.map((item, idx) => (
-                    <li key={`${item.task}-${idx}`} className="text-xs text-slate-300">
-                      <span className="text-slate-400">[{item.owner || 'Team'}]</span> {item.task}
+                    <li key={`${item.task}-${idx}`} className="text-xs text-slate-600">
+                      <span className="text-slate-500">[{item.owner || 'Team'}]</span> {item.task}
                     </li>
                   ))}
                 </ul>

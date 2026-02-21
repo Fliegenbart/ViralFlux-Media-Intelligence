@@ -128,7 +128,7 @@ interface RefinementTaskState {
 }
 
 const intensityColor = (intensity: number) => {
-  const a = 0.2 + Math.min(1, Math.max(0, intensity)) * 0.8;
+  const a = 0.25 + Math.min(1, Math.max(0, intensity)) * 0.65;
   return `rgba(27, 83, 155, ${a})`;
 };
 
@@ -149,9 +149,9 @@ const mappingLabel = (status?: string) => {
 };
 
 const pillToneClass = (tone?: 'green' | 'amber' | 'red') => {
-  if (tone === 'green') return 'text-emerald-400 bg-emerald-500/10';
-  if (tone === 'amber') return 'text-amber-300 bg-amber-500/10';
-  return 'text-red-400 bg-red-500/10';
+  if (tone === 'green') return 'text-emerald-600 bg-emerald-500/10';
+  if (tone === 'amber') return 'text-amber-600 bg-amber-500/10';
+  return 'text-red-500 bg-red-500/10';
 };
 
 const MediaCockpit: React.FC = () => {
@@ -633,11 +633,11 @@ const MediaCockpit: React.FC = () => {
   };
 
   const refinementBadgeStyle = (tone: 'queued' | 'running' | 'success' | 'fallback' | 'failed') => {
-    if (tone === 'queued') return { background: 'rgba(148,163,184,0.2)', color: '#cbd5e1' };
-    if (tone === 'running') return { background: 'rgba(56,189,248,0.2)', color: '#7dd3fc' };
-    if (tone === 'success') return { background: 'rgba(34,197,94,0.2)', color: '#86efac' };
-    if (tone === 'fallback') return { background: 'rgba(245,158,11,0.2)', color: '#fcd34d' };
-    return { background: 'rgba(239,68,68,0.2)', color: '#fca5a5' };
+    if (tone === 'queued') return { background: 'rgba(148,163,184,0.15)', color: '#64748b' };
+    if (tone === 'running') return { background: 'rgba(139,92,246,0.12)', color: '#7c3aed' };
+    if (tone === 'success') return { background: 'rgba(34,197,94,0.12)', color: '#16a34a' };
+    if (tone === 'fallback') return { background: 'rgba(245,158,11,0.12)', color: '#d97706' };
+    return { background: 'rgba(239,68,68,0.12)', color: '#dc2626' };
   };
 
   const renderTileValue = (tile: BentoTile) => {
@@ -649,14 +649,14 @@ const MediaCockpit: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen" style={{ background: 'var(--bg-primary)' }}>
+    <div className="min-h-screen bg-slate-50">
       <header className="media-header">
         <div className="max-w-[1600px] mx-auto px-4 sm:px-6 py-4 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-center gap-3">
             <div className="media-logo">VF</div>
             <div>
-              <h1 className="text-xl font-semibold text-white tracking-tight">ViralFlux Media Cockpit</h1>
-              <p className="text-xs text-slate-400">Deutschlandkarte + KI-Empfehlungen + Backtest Proof Engine</p>
+              <h1 className="text-xl font-semibold text-slate-900 tracking-tight">ViralFlux Media Cockpit</h1>
+              <p className="text-xs text-slate-500">Deutschlandkarte + KI-Empfehlungen + Backtest Proof Engine</p>
             </div>
           </div>
         </div>
@@ -673,12 +673,12 @@ const MediaCockpit: React.FC = () => {
         <section className="card p-4 focus-card">
           <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
             <div>
-              <div className="text-xs text-slate-400 uppercase tracking-wider">Leitplanke</div>
-              <h2 className="text-white text-lg font-bold mt-0.5">{currentFlowStep.title}</h2>
-              <p className="text-slate-400 text-xs mt-1">{currentFlowStep.detail}</p>
+              <div className="text-xs text-slate-500 uppercase tracking-wider">Leitplanke</div>
+              <h2 className="text-slate-900 text-lg font-bold mt-0.5">{currentFlowStep.title}</h2>
+              <p className="text-slate-500 text-xs mt-1">{currentFlowStep.detail}</p>
             </div>
-            <div className="text-xs text-slate-500">
-              Fortschritt: <span className="text-cyan-300">{flowProgress}/{flowTotal}</span>
+            <div className="text-xs text-slate-400">
+              Fortschritt: <span className="text-violet-500 font-semibold">{flowProgress}/{flowTotal}</span>
               {productMappingLoading && <span className="ml-2 text-slate-400">· Mapping-Status wird geprüft</span>}
             </div>
           </div>
@@ -692,8 +692,8 @@ const MediaCockpit: React.FC = () => {
           </div>
 
           <div className="rounded-lg p-3 soft-panel">
-            <div className="text-xs text-slate-400 uppercase tracking-wider">Nächster Schritt</div>
-            <div className="text-slate-200 mt-1">{currentFlowStep.actionHint}</div>
+            <div className="text-xs text-slate-500 uppercase tracking-wider">Nächster Schritt</div>
+            <div className="text-slate-700 mt-1">{currentFlowStep.actionHint}</div>
           </div>
         </section>
 
@@ -708,24 +708,23 @@ const MediaCockpit: React.FC = () => {
               className="card p-6"
               style={{
                 background:
-                  'radial-gradient(900px 220px at 20% 0%, rgba(34,197,94,0.12), transparent 60%), linear-gradient(135deg, rgba(30,41,59,1), rgba(15,23,42,1))',
-                border: '1px solid rgba(148,163,184,0.22)',
+                  'radial-gradient(900px 220px at 20% 0%, rgba(34,197,94,0.08), transparent 60%), linear-gradient(135deg, #ffffff, #f1f5f9)',
+                border: '1px solid rgba(226,232,240,0.9)',
               }}
             >
               <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
                 <div className="min-w-0">
-                  <div className="text-[10px] text-slate-400 uppercase tracking-wider">Media Cockpit</div>
-                  <h2 className="text-2xl font-black text-white tracking-tight mt-1">
+                  <div className="text-[10px] text-slate-500 uppercase tracking-wider">Media Cockpit</div>
+                  <h2 className="text-2xl font-black text-slate-900 tracking-tight mt-1">
                     Action Radar fuer {virus}
                   </h2>
-                  <p className="text-sm text-slate-400 mt-2 max-w-2xl">
+                  <p className="text-sm text-slate-500 mt-2 max-w-2xl">
                     Kein Zahlenfriedhof. Du siehst zuerst, wo Budget aktivieren sollte und welche Botschaft HWG-sicher passt.
                   </p>
                   <div className="mt-4 flex flex-wrap gap-2">
                     <button
                       onClick={() => switchTab('recommendations')}
-                      className="px-3 py-1.5 text-xs font-semibold rounded-full transition hover:brightness-110"
-                      style={{ background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)', color: 'white' }}
+                      className="media-button px-3 py-1.5 text-xs font-semibold rounded-full transition hover:brightness-110"
                     >
                       Kampagnenvorschlaege
                     </button>
@@ -733,41 +732,40 @@ const MediaCockpit: React.FC = () => {
                       onClick={triggerRecommendations}
                       disabled={recLoading}
                       className="px-3 py-1.5 text-xs font-semibold rounded-full transition hover:brightness-110 disabled:opacity-60"
-                      style={{ background: 'linear-gradient(135deg, #22c55e, #10b981)', color: '#052e1b' }}
+                      style={{ background: 'linear-gradient(135deg, #4ade80, #22c55e)', color: '#052e1b' }}
                       title="Erzeugt neue Cards und startet KI-Verfeinerung asynchron"
                     >
                       {recLoading ? 'Berechne...' : 'Jetzt Cards erzeugen'}
                     </button>
                     <span
-                      className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs"
-                      style={{ background: 'rgba(15,23,42,0.65)', border: '1px solid #334155', color: '#94a3b8' }}
+                      className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs bg-slate-100 border border-slate-200 text-slate-500"
                       title="Die genaue Score-Metrik ist absichtlich hinter Tech Details verborgen."
                     >
-                      Lage: <span className="text-slate-200">{peixSummary?.national_band || '—'}</span>
+                      Lage: <span className="text-slate-700 font-medium">{peixSummary?.national_band || '—'}</span>
                     </span>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3 w-full lg:w-[420px]">
-                  <div className="rounded-xl p-4" style={{ background: 'rgba(15,23,42,0.6)', border: '1px solid #334155' }}>
-                    <div className="text-[10px] text-slate-500 uppercase tracking-wider">Re-Allocation</div>
-                    <div className="text-xl font-black text-white mt-1">{eur(executiveShiftEur)}</div>
-                    <div className="text-[11px] text-slate-500 mt-1">aus Top-Aktionen (heuristisch)</div>
+                  <div className="metric-box">
+                    <div className="text-[10px] text-slate-400 uppercase tracking-wider">Re-Allocation</div>
+                    <div className="text-xl font-black text-slate-900 mt-1">{eur(executiveShiftEur)}</div>
+                    <div className="text-[11px] text-slate-400 mt-1">aus Top-Aktionen (heuristisch)</div>
                   </div>
-                  <div className="rounded-xl p-4" style={{ background: 'rgba(15,23,42,0.6)', border: '1px solid #334155' }}>
-                    <div className="text-[10px] text-slate-500 uppercase tracking-wider">Waste Reduction</div>
-                    <div className="text-xl font-black text-white mt-1">{eur(weeklyBudget * 0.12)}</div>
-                    <div className="text-[11px] text-slate-500 mt-1">in gesunden Regionen</div>
+                  <div className="metric-box">
+                    <div className="text-[10px] text-slate-400 uppercase tracking-wider">Waste Reduction</div>
+                    <div className="text-xl font-black text-slate-900 mt-1">{eur(weeklyBudget * 0.12)}</div>
+                    <div className="text-[11px] text-slate-400 mt-1">in gesunden Regionen</div>
                   </div>
-                  <div className="rounded-xl p-4" style={{ background: 'rgba(15,23,42,0.6)', border: '1px solid #334155' }}>
-                    <div className="text-[10px] text-slate-500 uppercase tracking-wider">Zeitfenster</div>
-                    <div className="text-xl font-black text-white mt-1">7-10 Tage</div>
-                    <div className="text-[11px] text-slate-500 mt-1">kurz, konzentriert, messbar</div>
+                  <div className="metric-box">
+                    <div className="text-[10px] text-slate-400 uppercase tracking-wider">Zeitfenster</div>
+                    <div className="text-xl font-black text-slate-900 mt-1">7-10 Tage</div>
+                    <div className="text-[11px] text-slate-400 mt-1">kurz, konzentriert, messbar</div>
                   </div>
-                  <div className="rounded-xl p-4" style={{ background: 'rgba(15,23,42,0.6)', border: '1px solid #334155' }}>
-                    <div className="text-[10px] text-slate-500 uppercase tracking-wider">Budget (Woche)</div>
-                    <div className="text-xl font-black text-white mt-1">{eur(weeklyBudget)}</div>
-                    <div className="text-[11px] text-slate-500 mt-1">fuer Demo/Planung</div>
+                  <div className="metric-box">
+                    <div className="text-[10px] text-slate-400 uppercase tracking-wider">Budget (Woche)</div>
+                    <div className="text-xl font-black text-slate-900 mt-1">{eur(weeklyBudget)}</div>
+                    <div className="text-[11px] text-slate-400 mt-1">fuer Demo/Planung</div>
                   </div>
                 </div>
               </div>
@@ -776,26 +774,25 @@ const MediaCockpit: React.FC = () => {
                 {(executiveActions.length ? executiveActions : []).map((s, idx) => (
                   <div
                     key={`${s.region}-${idx}`}
-                    className="rounded-xl p-4"
-                    style={{ background: 'rgba(15,23,42,0.65)', border: '1px solid #334155' }}
+                    className="card rounded-xl p-4"
                   >
                     <div className="flex items-center justify-between gap-3">
                       <div className="min-w-0">
-                        <div className="text-[10px] text-slate-500 uppercase tracking-wider">Aktion</div>
-                        <div className="text-base font-bold text-white mt-1 truncate">{s.region_name}</div>
+                        <div className="text-[10px] text-slate-400 uppercase tracking-wider">Aktion</div>
+                        <div className="text-base font-bold text-slate-900 mt-1 truncate">{s.region_name}</div>
                       </div>
                       <div className="text-right">
-                        <div className="text-[10px] text-slate-500 uppercase tracking-wider">Shift</div>
-                        <div className="text-sm font-bold text-cyan-300 mt-1">+{s.budget_shift_pct}%</div>
+                        <div className="text-[10px] text-slate-400 uppercase tracking-wider">Shift</div>
+                        <div className="text-sm font-bold text-violet-500 mt-1">+{s.budget_shift_pct}%</div>
                       </div>
                     </div>
-                    <p className="text-xs text-slate-400 mt-2 line-clamp-3">{s.reason}</p>
+                    <p className="text-xs text-slate-500 mt-2 line-clamp-3">{s.reason}</p>
                     <div className="mt-3 flex items-center justify-between gap-3">
-                      <div className="text-[11px] text-slate-500">Ziel: HWG-safe Copy Pack</div>
+                      <div className="text-[11px] text-slate-400">Ziel: HWG-safe Copy Pack</div>
                       <button
                         onClick={() => openRecommendationForRegion(s.region)}
                         className="px-3 py-1.5 text-xs font-bold rounded-lg transition hover:brightness-110"
-                        style={{ background: 'linear-gradient(135deg, #22c55e, #10b981)', color: '#052e1b' }}
+                        style={{ background: 'linear-gradient(135deg, #4ade80, #22c55e)', color: '#052e1b' }}
                       >
                         Aktivieren
                       </button>
@@ -803,7 +800,7 @@ const MediaCockpit: React.FC = () => {
                   </div>
                 ))}
                 {executiveActions.length === 0 && (
-                  <div className="md:col-span-3 text-sm text-slate-500">
+                  <div className="md:col-span-3 text-sm text-slate-400">
                     Noch keine Aktivierungs-Aktionen vorhanden. Erzeuge KI-Empfehlungen oder lade Kartendaten.
                   </div>
                 )}
@@ -811,11 +808,10 @@ const MediaCockpit: React.FC = () => {
             </div>
 
             <div className="flex items-center justify-between">
-              <div className="text-xs text-slate-500">Rohdaten sind hinter “Tech Details” verborgen.</div>
+              <div className="text-xs text-slate-400">Rohdaten sind hinter "Tech Details" verborgen.</div>
               <button
                 onClick={() => setShowTechDetails((s) => !s)}
-                className="px-3 py-1.5 text-xs font-semibold rounded-lg transition hover:bg-slate-700"
-                style={{ border: '1px solid #334155', color: '#94a3b8' }}
+                className="media-button secondary px-3 py-1.5 text-xs font-semibold rounded-lg transition"
               >
                 {showTechDetails ? 'Tech Details ausblenden' : 'Tech Details anzeigen'}
               </button>
@@ -825,16 +821,16 @@ const MediaCockpit: React.FC = () => {
               <div className="card p-5">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
-                    <h2 className="text-lg font-semibold text-white">Tech Details: Bento-Übersicht</h2>
-                    <p className="text-xs text-slate-500">Für Analyse/Revision. Nicht die Default-Ansicht.</p>
+                    <h2 className="text-lg font-semibold text-slate-900">Tech Details: Bento-Übersicht</h2>
+                    <p className="text-xs text-slate-400">Für Analyse/Revision. Nicht die Default-Ansicht.</p>
                   </div>
-                  <div className="text-xs text-slate-400 flex flex-col items-start sm:items-end gap-2">
+                  <div className="text-xs text-slate-500 flex flex-col items-start sm:items-end gap-2">
                     <div>
-                      Nationaler PeixEpiScore: <span className="text-cyan-300 font-semibold">{peixSummary?.national_score ?? '-'} / 100</span>
+                      Nationaler PeixEpiScore: <span className="text-violet-500 font-semibold">{peixSummary?.national_score ?? '-'} / 100</span>
                       {' · '}
-                      Band: <span className="text-slate-200">{peixSummary?.national_band ?? '-'}</span>
+                      Band: <span className="text-slate-700">{peixSummary?.national_band ?? '-'}</span>
                       {' · '}
-                      Impact: <span className="text-slate-200">{peixSummary?.national_impact_probability ?? '-'}%</span>
+                      Impact: <span className="text-slate-700">{peixSummary?.national_impact_probability ?? '-'}%</span>
                     </div>
                     <button onClick={() => navigate('/data-integration')} className="secondary-link-muted">
                       Integrationen verwalten
@@ -843,18 +839,18 @@ const MediaCockpit: React.FC = () => {
                 </div>
                 <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
                   {bentoTiles.map((tile) => (
-                    <div key={tile.id} className="rounded-xl p-3" style={{ background: 'rgba(15,23,42,0.65)', border: '1px solid #334155' }}>
+                    <div key={tile.id} className="metric-box">
                       <div className="flex items-center justify-between gap-2 mb-2">
-                        <div className="text-xs text-slate-400">{tile.title}</div>
+                        <div className="text-xs text-slate-500">{tile.title}</div>
                         <span
                           className="inline-flex w-2.5 h-2.5 rounded-full"
                           style={{ background: tile.is_live ? '#22c55e' : '#ef4444' }}
                           title={tile.is_live ? 'Live' : 'Nicht live'}
                         />
                       </div>
-                      <div className="text-base font-semibold text-white">{renderTileValue(tile)}</div>
-                      <div className="text-[11px] text-slate-500 mt-1">{tile.subtitle || tile.data_source || '-'}</div>
-                      <div className="text-[11px] text-cyan-300 mt-1">Impact: {Math.round(tile.impact_probability || 0)}%</div>
+                      <div className="text-base font-semibold text-slate-900">{renderTileValue(tile)}</div>
+                      <div className="text-[11px] text-slate-400 mt-1">{tile.subtitle || tile.data_source || '-'}</div>
+                      <div className="text-[11px] text-violet-500 mt-1">Impact: {Math.round(tile.impact_probability || 0)}%</div>
                     </div>
                   ))}
                 </div>
@@ -865,17 +861,17 @@ const MediaCockpit: React.FC = () => {
               <div className="xl:col-span-2 card p-5">
                 <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
                   <div>
-                    <h2 className="text-lg font-semibold text-white">
+                    <h2 className="text-lg font-semibold text-slate-900">
                       Deutschland Radar: {virus}{' '}
                       <span className="text-slate-400 font-normal">
                         {horizonDays === 0 ? '(Heute)' : `( +${horizonDays} Tage )`}
                       </span>
                     </h2>
-                    <p className="text-xs text-slate-500">
+                    <p className="text-xs text-slate-400">
                       {activeMap.date ? `Stand ${format(parseISO(activeMap.date), 'dd.MM.yyyy', { locale: de })}` : 'Kein Datenstand'}
                     </p>
                     <div className="mt-3">
-                      <div className="text-[10px] text-slate-400 uppercase tracking-wider">VIRUSFILTER LAGEKARTE</div>
+                      <div className="text-[10px] text-slate-500 uppercase tracking-wider">VIRUSFILTER LAGEKARTE</div>
                       <div className="mt-2 flex flex-wrap items-center gap-2">
                         {VIRUS_OPTIONS.map((v) => (
                           <button
@@ -894,24 +890,24 @@ const MediaCockpit: React.FC = () => {
                     </div>
                   </div>
                     <div className="flex items-center gap-3">
-                      <div className="text-[11px] text-slate-500">
+                      <div className="text-[11px] text-slate-400">
                         Forecast-Slider
                       </div>
                     <div className="flex items-center gap-2">
-                      <span className="text-[11px] text-slate-500">0</span>
+                      <span className="text-[11px] text-slate-400">0</span>
                       <input
                         type="range"
                         min={0}
                         max={14}
                         value={horizonDays}
                         onChange={(e) => setHorizonDays(Number(e.target.value))}
-                        className="w-44 accent-cyan-400"
+                        className="w-44 accent-violet-500"
                         title="Visualisierte 14-Tage-Entwicklung (heuristisch aus Trend/Change%)."
                       />
-                      <span className="text-[11px] text-slate-500">14</span>
+                      <span className="text-[11px] text-slate-400">14</span>
                     </div>
                     {showTechDetails && (
-                      <div className="text-xs text-slate-500">
+                      <div className="text-xs text-slate-400">
                         Max {activeMap.max_viruslast?.toLocaleString('de-DE')} Genkopien/L
                       </div>
                     )}
@@ -919,28 +915,28 @@ const MediaCockpit: React.FC = () => {
                 </div>
 
                 {!activeMap.has_data ? (
-                  <div className="py-16 text-center text-slate-500">Keine Kartendaten vorhanden.</div>
+                  <div className="py-16 text-center text-slate-400">Keine Kartendaten vorhanden.</div>
                 ) : (
                   <div
                     className="rounded-2xl p-3"
                     style={{
                       background:
-                        'radial-gradient(800px 260px at 12% 0%, rgba(14,165,233,0.09), transparent 58%), linear-gradient(160deg, rgba(15,23,42,0.9), rgba(8,17,31,0.86))',
-                      border: '1px solid rgba(51,65,85,0.75)',
+                        'radial-gradient(800px 260px at 12% 0%, rgba(139,92,246,0.06), transparent 58%), linear-gradient(160deg, #ffffff, #f1f5f9)',
+                      border: '1px solid rgba(226,232,240,0.9)',
                     }}
                   >
                     <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-                      <div className="text-[11px] text-slate-400">
+                      <div className="text-[11px] text-slate-500">
                         Klick auf ein Bundesland öffnet direkt den passenden Kampagnenvorschlag.
                       </div>
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="px-2 py-1 rounded-full text-[10px] uppercase tracking-wider" style={{ background: 'rgba(34,197,94,0.15)', color: '#86efac', border: '1px solid rgba(34,197,94,0.35)' }}>
+                        <span className="px-2 py-1 rounded-full text-[10px] uppercase tracking-wider" style={{ background: 'rgba(34,197,94,0.1)', color: '#16a34a', border: '1px solid rgba(34,197,94,0.25)' }}>
                           Niedrig
                         </span>
-                        <span className="px-2 py-1 rounded-full text-[10px] uppercase tracking-wider" style={{ background: 'rgba(250,204,21,0.15)', color: '#fcd34d', border: '1px solid rgba(250,204,21,0.35)' }}>
+                        <span className="px-2 py-1 rounded-full text-[10px] uppercase tracking-wider" style={{ background: 'rgba(250,204,21,0.1)', color: '#ca8a04', border: '1px solid rgba(250,204,21,0.25)' }}>
                           Mittel
                         </span>
-                        <span className="px-2 py-1 rounded-full text-[10px] uppercase tracking-wider" style={{ background: 'rgba(239,68,68,0.15)', color: '#fca5a5', border: '1px solid rgba(239,68,68,0.35)' }}>
+                        <span className="px-2 py-1 rounded-full text-[10px] uppercase tracking-wider" style={{ background: 'rgba(239,68,68,0.1)', color: '#dc2626', border: '1px solid rgba(239,68,68,0.25)' }}>
                           Hoch
                         </span>
                       </div>
@@ -949,17 +945,17 @@ const MediaCockpit: React.FC = () => {
                     <svg viewBox="0 0 420 460" className="w-full max-h-[560px]">
                       <defs>
                         <filter id="vf-map-shadow" x="-20%" y="-20%" width="140%" height="140%">
-                          <feDropShadow dx="0" dy="4" stdDeviation="4" floodColor="#020617" floodOpacity="0.55" />
+                          <feDropShadow dx="0" dy="2" stdDeviation="3" floodColor="#94a3b8" floodOpacity="0.2" />
                         </filter>
                         <filter id="vf-selected-glow" x="-30%" y="-30%" width="160%" height="160%">
-                          <feDropShadow dx="0" dy="0" stdDeviation="3" floodColor="#67e8f9" floodOpacity="0.5" />
+                          <feDropShadow dx="0" dy="0" stdDeviation="3" floodColor="#8b5cf6" floodOpacity="0.45" />
                         </filter>
                         <pattern id="vf-map-grid" width="14" height="14" patternUnits="userSpaceOnUse">
-                          <path d="M 14 0 L 0 0 0 14" fill="none" stroke="rgba(100,116,139,0.18)" strokeWidth="0.6" />
+                          <path d="M 14 0 L 0 0 0 14" fill="none" stroke="rgba(148,163,184,0.2)" strokeWidth="0.6" />
                         </pattern>
                       </defs>
 
-                      <rect x="0" y="0" width="420" height="460" rx="14" fill="rgba(2,6,23,0.3)" />
+                      <rect x="0" y="0" width="420" height="460" rx="14" fill="rgba(248,250,252,0.8)" />
                       <rect x="0" y="0" width="420" height="460" rx="14" fill="url(#vf-map-grid)" />
 
                       {mapShapes.map((shape) => {
@@ -967,7 +963,7 @@ const MediaCockpit: React.FC = () => {
                         const code = shape.code || codeFromName;
                         const region = code ? activeMap.regions?.[code] : undefined;
                         const intensity = region ? projectedIntensity(region) : 0;
-                        const fill = region ? intensityColor(intensity) : 'rgba(51,65,85,0.28)';
+                        const fill = region ? intensityColor(intensity) : 'rgba(226,232,240,0.5)';
                         const isSelected = Boolean(code && selectedRegion === code);
                         const band = !region ? '' : intensity >= 0.7 ? 'Hoch' : intensity >= 0.4 ? 'Mittel' : 'Niedrig';
                         return (
@@ -979,7 +975,7 @@ const MediaCockpit: React.FC = () => {
                             <path
                               d={shape.d}
                               fill={fill}
-                              stroke={isSelected ? '#67e8f9' : 'rgba(148,163,184,0.7)'}
+                              stroke={isSelected ? '#8b5cf6' : 'rgba(203,213,225,0.9)'}
                               strokeWidth={isSelected ? 2.4 : 1.1}
                               filter={isSelected ? 'url(#vf-selected-glow)' : 'url(#vf-map-shadow)'}
                               style={{ transition: 'all 180ms ease' }}
@@ -988,18 +984,18 @@ const MediaCockpit: React.FC = () => {
                               cx={shape.cx}
                               cy={shape.cy - 5}
                               r={8.5}
-                              fill="rgba(2,6,23,0.78)"
-                              stroke={isSelected ? 'rgba(103,232,249,0.85)' : 'rgba(100,116,139,0.65)'}
+                              fill="rgba(255,255,255,0.92)"
+                              stroke={isSelected ? 'rgba(139,92,246,0.85)' : 'rgba(203,213,225,0.7)'}
                               strokeWidth={isSelected ? 1.2 : 0.8}
                             />
-                            <text x={shape.cx} y={shape.cy - 2.5} textAnchor="middle" fill="#e2e8f0" fontSize="8" fontWeight="700">{code || '--'}</text>
+                            <text x={shape.cx} y={shape.cy - 2.5} textAnchor="middle" fill="#334155" fontSize="8" fontWeight="700">{code || '--'}</text>
                             {region && (
-                              <text x={shape.cx} y={shape.cy + 11} textAnchor="middle" fill="#94a3b8" fontSize="6.6">
+                              <text x={shape.cx} y={shape.cy + 11} textAnchor="middle" fill="#64748b" fontSize="6.6">
                                 {band}
                               </text>
                             )}
                             {openingRegion === code && (
-                              <text x={shape.cx} y={shape.cy + 20} textAnchor="middle" fill="#7dd3fc" fontSize="6">
+                              <text x={shape.cx} y={shape.cy + 20} textAnchor="middle" fill="#7c3aed" fontSize="6">
                                 oeffne...
                               </text>
                             )}
@@ -1008,12 +1004,12 @@ const MediaCockpit: React.FC = () => {
                       })}
                     </svg>
 
-                    <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-500">
+                    <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-400">
                       <div>
                         Intensität basiert auf PeixEpiScore + Trendprojektion (0-14 Tage).
                       </div>
                       <div>
-                        Aktive Auswahl: <span className="text-slate-300">{selectedRegion || 'keine'}</span>
+                        Aktive Auswahl: <span className="text-slate-600">{selectedRegion || 'keine'}</span>
                       </div>
                     </div>
                   </div>
@@ -1022,24 +1018,23 @@ const MediaCockpit: React.FC = () => {
 
               <div className="space-y-6">
                 <div className="card p-4">
-                  <h3 className="text-sm font-semibold text-white mb-3">Top Regionen nach Impact</h3>
+                  <h3 className="text-sm font-semibold text-slate-900 mb-3">Top Regionen nach Impact</h3>
                   <div className="space-y-2">
                     {mapRanking.slice(0, 8).map((r, idx) => (
                       <button
                         key={r.code}
                         type="button"
                         onClick={() => openRecommendationForRegion(r.code)}
-                        className="w-full text-left rounded-lg px-3 py-2 hover:brightness-110 transition"
-                        style={{ background: 'rgba(15,23,42,0.65)' }}
+                        className="w-full text-left rounded-lg px-3 py-2 hover:bg-slate-100 transition bg-slate-50 border border-slate-100"
                       >
                         <div className="flex items-center justify-between">
                           <div>
-                            <div className="text-sm text-slate-200">{idx + 1}. {r.name}</div>
-                            <div className="text-xs text-slate-500">Impact {Math.round(r.impact_probability || 0)}% · Trend {trendIcon(r.trend)} {r.change_pct > 0 ? '+' : ''}{r.change_pct}%</div>
+                            <div className="text-sm text-slate-700">{idx + 1}. {r.name}</div>
+                            <div className="text-xs text-slate-400">Impact {Math.round(r.impact_probability || 0)}% · Trend {trendIcon(r.trend)} {r.change_pct > 0 ? '+' : ''}{r.change_pct}%</div>
                           </div>
                           <div className="text-right">
-                            <div className="text-sm text-white font-medium">Radar</div>
-                            <div className="text-xs text-slate-500">Click to activate</div>
+                            <div className="text-sm text-slate-900 font-medium">Radar</div>
+                            <div className="text-xs text-slate-400">Click to activate</div>
                           </div>
                         </div>
                       </button>
@@ -1049,12 +1044,12 @@ const MediaCockpit: React.FC = () => {
 
                 {showTechDetails && (
                   <div className="card p-4">
-                    <h3 className="text-sm font-semibold text-white mb-3">Tech Details: Datenquellen Live-Status</h3>
+                    <h3 className="text-sm font-semibold text-slate-900 mb-3">Tech Details: Datenquellen Live-Status</h3>
                     <div className="space-y-2">
                       {sourceStatus.map((item) => (
-                        <div key={item.source_key} className="rounded-lg px-3 py-2" style={{ background: 'rgba(15,23,42,0.65)' }}>
+                        <div key={item.source_key} className="rounded-lg px-3 py-2 bg-slate-50 border border-slate-100">
                           <div className="flex items-center justify-between">
-                            <span className="text-xs text-slate-300">{item.label}</span>
+                            <span className="text-xs text-slate-600">{item.label}</span>
                             <div className="flex items-center gap-2">
                               <span
                                 className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${pillToneClass(item.feed_status_color)}`}
@@ -1074,7 +1069,7 @@ const MediaCockpit: React.FC = () => {
                               </span>
                             </div>
                           </div>
-                          <div className="text-[11px] text-slate-500 mt-1">
+                          <div className="text-[11px] text-slate-400 mt-1">
                             {item.last_updated
                               ? `Messdatum: ${format(parseISO(item.last_updated), 'dd.MM.yyyy HH:mm', { locale: de })}`
                               : 'Messdatum: kein Zeitstempel'}
@@ -1084,25 +1079,25 @@ const MediaCockpit: React.FC = () => {
                           </div>
                         </div>
                       ))}
-                      {sourceStatus.length === 0 && <div className="text-xs text-slate-500">Keine Quellenstatus verfügbar.</div>}
+                      {sourceStatus.length === 0 && <div className="text-xs text-slate-400">Keine Quellenstatus verfügbar.</div>}
                     </div>
                   </div>
                 )}
 
                 <div className="card p-4">
-                  <h3 className="text-sm font-semibold text-white mb-3">Activation-Vorschläge</h3>
+                  <h3 className="text-sm font-semibold text-slate-900 mb-3">Activation-Vorschläge</h3>
                   <div className="space-y-3">
                     {(activeMap.activation_suggestions || []).slice(0, 5).map((s, idx) => (
-                      <div key={idx} className="rounded-lg p-3" style={{ background: 'rgba(15,23,42,0.75)', border: '1px solid #334155' }}>
+                      <div key={idx} className="rounded-lg p-3 bg-slate-50 border border-slate-200">
                         <div className="flex items-center justify-between mb-1">
-                          <span className="text-sm text-white">{s.region_name}</span>
-                          <span className="text-xs text-cyan-400">+{s.budget_shift_pct}%</span>
+                          <span className="text-sm text-slate-900">{s.region_name}</span>
+                          <span className="text-xs text-violet-600 font-semibold">+{s.budget_shift_pct}%</span>
                         </div>
-                        <p className="text-xs text-slate-400">{s.reason}</p>
+                        <p className="text-xs text-slate-500">{s.reason}</p>
                       </div>
                     ))}
                     {(!activeMap.activation_suggestions || activeMap.activation_suggestions.length === 0) && (
-                      <p className="text-xs text-slate-500">Keine aktuellen Vorschläge.</p>
+                      <p className="text-xs text-slate-400">Keine aktuellen Vorschläge.</p>
                     )}
                   </div>
                 </div>
@@ -1117,29 +1112,29 @@ const MediaCockpit: React.FC = () => {
               className="card p-6"
               style={{
                 background:
-                  'radial-gradient(900px 220px at 20% 0%, rgba(59,130,246,0.16), transparent 60%), linear-gradient(135deg, rgba(30,41,59,1), rgba(15,23,42,1))',
-                border: '1px solid rgba(148,163,184,0.22)',
+                  'radial-gradient(900px 220px at 20% 0%, rgba(139,92,246,0.08), transparent 60%), linear-gradient(135deg, #ffffff, #f1f5f9)',
+                border: '1px solid rgba(226,232,240,0.9)',
               }}
             >
               <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
                 <div className="min-w-0">
-                  <div className="text-[10px] text-slate-400 uppercase tracking-wider">Kampagnenvorschlaege</div>
-                  <h2 className="text-2xl font-black text-white tracking-tight mt-1">Action Cards</h2>
-                  <p className="text-sm text-slate-400 mt-2 max-w-2xl">
+                  <div className="text-[10px] text-slate-500 uppercase tracking-wider">Kampagnenvorschlaege</div>
+                  <h2 className="text-2xl font-black text-slate-900 tracking-tight mt-1">Action Cards</h2>
+                  <p className="text-sm text-slate-500 mt-2 max-w-2xl">
                     Erst sehen, was du tun sollst. Dann (optional) die Details. Copy ist HWG-safe aus der Gelo-Playbook-Library.
                   </p>
                   <div className="mt-4 flex flex-wrap gap-2">
-                    <span className="px-3 py-1.5 rounded-full text-xs" style={{ background: 'rgba(15,23,42,0.65)', border: '1px solid #334155', color: '#94a3b8' }}>
-                      Brand: <span className="text-slate-200">{brand}</span>
+                    <span className="px-3 py-1.5 rounded-full text-xs bg-slate-100 border border-slate-200 text-slate-500">
+                      Brand: <span className="text-slate-700 font-medium">{brand}</span>
                     </span>
-                    <span className="px-3 py-1.5 rounded-full text-xs" style={{ background: 'rgba(15,23,42,0.65)', border: '1px solid #334155', color: '#94a3b8' }}>
-                      Produkt: <span className="text-slate-200">{product}</span>
+                    <span className="px-3 py-1.5 rounded-full text-xs bg-slate-100 border border-slate-200 text-slate-500">
+                      Produkt: <span className="text-slate-700 font-medium">{product}</span>
                     </span>
-                    <span className="px-3 py-1.5 rounded-full text-xs" style={{ background: 'rgba(15,23,42,0.65)', border: '1px solid #334155', color: '#94a3b8' }}>
-                      Budget/Woche: <span className="text-slate-200">{eur(weeklyBudget)}</span>
+                    <span className="px-3 py-1.5 rounded-full text-xs bg-slate-100 border border-slate-200 text-slate-500">
+                      Budget/Woche: <span className="text-slate-700 font-medium">{eur(weeklyBudget)}</span>
                     </span>
-                    <span className="px-3 py-1.5 rounded-full text-xs" style={{ background: 'rgba(15,23,42,0.65)', border: '1px solid #334155', color: '#94a3b8' }}>
-                      Virus: <span className="text-slate-200">{virus}</span>
+                    <span className="px-3 py-1.5 rounded-full text-xs bg-slate-100 border border-slate-200 text-slate-500">
+                      Virus: <span className="text-slate-700 font-medium">{virus}</span>
                     </span>
                   </div>
                 </div>
@@ -1148,7 +1143,7 @@ const MediaCockpit: React.FC = () => {
                   <button
                     onClick={triggerRecommendations}
                     className="px-4 py-2 text-xs font-bold rounded-lg transition hover:brightness-110 disabled:opacity-60"
-                    style={{ background: 'linear-gradient(135deg, #22c55e, #10b981)', color: '#052e1b' }}
+                    style={{ background: 'linear-gradient(135deg, #4ade80, #22c55e)', color: '#052e1b' }}
                     disabled={recLoading}
                     title="Erzeugt neue Cards und startet KI-Verfeinerung asynchron"
                   >
@@ -1156,8 +1151,7 @@ const MediaCockpit: React.FC = () => {
                   </button>
                   <button
                     onClick={() => highlightCardId && navigate(`/dashboard/recommendations/${encodeURIComponent(highlightCardId)}`)}
-                    className="px-4 py-2 text-xs font-semibold rounded-lg transition hover:bg-slate-700 disabled:opacity-60"
-                    style={{ border: '1px solid rgba(148,163,184,0.25)', color: '#e2e8f0' }}
+                    className="media-button secondary px-4 py-2 text-xs font-semibold rounded-lg transition disabled:opacity-60"
                     disabled={!highlightCardId}
                     title="Oeffnet die aktuell priorisierte Top-Empfehlung"
                   >
@@ -1165,16 +1159,14 @@ const MediaCockpit: React.FC = () => {
                   </button>
                   <button
                     onClick={loadRecommendations}
-                    className="px-4 py-2 text-xs font-semibold rounded-lg transition hover:bg-slate-700"
-                    style={{ border: '1px solid rgba(148,163,184,0.25)', color: '#e2e8f0' }}
+                    className="media-button secondary px-4 py-2 text-xs font-semibold rounded-lg transition"
                     title="Listet gespeicherte Cards (schnell)"
                   >
                     Liste aktualisieren
                   </button>
                   <button
                     onClick={() => setShowTechDetails((s) => !s)}
-                    className="px-4 py-2 text-xs font-semibold rounded-lg transition hover:bg-slate-700"
-                    style={{ border: '1px solid rgba(148,163,184,0.25)', color: '#94a3b8' }}
+                    className="media-button secondary px-4 py-2 text-xs font-semibold rounded-lg transition"
                   >
                     {showTechDetails ? 'Tech Details ausblenden' : 'Tech Details anzeigen'}
                   </button>
@@ -1183,8 +1175,7 @@ const MediaCockpit: React.FC = () => {
 
               {refinementNotice && (
                 <div
-                  className="mt-4 rounded-lg px-3 py-2 text-xs"
-                  style={{ background: 'rgba(15,23,42,0.65)', border: '1px solid #334155', color: '#94a3b8' }}
+                  className="mt-4 rounded-lg px-3 py-2 text-xs bg-slate-100 border border-slate-200 text-slate-500"
                 >
                   {refinementNotice}
                 </div>
@@ -1203,7 +1194,7 @@ const MediaCockpit: React.FC = () => {
                       <option value={3}>3 Cards</option>
                       <option value={4}>4 Cards</option>
                     </select>
-                    <div className="text-xs text-slate-500 flex items-center">
+                    <div className="text-xs text-slate-400 flex items-center">
                       Mode: {strategyMode}
                     </div>
                   </div>
@@ -1245,7 +1236,7 @@ const MediaCockpit: React.FC = () => {
                       className="media-input"
                       placeholder="Lageklasse"
                     />
-                    <div className="text-xs text-slate-500 flex items-center">
+                    <div className="text-xs text-slate-400 flex items-center">
                       max_cards: {maxCards}
                     </div>
                   </div>
@@ -1262,12 +1253,12 @@ const MediaCockpit: React.FC = () => {
                     key={card.id}
                     type="button"
                     onClick={() => navigate(`/dashboard/recommendations/${encodeURIComponent(card.id)}`)}
-                    className="card p-5 text-left hover:brightness-110 transition"
+                    className="card p-5 text-left hover:shadow-lg transition"
                     style={
                       isHighlighted
                         ? {
-                            border: '1px solid rgba(34,197,94,0.7)',
-                            boxShadow: '0 0 0 1px rgba(34,197,94,0.25), 0 10px 30px rgba(16,185,129,0.12)',
+                            border: '1px solid rgba(34,197,94,0.5)',
+                            boxShadow: '0 0 0 1px rgba(34,197,94,0.15), 0 10px 30px rgba(16,185,129,0.08)',
                           }
                         : undefined
                     }
@@ -1275,9 +1266,9 @@ const MediaCockpit: React.FC = () => {
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <div className="text-[10px] text-slate-500 uppercase tracking-wider">KI-Erkenntnis</div>
+                          <div className="text-[10px] text-slate-400 uppercase tracking-wider">KI-Erkenntnis</div>
                           {isHighlighted && (
-                            <span className="px-2 py-0.5 text-[10px] rounded-full" style={{ background: 'rgba(34,197,94,0.2)', color: '#86efac' }}>
+                            <span className="px-2 py-0.5 text-[10px] rounded-full" style={{ background: 'rgba(34,197,94,0.1)', color: '#16a34a' }}>
                               Top-Empfehlung
                             </span>
                           )}
@@ -1290,67 +1281,67 @@ const MediaCockpit: React.FC = () => {
                             </span>
                           )}
                         </div>
-                        <div className="text-base font-bold text-white mt-1 truncate">
+                        <div className="text-base font-bold text-slate-900 mt-1 truncate">
                           {card.playbook_title || card.campaign_preview?.playbook_title || card.campaign_name || `${card.brand} · ${card.product}`}
                         </div>
-                        <div className="text-xs text-slate-400 mt-1 line-clamp-2">{card.reason || card.trigger_snapshot?.details || 'Signal erkannt.'}</div>
+                        <div className="text-xs text-slate-500 mt-1 line-clamp-2">{card.reason || card.trigger_snapshot?.details || 'Signal erkannt.'}</div>
                       </div>
                       <div className="flex-shrink-0 text-right">
-                        <div className="text-[10px] text-slate-500 uppercase tracking-wider">Urgency</div>
-                        <div className="text-sm font-bold text-slate-200 mt-1">{Math.round(card.urgency_score || 0)}</div>
+                        <div className="text-[10px] text-slate-400 uppercase tracking-wider">Urgency</div>
+                        <div className="text-sm font-bold text-slate-700 mt-1">{Math.round(card.urgency_score || 0)}</div>
                         {card.confidence !== undefined && (
-                          <div className="text-[11px] text-emerald-300 mt-1">Conf {Math.round((card.confidence || 0) * 100)}%</div>
+                          <div className="text-[11px] text-emerald-500 mt-1">Conf {Math.round((card.confidence || 0) * 100)}%</div>
                         )}
                       </div>
                     </div>
 
                     <div className="mt-4 grid grid-cols-2 gap-3">
-                      <div className="rounded-lg p-3" style={{ background: 'rgba(15,23,42,0.7)', border: '1px solid #334155' }}>
-                        <div className="text-[10px] text-slate-500 uppercase tracking-wider">Produkt</div>
-                        <div className="text-sm font-semibold text-white mt-1 truncate" title={card.recommended_product || card.product}>
+                      <div className="rounded-lg p-3 bg-slate-50 border border-slate-100">
+                        <div className="text-[10px] text-slate-400 uppercase tracking-wider">Produkt</div>
+                        <div className="text-sm font-semibold text-slate-900 mt-1 truncate" title={card.recommended_product || card.product}>
                           {card.recommended_product || card.product}
                         </div>
-                        <div className="text-[11px] text-slate-500 mt-1">HWG-safe Copy Pack</div>
+                        <div className="text-[11px] text-slate-400 mt-1">HWG-safe Copy Pack</div>
                       </div>
-                      <div className="rounded-lg p-3" style={{ background: 'rgba(15,23,42,0.7)', border: '1px solid #334155' }}>
-                        <div className="text-[10px] text-slate-500 uppercase tracking-wider">Budget</div>
-                        <div className="text-sm font-semibold text-white mt-1">
+                      <div className="rounded-lg p-3 bg-slate-50 border border-slate-100">
+                        <div className="text-[10px] text-slate-400 uppercase tracking-wider">Budget</div>
+                        <div className="text-sm font-semibold text-slate-900 mt-1">
                           +{card.budget_shift_pct}%{' '}
-                          <span className="text-slate-400">
+                          <span className="text-slate-500">
                             ({card.campaign_preview?.budget?.shift_value_eur ? eur(card.campaign_preview.budget.shift_value_eur) : 'Shift'})
                           </span>
                         </div>
-                        <div className="text-[11px] text-slate-500 mt-1">KPI: {card.primary_kpi || card.campaign_preview?.primary_kpi || '-'}</div>
+                        <div className="text-[11px] text-slate-400 mt-1">KPI: {card.primary_kpi || card.campaign_preview?.primary_kpi || '-'}</div>
                       </div>
                     </div>
 
                     <div className="mt-4 flex items-center justify-between gap-3">
-                      <div className="text-[11px] text-slate-500">
-                        Status: <span className="text-slate-300">{String(card.status || 'DRAFT')}</span>
+                      <div className="text-[11px] text-slate-400">
+                        Status: <span className="text-slate-600 font-medium">{String(card.status || 'DRAFT')}</span>
                         {showTechDetails && (
                           <>
                             {' · '}
-                            <span className="text-slate-400">{mappingLabel(card.mapping_status)}</span>
+                            <span className="text-slate-500">{mappingLabel(card.mapping_status)}</span>
                           </>
                         )}
                       </div>
                       <span
                         className="px-3 py-1.5 text-xs font-bold rounded-lg"
-                        style={{ background: 'linear-gradient(135deg, #22c55e, #10b981)', color: '#052e1b' }}
+                        style={{ background: 'linear-gradient(135deg, #4ade80, #22c55e)', color: '#052e1b' }}
                       >
                         Aktivieren
                       </span>
                     </div>
 
                     {showTechDetails && (
-                      <div className="mt-3 text-xs text-slate-500">
+                      <div className="mt-3 text-xs text-slate-400">
                         Kanalmix: {Object.entries(card.channel_mix || {}).map(([k, v]) => `${k} ${v}%`).join(' · ')}
                       </div>
                     )}
                   </button>
                 );
               })}
-              {recCards.length === 0 && <div className="text-slate-500 text-sm">Noch keine Action Cards vorhanden.</div>}
+              {recCards.length === 0 && <div className="text-slate-400 text-sm">Noch keine Action Cards vorhanden.</div>}
             </div>
           </div>
         )}
@@ -1358,7 +1349,7 @@ const MediaCockpit: React.FC = () => {
         {!loading && tab === 'backtest' && (
           <div className="space-y-6">
             <div className="card p-5">
-              <h2 className="text-lg font-semibold text-white mb-4">Twin-Mode Backtest</h2>
+              <h2 className="text-lg font-semibold text-slate-900 mb-4">Twin-Mode Backtest</h2>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
                 <select value={targetSource} onChange={(e) => setTargetSource(e.target.value)} className="media-input">
                   {TARGET_OPTIONS.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
@@ -1374,13 +1365,13 @@ const MediaCockpit: React.FC = () => {
                 <button onClick={runCustomerBacktest} className="media-button" disabled={customerRunning || !customerFile}>
                   {customerRunning ? 'Läuft...' : 'Realitäts-Check (CSV)'}
                 </button>
-                <div className="text-xs text-slate-500 flex items-center">Pflichtspalten: `datum`, `menge` · optional: `region`</div>
+                <div className="text-xs text-slate-400 flex items-center">Pflichtspalten: `datum`, `menge` · optional: `region`</div>
               </div>
             </div>
 
             {marketRun?.metrics && (
               <div className="card p-5">
-                <h3 className="text-white font-semibold mb-3">Markt-Check Ergebnis</h3>
+                <h3 className="text-slate-900 font-semibold mb-3">Markt-Check Ergebnis</h3>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
                   <div className="metric-box"><span>R²</span><strong>{marketRun.metrics.r2_score}</strong></div>
                   <div className="metric-box"><span>Korrelation</span><strong>{marketRun.metrics.correlation_pct}%</strong></div>
@@ -1390,35 +1381,35 @@ const MediaCockpit: React.FC = () => {
                 {chartData.length > 0 && (
                   <ResponsiveContainer width="100%" height={260}>
                     <LineChart data={chartData}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                       <XAxis dataKey="dateLabel" tick={{ fill: '#64748b', fontSize: 10 }} />
                       <YAxis tick={{ fill: '#64748b', fontSize: 10 }} />
-                      <Tooltip contentStyle={{ background: '#1f2937', border: '1px solid #334155' }} />
+                      <Tooltip contentStyle={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }} />
                       <Legend />
                       <Line type="monotone" dataKey="real_qty" stroke="#ef4444" dot={false} name="Proxy (Ist)" />
-                      <Line type="monotone" dataKey="predicted_qty" stroke="#38bdf8" dot={false} name="ViralFlux" />
-                      <Line type="monotone" dataKey="baseline_seasonal" stroke="#64748b" dot={false} name="Seasonal" />
+                      <Line type="monotone" dataKey="predicted_qty" stroke="#8b5cf6" dot={false} name="ViralFlux" />
+                      <Line type="monotone" dataKey="baseline_seasonal" stroke="#94a3b8" dot={false} name="Seasonal" />
                     </LineChart>
                   </ResponsiveContainer>
                 )}
-                <p className="text-xs text-slate-400 mt-3">{marketRun.proof_text}</p>
+                <p className="text-xs text-slate-500 mt-3">{marketRun.proof_text}</p>
               </div>
             )}
 
             {customerRun?.metrics && (
               <div className="card p-5">
-                <h3 className="text-white font-semibold mb-2">Realitäts-Check Ergebnis</h3>
-                <div className="text-sm text-slate-300">R² {customerRun.metrics.r2_score} · Korrelation {customerRun.metrics.correlation_pct}% · MAE {customerRun.metrics.mae}</div>
-                <p className="text-xs text-slate-400 mt-2">{customerRun.proof_text}</p>
+                <h3 className="text-slate-900 font-semibold mb-2">Realitäts-Check Ergebnis</h3>
+                <div className="text-sm text-slate-600">R² {customerRun.metrics.r2_score} · Korrelation {customerRun.metrics.correlation_pct}% · MAE {customerRun.metrics.mae}</div>
+                <p className="text-xs text-slate-500 mt-2">{customerRun.proof_text}</p>
               </div>
             )}
 
             <div className="card p-5">
-              <h3 className="text-white font-semibold mb-3">Backtest-Historie</h3>
+              <h3 className="text-slate-900 font-semibold mb-3">Backtest-Historie</h3>
               <div className="overflow-auto">
                 <table className="w-full text-xs">
                   <thead>
-                    <tr className="text-slate-500 border-b border-slate-700">
+                    <tr className="text-slate-400 border-b border-slate-200">
                       <th className="text-left py-2">Zeit</th>
                       <th className="text-left py-2">Mode</th>
                       <th className="text-left py-2">Target</th>
@@ -1429,17 +1420,17 @@ const MediaCockpit: React.FC = () => {
                   </thead>
                   <tbody>
                     {runs.map((r) => (
-                      <tr key={r.run_id} className="border-b border-slate-800">
-                        <td className="py-2 text-slate-400">{r.created_at ? format(parseISO(r.created_at), 'dd.MM.yy HH:mm', { locale: de }) : '-'}</td>
-                        <td className="py-2 text-slate-200">{r.mode}</td>
-                        <td className="py-2 text-slate-300">{r.target_source}</td>
-                        <td className="py-2 text-slate-300">{r.virus_typ}</td>
-                        <td className="py-2 text-right text-white">{r.metrics?.r2_score ?? '-'}</td>
-                        <td className="py-2 text-right text-white">{r.metrics?.correlation_pct ?? '-'}</td>
+                      <tr key={r.run_id} className="border-b border-slate-100">
+                        <td className="py-2 text-slate-500">{r.created_at ? format(parseISO(r.created_at), 'dd.MM.yy HH:mm', { locale: de }) : '-'}</td>
+                        <td className="py-2 text-slate-700">{r.mode}</td>
+                        <td className="py-2 text-slate-600">{r.target_source}</td>
+                        <td className="py-2 text-slate-600">{r.virus_typ}</td>
+                        <td className="py-2 text-right text-slate-900 font-medium">{r.metrics?.r2_score ?? '-'}</td>
+                        <td className="py-2 text-right text-slate-900 font-medium">{r.metrics?.correlation_pct ?? '-'}</td>
                       </tr>
                     ))}
                     {runs.length === 0 && (
-                      <tr><td colSpan={6} className="py-4 text-slate-500 text-center">Noch keine Backtest-Runs gespeichert.</td></tr>
+                      <tr><td colSpan={6} className="py-4 text-slate-400 text-center">Noch keine Backtest-Runs gespeichert.</td></tr>
                     )}
                   </tbody>
                 </table>

@@ -15,20 +15,20 @@ const STATUS_UI: Record<IntegrationStatus, { label: string; dot: string; badgeBg
   connected: {
     label: 'Verbunden',
     dot: 'bg-emerald-400',
-    badgeBg: 'bg-emerald-500/10',
-    badgeText: 'text-emerald-300',
+    badgeBg: 'bg-emerald-50',
+    badgeText: 'text-emerald-700',
   },
   degraded: {
     label: 'Eingeschraenkt',
     dot: 'bg-amber-400',
-    badgeBg: 'bg-amber-500/10',
-    badgeText: 'text-amber-300',
+    badgeBg: 'bg-amber-50',
+    badgeText: 'text-amber-700',
   },
   disconnected: {
     label: 'Getrennt',
     dot: 'bg-rose-400',
-    badgeBg: 'bg-rose-500/10',
-    badgeText: 'text-rose-300',
+    badgeBg: 'bg-rose-50',
+    badgeText: 'text-rose-700',
   },
 };
 
@@ -115,39 +115,35 @@ const DataIntegration: React.FC = () => {
   );
 
   return (
-    <div className="min-h-screen" style={{ background: '#0f172a' }}>
-      <header style={{ background: '#1e293b', borderBottom: '1px solid #334155' }}>
+    <div className="min-h-screen bg-slate-50">
+      <header className="bg-white border-b border-slate-200">
         <div className="max-w-[1200px] mx-auto px-6 py-4 flex items-center justify-between gap-4">
           <div className="flex items-center gap-4">
             <button
               onClick={() => navigate('/dashboard')}
-              className="w-10 h-10 rounded-xl flex items-center justify-center transition hover:bg-slate-700"
-              style={{ border: '1px solid #334155' }}
+              className="w-10 h-10 rounded-xl flex items-center justify-center transition bg-white border border-slate-200 hover:bg-slate-50 hover:border-slate-300"
               aria-label="Zurueck ins Media Cockpit"
             >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2" strokeLinecap="round">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2" strokeLinecap="round">
                 <path d="M19 12H5M12 19l-7-7 7-7" />
               </svg>
             </button>
             <div>
-              <h1 className="text-xl font-bold text-white tracking-tight">Enterprise Integrationen</h1>
+              <h1 className="text-xl font-bold text-slate-900 tracking-tight">Enterprise Integrationen</h1>
               <p className="text-xs text-slate-400">Server-to-Server Sync statt manueller CSV-Uploads</p>
             </div>
           </div>
 
-          <div className="text-xs text-slate-500">
-            Letzter erfolgreicher M2M-Sync: <span className="text-slate-300 font-medium">{lastSync}</span>
+          <div className="text-xs text-slate-400">
+            Letzter erfolgreicher M2M-Sync: <span className="text-slate-600 font-medium">{lastSync}</span>
           </div>
         </div>
       </header>
 
       <main className="max-w-[1200px] mx-auto px-6 py-6 space-y-6">
-        <section
-          className="rounded-2xl p-4"
-          style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)' }}
-        >
-          <div className="text-xs font-semibold text-amber-200">Hinweis</div>
-          <p className="text-xs text-slate-300 mt-1">
+        <section className="rounded-2xl p-4 bg-amber-50/60 border border-amber-200">
+          <div className="text-xs font-semibold text-amber-800">Hinweis</div>
+          <p className="text-xs text-slate-600 mt-1">
             SAP ERP und IMS Health sind aktuell nicht automatisch per Connector verbunden. Diese Systeme gelten erst dann als
             &quot;Verbunden&quot;, wenn sie regelmaessig Daten an unseren Webhook pushen.
           </p>
@@ -159,14 +155,13 @@ const DataIntegration: React.FC = () => {
             return (
               <div
                 key={integration.system}
-                className="rounded-2xl p-5"
-                style={{ background: '#1e293b', border: '1px solid #334155' }}
+                className="card p-5"
               >
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <div className="flex items-center gap-3">
                       <span className={`w-2.5 h-2.5 rounded-full ${ui.dot}`} />
-                      <h2 className="text-base font-semibold text-white">{integration.name}</h2>
+                      <h2 className="text-base font-semibold text-slate-900">{integration.name}</h2>
                     </div>
                     <p className="text-xs text-slate-400 mt-2">{integration.description}</p>
                   </div>
@@ -177,13 +172,13 @@ const DataIntegration: React.FC = () => {
                 </div>
 
                 <div className="mt-4 grid grid-cols-2 gap-3">
-                  <div className="rounded-xl p-3" style={{ background: 'rgba(15,23,42,0.65)', border: '1px solid #334155' }}>
-                    <div className="text-[11px] text-slate-500">Letzter Sync</div>
-                    <div className="text-sm text-slate-200 font-medium mt-1">{integration.lastSuccessfulSync}</div>
+                  <div className="rounded-xl p-3 bg-slate-50 border border-slate-200">
+                    <div className="text-[11px] text-slate-400">Letzter Sync</div>
+                    <div className="text-sm text-slate-700 font-medium mt-1">{integration.lastSuccessfulSync}</div>
                   </div>
-                  <div className="rounded-xl p-3" style={{ background: 'rgba(15,23,42,0.65)', border: '1px solid #334155' }}>
-                    <div className="text-[11px] text-slate-500">Transport</div>
-                    <div className="text-sm text-slate-200 font-medium mt-1">Webhook (API-Key)</div>
+                  <div className="rounded-xl p-3 bg-slate-50 border border-slate-200">
+                    <div className="text-[11px] text-slate-400">Transport</div>
+                    <div className="text-sm text-slate-700 font-medium mt-1">Webhook (API-Key)</div>
                   </div>
                 </div>
               </div>
@@ -191,24 +186,24 @@ const DataIntegration: React.FC = () => {
           })}
         </section>
 
-        <section className="rounded-2xl p-5" style={{ background: '#0b1220', border: '1px solid #334155' }}>
+        <section className="card p-5">
           <div className="flex flex-col gap-1">
-            <h3 className="text-sm font-semibold text-white">Webhook Endpoint (ERP/IMS)</h3>
+            <h3 className="text-sm font-semibold text-slate-900">Webhook Endpoint (ERP/IMS)</h3>
             <p className="text-xs text-slate-400">
-              Dieser Endpoint ersetzt manuelle CSV-Uploads. Das Backend antwortet sofort mit <span className="text-slate-200 font-semibold">HTTP 202 Accepted</span> und verarbeitet die Inserts asynchron via Celery.
+              Dieser Endpoint ersetzt manuelle CSV-Uploads. Das Backend antwortet sofort mit <span className="text-slate-700 font-semibold">HTTP 202 Accepted</span> und verarbeitet die Inserts asynchron via Celery.
             </p>
           </div>
 
           <div className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <div className="rounded-xl p-4" style={{ background: '#0f172a', border: '1px solid #334155' }}>
-              <div className="text-[11px] text-slate-500 mb-2">Endpoint</div>
-              <div className="font-mono text-xs text-slate-200">POST /api/webhooks/erp/sales-sync</div>
+            <div className="rounded-xl p-4 bg-slate-50 border border-slate-200">
+              <div className="text-[11px] text-slate-400 mb-2">Endpoint</div>
+              <div className="font-mono text-xs text-slate-700">POST /api/webhooks/erp/sales-sync</div>
 
-              <div className="text-[11px] text-slate-500 mt-4 mb-2">Header</div>
-              <div className="font-mono text-xs text-slate-200">X-API-Key: &lt;M2M_SECRET_KEY&gt;</div>
+              <div className="text-[11px] text-slate-400 mt-4 mb-2">Header</div>
+              <div className="font-mono text-xs text-slate-700">X-API-Key: &lt;M2M_SECRET_KEY&gt;</div>
 
-              <div className="text-[11px] text-slate-500 mt-4 mb-2">Beispiel-Payload</div>
-              <pre className="font-mono text-[11px] leading-5 text-slate-200 overflow-auto rounded-lg p-3" style={{ background: '#0b1220', border: '1px solid #334155' }}>
+              <div className="text-[11px] text-slate-400 mt-4 mb-2">Beispiel-Payload</div>
+              <pre className="font-mono text-[11px] leading-5 text-slate-700 overflow-auto rounded-lg p-3 bg-white border border-slate-200">
 {`{
   "product_id": "GELO-12345",
   "region_code": "DE-BW",
@@ -219,9 +214,9 @@ const DataIntegration: React.FC = () => {
               </pre>
             </div>
 
-            <div className="rounded-xl p-4" style={{ background: '#0f172a', border: '1px solid #334155' }}>
-              <div className="text-[11px] text-slate-500 mb-2">Beispiel (curl)</div>
-              <pre className="font-mono text-[11px] leading-5 text-slate-200 overflow-auto rounded-lg p-3" style={{ background: '#0b1220', border: '1px solid #334155' }}>
+            <div className="rounded-xl p-4 bg-slate-50 border border-slate-200">
+              <div className="text-[11px] text-slate-400 mb-2">Beispiel (curl)</div>
+              <pre className="font-mono text-[11px] leading-5 text-slate-700 overflow-auto rounded-lg p-3 bg-white border border-slate-200">
 {`curl -X POST \
   -H "Content-Type: application/json" \
   -H "X-API-Key: <M2M_SECRET_KEY>" \
@@ -229,9 +224,9 @@ const DataIntegration: React.FC = () => {
   https://fluxengine.labpulse.ai/api/webhooks/erp/sales-sync`}
               </pre>
 
-              <div className="mt-4 rounded-xl p-3" style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.25)' }}>
-                <div className="text-xs text-emerald-200 font-semibold">Hinweis</div>
-                <p className="text-xs text-slate-300 mt-1">
+              <div className="mt-4 rounded-xl p-3 bg-emerald-50/60 border border-emerald-200">
+                <div className="text-xs text-emerald-800 font-semibold">Hinweis</div>
+                <p className="text-xs text-slate-600 mt-1">
                   Manuelle Datei-Uploads sind bewusst deaktiviert. Integrationen laufen automatisiert, revisionssicher und ohne UI-Prozessbruch.
                 </p>
               </div>

@@ -91,81 +91,89 @@ const buildMailtoLink = () => {
   return `mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 };
 
+/* ─── Icon helpers for feature cards ───────────────────────────── */
+const FeatureIcon: React.FC<{ idx: number }> = ({ idx }) => {
+  const icons = [
+    /* chart-bar */
+    <svg key="0" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="12" width="4" height="9" rx="1" /><rect x="10" y="8" width="4" height="13" rx="1" /><rect x="17" y="3" width="4" height="18" rx="1" /></svg>,
+    /* layers */
+    <svg key="1" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2 2 7l10 5 10-5-10-5Z" /><path d="m2 17 10 5 10-5" /><path d="m2 12 10 5 10-5" /></svg>,
+    /* shield-check */
+    <svg key="2" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /><path d="m9 12 2 2 4-4" /></svg>,
+  ];
+  return icons[idx % icons.length];
+};
+
+const iconBgColors = [
+  'bg-violet-100 text-violet-600',
+  'bg-pink-100 text-pink-600',
+  'bg-orange-100 text-orange-600',
+];
+
+const stepAccentColors = [
+  'from-violet-500 to-purple-600',
+  'from-pink-500 to-rose-600',
+  'from-orange-500 to-amber-600',
+  'from-cyan-500 to-blue-600',
+];
+
 const LandingPage: React.FC = () => {
   const navigate = useNavigate();
   const mailtoLink = buildMailtoLink();
 
   return (
-    <div className="relative min-h-screen overflow-x-hidden" style={{ background: '#091222' }}>
-      <div
-        className="absolute inset-0 opacity-30"
-        style={{
-          pointerEvents: 'none',
-          background:
-            'radial-gradient(circle at 12% 16%, rgba(14,165,233,0.22), transparent 35%), radial-gradient(circle at 84% 24%, rgba(245,158,11,0.16), transparent 30%), radial-gradient(circle at 52% 82%, rgba(59,130,246,0.18), transparent 34%)',
-        }}
-      />
-
-      <nav
-        className="relative max-w-[1180px] mx-auto px-4 sm:px-6 py-5 md:py-7 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
-        style={{ zIndex: 10 }}
-      >
+    <div className="relative min-h-screen overflow-x-hidden bg-white bg-blobs">
+      {/* ─── Navigation ─────────────────────────────────────────────── */}
+      <nav className="relative z-10 max-w-[1180px] mx-auto px-4 sm:px-6 py-5 md:py-7 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div className="flex items-center gap-3 w-full sm:w-auto">
-          <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #0ea5e9, #3b82f6)' }}>
+          <div className="media-logo">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
               <path d="M3 12h4l2-4 3 8 2-4h7" />
             </svg>
           </div>
           <div>
-            <div className="text-white font-bold tracking-tight">{COPY.nav.brandTitle}</div>
+            <div className="text-slate-900 font-bold tracking-tight text-sm">{COPY.nav.brandTitle}</div>
             <div className="text-[11px] text-slate-400">{COPY.nav.brandSubtitle}</div>
           </div>
         </div>
         <div className="flex w-full sm:w-auto flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
           <a
             href={mailtoLink}
-            className="px-4 py-2.5 text-xs font-semibold rounded-lg text-center whitespace-nowrap transition hover:brightness-110"
-            style={{ color: '#f59e0b', border: '1px solid #f59e0b55', background: 'rgba(245,158,11,0.08)' }}
+            className="media-button secondary px-4 py-2.5 text-xs font-semibold text-center whitespace-nowrap"
           >
             {COPY.nav.primaryCta}
           </a>
           <button
             onClick={() => navigate('/dashboard?tab=product-intel')}
-            className="px-4 py-2.5 text-xs font-semibold rounded-lg text-white text-center whitespace-nowrap transition hover:brightness-110"
-            style={{ background: 'linear-gradient(135deg, #0ea5e9, #3b82f6)' }}
+            className="media-button px-4 py-2.5 text-xs font-semibold text-center whitespace-nowrap"
           >
             {COPY.nav.secondaryCta}
           </button>
         </div>
       </nav>
 
-      <main className="relative max-w-[1180px] mx-auto px-4 sm:px-6 pb-20 space-y-12 md:space-y-14" style={{ zIndex: 5 }}>
-        <section className="pt-6 md:pt-10 grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_360px] gap-6 lg:gap-8 items-start">
+      {/* ─── Main Content ───────────────────────────────────────────── */}
+      <main className="relative z-[5] max-w-[1180px] mx-auto px-4 sm:px-6 pb-20 space-y-12 md:space-y-14">
+
+        {/* ─── Hero ───────────────────────────────────────────────────── */}
+        <section className="pt-6 md:pt-10 grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_360px] gap-6 lg:gap-8 items-start fade-in">
           <div>
-            <div
-              className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold mb-5"
-              style={{
-                color: '#38bdf8',
-                border: '1px solid rgba(56,189,248,0.3)',
-                background: 'rgba(14,165,233,0.1)',
-              }}
-            >
+            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold mb-5 bg-violet-50 text-violet-600 border border-violet-200">
               {COPY.hero.badge}
             </div>
 
-            <h1 className="text-4xl md:text-5xl font-extrabold leading-[1.06] text-white tracking-tight">
+            <h1 className="text-4xl md:text-5xl font-extrabold leading-[1.06] tracking-tight text-slate-900">
               {COPY.hero.titleTop}
               <br />
-              <span style={{ color: '#38bdf8' }}>{COPY.hero.titleBottom}</span>
+              <span className="gradient-text">{COPY.hero.titleBottom}</span>
             </h1>
-            <p className="mt-5 text-base md:text-lg text-slate-300 max-w-3xl leading-relaxed">{COPY.hero.subtitle}</p>
+            <p className="mt-5 text-base md:text-lg text-slate-500 max-w-3xl leading-relaxed">{COPY.hero.subtitle}</p>
 
             <div className="mt-6 flex flex-wrap gap-2">
               {COPY.hero.chips.map((chip) => (
                 <div
                   key={chip}
-                  className="px-3 py-1.5 rounded-full text-xs font-semibold text-slate-200"
-                  style={{ border: '1px solid #2d3e5e', background: '#0b1527' }}
+                  className="px-3 py-1.5 rounded-full text-xs font-semibold text-slate-500 bg-slate-50 border border-slate-200"
                 >
                   {chip}
                 </div>
@@ -175,60 +183,86 @@ const LandingPage: React.FC = () => {
             <div className="mt-7 flex flex-wrap gap-3">
               <button
                 onClick={() => navigate('/dashboard?tab=map')}
-                className="px-5 py-3 rounded-xl text-sm font-semibold transition hover:brightness-110"
-                style={{ color: '#ffffff', background: 'linear-gradient(135deg, #0ea5e9, #2563eb)' }}
+                className="media-button px-5 py-3 rounded-xl text-sm font-semibold"
               >
                 Zum Cockpit starten
               </button>
               <button
                 onClick={() => navigate('/dashboard?tab=product-intel')}
-                className="px-5 py-3 rounded-xl text-sm font-semibold transition hover:brightness-110"
-                style={{ color: '#ffffff', background: 'linear-gradient(135deg, #f59e0b, #d97706)' }}
+                className="px-5 py-3 rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-orange-500 to-amber-500 shadow-md hover:shadow-lg transition-all hover:-translate-y-0.5"
               >
                 Produkt anlegen
               </button>
             </div>
           </div>
 
-          <aside className="rounded-2xl p-5 md:p-6 h-full" style={{ background: '#111b2d', border: '1px solid #24324a' }}>
+          {/* ─── Sidebar Card ─────────────────────────────────────────── */}
+          <aside className="card p-5 md:p-6 h-full">
             <div className="text-[11px] text-slate-400 uppercase tracking-wider">In 30 Sekunden verstehen</div>
-            <h3 className="mt-2 text-xl font-bold text-white">Was macht das Tool konkret?</h3>
-            <ul className="mt-4 space-y-3 text-sm text-slate-300 leading-relaxed">
-              <li>Regionale Signalquellen werden zu einer erwarteten Lage in 7-14 Tagen verdichtet.</li>
-              <li>Diese Lage wird mit eurem Gelo-Produktkatalog gematcht.</li>
-              <li>Freigabe bleibt immer menschlich: erst Review, dann Aktivierung.</li>
+            <h3 className="mt-2 text-xl font-bold text-slate-900">Was macht das Tool konkret?</h3>
+            <ul className="mt-4 space-y-3 text-sm text-slate-500 leading-relaxed">
+              <li className="flex gap-2">
+                <span className="mt-1 shrink-0 w-1.5 h-1.5 rounded-full bg-violet-400" />
+                Regionale Signalquellen werden zu einer erwarteten Lage in 7-14 Tagen verdichtet.
+              </li>
+              <li className="flex gap-2">
+                <span className="mt-1 shrink-0 w-1.5 h-1.5 rounded-full bg-pink-400" />
+                Diese Lage wird mit eurem Gelo-Produktkatalog gematcht.
+              </li>
+              <li className="flex gap-2">
+                <span className="mt-1 shrink-0 w-1.5 h-1.5 rounded-full bg-orange-400" />
+                Freigabe bleibt immer menschlich: erst Review, dann Aktivierung.
+              </li>
             </ul>
-            <div className="mt-5 rounded-xl p-4 text-xs" style={{ background: '#0b1527', border: '1px solid #233149' }}>
-              <div className="text-cyan-300 font-semibold">Zielbild</div>
-              <div className="text-slate-300 mt-2">Budget nach epidemiologischer Dynamik steuern statt nur nach Demografie.</div>
+            <div className="mt-5 rounded-xl p-4 text-xs bg-gradient-to-br from-violet-50 to-pink-50 border border-violet-100">
+              <div className="font-semibold gradient-text">Zielbild</div>
+              <div className="text-slate-500 mt-2">Budget nach epidemiologischer Dynamik steuern statt nur nach Demografie.</div>
             </div>
           </aside>
         </section>
 
-        <section>
-          <h2 className="text-2xl md:text-3xl font-extrabold text-white mb-4 md:mb-5">Warum das heute relevant ist</h2>
+        {/* ─── Why Now ────────────────────────────────────────────────── */}
+        <section className="fade-in">
+          <h2 className="text-2xl md:text-3xl font-extrabold text-slate-900 mb-4 md:mb-5">
+            Warum das <span className="gradient-text">heute relevant</span> ist
+          </h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-5">
-            {COPY.whyNow.map((text) => (
-              <article key={text} className="rounded-2xl p-5" style={{ background: '#111b2d', border: '1px solid #24324a' }}>
-                <p className="text-sm text-slate-300 leading-relaxed">{text}</p>
+            {COPY.whyNow.map((text, idx) => (
+              <article key={text} className="card p-5 group hover:shadow-medium transition-all">
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center mb-4 ${iconBgColors[idx]}`}>
+                  <FeatureIcon idx={idx} />
+                </div>
+                <p className="text-sm text-slate-500 leading-relaxed">{text}</p>
               </article>
             ))}
           </div>
         </section>
 
-        <section className="rounded-2xl p-5 md:p-6" style={{ background: '#111b2d', border: '1px solid #24324a' }}>
+        {/* ─── Workflow Preview ────────────────────────────────────────── */}
+        <section className="card p-5 md:p-6 fade-in">
           <div className="flex flex-wrap items-end justify-between gap-3 mb-4">
-            <h3 className="text-2xl font-bold text-white">Workflow-Vorschau</h3>
-            <div className="text-xs text-slate-400">Signal {'>'} Erwartung {'>'} Produkt {'>'} Freigabe</div>
+            <h3 className="text-2xl font-bold text-slate-900">Workflow-Vorschau</h3>
+            <div className="text-xs text-slate-400 font-medium">Signal {'>'} Erwartung {'>'} Produkt {'>'} Freigabe</div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {COPY.steps.map((step, idx) => (
-              <article key={step.title} className="rounded-xl p-4" style={{ background: '#0b1527', border: '1px solid #233149' }}>
-                <div className="text-[11px] text-slate-400 uppercase tracking-wider">Step {idx + 1}</div>
-                <div className="text-white font-semibold mt-1">{step.title}</div>
-                <ul className="mt-3 text-sm text-slate-300 space-y-1.5">
+              <article
+                key={step.title}
+                className="rounded-xl p-4 bg-slate-50 border border-slate-100 hover:border-violet-200 transition-colors"
+              >
+                <div className="flex items-center gap-2 mb-2">
+                  <span className={`inline-flex items-center justify-center w-6 h-6 rounded-lg text-[10px] font-bold text-white bg-gradient-to-br ${stepAccentColors[idx]}`}>
+                    {idx + 1}
+                  </span>
+                  <span className="text-[11px] text-slate-400 uppercase tracking-wider">Step {idx + 1}</span>
+                </div>
+                <div className="text-slate-800 font-semibold">{step.title}</div>
+                <ul className="mt-3 text-sm text-slate-500 space-y-1.5">
                   {step.points.map((point) => (
-                    <li key={point}>{point}</li>
+                    <li key={point} className="flex gap-2">
+                      <span className="mt-1.5 shrink-0 w-1 h-1 rounded-full bg-slate-300" />
+                      {point}
+                    </li>
                   ))}
                 </ul>
               </article>
@@ -236,38 +270,42 @@ const LandingPage: React.FC = () => {
           </div>
         </section>
 
-        <section className="grid grid-cols-1 xl:grid-cols-2 gap-4 md:gap-5">
-          <div className="rounded-2xl p-6" style={{ background: '#111b2d', border: '1px solid #24324a' }}>
-            <h3 className="text-2xl font-bold text-white mb-3">Was im Hintergrund passiert</h3>
-            <p className="text-sm text-slate-300 leading-relaxed">{COPY.workflow.description}</p>
-            <div className="mt-5 text-xs rounded-xl p-4" style={{ background: '#0b1527', border: '1px solid #233149' }}>
-              <div className="text-cyan-300 font-semibold">Produkt-Intelligence</div>
-              <div className="text-slate-300 mt-2">Jedes Produkt wird auf Signalklassen gemappt, mit Score, Regelquelle und Review-Status gespeichert.</div>
+        {/* ─── Bottom Two-Column ──────────────────────────────────────── */}
+        <section className="grid grid-cols-1 xl:grid-cols-2 gap-4 md:gap-5 fade-in">
+          {/* Background Info */}
+          <div className="card p-6">
+            <h3 className="text-2xl font-bold text-slate-900 mb-3">Was im Hintergrund passiert</h3>
+            <p className="text-sm text-slate-500 leading-relaxed">{COPY.workflow.description}</p>
+            <div className="mt-5 text-xs rounded-xl p-4 bg-gradient-to-br from-blue-50 to-cyan-50 border border-blue-100">
+              <div className="font-semibold text-blue-600">Produkt-Intelligence</div>
+              <div className="text-slate-500 mt-2">Jedes Produkt wird auf Signalklassen gemappt, mit Score, Regelquelle und Review-Status gespeichert.</div>
             </div>
           </div>
 
-          <div className="rounded-2xl p-6" style={{ background: '#111b2d', border: '1px solid #24324a' }}>
-            <h3 className="text-2xl font-bold text-white mb-3">{COPY.offer.title}</h3>
-            <div className="text-xs text-slate-400 uppercase tracking-wider">Nächste Schritte im POC</div>
-            <ol className="mt-3 text-sm text-slate-300 space-y-2">
+          {/* Offer / POC */}
+          <div className="card p-6">
+            <h3 className="text-2xl font-bold text-slate-900 mb-3">{COPY.offer.title}</h3>
+            <div className="text-xs text-slate-400 uppercase tracking-wider font-medium">Nächste Schritte im POC</div>
+            <ol className="mt-3 text-sm text-slate-500 space-y-2">
               {COPY.offer.steps.map((step, idx) => (
-                <li key={step}>
-                  {idx + 1}. {step}
+                <li key={step} className="flex gap-2.5">
+                  <span className={`shrink-0 w-6 h-6 rounded-lg flex items-center justify-center text-[10px] font-bold text-white bg-gradient-to-br ${stepAccentColors[idx]}`}>
+                    {idx + 1}
+                  </span>
+                  <span className="pt-0.5">{step}</span>
                 </li>
               ))}
             </ol>
             <div className="mt-6 flex flex-wrap gap-3">
               <button
                 onClick={() => navigate('/dashboard?tab=map')}
-                className="px-4 py-2 rounded-lg text-xs font-semibold transition hover:brightness-110"
-                style={{ color: '#ffffff', background: 'linear-gradient(135deg, #0ea5e9, #2563eb)' }}
+                className="media-button px-4 py-2 text-xs font-semibold"
               >
                 Signal-Board öffnen
               </button>
               <button
                 onClick={() => navigate('/dashboard?tab=product-intel')}
-                className="px-4 py-2 rounded-lg text-xs font-semibold transition hover:brightness-110"
-                style={{ color: '#ffffff', background: 'linear-gradient(135deg, #f59e0b, #d97706)' }}
+                className="px-4 py-2 rounded-md text-xs font-semibold text-white bg-gradient-to-r from-orange-500 to-amber-500 shadow-md hover:shadow-lg transition-all hover:-translate-y-0.5"
               >
                 Direkt zu Produkt-Intelligence
               </button>
@@ -275,7 +313,8 @@ const LandingPage: React.FC = () => {
           </div>
         </section>
 
-        <footer className="relative pt-8 pb-2 text-center text-xs text-slate-500" style={{ borderTop: '1px solid #1c2a42' }}>
+        {/* ─── Footer ─────────────────────────────────────────────────── */}
+        <footer className="relative pt-8 pb-2 text-center text-xs text-slate-400 border-t border-slate-200">
           {COPY.footer}
         </footer>
       </main>

@@ -44,6 +44,21 @@ interface RegionData {
   tooltip?: RegionTooltipData | null;
 }
 
+interface StandortData {
+  standort: string;
+  bundesland: string;
+  latitude: number;
+  longitude: number;
+  viruslast: number;
+  viruslast_normalisiert: number | null;
+  vorhersage: number | null;
+  einwohner: number | null;
+  unter_bg: boolean;
+  intensity: number;
+  trend: string;
+  change_pct: number;
+}
+
 interface TransferSuggestion {
   from_region: string;
   from_name: string;
@@ -53,6 +68,19 @@ interface TransferSuggestion {
   priority: string;
   test_typ: string;
 }
+
+// Affine transformation: lat/lon → SVG viewbox (0 0 420 460)
+// Calibrated with 3 reference points: Berlin (52.52,13.41)→(335,130), Hamburg (53.55,9.99)→(232,98), Stuttgart area (48.66,9.35)→(140,380)
+const latLonToSvg = (lat: number, lon: number): { x: number; y: number } => ({
+  x: 14.27 * lat + 34.42 * lon - 876.1,
+  y: -56.7 * lat - 7.71 * lon + 3211.3,
+});
+
+const standortRadius = (einwohner: number | null): number => {
+  if (!einwohner || einwohner <= 0) return 2.5;
+  // log-scale: 5K→2, 50K→3, 500K→4.5, 1.5M→5.5
+  return Math.min(6, Math.max(2, 1 + Math.log10(einwohner) * 0.8));
+};
 
 const fmt = (n: number) => {
   if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
@@ -81,6 +109,10 @@ const GermanyMap: React.FC = () => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const [horizonDays, setHorizonDays] = useState(0);
   const [showTechDetails, setShowTechDetails] = useState(false);
+  const [showStandorte, setShowStandorte] = useState(false);
+  const [standorteData, setStandorteData] = useState<StandortData[]>([]);
+  const [hoveredStandort, setHoveredStandort] = useState<string | null>(null);
+  const [standortTooltipPos, setStandortTooltipPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [regionTimeseries, setRegionTimeseries] = useState<Array<{ date: string; viruslast: number }>>([]);
   const [hasData, setHasData] = useState(false);
   const [maxViruslast, setMaxViruslast] = useState(0);
@@ -126,6 +158,14 @@ const GermanyMap: React.FC = () => {
     fetchMapData();
     fetchTransfers();
   }, [fetchMapData, fetchTransfers]);
+
+  useEffect(() => {
+    if (!showStandorte) return;
+    fetch(`/api/v1/map/standorte/${encodeURIComponent(selectedVirus)}`)
+      .then((r) => r.json())
+      .then((d) => setStandorteData(d.standorte || []))
+      .catch(() => setStandorteData([]));
+  }, [showStandorte, selectedVirus]);
 
   useEffect(() => {
     if (selectedRegion) {
@@ -203,6 +243,16 @@ const GermanyMap: React.FC = () => {
                 </p>
               </div>
               <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setShowStandorte((s) => !s)}
+                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition border ${
+                    showStandorte
+                      ? 'border-indigo-300 bg-indigo-50 text-indigo-600'
+                      : 'border-slate-200 text-slate-500 hover:bg-slate-50 hover:border-slate-300'
+                  }`}
+                >
+                  {showStandorte ? 'Messstellen ausblenden' : 'Messstellen anzeigen'}
+                </button>
                 <button
                   onClick={() => setShowTechDetails((s) => !s)}
                   className="px-3 py-1.5 text-xs font-semibold rounded-lg transition border border-slate-200 text-slate-500 hover:bg-slate-50 hover:border-slate-300"
@@ -312,6 +362,42 @@ const GermanyMap: React.FC = () => {
                     </g>
                   );
                 })}
+
+                {/* Kläranlagen-Standorte Overlay */}
+                {showStandorte && standorteData.map((s) => {
+                  const pos = latLonToSvg(s.latitude, s.longitude);
+                  if (pos.x < -10 || pos.x > 430 || pos.y < -10 || pos.y > 470) return null;
+                  const r = standortRadius(s.einwohner);
+                  const isHovered = hoveredStandort === s.standort;
+                  const dotColor = intensityToColor(Math.min(1, s.intensity * 1.3), baseColor);
+
+                  return (
+                    <circle
+                      key={s.standort}
+                      cx={pos.x}
+                      cy={pos.y}
+                      r={isHovered ? r + 2 : r}
+                      fill={dotColor}
+                      stroke={isHovered ? '#0f172a' : '#ffffff'}
+                      strokeWidth={isHovered ? 1.5 : 0.8}
+                      style={{
+                        transition: 'r 0.15s ease, stroke 0.15s ease',
+                        cursor: 'pointer',
+                        filter: isHovered ? 'drop-shadow(0 1px 3px rgba(0,0,0,0.3))' : 'none',
+                      }}
+                      onMouseEnter={(e) => {
+                        setHoveredStandort(s.standort);
+                        const rect = mapContainerRef.current?.getBoundingClientRect();
+                        if (rect) setStandortTooltipPos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+                      }}
+                      onMouseMove={(e) => {
+                        const rect = mapContainerRef.current?.getBoundingClientRect();
+                        if (rect) setStandortTooltipPos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+                      }}
+                      onMouseLeave={() => setHoveredStandort(null)}
+                    />
+                  );
+                })}
               </svg>
 
               {/* Hover-Tooltip */}
@@ -415,6 +501,59 @@ const GermanyMap: React.FC = () => {
                         </span>
                         <span style={{ fontSize: 10, color: '#94a3b8' }}>Klick für Details</span>
                       </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Standort Hover-Tooltip */}
+              {hoveredStandort && (() => {
+                const s = standorteData.find((d) => d.standort === hoveredStandort);
+                if (!s) return null;
+                const containerW = mapContainerRef.current?.offsetWidth || 600;
+                const flipX = standortTooltipPos.x > containerW - 240;
+                const trendColor = s.trend === 'steigend' ? '#dc2626' : s.trend === 'fallend' ? '#16a34a' : '#64748b';
+                const trendArrow = s.trend === 'steigend' ? '\u2197' : s.trend === 'fallend' ? '\u2198' : '\u2192';
+
+                return (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      left: flipX ? standortTooltipPos.x - 220 : standortTooltipPos.x + 14,
+                      top: standortTooltipPos.y - 8,
+                      zIndex: 60,
+                      pointerEvents: 'none',
+                    }}
+                  >
+                    <div
+                      style={{
+                        background: '#ffffff',
+                        border: '1px solid #e2e8f0',
+                        borderRadius: 10,
+                        boxShadow: '0 6px 24px rgba(0,0,0,0.12)',
+                        padding: '10px 14px',
+                        minWidth: 180,
+                        maxWidth: 220,
+                      }}
+                    >
+                      <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', marginBottom: 6 }}>
+                        {s.standort}
+                      </div>
+                      <div style={{ display: 'flex', gap: 8, fontSize: 11, color: '#64748b', marginBottom: 4 }}>
+                        <span>{s.bundesland}</span>
+                        {s.einwohner && <span>{fmt(s.einwohner)} EW</span>}
+                      </div>
+                      <div style={{ display: 'flex', gap: 12, fontSize: 11, marginBottom: 2 }}>
+                        <span style={{ color: '#64748b' }}>
+                          Viruslast: <span style={{ fontWeight: 600, color: '#334155' }}>{fmt(s.viruslast)}</span>
+                        </span>
+                        <span style={{ fontWeight: 600, color: trendColor }}>
+                          {trendArrow} {s.change_pct > 0 ? '+' : ''}{s.change_pct}%
+                        </span>
+                      </div>
+                      {s.unter_bg && (
+                        <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 2 }}>Unter Bestimmungsgrenze</div>
+                      )}
                     </div>
                   </div>
                 );

@@ -232,21 +232,25 @@ const LandingPage: React.FC = () => {
   const C = getColors(theme);
   const navigate = useNavigate();
   const [heroVis, setHeroVis] = useState(false);
-  const [peixScore, setPeixScore] = useState(0.72);
+  const [peixScore, setPeixScore] = useState(0);
   const [virusData, setVirusData] = useState([
     { label: 'Influenza A', pct: 0, color: '#dc2626' },
     { label: 'SARS-CoV-2', pct: 0, color: '#2563eb' },
     { label: 'RSV', pct: 0, color: '#d97706' },
   ]);
+  const [topRegions, setTopRegions] = useState<{ bl: string; name: string; score: number; trend: string; col: string }[]>([]);
+  const [recText, setRecText] = useState('');
+  const [apiLive, setApiLive] = useState(false);
 
   useEffect(() => { const t = setTimeout(() => setHeroVis(true), 80); return () => clearTimeout(t); }, []);
 
-  // Fetch live PEIX score + virus data
+  // Fetch live PEIX score + virus data + top regions
   useEffect(() => {
     fetch('/api/v1/outbreak-score/peix-score')
       .then(r => r.ok ? r.json() : null)
       .then(data => {
         if (!data) return;
+        setApiLive(true);
         const ns = data.national_score ?? data.score;
         if (typeof ns === 'number') setPeixScore(ns / 100);
         const vs = data.virus_scores;
@@ -257,6 +261,30 @@ const LandingPage: React.FC = () => {
             { label: 'RSV', pct: Math.round((vs['rsv']?.epi_score ?? vs['RSV']?.epi_score ?? 0) * 100), color: '#d97706' },
           ];
           setVirusData(updated);
+        }
+        // Extract top regions from PEIX response
+        const regions = data.regions;
+        if (regions && typeof regions === 'object') {
+          const BL_NAMES: Record<string, string> = {
+            BW: 'Baden-Württemberg', BY: 'Bayern', BE: 'Berlin', BB: 'Brandenburg',
+            HB: 'Bremen', HH: 'Hamburg', HE: 'Hessen', MV: 'Mecklenburg-Vorpommern',
+            NI: 'Niedersachsen', NW: 'Nordrhein-Westfalen', RP: 'Rheinland-Pfalz',
+            SL: 'Saarland', SN: 'Sachsen', ST: 'Sachsen-Anhalt', SH: 'Schleswig-Holstein', TH: 'Thüringen',
+          };
+          const entries = Object.entries(regions)
+            .map(([code, val]: [string, any]) => ({
+              bl: code,
+              name: val.region_name || BL_NAMES[code] || code,
+              score: (val.score_0_100 ?? 0) / 100,
+              trend: val.trend || 'stabil',
+              col: (val.score_0_100 ?? 0) >= 70 ? '#dc2626' : (val.score_0_100 ?? 0) >= 40 ? '#d97706' : '#059669',
+            }))
+            .sort((a, b) => b.score - a.score)
+            .slice(0, 3);
+          if (entries.length > 0) {
+            setTopRegions(entries);
+            setRecText(`Budgets in ${entries.map(e => e.bl).join(', ')} erhoehen`);
+          }
         }
       })
       .catch(() => {});
@@ -396,7 +424,7 @@ const LandingPage: React.FC = () => {
           {/* Thin rule + stats */}
           <div style={{ marginTop: 36, width: 56, height: 1, background: C.rule }} />
           <div style={{ marginTop: 14, display: 'flex', gap: 24, flexWrap: 'wrap' }}>
-            {['16 Bundesländer', '4 Virustypen', '14-Tage-Prognose'].map(s => (
+            {['16 Bundeslaender', '4 Virustypen', '14-Tage-Prognose'].map(s => (
               <span key={s} style={{ fontSize: 12, color: C.textMuted, fontWeight: 500 }}>{s}</span>
             ))}
           </div>
@@ -416,10 +444,12 @@ const LandingPage: React.FC = () => {
               Live Lagebild
             </span>
             <span style={{
-              fontSize: 10, fontWeight: 700, color: '#059669',
-              background: '#ecfdf5', padding: '2px 8px', borderRadius: 4,
+              fontSize: 10, fontWeight: 700,
+              color: apiLive ? '#059669' : C.textMuted,
+              background: apiLive ? '#ecfdf5' : C.borderLight,
+              padding: '2px 8px', borderRadius: 4,
             }}>
-              LIVE
+              {apiLive ? 'LIVE' : '...'}
             </span>
           </div>
           <div style={{ fontSize: 12, color: C.textMuted, marginBottom: 16 }}>
@@ -443,7 +473,7 @@ const LandingPage: React.FC = () => {
             background: C.indigoSoft, fontSize: 12, color: C.textSec, lineHeight: 1.55,
           }}>
             <strong style={{ color: C.indigo, fontWeight: 600 }}>Empfehlung:</strong>{' '}
-            Budgets in NW, BY, SN erhöhen
+            {recText || 'Daten werden geladen...'}
           </div>
         </div>
       </div>
@@ -567,13 +597,11 @@ const LandingPage: React.FC = () => {
                 Kampagnenvorschlag mit epidemiologischer Begründung.
               </p>
 
-              {/* Mock data rows */}
+              {/* Top regions from API */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {[
-                  { bl: 'NW', name: 'Nordrhein-Westfalen', score: 0.82, trend: 'steigend', col: '#dc2626' },
-                  { bl: 'BY', name: 'Bayern', score: 0.68, trend: 'steigend', col: '#d97706' },
-                  { bl: 'SN', name: 'Sachsen', score: 0.71, trend: 'stabil', col: '#d97706' },
-                ].map(r => (
+                {(topRegions.length > 0 ? topRegions : [
+                  { bl: '—', name: 'Lade Regionaldaten...', score: 0, trend: 'stabil', col: C.textMuted },
+                ]).map(r => (
                   <div key={r.bl} style={{
                     display: 'flex', alignItems: 'center', gap: 12,
                     padding: '8px 12px', borderRadius: 8, background: C.borderLight, fontSize: 13,

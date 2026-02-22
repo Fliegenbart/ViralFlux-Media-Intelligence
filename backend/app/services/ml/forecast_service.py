@@ -453,9 +453,10 @@ class ForecastService:
         df_meta = df.copy()
         df_meta["hw_pred"] = oof["hw_pred"].values
         df_meta["ridge_pred"] = oof["ridge_pred"].values
-        # Prophet OOF: use 7-day rolling mean (lag-corrected) as proxy
-        # ma5 is already shifted by 1, use a wider window for Prophet-like smoothing
-        df_meta["prophet_pred"] = df_meta["y"].rolling(window=7, min_periods=1).mean().shift(1)
+        # Prophet OOF proxy: 7-day rolling mean shifted by forecast horizon (14d)
+        # to prevent target leakage during training.  With shift(1) the rolling
+        # window contained data the model wouldn't have at prediction time.
+        df_meta["prophet_pred"] = df_meta["y"].rolling(window=7, min_periods=1).mean().shift(14)
 
         # Build feature matrix
         available_meta = [f for f in META_FEATURES if f in df_meta.columns]

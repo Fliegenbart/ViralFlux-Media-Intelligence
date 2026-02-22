@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { useTheme } from '../App';
+import { useTheme, useToast } from '../App';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, Legend } from 'recharts';
 import { geoMercator, geoPath } from 'd3-geo';
 import { format, parseISO } from 'date-fns';
@@ -178,6 +178,7 @@ const pillToneClass = (tone?: 'green' | 'amber' | 'red') => {
 
 const MediaCockpit: React.FC = () => {
   const { theme, toggle: toggleTheme } = useTheme();
+  const { toast } = useToast();
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const initialTab = params.get('tab') || 'map';
@@ -297,6 +298,7 @@ const MediaCockpit: React.FC = () => {
       hasLoadedCockpitRef.current = true;
     } catch (e) {
       console.error('Cockpit fetch error', e);
+      toast('Daten konnten nicht geladen werden', 'error');
     } finally {
       if (showBlockingLoading) {
         setLoading(false);
@@ -547,9 +549,12 @@ const MediaCockpit: React.FC = () => {
       } else if (sorted.length > 0) {
         setRefinementNotice('Cards erzeugt. Keine asynchrone KI-Verfeinerung gestartet.');
       }
+      toast(`${sorted.length} Empfehlungen erzeugt`, 'success');
       await loadCockpit();
     } catch (e) {
       console.error('Generate recommendation error', e);
+      const msg = e instanceof Error ? e.message : 'Unbekannter Fehler';
+      toast(`Generierung fehlgeschlagen: ${msg}`, 'error');
       setRefinementNotice('Generierung fehlgeschlagen. Bitte erneut versuchen.');
     } finally {
       setRecLoading(false);
@@ -569,8 +574,10 @@ const MediaCockpit: React.FC = () => {
       const data = await res.json();
       setMarketRun(data);
       await loadRuns();
+      toast('Market-Backtest abgeschlossen', 'success');
     } catch (e) {
       console.error('Market backtest error', e);
+      toast('Market-Backtest fehlgeschlagen', 'error');
     } finally {
       setMarketRunning(false);
     }
@@ -590,8 +597,10 @@ const MediaCockpit: React.FC = () => {
       const data = await res.json();
       setCustomerRun(data);
       await loadRuns();
+      toast('Customer-Backtest abgeschlossen', 'success');
     } catch (e) {
       console.error('Customer backtest error', e);
+      toast('Customer-Backtest fehlgeschlagen', 'error');
     } finally {
       setCustomerRunning(false);
     }

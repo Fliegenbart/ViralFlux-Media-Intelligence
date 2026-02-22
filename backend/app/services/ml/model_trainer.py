@@ -11,7 +11,7 @@ Serialisation layout per virus type (e.g. ``influenza_a/``)::
 
     backend/app/ml_models/
         influenza_a/
-            model_median.json   # XGBRegressor, quantile_alpha=0.8
+            model_median.json   # XGBRegressor, quantile_alpha=0.5
             model_lower.json    # XGBRegressor, quantile_alpha=0.1
             model_upper.json    # XGBRegressor, quantile_alpha=0.9
             metadata.json       # version, trained_at, feature_names, ...

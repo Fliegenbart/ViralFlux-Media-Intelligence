@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useToast } from '../App';
 import { format, parseISO } from 'date-fns';
 import { de } from 'date-fns/locale';
 
@@ -59,6 +60,7 @@ const renderFactValue = (value: DecisionFact['value']) => {
 const CampaignRecommendationDetail: React.FC = () => {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
+  const { toast } = useToast();
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -211,9 +213,12 @@ const CampaignRecommendationDetail: React.FC = () => {
         throw new Error(data.detail || `HTTP ${res.status}`);
       }
 
+      toast('Kampagnenplan gespeichert', 'success');
       await loadDetail();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Unbekannter Fehler');
+      const msg = e instanceof Error ? e.message : 'Unbekannter Fehler';
+      setError(msg);
+      toast(`Speichern fehlgeschlagen: ${msg}`, 'error');
     } finally {
       setSaving(false);
     }
@@ -233,9 +238,12 @@ const CampaignRecommendationDetail: React.FC = () => {
         const data = await res.json().catch(() => ({}));
         throw new Error(data.detail || `HTTP ${res.status}`);
       }
+      toast(`Status auf ${STATUS_LABELS[nextStatus] || nextStatus} gesetzt`, 'success');
       await loadDetail();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Unbekannter Fehler');
+      const msg = e instanceof Error ? e.message : 'Unbekannter Fehler';
+      setError(msg);
+      toast(`Statusaenderung fehlgeschlagen: ${msg}`, 'error');
     } finally {
       setStatusSaving(false);
     }
@@ -253,9 +261,12 @@ const CampaignRecommendationDetail: React.FC = () => {
         const data = await res.json().catch(() => ({}));
         throw new Error(data.detail || `HTTP ${res.status}`);
       }
+      toast('KI-Plan regeneriert', 'success');
       await loadDetail();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Unbekannter Fehler');
+      const msg = e instanceof Error ? e.message : 'Unbekannter Fehler';
+      setError(msg);
+      toast(`Regenerierung fehlgeschlagen: ${msg}`, 'error');
     } finally {
       setRegenSaving(false);
     }

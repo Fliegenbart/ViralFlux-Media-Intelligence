@@ -229,16 +229,32 @@ class MarketingOpportunityEngine:
         "immun_support": "RESPIRATORY",
     }
 
+    # Grossstädte → Bundesland (für schnelle Zuordnung ohne DB-Lookup)
+    _KREIS_BL_MAP = {
+        "SK Hamburg": "Hamburg", "SK München": "Bayern", "SK Berlin": "Berlin",
+        "SK Dresden": "Sachsen", "SK Leipzig": "Sachsen", "SK Köln": "Nordrhein-Westfalen",
+        "SK Frankfurt am Main": "Hessen", "SK Stuttgart": "Baden-Württemberg",
+        "SK Düsseldorf": "Nordrhein-Westfalen", "SK Hannover": "Niedersachsen",
+        "SK Bremen": "Bremen", "SK Nürnberg": "Bayern", "SK Dortmund": "Nordrhein-Westfalen",
+        "SK Essen": "Nordrhein-Westfalen", "SK Duisburg": "Nordrhein-Westfalen",
+        "SK Chemnitz": "Sachsen", "SK Erfurt": "Thüringen", "SK Magdeburg": "Sachsen-Anhalt",
+        "SK Rostock": "Mecklenburg-Vorpommern", "SK Potsdam": "Brandenburg",
+        "SK Kiel": "Schleswig-Holstein", "SK Mainz": "Rheinland-Pfalz",
+        "SK Saarbrücken": "Saarland", "SK Freiburg i.Breisgau": "Baden-Württemberg",
+    }
+
+    def _kreis_bundesland(self, kreis_name: str) -> str:
+        """Bundesland aus Kreisname ableiten (Lookup + KreisEinwohner Fallback)."""
+        return self._KREIS_BL_MAP.get(kreis_name, "")
+
     def _enrich_kreis_targeting(self, opportunities: list[dict]) -> list[dict]:
-        """Anreicherung mit Top-Kreisen nach aktueller Inzidenz.
+        """Anreicherung mit Top-Kreisen nach aktueller Fallzahl.
 
         Liest SurvstatKreisData der letzten 4 Wochen, gruppiert nach
-        Disease-Cluster, und fügt die Top-10 Kreise mit höchster Inzidenz
-        in region_target ein.
+        Disease-Cluster, und fügt die Top-10 Kreise in region_target ein.
         """
-        from app.models.database import SurvstatKreisData, KreisEinwohner
+        from app.models.database import SurvstatKreisData
 
-        # Welche Cluster werden gebraucht?
         needed_clusters = set()
         for opp in opportunities:
             condition = opp.get("_condition", "")
@@ -253,14 +269,13 @@ class MarketingOpportunityEngine:
         current_week = now.isocalendar()[1]
         current_year = now.year
 
-        # Top-Kreise je Cluster (letzte 4 Wochen aggregiert)
         kreise_by_cluster: dict[str, list[dict]] = {}
         for cluster in needed_clusters:
+            # Letzte 4 verfügbare Wochen (aktuelles Jahr)
             rows = (
                 self.db.query(
                     SurvstatKreisData.kreis,
                     func.sum(SurvstatKreisData.fallzahl).label("total_faelle"),
-                    func.max(SurvstatKreisData.inzidenz).label("max_inzidenz"),
                 )
                 .filter(
                     SurvstatKreisData.disease_cluster == cluster,
@@ -272,29 +287,46 @@ class MarketingOpportunityEngine:
                 .limit(10)
                 .all()
             )
-            if rows:
-                # Bundesland-Mapping laden
-                kreis_names = [r.kreis for r in rows]
-                bl_map = {}
-                if kreis_names:
-                    bl_rows = (
-                        self.db.query(KreisEinwohner.kreis_name, KreisEinwohner.bundesland)
-                        .filter(KreisEinwohner.kreis_name.in_(kreis_names))
+
+            if not rows:
+                # Fallback: letztes verfügbares Jahr
+                latest_year = (
+                    self.db.query(func.max(SurvstatKreisData.year))
+                    .filter(SurvstatKreisData.disease_cluster == cluster)
+                    .scalar()
+                )
+                if latest_year and latest_year != current_year:
+                    latest_week = (
+                        self.db.query(func.max(SurvstatKreisData.week))
+                        .filter(SurvstatKreisData.disease_cluster == cluster, SurvstatKreisData.year == latest_year)
+                        .scalar()
+                    ) or 52
+                    rows = (
+                        self.db.query(
+                            SurvstatKreisData.kreis,
+                            func.sum(SurvstatKreisData.fallzahl).label("total_faelle"),
+                        )
+                        .filter(
+                            SurvstatKreisData.disease_cluster == cluster,
+                            SurvstatKreisData.year == latest_year,
+                            SurvstatKreisData.week >= max(1, latest_week - 4),
+                        )
+                        .group_by(SurvstatKreisData.kreis)
+                        .order_by(func.sum(SurvstatKreisData.fallzahl).desc())
+                        .limit(10)
                         .all()
                     )
-                    bl_map = {r.kreis_name: r.bundesland for r in bl_rows}
 
+            if rows:
                 kreise_by_cluster[cluster] = [
                     {
                         "kreis": r.kreis,
-                        "bundesland": bl_map.get(r.kreis, ""),
+                        "bundesland": self._kreis_bundesland(r.kreis),
                         "faelle_4w": int(r.total_faelle or 0),
-                        "max_inzidenz": round(float(r.max_inzidenz or 0), 1),
                     }
                     for r in rows
                 ]
 
-        # In jede Opportunity einfügen
         for opp in opportunities:
             condition = opp.get("_condition", "")
             cluster = self._CONDITION_CLUSTER_MAP.get(condition)
@@ -304,7 +336,6 @@ class MarketingOpportunityEngine:
                 region = opp.get("region_target", {})
                 region["top_kreise"] = [k["kreis"] for k in top_kreise]
                 region["kreis_detail"] = top_kreise
-                # Ergänze Bundesländer aus Kreisdaten wenn states leer ist
                 if not region.get("states"):
                     unique_bl = list(dict.fromkeys(k["bundesland"] for k in top_kreise if k["bundesland"]))
                     region["states"] = unique_bl

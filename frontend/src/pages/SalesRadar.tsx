@@ -11,7 +11,7 @@ interface MarketingOpportunity {
   type: string;
   status: string;
   urgency_score: number;
-  region_target: { country: string; states: string[]; plz_cluster: string; top_kreise?: string[]; kreis_detail?: Array<{ kreis: string; bundesland: string; faelle_4w: number; max_inzidenz: number }> };
+  region_target: { country: string; states: string[]; plz_cluster: string; top_kreise?: string[]; kreis_detail?: Array<{ kreis: string; bundesland: string; faelle_4w: number }> };
   trigger_context: { source: string; event: string; details: string; detected_at: string };
   target_audience: string[];
   sales_pitch: { headline_email: string; script_phone: string; call_to_action: string };
@@ -1061,7 +1061,7 @@ const SalesRadar: React.FC = () => {
                       <div className="flex flex-wrap gap-1.5">
                         {opp.region_target.kreis_detail.slice(0, 8).map((k, i) => (
                           <span key={i} className="text-[10px] px-2 py-0.5 rounded-full bg-white border border-indigo-200 text-indigo-700">
-                            {k.kreis} <span className="font-bold">{k.max_inzidenz}</span>
+                            {k.kreis} <span className="font-bold">{k.faelle_4w}</span>
                           </span>
                         ))}
                       </div>

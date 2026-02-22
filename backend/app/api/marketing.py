@@ -90,6 +90,15 @@ async def list_opportunities(
     }
 
 
+@router.get("/roi")
+async def get_roi_retrospective(db: Session = Depends(get_db), _user: dict = Depends(get_current_user)):
+    """ROI-Retrospektive: Simulierter Wert vergangener Empfehlungen."""
+    from app.services.marketing_engine.opportunity_engine import MarketingOpportunityEngine
+
+    engine = MarketingOpportunityEngine(db)
+    return engine.get_roi_retrospective()
+
+
 @router.get("/stats")
 async def get_stats(db: Session = Depends(get_db), _user: dict = Depends(get_current_user)):
     """Aggregierte Statistiken über alle Opportunities."""

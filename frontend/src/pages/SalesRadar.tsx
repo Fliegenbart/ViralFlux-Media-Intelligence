@@ -34,6 +34,37 @@ interface OpportunityStats {
   avg_urgency: number;
 }
 
+interface ROIData {
+  available: boolean;
+  reason?: string;
+  summary?: {
+    total_opportunities: number;
+    acted_on: number;
+    missed: number;
+    pending: number;
+    conversion_rate: number;
+  };
+  urgency_comparison?: {
+    avg_urgency_acted: number;
+    avg_urgency_missed: number;
+  };
+  signal_quality?: {
+    avg_demand_increase_pct: number;
+    signal_hit_rate_pct: number;
+    samples_analyzed: number;
+  };
+  model_accuracy?: {
+    correlation?: number;
+    improvement_vs_persistence?: number;
+    improvement_vs_seasonal?: number;
+  };
+  missed_opportunity_value?: {
+    high_urgency_missed: number;
+    estimated_campaigns_lost: number;
+    avg_potential_demand_lift_pct: number;
+  };
+}
+
 // ─── Constants ──────────────────────────────────────────────────────────────
 const TYPE_CONFIG: Record<string, { label: string; color: string; icon: string }> = {
   RESOURCE_SCARCITY: { label: 'Engpass', color: '#ef4444', icon: 'M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126z' },
@@ -169,6 +200,7 @@ const SalesRadar: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
+  const [roi, setRoi] = useState<ROIData | null>(null);
   const pageSize = 50;
   const { toasts, addToast, removeToast } = useToast();
 
@@ -202,7 +234,14 @@ const SalesRadar: React.FC = () => {
     } catch (_) {}
   }, []);
 
-  useEffect(() => { fetchOpportunities(); fetchStats(); }, [fetchOpportunities, fetchStats]);
+  const fetchRoi = useCallback(async () => {
+    try {
+      const res = await apiFetch('/api/v1/marketing/roi');
+      if (res.ok) setRoi(await res.json());
+    } catch (_) {}
+  }, []);
+
+  useEffect(() => { fetchOpportunities(); fetchStats(); fetchRoi(); }, [fetchOpportunities, fetchStats, fetchRoi]);
 
   // Deep-Link: open opportunity from URL ?opp=...
   useEffect(() => {
@@ -512,6 +551,75 @@ const SalesRadar: React.FC = () => {
               </div>
             </div>
           </div>
+        )}
+
+        {/* ROI-Retrospektive */}
+        {roi?.available && roi.signal_quality && (
+          <section className="card overflow-hidden fade-in">
+            <div className="px-6 py-4 border-b border-slate-200 flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: '#4338ca12' }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4338ca" strokeWidth="2" strokeLinecap="round">
+                  <path d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-slate-700">ROI-Retrospektive</h3>
+                <p className="text-[10px] text-slate-400">Simulierte Wertanalyse basierend auf {roi.signal_quality.samples_analyzed} historischen Signalen</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 divide-x divide-slate-200">
+              {/* Signal-Trefferquote */}
+              <div className="px-5 py-4 text-center">
+                <div className="text-2xl font-black" style={{ color: roi.signal_quality.signal_hit_rate_pct >= 70 ? '#10b981' : '#f59e0b' }}>
+                  {roi.signal_quality.signal_hit_rate_pct}%
+                </div>
+                <div className="text-[10px] text-slate-400 uppercase tracking-wider mt-1">Signal-Trefferquote</div>
+                <div className="text-[10px] text-slate-500 mt-0.5">Urgency {'\u2265'}70 = Nachfrage</div>
+              </div>
+              {/* Nachfrage-Anstieg */}
+              <div className="px-5 py-4 text-center">
+                <div className="text-2xl font-black" style={{ color: roi.signal_quality.avg_demand_increase_pct > 0 ? '#4338ca' : '#64748b' }}>
+                  {roi.signal_quality.avg_demand_increase_pct > 0 ? '+' : ''}{roi.signal_quality.avg_demand_increase_pct}%
+                </div>
+                <div className="text-[10px] text-slate-400 uppercase tracking-wider mt-1">Ø Nachfrage-Anstieg</div>
+                <div className="text-[10px] text-slate-500 mt-0.5">4 Wochen nach Signal</div>
+              </div>
+              {/* Modellgenauigkeit */}
+              <div className="px-5 py-4 text-center">
+                <div className="text-2xl font-black text-indigo-600">
+                  {roi.model_accuracy?.correlation
+                    ? (roi.model_accuracy.correlation * 100).toFixed(0) + '%'
+                    : '—'}
+                </div>
+                <div className="text-[10px] text-slate-400 uppercase tracking-wider mt-1">Modell-Korrelation</div>
+                <div className="text-[10px] text-slate-500 mt-0.5">
+                  {roi.model_accuracy?.improvement_vs_persistence
+                    ? `+${roi.model_accuracy.improvement_vs_persistence}% vs. Baseline`
+                    : 'Kein Backtest'}
+                </div>
+              </div>
+              {/* Verpasste Chancen */}
+              <div className="px-5 py-4 text-center">
+                <div className="text-2xl font-black" style={{ color: (roi.missed_opportunity_value?.high_urgency_missed ?? 0) > 0 ? '#ef4444' : '#10b981' }}>
+                  {roi.missed_opportunity_value?.high_urgency_missed ?? 0}
+                </div>
+                <div className="text-[10px] text-slate-400 uppercase tracking-wider mt-1">Verpasste Chancen</div>
+                <div className="text-[10px] text-slate-500 mt-0.5">Dringende Empfehlungen ignoriert</div>
+              </div>
+            </div>
+            {/* Summary Bar */}
+            {roi.summary && (
+              <div className="px-6 py-3 bg-slate-50 border-t border-slate-200 flex items-center gap-6 text-xs text-slate-500">
+                <span>{roi.summary.total_opportunities} Empfehlungen generiert</span>
+                <span className="text-green-600 font-medium">{roi.summary.acted_on} bearbeitet</span>
+                <span className="text-red-500">{roi.summary.missed} verpasst</span>
+                <span className="text-slate-400">{roi.summary.pending} offen</span>
+                <span className="ml-auto font-medium" style={{ color: '#4338ca' }}>
+                  Konversion: {roi.summary.conversion_rate}%
+                </span>
+              </div>
+            )}
+          </section>
         )}
 
         {loading ? (

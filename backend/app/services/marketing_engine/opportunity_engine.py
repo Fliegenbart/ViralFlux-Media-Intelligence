@@ -1156,6 +1156,151 @@ class MarketingOpportunityEngine:
             "avg_urgency": round(avg_urgency, 1) if avg_urgency else 0,
         }
 
+    def get_roi_retrospective(self) -> dict:
+        """ROI-Retrospektive: Simuliert den Wert vergangener Opportunities.
+
+        Korreliert generierte Empfehlungen mit tatsächlich eingetretenen
+        Infektionswellen (SurvStat) und Modell-Genauigkeit (Backtest).
+        """
+        from app.models.database import BacktestRun, SurvstatWeeklyData
+
+        # 1. Opportunity-Statistiken
+        all_opps = self.db.query(MarketingOpportunity).all()
+        if not all_opps:
+            return {"available": False, "reason": "Keine Opportunities vorhanden"}
+
+        acted_on = [o for o in all_opps if o.status in ("SENT", "APPROVED", "CONVERTED", "ACTIVATED")]
+        missed = [o for o in all_opps if o.status in ("EXPIRED", "DISMISSED")]
+        pending = [o for o in all_opps if o.status in ("NEW", "URGENT", "DRAFT", "READY")]
+
+        avg_urgency_acted = (
+            sum(o.urgency_score for o in acted_on) / len(acted_on)
+            if acted_on else 0
+        )
+        avg_urgency_missed = (
+            sum(o.urgency_score for o in missed) / len(missed)
+            if missed else 0
+        )
+
+        # 2. Modell-Genauigkeit aus letztem Backtest
+        latest_backtest = (
+            self.db.query(BacktestRun)
+            .filter(BacktestRun.status == "success")
+            .order_by(BacktestRun.created_at.desc())
+            .first()
+        )
+
+        model_accuracy = {}
+        if latest_backtest and latest_backtest.metrics:
+            metrics = latest_backtest.metrics
+            model_accuracy = {
+                "r2_score": round(metrics.get("r2_score", 0), 3),
+                "correlation": round(metrics.get("correlation", 0), 3),
+                "mae": round(metrics.get("mae", 0), 1),
+            }
+            if latest_backtest.improvement_vs_baselines:
+                imp = latest_backtest.improvement_vs_baselines
+                model_accuracy["improvement_vs_persistence"] = round(
+                    imp.get("persistence", {}).get("mae_improvement_pct", 0), 1
+                )
+                model_accuracy["improvement_vs_seasonal"] = round(
+                    imp.get("seasonal_naive", {}).get("mae_improvement_pct", 0), 1
+                )
+
+        # 3. SurvStat-Trend: Wie hat sich die Infektionslage nach Opportunity-Erstellung entwickelt?
+        signal_accuracy_samples = []
+        for opp in all_opps[:30]:  # Max 30 für Performance
+            created = opp.created_at
+            if not created:
+                continue
+
+            # Inzidenz in der Woche der Opportunity-Erstellung
+            week_at_creation = (
+                self.db.query(SurvstatWeeklyData.incidence)
+                .filter(
+                    SurvstatWeeklyData.bundesland == "Bundesweit",
+                    SurvstatWeeklyData.disease_cluster == "RESPIRATORY",
+                    SurvstatWeeklyData.week_start <= created,
+                )
+                .order_by(SurvstatWeeklyData.week_start.desc())
+                .first()
+            )
+
+            # Inzidenz 2-4 Wochen danach (tatsächlicher Peak)
+            peak_after = (
+                self.db.query(func.max(SurvstatWeeklyData.incidence))
+                .filter(
+                    SurvstatWeeklyData.bundesland == "Bundesweit",
+                    SurvstatWeeklyData.disease_cluster == "RESPIRATORY",
+                    SurvstatWeeklyData.week_start > created,
+                    SurvstatWeeklyData.week_start <= created + timedelta(weeks=4),
+                )
+                .scalar()
+            )
+
+            if week_at_creation and week_at_creation[0] and peak_after:
+                base = week_at_creation[0]
+                if base > 0:
+                    demand_increase = round(((peak_after - base) / base) * 100, 1)
+                    signal_accuracy_samples.append({
+                        "urgency": opp.urgency_score,
+                        "demand_increase_pct": demand_increase,
+                        "type": opp.opportunity_type,
+                    })
+
+        # 4. ROI-Schätzung
+        # Konversionsrate der bearbeiteten Opportunities
+        converted_count = len([o for o in all_opps if o.status in ("CONVERTED", "ACTIVATED")])
+        acted_count = len(acted_on)
+        conversion_rate = round((converted_count / acted_count * 100) if acted_count else 0, 1)
+
+        # Geschätzter Markteffekt: Durchschnittliche Nachfrage-Steigerung nach Signalen
+        avg_demand_increase = (
+            round(sum(s["demand_increase_pct"] for s in signal_accuracy_samples) / len(signal_accuracy_samples), 1)
+            if signal_accuracy_samples else 0
+        )
+
+        # Korrelation: Urgency Score vs. tatsächliche Nachfrage
+        high_urgency_hits = [
+            s for s in signal_accuracy_samples
+            if s["urgency"] >= 70 and s["demand_increase_pct"] > 0
+        ]
+        signal_hit_rate = (
+            round(len(high_urgency_hits) / len([s for s in signal_accuracy_samples if s["urgency"] >= 70]) * 100, 1)
+            if any(s["urgency"] >= 70 for s in signal_accuracy_samples) else 0
+        )
+
+        # "Was wäre wenn" — Missed Opportunities Wert
+        missed_high_urgency = [o for o in missed if o.urgency_score >= 70]
+        missed_value_estimate = len(missed_high_urgency) * (avg_demand_increase / 100 + 1) if avg_demand_increase > 0 else 0
+
+        return {
+            "available": True,
+            "summary": {
+                "total_opportunities": len(all_opps),
+                "acted_on": acted_count,
+                "missed": len(missed),
+                "pending": len(pending),
+                "conversion_rate": conversion_rate,
+            },
+            "urgency_comparison": {
+                "avg_urgency_acted": round(avg_urgency_acted, 1),
+                "avg_urgency_missed": round(avg_urgency_missed, 1),
+            },
+            "signal_quality": {
+                "avg_demand_increase_pct": avg_demand_increase,
+                "signal_hit_rate_pct": signal_hit_rate,
+                "samples_analyzed": len(signal_accuracy_samples),
+            },
+            "model_accuracy": model_accuracy,
+            "missed_opportunity_value": {
+                "high_urgency_missed": len(missed_high_urgency),
+                "estimated_campaigns_lost": len(missed_high_urgency),
+                "avg_potential_demand_lift_pct": avg_demand_increase,
+            },
+            "by_type": {},
+        }
+
     def _save_opportunity(self, opp: dict) -> bool:
         """Opportunity in DB speichern (mit Dedup)."""
         opp_id = opp.get("id", "")

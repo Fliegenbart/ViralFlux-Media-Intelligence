@@ -263,31 +263,63 @@ class ForecastService:
     # ═══════════════════════════════════════════════════════════════════
 
     def _fit_holt_winters(self, y: np.ndarray, n_steps: int) -> np.ndarray:
-        """Base estimator 1: Holt-Winters Exponential Smoothing."""
+        """Holt-Winters forecast with improved fallback chain.
+
+        Model selection:
+        - n >= 104: Multiplicative seasonal (2+ years -> robust seasonal decomposition)
+        - n >= 8:   Additive seasonal (min seasonal_periods=4)
+        - n >= 4:   Damped trend only (short series, prevents divergence)
+        - n < 4:    Simple moving average extrapolation
+        """
         n = len(y)
         try:
-            seasonal_periods = min(52, n // 2) if n >= 8 else None
-            if seasonal_periods and seasonal_periods >= 2:
+            if n >= 104:
+                # 2+ years: multiplicative seasonal captures amplitude changes
+                sp = min(52, n // 2)
                 hw_model = ExponentialSmoothing(
-                    y,
-                    trend="add",
-                    seasonal="add",
-                    seasonal_periods=seasonal_periods,
+                    y, trend="add", seasonal="mul",
+                    seasonal_periods=sp,
+                    initialization_method="estimated",
+                )
+            elif n >= 8:
+                # Additive seasonal with capped period
+                sp = min(52, n // 2)
+                hw_model = ExponentialSmoothing(
+                    y, trend="add", seasonal="add",
+                    seasonal_periods=sp,
+                    initialization_method="estimated",
+                )
+            elif n >= 4:
+                # Damped trend — no seasonal, but prevents linear divergence
+                hw_model = ExponentialSmoothing(
+                    y, trend="add", damped_trend=True,
                     initialization_method="estimated",
                 )
             else:
-                hw_model = ExponentialSmoothing(
-                    y,
-                    trend="add",
-                    initialization_method="estimated",
-                )
+                # Too few points — use moving average extrapolation
+                recent_mean = float(np.mean(y[-min(3, n):]))
+                return np.full(n_steps, max(0.0, recent_mean))
+
             hw_fit = hw_model.fit(optimized=True)
-            return hw_fit.forecast(n_steps)
+            forecast = hw_fit.forecast(n_steps)
+            # Clip to prevent implausible values
+            max_hist = float(np.max(y)) if len(y) > 0 else 1.0
+            forecast = np.clip(forecast, 0.0, max_hist * 3.0)
+            return forecast
+
         except Exception as e:
-            logger.warning(f"Holt-Winters failed, using simple trend: {e}")
-            recent = y[-min(5, n) :]
+            logger.warning(f"Holt-Winters failed, using damped extrapolation: {e}")
+            # Damped linear extrapolation from recent points
+            recent = y[-min(5, n):]
             slope = (recent[-1] - recent[0]) / max(len(recent) - 1, 1)
-            return np.array([y[-1] + slope * (i + 1) for i in range(n_steps)])
+            # Damping factor reduces slope influence over time
+            base = float(y[-1])
+            max_hist = float(np.max(y)) if len(y) > 0 else 1.0
+            forecast = np.array([
+                base + slope * (i + 1) * (0.85 ** i)
+                for i in range(n_steps)
+            ])
+            return np.clip(forecast, 0.0, max_hist * 3.0)
 
     def _fit_ridge(
         self,

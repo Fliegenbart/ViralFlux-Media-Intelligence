@@ -292,6 +292,14 @@ const Dashboard: React.FC = () => {
   const [drugShortageLoading, setDrugShortageLoading] = useState(false);
   const [peixScore, setPeixScore] = useState<PeixScoreData | null>(null);
   const [outbreakLoading, setOutbreakLoading] = useState(false);
+  const [accuracy, setAccuracy] = useState<Record<string, { mae: number; mape: number; correlation: number; drift_detected: boolean } | null>>({});
+
+  useEffect(() => {
+    fetch('/api/v1/forecast/accuracy')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.accuracy) setAccuracy(d.accuracy); })
+      .catch(() => {});
+  }, []);
 
   const fetchTopActions = useCallback(async () => {
     setActionsLoading(true);
@@ -1986,7 +1994,7 @@ const Dashboard: React.FC = () => {
           {/* Forecast Summary */}
           <div className="card p-6 fade-in">
             <h2 className="text-lg font-bold text-slate-900 mb-4">Prognose-\u00DCbersicht</h2>
-            <p className="text-xs text-slate-400 mb-4">Prophet ML-Modell (14 Tage)</p>
+            <p className="text-xs text-slate-400 mb-4">XGBoost Meta-Learner (14 Tage)</p>
             {data?.has_forecasts && data.forecast_summary ? (
               <div className="space-y-4">
                 {Object.entries(data.forecast_summary).map(([virus, fc]) => (
@@ -2005,6 +2013,12 @@ const Dashboard: React.FC = () => {
                       <div className="text-[10px] text-slate-400">
                         Konfidenz: {(fc.confidence * 100).toFixed(0)}%
                       </div>
+                      {accuracy[virus] && (
+                        <div className="text-[10px] mt-0.5" style={{ color: accuracy[virus]!.drift_detected ? '#ef4444' : '#64748b' }}>
+                          MAPE {accuracy[virus]!.mape?.toFixed(0) || '\u2014'}% \u00B7 r={accuracy[virus]!.correlation?.toFixed(2) || '\u2014'}
+                          {accuracy[virus]!.drift_detected && <span className="ml-1 text-red-500 font-bold">DRIFT</span>}
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}

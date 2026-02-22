@@ -120,6 +120,26 @@ def generate_briefing_pdf(opp: dict) -> bytes:
     pdf.cell(0, 7, _safe(", ".join(audience)) if audience else "Allgemein", new_x="LMARGIN", new_y="NEXT")
     pdf.ln(4)
 
+    # ── Regionale Hotspots ──
+    kreis_detail = region.get("kreis_detail", [])
+    if kreis_detail:
+        _section_header(pdf, "Regionale Hotspots")
+        pdf.set_font("Helvetica", "", 10)
+        pdf.set_text_color(*_SLATE_700)
+        pdf.cell(0, 7, _safe("Top-Kreise nach Fallzahl (letzte 4 Wochen):"), new_x="LMARGIN", new_y="NEXT")
+        for kd in kreis_detail[:5]:
+            name = _safe(kd.get("kreis", ""))
+            bl = _safe(kd.get("bundesland", ""))
+            faelle = kd.get("faelle_4w", 0)
+            label = f"  {name}"
+            if bl:
+                label += f" ({bl})"
+            label += f" - {faelle:,} Faelle".replace(",", ".")
+            pdf.set_font("Helvetica", "B" if faelle > 2000 else "", 10)
+            pdf.set_text_color(*_SLATE_700)
+            pdf.cell(0, 7, _safe(label), new_x="LMARGIN", new_y="NEXT")
+        pdf.ln(4)
+
     # ── Produktempfehlung ──
     if products:
         _section_header(pdf, "Empfohlene Produkte")

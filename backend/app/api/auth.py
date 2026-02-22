@@ -1,3 +1,4 @@
+import os
 from datetime import timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -8,10 +9,12 @@ from app.schemas.token import Token
 
 router = APIRouter()
 
-# Hardcoded mock user DB (temporary, will be replaced by real user table in Step 3B/3C)
+_ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "admin@gelo.de")
+_ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "gelo2026")
+
 _USERS = {
-    "admin@gelo.de": {
-        "password": get_password_hash("gelo2026"),
+    _ADMIN_EMAIL: {
+        "password": get_password_hash(_ADMIN_PASSWORD),
         "role": "admin",
     }
 }

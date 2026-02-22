@@ -1,3 +1,4 @@
+import logging
 import os
 from datetime import datetime, timedelta
 from typing import Any, Dict
@@ -5,10 +6,29 @@ from typing import Any, Dict
 from jose import jwt
 from passlib.context import CryptContext
 
+logger = logging.getLogger(__name__)
+
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 ALGORITHM = "HS256"
-SECRET_KEY = os.getenv("SECRET_KEY", "CHANGE_ME_IN_PROD_GELO_2026")
+
+_KNOWN_PLACEHOLDERS = {
+    "CHANGE_ME_IN_PROD_GELO_2026",
+    "dev-secret-key-change-me",
+    "viralflux-prod-secret-key-change-me-2026",
+    "generate-a-secure-random-key-here-minimum-32-characters",
+}
+
+SECRET_KEY = os.getenv("SECRET_KEY", "")
+if not SECRET_KEY or SECRET_KEY in _KNOWN_PLACEHOLDERS:
+    logger.warning(
+        "SECRET_KEY is missing or uses a known placeholder! "
+        "Set a secure random SECRET_KEY via environment variable."
+    )
+    if not SECRET_KEY:
+        import secrets
+        SECRET_KEY = secrets.token_urlsafe(48)
+        logger.warning("Generated ephemeral SECRET_KEY — tokens will NOT survive restarts.")
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:

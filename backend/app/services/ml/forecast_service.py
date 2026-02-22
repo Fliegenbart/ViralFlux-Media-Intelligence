@@ -223,12 +223,12 @@ class ForecastService:
         df["lag2"] = df["y"].shift(2)
         df["lag3"] = df["y"].shift(3)
 
-        # 5. Moving averages
-        df["ma3"] = df["y"].rolling(window=3, min_periods=1).mean()
-        df["ma5"] = df["y"].rolling(window=5, min_periods=1).mean()
+        # 5. Moving averages (shifted by 1 to avoid target leakage)
+        df["ma3"] = df["y"].rolling(window=3, min_periods=1).mean().shift(1)
+        df["ma5"] = df["y"].rolling(window=5, min_periods=1).mean().shift(1)
 
-        # 6. Rate of change
-        df["roc"] = df["y"].pct_change()
+        # 6. Rate of change (shifted by 1 to avoid target leakage)
+        df["roc"] = df["y"].pct_change().shift(1)
 
         # 7. Trend momentum (7-day slope as 1st derivative)
         y_shifted = df["y"].shift(7).replace(0, np.nan)
@@ -421,8 +421,9 @@ class ForecastService:
         df_meta = df.copy()
         df_meta["hw_pred"] = oof["hw_pred"].values
         df_meta["ridge_pred"] = oof["ridge_pred"].values
-        # Prophet OOF: approximate with rolling mean (Prophet is too expensive per fold)
-        df_meta["prophet_pred"] = df_meta["ma5"]  # reasonable proxy for OOF
+        # Prophet OOF: use 7-day rolling mean (lag-corrected) as proxy
+        # ma5 is already shifted by 1, use a wider window for Prophet-like smoothing
+        df_meta["prophet_pred"] = df_meta["y"].rolling(window=7, min_periods=1).mean().shift(1)
 
         # Build feature matrix
         available_meta = [f for f in META_FEATURES if f in df_meta.columns]
@@ -432,13 +433,13 @@ class ForecastService:
         # Replace any remaining NaN/inf
         X = np.nan_to_num(X, nan=0.0, posinf=0.0, neginf=0.0)
 
-        # ── Median model (main prediction, biased high via quantile_alpha=0.8) ──
+        # ── Median model (main prediction — 50th percentile) ──
         model_median = XGBRegressor(
             n_estimators=200,
             max_depth=5,
             learning_rate=0.05,
             objective="reg:quantileerror",
-            quantile_alpha=0.8,
+            quantile_alpha=0.5,
             random_state=42,
             verbosity=0,
         )

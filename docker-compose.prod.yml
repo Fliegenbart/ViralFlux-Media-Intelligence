@@ -94,6 +94,29 @@ services:
     networks:
       - virusradar_network
 
+  celery_beat:
+    build:
+      context: ./backend
+      dockerfile: ../docker/Dockerfile.backend
+    container_name: viralflux_celery_beat
+    restart: unless-stopped
+    command: celery -A app.core.celery_app beat --loglevel=info
+    environment:
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=${POSTGRES_USER:-virusradar}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-changeme}
+      - POSTGRES_DB=${POSTGRES_DB:-virusradar_db}
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - SECRET_KEY=${SECRET_KEY:-viralflux-prod-secret-key-change-me-2026}
+      - ENVIRONMENT=production
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - virusradar_network
+
   frontend:
     build:
       context: .

@@ -12,7 +12,10 @@
           "bromhexin",
           "codein",
           "dextromethorphan",
-          "noscapin"
+          "noscapin",
+          "guaifenesin",
+          "efeu",
+          "thymian"
         ],
         "target_forms": [
           "saft",
@@ -35,7 +38,9 @@
           "paracetamol",
           "acetylsalicyl",
           "phenylephrin",
-          "pseudoephedrin"
+          "pseudoephedrin",
+          "coffein",
+          "doxylamin"
         ],
         "target_forms": [
           "saft",
@@ -46,6 +51,140 @@
           "zaepfchen"
         ],
         "bid_multiplier": 1.5
+      }
+    },
+    {
+      "sku": "GELO-RVC",
+      "name": "Gelorevoice",
+      "condition": "halsschmerz",
+      "conquesting": {
+        "target_ingredients": [
+          "benzocain",
+          "lidocain",
+          "flurbiprofen",
+          "ambroxol",
+          "cetylpyridinium",
+          "dequalinium",
+          "hexetidin"
+        ],
+        "target_forms": [
+          "lutschtablette",
+          "loesung",
+          "spray",
+          "pastille"
+        ],
+        "bid_multiplier": 1.4
+      }
+    },
+    {
+      "sku": "GELO-BRO",
+      "name": "GeloBronchial",
+      "condition": "husten_reizhusten",
+      "conquesting": {
+        "target_ingredients": [
+          "dextromethorphan",
+          "codein",
+          "dihydrocodein",
+          "pentoxyverin",
+          "noscapin",
+          "clobutinol",
+          "spitzwegerich",
+          "islaendisch moos"
+        ],
+        "target_forms": [
+          "saft",
+          "sirup",
+          "tropfen",
+          "lutschtablette",
+          "pastille"
+        ],
+        "bid_multiplier": 1.4
+      }
+    },
+    {
+      "sku": "GELO-SIT",
+      "name": "GeloSitin",
+      "condition": "sinusitis",
+      "conquesting": {
+        "target_ingredients": [
+          "xylometazolin",
+          "oxymetazolin",
+          "tramazolin",
+          "sinupret",
+          "cineol",
+          "mometason"
+        ],
+        "target_forms": [
+          "nasenspray",
+          "nasentropfen",
+          "tablette",
+          "kapsel",
+          "dragee"
+        ],
+        "bid_multiplier": 1.5
+      }
+    },
+    {
+      "sku": "GELO-DUR",
+      "name": "GeloDurat",
+      "condition": "schnupfen",
+      "conquesting": {
+        "target_ingredients": [
+          "xylometazolin",
+          "oxymetazolin",
+          "tramazolin",
+          "phenylephrin",
+          "meersalz"
+        ],
+        "target_forms": [
+          "nasenspray",
+          "nasentropfen",
+          "nasengel"
+        ],
+        "bid_multiplier": 1.3
+      }
+    },
+    {
+      "sku": "GELO-VOX",
+      "name": "GeloVox",
+      "condition": "heiserkeit",
+      "conquesting": {
+        "target_ingredients": [
+          "islaendisch moos",
+          "hyaluronsaeure",
+          "dexpanthenol",
+          "salbei",
+          "emser salz"
+        ],
+        "target_forms": [
+          "lutschtablette",
+          "pastille",
+          "spray",
+          "loesung"
+        ],
+        "bid_multiplier": 1.3
+      }
+    },
+    {
+      "sku": "GELO-MUC",
+      "name": "GeloMuc",
+      "condition": "schleimloeser",
+      "conquesting": {
+        "target_ingredients": [
+          "acetylcystein",
+          "ambroxol",
+          "bromhexin",
+          "carbocistein",
+          "erdostein"
+        ],
+        "target_forms": [
+          "brausetablette",
+          "granulat",
+          "saft",
+          "sirup",
+          "tablette"
+        ],
+        "bid_multiplier": 1.4
       }
     }
   ]

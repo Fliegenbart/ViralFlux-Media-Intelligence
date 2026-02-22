@@ -60,6 +60,11 @@ code {
   50% { box-shadow: 0 0 12px 2px rgba(67, 56, 202, 0.2); }
 }
 
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 .fade-in { animation: fadeIn 0.4s ease-out; }
 .slide-in { animation: slideIn 0.3s ease-out; }
 

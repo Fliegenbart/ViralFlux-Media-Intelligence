@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 import logging
 
 from app.db.session import get_db
+from app.api.deps import get_current_user
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -20,7 +21,7 @@ _WORKFLOW_TO_LEGACY = {
 
 
 @router.post("/generate")
-async def generate_opportunities(db: Session = Depends(get_db)):
+async def generate_opportunities(db: Session = Depends(get_db), _user: dict = Depends(get_current_user)):
     """Alle Detektoren ausführen und neue Marketing-Opportunities erzeugen.
 
     Analysiert: BfArM-Engpässe, UV/Wetter, ERP-Bestellgeschwindigkeit.
@@ -40,6 +41,7 @@ async def list_opportunities(
     min_urgency: float = None,
     limit: int = 50,
     db: Session = Depends(get_db),
+    _user: dict = Depends(get_current_user),
 ):
     """Gespeicherte Opportunities abrufen mit optionalen Filtern.
 
@@ -71,7 +73,7 @@ async def list_opportunities(
 
 
 @router.get("/stats")
-async def get_stats(db: Session = Depends(get_db)):
+async def get_stats(db: Session = Depends(get_db), _user: dict = Depends(get_current_user)):
     """Aggregierte Statistiken über alle Opportunities."""
     from app.services.marketing_engine.opportunity_engine import MarketingOpportunityEngine
 
@@ -94,6 +96,7 @@ async def get_stats(db: Session = Depends(get_db)):
 async def export_crm_json(
     ids: str = None,
     db: Session = Depends(get_db),
+    _user: dict = Depends(get_current_user),
 ):
     """CRM-Export als JSON. Markiert exportierte Opportunities.
 
@@ -107,7 +110,7 @@ async def export_crm_json(
 
 
 @router.get("/{opportunity_id}")
-async def get_opportunity(opportunity_id: str, db: Session = Depends(get_db)):
+async def get_opportunity(opportunity_id: str, db: Session = Depends(get_db), _user: dict = Depends(get_current_user)):
     """Einzelne Opportunity abrufen."""
     from app.services.marketing_engine.opportunity_engine import MarketingOpportunityEngine
 
@@ -129,6 +132,7 @@ async def update_status(
     opportunity_id: str,
     status: str,
     db: Session = Depends(get_db),
+    _user: dict = Depends(get_current_user),
 ):
     """Status einer Opportunity aktualisieren.
 

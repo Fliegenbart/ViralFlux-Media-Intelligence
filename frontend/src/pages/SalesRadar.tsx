@@ -2,6 +2,8 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import { de } from 'date-fns/locale';
+import { apiFetch } from '../lib/api';
+import { useToast } from '../lib/useToast';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 interface MarketingOpportunity {
@@ -26,6 +28,7 @@ interface MarketingOpportunity {
 interface OpportunityStats {
   total: number;
   recent_7d: number;
+  daily_counts_7d?: number[];
   by_type: Record<string, number>;
   by_status: Record<string, number>;
   avg_urgency: number;
@@ -134,6 +137,26 @@ const ConquestingBadge: React.FC<{ opp: MarketingOpportunity; compact?: boolean 
   );
 };
 
+// ─── Toast Container ────────────────────────────────────────────────────────
+const ToastContainer: React.FC<{ toasts: Array<{ id: number; message: string; type: string }>; onRemove: (id: number) => void }> = ({ toasts, onRemove }) => {
+  if (toasts.length === 0) return null;
+  const colors: Record<string, string> = {
+    success: 'bg-emerald-600 text-white',
+    error: 'bg-red-600 text-white',
+    info: 'bg-slate-700 text-white',
+  };
+  return (
+    <div className="fixed bottom-6 right-6 z-[9999] flex flex-col gap-2" style={{ maxWidth: 380 }}>
+      {toasts.map(t => (
+        <div key={t.id} className={`${colors[t.type] || colors.info} rounded-lg px-4 py-3 shadow-xl text-sm flex items-center gap-3 animate-[slideUp_0.3s_ease-out]`}>
+          <span className="flex-1">{t.message}</span>
+          <button onClick={() => onRemove(t.id)} className="opacity-60 hover:opacity-100 text-lg leading-none">&times;</button>
+        </div>
+      ))}
+    </div>
+  );
+};
+
 // ─── Component ──────────────────────────────────────────────────────────────
 const SalesRadar: React.FC = () => {
   const navigate = useNavigate();
@@ -144,23 +167,31 @@ const SalesRadar: React.FC = () => {
   const [exporting, setExporting] = useState(false);
   const [detailOpp, setDetailOpp] = useState<MarketingOpportunity | null>(null);
   const [showTechDetails, setShowTechDetails] = useState(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+  const { toasts, addToast, removeToast } = useToast();
 
   // Fetch
   const fetchOpportunities = useCallback(async () => {
     try {
+      setFetchError(null);
       const params = new URLSearchParams({ limit: '100' });
-      const res = await fetch(`/api/v1/marketing/list?${params}`);
+      const res = await apiFetch(`/api/v1/marketing/list?${params}`);
       if (res.ok) {
         const data = await res.json();
         setOpportunities(data.opportunities || []);
+      } else {
+        setFetchError(`Fehler beim Laden: ${res.status}`);
       }
-    } catch (e) { console.error('Fetch error:', e); }
+    } catch (e) {
+      setFetchError('Verbindung zum Server fehlgeschlagen');
+      console.error('Fetch error:', e);
+    }
     finally { setLoading(false); }
   }, []);
 
   const fetchStats = useCallback(async () => {
     try {
-      const res = await fetch('/api/v1/marketing/stats');
+      const res = await apiFetch('/api/v1/marketing/stats');
       if (res.ok) setStats(await res.json());
     } catch (_) {}
   }, []);
@@ -170,17 +201,28 @@ const SalesRadar: React.FC = () => {
   const handleGenerate = async () => {
     setGenerating(true);
     try {
-      const res = await fetch('/api/v1/marketing/generate', { method: 'POST' });
-      if (res.ok) { await fetchOpportunities(); await fetchStats(); }
-    } catch (e) { console.error('Generate error:', e); }
+      const res = await apiFetch('/api/v1/marketing/generate', { method: 'POST' });
+      if (res.ok) {
+        const data = await res.json();
+        const count = data?.new_opportunities ?? data?.total ?? 0;
+        addToast(`${count} Opportunities generiert`, 'success');
+        await fetchOpportunities();
+        await fetchStats();
+      } else {
+        addToast(`Generate fehlgeschlagen: ${res.status}`, 'error');
+      }
+    } catch (e) {
+      addToast('Generate fehlgeschlagen — Server nicht erreichbar', 'error');
+      console.error('Generate error:', e);
+    }
     finally { setGenerating(false); }
   };
 
   const handleExport = async () => {
     setExporting(true);
     try {
-      const res = await fetch('/api/v1/marketing/export/crm');
-      if (!res.ok) throw new Error('Export failed');
+      const res = await apiFetch('/api/v1/marketing/export/crm');
+      if (!res.ok) throw new Error(`Export failed: ${res.status}`);
       const data = await res.json();
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
@@ -189,18 +231,31 @@ const SalesRadar: React.FC = () => {
       a.download = `ViralFlux_CRM_Export_${new Date().toISOString().slice(0, 10)}.json`;
       a.click();
       URL.revokeObjectURL(url);
+      addToast('CRM-Export heruntergeladen', 'success');
       await fetchOpportunities();
-    } catch (e) { console.error('Export error:', e); }
+    } catch (e) {
+      addToast('Export fehlgeschlagen', 'error');
+      console.error('Export error:', e);
+    }
     finally { setExporting(false); }
   };
 
   const updateStatus = async (id: string, status: string) => {
     try {
-      await fetch(`/api/v1/marketing/${encodeURIComponent(id)}/status?status=${status}`, { method: 'PATCH' });
+      const res = await apiFetch(`/api/v1/marketing/${encodeURIComponent(id)}/status?status=${status}`, { method: 'PATCH' });
+      if (res.ok) {
+        const label = status === 'APPROVED' ? 'freigegeben' : status === 'DISMISSED' ? 'verworfen' : status;
+        addToast(`Opportunity ${label}`, 'success');
+      } else {
+        addToast(`Status-Update fehlgeschlagen: ${res.status}`, 'error');
+      }
       await fetchOpportunities();
       await fetchStats();
       if (detailOpp?.id === id) setDetailOpp(null);
-    } catch (e) { console.error('Status update error:', e); }
+    } catch (e) {
+      addToast('Status-Update fehlgeschlagen', 'error');
+      console.error('Status update error:', e);
+    }
   };
 
   // ─── Derived data ───
@@ -235,11 +290,10 @@ const SalesRadar: React.FC = () => {
     return total > 0 ? Math.round((converted / total) * 100) : 0;
   }, [opportunities]);
 
-  // Fake 7-day sparkline from stats
+  // 7-day sparkline from real daily counts
   const sparkData = useMemo(() => {
-    if (!stats) return [0, 0, 0, 0, 0, 0, 0];
-    const base = Math.max(1, Math.floor(stats.recent_7d / 7));
-    return Array.from({ length: 7 }, (_, i) => Math.max(0, base + Math.floor(Math.sin(i * 1.2) * base * 0.6)));
+    if (!stats?.daily_counts_7d) return [0, 0, 0, 0, 0, 0, 0];
+    return stats.daily_counts_7d;
   }, [stats]);
 
   return (
@@ -924,6 +978,25 @@ const SalesRadar: React.FC = () => {
           </>
         );
       })()}
+
+      {/* ── Error Banner ── */}
+      {fetchError && (
+        <div className="max-w-[1600px] mx-auto px-6 mt-6">
+          <div className="bg-red-50 border border-red-200 rounded-xl px-5 py-4 flex items-center gap-3">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2" strokeLinecap="round">
+              <circle cx="12" cy="12" r="10" /><path d="M12 8v4M12 16h.01" />
+            </svg>
+            <span className="text-sm text-red-700 flex-1">{fetchError}</span>
+            <button onClick={() => { setFetchError(null); setLoading(true); fetchOpportunities(); fetchStats(); }}
+              className="text-xs font-medium text-red-600 hover:text-red-800 px-3 py-1 rounded-lg border border-red-200 hover:bg-red-100 transition">
+              Erneut versuchen
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Toast Notifications ── */}
+      <ToastContainer toasts={toasts} onRemove={removeToast} />
 
       {/* ── Footer ── */}
       <footer className="mt-8 py-4 text-center text-xs text-slate-400 border-t border-slate-200">

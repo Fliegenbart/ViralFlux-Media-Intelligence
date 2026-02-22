@@ -1105,9 +1105,26 @@ class MarketingOpportunityEngine:
             .count()
         )
 
+        # Daily breakdown for sparkline (last 7 days)
+        daily_counts: list[int] = []
+        now = datetime.utcnow()
+        for days_ago in range(6, -1, -1):
+            day_start = (now - timedelta(days=days_ago)).replace(hour=0, minute=0, second=0, microsecond=0)
+            day_end = day_start + timedelta(days=1)
+            count = (
+                self.db.query(MarketingOpportunity)
+                .filter(
+                    MarketingOpportunity.created_at >= day_start,
+                    MarketingOpportunity.created_at < day_end,
+                )
+                .count()
+            )
+            daily_counts.append(count)
+
         return {
             "total": total,
             "recent_7d": recent,
+            "daily_counts_7d": daily_counts,
             "by_type": by_type,
             "by_status": by_status,
             "avg_urgency": round(avg_urgency, 1) if avg_urgency else 0,

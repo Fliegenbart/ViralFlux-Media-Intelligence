@@ -642,6 +642,16 @@ const MediaCockpit: React.FC = () => {
   const bentoTiles = useMemo(() => (cockpit?.bento?.tiles || []), [cockpit]);
   const sourceStatus = useMemo(() => (cockpit?.source_status?.items || []), [cockpit]);
   const peixSummary = cockpit?.peix_epi_score;
+
+  // Forecast accuracy monitoring
+  const [forecastAccuracy, setForecastAccuracy] = useState<Record<string, { mae: number; mape: number; correlation: number; drift_detected: boolean } | null>>({});
+  useEffect(() => {
+    fetch('/api/v1/forecast/accuracy')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.accuracy) setForecastAccuracy(d.accuracy); })
+      .catch(() => {});
+  }, []);
+
   const chartData = useMemo(() => {
     if (!marketRun?.chart_data) return [];
     return marketRun.chart_data.map((row: any) => ({
@@ -1296,6 +1306,39 @@ const MediaCockpit: React.FC = () => {
                     ))}
                   </div>
                 </div>
+
+                {Object.keys(forecastAccuracy).length > 0 && (
+                  <div className="card p-4">
+                    <h3 className="text-sm font-semibold text-slate-900 mb-2">Prognose-Qualität</h3>
+                    <p className="text-[10px] text-slate-400 mb-3">XGBoost Meta-Learner · 14-Tage-Fenster</p>
+                    <div className="space-y-2">
+                      {VIRUS_OPTIONS.map(v => {
+                        const acc = forecastAccuracy[v];
+                        if (!acc) return (
+                          <div key={v} className="rounded-lg px-3 py-2 bg-slate-50 border border-slate-100">
+                            <span className="text-xs text-slate-500">{v}</span>
+                            <span className="text-[10px] text-slate-400 ml-2">Keine Daten</span>
+                          </div>
+                        );
+                        return (
+                          <div key={v} className={`rounded-lg px-3 py-2 border ${acc.drift_detected ? 'bg-red-50 border-red-200' : 'bg-slate-50 border-slate-100'}`}>
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs text-slate-700 font-medium">{v}</span>
+                              {acc.drift_detected && (
+                                <span className="text-[9px] font-bold text-red-600 bg-red-100 px-1.5 py-0.5 rounded uppercase tracking-wider">Drift</span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-3 mt-1">
+                              <span className="text-[10px] text-slate-500">MAPE <span className="font-semibold text-slate-700">{acc.mape?.toFixed(0) ?? '—'}%</span></span>
+                              <span className="text-[10px] text-slate-500">r = <span className="font-semibold text-slate-700">{acc.correlation?.toFixed(2) ?? '—'}</span></span>
+                              <span className="text-[10px] text-slate-500">MAE <span className="font-semibold text-slate-700">{acc.mae?.toFixed(1) ?? '—'}</span></span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
 
                 {showTechDetails && (
                   <div className="card p-4">

@@ -57,11 +57,24 @@ class CompetitorShortageDetector(OpportunityDetector):
 
     def detect(self) -> list[dict]:
         """Match BfArM shortages against Conquesting Matrix."""
+        _analyzer = None
         try:
-            from app.api.drug_shortage import _analyzer
+            import app.api.drug_shortage as ds_module
+            _analyzer = ds_module._analyzer
         except ImportError:
             logger.warning("drug_shortage module not available")
-            return []
+
+        # If no data in singleton, try auto-pull from BfArM
+        if _analyzer is None or _analyzer.df_filtered is None or _analyzer.df_filtered.empty:
+            try:
+                from app.services.data_ingest.bfarm_service import BfarmIngestionService
+                logger.info("BfArM cache miss in detector — triggering auto-pull")
+                result = BfarmIngestionService().run_full_import()
+                if result.get("success"):
+                    import app.api.drug_shortage as ds_module
+                    _analyzer = ds_module._analyzer
+            except Exception as exc:
+                logger.warning("BfArM auto-pull failed: %s", exc)
 
         if _analyzer is None or _analyzer.df_filtered is None or _analyzer.df_filtered.empty:
             logger.info("No BfArM data loaded — CompetitorShortageDetector skipped")

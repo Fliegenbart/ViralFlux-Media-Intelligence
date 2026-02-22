@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { format } from 'date-fns';
 import { de } from 'date-fns/locale';
 import { apiFetch } from '../lib/api';
@@ -157,6 +157,7 @@ const ToastContainer: React.FC<{ toasts: Array<{ id: number; message: string; ty
 // ─── Component ──────────────────────────────────────────────────────────────
 const SalesRadar: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [opportunities, setOpportunities] = useState<MarketingOpportunity[]>([]);
   const [stats, setStats] = useState<OpportunityStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -165,17 +166,25 @@ const SalesRadar: React.FC = () => {
   const [detailOpp, setDetailOpp] = useState<MarketingOpportunity | null>(null);
   const [showTechDetails, setShowTechDetails] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const pageSize = 50;
   const { toasts, addToast, removeToast } = useToast();
 
   // Fetch
-  const fetchOpportunities = useCallback(async () => {
+  const fetchOpportunities = useCallback(async (page = 1) => {
     try {
       setFetchError(null);
-      const params = new URLSearchParams({ limit: '100' });
+      const skip = (page - 1) * pageSize;
+      const params = new URLSearchParams({ limit: String(pageSize), skip: String(skip) });
       const res = await apiFetch(`/api/v1/marketing/list?${params}`);
       if (res.ok) {
         const data = await res.json();
         setOpportunities(data.opportunities || []);
+        setTotalCount(data.total ?? 0);
+        setTotalPages(data.pages ?? 1);
+        setCurrentPage(data.page ?? 1);
       } else {
         setFetchError(`Fehler beim Laden: ${res.status}`);
       }
@@ -194,6 +203,32 @@ const SalesRadar: React.FC = () => {
   }, []);
 
   useEffect(() => { fetchOpportunities(); fetchStats(); }, [fetchOpportunities, fetchStats]);
+
+  // Deep-Link: open opportunity from URL ?opp=...
+  useEffect(() => {
+    const oppId = searchParams.get('opp');
+    if (oppId && opportunities.length > 0 && !detailOpp) {
+      const match = opportunities.find(o => o.id === oppId);
+      if (match) setDetailOpp(match);
+    }
+  }, [searchParams, opportunities, detailOpp]);
+
+  // Open/close detail panel with URL sync
+  const openDetail = useCallback((opp: MarketingOpportunity | null) => {
+    setDetailOpp(opp);
+    if (opp) {
+      setSearchParams(prev => { prev.set('opp', opp.id); return prev; }, { replace: true });
+    } else {
+      setSearchParams(prev => { prev.delete('opp'); return prev; }, { replace: true });
+    }
+  }, [setSearchParams]);
+
+  // Page navigation
+  const goToPage = useCallback((page: number) => {
+    if (page < 1 || page > totalPages) return;
+    setLoading(true);
+    fetchOpportunities(page);
+  }, [fetchOpportunities, totalPages]);
 
   const handleGenerate = async () => {
     setGenerating(true);
@@ -248,7 +283,7 @@ const SalesRadar: React.FC = () => {
       }
       await fetchOpportunities();
       await fetchStats();
-      if (detailOpp?.id === id) setDetailOpp(null);
+      if (detailOpp?.id === id) openDetail(null);
     } catch (e) {
       addToast('Status-Update fehlgeschlagen', 'error');
       console.error('Status update error:', e);
@@ -418,7 +453,7 @@ const SalesRadar: React.FC = () => {
                   <div className="mt-4 flex items-center justify-between gap-3">
                     <div className="text-[11px] text-slate-400">Output: HWG-safe Copy + CTA</div>
                     <button
-                      onClick={() => setDetailOpp(opp)}
+                      onClick={() => openDetail(opp)}
                       className="px-4 py-2 text-xs font-bold rounded-lg transition hover:brightness-110"
                       style={{ background: 'linear-gradient(135deg, #22c55e, #10b981)', color: '#052e1b' }}
                     >
@@ -516,7 +551,7 @@ const SalesRadar: React.FC = () => {
                           borderTop: `3px solid ${tc.color}`,
                           animationDelay: `${idx * 60}ms`,
                         }}
-                        onClick={() => setDetailOpp(opp)}
+                        onClick={() => openDetail(opp)}
                       >
                         <div className="p-5">
                           <div className="flex items-start gap-4">
@@ -622,7 +657,7 @@ const SalesRadar: React.FC = () => {
                                 key={opp.id}
                                 className="card p-4 cursor-pointer transition-all hover:scale-[1.01] hover:shadow-md"
                                 style={{ borderLeft: `3px solid ${tc.color}` }}
-                                onClick={() => setDetailOpp(opp)}
+                                onClick={() => openDetail(opp)}
                               >
                                 <div className="flex items-start justify-between mb-2">
                                   <p className="text-xs text-slate-600 leading-relaxed line-clamp-2 flex-1 mr-3">
@@ -726,7 +761,7 @@ const SalesRadar: React.FC = () => {
                           return (
                             <tr key={opp.id}
                               className="cursor-pointer transition hover:bg-slate-50 border-b border-slate-200"
-                              onClick={() => setDetailOpp(opp)}
+                              onClick={() => openDetail(opp)}
                             >
                               <td className="px-4 py-3">
                                 <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
@@ -782,6 +817,56 @@ const SalesRadar: React.FC = () => {
                 </div>
               </section>
             )}
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between mt-6 px-1">
+                <span className="text-xs text-slate-400">
+                  {totalCount} Opportunities gesamt
+                </span>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => goToPage(currentPage - 1)}
+                    disabled={currentPage <= 1}
+                    className="w-8 h-8 rounded-lg border border-slate-200 flex items-center justify-center text-xs text-slate-500 transition hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed"
+                  >
+                    &laquo;
+                  </button>
+                  {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
+                    let page: number;
+                    if (totalPages <= 7) {
+                      page = i + 1;
+                    } else if (currentPage <= 4) {
+                      page = i + 1;
+                    } else if (currentPage >= totalPages - 3) {
+                      page = totalPages - 6 + i;
+                    } else {
+                      page = currentPage - 3 + i;
+                    }
+                    return (
+                      <button
+                        key={page}
+                        onClick={() => goToPage(page)}
+                        className={`w-8 h-8 rounded-lg text-xs font-medium transition ${
+                          page === currentPage
+                            ? 'bg-indigo-600 text-white shadow-sm'
+                            : 'border border-slate-200 text-slate-500 hover:bg-slate-100'
+                        }`}
+                      >
+                        {page}
+                      </button>
+                    );
+                  })}
+                  <button
+                    onClick={() => goToPage(currentPage + 1)}
+                    disabled={currentPage >= totalPages}
+                    className="w-8 h-8 rounded-lg border border-slate-200 flex items-center justify-center text-xs text-slate-500 transition hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed"
+                  >
+                    &raquo;
+                  </button>
+                </div>
+              </div>
+            )}
           </>
         )}
       </main>
@@ -796,7 +881,7 @@ const SalesRadar: React.FC = () => {
             {/* Backdrop */}
             <div
               className="fixed inset-0 z-40 bg-black/30 backdrop-blur-sm"
-              onClick={() => setDetailOpp(null)}
+              onClick={() => openDetail(null)}
             />
             {/* Panel */}
             <div className="fixed top-0 right-0 bottom-0 z-50 w-full max-w-lg overflow-y-auto slide-in bg-white border-l border-slate-200 shadow-2xl">
@@ -818,7 +903,7 @@ const SalesRadar: React.FC = () => {
                   </div>
                 </div>
                 <button
-                  onClick={() => setDetailOpp(null)}
+                  onClick={() => openDetail(null)}
                   className="w-8 h-8 rounded-lg border border-slate-200 flex items-center justify-center transition hover:bg-slate-100"
                 >
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2" strokeLinecap="round">

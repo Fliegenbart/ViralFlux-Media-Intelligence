@@ -260,6 +260,28 @@ class BacktestService:
         rank = bisect_right(values, current_value)
         return min(rank / len(values), 1.0)
 
+    def _market_proxy_at_date(
+        self,
+        target: datetime,
+        bio: float,
+        wastewater: float,
+        positivity: float,
+    ) -> float:
+        """Market disruption proxy from epidemiological signals.
+
+        Without customer-specific order data, we approximate market demand
+        using a composite of:
+        - Bio activity (weighted 0.4): high infection load → pharmacy demand
+        - Wastewater trend (weighted 0.3): leading indicator for OTC demand
+        - Positivity rate (weighted 0.3): confirmed infections → treatment demand
+
+        The non-linear transform (power 0.7) emphasizes moderate-to-high
+        signal levels where market disruption becomes meaningful.
+        """
+        raw = bio * 0.4 + wastewater * 0.3 + min(positivity * 5.0, 1.0) * 0.3
+        # Non-linear emphasis on higher signal ranges
+        return min(raw ** 0.7, 1.0)
+
     def _compute_sub_scores_at_date(
         self,
         target: datetime,
@@ -296,8 +318,10 @@ class BacktestService:
         else:
             bio = min(wastewater * 0.5 + positivity * 5.0 * 0.5, 1.0)
 
-        # MARKET = placeholder (order velocity needs customer-specific data)
-        market = 0.0
+        # MARKET = BfArM shortage disruption proxy
+        # Uses bio signal + wastewater as market demand indicator:
+        # High bio activity + shortages → pharmacy demand spike
+        market = self._market_proxy_at_date(target, bio, wastewater, positivity)
 
         # PSYCHO = Google Trends
         psycho = trends

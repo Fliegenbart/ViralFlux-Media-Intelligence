@@ -44,11 +44,12 @@ class ResourceScarcityDetector(OpportunityDetector):
     def detect(self) -> list[dict]:
         """Prüft DrugShortageAnalyzer auf aktive Engpässe."""
         try:
-            from app.api.drug_shortage import _analyzer
+            from app.api.drug_shortage import _ensure_analyzer
         except ImportError:
             logger.warning("drug_shortage Modul nicht verfügbar")
             return []
 
+        _analyzer = _ensure_analyzer()
         if _analyzer is None or _analyzer.df_filtered is None or _analyzer.df_filtered.empty:
             logger.info("Keine BfArM-Daten geladen — ResourceScarcityDetector übersprungen")
             return []

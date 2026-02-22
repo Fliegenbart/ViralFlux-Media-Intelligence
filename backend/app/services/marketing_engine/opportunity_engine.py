@@ -223,6 +223,7 @@ class MarketingOpportunityEngine:
         brand_filter: str | None = None,
         min_urgency: float | None = None,
         limit: int = 50,
+        skip: int = 0,
         normalize_status: bool = True,
     ) -> list[dict]:
         """Gespeicherte Opportunities mit Filtern abrufen."""
@@ -244,8 +245,33 @@ class MarketingOpportunityEngine:
         if min_urgency is not None:
             query = query.filter(MarketingOpportunity.urgency_score >= min_urgency)
 
-        results = query.limit(limit).all()
+        results = query.offset(skip).limit(limit).all()
         return [self._model_to_dict(r, normalize_status=normalize_status) for r in results]
+
+    def count_opportunities(
+        self,
+        type_filter: str | None = None,
+        status_filter: str | None = None,
+        brand_filter: str | None = None,
+        min_urgency: float | None = None,
+    ) -> int:
+        """Gesamtanzahl der Opportunities mit denselben Filtern."""
+        query = self.db.query(func.count(MarketingOpportunity.id))
+
+        if type_filter:
+            query = query.filter(MarketingOpportunity.opportunity_type == type_filter)
+        if status_filter:
+            query = query.filter(MarketingOpportunity.status.in_(self._status_filter_values(status_filter)))
+        if brand_filter:
+            canonical_brand = self._canonical_brand(brand_filter)
+            if canonical_brand == "gelo":
+                query = query.filter(func.lower(MarketingOpportunity.brand).like("%gelo%"))
+            else:
+                query = query.filter(func.lower(MarketingOpportunity.brand) == canonical_brand)
+        if min_urgency is not None:
+            query = query.filter(MarketingOpportunity.urgency_score >= min_urgency)
+
+        return query.scalar() or 0
 
     def get_recommendation_by_id(self, opportunity_id: str) -> dict | None:
         row = (

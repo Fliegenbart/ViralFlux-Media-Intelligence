@@ -5,6 +5,7 @@ import pandas as pd
 import tempfile
 import os
 import logging
+import threading
 
 from app.services.data_ingest.drug_shortage_service import DrugShortageAnalyzer
 
@@ -13,6 +14,32 @@ router = APIRouter()
 
 # Singleton-Instanz für gecachte Analyse
 _analyzer: DrugShortageAnalyzer | None = None
+_auto_refresh_lock = threading.Lock()
+_auto_refresh_attempted = False
+
+
+def _ensure_analyzer() -> DrugShortageAnalyzer | None:
+    """Lazy-load BfArM data if no analyzer is cached (multi-worker safety)."""
+    global _analyzer, _auto_refresh_attempted
+    if _analyzer is not None and _analyzer.df_filtered is not None:
+        return _analyzer
+    if _auto_refresh_attempted:
+        return _analyzer
+    with _auto_refresh_lock:
+        if _analyzer is not None and _analyzer.df_filtered is not None:
+            return _analyzer
+        if _auto_refresh_attempted:
+            return _analyzer
+        _auto_refresh_attempted = True
+        try:
+            from app.services.data_ingest.bfarm_service import BfarmIngestionService
+            logger.info("Auto-Refresh: BfArM-Daten werden nachgeladen (Worker hatte keine Daten)")
+            service = BfarmIngestionService()
+            service.run_full_import()
+            logger.info("Auto-Refresh: BfArM-Daten erfolgreich geladen")
+        except Exception as e:
+            logger.warning(f"Auto-Refresh fehlgeschlagen: {e}")
+    return _analyzer
 
 
 @router.post("/upload")
@@ -61,29 +88,31 @@ async def upload_shortage_csv(file: UploadFile = File(...)):
 @router.get("/signals")
 async def get_infection_signals():
     """Gibt die zuletzt berechneten Infektionswellen-Signale zurück."""
-    if _analyzer is None or _analyzer.df_filtered is None:
+    analyzer = _ensure_analyzer()
+    if analyzer is None or analyzer.df_filtered is None:
         raise HTTPException(
             status_code=404,
             detail="Keine Daten geladen. Bitte zuerst POST /upload mit CSV-Datei aufrufen."
         )
 
     return {
-        "signals": _analyzer.get_infection_signals(),
-        "summary": _analyzer.get_summary_text(),
+        "signals": analyzer.get_infection_signals(),
+        "summary": analyzer.get_summary_text(),
     }
 
 
 @router.get("/weekly-trend")
 async def get_weekly_trend():
     """Gibt die wöchentliche Engpass-Aggregation zurück."""
-    if _analyzer is None or _analyzer.df_filtered is None:
+    analyzer = _ensure_analyzer()
+    if analyzer is None or analyzer.df_filtered is None:
         raise HTTPException(
             status_code=404,
             detail="Keine Daten geladen. Bitte zuerst POST /upload mit CSV-Datei aufrufen."
         )
 
     return {
-        "trend": _analyzer.get_weekly_trend(),
+        "trend": analyzer.get_weekly_trend(),
     }
 
 
@@ -94,13 +123,14 @@ async def get_shortage_details(
     pediatric_only: bool = False,
 ):
     """Gibt detaillierte Engpass-Meldungen zurück, optional gefiltert."""
-    if _analyzer is None or _analyzer.df_filtered is None:
+    analyzer = _ensure_analyzer()
+    if analyzer is None or analyzer.df_filtered is None:
         raise HTTPException(
             status_code=404,
             detail="Keine Daten geladen. Bitte zuerst POST /upload mit CSV-Datei aufrufen."
         )
 
-    df = _analyzer.df_filtered.copy()
+    df = analyzer.df_filtered.copy()
 
     if category:
         df = df[df['category'] == category]

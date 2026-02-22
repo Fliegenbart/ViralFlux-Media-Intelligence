@@ -26,11 +26,12 @@ def _get_shortage_signals() -> dict | None:
     if _cached_shortage_signals:
         return _cached_shortage_signals
 
-    # Versuch 1: Bestehender Analyzer (manueller Upload)
+    # Versuch 1: Bestehender Analyzer (manueller Upload oder auto-refresh)
     try:
-        from app.api.drug_shortage import _analyzer
-        if _analyzer and _analyzer.df is not None and not _analyzer.df.empty:
-            signals = _analyzer.get_infection_signals()
+        from app.api.drug_shortage import _ensure_analyzer
+        analyzer = _ensure_analyzer()
+        if analyzer and analyzer.df is not None and not analyzer.df.empty:
+            signals = analyzer.get_infection_signals()
             _cached_shortage_signals = signals
             return signals
     except Exception:

@@ -41,6 +41,7 @@ async def list_opportunities(
     brand: str = None,
     min_urgency: float = None,
     limit: int = 50,
+    skip: int = 0,
     db: Session = Depends(get_db),
     _user: dict = Depends(get_current_user),
 ):
@@ -48,16 +49,25 @@ async def list_opportunities(
 
     type: RESOURCE_SCARCITY, SEASONAL_DEFICIENCY, PREDICTIVE_SALES_SPIKE
     status: NEW, URGENT, SENT, CONVERTED, EXPIRED, DISMISSED
+    skip: Offset fuer Pagination (default 0)
+    limit: Max Ergebnisse pro Seite (default 50)
     """
     from app.services.marketing_engine.opportunity_engine import MarketingOpportunityEngine
 
     engine = MarketingOpportunityEngine(db)
+    total_count = engine.count_opportunities(
+        type_filter=type,
+        status_filter=status,
+        brand_filter=brand,
+        min_urgency=min_urgency,
+    )
     opportunities = engine.get_opportunities(
         type_filter=type,
         status_filter=status,
         brand_filter=brand,
         min_urgency=min_urgency,
         limit=limit,
+        skip=skip,
         normalize_status=True,
     )
 
@@ -70,7 +80,14 @@ async def list_opportunities(
         copy["status"] = _WORKFLOW_TO_LEGACY.get(workflow_status, workflow_status)
         legacy_opps.append(copy)
 
-    return {"total": len(legacy_opps), "opportunities": legacy_opps}
+    return {
+        "total": total_count,
+        "skip": skip,
+        "limit": limit,
+        "page": skip // limit + 1 if limit else 1,
+        "pages": (total_count + limit - 1) // limit if limit else 1,
+        "opportunities": legacy_opps,
+    }
 
 
 @router.get("/stats")

@@ -7,11 +7,10 @@ Keine Gewichtungen, Schwellenwerte oder Rohdaten-Koeffizienten.
 from fastapi import APIRouter, Depends, Request, Query
 from sqlalchemy.orm import Session
 from datetime import datetime
-from slowapi import Limiter
-from slowapi.util import get_remote_address
 import re
 import logging
 
+from app.core.rate_limit import limiter
 from app.db.session import get_db
 from app.schemas.public_risk import (
     PublicRiskResponse,
@@ -30,9 +29,6 @@ from app.schemas.public_risk import (
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
-
-# Rate limiter: 50 requests/minute per IP
-limiter = Limiter(key_func=get_remote_address)
 
 # ─── Valid virus types (whitelist) ──────────────────────────────────────────
 VALID_VIRUS_TYPES = {"Influenza A", "Influenza B", "SARS-CoV-2", "RSV A"}

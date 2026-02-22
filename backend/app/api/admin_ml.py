@@ -7,10 +7,11 @@ and a status polling endpoint for Celery task progress.
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, Body, Depends, HTTPException, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 
 from app.api.deps import get_current_admin
+from app.core.rate_limit import limiter
 from app.core.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
@@ -22,8 +23,10 @@ class TrainXGBoostRequest(BaseModel):
 
 
 @router.post("/train-xgboost", status_code=status.HTTP_202_ACCEPTED)
+@limiter.limit("5/minute")
 async def train_xgboost(
-    request: TrainXGBoostRequest = Body(default_factory=TrainXGBoostRequest),
+    request: Request,
+    body: TrainXGBoostRequest = Body(default_factory=TrainXGBoostRequest),
     current_user: dict = Depends(get_current_admin),
 ):
     """Trigger XGBoost meta-learner training (async via Celery).
@@ -33,7 +36,7 @@ async def train_xgboost(
     from app.services.ml.tasks import train_xgboost_model_task
 
     try:
-        task = train_xgboost_model_task.delay(virus_typ=request.virus_typ)
+        task = train_xgboost_model_task.delay(virus_typ=body.virus_typ)
     except Exception as exc:
         logger.error(f"Celery enqueue failed: {exc}")
         raise HTTPException(
@@ -44,7 +47,7 @@ async def train_xgboost(
     return {
         "message": "XGBoost training gestartet",
         "task_id": task.id,
-        "virus_typ": request.virus_typ or "all",
+        "virus_typ": body.virus_typ or "all",
         "status_url": f"/api/v1/admin/ml/status/{task.id}",
     }
 

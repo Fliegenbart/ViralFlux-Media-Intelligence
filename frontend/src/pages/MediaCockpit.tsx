@@ -1059,8 +1059,20 @@ const MediaCockpit: React.FC = () => {
                         return (
                           <g
                             key={`${shape.name}-${shape.code || 'na'}`}
-                            style={{ cursor: region && code ? 'pointer' : 'default' }}
+                            tabIndex={region && code ? 0 : undefined}
+                            role={region && code ? 'button' : undefined}
+                            aria-label={region && code ? `${shape.name}: Intensitaet ${band}, Impact ${Math.round(region.impact_probability || 0)}%` : shape.name}
+                            style={{ cursor: region && code ? 'pointer' : 'default', outline: 'none' }}
                             onClick={() => region && code && openRecommendationForRegion(code)}
+                            onKeyDown={(e) => {
+                              if (!region || !code) return;
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                openRecommendationForRegion(code);
+                              }
+                            }}
+                            onFocus={() => { if (region && code) setHoveredRegion(code); }}
+                            onBlur={() => setHoveredRegion(null)}
                             onMouseEnter={(e) => {
                               if (!region || !code) return;
                               setHoveredRegion(code);

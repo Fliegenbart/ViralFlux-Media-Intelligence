@@ -4,12 +4,13 @@ from __future__ import annotations
 
 from typing import Any, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.core.celery_app import celery_app
 from app.core.config import get_settings
+from app.core.rate_limit import limiter
 from app.db.session import get_db
 from app.services.marketing_engine.opportunity_engine import MarketingOpportunityEngine
 from app.services.media.cockpit_service import MediaCockpitService
@@ -119,7 +120,9 @@ async def get_media_cockpit(
 
 
 @router.post("/recommendations/generate")
+@limiter.limit("10/minute")
 async def generate_media_recommendations(
+    request: Request,
     payload: RecommendationGenerateRequest,
     db: Session = Depends(get_db),
 ):

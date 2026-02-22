@@ -2,8 +2,10 @@ import logging
 import os
 from datetime import timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
+
+from app.core.rate_limit import limiter
 
 from app.core.security import create_access_token, get_password_hash, verify_password
 from app.schemas.token import Token
@@ -34,7 +36,8 @@ _USERS = {
 
 
 @router.post("/login", response_model=Token)
-async def login(form_data: OAuth2PasswordRequestForm = Depends()):
+@limiter.limit("10/minute")
+async def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends()):
     user = _USERS.get(form_data.username)
     if not user or not verify_password(form_data.password, user["password"]):
         raise HTTPException(

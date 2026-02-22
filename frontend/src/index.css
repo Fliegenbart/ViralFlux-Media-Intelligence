@@ -72,14 +72,31 @@
 [data-theme="dark"] .bg-amber-50 { background-color: rgba(245,158,11,0.12) !important; }
 [data-theme="dark"] .bg-red-50 { background-color: rgba(239,68,68,0.12) !important; }
 [data-theme="dark"] .bg-rose-50 { background-color: rgba(225,29,72,0.12) !important; }
-[data-theme="dark"] .border-emerald-100 { border-color: rgba(16,185,129,0.25) !important; }
+[data-theme="dark"] .border-emerald-100,
+[data-theme="dark"] .border-emerald-200 { border-color: rgba(16,185,129,0.25) !important; }
 [data-theme="dark"] .border-amber-100,
 [data-theme="dark"] .border-amber-200,
 [data-theme="dark"] .border-amber-400 { border-color: rgba(245,158,11,0.3) !important; }
 [data-theme="dark"] .border-red-100,
 [data-theme="dark"] .border-red-200 { border-color: rgba(239,68,68,0.3) !important; }
+[data-theme="dark"] .border-rose-200 { border-color: rgba(225,29,72,0.3) !important; }
+[data-theme="dark"] .border-indigo-400\/30 { border-color: rgba(99,102,241,0.3) !important; }
+[data-theme="dark"] .border-emerald-500\/30 { border-color: rgba(16,185,129,0.3) !important; }
+[data-theme="dark"] .border-amber-500\/30 { border-color: rgba(245,158,11,0.3) !important; }
 [data-theme="dark"] .hover\:bg-slate-100:hover { background-color: #334155 !important; }
 [data-theme="dark"] .hover\:bg-slate-50:hover { background-color: #1e293b !important; }
+[data-theme="dark"] .hover\:bg-emerald-50:hover { background-color: rgba(16,185,129,0.12) !important; }
+[data-theme="dark"] .hover\:bg-rose-50:hover { background-color: rgba(225,29,72,0.12) !important; }
+[data-theme="dark"] .from-indigo-50 { --tw-gradient-from: rgba(99,102,241,0.1) !important; }
+[data-theme="dark"] .via-indigo-50\/30 { --tw-gradient-via: rgba(99,102,241,0.04) !important; }
+[data-theme="dark"] .to-white { --tw-gradient-to: #1e293b !important; }
+
+/* Dark mode: semantic text colors */
+[data-theme="dark"] .text-emerald-700 { color: #6ee7b7 !important; }
+[data-theme="dark"] .text-amber-700 { color: #fcd34d !important; }
+[data-theme="dark"] .text-rose-600 { color: #fb7185 !important; }
+[data-theme="dark"] .text-red-500 { color: #f87171 !important; }
+[data-theme="dark"] .text-emerald-600 { color: #34d399 !important; }
 
 /* Dark mode: Recharts + scrollbar */
 [data-theme="dark"] .recharts-cartesian-grid line { stroke: #334155 !important; }
@@ -574,6 +591,17 @@ code {
     radial-gradient(circle at 15% 15%, rgba(67,56,202,0.05), transparent 35%),
     radial-gradient(circle at 85% 25%, rgba(99,102,241,0.04), transparent 30%),
     radial-gradient(circle at 50% 80%, rgba(67,56,202,0.03), transparent 35%);
+}
+
+/* ─── SVG Map Focus ────────────────────────────────────────────── */
+svg g[tabindex="0"]:focus > path {
+  stroke: #4338ca !important;
+  stroke-width: 2.5 !important;
+  filter: drop-shadow(0 0 4px rgba(67, 56, 202, 0.4));
+}
+[data-theme="dark"] svg g[tabindex="0"]:focus > path {
+  stroke: #818cf8 !important;
+  filter: drop-shadow(0 0 6px rgba(129, 140, 248, 0.5));
 }
 
 /* ─── Hero Gradient ─────────────────────────────────────────────── */

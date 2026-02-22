@@ -155,8 +155,9 @@ async def get_status(db: Session = Depends(get_db)):
     }
 
 
-# Rate Limiting (slowapi)
-from app.api.public_api import limiter
+# Rate Limiting (slowapi) — shared limiter from core module
+from app.core.rate_limit import limiter
+
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 

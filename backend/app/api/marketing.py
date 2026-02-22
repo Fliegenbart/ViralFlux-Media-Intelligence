@@ -1,10 +1,11 @@
 """API-Endpunkte für Marketing Opportunity Engine."""
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 import logging
 
+from app.core.rate_limit import limiter
 from app.db.session import get_db
 from app.api.deps import get_current_user
 
@@ -22,7 +23,8 @@ _WORKFLOW_TO_LEGACY = {
 
 
 @router.post("/generate")
-async def generate_opportunities(db: Session = Depends(get_db), _user: dict = Depends(get_current_user)):
+@limiter.limit("10/minute")
+async def generate_opportunities(request: Request, db: Session = Depends(get_db), _user: dict = Depends(get_current_user)):
     """Alle Detektoren ausführen und neue Marketing-Opportunities erzeugen.
 
     Analysiert: BfArM-Engpässe, UV/Wetter, ERP-Bestellgeschwindigkeit.

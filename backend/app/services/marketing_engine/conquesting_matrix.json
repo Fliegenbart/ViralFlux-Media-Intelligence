@@ -1,0 +1,52 @@
+{
+  "_doc": "Conquesting Matrix: Maps Gelo OTC products to competitor drug shortages (BfArM). Used by CompetitorShortageDetector to generate bid-multiplier opportunities.",
+  "products": [
+    {
+      "sku": "GELO-GMF",
+      "name": "GeloMyrtol forte",
+      "condition": "bronchitis_husten",
+      "conquesting": {
+        "target_ingredients": [
+          "acetylcystein",
+          "ambroxol",
+          "bromhexin",
+          "codein",
+          "dextromethorphan",
+          "noscapin"
+        ],
+        "target_forms": [
+          "saft",
+          "sirup",
+          "tablette",
+          "kapsel",
+          "brausetablette",
+          "granulat"
+        ],
+        "bid_multiplier": 1.5
+      }
+    },
+    {
+      "sku": "GELO-PRO",
+      "name": "GeloProsed",
+      "condition": "erkaltung_akut",
+      "conquesting": {
+        "target_ingredients": [
+          "ibuprofen",
+          "paracetamol",
+          "acetylsalicyl",
+          "phenylephrin",
+          "pseudoephedrin"
+        ],
+        "target_forms": [
+          "saft",
+          "suspension",
+          "tablette",
+          "kapsel",
+          "granulat",
+          "zaepfchen"
+        ],
+        "bid_multiplier": 1.5
+      }
+    }
+  ]
+}

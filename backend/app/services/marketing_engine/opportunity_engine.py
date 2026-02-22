@@ -23,6 +23,7 @@ from app.services.media.product_catalog_service import ProductCatalogService
 from app.services.media.peix_score_service import PeixEpiScoreService
 from app.services.media.playbook_engine import PLAYBOOK_CATALOG, PlaybookEngine
 
+from .detectors.competitor_shortage_detector import CompetitorShortageDetector
 from .detectors.predictive_sales_spike import PredictiveSalesSpikeDetector
 from .detectors.resource_scarcity import ResourceScarcityDetector
 from .detectors.weather_forecast import WeatherForecastDetector
@@ -96,6 +97,7 @@ class MarketingOpportunityEngine:
         self.db = db
         self.detectors = [
             ResourceScarcityDetector(db),
+            CompetitorShortageDetector(db),
             PredictiveSalesSpikeDetector(db),
             WeatherForecastDetector(db),
         ]
@@ -107,7 +109,7 @@ class MarketingOpportunityEngine:
         self.guardrails = CampaignGuardrails()
 
     def generate_opportunities(self) -> dict:
-        """Alle Detektoren ausfuehren -> Pitches -> Products -> Persist -> JSON."""
+        """Alle Detektoren ausfuehren -> Pitches -> Products -> Fuse Conquesting -> Persist -> JSON."""
         all_opportunities = []
 
         for detector in self.detectors:
@@ -124,6 +126,9 @@ class MarketingOpportunityEngine:
                     all_opportunities.append(raw)
             except Exception as exc:
                 logger.error("Detector %s fehlgeschlagen: %s", detector.OPPORTUNITY_TYPE, exc)
+
+        # ── Conquesting Fusion: amplify epidemiological opportunities with bid multipliers ──
+        all_opportunities = self._fuse_conquesting_multipliers(all_opportunities)
 
         all_opportunities.sort(key=lambda x: x.get("urgency_score", 0), reverse=True)
 
@@ -148,6 +153,68 @@ class MarketingOpportunityEngine:
             },
             "opportunities": clean_opps,
         }
+
+    @staticmethod
+    def _fuse_conquesting_multipliers(opportunities: list[dict]) -> list[dict]:
+        """Fuse COMPETITOR_SHORTAGE bid_multipliers into epidemiological opportunities.
+
+        When a COMPETITOR_SHORTAGE opportunity exists for a condition, its
+        bid_multiplier is applied to all other opportunities sharing that condition.
+        The conquesting opportunity itself is kept for audit/tracking but marked
+        as a modifier (not a standalone campaign trigger).
+
+        Fusion rules:
+        - Match on _condition field (e.g. "bronchitis_husten")
+        - Multiply urgency_score by bid_multiplier (capped at 100)
+        - Annotate the fused opportunity with conquesting metadata
+        - If multiple conquesting opps match, use the highest multiplier
+        """
+        # Collect conquesting multipliers by condition
+        conquesting_by_condition: dict[str, dict] = {}
+        for opp in opportunities:
+            if opp.get("type") != "COMPETITOR_SHORTAGE":
+                continue
+            condition = opp.get("_condition", "")
+            if not condition:
+                continue
+            existing = conquesting_by_condition.get(condition)
+            if not existing or opp.get("_bid_multiplier", 1.0) > existing.get("_bid_multiplier", 1.0):
+                conquesting_by_condition[condition] = opp
+
+        if not conquesting_by_condition:
+            return opportunities
+
+        # Apply multipliers to non-conquesting opportunities
+        for opp in opportunities:
+            if opp.get("type") == "COMPETITOR_SHORTAGE":
+                continue
+
+            condition = opp.get("_condition", "")
+            conquesting = conquesting_by_condition.get(condition)
+            if not conquesting:
+                continue
+
+            multiplier = float(conquesting.get("_bid_multiplier", 1.0))
+            original_urgency = float(opp.get("urgency_score", 0))
+            fused_urgency = min(100.0, original_urgency * multiplier)
+
+            opp["urgency_score"] = round(fused_urgency, 1)
+            opp["_conquesting_applied"] = True
+            opp["_conquesting_multiplier"] = multiplier
+            opp["_conquesting_sku"] = conquesting.get("_conquesting_sku")
+            opp["_conquesting_product"] = conquesting.get("_conquesting_product")
+            opp["_conquesting_matched_drugs"] = conquesting.get("_matched_drugs", [])
+
+            logger.info(
+                "Conquesting fusion: %s urgency %.0f → %.0f (×%.1f from %s)",
+                opp.get("id", "?"),
+                original_urgency,
+                fused_urgency,
+                multiplier,
+                conquesting.get("_conquesting_sku"),
+            )
+
+        return opportunities
 
     def get_opportunities(
         self,

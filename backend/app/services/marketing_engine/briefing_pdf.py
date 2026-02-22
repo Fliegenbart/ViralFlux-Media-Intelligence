@@ -16,6 +16,27 @@ from fpdf import FPDF
 
 logger = logging.getLogger(__name__)
 
+
+def _safe(text) -> str:
+    """Sanitize text for Latin-1 encoding (core PDF fonts)."""
+    if not isinstance(text, str):
+        text = str(text) if text is not None else ""
+    replacements = {
+        "\u2014": "-",   # em dash
+        "\u2013": "-",   # en dash
+        "\u2018": "'",   # left single quote
+        "\u2019": "'",   # right single quote
+        "\u201c": '"',   # left double quote
+        "\u201d": '"',   # right double quote
+        "\u2026": "...", # ellipsis
+        "\u2022": "*",   # bullet
+        "\u00a0": " ",   # non-breaking space
+    }
+    for old, new in replacements.items():
+        text = text.replace(old, new)
+    return text.encode("latin-1", errors="replace").decode("latin-1")
+
+
 # Brand colors
 _INDIGO = (67, 56, 202)
 _SLATE_700 = (51, 65, 85)
@@ -32,7 +53,7 @@ class BriefingPDF(FPDF):
         self.set_font("Helvetica", "B", 9)
         self.set_text_color(*_SLATE_400)
         self.cell(0, 6, "ViralFlux Media Intelligence", align="L")
-        self.cell(0, 6, f"Briefing — {datetime.now().strftime('%d.%m.%Y')}", align="R", new_x="LMARGIN", new_y="NEXT")
+        self.cell(0, 6, f"Briefing - {datetime.now().strftime('%d.%m.%Y')}", align="R", new_x="LMARGIN", new_y="NEXT")
         self.set_draw_color(*_INDIGO)
         self.set_line_width(0.6)
         self.line(10, self.get_y() + 2, 200, self.get_y() + 2)
@@ -42,7 +63,7 @@ class BriefingPDF(FPDF):
         self.set_y(-15)
         self.set_font("Helvetica", "", 7)
         self.set_text_color(*_SLATE_400)
-        self.cell(0, 8, f"Seite {self.page_no()} | Vertraulich — nur fuer internen Gebrauch", align="C")
+        self.cell(0, 8, f"Seite {self.page_no()} | Vertraulich - nur fuer internen Gebrauch", align="C")
 
 
 def generate_briefing_pdf(opp: dict) -> bytes:
@@ -62,12 +83,12 @@ def generate_briefing_pdf(opp: dict) -> bytes:
     # ── Title Block ──
     pdf.set_font("Helvetica", "B", 22)
     pdf.set_text_color(*_INDIGO)
-    title = trigger.get("event", opp.get("type", "")).replace("_", " ")
+    title = _safe(trigger.get("event", opp.get("type", "")).replace("_", " "))
     pdf.cell(0, 12, title, new_x="LMARGIN", new_y="NEXT")
 
     pdf.set_font("Helvetica", "", 11)
     pdf.set_text_color(*_SLATE_700)
-    pdf.multi_cell(0, 6, trigger.get("details", ""), new_x="LMARGIN", new_y="NEXT")
+    pdf.multi_cell(0, 6, _safe(trigger.get("details", "")), new_x="LMARGIN", new_y="NEXT")
     pdf.ln(4)
 
     # ── Urgency + Status Row ──
@@ -76,15 +97,15 @@ def generate_briefing_pdf(opp: dict) -> bytes:
     pdf.set_font("Helvetica", "B", 11)
     pdf.set_text_color(*_SLATE_700)
     pdf.cell(50, 8, f"Dringlichkeit: {urgency:.0f}/100")
-    pdf.cell(50, 8, f"Status: {status}")
-    pdf.cell(0, 8, f"Datum: {trigger.get('detected_at', '')}", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(50, 8, f"Status: {_safe(status)}")
+    pdf.cell(0, 8, f"Datum: {_safe(trigger.get('detected_at', ''))}", new_x="LMARGIN", new_y="NEXT")
     pdf.ln(2)
 
     # ── Region + Zielgruppe ──
     _section_header(pdf, "Region & Zielgruppe")
 
     states = region.get("states", [])
-    region_text = ", ".join(states) if states else "Bundesweit"
+    region_text = _safe(", ".join(states)) if states else "Bundesweit"
     plz = region.get("plz_cluster", "ALL")
     if plz != "ALL":
         region_text += f" (PLZ: {plz})"
@@ -94,9 +115,9 @@ def generate_briefing_pdf(opp: dict) -> bytes:
     pdf.set_font("Helvetica", "", 10)
     pdf.set_text_color(*_SLATE_700)
     pdf.cell(35, 7, "Region:", new_x="RIGHT")
-    pdf.cell(0, 7, region_text, new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 7, _safe(region_text), new_x="LMARGIN", new_y="NEXT")
     pdf.cell(35, 7, "Zielgruppe:", new_x="RIGHT")
-    pdf.cell(0, 7, ", ".join(audience) if audience else "Allgemein", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 7, _safe(", ".join(audience)) if audience else "Allgemein", new_x="LMARGIN", new_y="NEXT")
     pdf.ln(4)
 
     # ── Produktempfehlung ──
@@ -105,10 +126,10 @@ def generate_briefing_pdf(opp: dict) -> bytes:
         for prod in products[:5]:
             pdf.set_font("Helvetica", "B" if prod.get("priority") == "HIGH" else "", 10)
             pdf.set_text_color(*_SLATE_700)
-            name = prod.get("name", "")
-            sku = prod.get("sku", "")
-            prio = prod.get("priority", "")
-            pdf.cell(0, 7, f"  {name} ({sku}) — Prioritaet: {prio}", new_x="LMARGIN", new_y="NEXT")
+            name = _safe(prod.get("name", ""))
+            sku = _safe(prod.get("sku", ""))
+            prio = _safe(prod.get("priority", ""))
+            pdf.cell(0, 7, f"  {name} ({sku}) - Prioritaet: {prio}", new_x="LMARGIN", new_y="NEXT")
         pdf.ln(4)
 
     # ── Sales Pitch ──
@@ -124,7 +145,7 @@ def generate_briefing_pdf(opp: dict) -> bytes:
         pdf.cell(0, 7, "E-Mail Betreff:", new_x="LMARGIN", new_y="NEXT")
         pdf.set_font("Helvetica", "", 10)
         pdf.set_text_color(*_SLATE_700)
-        pdf.multi_cell(0, 6, headline, new_x="LMARGIN", new_y="NEXT")
+        pdf.multi_cell(0, 6, _safe(headline), new_x="LMARGIN", new_y="NEXT")
         pdf.ln(2)
 
     if script:
@@ -133,13 +154,13 @@ def generate_briefing_pdf(opp: dict) -> bytes:
         pdf.cell(0, 7, "Telefon-Script:", new_x="LMARGIN", new_y="NEXT")
         pdf.set_font("Helvetica", "I", 10)
         pdf.set_text_color(*_SLATE_700)
-        pdf.multi_cell(0, 6, f'"{script}"', new_x="LMARGIN", new_y="NEXT")
+        pdf.multi_cell(0, 6, _safe(f'"{script}"'), new_x="LMARGIN", new_y="NEXT")
         pdf.ln(2)
 
     if cta:
         pdf.set_font("Helvetica", "B", 10)
         pdf.set_text_color(*_AMBER)
-        pdf.cell(0, 7, f"Call-to-Action: {cta}", new_x="LMARGIN", new_y="NEXT")
+        pdf.cell(0, 7, f"Call-to-Action: {_safe(cta)}", new_x="LMARGIN", new_y="NEXT")
         pdf.ln(4)
 
     # ── Conquesting ──
@@ -147,9 +168,9 @@ def generate_briefing_pdf(opp: dict) -> bytes:
         _section_header(pdf, "Conquesting-Strategie")
         pdf.set_font("Helvetica", "", 10)
         pdf.set_text_color(*_SLATE_700)
-        ingredient = opp.get("competitor_shortage_ingredient", "")
+        ingredient = _safe(opp.get("competitor_shortage_ingredient", ""))
         multiplier = opp.get("recommended_bid_modifier", 1.0)
-        product = opp.get("conquesting_product", "")
+        product = _safe(opp.get("conquesting_product", ""))
 
         pdf.cell(0, 7, f"Engpass-Wirkstoff: {ingredient}", new_x="LMARGIN", new_y="NEXT")
         pdf.cell(0, 7, f"Bid-Multiplikator: {multiplier:.1f}x", new_x="LMARGIN", new_y="NEXT")
@@ -160,7 +181,7 @@ def generate_briefing_pdf(opp: dict) -> bytes:
     # ── Quelle ──
     pdf.set_font("Helvetica", "", 8)
     pdf.set_text_color(*_SLATE_400)
-    pdf.cell(0, 6, f"Quelle: {trigger.get('source', '').replace('_', ' ')} | Opportunity-ID: {opp.get('id', '')}",
+    pdf.cell(0, 6, _safe(f"Quelle: {trigger.get('source', '').replace('_', ' ')} | Opportunity-ID: {opp.get('id', '')}"),
              new_x="LMARGIN", new_y="NEXT")
 
     buf = io.BytesIO()

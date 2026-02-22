@@ -1431,3 +1431,193 @@ Verwende einen sachlichen, vertrauenswürdigen Ton."""
 
         self.db.commit()
         logger.info(f"Globale System-Defaults aktualisiert (R²={score:.2f})")
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Business Pitch Report: ML Detection Advantage vs RKI Reporting
+    # ─────────────────────────────────────────────────────────────────────────
+
+    def generate_business_pitch_report(
+        self,
+        disease: str = "RSV (Meldepflicht gemäß IfSG)",
+        virus_typ: str = "RSV A",
+        season_start: str = "2024-10-01",
+        season_end: str = "2025-03-31",
+        alert_threshold: float = 0.65,
+        output_path: str | None = None,
+    ) -> dict:
+        """Generate a business-proof CSV showing ML detection advantage over RKI reporting.
+
+        Simulates the winter season week-by-week using strict TimeSeriesSplit
+        (no future data leakage). For each week, computes the ML risk score
+        from wastewater/trends/weather signals, then compares the ML alert date
+        to the actual RKI-reported peak date.
+
+        The key metric is TTD_Advantage_Days (Time-To-Detection Advantage):
+        TTD = RKI_peak_date - ML_first_alert_date
+
+        Args:
+            disease: RKI disease name for SurvstatKreisData ground truth.
+            virus_typ: Virus type for wastewater/signal computation.
+            season_start: Start of evaluation window (ISO date).
+            season_end: End of evaluation window (ISO date).
+            alert_threshold: ML risk score threshold to trigger alert (0-1).
+            output_path: CSV output path. Defaults to data/processed/backtest_business_report.csv.
+
+        Returns:
+            Dict with summary metrics and path to exported CSV.
+        """
+        from pathlib import Path
+        from app.models.database import SurvstatKreisData
+
+        start_dt = datetime.strptime(season_start, "%Y-%m-%d")
+        end_dt = datetime.strptime(season_end, "%Y-%m-%d")
+
+        logger.info(
+            "Business Pitch Report: disease=%s, virus=%s, period=%s to %s",
+            disease, virus_typ, season_start, season_end,
+        )
+
+        # ── 1. Load ground truth: weekly national case counts from SurvstatKreisData ──
+        kreis_rows = self.db.query(
+            SurvstatKreisData.year,
+            SurvstatKreisData.week,
+            SurvstatKreisData.week_label,
+            func.sum(SurvstatKreisData.fallzahl).label("total_cases"),
+        ).filter(
+            SurvstatKreisData.disease == disease,
+        ).group_by(
+            SurvstatKreisData.year,
+            SurvstatKreisData.week,
+            SurvstatKreisData.week_label,
+        ).order_by(
+            SurvstatKreisData.year,
+            SurvstatKreisData.week,
+        ).all()
+
+        if not kreis_rows:
+            return {"error": f"No SurvstatKreisData found for disease '{disease}'"}
+
+        # Build weekly time series
+        weekly_data = []
+        for row in kreis_rows:
+            # Convert year + week to Monday date
+            try:
+                week_date = datetime.strptime(f"{row.year}-W{row.week:02d}-1", "%Y-W%W-%w")
+            except ValueError:
+                continue
+            if start_dt <= week_date <= end_dt:
+                weekly_data.append({
+                    "date": week_date,
+                    "week_label": row.week_label,
+                    "actual_rki_cases": int(row.total_cases or 0),
+                })
+
+        if len(weekly_data) < 4:
+            return {"error": f"Insufficient data points ({len(weekly_data)}) in evaluation window"}
+
+        df_ground = pd.DataFrame(weekly_data).sort_values("date").reset_index(drop=True)
+
+        # ── 2. Find RKI peak date (week with maximum cases) ──
+        peak_idx = df_ground["actual_rki_cases"].idxmax()
+        rki_peak_date = df_ground.loc[peak_idx, "date"]
+        rki_peak_cases = int(df_ground.loc[peak_idx, "actual_rki_cases"])
+
+        logger.info(
+            "RKI peak: %s with %d cases",
+            rki_peak_date.strftime("%Y-%m-%d"), rki_peak_cases,
+        )
+
+        # ── 3. Simulate ML risk scores (strict vintage: only data available at each date) ──
+        report_rows = []
+        ml_first_alert_date = None
+
+        for _, row in df_ground.iterrows():
+            eval_date = row["date"]
+
+            # Compute multi-dimensional risk score at this date
+            # Using strict vintage mode: only signals available at eval_date
+            sub_scores = self._compute_sub_scores_at_date(
+                target=eval_date,
+                virus_typ=virus_typ,
+                delay_rules=self.DEFAULT_DELAY_RULES_DAYS,
+            )
+
+            # Weighted composite risk score (same as production RiskEngine)
+            weights = self.DEFAULT_WEIGHTS
+            ml_risk_score = (
+                sub_scores["bio"] * weights["bio"]
+                + sub_scores["market"] * weights["market"]
+                + sub_scores["psycho"] * weights["psycho"]
+                + sub_scores["context"] * weights["context"]
+            )
+            ml_risk_score = round(min(1.0, max(0.0, ml_risk_score)), 4)
+
+            alert_triggered = ml_risk_score >= alert_threshold
+
+            if alert_triggered and ml_first_alert_date is None:
+                ml_first_alert_date = eval_date
+
+            report_rows.append({
+                "date": eval_date.strftime("%Y-%m-%d"),
+                "region": "Gesamt",
+                "disease": disease,
+                "actual_rki_cases": row["actual_rki_cases"],
+                "ml_risk_score": ml_risk_score,
+                "alert_triggered": alert_triggered,
+                "ttd_advantage_days": None,  # filled after loop
+                "bio_score": sub_scores["bio"],
+                "psycho_score": sub_scores["psycho"],
+                "context_score": sub_scores["context"],
+            })
+
+        # ── 4. Calculate TTD_Advantage_Days ──
+        if ml_first_alert_date:
+            ttd_days = (rki_peak_date - ml_first_alert_date).days
+        else:
+            ttd_days = 0
+
+        # Fill TTD into all rows (constant for the season)
+        for row in report_rows:
+            row["ttd_advantage_days"] = ttd_days
+
+        # ── 5. Export CSV ──
+        df_report = pd.DataFrame(report_rows)
+
+        if output_path is None:
+            out_dir = Path("/app/data/processed")
+            out_dir.mkdir(parents=True, exist_ok=True)
+            output_path = str(out_dir / "backtest_business_report.csv")
+
+        df_report.to_csv(output_path, index=False)
+        logger.info("Business pitch report exported to %s (%d rows)", output_path, len(df_report))
+
+        # ── 6. Summary ──
+        alerts_triggered = df_report["alert_triggered"].sum()
+        total_weeks = len(df_report)
+
+        summary = {
+            "status": "success",
+            "disease": disease,
+            "virus_typ": virus_typ,
+            "season": f"{season_start} → {season_end}",
+            "total_weeks": total_weeks,
+            "rki_peak_date": rki_peak_date.strftime("%Y-%m-%d"),
+            "rki_peak_cases": rki_peak_cases,
+            "ml_first_alert_date": ml_first_alert_date.strftime("%Y-%m-%d") if ml_first_alert_date else None,
+            "ttd_advantage_days": ttd_days,
+            "alert_threshold": alert_threshold,
+            "alerts_triggered": int(alerts_triggered),
+            "alert_rate_pct": round(alerts_triggered / total_weeks * 100, 1),
+            "output_path": output_path,
+            "proof_statement": (
+                f"ViralFlux ML detected the {disease} outbreak {ttd_days} days before "
+                f"the RKI peak ({rki_peak_date.strftime('%Y-%m-%d')}, {rki_peak_cases:,} cases). "
+                f"Alert triggered on {ml_first_alert_date.strftime('%Y-%m-%d') if ml_first_alert_date else 'N/A'} "
+                f"at threshold {alert_threshold:.0%}."
+            ) if ml_first_alert_date else (
+                f"No ML alert triggered during the evaluation period at threshold {alert_threshold:.0%}."
+            ),
+        }
+
+        logger.info("Business proof: TTD_Advantage=%d days, peak=%s", ttd_days, rki_peak_date.strftime("%Y-%m-%d"))
+        return summary

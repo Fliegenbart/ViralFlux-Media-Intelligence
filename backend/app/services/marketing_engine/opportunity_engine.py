@@ -130,6 +130,9 @@ class MarketingOpportunityEngine:
         # ── Conquesting Fusion: amplify epidemiological opportunities with bid multipliers ──
         all_opportunities = self._fuse_conquesting_multipliers(all_opportunities)
 
+        # ── Kreis-Targeting: Top-Kreise nach aktueller Inzidenz anreichern ──
+        all_opportunities = self._enrich_kreis_targeting(all_opportunities)
+
         all_opportunities.sort(key=lambda x: x.get("urgency_score", 0), reverse=True)
 
         saved = 0
@@ -213,6 +216,99 @@ class MarketingOpportunityEngine:
                 multiplier,
                 conquesting.get("_conquesting_sku"),
             )
+
+        return opportunities
+
+    # ── Condition → Disease-Cluster Mapping ──
+    _CONDITION_CLUSTER_MAP = {
+        "bronchitis_husten": "RESPIRATORY",
+        "sinusitis_nebenhoehlen": "RESPIRATORY",
+        "erkaltung_akut": "RESPIRATORY",
+        "halsschmerz_heiserkeit": "RESPIRATORY",
+        "rhinitis_trockene_nase": "RESPIRATORY",
+        "immun_support": "RESPIRATORY",
+    }
+
+    def _enrich_kreis_targeting(self, opportunities: list[dict]) -> list[dict]:
+        """Anreicherung mit Top-Kreisen nach aktueller Inzidenz.
+
+        Liest SurvstatKreisData der letzten 4 Wochen, gruppiert nach
+        Disease-Cluster, und fügt die Top-10 Kreise mit höchster Inzidenz
+        in region_target ein.
+        """
+        from app.models.database import SurvstatKreisData, KreisEinwohner
+
+        # Welche Cluster werden gebraucht?
+        needed_clusters = set()
+        for opp in opportunities:
+            condition = opp.get("_condition", "")
+            cluster = self._CONDITION_CLUSTER_MAP.get(condition)
+            if cluster:
+                needed_clusters.add(cluster)
+
+        if not needed_clusters:
+            return opportunities
+
+        now = datetime.utcnow()
+        current_week = now.isocalendar()[1]
+        current_year = now.year
+
+        # Top-Kreise je Cluster (letzte 4 Wochen aggregiert)
+        kreise_by_cluster: dict[str, list[dict]] = {}
+        for cluster in needed_clusters:
+            rows = (
+                self.db.query(
+                    SurvstatKreisData.kreis,
+                    func.sum(SurvstatKreisData.fallzahl).label("total_faelle"),
+                    func.max(SurvstatKreisData.inzidenz).label("max_inzidenz"),
+                )
+                .filter(
+                    SurvstatKreisData.disease_cluster == cluster,
+                    SurvstatKreisData.year == current_year,
+                    SurvstatKreisData.week >= max(1, current_week - 4),
+                )
+                .group_by(SurvstatKreisData.kreis)
+                .order_by(func.sum(SurvstatKreisData.fallzahl).desc())
+                .limit(10)
+                .all()
+            )
+            if rows:
+                # Bundesland-Mapping laden
+                kreis_names = [r.kreis for r in rows]
+                bl_map = {}
+                if kreis_names:
+                    bl_rows = (
+                        self.db.query(KreisEinwohner.kreis_name, KreisEinwohner.bundesland)
+                        .filter(KreisEinwohner.kreis_name.in_(kreis_names))
+                        .all()
+                    )
+                    bl_map = {r.kreis_name: r.bundesland for r in bl_rows}
+
+                kreise_by_cluster[cluster] = [
+                    {
+                        "kreis": r.kreis,
+                        "bundesland": bl_map.get(r.kreis, ""),
+                        "faelle_4w": int(r.total_faelle or 0),
+                        "max_inzidenz": round(float(r.max_inzidenz or 0), 1),
+                    }
+                    for r in rows
+                ]
+
+        # In jede Opportunity einfügen
+        for opp in opportunities:
+            condition = opp.get("_condition", "")
+            cluster = self._CONDITION_CLUSTER_MAP.get(condition)
+            top_kreise = kreise_by_cluster.get(cluster, []) if cluster else []
+
+            if top_kreise:
+                region = opp.get("region_target", {})
+                region["top_kreise"] = [k["kreis"] for k in top_kreise]
+                region["kreis_detail"] = top_kreise
+                # Ergänze Bundesländer aus Kreisdaten wenn states leer ist
+                if not region.get("states"):
+                    unique_bl = list(dict.fromkeys(k["bundesland"] for k in top_kreise if k["bundesland"]))
+                    region["states"] = unique_bl
+                opp["region_target"] = region
 
         return opportunities
 

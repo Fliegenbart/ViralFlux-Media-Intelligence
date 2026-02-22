@@ -616,6 +616,10 @@ class ForecastService:
         daily_lower = np.maximum(np.interp(daily_days, interp_x, interp_lo), 0)
         daily_upper = np.maximum(np.interp(daily_days, interp_x, interp_hi), 0)
 
+        # Monotonicity: enforce lower <= median <= upper (quantile crossing fix)
+        daily_lower = np.minimum(daily_lower, daily_ensemble)
+        daily_upper = np.maximum(daily_upper, daily_ensemble)
+
         # ── Step 6: Outbreak risk + trend momentum ──
         last_momentum = float(df["trend_momentum_7d"].iloc[-1]) if "trend_momentum_7d" in df.columns else 0.0
 
@@ -774,6 +778,10 @@ class ForecastService:
         daily_ensemble = np.maximum(np.interp(daily_days, interp_x, interp_y), 0)
         daily_lower = np.maximum(np.interp(daily_days, interp_x, interp_lo), 0)
         daily_upper = np.maximum(np.interp(daily_days, interp_x, interp_hi), 0)
+
+        # Monotonicity: enforce lower <= median <= upper (quantile crossing fix)
+        daily_lower = np.minimum(daily_lower, daily_ensemble)
+        daily_upper = np.maximum(daily_upper, daily_ensemble)
 
         # ── Step 6: Compute per-day outbreak risk + trend momentum ──
         last_momentum = float(df["trend_momentum_7d"].iloc[-1]) if "trend_momentum_7d" in df.columns else 0.0

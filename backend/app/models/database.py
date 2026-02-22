@@ -586,3 +586,24 @@ class BacktestPoint(Base):
     __table_args__ = (
         Index('idx_backtest_points_run_date', 'run_id', 'date'),
     )
+
+
+class ForecastAccuracyLog(Base):
+    """Tägliches Monitoring: Forecast vs. tatsächliche Abwasserdaten."""
+    __tablename__ = "forecast_accuracy_log"
+
+    id = Column(Integer, primary_key=True, index=True)
+    computed_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    virus_typ = Column(String, nullable=False, index=True)
+    window_days = Column(Integer, nullable=False, default=14)
+    samples = Column(Integer, nullable=False)
+    mae = Column(Float)
+    rmse = Column(Float)
+    mape = Column(Float)
+    correlation = Column(Float)
+    drift_detected = Column(Boolean, default=False)
+    details = Column(JSON)
+
+    __table_args__ = (
+        Index('idx_accuracy_virus_computed', 'virus_typ', 'computed_at'),
+    )

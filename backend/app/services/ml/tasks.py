@@ -84,3 +84,121 @@ def train_xgboost_model_task(
         "result": result,
         "timestamp": datetime.utcnow().isoformat(),
     })
+
+
+@celery_app.task(bind=True, name="compute_forecast_accuracy_task")
+def compute_forecast_accuracy_task(self) -> Dict[str, Any]:
+    """Tägliches Monitoring: vergangene Forecasts mit tatsächlichen Abwasserdaten vergleichen.
+
+    Für jeden Virustyp werden MLForecast-Einträge, deren forecast_date
+    in der Vergangenheit liegt, mit WastewaterAggregated-Werten gejoint.
+    MAE, RMSE, MAPE und Korrelation werden in ForecastAccuracyLog persistiert.
+    Bei MAPE > 35% wird drift_detected=True gesetzt.
+    """
+    import numpy as np
+
+    logger.info("Celery: Forecast accuracy check started")
+    self.update_state(state="PROGRESS", meta={"step": "Computing accuracy...", "progress": 10})
+
+    results = {}
+    virus_types = ["Influenza A", "Influenza B", "SARS-CoV-2", "RSV A"]
+
+    with get_db_context() as db:
+        from app.models.database import MLForecast, WastewaterAggregated, ForecastAccuracyLog
+        from datetime import timedelta
+
+        for virus in virus_types:
+            # Forecasts der letzten 14 Tage, die jetzt in der Vergangenheit liegen
+            cutoff = datetime.utcnow()
+            window_start = cutoff - timedelta(days=14)
+            forecasts = (
+                db.query(MLForecast)
+                .filter(
+                    MLForecast.virus_typ == virus,
+                    MLForecast.forecast_date < cutoff,
+                    MLForecast.forecast_date >= window_start,
+                )
+                .order_by(MLForecast.forecast_date.asc())
+                .all()
+            )
+
+            if not forecasts:
+                results[virus] = {"samples": 0, "message": "Keine vergangenen Forecasts"}
+                continue
+
+            predicted = []
+            actual = []
+            pairs = []
+
+            for fc in forecasts:
+                # Nächsten WastewaterAggregated-Wert finden (+-1 Tag Toleranz)
+                ww = (
+                    db.query(WastewaterAggregated)
+                    .filter(
+                        WastewaterAggregated.virus_typ == virus,
+                        WastewaterAggregated.datum >= fc.forecast_date - timedelta(days=1),
+                        WastewaterAggregated.datum <= fc.forecast_date + timedelta(days=1),
+                    )
+                    .order_by(WastewaterAggregated.datum.asc())
+                    .first()
+                )
+                if ww and ww.viruslast_normalisiert is not None:
+                    predicted.append(fc.predicted_value)
+                    actual.append(ww.viruslast_normalisiert)
+                    pairs.append({
+                        "date": fc.forecast_date.isoformat(),
+                        "predicted": round(fc.predicted_value, 2),
+                        "actual": round(ww.viruslast_normalisiert, 2),
+                    })
+
+            n = len(predicted)
+            if n < 3:
+                results[virus] = {"samples": n, "message": "Zu wenige Paare"}
+                continue
+
+            pred_arr = np.array(predicted)
+            act_arr = np.array(actual)
+            errors = pred_arr - act_arr
+
+            mae = float(np.mean(np.abs(errors)))
+            rmse = float(np.sqrt(np.mean(errors ** 2)))
+            # MAPE mit Schutz gegen Division durch 0
+            nonzero = act_arr != 0
+            mape = float(np.mean(np.abs(errors[nonzero] / act_arr[nonzero])) * 100) if nonzero.any() else 0.0
+            corr = float(np.corrcoef(pred_arr, act_arr)[0, 1]) if n >= 3 else 0.0
+
+            drift = mape > 35.0
+
+            log_entry = ForecastAccuracyLog(
+                virus_typ=virus,
+                window_days=14,
+                samples=n,
+                mae=round(mae, 3),
+                rmse=round(rmse, 3),
+                mape=round(mape, 1),
+                correlation=round(corr, 4),
+                drift_detected=drift,
+                details={"pairs": pairs[:14]},
+            )
+            db.add(log_entry)
+
+            results[virus] = {
+                "samples": n,
+                "mae": round(mae, 3),
+                "rmse": round(rmse, 3),
+                "mape": round(mape, 1),
+                "correlation": round(corr, 4),
+                "drift_detected": drift,
+            }
+
+            if drift:
+                logger.warning(f"DRIFT DETECTED for {virus}: MAPE={mape:.1f}% > 35% threshold")
+
+        db.commit()
+
+    logger.info(f"Celery: Forecast accuracy check completed: {results}")
+    return _json_safe({
+        "status": "success",
+        "results": results,
+        "timestamp": datetime.utcnow().isoformat(),
+    })

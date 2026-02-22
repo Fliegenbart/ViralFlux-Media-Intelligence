@@ -52,4 +52,10 @@ celery_app.conf.beat_schedule = {
         "schedule": crontab(hour=3, minute=0, day_of_week="monday"),
         "kwargs": {"years": None, "diseases": None},  # aktuelles + Vorjahr
     },
+    # Taeglich 08:00 — Forecast-Accuracy Monitoring (nach Ingestion + Training)
+    "daily-forecast-accuracy": {
+        "task": "compute_forecast_accuracy_task",
+        "schedule": crontab(hour=8, minute=0),
+        "kwargs": {},
+    },
 }

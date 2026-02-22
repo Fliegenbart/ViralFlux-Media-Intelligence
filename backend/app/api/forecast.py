@@ -119,3 +119,91 @@ async def get_forecast_status(db: Session = Depends(get_db)):
         }
 
     return {"forecasts": status, "timestamp": datetime.utcnow()}
+
+
+@router.get("/accuracy/{virus_typ}")
+async def get_forecast_accuracy(virus_typ: str, limit: int = 14, db: Session = Depends(get_db)):
+    """Rolling forecast accuracy metrics for a virus type.
+
+    Returns the latest accuracy log entries showing MAE, RMSE, MAPE,
+    correlation, and drift detection status.
+    """
+    from app.models.database import ForecastAccuracyLog
+
+    logs = (
+        db.query(ForecastAccuracyLog)
+        .filter(ForecastAccuracyLog.virus_typ == virus_typ)
+        .order_by(ForecastAccuracyLog.computed_at.desc())
+        .limit(limit)
+        .all()
+    )
+
+    if not logs:
+        return {
+            "virus_typ": virus_typ,
+            "accuracy": [],
+            "drift_active": False,
+            "message": "Noch keine Accuracy-Daten vorhanden. Täglicher Check läuft um 08:00.",
+        }
+
+    latest = logs[0]
+    return {
+        "virus_typ": virus_typ,
+        "drift_active": latest.drift_detected,
+        "latest": {
+            "computed_at": latest.computed_at.isoformat(),
+            "samples": latest.samples,
+            "mae": latest.mae,
+            "rmse": latest.rmse,
+            "mape": latest.mape,
+            "correlation": latest.correlation,
+            "drift_detected": latest.drift_detected,
+        },
+        "history": [
+            {
+                "computed_at": log.computed_at.isoformat(),
+                "samples": log.samples,
+                "mae": log.mae,
+                "rmse": log.rmse,
+                "mape": log.mape,
+                "correlation": log.correlation,
+                "drift_detected": log.drift_detected,
+            }
+            for log in logs
+        ],
+    }
+
+
+@router.get("/accuracy")
+async def get_all_forecast_accuracy(db: Session = Depends(get_db)):
+    """Accuracy overview for all virus types (latest entry each)."""
+    from app.models.database import ForecastAccuracyLog
+    from sqlalchemy import func
+
+    result = {}
+    for virus in ['Influenza A', 'Influenza B', 'SARS-CoV-2', 'RSV A']:
+        latest = (
+            db.query(ForecastAccuracyLog)
+            .filter(ForecastAccuracyLog.virus_typ == virus)
+            .order_by(ForecastAccuracyLog.computed_at.desc())
+            .first()
+        )
+        if latest:
+            result[virus] = {
+                "computed_at": latest.computed_at.isoformat(),
+                "samples": latest.samples,
+                "mae": latest.mae,
+                "rmse": latest.rmse,
+                "mape": latest.mape,
+                "correlation": latest.correlation,
+                "drift_detected": latest.drift_detected,
+            }
+        else:
+            result[virus] = None
+
+    any_drift = any(v and v.get("drift_detected") for v in result.values())
+    return {
+        "accuracy": result,
+        "any_drift": any_drift,
+        "timestamp": datetime.utcnow(),
+    }

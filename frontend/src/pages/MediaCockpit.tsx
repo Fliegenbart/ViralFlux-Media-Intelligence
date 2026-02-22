@@ -662,13 +662,13 @@ const MediaCockpit: React.FC = () => {
     const task = refinementByCard.get(card.id);
     if (!task) return null;
 
-    if (task.status === 'PENDING') return { label: 'KI queued', tone: 'queued' as const };
+    if (task.status === 'PENDING') return { label: 'KI-Warteschlange', tone: 'queued' as const };
     if (task.status === 'STARTED' || task.status === 'PROGRESS') return { label: 'KI läuft', tone: 'running' as const };
-    if (task.status === 'FAILURE') return { label: 'KI failed', tone: 'failed' as const };
+    if (task.status === 'FAILURE') return { label: 'KI fehlgeschlagen', tone: 'failed' as const };
     if (task.status === 'SUCCESS') {
       const aiStatus = String(task.result?.ai_generation_status || '').toLowerCase();
-      if (aiStatus === 'fallback_template') return { label: 'KI fallback', tone: 'fallback' as const };
-      return { label: 'KI success', tone: 'success' as const };
+      if (aiStatus === 'fallback_template') return { label: 'KI-Vorlage', tone: 'fallback' as const };
+      return { label: 'KI-generiert', tone: 'success' as const };
     }
     return null;
   };
@@ -780,7 +780,7 @@ const MediaCockpit: React.FC = () => {
                     </button>
                     <span
                       className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs bg-slate-100 border border-slate-200 text-slate-500"
-                      title="Die genaue Score-Metrik ist absichtlich hinter Tech Details verborgen."
+                      title="Die genaue Score-Metrik ist absichtlich hinter Technische Details verborgen."
                     >
                       Lage: <span className="text-slate-700 font-medium">{peixSummary?.national_band || '—'}</span>
                     </span>
@@ -848,13 +848,22 @@ const MediaCockpit: React.FC = () => {
               </div>
             </div>
 
+              {peixSummary && (
+                <div className="flex flex-wrap items-center gap-4 px-4 py-2.5 rounded-xl bg-indigo-50 border border-indigo-100">
+                  <span className="text-[10px] text-indigo-400 uppercase tracking-wider font-medium">PeixEpiScore</span>
+                  <span className="text-sm font-bold text-indigo-700">{peixSummary.national_score ?? '—'}<span className="text-xs font-normal text-indigo-400"> / 100</span></span>
+                  <span className="text-xs text-indigo-500">Band: <span className="font-semibold">{peixSummary.national_band ?? '—'}</span></span>
+                  <span className="text-xs text-indigo-500">Impact: <span className="font-semibold">{peixSummary.national_impact_probability ?? '—'}%</span></span>
+                </div>
+              )}
+
             <div className="flex items-center justify-between">
-              <div className="text-xs text-slate-400">Rohdaten sind hinter "Tech Details" verborgen.</div>
+              <div className="text-xs text-slate-400">Rohdaten sind hinter "Technische Details" verborgen.</div>
               <button
                 onClick={() => setShowTechDetails((s) => !s)}
                 className="media-button secondary px-3 py-1.5 text-xs font-semibold rounded-lg transition"
               >
-                {showTechDetails ? 'Tech Details ausblenden' : 'Tech Details anzeigen'}
+                {showTechDetails ? 'Technische Details ausblenden' : 'Technische Details anzeigen'}
               </button>
             </div>
 
@@ -862,7 +871,7 @@ const MediaCockpit: React.FC = () => {
               <div className="card p-5">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
-                    <h2 className="text-lg font-semibold text-slate-900">Tech Details: Bento-Übersicht</h2>
+                    <h2 className="text-lg font-semibold text-slate-900">Technische Details: Bento-Übersicht</h2>
                     <p className="text-xs text-slate-400">Für Analyse/Revision. Nicht die Default-Ansicht.</p>
                   </div>
                   <div className="text-xs text-slate-500 flex flex-col items-start sm:items-end gap-2">
@@ -1290,7 +1299,7 @@ const MediaCockpit: React.FC = () => {
 
                 {showTechDetails && (
                   <div className="card p-4">
-                    <h3 className="text-sm font-semibold text-slate-900 mb-3">Tech Details: Datenquellen Live-Status</h3>
+                    <h3 className="text-sm font-semibold text-slate-900 mb-3">Technische Details: Datenquellen Live-Status</h3>
                     <div className="space-y-2">
                       {sourceStatus.map((item) => (
                         <div key={item.source_key} className="rounded-lg px-3 py-2 bg-slate-50 border border-slate-100">
@@ -1414,7 +1423,7 @@ const MediaCockpit: React.FC = () => {
                     onClick={() => setShowTechDetails((s) => !s)}
                     className="media-button secondary px-4 py-2 text-xs font-semibold rounded-lg transition"
                   >
-                    {showTechDetails ? 'Tech Details ausblenden' : 'Tech Details anzeigen'}
+                    {showTechDetails ? 'Technische Details ausblenden' : 'Technische Details anzeigen'}
                   </button>
                 </div>
               </div>

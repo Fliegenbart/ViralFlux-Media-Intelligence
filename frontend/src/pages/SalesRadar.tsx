@@ -67,7 +67,7 @@ interface ROIData {
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 const TYPE_CONFIG: Record<string, { label: string; color: string; icon: string }> = {
-  RESOURCE_SCARCITY: { label: 'Engpass', color: '#ef4444', icon: 'M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126z' },
+  RESOURCE_SCARCITY: { label: 'Engpass', color: '#e11d48', icon: 'M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126z' },
   SEASONAL_DEFICIENCY: { label: 'Saisonal', color: '#f59e0b', icon: 'M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z' },
   PREDICTIVE_SALES_SPIKE: { label: 'Nachfrage', color: '#4338ca', icon: 'M2.25 18L9 11.25l4.306 4.307a11.95 11.95 0 015.814-5.519l2.74-1.22m0 0l-5.94-2.28m5.94 2.28l-2.28 5.941' },
   DIFFERENTIAL_DIAGNOSIS: { label: 'Differenzial', color: '#06b6d4', icon: 'M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3M14.25 3.104c.251.023.501.05.75.082M19.8 15.3l-1.57.393A9.065 9.065 0 0112 15a9.065 9.065 0 00-6.23.693L5 14.5m14.8.8l1.402 1.402c1.232 1.232.65 3.318-1.067 3.611A48.309 48.309 0 0112 21c-2.773 0-5.491-.235-8.135-.687-1.718-.293-2.3-2.379-1.067-3.61L5 14.5' },
@@ -315,10 +315,12 @@ const SalesRadar: React.FC = () => {
     try {
       const res = await apiFetch(`/api/v1/marketing/${encodeURIComponent(id)}/status?status=${status}`, { method: 'PATCH' });
       if (res.ok) {
-        const label = status === 'APPROVED' ? 'freigegeben' : status === 'DISMISSED' ? 'verworfen' : status;
+        const label = status === 'APPROVED' ? 'freigegeben' : status === 'DISMISSED' ? 'verworfen' : status === 'SENT' ? 'gesendet' : status === 'CONVERTED' ? 'konvertiert' : status === 'ACTIVATED' ? 'aktiviert' : status === 'READY' ? 'bereitgestellt' : status;
         addToast(`Opportunity ${label}`, 'success');
       } else {
-        addToast(`Status-Update fehlgeschlagen: ${res.status}`, 'error');
+        const err = await res.json().catch(() => null);
+        const detail = err?.detail || `HTTP ${res.status}`;
+        addToast(`Status-Update fehlgeschlagen: ${detail}`, 'error');
       }
       await fetchOpportunities();
       await fetchStats();
@@ -895,7 +897,7 @@ const SalesRadar: React.FC = () => {
                               </td>
                               <td className="px-4 py-3">
                                 {opp.is_conquesting_active ? (
-                                  <span className="text-[9px] font-bold px-2 py-0.5 rounded border-2 border-red-400 bg-red-50 text-red-700">
+                                  <span className="text-[9px] font-bold px-2 py-0.5 rounded border-2 border-amber-400 bg-amber-50 text-amber-700">
                                     {opp.recommended_bid_modifier?.toFixed(1) || '1.5'}x BID
                                   </span>
                                 ) : (

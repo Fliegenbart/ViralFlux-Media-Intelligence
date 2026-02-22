@@ -56,6 +56,8 @@ services:
       redis:
         condition: service_healthy
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2
+    volumes:
+      - ml_models:/app/app/ml_models
     networks:
       - virusradar_network
 
@@ -68,6 +70,8 @@ services:
     command: celery -A app.core.celery_app worker --loglevel=info --concurrency=2
     healthcheck:
       disable: true
+    volumes:
+      - ml_models:/app/app/ml_models
     environment:
       - POSTGRES_HOST=db
       - POSTGRES_PORT=5432
@@ -138,6 +142,7 @@ services:
 volumes:
   postgres_data:
     driver: local
+  ml_models:
   caddy_data:
   caddy_config:
 

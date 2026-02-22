@@ -174,6 +174,8 @@ class SurvstatApiService:
         esc_disease_id = xml_escape(disease_id)
         esc_year_id = xml_escape(f"{self.H_YEAR}.&[{year}]")
 
+        # WCF FilterCollection requires Key with both DimensionId + HierarchyId,
+        # and Value as FilterMemberCollection with plain <string> member IDs.
         return (
             f'<GetOlapData xmlns="{NS_SVC}">'
             f'<request xmlns:d="{NS_MDX}">'
@@ -182,23 +184,19 @@ class SurvstatApiService:
             f"<d:HierarchyFilters>"
             # Filter: Year
             f"<d:KeyValueOfFilterCollectionKeyFilterMemberCollectionb2rWaiIW>"
-            f"<d:Key><d:HierarchyId>{self.H_YEAR}</d:HierarchyId></d:Key>"
-            f'<d:Value xmlns:e="{NS_MDX}">'
-            f"<e:HierarchyMember>"
-            f"<e:Caption>{year}</e:Caption>"
-            f"<e:Id>{esc_year_id}</e:Id>"
-            f"</e:HierarchyMember>"
-            f"</d:Value>"
+            f"<d:Key>"
+            f"<d:DimensionId>{self.H_YEAR}</d:DimensionId>"
+            f"<d:HierarchyId>{self.H_YEAR}</d:HierarchyId>"
+            f"</d:Key>"
+            f"<d:Value><d:string>{esc_year_id}</d:string></d:Value>"
             f"</d:KeyValueOfFilterCollectionKeyFilterMemberCollectionb2rWaiIW>"
             # Filter: Disease
             f"<d:KeyValueOfFilterCollectionKeyFilterMemberCollectionb2rWaiIW>"
-            f"<d:Key><d:HierarchyId>{self.H_DISEASE}</d:HierarchyId></d:Key>"
-            f'<d:Value xmlns:e="{NS_MDX}">'
-            f"<e:HierarchyMember>"
-            f"<e:Caption></e:Caption>"
-            f"<e:Id>{esc_disease_id}</e:Id>"
-            f"</e:HierarchyMember>"
-            f"</d:Value>"
+            f"<d:Key>"
+            f"<d:DimensionId>{self.H_DISEASE}</d:DimensionId>"
+            f"<d:HierarchyId>{self.H_DISEASE}</d:HierarchyId>"
+            f"</d:Key>"
+            f"<d:Value><d:string>{esc_disease_id}</d:string></d:Value>"
             f"</d:KeyValueOfFilterCollectionKeyFilterMemberCollectionb2rWaiIW>"
             f"</d:HierarchyFilters>"
             f"<d:IncludeNullColumns>false</d:IncludeNullColumns>"

@@ -41,7 +41,7 @@ const TYPE_CONFIG: Record<string, { label: string; color: string; icon: string }
   PREDICTIVE_SALES_SPIKE: { label: 'Nachfrage', color: '#4338ca', icon: 'M2.25 18L9 11.25l4.306 4.307a11.95 11.95 0 015.814-5.519l2.74-1.22m0 0l-5.94-2.28m5.94 2.28l-2.28 5.941' },
   DIFFERENTIAL_DIAGNOSIS: { label: 'Differenzial', color: '#06b6d4', icon: 'M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3M14.25 3.104c.251.023.501.05.75.082M19.8 15.3l-1.57.393A9.065 9.065 0 0112 15a9.065 9.065 0 00-6.23.693L5 14.5m14.8.8l1.402 1.402c1.232 1.232.65 3.318-1.067 3.611A48.309 48.309 0 0112 21c-2.773 0-5.491-.235-8.135-.687-1.718-.293-2.3-2.379-1.067-3.61L5 14.5' },
   WEATHER_FORECAST: { label: 'Wetter', color: '#0ea5e9', icon: 'M2.25 15a4.5 4.5 0 004.5 4.5H18a3.75 3.75 0 001.332-7.257 3 3 0 00-3.758-3.848 5.25 5.25 0 00-10.233 2.33A4.502 4.502 0 002.25 15z' },
-  COMPETITOR_SHORTAGE: { label: 'Conquesting', color: '#dc2626', icon: 'M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z' },
+  COMPETITOR_SHORTAGE: { label: 'Conquesting', color: '#d97706', icon: 'M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z' },
 };
 
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
@@ -114,22 +114,19 @@ const Sparkline: React.FC<{ data: number[]; color: string; w?: number; h?: numbe
 const ConquestingBadge: React.FC<{ opp: MarketingOpportunity; compact?: boolean }> = ({ opp, compact }) => {
   if (!opp.is_conquesting_active) return null;
   return (
-    <div
-      className="rounded-lg border-2 border-red-500 bg-red-50 px-3 py-2"
-      style={{ animation: 'pulse 2s cubic-bezier(0.4,0,0.6,1) infinite' }}
-    >
+    <div className="rounded-lg border border-amber-400 bg-amber-50 px-3 py-2 mt-2">
       <div className="flex items-center gap-2">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
           <path d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" />
         </svg>
-        <span className="text-[11px] font-extrabold text-red-800 uppercase tracking-wider">Conquesting Opportunity</span>
+        <span className="text-[11px] font-bold text-amber-800 uppercase tracking-wider">Conquesting</span>
       </div>
       {!compact && (
-        <div className="mt-1.5 text-[11px] text-red-700 leading-relaxed">
-          Competitor shortage detected: <span className="font-bold">{opp.competitor_shortage_ingredient || '—'}</span>.
-          {' '}Scale bids by <span className="font-bold">{opp.recommended_bid_modifier?.toFixed(1) || '1.0'}x</span>.
+        <div className="mt-1.5 text-[11px] text-amber-700 leading-relaxed">
+          Engpass: <span className="font-bold">{opp.competitor_shortage_ingredient || '—'}</span>.
+          {' '}Bid-Multiplikator: <span className="font-bold">{opp.recommended_bid_modifier?.toFixed(1) || '1.0'}x</span>.
           {opp.conquesting_product && (
-            <span className="ml-1 text-red-600">({opp.conquesting_product})</span>
+            <span className="ml-1 text-amber-600">({opp.conquesting_product})</span>
           )}
         </div>
       )}
@@ -372,7 +369,7 @@ const SalesRadar: React.FC = () => {
               <div className="text-[10px] text-slate-400 uppercase tracking-wider">Heute</div>
               <h2 className="text-2xl font-black text-slate-900 tracking-tight mt-1" style={{ fontFamily: "'DM Serif Display', Georgia, serif" }}>Top Aktionen (Marketing)</h2>
               <p className="text-sm text-slate-500 mt-2 max-w-2xl">
-                Fokus auf "Was tun wir jetzt?" Rohscores, Tabellen und Export-Details sind hinter Tech Details versteckt.
+                Automatisch generierte Marketing-Opportunities auf Basis von Echtzeit-Signalen.
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -380,7 +377,7 @@ const SalesRadar: React.FC = () => {
                 onClick={() => setShowTechDetails((s) => !s)}
                 className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 text-slate-500 transition hover:bg-slate-100"
               >
-                {showTechDetails ? 'Tech Details ausblenden' : 'Tech Details anzeigen'}
+                {showTechDetails ? 'Pipeline ausblenden' : 'Pipeline anzeigen'}
               </button>
             </div>
           </div>
@@ -435,7 +432,7 @@ const SalesRadar: React.FC = () => {
         </div>
 
         {/* ── KPI Header ── */}
-        {showTechDetails && stats && (
+        {stats && (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 fade-in">
             {/* Total Opportunities */}
             <div className="card p-5 flex items-center gap-4">
@@ -453,7 +450,7 @@ const SalesRadar: React.FC = () => {
             <div className="card p-5 flex items-center gap-4">
               <UrgencyRing score={stats.avg_urgency} size={48} />
               <div>
-                <div className="text-[10px] text-slate-400 uppercase tracking-wider">Ø Urgency</div>
+                <div className="text-[10px] text-slate-400 uppercase tracking-wider">Ø Dringlichkeit</div>
                 <div className="text-sm text-slate-600">
                   {stats.avg_urgency >= 70 ? 'Hoher Handlungsdruck' : stats.avg_urgency >= 40 ? 'Mittleres Niveau' : 'Niedrig'}
                 </div>
@@ -469,11 +466,11 @@ const SalesRadar: React.FC = () => {
               </div>
             </div>
 
-            {/* Conversion Rate */}
+            {/* Konversionsrate */}
             <div className="card p-5 flex items-center gap-4">
               <UrgencyRing score={conversionRate} size={48} />
               <div>
-                <div className="text-[10px] text-slate-400 uppercase tracking-wider">Conversion</div>
+                <div className="text-[10px] text-slate-400 uppercase tracking-wider">Konversionsrate</div>
                 <div className="text-sm text-slate-600">
                   {stats.by_status?.CONVERTED || 0} von {(stats.by_status?.SENT || 0) + (stats.by_status?.CONVERTED || 0)}
                 </div>
@@ -588,7 +585,7 @@ const SalesRadar: React.FC = () => {
             )}
 
             {/* ZONE 2: NEUE CHANCEN */}
-            {showTechDetails && Object.keys(newByType).length > 0 && (
+            {Object.keys(newByType).length > 0 && (
               <section className="fade-in">
                 <div className="flex items-center gap-3 mb-4">
                   <div className="w-2 h-2 rounded-full bg-blue-500" />
@@ -835,7 +832,7 @@ const SalesRadar: React.FC = () => {
                 <div className="flex items-start gap-5">
                   <UrgencyRing score={opp.urgency_score} size={88} />
                   <div className="flex-1">
-                    <div className="text-[10px] text-slate-400 uppercase tracking-wider mb-1">Trigger</div>
+                    <div className="text-[10px] text-slate-400 uppercase tracking-wider mb-1">Auslöser</div>
                     <div className="flex items-center gap-2 mb-2">
                       <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-100 text-slate-500">
                         {opp.trigger_context.source.replace(/_/g, ' ')}
@@ -966,6 +963,31 @@ const SalesRadar: React.FC = () => {
                     </button>
                   )}
                 </div>
+
+                {/* PDF Briefing Download */}
+                <button
+                  onClick={async () => {
+                    try {
+                      const res = await apiFetch(`/api/v1/marketing/briefing/${encodeURIComponent(opp.id)}.pdf`);
+                      if (!res.ok) { addToast('PDF-Download fehlgeschlagen', 'error'); return; }
+                      const blob = await res.blob();
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = `Briefing_${opp.type}_${opp.id.slice(0, 8)}.pdf`;
+                      a.click();
+                      URL.revokeObjectURL(url);
+                      addToast('Briefing PDF heruntergeladen', 'success');
+                    } catch { addToast('PDF-Download fehlgeschlagen', 'error'); }
+                  }}
+                  className="w-full py-2.5 text-xs font-semibold rounded-lg border-2 border-dashed border-slate-300 text-slate-500 transition hover:border-indigo-400 hover:text-indigo-600 hover:bg-indigo-50 flex items-center justify-center gap-2"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                    <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
+                    <path d="M14 2v6h6M12 18v-6M9 15l3 3 3-3" />
+                  </svg>
+                  Briefing PDF herunterladen
+                </button>
 
                 {/* Meta */}
                 <div className="flex items-center justify-between text-[10px] text-slate-400 pt-2 border-t border-slate-100">

@@ -1,6 +1,7 @@
 """API-Endpunkte für Marketing Opportunity Engine."""
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 import logging
 
@@ -107,6 +108,31 @@ async def export_crm_json(
     engine = MarketingOpportunityEngine(db)
     opportunity_ids = ids.split(",") if ids else None
     return engine.export_crm_json(opportunity_ids=opportunity_ids)
+
+
+@router.get("/briefing/{opportunity_id}.pdf")
+async def download_briefing_pdf(
+    opportunity_id: str,
+    db: Session = Depends(get_db),
+    _user: dict = Depends(get_current_user),
+):
+    """PDF-Briefing einer Opportunity herunterladen."""
+    from app.services.marketing_engine.opportunity_engine import MarketingOpportunityEngine
+    from app.services.marketing_engine.briefing_pdf import generate_briefing_pdf
+
+    engine = MarketingOpportunityEngine(db)
+    results = engine.get_opportunities(normalize_status=True)
+    opp = next((o for o in results if o.get("id") == opportunity_id), None)
+    if not opp:
+        raise HTTPException(status_code=404, detail=f"Opportunity {opportunity_id} nicht gefunden")
+
+    pdf_bytes = generate_briefing_pdf(opp)
+    filename = f"Briefing_{opp.get('type', 'OPP')}_{opportunity_id[:8]}.pdf"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.get("/{opportunity_id}")

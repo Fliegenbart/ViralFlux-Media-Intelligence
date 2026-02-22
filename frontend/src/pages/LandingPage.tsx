@@ -78,14 +78,14 @@ const ScoreGauge: React.FC<{ score: number; label: string }> = ({ score, label }
 };
 
 /* ═══ Virus Level Bars ═══════════════════════════════════════════════ */
-const VirusBars: React.FC = () => {
+const VirusBars: React.FC<{ data?: Array<{ label: string; pct: number; color: string }> }> = ({ data: propData }) => {
   const [vis, setVis] = useState(false);
   useEffect(() => { const t = setTimeout(() => setVis(true), 1000); return () => clearTimeout(t); }, []);
 
-  const data = [
-    { label: 'Influenza A', pct: 82, color: '#dc2626' },
-    { label: 'SARS-CoV-2', pct: 45, color: '#2563eb' },
-    { label: 'RSV', pct: 63, color: '#d97706' },
+  const data = propData || [
+    { label: 'Influenza A', pct: 0, color: '#dc2626' },
+    { label: 'SARS-CoV-2', pct: 0, color: '#2563eb' },
+    { label: 'RSV', pct: 0, color: '#d97706' },
   ];
 
   return (
@@ -228,7 +228,35 @@ const RESPONSIVE_CSS = `
 const LandingPage: React.FC = () => {
   const navigate = useNavigate();
   const [heroVis, setHeroVis] = useState(false);
+  const [peixScore, setPeixScore] = useState(0.72);
+  const [virusData, setVirusData] = useState([
+    { label: 'Influenza A', pct: 0, color: '#dc2626' },
+    { label: 'SARS-CoV-2', pct: 0, color: '#2563eb' },
+    { label: 'RSV', pct: 0, color: '#d97706' },
+  ]);
+
   useEffect(() => { const t = setTimeout(() => setHeroVis(true), 80); return () => clearTimeout(t); }, []);
+
+  // Fetch live PEIX score + virus data
+  useEffect(() => {
+    fetch('/api/v1/outbreak-score/peix-score')
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (!data) return;
+        const ns = data.national_score ?? data.score;
+        if (typeof ns === 'number') setPeixScore(ns / 100);
+        const vs = data.virus_scores;
+        if (vs) {
+          const updated = [
+            { label: 'Influenza A', pct: Math.round((vs['influenza']?.epi_score ?? vs['Influenza']?.epi_score ?? 0) * 100), color: '#dc2626' },
+            { label: 'SARS-CoV-2', pct: Math.round((vs['covid']?.epi_score ?? vs['COVID-19']?.epi_score ?? 0) * 100), color: '#2563eb' },
+            { label: 'RSV', pct: Math.round((vs['rsv']?.epi_score ?? vs['RSV']?.epi_score ?? 0) * 100), color: '#d97706' },
+          ];
+          setVirusData(updated);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   return (
     <div style={{ minHeight: '100vh', background: C.bg, fontFamily: FONT_SANS, color: C.text, overflowX: 'hidden' }}>
@@ -381,7 +409,7 @@ const LandingPage: React.FC = () => {
             PeixEpiScore — Gesamtindex
           </div>
 
-          <ScoreGauge score={0.72} label="PeixEpiScore" />
+          <ScoreGauge score={peixScore} label="PeixEpiScore" />
 
           <div style={{ marginTop: 20, borderTop: `1px solid ${C.borderLight}`, paddingTop: 16 }}>
             <div style={{
@@ -390,7 +418,7 @@ const LandingPage: React.FC = () => {
             }}>
               Viruslast-Signale
             </div>
-            <VirusBars />
+            <VirusBars data={virusData} />
           </div>
 
           <div style={{

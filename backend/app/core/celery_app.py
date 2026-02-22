@@ -13,6 +13,7 @@ celery_app = Celery(
     include=[
         "app.services.data_ingest.tasks",
         "app.services.media.tasks",
+        "app.services.ml.tasks",
     ],  # Hintergrund-Jobs
 )
 

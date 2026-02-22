@@ -53,6 +53,11 @@ data/processed/*
 !data/raw/.gitkeep
 !data/processed/.gitkeep
 
+# ML Model Artifacts
+backend/app/ml_models/**/*.json
+backend/app/ml_models/**/*.ubj
+!backend/app/ml_models/.gitkeep
+
 # Logs
 *.log
 logs/

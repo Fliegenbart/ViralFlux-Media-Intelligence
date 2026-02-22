@@ -173,6 +173,7 @@ from app.api import (
     calibration,
     media,
     backtest,
+    admin_ml,
 )
 app.include_router(auth.router, prefix="/api/auth", tags=["Auth"])
 app.include_router(dashboard.router, prefix="/api/v1/dashboard", tags=["Dashboard"])
@@ -191,6 +192,7 @@ app.include_router(webhooks.router)
 app.include_router(public_api.router, prefix="/api/v1/public", tags=["Public API"])
 app.include_router(calibration.router, prefix="/api/v1/calibration", tags=["Calibration"])
 app.include_router(backtest.router, prefix="/api/v1/backtest", tags=["Backtest"])
+app.include_router(admin_ml.router, prefix="/api/v1/admin/ml", tags=["Admin ML"])
 
 
 if __name__ == "__main__":

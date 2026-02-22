@@ -3,13 +3,25 @@
 Architecture: XGBoost Meta-Learner stacking three base estimators
 (Holt-Winters, Ridge Regression, Prophet) with AMELAG lagged features
 and asymmetric loss (quantile regression at 80th percentile).
+
+**Inference flow (decoupled from training):**
+
+1. ``predict()`` checks for pre-trained models on disk
+   (serialised by ``model_trainer.XGBoostTrainer``).
+2. If found, loads them into a thread-safe in-memory cache and
+   runs inference-only (base estimators + XGBoost ``.predict()``).
+3. If no model file exists, falls back to the original
+   ``train_and_forecast()`` which trains in-memory.
 """
 
 from __future__ import annotations
 
+import json
 import logging
 import math
+import threading
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -42,6 +54,85 @@ META_FEATURES: list[str] = [
     "schulferien",
     "trends_score",
 ]
+
+# ═══════════════════════════════════════════════════════════════════════
+#  MODEL LOADING & CACHING (module-level, shared across requests)
+# ═══════════════════════════════════════════════════════════════════════
+
+_ML_MODELS_DIR = Path(__file__).resolve().parent.parent.parent / "ml_models"
+
+# Thread-safe cache: {virus_slug: (model_med, model_lo, model_hi, metadata)}
+_model_cache: dict[str, tuple[Any, Any, Any, dict[str, Any]]] = {}
+_cache_lock = threading.Lock()
+
+
+def _virus_slug(virus_typ: str) -> str:
+    """Normalise virus name to filesystem-safe slug."""
+    return virus_typ.lower().replace(" ", "_").replace("-", "_")
+
+
+def _load_cached_models(
+    virus_typ: str,
+) -> tuple[Any, Any, Any, dict[str, Any]] | None:
+    """Load XGBoost models from disk with in-memory caching.
+
+    Returns ``(model_median, model_lower, model_upper, metadata)``
+    or *None* when no serialised model exists for *virus_typ*.
+    """
+    from xgboost import XGBRegressor
+
+    slug = _virus_slug(virus_typ)
+
+    with _cache_lock:
+        if slug in _model_cache:
+            return _model_cache[slug]
+
+    model_dir = _ML_MODELS_DIR / slug
+    metadata_path = model_dir / "metadata.json"
+
+    if not metadata_path.exists():
+        return None
+
+    try:
+        with open(metadata_path) as f:
+            metadata = json.load(f)
+
+        model_med = XGBRegressor()
+        model_med.load_model(str(model_dir / "model_median.json"))
+
+        model_lo = XGBRegressor()
+        model_lo.load_model(str(model_dir / "model_lower.json"))
+
+        model_hi = XGBRegressor()
+        model_hi.load_model(str(model_dir / "model_upper.json"))
+
+        result = (model_med, model_lo, model_hi, metadata)
+
+        with _cache_lock:
+            _model_cache[slug] = result
+
+        logger.info(
+            f"Loaded XGBoost models from disk for {virus_typ} "
+            f"(version={metadata.get('version')}, "
+            f"trained_at={metadata.get('trained_at')})"
+        )
+        return result
+
+    except Exception as e:
+        logger.warning(f"Failed to load models for {virus_typ}: {e}")
+        return None
+
+
+def invalidate_model_cache(virus_typ: str | None = None) -> None:
+    """Clear cached models so the next ``predict()`` reloads from disk.
+
+    Called by ``XGBoostTrainer`` after writing fresh artefacts.
+    """
+    with _cache_lock:
+        if virus_typ:
+            _model_cache.pop(_virus_slug(virus_typ), None)
+        else:
+            _model_cache.clear()
 
 
 def _sigmoid(x: float) -> float:
@@ -404,7 +495,166 @@ class ForecastService:
         return round(_sigmoid(z), 3)
 
     # ═══════════════════════════════════════════════════════════════════
-    #  MAIN FORECAST PIPELINE
+    #  INFERENCE (loads pre-trained models from disk)
+    # ═══════════════════════════════════════════════════════════════════
+
+    def predict(self, virus_typ: str = "Influenza A") -> dict[str, Any]:
+        """Run forecast using pre-trained models from disk.
+
+        Falls back to :meth:`train_and_forecast` when no serialised
+        model exists (e.g. fresh deployment before first training).
+        """
+        cached = _load_cached_models(virus_typ)
+
+        if cached is None:
+            logger.info(
+                f"No pre-trained model found for {virus_typ}, "
+                f"falling back to in-memory train_and_forecast()"
+            )
+            return self.train_and_forecast(virus_typ=virus_typ)
+
+        model_med, model_lo, model_hi, metadata = cached
+        return self._inference_from_loaded_models(
+            virus_typ=virus_typ,
+            model_med=model_med,
+            model_lo=model_lo,
+            model_hi=model_hi,
+            metadata=metadata,
+        )
+
+    def _inference_from_loaded_models(
+        self,
+        virus_typ: str,
+        model_med: Any,
+        model_lo: Any,
+        model_hi: Any,
+        metadata: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Generate forecast using pre-loaded XGBoost models.
+
+        Mirrors the forecast-generation portion of
+        :meth:`train_and_forecast` (Steps 1, 4, 5, 6) but skips
+        Steps 2-3 (OOF generation + XGBoost training).
+        """
+        logger.info(
+            f"=== Inference for {virus_typ} "
+            f"(model={metadata.get('version')}) ==="
+        )
+
+        df = self.prepare_training_data(virus_typ=virus_typ)
+
+        if df.empty or len(df) < 10:
+            logger.error(f"Insufficient data for inference ({len(df)} rows)")
+            return {"error": "Insufficient data for inference"}
+
+        y = df["y"].values
+        n = len(y)
+
+        # Detect data frequency
+        date_diffs = df["ds"].diff().dt.days.dropna()
+        data_freq_days = int(date_diffs.median()) if len(date_diffs) > 0 else 7
+        data_freq_days = max(1, min(data_freq_days, 14))
+        n_steps = max(2, self.forecast_days // data_freq_days + 1)
+
+        # ── Step 1: Base estimator forecasts ──
+        hw_forecast = self._fit_holt_winters(y, n_steps)
+        ridge_forecast, ridge_importance = self._fit_ridge(df, y, n_steps)
+        prophet_forecast = self._fit_prophet(virus_typ, n_steps)
+
+        if prophet_forecast is None:
+            prophet_forecast = (hw_forecast + ridge_forecast) / 2.0
+
+        min_len = min(len(hw_forecast), len(ridge_forecast), len(prophet_forecast))
+        hw_forecast = hw_forecast[:min_len]
+        ridge_forecast = ridge_forecast[:min_len]
+        prophet_forecast = prophet_forecast[:min_len]
+        n_steps = min_len
+
+        # ── Step 4: Generate forecast via loaded XGBoost ──
+        feature_names = metadata.get("feature_names", META_FEATURES)
+        feature_importance = metadata.get("feature_importance", {})
+        last_row = df.iloc[-1].copy()
+
+        ensemble = np.zeros(n_steps)
+        lower = np.zeros(n_steps)
+        upper = np.zeros(n_steps)
+
+        for i in range(n_steps):
+            feat = {
+                "hw_pred": float(hw_forecast[i]),
+                "ridge_pred": float(ridge_forecast[i]),
+                "prophet_pred": float(prophet_forecast[i]),
+                "amelag_lag4": float(last_row.get("amelag_lag4", 0.0)),
+                "amelag_lag7": float(last_row.get("amelag_lag7", 0.0)),
+                "trend_momentum_7d": float(last_row.get("trend_momentum_7d", 0.0)),
+                "schulferien": float(last_row.get("schulferien", 0.0)),
+                "trends_score": float(last_row.get("trends_score", 0.0)),
+            }
+
+            X_row = np.array([[feat.get(f, 0.0) for f in feature_names]])
+            X_row = np.nan_to_num(X_row, nan=0.0, posinf=0.0, neginf=0.0)
+
+            ensemble[i] = max(0.0, float(model_med.predict(X_row)[0]))
+            lower[i] = max(0.0, float(model_lo.predict(X_row)[0]))
+            upper[i] = max(0.0, float(model_hi.predict(X_row)[0]))
+
+        # ── Step 5: Interpolate to daily resolution ──
+        last_date = df["ds"].max()
+        native_dates = [last_date + timedelta(days=data_freq_days * (i + 1)) for i in range(n_steps)]
+        daily_dates = [last_date + timedelta(days=i + 1) for i in range(self.forecast_days)]
+
+        native_days = np.array([(d - last_date).days for d in native_dates])
+        daily_days = np.array([(d - last_date).days for d in daily_dates])
+
+        interp_x = np.concatenate([[0], native_days])
+        interp_y = np.concatenate([[y[-1]], ensemble])
+        interp_lo = np.concatenate([[y[-1]], lower])
+        interp_hi = np.concatenate([[y[-1]], upper])
+
+        daily_ensemble = np.maximum(np.interp(daily_days, interp_x, interp_y), 0)
+        daily_lower = np.maximum(np.interp(daily_days, interp_x, interp_lo), 0)
+        daily_upper = np.maximum(np.interp(daily_days, interp_x, interp_hi), 0)
+
+        # ── Step 6: Outbreak risk + trend momentum ──
+        last_momentum = float(df["trend_momentum_7d"].iloc[-1]) if "trend_momentum_7d" in df.columns else 0.0
+
+        forecast_records: list[dict[str, Any]] = []
+        for i in range(self.forecast_days):
+            pred = float(daily_ensemble[i])
+            risk = self._compute_outbreak_risk(pred, y)
+            forecast_records.append(
+                {
+                    "ds": daily_dates[i],
+                    "yhat": pred,
+                    "yhat_lower": float(daily_lower[i]),
+                    "yhat_upper": float(daily_upper[i]),
+                    "trend_momentum_7d": last_momentum,
+                    "outbreak_risk_score": risk,
+                }
+            )
+
+        model_version = metadata.get("version", "xgb_stack_v1_loaded")
+
+        result: dict[str, Any] = {
+            "virus_typ": virus_typ,
+            "training_samples": metadata.get("training_samples", n),
+            "forecast_days": self.forecast_days,
+            "data_frequency_days": data_freq_days,
+            "forecast": forecast_records,
+            "feature_importance": feature_importance,
+            "model_version": model_version,
+            "confidence": float(self.confidence_level),
+            "timestamp": datetime.utcnow(),
+        }
+
+        logger.info(
+            f"Inference completed for {virus_typ}: {self.forecast_days} daily points, "
+            f"model={model_version}"
+        )
+        return result
+
+    # ═══════════════════════════════════════════════════════════════════
+    #  MAIN FORECAST PIPELINE (fallback: trains in-memory)
     # ═══════════════════════════════════════════════════════════════════
 
     def train_and_forecast(self, virus_typ: str = "Influenza A") -> dict[str, Any]:
@@ -609,14 +859,18 @@ class ForecastService:
         return count
 
     def run_forecasts_for_all_viruses(self) -> dict[str, Any]:
-        """Run stacking forecasts for all relevant virus types."""
+        """Run forecasts for all relevant virus types.
+
+        Uses :meth:`predict` which loads pre-trained models from disk
+        when available, falling back to in-memory training otherwise.
+        """
         virus_types = ["Influenza A", "Influenza B", "SARS-CoV-2", "RSV A"]
 
         results: dict[str, Any] = {}
         for virus in virus_types:
             logger.info(f"Processing forecast for {virus}...")
             try:
-                forecast = self.train_and_forecast(virus_typ=virus)
+                forecast = self.predict(virus_typ=virus)
                 if "error" not in forecast:
                     self.save_forecast(forecast)
                 results[virus] = forecast

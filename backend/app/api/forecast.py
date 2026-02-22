@@ -38,7 +38,7 @@ async def run_forecasts_sync(db: Session = Depends(get_db)):
     results = {}
     for virus in ['Influenza A', 'Influenza B', 'SARS-CoV-2', 'RSV A']:
         try:
-            forecast = service.train_and_forecast(virus_typ=virus)
+            forecast = service.predict(virus_typ=virus)
             if 'error' not in forecast:
                 service.save_forecast(forecast)
                 results[virus] = {

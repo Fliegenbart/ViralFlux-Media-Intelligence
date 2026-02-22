@@ -38,7 +38,7 @@ OTC_RELEVANT_DISEASES: Final[dict[str, list[str]]] = {
         "Keuchhusten (Meldepflicht gemäß IfSG)",
         "Keuchhusten (Meldepflicht gemäß Landesmeldeverordnung)",
         "Pneumokokken (Meldepflicht gemäß IfSG)",
-        "Pneumokokken (Meldepflicht gemäß Landesmeldeverordnung)",
+        "Pneumokokken (Meldepflicht gemäß Landesverordnung)",
         "Adenovirus (andere Form, Meldepflichtig gemäß Landesmeldeverordnung)",
         "Parainfluenza",
     ],

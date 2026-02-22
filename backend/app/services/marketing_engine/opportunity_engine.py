@@ -1121,10 +1121,26 @@ class MarketingOpportunityEngine:
             .filter(MarketingOpportunity.opportunity_id == opp_id)
             .first()
         )
+
+        # Build conquesting payload for persistence
+        conquesting_data = None
+        if opp.get("_conquesting_applied"):
+            conquesting_data = {
+                "is_active": True,
+                "multiplier": opp.get("_conquesting_multiplier", 1.0),
+                "sku": opp.get("_conquesting_sku", ""),
+                "product": opp.get("_conquesting_product", ""),
+                "matched_drugs": opp.get("_conquesting_matched_drugs", []),
+            }
+
         if existing:
             existing.urgency_score = opp.get("urgency_score", existing.urgency_score)
             existing.sales_pitch = opp.get("sales_pitch", existing.sales_pitch)
             existing.suggested_products = opp.get("suggested_products", existing.suggested_products)
+            if conquesting_data:
+                payload = (existing.campaign_payload or {}).copy()
+                payload["conquesting"] = conquesting_data
+                existing.campaign_payload = payload
             existing.updated_at = datetime.utcnow()
             self.db.commit()
             return False
@@ -1135,6 +1151,10 @@ class MarketingOpportunityEngine:
             detected_at = datetime.fromisoformat(detected_at_str.replace("Z", "+00:00"))
         except (ValueError, AttributeError):
             detected_at = datetime.utcnow()
+
+        campaign_payload = {}
+        if conquesting_data:
+            campaign_payload["conquesting"] = conquesting_data
 
         entry = MarketingOpportunity(
             opportunity_id=opp_id,
@@ -1149,6 +1169,7 @@ class MarketingOpportunityEngine:
             target_audience=opp.get("target_audience"),
             sales_pitch=opp.get("sales_pitch"),
             suggested_products=opp.get("suggested_products"),
+            campaign_payload=campaign_payload if campaign_payload else None,
             expires_at=datetime.utcnow() + timedelta(days=14),
         )
         self.db.add(entry)
@@ -1898,8 +1919,22 @@ class MarketingOpportunityEngine:
         }
 
     def _clean_for_output(self, opp: dict) -> dict:
-        """Entfernt interne _-Felder fuer den API-Output."""
-        return {k: v for k, v in opp.items() if not k.startswith("_")}
+        """Entfernt interne _-Felder und promotiert Conquesting-Felder fuer den API-Output."""
+        clean = {k: v for k, v in opp.items() if not k.startswith("_")}
+
+        # Promote conquesting metadata to public API fields
+        clean["is_conquesting_active"] = bool(opp.get("_conquesting_applied", False))
+        if clean["is_conquesting_active"]:
+            matched_drugs = opp.get("_conquesting_matched_drugs", [])
+            clean["competitor_shortage_ingredient"] = ", ".join(matched_drugs[:3]) if matched_drugs else ""
+            clean["recommended_bid_modifier"] = float(opp.get("_conquesting_multiplier", 1.0))
+            clean["conquesting_product"] = opp.get("_conquesting_product", "")
+        else:
+            clean["competitor_shortage_ingredient"] = ""
+            clean["recommended_bid_modifier"] = 1.0
+            clean["conquesting_product"] = ""
+
+        return clean
 
     def _normalize_workflow_status(self, status: str | None) -> str:
         if not status:
@@ -2015,4 +2050,13 @@ class MarketingOpportunityEngine:
             "updated_at": m.updated_at.isoformat() if m.updated_at else None,
             "expires_at": m.expires_at.isoformat() if m.expires_at else None,
             "exported_at": m.exported_at.isoformat() if m.exported_at else None,
+            # Conquesting fields (from persisted campaign_payload)
+            "is_conquesting_active": bool((campaign_payload.get("conquesting") or {}).get("is_active", False)),
+            "competitor_shortage_ingredient": ", ".join(
+                (campaign_payload.get("conquesting") or {}).get("matched_drugs", [])[:3]
+            ),
+            "recommended_bid_modifier": float(
+                (campaign_payload.get("conquesting") or {}).get("multiplier", 1.0)
+            ),
+            "conquesting_product": (campaign_payload.get("conquesting") or {}).get("product", ""),
         }

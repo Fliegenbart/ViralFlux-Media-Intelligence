@@ -1,3 +1,4 @@
+import logging
 import os
 from datetime import timedelta
 
@@ -7,10 +8,22 @@ from fastapi.security import OAuth2PasswordRequestForm
 from app.core.security import create_access_token, get_password_hash, verify_password
 from app.schemas.token import Token
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
-_ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "admin@gelo.de")
-_ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "gelo2026")
+_ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "")
+_ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "")
+_ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
+
+if not _ADMIN_EMAIL or not _ADMIN_PASSWORD:
+    if _ENVIRONMENT == "production":
+        raise RuntimeError(
+            "FATAL: ADMIN_EMAIL and ADMIN_PASSWORD must be set via environment "
+            "variables in production. Do NOT use hardcoded defaults."
+        )
+    _ADMIN_EMAIL = _ADMIN_EMAIL or "admin@gelo.de"
+    _ADMIN_PASSWORD = _ADMIN_PASSWORD or "gelo2026"
+    logger.warning("Using default admin credentials (dev only). Set ADMIN_EMAIL/ADMIN_PASSWORD in production.")
 
 _USERS = {
     _ADMIN_EMAIL: {

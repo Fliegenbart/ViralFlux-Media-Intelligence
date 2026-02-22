@@ -20,15 +20,21 @@ _KNOWN_PLACEHOLDERS = {
 }
 
 SECRET_KEY = os.getenv("SECRET_KEY", "")
+_ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
+
 if not SECRET_KEY or SECRET_KEY in _KNOWN_PLACEHOLDERS:
+    if _ENVIRONMENT == "production":
+        raise RuntimeError(
+            "FATAL: SECRET_KEY is missing or uses a known placeholder in production! "
+            "Set a secure random SECRET_KEY (≥32 chars) via environment variable."
+        )
+    # Dev/test: generate ephemeral key
+    import secrets
+    SECRET_KEY = secrets.token_urlsafe(48)
     logger.warning(
-        "SECRET_KEY is missing or uses a known placeholder! "
-        "Set a secure random SECRET_KEY via environment variable."
+        "SECRET_KEY not set — using ephemeral key (tokens will NOT survive restarts). "
+        "Set SECRET_KEY env var for persistent sessions."
     )
-    if not SECRET_KEY:
-        import secrets
-        SECRET_KEY = secrets.token_urlsafe(48)
-        logger.warning("Generated ephemeral SECRET_KEY — tokens will NOT survive restarts.")
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:

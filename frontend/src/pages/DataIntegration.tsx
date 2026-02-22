@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTheme } from '../App';
 
 type IntegrationStatus = 'connected' | 'degraded' | 'disconnected';
 
@@ -63,6 +64,7 @@ const fmtLast = (d: Date | null) => {
 };
 
 const DataIntegration: React.FC = () => {
+  const { theme, toggle: toggleTheme } = useTheme();
   const navigate = useNavigate();
   const [status, setStatus] = useState<IntegrationStatusResponse | null>(null);
 
@@ -134,8 +136,22 @@ const DataIntegration: React.FC = () => {
             </div>
           </div>
 
-          <div className="text-xs text-slate-400">
-            Letzter erfolgreicher M2M-Sync: <span className="text-slate-600 font-medium">{lastSync}</span>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={toggleTheme}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs font-medium transition-all"
+              style={{
+                background: theme === 'dark' ? 'rgba(99,102,241,0.15)' : 'rgba(15,23,42,0.06)',
+                color: theme === 'dark' ? '#a5b4fc' : '#475569',
+                border: `1px solid ${theme === 'dark' ? 'rgba(99,102,241,0.3)' : 'rgba(0,0,0,0.08)'}`,
+              }}
+              title={theme === 'dark' ? 'Hell' : 'Dunkel'}
+            >
+              {theme === 'dark' ? '\u2600\uFE0F' : '\u263E'}
+            </button>
+            <div className="text-xs text-slate-400">
+              Sync: <span className="text-slate-600 font-medium">{lastSync}</span>
+            </div>
           </div>
         </div>
       </header>

@@ -1,21 +1,23 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTheme } from '../App';
 
 /* ═══ Design Tokens ══════════════════════════════════════════════════ */
-const C = {
-  bg: '#faf9f7',
-  bgCard: '#ffffff',
-  text: '#1e293b',
-  textSec: '#64748b',
-  textMuted: '#94a3b8',
-  indigo: '#4338ca',
-  indigoLight: '#e0e7ff',
-  indigoSoft: '#eef2ff',
-  amber: '#d97706',
-  border: '#e2e8f0',
-  borderLight: '#f1f5f9',
-  rule: '#cbd5e1',
+const LIGHT = {
+  bg: '#faf9f7', bgCard: '#ffffff', text: '#1e293b', textSec: '#64748b',
+  textMuted: '#94a3b8', indigo: '#4338ca', indigoLight: '#e0e7ff',
+  indigoSoft: '#eef2ff', amber: '#d97706', border: '#e2e8f0',
+  borderLight: '#f1f5f9', rule: '#cbd5e1',
 };
+const DARK = {
+  bg: '#0c1222', bgCard: '#1e293b', text: '#f1f5f9', textSec: '#94a3b8',
+  textMuted: '#64748b', indigo: '#6366f1', indigoLight: 'rgba(99,102,241,0.18)',
+  indigoSoft: 'rgba(99,102,241,0.1)', amber: '#fbbf24', border: '#334155',
+  borderLight: '#1e293b', rule: '#475569',
+};
+const getColors = (t: string) => t === 'dark' ? DARK : LIGHT;
+// Module-level default for static helper components (overridden inside LandingPage)
+const C = LIGHT;
 
 const FONT_SERIF = "'DM Serif Display', Georgia, 'Times New Roman', serif";
 const FONT_SANS = "'DM Sans', 'Inter', system-ui, sans-serif";
@@ -226,6 +228,8 @@ const RESPONSIVE_CSS = `
 
 /* ═══ Main Component ═════════════════════════════════════════════════ */
 const LandingPage: React.FC = () => {
+  const { theme, toggle: toggleTheme } = useTheme();
+  const C = getColors(theme);
   const navigate = useNavigate();
   const [heroVis, setHeroVis] = useState(false);
   const [peixScore, setPeixScore] = useState(0.72);
@@ -291,6 +295,19 @@ const LandingPage: React.FC = () => {
           </div>
         </div>
         <div className="lp-nav-actions">
+          <button
+            onClick={toggleTheme}
+            style={{
+              fontSize: 13, fontWeight: 500, padding: '7px 14px', borderRadius: 999, cursor: 'pointer',
+              background: theme === 'dark' ? 'rgba(99,102,241,0.15)' : 'rgba(15,23,42,0.06)',
+              color: theme === 'dark' ? '#a5b4fc' : C.textSec,
+              border: `1px solid ${theme === 'dark' ? 'rgba(99,102,241,0.3)' : C.border}`,
+              transition: 'all 0.2s',
+            }}
+            title={theme === 'dark' ? 'Heller Modus' : 'Dunkler Modus'}
+          >
+            {theme === 'dark' ? '\u2600\uFE0F' : '\u263E'}
+          </button>
           <a
             href={MAILTO}
             style={{

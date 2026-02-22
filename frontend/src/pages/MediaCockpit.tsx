@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useTheme } from '../App';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, Legend } from 'recharts';
 import { geoMercator, geoPath } from 'd3-geo';
 import { format, parseISO } from 'date-fns';
@@ -176,6 +177,7 @@ const pillToneClass = (tone?: 'green' | 'amber' | 'red') => {
 };
 
 const MediaCockpit: React.FC = () => {
+  const { theme, toggle: toggleTheme } = useTheme();
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const initialTab = params.get('tab') || 'map';
@@ -710,6 +712,18 @@ const MediaCockpit: React.FC = () => {
               <p className="text-xs text-slate-500">Deutschlandkarte + KI-Empfehlungen + Backtest Proof Engine</p>
             </div>
           </div>
+          <button
+            onClick={toggleTheme}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all"
+            style={{
+              background: theme === 'dark' ? 'rgba(99,102,241,0.15)' : 'rgba(15,23,42,0.06)',
+              color: theme === 'dark' ? '#a5b4fc' : '#475569',
+              border: `1px solid ${theme === 'dark' ? 'rgba(99,102,241,0.3)' : 'rgba(0,0,0,0.08)'}`,
+            }}
+            title={theme === 'dark' ? 'Zum hellen Modus wechseln' : 'Zum dunklen Modus wechseln'}
+          >
+            {theme === 'dark' ? '\u2600\uFE0F' : '\u263E'} {theme === 'dark' ? 'Hell' : 'Dunkel'}
+          </button>
         </div>
       </header>
 
@@ -975,7 +989,11 @@ const MediaCockpit: React.FC = () => {
                 </div>
 
                 {!activeMap.has_data ? (
-                  <div className="py-16 text-center text-slate-400">Keine Kartendaten vorhanden.</div>
+                  <div className="py-16 text-center">
+                    <div className="text-3xl mb-3">🗺</div>
+                    <div className="text-sm font-medium text-slate-500 mb-1">Keine Kartendaten vorhanden</div>
+                    <div className="text-xs text-slate-400">Starte einen Datenimport unter Datenimport oder warte auf den täglichen Sync (06:00 Uhr).</div>
+                  </div>
                 ) : (
                   <div
                     ref={mapContainerRef}
@@ -1395,7 +1413,10 @@ const MediaCockpit: React.FC = () => {
                       </div>
                     ))}
                     {(!activeMap.activation_suggestions || activeMap.activation_suggestions.length === 0) && (
-                      <p className="text-xs text-slate-400">Keine aktuellen Vorschläge.</p>
+                      <div className="text-center py-4">
+                        <div className="text-xs text-slate-400">Noch keine Activation-Vorschläge.</div>
+                        <div className="text-[10px] text-slate-400 mt-1">Vorschläge werden aus der Karte + PEIX-Score berechnet.</div>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -1639,7 +1660,13 @@ const MediaCockpit: React.FC = () => {
                   </button>
                 );
               })}
-              {recCards.length === 0 && <div className="text-slate-400 text-sm">Noch keine Action Cards vorhanden.</div>}
+              {recCards.length === 0 && (
+                <div className="text-center py-8 rounded-xl bg-slate-50 border border-slate-100">
+                  <div className="text-2xl mb-2">{'\uD83D\uDCCB'}</div>
+                  <div className="text-sm font-medium text-slate-500">Noch keine KI-Empfehlungen</div>
+                  <div className="text-xs text-slate-400 mt-1">Klicke oben auf Empfehlungen erzeugen oder waehle ein Bundesland in der Lagekarte.</div>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -1728,7 +1755,10 @@ const MediaCockpit: React.FC = () => {
                       </tr>
                     ))}
                     {runs.length === 0 && (
-                      <tr><td colSpan={6} className="py-4 text-slate-400 text-center">Noch keine Backtest-Runs gespeichert.</td></tr>
+                      <tr><td colSpan={6} className="py-8 text-center">
+                        <div className="text-sm text-slate-500">Noch keine Backtest-Runs gespeichert</div>
+                        <div className="text-xs text-slate-400 mt-1">Starte einen Market- oder Customer-Backtest oben.</div>
+                      </td></tr>
                     )}
                   </tbody>
                 </table>

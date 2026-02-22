@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useTheme } from '../App';
 import { format } from 'date-fns';
 import { de } from 'date-fns/locale';
 import { apiFetch } from '../lib/api';
@@ -187,6 +188,7 @@ const ToastContainer: React.FC<{ toasts: Array<{ id: number; message: string; ty
 
 // ─── Component ──────────────────────────────────────────────────────────────
 const SalesRadar: React.FC = () => {
+  const { theme, toggle: toggleTheme } = useTheme();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [opportunities, setOpportunities] = useState<MarketingOpportunity[]>([]);
@@ -405,6 +407,18 @@ const SalesRadar: React.FC = () => {
                 <span className="text-xs font-semibold text-red-500">{urgent.length} dringend</span>
               </div>
             )}
+            <button
+              onClick={toggleTheme}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs font-medium transition-all"
+              style={{
+                background: theme === 'dark' ? 'rgba(99,102,241,0.15)' : 'rgba(15,23,42,0.06)',
+                color: theme === 'dark' ? '#a5b4fc' : '#475569',
+                border: `1px solid ${theme === 'dark' ? 'rgba(99,102,241,0.3)' : 'rgba(0,0,0,0.08)'}`,
+              }}
+              title={theme === 'dark' ? 'Hell' : 'Dunkel'}
+            >
+              {theme === 'dark' ? '\u2600\uFE0F' : '\u263E'}
+            </button>
             <button
               onClick={handleExport}
               disabled={exporting || opportunities.length === 0}

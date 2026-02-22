@@ -113,17 +113,18 @@ async def get_status(db: Session = Depends(get_db)):
         MLForecast,
         NotaufnahmeSyndromData,
         SurvstatWeeklyData,
+        SurvstatKreisData,
     )
-    
+
     # Check latest data timestamps
     latest_wastewater = db.query(WastewaterAggregated).order_by(
         WastewaterAggregated.created_at.desc()
     ).first()
-    
+
     latest_trends = db.query(GoogleTrendsData).order_by(
         GoogleTrendsData.created_at.desc()
     ).first()
-    
+
     latest_forecast = db.query(MLForecast).order_by(
         MLForecast.created_at.desc()
     ).first()
@@ -135,7 +136,11 @@ async def get_status(db: Session = Depends(get_db)):
     latest_survstat = db.query(SurvstatWeeklyData).order_by(
         SurvstatWeeklyData.created_at.desc()
     ).first()
-    
+
+    latest_survstat_kreis = db.query(SurvstatKreisData).order_by(
+        SurvstatKreisData.created_at.desc()
+    ).first()
+
     return {
         "status": "operational",
         "data_freshness": {
@@ -144,6 +149,7 @@ async def get_status(db: Session = Depends(get_db)):
             "ml_forecast": latest_forecast.created_at if latest_forecast else None,
             "notaufnahme": latest_notaufnahme.created_at if latest_notaufnahme else None,
             "survstat": latest_survstat.created_at if latest_survstat else None,
+            "survstat_kreis": latest_survstat_kreis.created_at if latest_survstat_kreis else None,
         },
         "timestamp": datetime.utcnow()
     }

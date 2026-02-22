@@ -350,3 +350,44 @@ def backfill_survstat_clusters(self) -> Dict[str, Any]:
 
     logger.info("SURVSTAT cluster backfill: %s rows updated", updated)
     return _json_safe({"status": "success", "rows_clustered": updated})
+
+
+@celery_app.task(bind=True, name="fetch_survstat_kreis_api")
+def fetch_survstat_kreis_api(
+    self,
+    years: list | None = None,
+    diseases: list | None = None,
+) -> Dict[str, Any]:
+    """RKI SurvStat OLAP-API: Landkreis-Level Fallzahlen abrufen.
+
+    Micro-Cubing mit Rate-Limiting (1.5s pro Request).
+    Laufzeit ca. 1-2 Min. pro Krankheit/Jahr.
+    """
+    from app.services.data_ingest.survstat_api_service import SurvstatApiService
+
+    logger.info(
+        "SurvStat Kreis-API Pipeline gestartet (years=%s, diseases=%s)",
+        years,
+        "all" if diseases is None else len(diseases),
+    )
+
+    def _progress(state, meta):
+        self.update_state(state=state, meta=meta)
+
+    with get_db_context() as db:
+        service = SurvstatApiService(db)
+        result = service.run(
+            years=years,
+            diseases=diseases,
+            progress_callback=_progress,
+        )
+
+    if not result.get("success"):
+        raise RuntimeError(f"SurvStat Kreis-API fehlgeschlagen: {result}")
+
+    logger.info(
+        "SurvStat Kreis-API: %s Datenpunkte in %ss",
+        result.get("total_records", 0),
+        result.get("elapsed_seconds", "?"),
+    )
+    return _json_safe(result)

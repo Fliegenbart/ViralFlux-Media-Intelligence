@@ -340,3 +340,57 @@ async def download_template(upload_type: str):
         media_type="text/csv",
         headers={"Content-Disposition": f"attachment; filename={filename}"},
     )
+
+
+# ─── RKI SurvStat Landkreis-API ─────────────────────────────────────
+
+
+@router.post("/survstat-api")
+async def trigger_survstat_api_fetch(
+    years: list[int] | None = None,
+    diseases: list[str] | None = None,
+):
+    """RKI SurvStat OLAP-API Abruf triggern (Landkreis-Ebene).
+
+    Micro-Cubing mit Rate-Limiting. Laufzeit: ~1-2 Min. pro Krankheit/Jahr.
+    Async via Celery — gibt sofort task_id zurück.
+
+    - ``years``: Liste der Jahre (Default: Vorjahr + aktuelles Jahr)
+    - ``diseases``: Krankheits-Filter (Default: alle 22 OTC-Krankheiten)
+    """
+    from app.services.data_ingest.tasks import fetch_survstat_kreis_api
+
+    try:
+        task = fetch_survstat_kreis_api.delay(years=years, diseases=diseases)
+    except Exception as exc:
+        logger.error(f"Celery-Enqueue fehlgeschlagen: {exc}")
+        raise HTTPException(
+            status_code=503,
+            detail="Celery Broker nicht erreichbar. Bitte Redis/Worker prüfen.",
+        )
+
+    return {
+        "task_id": task.id,
+        "status": "started",
+        "years": years or "default (current-1, current)",
+        "diseases": diseases or "all OTC (22)",
+        "status_url": f"/api/v1/admin/ml/status/{task.id}",
+    }
+
+
+@router.post("/survstat-api/discover-kreise")
+async def discover_kreise(db: Session = Depends(get_db)):
+    """Landkreis-Namen aus RKI-Hierarchie entdecken und in kreis_einwohner seeden."""
+    from app.services.data_ingest.survstat_api_service import SurvstatApiService
+
+    service = SurvstatApiService(db)
+    new_count = service.discover_and_seed_kreise()
+
+    return {
+        "success": True,
+        "new_kreise_discovered": new_count,
+        "message": (
+            f"{new_count} neue Kreise geseedet. "
+            "Einwohner-Daten müssen separat gepflegt werden."
+        ),
+    }

@@ -159,7 +159,7 @@ class XGBoostTrainer:
         # Atomic save helper
         def _atomic_save_model(model: Any, target: Path) -> None:
             fd, tmp_path = tempfile.mkstemp(
-                dir=str(model_dir), suffix=".json.tmp",
+                dir=str(model_dir), suffix=".tmp.json",
             )
             os.close(fd)
             try:

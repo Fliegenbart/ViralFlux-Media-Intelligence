@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime, Boolean, JSON, ForeignKey, Index
+from sqlalchemy import Column, Integer, String, Float, DateTime, Boolean, JSON, ForeignKey, Index, UniqueConstraint
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 from datetime import datetime
@@ -162,6 +162,40 @@ class SurvstatWeeklyData(Base):
         Index('idx_survstat_cluster_week', 'disease_cluster', 'week_start'),
         Index('uq_survstat_week_state_disease', 'week_label', 'bundesland', 'disease', unique=True),
     )
+
+
+class SurvstatKreisData(Base):
+    """RKI SurvStat Landkreis-Level Fallzahlen (via OLAP-Cube API)."""
+    __tablename__ = "survstat_kreis_data"
+
+    id = Column(Integer, primary_key=True, index=True)
+    year = Column(Integer, nullable=False, index=True)
+    week = Column(Integer, nullable=False)
+    week_label = Column(String, nullable=False, index=True)
+    kreis = Column(String, nullable=False, index=True)
+    disease = Column(String, nullable=False, index=True)
+    disease_cluster = Column(String, nullable=True, index=True)
+    fallzahl = Column(Integer, nullable=False, default=0)
+    inzidenz = Column(Float, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        UniqueConstraint("week_label", "kreis", "disease", name="uq_survstat_kreis"),
+        Index("idx_survstat_kreis_disease_week", "disease", "year", "week"),
+        Index("idx_survstat_kreis_cluster", "disease_cluster", "year"),
+    )
+
+
+class KreisEinwohner(Base):
+    """Referenztabelle: Landkreis-Einwohnerzahlen (Destatis)."""
+    __tablename__ = "kreis_einwohner"
+
+    id = Column(Integer, primary_key=True, index=True)
+    kreis_name = Column(String, nullable=False, unique=True, index=True)
+    ags = Column(String(5), nullable=True)
+    bundesland = Column(String, nullable=False, index=True)
+    einwohner = Column(Integer, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow)
 
 
 class GoogleTrendsData(Base):

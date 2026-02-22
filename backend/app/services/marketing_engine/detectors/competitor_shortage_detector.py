@@ -22,6 +22,13 @@ from .base_detector import OpportunityDetector
 
 logger = logging.getLogger(__name__)
 
+_UMLAUT_MAP = str.maketrans({"ä": "ae", "ö": "oe", "ü": "ue", "ß": "ss"})
+
+
+def _normalize(text: str) -> str:
+    """Lowercase + flatten German umlauts for matching."""
+    return text.lower().translate(_UMLAUT_MAP)
+
 # Load conquesting matrix at module level (immutable config)
 _MATRIX_PATH = Path(__file__).resolve().parent.parent / "conquesting_matrix.json"
 
@@ -94,8 +101,8 @@ class CompetitorShortageDetector(OpportunityDetector):
 
         for product_cfg in CONQUESTING_PRODUCTS:
             conquesting = product_cfg.get("conquesting", {})
-            target_ingredients = [i.lower() for i in conquesting.get("target_ingredients", [])]
-            target_forms = [f.lower() for f in conquesting.get("target_forms", [])]
+            target_ingredients = [_normalize(i) for i in conquesting.get("target_ingredients", [])]
+            target_forms = [_normalize(f) for f in conquesting.get("target_forms", [])]
             bid_multiplier = float(conquesting.get("bid_multiplier", 1.5))
 
             if not target_ingredients and not target_forms:
@@ -106,8 +113,8 @@ class CompetitorShortageDetector(OpportunityDetector):
             matched_count = 0
 
             for _, row in df.iterrows():
-                wirkstoffe = str(row.get("Wirkstoffe", "")).lower()
-                darreichung = str(row.get("Darreichungsform", "")).lower()
+                wirkstoffe = _normalize(str(row.get("Wirkstoffe", "")))
+                darreichung = _normalize(str(row.get("Darreichungsform", "")))
                 drug_name = str(row.get("Arzneimittlbezeichnung", ""))
                 signal_type = str(row.get("signal_type", ""))
 

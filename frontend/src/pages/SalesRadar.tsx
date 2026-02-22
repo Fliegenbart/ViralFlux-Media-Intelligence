@@ -17,6 +17,10 @@ interface MarketingOpportunity {
   created_at: string;
   expires_at: string | null;
   exported_at: string | null;
+  is_conquesting_active?: boolean;
+  competitor_shortage_ingredient?: string;
+  recommended_bid_modifier?: number;
+  conquesting_product?: string;
 }
 
 interface OpportunityStats {
@@ -34,6 +38,7 @@ const TYPE_CONFIG: Record<string, { label: string; color: string; icon: string }
   PREDICTIVE_SALES_SPIKE: { label: 'Nachfrage', color: '#4338ca', icon: 'M2.25 18L9 11.25l4.306 4.307a11.95 11.95 0 015.814-5.519l2.74-1.22m0 0l-5.94-2.28m5.94 2.28l-2.28 5.941' },
   DIFFERENTIAL_DIAGNOSIS: { label: 'Differenzial', color: '#06b6d4', icon: 'M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3M14.25 3.104c.251.023.501.05.75.082M19.8 15.3l-1.57.393A9.065 9.065 0 0112 15a9.065 9.065 0 00-6.23.693L5 14.5m14.8.8l1.402 1.402c1.232 1.232.65 3.318-1.067 3.611A48.309 48.309 0 0112 21c-2.773 0-5.491-.235-8.135-.687-1.718-.293-2.3-2.379-1.067-3.61L5 14.5' },
   WEATHER_FORECAST: { label: 'Wetter', color: '#0ea5e9', icon: 'M2.25 15a4.5 4.5 0 004.5 4.5H18a3.75 3.75 0 001.332-7.257 3 3 0 00-3.758-3.848 5.25 5.25 0 00-10.233 2.33A4.502 4.502 0 002.25 15z' },
+  COMPETITOR_SHORTAGE: { label: 'Conquesting', color: '#dc2626', icon: 'M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z' },
 };
 
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
@@ -100,6 +105,32 @@ const Sparkline: React.FC<{ data: number[]; color: string; w?: number; h?: numbe
         return <circle cx={lastX} cy={lastY} r="2.5" fill={color} />;
       })()}
     </svg>
+  );
+};
+
+const ConquestingBadge: React.FC<{ opp: MarketingOpportunity; compact?: boolean }> = ({ opp, compact }) => {
+  if (!opp.is_conquesting_active) return null;
+  return (
+    <div
+      className="rounded-lg border-2 border-red-500 bg-red-50 px-3 py-2"
+      style={{ animation: 'pulse 2s cubic-bezier(0.4,0,0.6,1) infinite' }}
+    >
+      <div className="flex items-center gap-2">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" />
+        </svg>
+        <span className="text-[11px] font-extrabold text-red-800 uppercase tracking-wider">Conquesting Opportunity</span>
+      </div>
+      {!compact && (
+        <div className="mt-1.5 text-[11px] text-red-700 leading-relaxed">
+          Competitor shortage detected: <span className="font-bold">{opp.competitor_shortage_ingredient || '—'}</span>.
+          {' '}Scale bids by <span className="font-bold">{opp.recommended_bid_modifier?.toFixed(1) || '1.0'}x</span>.
+          {opp.conquesting_product && (
+            <span className="ml-1 text-red-600">({opp.conquesting_product})</span>
+          )}
+        </div>
+      )}
+    </div>
   );
 };
 
@@ -332,6 +363,7 @@ const SalesRadar: React.FC = () => {
                       <div className="text-sm font-bold text-slate-700 mt-1">{topProduct?.name || '—'}</div>
                     </div>
                   </div>
+                  <ConquestingBadge opp={opp} compact />
                   <div className="mt-4 flex items-center justify-between gap-3">
                     <div className="text-[11px] text-slate-400">Output: HWG-safe Copy + CTA</div>
                     <button
@@ -464,6 +496,9 @@ const SalesRadar: React.FC = () => {
                             </div>
                           </div>
 
+                          {/* Conquesting Badge */}
+                          <ConquestingBadge opp={opp} />
+
                           {/* Top Product + Actions */}
                           <div className="flex items-center justify-between mt-4 pt-3 border-t border-slate-200">
                             {topProduct ? (
@@ -549,6 +584,8 @@ const SalesRadar: React.FC = () => {
                                   </div>
                                 </div>
 
+                                <ConquestingBadge opp={opp} compact />
+
                                 <div className="flex items-center justify-between">
                                   <div className="flex items-center gap-2">
                                     {topProduct && (
@@ -626,6 +663,7 @@ const SalesRadar: React.FC = () => {
                           <th className="text-left px-4 py-3 text-[10px] text-slate-500 uppercase tracking-wider font-medium">Typ</th>
                           <th className="text-left px-4 py-3 text-[10px] text-slate-500 uppercase tracking-wider font-medium">Trigger</th>
                           <th className="text-left px-4 py-3 text-[10px] text-slate-500 uppercase tracking-wider font-medium">Urgency</th>
+                          <th className="text-left px-4 py-3 text-[10px] text-slate-500 uppercase tracking-wider font-medium">Conquesting</th>
                           <th className="text-left px-4 py-3 text-[10px] text-slate-500 uppercase tracking-wider font-medium">Erstellt</th>
                           <th className="text-right px-4 py-3 text-[10px] text-slate-500 uppercase tracking-wider font-medium">Aktion</th>
                         </tr>
@@ -660,6 +698,15 @@ const SalesRadar: React.FC = () => {
                                 <span className="font-mono font-bold" style={{ color: urgencyColor(opp.urgency_score) }}>
                                   {opp.urgency_score}
                                 </span>
+                              </td>
+                              <td className="px-4 py-3">
+                                {opp.is_conquesting_active ? (
+                                  <span className="text-[9px] font-bold px-2 py-0.5 rounded border-2 border-red-400 bg-red-50 text-red-700">
+                                    {opp.recommended_bid_modifier?.toFixed(1) || '1.5'}x BID
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] text-slate-300">—</span>
+                                )}
                               </td>
                               <td className="px-4 py-3 text-slate-400">
                                 {opp.created_at ? format(new Date(opp.created_at), 'dd.MM.yy', { locale: de }) : '—'}
@@ -747,6 +794,9 @@ const SalesRadar: React.FC = () => {
                     <div className="text-[10px] text-slate-400 mt-2">{opp.trigger_context.detected_at}</div>
                   </div>
                 </div>
+
+                {/* Conquesting Badge (Detail) */}
+                <ConquestingBadge opp={opp} />
 
                 {/* Region + Audience */}
                 <div className="grid grid-cols-2 gap-4">

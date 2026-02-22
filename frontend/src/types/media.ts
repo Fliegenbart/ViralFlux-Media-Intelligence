@@ -79,6 +79,10 @@ export interface RecommendationCard {
   detail_url?: string;
   created_at?: string | null;
   updated_at?: string | null;
+  is_conquesting_active?: boolean;
+  competitor_shortage_ingredient?: string;
+  recommended_bid_modifier?: number;
+  conquesting_product?: string;
 }
 
 export interface ProductAttributePayload {

@@ -107,10 +107,14 @@ services:
       - POSTGRES_USER=${POSTGRES_USER:-virusradar}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-changeme}
       - POSTGRES_DB=${POSTGRES_DB:-virusradar_db}
+      - OPENWEATHER_API_KEY=${OPENWEATHER_API_KEY:-placeholder}
+      - VLLM_BASE_URL=${VLLM_BASE_URL:-http://host.docker.internal:8000/v1}
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
       - SECRET_KEY=${SECRET_KEY:-viralflux-prod-secret-key-change-me-2026}
       - ENVIRONMENT=production
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       redis:
         condition: service_healthy

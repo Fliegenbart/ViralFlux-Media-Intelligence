@@ -98,6 +98,13 @@
 [data-theme="dark"] .text-red-500 { color: #f87171 !important; }
 [data-theme="dark"] .text-emerald-600 { color: #34d399 !important; }
 
+/* Dark mode: Conquesting teal colors */
+[data-theme="dark"] .border-teal-400 { border-color: #2dd4bf !important; }
+[data-theme="dark"] .bg-teal-50 { background-color: rgba(20, 184, 166, 0.12) !important; }
+[data-theme="dark"] .text-teal-800 { color: #99f6e4 !important; }
+[data-theme="dark"] .text-teal-700 { color: #5eead4 !important; }
+[data-theme="dark"] .text-teal-600 { color: #2dd4bf !important; }
+
 /* Dark mode: Recharts + scrollbar */
 [data-theme="dark"] .recharts-cartesian-grid line { stroke: #334155 !important; }
 [data-theme="dark"] .recharts-text { fill: #64748b !important; }

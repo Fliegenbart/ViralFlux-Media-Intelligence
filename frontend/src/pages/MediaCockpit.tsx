@@ -1562,7 +1562,7 @@ const MediaCockpit: React.FC = () => {
                       min={0}
                       max={100}
                       className="media-input"
-                      placeholder="Min Urgency"
+                      placeholder="Min. Dringlichkeit"
                     />
                     <input
                       value={recRegionFilter}
@@ -1627,10 +1627,10 @@ const MediaCockpit: React.FC = () => {
                         <div className="text-xs text-slate-500 mt-1 line-clamp-2">{card.reason || card.trigger_snapshot?.details || 'Signal erkannt.'}</div>
                       </div>
                       <div className="flex-shrink-0 text-right">
-                        <div className="text-[10px] text-slate-400 uppercase tracking-wider">Urgency</div>
+                        <div className="text-[10px] text-slate-400 uppercase tracking-wider">Dringlichkeit</div>
                         <div className="text-sm font-bold text-slate-700 mt-1">{Math.round(card.urgency_score || 0)}</div>
                         {card.confidence !== undefined && (
-                          <div className="text-[11px] text-emerald-500 mt-1">Conf {Math.round((card.confidence || 0) * 100)}%</div>
+                          <div className="text-[11px] text-emerald-500 mt-1">Konf. {Math.round((card.confidence || 0) * 100)}%</div>
                         )}
                       </div>
                     </div>

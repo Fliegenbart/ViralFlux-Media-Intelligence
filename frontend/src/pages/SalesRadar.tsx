@@ -1,10 +1,9 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { useTheme } from '../App';
+import { useTheme, useToast } from '../App';
 import { format } from 'date-fns';
 import { de } from 'date-fns/locale';
 import { apiFetch } from '../lib/api';
-import { useToast } from '../lib/useToast';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 interface MarketingOpportunity {
@@ -73,7 +72,7 @@ const TYPE_CONFIG: Record<string, { label: string; color: string; icon: string }
   PREDICTIVE_SALES_SPIKE: { label: 'Nachfrage', color: '#4338ca', icon: 'M2.25 18L9 11.25l4.306 4.307a11.95 11.95 0 015.814-5.519l2.74-1.22m0 0l-5.94-2.28m5.94 2.28l-2.28 5.941' },
   DIFFERENTIAL_DIAGNOSIS: { label: 'Differenzial', color: '#06b6d4', icon: 'M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3M14.25 3.104c.251.023.501.05.75.082M19.8 15.3l-1.57.393A9.065 9.065 0 0112 15a9.065 9.065 0 00-6.23.693L5 14.5m14.8.8l1.402 1.402c1.232 1.232.65 3.318-1.067 3.611A48.309 48.309 0 0112 21c-2.773 0-5.491-.235-8.135-.687-1.718-.293-2.3-2.379-1.067-3.61L5 14.5' },
   WEATHER_FORECAST: { label: 'Wetter', color: '#0ea5e9', icon: 'M2.25 15a4.5 4.5 0 004.5 4.5H18a3.75 3.75 0 001.332-7.257 3 3 0 00-3.758-3.848 5.25 5.25 0 00-10.233 2.33A4.502 4.502 0 002.25 15z' },
-  COMPETITOR_SHORTAGE: { label: 'Conquesting', color: '#d97706', icon: 'M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z' },
+  COMPETITOR_SHORTAGE: { label: 'Conquesting', color: '#0d9488', icon: 'M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z' },
 };
 
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
@@ -146,42 +145,22 @@ const Sparkline: React.FC<{ data: number[]; color: string; w?: number; h?: numbe
 const ConquestingBadge: React.FC<{ opp: MarketingOpportunity; compact?: boolean }> = ({ opp, compact }) => {
   if (!opp.is_conquesting_active) return null;
   return (
-    <div className="rounded-lg border border-amber-400 bg-amber-50 px-3 py-2 mt-2">
+    <div className="rounded-lg border border-teal-400 bg-teal-50 px-3 py-2 mt-2">
       <div className="flex items-center gap-2">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#0d9488" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
           <path d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" />
         </svg>
-        <span className="text-[11px] font-bold text-amber-800 uppercase tracking-wider">Conquesting</span>
+        <span className="text-[11px] font-bold text-teal-800 uppercase tracking-wider">Conquesting</span>
       </div>
       {!compact && (
-        <div className="mt-1.5 text-[11px] text-amber-700 leading-relaxed">
+        <div className="mt-1.5 text-[11px] text-teal-700 leading-relaxed">
           Engpass: <span className="font-bold">{opp.competitor_shortage_ingredient || '—'}</span>.
           {' '}Bid-Multiplikator: <span className="font-bold">{opp.recommended_bid_modifier?.toFixed(1) || '1.0'}x</span>.
           {opp.conquesting_product && (
-            <span className="ml-1 text-amber-600">({opp.conquesting_product})</span>
+            <span className="ml-1 text-teal-600">({opp.conquesting_product})</span>
           )}
         </div>
       )}
-    </div>
-  );
-};
-
-// ─── Toast Container ────────────────────────────────────────────────────────
-const ToastContainer: React.FC<{ toasts: Array<{ id: number; message: string; type: string }>; onRemove: (id: number) => void }> = ({ toasts, onRemove }) => {
-  if (toasts.length === 0) return null;
-  const colors: Record<string, string> = {
-    success: 'bg-emerald-600 text-white',
-    error: 'bg-red-600 text-white',
-    info: 'bg-slate-700 text-white',
-  };
-  return (
-    <div className="fixed bottom-6 right-6 z-[9999] flex flex-col gap-2" style={{ maxWidth: 380 }}>
-      {toasts.map(t => (
-        <div key={t.id} className={`${colors[t.type] || colors.info} rounded-lg px-4 py-3 shadow-xl text-sm flex items-center gap-3 animate-[slideUp_0.3s_ease-out]`}>
-          <span className="flex-1">{t.message}</span>
-          <button onClick={() => onRemove(t.id)} className="opacity-60 hover:opacity-100 text-lg leading-none">&times;</button>
-        </div>
-      ))}
     </div>
   );
 };
@@ -204,7 +183,7 @@ const SalesRadar: React.FC = () => {
   const [totalCount, setTotalCount] = useState(0);
   const [roi, setRoi] = useState<ROIData | null>(null);
   const pageSize = 50;
-  const { toasts, addToast, removeToast } = useToast();
+  const { toast } = useToast();
 
   // Fetch
   const fetchOpportunities = useCallback(async (page = 1) => {
@@ -278,14 +257,14 @@ const SalesRadar: React.FC = () => {
       if (res.ok) {
         const data = await res.json();
         const count = data?.new_opportunities ?? data?.total ?? 0;
-        addToast(`${count} Opportunities generiert`, 'success');
+        toast(`${count} Opportunities generiert`, 'success');
         await fetchOpportunities();
         await fetchStats();
       } else {
-        addToast(`Generate fehlgeschlagen: ${res.status}`, 'error');
+        toast(`Generate fehlgeschlagen: ${res.status}`, 'error');
       }
     } catch (e) {
-      addToast('Generate fehlgeschlagen — Server nicht erreichbar', 'error');
+      toast('Generate fehlgeschlagen — Server nicht erreichbar', 'error');
       console.error('Generate error:', e);
     }
     finally { setGenerating(false); }
@@ -304,10 +283,10 @@ const SalesRadar: React.FC = () => {
       a.download = `ViralFlux_CRM_Export_${new Date().toISOString().slice(0, 10)}.json`;
       a.click();
       URL.revokeObjectURL(url);
-      addToast('CRM-Export heruntergeladen', 'success');
+      toast('CRM-Export heruntergeladen', 'success');
       await fetchOpportunities();
     } catch (e) {
-      addToast('Export fehlgeschlagen', 'error');
+      toast('Export fehlgeschlagen', 'error');
       console.error('Export error:', e);
     }
     finally { setExporting(false); }
@@ -318,17 +297,17 @@ const SalesRadar: React.FC = () => {
       const res = await apiFetch(`/api/v1/marketing/${encodeURIComponent(id)}/status?status=${status}`, { method: 'PATCH' });
       if (res.ok) {
         const label = status === 'APPROVED' ? 'freigegeben' : status === 'DISMISSED' ? 'verworfen' : status === 'SENT' ? 'gesendet' : status === 'CONVERTED' ? 'konvertiert' : status === 'ACTIVATED' ? 'aktiviert' : status === 'READY' ? 'bereitgestellt' : status;
-        addToast(`Opportunity ${label}`, 'success');
+        toast(`Opportunity ${label}`, 'success');
       } else {
         const err = await res.json().catch(() => null);
         const detail = err?.detail || `HTTP ${res.status}`;
-        addToast(`Status-Update fehlgeschlagen: ${detail}`, 'error');
+        toast(`Status-Update fehlgeschlagen: ${detail}`, 'error');
       }
       await fetchOpportunities();
       await fetchStats();
       if (detailOpp?.id === id) openDetail(null);
     } catch (e) {
-      addToast('Status-Update fehlgeschlagen', 'error');
+      toast('Status-Update fehlgeschlagen', 'error');
       console.error('Status update error:', e);
     }
   };
@@ -403,7 +382,7 @@ const SalesRadar: React.FC = () => {
             {urgent.length > 0 && (
               <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg mr-2"
                 style={{ background: '#ef444410', border: '1px solid #ef444430' }}>
-                <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                <span className="w-2 h-2 rounded-full bg-red-500 animate-none" />
                 <span className="text-xs font-semibold text-red-500">{urgent.length} dringend</span>
               </div>
             )}
@@ -462,14 +441,7 @@ const SalesRadar: React.FC = () => {
                 Automatisch generierte Marketing-Opportunities auf Basis von Echtzeit-Signalen.
               </p>
             </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setShowTechDetails((s) => !s)}
-                className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 text-slate-500 transition hover:bg-slate-100"
-              >
-                {showTechDetails ? 'Pipeline ausblenden' : 'Pipeline anzeigen'}
-              </button>
-            </div>
+            <div className="flex items-center gap-2" />
           </div>
 
           <div className="mt-5 grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -506,7 +478,7 @@ const SalesRadar: React.FC = () => {
                   </div>
                   <ConquestingBadge opp={opp} compact />
                   <div className="mt-4 flex items-center justify-between gap-3">
-                    <div className="text-[11px] text-slate-400">Output: HWG-safe Copy + CTA</div>
+                    <div className="text-[11px] text-slate-400">Ausgabe: HWG-konforme Texte</div>
                     <button
                       onClick={() => openDetail(opp)}
                       className="px-4 py-2 text-xs font-bold rounded-lg transition hover:brightness-110"
@@ -658,7 +630,7 @@ const SalesRadar: React.FC = () => {
             {urgent.length > 0 && (
               <section className="fade-in">
                 <div className="flex items-center gap-3 mb-4">
-                  <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                  <div className="w-2 h-2 rounded-full bg-red-500 animate-none" />
                   <h2 className="text-sm font-bold text-red-500 uppercase tracking-wider">Sofort handeln</h2>
                   <div className="flex-1 h-px" style={{ background: 'linear-gradient(to right, #ef444440, transparent)' }} />
                   <span className="text-xs text-slate-400">{urgent.length} dringend{urgent.length !== 1 ? 'e' : ''} Chance{urgent.length !== 1 ? 'n' : ''}</span>
@@ -688,7 +660,7 @@ const SalesRadar: React.FC = () => {
                                 </span>
                                 {opp.status === 'URGENT' && (
                                   <span className="text-[9px] font-bold px-1.5 py-0.5 rounded" style={{ background: '#ef444415', color: '#ef4444' }}>
-                                    URGENT
+                                    DRINGEND
                                   </span>
                                 )}
                               </div>
@@ -835,14 +807,15 @@ const SalesRadar: React.FC = () => {
             )}
 
             {/* ZONE 3: PIPELINE */}
-            {showTechDetails && pipeline.length > 0 && (
+            {/* ZONE 3: PIPELINE — Funnel immer sichtbar, Tabelle togglebar */}
+            {pipeline.length > 0 && (
               <section className="fade-in">
                 <div className="flex items-center gap-3 mb-4">
                   <div className="w-2 h-2 rounded-full bg-emerald-500" />
                   <h2 className="text-sm font-bold text-emerald-500 uppercase tracking-wider">Pipeline</h2>
                   <div className="flex-1 h-px" style={{ background: 'linear-gradient(to right, #10b98140, transparent)' }} />
 
-                  {/* Mini Funnel */}
+                  {/* Mini Funnel — immer sichtbar */}
                   <div className="flex items-center gap-2 text-[10px]">
                     <span className="flex items-center gap-1">
                       <span className="w-2 h-2 rounded-full" style={{ background: '#10b981' }} />
@@ -861,84 +834,93 @@ const SalesRadar: React.FC = () => {
                       {pipeline.filter(o => o.status === 'EXPIRED').length} abgelaufen
                     </span>
                   </div>
+
+                  <button
+                    onClick={() => setShowTechDetails((s) => !s)}
+                    className="ml-2 px-2.5 py-1 text-[10px] font-semibold rounded-lg border border-slate-200 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
+                  >
+                    {showTechDetails ? 'Tabelle ausblenden' : 'Tabelle anzeigen'}
+                  </button>
                 </div>
 
-                {/* Pipeline Table */}
-                <div className="card overflow-hidden">
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-xs">
-                      <thead>
-                        <tr className="bg-slate-100">
-                          <th className="text-left px-4 py-3 text-[10px] text-slate-500 uppercase tracking-wider font-medium">Status</th>
-                          <th className="text-left px-4 py-3 text-[10px] text-slate-500 uppercase tracking-wider font-medium">Typ</th>
-                          <th className="text-left px-4 py-3 text-[10px] text-slate-500 uppercase tracking-wider font-medium">Trigger</th>
-                          <th className="text-left px-4 py-3 text-[10px] text-slate-500 uppercase tracking-wider font-medium">Urgency</th>
-                          <th className="text-left px-4 py-3 text-[10px] text-slate-500 uppercase tracking-wider font-medium">Conquesting</th>
-                          <th className="text-left px-4 py-3 text-[10px] text-slate-500 uppercase tracking-wider font-medium">Erstellt</th>
-                          <th className="text-right px-4 py-3 text-[10px] text-slate-500 uppercase tracking-wider font-medium">Aktion</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {pipeline.map((opp) => {
-                          const tc = TYPE_CONFIG[opp.type] || { label: opp.type, color: '#64748b', icon: '' };
-                          const sc = STATUS_CONFIG[opp.status] || { label: opp.status, color: '#64748b' };
-                          return (
-                            <tr key={opp.id}
-                              className="cursor-pointer transition hover:bg-slate-50 border-b border-slate-200"
-                              onClick={() => openDetail(opp)}
-                            >
-                              <td className="px-4 py-3">
-                                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
-                                  style={{ background: `${sc.color}12`, color: sc.color }}>
-                                  {sc.label}
-                                </span>
-                              </td>
-                              <td className="px-4 py-3">
-                                <div className="flex items-center gap-2">
-                                  <TypeIcon type={opp.type} size={12} />
-                                  <span className="text-slate-500">{tc.label}</span>
-                                </div>
-                              </td>
-                              <td className="px-4 py-3">
-                                <span className="text-slate-700 line-clamp-1 max-w-[300px] inline-block">
-                                  {opp.trigger_context.details}
-                                </span>
-                              </td>
-                              <td className="px-4 py-3">
-                                <span className="font-mono font-bold" style={{ color: urgencyColor(opp.urgency_score) }}>
-                                  {opp.urgency_score}
-                                </span>
-                              </td>
-                              <td className="px-4 py-3">
-                                {opp.is_conquesting_active ? (
-                                  <span className="text-[9px] font-bold px-2 py-0.5 rounded border-2 border-amber-400 bg-amber-50 text-amber-700">
-                                    {opp.recommended_bid_modifier?.toFixed(1) || '1.5'}x BID
+                {/* Pipeline Table — togglebar */}
+                {showTechDetails && (
+                  <div className="card overflow-hidden">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="bg-slate-100">
+                            <th className="text-left px-4 py-3 text-[10px] text-slate-500 uppercase tracking-wider font-medium">Status</th>
+                            <th className="text-left px-4 py-3 text-[10px] text-slate-500 uppercase tracking-wider font-medium">Typ</th>
+                            <th className="text-left px-4 py-3 text-[10px] text-slate-500 uppercase tracking-wider font-medium">Trigger</th>
+                            <th className="text-left px-4 py-3 text-[10px] text-slate-500 uppercase tracking-wider font-medium">Dringlichkeit</th>
+                            <th className="text-left px-4 py-3 text-[10px] text-slate-500 uppercase tracking-wider font-medium">Conquesting</th>
+                            <th className="text-left px-4 py-3 text-[10px] text-slate-500 uppercase tracking-wider font-medium">Erstellt</th>
+                            <th className="text-right px-4 py-3 text-[10px] text-slate-500 uppercase tracking-wider font-medium">Aktion</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {pipeline.map((opp) => {
+                            const tc = TYPE_CONFIG[opp.type] || { label: opp.type, color: '#64748b', icon: '' };
+                            const sc = STATUS_CONFIG[opp.status] || { label: opp.status, color: '#64748b' };
+                            return (
+                              <tr key={opp.id}
+                                className="cursor-pointer transition hover:bg-slate-50 border-b border-slate-200"
+                                onClick={() => openDetail(opp)}
+                              >
+                                <td className="px-4 py-3">
+                                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
+                                    style={{ background: `${sc.color}12`, color: sc.color }}>
+                                    {sc.label}
                                   </span>
-                                ) : (
-                                  <span className="text-[10px] text-slate-300">—</span>
-                                )}
-                              </td>
-                              <td className="px-4 py-3 text-slate-400">
-                                {opp.created_at ? format(new Date(opp.created_at), 'dd.MM.yy', { locale: de }) : '—'}
-                              </td>
-                              <td className="px-4 py-3 text-right">
-                                {opp.status === 'SENT' && (
-                                  <button
-                                    onClick={(e) => { e.stopPropagation(); updateStatus(opp.id, 'CONVERTED'); }}
-                                    className="text-[10px] font-medium px-2.5 py-1 rounded-lg transition hover:opacity-80"
-                                    style={{ background: '#4338ca15', color: '#4338ca', border: '1px solid #4338ca30' }}
-                                  >
-                                    Konvertiert
-                                  </button>
-                                )}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
+                                </td>
+                                <td className="px-4 py-3">
+                                  <div className="flex items-center gap-2">
+                                    <TypeIcon type={opp.type} size={12} />
+                                    <span className="text-slate-500">{tc.label}</span>
+                                  </div>
+                                </td>
+                                <td className="px-4 py-3">
+                                  <span className="text-slate-700 line-clamp-1 max-w-[300px] inline-block">
+                                    {opp.trigger_context.details}
+                                  </span>
+                                </td>
+                                <td className="px-4 py-3">
+                                  <span className="font-mono font-bold" style={{ color: urgencyColor(opp.urgency_score) }}>
+                                    {opp.urgency_score}
+                                  </span>
+                                </td>
+                                <td className="px-4 py-3">
+                                  {opp.is_conquesting_active ? (
+                                    <span className="text-[9px] font-bold px-2 py-0.5 rounded border-2 border-teal-400 bg-teal-50 text-teal-700">
+                                      {opp.recommended_bid_modifier?.toFixed(1) || '1.5'}x BID
+                                    </span>
+                                  ) : (
+                                    <span className="text-[10px] text-slate-300">—</span>
+                                  )}
+                                </td>
+                                <td className="px-4 py-3 text-slate-400">
+                                  {opp.created_at ? format(new Date(opp.created_at), 'dd.MM.yy', { locale: de }) : '—'}
+                                </td>
+                                <td className="px-4 py-3 text-right">
+                                  {opp.status === 'SENT' && (
+                                    <button
+                                      onClick={(e) => { e.stopPropagation(); updateStatus(opp.id, 'CONVERTED'); }}
+                                      className="text-[10px] font-medium px-2.5 py-1 rounded-lg transition hover:opacity-80"
+                                      style={{ background: '#4338ca15', color: '#4338ca', border: '1px solid #4338ca30' }}
+                                    >
+                                      Konvertiert
+                                    </button>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
-                </div>
+                )}
               </section>
             )}
 
@@ -1114,7 +1096,7 @@ const SalesRadar: React.FC = () => {
                           </div>
                           {prod.priority === 'HIGH' && (
                             <span className="text-[9px] font-bold px-1.5 py-0.5 rounded" style={{ background: '#3b82f615', color: '#3b82f6' }}>
-                              HIGH
+                              HOCH
                             </span>
                           )}
                         </div>
@@ -1123,9 +1105,9 @@ const SalesRadar: React.FC = () => {
                   </div>
                 )}
 
-                {/* Sales Pitch */}
+                {/* Kommunikation */}
                 <div>
-                  <div className="text-[10px] text-slate-400 uppercase tracking-wider mb-3">Sales Pitch</div>
+                  <div className="text-[10px] text-slate-400 uppercase tracking-wider mb-3">Kommunikation</div>
                   <div className="space-y-4 p-4 rounded-lg bg-slate-50 border border-slate-200">
                     <div>
                       <div className="flex items-center gap-2 mb-1">
@@ -1190,7 +1172,7 @@ const SalesRadar: React.FC = () => {
                   onClick={async () => {
                     try {
                       const res = await apiFetch(`/api/v1/marketing/briefing/${encodeURIComponent(opp.id)}.pdf`);
-                      if (!res.ok) { addToast('PDF-Download fehlgeschlagen', 'error'); return; }
+                      if (!res.ok) { toast('PDF-Download fehlgeschlagen', 'error'); return; }
                       const blob = await res.blob();
                       const url = URL.createObjectURL(blob);
                       const a = document.createElement('a');
@@ -1198,8 +1180,8 @@ const SalesRadar: React.FC = () => {
                       a.download = `Briefing_${opp.type}_${opp.id.slice(0, 8)}.pdf`;
                       a.click();
                       URL.revokeObjectURL(url);
-                      addToast('Briefing PDF heruntergeladen', 'success');
-                    } catch { addToast('PDF-Download fehlgeschlagen', 'error'); }
+                      toast('Briefing PDF heruntergeladen', 'success');
+                    } catch { toast('PDF-Download fehlgeschlagen', 'error'); }
                   }}
                   className="w-full py-2.5 text-xs font-semibold rounded-lg border-2 border-dashed border-slate-300 text-slate-500 transition hover:border-indigo-400 hover:text-indigo-600 hover:bg-indigo-50 flex items-center justify-center gap-2"
                 >
@@ -1237,9 +1219,6 @@ const SalesRadar: React.FC = () => {
           </div>
         </div>
       )}
-
-      {/* ── Toast Notifications ── */}
-      <ToastContainer toasts={toasts} onRemove={removeToast} />
 
       {/* ── Footer ── */}
       <footer className="mt-8 py-4 text-center text-xs text-slate-400 border-t border-slate-200">

@@ -92,7 +92,8 @@ const urgencyColor = (score: number) =>
 const UrgencyRing: React.FC<{ score: number; size?: number }> = ({ score, size = 64 }) => {
   const r = (size - 8) / 2;
   const circ = 2 * Math.PI * r;
-  const offset = circ - (score / 100) * circ;
+  const visual = Math.min(score, 100); // Ring-Fuellstand max 100%
+  const offset = circ - (visual / 100) * circ;
   const color = urgencyColor(score);
   return (
     <svg width={size} height={size} className="flex-shrink-0">
@@ -106,7 +107,7 @@ const UrgencyRing: React.FC<{ score: number; size?: number }> = ({ score, size =
       />
       <text x={size / 2} y={size / 2 + 1} textAnchor="middle" dominantBaseline="middle"
         fill={color} fontSize={size * 0.28} fontWeight="800" fontFamily="monospace">
-        {score}
+        {Math.round(score)}
       </text>
     </svg>
   );
@@ -355,40 +356,40 @@ const SalesRadar: React.FC = () => {
 
       {/* ── Header ── */}
       <header className="bg-white border-b border-slate-200">
-        <div className="max-w-[1600px] mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-4">
+        <div className="max-w-[1600px] mx-auto px-4 sm:px-6 py-3 sm:py-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3 sm:gap-4">
             <button
               onClick={() => navigate('/dashboard')}
-              className="w-10 h-10 rounded-xl border border-slate-200 flex items-center justify-center transition hover:bg-slate-100"
+              className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl border border-slate-200 flex items-center justify-center transition hover:bg-slate-100"
             >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2" strokeLinecap="round">
                 <path d="M19 12H5M12 19l-7-7 7-7" />
               </svg>
             </button>
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #f59e0b, #d97706)' }}>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round">
+              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #f59e0b, #d97706)' }}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round">
                   <path d="M2.25 18L9 11.25l4.306 4.307a11.95 11.95 0 015.814-5.519l2.74-1.22" />
                   <path d="M16.06 6.22l5.94 2.28-2.28 5.94" />
                 </svg>
               </div>
               <div>
-                <h1 className="text-xl font-bold text-slate-900 tracking-tight" style={{ fontFamily: "'DM Serif Display', Georgia, serif" }}>Vertriebsradar</h1>
-                <p className="text-xs text-slate-400">KI-gesteuerte Vertriebschancen</p>
+                <h1 className="text-lg sm:text-xl font-bold text-slate-900 tracking-tight" style={{ fontFamily: "'DM Serif Display', Georgia, serif" }}>Vertriebsradar</h1>
+                <p className="text-[10px] sm:text-xs text-slate-400 hidden sm:block">KI-gesteuerte Vertriebschancen</p>
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
             {urgent.length > 0 && (
-              <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg mr-2"
+              <div className="flex items-center gap-2 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-lg"
                 style={{ background: '#ef444410', border: '1px solid #ef444430' }}>
-                <span className="w-2 h-2 rounded-full bg-red-500 animate-none" />
-                <span className="text-xs font-semibold text-red-500">{urgent.length} dringend</span>
+                <span className="w-2 h-2 rounded-full bg-red-500" />
+                <span className="text-[10px] sm:text-xs font-semibold text-red-500">{urgent.length} dringend</span>
               </div>
             )}
             <button
               onClick={toggleTheme}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs font-medium transition-all"
+              className="flex items-center gap-1.5 px-2 py-1.5 rounded-full text-xs font-medium transition-all"
               style={{
                 background: theme === 'dark' ? 'rgba(99,102,241,0.15)' : 'rgba(15,23,42,0.06)',
                 color: theme === 'dark' ? '#a5b4fc' : '#475569',
@@ -401,15 +402,15 @@ const SalesRadar: React.FC = () => {
             <button
               onClick={handleExport}
               disabled={exporting || opportunities.length === 0}
-              className="px-4 py-2 text-xs font-medium rounded-lg border border-amber-300 text-amber-600 transition-all hover:bg-amber-50"
+              className="hidden sm:block px-4 py-2 text-xs font-medium rounded-lg border border-amber-300 text-amber-600 transition-all hover:bg-amber-50"
               style={{ opacity: exporting || opportunities.length === 0 ? 0.5 : 1 }}
             >
-              {exporting ? 'Exportiere...' : 'CRM Export'}
+              {exporting ? 'Exportiere...' : 'CRM-Export'}
             </button>
             <button
               onClick={handleGenerate}
               disabled={generating}
-              className="px-5 py-2 text-xs font-semibold rounded-lg transition-all text-white"
+              className="px-3 sm:px-5 py-2 text-[10px] sm:text-xs font-semibold rounded-lg transition-all text-white"
               style={{ background: generating ? '#cbd5e1' : 'linear-gradient(135deg, #3b82f6, #4338ca)', opacity: generating ? 0.6 : 1 }}
             >
               {generating ? (
@@ -417,13 +418,13 @@ const SalesRadar: React.FC = () => {
                   <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
                   Generiere...
                 </span>
-              ) : 'Chancen generieren'}
+              ) : 'Generieren'}
             </button>
           </div>
         </div>
       </header>
 
-      <main className="max-w-[1600px] mx-auto px-6 py-6 space-y-6">
+      <main className="max-w-[1600px] mx-auto px-4 sm:px-6 py-4 sm:py-6 space-y-5 sm:space-y-6">
 
         {/* ── Business-First: Top Actions ── */}
         <div
@@ -850,13 +851,13 @@ const SalesRadar: React.FC = () => {
                       <table className="w-full text-xs">
                         <thead>
                           <tr className="bg-slate-100">
-                            <th className="text-left px-4 py-3 text-[10px] text-slate-500 uppercase tracking-wider font-medium">Status</th>
-                            <th className="text-left px-4 py-3 text-[10px] text-slate-500 uppercase tracking-wider font-medium">Typ</th>
-                            <th className="text-left px-4 py-3 text-[10px] text-slate-500 uppercase tracking-wider font-medium">Trigger</th>
-                            <th className="text-left px-4 py-3 text-[10px] text-slate-500 uppercase tracking-wider font-medium">Dringlichkeit</th>
-                            <th className="text-left px-4 py-3 text-[10px] text-slate-500 uppercase tracking-wider font-medium">Conquesting</th>
-                            <th className="text-left px-4 py-3 text-[10px] text-slate-500 uppercase tracking-wider font-medium">Erstellt</th>
-                            <th className="text-right px-4 py-3 text-[10px] text-slate-500 uppercase tracking-wider font-medium">Aktion</th>
+                            <th className="text-left px-3 sm:px-4 py-2.5 text-[10px] text-slate-500 uppercase tracking-wider font-medium">Status</th>
+                            <th className="text-left px-3 sm:px-4 py-2.5 text-[10px] text-slate-500 uppercase tracking-wider font-medium">Typ</th>
+                            <th className="text-left px-3 sm:px-4 py-2.5 text-[10px] text-slate-500 uppercase tracking-wider font-medium">Trigger</th>
+                            <th className="text-left px-3 sm:px-4 py-2.5 text-[10px] text-slate-500 uppercase tracking-wider font-medium">Score</th>
+                            <th className="text-left px-3 sm:px-4 py-2.5 text-[10px] text-slate-500 uppercase tracking-wider font-medium hidden md:table-cell">Conquesting</th>
+                            <th className="text-left px-3 sm:px-4 py-2.5 text-[10px] text-slate-500 uppercase tracking-wider font-medium hidden lg:table-cell">Erstellt</th>
+                            <th className="text-right px-3 sm:px-4 py-2.5 text-[10px] text-slate-500 uppercase tracking-wider font-medium">Aktion</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -868,29 +869,29 @@ const SalesRadar: React.FC = () => {
                                 className="cursor-pointer transition hover:bg-slate-50 border-b border-slate-200"
                                 onClick={() => openDetail(opp)}
                               >
-                                <td className="px-4 py-3">
+                                <td className="px-3 sm:px-4 py-2.5">
                                   <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
                                     style={{ background: `${sc.color}12`, color: sc.color }}>
                                     {sc.label}
                                   </span>
                                 </td>
-                                <td className="px-4 py-3">
-                                  <div className="flex items-center gap-2">
+                                <td className="px-3 sm:px-4 py-2.5">
+                                  <div className="flex items-center gap-1.5">
                                     <TypeIcon type={opp.type} size={12} />
                                     <span className="text-slate-500">{tc.label}</span>
                                   </div>
                                 </td>
-                                <td className="px-4 py-3">
-                                  <span className="text-slate-700 line-clamp-1 max-w-[300px] inline-block">
+                                <td className="px-3 sm:px-4 py-2.5">
+                                  <span className="text-slate-700 line-clamp-1 max-w-[180px] sm:max-w-[300px] inline-block">
                                     {opp.trigger_context.details}
                                   </span>
                                 </td>
-                                <td className="px-4 py-3">
+                                <td className="px-3 sm:px-4 py-2.5">
                                   <span className="font-mono font-bold" style={{ color: urgencyColor(opp.urgency_score) }}>
-                                    {opp.urgency_score}
+                                    {Math.round(opp.urgency_score)}
                                   </span>
                                 </td>
-                                <td className="px-4 py-3">
+                                <td className="px-3 sm:px-4 py-2.5 hidden md:table-cell">
                                   {opp.is_conquesting_active ? (
                                     <span className="text-[9px] font-bold px-2 py-0.5 rounded border-2 border-teal-400 bg-teal-50 text-teal-700">
                                       {opp.recommended_bid_modifier?.toFixed(1) || '1.5'}x BID
@@ -899,14 +900,14 @@ const SalesRadar: React.FC = () => {
                                     <span className="text-[10px] text-slate-300">—</span>
                                   )}
                                 </td>
-                                <td className="px-4 py-3 text-slate-400">
+                                <td className="px-3 sm:px-4 py-2.5 text-slate-400 hidden lg:table-cell">
                                   {opp.created_at ? format(new Date(opp.created_at), 'dd.MM.yy', { locale: de }) : '—'}
                                 </td>
-                                <td className="px-4 py-3 text-right">
+                                <td className="px-3 sm:px-4 py-2.5 text-right">
                                   {opp.status === 'SENT' && (
                                     <button
                                       onClick={(e) => { e.stopPropagation(); updateStatus(opp.id, 'CONVERTED'); }}
-                                      className="text-[10px] font-medium px-2.5 py-1 rounded-lg transition hover:opacity-80"
+                                      className="text-[10px] font-medium px-2 sm:px-2.5 py-1 rounded-lg transition hover:opacity-80"
                                       style={{ background: '#4338ca15', color: '#4338ca', border: '1px solid #4338ca30' }}
                                     >
                                       Konvertiert
@@ -990,7 +991,7 @@ const SalesRadar: React.FC = () => {
               onClick={() => openDetail(null)}
             />
             {/* Panel */}
-            <div className="fixed top-0 right-0 bottom-0 z-50 w-full max-w-lg overflow-y-auto slide-in bg-white border-l border-slate-200 shadow-2xl">
+            <div className="fixed top-0 right-0 bottom-0 z-50 w-full sm:max-w-lg overflow-y-auto slide-in bg-white border-l border-slate-200 shadow-2xl">
 
               {/* Panel Header */}
               <div className="sticky top-0 z-10 px-6 py-4 flex items-center justify-between bg-white"
@@ -1206,8 +1207,8 @@ const SalesRadar: React.FC = () => {
 
       {/* ── Error Banner ── */}
       {fetchError && (
-        <div className="max-w-[1600px] mx-auto px-6 mt-6">
-          <div className="bg-red-50 border border-red-200 rounded-xl px-5 py-4 flex items-center gap-3">
+        <div className="max-w-[1600px] mx-auto px-4 sm:px-6 mt-6">
+          <div className="bg-red-50 border border-red-200 rounded-xl px-4 sm:px-5 py-3 sm:py-4 flex items-center gap-3">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2" strokeLinecap="round">
               <circle cx="12" cy="12" r="10" /><path d="M12 8v4M12 16h.01" />
             </svg>

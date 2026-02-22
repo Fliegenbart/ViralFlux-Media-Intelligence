@@ -29,3 +29,34 @@ def refine_recommendation_ai_task(self, opportunity_id: str):
     except Exception as exc:
         logger.exception("AI refinement failed for recommendation %s", opportunity_id)
         raise RuntimeError(f"AI refinement failed for {opportunity_id}: {exc}") from exc
+
+
+@celery_app.task(bind=True, name="generate_marketing_opportunities_task")
+def generate_marketing_opportunities_task(self):
+    """Alle Detektoren ausfuehren und Marketing-Opportunities generieren.
+
+    Laeuft taeglich nach der Daten-Ingestion (Celery Beat 06:30),
+    damit frische Signale in Opportunities umgewandelt werden.
+    """
+    logger.info("Starting scheduled marketing opportunity generation")
+
+    try:
+        with get_db_context() as db:
+            engine = MarketingOpportunityEngine(db)
+            result = engine.generate_opportunities()
+
+            new_count = result.get("new_opportunities", 0)
+            total = result.get("total", 0)
+            logger.info(
+                "Marketing opportunity generation complete: %d new, %d total",
+                new_count, total,
+            )
+
+            return {
+                "success": True,
+                "new_opportunities": new_count,
+                "total": total,
+            }
+    except Exception as exc:
+        logger.exception("Marketing opportunity generation failed")
+        raise RuntimeError(f"Marketing opportunity generation failed: {exc}") from exc

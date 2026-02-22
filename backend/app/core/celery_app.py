@@ -40,6 +40,12 @@ celery_app.conf.beat_schedule = {
         "schedule": crontab(hour=6, minute=0),
         "kwargs": {},
     },
+    # Taeglich 06:30 — Marketing-Opportunities aus frischen Signalen generieren
+    "daily-marketing-opportunities": {
+        "task": "generate_marketing_opportunities_task",
+        "schedule": crontab(hour=6, minute=30),
+        "kwargs": {},
+    },
     # Taeglich 07:00 — XGBoost Retraining mit neuen Daten
     "daily-xgboost-training": {
         "task": "train_xgboost_model_task",

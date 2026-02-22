@@ -199,7 +199,9 @@ class MarketingOpportunityEngine:
 
             multiplier = float(conquesting.get("_bid_multiplier", 1.0))
             original_urgency = float(opp.get("urgency_score", 0))
-            fused_urgency = min(100.0, original_urgency * multiplier)
+            # Kein Cap bei 100: erlaubt Ranking unter mehreren urgenten
+            # Opportunities wenn Conquesting-Multiplikator angewendet wird.
+            fused_urgency = original_urgency * multiplier
 
             opp["urgency_score"] = round(fused_urgency, 1)
             opp["_conquesting_applied"] = True

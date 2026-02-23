@@ -1179,9 +1179,10 @@ class MarketingOpportunityEngine:
                 user="system",
                 action="GUARDRAIL_APPLIED",
                 entity_type="MarketingOpportunity",
-                entity_id=row.opportunity_id,
+                entity_id=row.id,
                 old_value=None,
                 new_value="; ".join(fixes),
+                reason=row.opportunity_id,
             ))
         payload["ai_meta"] = {
             **(generated.get("ai_meta") or {}),
@@ -1254,9 +1255,10 @@ class MarketingOpportunityEngine:
             user="system",
             action="STATUS_CHANGE",
             entity_type="MarketingOpportunity",
-            entity_id=opportunity_id,
+            entity_id=opp.id,
             old_value=old_status,
             new_value=target,
+            reason=opportunity_id,
         ))
 
         self.db.commit()

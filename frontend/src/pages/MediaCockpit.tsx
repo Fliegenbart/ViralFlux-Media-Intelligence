@@ -858,7 +858,7 @@ const MediaCockpit: React.FC = () => {
                       </div>
                       <div className="text-right">
                         <div className="text-[10px] text-slate-400 uppercase tracking-wider">Shift</div>
-                        <div className="text-sm font-bold text-indigo-500 mt-1">+{s.budget_shift_pct}%</div>
+                        <div className="text-sm font-bold text-indigo-500 mt-1">+{Number(s.budget_shift_pct).toFixed(2)}%</div>
                       </div>
                     </div>
                     <p className="text-xs text-slate-500 mt-2 line-clamp-3">{s.reason}</p>
@@ -1457,7 +1457,7 @@ const MediaCockpit: React.FC = () => {
                       <div key={idx} className="rounded-lg p-3 bg-slate-50 border border-slate-200">
                         <div className="flex items-center justify-between mb-1">
                           <span className="text-sm text-slate-900">{s.region_name}</span>
-                          <span className="text-xs text-indigo-600 font-semibold">+{s.budget_shift_pct}%</span>
+                          <span className="text-xs text-indigo-600 font-semibold">+{Number(s.budget_shift_pct).toFixed(2)}%</span>
                         </div>
                         <p className="text-xs text-slate-500">{s.reason}</p>
                       </div>
@@ -1689,7 +1689,7 @@ const MediaCockpit: React.FC = () => {
                       <div className="rounded-lg p-3 bg-slate-50 border border-slate-100">
                         <div className="text-[10px] text-slate-400 uppercase tracking-wider">Budget</div>
                         <div className="text-sm font-semibold text-slate-900 mt-1">
-                          +{card.budget_shift_pct}%{' '}
+                          +{Number(card.budget_shift_pct).toFixed(2)}%{' '}
                           <span className="text-slate-500">
                             ({card.campaign_preview?.budget?.shift_value_eur ? eur(card.campaign_preview.budget.shift_value_eur) : 'Shift'})
                           </span>

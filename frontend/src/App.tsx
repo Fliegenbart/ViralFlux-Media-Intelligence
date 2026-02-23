@@ -1,10 +1,11 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, Link } from 'react-router-dom';
 import LandingPage from './pages/LandingPage';
 import MediaCockpit from './pages/MediaCockpit';
+import ProductCatalog from './pages/ProductCatalog';
 import DataIntegration from './pages/DataIntegration';
 import SalesRadar from './pages/SalesRadar';
-import CampaignRecommendationDetail from './pages/CampaignRecommendationDetail';
+import AppLayout from './components/AppLayout';
 import './index.css';
 
 /* ── Theme ──────────────────────────────────────────────────────── */
@@ -111,6 +112,26 @@ const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   );
 };
 
+/* ── Admin Panel (minimal) ──────────────────────────────────────── */
+const AdminPanel: React.FC = () => (
+  <div style={{ maxWidth: 600, margin: '40px auto', padding: 32, background: 'var(--bg-card)', borderRadius: 12, border: '1px solid var(--border-color)' }}>
+    <h1 style={{ fontSize: 22, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>
+      Admin-Bereich
+    </h1>
+    <p style={{ fontSize: 14, color: 'var(--text-secondary)', marginBottom: 24 }}>
+      Backtest und Datenquellen
+    </p>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <Link to="/sales-radar" style={{ fontSize: 14, color: 'var(--accent-violet)', fontWeight: 500 }}>
+        Sales Radar &rarr;
+      </Link>
+      <Link to="/data-integration" style={{ fontSize: 14, color: 'var(--accent-violet)', fontWeight: 500 }}>
+        Datenimport &amp; Integration &rarr;
+      </Link>
+    </div>
+  </div>
+);
+
 /* ── App ────────────────────────────────────────────────────────── */
 const App: React.FC = () => {
   return (
@@ -118,18 +139,18 @@ const App: React.FC = () => {
       <ToastProvider>
         <Router>
           <Routes>
-            <Route path="/" element={<LandingPage />} />
+            <Route path="/" element={<Navigate to="/lagebild" replace />} />
             <Route path="/welcome" element={<LandingPage />} />
-            <Route path="/dashboard" element={<MediaCockpit />} />
-            <Route path="/dashboard/recommendations/:id" element={<CampaignRecommendationDetail />} />
-            <Route path="/app" element={<Navigate to="/dashboard" replace />} />
-            <Route path="/cockpit" element={<Navigate to="/dashboard" replace />} />
-            <Route path="/map" element={<Navigate to="/dashboard?tab=map" replace />} />
-            <Route path="/products" element={<Navigate to="/dashboard?tab=product-intel" replace />} />
+            <Route path="/lagebild" element={<AppLayout><MediaCockpit view="lagebild" /></AppLayout>} />
+            <Route path="/empfehlungen" element={<AppLayout><MediaCockpit view="empfehlungen" /></AppLayout>} />
+            <Route path="/empfehlungen/:id" element={<AppLayout><MediaCockpit view="empfehlungen" /></AppLayout>} />
+            <Route path="/produkte" element={<AppLayout><ProductCatalog /></AppLayout>} />
+            <Route path="/admin" element={<AppLayout><AdminPanel /></AppLayout>} />
+            {/* Legacy redirects */}
+            <Route path="/dashboard" element={<Navigate to="/lagebild" replace />} />
+            <Route path="/dashboard/recommendations/:id" element={<Navigate to="/empfehlungen" replace />} />
             <Route path="/sales-radar" element={<SalesRadar />} />
-            <Route path="/vertriebsradar" element={<Navigate to="/sales-radar" replace />} />
             <Route path="/data-integration" element={<DataIntegration />} />
-            <Route path="/datenimport" element={<Navigate to="/data-integration" replace />} />
           </Routes>
         </Router>
       </ToastProvider>

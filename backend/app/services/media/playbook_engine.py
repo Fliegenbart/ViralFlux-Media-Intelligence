@@ -95,6 +95,50 @@ PLAYBOOK_CATALOG: dict[str, dict[str, Any]] = {
         "message_direction": "Budget sparen bei Allergie-getriebenen Signalen",
         "kind": "efficiency",
     },
+    "HALSSCHMERZ_HUNTER": {
+        "title": "Halsschmerz-Hunter",
+        "description": "Halsschmerz-Targeting bei steigenden Atemwegsinfekten.",
+        "channels": ["search", "social", "programmatic"],
+        "default_mix": {"search": 40.0, "social": 35.0, "programmatic": 25.0},
+        "shift_min": 15.0,
+        "shift_max": 40.0,
+        "condition_key": "halsschmerz_heiserkeit",
+        "message_direction": "Halsschmerzen lindern / Stimme schuetzen",
+        "kind": "offensive",
+    },
+    "ERKAELTUNGSWELLE": {
+        "title": "Erkältungswelle",
+        "description": "Breites Erkältungs-Targeting bei hoher Infektionslast.",
+        "channels": ["programmatic", "social", "dooh"],
+        "default_mix": {"programmatic": 40.0, "social": 35.0, "dooh": 25.0},
+        "shift_min": 20.0,
+        "shift_max": 50.0,
+        "condition_key": "erkaltung_akut",
+        "message_direction": "Schnelle Hilfe bei Erkaeltung / Symptomlinderung",
+        "kind": "offensive",
+    },
+    "SINUS_DEFENDER": {
+        "title": "Sinus-Defender",
+        "description": "Nasennebenhöhlen-Targeting bei RSV/Pneumokokken-Signalen.",
+        "channels": ["search", "programmatic", "social"],
+        "default_mix": {"search": 45.0, "programmatic": 30.0, "social": 25.0},
+        "shift_min": 15.0,
+        "shift_max": 35.0,
+        "condition_key": "sinusitis_nebenhoehlen",
+        "message_direction": "Nasennebenhöhlen befreien / Durchatmen",
+        "kind": "offensive",
+    },
+    "IMMUNBOOSTER": {
+        "title": "Immun-Booster",
+        "description": "Präventive Immunsystem-Stärkung bei Saisonwechsel.",
+        "channels": ["social", "ctv", "programmatic"],
+        "default_mix": {"social": 40.0, "ctv": 35.0, "programmatic": 25.0},
+        "shift_min": 10.0,
+        "shift_max": 25.0,
+        "condition_key": "immun_support",
+        "message_direction": "Immunsystem staerken / Vorsorge in der Erkaeltungszeit",
+        "kind": "offensive",
+    },
 }
 
 
@@ -138,8 +182,12 @@ class PlaybookEngine:
         supply = self._supply_candidates(peix_regions=peix.get("regions") or {}, allowed_regions=allowed_regions)
         weather = self._wetter_candidates(peix_regions=peix.get("regions") or {}, allowed_regions=allowed_regions)
         allergy = self._allergy_candidates(peix_regions=peix.get("regions") or {}, allowed_regions=allowed_regions)
+        hals = self._halsschmerz_candidates(peix_regions=peix.get("regions") or {}, allowed_regions=allowed_regions)
+        erkaelt = self._erkaeltungswelle_candidates(peix_regions=peix.get("regions") or {}, allowed_regions=allowed_regions)
+        sinus = self._sinus_candidates(peix_regions=peix.get("regions") or {}, allowed_regions=allowed_regions)
+        immun = self._immunbooster_candidates(peix_regions=peix.get("regions") or {}, allowed_regions=allowed_regions)
 
-        all_candidates = myco + supply + weather + allergy
+        all_candidates = myco + supply + weather + allergy + hals + erkaelt + sinus + immun
         if not all_candidates:
             return {
                 "selected": [],
@@ -164,12 +212,24 @@ class PlaybookEngine:
         offensive = [row for row in ranked if PLAYBOOK_CATALOG[row["playbook_key"]]["kind"] == "offensive"]
         efficiency = [row for row in ranked if PLAYBOOK_CATALOG[row["playbook_key"]]["kind"] == "efficiency"]
 
+        # Diversitaets-Auswahl: ein Candidate pro Condition (= Produkt),
+        # dann auffuellen mit den staerksten Signalen.
         selected: list[dict[str, Any]] = []
-        selected.extend(offensive[:3])
+        seen_conditions: set[str] = set()
+        for row in offensive:
+            cond = row.get("condition_key", "")
+            if cond not in seen_conditions:
+                selected.append(row)
+                seen_conditions.add(cond)
+        # Auffuellen: Top-Offensive die noch nicht drin sind
+        for row in offensive:
+            if row not in selected:
+                selected.append(row)
+        # Maximal 1 Efficiency-Playbook anhaengen
         if efficiency:
             selected.append(efficiency[0])
 
-        selected = selected[: max(1, int(max_cards or 4))]
+        selected = selected[: max(1, int(max_cards or 8))]
         return {
             "selected": selected,
             "all_candidates": ranked,
@@ -180,6 +240,10 @@ class PlaybookEngine:
                     "supply": len(supply),
                     "wetter": len(weather),
                     "allergie": len(allergy),
+                    "halsschmerz": len(hals),
+                    "erkaeltung": len(erkaelt),
+                    "sinus": len(sinus),
+                    "immun": len(immun),
                 }
             },
         }
@@ -450,6 +514,250 @@ class PlaybookEngine:
                             "allergy_search_level": round(allergy_level, 2),
                             "allergy_search_delta": round(allergy_delta, 2),
                             "peix_score": round(peix_score, 2),
+                        },
+                    },
+                )
+            )
+        return candidates
+
+    def _halsschmerz_candidates(
+        self,
+        *,
+        peix_regions: dict[str, Any],
+        allowed_regions: list[str],
+    ) -> list[dict[str, Any]]:
+        """Triggert bei steigenden Keuchhusten/Influenza-Inzidenzen (Halsschmerz-Proxy)."""
+        rows = self.db.query(SurvstatWeeklyData).filter(
+            SurvstatWeeklyData.disease_cluster == "RESPIRATORY",
+            SurvstatWeeklyData.bundesland != "Gesamt",
+            SurvstatWeeklyData.week > 0,
+        ).order_by(SurvstatWeeklyData.week_start.desc()).limit(2000).all()
+        if not rows:
+            return []
+
+        grouped: dict[str, list[float]] = {}
+        for row in rows:
+            code = REGION_NAME_TO_CODE.get(str(row.bundesland or "").strip().lower())
+            if not code or code not in allowed_regions:
+                continue
+            grouped.setdefault(code, []).append(float(row.incidence or 0.0))
+
+        candidates: list[dict[str, Any]] = []
+        for code, values in grouped.items():
+            if len(values) < 2:
+                continue
+            avg_recent = sum(values[:4]) / min(4, len(values))
+            avg_old = sum(values[4:8]) / max(1, min(4, len(values[4:8]))) if len(values) > 4 else avg_recent * 0.8
+            growth = (avg_recent - avg_old) / max(1.0, avg_old)
+
+            if growth < 0.10 and avg_recent < 50:
+                continue
+
+            peix_entry = peix_regions.get(code) or {}
+            impact = float(peix_entry.get("impact_probability") or 0.0)
+            strength = min(100.0, max(0.0, 40.0 + growth * 80.0 + min(20.0, avg_recent / 10.0)))
+            confidence = min(90.0, 55.0 + min(25.0, len(values) / 3.0))
+            priority = self._priority_score(impact_probability=impact, trigger_strength=strength, confidence=confidence)
+            shift_pct = self._shift_from_strength("HALSSCHMERZ_HUNTER", strength)
+
+            candidates.append(
+                self._candidate_payload(
+                    playbook_key="HALSSCHMERZ_HUNTER",
+                    region_code=code,
+                    peix_entry=peix_entry,
+                    trigger_strength=strength,
+                    confidence=confidence,
+                    priority_score=priority,
+                    budget_shift_pct=shift_pct,
+                    trigger_snapshot={
+                        "source": "RKI SURVSTAT",
+                        "event": "RESPIRATORY_GROWTH_HALSSCHMERZ",
+                        "details": (
+                            f"Atemwegs-Inzidenz Ø{avg_recent:.1f} (Wachstum {growth * 100:+.1f}%), "
+                            f"Halsschmerz-Kampagne empfohlen."
+                        ),
+                        "lead_time_days": 7,
+                        "values": {
+                            "avg_recent_incidence": round(avg_recent, 2),
+                            "growth_pct": round(growth * 100, 2),
+                        },
+                    },
+                )
+            )
+        return candidates
+
+    def _erkaeltungswelle_candidates(
+        self,
+        *,
+        peix_regions: dict[str, Any],
+        allowed_regions: list[str],
+    ) -> list[dict[str, Any]]:
+        """Triggert bei breiter Infektionslast (COVID + Influenza + Noro kombiniert)."""
+        rows = self.db.query(SurvstatWeeklyData).filter(
+            SurvstatWeeklyData.bundesland != "Gesamt",
+            SurvstatWeeklyData.week > 0,
+            SurvstatWeeklyData.disease_cluster.in_(["RESPIRATORY", "GASTROINTESTINAL"]),
+        ).order_by(SurvstatWeeklyData.week_start.desc()).limit(3000).all()
+        if not rows:
+            return []
+
+        grouped: dict[str, float] = {}
+        for row in rows:
+            code = REGION_NAME_TO_CODE.get(str(row.bundesland or "").strip().lower())
+            if not code or code not in allowed_regions:
+                continue
+            grouped[code] = grouped.get(code, 0.0) + float(row.incidence or 0.0)
+
+        candidates: list[dict[str, Any]] = []
+        if not grouped:
+            return []
+        median_load = sorted(grouped.values())[len(grouped) // 2]
+
+        for code, total_load in grouped.items():
+            if total_load < median_load * 1.1:
+                continue
+
+            peix_entry = peix_regions.get(code) or {}
+            impact = float(peix_entry.get("impact_probability") or 0.0)
+            relative = total_load / max(1.0, median_load)
+            strength = min(100.0, max(0.0, 35.0 + (relative - 1.0) * 120.0 + impact * 0.15))
+            confidence = min(88.0, 60.0 + min(20.0, impact / 5.0))
+            priority = self._priority_score(impact_probability=impact, trigger_strength=strength, confidence=confidence)
+            shift_pct = self._shift_from_strength("ERKAELTUNGSWELLE", strength)
+
+            candidates.append(
+                self._candidate_payload(
+                    playbook_key="ERKAELTUNGSWELLE",
+                    region_code=code,
+                    peix_entry=peix_entry,
+                    trigger_strength=strength,
+                    confidence=confidence,
+                    priority_score=priority,
+                    budget_shift_pct=shift_pct,
+                    trigger_snapshot={
+                        "source": "RKI SURVSTAT",
+                        "event": "BROAD_INFECTION_WAVE",
+                        "details": (
+                            f"Gesamtlast {total_load:.0f} (Median {median_load:.0f}, "
+                            f"{relative:.1f}x), breite Erkältungswelle."
+                        ),
+                        "lead_time_days": 5,
+                        "values": {
+                            "total_infection_load": round(total_load, 1),
+                            "median_load": round(median_load, 1),
+                            "relative_to_median": round(relative, 2),
+                        },
+                    },
+                )
+            )
+        return candidates
+
+    def _sinus_candidates(
+        self,
+        *,
+        peix_regions: dict[str, Any],
+        allowed_regions: list[str],
+    ) -> list[dict[str, Any]]:
+        """Triggert bei RSV/Pneumokokken-Signalen (Sinusitis/Nasennebenhöhlen-Proxy)."""
+        rows = self.db.query(SurvstatWeeklyData).filter(
+            func.lower(SurvstatWeeklyData.disease).in_([
+                "rsv (meldepflicht gemäß ifsg)",
+                "pneumokokken (meldepflicht gemäß ifsg)",
+            ]),
+            SurvstatWeeklyData.bundesland != "Gesamt",
+            SurvstatWeeklyData.week > 0,
+        ).order_by(SurvstatWeeklyData.week_start.desc()).limit(1500).all()
+        if not rows:
+            return []
+
+        grouped: dict[str, list[float]] = {}
+        for row in rows:
+            code = REGION_NAME_TO_CODE.get(str(row.bundesland or "").strip().lower())
+            if not code or code not in allowed_regions:
+                continue
+            grouped.setdefault(code, []).append(float(row.incidence or 0.0))
+
+        candidates: list[dict[str, Any]] = []
+        for code, values in grouped.items():
+            if len(values) < 2:
+                continue
+            avg_recent = sum(values[:4]) / min(4, len(values))
+            if avg_recent < 5.0:
+                continue
+
+            peix_entry = peix_regions.get(code) or {}
+            impact = float(peix_entry.get("impact_probability") or 0.0)
+            strength = min(100.0, max(0.0, 30.0 + min(50.0, avg_recent * 0.5) + impact * 0.15))
+            confidence = min(85.0, 50.0 + min(25.0, len(values) / 3.0))
+            priority = self._priority_score(impact_probability=impact, trigger_strength=strength, confidence=confidence)
+            shift_pct = self._shift_from_strength("SINUS_DEFENDER", strength)
+
+            candidates.append(
+                self._candidate_payload(
+                    playbook_key="SINUS_DEFENDER",
+                    region_code=code,
+                    peix_entry=peix_entry,
+                    trigger_strength=strength,
+                    confidence=confidence,
+                    priority_score=priority,
+                    budget_shift_pct=shift_pct,
+                    trigger_snapshot={
+                        "source": "RKI SURVSTAT",
+                        "event": "RSV_PNEUMO_SINUS_SIGNAL",
+                        "details": (
+                            f"RSV/Pneumokokken Ø-Inzidenz {avg_recent:.1f}, "
+                            f"Nasennebenhöhlen-Kampagne empfohlen."
+                        ),
+                        "lead_time_days": 10,
+                        "values": {
+                            "avg_recent_incidence": round(avg_recent, 2),
+                        },
+                    },
+                )
+            )
+        return candidates
+
+    def _immunbooster_candidates(
+        self,
+        *,
+        peix_regions: dict[str, Any],
+        allowed_regions: list[str],
+    ) -> list[dict[str, Any]]:
+        """Triggert bei hohem Gesamt-PeixScore (= breit steigende Infektionslage)."""
+        candidates: list[dict[str, Any]] = []
+        for code in allowed_regions:
+            peix_entry = peix_regions.get(code) or {}
+            peix_score = float(peix_entry.get("score_0_100") or 0.0)
+            impact = float(peix_entry.get("impact_probability") or 0.0)
+
+            if peix_score < 50.0:
+                continue
+
+            strength = min(100.0, max(0.0, peix_score * 0.7 + impact * 0.3))
+            confidence = min(80.0, 45.0 + peix_score * 0.3)
+            priority = self._priority_score(impact_probability=impact, trigger_strength=strength, confidence=confidence)
+            shift_pct = self._shift_from_strength("IMMUNBOOSTER", strength)
+
+            candidates.append(
+                self._candidate_payload(
+                    playbook_key="IMMUNBOOSTER",
+                    region_code=code,
+                    peix_entry=peix_entry,
+                    trigger_strength=strength,
+                    confidence=confidence,
+                    priority_score=priority,
+                    budget_shift_pct=shift_pct,
+                    trigger_snapshot={
+                        "source": "PeixEpiScore",
+                        "event": "HIGH_PEIX_IMMUN_TRIGGER",
+                        "details": (
+                            f"PeixEpiScore {peix_score:.1f}/100 (Impact {impact:.1f}%), "
+                            f"praeventive Immun-Kampagne empfohlen."
+                        ),
+                        "lead_time_days": 14,
+                        "values": {
+                            "peix_score": round(peix_score, 2),
+                            "impact_probability": round(impact, 2),
                         },
                     },
                 )

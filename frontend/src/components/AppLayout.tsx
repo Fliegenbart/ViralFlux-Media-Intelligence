@@ -11,6 +11,7 @@ const NAV_ITEMS = [
   { label: 'Lagebild', path: '/lagebild' },
   { label: 'Empfehlungen', path: '/empfehlungen' },
   { label: 'Produkte', path: '/produkte' },
+  { label: 'Backtest', path: '/backtest' },
 ] as const;
 
 const AppLayout: React.FC<Props> = ({ children }) => {

@@ -50,30 +50,44 @@ def _infer_condition(
     top_drivers: list | None,
     virus_typ: str,
 ) -> str:
-    """Leite die wahrscheinlichste Condition aus regionalen Signalen ab."""
+    """Produktempfehlung nach Region differenzieren — Band + Trend + zweitstärkstem Driver.
+
+    Der stärkste Driver (z.B. Versorgungslage) ist oft für alle Regionen identisch.
+    Deshalb nutzen wir peix_band + trend als primäre Differenzierung und den
+    zweitstärksten Driver als Tiebreaker.
+    """
     driver_labels = [
         str(d.get("label", "") if isinstance(d, dict) else d).lower()
         for d in (top_drivers or [])
     ]
+    secondary_driver = driver_labels[1] if len(driver_labels) > 1 else ""
 
-    if any("versorgung" in dl or "shortage" in dl for dl in driver_labels):
-        return "bronchitis_husten"
-    if any("wetter" in dl or "weather" in dl for dl in driver_labels):
-        if peix_band in ("low", "elevated"):
-            return "rhinitis_trockene_nase"
-        return "erkaltung_akut"
-    if any("such" in dl or "search" in dl for dl in driver_labels):
-        return "immun_support"
+    # ── Akute Welle: steigend + kritisch/hoch ──
+    if trend == "steigend" and peix_band == "critical":
+        return "bronchitis_husten"              # GeloMyrtol forte — schwerste Lage
+
+    if trend == "steigend" and peix_band == "high":
+        if "wetter" in secondary_driver or "weather" in secondary_driver:
+            return "sinusitis_nebenhoehlen"      # GeloMyrtol forte (Nebenhöhlen)
+        return "erkaltung_akut"                  # GeloProsed — allgemeine Erkältung
+
+    # ── Abklingphase: fallend ──
+    if trend == "fallend":
+        if peix_band in ("critical", "high"):
+            return "halsschmerz_heiserkeit"      # GeloRevoice — Nachwirkungen
+        return "immun_support"                   # GeloVital — Prävention
+
+    # ── Stabil oder steigend + elevated ──
+    if "wetter" in secondary_driver or "weather" in secondary_driver:
+        return "rhinitis_trockene_nase"          # GeloSitin — Wetter-getrieben
+
+    if "such" in secondary_driver or "search" in secondary_driver:
+        return "immun_support"                   # GeloVital — Suchtrend
 
     if trend == "steigend":
-        if virus_typ in ("Influenza A", "Influenza B", "RSV A"):
-            return "bronchitis_husten"
-        return "erkaltung_akut"
+        return "erkaltung_akut"                  # GeloProsed
 
-    if trend == "fallend" and peix_band == "low":
-        return "immun_support"
-
-    return "erkaltung_akut"
+    return "erkaltung_akut"                      # Fallback
 
 
 def build_region_tooltip(
@@ -104,7 +118,7 @@ def build_region_tooltip(
 
     # Condition + Product
     condition = _infer_condition(trend, peix_band, top_drivers, virus_typ)
-    product = CONDITION_TO_PRODUCT.get(condition, "GeloMyrtol forte")
+    product = CONDITION_TO_PRODUCT.get(condition, "GeloProsed")
     reason = CONDITION_TO_REASON.get(condition, "")
 
     recommendation_text = (

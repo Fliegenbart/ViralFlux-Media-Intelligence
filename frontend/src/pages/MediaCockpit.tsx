@@ -2,6 +2,16 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTheme, useToast } from '../App';
 import { geoMercator, geoPath } from 'd3-geo';
 import { format, parseISO } from 'date-fns';
+import {
+  ResponsiveContainer,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  Tooltip as RechartsTooltip,
+  CartesianGrid,
+  Legend,
+} from 'recharts';
 import { de } from 'date-fns/locale';
 import {
   BentoTile,
@@ -130,7 +140,7 @@ const WORKFLOW_TRANSITIONS: Record<string, string> = {
 /* ─── Component ─── */
 
 interface Props {
-  view: 'lagebild' | 'empfehlungen';
+  view: 'lagebild' | 'empfehlungen' | 'backtest';
 }
 
 const MediaCockpit: React.FC<Props> = ({ view }) => {
@@ -158,6 +168,15 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
   const [slideOverLoading, setSlideOverLoading] = useState(false);
   const [slideOverAdvanced, setSlideOverAdvanced] = useState(false);
   const [statusTransitioning, setStatusTransitioning] = useState(false);
+
+  /* ── Backtest state ── */
+  const [btTargetSource, setBtTargetSource] = useState('RKI_ARE');
+  const [btRunning, setBtRunning] = useState(false);
+  const [btResult, setBtResult] = useState<any>(null);
+  const [btCustomerResult, setBtCustomerResult] = useState<any>(null);
+  const [btCustomerRunning, setBtCustomerRunning] = useState(false);
+  const [btRuns, setBtRuns] = useState<any[]>([]);
+  const btFileRef = useRef<HTMLInputElement>(null);
 
   /* ── Derived data ── */
   const activeMap = cockpit?.map;
@@ -1527,12 +1546,316 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
   };
 
   /* ─────────────────────────────────────────────────────────────────────────
+   *  BACKTEST
+   * ───────────────────────────────────────────────────────────────────────── */
+
+  const TARGET_OPTIONS = [
+    { value: 'RKI_ARE', label: 'RKI ARE (Atemwegserkrankungen)' },
+    { value: 'SURVSTAT', label: 'SURVSTAT Respiratory' },
+    { value: 'MYCOPLASMA', label: 'SURVSTAT Mycoplasma' },
+    { value: 'KEUCHHUSTEN', label: 'SURVSTAT Keuchhusten' },
+    { value: 'PNEUMOKOKKEN', label: 'SURVSTAT Pneumokokken' },
+  ];
+
+  const loadBacktestRuns = useCallback(async () => {
+    try {
+      const res = await fetch('/api/v1/backtest/runs?limit=30');
+      if (!res.ok) return;
+      const data = await res.json();
+      setBtRuns(data.runs || []);
+    } catch (e) {
+      console.error('Backtest runs fetch error', e);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (view === 'backtest') {
+      loadBacktestRuns();
+      // Seed from cockpit data if available
+      if (cockpit?.backtest_summary) {
+        const bs = cockpit.backtest_summary;
+        if (bs.latest_market && !btResult) setBtResult(bs.latest_market);
+        if (bs.latest_customer && !btCustomerResult) setBtCustomerResult(bs.latest_customer);
+        if (bs.recent_runs?.length && btRuns.length === 0) setBtRuns(bs.recent_runs);
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view, cockpit?.backtest_summary]);
+
+  const runMarketBacktest = async () => {
+    setBtRunning(true);
+    setBtResult(null);
+    try {
+      const qs = new URLSearchParams({
+        target_source: btTargetSource,
+        virus_typ: virus,
+      });
+      const res = await fetch(`/api/v1/backtest/market?${qs.toString()}`, { method: 'POST' });
+      const data = await res.json();
+      if (data.error) {
+        toast(`Backtest Fehler: ${data.error}`, 'error');
+      } else {
+        setBtResult(data);
+        toast('Markt-Check abgeschlossen', 'success');
+        loadBacktestRuns();
+      }
+    } catch (e) {
+      toast('Markt-Check fehlgeschlagen', 'error');
+    } finally {
+      setBtRunning(false);
+    }
+  };
+
+  const runCustomerBacktest = async () => {
+    const fileInput = btFileRef.current;
+    if (!fileInput?.files?.length) {
+      toast('Bitte CSV/XLSX Datei auswählen', 'error');
+      return;
+    }
+    setBtCustomerRunning(true);
+    setBtCustomerResult(null);
+    try {
+      const formData = new FormData();
+      formData.append('file', fileInput.files[0]);
+      const qs = new URLSearchParams({ virus_typ: virus });
+      const res = await fetch(`/api/v1/backtest/customer?${qs.toString()}`, {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await res.json();
+      if (data.error) {
+        toast(`Realitäts-Check Fehler: ${data.error}`, 'error');
+      } else {
+        setBtCustomerResult(data);
+        toast('Realitäts-Check abgeschlossen', 'success');
+        loadBacktestRuns();
+      }
+    } catch (e) {
+      toast('Realitäts-Check fehlgeschlagen', 'error');
+    } finally {
+      setBtCustomerRunning(false);
+    }
+  };
+
+  const renderBacktest = () => {
+    const cardStyle: React.CSSProperties = {
+      background: 'var(--bg-card)', borderRadius: 12, border: '1px solid var(--border-color)',
+      padding: 24, marginBottom: 20,
+    };
+    const metricBoxStyle: React.CSSProperties = {
+      background: 'var(--bg-secondary)', borderRadius: 8, padding: '12px 16px',
+      textAlign: 'center' as const, minWidth: 120,
+    };
+    const btnPrimary: React.CSSProperties = {
+      padding: '8px 20px', borderRadius: 8, border: 'none',
+      background: 'var(--accent-violet)', color: '#fff',
+      fontSize: 13, fontWeight: 600, cursor: 'pointer',
+    };
+    const btnSecondary: React.CSSProperties = {
+      ...btnPrimary,
+      background: 'var(--bg-secondary)', color: 'var(--text-primary)',
+      border: '1px solid var(--border-color)',
+    };
+
+    return (
+      <>
+        {/* ── Header ── */}
+        <div style={{ marginBottom: 24 }}>
+          <h1 style={{ fontSize: 22, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>
+            Backtest & Validierung
+          </h1>
+          <p style={{ fontSize: 14, color: 'var(--text-secondary)' }}>
+            Prüfe die Vorhersagequalität des ViralFlux-Modells gegen historische Daten.
+          </p>
+        </div>
+
+        {/* ── Market Check ── */}
+        <div style={cardStyle}>
+          <h2 style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 16 }}>
+            Markt-Check
+          </h2>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
+            <select
+              value={btTargetSource}
+              onChange={(e) => setBtTargetSource(e.target.value)}
+              style={{
+                padding: '8px 12px', borderRadius: 8, fontSize: 13,
+                border: '1px solid var(--border-color)', background: 'var(--bg-secondary)',
+                color: 'var(--text-primary)',
+              }}
+            >
+              {TARGET_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+            <button
+              onClick={runMarketBacktest}
+              disabled={btRunning}
+              style={{ ...btnPrimary, opacity: btRunning ? 0.6 : 1 }}
+            >
+              {btRunning ? 'Läuft\u2026' : 'Markt-Check starten'}
+            </button>
+          </div>
+
+          {/* Market result */}
+          {btResult?.metrics && (
+            <div>
+              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 20 }}>
+                {[
+                  { label: 'R²', value: btResult.metrics.r2_score?.toFixed(3) },
+                  { label: 'Korrelation', value: `${btResult.metrics.correlation_pct?.toFixed(1)}%` },
+                  { label: 'sMAPE', value: btResult.metrics.smape?.toFixed(1) },
+                  { label: 'Lead/Lag', value: `${btResult.lead_lag?.best_lag_days ?? '?'} Tage` },
+                ].map((m) => (
+                  <div key={m.label} style={metricBoxStyle}>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4, textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>
+                      {m.label}
+                    </div>
+                    <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)' }}>
+                      {m.value}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Chart */}
+              {btResult.chart_data?.length > 0 && (
+                <div style={{ width: '100%', height: 300, marginBottom: 16 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={btResult.chart_data}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" />
+                      <XAxis
+                        dataKey="date"
+                        tickFormatter={(d: string) => {
+                          try { return format(parseISO(d), 'dd.MM.yy'); } catch { return d; }
+                        }}
+                        tick={{ fontSize: 11, fill: 'var(--text-muted)' }}
+                      />
+                      <YAxis tick={{ fontSize: 11, fill: 'var(--text-muted)' }} />
+                      <RechartsTooltip
+                        contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: 8, fontSize: 12 }}
+                        labelFormatter={(d: string) => {
+                          try { return format(parseISO(d), 'dd.MM.yyyy'); } catch { return d; }
+                        }}
+                      />
+                      <Legend wrapperStyle={{ fontSize: 12 }} />
+                      <Line type="monotone" dataKey="real_qty" name="Proxy (Ist)" stroke="#c0392b" strokeWidth={2} dot={false} />
+                      <Line type="monotone" dataKey="predicted_qty" name="ViralFlux" stroke="var(--accent-violet)" strokeWidth={2} dot={false} />
+                      <Line type="monotone" dataKey="baseline_seasonal" name="Seasonal" stroke="#95a5a6" strokeWidth={1.5} dot={false} strokeDasharray="4 4" />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+
+              {btResult.proof_text && (
+                <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6, margin: 0 }}>
+                  {btResult.proof_text}
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* ── Customer Check ── */}
+        <div style={cardStyle}>
+          <h2 style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 16 }}>
+            Realitäts-Check (Kundendaten)
+          </h2>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}>
+            <input
+              ref={btFileRef}
+              type="file"
+              accept=".csv,.xlsx"
+              style={{ fontSize: 13, color: 'var(--text-primary)' }}
+            />
+            <button
+              onClick={runCustomerBacktest}
+              disabled={btCustomerRunning}
+              style={{ ...btnSecondary, opacity: btCustomerRunning ? 0.6 : 1 }}
+            >
+              {btCustomerRunning ? 'Läuft\u2026' : 'Realitäts-Check (CSV)'}
+            </button>
+          </div>
+          <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>
+            Pflichtspalten: <code>datum</code>, <code>menge</code> — optional: <code>region</code>
+          </p>
+
+          {btCustomerResult?.metrics && (
+            <div style={{ marginTop: 16 }}>
+              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}>
+                {[
+                  { label: 'R²', value: btCustomerResult.metrics.r2_score?.toFixed(3) },
+                  { label: 'Korrelation', value: `${btCustomerResult.metrics.correlation_pct?.toFixed(1)}%` },
+                  { label: 'MAE', value: btCustomerResult.metrics.mae?.toFixed(1) },
+                ].map((m) => (
+                  <div key={m.label} style={metricBoxStyle}>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4, textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>
+                      {m.label}
+                    </div>
+                    <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)' }}>
+                      {m.value}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {btCustomerResult.proof_text && (
+                <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6, margin: 0 }}>
+                  {btCustomerResult.proof_text}
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* ── Backtest History ── */}
+        {btRuns.length > 0 && (
+          <div style={cardStyle}>
+            <h2 style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 16 }}>
+              Backtest-Verlauf
+            </h2>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                <thead>
+                  <tr style={{ borderBottom: '2px solid var(--border-color)' }}>
+                    {['Zeit', 'Mode', 'Target', 'Virus', 'R²', 'Korrelation'].map((h) => (
+                      <th key={h} style={{ padding: '8px 12px', textAlign: 'left', color: 'var(--text-muted)', fontWeight: 600, fontSize: 11, textTransform: 'uppercase' as const }}>
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {btRuns.map((run: any, idx: number) => (
+                    <tr key={run.id || idx} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                      <td style={{ padding: '8px 12px', color: 'var(--text-secondary)' }}>
+                        {run.created_at ? format(parseISO(run.created_at), 'dd.MM.yy HH:mm') : '–'}
+                      </td>
+                      <td style={{ padding: '8px 12px', color: 'var(--text-primary)' }}>
+                        {run.mode === 'MARKET_CHECK' ? 'Markt' : 'Kunde'}
+                      </td>
+                      <td style={{ padding: '8px 12px', color: 'var(--text-primary)' }}>{run.target_label || run.target_source || '–'}</td>
+                      <td style={{ padding: '8px 12px', color: 'var(--text-primary)' }}>{run.virus_typ || '–'}</td>
+                      <td style={{ padding: '8px 12px', color: 'var(--text-primary)', fontWeight: 600 }}>{run.r2_score?.toFixed(3) ?? '–'}</td>
+                      <td style={{ padding: '8px 12px', color: 'var(--text-primary)', fontWeight: 600 }}>{run.correlation_pct ? `${run.correlation_pct.toFixed(1)}%` : '–'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </>
+    );
+  };
+
+  /* ─────────────────────────────────────────────────────────────────────────
    *  MAIN RENDER
    * ───────────────────────────────────────────────────────────────────────── */
   return (
     <div className="space-y-6">
       {view === 'lagebild' && renderLagebild()}
       {view === 'empfehlungen' && renderEmpfehlungen()}
+      {view === 'backtest' && renderBacktest()}
       {renderSlideOver()}
     </div>
   );

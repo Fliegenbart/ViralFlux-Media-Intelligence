@@ -145,6 +145,7 @@ const App: React.FC = () => {
             <Route path="/empfehlungen" element={<AppLayout><MediaCockpit view="empfehlungen" /></AppLayout>} />
             <Route path="/empfehlungen/:id" element={<AppLayout><MediaCockpit view="empfehlungen" /></AppLayout>} />
             <Route path="/produkte" element={<AppLayout><ProductCatalog /></AppLayout>} />
+            <Route path="/backtest" element={<AppLayout><MediaCockpit view="backtest" /></AppLayout>} />
             <Route path="/admin" element={<AppLayout><AdminPanel /></AppLayout>} />
             {/* Legacy redirects */}
             <Route path="/dashboard" element={<Navigate to="/lagebild" replace />} />

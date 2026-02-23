@@ -178,7 +178,7 @@ class BacktestService:
         ).scalar() or 0
 
         if previous > 0:
-            slope = (recent - previous) / previous
+            slope = float((recent - previous) / previous)
         else:
             slope = 0.0
 

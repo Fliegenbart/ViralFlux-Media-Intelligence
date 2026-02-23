@@ -11,7 +11,9 @@ from typing import Optional, Tuple
 from uuid import uuid4
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_, or_
+import math
 from sklearn.linear_model import Ridge
+from sklearn.ensemble import GradientBoostingRegressor
 from sklearn.metrics import r2_score, mean_absolute_error
 from sklearn.preprocessing import StandardScaler
 import logging
@@ -54,6 +56,32 @@ class BacktestService:
         "PNEUMOKOKKEN": "pneumokokken",
         "H_INFLUENZAE": "haemophilus influenzae",
     }
+
+    # Cross-disease pairs: epidemiologisch sinnvolle Korrelationen
+    CROSS_DISEASE_MAP: dict[str, list[str]] = {
+        "Influenza A": ["RSV A", "SARS-CoV-2"],
+        "Influenza B": ["Influenza A", "SARS-CoV-2"],
+        "SARS-CoV-2": ["Influenza A", "Influenza B"],
+        "RSV A": ["Influenza A", "Influenza B"],
+    }
+
+    # Erweiterte Feature-Liste für den verbesserten Walk-Forward Backtest
+    ENHANCED_FEATURE_COLS: list[str] = [
+        "wastewater_raw",
+        "positivity_raw",
+        "trends_raw",
+        "weather_temp",
+        "weather_humidity",
+        "school_start_float",
+        "target_lag1",
+        "target_lag2",
+        "target_lag3",
+        "target_ma3",
+        "target_roc",
+        "week_sin",
+        "week_cos",
+        "xdisease_load",
+    ]
 
     # Gelo-relevante Atemwegsinfekte (ohne COVID-19, da zu dominant)
     GELO_ATEMWEG_DISEASES: list[str] = [
@@ -194,6 +222,15 @@ class BacktestService:
         available_cutoff: Optional[datetime] = None,
     ) -> float:
         """Wetter-Risiko an target_date (Temperatur, UV, Feuchte)."""
+        components = self._weather_risk_components_at_date(target, available_cutoff)
+        return components["composite"]
+
+    def _weather_risk_components_at_date(
+        self,
+        target: datetime,
+        available_cutoff: Optional[datetime] = None,
+    ) -> dict[str, float]:
+        """Wetter-Risiko-Einzelkomponenten an target_date."""
         effective = available_cutoff or target
         latest = self.db.query(WeatherData).filter(
             WeatherData.datum <= effective,
@@ -201,7 +238,7 @@ class BacktestService:
         ).order_by(WeatherData.datum.desc()).limit(5).all()
 
         if not latest:
-            return 0.3
+            return {"temp_factor": 0.3, "uv_factor": 0.3, "humidity_factor": 0.6, "composite": 0.3}
 
         temps = [w.temperatur for w in latest if w.temperatur is not None]
         avg_temp = sum(temps) / len(temps) if temps else 5.0
@@ -211,8 +248,14 @@ class BacktestService:
         temp_factor = max(0, min(1, (20 - avg_temp) / 25))
         uv_factor = max(0, min(1, (8 - avg_uv) / 8))
         humidity_factor = max(0, min(1, avg_humidity / 100))
+        composite = temp_factor * 0.4 + uv_factor * 0.35 + humidity_factor * 0.25
 
-        return temp_factor * 0.4 + uv_factor * 0.35 + humidity_factor * 0.25
+        return {
+            "temp_factor": round(temp_factor, 4),
+            "uv_factor": round(uv_factor, 4),
+            "humidity_factor": round(humidity_factor, 4),
+            "composite": round(composite, 4),
+        }
 
     def _school_start_at_date(
         self,
@@ -227,6 +270,30 @@ class BacktestService:
             SchoolHolidays.end_datum <= effective,
         ).count()
         return count > 0
+
+    def _cross_disease_load_at_date(
+        self,
+        target: datetime,
+        xdisease_viruses: list[str],
+        available_cutoff: Optional[datetime] = None,
+    ) -> float:
+        """Durchschnittliche normalisierte Viruslast der Korrelations-Viren (7-Tage-Fenster)."""
+        if not xdisease_viruses:
+            return 0.0
+        effective = available_cutoff or target
+        week_ago = effective - timedelta(days=7)
+
+        from sqlalchemy import func as sa_func
+        avg_load = self.db.query(
+            sa_func.avg(WastewaterAggregated.viruslast_normalisiert)
+        ).filter(
+            WastewaterAggregated.virus_typ.in_(xdisease_viruses),
+            WastewaterAggregated.datum >= week_ago,
+            WastewaterAggregated.datum <= effective,
+            self._asof_filter(WastewaterAggregated, WastewaterAggregated.datum, effective),
+        ).scalar()
+
+        return round(float(avg_load or 0.0), 4)
 
     def _are_consultation_at_date(
         self,
@@ -298,7 +365,7 @@ class BacktestService:
         virus_typ: str,
         delay_rules: Optional[dict[str, int]] = None,
     ) -> dict[str, float]:
-        """Berechnet die 4 Dimensions-Scores an einem historischen Datum."""
+        """Berechnet Dimensions-Scores + Rohsignale an einem historischen Datum."""
         rules = dict(self.DEFAULT_DELAY_RULES_DAYS)
         if delay_rules:
             rules.update(delay_rules)
@@ -314,8 +381,13 @@ class BacktestService:
         positivity = self._positivity_rate_at_date(target, virus_typ, available_cutoff=positivity_cutoff)
         are_consultation = self._are_consultation_at_date(target, available_cutoff=are_cutoff)
         trends = self._trends_at_date(target, available_cutoff=trends_cutoff)
-        weather = self._weather_risk_at_date(target, available_cutoff=weather_cutoff)
+        weather_components = self._weather_risk_components_at_date(target, available_cutoff=weather_cutoff)
+        weather = weather_components["composite"]
         school_start = self._school_start_at_date(target, available_cutoff=holidays_cutoff)
+
+        # Cross-disease signal
+        xdisease_viruses = self.CROSS_DISEASE_MAP.get(virus_typ, [])
+        xdisease_load = self._cross_disease_load_at_date(target, xdisease_viruses, available_cutoff=wastewater_cutoff)
 
         # BIO = wastewater + lab positivity + ARE consultation (graceful degradation)
         if are_consultation > 0:
@@ -329,8 +401,6 @@ class BacktestService:
             bio = min(wastewater * 0.5 + positivity * 5.0 * 0.5, 1.0)
 
         # MARKET = BfArM shortage disruption proxy
-        # Uses bio signal + wastewater as market demand indicator:
-        # High bio activity + shortages → pharmacy demand spike
         market = self._market_proxy_at_date(target, bio, wastewater, positivity)
 
         # PSYCHO = Google Trends
@@ -342,14 +412,23 @@ class BacktestService:
             context = min(context * 1.3, 1.0)
 
         return {
+            # Legacy composite scores (for backward compatibility)
             "bio": round(bio, 4),
             "market": round(market, 4),
             "psycho": round(psycho, 4),
             "context": round(context, 4),
             "school_start": school_start,
+            # Individual raw signals (for enhanced backtest)
             "wastewater_raw": round(wastewater, 4),
+            "positivity_raw": round(min(positivity * 5.0, 1.0), 4),
             "are_consultation_raw": round(are_consultation, 4),
-            "weather_raw": round(weather, 4),
+            "trends_raw": round(trends, 4),
+            "weather_temp": weather_components["temp_factor"],
+            "weather_uv": weather_components["uv_factor"],
+            "weather_humidity": weather_components["humidity_factor"],
+            "weather_raw": weather,
+            "school_start_float": 1.0 if school_start else 0.0,
+            "xdisease_load": xdisease_load,
         }
 
     # ─────────────────────────────────────────────────────────────────────────
@@ -362,8 +441,14 @@ class BacktestService:
         virus_typ: str,
         horizon_days: int = 0,
         delay_rules: Optional[dict[str, int]] = None,
+        enhanced: bool = False,
     ) -> list[dict]:
-        """Berechne Sub-Scores je Ziel-Datenpunkt ohne Future-Leak."""
+        """Berechne Sub-Scores je Ziel-Datenpunkt ohne Future-Leak.
+
+        Args:
+            enhanced: If True, include raw signals + temporal features
+                      for the improved GradientBoosting pipeline.
+        """
         if target_df.empty:
             return []
 
@@ -372,8 +457,10 @@ class BacktestService:
         df["menge"] = pd.to_numeric(df["menge"], errors="coerce")
         df = df.dropna(subset=["datum", "menge"]).sort_values("datum").reset_index(drop=True)
 
+        menge_values = df["menge"].tolist()
+
         simulation_rows = []
-        for _, row in df.iterrows():
+        for idx, row in df.iterrows():
             target_date = row["datum"]
             sim_date = target_date - timedelta(days=max(0, int(horizon_days)))
             real_qty = float(row["menge"])
@@ -384,7 +471,7 @@ class BacktestService:
                     virus_typ,
                     delay_rules=delay_rules,
                 )
-                simulation_rows.append({
+                row_dict = {
                     "date": target_date.strftime("%Y-%m-%d"),
                     "feature_date": sim_date.strftime("%Y-%m-%d"),
                     "real_qty": real_qty,
@@ -393,7 +480,35 @@ class BacktestService:
                     "psycho": scores["psycho"],
                     "context": scores["context"],
                     "school_start": scores["school_start"],
-                })
+                }
+
+                if enhanced:
+                    # Raw signals
+                    row_dict["wastewater_raw"] = scores["wastewater_raw"]
+                    row_dict["positivity_raw"] = scores["positivity_raw"]
+                    row_dict["are_consultation_raw"] = scores.get("are_consultation_raw", 0.0)
+                    row_dict["trends_raw"] = scores["trends_raw"]
+                    row_dict["weather_temp"] = scores["weather_temp"]
+                    row_dict["weather_humidity"] = scores["weather_humidity"]
+                    row_dict["school_start_float"] = scores["school_start_float"]
+                    row_dict["xdisease_load"] = scores["xdisease_load"]
+
+                    # Temporal features from target history (no future leak)
+                    i = int(idx)
+                    row_dict["target_lag1"] = menge_values[i - 1] if i >= 1 else real_qty
+                    row_dict["target_lag2"] = menge_values[i - 2] if i >= 2 else row_dict["target_lag1"]
+                    row_dict["target_lag3"] = menge_values[i - 3] if i >= 3 else row_dict["target_lag2"]
+                    recent_3 = menge_values[max(0, i - 3):i] or [real_qty]
+                    row_dict["target_ma3"] = sum(recent_3) / len(recent_3)
+                    prev = menge_values[i - 1] if i >= 1 else 1.0
+                    row_dict["target_roc"] = (prev - (menge_values[i - 2] if i >= 2 else prev)) / prev if prev > 0 else 0.0
+
+                    # Cyclic seasonality
+                    iso_week = sim_date.isocalendar()[1]
+                    row_dict["week_sin"] = round(math.sin(2 * math.pi * iso_week / 52), 4)
+                    row_dict["week_cos"] = round(math.cos(2 * math.pi * iso_week / 52), 4)
+
+                simulation_rows.append(row_dict)
             except Exception as e:
                 logger.warning(f"Simulation für {sim_date} fehlgeschlagen: {e}")
                 continue
@@ -812,8 +927,14 @@ class BacktestService:
         horizon_days: int,
         min_train_points: int,
         delay_rules: Optional[dict[str, int]] = None,
+        exclude_are: bool = False,
     ) -> dict:
-        """Walk-forward Backtest mit Baselines und Delay-Regeln."""
+        """Walk-forward Backtest mit erweiterter Feature-Pipeline und GradientBoosting.
+
+        Args:
+            exclude_are: If True, remove are_consultation_raw from features
+                         (to prevent circular dependency when target=RKI_ARE).
+        """
         df = target_df.copy()
         df["datum"] = pd.to_datetime(df["datum"], errors="coerce")
         df["menge"] = pd.to_numeric(df["menge"], errors="coerce")
@@ -831,9 +952,17 @@ class BacktestService:
         df["iso_week"] = isocal.week.astype(int)
         df["month"] = df["datum"].dt.month.astype(int)
 
-        feature_cols = ["bio", "market", "psycho", "context"]
+        # Enhanced feature set (ohne ARE wenn target=RKI_ARE)
+        feature_cols = list(self.ENHANCED_FEATURE_COLS)
+        if not exclude_are and "are_consultation_raw" not in feature_cols:
+            feature_cols.insert(2, "are_consultation_raw")
+
+        # Legacy features for backward-compatible chart output
+        legacy_feature_cols = ["bio", "market", "psycho", "context"]
+
         folds: list[dict] = []
-        coef_accumulator: list[np.ndarray] = []
+        importance_accumulator: list[np.ndarray] = []
+        model_type_used = "GradientBoosting"
 
         for _, row in df.iterrows():
             target_time = row["datum"]
@@ -849,38 +978,97 @@ class BacktestService:
             if len(train_target_df) < min_train_points:
                 continue
 
+            # Enhanced simulation with raw signals + temporal features
             train_rows = self._simulate_rows_from_target(
                 train_target_df[["datum", "menge"]],
                 virus_typ=virus_typ,
                 horizon_days=horizon_days,
                 delay_rules=delay_rules,
+                enhanced=True,
             )
             if len(train_rows) < min_train_points:
                 continue
 
             df_train = pd.DataFrame(train_rows)
+            # Ensure all feature columns exist (fill missing with 0)
+            for col in feature_cols:
+                if col not in df_train.columns:
+                    df_train[col] = 0.0
+
             X_train = df_train[feature_cols].values
             y_train = df_train["real_qty"].values
 
-            scaler = StandardScaler()
-            X_train_scaled = scaler.fit_transform(X_train)
-            model = Ridge(alpha=1.0, fit_intercept=True)
-            model.fit(X_train_scaled, y_train)
+            # Replace NaN/inf
+            X_train = np.nan_to_num(X_train, nan=0.0, posinf=0.0, neginf=0.0)
 
-            coef_accumulator.append(np.abs(model.coef_))
+            # Model selection: GBR for sufficient data, Ridge as fallback
+            use_gbr = len(train_rows) >= 30
+            if use_gbr:
+                model = GradientBoostingRegressor(
+                    n_estimators=100,
+                    max_depth=4,
+                    learning_rate=0.05,
+                    subsample=0.8,
+                    min_samples_leaf=3,
+                    random_state=42,
+                )
+                model.fit(X_train, y_train)
+                importance_accumulator.append(model.feature_importances_)
+            else:
+                model_type_used = "Ridge"
+                scaler = StandardScaler()
+                X_train = scaler.fit_transform(X_train)
+                model = Ridge(alpha=1.0, fit_intercept=True)
+                model.fit(X_train, y_train)
+                importance_accumulator.append(np.abs(model.coef_))
 
+            # Build test features for the forecast point
             test_scores = self._compute_sub_scores_at_date(
                 forecast_time,
                 virus_typ=virus_typ,
                 delay_rules=delay_rules,
             )
-            X_test = np.array([[
-                test_scores["bio"],
-                test_scores["market"],
-                test_scores["psycho"],
-                test_scores["context"],
-            ]])
-            y_hat = float(model.predict(scaler.transform(X_test))[0])
+
+            # Target lags from training history (no future leak)
+            t_vals = train_target_df["menge"].tolist()
+            target_lag1 = float(t_vals[-1]) if len(t_vals) >= 1 else 0.0
+            target_lag2 = float(t_vals[-2]) if len(t_vals) >= 2 else target_lag1
+            target_lag3 = float(t_vals[-3]) if len(t_vals) >= 3 else target_lag2
+            recent_3 = t_vals[-3:] if len(t_vals) >= 3 else t_vals
+            target_ma3 = sum(recent_3) / len(recent_3) if recent_3 else 0.0
+            prev = float(t_vals[-2]) if len(t_vals) >= 2 else 1.0
+            target_roc = (target_lag1 - prev) / prev if prev > 0 else 0.0
+
+            # Seasonality
+            iso_week = forecast_time.isocalendar()[1]
+            week_sin = round(math.sin(2 * math.pi * iso_week / 52), 4)
+            week_cos = round(math.cos(2 * math.pi * iso_week / 52), 4)
+
+            # Build feature vector in same order as feature_cols
+            test_feat = {
+                "wastewater_raw": test_scores["wastewater_raw"],
+                "positivity_raw": test_scores["positivity_raw"],
+                "are_consultation_raw": test_scores.get("are_consultation_raw", 0.0),
+                "trends_raw": test_scores["trends_raw"],
+                "weather_temp": test_scores["weather_temp"],
+                "weather_humidity": test_scores["weather_humidity"],
+                "school_start_float": test_scores["school_start_float"],
+                "target_lag1": target_lag1,
+                "target_lag2": target_lag2,
+                "target_lag3": target_lag3,
+                "target_ma3": target_ma3,
+                "target_roc": target_roc,
+                "week_sin": week_sin,
+                "week_cos": week_cos,
+                "xdisease_load": test_scores["xdisease_load"],
+            }
+            X_test = np.array([[test_feat.get(c, 0.0) for c in feature_cols]])
+            X_test = np.nan_to_num(X_test, nan=0.0, posinf=0.0, neginf=0.0)
+
+            if not use_gbr:
+                X_test = scaler.transform(X_test)
+
+            y_hat = float(model.predict(X_test)[0])
 
             baseline_persistence = float(train_target_df.iloc[-1]["menge"])
             baseline_seasonal = self._seasonal_naive_baseline(
@@ -923,12 +1111,13 @@ class BacktestService:
         pers_mae = max(persistence_metrics["mae"], 1e-9)
         seas_mae = max(seasonal_metrics["mae"], 1e-9)
 
-        if coef_accumulator:
-            avg_coefs = np.mean(np.vstack(coef_accumulator), axis=0)
-            total = float(avg_coefs.sum())
+        # Feature importance from accumulated fold importances
+        if importance_accumulator:
+            avg_imp = np.mean(np.vstack(importance_accumulator), axis=0)
+            total = float(avg_imp.sum())
             if total > 0:
                 optimized_weights = {
-                    col: round(float(avg_coefs[i] / total), 2)
+                    col: round(float(avg_imp[i] / total), 3)
                     for i, col in enumerate(feature_cols)
                 }
             else:
@@ -955,6 +1144,9 @@ class BacktestService:
             },
             "optimized_weights": optimized_weights,
             "default_weights": dict(self.DEFAULT_WEIGHTS),
+            "model_type": model_type_used,
+            "feature_count": len(feature_cols),
+            "feature_names": feature_cols,
             "chart_data": [
                 {
                     "date": row["target_time"].strftime("%Y-%m-%d"),
@@ -1013,12 +1205,16 @@ class BacktestService:
                 "target_label": target_meta.get("target_label"),
             }
 
+        # Exclude ARE from features when target=RKI_ARE (circular dependency)
+        exclude_are = (target_source or "").strip().upper() == "RKI_ARE"
+
         result = self._run_walk_forward_market_backtest(
             target_df=target_df,
             virus_typ=virus_typ,
             horizon_days=horizon_days,
             min_train_points=min_train_points,
             delay_rules=delay_rules,
+            exclude_are=exclude_are,
         )
         if "error" in result:
             return result

@@ -339,7 +339,9 @@ class MediaCockpitService:
         latest_pollen_date = self.db.query(func.max(PollenData.datum)).scalar()
         pollen_signal = 0.0
         pollen_type = "Pollen"
-        if latest_pollen_date:
+        pollen_is_stale = True
+        if latest_pollen_date and (datetime.utcnow() - latest_pollen_date) <= timedelta(days=3):
+            pollen_is_stale = False
             pollen_row = self.db.query(
                 PollenData.pollen_type,
                 func.max(PollenData.pollen_index).label("max_index"),
@@ -349,11 +351,12 @@ class MediaCockpitService:
             if pollen_row:
                 raw_pollen = min(100.0, max(0.0, float(pollen_row.max_index or 0.0) / 3.0 * 100.0))
                 pollen_type = pollen_row.pollen_type or "Pollen"
-                # Pollen is a contextual signal, not a direct epidemiological
-                # risk.  Cap the standalone impact at 35% and weight by
-                # concurrent respiratory burden (ARE / Notaufnahme).
+                # Pollen ist ein Kontextsignal, nur relevant für GeloSitin.
+                # Standalone max 15%, mit ARE-Belastung max 45%.
                 are_factor = min(1.0, float((latest_are.konsultationsinzidenz or 0) / 4000.0)) if latest_are else 0.0
-                pollen_signal = round(raw_pollen * (0.35 + 0.65 * are_factor), 1)
+                pollen_signal = round(raw_pollen * (0.15 + 0.30 * are_factor), 1)
+        else:
+            pollen_type = "Saison-Pause"
 
         tiles = [
             {
@@ -442,9 +445,14 @@ class MediaCockpitService:
                 "title": "Pollen-Trigger",
                 "value": round(pollen_signal, 1),
                 "unit": "/100",
-                "subtitle": f"DWD ({pollen_type})",
+                "subtitle": (
+                    "Keine aktuellen Daten (Saison-Pause)"
+                    if pollen_is_stale
+                    else f"DWD ({pollen_type}) — Relevant für GeloSitin"
+                ),
                 "impact_probability": round(pollen_signal, 1),
                 "data_source": "DWD Pollen",
+                "product_scope": "GeloSitin",
             },
             {
                 "id": "trends",

@@ -878,6 +878,9 @@ class PlaybookEngine:
         latest = self.db.query(func.max(PollenData.datum)).scalar()
         if not latest:
             return {}
+        # Frische-Check: Keine Pollen-Daten älter als 3 Tage verwenden
+        if (datetime.utcnow() - latest) > timedelta(days=3):
+            return {}
         rows = self.db.query(
             PollenData.region_code,
             func.max(PollenData.pollen_index).label("max_index"),

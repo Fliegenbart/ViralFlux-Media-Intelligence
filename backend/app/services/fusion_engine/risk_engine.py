@@ -60,9 +60,8 @@ class EpidemiologicalRiskEngine:
             if humidity_pct < 40.0:
                 multiplier += 0.15
         else:
-            # SOMMER: Pollen verursachen Läsionen (Rhinovirus-Einfallstor / Halsbeschwerden)
-            if pollen_index > 2.0:  # Ab mäßigem Pollenflug
-                multiplier += (pollen_index - 2.0) * 0.10
+            # SOMMER: Pollen nicht mehr im allgemeinen PeixEpiScore —
+            # wirkt nur noch produktspezifisch über das ALLERGIE_BREMSE-Playbook (GeloSitin).
             # Hohe Luftfeuchtigkeit + Hitze belasten das Herz-Kreislauf-System (Sommergrippe)
             if temp_c > 25.0 and humidity_pct > 60.0:
                 multiplier += 0.05

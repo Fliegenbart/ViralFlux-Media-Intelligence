@@ -530,7 +530,6 @@ class PlaybookEngine:
         rows = self.db.query(SurvstatWeeklyData).filter(
             SurvstatWeeklyData.disease_cluster == "RESPIRATORY",
             SurvstatWeeklyData.bundesland != "Gesamt",
-            SurvstatWeeklyData.week > 0,
         ).order_by(SurvstatWeeklyData.week_start.desc()).limit(2000).all()
         if not rows:
             return []
@@ -595,7 +594,6 @@ class PlaybookEngine:
         """Triggert bei breiter Infektionslast (COVID + Influenza + Noro kombiniert)."""
         rows = self.db.query(SurvstatWeeklyData).filter(
             SurvstatWeeklyData.bundesland != "Gesamt",
-            SurvstatWeeklyData.week > 0,
             SurvstatWeeklyData.disease_cluster.in_(["RESPIRATORY", "GASTROINTESTINAL"]),
         ).order_by(SurvstatWeeklyData.week_start.desc()).limit(3000).all()
         if not rows:
@@ -665,7 +663,6 @@ class PlaybookEngine:
                 "pneumokokken (meldepflicht gemäß ifsg)",
             ]),
             SurvstatWeeklyData.bundesland != "Gesamt",
-            SurvstatWeeklyData.week > 0,
         ).order_by(SurvstatWeeklyData.week_start.desc()).limit(1500).all()
         if not rows:
             return []

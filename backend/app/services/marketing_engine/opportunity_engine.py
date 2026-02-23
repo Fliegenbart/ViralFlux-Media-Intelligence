@@ -886,6 +886,13 @@ class MarketingOpportunityEngine:
             candidate = product_mapping.get("candidate_product")
             if candidate:
                 return str(candidate)
+            # Fallback: SEED_PRODUCTS-Katalog nach condition_key durchsuchen
+            condition_key = product_mapping.get("condition_key")
+            if condition_key:
+                from app.services.marketing_engine.product_matcher import SEED_PRODUCTS
+                for seed in SEED_PRODUCTS:
+                    if condition_key in seed.get("applicable_conditions", []):
+                        return seed["name"]
 
         if status == "not_applicable":
             return fallback_product or "Produktfreigabe ausstehend"

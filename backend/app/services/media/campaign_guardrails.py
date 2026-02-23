@@ -19,8 +19,11 @@ Nutze ausschließlich lindernde, unterstützende und wohltuende Formulierungen (
 Verhalte dich stets objektiv, professionell und wissenschaftlich fundiert.
 """
 
-# Hardcoded Regex-Blockliste als finale Sicherung (falls die KI halluziniert)
+# Hardcoded Regex-Blockliste als finale Sicherung (falls die KI halluziniert).
+# Abgedeckt: §1 HWG (Heilversprechen), §3 (irreführende Werbung),
+# §9 (Gutachten-/Testimonial-Missbrauch), §14 (Fernbehandlung).
 HWG_BLOCKLIST = [
+    # ── §1 / §3 HWG: Heilversprechen & Garantien ──
     r"\bheilt\b",
     r"\bHeilung\b",
     r"\bgarantiert\b",
@@ -30,6 +33,46 @@ HWG_BLOCKLIST = [
     r"\bnebenwirkungsfrei\b",
     r"\bmacht\s+gesund\b",
     r"\bsicher\s+wirksam\b",
+    r"\bklinisch\s+bewiesen\b",
+    r"\bwissenschaftlich\s+bewiesen\b",
+    r"\bnachweislich\s+heilt\b",
+    r"\bbeseitigt\b",
+    r"\bvernichtet\b",
+    r"\btoetet\s+(?:Viren|Bakterien|Keime)\b",
+    r"\bsofort\s+(?:gesund|beschwerdefrei|symptomfrei)\b",
+    r"\bein\s+fuer\s+alle\s+[Mm]al\b",
+    r"\bendgueltig\b",
+    r"\bfuer\s+immer\b",
+    r"\bohnmachtssicher\b",
+    r"\brisikolos\b",
+    r"\brisikofrei\b",
+    r"\bvollstaendige?\s+(?:Heilung|Genesung)\b",
+    r"\b(?:keinerlei|ohne\s+jede)\s+Nebenwirkung",
+    r"\bfrei\s+von\s+Nebenwirkungen\b",
+    r"\bunbedingt\s+wirksam\b",
+    r"\bnachgewiesene\s+Heilwirkung\b",
+    r"\bAlternative\s+zu[rm]?\s+(?:Arzt|Arztbesuch|Operation)\b",
+    # ── §3 HWG: irreführende Superlative & Vergleiche ──
+    r"\bbeste[rs]?\s+(?:Mittel|Medikament|Arznei)\b",
+    r"\bNr\.?\s*1\b",
+    r"\bMarktfuehrer\b",
+    r"\bunerreicht\b",
+    r"\beinzigartig\s+wirksam\b",
+    r"\bstaerker\s+als\s+(?:jedes?\s+andere|Antibiotika)\b",
+    r"\bwirksamer\s+als\b",
+    r"\bnichts\s+(?:hilft|wirkt)\s+besser\b",
+    r"\bersetzt\s+(?:den\s+)?Arzt",
+    # ── §9 HWG: Gutachten / Testimonials (fiktiv) ──
+    r"\bArzt\s+empfiehlt\b",
+    r"\bAerzte\s+empfehlen\b",
+    r"\bApotheker\s+empfiehlt\b",
+    r"\b(?:laut|nach)\s+(?:einer\s+)?(?:Studie|Untersuchung)\s+(?:heilt|beseitigt)\b",
+    r"\bvon\s+Aerzten\s+(?:empfohlen|verordnet)\b",
+    # ── §14 HWG: Fernbehandlung / Eigendiagnose ──
+    r"\bSelbstdiagnose\b",
+    r"\bersetzt\s+(?:die\s+)?(?:aerztliche|medizinische)\s+(?:Beratung|Behandlung)\b",
+    r"\bstatt\s+(?:zum\s+)?Arzt\b",
+    r"\bkein\s+Arzt\s+(?:noetig|notwendig|erforderlich)\b",
 ]
 
 

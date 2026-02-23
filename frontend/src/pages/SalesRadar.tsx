@@ -183,8 +183,21 @@ const SalesRadar: React.FC = () => {
   const [totalPages, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
   const [roi, setRoi] = useState<ROIData | null>(null);
+  const [dismissDialog, setDismissDialog] = useState<{ id: string } | null>(null);
+  const [dismissReason, setDismissReason] = useState('');
+  const [dismissComment, setDismissComment] = useState('');
   const pageSize = 50;
   const { toast } = useToast();
+
+  const DISMISS_REASONS = [
+    'Nicht relevant fuer Zielgruppe',
+    'Budget nicht verfuegbar',
+    'Timing passt nicht',
+    'Region nicht im Fokus',
+    'Produkt passt nicht',
+    'Compliance-Bedenken',
+    'Sonstiges',
+  ];
 
   // Fetch
   const fetchOpportunities = useCallback(async (page = 1) => {
@@ -293,9 +306,13 @@ const SalesRadar: React.FC = () => {
     finally { setExporting(false); }
   };
 
-  const updateStatus = async (id: string, status: string) => {
+  const updateStatus = async (id: string, status: string, extraParams?: Record<string, string>) => {
     try {
-      const res = await apiFetch(`/api/v1/marketing/${encodeURIComponent(id)}/status?status=${status}`, { method: 'PATCH' });
+      const params = new URLSearchParams({ status });
+      if (extraParams) {
+        Object.entries(extraParams).forEach(([k, v]) => { if (v) params.set(k, v); });
+      }
+      const res = await apiFetch(`/api/v1/marketing/${encodeURIComponent(id)}/status?${params}`, { method: 'PATCH' });
       if (res.ok) {
         const label = status === 'APPROVED' ? 'freigegeben' : status === 'DISMISSED' ? 'verworfen' : status === 'SENT' ? 'gesendet' : status === 'CONVERTED' ? 'konvertiert' : status === 'ACTIVATED' ? 'aktiviert' : status === 'READY' ? 'bereitgestellt' : status;
         toast(`Opportunity ${label}`, 'success');
@@ -311,6 +328,21 @@ const SalesRadar: React.FC = () => {
       toast('Status-Update fehlgeschlagen', 'error');
       console.error('Status update error:', e);
     }
+  };
+
+  const openDismissDialog = (id: string) => {
+    setDismissReason('');
+    setDismissComment('');
+    setDismissDialog({ id });
+  };
+
+  const confirmDismiss = () => {
+    if (!dismissDialog) return;
+    updateStatus(dismissDialog.id, 'DISMISSED', {
+      dismiss_reason: dismissReason,
+      dismiss_comment: dismissComment,
+    });
+    setDismissDialog(null);
   };
 
   // ─── Derived data ───
@@ -341,7 +373,8 @@ const SalesRadar: React.FC = () => {
   const conversionRate = useMemo(() => {
     const sent = opportunities.filter(o => o.status === 'SENT').length;
     const converted = opportunities.filter(o => o.status === 'CONVERTED').length;
-    const total = sent + converted;
+    const dismissed = opportunities.filter(o => o.status === 'DISMISSED').length;
+    const total = sent + converted + dismissed;
     return total > 0 ? Math.round((converted / total) * 100) : 0;
   }, [opportunities]);
 
@@ -701,7 +734,7 @@ const SalesRadar: React.FC = () => {
                                 Gesendet
                               </button>
                               <button
-                                onClick={(e) => { e.stopPropagation(); updateStatus(opp.id, 'DISMISSED'); }}
+                                onClick={(e) => { e.stopPropagation(); openDismissDialog(opp.id); }}
                                 className="text-[10px] px-2.5 py-1.5 rounded-lg border border-slate-200 text-slate-400 transition hover:opacity-80"
                               >
                                 ✕
@@ -789,7 +822,7 @@ const SalesRadar: React.FC = () => {
                                       Senden
                                     </button>
                                     <button
-                                      onClick={(e) => { e.stopPropagation(); updateStatus(opp.id, 'DISMISSED'); }}
+                                      onClick={(e) => { e.stopPropagation(); openDismissDialog(opp.id); }}
                                       className="text-[9px] px-1.5 py-1 rounded text-slate-400 transition hover:opacity-80"
                                     >
                                       ✕
@@ -1150,7 +1183,7 @@ const SalesRadar: React.FC = () => {
                         Als gesendet markieren
                       </button>
                       <button
-                        onClick={() => updateStatus(opp.id, 'DISMISSED')}
+                        onClick={() => openDismissDialog(opp.id)}
                         className="py-2.5 px-4 text-xs rounded-lg border border-slate-200 text-slate-500 transition hover:opacity-80"
                       >
                         Verwerfen
@@ -1225,6 +1258,57 @@ const SalesRadar: React.FC = () => {
       <footer className="mt-8 py-4 text-center text-xs text-slate-400 border-t border-slate-200">
         ViralFlux Media Intelligence &mdash; Vertriebsradar v2.0
       </footer>
+
+      {/* ── Dismiss Dialog ── */}
+      {dismissDialog && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/30 backdrop-blur-sm" onClick={() => setDismissDialog(null)}>
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md mx-4 p-6" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-base font-bold text-slate-900 mb-1">Opportunity verwerfen</h3>
+            <p className="text-xs text-slate-500 mb-4">Warum wird diese Empfehlung verworfen?</p>
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-medium text-slate-600 block mb-1">Grund</label>
+                <select
+                  value={dismissReason}
+                  onChange={(e) => setDismissReason(e.target.value)}
+                  className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 bg-slate-50 focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-200"
+                >
+                  <option value="">— Bitte waehlen —</option>
+                  {DISMISS_REASONS.map((r) => (
+                    <option key={r} value={r}>{r}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-slate-600 block mb-1">Kommentar (optional)</label>
+                <textarea
+                  value={dismissComment}
+                  onChange={(e) => setDismissComment(e.target.value)}
+                  placeholder="Freitext-Anmerkung..."
+                  rows={2}
+                  maxLength={500}
+                  className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 bg-slate-50 focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-200 resize-none"
+                />
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-2 mt-5">
+              <button
+                onClick={() => setDismissDialog(null)}
+                className="px-4 py-2 text-xs font-medium rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 transition"
+              >
+                Abbrechen
+              </button>
+              <button
+                onClick={confirmDismiss}
+                className="px-4 py-2 text-xs font-semibold rounded-lg transition hover:opacity-90"
+                style={{ background: '#475569', color: 'white' }}
+              >
+                Verwerfen
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

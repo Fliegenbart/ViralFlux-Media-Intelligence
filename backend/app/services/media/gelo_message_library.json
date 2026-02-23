@@ -280,6 +280,109 @@
             "was hilft bei erkaeltung",
             "erkaeltung symptome"
           ]
+        },
+        "rhinitis_trockene_nase": {
+          "message_direction": "Schnupfen und verstopfte Nase: konservativ und symptomnah kommunizieren.",
+          "hero_messages": [
+            "Schnupfen? Symptome lindern und durchatmen.",
+            "Nase dicht? Sanft und symptomnah entlasten."
+          ],
+          "keyword_clusters": [
+            "schnupfen lindern",
+            "nase verstopft",
+            "nase frei bekommen",
+            "nasenschleimhaut abschwellen"
+          ]
+        },
+        "halsschmerz_heiserkeit": {
+          "message_direction": "Erkaeltung mit Halsschmerz: Symptome ganzheitlich lindern (konservativ).",
+          "hero_messages": [
+            "Hals kratzt und Nase laeuft? Ganzheitlich gegen Erkaeltungs-Symptome.",
+            "Erkaeltung mit Halsschmerz: symptomnah und konservativ."
+          ],
+          "keyword_clusters": [
+            "halsschmerzen erkaeltung",
+            "erkältung hals",
+            "grippaler infekt symptome",
+            "hals kratzt erkaeltung"
+          ]
+        }
+      }
+    },
+    "gelobronchial": {
+      "conditions": {
+        "bronchitis_husten": {
+          "message_direction": "Husten und Bronchien: wohltuend beruhigen und Schleim loesen (konservativ).",
+          "hero_messages": [
+            "Husten, der nicht aufhoert? Bronchien wohltuend beruhigen.",
+            "Bronchitis-Symptome: Husten lindern und durchatmen."
+          ],
+          "keyword_clusters": [
+            "husten bronchien",
+            "bronchitis husten",
+            "husten reizhusten",
+            "husten beruhigen"
+          ]
+        },
+        "erkaltung_akut": {
+          "message_direction": "Erkaeltungshusten: konservativ und symptomnah kommunizieren.",
+          "hero_messages": [
+            "Erkaeltungshusten? Sanft beruhigen und durchatmen.",
+            "Husten bei Erkaeltung: wohltuend und konservativ lindern."
+          ],
+          "keyword_clusters": [
+            "erkaeltung husten",
+            "husten bei erkaeltung",
+            "husten was hilft",
+            "husten nachts"
+          ]
+        }
+      }
+    },
+    "gelodurat": {
+      "conditions": {
+        "rhinitis_trockene_nase": {
+          "message_direction": "Schnupfen und verstopfte Nase: sanft abschwellen und durchatmen (konservativ).",
+          "hero_messages": [
+            "Nase dicht? Sanft abschwellen und durchatmen.",
+            "Verstopfte Nase: wieder frei atmen."
+          ],
+          "keyword_clusters": [
+            "nase verstopft",
+            "schnupfen nasenspray",
+            "nase abschwellen",
+            "nase frei bekommen"
+          ]
+        },
+        "erkaltung_akut": {
+          "message_direction": "Erkaeltungsschnupfen: konservativ und symptomnah kommunizieren.",
+          "hero_messages": [
+            "Erkaeltung mit Schnupfen? Nase sanft befreien.",
+            "Schnupfen bei Erkaeltung: symptomnah entlasten."
+          ],
+          "keyword_clusters": [
+            "erkaeltung schnupfen",
+            "schnupfen was tun",
+            "nase dicht erkaeltung",
+            "erkaeltung nase zu"
+          ]
+        }
+      }
+    },
+    "gelovox": {
+      "conditions": {
+        "halsschmerz_heiserkeit": {
+          "message_direction": "Heiserkeit und Stimme: wohltuend befeuchten und beruhigen (konservativ).",
+          "hero_messages": [
+            "Heiser? Stimme wohltuend befeuchten und beruhigen.",
+            "Wenn die Stimme versagt: sanft und schonend pflegen."
+          ],
+          "keyword_clusters": [
+            "heiserkeit stimme",
+            "stimme weg was tun",
+            "heiser sprechen",
+            "stimme pflegen"
+          ]
         }
       }
     }

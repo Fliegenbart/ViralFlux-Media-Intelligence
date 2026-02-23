@@ -15,7 +15,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.models.database import MarketingOpportunity
+from app.models.database import AuditLog, MarketingOpportunity
 from app.services.media.ai_campaign_planner import AiCampaignPlanner
 from app.services.media.campaign_guardrails import CampaignGuardrails
 from app.services.media.message_library import select_gelo_message_pack
@@ -127,6 +127,9 @@ class MarketingOpportunityEngine:
             except Exception as exc:
                 logger.error("Detector %s fehlgeschlagen: %s", detector.OPPORTUNITY_TYPE, exc)
 
+        # ── Signal-Deduplizierung: gleiche Condition + Region → nur höchste Urgency behalten ──
+        all_opportunities = self._deduplicate_signals(all_opportunities)
+
         # ── Conquesting Fusion: amplify epidemiological opportunities with bid multipliers ──
         all_opportunities = self._fuse_conquesting_multipliers(all_opportunities)
 
@@ -156,6 +159,36 @@ class MarketingOpportunityEngine:
             },
             "opportunities": clean_opps,
         }
+
+    @staticmethod
+    def _deduplicate_signals(opportunities: list[dict]) -> list[dict]:
+        """Dedupliziere Detektor-Signale: gleiche Condition + Region-Fingerprint
+        aus verschiedenen Detektoren → nur die Opportunity mit der höchsten
+        Urgency behalten. COMPETITOR_SHORTAGE wird nicht dedupliziert (ist
+        Modifier, kein eigenständiger Trigger)."""
+        seen: dict[str, dict] = {}
+        passthrough: list[dict] = []
+
+        for opp in opportunities:
+            opp_type = opp.get("type", "")
+            if opp_type == "COMPETITOR_SHORTAGE":
+                passthrough.append(opp)
+                continue
+
+            condition = opp.get("_condition", "")
+            region = opp.get("region_target", {})
+            states = tuple(sorted(region.get("states", []))) if isinstance(region, dict) else ()
+            dedup_key = f"{condition}::{states}"
+
+            existing = seen.get(dedup_key)
+            if existing is None or opp.get("urgency_score", 0) > existing.get("urgency_score", 0):
+                seen[dedup_key] = opp
+
+        deduped = list(seen.values()) + passthrough
+        removed = len(opportunities) - len(deduped)
+        if removed > 0:
+            logger.info("Signal-Deduplizierung: %d Duplikate entfernt", removed)
+        return deduped
 
     @staticmethod
     def _fuse_conquesting_multipliers(opportunities: list[dict]) -> list[dict]:
@@ -1138,6 +1171,18 @@ class MarketingOpportunityEngine:
 
         payload["ai_plan"] = guarded["ai_plan"]
         payload["guardrail_report"] = guarded["guardrail_report"]
+
+        # AuditLog: Guardrail-Anwendung dokumentieren
+        fixes = guarded.get("guardrail_report", {}).get("applied_fixes", [])
+        if fixes:
+            self.db.add(AuditLog(
+                user="system",
+                action="GUARDRAIL_APPLIED",
+                entity_type="MarketingOpportunity",
+                entity_id=row.opportunity_id,
+                old_value=None,
+                new_value="; ".join(fixes),
+            ))
         payload["ai_meta"] = {
             **(generated.get("ai_meta") or {}),
             "status": generated.get("ai_generation_status"),
@@ -1160,7 +1205,14 @@ class MarketingOpportunityEngine:
         result["ai_generation_status"] = generated.get("ai_generation_status")
         return result
 
-    def update_status(self, opportunity_id: str, new_status: str) -> dict:
+    def update_status(
+        self,
+        opportunity_id: str,
+        new_status: str,
+        *,
+        dismiss_reason: str | None = None,
+        dismiss_comment: str | None = None,
+    ) -> dict:
         """Status einer Opportunity aktualisieren (Workflow + Legacy kompatibel)."""
         target = self._normalize_workflow_status(new_status)
         if target not in WORKFLOW_STATUSES:
@@ -1178,6 +1230,7 @@ class MarketingOpportunityEngine:
         if current != target and target not in ALLOWED_TRANSITIONS.get(current, set()):
             return {"error": f"Ungueltiger Transition: {current} -> {target}"}
 
+        old_status = current
         opp.status = target
         opp.updated_at = datetime.utcnow()
 
@@ -1185,12 +1238,31 @@ class MarketingOpportunityEngine:
         campaign = (payload.get("campaign") or {}).copy()
         campaign["status"] = target
         payload["campaign"] = campaign
+
+        # Dismiss-Grund persistieren
+        if target == "DISMISSED" and (dismiss_reason or dismiss_comment):
+            payload["dismiss_info"] = {
+                "reason": dismiss_reason or "",
+                "comment": (dismiss_comment or "").strip()[:500],
+                "dismissed_at": datetime.utcnow().isoformat() + "Z",
+            }
+
         opp.campaign_payload = payload
+
+        # AuditLog
+        self.db.add(AuditLog(
+            user="system",
+            action="STATUS_CHANGE",
+            entity_type="MarketingOpportunity",
+            entity_id=opportunity_id,
+            old_value=old_status,
+            new_value=target,
+        ))
 
         self.db.commit()
         return {
             "opportunity_id": opportunity_id,
-            "old_status": current,
+            "old_status": old_status,
             "new_status": target,
             "legacy_status": WORKFLOW_TO_LEGACY.get(target, target),
         }

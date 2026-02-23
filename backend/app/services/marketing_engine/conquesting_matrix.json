@@ -166,6 +166,29 @@
       }
     },
     {
+      "sku": "GELO-VIT",
+      "name": "GeloVital",
+      "condition": "immun_support",
+      "conquesting": {
+        "target_ingredients": [
+          "echinacea",
+          "pelargonium",
+          "vitamin c",
+          "zink",
+          "vitamin d",
+          "holunder"
+        ],
+        "target_forms": [
+          "tablette",
+          "kapsel",
+          "saft",
+          "brausetablette",
+          "tropfen"
+        ],
+        "bid_multiplier": 1.3
+      }
+    },
+    {
       "sku": "GELO-MUC",
       "name": "GeloMuc",
       "condition": "schleimloeser",

@@ -185,6 +185,8 @@ async def get_opportunity(opportunity_id: str, db: Session = Depends(get_db), _u
 async def update_status(
     opportunity_id: str,
     status: str,
+    dismiss_reason: str | None = None,
+    dismiss_comment: str | None = None,
     db: Session = Depends(get_db),
     _user: dict = Depends(get_current_user),
 ):
@@ -193,11 +195,19 @@ async def update_status(
     Erlaubte Werte:
     - Legacy: NEW, URGENT, SENT, CONVERTED, EXPIRED, DISMISSED
     - Workflow: DRAFT, READY, APPROVED, ACTIVATED, DISMISSED, EXPIRED
+
+    Bei DISMISSED können optional dismiss_reason (Kategorie) und
+    dismiss_comment (Freitext) übergeben werden.
     """
     from app.services.marketing_engine.opportunity_engine import MarketingOpportunityEngine
 
     engine = MarketingOpportunityEngine(db)
-    result = engine.update_status(opportunity_id, status)
+    result = engine.update_status(
+        opportunity_id,
+        status,
+        dismiss_reason=dismiss_reason,
+        dismiss_comment=dismiss_comment,
+    )
 
     if "error" in result:
         raise HTTPException(status_code=400, detail=result["error"])

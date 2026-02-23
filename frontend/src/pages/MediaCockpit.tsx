@@ -653,6 +653,7 @@ const MediaCockpit: React.FC = () => {
   const bentoTiles = useMemo(() => (cockpit?.bento?.tiles || []), [cockpit]);
   const sourceStatus = useMemo(() => (cockpit?.source_status?.items || []), [cockpit]);
   const peixSummary = cockpit?.peix_epi_score;
+  const dataFreshness = cockpit?.data_freshness;
 
   // Forecast accuracy monitoring
   const [forecastAccuracy, setForecastAccuracy] = useState<Record<string, { mae: number; mape: number; correlation: number; drift_detected: boolean } | null>>({});
@@ -890,8 +891,36 @@ const MediaCockpit: React.FC = () => {
                 </div>
               )}
 
+            {/* ── Data Freshness Bar ── */}
+            {dataFreshness && Object.keys(dataFreshness).length > 0 && (
+              <div className="flex flex-wrap items-center gap-3 px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-100">
+                <span className="text-[10px] text-slate-400 uppercase tracking-wider font-medium">Datenstand</span>
+                {Object.entries(dataFreshness).map(([key, ts]) => {
+                  const label = key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+                  let ageDays = -1;
+                  if (ts) {
+                    try { ageDays = Math.round((Date.now() - new Date(ts).getTime()) / 86400000); } catch {}
+                  }
+                  const fresh = ageDays >= 0 && ageDays <= 3;
+                  const stale = ageDays > 3 && ageDays <= 7;
+                  return (
+                    <span key={key} className="text-[11px]">
+                      <span className="text-slate-500">{label}: </span>
+                      {ts ? (
+                        <span className={`font-semibold ${fresh ? 'text-emerald-600' : stale ? 'text-amber-600' : 'text-red-500'}`}>
+                          {ageDays === 0 ? 'heute' : ageDays === 1 ? 'gestern' : `${ageDays}d`}
+                        </span>
+                      ) : (
+                        <span className="text-slate-400">—</span>
+                      )}
+                    </span>
+                  );
+                })}
+              </div>
+            )}
+
             <div className="flex items-center justify-between">
-              <div className="text-xs text-slate-400">Rohdaten sind hinter "Technische Details" verborgen.</div>
+              <div className="text-xs text-slate-400">Rohdaten und Quellenstatus hinter "Technische Details".</div>
               <button
                 onClick={() => setShowTechDetails((s) => !s)}
                 className="media-button secondary px-3 py-1.5 text-xs font-semibold rounded-lg transition"

@@ -92,7 +92,7 @@ const urgencyColor = (score: number) =>
 const UrgencyRing: React.FC<{ score: number; size?: number }> = ({ score, size = 64 }) => {
   const r = (size - 8) / 2;
   const circ = 2 * Math.PI * r;
-  const visual = Math.min(score, 100); // Ring-Fuellstand max 100%
+  const visual = Math.min(score, 100); // Ring-Füllstand max 100%
   const offset = circ - (visual / 100) * circ;
   const color = urgencyColor(score);
   return (
@@ -190,8 +190,8 @@ const SalesRadar: React.FC = () => {
   const { toast } = useToast();
 
   const DISMISS_REASONS = [
-    'Nicht relevant fuer Zielgruppe',
-    'Budget nicht verfuegbar',
+    'Nicht relevant für Zielgruppe',
+    'Budget nicht verfügbar',
     'Timing passt nicht',
     'Region nicht im Fokus',
     'Produkt passt nicht',
@@ -1273,7 +1273,7 @@ const SalesRadar: React.FC = () => {
                   onChange={(e) => setDismissReason(e.target.value)}
                   className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 bg-slate-50 focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-200"
                 >
-                  <option value="">— Bitte waehlen —</option>
+                  <option value="">— Bitte wählen —</option>
                   {DISMISS_REASONS.map((r) => (
                     <option key={r} value={r}>{r}</option>
                   ))}

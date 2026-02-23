@@ -51,7 +51,7 @@ async def list_opportunities(
 
     type: RESOURCE_SCARCITY, SEASONAL_DEFICIENCY, PREDICTIVE_SALES_SPIKE
     status: NEW, URGENT, SENT, CONVERTED, EXPIRED, DISMISSED
-    skip: Offset fuer Pagination (default 0)
+    skip: Offset für Pagination (default 0)
     limit: Max Ergebnisse pro Seite (default 50)
     """
     from app.services.marketing_engine.opportunity_engine import MarketingOpportunityEngine

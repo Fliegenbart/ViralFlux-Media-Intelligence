@@ -1,4 +1,4 @@
-"""Playbook Engine fuer KI-gestuetzte Kampagnenkarten.
+"""Playbook Engine für KI-gestützte Kampagnenkarten.
 
 Erzeugt regionalspezifische Playbook-Kandidaten aus:
 - PeixEpiScore (safe projection)
@@ -103,7 +103,7 @@ PLAYBOOK_CATALOG: dict[str, dict[str, Any]] = {
         "shift_min": 15.0,
         "shift_max": 40.0,
         "condition_key": "halsschmerz_heiserkeit",
-        "message_direction": "Halsschmerzen lindern / Stimme schuetzen",
+        "message_direction": "Halsschmerzen lindern / Stimme schützen",
         "kind": "offensive",
     },
     "ERKAELTUNGSWELLE": {
@@ -114,7 +114,7 @@ PLAYBOOK_CATALOG: dict[str, dict[str, Any]] = {
         "shift_min": 20.0,
         "shift_max": 50.0,
         "condition_key": "erkaltung_akut",
-        "message_direction": "Schnelle Hilfe bei Erkaeltung / Symptomlinderung",
+        "message_direction": "Schnelle Hilfe bei Erkältung / Symptomlinderung",
         "kind": "offensive",
     },
     "SINUS_DEFENDER": {
@@ -136,7 +136,7 @@ PLAYBOOK_CATALOG: dict[str, dict[str, Any]] = {
         "shift_min": 10.0,
         "shift_max": 25.0,
         "condition_key": "immun_support",
-        "message_direction": "Immunsystem staerken / Vorsorge in der Erkaeltungszeit",
+        "message_direction": "Immunsystem stärken / Vorsorge in der Erkältungszeit",
         "kind": "offensive",
     },
 }
@@ -196,7 +196,7 @@ class PlaybookEngine:
                 "debug": {"reason": "no_trigger_data"},
             }
 
-        # Eindeutig nach (region, playbook), hoechster priority_score gewinnt.
+        # Eindeutig nach (region, playbook), höchster priority_score gewinnt.
         dedup: dict[tuple[str, str], dict[str, Any]] = {}
         for item in all_candidates:
             key = (item["region_code"], item["playbook_key"])
@@ -212,8 +212,8 @@ class PlaybookEngine:
         offensive = [row for row in ranked if PLAYBOOK_CATALOG[row["playbook_key"]]["kind"] == "offensive"]
         efficiency = [row for row in ranked if PLAYBOOK_CATALOG[row["playbook_key"]]["kind"] == "efficiency"]
 
-        # Diversitaets-Auswahl: ein Candidate pro Condition (= Produkt),
-        # dann auffuellen mit den staerksten Signalen.
+        # Diversitäts-Auswahl: ein Candidate pro Condition (= Produkt),
+        # dann auffüllen mit den stärksten Signalen.
         selected: list[dict[str, Any]] = []
         seen_conditions: set[str] = set()
         for row in offensive:
@@ -221,11 +221,11 @@ class PlaybookEngine:
             if cond not in seen_conditions:
                 selected.append(row)
                 seen_conditions.add(cond)
-        # Auffuellen: Top-Offensive die noch nicht drin sind
+        # Auffüllen: Top-Offensive die noch nicht drin sind
         for row in offensive:
             if row not in selected:
                 selected.append(row)
-        # Maximal 1 Efficiency-Playbook anhaengen
+        # Maximal 1 Efficiency-Playbook anhängen
         if efficiency:
             selected.append(efficiency[0])
 
@@ -383,7 +383,7 @@ class PlaybookEngine:
                         "event": "SUPPLY_SHOCK_WINDOW",
                         "details": (
                             f"BfArM Risiko {risk:.1f}/100 (Welle: {wave_type}), "
-                            f"Atemwegs-Engpaesse={respiratory_shortage:.0f}, "
+                            f"Atemwegs-Engpässe={respiratory_shortage:.0f}, "
                             f"ARE-Wachstum {growth * 100.0:+.1f}%."
                         ),
                         "lead_time_days": 7,
@@ -749,7 +749,7 @@ class PlaybookEngine:
                         "event": "HIGH_PEIX_IMMUN_TRIGGER",
                         "details": (
                             f"PeixEpiScore {peix_score:.1f}/100 (Impact {impact:.1f}%), "
-                            f"praeventive Immun-Kampagne empfohlen."
+                            f"präventive Immun-Kampagne empfohlen."
                         ),
                         "lead_time_days": 14,
                         "values": {

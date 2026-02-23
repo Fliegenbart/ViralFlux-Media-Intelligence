@@ -136,13 +136,13 @@ class WeatherForecastDetector(OpportunityDetector):
                 "source": "OpenWeather_Forecast",
                 "event": "LOW_SUNSHINE_FORECAST",
                 "details": (
-                    f"Wetterprognose: {low_days} von {total_days} Tagen mit sehr niedriger UV-Intensitaet "
-                    f"(Durchschnitt: {avg_uv_overall:.1f}). Konservatives Signal fuer saisonale Belastung "
-                    f"und praeventive Kommunikation (z. B. 'Immunsystem im Alltag unterstuetzen')."
+                    f"Wetterprognose: {low_days} von {total_days} Tagen mit sehr niedriger UV-Intensität "
+                    f"(Durchschnitt: {avg_uv_overall:.1f}). Konservatives Signal für saisonale Belastung "
+                    f"und präventive Kommunikation (z. B. 'Immunsystem im Alltag unterstützen')."
                 ),
                 "detected_at": datetime.now().strftime("%Y-%m-%d"),
             },
-            "target_audience": ["Erwachsene", "Familien", "Praeventionsaffine Zielgruppen"],
+            "target_audience": ["Erwachsene", "Familien", "Präventionsaffine Zielgruppen"],
             "_condition": "immun_support",
             "_low_days": low_days,
             "_total_days": total_days,
@@ -207,7 +207,7 @@ class WeatherForecastDetector(OpportunityDetector):
                 "details": (
                     f"Wetterprognose: {nasskalt_days} von {total_days} Tagen mit nasskalten "
                     f"Bedingungen (2-10°C + hohe Feuchtigkeit/Niederschlag). "
-                    f"Erhoehtes Erkaeltungs-Risiko — Timing fuer symptomnahe OTC-Kommunikation."
+                    f"Erhöhtes Erkältungs-Risiko — Timing für symptomnahe OTC-Kommunikation."
                 ),
                 "detected_at": datetime.now().strftime("%Y-%m-%d"),
             },
@@ -258,7 +258,7 @@ class WeatherForecastDetector(OpportunityDetector):
                 "details": (
                     f"Wetterprognose: {extreme_days} Tage mit Extremkälte "
                     f"(Tiefsttemperatur {min_temp:.1f}°C). "
-                    f"Stark erhoehtes Belastungs-/Erkaeltungs-Risiko (konservatives Signal) — Aktivierungsfenster."
+                    f"Stark erhöhtes Belastungs-/Erkältungs-Risiko (konservatives Signal) — Aktivierungsfenster."
                 ),
                 "detected_at": datetime.now().strftime("%Y-%m-%d"),
             },

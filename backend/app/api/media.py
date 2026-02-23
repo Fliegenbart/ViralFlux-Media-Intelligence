@@ -113,7 +113,7 @@ async def get_media_cockpit(
     target_source: str = "RKI_ARE",
     db: Session = Depends(get_db),
 ):
-    """Aggregierter One-shot Payload fuer das Map-first Dashboard."""
+    """Aggregierter One-shot Payload für das Map-first Dashboard."""
     service = MediaCockpitService(db)
     return service.get_cockpit_payload(virus_typ=virus_typ, target_source=target_source)
 
@@ -125,7 +125,7 @@ async def generate_media_recommendations(
     payload: RecommendationGenerateRequest,
     db: Session = Depends(get_db),
 ):
-    """Generiert strukturierte Action-Cards fuer Media-Steuerung."""
+    """Generiert strukturierte Action-Cards für Media-Steuerung."""
     engine = MarketingOpportunityEngine(db)
     generated = engine.generate_action_cards(
         brand=payload.brand,
@@ -311,7 +311,7 @@ async def backfill_recommendation_peix_context(
     payload: RecommendationBackfillPeixRequest,
     db: Session = Depends(get_db),
 ):
-    """Backfill von PeixEpiScore-Context fuer bestehende Recommendations."""
+    """Backfill von PeixEpiScore-Context für bestehende Recommendations."""
     engine = MarketingOpportunityEngine(db)
     return engine.backfill_peix_context(force=payload.force, limit=payload.limit)
 
@@ -322,7 +322,7 @@ async def backfill_recommendation_product_mapping(
     limit: int = Query(default=1000, ge=1, le=10000),
     db: Session = Depends(get_db),
 ):
-    """Re-resolve Produkt-Mappings fuer bestehende Recommendations."""
+    """Re-resolve Produkt-Mappings für bestehende Recommendations."""
     engine = MarketingOpportunityEngine(db)
     return engine.backfill_product_mapping(force=force, limit=limit)
 
@@ -627,7 +627,7 @@ async def generate_weekly_brief(
     virus_typ: str = Query(default="Influenza A"),
     db: Session = Depends(get_db),
 ):
-    """Manueller Trigger: Generiert den Action Brief fuer die aktuelle KW."""
+    """Manueller Trigger: Generiert den Action Brief für die aktuelle KW."""
     from app.services.media.weekly_brief_service import WeeklyBriefService
 
     service = WeeklyBriefService(db)
@@ -682,7 +682,7 @@ async def get_weekly_brief_by_week(
         .first()
     )
     if not brief or not brief.pdf_bytes:
-        raise HTTPException(status_code=404, detail=f"Kein Brief fuer {calendar_week} vorhanden.")
+        raise HTTPException(status_code=404, detail=f"Kein Brief für {calendar_week} vorhanden.")
 
     filename = f"Gelo_Action_Brief_{calendar_week}.pdf"
     return StreamingResponse(

@@ -27,19 +27,19 @@ LLM_PITCHES_ENABLED = os.getenv("MEDIA_LLM_PITCHES_ENABLED", "0").strip() == "1"
 TEMPLATES: dict[str, dict[str, Any]] = {
     "RESOURCE_SCARCITY": {
         "high": {
-            "headline_email": "Akuter Engpass in {region}: Verfuegbarkeit jetzt kommunizieren",
+            "headline_email": "Akuter Engpass in {region}: Verfügbarkeit jetzt kommunizieren",
             "script_phone": (
                 "In {region} melden BfArM-Daten einen akuten Engpass bei Wettbewerbsprodukten "
-                "({competitor}). Empfehlung: Verfuegbarkeit von {product} betonen und "
+                "({competitor}). Empfehlung: Verfügbarkeit von {product} betonen und "
                 "symptomnahe Kommunikation regional priorisieren (HWG-konform)."
             ),
             "call_to_action": "Conquesting-Kampagne starten",
         },
         "default": {
-            "headline_email": "Engpass-Signal im Markt: Verfuegbarkeit als Vorteil nutzen",
+            "headline_email": "Engpass-Signal im Markt: Verfügbarkeit als Vorteil nutzen",
             "script_phone": (
                 "Unsere Marktbeobachtung zeigt Engpasssignale bei Wettbewerbsprodukten in {region}. "
-                "Empfehlung: Verfuegbarkeit und konservative, symptomnahe Kommunikation betonen "
+                "Empfehlung: Verfügbarkeit und konservative, symptomnahe Kommunikation betonen "
                 "(ohne Heilversprechen). Soll die Aktivierung priorisiert werden?"
             ),
             "call_to_action": "Aktivierung priorisieren",
@@ -49,7 +49,7 @@ TEMPLATES: dict[str, dict[str, Any]] = {
         "high": {
             "headline_email": "Starkes Nachfrage-Signal: {product_or_article} in {region}",
             "script_phone": (
-                "Klares Nachfrage-Signal fuer {product_or_article} in {region}. "
+                "Klares Nachfrage-Signal für {product_or_article} in {region}. "
                 "{velocity_info} "
                 "Empfehlung: Budget und Sichtbarkeit in der Region kurzfristig anheben. "
                 "Copy symptomnah und HWG-konform halten."
@@ -59,7 +59,7 @@ TEMPLATES: dict[str, dict[str, Any]] = {
         "default": {
             "headline_email": "Nachfrage-Signal: {product_or_article} in {region} priorisieren",
             "script_phone": (
-                "Wir sehen ein Nachfrage-Signal fuer {product_or_article} in {region}. "
+                "Wir sehen ein Nachfrage-Signal für {product_or_article} in {region}. "
                 "{velocity_info} "
                 "Empfehlung: Budget und Sichtbarkeit in den betroffenen Regionen kurzfristig anheben, "
                 "mit konservativen symptomnahen Botschaften (HWG-konform)."
@@ -71,17 +71,17 @@ TEMPLATES: dict[str, dict[str, Any]] = {
         "immun_support": {
             "headline_email": "UV-Tief in {region}: Immun-Support im Alltag positionieren",
             "script_phone": (
-                "Die Wetterprognose fuer {region} zeigt mehrere Tage mit niedriger UV-Intensitaet. "
-                "Konservatives Signal fuer saisonale Belastung: Jetzt ist ein gutes Zeitfenster, "
-                "um 'Immunsystem im Alltag unterstuetzen' zu positionieren (ohne Therapieanweisungen)."
+                "Die Wetterprognose für {region} zeigt mehrere Tage mit niedriger UV-Intensität. "
+                "Konservatives Signal für saisonale Belastung: Jetzt ist ein gutes Zeitfenster, "
+                "um 'Immunsystem im Alltag unterstützen' zu positionieren (ohne Therapieanweisungen)."
             ),
-            "call_to_action": "Praeventive Aktivierung starten",
+            "call_to_action": "Präventive Aktivierung starten",
         },
         "erkaltung_akut": {
-            "headline_email": "Nasskalt in {region}: Erkaeltungs-Interesse steigt",
+            "headline_email": "Nasskalt in {region}: Erkältungs-Interesse steigt",
             "script_phone": (
-                "Die Prognose fuer {region} zeigt mehrere nasskalte Tage. Erfahrungsgemaess steigt "
-                "in solchen Phasen das Erkaeltungs-Interesse. Empfehlung: symptomnahe, konservative "
+                "Die Prognose für {region} zeigt mehrere nasskalte Tage. Erfahrungsgemäß steigt "
+                "in solchen Phasen das Erkältungs-Interesse. Empfehlung: symptomnahe, konservative "
                 "Botschaften ausspielen und regionale Flights priorisieren."
             ),
             "call_to_action": "Regional aktivieren",
@@ -89,10 +89,10 @@ TEMPLATES: dict[str, dict[str, Any]] = {
         "default": {
             "headline_email": "Wetter-Trigger in {region}: symptomnah aktivieren",
             "script_phone": (
-                "Ein Wetter-Trigger in {region} deutet auf ein moegliches Nachfragefenster hin. "
+                "Ein Wetter-Trigger in {region} deutet auf ein mögliches Nachfragefenster hin. "
                 "Empfehlung: regional priorisieren und Copy streng HWG-konform halten."
             ),
-            "call_to_action": "Empfehlung pruefen",
+            "call_to_action": "Empfehlung prüfen",
         },
     },
 }
@@ -135,7 +135,7 @@ class PitchGenerator:
         return {
             "headline_email": "Neue Aktivierungs-Chance erkannt",
             "script_phone": "Wir haben ein relevantes, triggerbasiertes Bedarfssignal erkannt.",
-            "call_to_action": "Empfehlung pruefen",
+            "call_to_action": "Empfehlung prüfen",
         }
 
     def _generate_llm_pitch(self, *, opportunity_type: str, context: dict) -> dict | None:
@@ -155,7 +155,7 @@ class PitchGenerator:
         hints = pack.to_prompt_hints()
 
         prompt = (
-            "Erstelle einen kurzen Marketing-Pitch fuer ein OTC-Produkt (Gelo) fuer den deutschen Markt.\n"
+            "Erstelle einen kurzen Marketing-Pitch für ein OTC-Produkt (Gelo) für den deutschen Markt.\n"
             "Hard Rules (HWG): Keine Heilversprechen, keine Garantien, keine Nebenwirkungsfreiheit.\n"
             "Output: NUR valides JSON (eine Zeile, ohne Markdown) mit Keys:\n"
             '- "headline_email" (max 120 Zeichen),\n'
@@ -213,7 +213,7 @@ class PitchGenerator:
         region = str((ctx.get("region_target") or {}).get("plz_cluster") or "Deutschland")
         article = str(ctx.get("_article_id") or "Produkt")
         velocity = float(ctx.get("_velocity") or 0.0)
-        velocity_info = f"Signalstaerke: {abs(velocity) * 100:.0f}%."
+        velocity_info = f"Signalstärke: {abs(velocity) * 100:.0f}%."
         severity = "high" if velocity >= 0.5 else "default"
         templates = TEMPLATES["PREDICTIVE_SALES_SPIKE"]
         template = templates.get(severity) or templates["default"]

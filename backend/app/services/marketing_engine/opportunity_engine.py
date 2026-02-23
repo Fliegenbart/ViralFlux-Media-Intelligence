@@ -109,7 +109,7 @@ class MarketingOpportunityEngine:
         self.guardrails = CampaignGuardrails()
 
     def generate_opportunities(self) -> dict:
-        """Alle Detektoren ausfuehren -> Pitches -> Products -> Fuse Conquesting -> Persist -> JSON."""
+        """Alle Detektoren ausführen -> Pitches -> Products -> Fuse Conquesting -> Persist -> JSON."""
         all_opportunities = []
 
         for detector in self.detectors:
@@ -458,7 +458,7 @@ class MarketingOpportunityEngine:
         max_cards: int = 4,
         virus_typ: str = "Influenza A",
     ) -> dict:
-        """Erzeugt strukturierte Media-Action-Cards fuer das Cockpit."""
+        """Erzeugt strukturierte Media-Action-Cards für das Cockpit."""
         normalized_mode = str(strategy_mode or "PLAYBOOK_AI").upper()
         generation = self.generate_opportunities()
         opportunities = generation.get("opportunities", [])
@@ -901,7 +901,7 @@ class MarketingOpportunityEngine:
         return "Produktfreigabe ausstehend"
 
     def backfill_peix_context(self, *, force: bool = False, limit: int = 1000) -> dict[str, Any]:
-        """Nachtraegliches Auffuellen von peix_context fuer bestehende Recommendations."""
+        """Nachträgliches Auffüllen von peix_context für bestehende Recommendations."""
         query = self.db.query(MarketingOpportunity).order_by(MarketingOpportunity.created_at.desc())
         if limit > 0:
             query = query.limit(limit)
@@ -1091,7 +1091,7 @@ class MarketingOpportunityEngine:
             weekly = float(budget.get("weekly_budget_eur", 0.0))
             shift_pct = float(budget.get("budget_shift_pct", 0.0))
             if weekly < 0:
-                return {"error": "Budgets duerfen nicht negativ sein"}
+                return {"error": "Budgets dürfen nicht negativ sein"}
             if shift_pct > 100 or shift_pct < -100:
                 return {"error": "budget_shift_pct muss zwischen -100 und 100 liegen"}
 
@@ -1115,7 +1115,7 @@ class MarketingOpportunityEngine:
 
             total_share = round(sum(float(item.get("share_pct", 0.0)) for item in channel_plan), 1)
             if abs(total_share - 100.0) > 0.2:
-                return {"error": "Channel-Shares muessen in Summe 100 ergeben"}
+                return {"error": "Channel-Shares müssen in Summe 100 ergeben"}
 
             budget_plan = payload.get("budget_plan") or {}
             shift_value = abs(float(budget_plan.get("budget_shift_value_eur", 0.0)))
@@ -1133,7 +1133,7 @@ class MarketingOpportunityEngine:
                         "share_pct": share,
                         "budget_eur": round(shift_value * (share / 100.0), 2),
                         "formats": item.get("formats") or [],
-                        "message_angle": item.get("message_angle") or "Verfuegbarkeit + frueher Bedarf",
+                        "message_angle": item.get("message_angle") or "Verfügbarkeit + früher Bedarf",
                         "kpi_primary": item.get("kpi_primary") or "CTR",
                         "kpi_secondary": item.get("kpi_secondary") or ["CPM"],
                     }
@@ -1175,7 +1175,7 @@ class MarketingOpportunityEngine:
         playbook = payload.get("playbook") or {}
         playbook_key = str(row.playbook_key or playbook.get("key") or "").upper()
         if not playbook_key or playbook_key not in PLAYBOOK_CATALOG:
-            return {"error": "Kein gueltiges Playbook auf der Recommendation hinterlegt."}
+            return {"error": "Kein gültiges Playbook auf der Recommendation hinterlegt."}
 
         cfg = PLAYBOOK_CATALOG[playbook_key]
         targeting = payload.get("targeting") or {}
@@ -1315,7 +1315,7 @@ class MarketingOpportunityEngine:
         """Status einer Opportunity aktualisieren (Workflow + Legacy kompatibel)."""
         target = self._normalize_workflow_status(new_status)
         if target not in WORKFLOW_STATUSES:
-            return {"error": f"Ungueltiger Status: {new_status}. Erlaubt: {sorted(WORKFLOW_STATUSES)}"}
+            return {"error": f"Ungültiger Status: {new_status}. Erlaubt: {sorted(WORKFLOW_STATUSES)}"}
 
         opp = (
             self.db.query(MarketingOpportunity)
@@ -1327,7 +1327,7 @@ class MarketingOpportunityEngine:
 
         current = self._normalize_workflow_status(opp.status)
         if current != target and target not in ALLOWED_TRANSITIONS.get(current, set()):
-            return {"error": f"Ungueltiger Transition: {current} -> {target}"}
+            return {"error": f"Ungültiger Transition: {current} -> {target}"}
 
         old_status = current
         opp.status = target
@@ -1738,7 +1738,7 @@ class MarketingOpportunityEngine:
                     "share_pct": round(float(share), 1),
                     "budget_eur": round(budget_shift_value * (float(share) / 100.0), 2),
                     "formats": format_map.get(channel, ["Standard"]),
-                    "message_angle": f"{campaign_goal}: regionaler Trigger + Verfuegbarkeit",
+                    "message_angle": f"{campaign_goal}: regionaler Trigger + Verfügbarkeit",
                     "kpi_primary": kpi_map.get(channel, "CTR"),
                     "kpi_secondary": ["CPM", "Frequency"],
                 }
@@ -1969,9 +1969,9 @@ class MarketingOpportunityEngine:
             "message_framework": {
                 "hero_message": f"{product} jetzt in {region} sichtbar machen, bevor die Nachfragewelle voll einsetzt.",
                 "support_points": [
-                    "Trigger-basiertes Timing statt Rueckspiegel-Steuerung",
+                    "Trigger-basiertes Timing statt Rückspiegel-Steuerung",
                     "Regionale Budgetverschiebung nach epidemiologischen Signalen",
-                    "Verfuegbarkeitskommunikation bei Wettbewerbsengpaessen",
+                    "Verfügbarkeitskommunikation bei Wettbewerbsengpässen",
                 ],
                 "compliance_note": "Claims als Backtest-basiert und konservativ formulieren (z. B. 'kann', 'bis zu').",
             },
@@ -1998,7 +1998,7 @@ class MarketingOpportunityEngine:
                 {"task": "Media-Flight in DSP/Ads Manager anlegen", "owner": "Media Ops", "eta": "T+0", "status": "open"},
                 {"task": "Search-Keyword-Set nach Trigger-Region ausrollen", "owner": "Performance Team", "eta": "T+1", "status": "open"},
                 {"task": "Creative-Freigabe mit Compliance abstimmen", "owner": "Account Lead", "eta": "T+1", "status": "open"},
-                {"task": "KPI-Dashboard fuer Daily Monitoring aktivieren", "owner": "Analytics", "eta": "T+1", "status": "open"},
+                {"task": "KPI-Dashboard für Daily Monitoring aktivieren", "owner": "Analytics", "eta": "T+1", "status": "open"},
             ],
         }
 
@@ -2383,7 +2383,7 @@ class MarketingOpportunityEngine:
         budget_shift = budget_shift_pct if budget_shift_pct is not None else budget_shift_pct_fallback
 
         summary_sentence = (
-            f"Auf Basis von {basis_text} erwarten wir in den naechsten 7-14 Tagen "
+            f"Auf Basis von {basis_text} erwarten wir in den nächsten 7-14 Tagen "
             f"{condition_text} in {primary_region}; daher empfehlen wir {primary_product}."
         )
 
@@ -2422,7 +2422,7 @@ class MarketingOpportunityEngine:
         }
 
     def _clean_for_output(self, opp: dict) -> dict:
-        """Entfernt interne _-Felder und promotiert Conquesting-Felder fuer den API-Output."""
+        """Entfernt interne _-Felder und promotiert Conquesting-Felder für den API-Output."""
         clean = {k: v for k, v in opp.items() if not k.startswith("_")}
 
         # Promote conquesting metadata to public API fields

@@ -35,7 +35,7 @@ const toLocalInput = (iso?: string | null) => {
 const mappingLabel = (value?: string | null) => {
   const normalized = String(value || '').trim().toLowerCase();
   if (normalized === 'approved') return 'Freigegeben';
-  if (normalized === 'needs_review') return 'Review noetig';
+  if (normalized === 'needs_review') return 'Review nötig';
   if (normalized === 'not_applicable') return 'Nicht anwendbar';
   return normalized || 'Unbekannt';
 };
@@ -163,16 +163,16 @@ const CampaignRecommendationDetail: React.FC = () => {
 
     try {
       if (!activationStart || !activationEnd) {
-        throw new Error('Aktivierungsfenster ist unvollstaendig.');
+        throw new Error('Aktivierungsfenster ist unvollständig.');
       }
       if (new Date(activationStart).getTime() > new Date(activationEnd).getTime()) {
         throw new Error('Aktivierungsstart liegt nach dem Ende.');
       }
       if (Math.abs(channelShareSum - 100) > 0.2) {
-        throw new Error('Channel-Shares muessen in Summe 100 ergeben.');
+        throw new Error('Channel-Shares müssen in Summe 100 ergeben.');
       }
       if (weeklyBudget < 0 || budgetShiftPct < 0) {
-        throw new Error('Budgetwerte duerfen nicht negativ sein.');
+        throw new Error('Budgetwerte dürfen nicht negativ sein.');
       }
 
       const payload = {
@@ -243,7 +243,7 @@ const CampaignRecommendationDetail: React.FC = () => {
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Unbekannter Fehler';
       setError(msg);
-      toast(`Statusaenderung fehlgeschlagen: ${msg}`, 'error');
+      toast(`Statusänderung fehlgeschlagen: ${msg}`, 'error');
     } finally {
       setStatusSaving(false);
     }
@@ -336,7 +336,7 @@ const CampaignRecommendationDetail: React.FC = () => {
   const expectationRegionCodes = Array.isArray(expectation.region_codes) ? expectation.region_codes : (detail.region_codes || []);
 
   const summarySentence = decision?.summary_sentence
-    || `Auf Basis der aktuellen Signale erwarten wir in den naechsten 7-14 Tagen ${conditionLabel} in ${primaryRegion}; daher empfehlen wir ${primaryProduct}.`;
+    || `Auf Basis der aktuellen Signale erwarten wir in den nächsten 7-14 Tagen ${conditionLabel} in ${primaryRegion}; daher empfehlen wir ${primaryProduct}.`;
 
   const openMappingReview = () => {
     const params = new URLSearchParams({ tab: 'product-intel', focus: 'audit' });
@@ -350,7 +350,7 @@ const CampaignRecommendationDetail: React.FC = () => {
     <div className="max-w-[1200px] mx-auto px-4 sm:px-6 py-6 space-y-6">
       <div className="card decision-header p-5 space-y-4">
         <button onClick={() => navigate('/dashboard?tab=recommendations')} className="text-xs text-indigo-500 hover:text-indigo-400">
-          {'<-'} Zurueck zu KI-Empfehlungen
+          {'<-'} Zurück zu KI-Empfehlungen
         </button>
 
         <div className="flex flex-wrap gap-3 items-start justify-between">
@@ -390,7 +390,7 @@ const CampaignRecommendationDetail: React.FC = () => {
           <h2 className="text-base font-semibold text-slate-900">A. Das sind die Fakten</h2>
           {facts.length === 0 ? (
             <div className="text-xs text-slate-500">
-              Keine quantifizierten Fakten vorhanden. Bitte Trigger-Snapshot pruefen.
+              Keine quantifizierten Fakten vorhanden. Bitte Trigger-Snapshot prüfen.
             </div>
           ) : (
             <div className="fact-table">
@@ -422,7 +422,7 @@ const CampaignRecommendationDetail: React.FC = () => {
         </div>
 
         <div className="card expectation-card p-5 space-y-3">
-          <h2 className="text-base font-semibold text-slate-900">B. Erwartete Lage in den naechsten 7-14 Tagen</h2>
+          <h2 className="text-base font-semibold text-slate-900">B. Erwartete Lage in den nächsten 7-14 Tagen</h2>
           <div className="text-xs text-slate-600">
             <div>Lageklasse: <span className="text-slate-900 font-semibold">{conditionLabel}</span></div>
             <div className="mt-1">
@@ -448,33 +448,33 @@ const CampaignRecommendationDetail: React.FC = () => {
 
           {needsReview && (
             <div className="action-banner-warning text-xs">
-              Produkt-Mapping ist noch nicht freigegeben. Bitte zuerst im Audit pruefen und freigeben.
+              Produkt-Mapping ist noch nicht freigegeben. Bitte zuerst im Audit prüfen und freigeben.
               <div className="mt-3">
                 <button onClick={openMappingReview} className="media-button secondary">
-                  Produkt-Mapping pruefen
+                  Produkt-Mapping prüfen
                 </button>
               </div>
             </div>
           )}
 
           <div className="soft-panel p-3">
-            <div className="text-[11px] uppercase tracking-wider text-slate-500">Primaere Empfehlung</div>
+            <div className="text-[11px] uppercase tracking-wider text-slate-500">Primäre Empfehlung</div>
             <div className="text-lg font-semibold text-slate-900 mt-1">{primaryProduct}</div>
             <div className="text-sm text-slate-600 mt-1">Region: {primaryRegion}</div>
           </div>
 
           <div className="grid grid-cols-1 gap-2 text-xs text-slate-600">
             <div>
-              Sekundaere Regionen: <span className="text-slate-900">{secondaryRegions.length > 0 ? secondaryRegions.join(', ') : '-'}</span>
+              Sekundäre Regionen: <span className="text-slate-900">{secondaryRegions.length > 0 ? secondaryRegions.join(', ') : '-'}</span>
             </div>
             <div>
-              Sekundaere Produkte: <span className="text-slate-900">{secondaryProducts.length > 0 ? secondaryProducts.join(', ') : '-'}</span>
+              Sekundäre Produkte: <span className="text-slate-900">{secondaryProducts.length > 0 ? secondaryProducts.join(', ') : '-'}</span>
             </div>
             <div>
               Budget-Shift: <span className="text-slate-900">{recommendation.budget_shift_pct !== undefined ? `${Number(recommendation.budget_shift_pct).toFixed(1)}%` : `${Number(budgetShiftPct || 0).toFixed(1)}%`}</span>
             </div>
             <div>
-              Mapping-Begruendung: <span className="text-slate-900">{recommendation.mapping_reason || detail.mapping_reason || '-'}</span>
+              Mapping-Begründung: <span className="text-slate-900">{recommendation.mapping_reason || detail.mapping_reason || '-'}</span>
             </div>
           </div>
         </div>
@@ -489,7 +489,7 @@ const CampaignRecommendationDetail: React.FC = () => {
             </button>
           ))}
           {nextTransitions.length === 0 && (
-            <div className="text-xs text-slate-400">Keine weiteren Status-Transitionen verfuegbar.</div>
+            <div className="text-xs text-slate-400">Keine weiteren Status-Transitionen verfügbar.</div>
           )}
         </div>
       </div>
@@ -507,7 +507,7 @@ const CampaignRecommendationDetail: React.FC = () => {
 
         {!showEditor && (
           <p className="text-xs text-slate-400">
-            Editor ist standardmaessig ausgeblendet. Erst die Entscheidungslogik pruefen, dann Kampagnenparameter anpassen.
+            Editor ist standardmäßig ausgeblendet. Erst die Entscheidungslogik prüfen, dann Kampagnenparameter anpassen.
           </p>
         )}
 
@@ -602,7 +602,7 @@ const CampaignRecommendationDetail: React.FC = () => {
 
         {!showTechDetails && (
           <p className="text-xs text-slate-400">
-            Trigger-Evidenz, KI-Plan, HWG-Botschaft und Quick-Facts sind standardmaessig ausgeblendet.
+            Trigger-Evidenz, KI-Plan, HWG-Botschaft und Quick-Facts sind standardmäßig ausgeblendet.
           </p>
         )}
 

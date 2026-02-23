@@ -1,4 +1,4 @@
-"""Weekly Media Action Brief — automatisierter PDF-Report fuer Gelo.
+"""Weekly Media Action Brief — automatisierter PDF-Report für Gelo.
 
 Generiert jeden Montag ein 3-seitiges PDF:
   Seite 1: Lagebild Deutschland (PeixEpiScore, Bento-Tiles, Top-Regionen)
@@ -30,15 +30,17 @@ _BG = (248, 250, 252)
 
 
 def _safe(text: Any) -> str:
-    """Sanitize text for Latin-1 encoding (core PDF fonts)."""
+    """Sanitize text for Latin-1 encoding (core PDF fonts).
+
+    Latin-1 natively supports ä ö ü Ä Ö Ü ß — only replace characters
+    outside the Latin-1 range (smart quotes, em-dashes, arrows, etc.).
+    """
     if not isinstance(text, str):
         text = str(text) if text is not None else ""
     replacements = {
         "\u2014": "-", "\u2013": "-", "\u2018": "'", "\u2019": "'",
         "\u201c": '"', "\u201d": '"', "\u2026": "...", "\u2022": "*",
-        "\u00a0": " ", "\u00fc": "ue", "\u00f6": "oe", "\u00e4": "ae",
-        "\u00dc": "Ue", "\u00d6": "Oe", "\u00c4": "Ae", "\u00df": "ss",
-        "\u2197": "^", "\u2198": "v", "\u2192": "->",
+        "\u00a0": " ", "\u2197": "^", "\u2198": "v", "\u2192": "->",
     }
     for old, new in replacements.items():
         text = text.replace(old, new)
@@ -162,7 +164,7 @@ class WeeklyBriefService:
         pdf.set_font("Helvetica", "", 10)
         pdf.set_text_color(*_SLATE_700)
         pdf.multi_cell(0, 6, _safe(
-            f"Automatisierte Lageeinschaetzung fuer Gelo OTC-Produkte "
+            f"Automatisierte Lageeinschätzung für Gelo OTC-Produkte "
             f"basierend auf epidemiologischen Echtzeit-Signalen. "
             f"Generiert: {now.strftime('%d.%m.%Y %H:%M')} UTC."
         ), new_x="LMARGIN", new_y="NEXT")
@@ -180,7 +182,7 @@ class WeeklyBriefService:
         pdf.ln(2)
 
         # Bento-Tiles Zusammenfassung
-        _section(pdf, "Signal-Uebersicht")
+        _section(pdf, "Signal-Übersicht")
         for tile in tiles[:8]:
             title = tile.get("title", "")
             value = tile.get("value", "")
@@ -209,7 +211,7 @@ class WeeklyBriefService:
             pdf.cell(25, 7, "Score", align="C", fill=True)
             pdf.cell(25, 7, "Impact", align="C", fill=True)
             pdf.cell(25, 7, "Trend", align="C", fill=True)
-            pdf.cell(0, 7, "Aenderung", align="C", fill=True,
+            pdf.cell(0, 7, "Änderung", align="C", fill=True,
                      new_x="LMARGIN", new_y="NEXT")
 
             for i, reg in enumerate(region_list[:8]):
@@ -251,7 +253,7 @@ class WeeklyBriefService:
         pdf.set_text_color(*_SLATE_700)
         pdf.multi_cell(0, 5, _safe(
             "Empfohlene Umschichtung basierend auf aktuellem PeixEpiScore und ML-Forecast. "
-            "Regionen mit hohem Impact sollten ueberproportional bespielt werden."
+            "Regionen mit hohem Impact sollten überproportional bespielt werden."
         ), new_x="LMARGIN", new_y="NEXT")
         pdf.ln(3)
 
@@ -263,7 +265,7 @@ class WeeklyBriefService:
         pdf.cell(25, 7, "Score", align="C", fill=True)
         pdf.cell(25, 7, "Impact", align="C", fill=True)
         pdf.cell(30, 7, "Empfehlung", align="C", fill=True)
-        pdf.cell(0, 7, "Begruendung", fill=True, new_x="LMARGIN", new_y="NEXT")
+        pdf.cell(0, 7, "Begründung", fill=True, new_x="LMARGIN", new_y="NEXT")
 
         for i, reg in enumerate(region_list[:8]):
             score = float(reg.get("peix_score", reg.get("score_0_100", 0)) or 0)
@@ -276,7 +278,7 @@ class WeeklyBriefService:
                 color = _RED
             elif impact >= 60:
                 shift = "+15-25%"
-                reason = "Hoch - Budget erhoehen"
+                reason = "Hoch - Budget erhöhen"
                 color = _AMBER
             elif impact >= 40:
                 shift = "Halten"
@@ -365,7 +367,7 @@ class WeeklyBriefService:
                          new_x="LMARGIN", new_y="NEXT")
 
                 pdf.set_font("Helvetica", "", 9)
-                _kv(pdf, "RKI-Peak:", f"{peak_date} ({peak_cases:,} Faelle)".replace(",", "."))
+                _kv(pdf, "RKI-Peak:", f"{peak_date} ({peak_cases:,} Fälle)".replace(",", "."))
                 _kv(pdf, "Erstes ML-Signal:", str(first_alert))
                 _kv(pdf, "Vorsprung:", f"{ttd} Tage", bold_value=True)
                 pdf.ln(2)
@@ -376,12 +378,12 @@ class WeeklyBriefService:
             pdf.set_font("Helvetica", "B", 11)
             pdf.set_text_color(*_INDIGO)
             pdf.cell(0, 8, _safe(
-                f"Durchschnittlicher Frueherkennungsvorteil: {avg_ttd:.0f} Tage vor RKI-Peak"
+                f"Durchschnittlicher Früherkennungsvorteil: {avg_ttd:.0f} Tage vor RKI-Peak"
             ), new_x="LMARGIN", new_y="NEXT")
         else:
             pdf.set_font("Helvetica", "I", 10)
             pdf.set_text_color(*_SLATE_400)
-            pdf.cell(0, 7, "Backtest-Daten nicht verfuegbar.",
+            pdf.cell(0, 7, "Backtest-Daten nicht verfügbar.",
                      new_x="LMARGIN", new_y="NEXT")
 
         pdf.ln(4)
@@ -417,8 +419,8 @@ class WeeklyBriefService:
         pdf.set_text_color(*_SLATE_400)
         pdf.multi_cell(0, 4, _safe(
             "Disclaimer: Dieser Report basiert auf retrospektiver Analyse epidemiologischer "
-            "Signale. Die genannten Vorsprungszeitraeume sind historische Werte und stellen "
-            "keine Garantie fuer kuenftige Performance dar. Alle Empfehlungen dienen als "
+            "Signale. Die genannten Vorsprungszeiträume sind historische Werte und stellen "
+            "keine Garantie für künftige Performance dar. Alle Empfehlungen dienen als "
             "Entscheidungshilfe - die finale Mediaplanung obliegt dem Kunden."
         ), new_x="LMARGIN", new_y="NEXT")
 

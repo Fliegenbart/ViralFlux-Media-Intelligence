@@ -3,7 +3,7 @@
 Nutzt den DrugShortageAnalyzer Singleton, um aus Medikamenten-Engpässen
 Marketing-/Media-Chancen abzuleiten (konservativ, ohne Heilversprechen).
 
-Logik: Engpasssignale → Verfuegbarkeit/Alternative betonen + Timing fuer symptomnahe Kommunikation.
+Logik: Engpasssignale → Verfügbarkeit/Alternative betonen + Timing für symptomnahe Kommunikation.
 """
 
 from datetime import datetime
@@ -19,19 +19,19 @@ CATEGORY_MAP = {
         "condition": "erkaltung_akut",
         "audience": ["Familien", "Eltern", "Erwachsene"],
         "event": "CRITICAL_SHORTAGE_ANTIBIOTICS",
-        "rationale": "Antibiotika-Engpass: konservative Aktivierung fuer symptomnahe OTC-Alternativen/Support.",
+        "rationale": "Antibiotika-Engpass: konservative Aktivierung für symptomnahe OTC-Alternativen/Support.",
     },
     "Atemwege": {
         "condition": "bronchitis_husten",
         "audience": ["Erwachsene", "Pendler", "Familien"],
         "event": "CRITICAL_SHORTAGE_RESPIRATORY",
-        "rationale": "Atemwegs-Engpass: Verfuegbarkeit und Alternative (konservativ) ausspielen.",
+        "rationale": "Atemwegs-Engpass: Verfügbarkeit und Alternative (konservativ) ausspielen.",
     },
     "Fieber_Schmerz": {
         "condition": "erkaltung_akut",
         "audience": ["Erwachsene", "Familien"],
         "event": "CRITICAL_SHORTAGE_FEVER",
-        "rationale": "Fieber/Schmerz-Engpass: Timing fuer konservative, symptomnahe Kommunikation.",
+        "rationale": "Fieber/Schmerz-Engpass: Timing für konservative, symptomnahe Kommunikation.",
     },
 }
 

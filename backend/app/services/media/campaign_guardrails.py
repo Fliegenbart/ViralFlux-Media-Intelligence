@@ -1,4 +1,4 @@
-"""Guardrails fuer AI-generierte Campaign-Plans und HWG-Compliance."""
+"""Guardrails für AI-generierte Campaign-Plans und HWG-Compliance."""
 
 from __future__ import annotations
 

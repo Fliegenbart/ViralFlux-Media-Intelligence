@@ -50,10 +50,10 @@ def _json_safe(value: Any) -> Any:
 @celery_app.task(bind=True, name="run_full_ingestion_pipeline")
 def run_full_ingestion_pipeline(self, region_code: str = "ALL") -> Dict[str, Any]:
     """
-    Vollpipeline fuer Daten-Ingestion.
-    Laeuft komplett entkoppelt vom Webserver im Hintergrund.
+    Vollpipeline für Daten-Ingestion.
+    Läuft komplett entkoppelt vom Webserver im Hintergrund.
     """
-    logger.info(f"Starte asynchrone Daten-Ingestion fuer Region: {region_code}")
+    logger.info(f"Starte asynchrone Daten-Ingestion für Region: {region_code}")
     results: dict[str, Any] = {}
 
     try:
@@ -118,7 +118,7 @@ def run_full_ingestion_pipeline(self, region_code: str = "ALL") -> Dict[str, Any
         # 5. BfArM Lieferengpass-Daten (statische CSV, kein API-Key)
         self.update_state(
             state="PROGRESS",
-            meta={"step": "BfArM Lieferengpaesse abrufen...", "progress": 95},
+            meta={"step": "BfArM Lieferengpässe abrufen...", "progress": 95},
         )
         try:
             from app.services.data_ingest.bfarm_service import BfarmIngestionService

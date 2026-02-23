@@ -423,7 +423,9 @@ class MediaCockpitService:
                 "value": bfarm_score,
                 "unit": "/100",
                 "subtitle": (bfarm.get("wave_type") or "BfArM"),
-                "impact_probability": bfarm_score,
+                # BfArM misst Lieferengpässe, nicht Epidemie-Risiko direkt.
+                # Standalone max 40%, gewichtet mit ARE-Belastung.
+                "impact_probability": round(bfarm_score * (0.40 + 0.60 * min(1.0, float((latest_are.konsultationsinzidenz or 0) / 4000.0) if latest_are else 0.0)), 1),
                 "data_source": "BfArM",
             },
             {

@@ -41,7 +41,7 @@ async def train_xgboost(
         logger.error(f"Celery enqueue failed: {exc}")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Celery Broker nicht erreichbar. Bitte Redis/Worker pruefen.",
+            detail="Celery Broker nicht erreichbar. Bitte Redis/Worker prüfen.",
         ) from exc
 
     return {

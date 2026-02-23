@@ -73,7 +73,7 @@ class AICampaignPlanner:
 
 
 class AiCampaignPlanner:
-    """Generiert strukturierte Kampagnenplaene via strikt lokalem vLLM."""
+    """Generiert strukturierte Kampagnenpläne via strikt lokalem vLLM."""
 
     def __init__(self) -> None:
         self.model = "Qwen/Qwen2.5-VL-7B-Instruct-AWQ"
@@ -191,7 +191,7 @@ class AiCampaignPlanner:
 
         return (
             "Du bist ein Senior Media Planner für Pharma-Brand-Cases.\n"
-            "Erzeuge NUR valides JSON ohne Markdown, ohne Erklaertexte.\n"
+            "Erzeuge NUR valides JSON ohne Markdown, ohne Erklärtexte.\n"
             "Sprache: Deutsch. Konservativ formulieren (kein Heilversprechen).\n"
             "Output-Felder: campaign_name, objective, budget_shift_pct, activation_window_days, channel_plan, keyword_clusters, creative_angles, kpi_targets, next_steps, compliance_hinweis.\n"
             "budget_shift_pct MUSS eine einzelne Zahl sein (kein Text, keine Range, kein 'bis').\n"
@@ -209,7 +209,7 @@ class AiCampaignPlanner:
             f"Hero-Message (fix): {hero}\n"
             f"Support-Points (fix): {json.dumps(support, ensure_ascii=True)}\n"
             f"Compliance-Hinweis (fix): {compliance_note}\n"
-            f"Woechentliches Budget (EUR): {weekly_budget:.2f}\n"
+            f"Wöchentliches Budget (EUR): {weekly_budget:.2f}\n"
             f"min_shift_pct: {min_shift}\n"
             f"max_shift_pct: {max_shift}\n"
             f"Kanal-Default-Mix: {json.dumps(channel_mix, ensure_ascii=True)}\n\n"
@@ -405,12 +405,12 @@ class AiCampaignPlanner:
                 "Nacht: Reizhusten lindern",
             ],
             "SUPPLY_SHOCK_ATTACK": [
-                "Jetzt verfuegbar trotz Engpass",
+                "Jetzt verfügbar trotz Engpass",
                 "Pflanzliche Alternative",
-                "Apotheken-Naehe: sofort finden",
+                "Apotheken-Nähe: sofort finden",
             ],
             "WETTER_REFLEX": [
-                "Schietwetter: praeventiv",
+                "Schietwetter: präventiv",
                 "Alltag: Schutzschild-Story",
                 "Kalt+Nass: situatives Motiv",
             ],
@@ -423,7 +423,7 @@ class AiCampaignPlanner:
         default_next_steps = [
             {"task": "Kampagnenstruktur im Ad-Setup anlegen", "owner": "Media Ops", "eta": "T+0"},
             {"task": "Creatives mit Compliance abstimmen", "owner": "Account Lead", "eta": "T+1"},
-            {"task": "KPI-Dashboard fuer Daily Monitoring aktivieren", "owner": "Analytics", "eta": "T+1"},
+            {"task": "KPI-Dashboard für Daily Monitoring aktivieren", "owner": "Analytics", "eta": "T+1"},
         ]
 
         keyword_clusters = ai_plan.get("keyword_clusters")
@@ -575,22 +575,22 @@ class AiCampaignPlanner:
             "keyword_clusters": [
                 "symptomnahes Suchverhalten",
                 "regionales Bedarfssignal",
-                "Verfuegbarkeitskommunikation",
+                "Verfügbarkeitskommunikation",
             ],
             "creative_angles": [
                 "Problem-Symptom-Ansprache mit konservativem Claim",
                 "Regionale Aktivierung bei messbarem Trigger",
-                "Verfuegbarkeit im Fokus",
+                "Verfügbarkeit im Fokus",
             ],
             "kpi_targets": {
                 "primary_kpi": "Qualified Visits",
                 "secondary_kpis": ["CTR", "CPM", "Reach"],
-                "success_criteria": "Hoehere Nachfrageabdeckung in den naechsten 14 Tagen bei stabiler Effizienz",
+                "success_criteria": "Höhere Nachfrageabdeckung in den nächsten 14 Tagen bei stabiler Effizienz",
             },
             "next_steps": [
                 {"task": "Kampagnenstruktur im Ad-Setup anlegen", "owner": "Media Ops", "eta": "T+0"},
                 {"task": "Creatives mit Compliance abstimmen", "owner": "Account Lead", "eta": "T+1"},
-                {"task": "KPI-Dashboard fuer Daily Monitoring aktivieren", "owner": "Analytics", "eta": "T+1"},
+                {"task": "KPI-Dashboard für Daily Monitoring aktivieren", "owner": "Analytics", "eta": "T+1"},
             ],
             "compliance_hinweis": "Backtest-basierte, konservative Aussagen verwenden; keine Heilversprechen.",
         }

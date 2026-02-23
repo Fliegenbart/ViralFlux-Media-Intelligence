@@ -761,7 +761,7 @@ const MediaCockpit: React.FC = () => {
                 color: theme === 'dark' ? '#a5b4fc' : '#4338ca',
                 border: `1px solid ${theme === 'dark' ? 'rgba(99,102,241,0.4)' : 'rgba(67,56,202,0.2)'}`,
               }}
-              title="Woechentlichen Action Brief als PDF herunterladen"
+              title="Wöchentlichen Action Brief als PDF herunterladen"
             >
               PDF Action Brief
             </button>
@@ -835,7 +835,7 @@ const MediaCockpit: React.FC = () => {
                 <div className="min-w-0">
                   <div className="text-[10px] text-slate-500 uppercase tracking-wider">Media Cockpit</div>
                   <h2 className="text-2xl font-black text-slate-900 tracking-tight mt-1" style={{ fontFamily: "'DM Serif Display', Georgia, serif" }}>
-                    Action Radar fuer {virus}
+                    Action Radar für {virus}
                   </h2>
                   <p className="text-sm text-slate-500 mt-2 max-w-2xl">
                     Kein Zahlenfriedhof. Du siehst zuerst, wo Budget aktivieren sollte und welche Botschaft HWG-sicher passt.
@@ -845,7 +845,7 @@ const MediaCockpit: React.FC = () => {
                       onClick={() => switchTab('recommendations')}
                       className="media-button px-3 py-1.5 text-xs font-semibold rounded-full transition hover:brightness-110"
                     >
-                      Kampagnenvorschlaege
+                      Kampagnenvorschläge
                     </button>
                     <button
                       onClick={triggerRecommendations}
@@ -884,7 +884,7 @@ const MediaCockpit: React.FC = () => {
                   <div className="metric-box">
                     <div className="text-[10px] text-slate-400 uppercase tracking-wider">Budget (Woche)</div>
                     <div className="text-xl font-black text-slate-900 mt-1">{eur(weeklyBudget)}</div>
-                    <div className="text-[11px] text-slate-400 mt-1">fuer Demo/Planung</div>
+                    <div className="text-[11px] text-slate-400 mt-1">für Demo/Planung</div>
                   </div>
                 </div>
               </div>
@@ -1143,7 +1143,7 @@ const MediaCockpit: React.FC = () => {
                             key={`${shape.name}-${shape.code || 'na'}`}
                             tabIndex={region && code ? 0 : undefined}
                             role={region && code ? 'button' : undefined}
-                            aria-label={region && code ? `${shape.name}: Intensitaet ${band}, Impact ${Math.round(region.impact_probability || 0)}%` : shape.name}
+                            aria-label={region && code ? `${shape.name}: Intensität ${band}, Impact ${Math.round(region.impact_probability || 0)}%` : shape.name}
                             style={{ cursor: region && code ? 'pointer' : 'default', outline: 'none' }}
                             onClick={() => region && code && openRecommendationForRegion(code)}
                             onKeyDown={(e) => {
@@ -1195,7 +1195,7 @@ const MediaCockpit: React.FC = () => {
                                 )}
                                 {openingRegion === code && (
                                   <text x={shape.cx} y={shape.cy + 20} textAnchor="middle" fill="#4f46e5" fontSize="6">
-                                    oeffne...
+                                    öffne...
                                   </text>
                                 )}
                               </>
@@ -1285,7 +1285,7 @@ const MediaCockpit: React.FC = () => {
                                 textAnchor="middle" fill="#4f46e5" fontSize="6"
                                 style={{ pointerEvents: 'none' }}
                               >
-                                oeffne...
+                                öffne...
                               </text>
                             )}
                           </g>
@@ -1566,7 +1566,7 @@ const MediaCockpit: React.FC = () => {
                                   item.freshness_state === 'live'
                                     ? 'aktuell'
                                     : item.freshness_state === 'stale'
-                                      ? 'verzoegert'
+                                      ? 'verzögert'
                                       : 'kein Datum'
                                 }
                               </span>
@@ -1624,7 +1624,7 @@ const MediaCockpit: React.FC = () => {
             >
               <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
                 <div className="min-w-0">
-                  <div className="text-[10px] text-slate-500 uppercase tracking-wider">Kampagnenvorschlaege</div>
+                  <div className="text-[10px] text-slate-500 uppercase tracking-wider">Kampagnenvorschläge</div>
                   <h2 className="text-2xl font-black text-slate-900 tracking-tight mt-1">Action Cards</h2>
                   <p className="text-sm text-slate-500 mt-2 max-w-2xl">
                     Erst sehen, was du tun sollst. Dann (optional) die Details. Copy ist HWG-safe aus der Gelo-Playbook-Library.
@@ -1665,7 +1665,7 @@ const MediaCockpit: React.FC = () => {
                     onClick={() => highlightCardId && navigate(`/dashboard/recommendations/${encodeURIComponent(highlightCardId)}`)}
                     className="media-button secondary px-4 py-2 text-xs font-semibold rounded-lg transition disabled:opacity-60"
                     disabled={!highlightCardId}
-                    title="Oeffnet die aktuell priorisierte Top-Empfehlung"
+                    title="Öffnet die aktuell priorisierte Top-Empfehlung"
                   >
                     Top-Empfehlung öffnen
                   </button>
@@ -1865,7 +1865,7 @@ const MediaCockpit: React.FC = () => {
                 <div className="text-center py-8 rounded-xl bg-slate-50 border border-slate-100">
                   <div className="text-2xl mb-2">{'\uD83D\uDCCB'}</div>
                   <div className="text-sm font-medium text-slate-500">Noch keine KI-Empfehlungen</div>
-                  <div className="text-xs text-slate-400 mt-1">Klicke oben auf Empfehlungen erzeugen oder waehle ein Bundesland in der Lagekarte.</div>
+                  <div className="text-xs text-slate-400 mt-1">Klicke oben auf Empfehlungen erzeugen oder wähle ein Bundesland in der Lagekarte.</div>
                 </div>
               )}
             </div>

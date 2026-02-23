@@ -316,6 +316,17 @@ async def backfill_recommendation_peix_context(
     return engine.backfill_peix_context(force=payload.force, limit=payload.limit)
 
 
+@router.post("/recommendations/backfill-products")
+async def backfill_recommendation_product_mapping(
+    force: bool = Query(default=True),
+    limit: int = Query(default=1000, ge=1, le=10000),
+    db: Session = Depends(get_db),
+):
+    """Re-resolve Produkt-Mappings fuer bestehende Recommendations."""
+    engine = MarketingOpportunityEngine(db)
+    return engine.backfill_product_mapping(force=force, limit=limit)
+
+
 @router.get("/recommendations/{opportunity_id}")
 async def get_media_recommendation_detail(
     opportunity_id: str,

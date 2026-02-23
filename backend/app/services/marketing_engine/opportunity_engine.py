@@ -966,6 +966,87 @@ class MarketingOpportunityEngine:
             "timestamp": datetime.utcnow().isoformat(),
         }
 
+    def backfill_product_mapping(self, *, force: bool = False, limit: int = 1000) -> dict[str, Any]:
+        """Re-resolve product mappings for all existing recommendations.
+
+        Re-runs ``resolve_product_for_opportunity()`` against current
+        ``product_condition_mapping`` table and updates stored
+        ``campaign_payload.product_mapping`` + ``suggested_products``.
+        """
+        query = self.db.query(MarketingOpportunity).order_by(MarketingOpportunity.created_at.desc())
+        if limit > 0:
+            query = query.limit(limit)
+        rows = query.all()
+
+        scanned = 0
+        updated = 0
+        skipped = 0
+
+        for row in rows:
+            scanned += 1
+            payload = (row.campaign_payload or {}).copy()
+            old_pm = payload.get("product_mapping") or {}
+            old_status = str(old_pm.get("mapping_status") or "").strip().lower()
+
+            if not force and old_status == "approved":
+                skipped += 1
+                continue
+
+            condition_key = old_pm.get("condition_key")
+            brand = str(row.brand or "gelo").strip().lower()
+
+            opp_dict = {
+                "region_target": row.region_target or {},
+                "campaign_payload": payload,
+                "trigger_context": row.trigger_details or {},
+            }
+            new_pm = self.product_catalog_service.resolve_product_for_opportunity(
+                brand=brand,
+                opportunity=opp_dict,
+                fallback_product=row.product,
+            )
+
+            if condition_key and not new_pm.get("condition_key"):
+                new_pm["condition_key"] = condition_key
+                new_pm["condition_label"] = old_pm.get("condition_label")
+
+            selected = self._select_product_for_opportunity(
+                fallback_product=row.product or "Alle Gelo-Produkte",
+                product_mapping=new_pm,
+            )
+
+            payload["product_mapping"] = new_pm
+            row.campaign_payload = payload
+
+            if new_pm.get("recommended_product"):
+                products_set = {new_pm["recommended_product"]}
+            else:
+                products_set = set()
+            if new_pm.get("candidate_product"):
+                products_set.add(new_pm["candidate_product"])
+            old_suggested = row.suggested_products or []
+            if isinstance(old_suggested, list):
+                for item in old_suggested:
+                    name = item if isinstance(item, str) else (item.get("product_name") if isinstance(item, dict) else None)
+                    if name and "test" not in name.lower() and "652238" not in name:
+                        products_set.add(name)
+            row.suggested_products = [{"product_name": p} for p in sorted(products_set) if p]
+
+            row.updated_at = datetime.utcnow()
+            updated += 1
+
+        if updated > 0:
+            self.db.commit()
+
+        return {
+            "success": True,
+            "scanned": scanned,
+            "updated": updated,
+            "skipped_approved": skipped,
+            "force": force,
+            "timestamp": datetime.utcnow().isoformat(),
+        }
+
     def update_campaign(
         self,
         opportunity_id: str,

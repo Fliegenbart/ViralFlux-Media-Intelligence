@@ -67,6 +67,14 @@ class BacktestService:
         "RSV A": ["Influenza A", "Influenza B"],
     }
 
+    # SURVSTAT-Krankheiten die Abwasser-Monitoring haben → VIRAL Features nutzen
+    SURVSTAT_VIRAL_DISEASES: set[str] = {
+        "Influenza, saisonal",
+        "COVID-19",
+        "RSV (Meldepflicht gemäß IfSG)",
+        "RSV (Meldepflicht gemäß Landesmeldeverordnung)",
+    }
+
     # SurvStat Cross-Disease: verwandte Krankheiten als Features
     SURVSTAT_CROSS_DISEASE_MAP: dict[str, list[str]] = {
         "Influenza, saisonal": ["RSV (Meldepflicht gemäß IfSG)", "Mycoplasma", "Parainfluenza"],
@@ -1073,8 +1081,13 @@ class BacktestService:
         df["month"] = df["datum"].dt.month.astype(int)
 
         # Disease-aware feature selection
-        is_survstat_target = target_disease and target_disease in self.SURVSTAT_CROSS_DISEASE_MAP
-        if is_survstat_target:
+        is_bacterial_target = (
+            target_disease
+            and target_disease in self.SURVSTAT_CROSS_DISEASE_MAP
+            and target_disease not in self.SURVSTAT_VIRAL_DISEASES
+        )
+        if is_bacterial_target:
+            # Bakterielle/nicht-virale Targets: kein Abwasser-Signal
             feature_cols = list(self.SURVSTAT_FEATURE_COLS)
         elif exclude_are:
             feature_cols = list(self.VIRAL_FEATURE_COLS)

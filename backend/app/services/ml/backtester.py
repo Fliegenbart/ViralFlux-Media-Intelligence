@@ -962,7 +962,8 @@ class BacktestService:
 
         folds: list[dict] = []
         importance_accumulator: list[np.ndarray] = []
-        model_type_used = "GradientBoosting"
+        gbr_fold_count = 0
+        ridge_fold_count = 0
 
         for _, row in df.iterrows():
             target_time = row["datum"]
@@ -1001,9 +1002,10 @@ class BacktestService:
             # Replace NaN/inf
             X_train = np.nan_to_num(X_train, nan=0.0, posinf=0.0, neginf=0.0)
 
-            # Model selection: GBR for sufficient data, Ridge as fallback
-            use_gbr = len(train_rows) >= 30
+            # Model selection: GBR when enough data, Ridge as fallback
+            use_gbr = len(train_rows) >= 25
             if use_gbr:
+                gbr_fold_count += 1
                 model = GradientBoostingRegressor(
                     n_estimators=100,
                     max_depth=4,
@@ -1015,7 +1017,7 @@ class BacktestService:
                 model.fit(X_train, y_train)
                 importance_accumulator.append(model.feature_importances_)
             else:
-                model_type_used = "Ridge"
+                ridge_fold_count += 1
                 scaler = StandardScaler()
                 X_train = scaler.fit_transform(X_train)
                 model = Ridge(alpha=1.0, fit_intercept=True)
@@ -1144,7 +1146,9 @@ class BacktestService:
             },
             "optimized_weights": optimized_weights,
             "default_weights": dict(self.DEFAULT_WEIGHTS),
-            "model_type": model_type_used,
+            "model_type": "GradientBoosting" if gbr_fold_count > ridge_fold_count else "Ridge",
+            "gbr_folds": gbr_fold_count,
+            "ridge_folds": ridge_fold_count,
             "feature_count": len(feature_cols),
             "feature_names": feature_cols,
             "chart_data": [

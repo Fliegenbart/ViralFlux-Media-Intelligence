@@ -799,7 +799,7 @@ class BacktestService:
             ).filter(
                 SurvstatWeeklyData.disease.in_(self.GELO_ATEMWEG_DISEASES),
                 SurvstatWeeklyData.bundesland == bl_filter,
-                SurvstatWeeklyData.age_group == "Gesamt",
+                or_(SurvstatWeeklyData.age_group == "Gesamt", SurvstatWeeklyData.age_group.is_(None)),
                 SurvstatWeeklyData.week_start >= start_date,
             ).group_by(
                 SurvstatWeeklyData.week_start,

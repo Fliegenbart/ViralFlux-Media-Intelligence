@@ -9,7 +9,7 @@ from io import BytesIO, StringIO
 import numpy as np
 import pandas as pd
 from fastapi import APIRouter, Depends, File, Query, UploadFile
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
@@ -120,7 +120,7 @@ async def top_regions(
             SurvstatWeeklyData.disease.in_(diseases),
             SurvstatWeeklyData.week_label == latest_week,
             SurvstatWeeklyData.bundesland != "Gesamt",
-            SurvstatWeeklyData.age_group == "Gesamt",
+            or_(SurvstatWeeklyData.age_group == "Gesamt", SurvstatWeeklyData.age_group.is_(None)),
         ).group_by(SurvstatWeeklyData.bundesland).order_by(
             func.sum(SurvstatWeeklyData.incidence).desc()
         ).limit(n).all()
@@ -138,7 +138,7 @@ async def top_regions(
             SurvstatWeeklyData.disease.in_(diseases),
             SurvstatWeeklyData.week_label == latest_week,
             SurvstatWeeklyData.bundesland != "Gesamt",
-            SurvstatWeeklyData.age_group == "Gesamt",
+            or_(SurvstatWeeklyData.age_group == "Gesamt", SurvstatWeeklyData.age_group.is_(None)),
         ).order_by(SurvstatWeeklyData.incidence.desc()).limit(n).all()
 
         return {

@@ -1553,9 +1553,9 @@ class BacktestService:
 
         df_sim = pd.DataFrame([{
             "date": row["date"],
-            "bio": row["bio"],
-            "real_qty": row["real_qty"],
-        } for row in result.get("chart_data", [])])
+            "bio": row.get("bio", 0.0),
+            "real_qty": row.get("real_qty", 0.0),
+        } for row in result.get("chart_data", []) if not row.get("is_forecast")])
         lead_lag = self._best_bio_lead_lag(df_sim)
         # Adjust for horizon shift: bio was computed horizon_days before target_time
         lead_lag["best_lag_days"] += horizon_days
@@ -1689,9 +1689,9 @@ class BacktestService:
 
             sim_df = pd.DataFrame([{
                 "date": row["date"],
-                "bio": row["bio"],
-                "real_qty": row["real_qty"],
-            } for row in region_result.get("chart_data", [])])
+                "bio": row.get("bio", 0.0),
+                "real_qty": row.get("real_qty", 0.0),
+            } for row in region_result.get("chart_data", []) if not row.get("is_forecast")])
             region_lead_lag = self._best_bio_lead_lag(sim_df)
             # Adjust for horizon shift
             region_lead_lag["best_lag_days"] += horizon_days

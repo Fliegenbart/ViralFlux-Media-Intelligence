@@ -104,7 +104,8 @@ class SeasonalDeficiencyDetector(OpportunityDetector):
             "region_target": {
                 "country": "DE",
                 "states": low_uv_states or list(CITY_STATE_MAP.values()),
-                "plz_cluster": "ALL",
+                "plz_cluster": self._derive_plz_from_states(low_uv_states or list(CITY_STATE_MAP.values())),
+                "kreis_detail": self._hotspot_kreise("RESPIRATORY", low_uv_states),
             },
             "trigger_context": {
                 "source": "OpenWeather_UV",
@@ -155,7 +156,8 @@ class SeasonalDeficiencyDetector(OpportunityDetector):
             "region_target": {
                 "country": "DE",
                 "states": list(CITY_STATE_MAP.values()),
-                "plz_cluster": "ALL",
+                "plz_cluster": self._derive_plz_from_states(list(CITY_STATE_MAP.values())),
+                "kreis_detail": self._hotspot_kreise("RESPIRATORY"),
             },
             "trigger_context": {
                 "source": "OpenWeather_Temperature",

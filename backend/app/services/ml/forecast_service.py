@@ -28,6 +28,7 @@ import numpy as np
 import pandas as pd
 from sklearn.linear_model import Ridge
 from sklearn.model_selection import TimeSeriesSplit
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from statsmodels.tsa.holtwinters import ExponentialSmoothing
 
@@ -53,7 +54,19 @@ META_FEATURES: list[str] = [
     "trend_momentum_7d",
     "schulferien",
     "trends_score",
+    "xdisease_lag7",
+    "xdisease_lag14",
 ]
+
+# Cross-disease pairs: epidemiologisch sinnvolle Korrelationen.
+# Key = Zielvirus, Value = Liste von Indikator-Viren (deren Aktivitaet
+# oft zeitlich vorlaufend oder co-zirkulierend ist).
+CROSS_DISEASE_MAP: dict[str, list[str]] = {
+    "Influenza A": ["RSV A", "SARS-CoV-2"],
+    "Influenza B": ["Influenza A", "SARS-CoV-2"],
+    "SARS-CoV-2": ["Influenza A", "Influenza B"],
+    "RSV A": ["Influenza A", "Influenza B"],
+}
 
 # ═══════════════════════════════════════════════════════════════════════
 #  MODEL LOADING & CACHING (module-level, shared across requests)
@@ -237,6 +250,34 @@ class ForecastService:
         # 8. AMELAG vorhersage time-lagged features (wastewater leads demand by 4-7 days)
         df["amelag_lag4"] = df["amelag_pred"].shift(4)
         df["amelag_lag7"] = df["amelag_pred"].shift(7)
+
+        # 9. Cross-disease features: aggregierte Viruslast anderer Erreger
+        xdisease_viruses = CROSS_DISEASE_MAP.get(virus_typ, [])
+        if xdisease_viruses:
+            xd_data = (
+                self.db.query(
+                    WastewaterAggregated.datum,
+                    func.avg(WastewaterAggregated.viruslast_normalisiert).label("xd_load"),
+                )
+                .filter(
+                    WastewaterAggregated.virus_typ.in_(xdisease_viruses),
+                    WastewaterAggregated.datum >= start_date,
+                )
+                .group_by(WastewaterAggregated.datum)
+                .all()
+            )
+            if xd_data:
+                xd_df = pd.DataFrame(
+                    [{"ds": pd.to_datetime(r.datum), "xd_load": float(r.xd_load or 0)} for r in xd_data]
+                )
+                df = df.merge(xd_df, on="ds", how="left")
+                df["xd_load"] = df["xd_load"].fillna(0.0)
+            else:
+                df["xd_load"] = 0.0
+        else:
+            df["xd_load"] = 0.0
+        df["xdisease_lag7"] = df["xd_load"].shift(7)
+        df["xdisease_lag14"] = df["xd_load"].shift(14)
 
         # Fill NaN
         df = df.bfill().ffill()

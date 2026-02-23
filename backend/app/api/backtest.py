@@ -533,10 +533,27 @@ async def outbreak_alerts(
                 prior_data[key].append(inc)
 
     # ── 3. Nationaler Forecast-Vektor ──
+    # Erst Gesamt-Daten versuchen, dann aus BL-Daten aggregieren
     national_forecast: dict[str, dict] = {}
     for disease in ALERT_DISEASES:
         nr = national_recent.get(disease, [])
         np_ = national_prior.get(disease, [])
+
+        # Fallback: aus BL-Daten aggregieren wenn kein "Gesamt"
+        if not nr or not np_:
+            bl_recent_vals = []
+            bl_prior_vals = []
+            for (bl, d), vals in recent_data.items():
+                if d == disease:
+                    bl_recent_vals.extend(v for v in vals)
+            for (bl, d), vals in prior_data.items():
+                if d == disease:
+                    bl_prior_vals.extend(v for v in vals)
+            if bl_recent_vals:
+                nr = [sum(bl_recent_vals) / len(bl_recent_vals)]
+            if bl_prior_vals:
+                np_ = [sum(bl_prior_vals) / len(bl_prior_vals)]
+
         if nr and np_:
             avg_r = sum(nr) / len(nr)
             avg_p = sum(np_) / len(np_)
@@ -597,18 +614,19 @@ async def outbreak_alerts(
         if severity < 0.5 and momentum_pct < 20:
             continue  # Unter Schwelle
 
-        # Forecast-Action
-        if momentum_pct > 50 and nat_direction == "rising":
+        # Forecast-Action: Momentum + nationale Richtung + Lead/Lag
+        if momentum_pct > 80 or (momentum_pct > 50 and nat_direction == "rising"):
             action = "JETZT aktivieren"
             urgency = "high"
-        elif momentum_pct > 20 and nat_direction == "rising":
+        elif momentum_pct > 30 or (momentum_pct > 15 and nat_direction == "rising"):
             action = "Kampagne vorbereiten"
             urgency = "medium"
-        elif momentum_pct > 0 and lead_lag_weeks < -1:
-            action = f"Welle erreicht Region in ~{abs(lead_lag_weeks)} Wochen"
-            urgency = "low"
+        elif momentum_pct > 0 and lead_lag_weeks < -1 and nat_direction in ("rising", "stable"):
+            weeks_eta = max(1, abs(lead_lag_weeks))
+            action = f"Welle erreicht Region in ~{weeks_eta} Wochen"
+            urgency = "medium" if nat_direction == "rising" else "low"
         elif momentum_pct < -20:
-            action = "Welle ebbt ab"
+            action = "Welle ebbt ab — Budget umschichten"
             urgency = "info"
         else:
             action = "Beobachten"

@@ -1868,7 +1868,13 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                   { label: 'R²', value: btResult.metrics.r2_score?.toFixed(3) },
                   { label: 'Korrelation', value: `${btResult.metrics.correlation_pct?.toFixed(1)}%` },
                   { label: 'sMAPE', value: btResult.metrics.smape?.toFixed(1) },
-                  { label: 'Lead/Lag', value: `${btResult.lead_lag?.best_lag_days ?? '?'} Tage` },
+                  { label: 'Vorlaufzeit', value: (() => {
+                    const lag = btResult.lead_lag?.best_lag_days;
+                    if (lag == null) return '?';
+                    if (lag > 0) return `Bio führt ${lag}T`;
+                    if (lag < 0) return `Target führt ${Math.abs(lag)}T`;
+                    return 'gleichzeitig';
+                  })() },
                 ].map((m) => (
                   <div key={m.label} style={metricBoxStyle}>
                     <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4, textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>

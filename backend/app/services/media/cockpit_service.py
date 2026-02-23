@@ -347,8 +347,13 @@ class MediaCockpitService:
                 PollenData.datum == latest_pollen_date,
             ).group_by(PollenData.pollen_type).order_by(func.max(PollenData.pollen_index).desc()).first()
             if pollen_row:
-                pollen_signal = min(100.0, max(0.0, float(pollen_row.max_index or 0.0) / 3.0 * 100.0))
+                raw_pollen = min(100.0, max(0.0, float(pollen_row.max_index or 0.0) / 3.0 * 100.0))
                 pollen_type = pollen_row.pollen_type or "Pollen"
+                # Pollen is a contextual signal, not a direct epidemiological
+                # risk.  Cap the standalone impact at 35% and weight by
+                # concurrent respiratory burden (ARE / Notaufnahme).
+                are_factor = min(1.0, float((latest_are.konsultationsinzidenz or 0) / 4000.0)) if latest_are else 0.0
+                pollen_signal = round(raw_pollen * (0.35 + 0.65 * are_factor), 1)
 
         tiles = [
             {

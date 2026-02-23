@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime, Boolean, JSON, ForeignKey, Index, UniqueConstraint
+from sqlalchemy import Column, Integer, LargeBinary, String, Float, DateTime, Boolean, JSON, ForeignKey, Index, UniqueConstraint
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 from datetime import datetime
@@ -606,4 +606,21 @@ class ForecastAccuracyLog(Base):
 
     __table_args__ = (
         Index('idx_accuracy_virus_computed', 'virus_typ', 'computed_at'),
+    )
+
+
+class WeeklyBrief(Base):
+    """Wöchentlicher Gelo Media Action Brief (PDF)."""
+    __tablename__ = "weekly_briefs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    calendar_week = Column(String(10), nullable=False, index=True)
+    generated_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    pdf_bytes = Column(LargeBinary)
+    summary_json = Column(JSON)
+    virus_typ = Column(String(50))
+    brand = Column(String(50), default="gelo", index=True)
+
+    __table_args__ = (
+        Index('idx_weekly_brief_week_brand', 'calendar_week', 'brand'),
     )

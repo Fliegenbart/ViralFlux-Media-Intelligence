@@ -750,7 +750,8 @@ class MarketingOpportunityEngine:
         ]
         allowed_region_set = {item for item in allowed_regions if item}
         channels = channel_pool or ["programmatic", "social", "search", "ctv"]
-        peix_regions = (PeixEpiScoreService(self.db).build().get("regions") or {})
+        peix_build = PeixEpiScoreService(self.db).build()
+        peix_regions = peix_build.get("regions") or {}
 
         cards: list[dict[str, Any]] = []
         for opp in opportunities:
@@ -770,7 +771,7 @@ class MarketingOpportunityEngine:
                 selected_region = region_codes[0] if region_codes else "Gesamt"
 
             region_label = self._region_label(selected_region)
-            peix_context = self._derive_peix_context(peix_regions, selected_region, opp)
+            peix_context = self._derive_peix_context(peix_regions, selected_region, opp, peix_national=peix_build)
 
             urgency = float(opp.get("urgency_score") or 50.0)
             budget_shift_pct = round(max(8.0, min(45.0, urgency * 0.4)), 1)
@@ -906,7 +907,8 @@ class MarketingOpportunityEngine:
             query = query.limit(limit)
         rows = query.all()
 
-        peix_regions = (PeixEpiScoreService(self.db).build().get("regions") or {})
+        peix_build = PeixEpiScoreService(self.db).build()
+        peix_regions = peix_build.get("regions") or {}
 
         scanned = 0
         updated = 0
@@ -940,7 +942,7 @@ class MarketingOpportunityEngine:
 
             region_codes = self._extract_region_codes_from_opportunity(opportunity)
             selected_region = region_codes[0] if region_codes else "Gesamt"
-            peix_context = self._derive_peix_context(peix_regions, selected_region, opportunity)
+            peix_context = self._derive_peix_context(peix_regions, selected_region, opportunity, peix_national=peix_build)
 
             if not peix_context:
                 skipped_no_region += 1
@@ -2053,12 +2055,26 @@ class MarketingOpportunityEngine:
         peix_regions: dict[str, Any],
         selected_region: str,
         opportunity: dict[str, Any],
+        *,
+        peix_national: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
+        trigger = opportunity.get("trigger_context") or {}
+
         if selected_region == "Gesamt":
-            return {}
+            nat = peix_national or {}
+            score = nat.get("national_score")
+            if score is None:
+                return {}
+            return {
+                "region_code": "Gesamt",
+                "score": score,
+                "band": nat.get("national_band"),
+                "impact_probability": nat.get("national_impact_probability"),
+                "drivers": nat.get("top_drivers") or [],
+                "trigger_event": trigger.get("event"),
+            }
 
         peix_entry = peix_regions.get(selected_region) or {}
-        trigger = opportunity.get("trigger_context") or {}
         return {
             "region_code": selected_region,
             "score": peix_entry.get("score_0_100"),

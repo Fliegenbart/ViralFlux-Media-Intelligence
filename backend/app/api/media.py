@@ -3,6 +3,7 @@
 from typing import Any, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -605,6 +606,79 @@ async def seed_missing_products(
     """Fehlende SEED_PRODUCTS als BrandProduct + Mappings anlegen (idempotent)."""
     service = ProductCatalogService(db)
     return service.seed_missing_products(brand=brand)
+
+
+# ── Weekly Brief Endpoints ────────────────────────────────────────────────────
+
+
+@router.post("/weekly-brief/generate")
+async def generate_weekly_brief(
+    virus_typ: str = Query(default="Influenza A"),
+    db: Session = Depends(get_db),
+):
+    """Manueller Trigger: Generiert den Action Brief fuer die aktuelle KW."""
+    from app.services.media.weekly_brief_service import WeeklyBriefService
+
+    service = WeeklyBriefService(db)
+    result = service.generate(virus_typ=virus_typ)
+    return {
+        "status": "success",
+        "calendar_week": result["calendar_week"],
+        "pages": result["pages"],
+        "summary": result["summary"],
+    }
+
+
+@router.get("/weekly-brief/latest")
+async def get_latest_weekly_brief(
+    brand: str = Query(default="gelo"),
+    db: Session = Depends(get_db),
+):
+    """Download des neuesten Action Brief als PDF."""
+    import io
+    from app.models.database import WeeklyBrief
+
+    brief = (
+        db.query(WeeklyBrief)
+        .filter_by(brand=brand)
+        .order_by(WeeklyBrief.generated_at.desc())
+        .first()
+    )
+    if not brief or not brief.pdf_bytes:
+        raise HTTPException(status_code=404, detail="Kein Weekly Brief vorhanden. Bitte zuerst generieren.")
+
+    filename = f"Gelo_Action_Brief_{brief.calendar_week}.pdf"
+    return StreamingResponse(
+        io.BytesIO(brief.pdf_bytes),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/weekly-brief/{calendar_week}")
+async def get_weekly_brief_by_week(
+    calendar_week: str,
+    brand: str = Query(default="gelo"),
+    db: Session = Depends(get_db),
+):
+    """Download eines spezifischen Action Brief nach Kalenderwoche."""
+    import io
+    from app.models.database import WeeklyBrief
+
+    brief = (
+        db.query(WeeklyBrief)
+        .filter_by(calendar_week=calendar_week, brand=brand)
+        .first()
+    )
+    if not brief or not brief.pdf_bytes:
+        raise HTTPException(status_code=404, detail=f"Kein Brief fuer {calendar_week} vorhanden.")
+
+    filename = f"Gelo_Action_Brief_{calendar_week}.pdf"
+    return StreamingResponse(
+        io.BytesIO(brief.pdf_bytes),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.patch("/product-mapping/{mapping_id}")

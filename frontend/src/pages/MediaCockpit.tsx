@@ -730,18 +730,54 @@ const MediaCockpit: React.FC = () => {
               <p className="text-xs text-slate-500">Deutschlandkarte + KI-Empfehlungen + Backtest Proof Engine</p>
             </div>
           </div>
-          <button
-            onClick={toggleTheme}
-            className="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all"
-            style={{
-              background: theme === 'dark' ? 'rgba(99,102,241,0.15)' : 'rgba(15,23,42,0.06)',
-              color: theme === 'dark' ? '#a5b4fc' : '#475569',
-              border: `1px solid ${theme === 'dark' ? 'rgba(99,102,241,0.3)' : 'rgba(0,0,0,0.08)'}`,
-            }}
-            title={theme === 'dark' ? 'Zum hellen Modus wechseln' : 'Zum dunklen Modus wechseln'}
-          >
-            {theme === 'dark' ? '\u2600\uFE0F' : '\u263E'} {theme === 'dark' ? 'Hell' : 'Dunkel'}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={async () => {
+                try {
+                  const res = await fetch('/api/v1/media/weekly-brief/latest');
+                  if (res.status === 404) {
+                    toast('Generiere ersten Action Brief...', 'info');
+                    const gen = await fetch('/api/v1/media/weekly-brief/generate', { method: 'POST' });
+                    if (!gen.ok) throw new Error('Generierung fehlgeschlagen');
+                    const dl = await fetch('/api/v1/media/weekly-brief/latest');
+                    if (!dl.ok) throw new Error('Download fehlgeschlagen');
+                    const blob = await dl.blob();
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a'); a.href = url;
+                    a.download = `Gelo_Action_Brief.pdf`; a.click(); URL.revokeObjectURL(url);
+                    toast('Action Brief heruntergeladen!', 'success');
+                  } else if (res.ok) {
+                    const blob = await res.blob();
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a'); a.href = url;
+                    a.download = `Gelo_Action_Brief.pdf`; a.click(); URL.revokeObjectURL(url);
+                    toast('Action Brief heruntergeladen!', 'success');
+                  } else { throw new Error('Download fehlgeschlagen'); }
+                } catch (e: any) { toast(e.message || 'Fehler beim Download', 'error'); }
+              }}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all"
+              style={{
+                background: theme === 'dark' ? 'rgba(99,102,241,0.2)' : 'rgba(67,56,202,0.08)',
+                color: theme === 'dark' ? '#a5b4fc' : '#4338ca',
+                border: `1px solid ${theme === 'dark' ? 'rgba(99,102,241,0.4)' : 'rgba(67,56,202,0.2)'}`,
+              }}
+              title="Woechentlichen Action Brief als PDF herunterladen"
+            >
+              PDF Action Brief
+            </button>
+            <button
+              onClick={toggleTheme}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all"
+              style={{
+                background: theme === 'dark' ? 'rgba(99,102,241,0.15)' : 'rgba(15,23,42,0.06)',
+                color: theme === 'dark' ? '#a5b4fc' : '#475569',
+                border: `1px solid ${theme === 'dark' ? 'rgba(99,102,241,0.3)' : 'rgba(0,0,0,0.08)'}`,
+              }}
+              title={theme === 'dark' ? 'Zum hellen Modus wechseln' : 'Zum dunklen Modus wechseln'}
+            >
+              {theme === 'dark' ? '\u2600\uFE0F' : '\u263E'} {theme === 'dark' ? 'Hell' : 'Dunkel'}
+            </button>
+          </div>
         </div>
       </header>
 

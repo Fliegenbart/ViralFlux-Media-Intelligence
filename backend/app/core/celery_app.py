@@ -64,4 +64,10 @@ celery_app.conf.beat_schedule = {
         "schedule": crontab(hour=8, minute=0),
         "kwargs": {},
     },
+    # Montags 08:30 — Woechentlicher Gelo Media Action Brief (nach allen Daten-Updates)
+    "weekly-media-brief": {
+        "task": "generate_weekly_brief_task",
+        "schedule": crontab(hour=8, minute=30, day_of_week="monday"),
+        "kwargs": {},
+    },
 }

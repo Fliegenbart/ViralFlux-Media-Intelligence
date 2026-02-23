@@ -285,10 +285,33 @@ class MediaCockpitService:
             NotaufnahmeSyndromData.age_group == "00+",
         ).order_by(NotaufnahmeSyndromData.datum.desc()).first()
 
-        latest_surv = self.db.query(SurvstatWeeklyData).filter(
-            SurvstatWeeklyData.disease == "All",
-            SurvstatWeeklyData.bundesland == "Gesamt",
-        ).order_by(SurvstatWeeklyData.week_start.desc()).first()
+        # SurvStat: Aggregierte RESPIRATORY-Cluster-Inzidenz (Gesamt)
+        _surv_latest_week = (
+            self.db.query(func.max(SurvstatWeeklyData.week_start))
+            .filter(
+                SurvstatWeeklyData.disease_cluster == "RESPIRATORY",
+                SurvstatWeeklyData.bundesland == "Gesamt",
+                SurvstatWeeklyData.week > 0,
+            )
+            .scalar()
+        )
+        surv_incidence = 0.0
+        surv_week_label = "RKI SURVSTAT"
+        if _surv_latest_week:
+            _surv_agg = (
+                self.db.query(func.sum(SurvstatWeeklyData.incidence))
+                .filter(
+                    SurvstatWeeklyData.disease_cluster == "RESPIRATORY",
+                    SurvstatWeeklyData.bundesland == "Gesamt",
+                    SurvstatWeeklyData.week_start == _surv_latest_week,
+                )
+                .scalar()
+            )
+            surv_incidence = float(_surv_agg or 0.0)
+            _surv_lbl = self.db.query(SurvstatWeeklyData.week_label).filter(
+                SurvstatWeeklyData.week_start == _surv_latest_week,
+            ).first()
+            surv_week_label = _surv_lbl[0] if _surv_lbl else "RKI SURVSTAT"
 
         trends_avg = self.db.query(func.avg(GoogleTrendsData.interest_score)).filter(
             GoogleTrendsData.datum >= datetime.utcnow() - timedelta(days=14),
@@ -382,11 +405,11 @@ class MediaCockpitService:
             },
             {
                 "id": "survstat",
-                "title": "SURVSTAT (All)",
-                "value": latest_surv.incidence if latest_surv else None,
-                "unit": "Inzidenz",
-                "subtitle": latest_surv.week_label if latest_surv else "RKI SURVSTAT",
-                "impact_probability": min(100.0, max(0.0, float((latest_surv.incidence or 0.0) / 200.0) * 100.0)) if latest_surv else 0.0,
+                "title": "SURVSTAT Respiratory",
+                "value": round(surv_incidence, 1) if surv_incidence > 0 else None,
+                "unit": "/100k",
+                "subtitle": surv_week_label,
+                "impact_probability": min(100.0, max(0.0, surv_incidence / 150.0 * 100.0)),
                 "data_source": "SURVSTAT",
             },
             {

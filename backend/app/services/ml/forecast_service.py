@@ -37,6 +37,7 @@ from app.models.database import (
     GoogleTrendsData,
     MLForecast,
     SchoolHolidays,
+    SurvstatWeeklyData,
     WastewaterAggregated,
     WeatherData,
 )
@@ -56,6 +57,9 @@ META_FEATURES: list[str] = [
     "trends_score",
     "xdisease_lag7",
     "xdisease_lag14",
+    "survstat_incidence",
+    "survstat_lag7",
+    "survstat_lag14",
 ]
 
 # Cross-disease pairs: epidemiologisch sinnvolle Korrelationen.
@@ -66,6 +70,14 @@ CROSS_DISEASE_MAP: dict[str, list[str]] = {
     "Influenza B": ["Influenza A", "SARS-CoV-2"],
     "SARS-CoV-2": ["Influenza A", "Influenza B"],
     "RSV A": ["Influenza A", "Influenza B"],
+}
+
+# SurvStat-Krankheiten pro Virus (laborbestätigte RKI-Meldedaten)
+SURVSTAT_VIRUS_MAP: dict[str, list[str]] = {
+    "Influenza A": ["influenza, saisonal"],
+    "Influenza B": ["influenza, saisonal"],
+    "SARS-CoV-2": ["covid-19"],
+    "RSV A": ["rsv (meldepflicht gemäß ifsg)"],
 }
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -278,6 +290,42 @@ class ForecastService:
             df["xd_load"] = 0.0
         df["xdisease_lag7"] = df["xd_load"].shift(7)
         df["xdisease_lag14"] = df["xd_load"].shift(14)
+
+        # 10. SurvStat RKI-Meldeinzidenzen (wöchentlich → forward-fill auf Tagesauflösung)
+        survstat_diseases = SURVSTAT_VIRUS_MAP.get(virus_typ, [])
+        if survstat_diseases:
+            surv_rows = (
+                self.db.query(
+                    SurvstatWeeklyData.week_start,
+                    func.sum(SurvstatWeeklyData.incidence).label("total_incidence"),
+                )
+                .filter(
+                    func.lower(SurvstatWeeklyData.disease).in_(survstat_diseases),
+                    SurvstatWeeklyData.bundesland == "Gesamt",
+                    SurvstatWeeklyData.week > 0,
+                    SurvstatWeeklyData.week_start >= start_date,
+                )
+                .group_by(SurvstatWeeklyData.week_start)
+                .order_by(SurvstatWeeklyData.week_start.asc())
+                .all()
+            )
+            if surv_rows:
+                surv_df = pd.DataFrame(
+                    [{"ds": pd.to_datetime(r.week_start), "survstat_raw": float(r.total_incidence or 0)}
+                     for r in surv_rows]
+                )
+                # Max-Normalisierung auf [0, 1]
+                surv_max = surv_df["survstat_raw"].max() or 1.0
+                surv_df["survstat_incidence"] = surv_df["survstat_raw"] / surv_max
+                surv_df = surv_df[["ds", "survstat_incidence"]]
+                df = df.merge(surv_df, on="ds", how="left")
+                df["survstat_incidence"] = df["survstat_incidence"].ffill().fillna(0.0)
+            else:
+                df["survstat_incidence"] = 0.0
+        else:
+            df["survstat_incidence"] = 0.0
+        df["survstat_lag7"] = df["survstat_incidence"].shift(7)
+        df["survstat_lag14"] = df["survstat_incidence"].shift(14)
 
         # Fill NaN
         df = df.bfill().ffill()
@@ -664,6 +712,9 @@ class ForecastService:
                 "trend_momentum_7d": float(last_row.get("trend_momentum_7d", 0.0)),
                 "schulferien": float(last_row.get("schulferien", 0.0)),
                 "trends_score": float(last_row.get("trends_score", 0.0)),
+                "survstat_incidence": float(last_row.get("survstat_incidence", 0.0)),
+                "survstat_lag7": float(last_row.get("survstat_lag7", 0.0)),
+                "survstat_lag14": float(last_row.get("survstat_lag14", 0.0)),
             }
 
             X_row = np.array([[feat.get(f, 0.0) for f in feature_names]])
@@ -813,6 +864,9 @@ class ForecastService:
                 feat["trend_momentum_7d"] = float(last_row.get("trend_momentum_7d", 0.0))
                 feat["schulferien"] = float(last_row.get("schulferien", 0.0))
                 feat["trends_score"] = float(last_row.get("trends_score", 0.0))
+                feat["survstat_incidence"] = float(last_row.get("survstat_incidence", 0.0))
+                feat["survstat_lag7"] = float(last_row.get("survstat_lag7", 0.0))
+                feat["survstat_lag14"] = float(last_row.get("survstat_lag14", 0.0))
 
                 X_row = np.array([[feat.get(f, 0.0) for f in available_meta]])
                 X_row = np.nan_to_num(X_row, nan=0.0, posinf=0.0, neginf=0.0)

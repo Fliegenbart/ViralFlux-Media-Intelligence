@@ -33,6 +33,7 @@ from app.models.database import (
     MLForecast,
     NotaufnahmeSyndromData,
     SchoolHolidays,
+    SurvstatWeeklyData,
     WastewaterData,
     WeatherData,
 )
@@ -73,6 +74,14 @@ _NOTAUFNAHME_BY_VIRUS = {
     "Influenza B": "ILI",
     "SARS-CoV-2": "COVID",
     "RSV A": "ARI",
+}
+
+# SurvStat-Krankheiten pro Virus (RKI-Meldedaten → PeixEpiScore-Virus)
+_SURVSTAT_BY_VIRUS: dict[str, list[str]] = {
+    "Influenza A": ["influenza, saisonal"],
+    "Influenza B": ["influenza, saisonal"],
+    "SARS-CoV-2": ["covid-19"],
+    "RSV A": ["rsv (meldepflicht gemäß ifsg)"],
 }
 
 # Dimension weights (sum = 1.00)
@@ -164,6 +173,10 @@ class PeixEpiScoreService:
         for v in VIRUS_WEIGHTS:
             notaufnahme_per_virus[v] = self._notaufnahme_signal(v)
 
+        survstat_per_virus = {}
+        for v in VIRUS_WEIGHTS:
+            survstat_per_virus[v] = self._survstat_by_region(v)
+
         # Nationale Signale
         search = self._search_signal()
         shortage = self._shortage_signal()
@@ -187,11 +200,14 @@ class PeixEpiScoreService:
             ww_national = sum(ww_vals.values()) / max(len(ww_vals), 1) if ww_vals else 0.0
             are_national = sum(are_signal.values()) / max(len(are_signal), 1) if are_signal else 0.0
             not_val = notaufnahme_per_virus[v]
+            surv_vals = survstat_per_virus[v]
+            surv_national = sum(surv_vals.values()) / max(len(surv_vals), 1) if surv_vals else 0.0
 
             epi = self._compute_epi_score(
                 wastewater=ww_national,
                 are=are_national,
                 notaufnahme=not_val,
+                survstat=surv_national,
             )
             virus_scores[v] = {
                 "epi_score": round(epi, 2),
@@ -213,7 +229,8 @@ class PeixEpiScoreService:
                 ww = wastewater_per_virus[v].get(code, 0.0)
                 a = are_signal.get(code, 0.0)
                 n = notaufnahme_per_virus[v]
-                epi = self._compute_epi_score(wastewater=ww, are=a, notaufnahme=n)
+                s = survstat_per_virus[v].get(code, 0.0)
+                epi = self._compute_epi_score(wastewater=ww, are=a, notaufnahme=n, survstat=s)
                 region_virus_epis.append(epi * v_weight)
 
             region_bio = sum(region_virus_epis)
@@ -335,13 +352,31 @@ class PeixEpiScoreService:
         wastewater: float,
         are: float,
         notaufnahme: float,
+        survstat: float = 0.0,
     ) -> float:
-        """Gewichteter Epi-Score mit adaptiver Gewichtung (bestehende Logik)."""
-        if are > 0 and notaufnahme > 0:
+        """Gewichteter Epi-Score mit adaptiver Gewichtung.
+
+        4-Komponenten-Modell (wenn alle Daten vorhanden):
+          Wastewater 35% + ARE 25% + Notaufnahme 20% + SurvStat 20%
+        Fallback auf 3/2/1-Komponenten wenn Daten fehlen.
+        """
+        has_are = are > 0
+        has_not = notaufnahme > 0
+        has_surv = survstat > 0
+
+        if has_are and has_not and has_surv:
+            score = wastewater * 0.35 + are * 0.25 + notaufnahme * 0.20 + survstat * 0.20
+        elif has_are and has_surv:
+            score = wastewater * 0.40 + are * 0.30 + survstat * 0.30
+        elif has_not and has_surv:
+            score = wastewater * 0.40 + notaufnahme * 0.30 + survstat * 0.30
+        elif has_surv:
+            score = wastewater * 0.55 + survstat * 0.45
+        elif has_are and has_not:
             score = wastewater * 0.45 + are * 0.30 + notaufnahme * 0.25
-        elif are > 0:
+        elif has_are:
             score = wastewater * 0.55 + are * 0.45
-        elif notaufnahme > 0:
+        elif has_not:
             score = wastewater * 0.55 + notaufnahme * 0.45
         else:
             score = wastewater
@@ -416,6 +451,77 @@ class PeixEpiScoreService:
             # Fallback: simple max-normalization
             max_val = max((float(r.konsultationsinzidenz or 0.0) for r in rows), default=1.0) or 1.0
             out[code] = _clamp(current_value / max_val)
+        return out
+
+    def _survstat_by_region(self, virus_typ: str) -> dict[str, float]:
+        """SurvStat-Meldeinzidenz per Region, Perzentil-Rang-normalisiert.
+
+        Nutzt laborbestätigte RKI-Fallzahlen als epidemiologischen
+        Gold-Standard-Indikator. Normalisierung erfolgt via Perzentil-Rang
+        gegenüber derselben ISO-Woche der Vorjahre (mind. 3 Werte).
+        """
+        diseases = _SURVSTAT_BY_VIRUS.get(virus_typ)
+        if not diseases:
+            return {}
+
+        latest_week = (
+            self.db.query(func.max(SurvstatWeeklyData.week_start))
+            .filter(
+                func.lower(SurvstatWeeklyData.disease).in_(diseases),
+                SurvstatWeeklyData.bundesland != "Gesamt",
+                SurvstatWeeklyData.week > 0,
+            )
+            .scalar()
+        )
+        if not latest_week:
+            return {}
+
+        rows = (
+            self.db.query(SurvstatWeeklyData)
+            .filter(
+                func.lower(SurvstatWeeklyData.disease).in_(diseases),
+                SurvstatWeeklyData.week_start == latest_week,
+                SurvstatWeeklyData.bundesland != "Gesamt",
+            )
+            .all()
+        )
+        if not rows:
+            return {}
+
+        current_week_nr = rows[0].week
+
+        per_bl: dict[str, float] = {}
+        for row in rows:
+            bl = str(row.bundesland or "").strip()
+            per_bl[bl] = per_bl.get(bl, 0.0) + float(row.incidence or 0.0)
+
+        out: dict[str, float] = {}
+        for bl, current_incidence in per_bl.items():
+            code = REGION_NAME_TO_CODE.get(bl.lower())
+            if not code:
+                continue
+
+            if current_week_nr and current_week_nr > 0:
+                historical = (
+                    self.db.query(func.sum(SurvstatWeeklyData.incidence))
+                    .filter(
+                        func.lower(SurvstatWeeklyData.disease).in_(diseases),
+                        SurvstatWeeklyData.week == current_week_nr,
+                        SurvstatWeeklyData.bundesland == bl,
+                        SurvstatWeeklyData.week_start < latest_week,
+                    )
+                    .group_by(SurvstatWeeklyData.year)
+                    .all()
+                )
+                values = sorted([float(h[0]) for h in historical if h[0] is not None])
+                if len(values) >= 3:
+                    rank = bisect_right(values, current_incidence)
+                    out[code] = _clamp(rank / len(values))
+                    continue
+
+            max_val = max(per_bl.values(), default=1.0) or 1.0
+            out[code] = _clamp(current_incidence / max_val)
+
         return out
 
     def _weather_by_region(self) -> dict[str, float]:

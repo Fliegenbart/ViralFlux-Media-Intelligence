@@ -174,9 +174,11 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
   const [statusTransitioning, setStatusTransitioning] = useState(false);
 
   /* ── Backtest state ── */
-  const [btTargetSource, setBtTargetSource] = useState('RKI_ARE');
+  const [btTargetSource, setBtTargetSource] = useState('ATEMWEGSINDEX');
+  const [btBundesland, setBtBundesland] = useState('');
   const [btRunning, setBtRunning] = useState(false);
   const [btResult, setBtResult] = useState<any>(null);
+  const [topRegions, setTopRegions] = useState<any>(null);
   const [btCustomerResult, setBtCustomerResult] = useState<any>(null);
   const [btCustomerRunning, setBtCustomerRunning] = useState(false);
   const [btRuns, setBtRuns] = useState<any[]>([]);
@@ -1574,12 +1576,20 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
    * ───────────────────────────────────────────────────────────────────────── */
 
   const TARGET_OPTIONS = [
-    { value: 'RKI_ARE', label: 'RKI ARE (Atemwegserkrankungen)' },
-    { value: 'SURVSTAT', label: 'SURVSTAT Respiratory' },
-    { value: 'MYCOPLASMA', label: 'SURVSTAT Mycoplasma' },
-    { value: 'KEUCHHUSTEN', label: 'SURVSTAT Keuchhusten' },
-    { value: 'PNEUMOKOKKEN', label: 'SURVSTAT Pneumokokken' },
-    { value: 'H_INFLUENZAE', label: 'SURVSTAT Parainfluenza' },
+    { value: 'ATEMWEGSINDEX', label: 'Atemwegsindex (alle Erreger)' },
+    { value: 'RKI_ARE', label: 'RKI ARE (Arztbesuche)' },
+    { value: 'SURVSTAT', label: 'Influenza (Detail)' },
+    { value: 'MYCOPLASMA', label: 'Mycoplasma (Detail)' },
+    { value: 'KEUCHHUSTEN', label: 'Keuchhusten (Detail)' },
+    { value: 'PNEUMOKOKKEN', label: 'Pneumokokken (Detail)' },
+    { value: 'H_INFLUENZAE', label: 'Parainfluenza (Detail)' },
+  ];
+
+  const BUNDESLAENDER_OPTIONS = [
+    '', 'Baden-Württemberg', 'Bayern', 'Berlin', 'Brandenburg', 'Bremen',
+    'Hamburg', 'Hessen', 'Mecklenburg-Vorpommern', 'Niedersachsen',
+    'Nordrhein-Westfalen', 'Rheinland-Pfalz', 'Saarland', 'Sachsen',
+    'Sachsen-Anhalt', 'Schleswig-Holstein', 'Thüringen',
   ];
 
   // ── Signal Detection for Backtest Chart ──
@@ -1668,14 +1678,24 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view, cockpit?.backtest_summary]);
 
+  const fetchTopRegions = async (target: string) => {
+    try {
+      const res = await fetch(`/api/v1/backtest/top-regions?target_source=${encodeURIComponent(target)}&n=5`);
+      const data = await res.json();
+      if (!data.error) setTopRegions(data);
+    } catch { /* best-effort */ }
+  };
+
   const runMarketBacktest = async () => {
     setBtRunning(true);
     setBtResult(null);
+    fetchTopRegions(btTargetSource);
     try {
       const qs = new URLSearchParams({
         target_source: btTargetSource,
         virus_typ: virus,
       });
+      if (btBundesland) qs.set('bundesland', btBundesland);
       const res = await fetch(`/api/v1/backtest/market?${qs.toString()}`, { method: 'POST' });
       const data = await res.json();
       if (data.error) {
@@ -1852,6 +1872,19 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                 <option key={o.value} value={o.value}>{o.label}</option>
               ))}
             </select>
+            <select
+              value={btBundesland}
+              onChange={(e) => setBtBundesland(e.target.value)}
+              style={{
+                padding: '8px 12px', borderRadius: 8, fontSize: 13,
+                border: '1px solid var(--border-color)', background: 'var(--bg-secondary)',
+                color: 'var(--text-primary)', minWidth: 140,
+              }}
+            >
+              {BUNDESLAENDER_OPTIONS.map((bl) => (
+                <option key={bl || '__bw'} value={bl}>{bl || 'Bundesweit'}</option>
+              ))}
+            </select>
             <button
               onClick={runMarketBacktest}
               disabled={btRunning}
@@ -1887,6 +1920,57 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                   </div>
                 ))}
               </div>
+
+              {/* Top-5 Regions card */}
+              {topRegions?.regions?.length > 0 && (
+                <div style={{
+                  marginBottom: 16, padding: '12px 16px', borderRadius: 10,
+                  background: 'var(--bg-secondary)', border: '1px solid var(--border-color)',
+                }}>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>
+                    Top-{topRegions.regions.length} Regionen — {topRegions.disease} (KW {topRegions.week?.split('_')[1]})
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    {topRegions.regions.map((r: any, i: number) => {
+                      const maxInc = topRegions.regions[0]?.incidence || 1;
+                      const pct = Math.round((r.incidence / maxInc) * 100);
+                      return (
+                        <button
+                          key={r.bundesland}
+                          onClick={() => { setBtBundesland(r.bundesland); }}
+                          style={{
+                            display: 'flex', alignItems: 'center', gap: 6,
+                            padding: '6px 10px', borderRadius: 8, fontSize: 12, cursor: 'pointer',
+                            border: btBundesland === r.bundesland ? '2px solid var(--accent-violet)' : '1px solid var(--border-color)',
+                            background: btBundesland === r.bundesland ? 'rgba(139,92,246,0.08)' : 'var(--bg-card)',
+                            color: 'var(--text-primary)',
+                          }}
+                        >
+                          <span style={{ fontWeight: 700, color: 'var(--text-muted)', fontSize: 10, minWidth: 14 }}>{i + 1}.</span>
+                          <span style={{ fontWeight: 500 }}>{r.bundesland}</span>
+                          <span style={{
+                            display: 'inline-block', width: 32, height: 6, borderRadius: 3,
+                            background: `linear-gradient(90deg, var(--accent-violet) ${pct}%, var(--border-color) ${pct}%)`,
+                          }} />
+                          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{r.incidence.toFixed(1)}</span>
+                        </button>
+                      );
+                    })}
+                    {btBundesland && (
+                      <button
+                        onClick={() => setBtBundesland('')}
+                        style={{
+                          padding: '6px 10px', borderRadius: 8, fontSize: 12, cursor: 'pointer',
+                          border: '1px solid var(--border-color)', background: 'var(--bg-card)',
+                          color: 'var(--text-muted)',
+                        }}
+                      >
+                        ✕ Bundesweit
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* Chart with zoom + signal annotations */}
               {btResult.chart_data?.length > 0 && (

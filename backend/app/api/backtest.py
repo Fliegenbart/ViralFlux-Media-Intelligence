@@ -23,6 +23,7 @@ router = APIRouter()
 
 VALID_VIRUS_TYPES = {"Influenza A", "Influenza B", "SARS-CoV-2", "RSV A"}
 VALID_MARKET_TARGETS = {
+    "ATEMWEGSINDEX",
     "RKI_ARE",
     "SURVSTAT",
     "MYCOPLASMA",
@@ -52,6 +53,7 @@ async def run_market_backtest(
     horizon_days: int = Query(default=14, ge=0, le=60),
     min_train_points: int = Query(default=0, ge=0, le=300),
     strict_vintage_mode: bool = Query(default=True),
+    bundesland: str = Query(default="", description="Bundesland-Filter (leer=Bundesweit)"),
     db: Session = Depends(get_db),
 ):
     """Mode A: Markt-Check ohne Kundendaten."""
@@ -73,7 +75,80 @@ async def run_market_backtest(
         horizon_days=horizon_days,
         min_train_points=min_train_points,
         strict_vintage_mode=strict_vintage_mode,
+        bundesland=bundesland.strip(),
     )
+
+
+@router.get("/top-regions")
+async def top_regions(
+    target_source: str = Query(default="MYCOPLASMA"),
+    n: int = Query(default=5, ge=1, le=16),
+    db: Session = Depends(get_db),
+):
+    """Top-N Bundesländer nach aktuellem Signal (letzte verfügbare Woche)."""
+    token = (target_source or "MYCOPLASMA").strip().upper()
+
+    # Resolve disease name
+    service = BacktestService(db)
+    if token == "ATEMWEGSINDEX":
+        diseases = list(service.GELO_ATEMWEG_DISEASES)
+    elif token == "RKI_ARE":
+        # RKI_ARE hat keine SurvStat-Einträge, nutze Influenza als Proxy
+        diseases = ["Influenza, saisonal"]
+    else:
+        alias = service.SURVSTAT_TARGET_ALIASES.get(token, token)
+        disease = service._resolve_survstat_disease(alias)
+        if not disease:
+            return {"error": f"Unbekanntes target_source: {target_source}"}
+        diseases = [disease]
+
+    # Letzte verfügbare Woche ermitteln
+    latest_week = db.query(func.max(SurvstatWeeklyData.week_label)).filter(
+        SurvstatWeeklyData.disease.in_(diseases),
+        SurvstatWeeklyData.bundesland != "Gesamt",
+    ).scalar()
+
+    if not latest_week:
+        return {"week": None, "disease": ", ".join(diseases), "regions": []}
+
+    if token == "ATEMWEGSINDEX":
+        # Aggregiert über alle Atemwegserkrankungen
+        rows = db.query(
+            SurvstatWeeklyData.bundesland,
+            func.sum(SurvstatWeeklyData.incidence).label("total"),
+        ).filter(
+            SurvstatWeeklyData.disease.in_(diseases),
+            SurvstatWeeklyData.week_label == latest_week,
+            SurvstatWeeklyData.bundesland != "Gesamt",
+            SurvstatWeeklyData.age_group == "Gesamt",
+        ).group_by(SurvstatWeeklyData.bundesland).order_by(
+            func.sum(SurvstatWeeklyData.incidence).desc()
+        ).limit(n).all()
+
+        return {
+            "week": latest_week,
+            "disease": "Atemwegsindex",
+            "regions": [
+                {"bundesland": r.bundesland, "incidence": round(float(r.total or 0), 2)}
+                for r in rows
+            ],
+        }
+    else:
+        rows = db.query(SurvstatWeeklyData).filter(
+            SurvstatWeeklyData.disease.in_(diseases),
+            SurvstatWeeklyData.week_label == latest_week,
+            SurvstatWeeklyData.bundesland != "Gesamt",
+            SurvstatWeeklyData.age_group == "Gesamt",
+        ).order_by(SurvstatWeeklyData.incidence.desc()).limit(n).all()
+
+        return {
+            "week": latest_week,
+            "disease": diseases[0],
+            "regions": [
+                {"bundesland": r.bundesland, "incidence": round(float(r.incidence or 0), 2)}
+                for r in rows
+            ],
+        }
 
 
 @router.post("/customer")

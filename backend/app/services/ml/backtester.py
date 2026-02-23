@@ -781,16 +781,52 @@ class BacktestService:
         self,
         target_source: str = "RKI_ARE",
         days_back: int = 730,
+        bundesland: str = "",
     ) -> Tuple[pd.DataFrame, dict]:
         """Lädt externe Markt-Proxy-Wahrheit für Twin-Mode Market-Check."""
         token = (target_source or "RKI_ARE").strip()
         token_upper = token.upper()
         start_date = datetime.now() - timedelta(days=days_back)
+        bl_filter = bundesland.strip() if bundesland else "Gesamt"
 
+        # --- ATEMWEGSINDEX: Aggregat aller respiratorischen Erreger ---
+        if token_upper == "ATEMWEGSINDEX":
+            surv_rows = self.db.query(
+                SurvstatWeeklyData.week_start,
+                SurvstatWeeklyData.week_label,
+                func.sum(SurvstatWeeklyData.incidence).label("total_incidence"),
+                func.min(SurvstatWeeklyData.available_time).label("available_time"),
+            ).filter(
+                SurvstatWeeklyData.disease.in_(self.GELO_ATEMWEG_DISEASES),
+                SurvstatWeeklyData.bundesland == bl_filter,
+                SurvstatWeeklyData.age_group == "Gesamt",
+                SurvstatWeeklyData.week_start >= start_date,
+            ).group_by(
+                SurvstatWeeklyData.week_start,
+                SurvstatWeeklyData.week_label,
+            ).order_by(SurvstatWeeklyData.week_start.asc()).all()
+
+            df = pd.DataFrame([{
+                "datum": row.week_start,
+                "menge": float(row.total_incidence or 0),
+                "available_time": row.available_time or row.week_start,
+            } for row in surv_rows])
+
+            bl_label = bl_filter if bl_filter != "Gesamt" else "Bundesweit"
+            return df, {
+                "target_source": "ATEMWEGSINDEX",
+                "target_label": f"Atemwegsindex ({bl_label})",
+                "target_key": "ATEMWEGSINDEX",
+                "disease": None,
+                "bundesland": bl_filter,
+            }
+
+        # --- RKI_ARE ---
         if token_upper == "RKI_ARE":
+            bl_are = "Bundesweit" if bl_filter == "Gesamt" else bl_filter
             are_rows = self.db.query(AREKonsultation).filter(
                 AREKonsultation.altersgruppe == "00+",
-                AREKonsultation.bundesland == "Bundesweit",
+                AREKonsultation.bundesland == bl_are,
                 AREKonsultation.datum >= start_date,
             ).order_by(AREKonsultation.datum.asc()).all()
 
@@ -802,10 +838,12 @@ class BacktestService:
 
             return df, {
                 "target_source": "RKI_ARE",
-                "target_label": "RKI ARE-Konsultationsinzidenz (Bundesweit, 00+)",
+                "target_label": f"RKI ARE ({bl_are}, 00+)",
                 "target_key": "RKI_ARE",
+                "bundesland": bl_filter,
             }
 
+        # --- SURVSTAT Einzelerreger ---
         if token_upper.startswith("SURVSTAT:"):
             survstat_token = token.split(":", 1)[1].strip()
         else:
@@ -824,7 +862,7 @@ class BacktestService:
 
         surv_rows = self.db.query(SurvstatWeeklyData).filter(
             SurvstatWeeklyData.disease == disease,
-            SurvstatWeeklyData.bundesland == "Gesamt",
+            SurvstatWeeklyData.bundesland == bl_filter,
             SurvstatWeeklyData.week_start >= start_date,
         ).order_by(SurvstatWeeklyData.week_start.asc()).all()
 
@@ -834,12 +872,13 @@ class BacktestService:
             "available_time": row.available_time or row.week_start,
         } for row in surv_rows if row.incidence is not None])
 
+        bl_label = bl_filter if bl_filter != "Gesamt" else "Bundesweit"
         return df, {
             "target_source": "SURVSTAT",
-            "target_label": f"SURVSTAT {disease} (Gesamt)",
+            "target_label": f"SURVSTAT {disease} ({bl_label})",
             "target_key": token_upper,
             "disease": disease,
-            "bundesland": "Gesamt",
+            "bundesland": bl_filter,
         }
 
     @staticmethod
@@ -1492,19 +1531,21 @@ class BacktestService:
         min_train_points: int = DEFAULT_MIN_TRAIN_POINTS,
         delay_rules: Optional[dict[str, int]] = None,
         strict_vintage_mode: bool = True,
+        bundesland: str = "",
     ) -> dict:
         """Mode A: Markt-Check ohne Kundendaten gegen externe RKI-Proxy-Targets."""
         self._scores_cache = {}  # Clear cache for each new simulation run
         self.strict_vintage_mode = bool(strict_vintage_mode)
         logger.info(
-            "Starte Markt-Simulation: virus=%s, target_source=%s, days_back=%s, strict_vintage=%s",
-            virus_typ, target_source, days_back, self.strict_vintage_mode
+            "Starte Markt-Simulation: virus=%s, target_source=%s, days_back=%s, bundesland=%s",
+            virus_typ, target_source, days_back, bundesland or "Gesamt"
         )
 
         try:
             target_df, target_meta = self._load_market_target(
                 target_source=target_source,
                 days_back=days_back,
+                bundesland=bundesland,
             )
         except Exception as e:
             return {"error": str(e)}

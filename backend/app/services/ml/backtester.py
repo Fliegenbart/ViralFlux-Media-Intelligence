@@ -49,12 +49,12 @@ class BacktestService:
     DEFAULT_MARKET_HORIZON_DAYS = 14
     DEFAULT_MIN_TRAIN_POINTS = 20
     SURVSTAT_TARGET_ALIASES = {
-        "SURVSTAT": "all",
-        "ALL": "all",
+        "SURVSTAT": "Influenza, saisonal",
+        "ALL": "Influenza, saisonal",
         "MYCOPLASMA": "mycoplasma",
         "KEUCHHUSTEN": "keuchhusten",
         "PNEUMOKOKKEN": "pneumokokken",
-        "H_INFLUENZAE": "haemophilus influenzae",
+        "H_INFLUENZAE": "Parainfluenza",
     }
 
     # Cross-disease pairs: epidemiologisch sinnvolle Korrelationen
@@ -607,14 +607,14 @@ class BacktestService:
         if token_upper in self.SURVSTAT_TARGET_ALIASES:
             token = self.SURVSTAT_TARGET_ALIASES[token_upper]
 
-        if token.lower() == "all":
-            exact_all = self.db.query(SurvstatWeeklyData.disease).filter(
-                SurvstatWeeklyData.disease == "All"
-            ).first()
-            if exact_all:
-                return exact_all[0]
-            return None
+        # Exakter Match zuerst
+        exact = self.db.query(SurvstatWeeklyData.disease).filter(
+            SurvstatWeeklyData.disease == token
+        ).first()
+        if exact:
+            return exact[0]
 
+        # Fuzzy-Match per LIKE
         pattern = f"%{token.lower()}%"
         row = self.db.query(SurvstatWeeklyData.disease).filter(
             func.lower(SurvstatWeeklyData.disease).like(pattern)

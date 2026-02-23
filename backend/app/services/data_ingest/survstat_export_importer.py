@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import csv
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from sqlalchemy import text
@@ -121,7 +121,9 @@ def import_meldewoche(
                 logger.warning("Ungültige Woche: %s_%02d", year, week)
                 continue
 
-            available_time = datetime(year + 1, 2, 21)  # Abfragedatum
+            # SurvStat-Daten werden typischerweise 1 Woche nach Ende
+            # der Meldewoche veröffentlicht.
+            available_time = week_start + timedelta(days=7)
 
             existing = (
                 db.query(SurvstatWeeklyData)
@@ -188,7 +190,7 @@ def import_bundesland(
     inserted, updated, skipped = 0, 0, 0
     week_label = f"{year}_00"
     week_start = datetime(year, 1, 1)
-    available_time = datetime(year + 1, 2, 21)
+    available_time = week_start + timedelta(days=7)
 
     for row in data_rows:
         disease = row[0].strip().strip('"') if row else ""

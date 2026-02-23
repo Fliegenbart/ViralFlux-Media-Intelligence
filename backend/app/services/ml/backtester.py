@@ -483,6 +483,13 @@ class BacktestService:
         target_disease: Optional[str] = None,
     ) -> dict[str, float]:
         """Berechnet Dimensions-Scores + Rohsignale an einem historischen Datum."""
+        # Cache: Same date + virus_typ + target_disease → same result
+        if not hasattr(self, "_scores_cache"):
+            self._scores_cache: dict[str, dict[str, float]] = {}
+        cache_key = f"{target.isoformat()}|{virus_typ}|{target_disease}"
+        if cache_key in self._scores_cache:
+            return self._scores_cache[cache_key]
+
         rules = dict(self.DEFAULT_DELAY_RULES_DAYS)
         if delay_rules:
             rules.update(delay_rules)
@@ -540,7 +547,7 @@ class BacktestService:
         if school_start:
             context = min(context * 1.3, 1.0)
 
-        return {
+        result = {
             # Legacy composite scores (for backward compatibility)
             "bio": round(bio, 4),
             "market": round(market, 4),
@@ -565,6 +572,8 @@ class BacktestService:
             "survstat_xdisease_1": survstat_xd["survstat_xdisease_1"],
             "survstat_xdisease_2": survstat_xd["survstat_xdisease_2"],
         }
+        self._scores_cache[cache_key] = result
+        return result
 
     # ─────────────────────────────────────────────────────────────────────────
     # Haupt-Kalibrierung
@@ -1397,6 +1406,7 @@ class BacktestService:
         strict_vintage_mode: bool = True,
     ) -> dict:
         """Mode A: Markt-Check ohne Kundendaten gegen externe RKI-Proxy-Targets."""
+        self._scores_cache = {}  # Clear cache for each new simulation run
         self.strict_vintage_mode = bool(strict_vintage_mode)
         logger.info(
             "Starte Markt-Simulation: virus=%s, target_source=%s, days_back=%s, strict_vintage=%s",

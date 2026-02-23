@@ -46,20 +46,20 @@ REGION_NAME_TO_CODE = {name.lower(): code for code, name in BUNDESLAND_NAMES.ite
 
 class RecommendationGenerateRequest(BaseModel):
     brand: str = Field(default="gelo")
-    product: str = Field(default="GeloMyrtol forte")
+    product: str = Field(default="Alle Gelo-Produkte")
     campaign_goal: str = Field(default="Awareness + Abverkauf")
     weekly_budget: float = Field(default=100000.0, ge=0)
     channel_pool: List[str] = Field(default_factory=lambda: ["programmatic", "social", "search", "ctv"])
     region_scope: Optional[List[str]] = None
     strategy_mode: str = Field(default="PLAYBOOK_AI")
-    max_cards: int = Field(default=4, ge=1, le=8)
+    max_cards: int = Field(default=8, ge=1, le=20)
     virus_typ: str = Field(default="Influenza A")
 
 
 class RecommendationOpenRegionRequest(BaseModel):
     region_code: str = Field(..., min_length=2)
     brand: str = Field(default="gelo")
-    product: str = Field(default="GeloMyrtol forte")
+    product: str = Field(default="Alle Gelo-Produkte")
     campaign_goal: str = Field(default="Top-of-Mind vor Erkältungswelle")
     weekly_budget: float = Field(default=100000.0, ge=0)
     virus_typ: str = Field(default="Influenza A")

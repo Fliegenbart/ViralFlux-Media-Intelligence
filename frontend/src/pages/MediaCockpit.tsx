@@ -219,11 +219,11 @@ const MediaCockpit: React.FC = () => {
   const [refinementStartedAt, setRefinementStartedAt] = useState<number | null>(null);
   const [refinementNotice, setRefinementNotice] = useState<string | null>(null);
   const [brand, setBrand] = useState('gelo');
-  const [product, setProduct] = useState('GeloMyrtol forte');
+  const [product, setProduct] = useState('Alle Gelo-Produkte');
   const [goal, setGoal] = useState('Top-of-Mind vor Erkältungswelle');
   const [weeklyBudget, setWeeklyBudget] = useState(120000);
   const [strategyMode] = useState('PLAYBOOK_AI');
-  const [maxCards, setMaxCards] = useState(4);
+  const [maxCards, setMaxCards] = useState(8);
   const [recStatusFilter, setRecStatusFilter] = useState<string>('all');
   const [recBrandFilter, setRecBrandFilter] = useState<string>('');
   const [recMinUrgency, setRecMinUrgency] = useState<number>(0);
@@ -1496,8 +1496,14 @@ const MediaCockpit: React.FC = () => {
                     <span className="px-3 py-1.5 rounded-full text-xs bg-slate-100 border border-slate-200 text-slate-500">
                       Brand: <span className="text-slate-700 font-medium">{brand}</span>
                     </span>
-                    <span className="px-3 py-1.5 rounded-full text-xs bg-slate-100 border border-slate-200 text-slate-500">
-                      Produkt: <span className="text-slate-700 font-medium">{product}</span>
+                    <span
+                      className="px-3 py-1.5 rounded-full text-xs font-medium"
+                      style={product.toLowerCase().includes('alle')
+                        ? { background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.3)', color: '#15803d' }
+                        : { background: '#f1f5f9', border: '1px solid #e2e8f0', color: '#64748b' }
+                      }
+                    >
+                      {product.toLowerCase().includes('alle') ? 'Sortiment: Alle Gelo-Produkte' : `Produkt: ${product}`}
                     </span>
                     <span className="px-3 py-1.5 rounded-full text-xs bg-slate-100 border border-slate-200 text-slate-500">
                       Budget/Woche: <span className="text-slate-700 font-medium">{eur(weeklyBudget)}</span>
@@ -1560,8 +1566,11 @@ const MediaCockpit: React.FC = () => {
                     <select className="media-input" value={maxCards} onChange={(e) => setMaxCards(Number(e.target.value))}>
                       <option value={1}>1 Card</option>
                       <option value={2}>2 Cards</option>
-                      <option value={3}>3 Cards</option>
                       <option value={4}>4 Cards</option>
+                      <option value={6}>6 Cards</option>
+                      <option value={8}>8 Cards</option>
+                      <option value={10}>10 Cards</option>
+                      <option value={12}>12 Cards</option>
                     </select>
                     <div className="text-xs text-slate-400 flex items-center">
                       Mode: {strategyMode}
@@ -1636,6 +1645,11 @@ const MediaCockpit: React.FC = () => {
                       <div className="min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <div className="text-[10px] text-slate-400 uppercase tracking-wider">KI-Erkenntnis</div>
+                          {(card.recommended_product || card.product) && (
+                            <span className="px-2 py-0.5 text-[10px] rounded-full font-semibold" style={{ background: 'rgba(99,102,241,0.1)', color: '#4f46e5', border: '1px solid rgba(99,102,241,0.2)' }}>
+                              {card.recommended_product || card.product}
+                            </span>
+                          )}
                           {isHighlighted && (
                             <span className="px-2 py-0.5 text-[10px] rounded-full" style={{ background: 'rgba(34,197,94,0.1)', color: '#16a34a' }}>
                               Top-Empfehlung

@@ -879,6 +879,14 @@ class MarketingOpportunityEngine:
             if recommended:
                 return str(recommended)
 
+        # Multi-Produkt-Modus: wenn kein fixes Produkt vorgegeben, bestes
+        # Candidate-Produkt aus dem Mapping verwenden (auch bei needs_review).
+        is_multi = not fallback_product or "alle" in fallback_product.lower()
+        if is_multi:
+            candidate = product_mapping.get("candidate_product")
+            if candidate:
+                return str(candidate)
+
         if status == "not_applicable":
             return fallback_product or "Produktfreigabe ausstehend"
 

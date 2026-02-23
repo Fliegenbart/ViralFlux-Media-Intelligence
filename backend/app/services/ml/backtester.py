@@ -26,6 +26,8 @@ from app.models.database import (
     SchoolHolidays,
     AREKonsultation,
     SurvstatWeeklyData,
+    GrippeWebData,
+    NotaufnahmeSyndromData,
     LabConfiguration,
     BacktestRun,
     BacktestPoint,
@@ -65,14 +67,21 @@ class BacktestService:
         "RSV A": ["Influenza A", "Influenza B"],
     }
 
-    # Erweiterte Feature-Liste für den verbesserten Walk-Forward Backtest
-    ENHANCED_FEATURE_COLS: list[str] = [
-        "wastewater_raw",
-        "positivity_raw",
-        "trends_raw",
-        "weather_temp",
-        "weather_humidity",
-        "school_start_float",
+    # SurvStat Cross-Disease: verwandte Krankheiten als Features
+    SURVSTAT_CROSS_DISEASE_MAP: dict[str, list[str]] = {
+        "Influenza, saisonal": ["RSV (Meldepflicht gemäß IfSG)", "Mycoplasma", "Parainfluenza"],
+        "Mycoplasma": ["Keuchhusten (Meldepflicht gemäß IfSG)", "Influenza, saisonal", "Parainfluenza"],
+        "Keuchhusten (Meldepflicht gemäß IfSG)": ["Mycoplasma", "Influenza, saisonal"],
+        "Keuchhusten (Meldepflicht gemäß Landesmeldeverordnung)": ["Mycoplasma", "Influenza, saisonal"],
+        "Pneumokokken (Meldepflicht gemäß IfSG)": ["Influenza, saisonal", "RSV (Meldepflicht gemäß IfSG)"],
+        "Parainfluenza": ["Influenza, saisonal", "RSV (Meldepflicht gemäß IfSG)", "Mycoplasma"],
+        "RSV (Meldepflicht gemäß IfSG)": ["Influenza, saisonal", "Parainfluenza"],
+        "RSV (Meldepflicht gemäß Landesmeldeverordnung)": ["Influenza, saisonal", "Parainfluenza"],
+        "COVID-19": ["Influenza, saisonal", "RSV (Meldepflicht gemäß IfSG)"],
+    }
+
+    # Basis-Features (krankheitsunabhängig)
+    BASE_FEATURE_COLS: list[str] = [
         "target_lag1",
         "target_lag2",
         "target_lag3",
@@ -80,8 +89,29 @@ class BacktestService:
         "target_roc",
         "week_sin",
         "week_cos",
+        "school_start_float",
+        "weather_temp",
+        "weather_humidity",
+        "trends_raw",
+        "grippeweb_are",
+        "notaufnahme_ari",
+    ]
+
+    # Virale Targets: Abwasser-Signale nützlich
+    VIRAL_FEATURE_COLS: list[str] = BASE_FEATURE_COLS + [
+        "wastewater_raw",
+        "positivity_raw",
         "xdisease_load",
     ]
+
+    # SURVSTAT-Targets: Abwasser irrelevant, SurvStat Cross-Disease stattdessen
+    SURVSTAT_FEATURE_COLS: list[str] = BASE_FEATURE_COLS + [
+        "survstat_xdisease_1",
+        "survstat_xdisease_2",
+    ]
+
+    # Legacy-Kompatibilität
+    ENHANCED_FEATURE_COLS: list[str] = VIRAL_FEATURE_COLS
 
     # Gelo-relevante Atemwegsinfekte (ohne COVID-19, da zu dominant)
     GELO_ATEMWEG_DISEASES: list[str] = [
@@ -295,6 +325,64 @@ class BacktestService:
 
         return round(float(avg_load or 0.0), 4)
 
+    def _grippeweb_at_date(
+        self,
+        target: datetime,
+        available_cutoff: Optional[datetime] = None,
+    ) -> dict[str, float]:
+        """GrippeWeb ARE-Inzidenz (syndromisch, krankheitsunabhängig)."""
+        effective = available_cutoff or target
+        row = self.db.query(GrippeWebData).filter(
+            GrippeWebData.erkrankung_typ == "ARE",
+            GrippeWebData.altersgruppe == "Gesamt",
+            GrippeWebData.datum <= effective,
+        ).order_by(GrippeWebData.datum.desc()).first()
+        # Normalisierung: ARE-Inzidenz typisch 500-5000 pro 100k → /10000 auf [0, 0.5]
+        are_val = float(row.inzidenz / 10000.0) if row and row.inzidenz else 0.0
+        return {"grippeweb_are": round(min(are_val, 1.0), 4)}
+
+    def _notaufnahme_at_date(
+        self,
+        target: datetime,
+        available_cutoff: Optional[datetime] = None,
+    ) -> dict[str, float]:
+        """Notaufnahme ARI 7-Tage-MA (tagesaktuell, krankheitsunabhängig)."""
+        effective = available_cutoff or target
+        row = self.db.query(NotaufnahmeSyndromData).filter(
+            NotaufnahmeSyndromData.syndrome == "ARI",
+            NotaufnahmeSyndromData.age_group == "00+",
+            NotaufnahmeSyndromData.ed_type == "all",
+            NotaufnahmeSyndromData.datum <= effective,
+        ).order_by(NotaufnahmeSyndromData.datum.desc()).first()
+        ari_val = float(row.relative_cases_7day_ma) if row and row.relative_cases_7day_ma else 0.0
+        return {"notaufnahme_ari": round(ari_val, 4)}
+
+    def _survstat_cross_disease_at_date(
+        self,
+        target: datetime,
+        target_disease: str,
+        available_cutoff: Optional[datetime] = None,
+    ) -> dict[str, float]:
+        """SurvStat-Inzidenz verwandter Krankheiten (für SURVSTAT-Targets)."""
+        related = self.SURVSTAT_CROSS_DISEASE_MAP.get(target_disease, [])
+        effective = available_cutoff or target
+        result = {"survstat_xdisease_1": 0.0, "survstat_xdisease_2": 0.0}
+
+        for i, disease in enumerate(related[:2]):
+            row = self.db.query(SurvstatWeeklyData).filter(
+                SurvstatWeeklyData.disease == disease,
+                SurvstatWeeklyData.bundesland == "Gesamt",
+                SurvstatWeeklyData.week_start <= effective,
+                SurvstatWeeklyData.available_time <= effective,
+            ).order_by(SurvstatWeeklyData.week_start.desc()).first()
+            if row and row.incidence is not None:
+                # Normalisierung: Inzidenz /1000, gekappt auf 1.0
+                result[f"survstat_xdisease_{i + 1}"] = round(
+                    min(float(row.incidence) / 1000.0, 1.0), 4
+                )
+
+        return result
+
     def _are_consultation_at_date(
         self,
         target: datetime,
@@ -364,6 +452,7 @@ class BacktestService:
         target: datetime,
         virus_typ: str,
         delay_rules: Optional[dict[str, int]] = None,
+        target_disease: Optional[str] = None,
     ) -> dict[str, float]:
         """Berechnet Dimensions-Scores + Rohsignale an einem historischen Datum."""
         rules = dict(self.DEFAULT_DELAY_RULES_DAYS)
@@ -385,9 +474,21 @@ class BacktestService:
         weather = weather_components["composite"]
         school_start = self._school_start_at_date(target, available_cutoff=holidays_cutoff)
 
-        # Cross-disease signal
+        # Cross-disease signal (wastewater-basiert)
         xdisease_viruses = self.CROSS_DISEASE_MAP.get(virus_typ, [])
         xdisease_load = self._cross_disease_load_at_date(target, xdisease_viruses, available_cutoff=wastewater_cutoff)
+
+        # GrippeWeb + Notaufnahme (syndromisch, krankheitsunabhängig)
+        grippeweb = self._grippeweb_at_date(target, available_cutoff=are_cutoff)
+        notaufnahme = self._notaufnahme_at_date(target, available_cutoff=are_cutoff)
+
+        # SurvStat Cross-Disease (für SURVSTAT-Targets)
+        if target_disease:
+            survstat_xd = self._survstat_cross_disease_at_date(
+                target, target_disease, available_cutoff=are_cutoff
+            )
+        else:
+            survstat_xd = {"survstat_xdisease_1": 0.0, "survstat_xdisease_2": 0.0}
 
         # BIO = wastewater + lab positivity + ARE consultation (graceful degradation)
         if are_consultation > 0:
@@ -429,6 +530,12 @@ class BacktestService:
             "weather_raw": weather,
             "school_start_float": 1.0 if school_start else 0.0,
             "xdisease_load": xdisease_load,
+            # Neue syndromische Signale
+            "grippeweb_are": grippeweb["grippeweb_are"],
+            "notaufnahme_ari": notaufnahme["notaufnahme_ari"],
+            # SurvStat Cross-Disease
+            "survstat_xdisease_1": survstat_xd["survstat_xdisease_1"],
+            "survstat_xdisease_2": survstat_xd["survstat_xdisease_2"],
         }
 
     # ─────────────────────────────────────────────────────────────────────────
@@ -442,12 +549,14 @@ class BacktestService:
         horizon_days: int = 0,
         delay_rules: Optional[dict[str, int]] = None,
         enhanced: bool = False,
+        target_disease: Optional[str] = None,
     ) -> list[dict]:
         """Berechne Sub-Scores je Ziel-Datenpunkt ohne Future-Leak.
 
         Args:
             enhanced: If True, include raw signals + temporal features
                       for the improved GradientBoosting pipeline.
+            target_disease: SurvStat disease name for cross-disease features.
         """
         if target_df.empty:
             return []
@@ -470,6 +579,7 @@ class BacktestService:
                     sim_date,
                     virus_typ,
                     delay_rules=delay_rules,
+                    target_disease=target_disease,
                 )
                 row_dict = {
                     "date": target_date.strftime("%Y-%m-%d"),
@@ -492,6 +602,14 @@ class BacktestService:
                     row_dict["weather_humidity"] = scores["weather_humidity"]
                     row_dict["school_start_float"] = scores["school_start_float"]
                     row_dict["xdisease_load"] = scores["xdisease_load"]
+
+                    # Neue syndromische Signale
+                    row_dict["grippeweb_are"] = scores["grippeweb_are"]
+                    row_dict["notaufnahme_ari"] = scores["notaufnahme_ari"]
+
+                    # SurvStat Cross-Disease
+                    row_dict["survstat_xdisease_1"] = scores["survstat_xdisease_1"]
+                    row_dict["survstat_xdisease_2"] = scores["survstat_xdisease_2"]
 
                     # Temporal features from target history (no future leak)
                     i = int(idx)
@@ -928,12 +1046,14 @@ class BacktestService:
         min_train_points: int,
         delay_rules: Optional[dict[str, int]] = None,
         exclude_are: bool = False,
+        target_disease: Optional[str] = None,
     ) -> dict:
         """Walk-forward Backtest mit erweiterter Feature-Pipeline und GradientBoosting.
 
         Args:
             exclude_are: If True, remove are_consultation_raw from features
                          (to prevent circular dependency when target=RKI_ARE).
+            target_disease: SurvStat disease name for disease-aware feature selection.
         """
         df = target_df.copy()
         df["datum"] = pd.to_datetime(df["datum"], errors="coerce")
@@ -952,10 +1072,16 @@ class BacktestService:
         df["iso_week"] = isocal.week.astype(int)
         df["month"] = df["datum"].dt.month.astype(int)
 
-        # Enhanced feature set (ohne ARE wenn target=RKI_ARE)
-        feature_cols = list(self.ENHANCED_FEATURE_COLS)
-        if not exclude_are and "are_consultation_raw" not in feature_cols:
-            feature_cols.insert(2, "are_consultation_raw")
+        # Disease-aware feature selection
+        is_survstat_target = target_disease and target_disease in self.SURVSTAT_CROSS_DISEASE_MAP
+        if is_survstat_target:
+            feature_cols = list(self.SURVSTAT_FEATURE_COLS)
+        elif exclude_are:
+            feature_cols = list(self.VIRAL_FEATURE_COLS)
+        else:
+            feature_cols = list(self.VIRAL_FEATURE_COLS)
+            if "are_consultation_raw" not in feature_cols:
+                feature_cols.insert(3, "are_consultation_raw")
 
         # Legacy features for backward-compatible chart output
         legacy_feature_cols = ["bio", "market", "psycho", "context"]
@@ -986,6 +1112,7 @@ class BacktestService:
                 horizon_days=horizon_days,
                 delay_rules=delay_rules,
                 enhanced=True,
+                target_disease=target_disease,
             )
             if len(train_rows) < min_train_points:
                 continue
@@ -1002,9 +1129,9 @@ class BacktestService:
             # Replace NaN/inf
             X_train = np.nan_to_num(X_train, nan=0.0, posinf=0.0, neginf=0.0)
 
-            # Model selection: GBR when enough data, Ridge as fallback
-            use_gbr = len(train_rows) >= 25
-            if use_gbr:
+            # Adaptive model selection based on training set size
+            n_train = len(train_rows)
+            if n_train >= 60:
                 gbr_fold_count += 1
                 model = GradientBoostingRegressor(
                     n_estimators=100,
@@ -1016,6 +1143,20 @@ class BacktestService:
                 )
                 model.fit(X_train, y_train)
                 importance_accumulator.append(model.feature_importances_)
+                use_gbr = True
+            elif n_train >= 30:
+                gbr_fold_count += 1
+                model = GradientBoostingRegressor(
+                    n_estimators=50,
+                    max_depth=2,
+                    learning_rate=0.08,
+                    subsample=0.8,
+                    min_samples_leaf=max(5, n_train // 6),
+                    random_state=42,
+                )
+                model.fit(X_train, y_train)
+                importance_accumulator.append(model.feature_importances_)
+                use_gbr = True
             else:
                 ridge_fold_count += 1
                 scaler = StandardScaler()
@@ -1023,12 +1164,14 @@ class BacktestService:
                 model = Ridge(alpha=1.0, fit_intercept=True)
                 model.fit(X_train, y_train)
                 importance_accumulator.append(np.abs(model.coef_))
+                use_gbr = False
 
             # Build test features for the forecast point
             test_scores = self._compute_sub_scores_at_date(
                 forecast_time,
                 virus_typ=virus_typ,
                 delay_rules=delay_rules,
+                target_disease=target_disease,
             )
 
             # Target lags from training history (no future leak)
@@ -1063,6 +1206,10 @@ class BacktestService:
                 "week_sin": week_sin,
                 "week_cos": week_cos,
                 "xdisease_load": test_scores["xdisease_load"],
+                "grippeweb_are": test_scores["grippeweb_are"],
+                "notaufnahme_ari": test_scores["notaufnahme_ari"],
+                "survstat_xdisease_1": test_scores["survstat_xdisease_1"],
+                "survstat_xdisease_2": test_scores["survstat_xdisease_2"],
             }
             X_test = np.array([[test_feat.get(c, 0.0) for c in feature_cols]])
             X_test = np.nan_to_num(X_test, nan=0.0, posinf=0.0, neginf=0.0)
@@ -1219,6 +1366,7 @@ class BacktestService:
             min_train_points=min_train_points,
             delay_rules=delay_rules,
             exclude_are=exclude_are,
+            target_disease=target_meta.get("disease"),
         )
         if "error" in result:
             return result

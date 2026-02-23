@@ -1,15 +1,22 @@
-"""Backtest API: Twin-Mode (Market + Customer)."""
+"""Backtest API: Twin-Mode (Market + Customer) + Wellen-Radar."""
 
 from __future__ import annotations
 
+import logging
+from datetime import datetime, timedelta
 from io import BytesIO, StringIO
 
+import numpy as np
 import pandas as pd
 from fastapi import APIRouter, Depends, File, Query, UploadFile
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
+from app.models.database import SurvstatWeeklyData
 from app.services.ml.backtester import BacktestService
+
+logger = logging.getLogger(__name__)
 
 
 router = APIRouter()
@@ -145,3 +152,207 @@ async def list_backtest_runs(
     service = BacktestService(db)
     runs = service.list_backtest_runs(mode=mode, limit=limit)
     return {"total": len(runs), "runs": runs}
+
+
+# ═══════════════════════════════════════════════════════════════════════
+#  WELLEN-RADAR: Regionale Ausbreitungsanalyse
+# ═══════════════════════════════════════════════════════════════════════
+
+DISEASE_ALIASES = {
+    "influenza": "Influenza, saisonal",
+    "mycoplasma": "Mycoplasma",
+    "keuchhusten": "Keuchhusten (Meldepflicht gemäß IfSG)",
+    "pneumokokken": "Pneumokokken (Meldepflicht gemäß IfSG)",
+    "parainfluenza": "Parainfluenza",
+    "rsv": "RSV (Meldepflicht gemäß IfSG)",
+    "covid": "COVID-19",
+    "norovirus": "Norovirus-Gastroenteritis",
+    "rotavirus": "Rotavirus-Gastroenteritis",
+}
+
+BUNDESLAENDER = [
+    "Baden-Württemberg", "Bayern", "Berlin", "Brandenburg", "Bremen",
+    "Hamburg", "Hessen", "Mecklenburg-Vorpommern", "Niedersachsen",
+    "Nordrhein-Westfalen", "Rheinland-Pfalz", "Saarland", "Sachsen",
+    "Sachsen-Anhalt", "Schleswig-Holstein", "Thüringen",
+]
+
+
+@router.get("/wave-radar")
+async def wave_radar(
+    disease: str = Query(default="influenza", description="Krankheit (influenza, mycoplasma, keuchhusten, ...)"),
+    season: str = Query(default="", description="Saison im Format YYYY/YYYY (z.B. 2024/2025). Leer = letzte verfügbare."),
+    threshold_pct: float = Query(default=50.0, ge=10, le=200, description="Schwellwert: Prozent über Saison-Median = Wellenstart"),
+    db: Session = Depends(get_db),
+):
+    """Wellen-Radar: Wann und wo beginnt eine Krankheitswelle?
+
+    Berechnet pro Bundesland den Zeitpunkt, an dem die Inzidenz
+    den saisonalen Median um threshold_pct% übersteigt.
+    Liefert Timeline + Karten-Daten für die Frontend-Visualisierung.
+    """
+    # Resolve disease alias
+    disease_name = DISEASE_ALIASES.get(disease.lower().strip(), disease)
+
+    # Determine season range
+    if season and "/" in season:
+        parts = season.split("/")
+        season_start = datetime(int(parts[0]), 10, 1)
+        season_end = datetime(int(parts[1]), 5, 31)
+    else:
+        # Auto: find latest season from data
+        latest = db.query(func.max(SurvstatWeeklyData.week_start)).filter(
+            SurvstatWeeklyData.disease == disease_name,
+            SurvstatWeeklyData.bundesland != "Gesamt",
+        ).scalar()
+        if not latest:
+            return {"error": f"Keine regionalen Daten für '{disease_name}'.", "available": list(DISEASE_ALIASES.keys())}
+        # Season: Oct of previous year to May
+        if latest.month >= 10:
+            season_start = datetime(latest.year, 10, 1)
+            season_end = datetime(latest.year + 1, 5, 31)
+        else:
+            season_start = datetime(latest.year - 1, 10, 1)
+            season_end = datetime(latest.year, 5, 31)
+
+    season_label = f"{season_start.year}/{season_end.year}"
+
+    # Load historical baseline (all years before this season) for median
+    baseline_rows = db.query(
+        SurvstatWeeklyData.bundesland,
+        func.avg(SurvstatWeeklyData.incidence).label("avg_inc"),
+    ).filter(
+        SurvstatWeeklyData.disease == disease_name,
+        SurvstatWeeklyData.bundesland != "Gesamt",
+        SurvstatWeeklyData.week_start < season_start,
+        SurvstatWeeklyData.incidence > 0,
+    ).group_by(SurvstatWeeklyData.bundesland).all()
+
+    bl_baseline = {r.bundesland: float(r.avg_inc) for r in baseline_rows}
+
+    # Fallback: if no history, use national average
+    if not bl_baseline:
+        national_avg = db.query(func.avg(SurvstatWeeklyData.incidence)).filter(
+            SurvstatWeeklyData.disease == disease_name,
+            SurvstatWeeklyData.bundesland == "Gesamt",
+            SurvstatWeeklyData.incidence > 0,
+        ).scalar()
+        for bl in BUNDESLAENDER:
+            bl_baseline[bl] = float(national_avg or 1.0)
+
+    # Load season data per Bundesland
+    season_rows = db.query(
+        SurvstatWeeklyData.bundesland,
+        SurvstatWeeklyData.week_start,
+        SurvstatWeeklyData.week_label,
+        SurvstatWeeklyData.incidence,
+    ).filter(
+        SurvstatWeeklyData.disease == disease_name,
+        SurvstatWeeklyData.bundesland != "Gesamt",
+        SurvstatWeeklyData.week_start >= season_start,
+        SurvstatWeeklyData.week_start <= season_end,
+    ).order_by(
+        SurvstatWeeklyData.bundesland,
+        SurvstatWeeklyData.week_start,
+    ).all()
+
+    # Group by Bundesland
+    bl_data: dict[str, list] = {bl: [] for bl in BUNDESLAENDER}
+    for r in season_rows:
+        if r.bundesland in bl_data:
+            bl_data[r.bundesland].append({
+                "week_start": r.week_start,
+                "week_label": r.week_label,
+                "incidence": float(r.incidence),
+            })
+
+    # Detect wave onset per Bundesland
+    results = []
+    timeline = []  # (date, bundesland) for chronological ordering
+    all_weeks = set()
+
+    for bl in BUNDESLAENDER:
+        weeks = bl_data.get(bl, [])
+        baseline = bl_baseline.get(bl, 1.0)
+        threshold = baseline * (1 + threshold_pct / 100)
+
+        wave_start = None
+        peak_week = None
+        peak_inc = 0.0
+        total_inc = 0.0
+
+        for w in weeks:
+            all_weeks.add(w["week_label"])
+            total_inc += w["incidence"]
+            if w["incidence"] > peak_inc:
+                peak_inc = w["incidence"]
+                peak_week = w["week_label"]
+
+            # Wave onset: first week above threshold (confirmed by next week)
+            if wave_start is None and w["incidence"] >= threshold:
+                wave_start = w["week_start"]
+
+        results.append({
+            "bundesland": bl,
+            "wave_start": wave_start.strftime("%Y-%m-%d") if wave_start else None,
+            "wave_week": next((w["week_label"] for w in weeks if w["week_start"] == wave_start), None) if wave_start else None,
+            "peak_week": peak_week,
+            "peak_incidence": round(peak_inc, 3),
+            "baseline_avg": round(baseline, 3),
+            "threshold": round(threshold, 3),
+            "total_incidence": round(total_inc, 3),
+            "data_points": len(weeks),
+        })
+
+        if wave_start:
+            timeline.append((wave_start, bl))
+
+    # Sort timeline chronologically
+    timeline.sort(key=lambda x: x[0])
+    rank = 1
+    for date, bl in timeline:
+        for r in results:
+            if r["bundesland"] == bl:
+                r["wave_rank"] = rank
+                break
+        rank += 1
+
+    # For Bundesländer without wave onset
+    for r in results:
+        if "wave_rank" not in r:
+            r["wave_rank"] = None
+
+    # Build weekly heatmap data (for animated timeline)
+    sorted_weeks = sorted(all_weeks)
+    heatmap = []
+    for wl in sorted_weeks:
+        week_entry = {"week_label": wl}
+        for bl in BUNDESLAENDER:
+            match = next((w for w in bl_data.get(bl, []) if w["week_label"] == wl), None)
+            week_entry[bl] = round(match["incidence"], 3) if match else 0.0
+        heatmap.append(week_entry)
+
+    first_wave = timeline[0] if timeline else None
+    last_wave = timeline[-1] if timeline else None
+    spread_days = (last_wave[0] - first_wave[0]).days if first_wave and last_wave else 0
+
+    return {
+        "disease": disease_name,
+        "season": season_label,
+        "threshold_pct": threshold_pct,
+        "summary": {
+            "first_onset": {
+                "bundesland": first_wave[1] if first_wave else None,
+                "date": first_wave[0].strftime("%Y-%m-%d") if first_wave else None,
+            },
+            "last_onset": {
+                "bundesland": last_wave[1] if last_wave else None,
+                "date": last_wave[0].strftime("%Y-%m-%d") if last_wave else None,
+            },
+            "spread_days": spread_days,
+            "regions_affected": len(timeline),
+            "regions_total": len(BUNDESLAENDER),
+        },
+        "regions": sorted(results, key=lambda r: r["wave_rank"] or 999),
+        "heatmap": heatmap,
+    }

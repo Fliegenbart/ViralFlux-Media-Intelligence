@@ -181,6 +181,14 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
   const [btRuns, setBtRuns] = useState<any[]>([]);
   const btFileRef = useRef<HTMLInputElement>(null);
 
+  /* ── Wave Radar state ── */
+  const [waveDisease, setWaveDisease] = useState('influenza');
+  const [waveSeason, setWaveSeason] = useState('');
+  const [waveData, setWaveData] = useState<any>(null);
+  const [waveLoading, setWaveLoading] = useState(false);
+  const [waveWeekIdx, setWaveWeekIdx] = useState(0);
+  const [waveAnimating, setWaveAnimating] = useState(false);
+
   /* ── Derived data ── */
   const activeMap = cockpit?.map;
   const peixSummary = cockpit?.peix_epi_score;
@@ -1710,6 +1718,62 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
     }
   };
 
+  // ── Wave Radar ──
+  const fetchWaveRadar = async () => {
+    setWaveLoading(true);
+    setWaveData(null);
+    setWaveWeekIdx(0);
+    setWaveAnimating(false);
+    try {
+      const qs = new URLSearchParams({ disease: waveDisease });
+      if (waveSeason) qs.set('season', waveSeason);
+      const res = await fetch(`/api/v1/backtest/wave-radar?${qs.toString()}`);
+      const data = await res.json();
+      if (data.error) {
+        toast(`Wellen-Radar Fehler: ${data.error}`, 'error');
+      } else {
+        setWaveData(data);
+        toast('Wellen-Radar geladen', 'success');
+      }
+    } catch (e) {
+      toast('Wellen-Radar fehlgeschlagen', 'error');
+    } finally {
+      setWaveLoading(false);
+    }
+  };
+
+  // Animation timer
+  useEffect(() => {
+    if (!waveAnimating || !waveData?.heatmap?.length) return;
+    const maxIdx = waveData.heatmap.length - 1;
+    if (waveWeekIdx >= maxIdx) { setWaveAnimating(false); return; }
+    const timer = setTimeout(() => setWaveWeekIdx((i: number) => Math.min(i + 1, maxIdx)), 400);
+    return () => clearTimeout(timer);
+  }, [waveAnimating, waveWeekIdx, waveData]);
+
+  // Compute map colors for current week
+  const waveMapColors = useMemo(() => {
+    if (!waveData?.heatmap?.length) return {} as Record<string, { intensity: number; incidence: number }>;
+    const week = waveData.heatmap[waveWeekIdx] || {};
+    const colors: Record<string, { intensity: number; incidence: number }> = {};
+
+    // Find max incidence across all weeks for normalization
+    let globalMax = 0;
+    for (const w of waveData.heatmap) {
+      for (const bl of Object.keys(BUNDESLAND_NAME_TO_CODE)) {
+        const v = w[bl] || 0;
+        if (v > globalMax) globalMax = v;
+      }
+    }
+    if (globalMax === 0) globalMax = 1;
+
+    for (const bl of Object.keys(BUNDESLAND_NAME_TO_CODE)) {
+      const inc = week[bl] || 0;
+      colors[bl] = { intensity: inc / globalMax, incidence: inc };
+    }
+    return colors;
+  }, [waveData, waveWeekIdx]);
+
   const renderBacktest = () => {
     const cardStyle: React.CSSProperties = {
       background: 'var(--bg-card)', borderRadius: 12, border: '1px solid var(--border-color)',
@@ -1954,6 +2018,222 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                 <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6, margin: 0 }}>
                   {btCustomerResult.proof_text}
                 </p>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* ── Wellen-Radar ── */}
+        <div style={cardStyle}>
+          <h2 style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 16 }}>
+            Wellen-Radar — Wo beginnt die Welle?
+          </h2>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
+            <select
+              value={waveDisease}
+              onChange={(e) => setWaveDisease(e.target.value)}
+              style={{ padding: '6px 12px', borderRadius: 6, border: '1px solid var(--border-color)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', fontSize: 13 }}
+            >
+              {[
+                { value: 'influenza', label: 'Influenza' },
+                { value: 'mycoplasma', label: 'Mycoplasma' },
+                { value: 'keuchhusten', label: 'Keuchhusten' },
+                { value: 'pneumokokken', label: 'Pneumokokken' },
+                { value: 'parainfluenza', label: 'Parainfluenza' },
+                { value: 'rsv', label: 'RSV' },
+                { value: 'covid', label: 'COVID-19' },
+                { value: 'norovirus', label: 'Norovirus' },
+              ].map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+            <input
+              type="text"
+              placeholder="Saison (z.B. 2024/2025)"
+              value={waveSeason}
+              onChange={(e) => setWaveSeason(e.target.value)}
+              style={{ padding: '6px 12px', borderRadius: 6, border: '1px solid var(--border-color)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', fontSize: 13, width: 160 }}
+            />
+            <button
+              onClick={fetchWaveRadar}
+              disabled={waveLoading}
+              style={{ ...btnPrimary, opacity: waveLoading ? 0.6 : 1 }}
+            >
+              {waveLoading ? 'Lädt\u2026' : 'Wellen-Radar laden'}
+            </button>
+          </div>
+
+          {waveData && (
+            <div>
+              {/* Summary */}
+              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 20 }}>
+                {[
+                  { label: 'Saison', value: waveData.season },
+                  { label: 'Erster Ausbruch', value: waveData.summary?.first_onset?.bundesland ? `${waveData.summary.first_onset.bundesland} (${waveData.summary.first_onset.date})` : '–' },
+                  { label: 'Ausbreitung', value: `${waveData.summary?.spread_days ?? '?'} Tage` },
+                  { label: 'Betroffen', value: `${waveData.summary?.regions_affected ?? '?'}/${waveData.summary?.regions_total ?? 16} Regionen` },
+                ].map((m) => (
+                  <div key={m.label} style={metricBoxStyle}>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4, textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>
+                      {m.label}
+                    </div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
+                      {m.value}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Map + Timeline */}
+              {waveData.heatmap?.length > 0 && (
+                <div>
+                  {/* Playback controls */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+                    <button
+                      onClick={() => { setWaveWeekIdx(0); setWaveAnimating(true); }}
+                      style={{ ...btnSecondary, fontSize: 12, padding: '4px 12px' }}
+                    >
+                      Abspielen
+                    </button>
+                    <button
+                      onClick={() => setWaveAnimating(false)}
+                      style={{ ...btnSecondary, fontSize: 12, padding: '4px 12px', opacity: waveAnimating ? 1 : 0.5 }}
+                    >
+                      Stopp
+                    </button>
+                    <input
+                      type="range"
+                      min={0}
+                      max={waveData.heatmap.length - 1}
+                      value={waveWeekIdx}
+                      onChange={(e) => { setWaveAnimating(false); setWaveWeekIdx(Number(e.target.value)); }}
+                      style={{ flex: 1 }}
+                    />
+                    <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', minWidth: 80 }}>
+                      {waveData.heatmap[waveWeekIdx]?.week_label?.replace('_', '-KW') || ''}
+                    </span>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
+                    {/* Map */}
+                    <div style={{ position: 'relative', width: 420, height: 460, flexShrink: 0 }}>
+                      <svg viewBox="0 0 420 460" style={{ width: '100%', height: '100%' }}>
+                        {mapShapes.map((shape) => {
+                          const blName = shape.name;
+                          const data = waveMapColors[blName];
+                          const intensity = data?.intensity || 0;
+                          // Color: transparent → yellow → orange → red
+                          const r = Math.round(180 + 75 * Math.min(intensity * 2, 1));
+                          const g = Math.round(220 * Math.max(0, 1 - intensity * 1.5));
+                          const b = Math.round(60 * Math.max(0, 1 - intensity * 2));
+                          const fill = intensity > 0.01
+                            ? `rgb(${r}, ${g}, ${b})`
+                            : 'var(--bg-secondary)';
+
+                          // Check if this region has wave onset at or before current week
+                          const regionInfo = waveData.regions?.find((reg: any) => reg.bundesland === blName);
+                          const hasOnset = regionInfo?.wave_week && waveData.heatmap.findIndex((w: any) => w.week_label === regionInfo.wave_week) <= waveWeekIdx;
+
+                          return (
+                            <g key={shape.code || blName}>
+                              <path
+                                d={shape.d}
+                                fill={fill}
+                                stroke="var(--border-color)"
+                                strokeWidth={hasOnset ? 2 : 0.8}
+                                style={{ transition: 'fill 0.3s ease, stroke-width 0.3s ease' }}
+                              />
+                              {hasOnset && (
+                                <circle
+                                  cx={shape.cx}
+                                  cy={shape.cy}
+                                  r={4 + intensity * 8}
+                                  fill="rgba(192, 57, 43, 0.7)"
+                                  stroke="white"
+                                  strokeWidth={1.5}
+                                  style={{ transition: 'r 0.3s ease' }}
+                                />
+                              )}
+                              {intensity > 0.15 && (
+                                <text
+                                  x={shape.cx}
+                                  y={shape.cy + (hasOnset ? 16 : 4)}
+                                  textAnchor="middle"
+                                  fontSize={9}
+                                  fontWeight={600}
+                                  fill="var(--text-primary)"
+                                  style={{ pointerEvents: 'none' }}
+                                >
+                                  {data?.incidence?.toFixed(1)}
+                                </text>
+                              )}
+                            </g>
+                          );
+                        })}
+                      </svg>
+                    </div>
+
+                    {/* Ranking list */}
+                    <div style={{ flex: 1, minWidth: 260 }}>
+                      <h3 style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 12 }}>
+                        Ausbreitungs-Reihenfolge
+                      </h3>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        {(waveData.regions || []).filter((r: any) => r.wave_rank).map((region: any) => {
+                          const isActive = region.wave_week && waveData.heatmap.findIndex((w: any) => w.week_label === region.wave_week) <= waveWeekIdx;
+                          return (
+                            <div
+                              key={region.bundesland}
+                              style={{
+                                display: 'flex', alignItems: 'center', gap: 10,
+                                padding: '6px 10px', borderRadius: 8,
+                                background: isActive ? 'rgba(192, 57, 43, 0.08)' : 'var(--bg-secondary)',
+                                border: `1px solid ${isActive ? 'rgba(192, 57, 43, 0.3)' : 'var(--border-color)'}`,
+                                transition: 'all 0.3s ease',
+                                opacity: isActive ? 1 : 0.5,
+                              }}
+                            >
+                              <span style={{
+                                width: 22, height: 22, borderRadius: '50%',
+                                background: isActive ? '#c0392b' : 'var(--border-color)',
+                                color: isActive ? 'white' : 'var(--text-muted)',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                fontSize: 11, fontWeight: 700, flexShrink: 0,
+                              }}>
+                                {region.wave_rank}
+                              </span>
+                              <div style={{ flex: 1 }}>
+                                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>
+                                  {region.bundesland}
+                                </div>
+                                <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+                                  KW {region.wave_week?.split('_')[1]} — Peak: {region.peak_incidence?.toFixed(1)}/100k
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                        {(waveData.regions || []).filter((r: any) => !r.wave_rank).length > 0 && (
+                          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+                            {(waveData.regions || []).filter((r: any) => !r.wave_rank).length} Regionen ohne Welle in dieser Saison
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Color legend */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12, fontSize: 10, color: 'var(--text-muted)' }}>
+                    <span>Niedrig</span>
+                    <div style={{
+                      width: 120, height: 10, borderRadius: 5,
+                      background: 'linear-gradient(to right, var(--bg-secondary), #f4d03f, #e67e22, #c0392b)',
+                    }} />
+                    <span>Hoch</span>
+                    <span style={{ marginLeft: 16 }}>Inzidenz pro 100.000 Einwohner</span>
+                  </div>
+                </div>
               )}
             </div>
           )}

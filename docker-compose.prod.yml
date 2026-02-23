@@ -105,6 +105,8 @@ services:
     container_name: viralflux_celery_beat
     restart: unless-stopped
     command: celery -A app.core.celery_app beat --loglevel=info
+    healthcheck:
+      disable: true
     environment:
       - POSTGRES_HOST=db
       - POSTGRES_PORT=5432

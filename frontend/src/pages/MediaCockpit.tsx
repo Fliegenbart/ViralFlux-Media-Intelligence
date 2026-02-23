@@ -4,8 +4,9 @@ import { geoMercator, geoPath } from 'd3-geo';
 import { format, parseISO } from 'date-fns';
 import {
   ResponsiveContainer,
-  LineChart,
+  ComposedChart,
   Line,
+  Area,
   XAxis,
   YAxis,
   Tooltip as RechartsTooltip,
@@ -1913,9 +1914,21 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                       )}
                     </div>
                   )}
-                  <div style={{ width: '100%', height: 380 }}>
+                  <div style={{ width: '100%', height: 420 }}>
                     <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={btResult.chart_data} margin={{ top: 8, right: 12, left: 0, bottom: 4 }}>
+                      <ComposedChart
+                        data={(() => {
+                          const d = btResult.chart_data || [];
+                          return d.map((pt: any) => ({
+                            ...pt,
+                            ci_95_base: pt.ci_95_lower ?? null,
+                            ci_95_range: (pt.ci_95_upper != null && pt.ci_95_lower != null) ? pt.ci_95_upper - pt.ci_95_lower : null,
+                            ci_80_base: pt.ci_80_lower ?? null,
+                            ci_80_range: (pt.ci_80_upper != null && pt.ci_80_lower != null) ? pt.ci_80_upper - pt.ci_80_lower : null,
+                          }));
+                        })()}
+                        margin={{ top: 8, right: 12, left: 0, bottom: 4 }}
+                      >
                         <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" opacity={0.5} />
                         <XAxis
                           dataKey="date"
@@ -1930,10 +1943,32 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                           labelFormatter={(d: string) => {
                             try { return format(parseISO(d), 'dd.MM.yyyy'); } catch { return d; }
                           }}
+                          formatter={(value: any, name: string) => {
+                            if (name === 'ci_95_base' || name === 'ci_95_range' || name === 'ci_80_base' || name === 'ci_80_range') return [null, null];
+                            return [typeof value === 'number' ? value.toFixed(2) : value, name];
+                          }}
                         />
-                        <Legend wrapperStyle={{ fontSize: 12, paddingTop: 4 }} />
+                        <Legend
+                          wrapperStyle={{ fontSize: 12, paddingTop: 4 }}
+                          payload={[
+                            { value: 'Ist-Wert', type: 'line', color: '#c0392b' },
+                            { value: 'ViralFlux', type: 'line', color: 'var(--accent-violet)' },
+                            { value: 'Forecast', type: 'line', color: 'var(--accent-violet)' },
+                            { value: '80% KI', type: 'rect', color: 'rgba(139,92,246,0.25)' },
+                            { value: '95% KI', type: 'rect', color: 'rgba(139,92,246,0.1)' },
+                            { value: 'Seasonal', type: 'line', color: '#95a5a6' },
+                          ]}
+                        />
 
-                        {/* Early warning zones (green shaded areas) */}
+                        {/* 95% confidence band (wider, lighter) */}
+                        <Area type="monotone" dataKey="ci_95_base" stackId="ci95" fill="transparent" stroke="none" activeDot={false} legendType="none" />
+                        <Area type="monotone" dataKey="ci_95_range" stackId="ci95" fill="rgba(139,92,246,0.1)" stroke="none" activeDot={false} legendType="none" />
+
+                        {/* 80% confidence band (narrower, darker) */}
+                        <Area type="monotone" dataKey="ci_80_base" stackId="ci80" fill="transparent" stroke="none" activeDot={false} legendType="none" />
+                        <Area type="monotone" dataKey="ci_80_range" stackId="ci80" fill="rgba(139,92,246,0.25)" stroke="none" activeDot={false} legendType="none" />
+
+                        {/* Early warning zones */}
                         {btSignals.earlyWarnings.map((ew, i) => (
                           <ReferenceArea
                             key={`ew-${i}`}
@@ -1947,7 +1982,7 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                           />
                         ))}
 
-                        {/* Peak markers (red vertical lines) */}
+                        {/* Peak markers */}
                         {btSignals.peaks.map((idx) => (
                           <ReferenceLine
                             key={`pk-${idx}`}
@@ -1959,7 +1994,7 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                           />
                         ))}
 
-                        {/* Surge markers (orange vertical lines) */}
+                        {/* Surge markers */}
                         {btSignals.surges.map((idx) => (
                           <ReferenceLine
                             key={`sg-${idx}`}
@@ -1971,11 +2006,25 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                           />
                         ))}
 
-                        <Line type="monotone" dataKey="real_qty" name="Proxy (Ist)" stroke="#c0392b" strokeWidth={2} dot={false} />
+                        {/* Forecast zone divider */}
+                        {btResult.chart_data?.some((d: any) => d.is_forecast) && (() => {
+                          const firstFc = btResult.chart_data.find((d: any) => d.is_forecast);
+                          return firstFc ? (
+                            <ReferenceLine
+                              x={firstFc.date}
+                              stroke="var(--text-muted)"
+                              strokeWidth={1}
+                              strokeDasharray="6 3"
+                              label={{ value: 'Forecast', position: 'insideTopRight', fontSize: 10, fill: 'var(--text-muted)', fontWeight: 600 }}
+                            />
+                          ) : null;
+                        })()}
+
+                        <Line type="monotone" dataKey="real_qty" name="Ist-Wert" stroke="#c0392b" strokeWidth={2} dot={false} />
                         <Line type="monotone" dataKey="predicted_qty" name="ViralFlux" stroke="var(--accent-violet)" strokeWidth={2} dot={false} />
+                        <Line type="monotone" dataKey="forecast_qty" name="Forecast" stroke="var(--accent-violet)" strokeWidth={2} dot={false} strokeDasharray="8 4" connectNulls={false} />
                         <Line type="monotone" dataKey="baseline_seasonal" name="Seasonal" stroke="#95a5a6" strokeWidth={1.5} dot={false} strokeDasharray="4 4" />
 
-                        {/* Brush zoom control */}
                         <Brush
                           dataKey="date"
                           height={28}
@@ -1986,11 +2035,14 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                           }}
                           travellerWidth={8}
                         />
-                      </LineChart>
+                      </ComposedChart>
                     </ResponsiveContainer>
                   </div>
-                  <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4, textAlign: 'center' }}>
-                    Zeitraum mit dem Schieberegler unten einschränken — zum Reinzoomen Handles verschieben
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--text-muted)', marginTop: 4 }}>
+                    <span>Schieberegler zum Reinzoomen — Handles verschieben</span>
+                    {btResult.forecast_weeks > 0 && (
+                      <span>Forecast: {btResult.forecast_weeks} Wochen — Bänder = 80%/95% Konfidenzintervall</span>
+                    )}
                   </div>
                 </div>
               )}

@@ -1348,6 +1348,104 @@ class BacktestService:
         else:
             optimized_weights = dict(self.DEFAULT_WEIGHTS)
 
+        # --- Future Forecast Extension (6 weeks ahead) ---
+        forecast_weeks = 6
+        residuals = y_true - y_hat
+        residual_std = (
+            float(np.std(residuals)) if len(residuals) > 2
+            else float(np.std(y_true) * 0.3)
+        )
+        last_target_time = pred_df["target_time"].max()
+        rolling_values = list(y_true[-3:])
+        forecast_chart: list[dict] = []
+
+        try:
+            for w in range(1, forecast_weeks + 1):
+                future_target = last_target_time + timedelta(weeks=w)
+                future_forecast = future_target - timedelta(
+                    days=max(0, int(horizon_days))
+                )
+
+                test_scores = self._compute_sub_scores_at_date(
+                    future_forecast,
+                    virus_typ=virus_typ,
+                    delay_rules=delay_rules,
+                    target_disease=target_disease,
+                )
+
+                t1 = float(rolling_values[-1]) if rolling_values else 0.0
+                t2 = float(rolling_values[-2]) if len(rolling_values) >= 2 else t1
+                t3 = float(rolling_values[-3]) if len(rolling_values) >= 3 else t2
+                r3 = rolling_values[-3:] if len(rolling_values) >= 3 else rolling_values
+                t_ma3 = sum(r3) / len(r3) if r3 else 0.0
+                t_prev = float(rolling_values[-2]) if len(rolling_values) >= 2 else 1.0
+                t_roc = (t1 - t_prev) / t_prev if t_prev > 0 else 0.0
+
+                iso_week = future_target.isocalendar()[1]
+                w_sin = round(math.sin(2 * math.pi * iso_week / 52), 4)
+                w_cos = round(math.cos(2 * math.pi * iso_week / 52), 4)
+
+                test_feat = {
+                    "wastewater_raw": test_scores["wastewater_raw"],
+                    "positivity_raw": test_scores["positivity_raw"],
+                    "are_consultation_raw": test_scores.get("are_consultation_raw", 0.0),
+                    "trends_raw": test_scores["trends_raw"],
+                    "weather_temp": test_scores["weather_temp"],
+                    "weather_humidity": test_scores["weather_humidity"],
+                    "school_start_float": test_scores["school_start_float"],
+                    "target_lag1": t1, "target_lag2": t2, "target_lag3": t3,
+                    "target_ma3": t_ma3, "target_roc": t_roc,
+                    "week_sin": w_sin, "week_cos": w_cos,
+                    "xdisease_load": test_scores["xdisease_load"],
+                    "grippeweb_are": test_scores["grippeweb_are"],
+                    "notaufnahme_ari": test_scores["notaufnahme_ari"],
+                    "survstat_xdisease_1": test_scores["survstat_xdisease_1"],
+                    "survstat_xdisease_2": test_scores["survstat_xdisease_2"],
+                }
+                X_fc = np.array([[test_feat.get(c, 0.0) for c in fold_features]])
+                X_fc = np.nan_to_num(X_fc, nan=0.0, posinf=0.0, neginf=0.0)
+                if not use_gbr:
+                    X_fc = scaler.transform(X_fc)
+                y_fc = max(0.0, float(model.predict(X_fc)[0]))
+
+                hf = math.sqrt(w)
+                ci_80 = 1.28 * residual_std * hf
+                ci_95 = 1.96 * residual_std * hf
+
+                forecast_chart.append({
+                    "date": future_target.strftime("%Y-%m-%d"),
+                    "forecast_qty": round(y_fc, 3),
+                    "ci_80_lower": round(max(0, y_fc - ci_80), 3),
+                    "ci_80_upper": round(y_fc + ci_80, 3),
+                    "ci_95_lower": round(max(0, y_fc - ci_95), 3),
+                    "ci_95_upper": round(y_fc + ci_95, 3),
+                    "is_forecast": True,
+                })
+                rolling_values.append(y_fc)
+        except Exception:
+            pass  # forecast is best-effort; backtest results always returned
+
+        # Build unified chart_data
+        historical_chart = [
+            {
+                "date": row["target_time"].strftime("%Y-%m-%d"),
+                "real_qty": float(row["real_qty"]),
+                "predicted_qty": round(float(row["predicted_qty"]), 3),
+                "bio": round(float(row["bio"]), 4),
+                "psycho": round(float(row["psycho"]), 4),
+                "context": round(float(row["context"]), 4),
+                "baseline_persistence": round(float(row["baseline_persistence"]), 3),
+                "baseline_seasonal": round(float(row["baseline_seasonal"]), 3),
+                "is_forecast": False,
+            }
+            for _, row in pred_df.iterrows()
+        ]
+        # Bridge: last historical point starts the forecast line
+        if historical_chart and forecast_chart:
+            historical_chart[-1]["forecast_qty"] = historical_chart[-1]["predicted_qty"]
+
+        chart_data = historical_chart + forecast_chart
+
         return {
             "metrics": {
                 **model_metrics,
@@ -1372,19 +1470,9 @@ class BacktestService:
             "ridge_folds": ridge_fold_count,
             "feature_count": len(imp_cols) if importance_accumulator else len(feature_cols),
             "feature_names": imp_cols if importance_accumulator else feature_cols,
-            "chart_data": [
-                {
-                    "date": row["target_time"].strftime("%Y-%m-%d"),
-                    "real_qty": float(row["real_qty"]),
-                    "predicted_qty": round(float(row["predicted_qty"]), 3),
-                    "bio": round(float(row["bio"]), 4),
-                    "psycho": round(float(row["psycho"]), 4),
-                    "context": round(float(row["context"]), 4),
-                    "baseline_persistence": round(float(row["baseline_persistence"]), 3),
-                    "baseline_seasonal": round(float(row["baseline_seasonal"]), 3),
-                }
-                for _, row in pred_df.iterrows()
-            ],
+            "chart_data": chart_data,
+            "forecast_weeks": len(forecast_chart),
+            "residual_std": round(residual_std, 4),
             "walk_forward": {
                 "enabled": True,
                 "folds": int(len(pred_df)),

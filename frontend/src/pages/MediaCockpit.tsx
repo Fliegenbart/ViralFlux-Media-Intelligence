@@ -11,6 +11,9 @@ import {
   Tooltip as RechartsTooltip,
   CartesianGrid,
   Legend,
+  Brush,
+  ReferenceLine,
+  ReferenceArea,
 } from 'recharts';
 import { de } from 'date-fns/locale';
 import {
@@ -1566,6 +1569,67 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
     { value: 'H_INFLUENZAE', label: 'SURVSTAT Parainfluenza' },
   ];
 
+  // ── Signal Detection for Backtest Chart ──
+  const btSignals = useMemo(() => {
+    const data = btResult?.chart_data;
+    if (!data || data.length < 5) return { peaks: [] as number[], surges: [] as number[], earlyWarnings: [] as { start: number; end: number }[] };
+
+    const real = data.map((d: any) => d.real_qty ?? 0);
+    const pred = data.map((d: any) => d.predicted_qty ?? 0);
+    const seasonal = data.map((d: any) => d.baseline_seasonal ?? 0);
+
+    // Median + std for thresholding
+    const sorted = [...real].sort((a, b) => a - b);
+    const median = sorted[Math.floor(sorted.length / 2)];
+    const mean = real.reduce((s: number, v: number) => s + v, 0) / real.length;
+    const std = Math.sqrt(real.reduce((s: number, v: number) => s + (v - mean) ** 2, 0) / real.length);
+    const peakThreshold = median + 1.5 * std;
+
+    // 1) Peaks: local maxima above threshold (within ±2 window)
+    const peaks: number[] = [];
+    for (let i = 2; i < real.length - 2; i++) {
+      if (real[i] >= peakThreshold
+        && real[i] >= real[i - 1] && real[i] >= real[i - 2]
+        && real[i] >= real[i + 1] && real[i] >= real[i + 2]) {
+        // Avoid marking peaks too close together (min 4 apart)
+        if (peaks.length === 0 || i - peaks[peaks.length - 1] >= 4) {
+          peaks.push(i);
+        }
+      }
+    }
+
+    // 2) Surges: week-over-week increase > 50% AND absolute jump > 0.3 * std
+    const surges: number[] = [];
+    for (let i = 1; i < real.length; i++) {
+      const prev = real[i - 1];
+      const curr = real[i];
+      if (prev > 0 && curr > median * 0.5 && (curr - prev) / prev > 0.5 && (curr - prev) > 0.3 * std) {
+        if (surges.length === 0 || i - surges[surges.length - 1] >= 3) {
+          surges.push(i);
+        }
+      }
+    }
+
+    // 3) Early Warnings: zones where model predicted rise ≥3 weeks before real peak
+    const earlyWarnings: { start: number; end: number }[] = [];
+    for (const peakIdx of peaks) {
+      // Look back: when did predicted first exceed seasonal by >20%?
+      let firstSignal = -1;
+      for (let j = Math.max(0, peakIdx - 12); j < peakIdx; j++) {
+        const s = seasonal[j] || 0;
+        if (s > 0 && pred[j] > s * 1.2 && pred[j] > median * 0.3) {
+          firstSignal = j;
+          break;
+        }
+      }
+      if (firstSignal >= 0 && peakIdx - firstSignal >= 3) {
+        earlyWarnings.push({ start: firstSignal, end: peakIdx });
+      }
+    }
+
+    return { peaks, surges, earlyWarnings };
+  }, [btResult]);
+
   const loadBacktestRuns = useCallback(async () => {
     try {
       const res = await fetch('/api/v1/backtest/runs?limit=30');
@@ -1727,32 +1791,111 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                 ))}
               </div>
 
-              {/* Chart */}
+              {/* Chart with zoom + signal annotations */}
               {btResult.chart_data?.length > 0 && (
-                <div style={{ width: '100%', height: 300, marginBottom: 16 }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={btResult.chart_data}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" />
-                      <XAxis
-                        dataKey="date"
-                        tickFormatter={(d: string) => {
-                          try { return format(parseISO(d), 'dd.MM.yy'); } catch { return d; }
-                        }}
-                        tick={{ fontSize: 11, fill: 'var(--text-muted)' }}
-                      />
-                      <YAxis tick={{ fontSize: 11, fill: 'var(--text-muted)' }} />
-                      <RechartsTooltip
-                        contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: 8, fontSize: 12 }}
-                        labelFormatter={(d: string) => {
-                          try { return format(parseISO(d), 'dd.MM.yyyy'); } catch { return d; }
-                        }}
-                      />
-                      <Legend wrapperStyle={{ fontSize: 12 }} />
-                      <Line type="monotone" dataKey="real_qty" name="Proxy (Ist)" stroke="#c0392b" strokeWidth={2} dot={false} />
-                      <Line type="monotone" dataKey="predicted_qty" name="ViralFlux" stroke="var(--accent-violet)" strokeWidth={2} dot={false} />
-                      <Line type="monotone" dataKey="baseline_seasonal" name="Seasonal" stroke="#95a5a6" strokeWidth={1.5} dot={false} strokeDasharray="4 4" />
-                    </LineChart>
-                  </ResponsiveContainer>
+                <div style={{ width: '100%', marginBottom: 16 }}>
+                  {/* Signal legend */}
+                  {(btSignals.peaks.length > 0 || btSignals.surges.length > 0 || btSignals.earlyWarnings.length > 0) && (
+                    <div style={{ display: 'flex', gap: 16, marginBottom: 10, flexWrap: 'wrap', fontSize: 11, color: 'var(--text-muted)' }}>
+                      {btSignals.earlyWarnings.length > 0 && (
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <span style={{ width: 14, height: 10, background: 'rgba(46, 204, 113, 0.15)', border: '1px solid rgba(46, 204, 113, 0.4)', borderRadius: 2, display: 'inline-block' }} />
+                          Frühwarnung ({btSignals.earlyWarnings.length})
+                        </span>
+                      )}
+                      {btSignals.peaks.length > 0 && (
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#c0392b', display: 'inline-block' }} />
+                          Peak ({btSignals.peaks.length})
+                        </span>
+                      )}
+                      {btSignals.surges.length > 0 && (
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <span style={{ width: 0, height: 0, borderLeft: '5px solid transparent', borderRight: '5px solid transparent', borderBottom: '10px solid #e67e22', display: 'inline-block' }} />
+                          Surge ({btSignals.surges.length})
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  <div style={{ width: '100%', height: 380 }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={btResult.chart_data} margin={{ top: 8, right: 12, left: 0, bottom: 4 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" opacity={0.5} />
+                        <XAxis
+                          dataKey="date"
+                          tickFormatter={(d: string) => {
+                            try { return format(parseISO(d), 'dd.MM.yy'); } catch { return d; }
+                          }}
+                          tick={{ fontSize: 10, fill: 'var(--text-muted)' }}
+                        />
+                        <YAxis tick={{ fontSize: 10, fill: 'var(--text-muted)' }} />
+                        <RechartsTooltip
+                          contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: 8, fontSize: 12 }}
+                          labelFormatter={(d: string) => {
+                            try { return format(parseISO(d), 'dd.MM.yyyy'); } catch { return d; }
+                          }}
+                        />
+                        <Legend wrapperStyle={{ fontSize: 12, paddingTop: 4 }} />
+
+                        {/* Early warning zones (green shaded areas) */}
+                        {btSignals.earlyWarnings.map((ew, i) => (
+                          <ReferenceArea
+                            key={`ew-${i}`}
+                            x1={btResult.chart_data[ew.start]?.date}
+                            x2={btResult.chart_data[ew.end]?.date}
+                            fill="#2ecc71"
+                            fillOpacity={0.1}
+                            stroke="#2ecc71"
+                            strokeOpacity={0.3}
+                            strokeDasharray="3 3"
+                          />
+                        ))}
+
+                        {/* Peak markers (red vertical lines) */}
+                        {btSignals.peaks.map((idx) => (
+                          <ReferenceLine
+                            key={`pk-${idx}`}
+                            x={btResult.chart_data[idx]?.date}
+                            stroke="#c0392b"
+                            strokeWidth={1.5}
+                            strokeDasharray="4 2"
+                            label={{ value: 'Peak', position: 'top', fontSize: 9, fill: '#c0392b', fontWeight: 600 }}
+                          />
+                        ))}
+
+                        {/* Surge markers (orange vertical lines) */}
+                        {btSignals.surges.map((idx) => (
+                          <ReferenceLine
+                            key={`sg-${idx}`}
+                            x={btResult.chart_data[idx]?.date}
+                            stroke="#e67e22"
+                            strokeWidth={1}
+                            strokeDasharray="2 3"
+                            label={{ value: '\u25B2', position: 'top', fontSize: 10, fill: '#e67e22' }}
+                          />
+                        ))}
+
+                        <Line type="monotone" dataKey="real_qty" name="Proxy (Ist)" stroke="#c0392b" strokeWidth={2} dot={false} />
+                        <Line type="monotone" dataKey="predicted_qty" name="ViralFlux" stroke="var(--accent-violet)" strokeWidth={2} dot={false} />
+                        <Line type="monotone" dataKey="baseline_seasonal" name="Seasonal" stroke="#95a5a6" strokeWidth={1.5} dot={false} strokeDasharray="4 4" />
+
+                        {/* Brush zoom control */}
+                        <Brush
+                          dataKey="date"
+                          height={28}
+                          stroke="var(--accent-violet)"
+                          fill="var(--bg-card)"
+                          tickFormatter={(d: string) => {
+                            try { return format(parseISO(d), 'MM/yy'); } catch { return ''; }
+                          }}
+                          travellerWidth={8}
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4, textAlign: 'center' }}>
+                    Zeitraum mit dem Schieberegler unten einschränken — zum Reinzoomen Handles verschieben
+                  </div>
                 </div>
               )}
 

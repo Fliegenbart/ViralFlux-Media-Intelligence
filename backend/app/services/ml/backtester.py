@@ -1144,7 +1144,7 @@ class BacktestService:
 
             # Adaptive model selection based on training set size
             n_train = len(train_rows)
-            if n_train >= 60:
+            if n_train >= 40:
                 gbr_fold_count += 1
                 model = GradientBoostingRegressor(
                     n_estimators=100,
@@ -1157,14 +1157,14 @@ class BacktestService:
                 model.fit(X_train, y_train)
                 importance_accumulator.append(model.feature_importances_)
                 use_gbr = True
-            elif n_train >= 30:
+            elif n_train >= 25:
                 gbr_fold_count += 1
                 model = GradientBoostingRegressor(
-                    n_estimators=50,
-                    max_depth=2,
-                    learning_rate=0.08,
+                    n_estimators=60,
+                    max_depth=3,
+                    learning_rate=0.06,
                     subsample=0.8,
-                    min_samples_leaf=max(5, n_train // 6),
+                    min_samples_leaf=max(4, n_train // 7),
                     random_state=42,
                 )
                 model.fit(X_train, y_train)

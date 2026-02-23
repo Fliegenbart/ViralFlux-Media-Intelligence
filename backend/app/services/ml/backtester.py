@@ -55,6 +55,16 @@ class BacktestService:
         "H_INFLUENZAE": "haemophilus influenzae",
     }
 
+    # Gelo-relevante Atemwegsinfekte (ohne COVID-19, da zu dominant)
+    GELO_ATEMWEG_DISEASES: list[str] = [
+        "Influenza, saisonal",
+        "RSV (Meldepflicht gemäß IfSG)",
+        "RSV (Meldepflicht gemäß Landesmeldeverordnung)",
+        "Keuchhusten (Meldepflicht gemäß IfSG)",
+        "Mycoplasma",
+        "Parainfluenza",
+    ]
+
     def __init__(self, db: Session):
         self.db = db
         self.strict_vintage_mode = True
@@ -1463,7 +1473,7 @@ Verwende einen sachlichen, vertrauenswürdigen Ton."""
 
     def generate_business_pitch_report(
         self,
-        disease: str = "Norovirus-Gastroenteritis",
+        disease: str | list[str] = "Norovirus-Gastroenteritis",
         virus_typ: str = "Influenza A",
         season_start: str = "2024-10-01",
         season_end: str = "2025-03-31",
@@ -1485,7 +1495,12 @@ Verwende einen sachlichen, vertrauenswürdigen Ton."""
         TTD = RKI_peak_date - ML_first_alert_date
 
         Args:
-            disease: RKI disease name for SurvstatKreisData ground truth.
+            disease: RKI disease name(s) for SurvstatKreisData ground truth.
+                     Pass ``"GELO_ATEMWEG"`` to use the preset list of
+                     Gelo-relevant respiratory diseases (Influenza, RSV,
+                     Keuchhusten, Mycoplasma, Parainfluenza — excl. COVID).
+                     A list of disease names is also accepted and will be
+                     aggregated into a single time series.
             virus_typ: Virus type for wastewater/signal computation.
             season_start: Start of evaluation window (ISO date).
             season_end: End of evaluation window (ISO date).
@@ -1497,6 +1512,17 @@ Verwende einen sachlichen, vertrauenswürdigen Ton."""
         from pathlib import Path
         from app.models.database import SurvstatKreisData
 
+        # ── Resolve disease list ──
+        if isinstance(disease, str) and disease.upper() == "GELO_ATEMWEG":
+            disease_list = self.GELO_ATEMWEG_DISEASES
+            disease_label = "Gelo Atemwegsinfekte (Influenza+RSV+Keuchhusten+Mycoplasma+Parainfluenza)"
+        elif isinstance(disease, list):
+            disease_list = disease
+            disease_label = " + ".join(disease_list)
+        else:
+            disease_list = [disease]
+            disease_label = disease
+
         start_dt = datetime.strptime(season_start, "%Y-%m-%d")
         end_dt = datetime.strptime(season_end, "%Y-%m-%d")
 
@@ -1504,8 +1530,8 @@ Verwende einen sachlichen, vertrauenswürdigen Ton."""
         lookback_dt = start_dt - timedelta(weeks=8)
 
         logger.info(
-            "Business Pitch Report: disease=%s, virus=%s, period=%s to %s",
-            disease, virus_typ, season_start, season_end,
+            "Business Pitch Report: diseases=%s, virus=%s, period=%s to %s",
+            disease_label, virus_typ, season_start, season_end,
         )
 
         # ── 1. Load ground truth: weekly national case counts from SurvstatKreisData ──
@@ -1515,7 +1541,7 @@ Verwende einen sachlichen, vertrauenswürdigen Ton."""
             SurvstatKreisData.week_label,
             func.sum(SurvstatKreisData.fallzahl).label("total_cases"),
         ).filter(
-            SurvstatKreisData.disease == disease,
+            SurvstatKreisData.disease.in_(disease_list),
         ).group_by(
             SurvstatKreisData.year,
             SurvstatKreisData.week,
@@ -1526,7 +1552,7 @@ Verwende einen sachlichen, vertrauenswürdigen Ton."""
         ).all()
 
         if not kreis_rows:
-            return {"error": f"No SurvstatKreisData found for disease '{disease}'"}
+            return {"error": f"No SurvstatKreisData found for diseases: {disease_list}"}
 
         # Build weekly time series (including lookback)
         all_weekly = []
@@ -1616,7 +1642,7 @@ Verwende einen sachlichen, vertrauenswürdigen Ton."""
             report_rows.append({
                 "date": row["date"].strftime("%Y-%m-%d"),
                 "region": "Gesamt",
-                "disease": disease,
+                "disease": disease_label,
                 "actual_rki_cases": int(row["actual_rki_cases"]),
                 "ml_risk_score": float(row["ml_risk_score"]),
                 "alert_triggered": bool(row["alert_triggered"]),
@@ -1644,7 +1670,8 @@ Verwende einen sachlichen, vertrauenswürdigen Ton."""
 
         summary = {
             "status": "success",
-            "disease": disease,
+            "disease": disease_label,
+            "disease_list": disease_list,
             "virus_typ": virus_typ,
             "season": f"{season_start} → {season_end}",
             "total_weeks": total_weeks,

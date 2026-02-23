@@ -102,6 +102,39 @@ async def run_customer_backtest(
     )
 
 
+@router.post("/business-pitch")
+async def run_business_pitch_report(
+    disease: str = Query(
+        default="GELO_ATEMWEG",
+        description=(
+            "Krankheit(en) als Ground Truth. "
+            "'GELO_ATEMWEG' = aggregierte Atemwegsinfekte (Influenza+RSV+Keuchhusten+Mycoplasma+Parainfluenza). "
+            "Oder ein einzelner Krankheitsname aus SurvStat."
+        ),
+    ),
+    virus_typ: str = Query(default="Influenza A"),
+    season_start: str = Query(default="2024-10-01"),
+    season_end: str = Query(default="2025-03-31"),
+    db: Session = Depends(get_db),
+):
+    """Business Pitch Report: ML-Frühsignal-Vorteil vs. RKI-Meldung.
+
+    Berechnet für die gewählte Saison wochenweise den ML-Risikoscore
+    und vergleicht das erste Warnsignal mit dem tatsächlichen RKI-Peak.
+    Default: Gelo-relevante Atemwegsinfekte.
+    """
+    if virus_typ not in VALID_VIRUS_TYPES:
+        virus_typ = "Influenza A"
+
+    service = BacktestService(db)
+    return service.generate_business_pitch_report(
+        disease=disease,
+        virus_typ=virus_typ,
+        season_start=season_start,
+        season_end=season_end,
+    )
+
+
 @router.get("/runs")
 async def list_backtest_runs(
     mode: str | None = Query(default=None, description="MARKET_CHECK oder CUSTOMER_CHECK"),

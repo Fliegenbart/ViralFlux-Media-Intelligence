@@ -597,6 +597,16 @@ async def list_media_product_mapping(
     }
 
 
+@router.post("/seed-products")
+async def seed_missing_products(
+    brand: str = Query(default="gelo"),
+    db: Session = Depends(get_db),
+):
+    """Fehlende SEED_PRODUCTS als BrandProduct + Mappings anlegen (idempotent)."""
+    service = ProductCatalogService(db)
+    return service.seed_missing_products(brand=brand)
+
+
 @router.patch("/product-mapping/{mapping_id}")
 async def update_media_product_mapping(
     mapping_id: int,

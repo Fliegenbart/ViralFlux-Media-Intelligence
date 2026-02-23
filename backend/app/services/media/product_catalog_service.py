@@ -677,6 +677,76 @@ class ProductCatalogService:
             "updated_at": mapping.updated_at.isoformat() if mapping.updated_at else None,
         }
 
+    def seed_missing_products(self, *, brand: str = "gelo") -> dict[str, Any]:
+        """Fehlende SEED_PRODUCTS als BrandProduct + Mappings anlegen."""
+        from app.services.marketing_engine.product_matcher import SEED_PRODUCTS
+
+        brand_key = self._normalize_brand(brand)
+        now = datetime.utcnow()
+
+        existing_names = {
+            row.product_name.strip().lower()
+            for row in self.db.query(BrandProduct).filter(BrandProduct.brand == brand_key).all()
+        }
+
+        added_products: list[str] = []
+        added_mappings = 0
+
+        for seed in SEED_PRODUCTS:
+            name = seed["name"]
+            if name.strip().lower() in existing_names:
+                continue
+
+            product = BrandProduct(
+                brand=brand_key,
+                product_name=name,
+                source_url="seed://gelo-katalog",
+                source_hash=f"seed-{seed['sku']}-{now.isoformat()}",
+                active=True,
+                extra_data={"sku": seed["sku"], "category": seed.get("category")},
+                last_seen_at=now,
+                created_at=now,
+                updated_at=now,
+            )
+            self.db.add(product)
+            self.db.flush()
+
+            for condition_key in seed.get("applicable_conditions", []):
+                existing_mapping = (
+                    self.db.query(ProductConditionMapping)
+                    .filter(
+                        ProductConditionMapping.product_id == product.id,
+                        ProductConditionMapping.condition_key == condition_key,
+                    )
+                    .first()
+                )
+                if existing_mapping:
+                    continue
+                self.db.add(ProductConditionMapping(
+                    brand=brand_key,
+                    product_id=product.id,
+                    condition_key=condition_key,
+                    rule_source="seed_catalog",
+                    fit_score=0.85,
+                    mapping_reason=f"Seed-Katalog: {name} → {condition_key}",
+                    is_approved=False,
+                    priority=500,
+                    updated_at=now,
+                ))
+                added_mappings += 1
+
+            added_products.append(name)
+
+        if added_products:
+            self.db.commit()
+
+        return {
+            "added_products": added_products,
+            "added_mappings": added_mappings,
+            "total_seed_products": len(SEED_PRODUCTS),
+            "already_existed": len(SEED_PRODUCTS) - len(added_products),
+        }
+
     def resolve_product_for_opportunity(
         self,
         *,

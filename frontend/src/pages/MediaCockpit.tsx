@@ -189,6 +189,10 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
   const [waveWeekIdx, setWaveWeekIdx] = useState(0);
   const [waveAnimating, setWaveAnimating] = useState(false);
 
+  /* ── Outbreak Alert state ── */
+  const [alertData, setAlertData] = useState<any>(null);
+  const [alertLoading, setAlertLoading] = useState(false);
+
   /* ── Derived data ── */
   const activeMap = cockpit?.map;
   const peixSummary = cockpit?.peix_epi_score;
@@ -1742,6 +1746,28 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
     }
   };
 
+  // Fetch outbreak alerts
+  const fetchAlerts = useCallback(async () => {
+    setAlertLoading(true);
+    try {
+      const res = await fetch('/api/v1/backtest/outbreak-alerts');
+      const data = await res.json();
+      if (!data.error) setAlertData(data);
+    } catch (e) {
+      console.error('Alert fetch error', e);
+    } finally {
+      setAlertLoading(false);
+    }
+  }, []);
+
+  // Auto-load alerts when backtest tab is active
+  useEffect(() => {
+    if (view === 'backtest' && !alertData && !alertLoading) {
+      fetchAlerts();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view]);
+
   // Animation timer
   useEffect(() => {
     if (!waveAnimating || !waveData?.heatmap?.length) return;
@@ -2236,6 +2262,174 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                 </div>
               )}
             </div>
+          )}
+        </div>
+
+        {/* ── Ausbruchs-Radar ── */}
+        <div style={cardStyle}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+            <h2 style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>
+              Ausbruchs-Radar — Live-Alerts
+            </h2>
+            <button
+              onClick={fetchAlerts}
+              disabled={alertLoading}
+              style={{ ...btnSecondary, fontSize: 11, padding: '4px 12px', opacity: alertLoading ? 0.6 : 1 }}
+            >
+              {alertLoading ? 'Scannt\u2026' : 'Aktualisieren'}
+            </button>
+          </div>
+
+          {alertData && (
+            <div>
+              {/* National forecast bar */}
+              {alertData.national_forecast && Object.keys(alertData.national_forecast).length > 0 && (
+                <div style={{ marginBottom: 16 }}>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    Nationaler Trend (letzte 3 vs. vorherige 3 Wochen)
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    {Object.entries(alertData.national_forecast).map(([disease, data]: [string, any]) => {
+                      const color = data.direction === 'rising' ? '#c0392b' : data.direction === 'falling' ? '#27ae60' : 'var(--text-muted)';
+                      const arrow = data.direction === 'rising' ? '\u2191' : data.direction === 'falling' ? '\u2193' : '\u2192';
+                      return (
+                        <div key={disease} style={{
+                          padding: '4px 10px', borderRadius: 6, fontSize: 11, fontWeight: 600,
+                          background: data.direction === 'rising' ? 'rgba(192,57,43,0.08)' : data.direction === 'falling' ? 'rgba(39,174,96,0.08)' : 'var(--bg-secondary)',
+                          color, border: `1px solid ${color}22`,
+                        }}>
+                          {arrow} {disease} {data.change_pct > 0 ? '+' : ''}{data.change_pct}%
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Map + Alerts side by side */}
+              <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
+                {/* Alert Map */}
+                <div style={{ position: 'relative', width: 380, height: 420, flexShrink: 0 }}>
+                  <svg viewBox="0 0 420 460" style={{ width: '100%', height: '100%' }}>
+                    {mapShapes.map((shape) => {
+                      const blName = shape.name;
+                      const region = alertData.region_summary?.[blName];
+                      const severity = region?.max_severity || 0;
+                      const highCount = region?.high_urgency_count || 0;
+
+                      // Color by severity: gray → yellow → orange → red
+                      let fill = 'var(--bg-secondary)';
+                      if (severity > 3) fill = 'rgba(192, 57, 43, 0.7)';
+                      else if (severity > 2) fill = 'rgba(230, 126, 34, 0.6)';
+                      else if (severity > 1) fill = 'rgba(241, 196, 15, 0.5)';
+                      else if (severity > 0.3) fill = 'rgba(241, 196, 15, 0.2)';
+
+                      return (
+                        <g key={shape.code || blName}>
+                          <path
+                            d={shape.d}
+                            fill={fill}
+                            stroke="var(--border-color)"
+                            strokeWidth={highCount > 0 ? 2 : 0.8}
+                            style={{ transition: 'fill 0.3s ease' }}
+                          />
+                          {region?.top_disease && severity > 0.5 && (
+                            <text
+                              x={shape.cx}
+                              y={shape.cy}
+                              textAnchor="middle"
+                              fontSize={8}
+                              fontWeight={600}
+                              fill="var(--text-primary)"
+                              style={{ pointerEvents: 'none' }}
+                            >
+                              {region.top_disease}
+                            </text>
+                          )}
+                          {highCount > 0 && (
+                            <circle
+                              cx={shape.cx}
+                              cy={shape.cy - 12}
+                              r={6}
+                              fill="#c0392b"
+                              stroke="white"
+                              strokeWidth={1.5}
+                            />
+                          )}
+                          {highCount > 0 && (
+                            <text
+                              x={shape.cx}
+                              y={shape.cy - 9}
+                              textAnchor="middle"
+                              fontSize={8}
+                              fontWeight={700}
+                              fill="white"
+                              style={{ pointerEvents: 'none' }}
+                            >
+                              {highCount}
+                            </text>
+                          )}
+                        </g>
+                      );
+                    })}
+                  </svg>
+                </div>
+
+                {/* Alert list */}
+                <div style={{ flex: 1, minWidth: 300, maxHeight: 420, overflowY: 'auto' }}>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>
+                    {alertData.total_alerts} Signale erkannt — {alertData.high_urgency} dringend — Stand: {alertData.scan_date}
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {(alertData.alerts || []).slice(0, 25).map((alert: any, idx: number) => {
+                      const urgencyColor = alert.urgency === 'high' ? '#c0392b' : alert.urgency === 'medium' ? '#e67e22' : alert.urgency === 'info' ? '#27ae60' : 'var(--text-muted)';
+                      const urgencyBg = alert.urgency === 'high' ? 'rgba(192,57,43,0.06)' : alert.urgency === 'medium' ? 'rgba(230,126,34,0.06)' : 'transparent';
+                      const momentumArrow = alert.momentum_pct > 20 ? '\u2191\u2191' : alert.momentum_pct > 0 ? '\u2191' : alert.momentum_pct < -20 ? '\u2193\u2193' : '\u2193';
+                      const leadLabel = alert.lead_lag_weeks > 0 ? `+${alert.lead_lag_weeks}W voraus` : alert.lead_lag_weeks < 0 ? `${alert.lead_lag_weeks}W hinterher` : 'synchron';
+
+                      return (
+                        <div
+                          key={`${alert.bundesland}-${alert.disease}-${idx}`}
+                          style={{
+                            padding: '8px 12px', borderRadius: 8,
+                            background: urgencyBg,
+                            border: `1px solid ${urgencyColor}33`,
+                          }}
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 3 }}>
+                            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>
+                              {alert.disease} — {alert.bundesland}
+                            </div>
+                            <span style={{
+                              fontSize: 9, fontWeight: 700, padding: '2px 8px', borderRadius: 4,
+                              background: urgencyColor, color: 'white', textTransform: 'uppercase',
+                            }}>
+                              {alert.urgency}
+                            </span>
+                          </div>
+                          <div style={{ display: 'flex', gap: 12, fontSize: 10, color: 'var(--text-muted)' }}>
+                            <span style={{ color: alert.momentum_pct > 0 ? '#c0392b' : '#27ae60' }}>
+                              {momentumArrow} {alert.momentum_pct > 0 ? '+' : ''}{alert.momentum_pct}%
+                            </span>
+                            <span>{leadLabel}</span>
+                            <span>National: {alert.national_direction === 'rising' ? '\u2191' : alert.national_direction === 'falling' ? '\u2193' : '\u2192'}</span>
+                          </div>
+                          <div style={{ fontSize: 11, color: urgencyColor, fontWeight: 600, marginTop: 3 }}>
+                            {alert.action}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {!alertData && !alertLoading && (
+            <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+              Scannt automatisch alle Krankheiten in allen Bundesländern...
+            </p>
           )}
         </div>
 

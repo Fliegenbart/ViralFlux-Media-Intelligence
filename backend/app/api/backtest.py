@@ -356,3 +356,332 @@ async def wave_radar(
         "regions": sorted(results, key=lambda r: r["wave_rank"] or 999),
         "heatmap": heatmap,
     }
+
+
+# ═══════════════════════════════════════════════════════════════════════
+#  AUSBRUCHS-RADAR: Prognose-getrieben (Momentum + Lead/Lag + Forecast)
+# ═══════════════════════════════════════════════════════════════════════
+
+ALERT_DISEASES = [
+    "Influenza, saisonal",
+    "Mycoplasma",
+    "Keuchhusten (Meldepflicht gemäß IfSG)",
+    "Pneumokokken (Meldepflicht gemäß IfSG)",
+    "Parainfluenza",
+    "RSV (Meldepflicht gemäß IfSG)",
+    "COVID-19",
+    "Norovirus-Gastroenteritis",
+    "Rotavirus-Gastroenteritis",
+]
+
+DISEASE_SHORT = {
+    "Influenza, saisonal": "Influenza",
+    "Mycoplasma": "Mycoplasma",
+    "Keuchhusten (Meldepflicht gemäß IfSG)": "Keuchhusten",
+    "Pneumokokken (Meldepflicht gemäß IfSG)": "Pneumokokken",
+    "Parainfluenza": "Parainfluenza",
+    "RSV (Meldepflicht gemäß IfSG)": "RSV",
+    "COVID-19": "COVID-19",
+    "Norovirus-Gastroenteritis": "Norovirus",
+    "Rotavirus-Gastroenteritis": "Rotavirus",
+}
+
+DISEASE_CLUSTER = {
+    "Influenza, saisonal": "RESPIRATORY",
+    "Mycoplasma": "RESPIRATORY",
+    "Keuchhusten (Meldepflicht gemäß IfSG)": "RESPIRATORY",
+    "Pneumokokken (Meldepflicht gemäß IfSG)": "RESPIRATORY",
+    "Parainfluenza": "RESPIRATORY",
+    "RSV (Meldepflicht gemäß IfSG)": "RESPIRATORY",
+    "COVID-19": "RESPIRATORY",
+    "Norovirus-Gastroenteritis": "GASTROINTESTINAL",
+    "Rotavirus-Gastroenteritis": "GASTROINTESTINAL",
+}
+
+
+def _compute_lead_lag(
+    db: Session, disease: str, bundesland: str, lookback_weeks: int = 200,
+) -> int:
+    """Berechne wie viele Wochen ein Bundesland der nationalen Welle voraus-/hinterherläuft.
+
+    Positiv = BL führt (früherer Anstieg), Negativ = BL folgt.
+    Methode: Cross-Korrelation der BL-Zeitreihe vs. Gesamt-Zeitreihe.
+    """
+    cutoff = datetime.now() - timedelta(weeks=lookback_weeks)
+
+    # BL time series
+    bl_rows = db.query(
+        SurvstatWeeklyData.week_label,
+        SurvstatWeeklyData.incidence,
+    ).filter(
+        SurvstatWeeklyData.disease == disease,
+        SurvstatWeeklyData.bundesland == bundesland,
+        SurvstatWeeklyData.week_start >= cutoff,
+    ).order_by(SurvstatWeeklyData.week_label).all()
+
+    # National time series
+    nat_rows = db.query(
+        SurvstatWeeklyData.week_label,
+        SurvstatWeeklyData.incidence,
+    ).filter(
+        SurvstatWeeklyData.disease == disease,
+        SurvstatWeeklyData.bundesland == "Gesamt",
+        SurvstatWeeklyData.week_start >= cutoff,
+    ).order_by(SurvstatWeeklyData.week_label).all()
+
+    if len(bl_rows) < 20 or len(nat_rows) < 20:
+        return 0
+
+    # Align by week_label
+    nat_dict = {r.week_label: float(r.incidence) for r in nat_rows}
+    aligned_bl = []
+    aligned_nat = []
+    for r in bl_rows:
+        if r.week_label in nat_dict:
+            aligned_bl.append(float(r.incidence))
+            aligned_nat.append(nat_dict[r.week_label])
+
+    if len(aligned_bl) < 20:
+        return 0
+
+    bl_arr = np.array(aligned_bl)
+    nat_arr = np.array(aligned_nat)
+
+    # Normalize
+    bl_std = bl_arr.std()
+    nat_std = nat_arr.std()
+    if bl_std == 0 or nat_std == 0:
+        return 0
+    bl_norm = (bl_arr - bl_arr.mean()) / bl_std
+    nat_norm = (nat_arr - nat_arr.mean()) / nat_std
+
+    # Cross-correlation for lags -6..+6 weeks
+    best_lag = 0
+    best_corr = -1.0
+    n = len(bl_norm)
+    for lag in range(-6, 7):
+        if lag >= 0:
+            corr = np.dot(bl_norm[:n - lag], nat_norm[lag:]) / (n - abs(lag))
+        else:
+            corr = np.dot(bl_norm[-lag:], nat_norm[:n + lag]) / (n - abs(lag))
+        if corr > best_corr:
+            best_corr = corr
+            best_lag = lag
+
+    # Positive lag = BL leads national (BL signal comes first)
+    return -best_lag  # Negate: if nat needs to shift right to match BL, BL leads
+
+
+@router.get("/outbreak-alerts")
+async def outbreak_alerts(
+    db: Session = Depends(get_db),
+):
+    """Ausbruchs-Radar: Prognose-getriebene Alerts.
+
+    Kombiniert drei Signale pro Krankheit × Region:
+    1. Momentum: Letzte 3 Wochen vs. 3 Wochen davor (steigt/fällt?)
+    2. Lead/Lag: Führt dieses BL die Welle an oder folgt es?
+    3. Nationaler Trend: Geht die Welle national hoch oder runter?
+
+    → Actionable Alerts für Marketing-Timing pro Region.
+    """
+    from collections import defaultdict
+
+    # ── 1. Zeitfenster bestimmen ──
+    latest_date = db.query(func.max(SurvstatWeeklyData.week_start)).filter(
+        SurvstatWeeklyData.bundesland != "Gesamt",
+        SurvstatWeeklyData.incidence > 0,
+    ).scalar()
+
+    if not latest_date:
+        return {"error": "Keine regionalen Daten verfügbar."}
+
+    recent_cutoff = latest_date - timedelta(weeks=3)
+    prior_cutoff = recent_cutoff - timedelta(weeks=3)
+
+    # ── 2. Lade letzte 6 Wochen: 3 "aktuell" + 3 "vorher" ──
+    six_week_rows = db.query(
+        SurvstatWeeklyData.bundesland,
+        SurvstatWeeklyData.disease,
+        SurvstatWeeklyData.week_start,
+        SurvstatWeeklyData.week_label,
+        SurvstatWeeklyData.incidence,
+    ).filter(
+        SurvstatWeeklyData.disease.in_(ALERT_DISEASES),
+        SurvstatWeeklyData.week_start > prior_cutoff,
+        SurvstatWeeklyData.incidence > 0,
+    ).all()
+
+    # Gruppiere: (bl, disease) → recent + prior
+    recent_data: dict[tuple[str, str], list[float]] = defaultdict(list)
+    prior_data: dict[tuple[str, str], list[float]] = defaultdict(list)
+    national_recent: dict[str, list[float]] = defaultdict(list)
+    national_prior: dict[str, list[float]] = defaultdict(list)
+
+    for r in six_week_rows:
+        key = (r.bundesland, r.disease)
+        inc = float(r.incidence)
+        if r.week_start > recent_cutoff:
+            if r.bundesland == "Gesamt":
+                national_recent[r.disease].append(inc)
+            else:
+                recent_data[key].append(inc)
+        else:
+            if r.bundesland == "Gesamt":
+                national_prior[r.disease].append(inc)
+            else:
+                prior_data[key].append(inc)
+
+    # ── 3. Nationaler Forecast-Vektor ──
+    national_forecast: dict[str, dict] = {}
+    for disease in ALERT_DISEASES:
+        nr = national_recent.get(disease, [])
+        np_ = national_prior.get(disease, [])
+        if nr and np_:
+            avg_r = sum(nr) / len(nr)
+            avg_p = sum(np_) / len(np_)
+            if avg_p > 0:
+                change_pct = round((avg_r - avg_p) / avg_p * 100, 1)
+            else:
+                change_pct = 100.0 if avg_r > 0 else 0.0
+            direction = "rising" if change_pct > 10 else "falling" if change_pct < -10 else "stable"
+            national_forecast[disease] = {
+                "current": round(avg_r, 3),
+                "prior": round(avg_p, 3),
+                "change_pct": change_pct,
+                "direction": direction,
+            }
+
+    # ── 4. Lead/Lag Cache (teuer → einmal berechnen) ──
+    lead_lag_cache: dict[tuple[str, str], int] = {}
+
+    # ── 5. Alerts berechnen ──
+    alerts = []
+
+    for (bl, disease), recent_vals in recent_data.items():
+        if bl == "Gesamt":
+            continue
+        prior_vals = prior_data.get((bl, disease), [])
+        if not recent_vals:
+            continue
+
+        avg_recent = sum(recent_vals) / len(recent_vals)
+        avg_prior = sum(prior_vals) / len(prior_vals) if prior_vals else 0.0
+
+        # Momentum: prozentuale Veränderung recent vs prior
+        if avg_prior > 0:
+            momentum_pct = round((avg_recent - avg_prior) / avg_prior * 100, 1)
+        elif avg_recent > 0:
+            momentum_pct = 100.0  # Neu aufgetaucht
+        else:
+            continue  # Kein Signal
+
+        # Lead/Lag vs national
+        cache_key = (bl, disease)
+        if cache_key not in lead_lag_cache:
+            lead_lag_cache[cache_key] = _compute_lead_lag(db, disease, bl)
+        lead_lag_weeks = lead_lag_cache[cache_key]
+
+        # National forecast direction
+        nat = national_forecast.get(disease, {})
+        nat_direction = nat.get("direction", "stable")
+        nat_change = nat.get("change_pct", 0.0)
+
+        # ── Severity Score ──
+        # Hohe Severity = starker Anstieg + Region führt + nationale Welle steigt
+        momentum_score = max(0, momentum_pct) / 50  # +100% → 2.0
+        lead_bonus = max(0, lead_lag_weeks) * 0.3  # Führende Region bekommt Bonus
+        nat_boost = max(0, nat_change) / 100  # Nationale Welle steigt → Boost
+
+        severity = round(momentum_score + lead_bonus + nat_boost, 2)
+        if severity < 0.5 and momentum_pct < 20:
+            continue  # Unter Schwelle
+
+        # Forecast-Action
+        if momentum_pct > 50 and nat_direction == "rising":
+            action = "JETZT aktivieren"
+            urgency = "high"
+        elif momentum_pct > 20 and nat_direction == "rising":
+            action = "Kampagne vorbereiten"
+            urgency = "medium"
+        elif momentum_pct > 0 and lead_lag_weeks < -1:
+            action = f"Welle erreicht Region in ~{abs(lead_lag_weeks)} Wochen"
+            urgency = "low"
+        elif momentum_pct < -20:
+            action = "Welle ebbt ab"
+            urgency = "info"
+        else:
+            action = "Beobachten"
+            urgency = "low"
+
+        alerts.append({
+            "bundesland": bl,
+            "disease": DISEASE_SHORT.get(disease, disease),
+            "disease_full": disease,
+            "cluster": DISEASE_CLUSTER.get(disease, "OTHER"),
+            "severity": severity,
+            "momentum_pct": momentum_pct,
+            "lead_lag_weeks": lead_lag_weeks,
+            "current_incidence": round(avg_recent, 3),
+            "prior_incidence": round(avg_prior, 3),
+            "national_direction": nat_direction,
+            "national_change_pct": nat_change,
+            "action": action,
+            "urgency": urgency,
+        })
+
+    # Sort: high urgency first, then by severity
+    urgency_order = {"high": 0, "medium": 1, "low": 2, "info": 3}
+    alerts.sort(key=lambda a: (urgency_order.get(a["urgency"], 9), -a["severity"]))
+
+    # ── 6. Region Summary für Karte ──
+    bl_summary: dict[str, dict] = {}
+    for bl in BUNDESLAENDER:
+        bl_alerts = [a for a in alerts if a["bundesland"] == bl]
+        if bl_alerts:
+            high_count = sum(1 for a in bl_alerts if a["urgency"] in ("high", "medium"))
+            bl_summary[bl] = {
+                "alert_count": len(bl_alerts),
+                "high_urgency_count": high_count,
+                "max_severity": max(a["severity"] for a in bl_alerts),
+                "top_disease": bl_alerts[0]["disease"],
+                "top_action": bl_alerts[0]["action"],
+                "diseases": list(set(a["disease"] for a in bl_alerts)),
+            }
+        else:
+            bl_summary[bl] = {
+                "alert_count": 0,
+                "high_urgency_count": 0,
+                "max_severity": 0,
+                "top_disease": None,
+                "top_action": "Kein Signal",
+                "diseases": [],
+            }
+
+    # ── 7. Disease Summary ──
+    disease_summary: dict[str, dict] = {}
+    for disease in ALERT_DISEASES:
+        short = DISEASE_SHORT.get(disease, disease)
+        d_alerts = [a for a in alerts if a["disease_full"] == disease]
+        nat = national_forecast.get(disease, {})
+        if d_alerts or nat:
+            disease_summary[short] = {
+                "alert_count": len(d_alerts),
+                "national_direction": nat.get("direction", "unknown"),
+                "national_change_pct": nat.get("change_pct", 0),
+                "regions_rising": len([a for a in d_alerts if a["momentum_pct"] > 20]),
+                "regions_falling": len([a for a in d_alerts if a["momentum_pct"] < -20]),
+                "hottest_region": d_alerts[0]["bundesland"] if d_alerts else None,
+            }
+
+    return {
+        "scan_date": latest_date.strftime("%Y-%m-%d"),
+        "total_alerts": len(alerts),
+        "high_urgency": len([a for a in alerts if a["urgency"] == "high"]),
+        "alerts": alerts[:60],
+        "region_summary": bl_summary,
+        "disease_summary": disease_summary,
+        "national_forecast": {
+            DISEASE_SHORT.get(d, d): v for d, v in national_forecast.items()
+        },
+    }

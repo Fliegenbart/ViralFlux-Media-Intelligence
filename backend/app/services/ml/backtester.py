@@ -1229,6 +1229,11 @@ class BacktestService:
             "real_qty": row["real_qty"],
         } for row in result.get("chart_data", [])])
         lead_lag = self._best_bio_lead_lag(df_sim)
+        # Adjust for horizon shift: bio was computed horizon_days before target_time
+        lead_lag["best_lag_days"] += horizon_days
+        lead_lag["bio_leads_target"] = bool(
+            lead_lag["best_lag_days"] > 0 and lead_lag["lag_correlation"] > 0
+        )
         lead_days = lead_lag["best_lag_days"]
         baseline_delta = result.get("improvement_vs_baselines", {})
         delta_pers = baseline_delta.get("mae_vs_persistence_pct", 0.0)
@@ -1236,17 +1241,18 @@ class BacktestService:
 
         if lead_lag["bio_leads_target"]:
             proof_text = (
-                f"Bio-Signal zeigt eine zeitliche Vorlauf-Korrelation von ca. {lead_days} Tagen "
-                f"(r={lead_lag['lag_correlation']}; statistischer Zusammenhang, nicht kausal)."
+                f"Bio-Signal (Abwasser-Monitoring) laeuft dem Target um ca. {lead_days} Tage voraus "
+                f"(r={lead_lag['lag_correlation']}; horizon={horizon_days}d + raw_lag={lead_lag['best_lag_days'] - horizon_days}d)."
             )
         elif lead_days < 0:
             proof_text = (
-                f"Zielreihe zeigt eine zeitliche Vorlauf-Korrelation von ca. {abs(lead_days)} Tagen "
-                f"gegenueber dem Bio-Signal (r={lead_lag['lag_correlation']}; statistisch, nicht kausal)."
+                f"Target laeuft dem Bio-Signal um ca. {abs(lead_days)} Tage voraus "
+                f"(r={lead_lag['lag_correlation']}; horizon={horizon_days}d + raw_lag={lead_lag['best_lag_days'] - horizon_days}d)."
             )
         else:
             proof_text = (
-                f"Kein klarer zeitlicher Vorlauf erkennbar (Lag-Korrelation r={lead_lag['lag_correlation']})."
+                f"Bio-Signal und Target zeigen gleichzeitige Korrelation "
+                f"(r={lead_lag['lag_correlation']}; horizon={horizon_days}d gleicht raw_lag aus)."
             )
 
         result["mode"] = "MARKET_CHECK"
@@ -1351,6 +1357,12 @@ class BacktestService:
                 "real_qty": row["real_qty"],
             } for row in region_result.get("chart_data", [])])
             region_lead_lag = self._best_bio_lead_lag(sim_df)
+            # Adjust for horizon shift
+            region_lead_lag["best_lag_days"] += horizon_days
+            region_lead_lag["bio_leads_target"] = bool(
+                region_lead_lag["best_lag_days"] > 0
+                and region_lead_lag["lag_correlation"] > 0
+            )
             region_result["lead_lag"] = region_lead_lag
 
             for row in region_result.get("chart_data", []):
@@ -1384,6 +1396,12 @@ class BacktestService:
 
         lead_lag_global = self._best_bio_lead_lag(
             combined_df[["date", "bio", "real_qty"]].rename(columns={"real_qty": "real_qty"})
+        )
+        # Adjust for horizon shift
+        lead_lag_global["best_lag_days"] += horizon_days
+        lead_lag_global["bio_leads_target"] = bool(
+            lead_lag_global["best_lag_days"] > 0
+            and lead_lag_global["lag_correlation"] > 0
         )
         proof_text = (
             f"Kundendaten-Check über {model_metrics['data_points']} Punkte: "

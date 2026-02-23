@@ -1431,6 +1431,23 @@ class BacktestService:
                 "target_label": target_meta.get("target_label"),
             }
 
+        # Auto-detect optimal min_train_points based on available data
+        n_available = len(target_df)
+        if min_train_points <= 0:
+            # Auto mode: use ~60% of data for initial training, min 20, max 150
+            min_train_points = max(20, min(150, int(n_available * 0.6)))
+            logger.info(
+                "Auto min_train_points=%d (data: %d points)",
+                min_train_points, n_available,
+            )
+        elif min_train_points >= n_available:
+            # Prevent zero-fold scenario: cap at 70% of data
+            min_train_points = max(20, int(n_available * 0.7))
+            logger.info(
+                "Capped min_train_points=%d (data: %d points)",
+                min_train_points, n_available,
+            )
+
         # Exclude ARE from features when target=RKI_ARE (circular dependency)
         exclude_are = (target_source or "").strip().upper() == "RKI_ARE"
 

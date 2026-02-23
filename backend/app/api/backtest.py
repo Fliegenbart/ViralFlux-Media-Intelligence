@@ -41,9 +41,9 @@ def _read_upload(content: bytes, filename: str) -> pd.DataFrame:
 async def run_market_backtest(
     target_source: str = Query(default="RKI_ARE"),
     virus_typ: str = Query(default="Influenza A"),
-    days_back: int = Query(default=730, ge=60, le=3000),
+    days_back: int = Query(default=2500, ge=60, le=3000),
     horizon_days: int = Query(default=14, ge=0, le=60),
-    min_train_points: int = Query(default=20, ge=5, le=300),
+    min_train_points: int = Query(default=0, ge=0, le=300),
     strict_vintage_mode: bool = Query(default=True),
     db: Session = Depends(get_db),
 ):

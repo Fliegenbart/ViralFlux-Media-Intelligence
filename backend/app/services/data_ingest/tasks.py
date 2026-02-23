@@ -302,6 +302,31 @@ def backfill_wastewater_coordinates(self) -> Dict[str, Any]:
     })
 
 
+@celery_app.task(bind=True, name="import_survstat_web_exports")
+def import_survstat_web_exports(
+    self,
+    folder_path: str = "/app/data/raw/survstat/peix_exports",
+    year: int = 2025,
+) -> Dict[str, Any]:
+    """Import der drei SurvStat Web-Export-Formate (Meldewoche, Bundesland, Landkreis).
+
+    Erwartet Unterordner: nach_meldewoche/, nach_bundesland/, nach_landkreis/
+    """
+    from app.services.data_ingest.survstat_export_importer import import_survstat_exports
+
+    logger.info("SurvStat Web-Export Import: Starte aus %s (year=%d)", folder_path, year)
+
+    with get_db_context() as db:
+        result = import_survstat_exports(db, folder_path, year=year)
+
+    logger.info(
+        "SurvStat Web-Export: %s inserted, %s updated",
+        result.get("total_inserted", 0),
+        result.get("total_updated", 0),
+    )
+    return _json_safe(result)
+
+
 @celery_app.task(bind=True, name="backfill_survstat_from_folder")
 def backfill_survstat_from_folder(
     self,

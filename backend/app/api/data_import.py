@@ -345,6 +345,32 @@ async def download_template(upload_type: str):
 # ─── RKI SurvStat Landkreis-API ─────────────────────────────────────
 
 
+@router.post("/survstat-export")
+async def import_survstat_exports(
+    folder: str = Query(..., description="Pfad zum Ordner mit SurvStat-Exports"),
+    year: int = Query(2025, description="Datenjahr (Standard: 2025)"),
+    db: Session = Depends(get_db),
+):
+    """RKI SurvStat Web-Export importieren (3 Formate).
+
+    Erwartet Unterordner: nach_meldewoche/, nach_bundesland/, nach_landkreis/
+    mit jeweils einer UTF-16 TSV Data*.csv Datei.
+    """
+    from app.services.data_ingest.survstat_export_importer import (
+        import_survstat_exports as _do_import,
+    )
+
+    try:
+        result = _do_import(db, folder, year=year)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    except Exception as exc:
+        logger.error("SurvStat export import failed: %s", exc)
+        raise HTTPException(500, f"Import fehlgeschlagen: {exc}")
+
+    return result
+
+
 @router.post("/survstat-api")
 async def trigger_survstat_api_fetch(
     years: list[int] | None = None,

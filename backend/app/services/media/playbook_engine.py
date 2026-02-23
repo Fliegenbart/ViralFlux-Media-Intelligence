@@ -128,17 +128,6 @@ PLAYBOOK_CATALOG: dict[str, dict[str, Any]] = {
         "message_direction": "Nasennebenhöhlen befreien / Durchatmen",
         "kind": "offensive",
     },
-    "IMMUNBOOSTER": {
-        "title": "Immun-Booster",
-        "description": "Präventive Immunsystem-Stärkung bei Saisonwechsel.",
-        "channels": ["social", "ctv", "programmatic"],
-        "default_mix": {"social": 40.0, "ctv": 35.0, "programmatic": 25.0},
-        "shift_min": 10.0,
-        "shift_max": 25.0,
-        "condition_key": "immun_support",
-        "message_direction": "Immunsystem stärken / Vorsorge in der Erkältungszeit",
-        "kind": "offensive",
-    },
 }
 
 
@@ -185,9 +174,7 @@ class PlaybookEngine:
         hals = self._halsschmerz_candidates(peix_regions=peix.get("regions") or {}, allowed_regions=allowed_regions)
         erkaelt = self._erkaeltungswelle_candidates(peix_regions=peix.get("regions") or {}, allowed_regions=allowed_regions)
         sinus = self._sinus_candidates(peix_regions=peix.get("regions") or {}, allowed_regions=allowed_regions)
-        immun = self._immunbooster_candidates(peix_regions=peix.get("regions") or {}, allowed_regions=allowed_regions)
-
-        all_candidates = myco + supply + weather + allergy + hals + erkaelt + sinus + immun
+        all_candidates = myco + supply + weather + allergy + hals + erkaelt + sinus
         if not all_candidates:
             return {
                 "selected": [],
@@ -283,7 +270,6 @@ class PlaybookEngine:
 
             peix_entry = peix_regions.get(code) or {}
             peix_score = float(peix_entry.get("score_0_100") or 0.0)
-            impact = float(peix_entry.get("impact_probability") or 0.0)
             if peix_score > 85:
                 # Zu breite Gesamtwelle: spezifischer Mycoplasma-Playbook-Wert sinkt.
                 damp = 0.78
@@ -302,7 +288,7 @@ class PlaybookEngine:
                 ),
             )
             confidence = min(96.0, 62.0 + min(22.0, len(history) / 4.0))
-            priority = self._priority_score(impact_probability=impact, trigger_strength=strength, confidence=confidence)
+            priority = self._priority_score(trigger_strength=strength, confidence=confidence)
             shift_pct = self._shift_from_strength("MYCOPLASMA_JAEGER", strength)
 
             candidates.append(
@@ -354,19 +340,18 @@ class PlaybookEngine:
         candidates: list[dict[str, Any]] = []
         for code in allowed_regions:
             peix_entry = peix_regions.get(code) or {}
-            impact = float(peix_entry.get("impact_probability") or 0.0)
-            if impact < 35.0:
-                continue
             growth = are_growth.get(code, 0.0)
             growth_score = min(100.0, max(0.0, growth * 100.0))
+            if growth_score < 10.0 and respiratory_shortage <= 0:
+                continue
             bonus = 8.0 if pediatric_alert else 0.0
             if respiratory_shortage <= 0 and pediatric_shortage <= 0:
                 bonus -= 10.0
-            strength = min(100.0, max(0.0, risk * 0.55 + growth_score * 0.25 + impact * 0.20 + bonus))
+            strength = min(100.0, max(0.0, risk * 0.65 + growth_score * 0.35 + bonus))
             if strength < 40.0:
                 continue
             confidence = min(95.0, 68.0 + min(20.0, respiratory_shortage * 3.0) + (5.0 if pediatric_alert else 0.0))
-            priority = self._priority_score(impact_probability=impact, trigger_strength=strength, confidence=confidence)
+            priority = self._priority_score(trigger_strength=strength, confidence=confidence)
             shift_pct = self._shift_from_strength("SUPPLY_SHOCK_ATTACK", strength)
 
             candidates.append(
@@ -413,7 +398,6 @@ class PlaybookEngine:
         for code in allowed_regions:
             burden = float(weather_burden.get(code) or 0.0)
             peix_entry = peix_regions.get(code) or {}
-            impact = float(peix_entry.get("impact_probability") or 0.0)
             if burden < 45.0:
                 continue
 
@@ -425,7 +409,7 @@ class PlaybookEngine:
                 continue
 
             confidence = min(92.0, 60.0 + (12.0 if burden >= 60 else 5.0) + (8.0 if psycho_delta > 0 else 0.0))
-            priority = self._priority_score(impact_probability=impact, trigger_strength=strength, confidence=confidence)
+            priority = self._priority_score(trigger_strength=strength, confidence=confidence)
             shift_pct = self._shift_from_strength("WETTER_REFLEX", strength)
 
             candidates.append(
@@ -489,7 +473,7 @@ class PlaybookEngine:
                 continue
 
             confidence = min(94.0, 66.0 + (12.0 if pollen_score >= 60 else 4.0) + (8.0 if allergy_delta > 0 else 0.0))
-            priority = self._priority_score(impact_probability=max(0.0, 100.0 - impact), trigger_strength=strength, confidence=confidence)
+            priority = self._priority_score(trigger_strength=strength, confidence=confidence)
             shift_pct = self._shift_from_strength("ALLERGIE_BREMSE", strength)
 
             candidates.append(
@@ -553,10 +537,9 @@ class PlaybookEngine:
                 continue
 
             peix_entry = peix_regions.get(code) or {}
-            impact = float(peix_entry.get("impact_probability") or 0.0)
             strength = min(100.0, max(0.0, 40.0 + growth * 80.0 + min(20.0, avg_recent / 10.0)))
             confidence = min(90.0, 55.0 + min(25.0, len(values) / 3.0))
-            priority = self._priority_score(impact_probability=impact, trigger_strength=strength, confidence=confidence)
+            priority = self._priority_score(trigger_strength=strength, confidence=confidence)
             shift_pct = self._shift_from_strength("HALSSCHMERZ_HUNTER", strength)
 
             candidates.append(
@@ -616,11 +599,10 @@ class PlaybookEngine:
                 continue
 
             peix_entry = peix_regions.get(code) or {}
-            impact = float(peix_entry.get("impact_probability") or 0.0)
             relative = total_load / max(1.0, median_load)
-            strength = min(100.0, max(0.0, 35.0 + (relative - 1.0) * 120.0 + impact * 0.15))
-            confidence = min(88.0, 60.0 + min(20.0, impact / 5.0))
-            priority = self._priority_score(impact_probability=impact, trigger_strength=strength, confidence=confidence)
+            strength = min(100.0, max(0.0, 35.0 + (relative - 1.0) * 140.0))
+            confidence = min(88.0, 60.0 + min(20.0, total_load / 50.0))
+            priority = self._priority_score(trigger_strength=strength, confidence=confidence)
             shift_pct = self._shift_from_strength("ERKAELTUNGSWELLE", strength)
 
             candidates.append(
@@ -683,10 +665,9 @@ class PlaybookEngine:
                 continue
 
             peix_entry = peix_regions.get(code) or {}
-            impact = float(peix_entry.get("impact_probability") or 0.0)
-            strength = min(100.0, max(0.0, 30.0 + min(50.0, avg_recent * 0.5) + impact * 0.15))
+            strength = min(100.0, max(0.0, 30.0 + min(70.0, avg_recent * 0.7)))
             confidence = min(85.0, 50.0 + min(25.0, len(values) / 3.0))
-            priority = self._priority_score(impact_probability=impact, trigger_strength=strength, confidence=confidence)
+            priority = self._priority_score(trigger_strength=strength, confidence=confidence)
             shift_pct = self._shift_from_strength("SINUS_DEFENDER", strength)
 
             candidates.append(
@@ -708,53 +689,6 @@ class PlaybookEngine:
                         "lead_time_days": 10,
                         "values": {
                             "avg_recent_incidence": round(avg_recent, 2),
-                        },
-                    },
-                )
-            )
-        return candidates
-
-    def _immunbooster_candidates(
-        self,
-        *,
-        peix_regions: dict[str, Any],
-        allowed_regions: list[str],
-    ) -> list[dict[str, Any]]:
-        """Triggert bei hohem Gesamt-PeixScore (= breit steigende Infektionslage)."""
-        candidates: list[dict[str, Any]] = []
-        for code in allowed_regions:
-            peix_entry = peix_regions.get(code) or {}
-            peix_score = float(peix_entry.get("score_0_100") or 0.0)
-            impact = float(peix_entry.get("impact_probability") or 0.0)
-
-            if peix_score < 50.0:
-                continue
-
-            strength = min(100.0, max(0.0, peix_score * 0.7 + impact * 0.3))
-            confidence = min(80.0, 45.0 + peix_score * 0.3)
-            priority = self._priority_score(impact_probability=impact, trigger_strength=strength, confidence=confidence)
-            shift_pct = self._shift_from_strength("IMMUNBOOSTER", strength)
-
-            candidates.append(
-                self._candidate_payload(
-                    playbook_key="IMMUNBOOSTER",
-                    region_code=code,
-                    peix_entry=peix_entry,
-                    trigger_strength=strength,
-                    confidence=confidence,
-                    priority_score=priority,
-                    budget_shift_pct=shift_pct,
-                    trigger_snapshot={
-                        "source": "PeixEpiScore",
-                        "event": "HIGH_PEIX_IMMUN_TRIGGER",
-                        "details": (
-                            f"PeixEpiScore {peix_score:.1f}/100 (Impact {impact:.1f}%), "
-                            f"präventive Immun-Kampagne empfohlen."
-                        ),
-                        "lead_time_days": 14,
-                        "values": {
-                            "peix_score": round(peix_score, 2),
-                            "impact_probability": round(impact, 2),
                         },
                     },
                 )
@@ -797,11 +731,11 @@ class PlaybookEngine:
         }
 
     @staticmethod
-    def _priority_score(*, impact_probability: float, trigger_strength: float, confidence: float) -> float:
+    def _priority_score(*, trigger_strength: float, confidence: float) -> float:
+        """Priorität nur aus unabhängigen Signalen — PeixEpiScore fließt nicht ein."""
         return (
-            0.5 * float(impact_probability or 0.0)
-            + 0.3 * float(trigger_strength or 0.0)
-            + 0.2 * float(confidence or 0.0)
+            0.6 * float(trigger_strength or 0.0)
+            + 0.4 * float(confidence or 0.0)
         )
 
     @staticmethod

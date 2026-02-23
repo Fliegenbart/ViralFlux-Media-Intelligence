@@ -195,7 +195,7 @@ def compute_forecast_accuracy_task(self) -> Dict[str, Any]:
             recent_logs = (
                 db.query(ForecastAccuracyLog)
                 .filter(ForecastAccuracyLog.virus_typ == virus)
-                .order_by(ForecastAccuracyLog.created_at.desc())
+                .order_by(ForecastAccuracyLog.computed_at.desc())
                 .limit(3)
                 .all()
             )

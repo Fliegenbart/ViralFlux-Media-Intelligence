@@ -107,7 +107,7 @@ async def health_check():
                         ForecastAccuracyLog.drift_detected,
                     )
                     .distinct(ForecastAccuracyLog.virus_typ)
-                    .order_by(ForecastAccuracyLog.virus_typ, ForecastAccuracyLog.created_at.desc())
+                    .order_by(ForecastAccuracyLog.virus_typ, ForecastAccuracyLog.computed_at.desc())
                     .all()
                 )
                 for row in latest:

@@ -105,6 +105,26 @@ class BacktestService:
         "notaufnahme_ari",
     ]
 
+    # Kompakte Features für kleine Datasets (< 35 Trainingspunkte)
+    # Nur die informativsten Features → besseres Feature/Sample-Verhältnis
+    COMPACT_BASE_COLS: list[str] = [
+        "target_lag1",
+        "target_ma3",
+        "target_roc",
+        "week_sin",
+        "week_cos",
+        "weather_temp",
+        "grippeweb_are",
+    ]
+
+    COMPACT_VIRAL_COLS: list[str] = COMPACT_BASE_COLS + [
+        "wastewater_raw",
+    ]
+
+    COMPACT_SURVSTAT_COLS: list[str] = COMPACT_BASE_COLS + [
+        "survstat_xdisease_1",
+    ]
+
     # Virale Targets: Abwasser-Signale nützlich
     VIRAL_FEATURE_COLS: list[str] = BASE_FEATURE_COLS + [
         "wastewater_raw",
@@ -1090,8 +1110,14 @@ class BacktestService:
             # Bakterielle/nicht-virale Targets: kein Abwasser-Signal
             feature_cols = list(self.SURVSTAT_FEATURE_COLS)
         elif exclude_are:
+            # RKI_ARE target: exclude ARE from features (circular dependency)
+            feature_cols = list(self.VIRAL_FEATURE_COLS)
+        elif target_disease:
+            # SURVSTAT viral targets: viral features but no are_consultation_raw
+            # (reduces dimensionality for small SURVSTAT datasets)
             feature_cols = list(self.VIRAL_FEATURE_COLS)
         else:
+            # Non-SURVSTAT targets (e.g. customer data): full feature set
             feature_cols = list(self.VIRAL_FEATURE_COLS)
             if "are_consultation_raw" not in feature_cols:
                 feature_cols.insert(3, "are_consultation_raw")
@@ -1131,19 +1157,30 @@ class BacktestService:
                 continue
 
             df_train = pd.DataFrame(train_rows)
+
+            # Adaptive feature set: compact for small datasets
+            n_train = len(train_rows)
+            if n_train < 35:
+                # Small dataset: use compact features (8 vs 15-16)
+                if is_bacterial_target:
+                    fold_features = list(self.COMPACT_SURVSTAT_COLS)
+                else:
+                    fold_features = list(self.COMPACT_VIRAL_COLS)
+            else:
+                fold_features = list(feature_cols)
+
             # Ensure all feature columns exist (fill missing with 0)
-            for col in feature_cols:
+            for col in fold_features:
                 if col not in df_train.columns:
                     df_train[col] = 0.0
 
-            X_train = df_train[feature_cols].values
+            X_train = df_train[fold_features].values
             y_train = df_train["real_qty"].values
 
             # Replace NaN/inf
             X_train = np.nan_to_num(X_train, nan=0.0, posinf=0.0, neginf=0.0)
 
             # Adaptive model selection based on training set size
-            n_train = len(train_rows)
             if n_train >= 40:
                 gbr_fold_count += 1
                 model = GradientBoostingRegressor(
@@ -1161,10 +1198,10 @@ class BacktestService:
                 gbr_fold_count += 1
                 model = GradientBoostingRegressor(
                     n_estimators=60,
-                    max_depth=3,
-                    learning_rate=0.06,
+                    max_depth=2,
+                    learning_rate=0.08,
                     subsample=0.8,
-                    min_samples_leaf=max(4, n_train // 7),
+                    min_samples_leaf=max(5, n_train // 6),
                     random_state=42,
                 )
                 model.fit(X_train, y_train)
@@ -1224,13 +1261,18 @@ class BacktestService:
                 "survstat_xdisease_1": test_scores["survstat_xdisease_1"],
                 "survstat_xdisease_2": test_scores["survstat_xdisease_2"],
             }
-            X_test = np.array([[test_feat.get(c, 0.0) for c in feature_cols]])
+            X_test = np.array([[test_feat.get(c, 0.0) for c in fold_features]])
             X_test = np.nan_to_num(X_test, nan=0.0, posinf=0.0, neginf=0.0)
 
             if not use_gbr:
                 X_test = scaler.transform(X_test)
 
             y_hat = float(model.predict(X_test)[0])
+
+            # Clip predictions to prevent extreme extrapolation
+            y_max = float(y_train.max())
+            y_min = float(y_train.min())
+            y_hat = max(0.0, min(y_hat, y_max * 2.0))
 
             baseline_persistence = float(train_target_df.iloc[-1]["menge"])
             baseline_seasonal = self._seasonal_naive_baseline(
@@ -1273,14 +1315,24 @@ class BacktestService:
         pers_mae = max(persistence_metrics["mae"], 1e-9)
         seas_mae = max(seasonal_metrics["mae"], 1e-9)
 
-        # Feature importance from accumulated fold importances
+        # Feature importance: use last fold (largest training set, most reliable)
         if importance_accumulator:
-            avg_imp = np.mean(np.vstack(importance_accumulator), axis=0)
-            total = float(avg_imp.sum())
+            last_imp = importance_accumulator[-1]
+            last_n_features = len(last_imp)
+            # Determine which feature set was used in the last fold
+            if last_n_features == len(feature_cols):
+                imp_cols = feature_cols
+            elif is_bacterial_target and last_n_features == len(self.COMPACT_SURVSTAT_COLS):
+                imp_cols = self.COMPACT_SURVSTAT_COLS
+            elif last_n_features == len(self.COMPACT_VIRAL_COLS):
+                imp_cols = self.COMPACT_VIRAL_COLS
+            else:
+                imp_cols = feature_cols[:last_n_features]
+            total = float(last_imp.sum())
             if total > 0:
                 optimized_weights = {
-                    col: round(float(avg_imp[i] / total), 3)
-                    for i, col in enumerate(feature_cols)
+                    col: round(float(last_imp[i] / total), 3)
+                    for i, col in enumerate(imp_cols)
                 }
             else:
                 optimized_weights = dict(self.DEFAULT_WEIGHTS)
@@ -1309,8 +1361,8 @@ class BacktestService:
             "model_type": "GradientBoosting" if gbr_fold_count > ridge_fold_count else "Ridge",
             "gbr_folds": gbr_fold_count,
             "ridge_folds": ridge_fold_count,
-            "feature_count": len(feature_cols),
-            "feature_names": feature_cols,
+            "feature_count": len(imp_cols) if importance_accumulator else len(feature_cols),
+            "feature_names": imp_cols if importance_accumulator else feature_cols,
             "chart_data": [
                 {
                     "date": row["target_time"].strftime("%Y-%m-%d"),

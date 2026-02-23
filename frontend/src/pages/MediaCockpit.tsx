@@ -1866,7 +1866,7 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
               <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 20 }}>
                 {[
                   { label: 'R²', value: btResult.metrics.r2_score?.toFixed(3) },
-                  { label: 'Korrelation', value: `${btResult.metrics.correlation_pct?.toFixed(1)}%` },
+                  { label: 'Modell-Korr.', value: `${btResult.metrics.correlation_pct?.toFixed(1)}%` },
                   { label: 'sMAPE', value: btResult.metrics.smape?.toFixed(1) },
                   { label: 'Vorlaufzeit', value: (() => {
                     const lag = btResult.lead_lag?.best_lag_days;

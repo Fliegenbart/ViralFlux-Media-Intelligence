@@ -1479,20 +1479,28 @@ class BacktestService:
         delta_pers = baseline_delta.get("mae_vs_persistence_pct", 0.0)
         delta_seas = baseline_delta.get("mae_vs_seasonal_pct", 0.0)
 
+        lag_r = lead_lag["lag_correlation"]
+        lag_strength = "stark" if abs(lag_r) >= 0.5 else "moderat" if abs(lag_r) >= 0.25 else "schwach"
+
         if lead_lag["bio_leads_target"]:
             proof_text = (
-                f"Bio-Signal (Abwasser-Monitoring) laeuft dem Target um ca. {lead_days} Tage voraus "
-                f"(r={lead_lag['lag_correlation']}; horizon={horizon_days}d + raw_lag={lead_lag['best_lag_days'] - horizon_days}d)."
+                f"Bio-Signal (Abwasser-Monitoring) laeuft dem Target um ca. {lead_days} Tage voraus. "
+                f"Signal-Korrelation am optimalen Lag: r={lag_r} ({lag_strength}). "
+                f"Hinweis: Die Modell-Korrelation oben misst die Gesamtprognose-Guete, "
+                f"die Signal-Korrelation hier nur den Bio-Kanal allein."
             )
         elif lead_days < 0:
             proof_text = (
-                f"Target laeuft dem Bio-Signal um ca. {abs(lead_days)} Tage voraus "
-                f"(r={lead_lag['lag_correlation']}; horizon={horizon_days}d + raw_lag={lead_lag['best_lag_days'] - horizon_days}d)."
+                f"Target laeuft dem Bio-Signal um ca. {abs(lead_days)} Tage voraus. "
+                f"Signal-Korrelation am optimalen Lag: r={lag_r} ({lag_strength}). "
+                f"Hinweis: Die Modell-Korrelation oben misst die Gesamtprognose-Guete, "
+                f"die Signal-Korrelation hier nur den Bio-Kanal allein."
             )
         else:
             proof_text = (
-                f"Bio-Signal und Target zeigen gleichzeitige Korrelation "
-                f"(r={lead_lag['lag_correlation']}; horizon={horizon_days}d gleicht raw_lag aus)."
+                f"Bio-Signal und Target zeigen gleichzeitige Korrelation: r={lag_r} ({lag_strength}). "
+                f"Hinweis: Die Modell-Korrelation oben misst die Gesamtprognose-Guete, "
+                f"die Signal-Korrelation hier nur den Bio-Kanal allein."
             )
 
         result["mode"] = "MARKET_CHECK"

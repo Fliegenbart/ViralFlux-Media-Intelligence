@@ -1563,6 +1563,7 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
     { value: 'MYCOPLASMA', label: 'SURVSTAT Mycoplasma' },
     { value: 'KEUCHHUSTEN', label: 'SURVSTAT Keuchhusten' },
     { value: 'PNEUMOKOKKEN', label: 'SURVSTAT Pneumokokken' },
+    { value: 'H_INFLUENZAE', label: 'SURVSTAT Parainfluenza' },
   ];
 
   const loadBacktestRuns = useCallback(async () => {

@@ -158,6 +158,14 @@ const eur = (n: number) =>
   }).format(Math.round(n || 0));
 
 const trendIcon = (trend: string) => (trend === 'steigend' ? '\u2197' : trend === 'fallend' ? '\u2198' : '\u2192');
+
+/* Callout-Positionen für kleine Stadtstaaten (Igel-Strich nach rechts) */
+const CALLOUT_TARGETS: Record<string, { tx: number; ty: number }> = {
+  HH: { tx: 385, ty: 52 },
+  BE: { tx: 395, ty: 138 },
+  HB: { tx: 385, ty: 92 },
+};
+
 const standortRadius = (einwohner: number | null): number => {
   if (!einwohner || einwohner <= 0) return 2.5;
   return Math.min(6, Math.max(2, 1 + Math.log10(einwohner) * 0.8));
@@ -1132,22 +1140,115 @@ const MediaCockpit: React.FC = () => {
                               filter={isSelected ? 'url(#vf-selected-glow)' : 'url(#vf-map-shadow)'}
                               style={{ transition: 'all 180ms ease' }}
                             />
-                            <circle
-                              cx={shape.cx}
-                              cy={shape.cy - 5}
-                              r={8.5}
-                              fill="rgba(255,255,255,0.92)"
-                              stroke={isSelected ? 'rgba(67,56,202,0.85)' : 'rgba(203,213,225,0.7)'}
-                              strokeWidth={isSelected ? 1.2 : 0.8}
+                            {/* Label-Kreise nur für Bundesländer OHNE Callout */}
+                            {!(code && CALLOUT_TARGETS[code]) && (
+                              <>
+                                <circle
+                                  cx={shape.cx}
+                                  cy={shape.cy - 5}
+                                  r={8.5}
+                                  fill="rgba(255,255,255,0.92)"
+                                  stroke={isSelected ? 'rgba(67,56,202,0.85)' : 'rgba(203,213,225,0.7)'}
+                                  strokeWidth={isSelected ? 1.2 : 0.8}
+                                />
+                                <text x={shape.cx} y={shape.cy - 2.5} textAnchor="middle" fill="#334155" fontSize="8" fontWeight="700">{code || '--'}</text>
+                                {region && (
+                                  <text x={shape.cx} y={shape.cy + 11} textAnchor="middle" fill="#64748b" fontSize="6.6">
+                                    {band}
+                                  </text>
+                                )}
+                                {openingRegion === code && (
+                                  <text x={shape.cx} y={shape.cy + 20} textAnchor="middle" fill="#4f46e5" fontSize="6">
+                                    oeffne...
+                                  </text>
+                                )}
+                              </>
+                            )}
+                          </g>
+                        );
+                      })}
+
+                      {/* Igel-Strich Callouts für Stadtstaaten */}
+                      {mapShapes.map((shape) => {
+                        const code = shape.code || (shape.name ? regionCodeByName[shape.name.toLowerCase()] : undefined);
+                        if (!code) return null;
+                        const callout = CALLOUT_TARGETS[code];
+                        if (!callout) return null;
+                        const region = activeMap.regions?.[code];
+                        const intensity = region ? projectedIntensity(region) : 0;
+                        const fill = region ? intensityColor(intensity) : 'rgba(226,232,240,0.5)';
+                        const isSelected = selectedRegion === code;
+                        const isHovered = hoveredRegion === code;
+                        const band = !region ? '' : intensity >= 0.7 ? 'Hoch' : intensity >= 0.4 ? 'Mittel' : 'Niedrig';
+                        return (
+                          <g
+                            key={`callout-${code}`}
+                            style={{ cursor: region ? 'pointer' : 'default' }}
+                            tabIndex={region ? 0 : undefined}
+                            role={region ? 'button' : undefined}
+                            aria-label={`${shape.name} Callout`}
+                            onClick={() => region && openRecommendationForRegion(code)}
+                            onKeyDown={(e) => {
+                              if (!region) return;
+                              if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openRecommendationForRegion(code); }
+                            }}
+                            onMouseEnter={(e) => {
+                              if (!region) return;
+                              setHoveredRegion(code);
+                              const rect = mapContainerRef.current?.getBoundingClientRect();
+                              if (rect) setTooltipPos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+                            }}
+                            onMouseMove={(e) => {
+                              if (!region) return;
+                              const rect = mapContainerRef.current?.getBoundingClientRect();
+                              if (rect) setTooltipPos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+                            }}
+                            onMouseLeave={() => setHoveredRegion(null)}
+                          >
+                            {/* Verbindungslinie */}
+                            <line
+                              x1={shape.cx} y1={shape.cy}
+                              x2={callout.tx} y2={callout.ty}
+                              stroke={isSelected || isHovered ? '#4338ca' : '#94a3b8'}
+                              strokeWidth={isSelected || isHovered ? 1.2 : 0.8}
+                              strokeDasharray="3 2"
+                              style={{ transition: 'all 180ms ease' }}
                             />
-                            <text x={shape.cx} y={shape.cy - 2.5} textAnchor="middle" fill="#334155" fontSize="8" fontWeight="700">{code || '--'}</text>
+                            {/* Callout-Kreis */}
+                            <circle
+                              cx={callout.tx} cy={callout.ty} r={14}
+                              fill={fill}
+                              stroke={isSelected ? '#4338ca' : isHovered ? 'rgba(67,56,202,0.6)' : 'rgba(203,213,225,0.9)'}
+                              strokeWidth={isSelected ? 2 : 1.2}
+                              filter={isSelected ? 'url(#vf-selected-glow)' : undefined}
+                              style={{ transition: 'all 180ms ease' }}
+                            />
+                            {/* Code-Label */}
+                            <text
+                              x={callout.tx} y={callout.ty + 1}
+                              textAnchor="middle" dominantBaseline="middle"
+                              fill={intensity >= 0.5 ? '#fff' : '#334155'}
+                              fontSize="8.5" fontWeight="700"
+                              style={{ pointerEvents: 'none' }}
+                            >
+                              {code}
+                            </text>
+                            {/* Band-Label unter dem Kreis */}
                             {region && (
-                              <text x={shape.cx} y={shape.cy + 11} textAnchor="middle" fill="#64748b" fontSize="6.6">
+                              <text
+                                x={callout.tx} y={callout.ty + 22}
+                                textAnchor="middle" fill="#64748b" fontSize="6.6"
+                                style={{ pointerEvents: 'none' }}
+                              >
                                 {band}
                               </text>
                             )}
                             {openingRegion === code && (
-                              <text x={shape.cx} y={shape.cy + 20} textAnchor="middle" fill="#4f46e5" fontSize="6">
+                              <text
+                                x={callout.tx} y={callout.ty + 30}
+                                textAnchor="middle" fill="#4f46e5" fontSize="6"
+                                style={{ pointerEvents: 'none' }}
+                              >
                                 oeffne...
                               </text>
                             )}

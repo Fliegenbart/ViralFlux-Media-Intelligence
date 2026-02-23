@@ -230,7 +230,6 @@ class PlaybookEngine:
                     "halsschmerz": len(hals),
                     "erkaeltung": len(erkaelt),
                     "sinus": len(sinus),
-                    "immun": len(immun),
                 }
             },
         }

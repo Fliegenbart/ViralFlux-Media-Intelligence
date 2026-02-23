@@ -57,7 +57,7 @@ const AppLayout: React.FC<Props> = ({ children }) => {
         backdropFilter: 'blur(12px)',
       }}>
         {/* Logo */}
-        <Link to="/lagebild" style={{ display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none' }}>
+        <Link to="/welcome" style={{ display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none' }}>
           <span style={{
             fontWeight: 800, fontSize: 18, letterSpacing: '-0.02em',
             color: 'var(--accent-violet)', background: 'var(--bg-secondary)',

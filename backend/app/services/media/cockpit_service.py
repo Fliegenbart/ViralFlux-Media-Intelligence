@@ -224,6 +224,40 @@ class MediaCockpitService:
             regions[code] = payload
             ranking.append({"code": code, **payload})
 
+        # Fehlende Bundesländer (z.B. Stadtstaaten ohne Kläranlagen) aus PeixEpiScore ergänzen
+        for code, name in BUNDESLAND_NAMES.items():
+            if code in regions:
+                continue
+            peix_entry = peix_regions.get(code)
+            if not peix_entry:
+                continue
+            fallback_payload = {
+                "name": name,
+                "avg_viruslast": 0.0,
+                "avg_normalisiert": None,
+                "n_standorte": 0,
+                "einwohner": 0,
+                "intensity": round(float(peix_entry.get("impact_probability", 0)) / 100.0, 2),
+                "trend": "stabil",
+                "change_pct": 0.0,
+                "peix_score": peix_entry.get("score_0_100"),
+                "peix_band": peix_entry.get("risk_band"),
+                "impact_probability": peix_entry.get("impact_probability"),
+                "recommendation_ref": region_recommendations.get(code),
+                "tooltip": build_region_tooltip(
+                    region_name=name,
+                    virus_typ=virus_typ,
+                    trend="stabil",
+                    change_pct=0.0,
+                    peix_score=peix_entry.get("score_0_100"),
+                    peix_band=peix_entry.get("risk_band", "low"),
+                    impact_probability=peix_entry.get("impact_probability"),
+                    top_drivers=peix_entry.get("top_drivers"),
+                ),
+            }
+            regions[code] = fallback_payload
+            ranking.append({"code": code, **fallback_payload})
+
         ranking.sort(
             key=lambda x: (
                 float(x.get("impact_probability") or 0.0),

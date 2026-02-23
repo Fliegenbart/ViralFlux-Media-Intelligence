@@ -391,48 +391,56 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
 
     return (
       <div className="space-y-6">
-        {/* PeixEpiScore banner */}
-        {peixSummary && (
-          <div className="flex flex-wrap items-center gap-4 px-4 py-3 rounded-xl bg-indigo-50 border border-indigo-100">
-            <span className="text-[10px] text-indigo-400 uppercase tracking-wider font-medium">
-              PeixEpiScore
-            </span>
-            <span className="text-sm font-bold text-indigo-700">
-              {peixSummary.national_score ?? '\u2014'}
-              <span className="text-xs font-normal text-indigo-400"> / 100</span>
-            </span>
-            <span className="text-xs text-indigo-500">
-              Band: <span className="font-semibold">{peixSummary.national_band ?? '\u2014'}</span>
-            </span>
-            <span className="text-xs text-indigo-500">
-              Impact:{' '}
-              <span className="font-semibold">
-                {peixSummary.national_impact_probability ?? '\u2014'}%
-              </span>
-            </span>
+        {/* Header row: Virus filter + PeixEpiScore */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 24, flexWrap: 'wrap' }}>
+          {/* Virus filter chips */}
+          <div>
+            <div className="text-[10px] text-slate-500 uppercase tracking-wider mb-2">
+              Virusfilter Lagekarte
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              {VIRUS_OPTIONS.map((v) => (
+                <button
+                  key={v}
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setVirus(v);
+                  }}
+                  className={`tab-chip ${virus === v ? 'active' : ''}`}
+                >
+                  {v}
+                </button>
+              ))}
+            </div>
           </div>
-        )}
 
-        {/* Virus filter chips */}
-        <div>
-          <div className="text-[10px] text-slate-500 uppercase tracking-wider mb-2">
-            Virusfilter Lagekarte
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            {VIRUS_OPTIONS.map((v) => (
-              <button
-                key={v}
-                type="button"
-                onClick={(e) => {
-                  e.preventDefault();
-                  setVirus(v);
-                }}
-                className={`tab-chip ${virus === v ? 'active' : ''}`}
-              >
-                {v}
-              </button>
-            ))}
-          </div>
+          {/* PeixEpiScore — oben rechts */}
+          {peixSummary && (
+            <div style={{
+              background: 'var(--bg-card)', border: '1px solid var(--border-color)',
+              borderRadius: 12, padding: '14px 20px', minWidth: 220, maxWidth: 320,
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                <span style={{
+                  fontSize: 28, fontWeight: 800, color: 'var(--accent-violet)', lineHeight: 1,
+                }}>
+                  {peixSummary.national_score ?? '\u2014'}
+                </span>
+                <div>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', lineHeight: 1.2 }}>
+                    PeixEpiScore
+                  </div>
+                  <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+                    Band: {peixSummary.national_band ?? '\u2014'} &middot; Impact: {peixSummary.national_impact_probability ?? '\u2014'}%
+                  </div>
+                </div>
+              </div>
+              <p style={{ fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.5, margin: 0 }}>
+                Fusionsindex aus 6 Dimensionen (Epidemiologie, Abwasser, Wetter, Suchtrends, Versorgungslage, Prognose). Zeigt die Gesamtlage f&uuml;r Atemwegsinfekte in Deutschland als Zahl von 0&ndash;100.
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Main grid: map + sidebar */}

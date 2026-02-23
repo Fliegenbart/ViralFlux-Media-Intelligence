@@ -91,16 +91,44 @@ async def root():
 
 @app.get("/health")
 async def health_check():
-    """Health check endpoint."""
+    """Health check endpoint with ML drift status."""
     db_healthy = await check_db_connection()
-    
+
+    drift_info: dict = {}
+    if db_healthy:
+        try:
+            from app.models.database import ForecastAccuracyLog
+            from app.db.session import get_db_context
+            with get_db_context() as db:
+                latest = (
+                    db.query(
+                        ForecastAccuracyLog.virus_typ,
+                        ForecastAccuracyLog.mape,
+                        ForecastAccuracyLog.drift_detected,
+                    )
+                    .distinct(ForecastAccuracyLog.virus_typ)
+                    .order_by(ForecastAccuracyLog.virus_typ, ForecastAccuracyLog.created_at.desc())
+                    .all()
+                )
+                for row in latest:
+                    drift_info[row.virus_typ] = {
+                        "mape": float(row.mape) if row.mape else None,
+                        "drift": bool(row.drift_detected),
+                    }
+        except Exception:
+            pass
+
+    any_drift = any(v.get("drift") for v in drift_info.values())
+
     return {
         "status": "healthy" if db_healthy else "unhealthy",
         "timestamp": datetime.utcnow(),
         "components": {
             "database": "up" if db_healthy else "down",
-            "api": "up"
-        }
+            "api": "up",
+            "ml_drift": "warning" if any_drift else "ok",
+        },
+        "ml_accuracy": drift_info or None,
     }
 
 

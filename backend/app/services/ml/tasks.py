@@ -191,8 +191,25 @@ def compute_forecast_accuracy_task(self) -> Dict[str, Any]:
                 "drift_detected": drift,
             }
 
+            # Trend-Analyse: letzte 3 Logs vergleichen
+            recent_logs = (
+                db.query(ForecastAccuracyLog)
+                .filter(ForecastAccuracyLog.virus_typ == virus)
+                .order_by(ForecastAccuracyLog.created_at.desc())
+                .limit(3)
+                .all()
+            )
+            if len(recent_logs) >= 2:
+                mapes = [l.mape for l in recent_logs if l.mape is not None]
+                if len(mapes) >= 2 and all(m > 35 for m in mapes[:2]):
+                    results[virus]["consecutive_drift"] = True
+                    logger.warning(
+                        "PERSISTENT DRIFT for %s: MAPE>35%% for %d consecutive windows",
+                        virus, len([m for m in mapes if m > 35]),
+                    )
+
             if drift:
-                logger.warning(f"DRIFT DETECTED for {virus}: MAPE={mape:.1f}% > 35% threshold")
+                logger.warning("DRIFT DETECTED for %s: MAPE=%.1f%% > 35%% threshold", virus, mape)
 
         db.commit()
 

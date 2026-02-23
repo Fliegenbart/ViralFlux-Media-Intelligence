@@ -7,12 +7,12 @@ import { de } from 'date-fns/locale';
 import { CampaignChannelPlanItem, DecisionFact, RecommendationDetail, WorkflowStatus } from '../types/media';
 
 const STATUS_LABELS: Record<string, string> = {
-  DRAFT: 'Draft',
-  READY: 'Ready',
-  APPROVED: 'Approved',
-  ACTIVATED: 'Activated',
-  DISMISSED: 'Dismissed',
-  EXPIRED: 'Expired',
+  DRAFT: 'Entwurf',
+  READY: 'Bereit',
+  APPROVED: 'Freigegeben',
+  ACTIVATED: 'Aktiviert',
+  DISMISSED: 'Verworfen',
+  EXPIRED: 'Abgelaufen',
 };
 
 const TRANSITIONS: Record<string, WorkflowStatus[]> = {

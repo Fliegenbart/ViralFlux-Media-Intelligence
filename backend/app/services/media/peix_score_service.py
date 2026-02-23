@@ -107,7 +107,18 @@ class PeixEpiScoreService:
         if not config:
             return
 
-        # Map 4D-Gewichte auf 6D-Struktur
+        # 4D (Backtester Ridge) → 6D (PeixEpiScore) Mapping.
+        #
+        # Der Backtester kalibriert 4 Gewichte: bio, market, psycho, context.
+        # PeixEpiScore benoetigt 6 Dimensionen. Mapping:
+        #   bio    → bio      (1:1, direkt)
+        #   market → shortage (1:1, direkt)
+        #   psycho → search   (1:1, direkt)
+        #   context → forecast (50%) + weather (30%) + baseline (20%)
+        #
+        # Der Context-Split (50/30/20) spiegelt die relative Erklaerungskraft
+        # wider: Forecasts enthalten aggregierte ML-Signale, Wetter liefert
+        # kurzfristigen Kontext, Baseline dient als Regularisierung.
         total_4d = (
             config.weight_bio + config.weight_market
             + config.weight_psycho + config.weight_context
@@ -115,22 +126,20 @@ class PeixEpiScoreService:
         if total_4d <= 0:
             return
 
-        # bio → bio_aggregate, market → shortage, psycho → search,
-        # context → split over weather/forecast/baseline
         bio_frac = config.weight_bio / total_4d
         market_frac = config.weight_market / total_4d
         psycho_frac = config.weight_psycho / total_4d
         context_frac = config.weight_context / total_4d
 
         self._weights = {
-            "bio": round(bio_frac * 0.85, 4),       # Bio bleibt dominant
+            "bio": round(bio_frac, 4),
             "forecast": round(context_frac * 0.50, 4),
             "weather": round(context_frac * 0.30, 4),
             "shortage": round(market_frac, 4),
             "search": round(psycho_frac, 4),
             "baseline": round(context_frac * 0.20, 4),
         }
-        # Renormalize to ensure sum = 1.0
+        # Renormalisierung: Summe = 1.0 (noetig wegen Rundung)
         total = sum(self._weights.values())
         if total > 0:
             self._weights = {k: round(v / total, 4) for k, v in self._weights.items()}

@@ -1026,17 +1026,17 @@ class BacktestService:
 
         if lead_lag["bio_leads_target"]:
             proof_text = (
-                f"Bio-Signal führt die Zielreihe um ca. {lead_days} Tage "
-                f"(Lag-Korrelation {lead_lag['lag_correlation']})."
+                f"Bio-Signal zeigt eine zeitliche Vorlauf-Korrelation von ca. {lead_days} Tagen "
+                f"(r={lead_lag['lag_correlation']}; statistischer Zusammenhang, nicht kausal)."
             )
         elif lead_days < 0:
             proof_text = (
-                f"Zielreihe führt das Bio-Signal um ca. {abs(lead_days)} Tage "
-                f"(Lag-Korrelation {lead_lag['lag_correlation']})."
+                f"Zielreihe zeigt eine zeitliche Vorlauf-Korrelation von ca. {abs(lead_days)} Tagen "
+                f"gegenueber dem Bio-Signal (r={lead_lag['lag_correlation']}; statistisch, nicht kausal)."
             )
         else:
             proof_text = (
-                f"Kein klarer Lead erkennbar (Lag-Korrelation {lead_lag['lag_correlation']})."
+                f"Kein klarer zeitlicher Vorlauf erkennbar (Lag-Korrelation r={lead_lag['lag_correlation']})."
             )
 
         result["mode"] = "MARKET_CHECK"
@@ -1053,14 +1053,15 @@ class BacktestService:
         }
         result["proof_text"] = (
             f"{proof_text} "
-            f"Gegenüber Persistence beträgt die MAE-Veränderung {delta_pers:+.2f}%, "
-            f"gegenüber Seasonal-Naive {delta_seas:+.2f}%."
+            f"Walk-forward Backtest: MAE vs. Persistence {delta_pers:+.2f}%, "
+            f"vs. Seasonal-Naive {delta_seas:+.2f}% (historisch; zukuenftige Performance kann abweichen)."
         )
         result["llm_insight"] = (
             f"{result['proof_text']} "
-            f"Walk-forward Modellgüte: R²={result['metrics']['r2_score']}, "
+            f"Modellguete: R²={result['metrics']['r2_score']}, "
             f"Korrelation={result['metrics']['correlation_pct']}%, "
-            f"sMAPE={result['metrics'].get('smape', 0)}."
+            f"sMAPE={result['metrics'].get('smape', 0)}. "
+            f"Hinweis: Alle Metriken basieren auf historischen Mustern."
         )
 
         persisted_run_id = self._persist_backtest_result(
@@ -1656,12 +1657,13 @@ Verwende einen sachlichen, vertrauenswürdigen Ton."""
             "alert_rate_pct": round(alerts_count / total_weeks * 100, 1),
             "output_path": output_path,
             "proof_statement": (
-                f"ViralFlux ML detected the {disease} outbreak {ttd_days} days before "
-                f"the RKI peak ({rki_peak_date.strftime('%Y-%m-%d')}, {rki_peak_cases:,} cases). "
-                f"First alert: {ml_first_alert_date.strftime('%Y-%m-%d') if ml_first_alert_date else 'N/A'}."
+                f"ViralFlux-Signal zeigte {ttd_days} Tage vor dem RKI-Peak "
+                f"({rki_peak_date.strftime('%Y-%m-%d')}, {rki_peak_cases:,} Faelle) ein Fruehsignal. "
+                f"Erste Warnung: {ml_first_alert_date.strftime('%Y-%m-%d') if ml_first_alert_date else 'k.A.'}. "
+                f"(Retrospektive Analyse — kein garantierter Vorhersagevorteil.)"
             ) if ml_first_alert_date else (
-                f"No ML alert triggered during the evaluation period. "
-                f"RKI peak: {rki_peak_date.strftime('%Y-%m-%d')} ({rki_peak_cases:,} cases)."
+                f"Kein ML-Fruehsignal im Evaluationszeitraum ausgeloest. "
+                f"RKI-Peak: {rki_peak_date.strftime('%Y-%m-%d')} ({rki_peak_cases:,} Faelle)."
             ),
         }
 

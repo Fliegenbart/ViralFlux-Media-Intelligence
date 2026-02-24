@@ -89,11 +89,12 @@ class BacktestService:
     }
 
     # Basis-Features (krankheitsunabhängig)
+    # Exogene Signale — KEINE Target-Lags!
+    # Target-Lags (lag1-3, ma3) wurden entfernt weil sie das Modell
+    # zu einem Nachlauf-Indikator machen: 91% Importance auf lag1
+    # → Prognose peakt 3-4 Wochen NACH dem echten Peak.
+    # Nur target_roc (Richtung) bleibt als schwaches Trend-Signal.
     BASE_FEATURE_COLS: list[str] = [
-        "target_lag1",
-        "target_lag2",
-        "target_lag3",
-        "target_ma3",
         "target_roc",
         "week_sin",
         "week_cos",
@@ -106,15 +107,13 @@ class BacktestService:
     ]
 
     # Kompakte Features für kleine Datasets (< 35 Trainingspunkte)
-    # Nur die informativsten Features → besseres Feature/Sample-Verhältnis
     COMPACT_BASE_COLS: list[str] = [
-        "target_lag1",
-        "target_ma3",
         "target_roc",
         "week_sin",
         "week_cos",
         "weather_temp",
         "grippeweb_are",
+        "notaufnahme_ari",
     ]
 
     COMPACT_VIRAL_COLS: list[str] = COMPACT_BASE_COLS + [
@@ -648,13 +647,8 @@ class BacktestService:
                     row_dict["survstat_xdisease_1"] = scores["survstat_xdisease_1"]
                     row_dict["survstat_xdisease_2"] = scores["survstat_xdisease_2"]
 
-                    # Temporal features from target history (no future leak)
+                    # Target rate of change only (keine Lags — sonst Nachlauf)
                     i = int(idx)
-                    row_dict["target_lag1"] = menge_values[i - 1] if i >= 1 else real_qty
-                    row_dict["target_lag2"] = menge_values[i - 2] if i >= 2 else row_dict["target_lag1"]
-                    row_dict["target_lag3"] = menge_values[i - 3] if i >= 3 else row_dict["target_lag2"]
-                    recent_3 = menge_values[max(0, i - 3):i] or [real_qty]
-                    row_dict["target_ma3"] = sum(recent_3) / len(recent_3)
                     prev = menge_values[i - 1] if i >= 1 else 1.0
                     row_dict["target_roc"] = (prev - (menge_values[i - 2] if i >= 2 else prev)) / prev if prev > 0 else 0.0
 
@@ -1273,21 +1267,18 @@ class BacktestService:
             )
 
             # Target lags from training history (no future leak)
+            # Target rate of change (Richtung, kein Niveau)
             t_vals = train_target_df["menge"].tolist()
-            target_lag1 = float(t_vals[-1]) if len(t_vals) >= 1 else 0.0
-            target_lag2 = float(t_vals[-2]) if len(t_vals) >= 2 else target_lag1
-            target_lag3 = float(t_vals[-3]) if len(t_vals) >= 3 else target_lag2
-            recent_3 = t_vals[-3:] if len(t_vals) >= 3 else t_vals
-            target_ma3 = sum(recent_3) / len(recent_3) if recent_3 else 0.0
+            lag1 = float(t_vals[-1]) if len(t_vals) >= 1 else 0.0
             prev = float(t_vals[-2]) if len(t_vals) >= 2 else 1.0
-            target_roc = (target_lag1 - prev) / prev if prev > 0 else 0.0
+            target_roc = (lag1 - prev) / prev if prev > 0 else 0.0
 
             # Seasonality
             iso_week = forecast_time.isocalendar()[1]
             week_sin = round(math.sin(2 * math.pi * iso_week / 52), 4)
             week_cos = round(math.cos(2 * math.pi * iso_week / 52), 4)
 
-            # Build feature vector in same order as feature_cols
+            # Build feature vector — nur exogene Signale + Saisonalität
             test_feat = {
                 "wastewater_raw": test_scores["wastewater_raw"],
                 "positivity_raw": test_scores["positivity_raw"],
@@ -1296,10 +1287,6 @@ class BacktestService:
                 "weather_temp": test_scores["weather_temp"],
                 "weather_humidity": test_scores["weather_humidity"],
                 "school_start_float": test_scores["school_start_float"],
-                "target_lag1": target_lag1,
-                "target_lag2": target_lag2,
-                "target_lag3": target_lag3,
-                "target_ma3": target_ma3,
                 "target_roc": target_roc,
                 "week_sin": week_sin,
                 "week_cos": week_cos,
@@ -1413,10 +1400,6 @@ class BacktestService:
                 )
 
                 t1 = float(rolling_values[-1]) if rolling_values else 0.0
-                t2 = float(rolling_values[-2]) if len(rolling_values) >= 2 else t1
-                t3 = float(rolling_values[-3]) if len(rolling_values) >= 3 else t2
-                r3 = rolling_values[-3:] if len(rolling_values) >= 3 else rolling_values
-                t_ma3 = sum(r3) / len(r3) if r3 else 0.0
                 t_prev = float(rolling_values[-2]) if len(rolling_values) >= 2 else 1.0
                 t_roc = (t1 - t_prev) / t_prev if t_prev > 0 else 0.0
 
@@ -1432,8 +1415,7 @@ class BacktestService:
                     "weather_temp": test_scores["weather_temp"],
                     "weather_humidity": test_scores["weather_humidity"],
                     "school_start_float": test_scores["school_start_float"],
-                    "target_lag1": t1, "target_lag2": t2, "target_lag3": t3,
-                    "target_ma3": t_ma3, "target_roc": t_roc,
+                    "target_roc": t_roc,
                     "week_sin": w_sin, "week_cos": w_cos,
                     "xdisease_load": test_scores["xdisease_load"],
                     "grippeweb_are": test_scores["grippeweb_are"],

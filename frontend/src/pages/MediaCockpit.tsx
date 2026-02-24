@@ -1897,29 +1897,78 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
           {/* Market result */}
           {btResult?.metrics && (
             <div>
-              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 20 }}>
-                {[
-                  { label: 'R²', value: btResult.metrics.r2_score?.toFixed(3) },
-                  { label: 'Modell-Korr.', value: `${btResult.metrics.correlation_pct?.toFixed(1)}%` },
-                  { label: 'sMAPE', value: btResult.metrics.smape?.toFixed(1) },
-                  { label: 'Vorlaufzeit', value: (() => {
-                    const lag = btResult.lead_lag?.best_lag_days;
-                    if (lag == null) return '?';
-                    if (lag > 0) return `Bio führt ${lag}T`;
-                    if (lag < 0) return `Target führt ${Math.abs(lag)}T`;
-                    return 'gleichzeitig';
-                  })() },
-                ].map((m) => (
-                  <div key={m.label} style={metricBoxStyle}>
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4, textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>
-                      {m.label}
+              {/* Actionable insight banner */}
+              {(() => {
+                const r2 = btResult.metrics.r2_score || 0;
+                const horizon = btResult.walk_forward?.horizon_days || 14;
+                const fcWeeks = btResult.forecast_weeks || 0;
+                const fcData = (btResult.chart_data || []).filter((d: any) => d.is_forecast);
+                const lastFc = fcData[fcData.length - 1];
+                const firstFc = fcData[0];
+                const trendUp = lastFc && firstFc && lastFc.forecast_qty > firstFc.forecast_qty * 1.1;
+                const trendDown = lastFc && firstFc && lastFc.forecast_qty < firstFc.forecast_qty * 0.9;
+
+                let signal = 'beobachten';
+                let signalColor = 'var(--text-muted)';
+                let signalBg = 'var(--bg-secondary)';
+                let signalIcon = '\u23F3';
+                if (r2 >= 0.3 && trendUp) {
+                  signal = 'Jetzt Media aktivieren';
+                  signalColor = '#c0392b';
+                  signalBg = 'rgba(192,57,43,0.06)';
+                  signalIcon = '\u26A0\uFE0F';
+                } else if (r2 >= 0.3 && trendDown) {
+                  signal = 'Welle klingt ab';
+                  signalColor = '#27ae60';
+                  signalBg = 'rgba(39,174,96,0.06)';
+                  signalIcon = '\u2705';
+                } else if (r2 >= 0.3) {
+                  signal = 'Stabil — beobachten';
+                  signalColor = 'var(--accent-violet)';
+                  signalBg = 'rgba(139,92,246,0.06)';
+                  signalIcon = '\uD83D\uDD0D';
+                }
+
+                return (
+                  <div style={{
+                    display: 'flex', gap: 16, alignItems: 'stretch', marginBottom: 20, flexWrap: 'wrap',
+                  }}>
+                    {/* Signal card — big */}
+                    <div style={{
+                      flex: '1 1 200px', padding: '16px 20px', borderRadius: 12,
+                      background: signalBg, border: `1px solid ${signalColor}22`,
+                    }}>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
+                        Handlungsempfehlung
+                      </div>
+                      <div style={{ fontSize: 22, fontWeight: 700, color: signalColor }}>
+                        {signalIcon} {signal}
+                      </div>
+                      <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4 }}>
+                        Modellgüte R²={r2.toFixed(2)} — Prognose {horizon}T Vorlauf — {fcWeeks > 0 ? `${fcWeeks} Wochen Forecast` : 'kein Forecast'}
+                      </div>
                     </div>
-                    <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)' }}>
-                      {m.value}
+
+                    {/* Compact metrics */}
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                      {[
+                        { label: 'Trefferquote', value: `${btResult.metrics.correlation_pct?.toFixed(0)}%`, sub: 'Korrelation' },
+                        { label: 'Vorlauf', value: `${btResult.walk_forward?.horizon_days || 14}T`, sub: 'Prognose-Fenster' },
+                        { label: 'Genauigkeit', value: btResult.metrics.smape?.toFixed(0), sub: 'sMAPE (niedr.=besser)' },
+                      ].map((m) => (
+                        <div key={m.label} style={{
+                          padding: '10px 14px', borderRadius: 10,
+                          background: 'var(--bg-secondary)', border: '1px solid var(--border-color)',
+                          textAlign: 'center' as const, minWidth: 90,
+                        }}>
+                          <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>{m.value}</div>
+                          <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>{m.sub}</div>
+                        </div>
+                      ))}
                     </div>
                   </div>
-                ))}
-              </div>
+                );
+              })()}
 
               {/* Top-5 Regions card */}
               {topRegions?.regions?.length > 0 && (
@@ -2035,12 +2084,11 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                         <Legend
                           wrapperStyle={{ fontSize: 12, paddingTop: 4 }}
                           payload={[
-                            { value: 'Ist-Wert', type: 'line', color: '#c0392b' },
-                            { value: 'ViralFlux', type: 'line', color: 'var(--accent-violet)' },
-                            { value: 'Forecast', type: 'line', color: 'var(--accent-violet)' },
+                            { value: 'Tatsächliche Inzidenz', type: 'line', color: '#c0392b' },
+                            { value: `Prognose (${btResult.walk_forward?.horizon_days || 14}T Vorlauf)`, type: 'line', color: 'var(--accent-violet)' },
+                            { value: 'Zukunft', type: 'line', color: 'var(--accent-violet)' },
                             { value: '80% KI', type: 'rect', color: 'rgba(139,92,246,0.25)' },
                             { value: '95% KI', type: 'rect', color: 'rgba(139,92,246,0.1)' },
-                            { value: 'Seasonal', type: 'line', color: '#95a5a6' },
                           ]}
                         />
 
@@ -2104,10 +2152,9 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                           ) : null;
                         })()}
 
-                        <Line type="monotone" dataKey="real_qty" name="Ist-Wert" stroke="#c0392b" strokeWidth={2} dot={false} />
-                        <Line type="monotone" dataKey="predicted_qty" name="ViralFlux" stroke="var(--accent-violet)" strokeWidth={2} dot={false} />
-                        <Line type="monotone" dataKey="forecast_qty" name="Forecast" stroke="var(--accent-violet)" strokeWidth={2} dot={false} strokeDasharray="8 4" connectNulls={false} />
-                        <Line type="monotone" dataKey="baseline_seasonal" name="Seasonal" stroke="#95a5a6" strokeWidth={1.5} dot={false} strokeDasharray="4 4" />
+                        <Line type="monotone" dataKey="real_qty" name="Tatsächliche Inzidenz" stroke="#c0392b" strokeWidth={2} dot={false} />
+                        <Line type="monotone" dataKey="predicted_qty" name={`Prognose (${btResult.walk_forward?.horizon_days || 14}T Vorlauf)`} stroke="var(--accent-violet)" strokeWidth={2} dot={false} />
+                        <Line type="monotone" dataKey="forecast_qty" name="Zukunft" stroke="var(--accent-violet)" strokeWidth={2} dot={false} strokeDasharray="8 4" connectNulls={false} />
 
                         <Brush
                           dataKey="date"
@@ -2122,19 +2169,27 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                       </ComposedChart>
                     </ResponsiveContainer>
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--text-muted)', marginTop: 4 }}>
-                    <span>Schieberegler zum Reinzoomen — Handles verschieben</span>
+                  <div style={{
+                    marginTop: 8, padding: '8px 12px', borderRadius: 8,
+                    background: 'rgba(139,92,246,0.04)', border: '1px solid rgba(139,92,246,0.12)',
+                    fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.5,
+                  }}>
+                    <strong>So liest du das Chart:</strong> Jeder Punkt der violetten Linie wurde <strong>{btResult.walk_forward?.horizon_days || 14} Tage vorher</strong> prognostiziert —
+                    je näher sie an der roten Linie liegt, desto besser die Vorhersage.
                     {btResult.forecast_weeks > 0 && (
-                      <span>Forecast: {btResult.forecast_weeks} Wochen — Bänder = 80%/95% Konfidenzintervall</span>
+                      <> Die gestrichelte Linie zeigt den <strong>{btResult.forecast_weeks}-Wochen-Forecast</strong> mit 80%/95% Konfidenzband.</>
                     )}
                   </div>
                 </div>
               )}
 
               {btResult.proof_text && (
-                <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6, margin: 0 }}>
-                  {btResult.proof_text}
-                </p>
+                <details style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 8 }}>
+                  <summary style={{ cursor: 'pointer', userSelect: 'none' as const }}>Technische Details</summary>
+                  <p style={{ marginTop: 6, lineHeight: 1.6, color: 'var(--text-secondary)' }}>
+                    {btResult.proof_text}
+                  </p>
+                </details>
               )}
             </div>
           )}

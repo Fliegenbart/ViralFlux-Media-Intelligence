@@ -62,6 +62,42 @@ class BacktesterMathTests(unittest.TestCase):
         self.assertGreater(abs(lag0_corr), lead_lag["lag_correlation"])
         self.assertGreater(lead_lag["lag_correlation"], 0.0)
 
+    def test_canonicalize_factor_weights_maps_enhanced_features(self) -> None:
+        service = BacktestService(db=None)
+        raw_weights = {
+            "ww_lag0w": 0.4,
+            "positivity_raw": 0.2,
+            "target_level": 0.2,
+            "trends_raw": 0.1,
+            "weather_temp": 0.1,
+        }
+
+        canonical = service._canonicalize_factor_weights(raw_weights)
+
+        self.assertEqual(set(canonical.keys()), {"bio", "market", "psycho", "context"})
+        self.assertAlmostEqual(sum(canonical.values()), 1.0, places=2)
+        self.assertGreater(canonical["bio"], canonical["psycho"])
+
+    @patch("app.services.llm.vllm_service.generate_text_sync", side_effect=RuntimeError("vLLM down"))
+    def test_generate_llm_insight_handles_noncanonical_weights(self, _llm_mock) -> None:
+        service = BacktestService(db=None)
+        text = service._generate_llm_insight(
+            weights={
+                "seasonal_baseline": 0.3,
+                "ww_lag0w": 0.4,
+                "target_level": 0.2,
+                "trends_raw": 0.1,
+            },
+            r2=0.42,
+            correlation=0.65,
+            mae=12.0,
+            n_samples=24,
+            virus_typ="Influenza A",
+        )
+
+        self.assertIsInstance(text, str)
+        self.assertIn("stärkste Einflussfaktor", text)
+
     @patch("app.services.ml.backtester.BacktestService._generate_llm_insight")
     @patch("app.services.ml.backtester.BacktestService._run_walk_forward_market_backtest")
     def test_run_calibration_uses_walk_forward_and_returns_oos_metadata(

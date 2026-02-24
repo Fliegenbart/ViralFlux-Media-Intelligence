@@ -2239,8 +2239,9 @@ class BacktestService:
         virus_typ: str,
     ) -> str:
         """LLM-Erklärung der Kalibrierungsergebnisse via lokalem vLLM."""
-        dominant = max(weights, key=weights.get)
-        weakest = min(weights, key=weights.get)
+        weights_canonical = self._canonicalize_factor_weights(weights)
+        dominant = max(weights_canonical, key=weights_canonical.get)
+        weakest = min(weights_canonical, key=weights_canonical.get)
 
         factor_names = {
             "bio": "Biologische Daten (RKI-Abwasser + Laborpositivrate)",
@@ -2260,10 +2261,10 @@ Harte Fakten:
 - Durchschnittliche Abweichung (MAE): {mae:.0f} Einheiten
 
 Ermittelte Einflussfaktoren auf die Bestellungen dieses Labors:
-- {factor_names['bio']}: {weights['bio']*100:.0f}% Wichtigkeit
-- {factor_names['market']}: {weights['market']*100:.0f}% Wichtigkeit
-- {factor_names['psycho']}: {weights['psycho']*100:.0f}% Wichtigkeit
-- {factor_names['context']}: {weights['context']*100:.0f}% Wichtigkeit
+- {factor_names['bio']}: {weights_canonical['bio']*100:.0f}% Wichtigkeit
+- {factor_names['market']}: {weights_canonical['market']*100:.0f}% Wichtigkeit
+- {factor_names['psycho']}: {weights_canonical['psycho']*100:.0f}% Wichtigkeit
+- {factor_names['context']}: {weights_canonical['context']*100:.0f}% Wichtigkeit
 
 Stärkster Faktor: {factor_names[dominant]}
 Schwächster Faktor: {factor_names[weakest]}
@@ -2290,9 +2291,73 @@ Verwende einen sachlichen, vertrauenswürdigen Ton."""
                 f"Die Analyse von {n_samples} Datenpunkten zeigt eine "
                 f"{abs(correlation)*100:.0f}%ige Korrelation zwischen ViralFlux-Signalen "
                 f"und Ihren tatsächlichen Bestellungen. Der stärkste Einflussfaktor "
-                f"ist \"{factor_names[dominant]}\" ({weights[dominant]*100:.0f}%). "
+                f"ist \"{factor_names[dominant]}\" ({weights_canonical[dominant]*100:.0f}%). "
                 f"Wir empfehlen, das Modell mit diesen optimierten Gewichten zu kalibrieren."
             )
+
+    def _map_feature_to_factor(self, feature_name: str) -> str:
+        """Mappt beliebige Feature-Namen auf die vier Business-Faktoren."""
+        key = str(feature_name or "").strip().lower()
+        if not key:
+            return "market"
+
+        if (
+            key.startswith("bio")
+            or key.startswith("ww_")
+            or "positivity" in key
+            or key.startswith("xdisease")
+            or key.startswith("survstat_xdisease")
+        ):
+            return "bio"
+
+        if key.startswith("psycho") or "trend" in key:
+            return "psycho"
+
+        if (
+            key.startswith("context")
+            or key.startswith("weather")
+            or key.startswith("school")
+            or key.startswith("week_")
+            or key.startswith("seasonal")
+        ):
+            return "context"
+
+        if (
+            key.startswith("market")
+            or key.startswith("are_")
+            or key.startswith("target_")
+            or key.startswith("grippeweb")
+            or key.startswith("notaufnahme")
+        ):
+            return "market"
+
+        return "market"
+
+    def _canonicalize_factor_weights(self, weights: Optional[dict]) -> dict[str, float]:
+        """Normiert Gewichte auf bio/market/psycho/context für UI/LLM-Kompatibilität."""
+        grouped = {k: 0.0 for k in self.DEFAULT_WEIGHTS.keys()}
+        if not isinstance(weights, dict) or not weights:
+            return dict(self.DEFAULT_WEIGHTS)
+
+        for raw_key, raw_value in weights.items():
+            try:
+                value = float(raw_value)
+            except (TypeError, ValueError):
+                continue
+            if not np.isfinite(value):
+                continue
+            value = abs(value)
+            factor = raw_key if raw_key in grouped else self._map_feature_to_factor(raw_key)
+            grouped[factor] += value
+
+        total = float(sum(grouped.values()))
+        if total <= 0:
+            return dict(self.DEFAULT_WEIGHTS)
+
+        return {
+            key: round(grouped[key] / total, 3)
+            for key in grouped.keys()
+        }
 
     # ─────────────────────────────────────────────────────────────────────────
     # Globale Kalibrierung (3 Jahre, RKI-Fallback)
@@ -2366,21 +2431,22 @@ Verwende einen sachlichen, vertrauenswürdigen Ton."""
             return result
 
         new_weights = result["optimized_weights"]
+        canonical_weights = self._canonicalize_factor_weights(new_weights)
         metrics = result["metrics"]
 
         # 4. Speichern als Global Default
         self._save_global_defaults(
-            new_weights, metrics["r2_score"], len(df)
+            canonical_weights, metrics["r2_score"], len(df)
         )
 
         message = (
             f"Analyse über {len(df)} Datenpunkte "
             f"({len(df) / 365 * 7:.1f} Wochen) abgeschlossen. "
             f"Basis: {target_source}. "
-            f"Neue Gewichtung: Bio {new_weights['bio'] * 100:.0f}%, "
-            f"Markt {new_weights['market'] * 100:.0f}%, "
-            f"Psycho {new_weights['psycho'] * 100:.0f}%, "
-            f"Kontext {new_weights['context'] * 100:.0f}%."
+            f"Neue Gewichtung: Bio {canonical_weights['bio'] * 100:.0f}%, "
+            f"Markt {canonical_weights['market'] * 100:.0f}%, "
+            f"Psycho {canonical_weights['psycho'] * 100:.0f}%, "
+            f"Kontext {canonical_weights['context'] * 100:.0f}%."
         )
 
         return {
@@ -2389,6 +2455,7 @@ Verwende einen sachlichen, vertrauenswürdigen Ton."""
             "period_days": days_back,
             "data_points": len(df),
             "new_weights": new_weights,
+            "new_weights_canonical": canonical_weights,
             "metrics": metrics,
             "message": message,
         }
@@ -2397,6 +2464,7 @@ Verwende einen sachlichen, vertrauenswürdigen Ton."""
         self, weights: dict, score: float, days_count: int
     ):
         """Speichere optimierte Gewichte als Global Default."""
+        weights = self._canonicalize_factor_weights(weights)
         config = self.db.query(LabConfiguration).filter_by(
             is_global_default=True
         ).first()

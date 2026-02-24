@@ -1,4 +1,5 @@
 import unittest
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import numpy as np
@@ -8,6 +9,50 @@ from app.services.ml.backtester import BacktestService
 
 
 class BacktesterMathTests(unittest.TestCase):
+    def test_build_planning_curve_includes_issue_and_target_dates(self) -> None:
+        class FakeQuery:
+            def __init__(self, rows):
+                self._rows = rows
+
+            def filter(self, *args, **kwargs):
+                return self
+
+            def group_by(self, *args, **kwargs):
+                return self
+
+            def order_by(self, *args, **kwargs):
+                return self
+
+            def all(self):
+                return self._rows
+
+        class FakeDB:
+            def __init__(self, rows):
+                self._rows = rows
+
+            def query(self, *args, **kwargs):
+                return FakeQuery(self._rows)
+
+        weeks = pd.date_range("2024-01-01", periods=20, freq="W-MON")
+        ww_rows = [
+            SimpleNamespace(week=week.to_pydatetime(), avg_vl=float(idx + 1))
+            for idx, week in enumerate(weeks)
+        ]
+        target_df = pd.DataFrame({
+            "datum": weeks,
+            "menge": np.linspace(10.0, 40.0, len(weeks)),
+        })
+
+        service = BacktestService(db=FakeDB(ww_rows))
+        planning = service._build_planning_curve(target_df=target_df, virus_typ="Influenza A", days_back=4000)
+
+        self.assertTrue(planning["curve"])
+        first_point = planning["curve"][0]
+        self.assertIn("issue_date", first_point)
+        self.assertIn("target_date", first_point)
+        self.assertEqual(first_point["date"], first_point["target_date"])
+        self.assertEqual(first_point["based_on"], first_point["issue_date"])
+
     def test_augment_lead_lag_adds_horizon_to_relative_lag(self) -> None:
         lead_lag = {"best_lag_days": 0, "lag_correlation": 0.82}
         enriched = BacktestService._augment_lead_lag_with_horizon(lead_lag, horizon_days=7)

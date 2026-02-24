@@ -584,6 +584,8 @@ export interface BacktestResponse {
     curve?: Array<{
       date: string;
       based_on?: string;
+      issue_date?: string;
+      target_date?: string;
       planning_qty?: number;
     }>;
   };

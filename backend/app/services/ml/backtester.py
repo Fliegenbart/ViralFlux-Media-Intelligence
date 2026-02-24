@@ -1061,6 +1061,8 @@ class BacktestService:
             curve.append({
                 "date": target_date.strftime("%Y-%m-%d"),
                 "based_on": ww_date.strftime("%Y-%m-%d"),
+                "issue_date": ww_date.strftime("%Y-%m-%d"),
+                "target_date": target_date.strftime("%Y-%m-%d"),
                 "planning_qty": round(predicted, 2),
             })
 

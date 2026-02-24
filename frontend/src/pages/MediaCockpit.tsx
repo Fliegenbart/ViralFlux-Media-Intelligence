@@ -1709,21 +1709,38 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
       if (mode === 'planning' && result?.planning_curve?.curve?.length) {
         const dateMap: Record<string, BacktestChartPoint> = {};
         for (const row of chartData.filter((p) => !p.is_forecast)) {
-          if (!dateMap[row.date]) dateMap[row.date] = { date: row.date };
-          if (row.real_qty != null) dateMap[row.date].real_qty = row.real_qty;
+          const targetDate = row.target_date || row.date;
+          if (!dateMap[targetDate]) dateMap[targetDate] = { date: targetDate };
+          dateMap[targetDate].target_date = targetDate;
+          if (row.real_qty != null) dateMap[targetDate].real_qty = row.real_qty;
         }
+
+        const lastRealDate = chartData
+          .filter((p) => !p.is_forecast && p.real_qty != null)
+          .map((p) => p.target_date || p.date)
+          .sort((a, b) => a.localeCompare(b))
+          .pop() || '';
+
         for (const point of result.planning_curve.curve) {
-          if (!dateMap[point.date]) dateMap[point.date] = { date: point.date };
-          dateMap[point.date].predicted_qty = point.planning_qty ?? null;
-          dateMap[point.date].based_on = point.based_on;
-        }
-        const lastReal = chartData.filter((p) => !p.is_forecast && p.real_qty != null).pop();
-        const lastRealDate = lastReal?.date || '';
-        for (const point of result.planning_curve.curve) {
-          if (point.date > lastRealDate && dateMap[point.date]) {
-            dateMap[point.date].forecast_qty = point.planning_qty ?? null;
+          const issueDate = point.issue_date || point.based_on;
+          const targetDate = point.target_date || point.date;
+          if (!issueDate || !targetDate) continue;
+
+          if (!dateMap[issueDate]) dateMap[issueDate] = { date: issueDate };
+          dateMap[issueDate].issue_date = issueDate;
+          dateMap[issueDate].target_date = targetDate;
+          dateMap[issueDate].based_on = point.based_on || issueDate;
+          dateMap[issueDate].predicted_qty = point.planning_qty ?? null;
+
+          if (!dateMap[targetDate]) {
+            dateMap[targetDate] = { date: targetDate, target_date: targetDate };
+          }
+
+          if (targetDate > lastRealDate) {
+            dateMap[issueDate].forecast_qty = point.planning_qty ?? null;
           }
         }
+
         return Object.values(dateMap).sort((a, b) => a.date.localeCompare(b.date));
       }
 
@@ -1802,6 +1819,24 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
     },
     [],
   );
+
+  const buildPlanningConnectors = useCallback((rows: BacktestChartPoint[]) => {
+    const candidates = rows.filter((row) =>
+      typeof row.predicted_qty === 'number'
+      && !!row.issue_date
+      && !!row.target_date,
+    );
+    if (!candidates.length) return [];
+    return candidates
+      .slice(-80)
+      .filter((_, idx) => idx % 2 === 0)
+      .slice(-40)
+      .map((row) => ({
+        issue_date: row.issue_date as string,
+        target_date: row.target_date as string,
+        planning_qty: row.predicted_qty as number,
+      }));
+  }, []);
 
   const loadBacktestRuns = useCallback(async () => {
     try {
@@ -2266,6 +2301,9 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                 const dividerDate = activeMode === 'vintage'
                   ? (firstForecast?.issue_date || firstForecast?.date)
                   : firstForecast?.date;
+                const planningConnectors = activeMode === 'planning'
+                  ? buildPlanningConnectors(chartRows)
+                  : [];
 
                 return (
                   <div style={{ width: '100%', marginBottom: 16 }}>
@@ -2284,14 +2322,14 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                           >
                             {mode === 'validation' && 'Validierung'}
                             {mode === 'vintage' && 'Forecast-Vintage'}
-                            {mode === 'planning' && 'Planung'}
+                            {mode === 'planning' && 'Planung (Bio-Vorlauf)'}
                           </button>
                         ))}
                       </div>
                       <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
                         {activeMode === 'validation' && 'Ist vs. Prognose am gleichen Datum'}
                         {activeMode === 'vintage' && 'Prognose am Erstelldatum (blau links = echter Vorlauf)'}
-                        {activeMode === 'planning' && 'Bio-Shift Planungskurve (signalbasiert)'}
+                        {activeMode === 'planning' && 'Messdatum (X) -> erwartetes Ereignisdatum (Y)'}
                       </span>
                     </div>
 
@@ -2356,8 +2394,10 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                               try {
                                 const label = format(parseISO(d), 'dd.MM.yyyy');
                                 const point = payload?.[0]?.payload || {};
-                                if (activeMode === 'planning' && point.based_on) {
-                                  return `${label} — basierend auf Abwasser vom ${format(parseISO(point.based_on), 'dd.MM.yyyy')}`;
+                                if (activeMode === 'planning') {
+                                  const issue = point.issue_date || point.based_on || d;
+                                  const target = point.target_date || d;
+                                  return `Messdatum: ${format(parseISO(issue), 'dd.MM.yyyy')} · erwartetes Ereignis: ${format(parseISO(target), 'dd.MM.yyyy')}`;
                                 }
                                 if (activeMode === 'validation') {
                                   const target = point.target_date || d;
@@ -2389,9 +2429,9 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                             payload={
                               activeMode === 'planning'
                                 ? [
-                                  { value: 'Tatsächliche Inzidenz', type: 'line', color: '#c0392b' },
-                                  { value: `Abwasser-Prognose (+${btResult.planning_curve?.lead_days || 7}T, r=${btResult.planning_curve?.correlation || '?'})`, type: 'line', color: 'var(--accent-violet)' },
-                                  { value: 'Zukunft (Bio-Shift)', type: 'line', color: 'var(--accent-violet)' },
+                                  { value: 'Tatsächliche Inzidenz (target_date)', type: 'line', color: '#c0392b' },
+                                  { value: `Abwasser-Prognose (issue_date, Bio-Vorlauf, +${btResult.planning_curve?.lead_days || 7}T)`, type: 'line', color: 'var(--accent-violet)' },
+                                  { value: 'Zukunft (issue_date)', type: 'line', color: 'var(--accent-violet)' },
                                 ]
                                 : activeMode === 'vintage'
                                   ? [
@@ -2453,6 +2493,19 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                             />
                           ))}
 
+                          {activeMode === 'planning' && planningConnectors.map((seg, idx) => (
+                            <ReferenceLine
+                              key={`planning-seg-${seg.issue_date}-${seg.target_date}-${idx}`}
+                              segment={[
+                                { x: seg.issue_date, y: seg.planning_qty },
+                                { x: seg.target_date, y: seg.planning_qty },
+                              ]}
+                              stroke="rgba(139,92,246,0.28)"
+                              strokeWidth={1}
+                              strokeDasharray="3 3"
+                            />
+                          ))}
+
                           {dividerDate && (
                             <ReferenceLine
                               x={dividerDate}
@@ -2467,14 +2520,16 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                           <Line
                             type="monotone"
                             dataKey="predicted_qty"
-                            name={activeMode === 'vintage'
-                              ? `ML-Prognose (issue_date, ${btResult.walk_forward?.horizon_days || btHorizonDays}T)`
-                              : `ML-Prognose (target_date, ${btResult.walk_forward?.horizon_days || btHorizonDays}T)`}
+                            name={activeMode === 'planning'
+                              ? 'Abwasser-Prognose (issue_date, Bio-Vorlauf)'
+                              : activeMode === 'vintage'
+                                ? `ML-Prognose (issue_date, ${btResult.walk_forward?.horizon_days || btHorizonDays}T)`
+                                : `ML-Prognose (target_date, ${btResult.walk_forward?.horizon_days || btHorizonDays}T)`}
                             stroke="var(--accent-violet)"
                             strokeWidth={2}
                             dot={false}
                           />
-                          <Line type="monotone" dataKey="forecast_qty" name="Zukunft" stroke="var(--accent-violet)" strokeWidth={2} dot={false} strokeDasharray="8 4" connectNulls={false} />
+                          <Line type="monotone" dataKey="forecast_qty" name={activeMode === 'planning' ? 'Zukunft (issue_date)' : 'Zukunft'} stroke="var(--accent-violet)" strokeWidth={2} dot={false} strokeDasharray="8 4" connectNulls={false} />
 
                           <Brush
                             dataKey="date"
@@ -2509,9 +2564,10 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                       )}
                       {activeMode === 'planning' && (
                         <>
-                          <strong>Planung:</strong> Violette Linie = Abwasser-Signal skaliert und um <strong>{btResult.planning_curve?.lead_days || 7} Tage</strong> nach rechts geshiftet
-                          (empirische Cross-Korrelation r={btResult.planning_curve?.correlation || '?'}).
-                          {' '}Hover zeigt das Abwasser-Datum. Punkte rechts der roten Linie = Zukunftsprognose.
+                          <strong>Planung (Bio-Vorlauf):</strong> Blau = <strong>Messdatum</strong> (links), Rot = <strong>Ereignisdatum</strong> (rechts).
+                          {' '}Die Connector-Linien zeigen explizit X→Y (Messung → erwartetes Ereignis) bei
+                          {' '}<strong>{btResult.planning_curve?.lead_days || 7} Tagen</strong> empirischem Vorlauf
+                          {' '}(Cross-Korrelation r={btResult.planning_curve?.correlation || '?'}).
                         </>
                       )}
                       {btResult.forecast_weeks && btResult.forecast_weeks > 0 && (
@@ -2617,6 +2673,9 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                 const dividerDate = activeMode === 'vintage'
                   ? (firstForecast?.issue_date || firstForecast?.date)
                   : firstForecast?.date;
+                const planningConnectors = activeMode === 'planning'
+                  ? buildPlanningConnectors(chartRows)
+                  : [];
 
                 return (
                   <div style={{ width: '100%', marginBottom: 12 }}>
@@ -2635,14 +2694,14 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                           >
                             {mode === 'validation' && 'Validierung'}
                             {mode === 'vintage' && 'Forecast-Vintage'}
-                            {mode === 'planning' && 'Planung'}
+                            {mode === 'planning' && 'Planung (Bio-Vorlauf)'}
                           </button>
                         ))}
                       </div>
                       <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
                         {activeMode === 'validation' && 'Ist vs. Prognose am gleichen Datum'}
                         {activeMode === 'vintage' && 'Prognose am Erstelldatum (blau links)'}
-                        {activeMode === 'planning' && 'Bio-Shift Planungskurve'}
+                        {activeMode === 'planning' && 'Messdatum (X) -> erwartetes Ereignisdatum (Y)'}
                       </span>
                     </div>
 
@@ -2664,8 +2723,10 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                               try {
                                 const label = format(parseISO(d), 'dd.MM.yyyy');
                                 const point = payload?.[0]?.payload || {};
-                                if (activeMode === 'planning' && point.based_on) {
-                                  return `${label} — basierend auf Abwasser vom ${format(parseISO(point.based_on), 'dd.MM.yyyy')}`;
+                                if (activeMode === 'planning') {
+                                  const issue = point.issue_date || point.based_on || d;
+                                  const target = point.target_date || d;
+                                  return `Messdatum: ${format(parseISO(issue), 'dd.MM.yyyy')} · erwartetes Ereignis: ${format(parseISO(target), 'dd.MM.yyyy')}`;
                                 }
                                 if (activeMode === 'validation') {
                                   const target = point.target_date || d;
@@ -2697,9 +2758,9 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                             payload={
                               activeMode === 'planning'
                                 ? [
-                                  { value: 'Tatsächliche Menge', type: 'line', color: '#c0392b' },
-                                  { value: 'Planung (Bio-Shift)', type: 'line', color: 'var(--accent-violet)' },
-                                  { value: 'Zukunft', type: 'line', color: 'var(--accent-violet)' },
+                                  { value: 'Tatsächliche Menge (target_date)', type: 'line', color: '#c0392b' },
+                                  { value: `Abwasser-Prognose (issue_date, Bio-Vorlauf, +${btCustomerResult.planning_curve?.lead_days || 7}T)`, type: 'line', color: 'var(--accent-violet)' },
+                                  { value: 'Zukunft (issue_date)', type: 'line', color: 'var(--accent-violet)' },
                                 ]
                                 : activeMode === 'vintage'
                                   ? [
@@ -2724,6 +2785,19 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                             </>
                           )}
 
+                          {activeMode === 'planning' && planningConnectors.map((seg, idx) => (
+                            <ReferenceLine
+                              key={`cust-planning-seg-${seg.issue_date}-${seg.target_date}-${idx}`}
+                              segment={[
+                                { x: seg.issue_date, y: seg.planning_qty },
+                                { x: seg.target_date, y: seg.planning_qty },
+                              ]}
+                              stroke="rgba(139,92,246,0.28)"
+                              strokeWidth={1}
+                              strokeDasharray="3 3"
+                            />
+                          ))}
+
                           {dividerDate && (
                             <ReferenceLine
                               x={dividerDate}
@@ -2738,14 +2812,16 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                           <Line
                             type="monotone"
                             dataKey="predicted_qty"
-                            name={activeMode === 'vintage'
-                              ? `ML-Prognose (issue_date, ${btCustomerResult.walk_forward?.horizon_days || btHorizonDays}T)`
-                              : `ML-Prognose (target_date, ${btCustomerResult.walk_forward?.horizon_days || btHorizonDays}T)`}
+                            name={activeMode === 'planning'
+                              ? 'Abwasser-Prognose (issue_date, Bio-Vorlauf)'
+                              : activeMode === 'vintage'
+                                ? `ML-Prognose (issue_date, ${btCustomerResult.walk_forward?.horizon_days || btHorizonDays}T)`
+                                : `ML-Prognose (target_date, ${btCustomerResult.walk_forward?.horizon_days || btHorizonDays}T)`}
                             stroke="var(--accent-violet)"
                             strokeWidth={2}
                             dot={false}
                           />
-                          <Line type="monotone" dataKey="forecast_qty" name="Zukunft (issue_date→target_date)" stroke="var(--accent-violet)" strokeWidth={2} dot={false} strokeDasharray="8 4" connectNulls={false} />
+                          <Line type="monotone" dataKey="forecast_qty" name={activeMode === 'planning' ? 'Zukunft (issue_date)' : 'Zukunft (issue_date→target_date)'} stroke="var(--accent-violet)" strokeWidth={2} dot={false} strokeDasharray="8 4" connectNulls={false} />
 
                           <Brush
                             dataKey="date"
@@ -2778,7 +2854,9 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                       )}
                       {activeMode === 'planning' && (
                         <>
-                          <strong>Planung:</strong> Signalbasierte Bio-Shift-Ansicht für operative Aktivierung.
+                          <strong>Planung (Bio-Vorlauf):</strong> Blau = <strong>Messdatum</strong> (links), Rot = <strong>Ereignisdatum</strong> (rechts).
+                          {' '}Connector-Linien zeigen X→Y (Messung → erwartetes Ereignis) bei
+                          {' '}<strong>{btCustomerResult.planning_curve?.lead_days || 7} Tagen</strong> empirischem Vorlauf.
                         </>
                       )}
                       {btCustomerResult.vintage_metrics && (

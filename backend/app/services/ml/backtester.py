@@ -95,6 +95,7 @@ class BacktestService:
     # - Modell trainiert auf RESIDUAL (y - seasonal_baseline)
     BASE_FEATURE_COLS: list[str] = [
         "seasonal_baseline",
+        "target_level",
         "target_roc",
         "week_sin",
         "week_cos",
@@ -109,6 +110,7 @@ class BacktestService:
     # Kompakte Features für kleine Datasets (< 35 Trainingspunkte)
     COMPACT_BASE_COLS: list[str] = [
         "seasonal_baseline",
+        "target_level",
         "target_roc",
         "week_sin",
         "week_cos",
@@ -726,8 +728,13 @@ class BacktestService:
                     else:
                         row_dict["target_roc"] = 0.0
 
-                    # Saisonale Baseline als Feature (Niveauanker)
+                    # Niveauanker: seasonal_baseline + target_level
                     row_dict["seasonal_baseline"] = baseline
+                    if vintage_vals:
+                        seasonal_med = max(float(np.median(vintage_vals)), 1.0)
+                        row_dict["target_level"] = round(float(vintage_vals[-1]) / seasonal_med, 4)
+                    else:
+                        row_dict["target_level"] = 0.0
 
                     # Saisonalität am TARGET_DATE (deterministisch bekannt)
                     iso_week = target_date.isocalendar()[1]
@@ -1445,19 +1452,22 @@ class BacktestService:
             prev = float(t_vals[-2]) if len(t_vals) >= 2 else 1.0
             target_roc = (lag1 - prev) / prev if prev > 0 else 0.0
 
-            # Saisonale Baseline (Median gleiche KW aus Training)
+            # Saisonale Baseline + target_level (Niveauanker)
             seasonal_bl = self._seasonal_naive_baseline(
                 train_target_df, target_week=target_week, target_month=target_month,
             )
+            seasonal_med = max(float(np.median(t_vals)), 1.0) if t_vals else 1.0
+            target_level = round(lag1 / seasonal_med, 4)
 
             # Saisonalität am TARGET_DATE (deterministisch bekannt)
             iso_week = target_time.isocalendar()[1]
             week_sin = round(math.sin(2 * math.pi * iso_week / 52), 4)
             week_cos = round(math.cos(2 * math.pi * iso_week / 52), 4)
 
-            # Build feature vector — Distributed-Lag Abwasser + Exogene
+            # Build feature vector — Distributed-Lag Abwasser + Exogene + Niveauanker
             test_feat = {
                 "seasonal_baseline": seasonal_bl,
+                "target_level": target_level,
                 "positivity_raw": test_scores["positivity_raw"],
                 "are_consultation_raw": test_scores.get("are_consultation_raw", 0.0),
                 "trends_raw": test_scores["trends_raw"],
@@ -1587,9 +1597,12 @@ class BacktestService:
                 fc_bl = self._seasonal_naive_baseline(
                     df, target_week=fc_iso_week, target_month=future_target.month,
                 )
+                fc_med = max(float(np.median(rolling_values)), 1.0) if rolling_values else 1.0
+                fc_level = round(t1 / fc_med, 4)
 
                 test_feat = {
                     "seasonal_baseline": fc_bl,
+                    "target_level": fc_level,
                     "positivity_raw": test_scores["positivity_raw"],
                     "are_consultation_raw": test_scores.get("are_consultation_raw", 0.0),
                     "trends_raw": test_scores["trends_raw"],

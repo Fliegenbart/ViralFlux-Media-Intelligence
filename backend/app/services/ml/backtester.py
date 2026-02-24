@@ -2120,6 +2120,12 @@ class BacktestService:
             f"Lead/Lag (effektiv)={lead_lag_global['effective_lead_days']} Tage. "
             f"Forecast-Vintage medianer Vorlauf={vintage_metrics['median_lead_days']} Tage."
         )
+        chart_records = (
+            combined_df
+            .replace([np.inf, -np.inf], np.nan)
+            .where(pd.notna(combined_df), None)
+            .to_dict(orient="records")
+        )
 
         result = {
             "mode": "CUSTOMER_CHECK",
@@ -2138,7 +2144,7 @@ class BacktestService:
             },
             "lead_lag": lead_lag_global,
             "regions": region_results,
-            "chart_data": combined_df.to_dict(orient="records"),
+            "chart_data": chart_records,
             "forecast_records": combined_forecast_records,
             "vintage_metrics": vintage_metrics,
             "proof_text": proof_text,

@@ -89,12 +89,13 @@ class BacktestService:
     }
 
     # Basis-Features (krankheitsunabhängig)
-    # Exogene Signale — KEINE Target-Lags!
-    # Target-Lags (lag1-3, ma3) wurden entfernt weil sie das Modell
-    # zu einem Nachlauf-Indikator machen: 91% Importance auf lag1
-    # → Prognose peakt 3-4 Wochen NACH dem echten Peak.
-    # Nur target_roc (Richtung) bleibt als schwaches Trend-Signal.
+    # Exogene Signale + normalisierter Niveauanker.
+    # Rohe target_lags (lag1-3) wurden entfernt: 91% Importance = pures Chasing.
+    # Stattdessen: target_level = lag1/saisonaler_median → normiertes Niveau [0-5].
+    # Gibt dem Modell "wie hoch sind wir relativ zum saisonalen Durchschnitt?"
+    # ohne den rohen Wert der zum 1:1-Kopieren verleitet.
     BASE_FEATURE_COLS: list[str] = [
+        "target_level",
         "target_roc",
         "week_sin",
         "week_cos",
@@ -108,6 +109,7 @@ class BacktestService:
 
     # Kompakte Features für kleine Datasets (< 35 Trainingspunkte)
     COMPACT_BASE_COLS: list[str] = [
+        "target_level",
         "target_roc",
         "week_sin",
         "week_cos",
@@ -647,18 +649,27 @@ class BacktestService:
                     row_dict["survstat_xdisease_1"] = scores["survstat_xdisease_1"]
                     row_dict["survstat_xdisease_2"] = scores["survstat_xdisease_2"]
 
-                    # Target rate of change — row-level vintage
-                    # Nur Werte nutzen die am sim_date tatsächlich verfügbar waren
+                    # Target features — row-level vintage
                     i = int(idx)
                     if "available_time" in df.columns:
                         vintage_mask = df["available_time"] <= sim_date
                         vintage_vals = df.loc[vintage_mask, "menge"].tolist()
                     else:
                         vintage_vals = menge_values[:i]
+
+                    # target_roc: Wachstumsrate
                     if len(vintage_vals) >= 2:
                         row_dict["target_roc"] = (vintage_vals[-1] - vintage_vals[-2]) / vintage_vals[-2] if vintage_vals[-2] > 0 else 0.0
                     else:
                         row_dict["target_roc"] = 0.0
+
+                    # target_level: Niveauanker = letzter_wert / saisonaler_median
+                    # Normiert auf ~[0, 5] statt roher Inzidenz → kein Chasing
+                    if vintage_vals:
+                        seasonal_med = max(float(np.median(vintage_vals)), 1.0)
+                        row_dict["target_level"] = round(float(vintage_vals[-1]) / seasonal_med, 4)
+                    else:
+                        row_dict["target_level"] = 0.0
 
                     # Saisonalität am TARGET_DATE (deterministisch bekannt)
                     iso_week = target_date.isocalendar()[1]
@@ -1274,12 +1285,13 @@ class BacktestService:
                 target_disease=target_disease,
             )
 
-            # Target lags from training history (no future leak)
-            # Target rate of change (Richtung, kein Niveau)
+            # Target features from training history (vintage-safe)
             t_vals = train_target_df["menge"].tolist()
             lag1 = float(t_vals[-1]) if len(t_vals) >= 1 else 0.0
             prev = float(t_vals[-2]) if len(t_vals) >= 2 else 1.0
             target_roc = (lag1 - prev) / prev if prev > 0 else 0.0
+            seasonal_med = max(float(np.median(t_vals)), 1.0) if t_vals else 1.0
+            target_level = round(lag1 / seasonal_med, 4)
 
             # Saisonalität am TARGET_DATE (deterministisch bekannt, nicht forecast_time)
             iso_week = target_time.isocalendar()[1]
@@ -1295,6 +1307,7 @@ class BacktestService:
                 "weather_temp": test_scores["weather_temp"],
                 "weather_humidity": test_scores["weather_humidity"],
                 "school_start_float": test_scores["school_start_float"],
+                "target_level": target_level,
                 "target_roc": target_roc,
                 "week_sin": week_sin,
                 "week_cos": week_cos,
@@ -1410,6 +1423,8 @@ class BacktestService:
                 t1 = float(rolling_values[-1]) if rolling_values else 0.0
                 t_prev = float(rolling_values[-2]) if len(rolling_values) >= 2 else 1.0
                 t_roc = (t1 - t_prev) / t_prev if t_prev > 0 else 0.0
+                fc_med = max(float(np.median(rolling_values)), 1.0) if rolling_values else 1.0
+                t_level = round(t1 / fc_med, 4)
 
                 iso_week = future_target.isocalendar()[1]
                 w_sin = round(math.sin(2 * math.pi * iso_week / 52), 4)
@@ -1423,6 +1438,7 @@ class BacktestService:
                     "weather_temp": test_scores["weather_temp"],
                     "weather_humidity": test_scores["weather_humidity"],
                     "school_start_float": test_scores["school_start_float"],
+                    "target_level": t_level,
                     "target_roc": t_roc,
                     "week_sin": w_sin, "week_cos": w_cos,
                     "xdisease_load": test_scores["xdisease_load"],

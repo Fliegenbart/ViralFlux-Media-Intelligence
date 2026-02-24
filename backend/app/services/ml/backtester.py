@@ -89,13 +89,11 @@ class BacktestService:
     }
 
     # Basis-Features (krankheitsunabhängig)
-    # Exogene Signale + normalisierter Niveauanker.
-    # Rohe target_lags (lag1-3) wurden entfernt: 91% Importance = pures Chasing.
-    # Stattdessen: target_level = lag1/saisonaler_median → normiertes Niveau [0-5].
-    # Gibt dem Modell "wie hoch sind wir relativ zum saisonalen Durchschnitt?"
-    # ohne den rohen Wert der zum 1:1-Kopieren verleitet.
+    # Distributed-Lag + Residual-Modellierung.
+    # - target_level/lag entfernt (90% Importance = Nachlauf)
+    # - Abwasser als 4 Lag-Punkte + Slope + Max (Lead nutzen)
+    # - Modell trainiert auf RESIDUAL (y - seasonal_baseline)
     BASE_FEATURE_COLS: list[str] = [
-        "target_level",
         "target_roc",
         "week_sin",
         "week_cos",
@@ -109,7 +107,6 @@ class BacktestService:
 
     # Kompakte Features für kleine Datasets (< 35 Trainingspunkte)
     COMPACT_BASE_COLS: list[str] = [
-        "target_level",
         "target_roc",
         "week_sin",
         "week_cos",
@@ -119,21 +116,27 @@ class BacktestService:
     ]
 
     COMPACT_VIRAL_COLS: list[str] = COMPACT_BASE_COLS + [
-        "wastewater_raw",
+        "ww_lag0w",
+        "ww_lag2w",
     ]
 
     COMPACT_SURVSTAT_COLS: list[str] = COMPACT_BASE_COLS + [
         "survstat_xdisease_1",
     ]
 
-    # Virale Targets: Abwasser-Signale nützlich
+    # Virale Targets: Distributed-Lag Abwasser
     VIRAL_FEATURE_COLS: list[str] = BASE_FEATURE_COLS + [
-        "wastewater_raw",
+        "ww_lag0w",
+        "ww_lag1w",
+        "ww_lag2w",
+        "ww_lag3w",
+        "ww_max_3w",
+        "ww_slope_2w",
         "positivity_raw",
         "xdisease_load",
     ]
 
-    # SURVSTAT-Targets: Abwasser irrelevant, SurvStat Cross-Disease stattdessen
+    # SURVSTAT-Targets: Cross-Disease statt Abwasser
     SURVSTAT_FEATURE_COLS: list[str] = BASE_FEATURE_COLS + [
         "survstat_xdisease_1",
         "survstat_xdisease_2",
@@ -202,6 +205,42 @@ class BacktestService:
         if not current or not current.viruslast:
             return 0.0
         return min(current.viruslast / max_load, 1.0)
+
+    def _wastewater_lags_at_date(
+        self,
+        target: datetime,
+        virus_typ: str,
+        available_cutoff: Optional[datetime] = None,
+    ) -> dict[str, float]:
+        """Distributed-Lag Abwasser: Werte bei 0/1/2/3 Wochen zurück + Ableitungen."""
+        effective = available_cutoff or target
+        one_year_ago = effective - timedelta(days=365)
+
+        max_load = self.db.query(
+            func.max(WastewaterAggregated.viruslast)
+        ).filter(
+            WastewaterAggregated.virus_typ == virus_typ,
+            WastewaterAggregated.datum >= one_year_ago,
+            WastewaterAggregated.datum <= effective,
+            self._asof_filter(WastewaterAggregated, WastewaterAggregated.datum, effective),
+        ).scalar() or 1.0
+
+        vals: list[float] = []
+        result: dict[str, float] = {}
+        for lag_w in range(4):  # 0, 1, 2, 3 Wochen
+            cutoff = effective - timedelta(weeks=lag_w)
+            row = self.db.query(WastewaterAggregated).filter(
+                WastewaterAggregated.virus_typ == virus_typ,
+                WastewaterAggregated.datum <= cutoff,
+                self._asof_filter(WastewaterAggregated, WastewaterAggregated.datum, cutoff),
+            ).order_by(WastewaterAggregated.datum.desc()).first()
+            v = min(row.viruslast / max_load, 1.0) if row and row.viruslast else 0.0
+            result[f"ww_lag{lag_w}w"] = round(v, 4)
+            vals.append(v)
+
+        result["ww_max_3w"] = round(max(vals), 4)
+        result["ww_slope_2w"] = round(vals[0] - vals[2], 4) if len(vals) > 2 else 0.0
+        return result
 
     def _positivity_rate_at_date(
         self,
@@ -503,6 +542,7 @@ class BacktestService:
         holidays_cutoff = target - timedelta(days=max(0, int(rules.get("school_holidays", 0))))
 
         wastewater = self._wastewater_at_date(target, virus_typ, available_cutoff=wastewater_cutoff)
+        ww_lags = self._wastewater_lags_at_date(target, virus_typ, available_cutoff=wastewater_cutoff)
         positivity = self._positivity_rate_at_date(target, virus_typ, available_cutoff=positivity_cutoff)
         are_consultation = self._are_consultation_at_date(target, available_cutoff=are_cutoff)
         trends = self._trends_at_date(target, available_cutoff=trends_cutoff)
@@ -566,6 +606,13 @@ class BacktestService:
             "weather_raw": weather,
             "school_start_float": 1.0 if school_start else 0.0,
             "xdisease_load": xdisease_load,
+            # Distributed-Lag Abwasser
+            "ww_lag0w": ww_lags.get("ww_lag0w", 0.0),
+            "ww_lag1w": ww_lags.get("ww_lag1w", 0.0),
+            "ww_lag2w": ww_lags.get("ww_lag2w", 0.0),
+            "ww_lag3w": ww_lags.get("ww_lag3w", 0.0),
+            "ww_max_3w": ww_lags.get("ww_max_3w", 0.0),
+            "ww_slope_2w": ww_lags.get("ww_slope_2w", 0.0),
             # Neue syndromische Signale
             "grippeweb_are": grippeweb["grippeweb_are"],
             "notaufnahme_ari": notaufnahme["notaufnahme_ari"],
@@ -606,11 +653,21 @@ class BacktestService:
 
         menge_values = df["menge"].tolist()
 
+        # Seasonal baselines per ISO-Woche (für Residual-Modellierung)
+        df["_iso_week"] = df["datum"].apply(lambda d: d.isocalendar()[1])
+        seasonal_baselines: dict[int, float] = {}
+        for wk in range(1, 54):
+            vals = df[df["_iso_week"] == wk]["menge"].tolist()
+            seasonal_baselines[wk] = float(np.median(vals)) if vals else 0.0
+
         simulation_rows = []
         for idx, row in df.iterrows():
             target_date = row["datum"]
             sim_date = target_date - timedelta(days=max(0, int(horizon_days)))
             real_qty = float(row["menge"])
+            # Residual = Ist - saisonale Baseline
+            baseline = seasonal_baselines.get(int(row["_iso_week"]), 0.0)
+            residual = real_qty - baseline
 
             try:
                 scores = self._compute_sub_scores_at_date(
@@ -622,7 +679,9 @@ class BacktestService:
                 row_dict = {
                     "date": target_date.strftime("%Y-%m-%d"),
                     "feature_date": sim_date.strftime("%Y-%m-%d"),
-                    "real_qty": real_qty,
+                    "real_qty": residual,  # Modell trainiert auf Residual
+                    "real_qty_raw": real_qty,
+                    "seasonal_baseline": baseline,
                     "bio": scores["bio"],
                     "market": scores["market"],
                     "psycho": scores["psycho"],
@@ -641,7 +700,15 @@ class BacktestService:
                     row_dict["school_start_float"] = scores["school_start_float"]
                     row_dict["xdisease_load"] = scores["xdisease_load"]
 
-                    # Neue syndromische Signale
+                    # Distributed-Lag Abwasser
+                    row_dict["ww_lag0w"] = scores["ww_lag0w"]
+                    row_dict["ww_lag1w"] = scores["ww_lag1w"]
+                    row_dict["ww_lag2w"] = scores["ww_lag2w"]
+                    row_dict["ww_lag3w"] = scores["ww_lag3w"]
+                    row_dict["ww_max_3w"] = scores["ww_max_3w"]
+                    row_dict["ww_slope_2w"] = scores["ww_slope_2w"]
+
+                    # Syndromische Signale
                     row_dict["grippeweb_are"] = scores["grippeweb_are"]
                     row_dict["notaufnahme_ari"] = scores["notaufnahme_ari"]
 
@@ -649,27 +716,17 @@ class BacktestService:
                     row_dict["survstat_xdisease_1"] = scores["survstat_xdisease_1"]
                     row_dict["survstat_xdisease_2"] = scores["survstat_xdisease_2"]
 
-                    # Target features — row-level vintage
+                    # Target rate of change — row-level vintage
                     i = int(idx)
                     if "available_time" in df.columns:
                         vintage_mask = df["available_time"] <= sim_date
                         vintage_vals = df.loc[vintage_mask, "menge"].tolist()
                     else:
                         vintage_vals = menge_values[:i]
-
-                    # target_roc: Wachstumsrate
                     if len(vintage_vals) >= 2:
                         row_dict["target_roc"] = (vintage_vals[-1] - vintage_vals[-2]) / vintage_vals[-2] if vintage_vals[-2] > 0 else 0.0
                     else:
                         row_dict["target_roc"] = 0.0
-
-                    # target_level: Niveauanker = letzter_wert / saisonaler_median
-                    # Normiert auf ~[0, 5] statt roher Inzidenz → kein Chasing
-                    if vintage_vals:
-                        seasonal_med = max(float(np.median(vintage_vals)), 1.0)
-                        row_dict["target_level"] = round(float(vintage_vals[-1]) / seasonal_med, 4)
-                    else:
-                        row_dict["target_level"] = 0.0
 
                     # Saisonalität am TARGET_DATE (deterministisch bekannt)
                     iso_week = target_date.isocalendar()[1]
@@ -1381,32 +1438,34 @@ class BacktestService:
                 target_disease=target_disease,
             )
 
-            # Target features from training history (vintage-safe)
+            # Target rate of change (vintage-safe)
             t_vals = train_target_df["menge"].tolist()
             lag1 = float(t_vals[-1]) if len(t_vals) >= 1 else 0.0
             prev = float(t_vals[-2]) if len(t_vals) >= 2 else 1.0
             target_roc = (lag1 - prev) / prev if prev > 0 else 0.0
-            seasonal_med = max(float(np.median(t_vals)), 1.0) if t_vals else 1.0
-            target_level = round(lag1 / seasonal_med, 4)
 
-            # Saisonalität am TARGET_DATE (deterministisch bekannt, nicht forecast_time)
+            # Saisonalität am TARGET_DATE (deterministisch bekannt)
             iso_week = target_time.isocalendar()[1]
             week_sin = round(math.sin(2 * math.pi * iso_week / 52), 4)
             week_cos = round(math.cos(2 * math.pi * iso_week / 52), 4)
 
-            # Build feature vector — nur exogene Signale + Saisonalität
+            # Build feature vector — Distributed-Lag Abwasser + Exogene
             test_feat = {
-                "wastewater_raw": test_scores["wastewater_raw"],
                 "positivity_raw": test_scores["positivity_raw"],
                 "are_consultation_raw": test_scores.get("are_consultation_raw", 0.0),
                 "trends_raw": test_scores["trends_raw"],
                 "weather_temp": test_scores["weather_temp"],
                 "weather_humidity": test_scores["weather_humidity"],
                 "school_start_float": test_scores["school_start_float"],
-                "target_level": target_level,
                 "target_roc": target_roc,
                 "week_sin": week_sin,
                 "week_cos": week_cos,
+                "ww_lag0w": test_scores["ww_lag0w"],
+                "ww_lag1w": test_scores["ww_lag1w"],
+                "ww_lag2w": test_scores["ww_lag2w"],
+                "ww_lag3w": test_scores["ww_lag3w"],
+                "ww_max_3w": test_scores["ww_max_3w"],
+                "ww_slope_2w": test_scores["ww_slope_2w"],
                 "xdisease_load": test_scores["xdisease_load"],
                 "grippeweb_are": test_scores["grippeweb_are"],
                 "notaufnahme_ari": test_scores["notaufnahme_ari"],
@@ -1419,19 +1478,18 @@ class BacktestService:
             if not use_gbr:
                 X_test = scaler.transform(X_test)
 
-            y_hat = float(model.predict(X_test)[0])
+            residual_hat = float(model.predict(X_test)[0])
 
-            # Clip predictions to prevent extreme extrapolation
-            y_max = float(y_train.max())
-            y_min = float(y_train.min())
-            y_hat = max(0.0, min(y_hat, y_max * 2.0))
-
-            baseline_persistence = float(train_target_df.iloc[-1]["menge"])
+            # Saisonale Baseline für target_week (aus Trainingshistorie)
             baseline_seasonal = self._seasonal_naive_baseline(
                 train_target_df,
                 target_week=target_week,
                 target_month=target_month,
             )
+
+            # Finale Prognose = Baseline + Residual-Prediction
+            y_hat = max(0.0, baseline_seasonal + residual_hat)
+            baseline_persistence = float(train_target_df.iloc[-1]["menge"])
 
             folds.append({
                 "forecast_time": forecast_time,
@@ -1519,24 +1577,26 @@ class BacktestService:
                 t1 = float(rolling_values[-1]) if rolling_values else 0.0
                 t_prev = float(rolling_values[-2]) if len(rolling_values) >= 2 else 1.0
                 t_roc = (t1 - t_prev) / t_prev if t_prev > 0 else 0.0
-                fc_med = max(float(np.median(rolling_values)), 1.0) if rolling_values else 1.0
-                t_level = round(t1 / fc_med, 4)
 
                 iso_week = future_target.isocalendar()[1]
                 w_sin = round(math.sin(2 * math.pi * iso_week / 52), 4)
                 w_cos = round(math.cos(2 * math.pi * iso_week / 52), 4)
 
                 test_feat = {
-                    "wastewater_raw": test_scores["wastewater_raw"],
                     "positivity_raw": test_scores["positivity_raw"],
                     "are_consultation_raw": test_scores.get("are_consultation_raw", 0.0),
                     "trends_raw": test_scores["trends_raw"],
                     "weather_temp": test_scores["weather_temp"],
                     "weather_humidity": test_scores["weather_humidity"],
                     "school_start_float": test_scores["school_start_float"],
-                    "target_level": t_level,
                     "target_roc": t_roc,
                     "week_sin": w_sin, "week_cos": w_cos,
+                    "ww_lag0w": test_scores["ww_lag0w"],
+                    "ww_lag1w": test_scores["ww_lag1w"],
+                    "ww_lag2w": test_scores["ww_lag2w"],
+                    "ww_lag3w": test_scores["ww_lag3w"],
+                    "ww_max_3w": test_scores["ww_max_3w"],
+                    "ww_slope_2w": test_scores["ww_slope_2w"],
                     "xdisease_load": test_scores["xdisease_load"],
                     "grippeweb_are": test_scores["grippeweb_are"],
                     "notaufnahme_ari": test_scores["notaufnahme_ari"],
@@ -1547,7 +1607,15 @@ class BacktestService:
                 X_fc = np.nan_to_num(X_fc, nan=0.0, posinf=0.0, neginf=0.0)
                 if not use_gbr:
                     X_fc = scaler.transform(X_fc)
-                y_fc = max(0.0, float(model.predict(X_fc)[0]))
+                fc_residual = float(model.predict(X_fc)[0])
+                # Seasonal baseline für future target week
+                fc_iso_week = future_target.isocalendar()[1]
+                fc_baseline = self._seasonal_naive_baseline(
+                    pred_df.rename(columns={"target_time": "datum", "real_qty": "menge"}),
+                    target_week=fc_iso_week,
+                    target_month=future_target.month,
+                )
+                y_fc = max(0.0, fc_baseline + fc_residual)
 
                 hf = math.sqrt(w)
                 ci_80 = 1.28 * residual_std * hf

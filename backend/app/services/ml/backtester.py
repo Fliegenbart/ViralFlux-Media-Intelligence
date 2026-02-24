@@ -48,7 +48,7 @@ class BacktestService:
         "school_holidays": 0,
         "are_consultation": 7,
     }
-    DEFAULT_MARKET_HORIZON_DAYS = 14
+    DEFAULT_MARKET_HORIZON_DAYS = 7
     DEFAULT_MIN_TRAIN_POINTS = 20
     SURVSTAT_TARGET_ALIASES = {
         "SURVSTAT": "Influenza, saisonal",

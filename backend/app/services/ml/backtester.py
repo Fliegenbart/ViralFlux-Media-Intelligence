@@ -2092,10 +2092,22 @@ class BacktestService:
         pers_mae = max(persistence_metrics["mae"], 1e-9)
         seas_mae = max(seasonal_metrics["mae"], 1e-9)
 
+        if "bio" in metrics_df.columns:
+            lag_input = metrics_df[["date", "bio", "real_qty"]].copy()
+            lag_input["bio"] = pd.to_numeric(lag_input["bio"], errors="coerce").fillna(0.0)
+            lag_input["real_qty"] = pd.to_numeric(lag_input["real_qty"], errors="coerce").fillna(0.0)
+            lead_lag_base = self._best_bio_lead_lag(lag_input)
+        else:
+            lead_lag_base = {
+                "best_lag_points": 0,
+                "best_lag_days": 0,
+                "lag_step_days": int(max(1, int(horizon_days) or 7)),
+                "lag_correlation": 0.0,
+                "bio_leads_target": False,
+            }
+
         lead_lag_global = self._augment_lead_lag_with_horizon(
-            self._best_bio_lead_lag(
-                metrics_df[["date", "bio", "real_qty"]].rename(columns={"real_qty": "real_qty"})
-            ),
+            lead_lag_base,
             horizon_days=horizon_days,
         )
         vintage_metrics = self._compute_vintage_metrics(

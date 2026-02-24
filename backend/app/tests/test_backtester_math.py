@@ -55,6 +55,54 @@ class BacktesterMathTests(unittest.TestCase):
         self.assertEqual(metrics["oos_points"], 3)
         self.assertGreater(metrics["p90_abs_error"], 0.0)
 
+    def test_compute_decision_metrics_counts_hits_false_alarms_and_misses(self) -> None:
+        records = [
+            {"issue_date": "2024-01-01", "target_date": "2024-01-08", "y_hat": 110.0, "y_true": 100.0},
+            {"issue_date": "2024-01-08", "target_date": "2024-01-15", "y_hat": 130.0, "y_true": 140.0},  # hit
+            {"issue_date": "2024-01-15", "target_date": "2024-01-22", "y_hat": 150.0, "y_true": 120.0},  # false alarm
+            {"issue_date": "2024-01-22", "target_date": "2024-01-29", "y_hat": 110.0, "y_true": 150.0},  # miss
+        ]
+
+        metrics = BacktestService._compute_decision_metrics(records, threshold_pct=25.0)
+
+        self.assertEqual(metrics["event_threshold_pct"], 25.0)
+        self.assertEqual(metrics["alerts"], 2)
+        self.assertEqual(metrics["events"], 2)
+        self.assertEqual(metrics["hits"], 1)
+        self.assertEqual(metrics["false_alarms"], 1)
+        self.assertEqual(metrics["misses"], 1)
+        self.assertEqual(metrics["hit_rate_pct"], 50.0)
+        self.assertEqual(metrics["recall_pct"], 50.0)
+        self.assertEqual(metrics["false_alarm_rate_pct"], 50.0)
+        self.assertEqual(metrics["median_ttd_days"], 7)
+        self.assertGreater(metrics["p90_abs_error"], 0.0)
+
+    def test_quality_gate_flags_pass_and_fail_conditions(self) -> None:
+        passed = BacktestService._build_quality_gate(
+            {
+                "median_ttd_days": 14,
+                "hit_rate_pct": 80.0,
+                "error_relative_pct": 20.0,
+            }
+        )
+        failed = BacktestService._build_quality_gate(
+            {
+                "median_ttd_days": 7,
+                "hit_rate_pct": 60.0,
+                "error_relative_pct": 50.0,
+            }
+        )
+
+        self.assertTrue(passed["ttd_passed"])
+        self.assertTrue(passed["hit_rate_passed"])
+        self.assertTrue(passed["error_passed"])
+        self.assertTrue(passed["overall_passed"])
+
+        self.assertFalse(failed["ttd_passed"])
+        self.assertFalse(failed["hit_rate_passed"])
+        self.assertFalse(failed["error_passed"])
+        self.assertFalse(failed["overall_passed"])
+
     def test_best_bio_lag_prefers_positive_alignment_over_stronger_negative(self) -> None:
         service = BacktestService(db=None)
         bio = np.array([

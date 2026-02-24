@@ -492,6 +492,34 @@ export interface BacktestVintageMetrics {
   oos_points?: number;
 }
 
+export interface BacktestDecisionMetrics {
+  event_threshold_pct?: number;
+  alerts?: number;
+  events?: number;
+  hits?: number;
+  false_alarms?: number;
+  misses?: number;
+  hit_rate_pct?: number;
+  recall_pct?: number;
+  false_alarm_rate_pct?: number;
+  median_ttd_days?: number;
+  p90_abs_error?: number;
+  median_y_true_last_12w?: number;
+  error_relative_pct?: number;
+  readiness_score_0_100?: number;
+  analyzed_points?: number;
+}
+
+export interface BacktestQualityGate {
+  ttd_target_days?: number;
+  hit_rate_target_pct?: number;
+  p90_error_relative_target_pct?: number;
+  ttd_passed?: boolean;
+  hit_rate_passed?: boolean;
+  error_passed?: boolean;
+  overall_passed?: boolean;
+}
+
 export interface BacktestForecastRecord {
   issue_date: string;
   target_date: string;
@@ -537,6 +565,8 @@ export interface BacktestResponse {
   chart_data?: BacktestChartPoint[];
   forecast_records?: BacktestForecastRecord[];
   vintage_metrics?: BacktestVintageMetrics;
+  decision_metrics?: BacktestDecisionMetrics;
+  quality_gate?: BacktestQualityGate;
   forecast_weeks?: number;
   proof_text?: string;
   llm_insight?: string;

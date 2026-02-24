@@ -690,12 +690,15 @@ class MediaCockpitService:
         def _pack(row: BacktestRun | None) -> dict | None:
             if not row:
                 return None
+            metrics = row.metrics or {}
             return {
                 "run_id": row.run_id,
                 "mode": row.mode,
                 "target_source": row.target_source,
                 "target_label": row.target_label,
-                "metrics": row.metrics or {},
+                "metrics": metrics,
+                "decision_metrics": metrics.get("decision_metrics"),
+                "quality_gate": metrics.get("quality_gate"),
                 "lead_lag": row.lead_lag or {},
                 "proof_text": row.proof_text,
                 "created_at": row.created_at.isoformat() if row.created_at else None,

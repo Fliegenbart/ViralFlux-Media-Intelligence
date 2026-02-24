@@ -50,6 +50,11 @@ class BacktestService:
     }
     DEFAULT_MARKET_HORIZON_DAYS = 7
     DEFAULT_MIN_TRAIN_POINTS = 20
+    DECISION_EVENT_THRESHOLD_PCT = 25.0
+    DECISION_BASELINE_WINDOW_DAYS = 84  # 12 weeks
+    QUALITY_GATE_TTD_TARGET_DAYS = 10
+    QUALITY_GATE_HIT_RATE_TARGET_PCT = 70.0
+    QUALITY_GATE_P90_ERROR_REL_TARGET_PCT = 35.0
     SURVSTAT_TARGET_ALIASES = {
         "SURVSTAT": "Influenza, saisonal",
         "ALL": "Influenza, saisonal",
@@ -1232,6 +1237,200 @@ class BacktestService:
         }
 
     @staticmethod
+    def _compute_decision_metrics(
+        forecast_records: list[dict],
+        threshold_pct: float = 25.0,
+        vintage_metrics: Optional[dict] = None,
+    ) -> dict:
+        """Decision-Layer Kennzahlen für Mediaplanung (TTD, Hit-Rate, False Alarms)."""
+        valid_rows: list[dict] = []
+        abs_errors: list[float] = []
+
+        for row in forecast_records or []:
+            issue = pd.to_datetime(row.get("issue_date"), errors="coerce")
+            target = pd.to_datetime(row.get("target_date"), errors="coerce")
+            try:
+                y_hat = float(row.get("y_hat"))
+                y_true = float(row.get("y_true"))
+            except (TypeError, ValueError):
+                continue
+            if pd.isna(issue) or pd.isna(target):
+                continue
+            if not (np.isfinite(y_hat) and np.isfinite(y_true)):
+                continue
+
+            valid_rows.append(
+                {
+                    "issue_date": issue,
+                    "target_date": target,
+                    "y_hat": y_hat,
+                    "y_true": y_true,
+                }
+            )
+            abs_errors.append(abs(y_hat - y_true))
+
+        threshold_pct = float(threshold_pct or 0.0)
+        threshold_ratio = threshold_pct / 100.0
+        default_metrics = {
+            "event_threshold_pct": round(threshold_pct, 1),
+            "alerts": 0,
+            "events": 0,
+            "hits": 0,
+            "false_alarms": 0,
+            "misses": 0,
+            "hit_rate_pct": 0.0,
+            "recall_pct": 0.0,
+            "false_alarm_rate_pct": 0.0,
+            "median_ttd_days": 0,
+            "p90_abs_error": round(
+                float(vintage_metrics.get("p90_abs_error", 0.0))
+                if vintage_metrics
+                else (float(np.percentile(abs_errors, 90)) if abs_errors else 0.0),
+                3,
+            ),
+            "median_y_true_last_12w": 0.0,
+            "error_relative_pct": 0.0,
+            "readiness_score_0_100": 0.0,
+            "analyzed_points": int(len(valid_rows)),
+        }
+        if not valid_rows:
+            return default_metrics
+
+        valid_rows.sort(key=lambda r: (r["issue_date"], r["target_date"]))
+        truth_rows = sorted(valid_rows, key=lambda r: r["target_date"])
+
+        alerts = 0
+        events = 0
+        hits = 0
+        false_alarms = 0
+        misses = 0
+        hit_ttd_days: list[int] = []
+
+        for row in valid_rows:
+            issue_date = row["issue_date"]
+            baseline_start = issue_date - timedelta(days=BacktestService.DECISION_BASELINE_WINDOW_DAYS)
+            baseline_vals = [
+                r["y_true"]
+                for r in truth_rows
+                if baseline_start <= r["target_date"] <= issue_date
+            ]
+            if not baseline_vals:
+                baseline_vals = [r["y_true"] for r in truth_rows if r["target_date"] <= issue_date]
+
+            if not baseline_vals:
+                continue
+
+            baseline = float(np.median(baseline_vals))
+            if not np.isfinite(baseline) or baseline <= 0:
+                continue
+
+            pred_growth = (float(row["y_hat"]) - baseline) / baseline
+            real_growth = (float(row["y_true"]) - baseline) / baseline
+            alert = pred_growth >= threshold_ratio
+            event = real_growth >= threshold_ratio
+
+            if alert:
+                alerts += 1
+            if event:
+                events += 1
+
+            if alert and event:
+                hits += 1
+                hit_ttd_days.append(int((row["target_date"] - row["issue_date"]).days))
+            elif alert and not event:
+                false_alarms += 1
+            elif event and not alert:
+                misses += 1
+
+        latest_issue_date = max(row["issue_date"] for row in valid_rows)
+        gate_start = latest_issue_date - timedelta(days=BacktestService.DECISION_BASELINE_WINDOW_DAYS)
+        gate_values = [
+            float(r["y_true"])
+            for r in truth_rows
+            if gate_start <= r["target_date"] <= latest_issue_date
+        ]
+        if not gate_values:
+            gate_values = [float(r["y_true"]) for r in truth_rows]
+
+        median_y_true_last_12w = (
+            float(np.median(gate_values))
+            if gate_values
+            else 0.0
+        )
+        p90_abs_error = (
+            float(vintage_metrics.get("p90_abs_error", 0.0))
+            if vintage_metrics
+            else (float(np.percentile(abs_errors, 90)) if abs_errors else 0.0)
+        )
+        error_relative_pct = (
+            (p90_abs_error / median_y_true_last_12w) * 100.0
+            if median_y_true_last_12w > 0
+            else 0.0
+        )
+
+        hit_rate_pct = (hits / alerts * 100.0) if alerts > 0 else 0.0
+        recall_pct = (hits / events * 100.0) if events > 0 else 0.0
+        false_alarm_rate_pct = (false_alarms / alerts * 100.0) if alerts > 0 else 0.0
+        median_ttd_days = int(round(float(np.median(hit_ttd_days)))) if hit_ttd_days else 0
+
+        ttd_target = float(BacktestService.QUALITY_GATE_TTD_TARGET_DAYS)
+        hit_target = float(BacktestService.QUALITY_GATE_HIT_RATE_TARGET_PCT)
+        err_target = float(BacktestService.QUALITY_GATE_P90_ERROR_REL_TARGET_PCT)
+
+        ttd_score = min(100.0, max(0.0, (median_ttd_days / max(ttd_target, 1e-9)) * 100.0))
+        hit_score = min(100.0, max(0.0, hit_rate_pct))
+        if error_relative_pct <= err_target:
+            error_score = 100.0
+        else:
+            over = (error_relative_pct - err_target) / max(err_target, 1e-9)
+            error_score = max(0.0, 100.0 - over * 100.0)
+        readiness_score = round(0.4 * hit_score + 0.35 * ttd_score + 0.25 * error_score, 1)
+
+        return {
+            "event_threshold_pct": round(threshold_pct, 1),
+            "alerts": int(alerts),
+            "events": int(events),
+            "hits": int(hits),
+            "false_alarms": int(false_alarms),
+            "misses": int(misses),
+            "hit_rate_pct": round(float(hit_rate_pct), 1),
+            "recall_pct": round(float(recall_pct), 1),
+            "false_alarm_rate_pct": round(float(false_alarm_rate_pct), 1),
+            "median_ttd_days": int(median_ttd_days),
+            "p90_abs_error": round(float(p90_abs_error), 3),
+            "median_y_true_last_12w": round(float(median_y_true_last_12w), 3),
+            "error_relative_pct": round(float(error_relative_pct), 2),
+            "readiness_score_0_100": float(readiness_score),
+            "analyzed_points": int(len(valid_rows)),
+        }
+
+    @staticmethod
+    def _build_quality_gate(decision_metrics: dict) -> dict:
+        """Leitet GO/WATCH Gate aus Decision-Metriken ab."""
+        ttd_target = int(BacktestService.QUALITY_GATE_TTD_TARGET_DAYS)
+        hit_target = float(BacktestService.QUALITY_GATE_HIT_RATE_TARGET_PCT)
+        err_target = float(BacktestService.QUALITY_GATE_P90_ERROR_REL_TARGET_PCT)
+
+        median_ttd_days = float(decision_metrics.get("median_ttd_days", 0.0) or 0.0)
+        hit_rate_pct = float(decision_metrics.get("hit_rate_pct", 0.0) or 0.0)
+        error_relative_pct = float(decision_metrics.get("error_relative_pct", 0.0) or 0.0)
+
+        ttd_passed = median_ttd_days >= float(ttd_target)
+        hit_rate_passed = hit_rate_pct >= hit_target
+        error_passed = error_relative_pct <= err_target
+        overall_passed = bool(ttd_passed and hit_rate_passed and error_passed)
+
+        return {
+            "ttd_target_days": ttd_target,
+            "hit_rate_target_pct": hit_target,
+            "p90_error_relative_target_pct": err_target,
+            "ttd_passed": bool(ttd_passed),
+            "hit_rate_passed": bool(hit_rate_passed),
+            "error_passed": bool(error_passed),
+            "overall_passed": bool(overall_passed),
+        }
+
+    @staticmethod
     def _sanitize_for_json(value):
         """Konvertiert NaN/Inf rekursiv zu None für JSON-kompatible API-Responses."""
         if isinstance(value, dict):
@@ -1263,6 +1462,11 @@ class BacktestService:
         try:
             run_id = f"bt_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}_{uuid4().hex[:8]}"
             chart_data = result.get("chart_data", []) or []
+            metrics_payload = dict(result.get("metrics", {}) or {})
+            if result.get("decision_metrics") is not None:
+                metrics_payload["decision_metrics"] = result.get("decision_metrics")
+            if result.get("quality_gate") is not None:
+                metrics_payload["quality_gate"] = result.get("quality_gate")
 
             run = BacktestRun(
                 run_id=run_id,
@@ -1281,7 +1485,7 @@ class BacktestService:
                 horizon_days=int(result.get("walk_forward", {}).get("horizon_days", 14)),
                 min_train_points=int(result.get("walk_forward", {}).get("min_train_points", 20)),
                 parameters=parameters or {},
-                metrics=result.get("metrics", {}),
+                metrics=metrics_payload,
                 baseline_metrics=result.get("baseline_metrics", {}),
                 improvement_vs_baselines=result.get("improvement_vs_baselines", {}),
                 optimized_weights=result.get("optimized_weights", {}),
@@ -1773,6 +1977,12 @@ class BacktestService:
             forecast_records=forecast_records,
             configured_horizon_days=int(horizon_days),
         )
+        decision_metrics = self._compute_decision_metrics(
+            forecast_records=forecast_records,
+            threshold_pct=float(self.DECISION_EVENT_THRESHOLD_PCT),
+            vintage_metrics=vintage_metrics,
+        )
+        quality_gate = self._build_quality_gate(decision_metrics)
 
         return {
             "metrics": {
@@ -1801,6 +2011,8 @@ class BacktestService:
             "chart_data": chart_data,
             "forecast_records": forecast_records,
             "vintage_metrics": vintage_metrics,
+            "decision_metrics": decision_metrics,
+            "quality_gate": quality_gate,
             "forecast_weeks": len(forecast_chart),
             "residual_std": round(residual_std, 4),
             "walk_forward": {
@@ -1898,6 +2110,14 @@ class BacktestService:
         baseline_delta = result.get("improvement_vs_baselines", {})
         delta_pers = baseline_delta.get("mae_vs_persistence_pct", 0.0)
         delta_seas = baseline_delta.get("mae_vs_seasonal_pct", 0.0)
+        decision_metrics = result.get("decision_metrics") or self._compute_decision_metrics(
+            forecast_records=result.get("forecast_records") or [],
+            threshold_pct=float(self.DECISION_EVENT_THRESHOLD_PCT),
+            vintage_metrics=result.get("vintage_metrics"),
+        )
+        quality_gate = result.get("quality_gate") or self._build_quality_gate(decision_metrics)
+        result["decision_metrics"] = decision_metrics
+        result["quality_gate"] = quality_gate
 
         lag_strength = "stark" if abs(lag_corr) >= 0.5 else "moderat" if abs(lag_corr) >= 0.25 else "schwach"
 
@@ -1959,7 +2179,11 @@ class BacktestService:
         result["proof_text"] = (
             f"{proof_text} "
             f"Walk-forward Backtest: MAE vs. Persistence {delta_pers:+.2f}%, "
-            f"vs. Seasonal-Naive {delta_seas:+.2f}% (historisch; zukuenftige Performance kann abweichen)."
+            f"vs. Seasonal-Naive {delta_seas:+.2f}% (historisch; zukuenftige Performance kann abweichen). "
+            f"Decision-Layer: TTD median {decision_metrics.get('median_ttd_days', 0)} Tage, "
+            f"Hit-Rate {decision_metrics.get('hit_rate_pct', 0):.1f}%, "
+            f"False-Alarms {decision_metrics.get('false_alarm_rate_pct', 0):.1f}%, "
+            f"Readiness {'GO' if quality_gate.get('overall_passed') else 'WATCH'}."
         )
         result["llm_insight"] = (
             f"{result['proof_text']} "
@@ -2131,11 +2355,20 @@ class BacktestService:
             forecast_records=combined_forecast_records,
             configured_horizon_days=int(horizon_days),
         )
+        decision_metrics = self._compute_decision_metrics(
+            forecast_records=combined_forecast_records,
+            threshold_pct=float(self.DECISION_EVENT_THRESHOLD_PCT),
+            vintage_metrics=vintage_metrics,
+        )
+        quality_gate = self._build_quality_gate(decision_metrics)
         proof_text = (
             f"Kundendaten-Check über {model_metrics['data_points']} Punkte: "
             f"R²={model_metrics['r2_score']}, Korrelationsstärke={model_metrics['correlation_pct']}%, "
             f"Lead/Lag (effektiv)={lead_lag_global['effective_lead_days']} Tage. "
-            f"Forecast-Vintage medianer Vorlauf={vintage_metrics['median_lead_days']} Tage."
+            f"Forecast-Vintage medianer Vorlauf={vintage_metrics['median_lead_days']} Tage. "
+            f"Decision-Layer: TTD median {decision_metrics.get('median_ttd_days', 0)} Tage, "
+            f"Hit-Rate {decision_metrics.get('hit_rate_pct', 0):.1f}%, "
+            f"False-Alarms {decision_metrics.get('false_alarm_rate_pct', 0):.1f}%."
         )
         clean_chart_df = combined_df.replace([np.inf, -np.inf], np.nan).astype(object)
         clean_chart_df = clean_chart_df.where(pd.notna(clean_chart_df), None)
@@ -2161,6 +2394,8 @@ class BacktestService:
             "chart_data": chart_records,
             "forecast_records": combined_forecast_records,
             "vintage_metrics": vintage_metrics,
+            "decision_metrics": decision_metrics,
+            "quality_gate": quality_gate,
             "proof_text": proof_text,
             "llm_insight": (
                 f"{proof_text} Gegenüber Persistence beträgt die MAE-Veränderung "

@@ -108,6 +108,23 @@ class MarketingOpportunityEngine:
         self.ai_planner = AiCampaignPlanner()
         self.guardrails = CampaignGuardrails()
 
+    @staticmethod
+    def _extract_improvement_vs_baselines(imp: dict | None) -> tuple[float, float]:
+        """Liest MAE-Verbesserung aus neuem oder legacy improvement-Schema."""
+        if not imp:
+            return 0.0, 0.0
+
+        persistence_val = imp.get("mae_vs_persistence_pct")
+        seasonal_val = imp.get("mae_vs_seasonal_pct")
+
+        # Backward compatibility for legacy nested schema.
+        if persistence_val is None:
+            persistence_val = imp.get("persistence", {}).get("mae_improvement_pct", 0)
+        if seasonal_val is None:
+            seasonal_val = imp.get("seasonal_naive", {}).get("mae_improvement_pct", 0)
+
+        return float(persistence_val or 0.0), float(seasonal_val or 0.0)
+
     def generate_opportunities(self) -> dict:
         """Alle Detektoren ausführen -> Pitches -> Products -> Fuse Conquesting -> Persist -> JSON."""
         all_opportunities = []
@@ -1500,13 +1517,11 @@ class MarketingOpportunityEngine:
                 "mae": round(metrics.get("mae", 0), 1),
             }
             if latest_backtest.improvement_vs_baselines:
-                imp = latest_backtest.improvement_vs_baselines
-                model_accuracy["improvement_vs_persistence"] = round(
-                    imp.get("persistence", {}).get("mae_improvement_pct", 0), 1
+                persistence_val, seasonal_val = self._extract_improvement_vs_baselines(
+                    latest_backtest.improvement_vs_baselines
                 )
-                model_accuracy["improvement_vs_seasonal"] = round(
-                    imp.get("seasonal_naive", {}).get("mae_improvement_pct", 0), 1
-                )
+                model_accuracy["improvement_vs_persistence"] = round(float(persistence_val or 0.0), 1)
+                model_accuracy["improvement_vs_seasonal"] = round(float(seasonal_val or 0.0), 1)
 
         # 3. SurvStat-Trend: Wie hat sich die Infektionslage nach Opportunity-Erstellung entwickelt?
         signal_accuracy_samples = []

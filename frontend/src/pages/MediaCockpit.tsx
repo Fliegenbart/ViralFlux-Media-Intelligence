@@ -132,6 +132,9 @@ const intensityColor = (intensity: number) => {
 const trendIcon = (trend: string) =>
   trend === 'steigend' ? '\u2197' : trend === 'fallend' ? '\u2198' : '\u2192';
 
+const clamp = (value: number, min: number, max: number) =>
+  Math.max(min, Math.min(max, value));
+
 /* Callout positions for city-states */
 const CALLOUT_TARGETS: Record<string, { tx: number; ty: number }> = {
   HH: { tx: 385, ty: 52 },
@@ -416,6 +419,10 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
     if (!activeMap) {
       return <div className="card p-8 text-center text-slate-400">Keine Kartendaten vorhanden.</div>;
     }
+    const latestMarketDecision = cockpit?.backtest_summary?.latest_market?.decision_metrics;
+    const latestMarketGate = cockpit?.backtest_summary?.latest_market?.quality_gate;
+    const latestReadiness = latestMarketDecision?.readiness_score_0_100;
+    const latestReadinessLabel = latestMarketGate?.overall_passed ? 'GO' : 'WATCH';
 
     return (
       <div className="space-y-6">
@@ -443,30 +450,61 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
             </div>
           </div>
 
-          {/* PeixEpiScore — oben rechts */}
-          {peixSummary && (
-            <div style={{
-              background: 'var(--bg-card)', border: '1px solid var(--border-color)',
-              borderRadius: 12, padding: '14px 20px', minWidth: 220, maxWidth: 320,
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-                <span style={{
-                  fontSize: 28, fontWeight: 800, color: 'var(--accent-violet)', lineHeight: 1,
+          {/* PeixEpiScore + Planungsreife — oben rechts */}
+          {(peixSummary || latestMarketDecision) && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, minWidth: 220, maxWidth: 340 }}>
+              {peixSummary && (
+                <div style={{
+                  background: 'var(--bg-card)', border: '1px solid var(--border-color)',
+                  borderRadius: 12, padding: '14px 20px',
                 }}>
-                  {peixSummary.national_score ?? '\u2014'}
-                </span>
-                <div>
-                  <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', lineHeight: 1.2 }}>
-                    PeixEpiScore
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                    <span style={{
+                      fontSize: 28, fontWeight: 800, color: 'var(--accent-violet)', lineHeight: 1,
+                    }}>
+                      {peixSummary.national_score ?? '\u2014'}
+                    </span>
+                    <div>
+                      <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', lineHeight: 1.2 }}>
+                        PeixEpiScore
+                      </div>
+                      <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+                        Band: {peixSummary.national_band ?? '\u2014'} &middot; Impact: {peixSummary.national_impact_probability ?? '\u2014'}%
+                      </div>
+                    </div>
                   </div>
-                  <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>
-                    Band: {peixSummary.national_band ?? '\u2014'} &middot; Impact: {peixSummary.national_impact_probability ?? '\u2014'}%
+                  <p style={{ fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.5, margin: 0 }}>
+                    Fusionsindex aus 6 Dimensionen (Epidemiologie, Abwasser, Wetter, Suchtrends, Versorgungslage, Prognose). Zeigt die Gesamtlage f&uuml;r Atemwegsinfekte in Deutschland als Zahl von 0&ndash;100.
+                  </p>
+                </div>
+              )}
+              {latestMarketDecision && (
+                <div style={{
+                  background: 'var(--bg-card)',
+                  border: `1px solid ${latestMarketGate?.overall_passed ? 'rgba(39,174,96,0.3)' : 'var(--border-color)'}`,
+                  borderRadius: 12,
+                  padding: '10px 14px',
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                    <span style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)' }}>
+                      Planungsreife
+                    </span>
+                    <span style={{
+                      fontSize: 11,
+                      fontWeight: 700,
+                      color: latestMarketGate?.overall_passed ? '#27ae60' : '#b7791f',
+                    }}>
+                      {latestReadinessLabel}
+                    </span>
+                  </div>
+                  <div style={{ marginTop: 4, fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>
+                    {latestReadiness != null ? `${Math.round(latestReadiness)}/100` : '\u2014'}
+                  </div>
+                  <div style={{ marginTop: 4, fontSize: 10, color: 'var(--text-muted)' }}>
+                    TTD {latestMarketDecision.median_ttd_days ?? 0}T · Hit-Rate {latestMarketDecision.hit_rate_pct ?? 0}% · False Alarms {latestMarketDecision.false_alarm_rate_pct ?? 0}%
                   </div>
                 </div>
-              </div>
-              <p style={{ fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.5, margin: 0 }}>
-                Fusionsindex aus 6 Dimensionen (Epidemiologie, Abwasser, Wetter, Suchtrends, Versorgungslage, Prognose). Zeigt die Gesamtlage f&uuml;r Atemwegsinfekte in Deutschland als Zahl von 0&ndash;100.
-              </p>
+              )}
             </div>
           )}
         </div>
@@ -2049,29 +2087,52 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                 const r2 = btResult.metrics.r2_score || 0;
                 const horizon = btResult.walk_forward?.horizon_days || 14;
                 const fcWeeks = btResult.forecast_weeks || 0;
-                const fcData = (btResult.chart_data || []).filter((d: any) => d.is_forecast);
-                const lastFc = fcData[fcData.length - 1];
-                const firstFc = fcData[0];
-                const lastFcQty = typeof lastFc?.forecast_qty === 'number' ? lastFc.forecast_qty : null;
-                const firstFcQty = typeof firstFc?.forecast_qty === 'number' ? firstFc.forecast_qty : null;
-                const trendUp = lastFcQty != null && firstFcQty != null && lastFcQty > firstFcQty * 1.1;
-                const trendDown = lastFcQty != null && firstFcQty != null && lastFcQty < firstFcQty * 0.9;
+                const decision = btResult.decision_metrics;
+                const gate = btResult.quality_gate;
+                const hasDecisionLayer = Boolean(decision);
+
+                const allRows = btResult.chart_data || [];
+                const fcData = allRows
+                  .filter((d: any) => d.is_forecast && typeof d.forecast_qty === 'number');
+                const histData = allRows
+                  .filter((d: any) => !d.is_forecast && typeof d.real_qty === 'number');
+
+                const forecastNext2 = fcData.slice(0, 2).map((d: any) => Number(d.forecast_qty || 0));
+                const actualLast4 = histData.slice(-4).map((d: any) => Number(d.real_qty || 0));
+                const meanForecast2 = forecastNext2.length
+                  ? forecastNext2.reduce((a, b) => a + b, 0) / forecastNext2.length
+                  : 0;
+                const meanActual4 = actualLast4.length
+                  ? actualLast4.reduce((a, b) => a + b, 0) / actualLast4.length
+                  : 0;
+                const predGrowth2w = meanActual4 > 0 ? (meanForecast2 - meanActual4) / meanActual4 : 0;
+                const baseShiftPct = clamp(8 + 60 * predGrowth2w, 8, 35);
+                const p90AbsError = Number(decision?.p90_abs_error ?? btResult.vintage_metrics?.p90_abs_error ?? 0);
+                const uncertaintyPenalty = meanActual4 > 0
+                  ? clamp(p90AbsError / meanActual4, 0, 0.5)
+                  : 0.5;
+                let finalShiftPct = Math.round(baseShiftPct * (1 - uncertaintyPenalty) * 10) / 10;
+                if (hasDecisionLayer && !gate?.overall_passed) finalShiftPct = Math.min(finalShiftPct, 12);
+                const gatePassed = hasDecisionLayer ? Boolean(gate?.overall_passed) : r2 >= 0.3;
+
+                const trendUp = predGrowth2w > 0.1;
+                const trendDown = predGrowth2w < -0.1;
 
                 let signal = 'beobachten';
                 let signalColor = 'var(--text-muted)';
                 let signalBg = 'var(--bg-secondary)';
                 let signalIcon = '\u23F3';
-                if (r2 >= 0.3 && trendUp) {
+                if (gatePassed && trendUp) {
                   signal = 'Jetzt Media aktivieren';
                   signalColor = '#c0392b';
                   signalBg = 'rgba(192,57,43,0.06)';
                   signalIcon = '\u26A0\uFE0F';
-                } else if (r2 >= 0.3 && trendDown) {
+                } else if (gatePassed && trendDown) {
                   signal = 'Welle klingt ab';
                   signalColor = '#27ae60';
                   signalBg = 'rgba(39,174,96,0.06)';
                   signalIcon = '\u2705';
-                } else if (r2 >= 0.3) {
+                } else if (gatePassed) {
                   signal = 'Stabil — beobachten';
                   signalColor = 'var(--accent-violet)';
                   signalBg = 'rgba(139,92,246,0.06)';
@@ -2094,16 +2155,39 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                         {signalIcon} {signal}
                       </div>
                       <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4 }}>
-                        Modellgüte R²={r2.toFixed(2)} — Prognose {horizon}T Vorlauf — {fcWeeks > 0 ? `${fcWeeks} Wochen Forecast` : 'kein Forecast'}
+                        Modellgüte R²={r2.toFixed(2)} — Prognose {horizon}T Vorlauf — {fcWeeks > 0 ? `${fcWeeks} Wochen Forecast` : 'kein Forecast'}.
+                        {' '}Empfohlener nationaler Budget-Shift: <strong>+{finalShiftPct.toFixed(1)}%</strong>.
+                      </div>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>
+                        {hasDecisionLayer
+                          ? 'Diese Empfehlung basiert auf OOS-TTD + Hit-Rate + Fehlerrisiko.'
+                          : 'Legacy-Fallback ohne Decision-Layer: Bewertung basiert auf OOS-Modellgüte.'}
                       </div>
                     </div>
 
-                    {/* Compact metrics */}
+                    {/* Decision KPI strip */}
                     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
                       {[
-                        { label: 'Trefferquote', value: `${btResult.metrics.correlation_pct?.toFixed(0)}%`, sub: 'Korrelation' },
-                        { label: 'Vorlauf', value: `${btResult.walk_forward?.horizon_days || 14}T`, sub: 'Prognose-Fenster' },
-                        { label: 'Genauigkeit', value: btResult.metrics.smape?.toFixed(0), sub: 'sMAPE (niedr.=besser)' },
+                        {
+                          label: 'TTD median',
+                          value: decision?.median_ttd_days != null ? `${decision.median_ttd_days}T` : '-',
+                          sub: 'Lead bis Ereignis',
+                        },
+                        {
+                          label: 'Hit-Rate',
+                          value: decision?.hit_rate_pct != null ? `${decision.hit_rate_pct.toFixed(0)}%` : '-',
+                          sub: 'Treffer / Alerts',
+                        },
+                        {
+                          label: 'False Alarms',
+                          value: decision?.false_alarm_rate_pct != null ? `${decision.false_alarm_rate_pct.toFixed(0)}%` : '-',
+                          sub: 'Fehlalarme',
+                        },
+                        {
+                          label: 'Readiness',
+                          value: decision?.readiness_score_0_100 != null ? `${Math.round(decision.readiness_score_0_100)}` : '-',
+                          sub: gate?.overall_passed ? 'GO' : 'WATCH',
+                        },
                       ].map((m) => (
                         <div key={m.label} style={{
                           padding: '10px 14px', borderRadius: 10,
@@ -2219,6 +2303,14 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                         Modell {btResult.model_type || 'GradientBoosting/Ridge'}
                       </div>
                     )}
+                    {btResult.decision_metrics && (
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>
+                        Decision-Layer: TTD median {btResult.decision_metrics.median_ttd_days ?? 0}T ·
+                        Hit-Rate {Number(btResult.decision_metrics.hit_rate_pct ?? 0).toFixed(1)}% ·
+                        False Alarms {Number(btResult.decision_metrics.false_alarm_rate_pct ?? 0).toFixed(1)}% ·
+                        Readiness {Number(btResult.decision_metrics.readiness_score_0_100 ?? 0).toFixed(0)}/100 ({btResult.quality_gate?.overall_passed ? 'GO' : 'WATCH'})
+                      </div>
+                    )}
 
                     {(activeMode === 'validation') && (btSignals.peaks.length > 0 || btSignals.surges.length > 0 || btSignals.earlyWarnings.length > 0) && (
                       <div style={{ display: 'flex', gap: 16, marginBottom: 10, flexWrap: 'wrap', fontSize: 11, color: 'var(--text-muted)' }}>
@@ -2267,15 +2359,22 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                                 if (activeMode === 'planning' && point.based_on) {
                                   return `${label} — basierend auf Abwasser vom ${format(parseISO(point.based_on), 'dd.MM.yyyy')}`;
                                 }
+                                if (activeMode === 'validation') {
+                                  const target = point.target_date || d;
+                                  if (point.is_forecast && point.issue_date && target) {
+                                    return `Prognose erstellt am: ${format(parseISO(point.issue_date), 'dd.MM.yyyy')} · für: ${format(parseISO(target), 'dd.MM.yyyy')}`;
+                                  }
+                                  if (target && point.issue_date) {
+                                    return `Ist-Datum: ${format(parseISO(target), 'dd.MM.yyyy')} · Prognose hierfür erstellt am: ${format(parseISO(point.issue_date), 'dd.MM.yyyy')}`;
+                                  }
+                                  return `Ist-Datum: ${format(parseISO(target || d), 'dd.MM.yyyy')}`;
+                                }
                                 if (activeMode === 'vintage') {
                                   const issue = point.issue_date || point.issue_date_hint;
                                   const target = point.target_date;
                                   if (issue && target) {
                                     return `${label} — erstellt am: ${format(parseISO(issue), 'dd.MM.yyyy')} · für: ${format(parseISO(target), 'dd.MM.yyyy')}`;
                                   }
-                                }
-                                if (point.issue_date) {
-                                  return `${label} — erstellt am: ${format(parseISO(point.issue_date), 'dd.MM.yyyy')}`;
                                 }
                                 return label;
                               } catch { return d; }
@@ -2301,9 +2400,9 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                                     { value: 'Zukunft (issue_date)', type: 'line', color: 'var(--accent-violet)' },
                                   ]
                                   : [
-                                    { value: 'Tatsächliche Inzidenz', type: 'line', color: '#c0392b' },
-                                    { value: `ML-Prognose (${btResult.walk_forward?.horizon_days || btHorizonDays}T)`, type: 'line', color: 'var(--accent-violet)' },
-                                    { value: 'Zukunft', type: 'line', color: 'var(--accent-violet)' },
+                                    { value: 'Tatsächliche Inzidenz (target_date)', type: 'line', color: '#c0392b' },
+                                    { value: `ML-Prognose (target_date, ${btResult.walk_forward?.horizon_days || btHorizonDays}T)`, type: 'line', color: 'var(--accent-violet)' },
+                                    { value: 'Zukunft (issue_date→target_date)', type: 'line', color: 'var(--accent-violet)' },
                                     { value: '80% KI', type: 'rect', color: 'rgba(139,92,246,0.25)' },
                                     { value: '95% KI', type: 'rect', color: 'rgba(139,92,246,0.1)' },
                                   ]
@@ -2364,13 +2463,13 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                             />
                           )}
 
-                          <Line type="monotone" dataKey="real_qty" name="Tatsächliche Inzidenz" stroke="#c0392b" strokeWidth={2} dot={false} />
+                          <Line type="monotone" dataKey="real_qty" name="Tatsächliche Inzidenz (target_date)" stroke="#c0392b" strokeWidth={2} dot={false} />
                           <Line
                             type="monotone"
                             dataKey="predicted_qty"
                             name={activeMode === 'vintage'
                               ? `ML-Prognose (issue_date, ${btResult.walk_forward?.horizon_days || btHorizonDays}T)`
-                              : `Prognose (${btResult.walk_forward?.horizon_days || btHorizonDays}T Vorlauf)`}
+                              : `ML-Prognose (target_date, ${btResult.walk_forward?.horizon_days || btHorizonDays}T)`}
                             stroke="var(--accent-violet)"
                             strokeWidth={2}
                             dot={false}
@@ -2398,7 +2497,7 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                       {activeMode === 'validation' && (
                         <>
                           <strong>Validierung:</strong> Beide Linien am gleichen Datum — je näher violett an rot, desto besser die {(btResult.walk_forward?.horizon_days || btHorizonDays)}-Tage-Prognose.
-                          {' '}Hover zeigt den Erstellzeitpunkt.
+                          {' '}Ist bleibt am Zielzeitpunkt; der Erstellzeitpunkt wird nur sekundär im Tooltip angezeigt.
                         </>
                       )}
                       {activeMode === 'vintage' && (
@@ -2568,15 +2667,22 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                                 if (activeMode === 'planning' && point.based_on) {
                                   return `${label} — basierend auf Abwasser vom ${format(parseISO(point.based_on), 'dd.MM.yyyy')}`;
                                 }
+                                if (activeMode === 'validation') {
+                                  const target = point.target_date || d;
+                                  if (point.is_forecast && point.issue_date && target) {
+                                    return `Prognose erstellt am: ${format(parseISO(point.issue_date), 'dd.MM.yyyy')} · für: ${format(parseISO(target), 'dd.MM.yyyy')}`;
+                                  }
+                                  if (target && point.issue_date) {
+                                    return `Ist-Datum: ${format(parseISO(target), 'dd.MM.yyyy')} · Prognose hierfür erstellt am: ${format(parseISO(point.issue_date), 'dd.MM.yyyy')}`;
+                                  }
+                                  return `Ist-Datum: ${format(parseISO(target || d), 'dd.MM.yyyy')}`;
+                                }
                                 if (activeMode === 'vintage') {
                                   const issue = point.issue_date || point.issue_date_hint;
                                   const target = point.target_date;
                                   if (issue && target) {
                                     return `${label} — erstellt am: ${format(parseISO(issue), 'dd.MM.yyyy')} · für: ${format(parseISO(target), 'dd.MM.yyyy')}`;
                                   }
-                                }
-                                if (point.issue_date) {
-                                  return `${label} — erstellt am: ${format(parseISO(point.issue_date), 'dd.MM.yyyy')}`;
                                 }
                                 return label;
                               } catch { return d; }
@@ -2602,9 +2708,9 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                                     { value: 'Zukunft (issue_date)', type: 'line', color: 'var(--accent-violet)' },
                                   ]
                                   : [
-                                    { value: 'Tatsächliche Menge', type: 'line', color: '#c0392b' },
-                                    { value: `ML-Prognose (${btCustomerResult.walk_forward?.horizon_days || btHorizonDays}T)`, type: 'line', color: 'var(--accent-violet)' },
-                                    { value: 'Zukunft', type: 'line', color: 'var(--accent-violet)' },
+                                    { value: 'Tatsächliche Menge (target_date)', type: 'line', color: '#c0392b' },
+                                    { value: `ML-Prognose (target_date, ${btCustomerResult.walk_forward?.horizon_days || btHorizonDays}T)`, type: 'line', color: 'var(--accent-violet)' },
+                                    { value: 'Zukunft (issue_date→target_date)', type: 'line', color: 'var(--accent-violet)' },
                                   ]
                             }
                           />
@@ -2628,9 +2734,18 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                             />
                           )}
 
-                          <Line type="monotone" dataKey="real_qty" name="Tatsächliche Menge" stroke="#c0392b" strokeWidth={2} dot={false} />
-                          <Line type="monotone" dataKey="predicted_qty" name="Prognose" stroke="var(--accent-violet)" strokeWidth={2} dot={false} />
-                          <Line type="monotone" dataKey="forecast_qty" name="Zukunft" stroke="var(--accent-violet)" strokeWidth={2} dot={false} strokeDasharray="8 4" connectNulls={false} />
+                          <Line type="monotone" dataKey="real_qty" name="Tatsächliche Menge (target_date)" stroke="#c0392b" strokeWidth={2} dot={false} />
+                          <Line
+                            type="monotone"
+                            dataKey="predicted_qty"
+                            name={activeMode === 'vintage'
+                              ? `ML-Prognose (issue_date, ${btCustomerResult.walk_forward?.horizon_days || btHorizonDays}T)`
+                              : `ML-Prognose (target_date, ${btCustomerResult.walk_forward?.horizon_days || btHorizonDays}T)`}
+                            stroke="var(--accent-violet)"
+                            strokeWidth={2}
+                            dot={false}
+                          />
+                          <Line type="monotone" dataKey="forecast_qty" name="Zukunft (issue_date→target_date)" stroke="var(--accent-violet)" strokeWidth={2} dot={false} strokeDasharray="8 4" connectNulls={false} />
 
                           <Brush
                             dataKey="date"
@@ -2670,6 +2785,12 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                         <> OOS {btCustomerResult.vintage_metrics.oos_points ?? btCustomerResult.metrics?.data_points ?? '-'} Punkte ·
                           medianer Vorlauf {btCustomerResult.vintage_metrics.median_lead_days ?? btCustomerResult.walk_forward?.horizon_days ?? btHorizonDays}T ·
                           p90 |Fehler| {btCustomerResult.vintage_metrics.p90_abs_error ?? '-'}.</>
+                      )}
+                      {btCustomerResult.decision_metrics && (
+                        <> Decision-Layer: TTD median {btCustomerResult.decision_metrics.median_ttd_days ?? 0}T ·
+                          Hit-Rate {Number(btCustomerResult.decision_metrics.hit_rate_pct ?? 0).toFixed(1)}% ·
+                          False Alarms {Number(btCustomerResult.decision_metrics.false_alarm_rate_pct ?? 0).toFixed(1)}% ·
+                          Readiness {Number(btCustomerResult.decision_metrics.readiness_score_0_100 ?? 0).toFixed(0)}/100 ({btCustomerResult.quality_gate?.overall_passed ? 'GO' : 'WATCH'}).</>
                       )}
                     </div>
                   </div>

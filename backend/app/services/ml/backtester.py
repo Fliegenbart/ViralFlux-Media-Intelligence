@@ -2177,9 +2177,9 @@ class BacktestService:
 
         df_sim = pd.DataFrame([{
             "date": row["date"],
-            "bio": row["bio"],
-            "real_qty": row["real_qty"],
-        } for row in result.get("chart_data", [])])
+            "bio": row.get("bio", 0.0),
+            "real_qty": row.get("real_qty", 0.0),
+        } for row in result.get("chart_data", []) if not row.get("is_forecast")])
         lead_lag = self._augment_lead_lag_with_horizon(
             self._best_bio_lead_lag(df_sim),
             horizon_days=used_horizon,

@@ -647,13 +647,21 @@ class BacktestService:
                     row_dict["survstat_xdisease_1"] = scores["survstat_xdisease_1"]
                     row_dict["survstat_xdisease_2"] = scores["survstat_xdisease_2"]
 
-                    # Target rate of change only (keine Lags — sonst Nachlauf)
+                    # Target rate of change — row-level vintage
+                    # Nur Werte nutzen die am sim_date tatsächlich verfügbar waren
                     i = int(idx)
-                    prev = menge_values[i - 1] if i >= 1 else 1.0
-                    row_dict["target_roc"] = (prev - (menge_values[i - 2] if i >= 2 else prev)) / prev if prev > 0 else 0.0
+                    if "available_time" in df.columns:
+                        vintage_mask = df["available_time"] <= sim_date
+                        vintage_vals = df.loc[vintage_mask, "menge"].tolist()
+                    else:
+                        vintage_vals = menge_values[:i]
+                    if len(vintage_vals) >= 2:
+                        row_dict["target_roc"] = (vintage_vals[-1] - vintage_vals[-2]) / vintage_vals[-2] if vintage_vals[-2] > 0 else 0.0
+                    else:
+                        row_dict["target_roc"] = 0.0
 
-                    # Cyclic seasonality
-                    iso_week = sim_date.isocalendar()[1]
+                    # Saisonalität am TARGET_DATE (deterministisch bekannt)
+                    iso_week = target_date.isocalendar()[1]
                     row_dict["week_sin"] = round(math.sin(2 * math.pi * iso_week / 52), 4)
                     row_dict["week_cos"] = round(math.cos(2 * math.pi * iso_week / 52), 4)
 
@@ -1273,8 +1281,8 @@ class BacktestService:
             prev = float(t_vals[-2]) if len(t_vals) >= 2 else 1.0
             target_roc = (lag1 - prev) / prev if prev > 0 else 0.0
 
-            # Seasonality
-            iso_week = forecast_time.isocalendar()[1]
+            # Saisonalität am TARGET_DATE (deterministisch bekannt, nicht forecast_time)
+            iso_week = target_time.isocalendar()[1]
             week_sin = round(math.sin(2 * math.pi * iso_week / 52), 4)
             week_cos = round(math.cos(2 * math.pi * iso_week / 52), 4)
 
@@ -1446,32 +1454,34 @@ class BacktestService:
         except Exception:
             pass  # forecast is best-effort; backtest results always returned
 
-        # Build unified chart_data
-        # Ist-Werte am target_time, Prognosen am forecast_time (wo sie erstellt wurden)
-        # So sieht man im Chart ob die Prognose VOR dem echten Peak kommt
-        from collections import OrderedDict
-        date_rows: dict[str, dict] = OrderedDict()
+        # Sauberes Datenmodell: forecast_records + chart_data für beide Ansichten
+        # forecast_records: Jeder Fold als Record mit issue_date + target_date
+        forecast_records = [
+            {
+                "issue_date": row["forecast_time"].strftime("%Y-%m-%d"),
+                "target_date": row["target_time"].strftime("%Y-%m-%d"),
+                "y_hat": round(float(row["predicted_qty"]), 3),
+                "y_true": float(row["real_qty"]),
+                "horizon_days": int(horizon_days),
+            }
+            for _, row in pred_df.iterrows()
+        ]
 
-        for _, row in pred_df.iterrows():
-            # Ist-Wert am target_time
-            td = row["target_time"].strftime("%Y-%m-%d")
-            if td not in date_rows:
-                date_rows[td] = {"date": td, "is_forecast": False}
-            date_rows[td]["real_qty"] = float(row["real_qty"])
-
-            # Prognose am forecast_time (wann sie erstellt wurde)
-            fd = row["forecast_time"].strftime("%Y-%m-%d")
-            if fd not in date_rows:
-                date_rows[fd] = {"date": fd, "is_forecast": False}
-            date_rows[fd]["predicted_qty"] = round(float(row["predicted_qty"]), 3)
-
-        historical_chart = sorted(date_rows.values(), key=lambda r: r["date"])
+        # chart_data: Validierungsansicht (beide am target_date, Standard)
+        historical_chart = [
+            {
+                "date": row["target_time"].strftime("%Y-%m-%d"),
+                "issue_date": row["forecast_time"].strftime("%Y-%m-%d"),
+                "real_qty": float(row["real_qty"]),
+                "predicted_qty": round(float(row["predicted_qty"]), 3),
+                "is_forecast": False,
+            }
+            for _, row in pred_df.iterrows()
+        ]
 
         # Bridge: last historical point starts the forecast line
         if historical_chart and forecast_chart:
-            last_pred = next((r for r in reversed(historical_chart) if r.get("predicted_qty") is not None), None)
-            if last_pred:
-                last_pred["forecast_qty"] = last_pred["predicted_qty"]
+            historical_chart[-1]["forecast_qty"] = historical_chart[-1]["predicted_qty"]
 
         chart_data = historical_chart + forecast_chart
 
@@ -1500,6 +1510,7 @@ class BacktestService:
             "feature_count": len(imp_cols) if importance_accumulator else len(feature_cols),
             "feature_names": imp_cols if importance_accumulator else feature_cols,
             "chart_data": chart_data,
+            "forecast_records": forecast_records,
             "forecast_weeks": len(forecast_chart),
             "residual_std": round(residual_std, 4),
             "walk_forward": {

@@ -179,6 +179,7 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
   const [btRunning, setBtRunning] = useState(false);
   const [btResult, setBtResult] = useState<any>(null);
   const [topRegions, setTopRegions] = useState<any>(null);
+  const [btChartMode, setBtChartMode] = useState<'validation' | 'planning'>('validation');
   const [btCustomerResult, setBtCustomerResult] = useState<any>(null);
   const [btCustomerRunning, setBtCustomerRunning] = useState(false);
   const [btRuns, setBtRuns] = useState<any[]>([]);
@@ -2024,6 +2025,28 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
               {/* Chart with zoom + signal annotations */}
               {btResult.chart_data?.length > 0 && (
                 <div style={{ width: '100%', marginBottom: 16 }}>
+                  {/* View toggle + Signal legend */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                    <div style={{ display: 'flex', gap: 4, background: 'var(--bg-secondary)', borderRadius: 8, padding: 2 }}>
+                      {(['validation', 'planning'] as const).map((mode) => (
+                        <button
+                          key={mode}
+                          onClick={() => setBtChartMode(mode)}
+                          style={{
+                            padding: '5px 12px', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                            border: 'none',
+                            background: btChartMode === mode ? 'var(--accent-violet)' : 'transparent',
+                            color: btChartMode === mode ? '#fff' : 'var(--text-muted)',
+                          }}
+                        >
+                          {mode === 'validation' ? 'Validierung' : 'Planung'}
+                        </button>
+                      ))}
+                    </div>
+                    <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+                      {btChartMode === 'validation' ? 'Ist vs. Prognose am gleichen Datum' : 'Prognose am Erstelldatum (was wusste man wann?)'}
+                    </span>
+                  </div>
                   {/* Signal legend */}
                   {(btSignals.peaks.length > 0 || btSignals.surges.length > 0 || btSignals.earlyWarnings.length > 0) && (
                     <div style={{ display: 'flex', gap: 16, marginBottom: 10, flexWrap: 'wrap', fontSize: 11, color: 'var(--text-muted)' }}>
@@ -2051,6 +2074,33 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                     <ResponsiveContainer width="100%" height="100%">
                       <ComposedChart
                         data={(() => {
+                          if (btChartMode === 'planning' && btResult.forecast_records?.length) {
+                            // Planungsansicht: Prognose am issue_date, Ist am target_date
+                            const dateMap: Record<string, any> = {};
+                            for (const r of btResult.forecast_records) {
+                              // Ist-Wert am target_date
+                              if (!dateMap[r.target_date]) dateMap[r.target_date] = { date: r.target_date };
+                              dateMap[r.target_date].real_qty = r.y_true;
+                              // Prognose am issue_date
+                              if (!dateMap[r.issue_date]) dateMap[r.issue_date] = { date: r.issue_date };
+                              dateMap[r.issue_date].predicted_qty = r.y_hat;
+                              dateMap[r.issue_date].target_for = r.target_date;
+                            }
+                            // Future forecast points
+                            for (const pt of (btResult.chart_data || []).filter((p: any) => p.is_forecast)) {
+                              const d = pt.date;
+                              if (!dateMap[d]) dateMap[d] = { date: d };
+                              Object.assign(dateMap[d], pt);
+                            }
+                            return Object.values(dateMap).sort((a: any, b: any) => a.date.localeCompare(b.date)).map((pt: any) => ({
+                              ...pt,
+                              ci_95_base: pt.ci_95_lower ?? null,
+                              ci_95_range: (pt.ci_95_upper != null && pt.ci_95_lower != null) ? pt.ci_95_upper - pt.ci_95_lower : null,
+                              ci_80_base: pt.ci_80_lower ?? null,
+                              ci_80_range: (pt.ci_80_upper != null && pt.ci_80_lower != null) ? pt.ci_80_upper - pt.ci_80_lower : null,
+                            }));
+                          }
+                          // Validierungsansicht: beide am target_date (Standard)
                           const d = btResult.chart_data || [];
                           return d.map((pt: any) => ({
                             ...pt,
@@ -2073,8 +2123,17 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                         <YAxis tick={{ fontSize: 10, fill: 'var(--text-muted)' }} />
                         <RechartsTooltip
                           contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: 8, fontSize: 12 }}
-                          labelFormatter={(d: string) => {
-                            try { return format(parseISO(d), 'dd.MM.yyyy'); } catch { return d; }
+                          labelFormatter={(d: string, payload: any[]) => {
+                            try {
+                              const label = format(parseISO(d), 'dd.MM.yyyy');
+                              if (btChartMode === 'planning' && payload?.[0]?.payload?.target_for) {
+                                return `${label} — gilt für: ${format(parseISO(payload[0].payload.target_for), 'dd.MM.yyyy')}`;
+                              }
+                              if (btChartMode === 'validation' && payload?.[0]?.payload?.issue_date) {
+                                return `${label} — erstellt am: ${format(parseISO(payload[0].payload.issue_date), 'dd.MM.yyyy')}`;
+                              }
+                              return label;
+                            } catch { return d; }
                           }}
                           formatter={(value: any, name: string) => {
                             if (name === 'ci_95_base' || name === 'ci_95_range' || name === 'ci_80_base' || name === 'ci_80_range') return [null, null];
@@ -2174,8 +2233,17 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                     background: 'rgba(139,92,246,0.04)', border: '1px solid rgba(139,92,246,0.12)',
                     fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.5,
                   }}>
-                    <strong>So liest du das Chart:</strong> Jeder Punkt der violetten Linie wurde <strong>{btResult.walk_forward?.horizon_days || 14} Tage vorher</strong> prognostiziert —
-                    je näher sie an der roten Linie liegt, desto besser die Vorhersage.
+                    {btChartMode === 'validation' ? (
+                      <>
+                        <strong>Validierung:</strong> Beide Linien am gleichen Datum — je näher violett an rot, desto besser die {btResult.walk_forward?.horizon_days || 14}-Tage-Prognose.
+                        {' '}Hover zeigt wann die Prognose erstellt wurde.
+                      </>
+                    ) : (
+                      <>
+                        <strong>Planung:</strong> Violette Linie zeigt was man <strong>zum jeweiligen Zeitpunkt</strong> wusste (Forecast +{btResult.walk_forward?.horizon_days || 14}T).
+                        {' '}Hover zeigt für welches Datum die Prognose gilt.
+                      </>
+                    )}
                     {btResult.forecast_weeks > 0 && (
                       <> Die gestrichelte Linie zeigt den <strong>{btResult.forecast_weeks}-Wochen-Forecast</strong> mit 80%/95% Konfidenzband.</>
                     )}

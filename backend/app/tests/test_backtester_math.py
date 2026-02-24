@@ -42,6 +42,19 @@ class BacktesterMathTests(unittest.TestCase):
         self.assertEqual(metrics["mae"], 0.0)
         self.assertEqual(metrics["rmse"], 0.0)
 
+    def test_compute_vintage_metrics_uses_lead_days_and_abs_error(self) -> None:
+        records = [
+            {"issue_date": "2024-01-01", "target_date": "2024-01-08", "y_hat": 105.0, "y_true": 100.0},
+            {"issue_date": "2024-01-08", "target_date": "2024-01-15", "y_hat": 95.0, "y_true": 100.0},
+            {"issue_date": "2024-01-15", "target_date": "2024-01-22", "y_hat": 102.0, "y_true": 100.0},
+        ]
+
+        metrics = BacktestService._compute_vintage_metrics(records, configured_horizon_days=7)
+        self.assertEqual(metrics["configured_horizon_days"], 7)
+        self.assertEqual(metrics["median_lead_days"], 7)
+        self.assertEqual(metrics["oos_points"], 3)
+        self.assertGreater(metrics["p90_abs_error"], 0.0)
+
     def test_best_bio_lag_prefers_positive_alignment_over_stronger_negative(self) -> None:
         service = BacktestService(db=None)
         bio = np.array([
@@ -163,6 +176,72 @@ class BacktesterMathTests(unittest.TestCase):
 
         result = service.run_calibration(df, virus_typ="Influenza A")
         self.assertIn("error", result)
+
+    @patch("app.services.ml.backtester.BacktestService._persist_backtest_result", return_value=None)
+    @patch("app.services.ml.backtester.BacktestService._run_walk_forward_market_backtest")
+    def test_run_customer_simulation_ignores_future_rows_for_metrics(
+        self,
+        run_walk_forward_mock,
+        _persist_mock,
+    ) -> None:
+        run_walk_forward_mock.return_value = {
+            "metrics": {"r2_score": 0.5},
+            "chart_data": [
+                {
+                    "date": "2024-01-01",
+                    "issue_date": "2023-12-25",
+                    "target_date": "2024-01-01",
+                    "real_qty": 10.0,
+                    "predicted_qty": 11.0,
+                    "baseline_persistence": 9.0,
+                    "baseline_seasonal": 8.0,
+                    "bio": 0.1,
+                    "is_forecast": False,
+                },
+                {
+                    "date": "2024-01-08",
+                    "issue_date": "2024-01-01",
+                    "target_date": "2024-01-08",
+                    "real_qty": 20.0,
+                    "predicted_qty": 19.0,
+                    "baseline_persistence": 10.0,
+                    "baseline_seasonal": 11.0,
+                    "bio": 0.2,
+                    "is_forecast": False,
+                },
+                {
+                    "date": "2024-01-15",
+                    "issue_date": "2024-01-08",
+                    "target_date": "2024-01-15",
+                    "forecast_qty": 22.0,
+                    "is_forecast": True,
+                },
+            ],
+            "forecast_records": [
+                {"issue_date": "2023-12-25", "target_date": "2024-01-01", "y_hat": 11.0, "y_true": 10.0, "horizon_days": 7},
+                {"issue_date": "2024-01-01", "target_date": "2024-01-08", "y_hat": 19.0, "y_true": 20.0, "horizon_days": 7},
+            ],
+            "walk_forward": {"enabled": True, "horizon_days": 7, "folds": 2},
+        }
+
+        service = BacktestService(db=None)
+        df = pd.DataFrame({
+            "datum": pd.date_range("2024-01-01", periods=8, freq="D"),
+            "menge": np.linspace(10, 17, 8),
+            "region": ["Gesamt"] * 8,
+        })
+        result = service.run_customer_simulation(
+            customer_df=df,
+            virus_typ="Influenza A",
+            horizon_days=7,
+            min_train_points=5,
+            strict_vintage_mode=True,
+        )
+
+        self.assertEqual(result["metrics"]["data_points"], 2)
+        self.assertIn("forecast_records", result)
+        self.assertEqual(len(result["forecast_records"]), 2)
+        self.assertEqual(result["vintage_metrics"]["oos_points"], 2)
 
 
 if __name__ == "__main__":

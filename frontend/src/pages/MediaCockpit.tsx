@@ -18,6 +18,9 @@ import {
 } from 'recharts';
 import { de } from 'date-fns/locale';
 import {
+  BacktestChartMode,
+  BacktestChartPoint,
+  BacktestResponse,
   BentoTile,
   PeixScoreSummary,
   RecommendationCard,
@@ -111,7 +114,11 @@ interface CockpitResponse {
     }>;
   };
   recommendations: { total: number; cards: RecommendationCard[] };
-  backtest_summary: { latest_market: any; latest_customer: any; recent_runs: Array<any> };
+  backtest_summary: {
+    latest_market: BacktestResponse | null;
+    latest_customer: BacktestResponse | null;
+    recent_runs: Array<any>;
+  };
   data_freshness: Record<string, string | null>;
 }
 
@@ -176,11 +183,13 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
   /* ── Backtest state ── */
   const [btTargetSource, setBtTargetSource] = useState('ATEMWEGSINDEX');
   const [btBundesland, setBtBundesland] = useState('');
+  const [btHorizonDays, setBtHorizonDays] = useState<7 | 14 | 21>(14);
   const [btRunning, setBtRunning] = useState(false);
-  const [btResult, setBtResult] = useState<any>(null);
+  const [btResult, setBtResult] = useState<BacktestResponse | null>(null);
   const [topRegions, setTopRegions] = useState<any>(null);
-  const [btChartMode, setBtChartMode] = useState<'validation' | 'planning'>('validation');
-  const [btCustomerResult, setBtCustomerResult] = useState<any>(null);
+  const [btChartMode, setBtChartMode] = useState<BacktestChartMode>('validation');
+  const [btCustomerChartMode, setBtCustomerChartMode] = useState<BacktestChartMode>('validation');
+  const [btCustomerResult, setBtCustomerResult] = useState<BacktestResponse | null>(null);
   const [btCustomerRunning, setBtCustomerRunning] = useState(false);
   const [btRuns, setBtRuns] = useState<any[]>([]);
   const btFileRef = useRef<HTMLInputElement>(null);
@@ -1654,6 +1663,108 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
     return { peaks, surges, earlyWarnings };
   }, [btResult]);
 
+  const buildBacktestChartData = useCallback(
+    (result: BacktestResponse | null, mode: BacktestChartMode): BacktestChartPoint[] => {
+      const chartData = result?.chart_data || [];
+      if (!chartData.length) return [];
+
+      if (mode === 'planning' && result?.planning_curve?.curve?.length) {
+        const dateMap: Record<string, BacktestChartPoint> = {};
+        for (const row of chartData.filter((p) => !p.is_forecast)) {
+          if (!dateMap[row.date]) dateMap[row.date] = { date: row.date };
+          if (row.real_qty != null) dateMap[row.date].real_qty = row.real_qty;
+        }
+        for (const point of result.planning_curve.curve) {
+          if (!dateMap[point.date]) dateMap[point.date] = { date: point.date };
+          dateMap[point.date].predicted_qty = point.planning_qty ?? null;
+          dateMap[point.date].based_on = point.based_on;
+        }
+        const lastReal = chartData.filter((p) => !p.is_forecast && p.real_qty != null).pop();
+        const lastRealDate = lastReal?.date || '';
+        for (const point of result.planning_curve.curve) {
+          if (point.date > lastRealDate && dateMap[point.date]) {
+            dateMap[point.date].forecast_qty = point.planning_qty ?? null;
+          }
+        }
+        return Object.values(dateMap).sort((a, b) => a.date.localeCompare(b.date));
+      }
+
+      if (mode === 'vintage') {
+        const dateMap: Record<string, BacktestChartPoint> = {};
+        const records = result?.forecast_records || [];
+
+        if (records.length) {
+          for (const rec of records) {
+            const issueDate = rec.issue_date;
+            const targetDate = rec.target_date;
+            if (!issueDate || !targetDate) continue;
+
+            if (!dateMap[issueDate]) dateMap[issueDate] = { date: issueDate };
+            dateMap[issueDate].issue_date = issueDate;
+            dateMap[issueDate].target_date = targetDate;
+            dateMap[issueDate].predicted_qty = rec.y_hat ?? null;
+            const issueTs = Date.parse(issueDate);
+            const targetTs = Date.parse(targetDate);
+            if (!Number.isNaN(issueTs) && !Number.isNaN(targetTs)) {
+              dateMap[issueDate].lead_days = Math.round((targetTs - issueTs) / 86400000);
+            }
+
+            if (!dateMap[targetDate]) dateMap[targetDate] = { date: targetDate };
+            dateMap[targetDate].target_date = targetDate;
+            dateMap[targetDate].real_qty = rec.y_true ?? null;
+            if (!dateMap[targetDate].issue_date_hint) {
+              dateMap[targetDate].issue_date_hint = issueDate;
+            }
+          }
+        } else {
+          for (const row of chartData.filter((p) => !p.is_forecast && p.issue_date)) {
+            const issueDate = row.issue_date as string;
+            if (!dateMap[issueDate]) dateMap[issueDate] = { date: issueDate };
+            dateMap[issueDate].issue_date = issueDate;
+            dateMap[issueDate].target_date = row.target_date || row.date;
+            dateMap[issueDate].predicted_qty = row.predicted_qty ?? null;
+
+            if (!dateMap[row.date]) dateMap[row.date] = { date: row.date };
+            dateMap[row.date].target_date = row.target_date || row.date;
+            dateMap[row.date].real_qty = row.real_qty ?? null;
+            dateMap[row.date].issue_date_hint = issueDate;
+          }
+        }
+
+        for (const row of chartData.filter((p) => p.is_forecast)) {
+          const issueDate = row.issue_date || row.date;
+          if (!issueDate) continue;
+          if (!dateMap[issueDate]) dateMap[issueDate] = { date: issueDate };
+          dateMap[issueDate].issue_date = issueDate;
+          dateMap[issueDate].target_date = row.target_date || row.date;
+          dateMap[issueDate].forecast_qty = row.forecast_qty ?? null;
+          dateMap[issueDate].ci_80_lower = row.ci_80_lower ?? null;
+          dateMap[issueDate].ci_80_upper = row.ci_80_upper ?? null;
+          dateMap[issueDate].ci_95_lower = row.ci_95_lower ?? null;
+          dateMap[issueDate].ci_95_upper = row.ci_95_upper ?? null;
+          dateMap[issueDate].is_future_vintage = true;
+        }
+
+        return Object.values(dateMap).sort((a, b) => a.date.localeCompare(b.date));
+      }
+
+      return chartData.map((point) => ({
+        ...point,
+        ci_95_base: point.ci_95_lower ?? null,
+        ci_95_range:
+          point.ci_95_upper != null && point.ci_95_lower != null
+            ? point.ci_95_upper - point.ci_95_lower
+            : null,
+        ci_80_base: point.ci_80_lower ?? null,
+        ci_80_range:
+          point.ci_80_upper != null && point.ci_80_lower != null
+            ? point.ci_80_upper - point.ci_80_lower
+            : null,
+      }));
+    },
+    [],
+  );
+
   const loadBacktestRuns = useCallback(async () => {
     try {
       const res = await fetch('/api/v1/backtest/runs?limit=30');
@@ -1690,11 +1801,13 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
   const runMarketBacktest = async () => {
     setBtRunning(true);
     setBtResult(null);
+    setBtChartMode('validation');
     fetchTopRegions(btTargetSource);
     try {
       const qs = new URLSearchParams({
         target_source: btTargetSource,
         virus_typ: virus,
+        horizon_days: String(btHorizonDays),
       });
       if (btBundesland) qs.set('bundesland', btBundesland);
       const res = await fetch(`/api/v1/backtest/market?${qs.toString()}`, { method: 'POST' });
@@ -1721,10 +1834,14 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
     }
     setBtCustomerRunning(true);
     setBtCustomerResult(null);
+    setBtCustomerChartMode('validation');
     try {
       const formData = new FormData();
       formData.append('file', fileInput.files[0]);
-      const qs = new URLSearchParams({ virus_typ: virus });
+      const qs = new URLSearchParams({
+        virus_typ: virus,
+        horizon_days: String(btHorizonDays),
+      });
       const res = await fetch(`/api/v1/backtest/customer?${qs.toString()}`, {
         method: 'POST',
         body: formData,
@@ -1886,6 +2003,35 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                 <option key={bl || '__bw'} value={bl}>{bl || 'Bundesweit'}</option>
               ))}
             </select>
+            <div
+              style={{
+                display: 'flex',
+                gap: 4,
+                padding: 2,
+                borderRadius: 8,
+                border: '1px solid var(--border-color)',
+                background: 'var(--bg-secondary)',
+              }}
+            >
+              {[7, 14, 21].map((days) => (
+                <button
+                  key={days}
+                  onClick={() => setBtHorizonDays(days as 7 | 14 | 21)}
+                  style={{
+                    padding: '6px 10px',
+                    borderRadius: 6,
+                    border: 'none',
+                    cursor: 'pointer',
+                    fontSize: 11,
+                    fontWeight: 600,
+                    background: btHorizonDays === days ? 'var(--accent-violet)' : 'transparent',
+                    color: btHorizonDays === days ? '#fff' : 'var(--text-muted)',
+                  }}
+                >
+                  {days}T
+                </button>
+              ))}
+            </div>
             <button
               onClick={runMarketBacktest}
               disabled={btRunning}
@@ -1906,8 +2052,10 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                 const fcData = (btResult.chart_data || []).filter((d: any) => d.is_forecast);
                 const lastFc = fcData[fcData.length - 1];
                 const firstFc = fcData[0];
-                const trendUp = lastFc && firstFc && lastFc.forecast_qty > firstFc.forecast_qty * 1.1;
-                const trendDown = lastFc && firstFc && lastFc.forecast_qty < firstFc.forecast_qty * 0.9;
+                const lastFcQty = typeof lastFc?.forecast_qty === 'number' ? lastFc.forecast_qty : null;
+                const firstFcQty = typeof firstFc?.forecast_qty === 'number' ? firstFc.forecast_qty : null;
+                const trendUp = lastFcQty != null && firstFcQty != null && lastFcQty > firstFcQty * 1.1;
+                const trendDown = lastFcQty != null && firstFcQty != null && lastFcQty < firstFcQty * 0.9;
 
                 let signal = 'beobachten';
                 let signalColor = 'var(--text-muted)';
@@ -2023,237 +2171,257 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
               )}
 
               {/* Chart with zoom + signal annotations */}
-              {btResult.chart_data?.length > 0 && (
-                <div style={{ width: '100%', marginBottom: 16 }}>
-                  {/* View toggle + Signal legend */}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                    <div style={{ display: 'flex', gap: 4, background: 'var(--bg-secondary)', borderRadius: 8, padding: 2 }}>
-                      {(['validation', 'planning'] as const).map((mode) => (
-                        <button
-                          key={mode}
-                          onClick={() => setBtChartMode(mode)}
-                          style={{
-                            padding: '5px 12px', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer',
-                            border: 'none',
-                            background: btChartMode === mode ? 'var(--accent-violet)' : 'transparent',
-                            color: btChartMode === mode ? '#fff' : 'var(--text-muted)',
-                          }}
+              {(btResult.chart_data?.length ?? 0) > 0 && (() => {
+                const planningAvailable = Boolean(btResult.planning_curve?.curve?.length);
+                const modes: BacktestChartMode[] = planningAvailable
+                  ? ['validation', 'vintage', 'planning']
+                  : ['validation', 'vintage'];
+                const activeMode = modes.includes(btChartMode) ? btChartMode : 'validation';
+                const chartRows = buildBacktestChartData(btResult, activeMode);
+                const firstForecast = btResult.chart_data?.find((row) => row.is_forecast);
+                const dividerDate = activeMode === 'vintage'
+                  ? (firstForecast?.issue_date || firstForecast?.date)
+                  : firstForecast?.date;
+
+                return (
+                  <div style={{ width: '100%', marginBottom: 16 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                      <div style={{ display: 'flex', gap: 4, background: 'var(--bg-secondary)', borderRadius: 8, padding: 2 }}>
+                        {modes.map((mode) => (
+                          <button
+                            key={mode}
+                            onClick={() => setBtChartMode(mode)}
+                            style={{
+                              padding: '5px 12px', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                              border: 'none',
+                              background: activeMode === mode ? 'var(--accent-violet)' : 'transparent',
+                              color: activeMode === mode ? '#fff' : 'var(--text-muted)',
+                            }}
+                          >
+                            {mode === 'validation' && 'Validierung'}
+                            {mode === 'vintage' && 'Forecast-Vintage'}
+                            {mode === 'planning' && 'Planung'}
+                          </button>
+                        ))}
+                      </div>
+                      <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+                        {activeMode === 'validation' && 'Ist vs. Prognose am gleichen Datum'}
+                        {activeMode === 'vintage' && 'Prognose am Erstelldatum (blau links = echter Vorlauf)'}
+                        {activeMode === 'planning' && 'Bio-Shift Planungskurve (signalbasiert)'}
+                      </span>
+                    </div>
+
+                    {btResult.vintage_metrics && (
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>
+                        Vintage: Vorlauf median {btResult.vintage_metrics.median_lead_days ?? btResult.walk_forward?.horizon_days ?? btHorizonDays}T ·
+                        p90 |Fehler| {btResult.vintage_metrics.p90_abs_error ?? '-'} ·
+                        OOS Punkte {btResult.vintage_metrics.oos_points ?? btResult.metrics?.data_points ?? '-'} ·
+                        Modell {btResult.model_type || 'GradientBoosting/Ridge'}
+                      </div>
+                    )}
+
+                    {(activeMode === 'validation') && (btSignals.peaks.length > 0 || btSignals.surges.length > 0 || btSignals.earlyWarnings.length > 0) && (
+                      <div style={{ display: 'flex', gap: 16, marginBottom: 10, flexWrap: 'wrap', fontSize: 11, color: 'var(--text-muted)' }}>
+                        {btSignals.earlyWarnings.length > 0 && (
+                          <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <span style={{ width: 14, height: 10, background: 'rgba(46, 204, 113, 0.15)', border: '1px solid rgba(46, 204, 113, 0.4)', borderRadius: 2, display: 'inline-block' }} />
+                            Frühwarnung ({btSignals.earlyWarnings.length})
+                          </span>
+                        )}
+                        {btSignals.peaks.length > 0 && (
+                          <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#c0392b', display: 'inline-block' }} />
+                            Peak ({btSignals.peaks.length})
+                          </span>
+                        )}
+                        {btSignals.surges.length > 0 && (
+                          <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <span style={{ width: 0, height: 0, borderLeft: '5px solid transparent', borderRight: '5px solid transparent', borderBottom: '10px solid #e67e22', display: 'inline-block' }} />
+                            Surge ({btSignals.surges.length})
+                          </span>
+                        )}
+                      </div>
+                    )}
+
+                    <div style={{ width: '100%', height: 420 }}>
+                      <ResponsiveContainer width="100%" height="100%">
+                        <ComposedChart
+                          data={chartRows}
+                          margin={{ top: 8, right: 12, left: 0, bottom: 4 }}
                         >
-                          {mode === 'validation' ? 'Validierung' : 'Planung'}
-                        </button>
-                      ))}
-                    </div>
-                    <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
-                      {btChartMode === 'validation' ? 'Ist vs. Prognose am gleichen Datum' : 'Prognose am Erstelldatum (was wusste man wann?)'}
-                    </span>
-                  </div>
-                  {/* Signal legend */}
-                  {(btSignals.peaks.length > 0 || btSignals.surges.length > 0 || btSignals.earlyWarnings.length > 0) && (
-                    <div style={{ display: 'flex', gap: 16, marginBottom: 10, flexWrap: 'wrap', fontSize: 11, color: 'var(--text-muted)' }}>
-                      {btSignals.earlyWarnings.length > 0 && (
-                        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                          <span style={{ width: 14, height: 10, background: 'rgba(46, 204, 113, 0.15)', border: '1px solid rgba(46, 204, 113, 0.4)', borderRadius: 2, display: 'inline-block' }} />
-                          Frühwarnung ({btSignals.earlyWarnings.length})
-                        </span>
-                      )}
-                      {btSignals.peaks.length > 0 && (
-                        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                          <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#c0392b', display: 'inline-block' }} />
-                          Peak ({btSignals.peaks.length})
-                        </span>
-                      )}
-                      {btSignals.surges.length > 0 && (
-                        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                          <span style={{ width: 0, height: 0, borderLeft: '5px solid transparent', borderRight: '5px solid transparent', borderBottom: '10px solid #e67e22', display: 'inline-block' }} />
-                          Surge ({btSignals.surges.length})
-                        </span>
-                      )}
-                    </div>
-                  )}
-                  <div style={{ width: '100%', height: 420 }}>
-                    <ResponsiveContainer width="100%" height="100%">
-                      <ComposedChart
-                        data={(() => {
-                          if (btChartMode === 'planning' && btResult.planning_curve?.curve?.length) {
-                            // Planungsansicht: Abwasser→skaliert+geshiftet als Planungskurve
-                            const pc = btResult.planning_curve.curve;
-                            const dateMap: Record<string, any> = {};
-                            // Ist-Werte aus chart_data
-                            for (const r of (btResult.chart_data || []).filter((p: any) => !p.is_forecast)) {
-                              if (!dateMap[r.date]) dateMap[r.date] = { date: r.date };
-                              if (r.real_qty != null) dateMap[r.date].real_qty = r.real_qty;
-                            }
-                            // Planungskurve (Bio-Signal geshiftet)
-                            for (const p of pc) {
-                              if (!dateMap[p.date]) dateMap[p.date] = { date: p.date };
-                              dateMap[p.date].predicted_qty = p.planning_qty;
-                              dateMap[p.date].based_on = p.based_on;
-                            }
-                            // Future: letzte Punkte der Planungskurve die über letztes Ist-Datum hinausgehen
-                            const lastReal = (btResult.chart_data || []).filter((p: any) => !p.is_forecast && p.real_qty != null).pop();
-                            const lastRealDate = lastReal?.date || '';
-                            for (const p of pc) {
-                              if (p.date > lastRealDate && dateMap[p.date]) {
-                                dateMap[p.date].forecast_qty = p.planning_qty;
-                              }
-                            }
-                            return Object.values(dateMap).sort((a: any, b: any) => a.date.localeCompare(b.date));
-                          }
-                          // Validierungsansicht: ML-Prognose am target_date (Standard)
-                          const d = btResult.chart_data || [];
-                          return d.map((pt: any) => ({
-                            ...pt,
-                            ci_95_base: pt.ci_95_lower ?? null,
-                            ci_95_range: (pt.ci_95_upper != null && pt.ci_95_lower != null) ? pt.ci_95_upper - pt.ci_95_lower : null,
-                            ci_80_base: pt.ci_80_lower ?? null,
-                            ci_80_range: (pt.ci_80_upper != null && pt.ci_80_lower != null) ? pt.ci_80_upper - pt.ci_80_lower : null,
-                          }));
-                        })()}
-                        margin={{ top: 8, right: 12, left: 0, bottom: 4 }}
-                      >
-                        <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" opacity={0.5} />
-                        <XAxis
-                          dataKey="date"
-                          tickFormatter={(d: string) => {
-                            try { return format(parseISO(d), 'dd.MM.yy'); } catch { return d; }
-                          }}
-                          tick={{ fontSize: 10, fill: 'var(--text-muted)' }}
-                        />
-                        <YAxis tick={{ fontSize: 10, fill: 'var(--text-muted)' }} />
-                        <RechartsTooltip
-                          contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: 8, fontSize: 12 }}
-                          labelFormatter={(d: string, payload: any[]) => {
-                            try {
-                              const label = format(parseISO(d), 'dd.MM.yyyy');
-                              if (btChartMode === 'planning' && payload?.[0]?.payload?.based_on) {
-                                return `${label} — basierend auf Abwasser vom ${format(parseISO(payload[0].payload.based_on), 'dd.MM.yyyy')}`;
-                              }
-                              if (btChartMode === 'validation' && payload?.[0]?.payload?.issue_date) {
-                                return `${label} — erstellt am: ${format(parseISO(payload[0].payload.issue_date), 'dd.MM.yyyy')}`;
-                              }
-                              return label;
-                            } catch { return d; }
-                          }}
-                          formatter={(value: any, name: string) => {
-                            if (name === 'ci_95_base' || name === 'ci_95_range' || name === 'ci_80_base' || name === 'ci_80_range') return [null, null];
-                            return [typeof value === 'number' ? value.toFixed(2) : value, name];
-                          }}
-                        />
-                        <Legend
-                          wrapperStyle={{ fontSize: 12, paddingTop: 4 }}
-                          payload={btChartMode === 'planning' ? [
-                            { value: 'Tatsächliche Inzidenz', type: 'line', color: '#c0392b' },
-                            { value: `Abwasser-Prognose (+${btResult.planning_curve?.lead_days || 7}T, r=${btResult.planning_curve?.correlation || '?'})`, type: 'line', color: 'var(--accent-violet)' },
-                            { value: 'Zukunft (Bio-Shift)', type: 'line', color: 'var(--accent-violet)' },
-                          ] : [
-                            { value: 'Tatsächliche Inzidenz', type: 'line', color: '#c0392b' },
-                            { value: `ML-Prognose (${btResult.walk_forward?.horizon_days || 7}T)`, type: 'line', color: 'var(--accent-violet)' },
-                            { value: 'Zukunft', type: 'line', color: 'var(--accent-violet)' },
-                            { value: '80% KI', type: 'rect', color: 'rgba(139,92,246,0.25)' },
-                            { value: '95% KI', type: 'rect', color: 'rgba(139,92,246,0.1)' },
-                          ]}
-                        />
-
-                        {/* 95% confidence band (wider, lighter) */}
-                        <Area type="monotone" dataKey="ci_95_base" stackId="ci95" fill="transparent" stroke="none" activeDot={false} legendType="none" />
-                        <Area type="monotone" dataKey="ci_95_range" stackId="ci95" fill="rgba(139,92,246,0.1)" stroke="none" activeDot={false} legendType="none" />
-
-                        {/* 80% confidence band (narrower, darker) */}
-                        <Area type="monotone" dataKey="ci_80_base" stackId="ci80" fill="transparent" stroke="none" activeDot={false} legendType="none" />
-                        <Area type="monotone" dataKey="ci_80_range" stackId="ci80" fill="rgba(139,92,246,0.25)" stroke="none" activeDot={false} legendType="none" />
-
-                        {/* Early warning zones */}
-                        {btSignals.earlyWarnings.map((ew, i) => (
-                          <ReferenceArea
-                            key={`ew-${i}`}
-                            x1={btResult.chart_data[ew.start]?.date}
-                            x2={btResult.chart_data[ew.end]?.date}
-                            fill="#2ecc71"
-                            fillOpacity={0.1}
-                            stroke="#2ecc71"
-                            strokeOpacity={0.3}
-                            strokeDasharray="3 3"
+                          <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" opacity={0.5} />
+                          <XAxis
+                            dataKey="date"
+                            tickFormatter={(d: string) => {
+                              try { return format(parseISO(d), 'dd.MM.yy'); } catch { return d; }
+                            }}
+                            tick={{ fontSize: 10, fill: 'var(--text-muted)' }}
                           />
-                        ))}
-
-                        {/* Peak markers */}
-                        {btSignals.peaks.map((idx) => (
-                          <ReferenceLine
-                            key={`pk-${idx}`}
-                            x={btResult.chart_data[idx]?.date}
-                            stroke="#c0392b"
-                            strokeWidth={1.5}
-                            strokeDasharray="4 2"
-                            label={{ value: 'Peak', position: 'top', fontSize: 9, fill: '#c0392b', fontWeight: 600 }}
+                          <YAxis tick={{ fontSize: 10, fill: 'var(--text-muted)' }} />
+                          <RechartsTooltip
+                            contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: 8, fontSize: 12 }}
+                            labelFormatter={(d: string, payload: any[]) => {
+                              try {
+                                const label = format(parseISO(d), 'dd.MM.yyyy');
+                                const point = payload?.[0]?.payload || {};
+                                if (activeMode === 'planning' && point.based_on) {
+                                  return `${label} — basierend auf Abwasser vom ${format(parseISO(point.based_on), 'dd.MM.yyyy')}`;
+                                }
+                                if (activeMode === 'vintage') {
+                                  const issue = point.issue_date || point.issue_date_hint;
+                                  const target = point.target_date;
+                                  if (issue && target) {
+                                    return `${label} — erstellt am: ${format(parseISO(issue), 'dd.MM.yyyy')} · für: ${format(parseISO(target), 'dd.MM.yyyy')}`;
+                                  }
+                                }
+                                if (point.issue_date) {
+                                  return `${label} — erstellt am: ${format(parseISO(point.issue_date), 'dd.MM.yyyy')}`;
+                                }
+                                return label;
+                              } catch { return d; }
+                            }}
+                            formatter={(value: any, name: string) => {
+                              if (name === 'ci_95_base' || name === 'ci_95_range' || name === 'ci_80_base' || name === 'ci_80_range') return [null, null];
+                              return [typeof value === 'number' ? value.toFixed(2) : value, name];
+                            }}
                           />
-                        ))}
-
-                        {/* Surge markers */}
-                        {btSignals.surges.map((idx) => (
-                          <ReferenceLine
-                            key={`sg-${idx}`}
-                            x={btResult.chart_data[idx]?.date}
-                            stroke="#e67e22"
-                            strokeWidth={1}
-                            strokeDasharray="2 3"
-                            label={{ value: '\u25B2', position: 'top', fontSize: 10, fill: '#e67e22' }}
+                          <Legend
+                            wrapperStyle={{ fontSize: 12, paddingTop: 4 }}
+                            payload={
+                              activeMode === 'planning'
+                                ? [
+                                  { value: 'Tatsächliche Inzidenz', type: 'line', color: '#c0392b' },
+                                  { value: `Abwasser-Prognose (+${btResult.planning_curve?.lead_days || 7}T, r=${btResult.planning_curve?.correlation || '?'})`, type: 'line', color: 'var(--accent-violet)' },
+                                  { value: 'Zukunft (Bio-Shift)', type: 'line', color: 'var(--accent-violet)' },
+                                ]
+                                : activeMode === 'vintage'
+                                  ? [
+                                    { value: 'Tatsächliche Inzidenz (target_date)', type: 'line', color: '#c0392b' },
+                                    { value: `ML-Prognose (issue_date, ${btResult.walk_forward?.horizon_days || btHorizonDays}T Vorlauf)`, type: 'line', color: 'var(--accent-violet)' },
+                                    { value: 'Zukunft (issue_date)', type: 'line', color: 'var(--accent-violet)' },
+                                  ]
+                                  : [
+                                    { value: 'Tatsächliche Inzidenz', type: 'line', color: '#c0392b' },
+                                    { value: `ML-Prognose (${btResult.walk_forward?.horizon_days || btHorizonDays}T)`, type: 'line', color: 'var(--accent-violet)' },
+                                    { value: 'Zukunft', type: 'line', color: 'var(--accent-violet)' },
+                                    { value: '80% KI', type: 'rect', color: 'rgba(139,92,246,0.25)' },
+                                    { value: '95% KI', type: 'rect', color: 'rgba(139,92,246,0.1)' },
+                                  ]
+                            }
                           />
-                        ))}
 
-                        {/* Forecast zone divider */}
-                        {btResult.chart_data?.some((d: any) => d.is_forecast) && (() => {
-                          const firstFc = btResult.chart_data.find((d: any) => d.is_forecast);
-                          return firstFc ? (
+                          {activeMode === 'validation' && (
+                            <>
+                              <Area type="monotone" dataKey="ci_95_base" stackId="ci95" fill="transparent" stroke="none" activeDot={false} legendType="none" />
+                              <Area type="monotone" dataKey="ci_95_range" stackId="ci95" fill="rgba(139,92,246,0.1)" stroke="none" activeDot={false} legendType="none" />
+                              <Area type="monotone" dataKey="ci_80_base" stackId="ci80" fill="transparent" stroke="none" activeDot={false} legendType="none" />
+                              <Area type="monotone" dataKey="ci_80_range" stackId="ci80" fill="rgba(139,92,246,0.25)" stroke="none" activeDot={false} legendType="none" />
+                            </>
+                          )}
+
+                          {(activeMode === 'validation') && btSignals.earlyWarnings.map((ew, i) => (
+                            <ReferenceArea
+                              key={`ew-${i}`}
+                              x1={btResult.chart_data?.[ew.start]?.date}
+                              x2={btResult.chart_data?.[ew.end]?.date}
+                              fill="#2ecc71"
+                              fillOpacity={0.1}
+                              stroke="#2ecc71"
+                              strokeOpacity={0.3}
+                              strokeDasharray="3 3"
+                            />
+                          ))}
+
+                          {(activeMode === 'validation') && btSignals.peaks.map((idx) => (
                             <ReferenceLine
-                              x={firstFc.date}
+                              key={`pk-${idx}`}
+                              x={btResult.chart_data?.[idx]?.date}
+                              stroke="#c0392b"
+                              strokeWidth={1.5}
+                              strokeDasharray="4 2"
+                              label={{ value: 'Peak', position: 'top', fontSize: 9, fill: '#c0392b', fontWeight: 600 }}
+                            />
+                          ))}
+
+                          {(activeMode === 'validation') && btSignals.surges.map((idx) => (
+                            <ReferenceLine
+                              key={`sg-${idx}`}
+                              x={btResult.chart_data?.[idx]?.date}
+                              stroke="#e67e22"
+                              strokeWidth={1}
+                              strokeDasharray="2 3"
+                              label={{ value: '\u25B2', position: 'top', fontSize: 10, fill: '#e67e22' }}
+                            />
+                          ))}
+
+                          {dividerDate && (
+                            <ReferenceLine
+                              x={dividerDate}
                               stroke="var(--text-muted)"
                               strokeWidth={1}
                               strokeDasharray="6 3"
                               label={{ value: 'Forecast', position: 'insideTopRight', fontSize: 10, fill: 'var(--text-muted)', fontWeight: 600 }}
                             />
-                          ) : null;
-                        })()}
+                          )}
 
-                        <Line type="monotone" dataKey="real_qty" name="Tatsächliche Inzidenz" stroke="#c0392b" strokeWidth={2} dot={false} />
-                        <Line type="monotone" dataKey="predicted_qty" name={`Prognose (${btResult.walk_forward?.horizon_days || 14}T Vorlauf)`} stroke="var(--accent-violet)" strokeWidth={2} dot={false} />
-                        <Line type="monotone" dataKey="forecast_qty" name="Zukunft" stroke="var(--accent-violet)" strokeWidth={2} dot={false} strokeDasharray="8 4" connectNulls={false} />
+                          <Line type="monotone" dataKey="real_qty" name="Tatsächliche Inzidenz" stroke="#c0392b" strokeWidth={2} dot={false} />
+                          <Line
+                            type="monotone"
+                            dataKey="predicted_qty"
+                            name={activeMode === 'vintage'
+                              ? `ML-Prognose (issue_date, ${btResult.walk_forward?.horizon_days || btHorizonDays}T)`
+                              : `Prognose (${btResult.walk_forward?.horizon_days || btHorizonDays}T Vorlauf)`}
+                            stroke="var(--accent-violet)"
+                            strokeWidth={2}
+                            dot={false}
+                          />
+                          <Line type="monotone" dataKey="forecast_qty" name="Zukunft" stroke="var(--accent-violet)" strokeWidth={2} dot={false} strokeDasharray="8 4" connectNulls={false} />
 
-                        <Brush
-                          dataKey="date"
-                          height={28}
-                          stroke="var(--accent-violet)"
-                          fill="var(--bg-card)"
-                          tickFormatter={(d: string) => {
-                            try { return format(parseISO(d), 'MM/yy'); } catch { return ''; }
-                          }}
-                          travellerWidth={8}
-                        />
-                      </ComposedChart>
-                    </ResponsiveContainer>
+                          <Brush
+                            dataKey="date"
+                            height={28}
+                            stroke="var(--accent-violet)"
+                            fill="var(--bg-card)"
+                            tickFormatter={(d: string) => {
+                              try { return format(parseISO(d), 'MM/yy'); } catch { return ''; }
+                            }}
+                            travellerWidth={8}
+                          />
+                        </ComposedChart>
+                      </ResponsiveContainer>
+                    </div>
+                    <div style={{
+                      marginTop: 8, padding: '8px 12px', borderRadius: 8,
+                      background: 'rgba(139,92,246,0.04)', border: '1px solid rgba(139,92,246,0.12)',
+                      fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.5,
+                    }}>
+                      {activeMode === 'validation' && (
+                        <>
+                          <strong>Validierung:</strong> Beide Linien am gleichen Datum — je näher violett an rot, desto besser die {(btResult.walk_forward?.horizon_days || btHorizonDays)}-Tage-Prognose.
+                          {' '}Hover zeigt den Erstellzeitpunkt.
+                        </>
+                      )}
+                      {activeMode === 'vintage' && (
+                        <>
+                          <strong>Forecast-Vintage:</strong> Blau liegt am <strong>Erstelldatum</strong>, Rot am <strong>Ereignisdatum</strong>.
+                          {' '}Linksversatz bedeutet echten Vorlauf (kein künstlicher Shift). Medianer Vorlauf:
+                          {' '}<strong>{btResult.vintage_metrics?.median_lead_days ?? btResult.walk_forward?.horizon_days ?? btHorizonDays} Tage</strong>.
+                        </>
+                      )}
+                      {activeMode === 'planning' && (
+                        <>
+                          <strong>Planung:</strong> Violette Linie = Abwasser-Signal skaliert und um <strong>{btResult.planning_curve?.lead_days || 7} Tage</strong> nach rechts geshiftet
+                          (empirische Cross-Korrelation r={btResult.planning_curve?.correlation || '?'}).
+                          {' '}Hover zeigt das Abwasser-Datum. Punkte rechts der roten Linie = Zukunftsprognose.
+                        </>
+                      )}
+                      {btResult.forecast_weeks && btResult.forecast_weeks > 0 && (
+                        <> Die gestrichelte Linie zeigt den <strong>{btResult.forecast_weeks}-Wochen-Forecast</strong>.</>
+                      )}
+                    </div>
                   </div>
-                  <div style={{
-                    marginTop: 8, padding: '8px 12px', borderRadius: 8,
-                    background: 'rgba(139,92,246,0.04)', border: '1px solid rgba(139,92,246,0.12)',
-                    fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.5,
-                  }}>
-                    {btChartMode === 'validation' ? (
-                      <>
-                        <strong>Validierung:</strong> Beide Linien am gleichen Datum — je näher violett an rot, desto besser die {btResult.walk_forward?.horizon_days || 14}-Tage-Prognose.
-                        {' '}Hover zeigt wann die Prognose erstellt wurde.
-                      </>
-                    ) : (
-                      <>
-                        <strong>Planung:</strong> Violette Linie = Abwasser-Signal skaliert und um <strong>{btResult.planning_curve?.lead_days || 7} Tage</strong> nach rechts geshiftet
-                        (empirische Cross-Korrelation r={btResult.planning_curve?.correlation || '?'}).
-                        {' '}Hover zeigt das Abwasser-Datum. Punkte rechts der roten Linie = Zukunftsprognose.
-                      </>
-                    )}
-                    {btResult.forecast_weeks > 0 && (
-                      <> Die gestrichelte Linie zeigt den <strong>{btResult.forecast_weeks}-Wochen-Forecast</strong> mit 80%/95% Konfidenzband.</>
-                    )}
-                  </div>
-                </div>
-              )}
+                );
+              })()}
 
               {btResult.proof_text && (
                 <details style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 8 }}>
@@ -2279,6 +2447,35 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
               accept=".csv,.xlsx"
               style={{ fontSize: 13, color: 'var(--text-primary)' }}
             />
+            <div
+              style={{
+                display: 'flex',
+                gap: 4,
+                padding: 2,
+                borderRadius: 8,
+                border: '1px solid var(--border-color)',
+                background: 'var(--bg-secondary)',
+              }}
+            >
+              {[7, 14, 21].map((days) => (
+                <button
+                  key={`customer-${days}`}
+                  onClick={() => setBtHorizonDays(days as 7 | 14 | 21)}
+                  style={{
+                    padding: '6px 10px',
+                    borderRadius: 6,
+                    border: 'none',
+                    cursor: 'pointer',
+                    fontSize: 11,
+                    fontWeight: 600,
+                    background: btHorizonDays === days ? 'var(--accent-violet)' : 'transparent',
+                    color: btHorizonDays === days ? '#fff' : 'var(--text-muted)',
+                  }}
+                >
+                  {days}T
+                </button>
+              ))}
+            </div>
             <button
               onClick={runCustomerBacktest}
               disabled={btCustomerRunning}
@@ -2309,6 +2506,176 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                   </div>
                 ))}
               </div>
+
+              {btCustomerResult.chart_data?.length ? (() => {
+                const planningAvailable = Boolean(btCustomerResult.planning_curve?.curve?.length);
+                const modes: BacktestChartMode[] = planningAvailable
+                  ? ['validation', 'vintage', 'planning']
+                  : ['validation', 'vintage'];
+                const activeMode = modes.includes(btCustomerChartMode) ? btCustomerChartMode : 'validation';
+                const chartRows = buildBacktestChartData(btCustomerResult, activeMode);
+                const firstForecast = btCustomerResult.chart_data?.find((row) => row.is_forecast);
+                const dividerDate = activeMode === 'vintage'
+                  ? (firstForecast?.issue_date || firstForecast?.date)
+                  : firstForecast?.date;
+
+                return (
+                  <div style={{ width: '100%', marginBottom: 12 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                      <div style={{ display: 'flex', gap: 4, background: 'var(--bg-secondary)', borderRadius: 8, padding: 2 }}>
+                        {modes.map((mode) => (
+                          <button
+                            key={`cust-${mode}`}
+                            onClick={() => setBtCustomerChartMode(mode)}
+                            style={{
+                              padding: '5px 12px', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                              border: 'none',
+                              background: activeMode === mode ? 'var(--accent-violet)' : 'transparent',
+                              color: activeMode === mode ? '#fff' : 'var(--text-muted)',
+                            }}
+                          >
+                            {mode === 'validation' && 'Validierung'}
+                            {mode === 'vintage' && 'Forecast-Vintage'}
+                            {mode === 'planning' && 'Planung'}
+                          </button>
+                        ))}
+                      </div>
+                      <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+                        {activeMode === 'validation' && 'Ist vs. Prognose am gleichen Datum'}
+                        {activeMode === 'vintage' && 'Prognose am Erstelldatum (blau links)'}
+                        {activeMode === 'planning' && 'Bio-Shift Planungskurve'}
+                      </span>
+                    </div>
+
+                    <div style={{ width: '100%', height: 320 }}>
+                      <ResponsiveContainer width="100%" height="100%">
+                        <ComposedChart data={chartRows} margin={{ top: 8, right: 12, left: 0, bottom: 4 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" opacity={0.5} />
+                          <XAxis
+                            dataKey="date"
+                            tickFormatter={(d: string) => {
+                              try { return format(parseISO(d), 'dd.MM.yy'); } catch { return d; }
+                            }}
+                            tick={{ fontSize: 10, fill: 'var(--text-muted)' }}
+                          />
+                          <YAxis tick={{ fontSize: 10, fill: 'var(--text-muted)' }} />
+                          <RechartsTooltip
+                            contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: 8, fontSize: 12 }}
+                            labelFormatter={(d: string, payload: any[]) => {
+                              try {
+                                const label = format(parseISO(d), 'dd.MM.yyyy');
+                                const point = payload?.[0]?.payload || {};
+                                if (activeMode === 'planning' && point.based_on) {
+                                  return `${label} — basierend auf Abwasser vom ${format(parseISO(point.based_on), 'dd.MM.yyyy')}`;
+                                }
+                                if (activeMode === 'vintage') {
+                                  const issue = point.issue_date || point.issue_date_hint;
+                                  const target = point.target_date;
+                                  if (issue && target) {
+                                    return `${label} — erstellt am: ${format(parseISO(issue), 'dd.MM.yyyy')} · für: ${format(parseISO(target), 'dd.MM.yyyy')}`;
+                                  }
+                                }
+                                if (point.issue_date) {
+                                  return `${label} — erstellt am: ${format(parseISO(point.issue_date), 'dd.MM.yyyy')}`;
+                                }
+                                return label;
+                              } catch { return d; }
+                            }}
+                            formatter={(value: any, name: string) => {
+                              if (name === 'ci_95_base' || name === 'ci_95_range' || name === 'ci_80_base' || name === 'ci_80_range') return [null, null];
+                              return [typeof value === 'number' ? value.toFixed(2) : value, name];
+                            }}
+                          />
+                          <Legend
+                            wrapperStyle={{ fontSize: 12, paddingTop: 4 }}
+                            payload={
+                              activeMode === 'planning'
+                                ? [
+                                  { value: 'Tatsächliche Menge', type: 'line', color: '#c0392b' },
+                                  { value: 'Planung (Bio-Shift)', type: 'line', color: 'var(--accent-violet)' },
+                                  { value: 'Zukunft', type: 'line', color: 'var(--accent-violet)' },
+                                ]
+                                : activeMode === 'vintage'
+                                  ? [
+                                    { value: 'Tatsächliche Menge (target_date)', type: 'line', color: '#c0392b' },
+                                    { value: `ML-Prognose (issue_date, ${btCustomerResult.walk_forward?.horizon_days || btHorizonDays}T)`, type: 'line', color: 'var(--accent-violet)' },
+                                    { value: 'Zukunft (issue_date)', type: 'line', color: 'var(--accent-violet)' },
+                                  ]
+                                  : [
+                                    { value: 'Tatsächliche Menge', type: 'line', color: '#c0392b' },
+                                    { value: `ML-Prognose (${btCustomerResult.walk_forward?.horizon_days || btHorizonDays}T)`, type: 'line', color: 'var(--accent-violet)' },
+                                    { value: 'Zukunft', type: 'line', color: 'var(--accent-violet)' },
+                                  ]
+                            }
+                          />
+
+                          {activeMode === 'validation' && (
+                            <>
+                              <Area type="monotone" dataKey="ci_95_base" stackId="ci95" fill="transparent" stroke="none" activeDot={false} legendType="none" />
+                              <Area type="monotone" dataKey="ci_95_range" stackId="ci95" fill="rgba(139,92,246,0.1)" stroke="none" activeDot={false} legendType="none" />
+                              <Area type="monotone" dataKey="ci_80_base" stackId="ci80" fill="transparent" stroke="none" activeDot={false} legendType="none" />
+                              <Area type="monotone" dataKey="ci_80_range" stackId="ci80" fill="rgba(139,92,246,0.25)" stroke="none" activeDot={false} legendType="none" />
+                            </>
+                          )}
+
+                          {dividerDate && (
+                            <ReferenceLine
+                              x={dividerDate}
+                              stroke="var(--text-muted)"
+                              strokeWidth={1}
+                              strokeDasharray="6 3"
+                              label={{ value: 'Forecast', position: 'insideTopRight', fontSize: 10, fill: 'var(--text-muted)', fontWeight: 600 }}
+                            />
+                          )}
+
+                          <Line type="monotone" dataKey="real_qty" name="Tatsächliche Menge" stroke="#c0392b" strokeWidth={2} dot={false} />
+                          <Line type="monotone" dataKey="predicted_qty" name="Prognose" stroke="var(--accent-violet)" strokeWidth={2} dot={false} />
+                          <Line type="monotone" dataKey="forecast_qty" name="Zukunft" stroke="var(--accent-violet)" strokeWidth={2} dot={false} strokeDasharray="8 4" connectNulls={false} />
+
+                          <Brush
+                            dataKey="date"
+                            height={28}
+                            stroke="var(--accent-violet)"
+                            fill="var(--bg-card)"
+                            tickFormatter={(d: string) => {
+                              try { return format(parseISO(d), 'MM/yy'); } catch { return ''; }
+                            }}
+                            travellerWidth={8}
+                          />
+                        </ComposedChart>
+                      </ResponsiveContainer>
+                    </div>
+                    <div style={{
+                      marginTop: 8, padding: '8px 12px', borderRadius: 8,
+                      background: 'rgba(139,92,246,0.04)', border: '1px solid rgba(139,92,246,0.12)',
+                      fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.5,
+                    }}>
+                      {activeMode === 'validation' && (
+                        <>
+                          <strong>Validierung:</strong> Klassische OOS-Güte am Zielzeitpunkt.
+                        </>
+                      )}
+                      {activeMode === 'vintage' && (
+                        <>
+                          <strong>Forecast-Vintage:</strong> Blau zeigt, was das Modell am Erstelldatum wusste; Rot zeigt die spätere Realität.
+                          {' '}Linksversatz ist methodisch echter Vorlauf.
+                        </>
+                      )}
+                      {activeMode === 'planning' && (
+                        <>
+                          <strong>Planung:</strong> Signalbasierte Bio-Shift-Ansicht für operative Aktivierung.
+                        </>
+                      )}
+                      {btCustomerResult.vintage_metrics && (
+                        <> OOS {btCustomerResult.vintage_metrics.oos_points ?? btCustomerResult.metrics?.data_points ?? '-'} Punkte ·
+                          medianer Vorlauf {btCustomerResult.vintage_metrics.median_lead_days ?? btCustomerResult.walk_forward?.horizon_days ?? btHorizonDays}T ·
+                          p90 |Fehler| {btCustomerResult.vintage_metrics.p90_abs_error ?? '-'}.</>
+                      )}
+                    </div>
+                  </div>
+                );
+              })() : null}
+
               {btCustomerResult.proof_text && (
                 <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6, margin: 0 }}>
                   {btCustomerResult.proof_text}

@@ -468,3 +468,93 @@ export interface BentoTile {
   is_live?: boolean;
   last_updated?: string | null;
 }
+
+export type BacktestChartMode = 'validation' | 'vintage' | 'planning';
+
+export interface BacktestMetrics {
+  r2_score?: number;
+  correlation?: number;
+  correlation_pct?: number;
+  mae?: number;
+  rmse?: number;
+  smape?: number;
+  data_points?: number;
+  date_range?: {
+    start?: string;
+    end?: string;
+  };
+}
+
+export interface BacktestVintageMetrics {
+  configured_horizon_days?: number;
+  median_lead_days?: number;
+  p90_abs_error?: number;
+  oos_points?: number;
+}
+
+export interface BacktestForecastRecord {
+  issue_date: string;
+  target_date: string;
+  y_hat?: number;
+  y_true?: number;
+  horizon_days?: number;
+  region?: string;
+}
+
+export interface BacktestChartPoint {
+  date: string;
+  issue_date?: string;
+  target_date?: string;
+  issue_date_hint?: string;
+  real_qty?: number | null;
+  predicted_qty?: number | null;
+  forecast_qty?: number | null;
+  baseline_persistence?: number | null;
+  baseline_seasonal?: number | null;
+  ci_80_lower?: number | null;
+  ci_80_upper?: number | null;
+  ci_95_lower?: number | null;
+  ci_95_upper?: number | null;
+  ci_80_base?: number | null;
+  ci_80_range?: number | null;
+  ci_95_base?: number | null;
+  ci_95_range?: number | null;
+  is_forecast?: boolean;
+  bio?: number | null;
+  psycho?: number | null;
+  context?: number | null;
+  based_on?: string;
+  region?: string;
+  lead_days?: number;
+  is_future_vintage?: boolean;
+}
+
+export interface BacktestResponse {
+  mode?: string;
+  virus_typ?: string;
+  target_source?: string;
+  metrics?: BacktestMetrics;
+  chart_data?: BacktestChartPoint[];
+  forecast_records?: BacktestForecastRecord[];
+  vintage_metrics?: BacktestVintageMetrics;
+  forecast_weeks?: number;
+  proof_text?: string;
+  llm_insight?: string;
+  model_type?: string;
+  walk_forward?: {
+    enabled?: boolean;
+    folds?: number;
+    horizon_days?: number;
+    min_train_points?: number;
+    strict_vintage_mode?: boolean;
+  };
+  planning_curve?: {
+    lead_days?: number;
+    correlation?: number;
+    curve?: Array<{
+      date: string;
+      based_on?: string;
+      planning_qty?: number;
+    }>;
+  };
+}

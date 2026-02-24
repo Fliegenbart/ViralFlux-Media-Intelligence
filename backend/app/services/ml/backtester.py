@@ -1190,6 +1190,47 @@ class BacktestService:
             "data_points": int(len(y_true)),
         }
 
+    @staticmethod
+    def _compute_vintage_metrics(
+        forecast_records: list[dict],
+        configured_horizon_days: int,
+    ) -> dict:
+        """Berechnet Kennzahlen für Forecast-Vintage-Ansicht (issue_date vs target_date)."""
+        lead_days: list[int] = []
+        abs_errors: list[float] = []
+
+        for row in forecast_records or []:
+            issue = pd.to_datetime(row.get("issue_date"), errors="coerce")
+            target = pd.to_datetime(row.get("target_date"), errors="coerce")
+            if not pd.isna(issue) and not pd.isna(target):
+                lead_days.append(int((target - issue).days))
+
+            try:
+                y_hat = float(row.get("y_hat"))
+                y_true = float(row.get("y_true"))
+            except (TypeError, ValueError):
+                continue
+            if np.isfinite(y_hat) and np.isfinite(y_true):
+                abs_errors.append(abs(y_hat - y_true))
+
+        median_lead_days = (
+            int(round(float(np.median(lead_days))))
+            if lead_days
+            else int(configured_horizon_days)
+        )
+        p90_abs_error = (
+            round(float(np.percentile(abs_errors, 90)), 3)
+            if abs_errors
+            else 0.0
+        )
+
+        return {
+            "configured_horizon_days": int(configured_horizon_days),
+            "median_lead_days": int(median_lead_days),
+            "p90_abs_error": float(p90_abs_error),
+            "oos_points": int(len(abs_errors)),
+        }
+
     def _persist_backtest_result(
         self,
         *,
@@ -1665,6 +1706,8 @@ class BacktestService:
 
                 forecast_chart.append({
                     "date": future_target.strftime("%Y-%m-%d"),
+                    "issue_date": future_forecast.strftime("%Y-%m-%d"),
+                    "target_date": future_target.strftime("%Y-%m-%d"),
                     "forecast_qty": round(y_fc, 3),
                     "ci_80_lower": round(max(0, y_fc - ci_80), 3),
                     "ci_80_upper": round(y_fc + ci_80, 3),
@@ -1694,6 +1737,7 @@ class BacktestService:
             {
                 "date": row["target_time"].strftime("%Y-%m-%d"),
                 "issue_date": row["forecast_time"].strftime("%Y-%m-%d"),
+                "target_date": row["target_time"].strftime("%Y-%m-%d"),
                 "real_qty": float(row["real_qty"]),
                 "predicted_qty": round(float(row["predicted_qty"]), 3),
                 "is_forecast": False,
@@ -1706,6 +1750,10 @@ class BacktestService:
             historical_chart[-1]["forecast_qty"] = historical_chart[-1]["predicted_qty"]
 
         chart_data = historical_chart + forecast_chart
+        vintage_metrics = self._compute_vintage_metrics(
+            forecast_records=forecast_records,
+            configured_horizon_days=int(horizon_days),
+        )
 
         return {
             "metrics": {
@@ -1733,6 +1781,7 @@ class BacktestService:
             "feature_names": imp_cols if importance_accumulator else feature_cols,
             "chart_data": chart_data,
             "forecast_records": forecast_records,
+            "vintage_metrics": vintage_metrics,
             "forecast_weeks": len(forecast_chart),
             "residual_std": round(residual_std, 4),
             "walk_forward": {
@@ -1955,6 +2004,8 @@ class BacktestService:
 
         region_results: dict[str, dict] = {}
         combined_chart: list[dict] = []
+        combined_historical: list[dict] = []
+        combined_forecast_records: list[dict] = []
 
         for region_name, region_df in df.groupby("region"):
             target_df = region_df[["datum", "menge"]].copy()
@@ -1984,8 +2035,16 @@ class BacktestService:
             region_result["lead_lag"] = region_lead_lag
 
             for row in region_result.get("chart_data", []):
-                row["region"] = region_name
-                combined_chart.append(row)
+                row_copy = dict(row)
+                row_copy["region"] = region_name
+                combined_chart.append(row_copy)
+                if not row_copy.get("is_forecast"):
+                    combined_historical.append(row_copy)
+
+            for row in region_result.get("forecast_records", []):
+                rec_copy = dict(row)
+                rec_copy["region"] = region_name
+                combined_forecast_records.append(rec_copy)
 
             region_results[region_name] = {
                 "metrics": region_result.get("metrics", {}),
@@ -1993,16 +2052,22 @@ class BacktestService:
                 "chart_points": len(region_result.get("chart_data", [])),
             }
 
-        if not combined_chart:
+        if not combined_chart or not combined_historical:
             return {
                 "error": "Keine validen Backtest-Folds aus Kundendaten erzeugt. Bitte mehr Historie hochladen.",
             }
 
         combined_df = pd.DataFrame(combined_chart).sort_values("date").reset_index(drop=True)
-        y_true = combined_df["real_qty"].to_numpy(dtype=float)
-        y_hat = combined_df["predicted_qty"].to_numpy(dtype=float)
-        y_persistence = combined_df["baseline_persistence"].to_numpy(dtype=float)
-        y_seasonal = combined_df["baseline_seasonal"].to_numpy(dtype=float)
+        metrics_df = pd.DataFrame(combined_historical).sort_values("date").reset_index(drop=True)
+
+        y_true = pd.to_numeric(metrics_df["real_qty"], errors="coerce").to_numpy(dtype=float)
+        y_hat = pd.to_numeric(metrics_df["predicted_qty"], errors="coerce").to_numpy(dtype=float)
+        y_persistence = pd.to_numeric(
+            metrics_df["baseline_persistence"], errors="coerce"
+        ).to_numpy(dtype=float)
+        y_seasonal = pd.to_numeric(
+            metrics_df["baseline_seasonal"], errors="coerce"
+        ).to_numpy(dtype=float)
 
         model_metrics = self._compute_forecast_metrics(y_true, y_hat)
         persistence_metrics = self._compute_forecast_metrics(y_true, y_persistence)
@@ -2014,14 +2079,19 @@ class BacktestService:
 
         lead_lag_global = self._augment_lead_lag_with_horizon(
             self._best_bio_lead_lag(
-                combined_df[["date", "bio", "real_qty"]].rename(columns={"real_qty": "real_qty"})
+                metrics_df[["date", "bio", "real_qty"]].rename(columns={"real_qty": "real_qty"})
             ),
             horizon_days=horizon_days,
+        )
+        vintage_metrics = self._compute_vintage_metrics(
+            forecast_records=combined_forecast_records,
+            configured_horizon_days=int(horizon_days),
         )
         proof_text = (
             f"Kundendaten-Check über {model_metrics['data_points']} Punkte: "
             f"R²={model_metrics['r2_score']}, Korrelationsstärke={model_metrics['correlation_pct']}%, "
-            f"Lead/Lag (effektiv)={lead_lag_global['effective_lead_days']} Tage."
+            f"Lead/Lag (effektiv)={lead_lag_global['effective_lead_days']} Tage. "
+            f"Forecast-Vintage medianer Vorlauf={vintage_metrics['median_lead_days']} Tage."
         )
 
         result = {
@@ -2042,6 +2112,8 @@ class BacktestService:
             "lead_lag": lead_lag_global,
             "regions": region_results,
             "chart_data": combined_df.to_dict(orient="records"),
+            "forecast_records": combined_forecast_records,
+            "vintage_metrics": vintage_metrics,
             "proof_text": proof_text,
             "llm_insight": (
                 f"{proof_text} Gegenüber Persistence beträgt die MAE-Veränderung "

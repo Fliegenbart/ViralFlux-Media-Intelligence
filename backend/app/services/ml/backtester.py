@@ -907,6 +907,102 @@ class BacktestService:
         median_days = int(round(float(day_diffs.median())))
         return median_days if median_days > 0 else 7
 
+    def _build_planning_curve(
+        self,
+        target_df: pd.DataFrame,
+        virus_typ: str = "Influenza A",
+        days_back: int = 2500,
+    ) -> dict:
+        """Planungskurve: Abwasser um empirischen Lead shiften + skalieren.
+
+        Statt ML-Forecast nutzt dies die empirische Cross-Korrelation
+        zwischen Abwasser und Target. Robuster als Modell-Prognose.
+        """
+        from sklearn.linear_model import LinearRegression
+
+        start_date = datetime.now() - timedelta(days=days_back)
+
+        # 1. Abwasser wöchentlich aggregieren
+        ww_weekly = self.db.query(
+            func.date_trunc("week", WastewaterAggregated.datum).label("week"),
+            func.avg(WastewaterAggregated.viruslast).label("avg_vl"),
+        ).filter(
+            WastewaterAggregated.virus_typ == virus_typ,
+            WastewaterAggregated.datum >= start_date,
+        ).group_by(
+            func.date_trunc("week", WastewaterAggregated.datum)
+        ).order_by("week").all()
+
+        if len(ww_weekly) < 10:
+            return {"lead_days": 0, "correlation": 0, "curve": []}
+
+        ww_df = pd.DataFrame([
+            {"week": r.week, "viruslast": float(r.avg_vl or 0)}
+            for r in ww_weekly
+        ]).set_index("week")
+
+        # 2. Target wöchentlich
+        tgt_df = target_df.copy()
+        tgt_df["datum"] = pd.to_datetime(tgt_df["datum"])
+        tgt_df = tgt_df.set_index("datum")[["menge"]].dropna()
+
+        # 3. Align + Cross-Korrelation
+        merged = ww_df.join(tgt_df, how="inner").dropna()
+        if len(merged) < 15:
+            return {"lead_days": 0, "correlation": 0, "curve": []}
+
+        vl = merged["viruslast"].values
+        inc = merged["menge"].values
+        vl_n = (vl - vl.mean()) / (vl.std() + 1e-9)
+        inc_n = (inc - inc.mean()) / (inc.std() + 1e-9)
+
+        best_lag = 0
+        best_corr = 0.0
+        for lag in range(0, 5):  # 0-4 Wochen, nur positiv (Abwasser führt)
+            if lag > 0:
+                x, y = vl_n[:-lag], inc_n[lag:]
+            else:
+                x, y = vl_n, inc_n
+            if len(x) < 10:
+                continue
+            corr = float(np.corrcoef(x, y)[0, 1])
+            if corr > best_corr:
+                best_corr = corr
+                best_lag = lag
+
+        lead_days = best_lag * 7
+
+        # 4. Lineare Regression: incidence[t+lag] = a * viruslast[t] + b
+        if best_lag > 0:
+            X_reg = vl[:-best_lag].reshape(-1, 1)
+            y_reg = inc[best_lag:]
+        else:
+            X_reg = vl.reshape(-1, 1)
+            y_reg = inc
+
+        reg = LinearRegression().fit(X_reg, y_reg)
+
+        # 5. Planungskurve: Jeder Abwasser-Punkt → Prognose für +lead_days
+        curve = []
+        for _, row_data in ww_df.iterrows():
+            ww_date = row_data.name
+            target_date = ww_date + timedelta(days=lead_days)
+            predicted = max(0, float(reg.predict([[row_data["viruslast"]]])[0]))
+            curve.append({
+                "date": target_date.strftime("%Y-%m-%d"),
+                "based_on": ww_date.strftime("%Y-%m-%d"),
+                "planning_qty": round(predicted, 2),
+            })
+
+        return {
+            "lead_days": lead_days,
+            "lead_weeks": best_lag,
+            "correlation": round(best_corr, 3),
+            "regression_coef": round(float(reg.coef_[0]), 6),
+            "regression_intercept": round(float(reg.intercept_), 2),
+            "curve": sorted(curve, key=lambda r: r["date"]),
+        }
+
     def _best_bio_lead_lag(self, df_sim: pd.DataFrame, max_lag_points: int = 6) -> dict:
         """Bestimme Lag, bei dem Bio-Signal und Target am stärksten korrelieren.
 
@@ -1651,6 +1747,18 @@ class BacktestService:
 
         result["mode"] = "MARKET_CHECK"
         result["virus_typ"] = virus_typ
+        # Planungskurve: Abwasser-Signal → skaliert + um Lead geshiftet
+        try:
+            planning = self._build_planning_curve(
+                target_df=target_df,
+                virus_typ=virus_typ,
+                days_back=days_back,
+            )
+            result["planning_curve"] = planning
+        except Exception as e:
+            logger.warning("Planungskurve fehlgeschlagen: %s", e)
+            result["planning_curve"] = {"lead_days": 0, "correlation": 0, "curve": []}
+
         result["target_source"] = target_meta.get("target_source")
         result["target_key"] = target_meta.get("target_key", target_source)
         result["target_label"] = target_meta.get("target_label")

@@ -2074,33 +2074,32 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                     <ResponsiveContainer width="100%" height="100%">
                       <ComposedChart
                         data={(() => {
-                          if (btChartMode === 'planning' && btResult.forecast_records?.length) {
-                            // Planungsansicht: Prognose am issue_date, Ist am target_date
+                          if (btChartMode === 'planning' && btResult.planning_curve?.curve?.length) {
+                            // Planungsansicht: Abwasser→skaliert+geshiftet als Planungskurve
+                            const pc = btResult.planning_curve.curve;
                             const dateMap: Record<string, any> = {};
-                            for (const r of btResult.forecast_records) {
-                              // Ist-Wert am target_date
-                              if (!dateMap[r.target_date]) dateMap[r.target_date] = { date: r.target_date };
-                              dateMap[r.target_date].real_qty = r.y_true;
-                              // Prognose am issue_date
-                              if (!dateMap[r.issue_date]) dateMap[r.issue_date] = { date: r.issue_date };
-                              dateMap[r.issue_date].predicted_qty = r.y_hat;
-                              dateMap[r.issue_date].target_for = r.target_date;
+                            // Ist-Werte aus chart_data
+                            for (const r of (btResult.chart_data || []).filter((p: any) => !p.is_forecast)) {
+                              if (!dateMap[r.date]) dateMap[r.date] = { date: r.date };
+                              if (r.real_qty != null) dateMap[r.date].real_qty = r.real_qty;
                             }
-                            // Future forecast points
-                            for (const pt of (btResult.chart_data || []).filter((p: any) => p.is_forecast)) {
-                              const d = pt.date;
-                              if (!dateMap[d]) dateMap[d] = { date: d };
-                              Object.assign(dateMap[d], pt);
+                            // Planungskurve (Bio-Signal geshiftet)
+                            for (const p of pc) {
+                              if (!dateMap[p.date]) dateMap[p.date] = { date: p.date };
+                              dateMap[p.date].predicted_qty = p.planning_qty;
+                              dateMap[p.date].based_on = p.based_on;
                             }
-                            return Object.values(dateMap).sort((a: any, b: any) => a.date.localeCompare(b.date)).map((pt: any) => ({
-                              ...pt,
-                              ci_95_base: pt.ci_95_lower ?? null,
-                              ci_95_range: (pt.ci_95_upper != null && pt.ci_95_lower != null) ? pt.ci_95_upper - pt.ci_95_lower : null,
-                              ci_80_base: pt.ci_80_lower ?? null,
-                              ci_80_range: (pt.ci_80_upper != null && pt.ci_80_lower != null) ? pt.ci_80_upper - pt.ci_80_lower : null,
-                            }));
+                            // Future: letzte Punkte der Planungskurve die über letztes Ist-Datum hinausgehen
+                            const lastReal = (btResult.chart_data || []).filter((p: any) => !p.is_forecast && p.real_qty != null).pop();
+                            const lastRealDate = lastReal?.date || '';
+                            for (const p of pc) {
+                              if (p.date > lastRealDate && dateMap[p.date]) {
+                                dateMap[p.date].forecast_qty = p.planning_qty;
+                              }
+                            }
+                            return Object.values(dateMap).sort((a: any, b: any) => a.date.localeCompare(b.date));
                           }
-                          // Validierungsansicht: beide am target_date (Standard)
+                          // Validierungsansicht: ML-Prognose am target_date (Standard)
                           const d = btResult.chart_data || [];
                           return d.map((pt: any) => ({
                             ...pt,
@@ -2126,8 +2125,8 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                           labelFormatter={(d: string, payload: any[]) => {
                             try {
                               const label = format(parseISO(d), 'dd.MM.yyyy');
-                              if (btChartMode === 'planning' && payload?.[0]?.payload?.target_for) {
-                                return `${label} — gilt für: ${format(parseISO(payload[0].payload.target_for), 'dd.MM.yyyy')}`;
+                              if (btChartMode === 'planning' && payload?.[0]?.payload?.based_on) {
+                                return `${label} — basierend auf Abwasser vom ${format(parseISO(payload[0].payload.based_on), 'dd.MM.yyyy')}`;
                               }
                               if (btChartMode === 'validation' && payload?.[0]?.payload?.issue_date) {
                                 return `${label} — erstellt am: ${format(parseISO(payload[0].payload.issue_date), 'dd.MM.yyyy')}`;
@@ -2142,9 +2141,13 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                         />
                         <Legend
                           wrapperStyle={{ fontSize: 12, paddingTop: 4 }}
-                          payload={[
+                          payload={btChartMode === 'planning' ? [
                             { value: 'Tatsächliche Inzidenz', type: 'line', color: '#c0392b' },
-                            { value: `Prognose (${btResult.walk_forward?.horizon_days || 14}T Vorlauf)`, type: 'line', color: 'var(--accent-violet)' },
+                            { value: `Abwasser-Prognose (+${btResult.planning_curve?.lead_days || 7}T, r=${btResult.planning_curve?.correlation || '?'})`, type: 'line', color: 'var(--accent-violet)' },
+                            { value: 'Zukunft (Bio-Shift)', type: 'line', color: 'var(--accent-violet)' },
+                          ] : [
+                            { value: 'Tatsächliche Inzidenz', type: 'line', color: '#c0392b' },
+                            { value: `ML-Prognose (${btResult.walk_forward?.horizon_days || 7}T)`, type: 'line', color: 'var(--accent-violet)' },
                             { value: 'Zukunft', type: 'line', color: 'var(--accent-violet)' },
                             { value: '80% KI', type: 'rect', color: 'rgba(139,92,246,0.25)' },
                             { value: '95% KI', type: 'rect', color: 'rgba(139,92,246,0.1)' },
@@ -2240,8 +2243,9 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                       </>
                     ) : (
                       <>
-                        <strong>Planung:</strong> Violette Linie zeigt was man <strong>zum jeweiligen Zeitpunkt</strong> wusste (Forecast +{btResult.walk_forward?.horizon_days || 14}T).
-                        {' '}Hover zeigt für welches Datum die Prognose gilt.
+                        <strong>Planung:</strong> Violette Linie = Abwasser-Signal skaliert und um <strong>{btResult.planning_curve?.lead_days || 7} Tage</strong> nach rechts geshiftet
+                        (empirische Cross-Korrelation r={btResult.planning_curve?.correlation || '?'}).
+                        {' '}Hover zeigt das Abwasser-Datum. Punkte rechts der roten Linie = Zukunftsprognose.
                       </>
                     )}
                     {btResult.forecast_weeks > 0 && (

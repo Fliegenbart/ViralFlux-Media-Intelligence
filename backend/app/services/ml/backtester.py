@@ -1447,23 +1447,31 @@ class BacktestService:
             pass  # forecast is best-effort; backtest results always returned
 
         # Build unified chart_data
-        historical_chart = [
-            {
-                "date": row["target_time"].strftime("%Y-%m-%d"),
-                "real_qty": float(row["real_qty"]),
-                "predicted_qty": round(float(row["predicted_qty"]), 3),
-                "bio": round(float(row["bio"]), 4),
-                "psycho": round(float(row["psycho"]), 4),
-                "context": round(float(row["context"]), 4),
-                "baseline_persistence": round(float(row["baseline_persistence"]), 3),
-                "baseline_seasonal": round(float(row["baseline_seasonal"]), 3),
-                "is_forecast": False,
-            }
-            for _, row in pred_df.iterrows()
-        ]
+        # Ist-Werte am target_time, Prognosen am forecast_time (wo sie erstellt wurden)
+        # So sieht man im Chart ob die Prognose VOR dem echten Peak kommt
+        from collections import OrderedDict
+        date_rows: dict[str, dict] = OrderedDict()
+
+        for _, row in pred_df.iterrows():
+            # Ist-Wert am target_time
+            td = row["target_time"].strftime("%Y-%m-%d")
+            if td not in date_rows:
+                date_rows[td] = {"date": td, "is_forecast": False}
+            date_rows[td]["real_qty"] = float(row["real_qty"])
+
+            # Prognose am forecast_time (wann sie erstellt wurde)
+            fd = row["forecast_time"].strftime("%Y-%m-%d")
+            if fd not in date_rows:
+                date_rows[fd] = {"date": fd, "is_forecast": False}
+            date_rows[fd]["predicted_qty"] = round(float(row["predicted_qty"]), 3)
+
+        historical_chart = sorted(date_rows.values(), key=lambda r: r["date"])
+
         # Bridge: last historical point starts the forecast line
         if historical_chart and forecast_chart:
-            historical_chart[-1]["forecast_qty"] = historical_chart[-1]["predicted_qty"]
+            last_pred = next((r for r in reversed(historical_chart) if r.get("predicted_qty") is not None), None)
+            if last_pred:
+                last_pred["forecast_qty"] = last_pred["predicted_qty"]
 
         chart_data = historical_chart + forecast_chart
 

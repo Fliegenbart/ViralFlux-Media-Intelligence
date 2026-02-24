@@ -207,13 +207,17 @@ async def upload_orders(
             cal_df.columns = ["datum", "menge"]
             cal_df = cal_df.dropna(subset=["datum", "menge"])
 
-            if len(cal_df) >= 5:
+            if len(cal_df) >= 8:
                 from app.services.ml.backtester import BacktestService
 
                 virus_typ = _infer_virus_type(df)
                 backtest = BacktestService(db)
                 calibration_result = backtest.run_calibration(
-                    cal_df, virus_typ=virus_typ
+                    cal_df,
+                    virus_typ=virus_typ,
+                    horizon_days=7,
+                    min_train_points=20,
+                    strict_vintage_mode=True,
                 )
                 logger.info(
                     f"Auto-Kalibrierung: R²={calibration_result.get('metrics', {}).get('r2_score', '?')}, "
@@ -221,7 +225,7 @@ async def upload_orders(
                 )
             else:
                 logger.info(
-                    f"Auto-Kalibrierung übersprungen: nur {len(cal_df)} Datenpunkte (min. 5)"
+                    f"Auto-Kalibrierung übersprungen: nur {len(cal_df)} Datenpunkte (min. 8)"
                 )
         except Exception as e:
             logger.warning(f"Auto-Kalibrierung fehlgeschlagen (nicht kritisch): {e}")

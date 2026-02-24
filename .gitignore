@@ -75,6 +75,7 @@ coverage/
 .coverage
 htmlcov/
 output/
+.playwright-cli/
 
 # TypeScript
 *.tsbuildinfo

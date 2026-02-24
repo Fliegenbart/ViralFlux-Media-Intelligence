@@ -213,7 +213,7 @@ docker-compose down -v
 
 ## Deployment auf Hetzner
 
-Siehe vollständige Anleitung in `docs/DEPLOYMENT.md`
+Siehe vollständige Anleitung in `DEPLOY.md`
 
 **Kurzversion:**
 ```bash
@@ -226,9 +226,6 @@ cd viralflux-media
 
 # Produktions-Setup
 docker-compose -f docker-compose.prod.yml up -d
-
-# SSL einrichten
-./scripts/setup-ssl.sh your-domain.de
 ```
 
 ---

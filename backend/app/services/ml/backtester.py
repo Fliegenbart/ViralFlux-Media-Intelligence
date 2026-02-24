@@ -1088,6 +1088,10 @@ class BacktestService:
 
         best_lag = 0
         best_corr = 0.0
+        best_abs_lag = 0
+        best_abs_corr = 0.0
+        best_pos_lag = 0
+        best_pos_corr = -1.0
 
         for lag in range(-max_lag_points, max_lag_points + 1):
             if lag > 0:
@@ -1107,9 +1111,20 @@ class BacktestService:
             if np.isnan(corr):
                 continue
 
-            if abs(corr) > abs(best_corr):
-                best_corr = corr
-                best_lag = lag
+            if abs(corr) > abs(best_abs_corr):
+                best_abs_corr = corr
+                best_abs_lag = lag
+
+            if corr > best_pos_corr:
+                best_pos_corr = corr
+                best_pos_lag = lag
+
+        if best_pos_corr > 0:
+            best_corr = best_pos_corr
+            best_lag = best_pos_lag
+        else:
+            best_corr = best_abs_corr
+            best_lag = best_abs_lag
 
         lead_days = best_lag * step_days
         return {
@@ -1119,6 +1134,21 @@ class BacktestService:
             "lag_correlation": round(float(best_corr), 3),
             "bio_leads_target": bool(lead_days > 0 and best_corr > 0),
         }
+
+    @staticmethod
+    def _augment_lead_lag_with_horizon(lead_lag: dict, horizon_days: int) -> dict:
+        """Erweitert relative Lag-Metrik um den tatsächlich eingesetzten Forecast-Horizont."""
+        relative_lag_days = int(lead_lag.get("best_lag_days", 0) or 0)
+        lag_corr = float(lead_lag.get("lag_correlation", 0.0) or 0.0)
+        effective_lead_days = int(horizon_days) + relative_lag_days
+
+        enriched = dict(lead_lag or {})
+        enriched["relative_lag_days"] = relative_lag_days
+        enriched["horizon_days"] = int(horizon_days)
+        enriched["effective_lead_days"] = int(effective_lead_days)
+        enriched["bio_leads_target_effective"] = bool(effective_lead_days > 0 and lag_corr > 0)
+        enriched["target_leads_bio_effective"] = bool(effective_lead_days < 0 and lag_corr > 0)
+        return enriched
 
     @staticmethod
     def _compute_forecast_metrics(y_true: np.ndarray, y_pred: np.ndarray) -> dict:
@@ -1790,37 +1820,46 @@ class BacktestService:
             "bio": row.get("bio", 0.0),
             "real_qty": row.get("real_qty", 0.0),
         } for row in result.get("chart_data", []) if not row.get("is_forecast")])
-        lead_lag = self._best_bio_lead_lag(df_sim)
-        # Adjust for horizon shift: bio was computed horizon_days before target_time
-        lead_lag["best_lag_days"] += horizon_days
-        lead_lag["bio_leads_target"] = bool(
-            lead_lag["best_lag_days"] > 0 and lead_lag["lag_correlation"] > 0
+        lead_lag = self._augment_lead_lag_with_horizon(
+            self._best_bio_lead_lag(df_sim),
+            horizon_days=horizon_days,
         )
-        lead_days = lead_lag["best_lag_days"]
+        relative_lag_days = int(lead_lag.get("relative_lag_days", 0))
+        effective_lead_days = int(lead_lag.get("effective_lead_days", 0))
+        lag_corr = float(lead_lag.get("lag_correlation", 0.0))
         baseline_delta = result.get("improvement_vs_baselines", {})
         delta_pers = baseline_delta.get("mae_vs_persistence_pct", 0.0)
         delta_seas = baseline_delta.get("mae_vs_seasonal_pct", 0.0)
 
-        lag_r = lead_lag["lag_correlation"]
-        lag_strength = "stark" if abs(lag_r) >= 0.5 else "moderat" if abs(lag_r) >= 0.25 else "schwach"
+        lag_strength = "stark" if abs(lag_corr) >= 0.5 else "moderat" if abs(lag_corr) >= 0.25 else "schwach"
 
-        if lead_lag["bio_leads_target"]:
+        if lag_corr <= 0:
             proof_text = (
-                f"Bio-Signal (Abwasser-Monitoring) laeuft dem Target um ca. {lead_days} Tage voraus. "
-                f"Signal-Korrelation am optimalen Lag: r={lag_r} ({lag_strength}). "
+                f"Kein stabiler positiver Lead erkennbar. "
+                f"Signal-Korrelation am optimalen Lag: r={lag_corr} ({lag_strength}). "
                 f"Hinweis: Die Modell-Korrelation oben misst die Gesamtprognose-Guete, "
                 f"die Signal-Korrelation hier nur den Bio-Kanal allein."
             )
-        elif lead_days < 0:
+        elif lead_lag.get("bio_leads_target_effective"):
             proof_text = (
-                f"Target laeuft dem Bio-Signal um ca. {abs(lead_days)} Tage voraus. "
-                f"Signal-Korrelation am optimalen Lag: r={lag_r} ({lag_strength}). "
+                f"Bio-Signal (Abwasser-Monitoring) laeuft dem Target um ca. {effective_lead_days} Tage voraus "
+                f"(Forecast-Horizont {horizon_days}T + Relativ-Lag {relative_lag_days}T). "
+                f"Signal-Korrelation am optimalen Lag: r={lag_corr} ({lag_strength}). "
+                f"Hinweis: Die Modell-Korrelation oben misst die Gesamtprognose-Guete, "
+                f"die Signal-Korrelation hier nur den Bio-Kanal allein."
+            )
+        elif lead_lag.get("target_leads_bio_effective"):
+            proof_text = (
+                f"Target laeuft dem Bio-Signal um ca. {abs(effective_lead_days)} Tage voraus "
+                f"(Forecast-Horizont {horizon_days}T + Relativ-Lag {relative_lag_days}T). "
+                f"Signal-Korrelation am optimalen Lag: r={lag_corr} ({lag_strength}). "
                 f"Hinweis: Die Modell-Korrelation oben misst die Gesamtprognose-Guete, "
                 f"die Signal-Korrelation hier nur den Bio-Kanal allein."
             )
         else:
             proof_text = (
-                f"Bio-Signal und Target zeigen gleichzeitige Korrelation: r={lag_r} ({lag_strength}). "
+                f"Signal und Target sind effektiv gleichzeitig (0T Lead). "
+                f"Signal-Korrelation am optimalen Lag: r={lag_corr} ({lag_strength}). "
                 f"Hinweis: Die Modell-Korrelation oben misst die Gesamtprognose-Guete, "
                 f"die Signal-Korrelation hier nur den Bio-Kanal allein."
             )
@@ -1856,8 +1895,8 @@ class BacktestService:
         )
         result["llm_insight"] = (
             f"{result['proof_text']} "
-            f"Modellguete: R²={result['metrics']['r2_score']}, "
-            f"Korrelation={result['metrics']['correlation_pct']}%, "
+            f"Walk-forward Modellguete: R²={result['metrics']['r2_score']}, "
+            f"Korrelationsstärke={result['metrics']['correlation_pct']}%, "
             f"sMAPE={result['metrics'].get('smape', 0)}. "
             f"Hinweis: Alle Metriken basieren auf historischen Mustern."
         )
@@ -1938,12 +1977,9 @@ class BacktestService:
                 "bio": row.get("bio", 0.0),
                 "real_qty": row.get("real_qty", 0.0),
             } for row in region_result.get("chart_data", []) if not row.get("is_forecast")])
-            region_lead_lag = self._best_bio_lead_lag(sim_df)
-            # Adjust for horizon shift
-            region_lead_lag["best_lag_days"] += horizon_days
-            region_lead_lag["bio_leads_target"] = bool(
-                region_lead_lag["best_lag_days"] > 0
-                and region_lead_lag["lag_correlation"] > 0
+            region_lead_lag = self._augment_lead_lag_with_horizon(
+                self._best_bio_lead_lag(sim_df),
+                horizon_days=horizon_days,
             )
             region_result["lead_lag"] = region_lead_lag
 
@@ -1976,19 +2012,16 @@ class BacktestService:
         pers_mae = max(persistence_metrics["mae"], 1e-9)
         seas_mae = max(seasonal_metrics["mae"], 1e-9)
 
-        lead_lag_global = self._best_bio_lead_lag(
-            combined_df[["date", "bio", "real_qty"]].rename(columns={"real_qty": "real_qty"})
-        )
-        # Adjust for horizon shift
-        lead_lag_global["best_lag_days"] += horizon_days
-        lead_lag_global["bio_leads_target"] = bool(
-            lead_lag_global["best_lag_days"] > 0
-            and lead_lag_global["lag_correlation"] > 0
+        lead_lag_global = self._augment_lead_lag_with_horizon(
+            self._best_bio_lead_lag(
+                combined_df[["date", "bio", "real_qty"]].rename(columns={"real_qty": "real_qty"})
+            ),
+            horizon_days=horizon_days,
         )
         proof_text = (
             f"Kundendaten-Check über {model_metrics['data_points']} Punkte: "
-            f"R²={model_metrics['r2_score']}, Korrelation={model_metrics['correlation_pct']}%, "
-            f"Lead/Lag={lead_lag_global['best_lag_days']} Tage."
+            f"R²={model_metrics['r2_score']}, Korrelationsstärke={model_metrics['correlation_pct']}%, "
+            f"Lead/Lag (effektiv)={lead_lag_global['effective_lead_days']} Tage."
         )
 
         result = {
@@ -2047,35 +2080,152 @@ class BacktestService:
         self,
         customer_df: pd.DataFrame,
         virus_typ: str = "Influenza A",
+        horizon_days: int = 7,
+        min_train_points: int = DEFAULT_MIN_TRAIN_POINTS,
+        strict_vintage_mode: bool = True,
     ) -> dict:
-        """Backtesting + Ridge Regression Gewichtsoptimierung.
+        """Out-of-sample Kalibrierung via Walk-forward Backtest.
 
         customer_df: Spalten 'datum' und 'menge' (Bestellmenge).
-        Returns: Metrics, optimierte Gewichte, Chart-Daten, LLM-Insight.
+        Returns: Metriken, optimierte Gewichte, Chart-Daten, LLM-Insight.
         """
-        logger.info(f"Starte Kalibrierung: {len(customer_df)} Zeilen, Virus={virus_typ}")
-        self.strict_vintage_mode = False
-
-        no_delay_rules = {k: 0 for k in self.DEFAULT_DELAY_RULES_DAYS}
-        simulation_rows = self._simulate_rows_from_target(
-            customer_df,
+        logger.info(
+            "Starte OOS-Kalibrierung: rows=%s, virus=%s, horizon_days=%s, min_train_points=%s",
+            len(customer_df),
             virus_typ,
-            horizon_days=0,
-            delay_rules=no_delay_rules,
+            horizon_days,
+            min_train_points,
         )
-        if not simulation_rows:
-            return {"error": "Keine Datenpunkte konnten simuliert werden."}
+        self.strict_vintage_mode = bool(strict_vintage_mode)
 
-        df_sim = pd.DataFrame(simulation_rows)
-        result = self._fit_regression_from_simulation(df_sim, virus_typ, use_llm=True)
-        if "error" in result:
-            return result
+        df = customer_df.copy()
+        df.columns = [str(c).strip().lower() for c in df.columns]
+        if "datum" not in df.columns or "menge" not in df.columns:
+            return {
+                "error": "Fehlende Pflichtspalten. Erwartet: datum, menge",
+                "found_columns": list(df.columns),
+            }
+
+        df["datum"] = pd.to_datetime(df["datum"], errors="coerce")
+        df["menge"] = pd.to_numeric(df["menge"], errors="coerce")
+        df = df.dropna(subset=["datum", "menge"]).sort_values("datum").reset_index(drop=True)
+
+        if len(df) < 8:
+            return {
+                "error": (
+                    f"Zu wenig Datenpunkte für OOS-Kalibrierung ({len(df)}). "
+                    "Mindestens 8 erforderlich."
+                )
+            }
+
+        target_df = df[["datum", "menge"]].copy()
+        target_df["available_time"] = target_df["datum"]
+
+        step_days = self._estimate_step_days(
+            pd.DataFrame({"date": target_df["datum"].dt.strftime("%Y-%m-%d")})
+        )
+        primary_horizon = max(1, int(horizon_days))
+        primary_min_train = max(5, min(int(min_train_points), max(5, len(target_df) - 1)))
+
+        candidate_cfgs: list[tuple[int, int]] = [
+            (primary_horizon, primary_min_train),
+            (step_days, primary_min_train),
+            (step_days, max(5, min(primary_min_train, len(target_df) // 2))),
+            (step_days, 5),
+        ]
+
+        seen: set[tuple[int, int]] = set()
+        unique_cfgs: list[tuple[int, int]] = []
+        for cfg in candidate_cfgs:
+            if cfg in seen:
+                continue
+            seen.add(cfg)
+            unique_cfgs.append(cfg)
+
+        result: dict | None = None
+        used_horizon = primary_horizon
+        used_min_train = primary_min_train
+        last_error: str | None = None
+
+        for cfg_horizon, cfg_min_train in unique_cfgs:
+            candidate = self._run_walk_forward_market_backtest(
+                target_df=target_df,
+                virus_typ=virus_typ,
+                horizon_days=cfg_horizon,
+                min_train_points=cfg_min_train,
+                delay_rules=None,
+            )
+            if "error" in candidate:
+                last_error = str(candidate.get("error"))
+                continue
+            result = candidate
+            used_horizon = cfg_horizon
+            used_min_train = cfg_min_train
+            break
+
+        if not result:
+            return {
+                "error": (
+                    "Walk-forward OOS-Kalibrierung konnte keine validen Folds erzeugen. "
+                    f"Letzter Fehler: {last_error or 'unbekannt'}"
+                ),
+                "attempted_configs": [
+                    {"horizon_days": h, "min_train_points": m}
+                    for h, m in unique_cfgs
+                ],
+            }
+
+        df_sim = pd.DataFrame([{
+            "date": row["date"],
+            "bio": row["bio"],
+            "real_qty": row["real_qty"],
+        } for row in result.get("chart_data", [])])
+        lead_lag = self._augment_lead_lag_with_horizon(
+            self._best_bio_lead_lag(df_sim),
+            horizon_days=used_horizon,
+        )
+
+        metrics = result.get("metrics", {})
+        optimized_weights = result.get("optimized_weights", dict(self.DEFAULT_WEIGHTS))
+        correlation_signed = float(metrics.get("correlation", 0.0) or 0.0)
+        llm_insight = self._generate_llm_insight(
+            weights=optimized_weights,
+            r2=float(metrics.get("r2_score", 0.0) or 0.0),
+            correlation=correlation_signed,
+            mae=float(metrics.get("mae", 0.0) or 0.0),
+            n_samples=int(metrics.get("data_points", 0) or 0),
+            virus_typ=virus_typ,
+        )
+
+        proof_text = (
+            f"OOS Walk-forward über {metrics.get('data_points', 0)} Folds "
+            f"(Horizont {used_horizon}T, min_train_points={used_min_train}). "
+            f"R²={metrics.get('r2_score')}, |Korrelation|={metrics.get('correlation_pct')}%, "
+            f"sMAPE={metrics.get('smape')}, Lead/Lag (effektiv)="
+            f"{lead_lag.get('effective_lead_days', 0)} Tage."
+        )
+
+        result["mode"] = "CALIBRATION_OOS"
+        result["proof_text"] = proof_text
+        result["llm_insight"] = llm_insight
+        result["lead_lag"] = lead_lag
+        result["walk_forward"] = {
+            **(result.get("walk_forward") or {}),
+            "enabled": True,
+            "horizon_days": int(used_horizon),
+            "min_train_points": int(used_min_train),
+            "strict_vintage_mode": bool(self.strict_vintage_mode),
+            "calibration_mode": "WALK_FORWARD_OOS",
+        }
 
         logger.info(
-            "Kalibrierung abgeschlossen: R²=%s, Korrelation=%s, Gewichte=%s",
-            result["metrics"]["r2_score"],
-            result["metrics"]["correlation"],
-            result["optimized_weights"],
+            "OOS-Kalibrierung abgeschlossen: R²=%s, corr=%s, folds=%s, horizon=%s, min_train=%s, weights=%s",
+            result.get("metrics", {}).get("r2_score"),
+            result.get("metrics", {}).get("correlation"),
+            result.get("walk_forward", {}).get("folds"),
+            used_horizon,
+            used_min_train,
+            result.get("optimized_weights"),
         )
         return result
 

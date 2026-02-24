@@ -44,6 +44,9 @@ def _read_upload(content: bytes, filename: str) -> pd.DataFrame:
 async def run_calibration(
     file: UploadFile = File(...),
     virus_typ: str = Query(default="Influenza A"),
+    horizon_days: int = Query(default=7, ge=1, le=60),
+    min_train_points: int = Query(default=20, ge=5, le=300),
+    strict_vintage_mode: bool = Query(default=True),
     db: Session = Depends(get_db),
 ):
     """Kalibierungslauf starten.
@@ -69,12 +72,18 @@ async def run_calibration(
 
     # Leere Zeilen entfernen
     df = df.dropna(subset=["datum", "menge"])
-    if len(df) < 5:
-        return {"error": "Mindestens 5 Datenpunkte erforderlich."}
+    if len(df) < 8:
+        return {"error": "Mindestens 8 Datenpunkte für OOS-Kalibrierung erforderlich."}
 
     from app.services.ml.backtester import BacktestService
     service = BacktestService(db)
-    return service.run_calibration(df, virus_typ=virus_typ)
+    return service.run_calibration(
+        df,
+        virus_typ=virus_typ,
+        horizon_days=horizon_days,
+        min_train_points=min_train_points,
+        strict_vintage_mode=strict_vintage_mode,
+    )
 
 
 @router.post("/preview")

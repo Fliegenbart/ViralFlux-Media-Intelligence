@@ -205,11 +205,11 @@ GANZIMMUN_API_KEY=<optional>
 ```bash
 # Backend Tests
 cd backend
-pytest
+python3 -m pytest
 
 # Frontend Tests
 cd frontend
-npm test
+npm test -- --passWithNoTests
 ```
 
 ## 📦 Deployment auf Hetzner
@@ -224,10 +224,9 @@ cd viralflux-media
 
 # Produktion starten
 docker-compose -f docker-compose.prod.yml up -d
-
-# SSL mit Let's Encrypt
-./scripts/setup-ssl.sh your-domain.de
 ```
+
+Vollständige Produktionsanleitung: `DEPLOY.md`
 
 ## 📈 ANNEx 22 Compliance
 

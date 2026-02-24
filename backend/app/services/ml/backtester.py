@@ -1269,16 +1269,16 @@ class BacktestService:
 
     @staticmethod
     def _seasonal_naive_baseline(train_df: pd.DataFrame, target_week: int, target_month: int) -> float:
-        """Seasonal Naive: gleiche ISO-Woche, sonst Monat, sonst letzter Wert."""
+        """Seasonal Baseline: Median der gleichen ISO-Woche (konsistent mit Residual-Training)."""
         same_week = train_df[train_df["iso_week"] == target_week]
         if not same_week.empty:
-            return float(same_week.iloc[-1]["menge"])
+            return float(same_week["menge"].median())
 
         same_month = train_df[train_df["month"] == target_month]
         if not same_month.empty:
-            return float(same_month.iloc[-1]["menge"])
+            return float(same_month["menge"].median())
 
-        return float(train_df.iloc[-1]["menge"])
+        return float(train_df["menge"].median())
 
     def _run_walk_forward_market_backtest(
         self,
@@ -1611,7 +1611,7 @@ class BacktestService:
                 # Seasonal baseline für future target week
                 fc_iso_week = future_target.isocalendar()[1]
                 fc_baseline = self._seasonal_naive_baseline(
-                    pred_df.rename(columns={"target_time": "datum", "real_qty": "menge"}),
+                    df,  # Full target df with iso_week + month columns
                     target_week=fc_iso_week,
                     target_month=future_target.month,
                 )

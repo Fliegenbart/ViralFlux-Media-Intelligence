@@ -1231,6 +1231,23 @@ class BacktestService:
             "oos_points": int(len(abs_errors)),
         }
 
+    @staticmethod
+    def _sanitize_for_json(value):
+        """Konvertiert NaN/Inf rekursiv zu None für JSON-kompatible API-Responses."""
+        if isinstance(value, dict):
+            return {k: BacktestService._sanitize_for_json(v) for k, v in value.items()}
+        if isinstance(value, list):
+            return [BacktestService._sanitize_for_json(v) for v in value]
+        if isinstance(value, tuple):
+            return [BacktestService._sanitize_for_json(v) for v in value]
+        if isinstance(value, pd.Timestamp):
+            return value.isoformat()
+        if isinstance(value, np.generic):
+            value = value.item()
+        if isinstance(value, float):
+            return value if math.isfinite(value) else None
+        return value
+
     def _persist_backtest_result(
         self,
         *,
@@ -2120,12 +2137,9 @@ class BacktestService:
             f"Lead/Lag (effektiv)={lead_lag_global['effective_lead_days']} Tage. "
             f"Forecast-Vintage medianer Vorlauf={vintage_metrics['median_lead_days']} Tage."
         )
-        chart_records = (
-            combined_df
-            .replace([np.inf, -np.inf], np.nan)
-            .where(pd.notna(combined_df), None)
-            .to_dict(orient="records")
-        )
+        clean_chart_df = combined_df.replace([np.inf, -np.inf], np.nan).astype(object)
+        clean_chart_df = clean_chart_df.where(pd.notna(clean_chart_df), None)
+        chart_records = clean_chart_df.to_dict(orient="records")
 
         result = {
             "mode": "CUSTOMER_CHECK",
@@ -2161,6 +2175,7 @@ class BacktestService:
                 "strict_vintage_mode": bool(self.strict_vintage_mode),
             },
         }
+        result = self._sanitize_for_json(result)
 
         persisted_run_id = self._persist_backtest_result(
             mode="CUSTOMER_CHECK",

@@ -1727,6 +1727,8 @@ class BacktestService:
                 "target_date": row["target_time"].strftime("%Y-%m-%d"),
                 "y_hat": round(float(row["predicted_qty"]), 3),
                 "y_true": float(row["real_qty"]),
+                "baseline_persistence": float(row["baseline_persistence"]),
+                "baseline_seasonal": float(row["baseline_seasonal"]),
                 "horizon_days": int(horizon_days),
             }
             for _, row in pred_df.iterrows()
@@ -2059,15 +2061,28 @@ class BacktestService:
 
         combined_df = pd.DataFrame(combined_chart).sort_values("date").reset_index(drop=True)
         metrics_df = pd.DataFrame(combined_historical).sort_values("date").reset_index(drop=True)
+        forecast_df = pd.DataFrame(combined_forecast_records).copy()
+        if forecast_df.empty:
+            return {
+                "error": "Keine Forecast-Records für OOS-Metriken verfügbar.",
+            }
 
-        y_true = pd.to_numeric(metrics_df["real_qty"], errors="coerce").to_numpy(dtype=float)
-        y_hat = pd.to_numeric(metrics_df["predicted_qty"], errors="coerce").to_numpy(dtype=float)
-        y_persistence = pd.to_numeric(
-            metrics_df["baseline_persistence"], errors="coerce"
-        ).to_numpy(dtype=float)
-        y_seasonal = pd.to_numeric(
-            metrics_df["baseline_seasonal"], errors="coerce"
-        ).to_numpy(dtype=float)
+        y_true = pd.to_numeric(forecast_df["y_true"], errors="coerce").to_numpy(dtype=float)
+        y_hat = pd.to_numeric(forecast_df["y_hat"], errors="coerce").to_numpy(dtype=float)
+
+        if "baseline_persistence" in forecast_df.columns:
+            y_persistence = pd.to_numeric(
+                forecast_df["baseline_persistence"], errors="coerce"
+            ).to_numpy(dtype=float)
+        else:
+            y_persistence = y_hat.copy()
+
+        if "baseline_seasonal" in forecast_df.columns:
+            y_seasonal = pd.to_numeric(
+                forecast_df["baseline_seasonal"], errors="coerce"
+            ).to_numpy(dtype=float)
+        else:
+            y_seasonal = y_hat.copy()
 
         model_metrics = self._compute_forecast_metrics(y_true, y_hat)
         persistence_metrics = self._compute_forecast_metrics(y_true, y_persistence)

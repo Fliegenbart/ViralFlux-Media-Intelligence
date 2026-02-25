@@ -1511,10 +1511,17 @@ class MarketingOpportunityEngine:
         model_accuracy = {}
         if latest_backtest and latest_backtest.metrics:
             metrics = latest_backtest.metrics
+            quality_gate = metrics.get("quality_gate") or {}
+            timing_metrics = metrics.get("timing_metrics") or {}
+            overall_gate = bool(quality_gate.get("overall_passed"))
+            lead_gate = bool(quality_gate.get("lead_passed", overall_gate))
             model_accuracy = {
                 "r2_score": round(metrics.get("r2_score", 0), 3),
                 "correlation": round(metrics.get("correlation", 0), 3),
                 "mae": round(metrics.get("mae", 0), 1),
+                "readiness_status": "GO" if (overall_gate and lead_gate) else "WATCH",
+                "lead_passed": lead_gate,
+                "best_lag_days": int(timing_metrics.get("best_lag_days", 0) or 0),
             }
             if latest_backtest.improvement_vs_baselines:
                 persistence_val, seasonal_val = self._extract_improvement_vs_baselines(

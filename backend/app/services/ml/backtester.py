@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func, and_, or_
 import math
 from sklearn.linear_model import Ridge
-from sklearn.ensemble import GradientBoostingRegressor
+from sklearn.ensemble import GradientBoostingClassifier, GradientBoostingRegressor
 from sklearn.metrics import r2_score, mean_absolute_error
 from sklearn.preprocessing import StandardScaler
 import logging
@@ -55,6 +55,8 @@ class BacktestService:
     QUALITY_GATE_TTD_TARGET_DAYS = 10
     QUALITY_GATE_HIT_RATE_TARGET_PCT = 70.0
     QUALITY_GATE_P90_ERROR_REL_TARGET_PCT = 35.0
+    QUALITY_GATE_LEAD_TARGET_DAYS = 7
+    DECISION_EVENT_PROBA_THRESHOLD = 0.55
     SURVSTAT_TARGET_ALIASES = {
         "SURVSTAT": "Influenza, saisonal",
         "ALL": "Influenza, saisonal",
@@ -1239,6 +1241,131 @@ class BacktestService:
         }
 
     @staticmethod
+    def _build_lead_feature_set(feature_cols: list[str]) -> list[str]:
+        """Feature-Subset für Lead-Optimierung (ohne Nachlaufanker)."""
+        excluded = {"target_level", "target_roc"}
+        lead_cols = [col for col in feature_cols if col not in excluded]
+        return lead_cols if lead_cols else list(feature_cols)
+
+    @staticmethod
+    def _compute_timing_metrics(
+        forecast_records: list[dict],
+        horizon_days: int,
+        y_hat_key: str = "y_hat",
+        max_lag_points: int = 8,
+    ) -> dict:
+        """Zeitliche Ausrichtung von Prognose zu Ist (positiver Lag = Prognose fuehrt)."""
+        valid_rows: list[dict] = []
+        for row in forecast_records or []:
+            issue = pd.to_datetime(row.get("issue_date"), errors="coerce")
+            target = pd.to_datetime(row.get("target_date"), errors="coerce")
+            region = str(row.get("region") or "__all__")
+            try:
+                y_hat = float(row.get(y_hat_key))
+                y_true = float(row.get("y_true"))
+            except (TypeError, ValueError):
+                continue
+            if pd.isna(issue) or pd.isna(target):
+                continue
+            if not (np.isfinite(y_hat) and np.isfinite(y_true)):
+                continue
+            valid_rows.append(
+                {
+                    "region": region,
+                    "issue_date": issue.normalize(),
+                    "target_date": target.normalize(),
+                    "y_hat": y_hat,
+                    "y_true": y_true,
+                }
+            )
+
+        default = {
+            "configured_horizon_days": int(horizon_days),
+            "best_lag_days": 0,
+            "corr_at_best_lag": 0.0,
+            "corr_at_horizon": 0.0,
+            "lead_passed": False,
+            "lag_step_days": 7,
+            "aligned_points": 0,
+        }
+        if len(valid_rows) < 3:
+            return default
+
+        target_dates = sorted({row["target_date"] for row in valid_rows})
+        if len(target_dates) >= 2:
+            diffs = [
+                int((target_dates[i] - target_dates[i - 1]).days)
+                for i in range(1, len(target_dates))
+                if (target_dates[i] - target_dates[i - 1]).days > 0
+            ]
+            step_days = int(round(float(np.median(diffs)))) if diffs else 7
+        else:
+            step_days = 7
+        step_days = max(step_days, 1)
+
+        truth_map: dict[tuple[str, pd.Timestamp], float] = {}
+        pred_points: list[tuple[str, pd.Timestamp, float]] = []
+        for row in valid_rows:
+            key = (row["region"], row["target_date"])
+            truth_map[key] = row["y_true"]
+            pred_points.append((row["region"], row["issue_date"], row["y_hat"]))
+
+        def _corr_for_lag_days(lag_days: int) -> tuple[float, int]:
+            xs: list[float] = []
+            ys: list[float] = []
+            lag_delta = timedelta(days=int(lag_days))
+            for region, issue_date, pred_val in pred_points:
+                target_date = issue_date + lag_delta
+                true_val = truth_map.get((region, target_date))
+                if true_val is None:
+                    continue
+                xs.append(float(pred_val))
+                ys.append(float(true_val))
+
+            n = len(xs)
+            if n < 3:
+                return 0.0, n
+            x = np.asarray(xs, dtype=float)
+            y = np.asarray(ys, dtype=float)
+            if np.std(x) <= 1e-12 or np.std(y) <= 1e-12:
+                return 0.0, n
+            corr = float(np.corrcoef(x, y)[0, 1])
+            if not np.isfinite(corr):
+                corr = 0.0
+            return corr, n
+
+        best_lag_days = 0
+        best_corr = -1.0
+        best_n = 0
+        for lag_points in range(-max_lag_points, max_lag_points + 1):
+            lag_days = lag_points * step_days
+            corr, n = _corr_for_lag_days(lag_days)
+            if n < 3:
+                continue
+            if (corr > best_corr + 1e-12) or (
+                abs(corr - best_corr) <= 1e-12 and lag_days > best_lag_days
+            ):
+                best_lag_days = int(lag_days)
+                best_corr = float(corr)
+                best_n = int(n)
+
+        horizon_lag_days = int(round(float(horizon_days) / float(step_days))) * step_days
+        corr_at_horizon, _ = _corr_for_lag_days(horizon_lag_days)
+        if best_corr < 0:
+            best_corr = 0.0
+
+        lead_passed = best_lag_days >= int(BacktestService.QUALITY_GATE_LEAD_TARGET_DAYS)
+        return {
+            "configured_horizon_days": int(horizon_days),
+            "best_lag_days": int(best_lag_days),
+            "corr_at_best_lag": round(float(best_corr), 3),
+            "corr_at_horizon": round(float(corr_at_horizon), 3),
+            "lead_passed": bool(lead_passed),
+            "lag_step_days": int(step_days),
+            "aligned_points": int(best_n),
+        }
+
+    @staticmethod
     def _compute_decision_metrics(
         forecast_records: list[dict],
         threshold_pct: float = 25.0,
@@ -1407,28 +1534,39 @@ class BacktestService:
         }
 
     @staticmethod
-    def _build_quality_gate(decision_metrics: dict) -> dict:
+    def _build_quality_gate(
+        decision_metrics: dict,
+        timing_metrics: Optional[dict] = None,
+    ) -> dict:
         """Leitet GO/WATCH Gate aus Decision-Metriken ab."""
         ttd_target = int(BacktestService.QUALITY_GATE_TTD_TARGET_DAYS)
         hit_target = float(BacktestService.QUALITY_GATE_HIT_RATE_TARGET_PCT)
         err_target = float(BacktestService.QUALITY_GATE_P90_ERROR_REL_TARGET_PCT)
+        lead_target = int(BacktestService.QUALITY_GATE_LEAD_TARGET_DAYS)
 
         median_ttd_days = float(decision_metrics.get("median_ttd_days", 0.0) or 0.0)
         hit_rate_pct = float(decision_metrics.get("hit_rate_pct", 0.0) or 0.0)
         error_relative_pct = float(decision_metrics.get("error_relative_pct", 0.0) or 0.0)
+        best_lag_days = float((timing_metrics or {}).get("best_lag_days", 0.0) or 0.0)
 
         ttd_passed = median_ttd_days >= float(ttd_target)
         hit_rate_passed = hit_rate_pct >= hit_target
         error_passed = error_relative_pct <= err_target
-        overall_passed = bool(ttd_passed and hit_rate_passed and error_passed)
+        if timing_metrics is None:
+            lead_passed = True
+        else:
+            lead_passed = best_lag_days >= float(lead_target)
+        overall_passed = bool(ttd_passed and hit_rate_passed and error_passed and lead_passed)
 
         return {
             "ttd_target_days": ttd_target,
             "hit_rate_target_pct": hit_target,
             "p90_error_relative_target_pct": err_target,
+            "lead_target_days": lead_target,
             "ttd_passed": bool(ttd_passed),
             "hit_rate_passed": bool(hit_rate_passed),
             "error_passed": bool(error_passed),
+            "lead_passed": bool(lead_passed),
             "overall_passed": bool(overall_passed),
         }
 
@@ -1469,6 +1607,8 @@ class BacktestService:
                 metrics_payload["decision_metrics"] = result.get("decision_metrics")
             if result.get("quality_gate") is not None:
                 metrics_payload["quality_gate"] = result.get("quality_gate")
+            if result.get("timing_metrics") is not None:
+                metrics_payload["timing_metrics"] = result.get("timing_metrics")
 
             run = BacktestRun(
                 run_id=run_id,
@@ -1645,6 +1785,8 @@ class BacktestService:
         importance_accumulator: list[np.ndarray] = []
         gbr_fold_count = 0
         ridge_fold_count = 0
+        decision_threshold_ratio = float(self.DECISION_EVENT_THRESHOLD_PCT) / 100.0
+        event_proba_threshold = float(self.DECISION_EVENT_PROBA_THRESHOLD)
 
         for _, row in df.iterrows():
             target_time = row["datum"]
@@ -1689,9 +1831,13 @@ class BacktestService:
             for col in fold_features:
                 if col not in df_train.columns:
                     df_train[col] = 0.0
+            lead_features = self._build_lead_feature_set(fold_features)
+            for col in lead_features:
+                if col not in df_train.columns:
+                    df_train[col] = 0.0
 
             X_train = df_train[fold_features].values
-            y_train = df_train["real_qty"].values
+            y_train = df_train["real_qty"].to_numpy(dtype=float)
 
             # Replace NaN/inf
             X_train = np.nan_to_num(X_train, nan=0.0, posinf=0.0, neginf=0.0)
@@ -1731,6 +1877,93 @@ class BacktestService:
                 model.fit(X_train, y_train)
                 importance_accumulator.append(np.abs(model.coef_))
                 use_gbr = False
+
+            # Lead-Layer training targets (event + growth) using leakage-safe baseline at issue_date.
+            truth_df = train_target_df[["datum", "menge"]].copy()
+            truth_df["datum"] = pd.to_datetime(truth_df["datum"], errors="coerce")
+            truth_df["menge"] = pd.to_numeric(truth_df["menge"], errors="coerce")
+            truth_df = truth_df.dropna(subset=["datum", "menge"]).sort_values("datum").reset_index(drop=True)
+
+            def _baseline_for_issue(issue_date: pd.Timestamp) -> float:
+                if truth_df.empty:
+                    return 0.0
+                window_start = issue_date - timedelta(days=self.DECISION_BASELINE_WINDOW_DAYS)
+                mask_window = (truth_df["datum"] >= window_start) & (truth_df["datum"] <= issue_date)
+                vals = truth_df.loc[mask_window, "menge"].tolist()
+                if not vals:
+                    vals = truth_df.loc[truth_df["datum"] <= issue_date, "menge"].tolist()
+                if not vals:
+                    vals = truth_df["menge"].tolist()
+                if not vals:
+                    return 0.0
+                return float(np.median(vals))
+
+            if "feature_date" in df_train.columns:
+                train_issue_dates = pd.to_datetime(df_train["feature_date"], errors="coerce")
+            else:
+                train_issue_dates = pd.Series([pd.NaT] * len(df_train))
+            if train_issue_dates.isna().all():
+                if "date" in df_train.columns:
+                    train_target_dates = pd.to_datetime(df_train["date"], errors="coerce")
+                else:
+                    train_target_dates = pd.Series([pd.NaT] * len(df_train))
+                train_issue_dates = train_target_dates - pd.to_timedelta(max(0, int(horizon_days)), unit="D")
+
+            baseline_train = np.array(
+                [_baseline_for_issue(issue_date) for issue_date in train_issue_dates],
+                dtype=float,
+            )
+            baseline_train = np.where(np.isfinite(baseline_train), baseline_train, 0.0)
+            valid_baseline_mask = baseline_train > 0
+            safe_baseline_train = np.where(valid_baseline_mask, baseline_train, 1.0)
+            growth_train_all = (y_train - safe_baseline_train) / safe_baseline_train
+            event_train_all = (growth_train_all >= decision_threshold_ratio).astype(int)
+
+            X_lead_train_all = df_train[lead_features].to_numpy(dtype=float)
+            X_lead_train_all = np.nan_to_num(X_lead_train_all, nan=0.0, posinf=0.0, neginf=0.0)
+
+            if valid_baseline_mask.any():
+                X_lead_train = X_lead_train_all[valid_baseline_mask]
+                growth_train = growth_train_all[valid_baseline_mask]
+                event_train = event_train_all[valid_baseline_mask]
+            else:
+                X_lead_train = X_lead_train_all
+                growth_train = np.zeros(len(X_lead_train_all), dtype=float)
+                event_train = np.zeros(len(X_lead_train_all), dtype=int)
+
+            growth_train = np.nan_to_num(growth_train, nan=0.0, posinf=0.0, neginf=0.0)
+            event_prior = float(np.clip(np.mean(event_train), 0.0, 1.0)) if len(event_train) else 0.0
+            growth_prior = float(np.mean(growth_train)) if len(growth_train) else 0.0
+
+            lead_scaler = None
+            lead_growth_model = None
+            if len(X_lead_train) >= 25:
+                lead_growth_model = GradientBoostingRegressor(
+                    n_estimators=60,
+                    max_depth=2,
+                    learning_rate=0.08,
+                    subsample=0.8,
+                    min_samples_leaf=max(4, len(X_lead_train) // 8),
+                    random_state=42,
+                )
+                lead_growth_model.fit(X_lead_train, growth_train)
+            elif len(X_lead_train) >= 8:
+                lead_scaler = StandardScaler()
+                X_lead_scaled = lead_scaler.fit_transform(X_lead_train)
+                lead_growth_model = Ridge(alpha=1.0, fit_intercept=True)
+                lead_growth_model.fit(X_lead_scaled, growth_train)
+
+            lead_event_model = None
+            if len(X_lead_train) >= 15 and len(np.unique(event_train)) >= 2:
+                lead_event_model = GradientBoostingClassifier(
+                    n_estimators=80,
+                    max_depth=2,
+                    learning_rate=0.08,
+                    subsample=0.8,
+                    min_samples_leaf=max(4, len(X_lead_train) // 8),
+                    random_state=42,
+                )
+                lead_event_model.fit(X_lead_train, event_train)
 
             # Build test features for the forecast point
             test_scores = self._compute_sub_scores_at_date(
@@ -1791,9 +2024,40 @@ class BacktestService:
 
             y_hat = float(model.predict(X_test)[0])
 
+            X_test_lead = np.array([[test_feat.get(c, 0.0) for c in lead_features]])
+            X_test_lead = np.nan_to_num(X_test_lead, nan=0.0, posinf=0.0, neginf=0.0)
+
+            growth_hat = float(growth_prior)
+            if lead_growth_model is not None:
+                X_growth = lead_scaler.transform(X_test_lead) if lead_scaler is not None else X_test_lead
+                growth_hat = float(lead_growth_model.predict(X_growth)[0])
+            growth_hat = float(np.nan_to_num(growth_hat, nan=0.0, posinf=0.0, neginf=0.0))
+
+            p_event = float(event_prior)
+            if lead_event_model is not None:
+                p_event = float(lead_event_model.predict_proba(X_test_lead)[0][1])
+            p_event = float(np.clip(np.nan_to_num(p_event, nan=event_prior), 0.0, 1.0))
+
             # Clip + Baselines
             y_max = float(y_train.max())
             y_hat = max(0.0, min(y_hat, y_max * 2.5))
+
+            decision_baseline = _baseline_for_issue(forecast_time)
+            if not np.isfinite(decision_baseline) or decision_baseline <= 0:
+                decision_baseline = float(np.median(y_train)) if len(y_train) else 0.0
+            y_hat_lead = float(decision_baseline * (1.0 + growth_hat))
+            y_hat_lead = max(0.0, min(y_hat_lead, y_max * 2.5))
+
+            selected_variant = "level"
+            y_hat_decision = y_hat
+            if np.isfinite(y_hat_lead):
+                if p_event >= event_proba_threshold:
+                    y_hat_decision = y_hat_lead
+                    selected_variant = "lead"
+                else:
+                    y_hat_decision = (0.7 * y_hat) + (0.3 * y_hat_lead)
+                    selected_variant = "blend"
+            y_hat_decision = max(0.0, min(float(y_hat_decision), y_max * 2.5))
 
             baseline_persistence = float(train_target_df.iloc[-1]["menge"])
             baseline_seasonal = seasonal_bl
@@ -1803,6 +2067,11 @@ class BacktestService:
                 "target_time": target_time,
                 "real_qty": target_value,
                 "predicted_qty": y_hat,
+                "predicted_qty_level": y_hat,
+                "predicted_qty_lead": y_hat_lead,
+                "predicted_qty_decision": y_hat_decision,
+                "p_event": p_event,
+                "selected_variant": selected_variant,
                 "baseline_persistence": baseline_persistence,
                 "baseline_seasonal": baseline_seasonal,
                 "bio": float(test_scores["bio"]),
@@ -1957,6 +2226,23 @@ class BacktestService:
             }
             for _, row in pred_df.iterrows()
         ]
+        decision_forecast_records = [
+            {
+                "issue_date": row["forecast_time"].strftime("%Y-%m-%d"),
+                "target_date": row["target_time"].strftime("%Y-%m-%d"),
+                "y_hat": round(float(row.get("predicted_qty_decision", row["predicted_qty"])), 3),
+                "y_hat_level": round(float(row.get("predicted_qty_level", row["predicted_qty"])), 3),
+                "y_hat_lead": round(float(row.get("predicted_qty_lead", row["predicted_qty"])), 3),
+                "p_event": round(float(row.get("p_event", 0.0)), 4),
+                "selected_variant": str(row.get("selected_variant") or "level"),
+                "y_true": float(row["real_qty"]),
+                "baseline_persistence": float(row["baseline_persistence"]),
+                "baseline_seasonal": float(row["baseline_seasonal"]),
+                "horizon_days": int(horizon_days),
+                "lead_days": int((row["target_time"] - row["forecast_time"]).days),
+            }
+            for _, row in pred_df.iterrows()
+        ]
 
         # chart_data: Validierungsansicht (beide am target_date, Standard)
         historical_chart = [
@@ -1976,16 +2262,21 @@ class BacktestService:
             historical_chart[-1]["forecast_qty"] = historical_chart[-1]["predicted_qty"]
 
         chart_data = historical_chart + forecast_chart
+        vintage_records = decision_forecast_records or forecast_records
         vintage_metrics = self._compute_vintage_metrics(
-            forecast_records=forecast_records,
+            forecast_records=vintage_records,
             configured_horizon_days=int(horizon_days),
         )
         decision_metrics = self._compute_decision_metrics(
-            forecast_records=forecast_records,
+            forecast_records=vintage_records,
             threshold_pct=float(self.DECISION_EVENT_THRESHOLD_PCT),
             vintage_metrics=vintage_metrics,
         )
-        quality_gate = self._build_quality_gate(decision_metrics)
+        timing_metrics = self._compute_timing_metrics(
+            forecast_records=vintage_records,
+            horizon_days=int(horizon_days),
+        )
+        quality_gate = self._build_quality_gate(decision_metrics, timing_metrics)
 
         return {
             "metrics": {
@@ -2013,8 +2304,10 @@ class BacktestService:
             "feature_names": imp_cols if importance_accumulator else feature_cols,
             "chart_data": chart_data,
             "forecast_records": forecast_records,
+            "decision_forecast_records": decision_forecast_records,
             "vintage_metrics": vintage_metrics,
             "decision_metrics": decision_metrics,
+            "timing_metrics": timing_metrics,
             "quality_gate": quality_gate,
             "forecast_weeks": len(forecast_chart),
             "residual_std": round(residual_std, 4),
@@ -2113,13 +2406,19 @@ class BacktestService:
         baseline_delta = result.get("improvement_vs_baselines", {})
         delta_pers = baseline_delta.get("mae_vs_persistence_pct", 0.0)
         delta_seas = baseline_delta.get("mae_vs_seasonal_pct", 0.0)
+        decision_records = result.get("decision_forecast_records") or result.get("forecast_records") or []
         decision_metrics = result.get("decision_metrics") or self._compute_decision_metrics(
-            forecast_records=result.get("forecast_records") or [],
+            forecast_records=decision_records,
             threshold_pct=float(self.DECISION_EVENT_THRESHOLD_PCT),
             vintage_metrics=result.get("vintage_metrics"),
         )
-        quality_gate = result.get("quality_gate") or self._build_quality_gate(decision_metrics)
+        timing_metrics = result.get("timing_metrics") or self._compute_timing_metrics(
+            forecast_records=decision_records,
+            horizon_days=int(horizon_days),
+        )
+        quality_gate = result.get("quality_gate") or self._build_quality_gate(decision_metrics, timing_metrics)
         result["decision_metrics"] = decision_metrics
+        result["timing_metrics"] = timing_metrics
         result["quality_gate"] = quality_gate
 
         lag_strength = "stark" if abs(lag_corr) >= 0.5 else "moderat" if abs(lag_corr) >= 0.25 else "schwach"
@@ -2183,6 +2482,8 @@ class BacktestService:
             f"{proof_text} "
             f"Walk-forward Backtest: MAE vs. Persistence {delta_pers:+.2f}%, "
             f"vs. Seasonal-Naive {delta_seas:+.2f}% (historisch; zukuenftige Performance kann abweichen). "
+            f"Timing: best_lag={timing_metrics.get('best_lag_days', 0)} Tage, "
+            f"corr@best={timing_metrics.get('corr_at_best_lag', 0)}. "
             f"Decision-Layer: TTD median {decision_metrics.get('median_ttd_days', 0)} Tage, "
             f"Hit-Rate {decision_metrics.get('hit_rate_pct', 0):.1f}%, "
             f"False-Alarms {decision_metrics.get('false_alarm_rate_pct', 0):.1f}%, "
@@ -2252,6 +2553,7 @@ class BacktestService:
         combined_chart: list[dict] = []
         combined_historical: list[dict] = []
         combined_forecast_records: list[dict] = []
+        combined_decision_forecast_records: list[dict] = []
 
         for region_name, region_df in df.groupby("region"):
             target_df = region_df[["datum", "menge"]].copy()
@@ -2291,6 +2593,10 @@ class BacktestService:
                 rec_copy = dict(row)
                 rec_copy["region"] = region_name
                 combined_forecast_records.append(rec_copy)
+            for row in region_result.get("decision_forecast_records", []) or []:
+                rec_copy = dict(row)
+                rec_copy["region"] = region_name
+                combined_decision_forecast_records.append(rec_copy)
 
             region_results[region_name] = {
                 "metrics": region_result.get("metrics", {}),
@@ -2354,21 +2660,27 @@ class BacktestService:
             lead_lag_base,
             horizon_days=horizon_days,
         )
+        decision_records = combined_decision_forecast_records or combined_forecast_records
         vintage_metrics = self._compute_vintage_metrics(
-            forecast_records=combined_forecast_records,
+            forecast_records=decision_records,
             configured_horizon_days=int(horizon_days),
         )
         decision_metrics = self._compute_decision_metrics(
-            forecast_records=combined_forecast_records,
+            forecast_records=decision_records,
             threshold_pct=float(self.DECISION_EVENT_THRESHOLD_PCT),
             vintage_metrics=vintage_metrics,
         )
-        quality_gate = self._build_quality_gate(decision_metrics)
+        timing_metrics = self._compute_timing_metrics(
+            forecast_records=decision_records,
+            horizon_days=int(horizon_days),
+        )
+        quality_gate = self._build_quality_gate(decision_metrics, timing_metrics)
         proof_text = (
             f"Kundendaten-Check über {model_metrics['data_points']} Punkte: "
             f"R²={model_metrics['r2_score']}, Korrelationsstärke={model_metrics['correlation_pct']}%, "
             f"Lead/Lag (effektiv)={lead_lag_global['effective_lead_days']} Tage. "
             f"Forecast-Vintage medianer Vorlauf={vintage_metrics['median_lead_days']} Tage. "
+            f"Timing best_lag={timing_metrics.get('best_lag_days', 0)} Tage. "
             f"Decision-Layer: TTD median {decision_metrics.get('median_ttd_days', 0)} Tage, "
             f"Hit-Rate {decision_metrics.get('hit_rate_pct', 0):.1f}%, "
             f"False-Alarms {decision_metrics.get('false_alarm_rate_pct', 0):.1f}%."
@@ -2396,8 +2708,10 @@ class BacktestService:
             "regions": region_results,
             "chart_data": chart_records,
             "forecast_records": combined_forecast_records,
+            "decision_forecast_records": decision_records,
             "vintage_metrics": vintage_metrics,
             "decision_metrics": decision_metrics,
+            "timing_metrics": timing_metrics,
             "quality_gate": quality_gate,
             "proof_text": proof_text,
             "llm_insight": (

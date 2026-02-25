@@ -122,30 +122,52 @@ class BacktesterMathTests(unittest.TestCase):
         self.assertEqual(metrics["median_ttd_days"], 7)
         self.assertGreater(metrics["p90_abs_error"], 0.0)
 
+    def test_compute_timing_metrics_detects_positive_lead(self) -> None:
+        signal = [3.0, 1.0, 4.0, 2.0, 5.0, 0.5, 6.0, 1.5]
+        records = [
+            {
+                "issue_date": (pd.Timestamp("2024-01-01") + pd.Timedelta(days=7 * idx)).strftime("%Y-%m-%d"),
+                "target_date": (pd.Timestamp("2024-01-15") + pd.Timedelta(days=7 * idx)).strftime("%Y-%m-%d"),
+                "y_hat": signal[idx],
+                "y_true": signal[idx],
+            }
+            for idx in range(len(signal))
+        ]
+
+        timing = BacktestService._compute_timing_metrics(records, horizon_days=14)
+        self.assertEqual(timing["configured_horizon_days"], 14)
+        self.assertEqual(timing["best_lag_days"], 14)
+        self.assertTrue(timing["lead_passed"])
+        self.assertGreaterEqual(timing["corr_at_best_lag"], timing["corr_at_horizon"])
+
     def test_quality_gate_flags_pass_and_fail_conditions(self) -> None:
         passed = BacktestService._build_quality_gate(
             {
                 "median_ttd_days": 14,
                 "hit_rate_pct": 80.0,
                 "error_relative_pct": 20.0,
-            }
+            },
+            timing_metrics={"best_lag_days": 14},
         )
         failed = BacktestService._build_quality_gate(
             {
                 "median_ttd_days": 7,
                 "hit_rate_pct": 60.0,
                 "error_relative_pct": 50.0,
-            }
+            },
+            timing_metrics={"best_lag_days": 0},
         )
 
         self.assertTrue(passed["ttd_passed"])
         self.assertTrue(passed["hit_rate_passed"])
         self.assertTrue(passed["error_passed"])
+        self.assertTrue(passed["lead_passed"])
         self.assertTrue(passed["overall_passed"])
 
         self.assertFalse(failed["ttd_passed"])
         self.assertFalse(failed["hit_rate_passed"])
         self.assertFalse(failed["error_passed"])
+        self.assertFalse(failed["lead_passed"])
         self.assertFalse(failed["overall_passed"])
 
     def test_best_bio_lag_prefers_positive_alignment_over_stronger_negative(self) -> None:

@@ -421,6 +421,7 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
     }
     const latestMarketDecision = cockpit?.backtest_summary?.latest_market?.decision_metrics;
     const latestMarketGate = cockpit?.backtest_summary?.latest_market?.quality_gate;
+    const latestMarketTiming = cockpit?.backtest_summary?.latest_market?.timing_metrics;
     const latestReadiness = latestMarketDecision?.readiness_score_0_100;
     const latestReadinessLabel = latestMarketGate?.overall_passed ? 'GO' : 'WATCH';
 
@@ -501,7 +502,7 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                     {latestReadiness != null ? `${Math.round(latestReadiness)}/100` : '\u2014'}
                   </div>
                   <div style={{ marginTop: 4, fontSize: 10, color: 'var(--text-muted)' }}>
-                    TTD {latestMarketDecision.median_ttd_days ?? 0}T · Hit-Rate {latestMarketDecision.hit_rate_pct ?? 0}% · False Alarms {latestMarketDecision.false_alarm_rate_pct ?? 0}%
+                    TTD {latestMarketDecision.median_ttd_days ?? 0}T · Hit-Rate {latestMarketDecision.hit_rate_pct ?? 0}% · False Alarms {latestMarketDecision.false_alarm_rate_pct ?? 0}% · Timing {latestMarketTiming?.best_lag_days ?? 0}d
                   </div>
                 </div>
               )}
@@ -1746,7 +1747,9 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
 
       if (mode === 'vintage') {
         const dateMap: Record<string, BacktestChartPoint> = {};
-        const records = result?.forecast_records || [];
+        const records = (result?.decision_forecast_records && result.decision_forecast_records.length > 0)
+          ? result.decision_forecast_records
+          : (result?.forecast_records || []);
         const configuredLeadDays = result?.vintage_metrics?.configured_horizon_days
           || result?.walk_forward?.horizon_days
           || 14;
@@ -2192,6 +2195,7 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                 const horizon = btResult.walk_forward?.horizon_days || 14;
                 const fcWeeks = btResult.forecast_weeks || 0;
                 const decision = btResult.decision_metrics;
+                const timing = btResult.timing_metrics;
                 const gate = btResult.quality_gate;
                 const hasDecisionLayer = Boolean(decision);
 
@@ -2264,7 +2268,7 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                       </div>
                       <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>
                         {hasDecisionLayer
-                          ? 'Diese Empfehlung basiert auf OOS-TTD + Hit-Rate + Fehlerrisiko.'
+                          ? 'Diese Empfehlung basiert auf OOS-TTD + Hit-Rate + Timing + Fehlerrisiko.'
                           : 'Legacy-Fallback ohne Decision-Layer: Bewertung basiert auf OOS-Modellgüte.'}
                       </div>
                     </div>
@@ -2291,6 +2295,13 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                           label: 'Readiness',
                           value: decision?.readiness_score_0_100 != null ? `${Math.round(decision.readiness_score_0_100)}` : '-',
                           sub: gate?.overall_passed ? 'GO' : 'WATCH',
+                        },
+                        {
+                          label: 'Timing',
+                          value: timing?.best_lag_days != null
+                            ? `${timing.best_lag_days > 0 ? '+' : ''}${Math.round(timing.best_lag_days)}d`
+                            : '-',
+                          sub: timing?.lead_passed ? 'LEAD PASS' : 'WATCH',
                         },
                       ].map((m) => (
                         <div key={m.label} style={{
@@ -2419,6 +2430,9 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                         Trigger-Proof: P(Event|Alert) {Number(btResult.decision_metrics.hit_rate_pct ?? 0).toFixed(1)}% ·
                         False Alarm Rate {Number(btResult.decision_metrics.false_alarm_rate_pct ?? 0).toFixed(1)}% ·
                         TTD median {btResult.decision_metrics.median_ttd_days ?? 0}T ·
+                        Timing {btResult.timing_metrics?.best_lag_days != null
+                          ? `${Number(btResult.timing_metrics.best_lag_days) > 0 ? '+' : ''}${btResult.timing_metrics.best_lag_days}d`
+                          : '0d'} ·
                         Readiness {Number(btResult.decision_metrics.readiness_score_0_100 ?? 0).toFixed(0)}/100 ({btResult.quality_gate?.overall_passed ? 'GO' : 'WATCH'})
                       </div>
                     )}
@@ -2652,6 +2666,7 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                         <>
                           <strong>Forecast-Vintage:</strong> Blau ist strikt um den echten Vorlauf nach links geplottet (strict shift), Rot bleibt am Ereignisdatum.
                           {' '}Connectoren zeigen den Prognosezeitpunkt X → Ereigniszeitpunkt Y.
+                          {' '}Timing-Pass gilt erst bei <strong>best_lag ≥ +7 Tagen</strong>.
                           {' '}Medianer Vorlauf: <strong>{btResult.vintage_metrics?.median_lead_days ?? btResult.walk_forward?.horizon_days ?? btHorizonDays} Tage</strong>.
                           {btResult.decision_metrics && (
                             <>
@@ -2659,6 +2674,11 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                               {' '}innerhalb von <strong>{btResult.vintage_metrics?.configured_horizon_days ?? btResult.walk_forward?.horizon_days ?? btHorizonDays}T</strong> ein Event ein;
                               {' '}Fehlalarme: <strong>{Number(btResult.decision_metrics.false_alarm_rate_pct ?? 0).toFixed(1)}%</strong>
                               {' '}({btResult.quality_gate?.overall_passed ? 'GO' : 'WATCH'}).
+                            </>
+                          )}
+                          {btResult.timing_metrics && !btResult.timing_metrics.lead_passed && (
+                            <>
+                              {' '}Aktuell ist das Timing noch zu traege (best_lag {btResult.timing_metrics.best_lag_days ?? 0}d) fuer aggressiven Budget-Shift.
                             </>
                           )}
                         </>
@@ -2975,12 +2995,18 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                         <>
                           <strong>Forecast-Vintage:</strong> Blau ist strikt um den echten Vorlauf nach links geplottet (strict shift), Rot bleibt am Ereignisdatum.
                           {' '}Connectoren zeigen den Prognosezeitpunkt X → Ereigniszeitpunkt Y.
+                          {' '}Timing-Pass gilt erst bei <strong>best_lag ≥ +7 Tagen</strong>.
                           {btCustomerResult.decision_metrics && (
                             <>
                               {' '}Wenn Trigger feuert, trat in <strong>{Number(btCustomerResult.decision_metrics.hit_rate_pct ?? 0).toFixed(1)}%</strong> der OOS-Fälle
                               {' '}innerhalb von <strong>{btCustomerResult.vintage_metrics?.configured_horizon_days ?? btCustomerResult.walk_forward?.horizon_days ?? btHorizonDays}T</strong> ein Event ein;
                               {' '}Fehlalarme: <strong>{Number(btCustomerResult.decision_metrics.false_alarm_rate_pct ?? 0).toFixed(1)}%</strong>
                               {' '}({btCustomerResult.quality_gate?.overall_passed ? 'GO' : 'WATCH'}).
+                            </>
+                          )}
+                          {btCustomerResult.timing_metrics && !btCustomerResult.timing_metrics.lead_passed && (
+                            <>
+                              {' '}Aktuell ist das Timing noch zu traege (best_lag {btCustomerResult.timing_metrics.best_lag_days ?? 0}d).
                             </>
                           )}
                         </>
@@ -3001,6 +3027,9 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                         <> Trigger-Proof: P(Event|Alert) {Number(btCustomerResult.decision_metrics.hit_rate_pct ?? 0).toFixed(1)}% ·
                           False Alarm Rate {Number(btCustomerResult.decision_metrics.false_alarm_rate_pct ?? 0).toFixed(1)}% ·
                           TTD median {btCustomerResult.decision_metrics.median_ttd_days ?? 0}T ·
+                          Timing {btCustomerResult.timing_metrics?.best_lag_days != null
+                            ? `${Number(btCustomerResult.timing_metrics.best_lag_days) > 0 ? '+' : ''}${btCustomerResult.timing_metrics.best_lag_days}d`
+                            : '0d'} ·
                           Readiness {Number(btCustomerResult.decision_metrics.readiness_score_0_100 ?? 0).toFixed(0)}/100 ({btCustomerResult.quality_gate?.overall_passed ? 'GO' : 'WATCH'}).</>
                       )}
                     </div>

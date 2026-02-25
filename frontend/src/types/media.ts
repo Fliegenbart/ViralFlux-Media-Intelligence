@@ -514,9 +514,11 @@ export interface BacktestQualityGate {
   ttd_target_days?: number;
   hit_rate_target_pct?: number;
   p90_error_relative_target_pct?: number;
+  lead_target_days?: number;
   ttd_passed?: boolean;
   hit_rate_passed?: boolean;
   error_passed?: boolean;
+  lead_passed?: boolean;
   overall_passed?: boolean;
 }
 
@@ -525,9 +527,23 @@ export interface BacktestForecastRecord {
   target_date: string;
   lead_days?: number;
   y_hat?: number;
+  y_hat_level?: number;
+  y_hat_lead?: number;
+  p_event?: number;
+  selected_variant?: 'level' | 'lead' | 'blend';
   y_true?: number;
   horizon_days?: number;
   region?: string;
+}
+
+export interface BacktestTimingMetrics {
+  configured_horizon_days?: number;
+  best_lag_days?: number;
+  corr_at_best_lag?: number;
+  corr_at_horizon?: number;
+  lead_passed?: boolean;
+  lag_step_days?: number;
+  aligned_points?: number;
 }
 
 export interface BacktestChartPoint {
@@ -566,8 +582,10 @@ export interface BacktestResponse {
   metrics?: BacktestMetrics;
   chart_data?: BacktestChartPoint[];
   forecast_records?: BacktestForecastRecord[];
+  decision_forecast_records?: BacktestForecastRecord[];
   vintage_metrics?: BacktestVintageMetrics;
   decision_metrics?: BacktestDecisionMetrics;
+  timing_metrics?: BacktestTimingMetrics;
   quality_gate?: BacktestQualityGate;
   forecast_weeks?: number;
   proof_text?: string;

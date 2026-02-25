@@ -699,6 +699,7 @@ class MediaCockpitService:
                 "metrics": metrics,
                 "decision_metrics": metrics.get("decision_metrics"),
                 "quality_gate": metrics.get("quality_gate"),
+                "timing_metrics": metrics.get("timing_metrics"),
                 "lead_lag": row.lead_lag or {},
                 "proof_text": row.proof_text,
                 "created_at": row.created_at.isoformat() if row.created_at else None,

@@ -523,6 +523,7 @@ export interface BacktestQualityGate {
 export interface BacktestForecastRecord {
   issue_date: string;
   target_date: string;
+  lead_days?: number;
   y_hat?: number;
   y_true?: number;
   horizon_days?: number;
@@ -554,6 +555,7 @@ export interface BacktestChartPoint {
   based_on?: string;
   region?: string;
   lead_days?: number;
+  plot_date?: string;
   is_future_vintage?: boolean;
 }
 

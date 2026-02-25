@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTheme, useToast } from '../App';
 import { geoMercator, geoPath } from 'd3-geo';
-import { format, parseISO } from 'date-fns';
+import { differenceInCalendarDays, format, isValid, parseISO, subDays } from 'date-fns';
 import {
   ResponsiveContainer,
   ComposedChart,
@@ -1747,21 +1747,57 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
       if (mode === 'vintage') {
         const dateMap: Record<string, BacktestChartPoint> = {};
         const records = result?.forecast_records || [];
+        const configuredLeadDays = result?.vintage_metrics?.configured_horizon_days
+          || result?.walk_forward?.horizon_days
+          || 14;
+
+        const resolveLeadDays = (
+          issueDate?: string,
+          targetDate?: string,
+          explicitLead?: number | null,
+        ): number => {
+          if (typeof explicitLead === 'number' && Number.isFinite(explicitLead)) {
+            return Math.round(explicitLead);
+          }
+          if (issueDate && targetDate) {
+            const issue = parseISO(issueDate);
+            const target = parseISO(targetDate);
+            if (isValid(issue) && isValid(target)) {
+              return differenceInCalendarDays(target, issue);
+            }
+          }
+          return configuredLeadDays;
+        };
+
+        const resolvePlotDate = (
+          targetDate?: string,
+          leadDays?: number,
+          fallbackIssueDate?: string,
+        ): string | null => {
+          if (targetDate && typeof leadDays === 'number' && Number.isFinite(leadDays)) {
+            const target = parseISO(targetDate);
+            if (isValid(target)) {
+              return format(subDays(target, leadDays), 'yyyy-MM-dd');
+            }
+          }
+          return fallbackIssueDate || targetDate || null;
+        };
 
         if (records.length) {
           for (const rec of records) {
             const issueDate = rec.issue_date;
             const targetDate = rec.target_date;
-            if (!issueDate || !targetDate) continue;
+            if (!targetDate) continue;
+            const leadDays = resolveLeadDays(issueDate, targetDate, rec.lead_days);
+            const plotDate = resolvePlotDate(targetDate, leadDays, issueDate);
 
-            if (!dateMap[issueDate]) dateMap[issueDate] = { date: issueDate };
-            dateMap[issueDate].issue_date = issueDate;
-            dateMap[issueDate].target_date = targetDate;
-            dateMap[issueDate].predicted_qty = rec.y_hat ?? null;
-            const issueTs = Date.parse(issueDate);
-            const targetTs = Date.parse(targetDate);
-            if (!Number.isNaN(issueTs) && !Number.isNaN(targetTs)) {
-              dateMap[issueDate].lead_days = Math.round((targetTs - issueTs) / 86400000);
+            if (plotDate) {
+              if (!dateMap[plotDate]) dateMap[plotDate] = { date: plotDate };
+              dateMap[plotDate].plot_date = plotDate;
+              dateMap[plotDate].issue_date = issueDate || plotDate;
+              dateMap[plotDate].target_date = targetDate;
+              dateMap[plotDate].lead_days = leadDays;
+              dateMap[plotDate].predicted_qty = rec.y_hat ?? null;
             }
 
             if (!dateMap[targetDate]) dateMap[targetDate] = { date: targetDate };
@@ -1774,30 +1810,45 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
         } else {
           for (const row of chartData.filter((p) => !p.is_forecast && p.issue_date)) {
             const issueDate = row.issue_date as string;
-            if (!dateMap[issueDate]) dateMap[issueDate] = { date: issueDate };
-            dateMap[issueDate].issue_date = issueDate;
-            dateMap[issueDate].target_date = row.target_date || row.date;
-            dateMap[issueDate].predicted_qty = row.predicted_qty ?? null;
+            const targetDate = row.target_date || row.date;
+            const leadDays = resolveLeadDays(issueDate, targetDate, row.lead_days ?? null);
+            const plotDate = resolvePlotDate(targetDate, leadDays, issueDate);
 
-            if (!dateMap[row.date]) dateMap[row.date] = { date: row.date };
-            dateMap[row.date].target_date = row.target_date || row.date;
-            dateMap[row.date].real_qty = row.real_qty ?? null;
-            dateMap[row.date].issue_date_hint = issueDate;
+            if (plotDate) {
+              if (!dateMap[plotDate]) dateMap[plotDate] = { date: plotDate };
+              dateMap[plotDate].plot_date = plotDate;
+              dateMap[plotDate].issue_date = issueDate;
+              dateMap[plotDate].target_date = targetDate;
+              dateMap[plotDate].lead_days = leadDays;
+              dateMap[plotDate].predicted_qty = row.predicted_qty ?? null;
+            }
+
+            if (!dateMap[targetDate]) dateMap[targetDate] = { date: targetDate };
+            dateMap[targetDate].target_date = targetDate;
+            dateMap[targetDate].real_qty = row.real_qty ?? null;
+            dateMap[targetDate].issue_date_hint = issueDate;
           }
         }
 
         for (const row of chartData.filter((p) => p.is_forecast)) {
           const issueDate = row.issue_date || row.date;
-          if (!issueDate) continue;
-          if (!dateMap[issueDate]) dateMap[issueDate] = { date: issueDate };
-          dateMap[issueDate].issue_date = issueDate;
-          dateMap[issueDate].target_date = row.target_date || row.date;
-          dateMap[issueDate].forecast_qty = row.forecast_qty ?? null;
-          dateMap[issueDate].ci_80_lower = row.ci_80_lower ?? null;
-          dateMap[issueDate].ci_80_upper = row.ci_80_upper ?? null;
-          dateMap[issueDate].ci_95_lower = row.ci_95_lower ?? null;
-          dateMap[issueDate].ci_95_upper = row.ci_95_upper ?? null;
-          dateMap[issueDate].is_future_vintage = true;
+          const targetDate = row.target_date || row.date;
+          if (!issueDate || !targetDate) continue;
+          const leadDays = resolveLeadDays(issueDate, targetDate, row.lead_days ?? null);
+          const plotDate = resolvePlotDate(targetDate, leadDays, issueDate);
+          if (!plotDate) continue;
+
+          if (!dateMap[plotDate]) dateMap[plotDate] = { date: plotDate };
+          dateMap[plotDate].plot_date = plotDate;
+          dateMap[plotDate].issue_date = issueDate;
+          dateMap[plotDate].target_date = targetDate;
+          dateMap[plotDate].lead_days = leadDays;
+          dateMap[plotDate].forecast_qty = row.forecast_qty ?? null;
+          dateMap[plotDate].ci_80_lower = row.ci_80_lower ?? null;
+          dateMap[plotDate].ci_80_upper = row.ci_80_upper ?? null;
+          dateMap[plotDate].ci_95_lower = row.ci_95_lower ?? null;
+          dateMap[plotDate].ci_95_upper = row.ci_95_upper ?? null;
+          dateMap[plotDate].is_future_vintage = true;
         }
 
         return Object.values(dateMap).sort((a, b) => a.date.localeCompare(b.date));
@@ -1835,6 +1886,24 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
         issue_date: row.issue_date as string,
         target_date: row.target_date as string,
         planning_qty: row.predicted_qty as number,
+      }));
+  }, []);
+
+  const buildVintageConnectors = useCallback((rows: BacktestChartPoint[]) => {
+    const candidates = rows.filter((row) =>
+      !!row.target_date
+      && !!row.date
+      && (typeof row.predicted_qty === 'number' || typeof row.forecast_qty === 'number'),
+    );
+    if (!candidates.length) return [];
+    return candidates
+      .slice(-80)
+      .filter((_, idx) => idx % 2 === 0)
+      .slice(-40)
+      .map((row) => ({
+        plot_date: row.date,
+        target_date: row.target_date as string,
+        vintage_qty: (typeof row.predicted_qty === 'number' ? row.predicted_qty : row.forecast_qty) as number,
       }));
   }, []);
 
@@ -2304,6 +2373,10 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                 const planningConnectors = activeMode === 'planning'
                   ? buildPlanningConnectors(chartRows)
                   : [];
+                const vintageConnectors = activeMode === 'vintage'
+                  ? buildVintageConnectors(chartRows)
+                  : [];
+                const chartLineType: 'linear' | 'monotone' = activeMode === 'vintage' ? 'linear' : 'monotone';
 
                 return (
                   <div style={{ width: '100%', marginBottom: 16 }}>
@@ -2328,7 +2401,7 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                       </div>
                       <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
                         {activeMode === 'validation' && 'Ist vs. Prognose am gleichen Datum'}
-                        {activeMode === 'vintage' && 'Prognose am Erstelldatum (blau links = echter Vorlauf)'}
+                        {activeMode === 'vintage' && 'Strict Shift Overlay (blau links = echter Vorlauf)'}
                         {activeMode === 'planning' && 'Messdatum (X) -> erwartetes Ereignisdatum (Y)'}
                       </span>
                     </div>
@@ -2343,9 +2416,9 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                     )}
                     {btResult.decision_metrics && (
                       <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>
-                        Decision-Layer: TTD median {btResult.decision_metrics.median_ttd_days ?? 0}T ·
-                        Hit-Rate {Number(btResult.decision_metrics.hit_rate_pct ?? 0).toFixed(1)}% ·
-                        False Alarms {Number(btResult.decision_metrics.false_alarm_rate_pct ?? 0).toFixed(1)}% ·
+                        Trigger-Proof: P(Event|Alert) {Number(btResult.decision_metrics.hit_rate_pct ?? 0).toFixed(1)}% ·
+                        False Alarm Rate {Number(btResult.decision_metrics.false_alarm_rate_pct ?? 0).toFixed(1)}% ·
+                        TTD median {btResult.decision_metrics.median_ttd_days ?? 0}T ·
                         Readiness {Number(btResult.decision_metrics.readiness_score_0_100 ?? 0).toFixed(0)}/100 ({btResult.quality_gate?.overall_passed ? 'GO' : 'WATCH'})
                       </div>
                     )}
@@ -2411,9 +2484,15 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                                 }
                                 if (activeMode === 'vintage') {
                                   const issue = point.issue_date || point.issue_date_hint;
-                                  const target = point.target_date;
-                                  if (issue && target) {
-                                    return `${label} — erstellt am: ${format(parseISO(issue), 'dd.MM.yyyy')} · für: ${format(parseISO(target), 'dd.MM.yyyy')}`;
+                                  const target = point.target_date || d;
+                                  const leadDays = typeof point.lead_days === 'number' ? point.lead_days : null;
+                                  const hasPred = typeof point.predicted_qty === 'number' || typeof point.forecast_qty === 'number';
+                                  if (hasPred && issue && target) {
+                                    const leadText = leadDays != null ? ` (Vorlauf ${leadDays} Tage)` : '';
+                                    return `Erstellt am ${format(parseISO(issue), 'dd.MM.yyyy')} -> für ${format(parseISO(target), 'dd.MM.yyyy')}${leadText}`;
+                                  }
+                                  if (typeof point.real_qty === 'number' && target) {
+                                    return `Ist am ${format(parseISO(target), 'dd.MM.yyyy')}`;
                                   }
                                 }
                                 return label;
@@ -2436,8 +2515,8 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                                 : activeMode === 'vintage'
                                   ? [
                                     { value: 'Tatsächliche Inzidenz (target_date)', type: 'line', color: '#c0392b' },
-                                    { value: `ML-Prognose (issue_date, ${btResult.walk_forward?.horizon_days || btHorizonDays}T Vorlauf)`, type: 'line', color: 'var(--accent-violet)' },
-                                    { value: 'Zukunft (issue_date)', type: 'line', color: 'var(--accent-violet)' },
+                                    { value: `ML-Prognose (strict shift, issue_date, ${btResult.walk_forward?.horizon_days || btHorizonDays}T)`, type: 'line', color: 'var(--accent-violet)' },
+                                    { value: 'Zukunft (strict shift)', type: 'line', color: 'var(--accent-violet)' },
                                   ]
                                   : [
                                     { value: 'Tatsächliche Inzidenz (target_date)', type: 'line', color: '#c0392b' },
@@ -2493,6 +2572,19 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                             />
                           ))}
 
+                          {activeMode === 'vintage' && vintageConnectors.map((seg, idx) => (
+                            <ReferenceLine
+                              key={`vintage-seg-${seg.plot_date}-${seg.target_date}-${idx}`}
+                              segment={[
+                                { x: seg.plot_date, y: seg.vintage_qty },
+                                { x: seg.target_date, y: seg.vintage_qty },
+                              ]}
+                              stroke="rgba(139,92,246,0.28)"
+                              strokeWidth={1}
+                              strokeDasharray="3 3"
+                            />
+                          ))}
+
                           {activeMode === 'planning' && planningConnectors.map((seg, idx) => (
                             <ReferenceLine
                               key={`planning-seg-${seg.issue_date}-${seg.target_date}-${idx}`}
@@ -2516,20 +2608,21 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                             />
                           )}
 
-                          <Line type="monotone" dataKey="real_qty" name="Tatsächliche Inzidenz (target_date)" stroke="#c0392b" strokeWidth={2} dot={false} />
+                          <Line type={chartLineType} dataKey="real_qty" name="Tatsächliche Inzidenz (target_date)" stroke="#c0392b" strokeWidth={2} dot={false} connectNulls={false} />
                           <Line
-                            type="monotone"
+                            type={chartLineType}
                             dataKey="predicted_qty"
                             name={activeMode === 'planning'
                               ? 'Abwasser-Prognose (issue_date, Bio-Vorlauf)'
                               : activeMode === 'vintage'
-                                ? `ML-Prognose (issue_date, ${btResult.walk_forward?.horizon_days || btHorizonDays}T)`
+                                ? `ML-Prognose (strict shift, issue_date, ${btResult.walk_forward?.horizon_days || btHorizonDays}T)`
                                 : `ML-Prognose (target_date, ${btResult.walk_forward?.horizon_days || btHorizonDays}T)`}
                             stroke="var(--accent-violet)"
                             strokeWidth={2}
                             dot={false}
+                            connectNulls={false}
                           />
-                          <Line type="monotone" dataKey="forecast_qty" name={activeMode === 'planning' ? 'Zukunft (issue_date)' : 'Zukunft'} stroke="var(--accent-violet)" strokeWidth={2} dot={false} strokeDasharray="8 4" connectNulls={false} />
+                          <Line type={chartLineType} dataKey="forecast_qty" name={activeMode === 'planning' ? 'Zukunft (issue_date)' : activeMode === 'vintage' ? 'Zukunft (strict shift)' : 'Zukunft'} stroke="var(--accent-violet)" strokeWidth={2} dot={false} strokeDasharray="8 4" connectNulls={false} />
 
                           <Brush
                             dataKey="date"
@@ -2557,9 +2650,17 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                       )}
                       {activeMode === 'vintage' && (
                         <>
-                          <strong>Forecast-Vintage:</strong> Blau liegt am <strong>Erstelldatum</strong>, Rot am <strong>Ereignisdatum</strong>.
-                          {' '}Linksversatz bedeutet echten Vorlauf (kein künstlicher Shift). Medianer Vorlauf:
-                          {' '}<strong>{btResult.vintage_metrics?.median_lead_days ?? btResult.walk_forward?.horizon_days ?? btHorizonDays} Tage</strong>.
+                          <strong>Forecast-Vintage:</strong> Blau ist strikt um den echten Vorlauf nach links geplottet (strict shift), Rot bleibt am Ereignisdatum.
+                          {' '}Connectoren zeigen den Prognosezeitpunkt X → Ereigniszeitpunkt Y.
+                          {' '}Medianer Vorlauf: <strong>{btResult.vintage_metrics?.median_lead_days ?? btResult.walk_forward?.horizon_days ?? btHorizonDays} Tage</strong>.
+                          {btResult.decision_metrics && (
+                            <>
+                              {' '}Wenn Trigger feuert, trat in <strong>{Number(btResult.decision_metrics.hit_rate_pct ?? 0).toFixed(1)}%</strong> der OOS-Fälle
+                              {' '}innerhalb von <strong>{btResult.vintage_metrics?.configured_horizon_days ?? btResult.walk_forward?.horizon_days ?? btHorizonDays}T</strong> ein Event ein;
+                              {' '}Fehlalarme: <strong>{Number(btResult.decision_metrics.false_alarm_rate_pct ?? 0).toFixed(1)}%</strong>
+                              {' '}({btResult.quality_gate?.overall_passed ? 'GO' : 'WATCH'}).
+                            </>
+                          )}
                         </>
                       )}
                       {activeMode === 'planning' && (
@@ -2676,6 +2777,10 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                 const planningConnectors = activeMode === 'planning'
                   ? buildPlanningConnectors(chartRows)
                   : [];
+                const vintageConnectors = activeMode === 'vintage'
+                  ? buildVintageConnectors(chartRows)
+                  : [];
+                const chartLineType: 'linear' | 'monotone' = activeMode === 'vintage' ? 'linear' : 'monotone';
 
                 return (
                   <div style={{ width: '100%', marginBottom: 12 }}>
@@ -2700,7 +2805,7 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                       </div>
                       <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
                         {activeMode === 'validation' && 'Ist vs. Prognose am gleichen Datum'}
-                        {activeMode === 'vintage' && 'Prognose am Erstelldatum (blau links)'}
+                        {activeMode === 'vintage' && 'Strict Shift Overlay (blau links = echter Vorlauf)'}
                         {activeMode === 'planning' && 'Messdatum (X) -> erwartetes Ereignisdatum (Y)'}
                       </span>
                     </div>
@@ -2740,9 +2845,15 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                                 }
                                 if (activeMode === 'vintage') {
                                   const issue = point.issue_date || point.issue_date_hint;
-                                  const target = point.target_date;
-                                  if (issue && target) {
-                                    return `${label} — erstellt am: ${format(parseISO(issue), 'dd.MM.yyyy')} · für: ${format(parseISO(target), 'dd.MM.yyyy')}`;
+                                  const target = point.target_date || d;
+                                  const leadDays = typeof point.lead_days === 'number' ? point.lead_days : null;
+                                  const hasPred = typeof point.predicted_qty === 'number' || typeof point.forecast_qty === 'number';
+                                  if (hasPred && issue && target) {
+                                    const leadText = leadDays != null ? ` (Vorlauf ${leadDays} Tage)` : '';
+                                    return `Erstellt am ${format(parseISO(issue), 'dd.MM.yyyy')} -> für ${format(parseISO(target), 'dd.MM.yyyy')}${leadText}`;
+                                  }
+                                  if (typeof point.real_qty === 'number' && target) {
+                                    return `Ist am ${format(parseISO(target), 'dd.MM.yyyy')}`;
                                   }
                                 }
                                 return label;
@@ -2765,8 +2876,8 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                                 : activeMode === 'vintage'
                                   ? [
                                     { value: 'Tatsächliche Menge (target_date)', type: 'line', color: '#c0392b' },
-                                    { value: `ML-Prognose (issue_date, ${btCustomerResult.walk_forward?.horizon_days || btHorizonDays}T)`, type: 'line', color: 'var(--accent-violet)' },
-                                    { value: 'Zukunft (issue_date)', type: 'line', color: 'var(--accent-violet)' },
+                                    { value: `ML-Prognose (strict shift, issue_date, ${btCustomerResult.walk_forward?.horizon_days || btHorizonDays}T)`, type: 'line', color: 'var(--accent-violet)' },
+                                    { value: 'Zukunft (strict shift)', type: 'line', color: 'var(--accent-violet)' },
                                   ]
                                   : [
                                     { value: 'Tatsächliche Menge (target_date)', type: 'line', color: '#c0392b' },
@@ -2784,6 +2895,19 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                               <Area type="monotone" dataKey="ci_80_range" stackId="ci80" fill="rgba(139,92,246,0.25)" stroke="none" activeDot={false} legendType="none" />
                             </>
                           )}
+
+                          {activeMode === 'vintage' && vintageConnectors.map((seg, idx) => (
+                            <ReferenceLine
+                              key={`cust-vintage-seg-${seg.plot_date}-${seg.target_date}-${idx}`}
+                              segment={[
+                                { x: seg.plot_date, y: seg.vintage_qty },
+                                { x: seg.target_date, y: seg.vintage_qty },
+                              ]}
+                              stroke="rgba(139,92,246,0.28)"
+                              strokeWidth={1}
+                              strokeDasharray="3 3"
+                            />
+                          ))}
 
                           {activeMode === 'planning' && planningConnectors.map((seg, idx) => (
                             <ReferenceLine
@@ -2808,20 +2932,21 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                             />
                           )}
 
-                          <Line type="monotone" dataKey="real_qty" name="Tatsächliche Menge (target_date)" stroke="#c0392b" strokeWidth={2} dot={false} />
+                          <Line type={chartLineType} dataKey="real_qty" name="Tatsächliche Menge (target_date)" stroke="#c0392b" strokeWidth={2} dot={false} connectNulls={false} />
                           <Line
-                            type="monotone"
+                            type={chartLineType}
                             dataKey="predicted_qty"
                             name={activeMode === 'planning'
                               ? 'Abwasser-Prognose (issue_date, Bio-Vorlauf)'
                               : activeMode === 'vintage'
-                                ? `ML-Prognose (issue_date, ${btCustomerResult.walk_forward?.horizon_days || btHorizonDays}T)`
+                                ? `ML-Prognose (strict shift, issue_date, ${btCustomerResult.walk_forward?.horizon_days || btHorizonDays}T)`
                                 : `ML-Prognose (target_date, ${btCustomerResult.walk_forward?.horizon_days || btHorizonDays}T)`}
                             stroke="var(--accent-violet)"
                             strokeWidth={2}
                             dot={false}
+                            connectNulls={false}
                           />
-                          <Line type="monotone" dataKey="forecast_qty" name={activeMode === 'planning' ? 'Zukunft (issue_date)' : 'Zukunft (issue_date→target_date)'} stroke="var(--accent-violet)" strokeWidth={2} dot={false} strokeDasharray="8 4" connectNulls={false} />
+                          <Line type={chartLineType} dataKey="forecast_qty" name={activeMode === 'planning' ? 'Zukunft (issue_date)' : activeMode === 'vintage' ? 'Zukunft (strict shift)' : 'Zukunft (issue_date→target_date)'} stroke="var(--accent-violet)" strokeWidth={2} dot={false} strokeDasharray="8 4" connectNulls={false} />
 
                           <Brush
                             dataKey="date"
@@ -2848,8 +2973,16 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                       )}
                       {activeMode === 'vintage' && (
                         <>
-                          <strong>Forecast-Vintage:</strong> Blau zeigt, was das Modell am Erstelldatum wusste; Rot zeigt die spätere Realität.
-                          {' '}Linksversatz ist methodisch echter Vorlauf.
+                          <strong>Forecast-Vintage:</strong> Blau ist strikt um den echten Vorlauf nach links geplottet (strict shift), Rot bleibt am Ereignisdatum.
+                          {' '}Connectoren zeigen den Prognosezeitpunkt X → Ereigniszeitpunkt Y.
+                          {btCustomerResult.decision_metrics && (
+                            <>
+                              {' '}Wenn Trigger feuert, trat in <strong>{Number(btCustomerResult.decision_metrics.hit_rate_pct ?? 0).toFixed(1)}%</strong> der OOS-Fälle
+                              {' '}innerhalb von <strong>{btCustomerResult.vintage_metrics?.configured_horizon_days ?? btCustomerResult.walk_forward?.horizon_days ?? btHorizonDays}T</strong> ein Event ein;
+                              {' '}Fehlalarme: <strong>{Number(btCustomerResult.decision_metrics.false_alarm_rate_pct ?? 0).toFixed(1)}%</strong>
+                              {' '}({btCustomerResult.quality_gate?.overall_passed ? 'GO' : 'WATCH'}).
+                            </>
+                          )}
                         </>
                       )}
                       {activeMode === 'planning' && (
@@ -2865,9 +2998,9 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                           p90 |Fehler| {btCustomerResult.vintage_metrics.p90_abs_error ?? '-'}.</>
                       )}
                       {btCustomerResult.decision_metrics && (
-                        <> Decision-Layer: TTD median {btCustomerResult.decision_metrics.median_ttd_days ?? 0}T ·
-                          Hit-Rate {Number(btCustomerResult.decision_metrics.hit_rate_pct ?? 0).toFixed(1)}% ·
-                          False Alarms {Number(btCustomerResult.decision_metrics.false_alarm_rate_pct ?? 0).toFixed(1)}% ·
+                        <> Trigger-Proof: P(Event|Alert) {Number(btCustomerResult.decision_metrics.hit_rate_pct ?? 0).toFixed(1)}% ·
+                          False Alarm Rate {Number(btCustomerResult.decision_metrics.false_alarm_rate_pct ?? 0).toFixed(1)}% ·
+                          TTD median {btCustomerResult.decision_metrics.median_ttd_days ?? 0}T ·
                           Readiness {Number(btCustomerResult.decision_metrics.readiness_score_0_100 ?? 0).toFixed(0)}/100 ({btCustomerResult.quality_gate?.overall_passed ? 'GO' : 'WATCH'}).</>
                       )}
                     </div>

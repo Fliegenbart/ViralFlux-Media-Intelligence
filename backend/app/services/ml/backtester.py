@@ -1953,6 +1953,7 @@ class BacktestService:
                 "baseline_persistence": float(row["baseline_persistence"]),
                 "baseline_seasonal": float(row["baseline_seasonal"]),
                 "horizon_days": int(horizon_days),
+                "lead_days": int((row["target_time"] - row["forecast_time"]).days),
             }
             for _, row in pred_df.iterrows()
         ]

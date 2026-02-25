@@ -311,8 +311,8 @@ class BacktesterMathTests(unittest.TestCase):
                 },
             ],
             "forecast_records": [
-                {"issue_date": "2023-12-25", "target_date": "2024-01-01", "y_hat": 11.0, "y_true": 10.0, "horizon_days": 7},
-                {"issue_date": "2024-01-01", "target_date": "2024-01-08", "y_hat": 19.0, "y_true": 20.0, "horizon_days": 7},
+                {"issue_date": "2023-12-25", "target_date": "2024-01-01", "lead_days": 7, "y_hat": 11.0, "y_true": 10.0, "horizon_days": 7},
+                {"issue_date": "2024-01-01", "target_date": "2024-01-08", "lead_days": 7, "y_hat": 19.0, "y_true": 20.0, "horizon_days": 7},
             ],
             "walk_forward": {"enabled": True, "horizon_days": 7, "folds": 2},
         }
@@ -334,6 +334,7 @@ class BacktesterMathTests(unittest.TestCase):
         self.assertEqual(result["metrics"]["data_points"], 2)
         self.assertIn("forecast_records", result)
         self.assertEqual(len(result["forecast_records"]), 2)
+        self.assertEqual(result["forecast_records"][0]["lead_days"], 7)
         self.assertEqual(result["vintage_metrics"]["oos_points"], 2)
 
 

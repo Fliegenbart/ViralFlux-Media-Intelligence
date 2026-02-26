@@ -387,15 +387,15 @@ const LandingPage: React.FC = () => {
               letterSpacing: '-0.02em', color: C.text, margin: 0, maxWidth: 560,
             }}
           >
-            Medienplanung starten,{' '}
+            GELO-Kampagnen starten,{' '}
             <span style={{ color: C.indigo }}>bevor</span>{' '}
-            der Abverkauf hochläuft.
+            die Infektionswelle kommt.
           </h1>
 
           <p style={{ marginTop: 20, fontSize: 17, lineHeight: 1.65, color: C.textSec, maxWidth: 480 }}>
-            ViralFlux verbindet regionale Epidemielagen mit eurem Produktprofil
-            und leitet daraus direkte Media-Hinweise ab — bundeslandgenau,
-            mit 14-Tage-Horizont.
+            ViralFlux erkennt Atemwegsinfektionen 14 Tage frueh per Abwasser-Monitoring
+            und verschiebt euer Mediabudget automatisch in die richtigen Regionen —
+            bevor der Wettbewerb reagiert.
           </p>
 
           <div style={{ marginTop: 28, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
@@ -632,10 +632,10 @@ const LandingPage: React.FC = () => {
           <h2 style={{
             fontFamily: FONT_SERIF, fontSize: 36, margin: '0 0 16px', letterSpacing: '-0.01em',
           }}>
-            Bereit für datenbasierte Medienplanung?
+            14 Tage Vorsprung fuer GELO.
           </h2>
           <p style={{ fontSize: 16, color: C.textSec, marginBottom: 28, maxWidth: 480, marginLeft: 'auto', marginRight: 'auto' }}>
-            Starten Sie direkt im Dashboard oder vereinbaren Sie ein kurzes Beratungsgespräch.
+            Starten Sie im Lagebild oder lassen Sie sich die aktuelle Signallage zeigen.
           </p>
           <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
             <button
@@ -667,7 +667,7 @@ const LandingPage: React.FC = () => {
           marginTop: 80, paddingTop: 20, paddingBottom: 12,
           borderTop: `1px solid ${C.border}`, textAlign: 'center', fontSize: 12, color: C.textMuted,
         }}>
-          PEIX ViralFlux Media Intelligence &copy; 2026 &middot; Predictive Pharma Media Intelligence
+          PEIX Healthcare &copy; 2026 &middot; ViralFlux Media Intelligence fuer GELO
         </footer>
       </main>
     </div>

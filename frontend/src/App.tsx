@@ -2,9 +2,7 @@ import React, { createContext, useCallback, useContext, useEffect, useRef, useSt
 import { BrowserRouter as Router, Routes, Route, Navigate, Link } from 'react-router-dom';
 import LandingPage from './pages/LandingPage';
 import MediaCockpit from './pages/MediaCockpit';
-import ProductCatalog from './pages/ProductCatalog';
-import DataIntegration from './pages/DataIntegration';
-import SalesRadar from './pages/SalesRadar';
+import WeeklyReport from './pages/WeeklyReport';
 import AppLayout from './components/AppLayout';
 import './index.css';
 
@@ -112,26 +110,6 @@ const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   );
 };
 
-/* ── Admin Panel (minimal) ──────────────────────────────────────── */
-const AdminPanel: React.FC = () => (
-  <div style={{ maxWidth: 600, margin: '40px auto', padding: 32, background: 'var(--bg-card)', borderRadius: 12, border: '1px solid var(--border-color)' }}>
-    <h1 style={{ fontSize: 22, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>
-      Admin-Bereich
-    </h1>
-    <p style={{ fontSize: 14, color: 'var(--text-secondary)', marginBottom: 24 }}>
-      Backtest und Datenquellen
-    </p>
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      <Link to="/sales-radar" style={{ fontSize: 14, color: 'var(--accent-violet)', fontWeight: 500 }}>
-        Sales Radar &rarr;
-      </Link>
-      <Link to="/data-integration" style={{ fontSize: 14, color: 'var(--accent-violet)', fontWeight: 500 }}>
-        Datenimport &amp; Integration &rarr;
-      </Link>
-    </div>
-  </div>
-);
-
 /* ── App ────────────────────────────────────────────────────────── */
 const App: React.FC = () => {
   return (
@@ -144,14 +122,16 @@ const App: React.FC = () => {
             <Route path="/lagebild" element={<AppLayout><MediaCockpit view="lagebild" /></AppLayout>} />
             <Route path="/empfehlungen" element={<AppLayout><MediaCockpit view="empfehlungen" /></AppLayout>} />
             <Route path="/empfehlungen/:id" element={<AppLayout><MediaCockpit view="empfehlungen" /></AppLayout>} />
-            <Route path="/produkte" element={<AppLayout><ProductCatalog /></AppLayout>} />
-            <Route path="/backtest" element={<AppLayout><MediaCockpit view="backtest" /></AppLayout>} />
-            <Route path="/admin" element={<AppLayout><AdminPanel /></AppLayout>} />
+            <Route path="/validierung" element={<AppLayout><MediaCockpit view="backtest" /></AppLayout>} />
+            <Route path="/bericht" element={<AppLayout><WeeklyReport /></AppLayout>} />
             {/* Legacy redirects */}
             <Route path="/dashboard" element={<Navigate to="/lagebild" replace />} />
             <Route path="/dashboard/recommendations/:id" element={<Navigate to="/empfehlungen" replace />} />
-            <Route path="/sales-radar" element={<SalesRadar />} />
-            <Route path="/data-integration" element={<DataIntegration />} />
+            <Route path="/backtest" element={<Navigate to="/validierung" replace />} />
+            <Route path="/produkte" element={<Navigate to="/empfehlungen" replace />} />
+            <Route path="/admin" element={<Navigate to="/lagebild" replace />} />
+            <Route path="/sales-radar" element={<Navigate to="/lagebild" replace />} />
+            <Route path="/data-integration" element={<Navigate to="/lagebild" replace />} />
           </Routes>
         </Router>
       </ToastProvider>

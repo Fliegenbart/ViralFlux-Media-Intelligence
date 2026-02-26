@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
+// Link used in logo below
 import { useTheme } from '../App';
 import { apiFetch } from '../lib/api';
 
@@ -10,8 +11,8 @@ interface Props {
 const NAV_ITEMS = [
   { label: 'Lagebild', path: '/lagebild' },
   { label: 'Empfehlungen', path: '/empfehlungen' },
-  { label: 'Produkte', path: '/produkte' },
-  { label: 'Backtest', path: '/backtest' },
+  { label: 'Validierung', path: '/validierung' },
+  { label: 'Bericht', path: '/bericht' },
 ] as const;
 
 const AppLayout: React.FC<Props> = ({ children }) => {
@@ -95,9 +96,6 @@ const AppLayout: React.FC<Props> = ({ children }) => {
         <div style={{ flex: 1 }} />
 
         {/* Right actions */}
-        <Link to="/admin" style={{ fontSize: 18, textDecoration: 'none', color: 'var(--text-muted)', lineHeight: 1 }} title="Admin">
-          &#9881;
-        </Link>
         <button
           onClick={toggle}
           style={{

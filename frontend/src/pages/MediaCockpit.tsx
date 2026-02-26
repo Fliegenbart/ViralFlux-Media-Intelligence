@@ -2163,11 +2163,11 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
     };
 
     const btAny = btResult as any;
-    const proofHitRate = btAny?.trigger_proof?.hit_rate ?? btResult?.metrics?.precision;
-    const proofTTD = btAny?.timing_metrics?.median_ttd_days ?? btResult?.vintage_metrics?.median_lead_days;
+    const proofHitRate = btAny?.trigger_proof?.hit_rate ?? btAny?.metrics?.precision;
+    const proofTTD = btAny?.timing_metrics?.median_ttd_days ?? btAny?.vintage_metrics?.median_lead_days;
     const proofFAR = btAny?.trigger_proof?.false_alarm_rate;
     const proofReadiness = btAny?.planning_readiness?.readiness_score;
-    const proofCorr = btResult?.metrics?.correlation;
+    const proofCorr = btAny?.metrics?.correlation;
 
     return (
       <>

@@ -629,10 +629,14 @@ class PeixEpiScoreService:
         return 0.5
 
     def _shortage_signal(self) -> float:
-        """BfArM-Engpass-Signal, normalisiert auf 0-1 (max bei 200 Engpässen)."""
+        """BfArM-Engpass-Signal, nur GELO-relevante Kategorien (Atemwege + Fieber/Schmerz)."""
         signals = get_cached_signals() or {}
-        count = float(signals.get("high_demand_shortages", 0) or 0)
-        return _clamp(count / 200.0)
+        by_cat = signals.get("by_category", {})
+        atemwege = float((by_cat.get("Atemwege") or {}).get("high_demand", 0) or 0)
+        fieber = float((by_cat.get("Fieber_Schmerz") or {}).get("high_demand", 0) or 0)
+        # Atemwege voll gewichtet, Fieber/Schmerz halb (indirekt GELO-relevant)
+        count = atemwege + fieber * 0.5
+        return _clamp(count / 20.0)
 
     def _forecast_signal(self, virus_typ: str) -> float:
         """Prophet/HW-Trend aus MLForecast-Tabelle (bestehende Logik)."""

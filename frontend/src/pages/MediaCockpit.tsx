@@ -1208,7 +1208,7 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
     );
     const regionBudgets: Record<string, { shift: number; count: number }> = {};
     for (const r of activeRecs) {
-      const region = r.region || r.bundesland || 'DE';
+      const region = r.region || (r as any).bundesland || 'DE';
       if (!regionBudgets[region]) regionBudgets[region] = { shift: 0, count: 0 };
       regionBudgets[region].shift += (r.budget_shift_pct || 0);
       regionBudgets[region].count += 1;

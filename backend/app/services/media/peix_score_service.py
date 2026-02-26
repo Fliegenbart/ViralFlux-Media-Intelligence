@@ -629,10 +629,10 @@ class PeixEpiScoreService:
         return 0.5
 
     def _shortage_signal(self) -> float:
-        """BfArM-Engpass-Signal, normalisiert auf 0-1 (max bei 10 Engpässen)."""
+        """BfArM-Engpass-Signal, normalisiert auf 0-1 (max bei 200 Engpässen)."""
         signals = get_cached_signals() or {}
         count = float(signals.get("high_demand_shortages", 0) or 0)
-        return _clamp(count / 10.0)
+        return _clamp(count / 200.0)
 
     def _forecast_signal(self, virus_typ: str) -> float:
         """Prophet/HW-Trend aus MLForecast-Tabelle (bestehende Logik)."""

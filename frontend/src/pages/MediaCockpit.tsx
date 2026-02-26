@@ -2162,10 +2162,11 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
       border: '1px solid var(--border-color)',
     };
 
-    const proofHitRate = btResult?.trigger_proof?.hit_rate ?? btResult?.metrics?.precision;
-    const proofTTD = btResult?.timing_metrics?.median_ttd_days ?? btResult?.vintage_metrics?.median_lead_days;
-    const proofFAR = btResult?.trigger_proof?.false_alarm_rate;
-    const proofReadiness = btResult?.planning_readiness?.readiness_score;
+    const btAny = btResult as any;
+    const proofHitRate = btAny?.trigger_proof?.hit_rate ?? btResult?.metrics?.precision;
+    const proofTTD = btAny?.timing_metrics?.median_ttd_days ?? btResult?.vintage_metrics?.median_lead_days;
+    const proofFAR = btAny?.trigger_proof?.false_alarm_rate;
+    const proofReadiness = btAny?.planning_readiness?.readiness_score;
     const proofCorr = btResult?.metrics?.correlation;
 
     return (

@@ -2418,7 +2418,7 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                       <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
                         {activeMode === 'validation' && 'Ist vs. Prognose am gleichen Datum'}
                         {activeMode === 'vintage' && 'Strict Shift Overlay (blau links = echter Vorlauf)'}
-                        {activeMode === 'planning' && `Abwasser-Prognose vs. Ist (Vorlauf ${btResult.planning_curve?.lead_days || btCustomerResult?.planning_curve?.lead_days || 7}T)`}
+                        {activeMode === 'planning' && `Abwasser-Prognose vs. Ist (Vorlauf ${btResult?.planning_curve?.lead_days || btCustomerResult?.planning_curve?.lead_days || 7}T)`}
                       </span>
                     </div>
 
@@ -2829,7 +2829,7 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                       <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
                         {activeMode === 'validation' && 'Ist vs. Prognose am gleichen Datum'}
                         {activeMode === 'vintage' && 'Strict Shift Overlay (blau links = echter Vorlauf)'}
-                        {activeMode === 'planning' && `Abwasser-Prognose vs. Ist (Vorlauf ${btResult.planning_curve?.lead_days || btCustomerResult?.planning_curve?.lead_days || 7}T)`}
+                        {activeMode === 'planning' && `Abwasser-Prognose vs. Ist (Vorlauf ${btResult?.planning_curve?.lead_days || btCustomerResult?.planning_curve?.lead_days || 7}T)`}
                       </span>
                     </div>
 

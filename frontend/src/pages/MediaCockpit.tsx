@@ -2371,7 +2371,12 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
 
               {/* Chart with zoom + signal annotations */}
               {(btResult.chart_data?.length ?? 0) > 0 && (() => {
-                const planningAvailable = Boolean(btResult.planning_curve?.curve?.length);
+                const MIN_PLANNING_CORRELATION = 0.15;
+                const planningCorrelation = btResult.planning_curve?.correlation ?? 0;
+                const planningAvailable = Boolean(
+                  btResult.planning_curve?.curve?.length
+                  && planningCorrelation >= MIN_PLANNING_CORRELATION
+                );
                 const modes: BacktestChartMode[] = planningAvailable
                   ? ['validation', 'vintage', 'planning']
                   : ['validation', 'vintage'];
@@ -2392,7 +2397,7 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                 return (
                   <div style={{ width: '100%', marginBottom: 16 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                      <div style={{ display: 'flex', gap: 4, background: 'var(--bg-secondary)', borderRadius: 8, padding: 2 }}>
+                      <div style={{ display: 'flex', gap: 4, background: 'var(--bg-secondary)', borderRadius: 8, padding: 2, alignItems: 'center' }}>
                         {modes.map((mode) => (
                           <button
                             key={mode}
@@ -2409,6 +2414,11 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                             {mode === 'planning' && 'Planung (Bio-Vorlauf)'}
                           </button>
                         ))}
+                        {Boolean(btResult.planning_curve?.curve?.length) && !planningAvailable && (
+                          <span style={{ fontSize: 10, color: 'var(--text-muted)', marginLeft: 8 }}>
+                            Planung n/a (Bio-Signal r={planningCorrelation.toFixed(2)} zu schwach)
+                          </span>
+                        )}
                       </div>
                       <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
                         {activeMode === 'validation' && 'Ist vs. Prognose am gleichen Datum'}

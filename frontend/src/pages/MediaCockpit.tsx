@@ -1727,18 +1727,15 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
           const targetDate = point.target_date || point.date;
           if (!issueDate || !targetDate) continue;
 
-          if (!dateMap[issueDate]) dateMap[issueDate] = { date: issueDate };
-          dateMap[issueDate].issue_date = issueDate;
-          dateMap[issueDate].target_date = targetDate;
-          dateMap[issueDate].based_on = point.based_on || issueDate;
-          dateMap[issueDate].predicted_qty = point.planning_qty ?? null;
-
-          if (!dateMap[targetDate]) {
-            dateMap[targetDate] = { date: targetDate, target_date: targetDate };
-          }
+          if (!dateMap[targetDate]) dateMap[targetDate] = { date: targetDate };
+          dateMap[targetDate].issue_date = issueDate;
+          dateMap[targetDate].target_date = targetDate;
+          dateMap[targetDate].based_on = point.based_on || issueDate;
 
           if (targetDate > lastRealDate) {
-            dateMap[issueDate].forecast_qty = point.planning_qty ?? null;
+            dateMap[targetDate].forecast_qty = point.planning_qty ?? null;
+          } else {
+            dateMap[targetDate].predicted_qty = point.planning_qty ?? null;
           }
         }
 
@@ -2386,9 +2383,7 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                 const dividerDate = activeMode === 'vintage'
                   ? (firstForecast?.issue_date || firstForecast?.date)
                   : firstForecast?.date;
-                const planningConnectors = activeMode === 'planning'
-                  ? buildPlanningConnectors(chartRows)
-                  : [];
+                const planningConnectors: ReturnType<typeof buildPlanningConnectors> = [];
                 const vintageConnectors = activeMode === 'vintage'
                   ? buildVintageConnectors(chartRows)
                   : [];
@@ -2423,7 +2418,7 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                       <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
                         {activeMode === 'validation' && 'Ist vs. Prognose am gleichen Datum'}
                         {activeMode === 'vintage' && 'Strict Shift Overlay (blau links = echter Vorlauf)'}
-                        {activeMode === 'planning' && 'Messdatum (X) -> erwartetes Ereignisdatum (Y)'}
+                        {activeMode === 'planning' && `Abwasser-Prognose vs. Ist (Vorlauf ${btResult.planning_curve?.lead_days || btCustomerResult?.planning_curve?.lead_days || 7}T)`}
                       </span>
                     </div>
 
@@ -2494,7 +2489,7 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                                 if (activeMode === 'planning') {
                                   const issue = point.issue_date || point.based_on || d;
                                   const target = point.target_date || d;
-                                  return `Messdatum: ${format(parseISO(issue), 'dd.MM.yyyy')} · erwartetes Ereignis: ${format(parseISO(target), 'dd.MM.yyyy')}`;
+                                  return `${format(parseISO(target), 'dd.MM.yyyy')} (Abwasser gemessen am ${format(parseISO(issue), 'dd.MM.yyyy')})`;
                                 }
                                 if (activeMode === 'validation') {
                                   const target = point.target_date || d;
@@ -2532,9 +2527,9 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                             payload={
                               activeMode === 'planning'
                                 ? [
-                                  { value: 'Tatsächliche Inzidenz (target_date)', type: 'line', color: '#c0392b' },
-                                  { value: `Abwasser-Prognose (issue_date, Bio-Vorlauf, +${btResult.planning_curve?.lead_days || 7}T)`, type: 'line', color: 'var(--accent-violet)' },
-                                  { value: 'Zukunft (issue_date)', type: 'line', color: 'var(--accent-violet)' },
+                                  { value: 'Tatsächliche Inzidenz', type: 'line', color: '#c0392b' },
+                                  { value: `Abwasser-Prognose (Vorlauf ${btResult.planning_curve?.lead_days || 7}T)`, type: 'line', color: 'var(--accent-violet)' },
+                                  { value: `Abwasser-Forecast (${btResult.planning_curve?.lead_days || 7}T voraus)`, type: 'line', color: 'var(--accent-violet)' },
                                 ]
                                 : activeMode === 'vintage'
                                   ? [
@@ -2637,7 +2632,7 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                             type={chartLineType}
                             dataKey="predicted_qty"
                             name={activeMode === 'planning'
-                              ? 'Abwasser-Prognose (issue_date, Bio-Vorlauf)'
+                              ? `Abwasser-Prognose (Vorlauf ${btResult.planning_curve?.lead_days || 7}T)`
                               : activeMode === 'vintage'
                                 ? `ML-Prognose (strict shift, issue_date, ${btResult.walk_forward?.horizon_days || btHorizonDays}T)`
                                 : `ML-Prognose (target_date, ${btResult.walk_forward?.horizon_days || btHorizonDays}T)`}
@@ -2646,7 +2641,7 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                             dot={false}
                             connectNulls={false}
                           />
-                          <Line type={chartLineType} dataKey="forecast_qty" name={activeMode === 'planning' ? 'Zukunft (issue_date)' : activeMode === 'vintage' ? 'Zukunft (strict shift)' : 'Zukunft'} stroke="var(--accent-violet)" strokeWidth={2} dot={false} strokeDasharray="8 4" connectNulls={false} />
+                          <Line type={chartLineType} dataKey="forecast_qty" name={activeMode === 'planning' ? `Abwasser-Forecast (${btResult.planning_curve?.lead_days || 7}T voraus)` : activeMode === 'vintage' ? 'Zukunft (strict shift)' : 'Zukunft'} stroke="var(--accent-violet)" strokeWidth={2} dot={false} strokeDasharray="8 4" connectNulls={false} />
 
                           <Brush
                             dataKey="date"
@@ -2695,10 +2690,10 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                       )}
                       {activeMode === 'planning' && (
                         <>
-                          <strong>Planung (Bio-Vorlauf):</strong> Blau = <strong>Messdatum</strong> (links), Rot = <strong>Ereignisdatum</strong> (rechts).
-                          {' '}Die Connector-Linien zeigen explizit X→Y (Messung → erwartetes Ereignis) bei
-                          {' '}<strong>{btResult.planning_curve?.lead_days || 7} Tagen</strong> empirischem Vorlauf
+                          <strong>Planung (Bio-Vorlauf):</strong> Blau = Abwasser-Prognose, Rot = tatsächliche Inzidenz.
+                          {' '}Die Prognose basiert auf AMELAG-Abwasserdaten mit <strong>{btResult.planning_curve?.lead_days || 7} Tagen</strong> empirischem Vorlauf
                           {' '}(Cross-Korrelation r={btResult.planning_curve?.correlation || '?'}).
+                          {' '}Die gestrichelte Linie zeigt den Abwasser-Forecast in die Zukunft.
                         </>
                       )}
                       {btResult.forecast_weeks && btResult.forecast_weeks > 0 && (
@@ -2804,9 +2799,7 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                 const dividerDate = activeMode === 'vintage'
                   ? (firstForecast?.issue_date || firstForecast?.date)
                   : firstForecast?.date;
-                const planningConnectors = activeMode === 'planning'
-                  ? buildPlanningConnectors(chartRows)
-                  : [];
+                const planningConnectors: ReturnType<typeof buildPlanningConnectors> = [];
                 const vintageConnectors = activeMode === 'vintage'
                   ? buildVintageConnectors(chartRows)
                   : [];
@@ -2836,7 +2829,7 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                       <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
                         {activeMode === 'validation' && 'Ist vs. Prognose am gleichen Datum'}
                         {activeMode === 'vintage' && 'Strict Shift Overlay (blau links = echter Vorlauf)'}
-                        {activeMode === 'planning' && 'Messdatum (X) -> erwartetes Ereignisdatum (Y)'}
+                        {activeMode === 'planning' && `Abwasser-Prognose vs. Ist (Vorlauf ${btResult.planning_curve?.lead_days || btCustomerResult?.planning_curve?.lead_days || 7}T)`}
                       </span>
                     </div>
 
@@ -2861,7 +2854,7 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                                 if (activeMode === 'planning') {
                                   const issue = point.issue_date || point.based_on || d;
                                   const target = point.target_date || d;
-                                  return `Messdatum: ${format(parseISO(issue), 'dd.MM.yyyy')} · erwartetes Ereignis: ${format(parseISO(target), 'dd.MM.yyyy')}`;
+                                  return `${format(parseISO(target), 'dd.MM.yyyy')} (Abwasser gemessen am ${format(parseISO(issue), 'dd.MM.yyyy')})`;
                                 }
                                 if (activeMode === 'validation') {
                                   const target = point.target_date || d;
@@ -2899,9 +2892,9 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                             payload={
                               activeMode === 'planning'
                                 ? [
-                                  { value: 'Tatsächliche Menge (target_date)', type: 'line', color: '#c0392b' },
-                                  { value: `Abwasser-Prognose (issue_date, Bio-Vorlauf, +${btCustomerResult.planning_curve?.lead_days || 7}T)`, type: 'line', color: 'var(--accent-violet)' },
-                                  { value: 'Zukunft (issue_date)', type: 'line', color: 'var(--accent-violet)' },
+                                  { value: 'Tatsächliche Menge', type: 'line', color: '#c0392b' },
+                                  { value: `Abwasser-Prognose (Vorlauf ${btCustomerResult.planning_curve?.lead_days || 7}T)`, type: 'line', color: 'var(--accent-violet)' },
+                                  { value: `Abwasser-Forecast (${btCustomerResult.planning_curve?.lead_days || 7}T voraus)`, type: 'line', color: 'var(--accent-violet)' },
                                 ]
                                 : activeMode === 'vintage'
                                   ? [
@@ -2967,7 +2960,7 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                             type={chartLineType}
                             dataKey="predicted_qty"
                             name={activeMode === 'planning'
-                              ? 'Abwasser-Prognose (issue_date, Bio-Vorlauf)'
+                              ? `Abwasser-Prognose (Vorlauf ${btCustomerResult.planning_curve?.lead_days || 7}T)`
                               : activeMode === 'vintage'
                                 ? `ML-Prognose (strict shift, issue_date, ${btCustomerResult.walk_forward?.horizon_days || btHorizonDays}T)`
                                 : `ML-Prognose (target_date, ${btCustomerResult.walk_forward?.horizon_days || btHorizonDays}T)`}
@@ -2976,7 +2969,7 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                             dot={false}
                             connectNulls={false}
                           />
-                          <Line type={chartLineType} dataKey="forecast_qty" name={activeMode === 'planning' ? 'Zukunft (issue_date)' : activeMode === 'vintage' ? 'Zukunft (strict shift)' : 'Zukunft (issue_date→target_date)'} stroke="var(--accent-violet)" strokeWidth={2} dot={false} strokeDasharray="8 4" connectNulls={false} />
+                          <Line type={chartLineType} dataKey="forecast_qty" name={activeMode === 'planning' ? `Abwasser-Forecast (${btCustomerResult.planning_curve?.lead_days || 7}T voraus)` : activeMode === 'vintage' ? 'Zukunft (strict shift)' : 'Zukunft (issue_date→target_date)'} stroke="var(--accent-violet)" strokeWidth={2} dot={false} strokeDasharray="8 4" connectNulls={false} />
 
                           <Brush
                             dataKey="date"
@@ -3023,9 +3016,10 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                       )}
                       {activeMode === 'planning' && (
                         <>
-                          <strong>Planung (Bio-Vorlauf):</strong> Blau = <strong>Messdatum</strong> (links), Rot = <strong>Ereignisdatum</strong> (rechts).
-                          {' '}Connector-Linien zeigen X→Y (Messung → erwartetes Ereignis) bei
-                          {' '}<strong>{btCustomerResult.planning_curve?.lead_days || 7} Tagen</strong> empirischem Vorlauf.
+                          <strong>Planung (Bio-Vorlauf):</strong> Blau = Abwasser-Prognose, Rot = tatsächliche Menge.
+                          {' '}Die Prognose basiert auf AMELAG-Abwasserdaten mit <strong>{btCustomerResult.planning_curve?.lead_days || 7} Tagen</strong> empirischem Vorlauf
+                          {' '}(Cross-Korrelation r={btCustomerResult.planning_curve?.correlation || '?'}).
+                          {' '}Die gestrichelte Linie zeigt den Abwasser-Forecast in die Zukunft.
                         </>
                       )}
                       {btCustomerResult.vintage_metrics && (

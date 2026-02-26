@@ -16,6 +16,7 @@ from sklearn.linear_model import Ridge
 from sklearn.ensemble import GradientBoostingClassifier, GradientBoostingRegressor
 from sklearn.metrics import r2_score, mean_absolute_error
 from sklearn.preprocessing import StandardScaler
+from xgboost import XGBRegressor
 import logging
 
 from app.models.database import (
@@ -156,6 +157,15 @@ class BacktestService:
     # Legacy-Kompatibilität
     ENHANCED_FEATURE_COLS: list[str] = VIRAL_FEATURE_COLS
 
+    # XGBoost auf SURVSTAT: rein autoregressive Features (kein bio/psycho/context)
+    XGBOOST_SURVSTAT_FEATURES: list[str] = [
+        "y_lag1", "y_lag2", "y_lag4", "y_lag8", "y_lag52",
+        "y_roll4_mean", "y_roll4_std", "y_roll8_mean",
+        "y_roc1", "y_roc4",
+        "week_sin", "week_cos",
+        "y_level",
+    ]
+
     # Gelo-relevante Atemwegsinfekte (ohne COVID-19, da zu dominant)
     GELO_ATEMWEG_DISEASES: list[str] = [
         "Influenza, saisonal",
@@ -216,6 +226,24 @@ class BacktestService:
         if not current or not current.viruslast:
             return 0.0
         return min(current.viruslast / max_load, 1.0)
+
+    def _amelag_raw_at_date(
+        self,
+        target: datetime,
+        virus_typ: str,
+        available_cutoff: Optional[datetime] = None,
+    ) -> Optional[float]:
+        """Rohe AMELAG-Viruslast an target_date (nicht normalisiert)."""
+        effective = available_cutoff or target
+        current = self.db.query(WastewaterAggregated).filter(
+            WastewaterAggregated.virus_typ == virus_typ,
+            WastewaterAggregated.datum <= effective,
+            self._asof_filter(WastewaterAggregated, WastewaterAggregated.datum, effective),
+        ).order_by(WastewaterAggregated.datum.desc()).first()
+
+        if not current or not current.viruslast:
+            return None
+        return float(current.viruslast)
 
     def _wastewater_lags_at_date(
         self,
@@ -633,6 +661,97 @@ class BacktestService:
         }
         self._scores_cache[cache_key] = result
         return result
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # XGBoost-Features: rein autoregressive SURVSTAT-Zeitreihe
+    # ─────────────────────────────────────────────────────────────────────────
+
+    @staticmethod
+    def _build_survstat_ar_row(
+        series: pd.Series,
+        idx: int,
+        target_date: datetime,
+    ) -> dict[str, float]:
+        """Baut einen einzelnen Feature-Vektor aus der SURVSTAT-Zeitreihe.
+
+        Args:
+            series: Sortierte Zeitreihe der menge-Werte (Index 0 = ältester)
+            idx: Position in der Zeitreihe
+            target_date: Datum für saisonale Features
+        """
+        n = len(series)
+        val = float(series.iloc[idx]) if idx < n else 0.0
+
+        def _lag(k: int) -> float:
+            i = idx - k
+            return float(series.iloc[i]) if 0 <= i < n else 0.0
+
+        y_lag1 = _lag(1)
+        y_lag2 = _lag(2)
+        y_lag4 = _lag(4)
+        y_lag8 = _lag(8)
+        y_lag52 = _lag(52)
+
+        # Rolling statistics (über die letzten k Punkte VOR idx)
+        window4 = [float(series.iloc[idx - j]) for j in range(1, 5) if 0 <= idx - j < n]
+        window8 = [float(series.iloc[idx - j]) for j in range(1, 9) if 0 <= idx - j < n]
+        y_roll4_mean = float(np.mean(window4)) if window4 else 0.0
+        y_roll4_std = float(np.std(window4)) if len(window4) >= 2 else 0.0
+        y_roll8_mean = float(np.mean(window8)) if window8 else 0.0
+
+        # Rate of change
+        y_roc1 = (y_lag1 - _lag(2)) / max(_lag(2), 1e-6) if _lag(2) > 0 else 0.0
+        y_roc4 = (y_lag1 - _lag(5)) / max(_lag(5), 1e-6) if _lag(5) > 0 else 0.0
+
+        # Seasonal encoding
+        iso_week = target_date.isocalendar()[1]
+        week_sin = round(math.sin(2 * math.pi * iso_week / 52), 4)
+        week_cos = round(math.cos(2 * math.pi * iso_week / 52), 4)
+
+        # Level: aktueller Wert / langfristiger Median
+        all_vals = [float(series.iloc[j]) for j in range(max(0, idx - 52), idx) if j < n]
+        median_val = float(np.median(all_vals)) if all_vals else 1.0
+        y_level = y_lag1 / max(median_val, 1e-6)
+
+        return {
+            "y_lag1": y_lag1, "y_lag2": y_lag2, "y_lag4": y_lag4,
+            "y_lag8": y_lag8, "y_lag52": y_lag52,
+            "y_roll4_mean": y_roll4_mean, "y_roll4_std": y_roll4_std,
+            "y_roll8_mean": y_roll8_mean,
+            "y_roc1": y_roc1, "y_roc4": y_roc4,
+            "week_sin": week_sin, "week_cos": week_cos,
+            "y_level": y_level,
+        }
+
+    def _build_survstat_ar_training_data(
+        self,
+        train_df: pd.DataFrame,
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """Baut X/y aus SURVSTAT train_df für XGBoost.
+
+        train_df muss Spalten 'datum' und 'menge' haben, sortiert nach datum.
+        Gibt (X, y) zurück wobei X die autoregressive Feature-Matrix ist.
+        Skipt die ersten 52 Zeilen (brauchen lag52).
+        """
+        series = train_df["menge"].reset_index(drop=True)
+        dates = train_df["datum"].reset_index(drop=True)
+        n = len(series)
+        min_idx = min(52, n - 1)  # brauchen mindestens lag52
+
+        rows = []
+        targets = []
+        for i in range(max(min_idx, 1), n):
+            feat = self._build_survstat_ar_row(series, i, dates.iloc[i])
+            rows.append([feat[c] for c in self.XGBOOST_SURVSTAT_FEATURES])
+            targets.append(float(series.iloc[i]))
+
+        if not rows:
+            return np.empty((0, len(self.XGBOOST_SURVSTAT_FEATURES))), np.empty(0)
+
+        X = np.array(rows, dtype=float)
+        y = np.array(targets, dtype=float)
+        X = np.nan_to_num(X, nan=0.0, posinf=0.0, neginf=0.0)
+        return X, y
 
     # ─────────────────────────────────────────────────────────────────────────
     # Haupt-Kalibrierung
@@ -1732,12 +1851,10 @@ class BacktestService:
         exclude_are: bool = False,
         target_disease: Optional[str] = None,
     ) -> dict:
-        """Walk-forward Backtest mit erweiterter Feature-Pipeline und GradientBoosting.
+        """Walk-forward Backtest mit XGBoost auf autoregressive SURVSTAT-Features.
 
-        Args:
-            exclude_are: If True, remove are_consultation_raw from features
-                         (to prevent circular dependency when target=RKI_ARE).
-            target_disease: SurvStat disease name for disease-aware feature selection.
+        Trainiert rein auf historischen SURVSTAT-Zeitreihendaten (Lags, Rolling,
+        Saisonalität). AMELAG-Viruslast wird als Zusatzinfo in chart_data ausgegeben.
         """
         df = target_df.copy()
         df["datum"] = pd.to_datetime(df["datum"], errors="coerce")
@@ -1756,37 +1873,12 @@ class BacktestService:
         df["iso_week"] = isocal.week.astype(int)
         df["month"] = df["datum"].dt.month.astype(int)
 
-        # Disease-aware feature selection
-        is_bacterial_target = (
-            target_disease
-            and target_disease in self.SURVSTAT_CROSS_DISEASE_MAP
-            and target_disease not in self.SURVSTAT_VIRAL_DISEASES
-        )
-        if is_bacterial_target:
-            # Bakterielle/nicht-virale Targets: kein Abwasser-Signal
-            feature_cols = list(self.SURVSTAT_FEATURE_COLS)
-        elif exclude_are:
-            # RKI_ARE target: exclude ARE from features (circular dependency)
-            feature_cols = list(self.VIRAL_FEATURE_COLS)
-        elif target_disease:
-            # SURVSTAT viral targets: viral features but no are_consultation_raw
-            # (reduces dimensionality for small SURVSTAT datasets)
-            feature_cols = list(self.VIRAL_FEATURE_COLS)
-        else:
-            # Non-SURVSTAT targets (e.g. customer data): full feature set
-            feature_cols = list(self.VIRAL_FEATURE_COLS)
-            if "are_consultation_raw" not in feature_cols:
-                feature_cols.insert(3, "are_consultation_raw")
-
-        # Legacy features for backward-compatible chart output
-        legacy_feature_cols = ["bio", "market", "psycho", "context"]
+        # XGBoost auf autoregressive SURVSTAT-Features
+        feature_cols = list(self.XGBOOST_SURVSTAT_FEATURES)
 
         folds: list[dict] = []
         importance_accumulator: list[np.ndarray] = []
-        gbr_fold_count = 0
-        ridge_fold_count = 0
-        decision_threshold_ratio = float(self.DECISION_EVENT_THRESHOLD_PCT) / 100.0
-        event_proba_threshold = float(self.DECISION_EVENT_PROBA_THRESHOLD)
+        xgb_fold_count = 0
 
         for _, row in df.iterrows():
             target_time = row["datum"]
@@ -1802,265 +1894,48 @@ class BacktestService:
             if len(train_target_df) < min_train_points:
                 continue
 
-            # Enhanced simulation with raw signals + temporal features
-            train_rows = self._simulate_rows_from_target(
-                train_target_df[["datum", "menge"]],
-                virus_typ=virus_typ,
-                horizon_days=horizon_days,
-                delay_rules=delay_rules,
-                enhanced=True,
-                target_disease=target_disease,
-            )
-            if len(train_rows) < min_train_points:
+            # XGBoost: Autoregressive Features rein aus SURVSTAT-Zeitreihe
+            train_sorted = train_target_df[["datum", "menge"]].sort_values("datum").reset_index(drop=True)
+            X_train, y_train = self._build_survstat_ar_training_data(train_sorted)
+            if len(X_train) < max(min_train_points, 10):
                 continue
 
-            df_train = pd.DataFrame(train_rows)
-
-            # Adaptive feature set: compact for small datasets
-            n_train = len(train_rows)
-            if n_train < 35:
-                # Small dataset: use compact features (8 vs 15-16)
-                if is_bacterial_target:
-                    fold_features = list(self.COMPACT_SURVSTAT_COLS)
-                else:
-                    fold_features = list(self.COMPACT_VIRAL_COLS)
-            else:
-                fold_features = list(feature_cols)
-
-            # Ensure all feature columns exist (fill missing with 0)
-            for col in fold_features:
-                if col not in df_train.columns:
-                    df_train[col] = 0.0
-            lead_features = self._build_lead_feature_set(fold_features)
-            for col in lead_features:
-                if col not in df_train.columns:
-                    df_train[col] = 0.0
-
-            X_train = df_train[fold_features].values
-            y_train = df_train["real_qty"].to_numpy(dtype=float)
-
-            # Replace NaN/inf
-            X_train = np.nan_to_num(X_train, nan=0.0, posinf=0.0, neginf=0.0)
-
-            # Adaptive model selection based on training set size
-            if n_train >= 40:
-                gbr_fold_count += 1
-                model = GradientBoostingRegressor(
-                    n_estimators=100,
-                    max_depth=4,
-                    learning_rate=0.05,
-                    subsample=0.8,
-                    min_samples_leaf=3,
-                    random_state=42,
-                )
-                model.fit(X_train, y_train)
-                importance_accumulator.append(model.feature_importances_)
-                use_gbr = True
-            elif n_train >= 25:
-                gbr_fold_count += 1
-                model = GradientBoostingRegressor(
-                    n_estimators=60,
-                    max_depth=2,
-                    learning_rate=0.08,
-                    subsample=0.8,
-                    min_samples_leaf=max(5, n_train // 6),
-                    random_state=42,
-                )
-                model.fit(X_train, y_train)
-                importance_accumulator.append(model.feature_importances_)
-                use_gbr = True
-            else:
-                ridge_fold_count += 1
-                scaler = StandardScaler()
-                X_train = scaler.fit_transform(X_train)
-                model = Ridge(alpha=1.0, fit_intercept=True)
-                model.fit(X_train, y_train)
-                importance_accumulator.append(np.abs(model.coef_))
-                use_gbr = False
-
-            # Lead-Layer training targets (event + growth) using leakage-safe baseline at issue_date.
-            truth_df = train_target_df[["datum", "menge"]].copy()
-            truth_df["datum"] = pd.to_datetime(truth_df["datum"], errors="coerce")
-            truth_df["menge"] = pd.to_numeric(truth_df["menge"], errors="coerce")
-            truth_df = truth_df.dropna(subset=["datum", "menge"]).sort_values("datum").reset_index(drop=True)
-
-            def _baseline_for_issue(issue_date: pd.Timestamp) -> float:
-                if truth_df.empty:
-                    return 0.0
-                window_start = issue_date - timedelta(days=self.DECISION_BASELINE_WINDOW_DAYS)
-                mask_window = (truth_df["datum"] >= window_start) & (truth_df["datum"] <= issue_date)
-                vals = truth_df.loc[mask_window, "menge"].tolist()
-                if not vals:
-                    vals = truth_df.loc[truth_df["datum"] <= issue_date, "menge"].tolist()
-                if not vals:
-                    vals = truth_df["menge"].tolist()
-                if not vals:
-                    return 0.0
-                return float(np.median(vals))
-
-            if "feature_date" in df_train.columns:
-                train_issue_dates = pd.to_datetime(df_train["feature_date"], errors="coerce")
-            else:
-                train_issue_dates = pd.Series([pd.NaT] * len(df_train))
-            if train_issue_dates.isna().all():
-                if "date" in df_train.columns:
-                    train_target_dates = pd.to_datetime(df_train["date"], errors="coerce")
-                else:
-                    train_target_dates = pd.Series([pd.NaT] * len(df_train))
-                train_issue_dates = train_target_dates - pd.to_timedelta(max(0, int(horizon_days)), unit="D")
-
-            baseline_train = np.array(
-                [_baseline_for_issue(issue_date) for issue_date in train_issue_dates],
-                dtype=float,
+            # XGBoost Regressor (keine bio/psycho/context Mischung)
+            n_train = len(X_train)
+            xgb_fold_count += 1
+            model = XGBRegressor(
+                n_estimators=min(200, max(50, n_train * 2)),
+                max_depth=4 if n_train >= 60 else 3,
+                learning_rate=0.05,
+                subsample=0.8,
+                colsample_bytree=0.8,
+                min_child_weight=3,
+                random_state=42,
+                verbosity=0,
             )
-            baseline_train = np.where(np.isfinite(baseline_train), baseline_train, 0.0)
-            valid_baseline_mask = baseline_train > 0
-            safe_baseline_train = np.where(valid_baseline_mask, baseline_train, 1.0)
-            growth_train_all = (y_train - safe_baseline_train) / safe_baseline_train
-            event_train_all = (growth_train_all >= decision_threshold_ratio).astype(int)
+            model.fit(X_train, y_train)
+            importance_accumulator.append(model.feature_importances_)
 
-            X_lead_train_all = df_train[lead_features].to_numpy(dtype=float)
-            X_lead_train_all = np.nan_to_num(X_lead_train_all, nan=0.0, posinf=0.0, neginf=0.0)
-
-            if valid_baseline_mask.any():
-                X_lead_train = X_lead_train_all[valid_baseline_mask]
-                growth_train = growth_train_all[valid_baseline_mask]
-                event_train = event_train_all[valid_baseline_mask]
-            else:
-                X_lead_train = X_lead_train_all
-                growth_train = np.zeros(len(X_lead_train_all), dtype=float)
-                event_train = np.zeros(len(X_lead_train_all), dtype=int)
-
-            growth_train = np.nan_to_num(growth_train, nan=0.0, posinf=0.0, neginf=0.0)
-            event_prior = float(np.clip(np.mean(event_train), 0.0, 1.0)) if len(event_train) else 0.0
-            growth_prior = float(np.mean(growth_train)) if len(growth_train) else 0.0
-
-            lead_scaler = None
-            lead_growth_model = None
-            if len(X_lead_train) >= 25:
-                lead_growth_model = GradientBoostingRegressor(
-                    n_estimators=60,
-                    max_depth=2,
-                    learning_rate=0.08,
-                    subsample=0.8,
-                    min_samples_leaf=max(4, len(X_lead_train) // 8),
-                    random_state=42,
-                )
-                lead_growth_model.fit(X_lead_train, growth_train)
-            elif len(X_lead_train) >= 8:
-                lead_scaler = StandardScaler()
-                X_lead_scaled = lead_scaler.fit_transform(X_lead_train)
-                lead_growth_model = Ridge(alpha=1.0, fit_intercept=True)
-                lead_growth_model.fit(X_lead_scaled, growth_train)
-
-            lead_event_model = None
-            if len(X_lead_train) >= 15 and len(np.unique(event_train)) >= 2:
-                lead_event_model = GradientBoostingClassifier(
-                    n_estimators=80,
-                    max_depth=2,
-                    learning_rate=0.08,
-                    subsample=0.8,
-                    min_samples_leaf=max(4, len(X_lead_train) // 8),
-                    random_state=42,
-                )
-                lead_event_model.fit(X_lead_train, event_train)
-
-            # Build test features for the forecast point
-            test_scores = self._compute_sub_scores_at_date(
-                forecast_time,
-                virus_typ=virus_typ,
-                delay_rules=delay_rules,
-                target_disease=target_disease,
+            # Test-Features für den Vorhersagepunkt
+            series = train_sorted["menge"].reset_index(drop=True)
+            test_feat = self._build_survstat_ar_row(
+                series, len(series), target_time,
             )
+            X_test = np.array([[test_feat.get(c, 0.0) for c in self.XGBOOST_SURVSTAT_FEATURES]])
+            X_test = np.nan_to_num(X_test, nan=0.0, posinf=0.0, neginf=0.0)
 
-            # Target rate of change (vintage-safe)
-            t_vals = train_target_df["menge"].tolist()
-            lag1 = float(t_vals[-1]) if len(t_vals) >= 1 else 0.0
-            prev = float(t_vals[-2]) if len(t_vals) >= 2 else 1.0
-            target_roc = (lag1 - prev) / prev if prev > 0 else 0.0
+            y_hat = max(0.0, float(model.predict(X_test)[0]))
+            y_max = float(y_train.max())
+            y_hat = min(y_hat, y_max * 2.5)
 
-            # Saisonale Baseline + target_level (Niveauanker)
+            # Baselines für Vergleich
+            baseline_persistence = float(train_target_df.iloc[-1]["menge"])
             seasonal_bl = self._seasonal_naive_baseline(
                 train_target_df, target_week=target_week, target_month=target_month,
             )
-            seasonal_med = max(float(np.median(t_vals)), 1.0) if t_vals else 1.0
-            target_level = round(lag1 / seasonal_med, 4)
 
-            # Saisonalität am TARGET_DATE (deterministisch bekannt)
-            iso_week = target_time.isocalendar()[1]
-            week_sin = round(math.sin(2 * math.pi * iso_week / 52), 4)
-            week_cos = round(math.cos(2 * math.pi * iso_week / 52), 4)
-
-            # Build feature vector — Distributed-Lag Abwasser + Exogene + Niveauanker
-            test_feat = {
-                "seasonal_baseline": seasonal_bl,
-                "target_level": target_level,
-                "positivity_raw": test_scores["positivity_raw"],
-                "are_consultation_raw": test_scores.get("are_consultation_raw", 0.0),
-                "trends_raw": test_scores["trends_raw"],
-                "weather_temp": test_scores["weather_temp"],
-                "weather_humidity": test_scores["weather_humidity"],
-                "school_start_float": test_scores["school_start_float"],
-                "target_roc": target_roc,
-                "week_sin": week_sin,
-                "week_cos": week_cos,
-                "ww_lag0w": test_scores["ww_lag0w"],
-                "ww_lag1w": test_scores["ww_lag1w"],
-                "ww_lag2w": test_scores["ww_lag2w"],
-                "ww_lag3w": test_scores["ww_lag3w"],
-                "ww_max_3w": test_scores["ww_max_3w"],
-                "ww_slope_2w": test_scores["ww_slope_2w"],
-                "xdisease_load": test_scores["xdisease_load"],
-                "grippeweb_are": test_scores["grippeweb_are"],
-                "notaufnahme_ari": test_scores["notaufnahme_ari"],
-                "survstat_xdisease_1": test_scores["survstat_xdisease_1"],
-                "survstat_xdisease_2": test_scores["survstat_xdisease_2"],
-            }
-            X_test = np.array([[test_feat.get(c, 0.0) for c in fold_features]])
-            X_test = np.nan_to_num(X_test, nan=0.0, posinf=0.0, neginf=0.0)
-
-            if not use_gbr:
-                X_test = scaler.transform(X_test)
-
-            y_hat = float(model.predict(X_test)[0])
-
-            X_test_lead = np.array([[test_feat.get(c, 0.0) for c in lead_features]])
-            X_test_lead = np.nan_to_num(X_test_lead, nan=0.0, posinf=0.0, neginf=0.0)
-
-            growth_hat = float(growth_prior)
-            if lead_growth_model is not None:
-                X_growth = lead_scaler.transform(X_test_lead) if lead_scaler is not None else X_test_lead
-                growth_hat = float(lead_growth_model.predict(X_growth)[0])
-            growth_hat = float(np.nan_to_num(growth_hat, nan=0.0, posinf=0.0, neginf=0.0))
-
-            p_event = float(event_prior)
-            if lead_event_model is not None:
-                p_event = float(lead_event_model.predict_proba(X_test_lead)[0][1])
-            p_event = float(np.clip(np.nan_to_num(p_event, nan=event_prior), 0.0, 1.0))
-
-            # Clip + Baselines
-            y_max = float(y_train.max())
-            y_hat = max(0.0, min(y_hat, y_max * 2.5))
-
-            decision_baseline = _baseline_for_issue(forecast_time)
-            if not np.isfinite(decision_baseline) or decision_baseline <= 0:
-                decision_baseline = float(np.median(y_train)) if len(y_train) else 0.0
-            y_hat_lead = float(decision_baseline * (1.0 + growth_hat))
-            y_hat_lead = max(0.0, min(y_hat_lead, y_max * 2.5))
-
-            selected_variant = "level"
-            y_hat_decision = y_hat
-            if np.isfinite(y_hat_lead):
-                if p_event >= event_proba_threshold:
-                    y_hat_decision = y_hat_lead
-                    selected_variant = "lead"
-                else:
-                    y_hat_decision = (0.7 * y_hat) + (0.3 * y_hat_lead)
-                    selected_variant = "blend"
-            y_hat_decision = max(0.0, min(float(y_hat_decision), y_max * 2.5))
-
-            baseline_persistence = float(train_target_df.iloc[-1]["menge"])
-            baseline_seasonal = seasonal_bl
+            # AMELAG Rohdaten für Chart-Anzeige
+            amelag_val = self._amelag_raw_at_date(target_time, virus_typ)
 
             folds.append({
                 "forecast_time": forecast_time,
@@ -2068,15 +1943,13 @@ class BacktestService:
                 "real_qty": target_value,
                 "predicted_qty": y_hat,
                 "predicted_qty_level": y_hat,
-                "predicted_qty_lead": y_hat_lead,
-                "predicted_qty_decision": y_hat_decision,
-                "p_event": p_event,
-                "selected_variant": selected_variant,
+                "predicted_qty_lead": y_hat,
+                "predicted_qty_decision": y_hat,
+                "p_event": 0.0,
+                "selected_variant": "xgboost",
                 "baseline_persistence": baseline_persistence,
-                "baseline_seasonal": baseline_seasonal,
-                "bio": float(test_scores["bio"]),
-                "psycho": float(test_scores["psycho"]),
-                "context": float(test_scores["context"]),
+                "baseline_seasonal": seasonal_bl,
+                "amelag_viruslast": amelag_val,
             })
 
         if not folds:
@@ -2101,31 +1974,22 @@ class BacktestService:
         pers_mae = max(persistence_metrics["mae"], 1e-9)
         seas_mae = max(seasonal_metrics["mae"], 1e-9)
 
-        # Feature importance: use last fold (largest training set, most reliable)
+        # Feature importance: XGBoost (letzter Fold = größtes Training)
+        imp_cols = feature_cols
         if importance_accumulator:
             last_imp = importance_accumulator[-1]
-            last_n_features = len(last_imp)
-            # Determine which feature set was used in the last fold
-            if last_n_features == len(feature_cols):
-                imp_cols = feature_cols
-            elif is_bacterial_target and last_n_features == len(self.COMPACT_SURVSTAT_COLS):
-                imp_cols = self.COMPACT_SURVSTAT_COLS
-            elif last_n_features == len(self.COMPACT_VIRAL_COLS):
-                imp_cols = self.COMPACT_VIRAL_COLS
-            else:
-                imp_cols = feature_cols[:last_n_features]
             total = float(last_imp.sum())
             if total > 0:
                 optimized_weights = {
                     col: round(float(last_imp[i] / total), 3)
-                    for i, col in enumerate(imp_cols)
+                    for i, col in enumerate(imp_cols[:len(last_imp)])
                 }
             else:
                 optimized_weights = dict(self.DEFAULT_WEIGHTS)
         else:
             optimized_weights = dict(self.DEFAULT_WEIGHTS)
 
-        # --- Future Forecast Extension (6 weeks ahead) ---
+        # --- Future Forecast Extension (6 weeks ahead) mit XGBoost ---
         forecast_weeks = 6
         residuals = y_true - y_hat
         residual_std = (
@@ -2133,7 +1997,8 @@ class BacktestService:
             else float(np.std(y_true) * 0.3)
         )
         last_target_time = pred_df["target_time"].max()
-        rolling_values = list(y_true[-3:])
+        # Extend the series with actual values for autoregressive features
+        rolling_series = list(df.loc[df["datum"] <= last_target_time, "menge"].values)
         forecast_chart: list[dict] = []
 
         try:
@@ -2143,53 +2008,13 @@ class BacktestService:
                     days=max(0, int(horizon_days))
                 )
 
-                test_scores = self._compute_sub_scores_at_date(
-                    future_forecast,
-                    virus_typ=virus_typ,
-                    delay_rules=delay_rules,
-                    target_disease=target_disease,
+                # Build AR features from extended series
+                fc_series = pd.Series(rolling_series, dtype=float)
+                fc_feat = self._build_survstat_ar_row(
+                    fc_series, len(fc_series), future_target,
                 )
-
-                t1 = float(rolling_values[-1]) if rolling_values else 0.0
-                t_prev = float(rolling_values[-2]) if len(rolling_values) >= 2 else 1.0
-                t_roc = (t1 - t_prev) / t_prev if t_prev > 0 else 0.0
-
-                fc_iso_week = future_target.isocalendar()[1]
-                w_sin = round(math.sin(2 * math.pi * fc_iso_week / 52), 4)
-                w_cos = round(math.cos(2 * math.pi * fc_iso_week / 52), 4)
-                fc_bl = self._seasonal_naive_baseline(
-                    df, target_week=fc_iso_week, target_month=future_target.month,
-                )
-                fc_med = max(float(np.median(rolling_values)), 1.0) if rolling_values else 1.0
-                fc_level = round(t1 / fc_med, 4)
-
-                test_feat = {
-                    "seasonal_baseline": fc_bl,
-                    "target_level": fc_level,
-                    "positivity_raw": test_scores["positivity_raw"],
-                    "are_consultation_raw": test_scores.get("are_consultation_raw", 0.0),
-                    "trends_raw": test_scores["trends_raw"],
-                    "weather_temp": test_scores["weather_temp"],
-                    "weather_humidity": test_scores["weather_humidity"],
-                    "school_start_float": test_scores["school_start_float"],
-                    "target_roc": t_roc,
-                    "week_sin": w_sin, "week_cos": w_cos,
-                    "ww_lag0w": test_scores["ww_lag0w"],
-                    "ww_lag1w": test_scores["ww_lag1w"],
-                    "ww_lag2w": test_scores["ww_lag2w"],
-                    "ww_lag3w": test_scores["ww_lag3w"],
-                    "ww_max_3w": test_scores["ww_max_3w"],
-                    "ww_slope_2w": test_scores["ww_slope_2w"],
-                    "xdisease_load": test_scores["xdisease_load"],
-                    "grippeweb_are": test_scores["grippeweb_are"],
-                    "notaufnahme_ari": test_scores["notaufnahme_ari"],
-                    "survstat_xdisease_1": test_scores["survstat_xdisease_1"],
-                    "survstat_xdisease_2": test_scores["survstat_xdisease_2"],
-                }
-                X_fc = np.array([[test_feat.get(c, 0.0) for c in fold_features]])
+                X_fc = np.array([[fc_feat.get(c, 0.0) for c in self.XGBOOST_SURVSTAT_FEATURES]])
                 X_fc = np.nan_to_num(X_fc, nan=0.0, posinf=0.0, neginf=0.0)
-                if not use_gbr:
-                    X_fc = scaler.transform(X_fc)
                 y_fc = max(0.0, float(model.predict(X_fc)[0]))
 
                 hf = math.sqrt(w)
@@ -2207,7 +2032,7 @@ class BacktestService:
                     "ci_95_upper": round(y_fc + ci_95, 3),
                     "is_forecast": True,
                 })
-                rolling_values.append(y_fc)
+                rolling_series.append(y_fc)
         except Exception:
             pass  # forecast is best-effort; backtest results always returned
 
@@ -2252,6 +2077,7 @@ class BacktestService:
                 "target_date": row["target_time"].strftime("%Y-%m-%d"),
                 "real_qty": float(row["real_qty"]),
                 "predicted_qty": round(float(row["predicted_qty"]), 3),
+                "amelag_viruslast": round(float(row["amelag_viruslast"]), 3) if row.get("amelag_viruslast") is not None else None,
                 "is_forecast": False,
             }
             for _, row in pred_df.iterrows()
@@ -2297,9 +2123,8 @@ class BacktestService:
             },
             "optimized_weights": optimized_weights,
             "default_weights": dict(self.DEFAULT_WEIGHTS),
-            "model_type": "GradientBoosting" if gbr_fold_count > ridge_fold_count else "Ridge",
-            "gbr_folds": gbr_fold_count,
-            "ridge_folds": ridge_fold_count,
+            "model_type": "XGBoost",
+            "xgb_folds": xgb_fold_count,
             "feature_count": len(imp_cols) if importance_accumulator else len(feature_cols),
             "feature_names": imp_cols if importance_accumulator else feature_cols,
             "chart_data": chart_data,

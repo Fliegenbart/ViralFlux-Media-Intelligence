@@ -573,6 +573,7 @@ export interface BacktestChartPoint {
   lead_days?: number;
   plot_date?: string;
   is_future_vintage?: boolean;
+  amelag_viruslast?: number | null;
 }
 
 export interface BacktestResponse {

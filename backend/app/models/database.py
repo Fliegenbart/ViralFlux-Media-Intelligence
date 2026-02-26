@@ -138,6 +138,46 @@ class NotaufnahmeStandort(Base):
     )
 
 
+class InfluenzaData(Base):
+    """RKI IfSG Influenzafälle — wöchentliche Meldedaten nach Region und Altersgruppe."""
+    __tablename__ = "influenza_data"
+
+    id = Column(Integer, primary_key=True, index=True)
+    datum = Column(DateTime, nullable=False, index=True)
+    available_time = Column(DateTime, nullable=True, index=True)
+    meldewoche = Column(String, nullable=False)  # Original 'YYYY-Wxx'
+    region = Column(String, nullable=False)
+    region_id = Column(String, nullable=True)
+    altersgruppe = Column(String, nullable=False)
+    fallzahl = Column(Integer, nullable=True)
+    inzidenz = Column(Float, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        Index('idx_influenza_date_region_age', 'datum', 'region', 'altersgruppe'),
+    )
+
+
+class RSVData(Base):
+    """RKI IfSG RSV-Fälle — wöchentliche Meldedaten nach Region und Altersgruppe."""
+    __tablename__ = "rsv_data"
+
+    id = Column(Integer, primary_key=True, index=True)
+    datum = Column(DateTime, nullable=False, index=True)
+    available_time = Column(DateTime, nullable=True, index=True)
+    meldewoche = Column(String, nullable=False)  # Original 'YYYY-Wxx'
+    region = Column(String, nullable=False)
+    region_id = Column(String, nullable=True)
+    altersgruppe = Column(String, nullable=False)
+    fallzahl = Column(Integer, nullable=True)
+    inzidenz = Column(Float, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        Index('idx_rsv_date_region_age', 'datum', 'region', 'altersgruppe'),
+    )
+
+
 class SurvstatWeeklyData(Base):
     """SURVSTAT RKI Meldeinzidenzen je Woche/Bundesland/Krankheit."""
     __tablename__ = "survstat_weekly_data"

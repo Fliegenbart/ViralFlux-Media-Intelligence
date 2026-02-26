@@ -30,7 +30,7 @@ import requests
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
-from app.models.database import KreisEinwohner, SurvstatKreisData
+from app.models.database import KreisEinwohner, SurvstatKreisData, SurvstatWeeklyData
 from app.services.data_ingest.otc_disease_clusters import (
     ALL_OTC_DISEASES,
     disease_to_cluster,
@@ -448,6 +448,94 @@ class SurvstatApiService:
         }
 
     # ------------------------------------------------------------------
+    #  Step 7: Aggregate Kreis → Gesamt for survstat_weekly_data
+    # ------------------------------------------------------------------
+
+    def _aggregate_to_weekly_gesamt(self, years: list[int]) -> int:
+        """Aggregate survstat_kreis_data into survstat_weekly_data 'Gesamt' rows.
+
+        Sums fallzahl across all Kreise per (week_label, disease) and
+        upserts into survstat_weekly_data so the Markt-Check backtester
+        can use them.
+        """
+        from sqlalchemy import func
+
+        rows = (
+            self.db.query(
+                SurvstatKreisData.year,
+                SurvstatKreisData.week,
+                SurvstatKreisData.week_label,
+                SurvstatKreisData.disease,
+                SurvstatKreisData.disease_cluster,
+                func.sum(SurvstatKreisData.fallzahl).label("total_fallzahl"),
+            )
+            .filter(
+                SurvstatKreisData.year.in_(years),
+                SurvstatKreisData.week >= 1,
+                SurvstatKreisData.week <= 53,
+            )
+            .group_by(
+                SurvstatKreisData.year,
+                SurvstatKreisData.week,
+                SurvstatKreisData.week_label,
+                SurvstatKreisData.disease,
+                SurvstatKreisData.disease_cluster,
+            )
+            .all()
+        )
+
+        if not rows:
+            return 0
+
+        upserted = 0
+        for row in rows:
+            try:
+                week_start = datetime.strptime(
+                    f"{row.year}-W{row.week:02d}-1", "%G-W%V-%u"
+                )
+            except ValueError:
+                continue
+            available_time = week_start + pd.Timedelta(days=7)
+
+            existing = (
+                self.db.query(SurvstatWeeklyData)
+                .filter(
+                    SurvstatWeeklyData.week_label == row.week_label,
+                    SurvstatWeeklyData.bundesland == "Gesamt",
+                    SurvstatWeeklyData.disease == row.disease,
+                )
+                .first()
+            )
+
+            if existing:
+                existing.incidence = float(row.total_fallzahl)
+                existing.disease_cluster = row.disease_cluster
+                existing.source_file = "survstat_api_aggregated"
+                if existing.available_time is None:
+                    existing.available_time = available_time
+            else:
+                self.db.add(SurvstatWeeklyData(
+                    week_label=row.week_label,
+                    week_start=week_start,
+                    available_time=available_time,
+                    year=row.year,
+                    week=row.week,
+                    bundesland="Gesamt",
+                    disease=row.disease,
+                    disease_cluster=row.disease_cluster,
+                    incidence=float(row.total_fallzahl),
+                    source_file="survstat_api_aggregated",
+                ))
+            upserted += 1
+
+        self.db.commit()
+        logger.info(
+            f"SurvStat Gesamt-Aggregation: {upserted} Wochen×Krankheiten "
+            f"in survstat_weekly_data geschrieben."
+        )
+        return upserted
+
+    # ------------------------------------------------------------------
     #  Main orchestration
     # ------------------------------------------------------------------
 
@@ -538,6 +626,14 @@ class SurvstatApiService:
             combined = self._compute_inzidenz(combined)
             db_result = self._save_to_db(combined)
 
+        # Step 7: Aggregate Kreis → Gesamt for survstat_weekly_data
+        gesamt_upserted = 0
+        try:
+            gesamt_upserted = self._aggregate_to_weekly_gesamt(years)
+        except Exception as e:
+            logger.error(f"Gesamt-Aggregation fehlgeschlagen: {e}")
+            errors.append(f"Gesamt-Aggregation: {e}")
+
         elapsed = round(time.time() - start, 1)
 
         result = {
@@ -548,6 +644,7 @@ class SurvstatApiService:
             "diseases_with_data": total_diseases_fetched,
             "total_records": total_records,
             "db_written": db_result["inserted"],
+            "gesamt_aggregated": gesamt_upserted,
             "errors": errors,
             "elapsed_seconds": elapsed,
             "timestamp": datetime.utcnow().isoformat(),

@@ -85,6 +85,21 @@ def run_full_ingestion_pipeline(self, region_code: str = "ALL") -> Dict[str, Any
             are = AREKonsultationIngestionService(db)
             results["are_konsultation"] = are.run_full_import()
 
+        # 2b. Influenza + RSV IfSG-Meldedaten
+        self.update_state(
+            state="PROGRESS",
+            meta={"step": "RKI Influenza + RSV Meldedaten abrufen...", "progress": 40},
+        )
+        with get_db_context() as db:
+            from app.services.data_ingest.influenza_service import InfluenzaIngestionService
+
+            results["influenza"] = InfluenzaIngestionService(db).run_full_import()
+
+        with get_db_context() as db:
+            from app.services.data_ingest.rsv_service import RSVIngestionService
+
+            results["rsv"] = RSVIngestionService(db).run_full_import()
+
         # 3. Notaufnahme + Schulferien + Trends
         self.update_state(
             state="PROGRESS",

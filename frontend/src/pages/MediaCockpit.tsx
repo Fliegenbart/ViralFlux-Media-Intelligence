@@ -2610,7 +2610,9 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                             }}
                             tick={{ fontSize: 10, fill: 'var(--text-muted)' }}
                           />
-                          <YAxis tick={{ fontSize: 10, fill: 'var(--text-muted)' }} />
+                          <YAxis yAxisId="left" tick={{ fontSize: 10, fill: 'var(--text-muted)' }} />
+                          <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10, fill: 'var(--text-muted)' }}
+                            label={{ value: 'Viruslast', angle: -90, position: 'insideRight', fontSize: 9, fill: 'var(--text-muted)' }} />
                           <RechartsTooltip
                             contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: 8, fontSize: 12 }}
                             labelFormatter={(d: string, payload: any[]) => {
@@ -2655,40 +2657,29 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                           />
                           <Legend
                             wrapperStyle={{ fontSize: 12, paddingTop: 4 }}
-                            payload={
-                              activeMode === 'planning'
-                                ? [
-                                  { value: 'Tatsächliche Inzidenz', type: 'line', color: '#c0392b' },
-                                  { value: `Abwasser-Prognose (Vorlauf ${btResult.planning_curve?.lead_days || 7}T)`, type: 'line', color: 'var(--accent-violet)' },
-                                  { value: `Abwasser-Forecast (${btResult.planning_curve?.lead_days || 7}T voraus)`, type: 'line', color: 'var(--accent-violet)' },
-                                ]
-                                : activeMode === 'vintage'
-                                  ? [
-                                    { value: 'Tatsächliche Inzidenz (target_date)', type: 'line', color: '#c0392b' },
-                                    { value: `ML-Prognose (strict shift, issue_date, ${btResult.walk_forward?.horizon_days || btHorizonDays}T)`, type: 'line', color: 'var(--accent-violet)' },
-                                    { value: 'Zukunft (strict shift)', type: 'line', color: 'var(--accent-violet)' },
-                                  ]
-                                  : [
-                                    { value: 'Tatsächliche Inzidenz (target_date)', type: 'line', color: '#c0392b' },
-                                    { value: `ML-Prognose (target_date, ${btResult.walk_forward?.horizon_days || btHorizonDays}T)`, type: 'line', color: 'var(--accent-violet)' },
-                                    { value: 'Zukunft (issue_date→target_date)', type: 'line', color: 'var(--accent-violet)' },
-                                    { value: '80% KI', type: 'rect', color: 'rgba(139,92,246,0.25)' },
-                                    { value: '95% KI', type: 'rect', color: 'rgba(139,92,246,0.1)' },
-                                  ]
+                            payload={[
+                              { value: 'SURVSTAT Ist-Inzidenz', type: 'line', color: '#c0392b' },
+                              { value: 'AMELAG Viruslast', type: 'line', color: 'var(--accent-violet)' },
+                              { value: `XGBoost-Prognose (${btResult.walk_forward?.horizon_days || btHorizonDays}T)`, type: 'line', color: '#3498db' },
+                              { value: 'Zukunft (XGBoost)', type: 'line', color: '#3498db' },
+                              { value: '80% KI', type: 'rect', color: 'rgba(52,152,219,0.25)' },
+                              { value: '95% KI', type: 'rect', color: 'rgba(52,152,219,0.1)' },
+                            ]
                             }
                           />
 
                           {activeMode === 'validation' && (
                             <>
-                              <Area type="monotone" dataKey="ci_95_base" stackId="ci95" fill="transparent" stroke="none" activeDot={false} legendType="none" />
-                              <Area type="monotone" dataKey="ci_95_range" stackId="ci95" fill="rgba(139,92,246,0.1)" stroke="none" activeDot={false} legendType="none" />
-                              <Area type="monotone" dataKey="ci_80_base" stackId="ci80" fill="transparent" stroke="none" activeDot={false} legendType="none" />
-                              <Area type="monotone" dataKey="ci_80_range" stackId="ci80" fill="rgba(139,92,246,0.25)" stroke="none" activeDot={false} legendType="none" />
+                              <Area yAxisId="left" type="monotone" dataKey="ci_95_base" stackId="ci95" fill="transparent" stroke="none" activeDot={false} legendType="none" />
+                              <Area yAxisId="left" type="monotone" dataKey="ci_95_range" stackId="ci95" fill="rgba(52,152,219,0.1)" stroke="none" activeDot={false} legendType="none" />
+                              <Area yAxisId="left" type="monotone" dataKey="ci_80_base" stackId="ci80" fill="transparent" stroke="none" activeDot={false} legendType="none" />
+                              <Area yAxisId="left" type="monotone" dataKey="ci_80_range" stackId="ci80" fill="rgba(52,152,219,0.25)" stroke="none" activeDot={false} legendType="none" />
                             </>
                           )}
 
                           {(activeMode === 'validation') && btSignals.earlyWarnings.map((ew, i) => (
                             <ReferenceArea
+                              yAxisId="left"
                               key={`ew-${i}`}
                               x1={btResult.chart_data?.[ew.start]?.date}
                               x2={btResult.chart_data?.[ew.end]?.date}
@@ -2702,6 +2693,7 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
 
                           {(activeMode === 'validation') && btSignals.peaks.map((idx) => (
                             <ReferenceLine
+                              yAxisId="left"
                               key={`pk-${idx}`}
                               x={btResult.chart_data?.[idx]?.date}
                               stroke="#c0392b"
@@ -2713,6 +2705,7 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
 
                           {(activeMode === 'validation') && btSignals.surges.map((idx) => (
                             <ReferenceLine
+                              yAxisId="left"
                               key={`sg-${idx}`}
                               x={btResult.chart_data?.[idx]?.date}
                               stroke="#e67e22"
@@ -2724,12 +2717,13 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
 
                           {activeMode === 'vintage' && vintageConnectors.map((seg, idx) => (
                             <ReferenceLine
+                              yAxisId="left"
                               key={`vintage-seg-${seg.plot_date}-${seg.target_date}-${idx}`}
                               segment={[
                                 { x: seg.plot_date, y: seg.vintage_qty },
                                 { x: seg.target_date, y: seg.vintage_qty },
                               ]}
-                              stroke="rgba(139,92,246,0.28)"
+                              stroke="rgba(52,152,219,0.28)"
                               strokeWidth={1}
                               strokeDasharray="3 3"
                             />
@@ -2737,12 +2731,13 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
 
                           {activeMode === 'planning' && planningConnectors.map((seg, idx) => (
                             <ReferenceLine
+                              yAxisId="left"
                               key={`planning-seg-${seg.issue_date}-${seg.target_date}-${idx}`}
                               segment={[
                                 { x: seg.issue_date, y: seg.planning_qty },
                                 { x: seg.target_date, y: seg.planning_qty },
                               ]}
-                              stroke="rgba(139,92,246,0.28)"
+                              stroke="rgba(52,152,219,0.28)"
                               strokeWidth={1}
                               strokeDasharray="3 3"
                             />
@@ -2750,6 +2745,7 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
 
                           {dividerDate && (
                             <ReferenceLine
+                              yAxisId="left"
                               x={dividerDate}
                               stroke="var(--text-muted)"
                               strokeWidth={1}
@@ -2758,21 +2754,23 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                             />
                           )}
 
-                          <Line type={chartLineType} dataKey="real_qty" name="Tatsächliche Inzidenz (target_date)" stroke="#c0392b" strokeWidth={2} dot={false} connectNulls={false} />
+                          {/* ROT: Tatsächliche SURVSTAT-Inzidenz */}
+                          <Line yAxisId="left" type={chartLineType} dataKey="real_qty" name="Tatsächliche Inzidenz (SURVSTAT)" stroke="#c0392b" strokeWidth={2} dot={false} connectNulls={false} />
+                          {/* VIOLETT: AMELAG Abwasser-Viruslast (rechte Y-Achse) */}
+                          <Line yAxisId="right" type={chartLineType} dataKey="amelag_viruslast" name="Abwasser-Viruslast (AMELAG)" stroke="var(--accent-violet)" strokeWidth={2} dot={false} connectNulls={false} />
+                          {/* BLAU: XGBoost-Prognose auf SURVSTAT */}
                           <Line
+                            yAxisId="left"
                             type={chartLineType}
                             dataKey="predicted_qty"
-                            name={activeMode === 'planning'
-                              ? `Abwasser-Prognose (Vorlauf ${btResult.planning_curve?.lead_days || 7}T)`
-                              : activeMode === 'vintage'
-                                ? `ML-Prognose (strict shift, issue_date, ${btResult.walk_forward?.horizon_days || btHorizonDays}T)`
-                                : `ML-Prognose (target_date, ${btResult.walk_forward?.horizon_days || btHorizonDays}T)`}
-                            stroke="var(--accent-violet)"
+                            name={`XGBoost-Prognose (${btResult.walk_forward?.horizon_days || btHorizonDays}T)`}
+                            stroke="#3498db"
                             strokeWidth={2}
                             dot={false}
                             connectNulls={false}
                           />
-                          <Line type={chartLineType} dataKey="forecast_qty" name={activeMode === 'planning' ? `Abwasser-Forecast (${btResult.planning_curve?.lead_days || 7}T voraus)` : activeMode === 'vintage' ? 'Zukunft (strict shift)' : 'Zukunft'} stroke="var(--accent-violet)" strokeWidth={2} dot={false} strokeDasharray="8 4" connectNulls={false} />
+                          {/* Gestrichelt: Zukunfts-Forecast (XGBoost) */}
+                          <Line yAxisId="left" type={chartLineType} dataKey="forecast_qty" name="Zukunft (XGBoost)" stroke="#3498db" strokeWidth={2} dot={false} strokeDasharray="8 4" connectNulls={false} />
 
                           <Brush
                             dataKey="date"
@@ -2794,8 +2792,8 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                     }}>
                       {activeMode === 'validation' && (
                         <>
-                          <strong>Validierung:</strong> Beide Linien am gleichen Datum — je näher violett an rot, desto besser die {(btResult.walk_forward?.horizon_days || btHorizonDays)}-Tage-Prognose.
-                          {' '}Ist bleibt am Zielzeitpunkt; der Erstellzeitpunkt wird nur sekundär im Tooltip angezeigt.
+                          <strong>Validierung:</strong> <span style={{color:'#c0392b'}}>Rot</span> = SURVSTAT Ist-Inzidenz, <span style={{color:'#3498db'}}>Blau</span> = XGBoost-Prognose ({(btResult.walk_forward?.horizon_days || btHorizonDays)}T), <span style={{color:'var(--accent-violet)'}}>Violett</span> = AMELAG-Viruslast (rechte Achse).
+                          {' '}Je näher blau an rot, desto besser die Prognose.
                         </>
                       )}
                       {activeMode === 'vintage' && (

@@ -126,6 +126,22 @@ async def run_notaufnahme_import(db: Session = Depends(get_db)):
     return service.run_full_import()
 
 
+@router.post("/influenza")
+async def run_influenza_import(db: Session = Depends(get_db)):
+    """Importiere RKI IfSG Influenza-Meldedaten."""
+    from app.services.data_ingest.influenza_service import InfluenzaIngestionService
+    service = InfluenzaIngestionService(db)
+    return service.run_full_import()
+
+
+@router.post("/rsv")
+async def run_rsv_import(db: Session = Depends(get_db)):
+    """Importiere RKI IfSG RSV-Meldedaten."""
+    from app.services.data_ingest.rsv_service import RSVIngestionService
+    service = RSVIngestionService(db)
+    return service.run_full_import()
+
+
 @router.post("/survstat-local")
 async def run_survstat_local_import(
     folder_path: str | None = None,

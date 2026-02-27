@@ -31,12 +31,15 @@ export interface CampaignPreview {
 export interface RecommendationCard {
   id: string;
   status: WorkflowStatus | string;
+  status_label?: string;
   type: string;
   urgency_score: number;
   brand: string;
   product: string;
   region?: string;
   region_codes?: string[];
+  region_codes_display?: string[];
+  display_title?: string;
   budget_shift_pct: number;
   channel_mix: Record<string, number>;
   activation_window?: {

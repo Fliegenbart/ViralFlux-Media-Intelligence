@@ -151,6 +151,15 @@ const WORKFLOW_TRANSITIONS: Record<string, string> = {
   APPROVED: 'ACTIVATED',
 };
 
+const STATUS_LABELS_DE: Record<string, string> = {
+  NEW: 'Neu',
+  URGENT: 'Dringend',
+  DRAFT: 'Entwurf',
+  READY: 'Bereit',
+  APPROVED: 'Freigegeben',
+  ACTIVATED: 'Aktiviert',
+};
+
 /* ─── Component ─── */
 
 interface Props {
@@ -1322,12 +1331,13 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="text-base font-bold text-slate-900 truncate">
-                    {card.playbook_title ||
+                    {card.display_title ||
+                      card.playbook_title ||
                       card.campaign_name ||
                       `${card.brand} · ${card.product}`}
                   </div>
                   <div className="text-xs text-slate-500 mt-1">
-                    {card.region || (card.region_codes || []).join(', ') || 'National'}
+                    {card.region || (card.region_codes_display || card.region_codes || []).join(', ') || 'National'}
                   </div>
                 </div>
                 <div className="flex-shrink-0 text-right">
@@ -1369,7 +1379,7 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                     border: '1px solid rgba(148,163,184,0.2)',
                   }}
                 >
-                  {String(card.status || 'DRAFT')}
+                  {card.status_label || String(card.status || 'Entwurf')}
                 </span>
               </div>
             </button>
@@ -1435,13 +1445,14 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                 {/* Campaign name + region */}
                 <div>
                   <div className="text-lg font-bold text-slate-900">
-                    {slideOverData.campaign_name ||
+                    {slideOverData.display_title ||
+                      slideOverData.campaign_name ||
                       slideOverData.playbook_title ||
                       `${slideOverData.brand} · ${slideOverData.product}`}
                   </div>
                   <div className="text-xs text-slate-500 mt-1">
                     {slideOverData.region ||
-                      (slideOverData.region_codes || []).join(', ') ||
+                      (slideOverData.region_codes_display || slideOverData.region_codes || []).join(', ') ||
                       'National'}
                   </div>
                 </div>
@@ -1543,7 +1554,7 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                         border: '1px solid rgba(99,102,241,0.2)',
                       }}
                     >
-                      Aktuell: {currentStatus}
+                      Aktuell: {STATUS_LABELS_DE[currentStatus] || currentStatus}
                     </span>
                     {nextStatus && (
                       <button
@@ -1559,12 +1570,12 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                       >
                         {statusTransitioning
                           ? 'Wird gesetzt...'
-                          : `Auf ${nextStatus} setzen`}
+                          : `Auf ${STATUS_LABELS_DE[nextStatus] || nextStatus} setzen`}
                       </button>
                     )}
                     {currentStatus === 'ACTIVATED' && (
                       <span className="text-xs text-emerald-600 font-medium">
-                        Bereits aktiviert
+                        Bereits aktiviert &#x2713;
                       </span>
                     )}
                   </div>

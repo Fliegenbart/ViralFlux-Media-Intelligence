@@ -1897,7 +1897,7 @@ class BacktestService:
             # XGBoost: Autoregressive Features rein aus SURVSTAT-Zeitreihe
             train_sorted = train_target_df[["datum", "menge"]].sort_values("datum").reset_index(drop=True)
             X_train, y_train = self._build_survstat_ar_training_data(train_sorted)
-            if len(X_train) < max(min_train_points, 10):
+            if len(X_train) < 10:
                 continue
 
             # XGBoost Regressor (keine bio/psycho/context Mischung)

@@ -44,6 +44,48 @@ BUNDESLAND_NAMES = {
 }
 REGION_NAME_TO_CODE = {name.lower(): code for code, name in BUNDESLAND_NAMES.items()}
 
+EVENT_LABELS: dict[str, str] = {
+    "COMPETITOR_SHORTAGE_GELO-PRO": "Wettbewerber-Engpass: Erkältungsmittel",
+    "COMPETITOR_SHORTAGE_GELO-GMF": "Wettbewerber-Engpass: Bronchitis/Husten",
+    "COMPETITOR_SHORTAGE_GELO-RVC": "Wettbewerber-Engpass: Halsschmerzmittel",
+    "COMPETITOR_SHORTAGE_GELO-BRO": "Wettbewerber-Engpass: Hustenstiller",
+    "COMPETITOR_SHORTAGE_GELO-SIT": "Wettbewerber-Engpass: Sinusitis-Mittel",
+    "COMPETITOR_SHORTAGE_GELO-DUR": "Wettbewerber-Engpass: Schnupfenmittel",
+    "COMPETITOR_SHORTAGE_GELO-VOX": "Wettbewerber-Engpass: Heiserkeit-Mittel",
+    "COMPETITOR_SHORTAGE_GELO-VIT": "Wettbewerber-Engpass: Immunpräparate",
+    "COMPETITOR_SHORTAGE_GELO-MUC": "Wettbewerber-Engpass: Schleimlöser",
+    "CRITICAL_SHORTAGE_ANTIBIOTICS": "Kritischer Engpass: Antibiotika",
+    "CRITICAL_SHORTAGE_RESPIRATORY": "Kritischer Engpass: Atemwegsmedikamente",
+    "CRITICAL_SHORTAGE_FEVER": "Kritischer Engpass: Fieber-/Schmerzmittel",
+    "ORDER_VELOCITY_SURGE": "Bestellanstieg erkannt",
+    "LOW_UV_EXTENDED": "Anhaltend niedriger UV-Index",
+    "WINTER_COLD_STREAK": "Winterliche Kältewelle",
+    "LOW_SUNSHINE_FORECAST": "Wenig Sonnenschein vorhergesagt",
+    "NASSKALT_FORECAST": "Nasskaltes Wetter vorhergesagt",
+    "EXTREME_COLD_FORECAST": "Extremkälte vorhergesagt",
+}
+
+CONDITION_LABELS: dict[str, str] = {
+    "erkaltung_akut": "Akute Erkältung",
+    "bronchitis_husten": "Bronchitis & Husten",
+    "halsschmerz": "Halsschmerzen",
+    "husten_reizhusten": "Reizhusten",
+    "sinusitis": "Sinusitis",
+    "schnupfen": "Schnupfen",
+    "heiserkeit": "Heiserkeit",
+    "immun_support": "Immununterstützung",
+    "schleimloeser": "Schleimlösung",
+}
+
+STATUS_LABELS: dict[str, str] = {
+    "NEW": "Neu",
+    "URGENT": "Dringend",
+    "DRAFT": "Entwurf",
+    "READY": "Bereit",
+    "APPROVED": "Freigegeben",
+    "ACTIVATED": "Aktiviert",
+}
+
 
 class RecommendationGenerateRequest(BaseModel):
     brand: str = Field(default="gelo")
@@ -711,6 +753,19 @@ async def update_media_product_mapping(
     return updated
 
 
+def _build_display_title(opp: dict[str, Any], product: str | None) -> str:
+    """Baut einen lesbaren Titel aus Trigger-Kontext."""
+    event = (opp.get("trigger_context") or {}).get("event", "")
+    label = EVENT_LABELS.get(event)
+    prod = product or opp.get("product") or "Atemwegslinie"
+    if label:
+        return f"{prod}: {label}"
+    cond = CONDITION_LABELS.get(opp.get("condition_key", ""), "")
+    if cond:
+        return f"{prod} – {cond}"
+    return prod
+
+
 def _to_card_response(opp: dict[str, Any], include_preview: bool = True) -> dict[str, Any]:
     preview = opp.get("campaign_preview") or {}
     campaign_pack = opp.get("campaign_payload") or {}
@@ -726,23 +781,35 @@ def _to_card_response(opp: dict[str, Any], include_preview: bool = True) -> dict
         or opp.get("product")
     )
 
+    trigger_ctx = opp.get("trigger_context") or {}
+    condition_key = opp.get("condition_key") or product_mapping.get("condition_key", "")
+
     card = {
         "id": opp.get("id"),
         "status": opp.get("status"),
+        "status_label": STATUS_LABELS.get(opp.get("status", ""), opp.get("status")),
         "type": opp.get("type"),
         "urgency_score": opp.get("urgency_score"),
         "brand": opp.get("brand") or "PEIX Partner",
         "product": recommended_product or "Atemwegslinie",
         "recommended_product": recommended_product,
-        "region": opp.get("region") or (region_codes[0] if region_codes else "Gesamt"),
+        "region": opp.get("region") or (
+            BUNDESLAND_NAMES.get(region_codes[0], region_codes[0]) if region_codes else "National"
+        ),
         "region_codes": region_codes,
+        "region_codes_display": [BUNDESLAND_NAMES.get(c, c) for c in region_codes],
         "budget_shift_pct": opp.get("budget_shift_pct") or (preview.get("budget") or {}).get("shift_pct") or 15.0,
         "channel_mix": opp.get("channel_mix") or {"programmatic": 35, "social": 30, "search": 20, "ctv": 15},
         "activation_window": {
             "start": opp.get("activation_start") or (preview.get("activation_window") or {}).get("start"),
             "end": opp.get("activation_end") or (preview.get("activation_window") or {}).get("end"),
         },
-        "reason": opp.get("recommendation_reason") or (opp.get("trigger_context") or {}).get("event"),
+        "reason": (
+            opp.get("recommendation_reason")
+            or EVENT_LABELS.get(trigger_ctx.get("event", ""))
+            or trigger_ctx.get("details")
+            or trigger_ctx.get("event")
+        ),
         "confidence": (
             round(float(opp.get("confidence")), 2)
             if opp.get("confidence") is not None
@@ -756,8 +823,12 @@ def _to_card_response(opp: dict[str, Any], include_preview: bool = True) -> dict
         "mapping_status": opp.get("mapping_status") or product_mapping.get("mapping_status"),
         "mapping_confidence": opp.get("mapping_confidence") or product_mapping.get("mapping_confidence"),
         "mapping_reason": opp.get("mapping_reason") or product_mapping.get("mapping_reason"),
-        "condition_key": opp.get("condition_key") or product_mapping.get("condition_key"),
-        "condition_label": opp.get("condition_label") or product_mapping.get("condition_label"),
+        "condition_key": condition_key,
+        "condition_label": (
+            opp.get("condition_label")
+            or product_mapping.get("condition_label")
+            or CONDITION_LABELS.get(condition_key)
+        ),
         "mapping_candidate_product": opp.get("mapping_candidate_product") or product_mapping.get("candidate_product"),
         "mapping_rule_source": opp.get("rule_source") or product_mapping.get("rule_source"),
         "peix_context": opp.get("peix_context") or peix_context,
@@ -768,6 +839,13 @@ def _to_card_response(opp: dict[str, Any], include_preview: bool = True) -> dict
         "ai_generation_status": opp.get("ai_generation_status") or ai_meta.get("status"),
         "strategy_mode": opp.get("strategy_mode") or campaign_pack.get("strategy_mode"),
         "decision_brief": opp.get("decision_brief"),
+        "display_title": (
+            opp.get("playbook_title")
+            or playbook.get("title")
+            or preview.get("campaign_name")
+            or (campaign_pack.get("campaign") or {}).get("campaign_name")
+            or _build_display_title(opp, recommended_product)
+        ),
     }
 
     if include_preview:

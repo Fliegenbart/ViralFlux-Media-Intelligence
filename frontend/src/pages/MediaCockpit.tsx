@@ -186,10 +186,13 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
   const [recLoading, setRecLoading] = useState(false);
   const [recCards, setRecCards] = useState<RecommendationCard[]>([]);
   const [recFilter, setRecFilter] = useState<'active' | 'all'>('all');
+  const [recBrand, setRecBrand] = useState('gelo');
+  const [recBudget, setRecBudget] = useState(120000);
+  const [recGoal, setRecGoal] = useState('Top-of-Mind vor Erkältungswelle');
   const [selectedRecommendationId, setSelectedRecommendationId] = useState<string | null>(null);
   const [slideOverData, setSlideOverData] = useState<RecommendationDetail | null>(null);
   const [slideOverLoading, setSlideOverLoading] = useState(false);
-  const [slideOverAdvanced, setSlideOverAdvanced] = useState(false);
+  const [slideOverAdvanced, setSlideOverAdvanced] = useState(true);
   const [statusTransitioning, setStatusTransitioning] = useState(false);
 
   /* ── Backtest state ── */
@@ -318,10 +321,10 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          brand: 'gelo',
+          brand: recBrand,
           product: 'Alle Gelo-Produkte',
-          campaign_goal: 'Top-of-Mind vor Erkältungswelle',
-          weekly_budget: 120000,
+          campaign_goal: recGoal,
+          weekly_budget: recBudget,
           channel_pool: ['programmatic', 'social', 'search', 'ctv'],
           strategy_mode: 'PLAYBOOK_AI',
           max_cards: 8,
@@ -463,31 +466,49 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
           {/* PeixEpiScore + Planungsreife — oben rechts */}
           {(peixSummary || latestMarketDecision) && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, minWidth: 220, maxWidth: 340 }}>
-              {peixSummary && (
-                <div style={{
-                  background: 'var(--bg-card)', border: '1px solid var(--border-color)',
-                  borderRadius: 12, padding: '14px 20px',
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-                    <span style={{
-                      fontSize: 28, fontWeight: 800, color: 'var(--accent-violet)', lineHeight: 1,
-                    }}>
-                      {peixSummary.national_score ?? '\u2014'}
-                    </span>
-                    <div>
-                      <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', lineHeight: 1.2 }}>
-                        PeixEpiScore
-                      </div>
-                      <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>
-                        Band: {peixSummary.national_band ?? '\u2014'} &middot; Impact: {peixSummary.national_impact_probability ?? '\u2014'}%
+              {peixSummary && (() => {
+                const band = peixSummary.national_band ?? 'low';
+                const peixColor: Record<string, string> = { critical: '#ef4444', high: '#f59e0b', elevated: '#eab308', low: '#22c55e' };
+                const peixLabel: Record<string, string> = {
+                  critical: 'Hohes Infektionsgeschehen \u2014 Budget-Shift empfohlen',
+                  high: 'Erh\u00f6htes Risiko \u2014 Kampagnen vorbereiten',
+                  elevated: 'Leicht erh\u00f6ht \u2014 Lage beobachten',
+                  low: 'Niedrig \u2014 Standardbetrieb',
+                };
+                return (
+                  <div style={{
+                    background: 'var(--bg-card)',
+                    border: `2px solid ${peixColor[band] || peixColor.low}`,
+                    borderRadius: 12, padding: '14px 20px',
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+                      <span style={{
+                        fontSize: 32, fontWeight: 800, color: peixColor[band] || peixColor.low, lineHeight: 1,
+                      }}>
+                        {peixSummary.national_score ?? '\u2014'}
+                      </span>
+                      <div>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.2 }}>
+                          PEIX Score
+                        </div>
+                        <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+                          Eintrittswahrscheinlichkeit: {peixSummary.national_impact_probability ?? '\u2014'}%
+                        </div>
                       </div>
                     </div>
+                    <div style={{
+                      fontSize: 11, fontWeight: 600,
+                      color: peixColor[band] || peixColor.low,
+                      marginBottom: 4,
+                    }}>
+                      {peixLabel[band] || peixLabel.low}
+                    </div>
+                    <p style={{ fontSize: 10, color: 'var(--text-muted)', lineHeight: 1.4, margin: 0 }}>
+                      Fusionsindex: Epidemiologie, Abwasser, Wetter, Suchtrends, Versorgungslage, Prognose (0\u2013100)
+                    </p>
                   </div>
-                  <p style={{ fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.5, margin: 0 }}>
-                    Fusionsindex aus 6 Dimensionen (Epidemiologie, Abwasser, Wetter, Suchtrends, Versorgungslage, Prognose). Zeigt die Gesamtlage f&uuml;r Atemwegsinfekte in Deutschland als Zahl von 0&ndash;100.
-                  </p>
-                </div>
-              )}
+                );
+              })()}
               {latestMarketDecision && (
                 <div style={{
                   background: 'var(--bg-card)',
@@ -1274,6 +1295,35 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
           </div>
         )}
 
+        {/* Kampagnen-Parameter */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: 12, alignItems: 'flex-end' }}>
+          <label style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+            Marke
+            <input
+              value={recBrand}
+              onChange={(e) => setRecBrand(e.target.value)}
+              style={{ display: 'block', marginTop: 2, padding: '5px 8px', fontSize: 13, borderRadius: 6, border: '1px solid var(--border-color)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', width: 120 }}
+            />
+          </label>
+          <label style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+            Wochenbudget (€)
+            <input
+              type="number"
+              value={recBudget}
+              onChange={(e) => setRecBudget(Number(e.target.value) || 0)}
+              style={{ display: 'block', marginTop: 2, padding: '5px 8px', fontSize: 13, borderRadius: 6, border: '1px solid var(--border-color)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', width: 130 }}
+            />
+          </label>
+          <label style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+            Kampagnenziel
+            <input
+              value={recGoal}
+              onChange={(e) => setRecGoal(e.target.value)}
+              style={{ display: 'block', marginTop: 2, padding: '5px 8px', fontSize: 13, borderRadius: 6, border: '1px solid var(--border-color)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', width: 280 }}
+            />
+          </label>
+        </div>
+
         {/* Header bar */}
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
@@ -1587,7 +1637,7 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                     onClick={() => setSlideOverAdvanced((s) => !s)}
                     className="text-xs text-slate-500 hover:text-slate-700 transition underline"
                   >
-                    {slideOverAdvanced ? 'Erweitert ausblenden' : 'Erweitert'}
+                    {slideOverAdvanced ? 'Kampagnenplan ausblenden' : 'Kampagnenplan anzeigen'}
                   </button>
                   {slideOverAdvanced && pack && (
                     <div className="mt-3 space-y-3">
@@ -2402,7 +2452,10 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                         {signalIcon} {signal}
                       </div>
                       <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4 }}>
-                        Modellgüte R²={r2.toFixed(2)} — Prognose {horizon}T Vorlauf — {fcWeeks > 0 ? `${fcWeeks} Wochen Forecast` : 'kein Forecast'}.
+                        {hasDecisionLayer && decision?.hit_rate_pct != null
+                          ? `Trefferquote: ${decision.hit_rate_pct.toFixed(0)}% · Vorlauf: ${decision.median_ttd_days ?? horizon}T`
+                          : `Prognosegüte: R²=${r2.toFixed(2)} · Vorlauf: ${horizon}T`}
+                        {' '} — {fcWeeks > 0 ? `${fcWeeks} Wochen Forecast` : 'kein Forecast'}.
                         {' '}Empfohlener nationaler Budget-Shift: <strong>+{finalShiftPct.toFixed(1)}%</strong>.
                       </div>
                       <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>

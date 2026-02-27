@@ -13,7 +13,7 @@ from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.models.database import SurvstatWeeklyData
+from app.models.database import SurvstatWeeklyData, WastewaterAggregated
 from app.services.ml.backtester import BacktestService
 
 logger = logging.getLogger(__name__)
@@ -227,6 +227,201 @@ async def list_backtest_runs(
     service = BacktestService(db)
     runs = service.list_backtest_runs(mode=mode, limit=limit)
     return {"total": len(runs), "runs": runs}
+
+
+# ═══════════════════════════════════════════════════════════════════════
+#  PEIX VALIDATION: Historischer Backtest gegen SURVSTAT-Spitzen
+# ═══════════════════════════════════════════════════════════════════════
+
+_SURVSTAT_DISEASE_MAP = {
+    "Influenza A": "influenza, saisonal",
+    "Influenza B": "influenza, saisonal",
+    "SARS-CoV-2": "covid-19",
+    "RSV A": "rsv (meldepflicht gemäß ifsg)",
+}
+
+_VIRUS_TO_WW = {
+    "Influenza A": "Influenza A",
+    "Influenza B": "Influenza B",
+    "SARS-CoV-2": "SARS-CoV-2",
+    "RSV A": "RSV",
+}
+
+
+@router.get("/peix-validation")
+async def peix_validation(
+    virus_typ: str = Query(default="Influenza A"),
+    weeks_back: int = Query(default=104, ge=26, le=260),
+    spike_percentile: float = Query(default=75.0, ge=50, le=95),
+    alert_threshold: float = Query(default=0.45, ge=0.1, le=0.9),
+    db: Session = Depends(get_db),
+):
+    """PEIX-Validierung: Wie gut hat das Abwasser-Frühsignal SURVSTAT-Spitzen vorhergesagt?
+
+    Berechnet wöchentlich einen Bio-Proxy (normalisierter AMELAG-Wert) und prüft,
+    ob erhöhte Werte SURVSTAT-Inzidenz-Spitzen vorausgegangen sind.
+
+    Returns: Timeline, Precision, Recall, medianer Vorlauf in Wochen.
+    """
+    if virus_typ not in VALID_VIRUS_TYPES:
+        virus_typ = "Influenza A"
+
+    now = datetime.utcnow()
+    cutoff = now - timedelta(weeks=weeks_back)
+    disease = _SURVSTAT_DISEASE_MAP.get(virus_typ, "influenza, saisonal")
+    ww_virus = _VIRUS_TO_WW.get(virus_typ, virus_typ)
+
+    # --- 1. SURVSTAT wöchentliche nationale Inzidenz ---
+    surv_rows = (
+        db.query(
+            SurvstatWeeklyData.week_start,
+            func.sum(SurvstatWeeklyData.incidence).label("total_inc"),
+        )
+        .filter(
+            func.lower(SurvstatWeeklyData.disease) == disease.lower(),
+            SurvstatWeeklyData.bundesland == "Gesamt",
+            SurvstatWeeklyData.week_start >= cutoff,
+        )
+        .group_by(SurvstatWeeklyData.week_start)
+        .order_by(SurvstatWeeklyData.week_start)
+        .all()
+    )
+    if len(surv_rows) < 10:
+        return {"error": f"Zu wenig SURVSTAT-Daten für '{disease}' (nur {len(surv_rows)} Wochen)."}
+
+    surv_df = pd.DataFrame([
+        {"week_start": r.week_start, "incidence": float(r.total_inc or 0)}
+        for r in surv_rows
+    ]).sort_values("week_start").reset_index(drop=True)
+
+    # --- 2. AMELAG Abwasser wöchentlich aggregiert (Bundesdurchschnitt) ---
+    ww_rows = (
+        db.query(
+            func.date_trunc("week", WastewaterAggregated.datum).label("week_start"),
+            func.avg(WastewaterAggregated.viruslast_normalisiert).label("avg_vl"),
+        )
+        .filter(
+            WastewaterAggregated.virus_typ == ww_virus,
+            WastewaterAggregated.datum >= cutoff,
+        )
+        .group_by(func.date_trunc("week", WastewaterAggregated.datum))
+        .order_by(func.date_trunc("week", WastewaterAggregated.datum))
+        .all()
+    )
+    ww_df = pd.DataFrame([
+        {"week_start": r.week_start, "wastewater": float(r.avg_vl or 0)}
+        for r in ww_rows
+    ]).sort_values("week_start").reset_index(drop=True)
+
+    if ww_df.empty:
+        return {"error": f"Keine AMELAG-Abwasserdaten für '{ww_virus}'."}
+
+    # --- 3. Merge auf Wochenbasis ---
+    surv_df["week_start"] = pd.to_datetime(surv_df["week_start"]).dt.tz_localize(None)
+    ww_df["week_start"] = pd.to_datetime(ww_df["week_start"]).dt.tz_localize(None)
+    merged = pd.merge_asof(
+        surv_df.sort_values("week_start"),
+        ww_df.sort_values("week_start"),
+        on="week_start",
+        direction="nearest",
+        tolerance=pd.Timedelta("10D"),
+    ).dropna(subset=["wastewater"])
+
+    if len(merged) < 10:
+        return {"error": "Zu wenig überlappende Wochen zwischen AMELAG und SURVSTAT."}
+
+    # --- 4. Normalisierung ---
+    ww_max = merged["wastewater"].max()
+    if ww_max > 0:
+        merged["bio_signal"] = merged["wastewater"] / ww_max
+    else:
+        merged["bio_signal"] = 0.0
+
+    # Spike-Erkennung: rollendes 52-Wochen-Fenster, Perzentil-basiert
+    merged["inc_rolling_p75"] = merged["incidence"].rolling(
+        min(52, len(merged) // 2), min_periods=8
+    ).quantile(spike_percentile / 100.0)
+    merged["is_spike"] = merged["incidence"] > merged["inc_rolling_p75"]
+
+    # Alert: Bio-Signal über Schwelle
+    merged["is_alert"] = merged["bio_signal"] > alert_threshold
+
+    # --- 5. Precision / Recall / Vorlauf berechnen ---
+    valid = merged.dropna(subset=["inc_rolling_p75"]).reset_index(drop=True)
+    if valid.empty:
+        return {"error": "Nicht genug Daten nach Rolling-Window-Berechnung."}
+
+    tp = 0  # True Positive: Alert gefolgt von Spike innerhalb 4 Wochen
+    fp = 0  # False Positive: Alert ohne Spike innerhalb 4 Wochen
+    fn = 0  # False Negative: Spike ohne vorheriges Alert
+    lead_weeks: list[int] = []
+    look_ahead = 4  # Wochen
+
+    spike_indices = set(valid.index[valid["is_spike"]])
+    alert_indices = set(valid.index[valid["is_alert"]])
+
+    # Für jede Alert-Woche: gibt es einen Spike in den nächsten look_ahead Wochen?
+    matched_spikes: set[int] = set()
+    for ai in sorted(alert_indices):
+        found = False
+        for ahead in range(0, look_ahead + 1):
+            si = ai + ahead
+            if si in spike_indices and si not in matched_spikes:
+                tp += 1
+                lead_weeks.append(ahead)
+                matched_spikes.add(si)
+                found = True
+                break
+        if not found:
+            fp += 1
+
+    # Spikes ohne vorheriges Alert = False Negative
+    fn = len(spike_indices - matched_spikes)
+
+    precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+    recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+    f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
+    median_lead = float(np.median(lead_weeks)) if lead_weeks else 0.0
+
+    # Pearson-Korrelation Bio-Signal ↔ Inzidenz
+    corr = float(valid["bio_signal"].corr(valid["incidence"]))
+
+    # --- 6. Chart-Daten ---
+    chart_data = [
+        {
+            "date": row["week_start"].strftime("%Y-%m-%d"),
+            "incidence": round(float(row["incidence"]), 2),
+            "bio_signal": round(float(row["bio_signal"]), 4),
+            "is_spike": bool(row["is_spike"]),
+            "is_alert": bool(row["is_alert"]),
+            "threshold": round(float(row.get("inc_rolling_p75", 0)), 2),
+        }
+        for _, row in valid.iterrows()
+    ]
+
+    return {
+        "virus_typ": virus_typ,
+        "weeks_analyzed": len(valid),
+        "spike_percentile": spike_percentile,
+        "alert_threshold": alert_threshold,
+        "metrics": {
+            "precision": round(precision * 100, 1),
+            "recall": round(recall * 100, 1),
+            "f1_score": round(f1 * 100, 1),
+            "median_lead_weeks": round(median_lead, 1),
+            "true_positives": tp,
+            "false_positives": fp,
+            "false_negatives": fn,
+            "correlation": round(corr, 3),
+        },
+        "summary": (
+            f"PEIX Bio-Signal erkannte {round(recall * 100)}% der SURVSTAT-Spitzen "
+            f"(Precision {round(precision * 100)}%, F1 {round(f1 * 100)}%). "
+            f"Medianer Vorlauf: {round(median_lead, 1)} Wochen. "
+            f"Korrelation Abwasser↔Inzidenz: r={round(corr, 2)}."
+        ),
+        "chart_data": chart_data,
+    }
 
 
 # ═══════════════════════════════════════════════════════════════════════

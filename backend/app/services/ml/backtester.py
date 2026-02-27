@@ -2070,6 +2070,9 @@ class BacktestService:
         ]
 
         # chart_data: Validierungsansicht (beide am target_date, Standard)
+        # OOS-Konfidenzintervalle basierend auf residual_std (konstant, kein Horizont-Faktor)
+        ci_80_half = 1.28 * residual_std
+        ci_95_half = 1.96 * residual_std
         historical_chart = [
             {
                 "date": row["target_time"].strftime("%Y-%m-%d"),
@@ -2077,6 +2080,10 @@ class BacktestService:
                 "target_date": row["target_time"].strftime("%Y-%m-%d"),
                 "real_qty": float(row["real_qty"]),
                 "predicted_qty": round(float(row["predicted_qty"]), 3),
+                "ci_80_lower": round(max(0.0, float(row["predicted_qty"]) - ci_80_half), 3),
+                "ci_80_upper": round(float(row["predicted_qty"]) + ci_80_half, 3),
+                "ci_95_lower": round(max(0.0, float(row["predicted_qty"]) - ci_95_half), 3),
+                "ci_95_upper": round(float(row["predicted_qty"]) + ci_95_half, 3),
                 "amelag_viruslast": round(float(row["amelag_viruslast"]), 3) if row.get("amelag_viruslast") is not None else None,
                 "is_forecast": False,
             }

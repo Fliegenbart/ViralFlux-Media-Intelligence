@@ -6,6 +6,7 @@ import {
   ResponsiveContainer,
   ComposedChart,
   Line,
+  Bar,
   Area,
   XAxis,
   YAxis,
@@ -207,6 +208,8 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
   const [btCustomerResult, setBtCustomerResult] = useState<BacktestResponse | null>(null);
   const [btCustomerRunning, setBtCustomerRunning] = useState(false);
   const [btRuns, setBtRuns] = useState<any[]>([]);
+  const [peixVal, setPeixVal] = useState<any>(null);
+  const [peixValLoading, setPeixValLoading] = useState(false);
   const btFileRef = useRef<HTMLInputElement>(null);
 
   /* ── Wave Radar state ── */
@@ -2304,6 +2307,87 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
             </div>
           </div>
         )}
+
+        {/* ── PEIX Historische Validierung ── */}
+        <div style={cardStyle}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+            <h2 style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>
+              PEIX Historische Validierung
+            </h2>
+            <button
+              onClick={async () => {
+                setPeixValLoading(true);
+                try {
+                  const res = await fetch(`/api/v1/backtest/peix-validation?virus_typ=${encodeURIComponent(virus)}&weeks_back=104`);
+                  const data = await res.json();
+                  if (data.error) { toast(`PEIX-Validierung: ${data.error}`, 'error'); }
+                  else { setPeixVal(data); toast('PEIX-Validierung abgeschlossen', 'success'); }
+                } catch (e) { toast('PEIX-Validierung fehlgeschlagen', 'error'); }
+                finally { setPeixValLoading(false); }
+              }}
+              disabled={peixValLoading}
+              className="px-3 py-2 text-xs font-semibold rounded-lg transition"
+              style={{
+                background: 'linear-gradient(135deg, var(--accent-violet), #6366f1)',
+                color: '#fff', opacity: peixValLoading ? 0.6 : 1,
+              }}
+            >
+              {peixValLoading ? 'Berechne...' : 'PEIX validieren'}
+            </button>
+          </div>
+          <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>
+            Wie gut hat das AMELAG-Abwassersignal historische SURVSTAT-Inzidenz-Spitzen vorhergesagt?
+          </p>
+          {peixVal && (
+            <div>
+              {/* Metriken-Karten */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 10, marginBottom: 16 }}>
+                {[
+                  { label: 'Trefferquote', value: `${peixVal.metrics.recall}%`, sub: `${peixVal.metrics.true_positives} von ${peixVal.metrics.true_positives + peixVal.metrics.false_negatives} Spitzen erkannt` },
+                  { label: 'Precision', value: `${peixVal.metrics.precision}%`, sub: `${peixVal.metrics.false_positives} Fehlalarme` },
+                  { label: 'F1 Score', value: `${peixVal.metrics.f1_score}%`, sub: 'Harmonisches Mittel' },
+                  { label: 'Vorlauf', value: `${peixVal.metrics.median_lead_weeks}W`, sub: 'Median' },
+                  { label: 'Korrelation', value: `r=${peixVal.metrics.correlation}`, sub: 'Abwasser \u2194 Inzidenz' },
+                ].map((m) => (
+                  <div key={m.label} style={{
+                    padding: '10px 12px', borderRadius: 10,
+                    background: 'var(--bg-secondary)', border: '1px solid var(--border-color)',
+                    textAlign: 'center',
+                  }}>
+                    <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--accent-violet)' }}>{m.value}</div>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', marginTop: 2 }}>{m.label}</div>
+                    <div style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 2 }}>{m.sub}</div>
+                  </div>
+                ))}
+              </div>
+              {/* Timeline-Chart */}
+              <div style={{ width: '100%', height: 280 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart data={peixVal.chart_data} margin={{ top: 8, right: 12, left: 0, bottom: 4 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" opacity={0.5} />
+                    <XAxis
+                      dataKey="date"
+                      tickFormatter={(d: string) => { try { return format(parseISO(d), 'dd.MM.yy'); } catch { return d; } }}
+                      tick={{ fontSize: 9, fill: 'var(--text-muted)' }}
+                    />
+                    <YAxis yAxisId="left" tick={{ fontSize: 9, fill: 'var(--text-muted)' }} />
+                    <YAxis yAxisId="right" orientation="right" domain={[0, 1]} tick={{ fontSize: 9, fill: 'var(--text-muted)' }} />
+                    <RechartsTooltip
+                      contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: 8, fontSize: 11 }}
+                    />
+                    <Bar yAxisId="left" dataKey="incidence" fill="rgba(192,57,43,0.3)" name="SURVSTAT Inzidenz" />
+                    <Line yAxisId="left" type="monotone" dataKey="threshold" stroke="#e67e22" strokeDasharray="4 4" dot={false} name="Spike-Schwelle" />
+                    <Line yAxisId="right" type="monotone" dataKey="bio_signal" stroke="var(--accent-violet)" strokeWidth={2} dot={false} name="Bio-Signal (AMELAG)" />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 8, lineHeight: 1.5 }}>
+                {peixVal.summary}
+                {' '}Analysiert: {peixVal.weeks_analyzed} Wochen, Virus: {peixVal.virus_typ}.
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* ── Market Check ── */}
         <div style={cardStyle}>

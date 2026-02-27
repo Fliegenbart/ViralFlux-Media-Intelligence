@@ -94,6 +94,37 @@ DEFAULT_WEIGHTS = {
     "baseline": 0.05,
 }
 
+# ── Konfigurierbare Schwellwerte ──────────────────────────────────────
+# Alle Magic Numbers an einer Stelle. Begründungen wo vorhanden.
+PEIX_CONFIG = {
+    # Wetter: Temperatur-Risiko steigt linear unter 20°C (RKI-Grippesaison beginnt ~15°C,
+    # 20°C als obere Schwelle konservativ). Normierung /25 → 0°C ergibt 0.8, -5°C ergibt 1.0.
+    "weather_temp_threshold": 20.0,
+    "weather_temp_divisor": 25.0,
+    # Wetter: UV < 8 erhöht Risiko (UV 8 = "sehr hoch" lt. DWD-Skala).
+    "weather_uv_threshold": 8.0,
+    # Wetter: Gewichtung der 3 Wetter-Faktoren (Summe = 1.0)
+    "weather_temp_weight": 0.40,
+    "weather_uv_weight": 0.35,
+    "weather_humidity_weight": 0.25,
+    # Schulstart-Multiplikator: Erhöhte Kontaktrate nach Ferien.
+    # Empirisch geschätzt, nicht validiert. 1.0 = deaktiviert.
+    "school_start_multiplier": 1.15,
+    "school_start_weather_min": 0.6,
+    # Engpass-Signal: Normierung auf max. 20 "High-Demand" Meldungen.
+    # 20 = oberes Ende des typischen Bereichs lt. BfArM-Daten 2023-2025.
+    "shortage_norm_divisor": 20.0,
+    "shortage_fieber_weight": 0.5,
+    # Notaufnahme Fallback: Wenn <14 historische Werte, normiere auf /20.
+    "notaufnahme_fallback_divisor": 20.0,
+    # Epi-Score Komponentengewichte (4-Signale vorhanden)
+    "epi_weights_4": {"wastewater": 0.35, "are": 0.25, "notaufnahme": 0.20, "survstat": 0.20},
+    # Risk-Band Schwellwerte (Score 0-100)
+    "risk_band_high": 75,
+    "risk_band_elevated": 55,
+    "risk_band_moderate": 35,
+}
+
 
 def _clamp(value: float, lo: float = 0.0, hi: float = 1.0) -> float:
     return max(lo, min(hi, value))
@@ -248,8 +279,8 @@ class PeixEpiScoreService:
 
             # Genius Multipliers (abgeschwächt)
             multiplier = 1.0
-            if school_start and region_weather > 0.6:
-                multiplier = 1.15  # School-Start Turbo (reduziert von 1.4)
+            if school_start and region_weather > PEIX_CONFIG["school_start_weather_min"]:
+                multiplier = PEIX_CONFIG["school_start_multiplier"]
 
             score = round(_clamp(raw_score * multiplier) * 100.0, 1)
             risk_band = self._score_to_band(score)
@@ -365,7 +396,8 @@ class PeixEpiScoreService:
         has_surv = survstat > 0
 
         if has_are and has_not and has_surv:
-            score = wastewater * 0.35 + are * 0.25 + notaufnahme * 0.20 + survstat * 0.20
+            w = PEIX_CONFIG["epi_weights_4"]
+            score = wastewater * w["wastewater"] + are * w["are"] + notaufnahme * w["notaufnahme"] + survstat * w["survstat"]
         elif has_are and has_surv:
             score = wastewater * 0.40 + are * 0.30 + survstat * 0.30
         elif has_not and has_surv:
@@ -544,10 +576,12 @@ class PeixEpiScoreService:
             temp = float(row.temperatur) if row.temperatur is not None else 7.0
             uv = float(row.uv_index) if row.uv_index is not None else 2.5
             humidity = float(row.luftfeuchtigkeit) if row.luftfeuchtigkeit is not None else 70.0
-            temp_factor = _clamp((20.0 - temp) / 25.0)
-            uv_factor = _clamp((8.0 - uv) / 8.0)
+            temp_factor = _clamp((PEIX_CONFIG["weather_temp_threshold"] - temp) / PEIX_CONFIG["weather_temp_divisor"])
+            uv_factor = _clamp((PEIX_CONFIG["weather_uv_threshold"] - uv) / PEIX_CONFIG["weather_uv_threshold"])
             humidity_factor = _clamp(humidity / 100.0)
-            risk = temp_factor * 0.40 + uv_factor * 0.35 + humidity_factor * 0.25
+            risk = (temp_factor * PEIX_CONFIG["weather_temp_weight"]
+                    + uv_factor * PEIX_CONFIG["weather_uv_weight"]
+                    + humidity_factor * PEIX_CONFIG["weather_humidity_weight"])
             per_region.setdefault(code, []).append(_clamp(risk))
 
         return {
@@ -593,7 +627,7 @@ class PeixEpiScoreService:
         values = sorted(values)
 
         if len(values) < 14:
-            return _clamp(float(current_value) / 20.0)
+            return _clamp(float(current_value) / PEIX_CONFIG["notaufnahme_fallback_divisor"])
 
         rank = bisect_right(values, current_value)
         return _clamp(rank / len(values))
@@ -635,8 +669,8 @@ class PeixEpiScoreService:
         atemwege = float((by_cat.get("Atemwege") or {}).get("high_demand", 0) or 0)
         fieber = float((by_cat.get("Fieber_Schmerz") or {}).get("high_demand", 0) or 0)
         # Atemwege voll gewichtet, Fieber/Schmerz halb (indirekt GELO-relevant)
-        count = atemwege + fieber * 0.5
-        return _clamp(count / 20.0)
+        count = atemwege + fieber * PEIX_CONFIG["shortage_fieber_weight"]
+        return _clamp(count / PEIX_CONFIG["shortage_norm_divisor"])
 
     def _forecast_signal(self, virus_typ: str) -> float:
         """Prophet/HW-Trend aus MLForecast-Tabelle (bestehende Logik)."""
@@ -739,11 +773,11 @@ class PeixEpiScoreService:
 
     @staticmethod
     def _score_to_band(score: float) -> str:
-        if score >= 75:
+        if score >= PEIX_CONFIG["risk_band_high"]:
             return "critical"
-        if score >= 55:
+        if score >= PEIX_CONFIG["risk_band_elevated"]:
             return "high"
-        if score >= 35:
+        if score >= PEIX_CONFIG["risk_band_moderate"]:
             return "elevated"
         return "low"
 

@@ -17,6 +17,8 @@ _ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "")
 _ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "")
 _ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
 
+_WEAK_PASSWORDS = {"gelo2026", "admin", "password", "123456", "test", "changeme"}
+
 if not _ADMIN_EMAIL or not _ADMIN_PASSWORD:
     if _ENVIRONMENT == "production":
         raise RuntimeError(
@@ -26,6 +28,12 @@ if not _ADMIN_EMAIL or not _ADMIN_PASSWORD:
     _ADMIN_EMAIL = _ADMIN_EMAIL or "admin@gelo.de"
     _ADMIN_PASSWORD = _ADMIN_PASSWORD or "gelo2026"
     logger.warning("Using default admin credentials (dev only). Set ADMIN_EMAIL/ADMIN_PASSWORD in production.")
+
+if _ENVIRONMENT == "production" and _ADMIN_PASSWORD.lower() in _WEAK_PASSWORDS:
+    raise RuntimeError(
+        "FATAL: ADMIN_PASSWORD is a known weak/default password. "
+        "Set a strong password via environment variable in production."
+    )
 
 _USERS = {
     _ADMIN_EMAIL: {

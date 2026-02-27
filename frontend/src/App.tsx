@@ -128,10 +128,6 @@ const App: React.FC = () => {
             <Route path="/dashboard" element={<Navigate to="/lagebild" replace />} />
             <Route path="/dashboard/recommendations/:id" element={<Navigate to="/empfehlungen" replace />} />
             <Route path="/backtest" element={<Navigate to="/validierung" replace />} />
-            <Route path="/produkte" element={<Navigate to="/empfehlungen" replace />} />
-            <Route path="/admin" element={<Navigate to="/lagebild" replace />} />
-            <Route path="/sales-radar" element={<Navigate to="/lagebild" replace />} />
-            <Route path="/data-integration" element={<Navigate to="/lagebild" replace />} />
           </Routes>
         </Router>
       </ToastProvider>

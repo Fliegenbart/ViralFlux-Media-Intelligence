@@ -2216,9 +2216,10 @@ class BacktestService:
         if "error" in result:
             return result
 
+        # Lead-Lag: XGBoost-Prognose vs. Ist-Wert (nicht mehr Bio-Signal)
         df_sim = pd.DataFrame([{
             "date": row["date"],
-            "bio": row.get("bio", 0.0),
+            "bio": row.get("predicted_qty", 0.0),
             "real_qty": row.get("real_qty", 0.0),
         } for row in result.get("chart_data", []) if not row.get("is_forecast")])
         lead_lag = self._augment_lead_lag_with_horizon(
@@ -2251,32 +2252,24 @@ class BacktestService:
         if lag_corr <= 0:
             proof_text = (
                 f"Kein stabiler positiver Lead erkennbar. "
-                f"Signal-Korrelation am optimalen Lag: r={lag_corr} ({lag_strength}). "
-                f"Hinweis: Die Modell-Korrelation oben misst die Gesamtprognose-Guete, "
-                f"die Signal-Korrelation hier nur den Bio-Kanal allein."
+                f"Prognose-Korrelation am optimalen Lag: r={lag_corr} ({lag_strength})."
             )
         elif lead_lag.get("bio_leads_target_effective"):
             proof_text = (
-                f"Bio-Signal (Abwasser-Monitoring) laeuft dem Target um ca. {effective_lead_days} Tage voraus "
+                f"XGBoost-Prognose laeuft dem Ist-Wert um ca. {effective_lead_days} Tage voraus "
                 f"(Forecast-Horizont {horizon_days}T + Relativ-Lag {relative_lag_days}T). "
-                f"Signal-Korrelation am optimalen Lag: r={lag_corr} ({lag_strength}). "
-                f"Hinweis: Die Modell-Korrelation oben misst die Gesamtprognose-Guete, "
-                f"die Signal-Korrelation hier nur den Bio-Kanal allein."
+                f"Prognose-Korrelation am optimalen Lag: r={lag_corr} ({lag_strength})."
             )
         elif lead_lag.get("target_leads_bio_effective"):
             proof_text = (
-                f"Target laeuft dem Bio-Signal um ca. {abs(effective_lead_days)} Tage voraus "
+                f"Ist-Wert laeuft der XGBoost-Prognose um ca. {abs(effective_lead_days)} Tage voraus "
                 f"(Forecast-Horizont {horizon_days}T + Relativ-Lag {relative_lag_days}T). "
-                f"Signal-Korrelation am optimalen Lag: r={lag_corr} ({lag_strength}). "
-                f"Hinweis: Die Modell-Korrelation oben misst die Gesamtprognose-Guete, "
-                f"die Signal-Korrelation hier nur den Bio-Kanal allein."
+                f"Prognose-Korrelation am optimalen Lag: r={lag_corr} ({lag_strength})."
             )
         else:
             proof_text = (
-                f"Signal und Target sind effektiv gleichzeitig (0T Lead). "
-                f"Signal-Korrelation am optimalen Lag: r={lag_corr} ({lag_strength}). "
-                f"Hinweis: Die Modell-Korrelation oben misst die Gesamtprognose-Guete, "
-                f"die Signal-Korrelation hier nur den Bio-Kanal allein."
+                f"Prognose und Ist-Wert sind effektiv gleichzeitig (0T Lead). "
+                f"Prognose-Korrelation am optimalen Lag: r={lag_corr} ({lag_strength})."
             )
 
         result["mode"] = "MARKET_CHECK"

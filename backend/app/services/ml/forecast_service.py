@@ -62,6 +62,8 @@ META_FEATURES: list[str] = [
     "survstat_lag14",
 ]
 
+LEAKAGE_SAFE_WARMUP_ROWS = 14
+
 # Cross-disease pairs: epidemiologisch sinnvolle Korrelationen.
 # Key = Zielvirus, Value = Liste von Indikator-Viren (deren Aktivitaet
 # oft zeitlich vorlaufend oder co-zirkulierend ist).
@@ -327,13 +329,67 @@ class ForecastService:
         df["survstat_lag7"] = df["survstat_incidence"].shift(7)
         df["survstat_lag14"] = df["survstat_incidence"].shift(14)
 
-        # Fill NaN
-        df = df.bfill().ffill()
-        # Replace remaining inf/nan
-        df = df.replace([np.inf, -np.inf], 0.0).fillna(0.0)
+        df = self._finalize_training_frame(df)
 
         logger.info(f"Training data prepared: {len(df)} rows, {len(df.columns)} features")
         return df
+
+    @staticmethod
+    def _finalize_training_frame(df: pd.DataFrame) -> pd.DataFrame:
+        """Leakage-safe post processing for engineered training features.
+
+        We explicitly avoid backfilling lagged or rolling features from the
+        future into the past. Instead we:
+        1. forward-fill a small set of source signals that are naturally held
+           until a newer observation arrives,
+        2. drop the warm-up rows required by the largest lag (14 days),
+        3. zero-fill any remaining gaps.
+        """
+        cleaned = df.copy()
+        cleaned = cleaned.sort_values("ds").reset_index(drop=True)
+        cleaned = cleaned.replace([np.inf, -np.inf], np.nan)
+
+        held_signal_cols = [
+            "trends_score",
+            "schulferien",
+            "amelag_pred",
+            "xd_load",
+            "survstat_incidence",
+        ]
+        for col in held_signal_cols:
+            if col in cleaned.columns:
+                cleaned[col] = cleaned[col].ffill()
+
+        if len(cleaned) > LEAKAGE_SAFE_WARMUP_ROWS:
+            cleaned = cleaned.iloc[LEAKAGE_SAFE_WARMUP_ROWS:].copy()
+
+        cleaned = cleaned.fillna(0.0).reset_index(drop=True)
+        return cleaned
+
+    @staticmethod
+    def _build_meta_feature_row(
+        last_row: pd.Series,
+        *,
+        hw_pred: float,
+        ridge_pred: float,
+        prophet_pred: float,
+    ) -> dict[str, float]:
+        """Build one inference row for the XGBoost meta-learner."""
+        return {
+            "hw_pred": float(hw_pred),
+            "ridge_pred": float(ridge_pred),
+            "prophet_pred": float(prophet_pred),
+            "amelag_lag4": float(last_row.get("amelag_lag4", 0.0)),
+            "amelag_lag7": float(last_row.get("amelag_lag7", 0.0)),
+            "trend_momentum_7d": float(last_row.get("trend_momentum_7d", 0.0)),
+            "schulferien": float(last_row.get("schulferien", 0.0)),
+            "trends_score": float(last_row.get("trends_score", 0.0)),
+            "xdisease_lag7": float(last_row.get("xdisease_lag7", 0.0)),
+            "xdisease_lag14": float(last_row.get("xdisease_lag14", 0.0)),
+            "survstat_incidence": float(last_row.get("survstat_incidence", 0.0)),
+            "survstat_lag7": float(last_row.get("survstat_lag7", 0.0)),
+            "survstat_lag14": float(last_row.get("survstat_lag14", 0.0)),
+        }
 
     def _is_holiday(self, datum: datetime) -> bool:
         """Check if date falls in school holidays."""
@@ -703,19 +759,12 @@ class ForecastService:
         upper = np.zeros(n_steps)
 
         for i in range(n_steps):
-            feat = {
-                "hw_pred": float(hw_forecast[i]),
-                "ridge_pred": float(ridge_forecast[i]),
-                "prophet_pred": float(prophet_forecast[i]),
-                "amelag_lag4": float(last_row.get("amelag_lag4", 0.0)),
-                "amelag_lag7": float(last_row.get("amelag_lag7", 0.0)),
-                "trend_momentum_7d": float(last_row.get("trend_momentum_7d", 0.0)),
-                "schulferien": float(last_row.get("schulferien", 0.0)),
-                "trends_score": float(last_row.get("trends_score", 0.0)),
-                "survstat_incidence": float(last_row.get("survstat_incidence", 0.0)),
-                "survstat_lag7": float(last_row.get("survstat_lag7", 0.0)),
-                "survstat_lag14": float(last_row.get("survstat_lag14", 0.0)),
-            }
+            feat = self._build_meta_feature_row(
+                last_row,
+                hw_pred=float(hw_forecast[i]),
+                ridge_pred=float(ridge_forecast[i]),
+                prophet_pred=float(prophet_forecast[i]),
+            )
 
             X_row = np.array([[feat.get(f, 0.0) for f in feature_names]])
             X_row = np.nan_to_num(X_row, nan=0.0, posinf=0.0, neginf=0.0)
@@ -855,18 +904,12 @@ class ForecastService:
             upper = np.zeros(n_steps)
 
             for i in range(n_steps):
-                feat = {}
-                feat["hw_pred"] = float(hw_forecast[i])
-                feat["ridge_pred"] = float(ridge_forecast[i])
-                feat["prophet_pred"] = float(prophet_forecast[i])
-                feat["amelag_lag4"] = float(last_row.get("amelag_lag4", 0.0))
-                feat["amelag_lag7"] = float(last_row.get("amelag_lag7", 0.0))
-                feat["trend_momentum_7d"] = float(last_row.get("trend_momentum_7d", 0.0))
-                feat["schulferien"] = float(last_row.get("schulferien", 0.0))
-                feat["trends_score"] = float(last_row.get("trends_score", 0.0))
-                feat["survstat_incidence"] = float(last_row.get("survstat_incidence", 0.0))
-                feat["survstat_lag7"] = float(last_row.get("survstat_lag7", 0.0))
-                feat["survstat_lag14"] = float(last_row.get("survstat_lag14", 0.0))
+                feat = self._build_meta_feature_row(
+                    last_row,
+                    hw_pred=float(hw_forecast[i]),
+                    ridge_pred=float(ridge_forecast[i]),
+                    prophet_pred=float(prophet_forecast[i]),
+                )
 
                 X_row = np.array([[feat.get(f, 0.0) for f in available_meta]])
                 X_row = np.nan_to_num(X_row, nan=0.0, posinf=0.0, neginf=0.0)

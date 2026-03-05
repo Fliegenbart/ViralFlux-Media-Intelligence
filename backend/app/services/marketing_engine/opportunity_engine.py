@@ -15,7 +15,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.models.database import AuditLog, MarketingOpportunity
+from app.models.database import AuditLog, BacktestRun, MarketingOpportunity
 from app.services.media.ai_campaign_planner import AiCampaignPlanner
 from app.services.media.campaign_guardrails import CampaignGuardrails
 from app.services.media.message_library import select_gelo_message_pack
@@ -107,6 +107,36 @@ class MarketingOpportunityEngine:
         self.playbook_engine = PlaybookEngine(db)
         self.ai_planner = AiCampaignPlanner()
         self.guardrails = CampaignGuardrails()
+
+    def _latest_market_backtest(
+        self,
+        *,
+        virus_typ: str | None = None,
+        target_source: str | None = None,
+    ) -> BacktestRun | None:
+        """Return the latest successful market backtest for the requested context."""
+        query = self.db.query(BacktestRun).filter(
+            BacktestRun.status == "success",
+            BacktestRun.mode == "MARKET_CHECK",
+        )
+        if virus_typ:
+            query = query.filter(BacktestRun.virus_typ == virus_typ)
+        if target_source:
+            query = query.filter(
+                func.upper(BacktestRun.target_source) == str(target_source).strip().upper()
+            )
+        return query.order_by(BacktestRun.created_at.desc()).first()
+
+    @staticmethod
+    def _market_backtest_is_ready(backtest: BacktestRun | None) -> bool:
+        if not backtest or not backtest.metrics:
+            return False
+        quality_gate = backtest.metrics.get("quality_gate") or {}
+        return bool(quality_gate.get("overall_passed") and quality_gate.get("lead_passed", False))
+
+    @staticmethod
+    def _derive_playbook_workflow_status(peix_score: float, model_ready: bool) -> str:
+        return "READY" if (peix_score >= 80.0 and model_ready) else "DRAFT"
 
     @staticmethod
     def _extract_improvement_vs_baselines(imp: dict | None) -> tuple[float, float]:
@@ -547,6 +577,9 @@ class MarketingOpportunityEngine:
         # per-card regeneration flows.
         ai_disabled = True
         started = time.monotonic()
+        latest_market_backtest = self._latest_market_backtest(virus_typ=virus_typ)
+        model_ready = self._market_backtest_is_ready(latest_market_backtest)
+        model_readiness_status = "GO" if model_ready else "WATCH"
 
         for candidate in candidates:
             # Guard against long-running multi-card generation: once vLLM times out,
@@ -631,7 +664,7 @@ class MarketingOpportunityEngine:
             guardrail_notes = guarded["guardrail_notes"]
 
             peix_score = float(candidate.get("peix_score") or 0.0)
-            workflow_status = "READY" if peix_score >= 80.0 else "DRAFT"
+            workflow_status = self._derive_playbook_workflow_status(peix_score, model_ready)
             urgency = float(candidate.get("priority_score") or candidate.get("trigger_strength") or 50.0)
             confidence_0_1 = round(float(candidate.get("confidence") or 60.0) / 100.0, 2)
             budget_shift_pct = float(ai_plan.get("budget_shift_pct") or candidate.get("budget_shift_pct") or 0.0)
@@ -651,6 +684,8 @@ class MarketingOpportunityEngine:
                 "impact_probability": round(float(candidate.get("impact_probability") or 0.0), 1),
                 "drivers": candidate.get("peix_drivers") or [],
                 "trigger_event": str(trigger_snapshot.get("event") or ""),
+                "model_readiness_status": model_readiness_status,
+                "model_backtest_run_id": latest_market_backtest.run_id if latest_market_backtest else None,
             }
 
             campaign_payload = self._build_campaign_pack(
@@ -744,6 +779,7 @@ class MarketingOpportunityEngine:
                     "ai_generation_status": ai_generated.get("ai_generation_status"),
                     "strategy_mode": "PLAYBOOK_AI",
                     "copy_status": pack.status,
+                    "model_readiness_status": model_readiness_status,
                 }
             )
 
@@ -1501,12 +1537,7 @@ class MarketingOpportunityEngine:
         )
 
         # 2. Modell-Genauigkeit aus letztem Backtest
-        latest_backtest = (
-            self.db.query(BacktestRun)
-            .filter(BacktestRun.status == "success")
-            .order_by(BacktestRun.created_at.desc())
-            .first()
-        )
+        latest_backtest = self._latest_market_backtest()
 
         model_accuracy = {}
         if latest_backtest and latest_backtest.metrics:
@@ -2308,7 +2339,7 @@ class MarketingOpportunityEngine:
             facts.append(
                 {
                     "key": "impact_probability",
-                    "label": "Impact Probability (%)",
+                    "label": "Signal-Score (%)",
                     "value": impact,
                     "source": "PeixEpiScore",
                 }

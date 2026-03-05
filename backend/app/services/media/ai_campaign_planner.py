@@ -203,7 +203,7 @@ class AiCampaignPlanner:
             f"Kampagnenziel: {campaign_goal}\n"
             f"Playbook: {playbook_candidate.get('playbook_title')} ({playbook_candidate.get('playbook_key')})\n"
             f"Region: {playbook_candidate.get('region_name')} ({playbook_candidate.get('region_code')})\n"
-            f"PeixEpiScore: {playbook_candidate.get('peix_score')} / Impact {playbook_candidate.get('impact_probability')}%\n"
+            f"PeixEpiScore: {playbook_candidate.get('peix_score')} / Signal-Score {playbook_candidate.get('impact_probability')}% (Priorisierungsscore, keine empirische Eintrittswahrscheinlichkeit)\n"
             f"Trigger: {trigger.get('event')} | {trigger.get('details')}\n"
             f"Message-Direction (fix): {direction}\n"
             f"Hero-Message (fix): {hero}\n"

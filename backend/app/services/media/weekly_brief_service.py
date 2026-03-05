@@ -177,7 +177,8 @@ class WeeklyBriefService:
         national_impact = peix.get("national_impact_probability", 0)
         _kv(pdf, "Nationaler Score:", f"{national_score:.0f} / 100", bold_value=True)
         _kv(pdf, "Risiko-Band:", str(national_band).upper(), bold_value=True)
-        _kv(pdf, "Impact-Wahrscheinlichkeit:", f"{national_impact:.1f}%", bold_value=True)
+        _kv(pdf, "Signal-Score:", f"{national_impact:.1f}%", bold_value=True)
+        _kv(pdf, "Score-Typ:", "Priorisierungs-/Entscheidungsscore", bold_value=True)
         _kv(pdf, "Dominanter Virus:", virus_typ)
         pdf.ln(2)
 
@@ -193,7 +194,7 @@ class WeeklyBriefService:
             pdf.set_font("Helvetica", "B" if is_live else "", 9)
             pdf.set_text_color(*_SLATE_700)
             display_val = f"{value}{unit}" if unit else str(value)
-            impact_str = f"Impact: {impact:.0f}%" if impact is not None else ""
+            impact_str = f"Signal-Score: {impact:.0f}%" if impact is not None else ""
             live_marker = "[LIVE]" if is_live else "[STALE]"
             pdf.cell(0, 6,
                      _safe(f"  {live_marker} {title}: {display_val}   {impact_str}"),
@@ -201,7 +202,7 @@ class WeeklyBriefService:
         pdf.ln(2)
 
         # Top-Regionen
-        _section(pdf, "Top-Regionen nach Impact")
+        _section(pdf, "Top-Regionen nach Signal-Score")
         if region_list:
             # Table header
             pdf.set_font("Helvetica", "B", 9)
@@ -209,7 +210,7 @@ class WeeklyBriefService:
             pdf.set_fill_color(*_INDIGO)
             pdf.cell(40, 7, "  Region", fill=True)
             pdf.cell(25, 7, "Score", align="C", fill=True)
-            pdf.cell(25, 7, "Impact", align="C", fill=True)
+            pdf.cell(25, 7, "Signal", align="C", fill=True)
             pdf.cell(25, 7, "Trend", align="C", fill=True)
             pdf.cell(0, 7, "Änderung", align="C", fill=True,
                      new_x="LMARGIN", new_y="NEXT")
@@ -253,7 +254,7 @@ class WeeklyBriefService:
         pdf.set_text_color(*_SLATE_700)
         pdf.multi_cell(0, 5, _safe(
             "Empfohlene Umschichtung basierend auf aktuellem PeixEpiScore und ML-Forecast. "
-            "Regionen mit hohem Impact sollten überproportional bespielt werden."
+            "Regionen mit hohem Signal-Score sollten überproportional bespielt werden."
         ), new_x="LMARGIN", new_y="NEXT")
         pdf.ln(3)
 
@@ -263,7 +264,7 @@ class WeeklyBriefService:
         pdf.set_fill_color(*_INDIGO)
         pdf.cell(45, 7, "  Region", fill=True)
         pdf.cell(25, 7, "Score", align="C", fill=True)
-        pdf.cell(25, 7, "Impact", align="C", fill=True)
+        pdf.cell(25, 7, "Signal", align="C", fill=True)
         pdf.cell(30, 7, "Empfehlung", align="C", fill=True)
         pdf.cell(0, 7, "Begründung", fill=True, new_x="LMARGIN", new_y="NEXT")
 

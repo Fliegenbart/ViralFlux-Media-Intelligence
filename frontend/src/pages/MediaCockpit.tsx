@@ -258,7 +258,7 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
         return { code, name: props.name || code || 'Unbekannt', d, cx, cy } as GeoBundeslandShape;
       })
       .filter((shape): shape is GeoBundeslandShape => Boolean(shape));
-  }, []);
+  }, [mapProjection]);
 
   const mapRanking = useMemo(() => (activeMap?.top_regions || []).slice(0, 5), [activeMap]);
 
@@ -287,7 +287,7 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
     } finally {
       if (showBlocking) setLoading(false);
     }
-  }, [virus]);
+  }, [toast, virus]);
 
   useEffect(() => {
     loadCockpit();
@@ -495,7 +495,7 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                           PEIX Score
                         </div>
                         <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>
-                          Eintrittswahrscheinlichkeit: {peixSummary.national_impact_probability ?? '\u2014'}%
+                          Band: {peixSummary.national_band ?? '\u2014'} &middot; Signal-Score: {peixSummary.national_impact_probability ?? '\u2014'}%
                         </div>
                       </div>
                     </div>
@@ -506,8 +506,8 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                     }}>
                       {peixLabel[band] || peixLabel.low}
                     </div>
-                    <p style={{ fontSize: 10, color: 'var(--text-muted)', lineHeight: 1.4, margin: 0 }}>
-                      Fusionsindex: Epidemiologie, Abwasser, Wetter, Suchtrends, Versorgungslage, Prognose (0\u2013100)
+                    <p style={{ fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.5, margin: 0 }}>
+                      Fusionsindex aus 6 Dimensionen (Epidemiologie, Abwasser, Wetter, Suchtrends, Versorgungslage, Prognose). Zeigt die Gesamtlage f&uuml;r Atemwegsinfekte in Deutschland als Priorisierungs-Score von 0&ndash;100, nicht als empirische Eintrittswahrscheinlichkeit.
                     </p>
                   </div>
                 );
@@ -692,7 +692,7 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                         role={region && code ? 'button' : undefined}
                         aria-label={
                           region && code
-                            ? `${shape.name}: Intensität ${band}, Impact ${Math.round(region.impact_probability || 0)}%`
+                            ? `${shape.name}: Intensität ${band}, Signal-Score ${Math.round(region.impact_probability || 0)}%`
                             : shape.name
                         }
                         style={{
@@ -991,7 +991,7 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                               </span>
                             </div>
                             <div style={{ fontSize: 11, color: '#64748b' }}>
-                              Impact:{' '}
+                              Signal-Score:{' '}
                               <span style={{ fontWeight: 600, color: '#334155' }}>
                                 {tip.impact_probability?.toFixed(0)}%
                               </span>
@@ -1080,7 +1080,7 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
           <div className="space-y-4">
             <div className="card p-4">
               <h3 className="text-sm font-semibold text-slate-900 mb-3">
-                Top Regionen nach Impact
+                Top Regionen nach Signal-Score
               </h3>
               <div className="space-y-2">
                 {mapRanking.map((r, idx) => (
@@ -1096,7 +1096,7 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                           {idx + 1}. {r.name}
                         </div>
                         <div className="text-xs text-slate-400">
-                          Impact {Math.round(r.impact_probability || 0)}% · Trend{' '}
+                          Signal {Math.round(r.impact_probability || 0)}% · Trend{' '}
                           {trendIcon(r.trend)} {r.change_pct > 0 ? '+' : ''}
                           {r.change_pct}%
                         </div>
@@ -1132,7 +1132,7 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
               </div>
               <div className="text-lg font-bold text-slate-900">{renderTileValue(tile)}</div>
               <div className="text-[11px] text-indigo-500 mt-1">
-                Impact: {Math.round(tile.impact_probability || 0)}%
+                Signal: {Math.round(tile.impact_probability || 0)}%
               </div>
             </div>
           ))}
@@ -1158,7 +1158,7 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                     {renderTileValue(tile)}
                   </div>
                   <div className="text-[11px] text-indigo-500 mt-1">
-                    Impact: {Math.round(tile.impact_probability || 0)}%
+                    Signal: {Math.round(tile.impact_probability || 0)}%
                   </div>
                 </div>
               ))}
@@ -2392,7 +2392,7 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
         {/* ── Market Check ── */}
         <div style={cardStyle}>
           <h2 style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 16 }}>
-            Markt-Check
+            Markt-Check (Proxy-Validierung)
           </h2>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
             <select
@@ -2495,6 +2495,9 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                 let finalShiftPct = Math.round(baseShiftPct * (1 - uncertaintyPenalty) * 10) / 10;
                 if (hasDecisionLayer && !gate?.overall_passed) finalShiftPct = Math.min(finalShiftPct, 12);
                 const gatePassed = hasDecisionLayer ? Boolean(gate?.overall_passed) : r2 >= 0.3;
+                const budgetShiftText = gatePassed
+                  ? `Freigegebener nationaler Budget-Shift: +${finalShiftPct.toFixed(1)}%.`
+                  : `Kein freigegebener Budget-Shift; Modell steht auf WATCH. Explorativer Proxy-Wert: +${finalShiftPct.toFixed(1)}%.`;
 
                 const trendUp = predGrowth2w > 0.1;
                 const trendDown = predGrowth2w < -0.1;
@@ -2539,13 +2542,13 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                         {hasDecisionLayer && decision?.hit_rate_pct != null
                           ? `Trefferquote: ${decision.hit_rate_pct.toFixed(0)}% · Vorlauf: ${decision.median_ttd_days ?? horizon}T`
                           : `Prognosegüte: R²=${r2.toFixed(2)} · Vorlauf: ${horizon}T`}
-                        {' '} — {fcWeeks > 0 ? `${fcWeeks} Wochen Forecast` : 'kein Forecast'}.
-                        {' '}Empfohlener nationaler Budget-Shift: <strong>+{finalShiftPct.toFixed(1)}%</strong>.
+                        {' '}— {fcWeeks > 0 ? `${fcWeeks} Wochen Forecast` : 'kein Forecast'}.
+                        {' '}<strong>{budgetShiftText}</strong>
                       </div>
                       <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>
                         {hasDecisionLayer
-                          ? 'Diese Empfehlung basiert auf OOS-TTD + Hit-Rate + Timing + Fehlerrisiko.'
-                          : 'Legacy-Fallback ohne Decision-Layer: Bewertung basiert auf OOS-Modellgüte.'}
+                          ? 'Diese Einschätzung basiert auf OOS-TTD + Hit-Rate + Timing + Fehlerrisiko und ist als Proxy-Validierung zu lesen.'
+                          : 'Legacy-Fallback ohne Decision-Layer: Bewertung basiert auf OOS-Modellgüte und bleibt explorativ.'}
                       </div>
                     </div>
 
@@ -2996,7 +2999,7 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
         {/* ── Customer Check ── */}
         <div style={cardStyle}>
           <h2 style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 16 }}>
-            Realitäts-Check (Kundendaten)
+            Realitäts-Check (Kundendaten / Truth-Layer)
           </h2>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}>
             <input
@@ -3064,6 +3067,27 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
                   </div>
                 ))}
               </div>
+
+              {btCustomerResult.metrics?.data_points != null && (
+                <div
+                  style={{
+                    marginBottom: 12,
+                    padding: '10px 12px',
+                    borderRadius: 10,
+                    border: '1px solid var(--border-color)',
+                    background: 'var(--bg-secondary)',
+                    fontSize: 12,
+                    color: 'var(--text-secondary)',
+                    lineHeight: 1.5,
+                  }}
+                >
+                  {btCustomerResult.metrics.data_points < 26
+                    ? `Explorativ: Nur ${btCustomerResult.metrics.data_points} OOS-Punkte. Das reicht für einen ersten Reality-Check, aber nicht für einen belastbaren GELO-Nachweis.`
+                    : btCustomerResult.metrics.data_points < 52
+                      ? `Frühe Evidenz: ${btCustomerResult.metrics.data_points} OOS-Punkte. Nutzbar als Truth-Layer-Signal, aber noch kein stabiler Jahresnachweis.`
+                      : `Belastbarer Truth-Layer: ${btCustomerResult.metrics.data_points} OOS-Punkte im Customer Check.`}
+                </div>
+              )}
 
               {btCustomerResult.chart_data?.length ? (() => {
                 const planningAvailable = Boolean(btCustomerResult.planning_curve?.curve?.length);

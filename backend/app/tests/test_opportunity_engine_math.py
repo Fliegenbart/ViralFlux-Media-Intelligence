@@ -34,6 +34,20 @@ class OpportunityEngineMathTests(unittest.TestCase):
         self.assertEqual(persistence, 9.1)
         self.assertEqual(seasonal, 2.7)
 
+    def test_derive_playbook_workflow_status_requires_model_readiness(self) -> None:
+        self.assertEqual(
+            MarketingOpportunityEngine._derive_playbook_workflow_status(85.0, True),
+            "READY",
+        )
+        self.assertEqual(
+            MarketingOpportunityEngine._derive_playbook_workflow_status(85.0, False),
+            "DRAFT",
+        )
+        self.assertEqual(
+            MarketingOpportunityEngine._derive_playbook_workflow_status(70.0, True),
+            "DRAFT",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

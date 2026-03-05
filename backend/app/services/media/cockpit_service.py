@@ -115,6 +115,24 @@ class MediaCockpitService:
             "timestamp": datetime.utcnow().isoformat(),
         }
 
+    @staticmethod
+    def _normalize_freshness_timestamp(
+        value: datetime | None,
+        *,
+        now: datetime | None = None,
+    ) -> str | None:
+        """Return an ISO timestamp that never points into the future."""
+        if value is None:
+            return None
+
+        effective_now = now or datetime.utcnow()
+        normalized = value
+        if normalized.tzinfo is not None:
+            normalized = normalized.replace(tzinfo=None)
+        if normalized > effective_now:
+            normalized = effective_now
+        return normalized.isoformat()
+
     def _map_section(
         self,
         *,
@@ -400,6 +418,7 @@ class MediaCockpitService:
                 "unit": "/100",
                 "subtitle": f"Band: {peix_score.get('national_band', 'n/a')}",
                 "impact_probability": peix_score.get("national_impact_probability") or 0.0,
+                "score_semantics": "ranking_signal",
                 "data_source": "Fusion",
             },
             {
@@ -408,10 +427,11 @@ class MediaCockpitService:
                 "value": top_region.get("name") if top_region else "-",
                 "unit": "",
                 "subtitle": (
-                    f"Impact {top_region.get('impact_probability', 0):.1f}%"
+                    f"Signal-Score {top_region.get('impact_probability', 0):.1f}%"
                     if top_region else "Keine Daten"
                 ),
                 "impact_probability": top_region.get("impact_probability") if top_region else 0.0,
+                "score_semantics": "ranking_signal",
                 "data_source": "Karte + Score",
             },
             {
@@ -677,10 +697,15 @@ class MediaCockpitService:
         return sorted(normalized)
 
     def _backtest_summary(self, virus_typ: str, target_source: str) -> dict:
-        latest_market = self.db.query(BacktestRun).filter(
+        latest_market_query = self.db.query(BacktestRun).filter(
             BacktestRun.mode == "MARKET_CHECK",
             BacktestRun.virus_typ == virus_typ,
-        ).order_by(BacktestRun.created_at.desc()).first()
+        )
+        if target_source:
+            latest_market_query = latest_market_query.filter(
+                func.upper(BacktestRun.target_source) == str(target_source).strip().upper()
+            )
+        latest_market = latest_market_query.order_by(BacktestRun.created_at.desc()).first()
 
         latest_customer = self.db.query(BacktestRun).filter(
             BacktestRun.mode == "CUSTOMER_CHECK",
@@ -725,6 +750,8 @@ class MediaCockpitService:
         }
 
     def _data_freshness(self) -> dict:
+        now = datetime.utcnow()
+
         def _max_date_for(model_cls, *col_names: str):
             for col_name in col_names:
                 col = getattr(model_cls, col_name, None)
@@ -732,7 +759,7 @@ class MediaCockpitService:
                     continue
                 value = self.db.query(func.max(col)).scalar()
                 if value:
-                    return value.isoformat()
+                    return self._normalize_freshness_timestamp(value, now=now)
             return None
 
         bfarm_freshness = None
@@ -740,7 +767,10 @@ class MediaCockpitService:
         analysis_date = signals.get("analysis_date")
         if analysis_date:
             try:
-                bfarm_freshness = datetime.fromisoformat(str(analysis_date)).isoformat()
+                bfarm_freshness = self._normalize_freshness_timestamp(
+                    datetime.fromisoformat(str(analysis_date)),
+                    now=now,
+                )
             except ValueError:
                 bfarm_freshness = None
 

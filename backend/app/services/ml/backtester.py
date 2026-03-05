@@ -4,6 +4,8 @@ Simuliert die RiskEngine für jeden Tag in der Kundenhistorie,
 optimiert Gewichte via Ridge Regression und generiert LLM-Insights.
 """
 
+from __future__ import annotations
+
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta

@@ -39,6 +39,50 @@ def _json_safe(value: Any) -> Any:
     return str(value)
 
 
+def _select_forecast_accuracy_actual(row: Any) -> float | None:
+    """Return the actual series value on the same scale as MLForecast.
+
+    The forecasting model is trained on raw ``viruslast`` values, not on
+    ``viruslast_normalisiert``. If the raw value is missing we skip the pair
+    instead of silently comparing different scales.
+    """
+    raw_value = getattr(row, "viruslast", None)
+    if raw_value is None:
+        return None
+
+    try:
+        value = float(raw_value)
+    except (TypeError, ValueError):
+        return None
+
+    return value if value == value else None
+
+
+def _compute_accuracy_metrics(predicted: list[float], actual: list[float]) -> dict[str, float]:
+    """Compute accuracy metrics for a list of like-for-like forecast pairs."""
+    import numpy as np
+
+    pred_arr = np.asarray(predicted, dtype=float)
+    act_arr = np.asarray(actual, dtype=float)
+    errors = pred_arr - act_arr
+
+    mae = float(np.mean(np.abs(errors)))
+    rmse = float(np.sqrt(np.mean(errors ** 2)))
+    nonzero = act_arr != 0
+    mape = float(np.mean(np.abs(errors[nonzero] / act_arr[nonzero])) * 100) if nonzero.any() else 0.0
+    if len(pred_arr) >= 3 and float(np.std(pred_arr)) > 0.0 and float(np.std(act_arr)) > 0.0:
+        corr = float(np.corrcoef(pred_arr, act_arr)[0, 1])
+    else:
+        corr = 0.0
+
+    return {
+        "mae": mae,
+        "rmse": rmse,
+        "mape": mape,
+        "correlation": corr,
+    }
+
+
 @celery_app.task(bind=True, name="train_xgboost_model_task")
 def train_xgboost_model_task(
     self,
@@ -95,8 +139,6 @@ def compute_forecast_accuracy_task(self) -> Dict[str, Any]:
     MAE, RMSE, MAPE und Korrelation werden in ForecastAccuracyLog persistiert.
     Bei MAPE > 35% wird drift_detected=True gesetzt.
     """
-    import numpy as np
-
     logger.info("Celery: Forecast accuracy check started")
     self.update_state(state="PROGRESS", meta={"step": "Computing accuracy...", "progress": 10})
 
@@ -142,13 +184,14 @@ def compute_forecast_accuracy_task(self) -> Dict[str, Any]:
                     .order_by(WastewaterAggregated.datum.asc())
                     .first()
                 )
-                if ww and ww.viruslast_normalisiert is not None:
+                actual_value = _select_forecast_accuracy_actual(ww) if ww else None
+                if actual_value is not None:
                     predicted.append(fc.predicted_value)
-                    actual.append(ww.viruslast_normalisiert)
+                    actual.append(actual_value)
                     pairs.append({
                         "date": fc.forecast_date.isoformat(),
                         "predicted": round(fc.predicted_value, 2),
-                        "actual": round(ww.viruslast_normalisiert, 2),
+                        "actual": round(actual_value, 2),
                     })
 
             n = len(predicted)
@@ -156,16 +199,11 @@ def compute_forecast_accuracy_task(self) -> Dict[str, Any]:
                 results[virus] = {"samples": n, "message": "Zu wenige Paare"}
                 continue
 
-            pred_arr = np.array(predicted)
-            act_arr = np.array(actual)
-            errors = pred_arr - act_arr
-
-            mae = float(np.mean(np.abs(errors)))
-            rmse = float(np.sqrt(np.mean(errors ** 2)))
-            # MAPE mit Schutz gegen Division durch 0
-            nonzero = act_arr != 0
-            mape = float(np.mean(np.abs(errors[nonzero] / act_arr[nonzero])) * 100) if nonzero.any() else 0.0
-            corr = float(np.corrcoef(pred_arr, act_arr)[0, 1]) if n >= 3 else 0.0
+            metrics = _compute_accuracy_metrics(predicted, actual)
+            mae = metrics["mae"]
+            rmse = metrics["rmse"]
+            mape = metrics["mape"]
+            corr = metrics["correlation"]
 
             drift = mape > 35.0
 
@@ -189,6 +227,7 @@ def compute_forecast_accuracy_task(self) -> Dict[str, Any]:
                 "mape": round(mape, 1),
                 "correlation": round(corr, 4),
                 "drift_detected": drift,
+                "target_scale": "viruslast",
             }
 
             # Trend-Analyse: letzte 3 Logs vergleichen

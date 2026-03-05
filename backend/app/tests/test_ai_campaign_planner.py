@@ -1,25 +1,42 @@
 import json
+import importlib
 import sys
 import types
 import unittest
 
-# Isolate planner tests from wider app import graph (Python 3.11-only modules).
-guardrails_stub = types.ModuleType("app.services.media.campaign_guardrails")
-guardrails_stub.HWG_SYSTEM_PROMPT = "test"
-guardrails_stub.check_hwg_compliance = lambda _: True
-sys.modules["app.services.media.campaign_guardrails"] = guardrails_stub
-
-llm_stub = types.ModuleType("app.services.llm.vllm_service")
-llm_stub.generate_text = lambda *_, **__: "ok"
-llm_stub.generate_text_sync = lambda *_, **__: '{"campaign_name":"A","objective":"B","budget_shift_pct":30,"activation_window_days":10,"channel_plan":[{"channel":"search","share_pct":100}]}'
-sys.modules["app.services.llm.vllm_service"] = llm_stub
-
-from app.services.media.ai_campaign_planner import AiCampaignPlanner
-
-
 class AiCampaignPlannerNormalizationTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls._original_guardrails = sys.modules.get("app.services.media.campaign_guardrails")
+        cls._original_vllm = sys.modules.get("app.services.llm.vllm_service")
+
+        guardrails_stub = types.ModuleType("app.services.media.campaign_guardrails")
+        guardrails_stub.HWG_SYSTEM_PROMPT = "test"
+        guardrails_stub.check_hwg_compliance = lambda _: True
+        sys.modules["app.services.media.campaign_guardrails"] = guardrails_stub
+
+        llm_stub = types.ModuleType("app.services.llm.vllm_service")
+        llm_stub.generate_text = lambda *_, **__: "ok"
+        llm_stub.generate_text_sync = lambda *_, **__: '{"campaign_name":"A","objective":"B","budget_shift_pct":30,"activation_window_days":10,"channel_plan":[{"channel":"search","share_pct":100}]}'
+        sys.modules["app.services.llm.vllm_service"] = llm_stub
+
+        planner_module = importlib.import_module("app.services.media.ai_campaign_planner")
+        cls.AiCampaignPlanner = planner_module.AiCampaignPlanner
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        if cls._original_guardrails is None:
+            sys.modules.pop("app.services.media.campaign_guardrails", None)
+        else:
+            sys.modules["app.services.media.campaign_guardrails"] = cls._original_guardrails
+
+        if cls._original_vllm is None:
+            sys.modules.pop("app.services.llm.vllm_service", None)
+        else:
+            sys.modules["app.services.llm.vllm_service"] = cls._original_vllm
+
     def setUp(self) -> None:
-        self.planner = AiCampaignPlanner()
+        self.planner = self.AiCampaignPlanner()
         self.candidate = {
             "playbook_key": "SUPPLY_SHOCK_ATTACK",
             "playbook_title": "Supply Shock",

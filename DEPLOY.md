@@ -5,16 +5,17 @@ Diese Anleitung beschreibt den produktiven Deploy für `https://fluxengine.labpu
 ## Zielzustand
 
 - Domain: `https://fluxengine.labpulse.ai/`
-- Public Edge: externer Nginx/TLS-Terminator
-- App-Proxy: Caddy im Docker-Stack auf Host-Port `18180`
-- Backend/DB/Redis: nur intern im Docker-Netzwerk
+- Public Edge: `voxdrop-nginx` auf `80/443`
+- Live-Frontend: `virusradar_frontend_prod` auf Host-Port `18080`
+- App-Stack: `backend`, `celery_worker`, `celery_beat` im Clean-Compose-Projekt
+- Persistente Infra: `virusradar_db` und `viralflux_redis`
 - Brand-Default im Prototyp: `gelo`
 
 ## Server-Pfade
 
 - Clean Checkout: `/opt/viralflux-media-intelligence-clean`
-- Edge-Konfiguration: `/opt/viralflux-media-config/Caddyfile.edge`
 - Deploy-Script: `/usr/local/bin/viralflux-deploy`
+- Versioniertes Deploy-Script im Repo: `/opt/viralflux-media-intelligence-clean/scripts/deploy-live.sh`
 
 ## Standard-Deploy
 
@@ -26,9 +27,10 @@ Was der Command macht:
 
 1. `origin/main` fetchen
 2. lokalen Stand im clean Checkout hart auf `origin/main` setzen
-3. serverseitige Edge-Caddy-Konfiguration injizieren
-4. Compose-Stack bauen und starten
-5. Status der Services ausgeben
+3. Frontend-Image neu bauen
+4. sicherstellen, dass `virusradar_db` und `viralflux_redis` im Clean-Netz hängen
+5. `frontend-prod`, `backend`, `celery_worker` und `celery_beat` sauber neu erzeugen
+6. Status der Live-Services ausgeben
 
 ## Smoke-Checks nach Deploy
 
@@ -51,9 +53,10 @@ Erwartung:
 
 ## Wichtige Hinweise
 
-- Nicht aus dem alten, lokalen Arbeitsbaum deployen: `/opt/viralflux-media-intelligence` kann absichtlich `dirty` sein.
+- Nicht aus dem alten, lokalen Arbeitsbaum deployen: `/opt/viralflux-media-intelligence` bleibt nur als Altbestand liegen.
 - Produktive Deploys nur über den clean Checkout + Deploy-Script.
 - Keine manuelle Anpassung der App-Dateien im clean Checkout; Änderungen gehören ins GitHub-Repo.
+- `virusradar_caddy_proxy` und das alte Compose-Netzwerk sind nicht mehr Teil des Live-Pfads.
 
 ## Rollback (schnell)
 
@@ -71,9 +74,9 @@ git reset --hard <COMMIT_HASH>
 ## Troubleshooting
 
 - `port is already allocated`:
-  - prüfen, ob ein anderer Service `80/443` belegt
-  - sicherstellen, dass der App-Proxy nur auf `18180` bindet
+  - prüfen, ob ein anderer Service `18080` oder `8000` belegt
+  - sicherstellen, dass nur der Clean-Stack `virusradar_frontend_prod` bereitstellt
 - CORS-Fehler:
   - `ALLOWED_ORIGINS` im Backend-Container prüfen
 - API läuft, UI nicht:
-  - `docker compose ... ps` und Proxy-Logs prüfen
+  - `docker ps` für `virusradar_frontend_prod` und `virusradar_backend` prüfen

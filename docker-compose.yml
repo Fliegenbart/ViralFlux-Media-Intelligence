@@ -40,15 +40,15 @@ services:
       dockerfile: ../docker/Dockerfile.backend
     container_name: virusradar_backend
     environment:
-      - POSTGRES_HOST=db
+      - POSTGRES_HOST=virusradar_db
       - POSTGRES_PORT=5432
       - POSTGRES_USER=${POSTGRES_USER:-virusradar}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-changeme}
       - POSTGRES_DB=${POSTGRES_DB:-virusradar_db}
       - OPENWEATHER_API_KEY=${OPENWEATHER_API_KEY}
       - VLLM_BASE_URL=${VLLM_BASE_URL:-http://localhost:8000/v1}
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://viralflux_redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://viralflux_redis:6379/0
       - SECRET_KEY=${SECRET_KEY}
       - ENVIRONMENT=${ENVIRONMENT:-development}
     volumes:
@@ -74,7 +74,7 @@ services:
       - ./backend:/app
       - ./data:/app/data
     environment:
-      - POSTGRES_HOST=db
+      - POSTGRES_HOST=virusradar_db
       - POSTGRES_PORT=5432
       - POSTGRES_USER=${POSTGRES_USER:-virusradar}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-changeme}
@@ -82,8 +82,8 @@ services:
       - OPENWEATHER_API_KEY=${OPENWEATHER_API_KEY}
       - SECRET_KEY=${SECRET_KEY}
       - ENVIRONMENT=${ENVIRONMENT:-development}
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://viralflux_redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://viralflux_redis:6379/0
       - VLLM_BASE_URL=${VLLM_BASE_URL:-http://host.docker.internal:8000/v1} # Greift auf lokalen vLLM zu
     depends_on:
       redis:
@@ -107,7 +107,7 @@ services:
       - ./backend:/app
       - ./data:/app/data
     environment:
-      - POSTGRES_HOST=db
+      - POSTGRES_HOST=virusradar_db
       - POSTGRES_PORT=5432
       - POSTGRES_USER=${POSTGRES_USER:-virusradar}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-changeme}
@@ -115,8 +115,8 @@ services:
       - OPENWEATHER_API_KEY=${OPENWEATHER_API_KEY}
       - SECRET_KEY=${SECRET_KEY}
       - ENVIRONMENT=${ENVIRONMENT:-development}
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://viralflux_redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://viralflux_redis:6379/0
       - VLLM_BASE_URL=${VLLM_BASE_URL:-http://host.docker.internal:8000/v1}
     depends_on:
       redis:

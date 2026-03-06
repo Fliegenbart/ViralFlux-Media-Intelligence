@@ -134,7 +134,7 @@ const CampaignStudio: React.FC<Props> = ({
                         </div>
                         <div>
                           <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Budget-Shift</div>
-                          <div style={{ marginTop: 4, fontSize: 13, color: '#4338ca', fontWeight: 700 }}>
+                          <div style={{ marginTop: 4, fontSize: 13, color: 'var(--accent-violet)', fontWeight: 700 }}>
                             {formatPercent(card.budget_shift_pct || 0)}
                           </div>
                         </div>

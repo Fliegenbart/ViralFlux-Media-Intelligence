@@ -195,7 +195,7 @@ const DecisionView: React.FC<Props> = ({
                       {card.region_codes_display?.join(', ') || card.region || 'National'} · {card.recommended_product || card.product}
                     </div>
                   </div>
-                  <strong style={{ fontSize: 14, color: '#4338ca' }}>{formatPercent(card.budget_shift_pct || 0)}</strong>
+                  <strong style={{ fontSize: 14, color: 'var(--accent-violet)' }}>{formatPercent(card.budget_shift_pct || 0)}</strong>
                 </div>
               </button>
             ))}

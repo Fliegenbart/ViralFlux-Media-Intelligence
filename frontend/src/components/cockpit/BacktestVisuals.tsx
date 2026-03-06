@@ -199,10 +199,10 @@ export const WaveOutlookPanel: React.FC<WaveOutlookPanelProps> = ({ result, load
 
       <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', marginBottom: 16 }}>
         {[
-          { label: 'Welle beginnt', value: startDate, tone: '#0f766e' },
-          { label: 'Wir stehen hier', value: currentDate, tone: '#4338ca' },
-          { label: 'Erwarteter Peak', value: peakDate, tone: '#b91c1c' },
-          { label: 'Rückgang', value: cooldownDate, tone: '#b45309' },
+          { label: 'Welle beginnt', value: startDate, tone: '#2aa198' },
+          { label: 'Wir stehen hier', value: currentDate, tone: '#0a84ff' },
+          { label: 'Erwarteter Peak', value: peakDate, tone: '#ff453a' },
+          { label: 'Rückgang', value: cooldownDate, tone: '#ff9f0a' },
         ].map((item) => (
           <div key={item.label} className="soft-panel" style={{ padding: 14 }}>
             <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
@@ -227,21 +227,21 @@ export const WaveOutlookPanel: React.FC<WaveOutlookPanelProps> = ({ result, load
             <ReferenceArea
               x1={rows[markers.currentIndex]?.dateLabel}
               x2={rows[rows.length - 1]?.dateLabel}
-              fill="rgba(67, 56, 202, 0.05)"
+              fill="rgba(10, 132, 255, 0.06)"
             />
-            <ReferenceLine x={rows[markers.startIndex]?.dateLabel} stroke="#0f766e" strokeDasharray="4 4" label={{ value: 'Beginn', position: 'top', fill: '#0f766e', fontSize: 10 }} />
-            <ReferenceLine x={rows[markers.currentIndex]?.dateLabel} stroke="#4338ca" strokeDasharray="4 4" label={{ value: 'Jetzt', position: 'top', fill: '#4338ca', fontSize: 10 }} />
-            <ReferenceLine x={rows[markers.peakIndex]?.dateLabel} stroke="#b91c1c" strokeDasharray="4 4" label={{ value: 'Peak', position: 'top', fill: '#b91c1c', fontSize: 10 }} />
+            <ReferenceLine x={rows[markers.startIndex]?.dateLabel} stroke="#2aa198" strokeDasharray="4 4" label={{ value: 'Beginn', position: 'top', fill: '#2aa198', fontSize: 10 }} />
+            <ReferenceLine x={rows[markers.currentIndex]?.dateLabel} stroke="#0a84ff" strokeDasharray="4 4" label={{ value: 'Jetzt', position: 'top', fill: '#0a84ff', fontSize: 10 }} />
+            <ReferenceLine x={rows[markers.peakIndex]?.dateLabel} stroke="#ff453a" strokeDasharray="4 4" label={{ value: 'Peak', position: 'top', fill: '#ff453a', fontSize: 10 }} />
 
             <Area type="monotone" dataKey="ci95Base" stackId="ci95" stroke="none" fill="transparent" activeDot={false} legendType="none" />
             <Area type="monotone" dataKey="ci95Range" stackId="ci95" stroke="none" fill="rgba(59,130,246,0.08)" activeDot={false} legendType="none" />
             <Area type="monotone" dataKey="ci80Base" stackId="ci80" stroke="none" fill="transparent" activeDot={false} legendType="none" />
             <Area type="monotone" dataKey="ci80Range" stackId="ci80" stroke="none" fill="rgba(59,130,246,0.18)" activeDot={false} legendType="none" />
 
-            <Line type="monotone" dataKey="actual" name="Ist-Wert" stroke="#1d4ed8" strokeWidth={2.5} dot={false} />
+            <Line type="monotone" dataKey="actual" name="Ist-Wert" stroke="#0a84ff" strokeWidth={2.5} dot={false} />
             <Line type="monotone" dataKey="model" name="Validierte Prognose" stroke="#475569" strokeWidth={1.8} dot={false} strokeDasharray="5 4" />
-            <Line type="monotone" dataKey="forecast" name="Ausblick" stroke="#4338ca" strokeWidth={2.8} dot={false} />
-            <Line type="monotone" dataKey="seasonal" name="Saison-Baseline" stroke="#f59e0b" strokeWidth={1.6} dot={false} strokeDasharray="3 3" />
+            <Line type="monotone" dataKey="forecast" name="Ausblick" stroke="#5e5ce6" strokeWidth={2.8} dot={false} />
+            <Line type="monotone" dataKey="seasonal" name="Saison-Baseline" stroke="#ff9f0a" strokeWidth={1.6} dot={false} strokeDasharray="3 3" />
           </ComposedChart>
         </ResponsiveContainer>
       </div>
@@ -327,9 +327,9 @@ export const ValidationSection: React.FC<ValidationSectionProps> = ({
               <Tooltip />
               <Legend />
 
-              <Line yAxisId="left" type="monotone" dataKey="actual" name="Ist" stroke="#1d4ed8" strokeWidth={2.5} dot={false} />
-              <Line yAxisId="left" type="monotone" dataKey="model" name="Modell" stroke="#4338ca" strokeWidth={2.2} dot={false} />
-              <Line yAxisId="left" type="monotone" dataKey="seasonal" name="Saison-Baseline" stroke="#f59e0b" strokeWidth={1.6} dot={false} strokeDasharray="3 3" />
+              <Line yAxisId="left" type="monotone" dataKey="actual" name="Ist" stroke="#0a84ff" strokeWidth={2.5} dot={false} />
+              <Line yAxisId="left" type="monotone" dataKey="model" name="Modell" stroke="#5e5ce6" strokeWidth={2.2} dot={false} />
+              <Line yAxisId="left" type="monotone" dataKey="seasonal" name="Saison-Baseline" stroke="#ff9f0a" strokeWidth={1.6} dot={false} strokeDasharray="3 3" />
               <Line yAxisId="left" type="monotone" dataKey="persistence" name="Persistence" stroke="#64748b" strokeWidth={1.4} dot={false} strokeDasharray="3 3" />
               {hasBio && <Line yAxisId="right" type="monotone" dataKey="bio" name="Bio-Signal" stroke="#7c3aed" strokeWidth={1.8} dot={false} />}
             </ComposedChart>

@@ -98,7 +98,7 @@ const GermanyMap: React.FC<Props> = ({ regions, selectedRegion, onSelectRegion }
           </filter>
         </defs>
 
-        <rect x="0" y="0" width="420" height="460" rx="18" fill="rgba(248, 250, 252, 0.92)" />
+        <rect x="0" y="0" width="420" height="460" rx="22" fill="rgba(255, 255, 255, 0.68)" />
 
         {shapes.map((shape) => {
           const code = shape.code;
@@ -115,7 +115,7 @@ const GermanyMap: React.FC<Props> = ({ regions, selectedRegion, onSelectRegion }
               <path
                 d={shape.d}
                 fill={regionColor(region)}
-                stroke={isSelected ? '#4338ca' : 'rgba(203, 213, 225, 0.9)'}
+                stroke={isSelected ? 'var(--accent-violet)' : 'rgba(203, 213, 225, 0.9)'}
                 strokeWidth={isSelected ? 2.4 : 1.1}
                 filter="url(#vf-map-shadow)"
               />
@@ -126,7 +126,7 @@ const GermanyMap: React.FC<Props> = ({ regions, selectedRegion, onSelectRegion }
                     cy={shape.cy - 5}
                     r={8.4}
                     fill="rgba(255,255,255,0.95)"
-                    stroke={isSelected ? '#4338ca' : 'rgba(203, 213, 225, 0.7)'}
+                    stroke={isSelected ? 'var(--accent-violet)' : 'rgba(203, 213, 225, 0.7)'}
                   />
                   <text x={shape.cx} y={shape.cy - 2.5} textAnchor="middle" fill="#334155" fontSize="8" fontWeight="700">
                     {code}

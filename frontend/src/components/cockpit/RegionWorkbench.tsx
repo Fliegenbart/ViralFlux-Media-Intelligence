@@ -171,7 +171,7 @@ const RegionWorkbench: React.FC<Props> = ({
                       </div>
                     </div>
                     <div style={{ textAlign: 'right' }}>
-                      <div style={{ fontSize: 15, fontWeight: 800, color: '#4338ca' }}>{formatPercent(item.impact_probability || item.peix_score || 0)}</div>
+                      <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--accent-violet)' }}>{formatPercent(item.impact_probability || item.peix_score || 0)}</div>
                       <div style={{ marginTop: 4, fontSize: 12, color: 'var(--text-muted)' }}>
                         Priorität {Math.round(item.recommendation_ref?.urgency_score || 0)}
                       </div>

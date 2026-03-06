@@ -61,9 +61,9 @@ export function statusTone(status?: string | null): { background: string; color:
   }
   if (normalized === 'APPROVED') {
     return {
-      background: 'rgba(37, 99, 235, 0.10)',
-      color: '#1d4ed8',
-      border: '1px solid rgba(37, 99, 235, 0.24)',
+      background: 'rgba(10, 132, 255, 0.12)',
+      color: 'var(--accent-violet)',
+      border: '1px solid rgba(10, 132, 255, 0.24)',
     };
   }
   if (normalized === 'READY') {
@@ -74,9 +74,9 @@ export function statusTone(status?: string | null): { background: string; color:
     };
   }
   return {
-    background: 'rgba(99, 102, 241, 0.10)',
-    color: '#4338ca',
-    border: '1px solid rgba(99, 102, 241, 0.22)',
+    background: 'rgba(10, 132, 255, 0.10)',
+    color: 'var(--accent-violet)',
+    border: '1px solid rgba(10, 132, 255, 0.2)',
   };
 }
 

@@ -1,5 +1,8 @@
 """Media API: Map-first Cockpit + Action Cards."""
 
+import math
+from datetime import date, datetime
+from decimal import Decimal
 from typing import Any, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -168,6 +171,34 @@ class OutcomeImportRequest(BaseModel):
     csv_payload: str | None = None
 
 
+def _json_safe_response(value: Any) -> Any:
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return value if math.isfinite(value) else None
+    if isinstance(value, str):
+        return value
+    if isinstance(value, (datetime, date)):
+        return value.isoformat()
+    if isinstance(value, Decimal):
+        return float(value)
+    item = getattr(value, "item", None)
+    if callable(item):
+        try:
+            return _json_safe_response(item())
+        except Exception:
+            pass
+    if isinstance(value, dict):
+        return {str(k): _json_safe_response(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple, set)):
+        return [_json_safe_response(v) for v in value]
+    return str(value)
+
+
 @router.get("/cockpit")
 async def get_media_cockpit(
     virus_typ: str = "Influenza A",
@@ -187,10 +218,12 @@ async def get_media_decision(
     db: Session = Depends(get_db),
 ):
     """V2 Decision-View Payload mit WeeklyDecision, Gate-Mix und Model/Truth-Kontext."""
-    return MediaV2Service(db).get_decision_payload(
-        virus_typ=virus_typ,
-        target_source=target_source,
-        brand=brand,
+    return _json_safe_response(
+        MediaV2Service(db).get_decision_payload(
+            virus_typ=virus_typ,
+            target_source=target_source,
+            brand=brand,
+        )
     )
 
 
@@ -202,10 +235,12 @@ async def get_media_regions(
     db: Session = Depends(get_db),
 ):
     """V2 Regionen-Workbench Payload mit Signal-Treibern und Prioritätslogik."""
-    return MediaV2Service(db).get_regions_payload(
-        virus_typ=virus_typ,
-        target_source=target_source,
-        brand=brand,
+    return _json_safe_response(
+        MediaV2Service(db).get_regions_payload(
+            virus_typ=virus_typ,
+            target_source=target_source,
+            brand=brand,
+        )
     )
 
 
@@ -216,7 +251,7 @@ async def get_media_campaigns(
     db: Session = Depends(get_db),
 ):
     """V2 Campaign-Queue mit Deduplizierung, Lifecycle-State und Publish-Blockern."""
-    return MediaV2Service(db).get_campaigns_payload(brand=brand, limit=limit)
+    return _json_safe_response(MediaV2Service(db).get_campaigns_payload(brand=brand, limit=limit))
 
 
 @router.get("/evidence")
@@ -227,10 +262,12 @@ async def get_media_evidence(
     db: Session = Depends(get_db),
 ):
     """V2 Evidenz-View mit Proxy, Truth, SignalStack und ModelLineage."""
-    return MediaV2Service(db).get_evidence_payload(
-        virus_typ=virus_typ,
-        target_source=target_source,
-        brand=brand,
+    return _json_safe_response(
+        MediaV2Service(db).get_evidence_payload(
+            virus_typ=virus_typ,
+            target_source=target_source,
+            brand=brand,
+        )
     )
 
 
@@ -240,7 +277,7 @@ async def get_media_signal_stack(
     db: Session = Depends(get_db),
 ):
     """Technischer V2-Endpunkt für den expliziten Signal-Stack."""
-    return MediaV2Service(db).get_signal_stack(virus_typ=virus_typ)
+    return _json_safe_response(MediaV2Service(db).get_signal_stack(virus_typ=virus_typ))
 
 
 @router.get("/model-lineage")
@@ -249,7 +286,7 @@ async def get_media_model_lineage(
     db: Session = Depends(get_db),
 ):
     """Liefert Modellversion, Feature-Set und Drift-Status des aktuellen Forecast-Stacks."""
-    return MediaV2Service(db).get_model_lineage(virus_typ=virus_typ)
+    return _json_safe_response(MediaV2Service(db).get_model_lineage(virus_typ=virus_typ))
 
 
 @router.get("/outcomes/coverage")
@@ -258,7 +295,7 @@ async def get_media_outcomes_coverage(
     db: Session = Depends(get_db),
 ):
     """Truth-Layer Coverage über importierte Outcome-Daten."""
-    return MediaV2Service(db).get_truth_coverage(brand=brand)
+    return _json_safe_response(MediaV2Service(db).get_truth_coverage(brand=brand))
 
 
 @router.get("/evidence/truth")
@@ -268,11 +305,11 @@ async def get_media_truth_evidence(
 ):
     """Kompakter Truth-Evidence Endpunkt für spätere dedizierte Client-Views."""
     coverage = MediaV2Service(db).get_truth_coverage(brand=brand)
-    return {
+    return _json_safe_response({
         "brand": brand,
         "coverage": coverage,
         "state_label": coverage.get("trust_readiness"),
-    }
+    })
 
 
 @router.post("/outcomes/import")
@@ -282,12 +319,14 @@ async def import_media_outcomes(
 ):
     """Importiert Truth-/Outcome-Daten per JSON oder CSV-String für den Kundenbeweis-Layer."""
     service = MediaV2Service(db)
-    return service.import_outcomes(
-        source_label=payload.source_label,
-        records=[item.model_dump(exclude_none=True) for item in payload.records],
-        csv_payload=payload.csv_payload,
-        brand=payload.brand,
-        replace_existing=payload.replace_existing,
+    return _json_safe_response(
+        service.import_outcomes(
+            source_label=payload.source_label,
+            records=[item.model_dump(exclude_none=True) for item in payload.records],
+            csv_payload=payload.csv_payload,
+            brand=payload.brand,
+            replace_existing=payload.replace_existing,
+        )
     )
 
 

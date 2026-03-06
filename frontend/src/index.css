@@ -1574,8 +1574,8 @@ body {
 }
 
 .drawer-overlay {
-  background: rgba(11, 12, 16, 0.28);
-  backdrop-filter: blur(12px) saturate(130%);
+  background: rgba(11, 12, 16, 0.42);
+  backdrop-filter: blur(18px) saturate(145%);
 }
 
 .drawer-panel {

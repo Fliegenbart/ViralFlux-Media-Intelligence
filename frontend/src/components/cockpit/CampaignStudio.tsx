@@ -60,13 +60,13 @@ const CampaignStudio: React.FC<Props> = ({
   }).length;
   const focusCard = cards.find((card) => ['approve', 'sync', 'review'].includes(recommendationLane(card))) || cards[0] || null;
   const focusTitle = focusCard
-    ? (focusCard.campaign_name || focusCard.display_title || focusCard.recommended_product || focusCard.product)
+    ? (focusCard.display_title || focusCard.campaign_name || focusCard.recommended_product || focusCard.product)
     : 'Noch keine Pakete im Review';
   const focusContext = focusCard
     ? `${focusCard.region_codes_display?.join(', ') || focusCard.region || 'National'} · ${flightWindowLabel(focusCard)}`
     : 'Qwen kann aus Regionen und Wochenentscheidung neue reviewbare Pakete erzeugen.';
   const focusCopy = focusCard
-    ? (focusCard.reason || focusCard.decision_brief?.summary_sentence || 'Nächster sinnvoller Kandidat für Review, Freigabe oder Connector-Vorbereitung.')
+    ? readableCampaignSummary(focusCard)
     : 'Sobald Pakete vorliegen, verschiebt sich der Fokus automatisch auf Review, Freigabe und Sync-Readiness.';
 
   return (
@@ -229,7 +229,7 @@ const CampaignStudio: React.FC<Props> = ({
                         </div>
 
                         <p className="campaign-work-item-copy">
-                          {card.reason || card.decision_brief?.summary_sentence || 'Regionale Aktivierung entlang des aktuellen Signals.'}
+                          {readableCampaignSummary(card)}
                         </p>
 
                         <div className="campaign-work-item-metrics">
@@ -287,4 +287,23 @@ function flightWindowLabel(card: RecommendationCard): string {
   if (start === '-' && end === '-') return 'Flight offen';
   if (end === '-' || start === end) return `Start ${start}`;
   return `${start} – ${end}`;
+}
+
+function readableCampaignSummary(card: RecommendationCard): string {
+  const summary = String(card.decision_brief?.summary_sentence || card.reason || '').trim();
+
+  if (!summary) return 'Regionale Aktivierung entlang des aktuellen Signals.';
+  if (/^[A-Z0-9_]+$/.test(summary)) {
+    return `${humanizeTrigger(summary)} als Trigger erkannt.`;
+  }
+
+  return summary;
+}
+
+function humanizeTrigger(value: string): string {
+  return value
+    .split('_')
+    .filter(Boolean)
+    .map((segment) => segment.charAt(0) + segment.slice(1).toLowerCase())
+    .join(' ');
 }

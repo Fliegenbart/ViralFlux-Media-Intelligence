@@ -1,8 +1,10 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 
-import { BacktestResponse, RecommendationCard } from '../../types/media';
-import { CockpitResponse } from './types';
+import {
+  BacktestResponse,
+  MediaDecisionResponse,
+} from '../../types/media';
 import { WaveOutlookPanel } from './BacktestVisuals';
 import {
   VIRUS_OPTIONS,
@@ -16,9 +18,8 @@ import {
 interface Props {
   virus: string;
   onVirusChange: (value: string) => void;
-  cockpit: CockpitResponse | null;
+  decision: MediaDecisionResponse | null;
   loading: boolean;
-  recommendations: RecommendationCard[];
   waveOutlook: BacktestResponse | null;
   waveOutlookLoading: boolean;
   onOpenRecommendation: (id: string) => void;
@@ -29,29 +30,33 @@ interface Props {
 const DecisionView: React.FC<Props> = ({
   virus,
   onVirusChange,
-  cockpit,
+  decision,
   loading,
-  recommendations,
   waveOutlook,
   waveOutlookLoading,
   onOpenRecommendation,
   onOpenRegions,
   onOpenCampaigns,
 }) => {
-  const latestMarket = cockpit?.backtest_summary?.latest_market;
-  const latestCustomer = cockpit?.backtest_summary?.latest_customer;
-  const topCard = recommendations[0] || cockpit?.recommendations?.cards?.[0] || null;
-  const topRegions = (cockpit?.map?.top_regions || []).slice(0, 3);
-  const isGo = Boolean(latestMarket?.quality_gate?.overall_passed);
+  const weeklyDecision = decision?.weekly_decision;
+  const latestMarket = decision?.backtest_summary?.latest_market;
+  const latestCustomer = decision?.backtest_summary?.latest_customer;
+  const topCard = decision?.top_recommendations?.[0] || null;
+  const recommendations = decision?.top_recommendations || [];
+  const topRegions = weeklyDecision?.top_regions || [];
+  const isGo = String(weeklyDecision?.decision_state || '').toUpperCase() === 'GO';
   const readiness = latestMarket?.decision_metrics?.readiness_score_0_100;
   const primaryRegion = topCard?.decision_brief?.recommendation?.primary_region || topRegions[0]?.name;
   const horizonMin = topCard?.decision_brief?.horizon?.min_days;
   const horizonMax = topCard?.decision_brief?.horizon?.max_days;
+  const topDrivers = weeklyDecision?.signal_stack_summary?.top_drivers || [];
+  const mathStack = weeklyDecision?.signal_stack_summary?.math_stack;
 
-  const heroSentence = topCard?.decision_brief?.summary_sentence
+  const heroSentence = weeklyDecision?.recommended_action
+    || topCard?.decision_brief?.summary_sentence
     || (topRegions.length
       ? `Diese Woche ${isGo ? 'freigeben' : 'vorbereiten'}: Fokus auf ${topRegions
-        .map((region) => region.name)
+        .map((region) => region.name || region.code)
         .join(', ')}.`
       : 'Diese Woche die nationale Lage beobachten und regionale Signale priorisieren.');
   const horizonLabel = horizonMin && horizonMax
@@ -65,7 +70,7 @@ const DecisionView: React.FC<Props> = ({
 
   const gateTone = readinessTone(isGo);
 
-  if (loading && !cockpit) {
+  if (loading && !decision) {
     return <div className="card" style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>Lade Entscheidungssystem...</div>;
   }
 
@@ -88,9 +93,9 @@ const DecisionView: React.FC<Props> = ({
           </div>
         </div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-          <span className="step-chip step-chip-done">Datenstand {formatDateTime(cockpit?.map?.date)}</span>
-          <span className="step-chip">Proxy-validiert</span>
-          <span className="step-chip">Kunden-Check: {truthLayerLabel(latestCustomer)}</span>
+          <span className="step-chip step-chip-done">Datenstand {formatDateTime(weeklyDecision?.decision_window?.start)}</span>
+          <span className="step-chip">Proxy: {weeklyDecision?.proxy_state === 'passed' ? 'GO-Korridor' : 'WATCH'}</span>
+          <span className="step-chip">Kunden-Check: {truthLayerLabel(decision?.truth_coverage || latestCustomer)}</span>
         </div>
       </section>
 
@@ -112,7 +117,7 @@ const DecisionView: React.FC<Props> = ({
                 {isGo ? 'GO' : 'WATCH'}
               </span>
               <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                {topCard?.playbook_title || 'Wochenentscheidung'} · {cockpit?.map?.date ? new Date(cockpit.map.date).toLocaleDateString('de-DE') : '-'}
+                {topCard?.playbook_title || 'Wochenentscheidung'} · {weeklyDecision?.decision_window?.start ? new Date(weeklyDecision.decision_window.start).toLocaleDateString('de-DE') : '-'}
               </span>
             </div>
             <div className="section-heading" style={{ gap: 12 }}>
@@ -135,17 +140,17 @@ const DecisionView: React.FC<Props> = ({
             <div>
               <div className="section-kicker">Wochenfokus</div>
               <div className="summary-headline">
-                {topCard?.recommended_product || 'GELO Portfolio'}
+                {weeklyDecision?.top_products?.[0] || topCard?.recommended_product || 'GELO Portfolio'}
               </div>
               <div className="summary-note">
-                Top-Regionen: {topRegions.map((region) => region.name).join(', ') || 'National'}
+                Top-Regionen: {topRegions.map((region) => region.name || region.code).join(', ') || 'National'}
               </div>
             </div>
             <div className="decision-rail summary-grid">
               <div style={{ minWidth: 120 }}>
                 <div className="section-kicker" style={{ marginBottom: 6 }}>Shift</div>
                 <div className="summary-metric">
-                  {formatPercent(topCard?.budget_shift_pct || 0)}
+                  {formatPercent((weeklyDecision?.budget_shift as number | undefined) || topCard?.budget_shift_pct || 0)}
                 </div>
               </div>
               <div style={{ minWidth: 140 }}>
@@ -180,6 +185,22 @@ const DecisionView: React.FC<Props> = ({
 
           <div className="card subsection-card" style={{ padding: 24 }}>
             <div className="section-heading" style={{ gap: 6 }}>
+              <h2 className="subsection-title">Warum jetzt?</h2>
+              <p className="subsection-copy">
+                Decision Support aus expliziten Signalen statt Black Box.
+              </p>
+            </div>
+            <div style={{ display: 'grid', gap: 10, marginTop: 14 }}>
+              {(weeklyDecision?.why_now || []).map((reason) => (
+                <div key={reason} className="soft-panel" style={{ padding: 14, fontSize: 14, color: 'var(--text-secondary)' }}>
+                  {reason}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="card subsection-card" style={{ padding: 24 }}>
+            <div className="section-heading" style={{ gap: 6 }}>
               <h2 className="subsection-title">Kampagnen, die jetzt zählen</h2>
               <p className="subsection-copy">
                 Direkter Sprung in review- oder publishable Pakete.
@@ -206,8 +227,49 @@ const DecisionView: React.FC<Props> = ({
               </button>
             ))}
           </div>
+
+          <div className="card subsection-card" style={{ padding: 24 }}>
+            <div className="section-heading" style={{ gap: 6 }}>
+              <h2 className="subsection-title">Signal- und Modellkette</h2>
+              <p className="subsection-copy">
+                AMELAG und SurvStat bleiben Kernsignale. Holt-Winters, Ridge und Prophet laufen in XGBoost als Meta-Learner zusammen.
+              </p>
+            </div>
+            <div className="review-chip-row" style={{ marginTop: 14 }}>
+              {(mathStack?.base_models || []).map((label) => (
+                <span key={label} className="step-chip">{label}</span>
+              ))}
+              {mathStack?.meta_learner && <span className="step-chip">{mathStack.meta_learner}</span>}
+            </div>
+            <div className="review-chip-row" style={{ marginTop: 10 }}>
+              {topDrivers.map((driver) => (
+                <span key={driver.label} className="step-chip">
+                  {driver.label} {formatPercent(driver.strength_pct || 0)}
+                </span>
+              ))}
+            </div>
+          </div>
         </div>
       </section>
+
+      {(weeklyDecision?.risk_flags || []).length > 0 && (
+        <section className="card subsection-card" style={{ padding: 24 }}>
+          <div className="section-heading" style={{ gap: 6 }}>
+            <h2 className="subsection-title">Risiken und Sperren</h2>
+            <p className="subsection-copy">
+              GO/WATCH wird aus Datenfrische, Proxy, Truth, Modellzustand und Publishability abgeleitet.
+            </p>
+          </div>
+          <div style={{ display: 'grid', gap: 10, marginTop: 14 }}>
+            {(weeklyDecision?.risk_flags || []).map((flag) => (
+              <div key={flag} className="evidence-row">
+                <span>{flag}</span>
+                <strong>{weeklyDecision?.decision_state}</strong>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   );
 };

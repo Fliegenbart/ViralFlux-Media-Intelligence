@@ -139,6 +139,9 @@ const RecommendationDrawer: React.FC<Props> = ({
                     {confidenceValue != null ? `${confidenceValue}% Confidence` : 'Confidence offen'}
                   </span>
                   <span className="campaign-confidence-chip">
+                    {detail.lifecycle_state || workflowLabel(detail.status)}
+                  </span>
+                  <span className="campaign-confidence-chip">
                     KPI {kpiLabel(detail.primary_kpi || detail.campaign_pack?.measurement_plan?.primary_kpi)}
                   </span>
                   <span className="campaign-confidence-chip">
@@ -341,6 +344,19 @@ const RecommendationDrawer: React.FC<Props> = ({
                       ))
                     ) : (
                       <div className="review-muted-copy">Keine zusätzlichen Guardrail-Hinweise.</div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="soft-panel review-panel-soft">
+                  <div className="campaign-focus-label">Publish-Blocker</div>
+                  <div className="review-stack">
+                    {detail.publish_blockers && detail.publish_blockers.length > 0 ? (
+                      detail.publish_blockers.map((note) => (
+                        <div key={note} className="review-body-copy">{note}</div>
+                      ))
+                    ) : (
+                      <div className="review-muted-copy">Keine offenen Blocker. Paket ist operativ konsistent.</div>
                     )}
                   </div>
                 </div>

@@ -1,6 +1,6 @@
 import React from 'react';
 
-import { RecommendationCard } from '../../types/media';
+import { MediaCampaignsResponse, RecommendationCard } from '../../types/media';
 import { CAMPAIGN_LANES } from './types';
 import {
   workflowLabel,
@@ -12,7 +12,7 @@ import {
 } from './cockpitUtils';
 
 interface Props {
-  cards: RecommendationCard[];
+  campaignsView: MediaCampaignsResponse | null;
   virus: string;
   brand: string;
   budget: number;
@@ -27,7 +27,7 @@ interface Props {
 }
 
 const CampaignStudio: React.FC<Props> = ({
-  cards,
+  campaignsView,
   virus,
   brand,
   budget,
@@ -40,17 +40,11 @@ const CampaignStudio: React.FC<Props> = ({
   onGenerate,
   onOpenRecommendation,
 }) => {
+  const cards = campaignsView?.cards || [];
   const grouped = CAMPAIGN_LANES.map((lane) => ({
     ...lane,
     cards: cards.filter((card) => recommendationLane(card) === lane.id),
   }));
-  const confidenceValues = cards
-    .map((card) => card.confidence)
-    .filter((value): value is number => value != null && !Number.isNaN(value))
-    .map((value) => (value <= 1 ? value * 100 : value));
-  const averageConfidence = confidenceValues.length > 0
-    ? Math.round(confidenceValues.reduce((sum, value) => sum + value, 0) / confidenceValues.length)
-    : null;
   const reviewCount = grouped.find((lane) => lane.id === 'review')?.cards.length || 0;
   const approveCount = grouped.find((lane) => lane.id === 'approve')?.cards.length || 0;
   const syncCount = grouped.find((lane) => lane.id === 'sync')?.cards.length || 0;
@@ -109,8 +103,8 @@ const CampaignStudio: React.FC<Props> = ({
               <small>Connector-Vorbereitung möglich</small>
             </div>
             <div className="campaign-metric-card">
-              <span>Confidence</span>
-              <strong>{averageConfidence != null ? `${averageConfidence}%` : '-'}</strong>
+              <span>Publishable</span>
+              <strong>{campaignsView?.summary?.publishable_cards ?? 0}</strong>
               <small>{liveCount} live · {aiTouchedCount} mit AI-Plan</small>
             </div>
           </div>
@@ -165,6 +159,10 @@ const CampaignStudio: React.FC<Props> = ({
               <span>Connector-Fokus</span>
               <strong>{syncCount}</strong>
             </div>
+            <div className="campaign-guidance-row">
+              <span>Dedupliziert</span>
+              <strong>{campaignsView?.summary?.deduped_cards ?? cards.length}</strong>
+            </div>
             <div className="campaign-guidance-copy">
               Gute UX hier heißt: wenige starke Pakete, klare Zustände, ein sauberer Schritt zur Freigabe.
             </div>
@@ -213,7 +211,7 @@ const CampaignStudio: React.FC<Props> = ({
                       >
                         <div className="campaign-work-item-top">
                           <span className="campaign-status-badge" style={tone}>
-                            {card.status_label || workflowLabel(card.status)}
+                            {card.lifecycle_state || card.status_label || workflowLabel(card.status)}
                           </span>
                           <span className="campaign-confidence-chip">
                             {confidenceLabel(card.confidence)}
@@ -232,6 +230,14 @@ const CampaignStudio: React.FC<Props> = ({
                         <p className="campaign-work-item-copy">
                           {readableCampaignSummary(card)}
                         </p>
+
+                        {Boolean(card.publish_blockers?.length) && (
+                          <div className="review-chip-row" style={{ marginTop: 10 }}>
+                            {card.publish_blockers!.slice(0, 2).map((blocker) => (
+                              <span key={blocker} className="step-chip">{blocker}</span>
+                            ))}
+                          </div>
+                        )}
 
                         <div className="campaign-work-item-metrics">
                           <div className="campaign-inline-stat">
@@ -253,7 +259,7 @@ const CampaignStudio: React.FC<Props> = ({
                         </div>
 
                         <div className="campaign-work-item-footer">
-                          <span>{flightWindowLabel(card)}</span>
+                          <span>{flightWindowLabel(card)} · {card.evidence_strength || 'Evidenz offen'}</span>
                           <span>Review öffnen</span>
                         </div>
                       </button>

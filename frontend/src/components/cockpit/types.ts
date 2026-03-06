@@ -20,6 +20,12 @@ export interface MapRegion {
   impact_probability?: number;
   recommendation_ref?: RegionRecommendationRef | null;
   tooltip?: RegionTooltipData | null;
+  forecast_direction?: string;
+  signal_drivers?: Array<{ label: string; strength_pct: number }>;
+  layer_contributions?: Record<string, number>;
+  budget_logic?: string;
+  priority_explanation?: string;
+  source_trace?: string[];
 }
 
 export interface CockpitResponse {

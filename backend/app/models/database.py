@@ -555,6 +555,36 @@ class UploadHistory(Base):
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
 
 
+class MediaOutcomeRecord(Base):
+    """Manuell oder per CSV importierte Truth-/Outcome-Daten für Media-Evidenz."""
+    __tablename__ = "media_outcome_records"
+
+    id = Column(Integer, primary_key=True, index=True)
+    week_start = Column(DateTime, nullable=False, index=True)
+    brand = Column(String, nullable=False, index=True, default="gelo")
+    product = Column(String, nullable=False, index=True)
+    region_code = Column(String, nullable=False, index=True)
+    media_spend_eur = Column(Float)
+    impressions = Column(Float)
+    clicks = Column(Float)
+    qualified_visits = Column(Float)
+    search_lift_index = Column(Float)
+    sales_units = Column(Float)
+    order_count = Column(Float)
+    revenue_eur = Column(Float)
+    source_label = Column(String, nullable=False, default="manual", index=True)
+    import_batch_id = Column(String, nullable=True, index=True)
+    extra_data = Column(JSON)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, index=True)
+
+    __table_args__ = (
+        UniqueConstraint("week_start", "brand", "product", "region_code", "source_label", name="uq_media_outcome_record"),
+        Index("idx_media_outcome_brand_week", "brand", "week_start"),
+        Index("idx_media_outcome_product_week", "product", "week_start"),
+    )
+
+
 class LabConfiguration(Base):
     """Gelernte Gewichte (Global oder pro Mandant)."""
     __tablename__ = "lab_configurations"

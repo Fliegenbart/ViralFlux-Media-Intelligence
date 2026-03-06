@@ -23,7 +23,14 @@ from app.services.media.product_catalog_service import (
     DEFAULT_GELO_SOURCE_URL,
     ProductCatalogService,
 )
+from app.services.media.recommendation_contracts import (
+    extract_region_codes_from_card as contract_extract_region_codes_from_card,
+    extract_region_codes_from_card_payload as contract_extract_region_codes_from_card_payload,
+    normalize_region_code as contract_normalize_region_code,
+    to_card_response as contract_to_card_response,
+)
 from app.services.media.tasks import refine_recommendation_ai_task
+from app.services.media.v2_service import MediaV2Service
 from app.schemas.brand_product import BrandProductCreateInput, BrandProductUpdate
 
 
@@ -138,6 +145,29 @@ class ProductConditionLinkRequest(BaseModel):
     notes: str | None = None
 
 
+class OutcomeImportRecord(BaseModel):
+    week_start: str
+    product: str
+    region_code: str
+    media_spend_eur: float | None = None
+    impressions: float | None = None
+    clicks: float | None = None
+    qualified_visits: float | None = None
+    search_lift_index: float | None = None
+    sales_units: float | None = None
+    order_count: float | None = None
+    revenue_eur: float | None = None
+    extra_data: dict[str, Any] | None = None
+
+
+class OutcomeImportRequest(BaseModel):
+    brand: str = Field(default="gelo")
+    source_label: str = Field(default="manual")
+    replace_existing: bool = Field(default=False)
+    records: list[OutcomeImportRecord] = Field(default_factory=list)
+    csv_payload: str | None = None
+
+
 @router.get("/cockpit")
 async def get_media_cockpit(
     virus_typ: str = "Influenza A",
@@ -147,6 +177,118 @@ async def get_media_cockpit(
     """Aggregierter One-shot Payload für das Map-first Dashboard."""
     service = MediaCockpitService(db)
     return service.get_cockpit_payload(virus_typ=virus_typ, target_source=target_source)
+
+
+@router.get("/decision")
+async def get_media_decision(
+    virus_typ: str = "Influenza A",
+    target_source: str = "RKI_ARE",
+    brand: str = "gelo",
+    db: Session = Depends(get_db),
+):
+    """V2 Decision-View Payload mit WeeklyDecision, Gate-Mix und Model/Truth-Kontext."""
+    return MediaV2Service(db).get_decision_payload(
+        virus_typ=virus_typ,
+        target_source=target_source,
+        brand=brand,
+    )
+
+
+@router.get("/regions")
+async def get_media_regions(
+    virus_typ: str = "Influenza A",
+    target_source: str = "RKI_ARE",
+    brand: str = "gelo",
+    db: Session = Depends(get_db),
+):
+    """V2 Regionen-Workbench Payload mit Signal-Treibern und Prioritätslogik."""
+    return MediaV2Service(db).get_regions_payload(
+        virus_typ=virus_typ,
+        target_source=target_source,
+        brand=brand,
+    )
+
+
+@router.get("/campaigns")
+async def get_media_campaigns(
+    brand: str = "gelo",
+    limit: int = Query(default=120, ge=1, le=500),
+    db: Session = Depends(get_db),
+):
+    """V2 Campaign-Queue mit Deduplizierung, Lifecycle-State und Publish-Blockern."""
+    return MediaV2Service(db).get_campaigns_payload(brand=brand, limit=limit)
+
+
+@router.get("/evidence")
+async def get_media_evidence(
+    virus_typ: str = "Influenza A",
+    target_source: str = "RKI_ARE",
+    brand: str = "gelo",
+    db: Session = Depends(get_db),
+):
+    """V2 Evidenz-View mit Proxy, Truth, SignalStack und ModelLineage."""
+    return MediaV2Service(db).get_evidence_payload(
+        virus_typ=virus_typ,
+        target_source=target_source,
+        brand=brand,
+    )
+
+
+@router.get("/signal-stack")
+async def get_media_signal_stack(
+    virus_typ: str = "Influenza A",
+    db: Session = Depends(get_db),
+):
+    """Technischer V2-Endpunkt für den expliziten Signal-Stack."""
+    return MediaV2Service(db).get_signal_stack(virus_typ=virus_typ)
+
+
+@router.get("/model-lineage")
+async def get_media_model_lineage(
+    virus_typ: str = "Influenza A",
+    db: Session = Depends(get_db),
+):
+    """Liefert Modellversion, Feature-Set und Drift-Status des aktuellen Forecast-Stacks."""
+    return MediaV2Service(db).get_model_lineage(virus_typ=virus_typ)
+
+
+@router.get("/outcomes/coverage")
+async def get_media_outcomes_coverage(
+    brand: str = "gelo",
+    db: Session = Depends(get_db),
+):
+    """Truth-Layer Coverage über importierte Outcome-Daten."""
+    return MediaV2Service(db).get_truth_coverage(brand=brand)
+
+
+@router.get("/evidence/truth")
+async def get_media_truth_evidence(
+    brand: str = "gelo",
+    db: Session = Depends(get_db),
+):
+    """Kompakter Truth-Evidence Endpunkt für spätere dedizierte Client-Views."""
+    coverage = MediaV2Service(db).get_truth_coverage(brand=brand)
+    return {
+        "brand": brand,
+        "coverage": coverage,
+        "state_label": coverage.get("trust_readiness"),
+    }
+
+
+@router.post("/outcomes/import")
+async def import_media_outcomes(
+    payload: OutcomeImportRequest,
+    db: Session = Depends(get_db),
+):
+    """Importiert Truth-/Outcome-Daten per JSON oder CSV-String für den Kundenbeweis-Layer."""
+    service = MediaV2Service(db)
+    return service.import_outcomes(
+        source_label=payload.source_label,
+        records=[item.model_dump(exclude_none=True) for item in payload.records],
+        csv_payload=payload.csv_payload,
+        brand=payload.brand,
+        replace_existing=payload.replace_existing,
+    )
 
 
 @router.post("/recommendations/generate")
@@ -785,183 +927,16 @@ def _build_display_title(opp: dict[str, Any], product: str | None) -> str:
 
 
 def _to_card_response(opp: dict[str, Any], include_preview: bool = True) -> dict[str, Any]:
-    preview = opp.get("campaign_preview") or {}
-    campaign_pack = opp.get("campaign_payload") or {}
-    measurement = campaign_pack.get("measurement_plan") or {}
-    product_mapping = campaign_pack.get("product_mapping") or {}
-    peix_context = campaign_pack.get("peix_context") or {}
-    playbook = campaign_pack.get("playbook") or {}
-    ai_meta = campaign_pack.get("ai_meta") or {}
-    region_codes = _extract_region_codes_from_card_payload(opp, campaign_pack)
-    recommended_product = (
-        opp.get("recommended_product")
-        or product_mapping.get("recommended_product")
-        or opp.get("product")
-    )
-
-    trigger_ctx = opp.get("trigger_context") or {}
-    condition_key = opp.get("condition_key") or product_mapping.get("condition_key", "")
-    public_playbook = public_playbook_title(
-        playbook_key=opp.get("playbook_key") or playbook.get("key"),
-        title=opp.get("playbook_title") or playbook.get("title"),
-    )
-    public_title = public_display_title(
-        playbook_key=opp.get("playbook_key") or playbook.get("key"),
-        playbook_title=opp.get("playbook_title") or playbook.get("title"),
-        campaign_name=preview.get("campaign_name") or ((campaign_pack.get("campaign") or {}).get("campaign_name")),
-        product=recommended_product,
-        trigger_event=trigger_ctx.get("event"),
-        condition_label=(
-            opp.get("condition_label")
-            or product_mapping.get("condition_label")
-            or CONDITION_LABELS.get(condition_key)
-        ),
-    )
-
-    card = {
-        "id": opp.get("id"),
-        "status": opp.get("status"),
-        "status_label": STATUS_LABELS.get(opp.get("status", ""), opp.get("status")),
-        "type": opp.get("type"),
-        "urgency_score": opp.get("urgency_score"),
-        "brand": opp.get("brand") or "PEIX Partner",
-        "product": recommended_product or "Atemwegslinie",
-        "recommended_product": recommended_product,
-        "region": opp.get("region") or (
-            BUNDESLAND_NAMES.get(region_codes[0], region_codes[0]) if region_codes else "National"
-        ),
-        "region_codes": region_codes,
-        "region_codes_display": [BUNDESLAND_NAMES.get(c, c) for c in region_codes],
-        "budget_shift_pct": opp.get("budget_shift_pct") or (preview.get("budget") or {}).get("shift_pct") or 15.0,
-        "channel_mix": opp.get("channel_mix") or {"programmatic": 35, "social": 30, "search": 20, "ctv": 15},
-        "activation_window": {
-            "start": opp.get("activation_start") or (preview.get("activation_window") or {}).get("start"),
-            "end": opp.get("activation_end") or (preview.get("activation_window") or {}).get("end"),
-        },
-        "reason": (
-            public_reason_text(
-                reason=opp.get("recommendation_reason"),
-                event=trigger_ctx.get("event"),
-                details=trigger_ctx.get("details"),
-            )
-        ),
-        "confidence": (
-            round(float(opp.get("confidence")), 2)
-            if opp.get("confidence") is not None
-            else round(min(0.98, max(0.45, float(opp.get("urgency_score") or 50.0) / 100.0)), 2)
-        ),
-        "detail_url": opp.get("detail_url") or f"/kampagnen/{opp.get('id')}",
-        "created_at": opp.get("created_at"),
-        "updated_at": opp.get("updated_at"),
-        "campaign_name": preview.get("campaign_name") or ((campaign_pack.get("campaign") or {}).get("campaign_name")),
-        "primary_kpi": preview.get("primary_kpi") or measurement.get("primary_kpi"),
-        "mapping_status": opp.get("mapping_status") or product_mapping.get("mapping_status"),
-        "mapping_confidence": opp.get("mapping_confidence") or product_mapping.get("mapping_confidence"),
-        "mapping_reason": opp.get("mapping_reason") or product_mapping.get("mapping_reason"),
-        "condition_key": condition_key,
-        "condition_label": (
-            opp.get("condition_label")
-            or product_mapping.get("condition_label")
-            or CONDITION_LABELS.get(condition_key)
-        ),
-        "mapping_candidate_product": opp.get("mapping_candidate_product") or product_mapping.get("candidate_product"),
-        "mapping_rule_source": opp.get("rule_source") or product_mapping.get("rule_source"),
-        "peix_context": opp.get("peix_context") or peix_context,
-        "playbook_key": opp.get("playbook_key") or playbook.get("key"),
-        "playbook_title": public_playbook or opp.get("playbook_title") or playbook.get("title"),
-        "trigger_snapshot": opp.get("trigger_snapshot") or campaign_pack.get("trigger_snapshot"),
-        "guardrail_notes": opp.get("guardrail_notes") or (campaign_pack.get("guardrail_report") or {}).get("applied_fixes") or [],
-        "ai_generation_status": opp.get("ai_generation_status") or ai_meta.get("status"),
-        "strategy_mode": opp.get("strategy_mode") or campaign_pack.get("strategy_mode"),
-        "decision_brief": opp.get("decision_brief"),
-        "display_title": public_title or _build_display_title(opp, recommended_product),
-    }
-
-    if include_preview:
-        card["campaign_preview"] = {
-            "campaign_name": card.get("campaign_name"),
-            "activation_window": preview.get("activation_window") or card.get("activation_window"),
-            "budget": preview.get("budget") or {},
-            "primary_kpi": card.get("primary_kpi"),
-            "recommended_product": recommended_product,
-            "mapping_status": card.get("mapping_status"),
-            "peix_context": card.get("peix_context"),
-            "playbook_key": card.get("playbook_key"),
-            "playbook_title": card.get("playbook_title"),
-            "ai_generation_status": card.get("ai_generation_status"),
-        }
-
-    return card
+    return contract_to_card_response(opp, include_preview=include_preview)
 
 
 def _normalize_region_code(value: str) -> str:
-    raw = (value or "").strip()
-    if not raw:
-        return "DE"
-
-    upper = raw.upper()
-    if upper in BUNDESLAND_NAMES:
-        return upper
-
-    mapped = REGION_NAME_TO_CODE.get(raw.lower())
-    if mapped:
-        return mapped
-
-    return upper
+    return contract_normalize_region_code(value)
 
 
 def _extract_region_codes_from_card_payload(opp: dict[str, Any], campaign_pack: dict[str, Any]) -> list[str]:
-    existing = opp.get("region_codes")
-    if isinstance(existing, list) and existing:
-        normalized = [_normalize_region_code(str(item)) for item in existing if item]
-        return sorted({code for code in normalized if code in BUNDESLAND_NAMES})
-
-    region = opp.get("region")
-    if isinstance(region, str) and region.strip():
-        code = _normalize_region_code(region)
-        if code in BUNDESLAND_NAMES:
-            return [code]
-        if region.strip().lower() in {"gesamt", "de", "all", "national"}:
-            return sorted(BUNDESLAND_NAMES.keys())
-
-    targeting = campaign_pack.get("targeting") or {}
-    scope = targeting.get("region_scope")
-    tokens: list[str] = []
-    if isinstance(scope, list):
-        tokens.extend(str(item) for item in scope if item)
-    elif isinstance(scope, str) and scope.strip():
-        tokens.append(scope)
-
-    if not tokens:
-        return []
-
-    result = set()
-    for token in tokens:
-        lower = token.strip().lower()
-        if lower in {"gesamt", "de", "all", "national", "deutschland"}:
-            return sorted(BUNDESLAND_NAMES.keys())
-        code = _normalize_region_code(token)
-        if code in BUNDESLAND_NAMES:
-            result.add(code)
-
-    return sorted(result)
+    return contract_extract_region_codes_from_card_payload(opp, campaign_pack)
 
 
 def _extract_region_codes_from_card(card: dict[str, Any]) -> set[str]:
-    codes = card.get("region_codes")
-    if isinstance(codes, list) and codes:
-        normalized = {_normalize_region_code(str(code)) for code in codes if code}
-        normalized = {code for code in normalized if code in BUNDESLAND_NAMES}
-        if normalized:
-            return normalized
-
-    region = str(card.get("region") or "").strip().lower()
-    if region in {"gesamt", "de", "all", "national", "deutschland"}:
-        return set(BUNDESLAND_NAMES.keys())
-
-    if region:
-        code = _normalize_region_code(region)
-        if code in BUNDESLAND_NAMES:
-            return {code}
-
-    return set()
+    return contract_extract_region_codes_from_card(card)

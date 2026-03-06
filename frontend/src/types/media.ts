@@ -6,6 +6,15 @@ export type WorkflowStatus =
   | 'DISMISSED'
   | 'EXPIRED';
 
+export type CampaignLifecycleState =
+  | 'PREPARE'
+  | 'REVIEW'
+  | 'APPROVE'
+  | 'SYNC_READY'
+  | 'LIVE'
+  | 'EXPIRED'
+  | 'ARCHIVED';
+
 export interface CampaignBudgetPreview {
   weekly_budget_eur?: number;
   shift_pct?: number;
@@ -83,10 +92,26 @@ export interface RecommendationCard {
   detail_url?: string;
   created_at?: string | null;
   updated_at?: string | null;
+  expires_at?: string | null;
   is_conquesting_active?: boolean;
   competitor_shortage_ingredient?: string;
   recommended_bid_modifier?: number;
   conquesting_product?: string;
+  lifecycle_state?: CampaignLifecycleState | string;
+  freshness_state?: 'scheduled' | 'current' | 'missing_window' | 'expired' | 'stale' | string;
+  evidence_strength?: 'hoch' | 'mittel' | 'niedrig' | string;
+  publish_blockers?: string[];
+  is_publishable?: boolean;
+  dedupe_group_id?: string;
+  is_primary_variant?: boolean;
+  decision_link?: string;
+  variant_count?: number;
+  variants?: Array<{
+    id: string;
+    status?: string;
+    lifecycle_state?: CampaignLifecycleState | string;
+    display_title?: string;
+  }>;
 }
 
 export interface ProductAttributePayload {
@@ -358,6 +383,207 @@ export interface RecommendationDetail extends RecommendationCard {
   trigger_evidence?: CampaignPack['trigger_evidence'];
   target_audience?: string[];
   decision_brief?: RecommendationDecisionBrief;
+}
+
+export interface WeeklyDecisionRegion {
+  code?: string;
+  name?: string;
+  signal_score?: number;
+  trend?: string;
+}
+
+export interface WeeklyDecision {
+  decision_state: 'GO' | 'WATCH' | string;
+  decision_window?: {
+    start?: string | null;
+    horizon_days?: number | null;
+  };
+  recommended_action?: string | null;
+  top_regions: WeeklyDecisionRegion[];
+  top_products?: string[];
+  budget_shift?: number | null;
+  why_now: string[];
+  risk_flags: string[];
+  freshness_state?: string;
+  proxy_state?: string;
+  truth_state?: string;
+  signal_stack_summary?: {
+    peix_epi_score?: number;
+    national_band?: string;
+    top_drivers?: Array<{ label: string; strength_pct: number }>;
+    context_signals?: Record<string, { value: number; weight: number; contribution: number }>;
+    math_stack?: {
+      base_models?: string[];
+      meta_learner?: string;
+      feature_families?: string[];
+    };
+  };
+}
+
+export interface TruthCoverage {
+  coverage_weeks: number;
+  latest_week?: string | null;
+  regions_covered: number;
+  products_covered: number;
+  outcome_fields_present: string[];
+  trust_readiness: string;
+  source_labels?: string[];
+}
+
+export interface SignalStackItem {
+  source_key: string;
+  label: string;
+  signal_group: string;
+  last_available_at?: string | null;
+  freshness_state: string;
+  coverage_state: string;
+  quality_note?: string;
+  contribution_state?: string;
+  is_core_signal?: boolean;
+}
+
+export interface SignalStackResponse {
+  virus_typ: string;
+  generated_at: string;
+  items: SignalStackItem[];
+  summary: {
+    peix_epi_score?: number;
+    national_band?: string;
+    top_drivers?: Array<{ label: string; strength_pct: number }>;
+    context_signals?: Record<string, { value: number; weight: number; contribution: number }>;
+    math_stack?: {
+      base_models?: string[];
+      meta_learner?: string;
+      feature_families?: string[];
+    };
+  };
+}
+
+export interface ModelLineage {
+  virus_typ: string;
+  model_family: string;
+  base_estimators: string[];
+  meta_learner: string;
+  model_version: string;
+  trained_at?: string | null;
+  feature_set_version?: string;
+  feature_names?: string[];
+  training_window?: {
+    start?: string | null;
+    end?: string | null;
+    points?: number;
+  };
+  drift_state?: 'ok' | 'warning' | 'unknown' | string;
+  coverage_limits?: string[];
+  latest_accuracy?: {
+    computed_at?: string | null;
+    samples?: number | null;
+    mape?: number | null;
+    rmse?: number | null;
+    correlation?: number | null;
+  };
+  latest_forecast_created_at?: string | null;
+}
+
+export interface MediaDecisionResponse {
+  virus_typ: string;
+  target_source: string;
+  generated_at: string;
+  weekly_decision: WeeklyDecision;
+  top_recommendations: RecommendationCard[];
+  wave_run_id?: string | null;
+  backtest_summary?: {
+    latest_market?: BacktestResponse | null;
+    latest_customer?: BacktestResponse | null;
+  };
+  model_lineage?: ModelLineage;
+  truth_coverage?: TruthCoverage;
+}
+
+export interface MediaRegionsResponse {
+  virus_typ: string;
+  target_source: string;
+  generated_at: string;
+  map: {
+    has_data: boolean;
+    date: string | null;
+    max_viruslast: number;
+    regions: Record<string, {
+      name: string;
+      avg_viruslast: number;
+      intensity: number;
+      trend: string;
+      change_pct: number;
+      n_standorte: number;
+      peix_score?: number;
+      peix_band?: string;
+      impact_probability?: number;
+      recommendation_ref?: RegionRecommendationRef | null;
+      tooltip?: RegionTooltipData | null;
+      forecast_direction?: string;
+      signal_drivers?: Array<{ label: string; strength_pct: number }>;
+      layer_contributions?: Record<string, number>;
+      budget_logic?: string;
+      priority_explanation?: string;
+      source_trace?: string[];
+    }>;
+    top_regions: Array<{
+      code: string;
+      name: string;
+      trend: string;
+      impact_probability?: number;
+      peix_score?: number;
+      recommendation_ref?: RegionRecommendationRef | null;
+      tooltip?: RegionTooltipData | null;
+    }>;
+    activation_suggestions: Array<{
+      region: string;
+      region_name: string;
+      priority: string;
+      budget_shift_pct: number;
+      channel_mix: Record<string, number>;
+      reason: string;
+    }>;
+  };
+  top_regions: Array<{
+    code: string;
+    name: string;
+    trend: string;
+    impact_probability?: number;
+    peix_score?: number;
+    recommendation_ref?: RegionRecommendationRef | null;
+    tooltip?: RegionTooltipData | null;
+  }>;
+  decision_state?: string;
+}
+
+export interface MediaCampaignsResponse {
+  generated_at: string;
+  cards: RecommendationCard[];
+  archived_cards: RecommendationCard[];
+  summary: {
+    total_cards: number;
+    active_cards: number;
+    deduped_cards: number;
+    publishable_cards: number;
+    expired_cards: number;
+    states: Record<string, number>;
+  };
+}
+
+export interface MediaEvidenceResponse {
+  virus_typ: string;
+  target_source: string;
+  generated_at: string;
+  proxy_validation?: BacktestResponse | null;
+  truth_validation?: BacktestResponse | null;
+  recent_runs: Array<Record<string, unknown>>;
+  data_freshness: Record<string, string | null>;
+  source_status: SourceStatusSummary;
+  signal_stack: SignalStackResponse;
+  model_lineage: ModelLineage;
+  truth_coverage: TruthCoverage;
+  known_limits: string[];
 }
 
 export interface ConnectorCatalogItem {

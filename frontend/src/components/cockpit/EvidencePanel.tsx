@@ -1,8 +1,7 @@
 import React from 'react';
 
-import { BacktestResponse } from '../../types/media';
+import { BacktestResponse, MediaEvidenceResponse } from '../../types/media';
 import { ValidationSection } from './BacktestVisuals';
-import { CockpitResponse } from './types';
 import {
   formatDateTime,
   formatPercent,
@@ -10,7 +9,7 @@ import {
 } from './cockpitUtils';
 
 interface Props {
-  cockpit: CockpitResponse | null;
+  evidence: MediaEvidenceResponse | null;
   loading: boolean;
   marketValidation: BacktestResponse | null;
   marketValidationLoading: boolean;
@@ -19,19 +18,22 @@ interface Props {
 }
 
 const EvidencePanel: React.FC<Props> = ({
-  cockpit,
+  evidence,
   loading,
   marketValidation,
   marketValidationLoading,
   customerValidation,
   customerValidationLoading,
 }) => {
-  const latestMarket = cockpit?.backtest_summary?.latest_market;
-  const latestCustomer = cockpit?.backtest_summary?.latest_customer;
-  const sourceItems = cockpit?.source_status?.items || [];
-  const recentRuns = cockpit?.backtest_summary?.recent_runs || [];
+  const latestMarket = evidence?.proxy_validation;
+  const latestCustomer = evidence?.truth_validation;
+  const sourceItems = evidence?.source_status?.items || [];
+  const recentRuns = evidence?.recent_runs || [];
+  const truthCoverage = evidence?.truth_coverage;
+  const signalStack = evidence?.signal_stack;
+  const modelLineage = evidence?.model_lineage;
 
-  if (loading && !cockpit) {
+  if (loading && !evidence) {
     return <div className="card" style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>Lade Evidenz...</div>;
   }
 
@@ -40,11 +42,12 @@ const EvidencePanel: React.FC<Props> = ({
       <section className="context-filter-rail">
         <div className="section-heading">
           <span className="section-kicker">Evidenz</span>
-          <h1 className="section-title">Proxy und Truth sauber getrennt</h1>
+          <h1 className="section-title">Proxy, Truth, Signalquellen und Modellzustand</h1>
         </div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
           <span className="step-chip">Proxy-validiert</span>
-          <span className="step-chip">Kunden-Check: {truthLayerLabel(latestCustomer)}</span>
+          <span className="step-chip">Kunden-Check: {truthLayerLabel(truthCoverage || latestCustomer)}</span>
+          <span className="step-chip">Drift: {modelLineage?.drift_state || '-'}</span>
         </div>
       </section>
 
@@ -79,25 +82,25 @@ const EvidencePanel: React.FC<Props> = ({
           <div>
             <div className="section-kicker">Kunden-Check</div>
             <h2 className="subsection-title" style={{ marginTop: 8 }}>
-              {truthLayerLabel(latestCustomer)}
+              {truthLayerLabel(truthCoverage || latestCustomer)}
             </h2>
           </div>
           <div className="metric-strip">
             <div className="metric-box">
-              <span>Datenpunkte</span>
-              <strong>{latestCustomer?.metrics?.data_points ?? 0}</strong>
+              <span>Wochen</span>
+              <strong>{truthCoverage?.coverage_weeks ?? 0}</strong>
             </div>
             <div className="metric-box">
-              <span>Korrelation</span>
-              <strong>{formatPercent((latestCustomer?.metrics?.correlation_pct ?? latestCustomer?.metrics?.correlation ?? 0) as number)}</strong>
+              <span>Regionen</span>
+              <strong>{truthCoverage?.regions_covered ?? 0}</strong>
             </div>
             <div className="metric-box">
-              <span>R²</span>
-              <strong>{latestCustomer?.metrics?.r2_score != null ? latestCustomer.metrics.r2_score.toFixed(2) : '-'}</strong>
+              <span>Produkte</span>
+              <strong>{truthCoverage?.products_covered ?? 0}</strong>
             </div>
           </div>
           <p className="section-copy">
-            Das ist kein Qualitätsurteil, sondern eine Aussage zur Datenbreite. Unter 26 Wochen zeigt der Layer erste Signale, unter 52 Wochen bleibt er im Aufbau und ist noch kein belastbarer Freigabebeweis für kundennahe Media-Automation.
+            Der Truth-Layer basiert auf importierten Outcome-Daten. Er bewertet Datenbreite und Abdeckung, nicht pauschal die Produktqualität.
           </p>
         </div>
       </section>
@@ -123,7 +126,7 @@ const EvidencePanel: React.FC<Props> = ({
         <div className="card subsection-card" style={{ padding: 24 }}>
           <h2 className="subsection-title">Datenfrische</h2>
           <div style={{ display: 'grid', gap: 10, marginTop: 14 }}>
-            {Object.entries(cockpit?.data_freshness || {}).map(([key, value]) => (
+            {Object.entries(evidence?.data_freshness || {}).map(([key, value]) => (
               <div key={key} className="evidence-row">
                 <span>{key}</span>
                 <strong>{formatDateTime(value)}</strong>
@@ -139,10 +142,46 @@ const EvidencePanel: React.FC<Props> = ({
               <div key={item.source_key} className="evidence-row">
                 <span>{item.label}</span>
                 <strong style={{ color: item.status_color === 'green' ? '#047857' : item.status_color === 'amber' ? '#b45309' : '#b91c1c' }}>
-                  {item.is_live ? 'live' : 'stale'}
+                  {item.freshness_state}
                 </strong>
               </div>
             ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="cockpit-grid">
+        <div className="card subsection-card" style={{ padding: 24 }}>
+          <h2 className="subsection-title">Signal-Stack</h2>
+          <div style={{ display: 'grid', gap: 10, marginTop: 14 }}>
+            {(signalStack?.items || []).map((item) => (
+              <div key={item.source_key} className="evidence-row">
+                <span>{item.label}</span>
+                <strong>{item.contribution_state}</strong>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="card subsection-card" style={{ padding: 24 }}>
+          <h2 className="subsection-title">Model Lineage</h2>
+          <div style={{ display: 'grid', gap: 10, marginTop: 14 }}>
+            <div className="evidence-row">
+              <span>Stack</span>
+              <strong>{[...(modelLineage?.base_estimators || []), modelLineage?.meta_learner].filter(Boolean).join(' → ') || '-'}</strong>
+            </div>
+            <div className="evidence-row">
+              <span>Version</span>
+              <strong>{modelLineage?.model_version || '-'}</strong>
+            </div>
+            <div className="evidence-row">
+              <span>Trainiert am</span>
+              <strong>{formatDateTime(modelLineage?.trained_at)}</strong>
+            </div>
+            <div className="evidence-row">
+              <span>Feature-Set</span>
+              <strong>{modelLineage?.feature_set_version || '-'}</strong>
+            </div>
           </div>
         </div>
       </section>
@@ -160,6 +199,20 @@ const EvidencePanel: React.FC<Props> = ({
           )}
         </div>
       </section>
+
+      {(evidence?.known_limits || []).length > 0 && (
+        <section className="card subsection-card" style={{ padding: 24 }}>
+          <h2 className="subsection-title">Bekannte Grenzen</h2>
+          <div style={{ display: 'grid', gap: 10, marginTop: 14 }}>
+            {evidence!.known_limits.map((item) => (
+              <div key={item} className="evidence-row">
+                <span>{item}</span>
+                <strong>Limit</strong>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   );
 };

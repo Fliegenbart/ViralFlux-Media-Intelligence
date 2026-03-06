@@ -1,13 +1,13 @@
 import React from 'react';
 
-import { CockpitResponse } from './types';
+import { MediaRegionsResponse } from '../../types/media';
 import GermanyMap from './GermanyMap';
 import { formatDateShort, formatPercent, VIRUS_OPTIONS } from './cockpitUtils';
 
 interface Props {
   virus: string;
   onVirusChange: (value: string) => void;
-  cockpit: CockpitResponse | null;
+  regionsView: MediaRegionsResponse | null;
   loading: boolean;
   selectedRegion: string | null;
   onSelectRegion: (code: string) => void;
@@ -19,7 +19,7 @@ interface Props {
 const RegionWorkbench: React.FC<Props> = ({
   virus,
   onVirusChange,
-  cockpit,
+  regionsView,
   loading,
   selectedRegion,
   onSelectRegion,
@@ -27,12 +27,12 @@ const RegionWorkbench: React.FC<Props> = ({
   onGenerateRegionCampaign,
   regionActionLoading,
 }) => {
-  const activeMap = cockpit?.map;
+  const activeMap = regionsView?.map;
   const region = selectedRegion ? activeMap?.regions?.[selectedRegion] : null;
   const suggestion = activeMap?.activation_suggestions?.find((item) => item.region === selectedRegion);
   const topRegions = (activeMap?.top_regions || []).slice(0, 5);
 
-  if (loading && !cockpit) {
+  if (loading && !regionsView) {
     return <div className="card" style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>Lade Regionen-Workbench...</div>;
   }
 
@@ -106,7 +106,7 @@ const RegionWorkbench: React.FC<Props> = ({
                   <div>
                     <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Warum jetzt?</div>
                     <div style={{ marginTop: 4, fontSize: 14, lineHeight: 1.6, color: 'var(--text-secondary)' }}>
-                      {suggestion?.reason || region.tooltip?.recommendation_text || 'Regionale Auffälligkeit aus Abwasser, Forecast und Kontextsignalen.'}
+                      {region.priority_explanation || suggestion?.reason || region.tooltip?.recommendation_text || 'Regionale Auffälligkeit aus Abwasser, Forecast und Kontextsignalen.'}
                     </div>
                   </div>
                   <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
@@ -114,6 +114,23 @@ const RegionWorkbench: React.FC<Props> = ({
                   </div>
                   <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
                     Signaländerung: <strong style={{ color: 'var(--text-primary)' }}>{formatPercent(region.change_pct || 0, 1)}</strong>
+                  </div>
+                  <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+                    Forecast-Richtung: <strong style={{ color: 'var(--text-primary)' }}>{region.forecast_direction || 'seitwärts'}</strong>
+                  </div>
+                </div>
+
+                <div className="soft-panel" style={{ padding: 16, display: 'grid', gap: 10 }}>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Treiber dieser Region</div>
+                  <div className="review-chip-row">
+                    {(region.signal_drivers || []).map((driver) => (
+                      <span key={driver.label} className="step-chip">
+                        {driver.label} {formatPercent(driver.strength_pct || 0)}
+                      </span>
+                    ))}
+                  </div>
+                  <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+                    Ableitung aus: <strong style={{ color: 'var(--text-primary)' }}>{(region.source_trace || []).join(', ') || 'AMELAG, SurvStat, Forecast'}</strong>
                   </div>
                 </div>
 
@@ -163,13 +180,13 @@ const RegionWorkbench: React.FC<Props> = ({
                     <div style={{ textAlign: 'left' }}>
                       <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>{item.name}</div>
                       <div style={{ marginTop: 4, fontSize: 12, color: 'var(--text-muted)' }}>
-                        {item.tooltip?.recommended_product || 'GELO'} · {item.trend}
+                        {item.tooltip?.recommended_product || 'GELO'} · {item.trend || '-'}
                       </div>
                     </div>
                     <div style={{ textAlign: 'right' }}>
-                      <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--accent-violet)' }}>{formatPercent(item.impact_probability || item.peix_score || 0)}</div>
+                      <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--accent-violet)' }}>{formatPercent(Number(item.impact_probability || item.peix_score || 0))}</div>
                       <div style={{ marginTop: 4, fontSize: 12, color: 'var(--text-muted)' }}>
-                        Priorität {Math.round(item.recommendation_ref?.urgency_score || 0)}
+                        Priorität {Math.round(Number(item.recommendation_ref?.urgency_score || 0))}
                       </div>
                     </div>
                   </div>

@@ -1,20 +1,24 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 
 import { useToast } from '../App';
-import {
-  BacktestResponse,
-  ConnectorCatalogItem,
-  PreparedSyncPayload,
-  RecommendationCard,
-  RecommendationDetail,
-} from '../types/media';
 import CampaignStudio from '../components/cockpit/CampaignStudio';
 import DecisionView from '../components/cockpit/DecisionView';
 import EvidencePanel from '../components/cockpit/EvidencePanel';
 import RecommendationDrawer from '../components/cockpit/RecommendationDrawer';
 import RegionWorkbench from '../components/cockpit/RegionWorkbench';
-import { CockpitResponse, MediaCockpitView } from '../components/cockpit/types';
+import { MediaCockpitView } from '../components/cockpit/types';
+import {
+  BacktestResponse,
+  ConnectorCatalogItem,
+  MediaCampaignsResponse,
+  MediaDecisionResponse,
+  MediaEvidenceResponse,
+  MediaRegionsResponse,
+  PreparedSyncPayload,
+  RecommendationCard,
+  RecommendationDetail,
+} from '../types/media';
 
 interface Props {
   view: MediaCockpitView;
@@ -43,6 +47,8 @@ async function fetchJson<T>(url: string, init?: RequestInit, timeoutMs = 12000):
 
 function sortRecommendations(cards: RecommendationCard[]): RecommendationCard[] {
   return [...cards].sort((a, b) => {
+    const publishableDelta = Number(Boolean(b.is_publishable)) - Number(Boolean(a.is_publishable));
+    if (publishableDelta !== 0) return publishableDelta;
     const urgencyDelta = Number(b.urgency_score || 0) - Number(a.urgency_score || 0);
     if (urgencyDelta !== 0) return urgencyDelta;
     return Number(b.confidence || 0) - Number(a.confidence || 0);
@@ -55,17 +61,20 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
   const { toast } = useToast();
 
   const [virus, setVirus] = useState('Influenza A');
-  const [cockpit, setCockpit] = useState<CockpitResponse | null>(null);
-  const [cockpitLoading, setCockpitLoading] = useState(true);
-
-  const [recommendations, setRecommendations] = useState<RecommendationCard[]>([]);
-  const [recommendationsLoading, setRecommendationsLoading] = useState(true);
-  const [generationLoading, setGenerationLoading] = useState(false);
-
   const [brand, setBrand] = useState('gelo');
   const [weeklyBudget, setWeeklyBudget] = useState(120000);
   const [campaignGoal, setCampaignGoal] = useState('Top-of-Mind vor Erkältungswelle');
 
+  const [decision, setDecision] = useState<MediaDecisionResponse | null>(null);
+  const [decisionLoading, setDecisionLoading] = useState(false);
+  const [regionsView, setRegionsView] = useState<MediaRegionsResponse | null>(null);
+  const [regionsLoading, setRegionsLoading] = useState(false);
+  const [campaignsView, setCampaignsView] = useState<MediaCampaignsResponse | null>(null);
+  const [campaignsLoading, setCampaignsLoading] = useState(false);
+  const [evidenceView, setEvidenceView] = useState<MediaEvidenceResponse | null>(null);
+  const [evidenceLoading, setEvidenceLoading] = useState(false);
+
+  const [generationLoading, setGenerationLoading] = useState(false);
   const [selectedRegion, setSelectedRegion] = useState<string | null>(null);
   const [regionActionLoading, setRegionActionLoading] = useState(false);
 
@@ -77,51 +86,72 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
   const [connectorCatalog, setConnectorCatalog] = useState<ConnectorCatalogItem[]>([]);
   const [syncPreview, setSyncPreview] = useState<PreparedSyncPayload | null>(null);
   const [syncLoading, setSyncLoading] = useState(false);
+
   const [marketValidation, setMarketValidation] = useState<BacktestResponse | null>(null);
   const [marketValidationLoading, setMarketValidationLoading] = useState(false);
   const [customerValidation, setCustomerValidation] = useState<BacktestResponse | null>(null);
   const [customerValidationLoading, setCustomerValidationLoading] = useState(false);
-  const needsCampaignList = view === 'campaigns';
+
   const needsConnectorCatalog = view === 'campaigns' || Boolean(detail);
-  const needsMarketValidation = view === 'decision' || view === 'evidence';
-  const needsCustomerValidation = view === 'evidence';
 
-  const displayedRecommendations = useMemo(
-    () => (
-      needsCampaignList && recommendations.length > 0
-        ? recommendations
-        : sortRecommendations(cockpit?.recommendations?.cards || [])
-    ),
-    [cockpit?.recommendations?.cards, needsCampaignList, recommendations],
-  );
-
-  const loadCockpit = useCallback(async () => {
-    setCockpitLoading(true);
+  const loadDecision = useCallback(async () => {
+    setDecisionLoading(true);
     try {
-      const qs = new URLSearchParams({ virus_typ: virus });
-      const data = await fetchJson<CockpitResponse>(`/api/v1/media/cockpit?${qs.toString()}`, undefined, 12000);
-      setCockpit(data);
+      const qs = new URLSearchParams({ virus_typ: virus, brand });
+      const data = await fetchJson<MediaDecisionResponse>(`/api/v1/media/decision?${qs.toString()}`, undefined, 12000);
+      setDecision(data);
     } catch (error) {
-      console.error('Cockpit fetch failed', error);
-      toast('Cockpit konnte nicht geladen werden.', 'error');
+      console.error('Decision fetch failed', error);
+      toast('Entscheidung konnte nicht geladen werden.', 'error');
     } finally {
-      setCockpitLoading(false);
+      setDecisionLoading(false);
     }
-  }, [toast, virus]);
+  }, [brand, toast, virus]);
 
-  const loadRecommendations = useCallback(async () => {
-    setRecommendationsLoading(true);
+  const loadRegions = useCallback(async () => {
+    setRegionsLoading(true);
     try {
-      const qs = new URLSearchParams({ limit: '120', with_campaign_preview: 'true' });
-      const data = await fetchJson<{ cards?: RecommendationCard[] }>(`/api/v1/media/recommendations/list?${qs.toString()}`, undefined, 12000);
-      setRecommendations(sortRecommendations(data.cards || []));
+      const qs = new URLSearchParams({ virus_typ: virus, brand });
+      const data = await fetchJson<MediaRegionsResponse>(`/api/v1/media/regions?${qs.toString()}`, undefined, 12000);
+      setRegionsView(data);
     } catch (error) {
-      console.error('Recommendation list failed', error);
+      console.error('Regions fetch failed', error);
+      toast('Regionen konnten nicht geladen werden.', 'error');
+    } finally {
+      setRegionsLoading(false);
+    }
+  }, [brand, toast, virus]);
+
+  const loadCampaigns = useCallback(async () => {
+    setCampaignsLoading(true);
+    try {
+      const qs = new URLSearchParams({ brand, limit: '120' });
+      const data = await fetchJson<MediaCampaignsResponse>(`/api/v1/media/campaigns?${qs.toString()}`, undefined, 12000);
+      setCampaignsView({
+        ...data,
+        cards: sortRecommendations(data.cards || []),
+      });
+    } catch (error) {
+      console.error('Campaigns fetch failed', error);
       toast('Kampagnenpakete konnten nicht geladen werden.', 'error');
     } finally {
-      setRecommendationsLoading(false);
+      setCampaignsLoading(false);
     }
-  }, [toast]);
+  }, [brand, toast]);
+
+  const loadEvidence = useCallback(async () => {
+    setEvidenceLoading(true);
+    try {
+      const qs = new URLSearchParams({ virus_typ: virus, brand });
+      const data = await fetchJson<MediaEvidenceResponse>(`/api/v1/media/evidence?${qs.toString()}`, undefined, 12000);
+      setEvidenceView(data);
+    } catch (error) {
+      console.error('Evidence fetch failed', error);
+      toast('Evidenz konnte nicht geladen werden.', 'error');
+    } finally {
+      setEvidenceLoading(false);
+    }
+  }, [brand, toast, virus]);
 
   const loadConnectors = useCallback(async () => {
     try {
@@ -154,16 +184,22 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
   }, []);
 
   useEffect(() => {
-    loadCockpit();
-  }, [loadCockpit]);
-
-  useEffect(() => {
-    if (!needsCampaignList) {
-      setRecommendationsLoading(false);
+    if (view === 'decision') {
+      loadDecision();
       return;
     }
-    loadRecommendations();
-  }, [loadRecommendations, needsCampaignList]);
+    if (view === 'regions') {
+      loadRegions();
+      return;
+    }
+    if (view === 'campaigns') {
+      loadCampaigns();
+      return;
+    }
+    if (view === 'evidence') {
+      loadEvidence();
+    }
+  }, [loadCampaigns, loadDecision, loadEvidence, loadRegions, view]);
 
   useEffect(() => {
     if (!needsConnectorCatalog) return;
@@ -171,38 +207,37 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
   }, [loadConnectors, needsConnectorCatalog]);
 
   useEffect(() => {
-    if (!needsMarketValidation) {
-      setMarketValidationLoading(false);
-      return;
-    }
-    const marketRunId = cockpit?.backtest_summary?.latest_market?.run_id;
-    if (!marketRunId) {
+    const runId = view === 'decision'
+      ? decision?.wave_run_id
+      : evidenceView?.proxy_validation?.run_id;
+    if (!runId) {
       setMarketValidation(null);
       setMarketValidationLoading(false);
       return;
     }
-    loadBacktestRun(marketRunId, setMarketValidation, setMarketValidationLoading, 'Market validation');
-  }, [cockpit?.backtest_summary?.latest_market?.run_id, loadBacktestRun, needsMarketValidation]);
+    loadBacktestRun(runId, setMarketValidation, setMarketValidationLoading, 'Market validation');
+  }, [decision?.wave_run_id, evidenceView?.proxy_validation?.run_id, loadBacktestRun, view]);
 
   useEffect(() => {
-    if (!needsCustomerValidation) {
+    if (view !== 'evidence') {
+      setCustomerValidation(null);
       setCustomerValidationLoading(false);
       return;
     }
-    const customerRunId = cockpit?.backtest_summary?.latest_customer?.run_id;
+    const customerRunId = evidenceView?.truth_validation?.run_id;
     if (!customerRunId) {
       setCustomerValidation(null);
       setCustomerValidationLoading(false);
       return;
     }
     loadBacktestRun(customerRunId, setCustomerValidation, setCustomerValidationLoading, 'Customer validation');
-  }, [cockpit?.backtest_summary?.latest_customer?.run_id, loadBacktestRun, needsCustomerValidation]);
+  }, [evidenceView?.truth_validation?.run_id, loadBacktestRun, view]);
 
   useEffect(() => {
-    if (!selectedRegion && cockpit?.map?.top_regions?.[0]?.code) {
-      setSelectedRegion(cockpit.map.top_regions[0].code);
+    if (!selectedRegion && regionsView?.map?.top_regions?.[0]?.code) {
+      setSelectedRegion(regionsView.map.top_regions[0].code);
     }
-  }, [cockpit?.map?.top_regions, selectedRegion]);
+  }, [regionsView?.map?.top_regions, selectedRegion]);
 
   const openRecommendation = useCallback(async (id: string, updateRoute = view === 'campaigns') => {
     if (!id) return;
@@ -236,6 +271,15 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
     }
   }, [navigate, routeRecommendationId]);
 
+  const refreshCoreViews = useCallback(async () => {
+    await Promise.all([
+      loadDecision(),
+      loadRegions(),
+      loadCampaigns(),
+      loadEvidence(),
+    ]);
+  }, [loadCampaigns, loadDecision, loadEvidence, loadRegions]);
+
   const generateRecommendations = useCallback(async () => {
     setGenerationLoading(true);
     try {
@@ -254,10 +298,8 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
         }),
       }, 30000);
 
-      const cards = sortRecommendations(data.cards || []);
-      setRecommendations(cards);
-      toast(`${cards.length} Kampagnenpakete erzeugt.`, 'success');
-      await loadCockpit();
+      toast(`${(data.cards || []).length} Kampagnenpakete erzeugt.`, 'success');
+      await refreshCoreViews();
     } catch (error) {
       console.error('Recommendation generation failed', error);
       const message = error instanceof Error ? error.message : 'Unbekannter Fehler';
@@ -265,7 +307,7 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
     } finally {
       setGenerationLoading(false);
     }
-  }, [brand, campaignGoal, loadCockpit, toast, virus, weeklyBudget]);
+  }, [brand, campaignGoal, refreshCoreViews, toast, virus, weeklyBudget]);
 
   const openOrCreateRegionCampaign = useCallback(async (regionCode: string) => {
     setRegionActionLoading(true);
@@ -283,10 +325,7 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
         }),
       }, 30000);
 
-      if (needsCampaignList) {
-        await loadRecommendations();
-      }
-      await loadCockpit();
+      await refreshCoreViews();
 
       if (data.card_id) {
         toast(data.action === 'reused' ? 'Vorhandenes Kampagnenpaket geöffnet.' : 'Regionale Kampagne erzeugt.', 'success');
@@ -299,7 +338,7 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
     } finally {
       setRegionActionLoading(false);
     }
-  }, [brand, campaignGoal, loadCockpit, loadRecommendations, needsCampaignList, openRecommendation, toast, virus, weeklyBudget]);
+  }, [brand, campaignGoal, openRecommendation, refreshCoreViews, toast, virus, weeklyBudget]);
 
   const advanceStatus = useCallback(async (id: string, nextStatus: string) => {
     setStatusUpdating(true);
@@ -310,14 +349,8 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
         body: JSON.stringify({ status: nextStatus }),
       }, 12000);
 
-      setRecommendations((current) => sortRecommendations(
-        current.map((card) => (
-          card.id === id
-            ? { ...card, status: data.new_status || nextStatus, status_label: data.new_status || nextStatus }
-            : card
-        )),
-      ));
       toast(`Status auf ${data.new_status || nextStatus} gesetzt.`, 'success');
+      await refreshCoreViews();
       await openRecommendation(id, false);
     } catch (error) {
       console.error('Status update failed', error);
@@ -326,7 +359,7 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
     } finally {
       setStatusUpdating(false);
     }
-  }, [openRecommendation, toast]);
+  }, [openRecommendation, refreshCoreViews, toast]);
 
   const regenerateAI = useCallback(async (id: string) => {
     setRegenerating(true);
@@ -336,18 +369,7 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
       }, 30000);
 
       setDetail(data);
-      setRecommendations((current) => sortRecommendations(
-        current.map((card) => (
-          card.id === id
-            ? {
-              ...card,
-              campaign_name: data.campaign_name || card.campaign_name,
-              campaign_preview: data.campaign_preview || card.campaign_preview,
-              ai_generation_status: data.ai_generation_status || card.ai_generation_status,
-            }
-            : card
-        )),
-      ));
+      await refreshCoreViews();
       toast('Qwen-Plan aktualisiert.', 'success');
     } catch (error) {
       console.error('AI regeneration failed', error);
@@ -356,7 +378,7 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
     } finally {
       setRegenerating(false);
     }
-  }, [toast]);
+  }, [refreshCoreViews, toast]);
 
   const prepareSync = useCallback(async (id: string, connectorKey: string) => {
     setSyncLoading(true);
@@ -384,9 +406,8 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
         <DecisionView
           virus={virus}
           onVirusChange={setVirus}
-          cockpit={cockpit}
-          loading={cockpitLoading}
-          recommendations={displayedRecommendations}
+          decision={decision}
+          loading={decisionLoading}
           waveOutlook={marketValidation}
           waveOutlookLoading={marketValidationLoading}
           onOpenRecommendation={(id) => openRecommendation(id, false)}
@@ -399,8 +420,8 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
         <RegionWorkbench
           virus={virus}
           onVirusChange={setVirus}
-          cockpit={cockpit}
-          loading={cockpitLoading}
+          regionsView={regionsView}
+          loading={regionsLoading}
           selectedRegion={selectedRegion}
           onSelectRegion={setSelectedRegion}
           onOpenRecommendation={(id) => openRecommendation(id, false)}
@@ -411,12 +432,12 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
 
       {view === 'campaigns' && (
         <CampaignStudio
-          cards={displayedRecommendations}
+          campaignsView={campaignsView}
           virus={virus}
           brand={brand}
           budget={weeklyBudget}
           goal={campaignGoal}
-          loading={recommendationsLoading}
+          loading={campaignsLoading}
           generationLoading={generationLoading}
           onBrandChange={setBrand}
           onBudgetChange={setWeeklyBudget}
@@ -428,8 +449,8 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
 
       {view === 'evidence' && (
         <EvidencePanel
-          cockpit={cockpit}
-          loading={cockpitLoading}
+          evidence={evidenceView}
+          loading={evidenceLoading}
           marketValidation={marketValidation}
           marketValidationLoading={marketValidationLoading}
           customerValidation={customerValidation}

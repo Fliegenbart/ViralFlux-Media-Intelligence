@@ -1,7 +1,7 @@
 import { format, parseISO } from 'date-fns';
 import { de } from 'date-fns/locale';
 
-import { BacktestResponse, RecommendationCard } from '../../types/media';
+import { BacktestResponse, RecommendationCard, TruthCoverage } from '../../types/media';
 import { CampaignLaneId } from './types';
 
 export const VIRUS_OPTIONS = ['Influenza A', 'Influenza B', 'SARS-CoV-2', 'RSV A'];
@@ -104,8 +104,15 @@ export function readinessTone(isGo: boolean): { background: string; color: strin
   };
 }
 
-export function truthLayerLabel(backtest?: BacktestResponse | null): string {
-  const points = Number(backtest?.metrics?.data_points || 0);
+export function truthLayerLabel(backtestOrCoverage?: BacktestResponse | TruthCoverage | null): string {
+  const coverageWeeks = Number((backtestOrCoverage as TruthCoverage | undefined)?.coverage_weeks || 0);
+  if (coverageWeeks > 0) {
+    if (coverageWeeks >= 52) return 'belastbar';
+    if (coverageWeeks >= 26) return 'im Aufbau';
+    return 'erste Signale';
+  }
+
+  const points = Number((backtestOrCoverage as BacktestResponse | undefined)?.metrics?.data_points || 0);
   if (points >= 52) return 'belastbar';
   if (points >= 26) return 'im Aufbau';
   if (points > 0) return 'erste Signale';
@@ -113,6 +120,13 @@ export function truthLayerLabel(backtest?: BacktestResponse | null): string {
 }
 
 export function recommendationLane(card: RecommendationCard): CampaignLaneId {
+  const lifecycle = String(card.lifecycle_state || '').toUpperCase();
+  if (lifecycle === 'LIVE') return 'live';
+  if (lifecycle === 'SYNC_READY') return 'sync';
+  if (lifecycle === 'APPROVE') return 'approve';
+  if (lifecycle === 'REVIEW') return 'review';
+  if (lifecycle === 'EXPIRED' || lifecycle === 'ARCHIVED') return 'prepare';
+
   const status = String(card.status || '').toUpperCase();
   if (status === 'ACTIVATED') return 'live';
   if (status === 'APPROVED') return 'sync';

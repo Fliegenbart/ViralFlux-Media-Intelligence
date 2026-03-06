@@ -1,0 +1,427 @@
+from __future__ import annotations
+
+from datetime import datetime
+from typing import Any
+
+from app.services.media.copy_service import (
+    public_display_title,
+    public_playbook_title,
+    public_reason_text,
+)
+
+BUNDESLAND_NAMES = {
+    "BW": "Baden-Württemberg",
+    "BY": "Bayern",
+    "BE": "Berlin",
+    "BB": "Brandenburg",
+    "HB": "Bremen",
+    "HH": "Hamburg",
+    "HE": "Hessen",
+    "MV": "Mecklenburg-Vorpommern",
+    "NI": "Niedersachsen",
+    "NW": "Nordrhein-Westfalen",
+    "RP": "Rheinland-Pfalz",
+    "SL": "Saarland",
+    "SN": "Sachsen",
+    "ST": "Sachsen-Anhalt",
+    "SH": "Schleswig-Holstein",
+    "TH": "Thüringen",
+}
+REGION_NAME_TO_CODE = {name.lower(): code for code, name in BUNDESLAND_NAMES.items()}
+
+CONDITION_LABELS: dict[str, str] = {
+    "erkaltung_akut": "Akute Erkältung",
+    "bronchitis_husten": "Bronchitis & Husten",
+    "halsschmerz": "Halsschmerzen",
+    "husten_reizhusten": "Reizhusten",
+    "sinusitis": "Sinusitis",
+    "schnupfen": "Schnupfen",
+    "heiserkeit": "Heiserkeit",
+    "immun_support": "Immununterstützung",
+    "schleimloeser": "Schleimlösung",
+}
+
+STATUS_LABELS: dict[str, str] = {
+    "NEW": "Neu",
+    "URGENT": "Dringend",
+    "DRAFT": "Vorbereitung",
+    "READY": "In Prüfung",
+    "APPROVED": "Freigegeben",
+    "ACTIVATED": "Live",
+    "DISMISSED": "Archiviert",
+    "EXPIRED": "Abgelaufen",
+}
+
+PLACEHOLDER_PRODUCTS = {
+    "",
+    "atemwegslinie",
+    "produktfreigabe ausstehend",
+    "alle gelo-produkte",
+}
+MAPPING_BLOCK_STATES = {
+    "needs_review",
+    "pending",
+    "unmapped",
+    "rejected",
+}
+
+
+def normalize_region_code(value: str) -> str:
+    raw = (value or "").strip()
+    if not raw:
+        return "DE"
+
+    upper = raw.upper()
+    if upper in BUNDESLAND_NAMES:
+        return upper
+
+    mapped = REGION_NAME_TO_CODE.get(raw.lower())
+    if mapped:
+        return mapped
+
+    return upper
+
+
+def extract_region_codes_from_card_payload(
+    opp: dict[str, Any],
+    campaign_pack: dict[str, Any],
+) -> list[str]:
+    existing = opp.get("region_codes")
+    if isinstance(existing, list) and existing:
+        normalized = [normalize_region_code(str(item)) for item in existing if item]
+        return sorted({code for code in normalized if code in BUNDESLAND_NAMES})
+
+    region = opp.get("region")
+    if isinstance(region, str) and region.strip():
+        code = normalize_region_code(region)
+        if code in BUNDESLAND_NAMES:
+            return [code]
+        if region.strip().lower() in {"gesamt", "de", "all", "national"}:
+            return sorted(BUNDESLAND_NAMES.keys())
+
+    targeting = campaign_pack.get("targeting") or {}
+    scope = targeting.get("region_scope")
+    tokens: list[str] = []
+    if isinstance(scope, list):
+        tokens.extend(str(item) for item in scope if item)
+    elif isinstance(scope, str) and scope.strip():
+        tokens.append(scope)
+
+    if not tokens:
+        return []
+
+    result = set()
+    for token in tokens:
+        lower = token.strip().lower()
+        if lower in {"gesamt", "de", "all", "national", "deutschland"}:
+            return sorted(BUNDESLAND_NAMES.keys())
+        code = normalize_region_code(token)
+        if code in BUNDESLAND_NAMES:
+            result.add(code)
+
+    return sorted(result)
+
+
+def extract_region_codes_from_card(card: dict[str, Any]) -> set[str]:
+    codes = card.get("region_codes")
+    if isinstance(codes, list) and codes:
+        normalized = {normalize_region_code(str(code)) for code in codes if code}
+        normalized = {code for code in normalized if code in BUNDESLAND_NAMES}
+        if normalized:
+            return normalized
+
+    region = str(card.get("region") or "").strip().lower()
+    if region in {"gesamt", "de", "all", "national", "deutschland"}:
+        return set(BUNDESLAND_NAMES.keys())
+
+    if region:
+        code = normalize_region_code(region)
+        if code in BUNDESLAND_NAMES:
+            return {code}
+
+    return set()
+
+
+def _build_display_title(opp: dict[str, Any], product: str | None) -> str:
+    event = (opp.get("trigger_context") or {}).get("event", "")
+    prod = product or opp.get("product") or "Atemwegslinie"
+    condition = CONDITION_LABELS.get(opp.get("condition_key", ""), "")
+    return public_display_title(
+        playbook_key=opp.get("playbook_key"),
+        playbook_title=opp.get("playbook_title"),
+        campaign_name=(
+            (opp.get("campaign_preview") or {}).get("campaign_name")
+            or ((opp.get("campaign_payload") or {}).get("campaign") or {}).get("campaign_name")
+        ),
+        product=prod,
+        trigger_event=event,
+        condition_label=condition,
+    )
+
+
+def _parse_iso_datetime(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is not None:
+        return parsed.replace(tzinfo=None)
+    return parsed
+
+
+def _activation_window(card: dict[str, Any], campaign_pack: dict[str, Any]) -> tuple[datetime | None, datetime | None]:
+    activation_window = card.get("activation_window") or {}
+    payload_activation = campaign_pack.get("activation_window") or {}
+    start = (
+        activation_window.get("start")
+        or card.get("activation_start")
+        or payload_activation.get("start")
+    )
+    end = (
+        activation_window.get("end")
+        or card.get("activation_end")
+        or payload_activation.get("end")
+    )
+    return _parse_iso_datetime(start), _parse_iso_datetime(end)
+
+
+def derive_publish_blockers(card: dict[str, Any], now: datetime | None = None) -> list[str]:
+    effective_now = now or datetime.utcnow()
+    campaign_pack = card.get("campaign_payload") or {}
+    budget = (card.get("campaign_preview") or {}).get("budget") or campaign_pack.get("budget_plan") or {}
+    message_framework = campaign_pack.get("message_framework") or {}
+    guardrails = campaign_pack.get("guardrail_report") or {}
+    channel_plan = campaign_pack.get("channel_plan") or []
+    channel_mix = card.get("channel_mix") or {}
+
+    blockers: list[str] = []
+    recommended_product = str(card.get("recommended_product") or card.get("product") or "").strip()
+    if recommended_product.lower() in PLACEHOLDER_PRODUCTS:
+        blockers.append("Produkt-Mapping ist noch nicht freigabefähig.")
+
+    mapping_status = str(card.get("mapping_status") or "").strip().lower()
+    if mapping_status in MAPPING_BLOCK_STATES:
+        blockers.append("Produkt-Mapping benötigt noch Review.")
+
+    start_at, end_at = _activation_window(card, campaign_pack)
+    if start_at is None or end_at is None:
+        blockers.append("Flight-Fenster ist unvollständig.")
+    elif end_at < effective_now:
+        blockers.append("Flight-Fenster ist bereits abgelaufen.")
+
+    weekly_budget = budget.get("weekly_budget_eur")
+    total_budget = budget.get("total_flight_budget_eur")
+    if not any(
+        isinstance(value, (int, float)) and float(value) > 0
+        for value in (weekly_budget, total_budget)
+    ):
+        blockers.append("Budget ist noch nicht valide hinterlegt.")
+
+    if not channel_plan and not channel_mix:
+        blockers.append("Channel-Plan fehlt.")
+
+    if not str(message_framework.get("hero_message") or "").strip():
+        blockers.append("Hero Message fehlt.")
+
+    if guardrails.get("passed") is False:
+        blockers.append("Guardrail-Check ist noch nicht bestanden.")
+
+    return blockers
+
+
+def derive_freshness_state(card: dict[str, Any], now: datetime | None = None) -> str:
+    effective_now = now or datetime.utcnow()
+    campaign_pack = card.get("campaign_payload") or {}
+    start_at, end_at = _activation_window(card, campaign_pack)
+
+    if end_at and end_at < effective_now:
+        return "expired"
+    if start_at and start_at > effective_now:
+        return "scheduled"
+    if start_at and (end_at is None or end_at >= effective_now):
+        return "current"
+    if start_at is None and end_at is None:
+        return "missing_window"
+    return "stale"
+
+
+def derive_evidence_strength(card: dict[str, Any]) -> str:
+    confidence = float(card.get("confidence") or 0.0)
+    if confidence <= 1:
+        confidence *= 100.0
+    peix_score = float(
+        (card.get("peix_context") or {}).get("score")
+        or (card.get("peix_context") or {}).get("impact_probability")
+        or 0.0
+    )
+    signal_count = len((card.get("decision_brief") or {}).get("facts") or [])
+    if confidence >= 78 and peix_score >= 60 and signal_count >= 2:
+        return "hoch"
+    if confidence >= 60 or peix_score >= 50:
+        return "mittel"
+    return "niedrig"
+
+
+def derive_lifecycle_state(card: dict[str, Any], now: datetime | None = None) -> str:
+    status = str(card.get("status") or "").upper()
+    freshness_state = derive_freshness_state(card, now=now)
+    blockers = derive_publish_blockers(card, now=now)
+
+    if freshness_state == "expired" or status == "EXPIRED":
+        return "EXPIRED"
+    if status == "DISMISSED":
+        return "ARCHIVED"
+    if status == "ACTIVATED":
+        return "LIVE"
+    if status == "APPROVED":
+        return "SYNC_READY" if not blockers else "APPROVE"
+    if status == "READY":
+        return "APPROVE" if not blockers else "REVIEW"
+    if str(card.get("mapping_status") or "").strip().lower() in MAPPING_BLOCK_STATES:
+        return "REVIEW"
+    if blockers:
+        return "PREPARE"
+    return "PREPARE"
+
+
+def dedupe_group_id(card: dict[str, Any]) -> str:
+    region_codes = sorted(str(code) for code in (card.get("region_codes") or []) if code)
+    activation_window = card.get("activation_window") or {}
+    start = str(activation_window.get("start") or "")[:10]
+    end = str(activation_window.get("end") or "")[:10]
+    condition = str(card.get("condition_key") or "unknown").strip().lower()
+    product = str(card.get("recommended_product") or card.get("product") or "unknown").strip().lower()
+    if not product:
+        product = "unknown"
+    region_part = ",".join(region_codes) or "national"
+    return f"{condition}|{product}|{region_part}|{start}|{end}"
+
+
+def enrich_card_v2(card: dict[str, Any], now: datetime | None = None) -> dict[str, Any]:
+    effective_now = now or datetime.utcnow()
+    enriched = dict(card)
+    blockers = derive_publish_blockers(enriched, now=effective_now)
+    lifecycle_state = derive_lifecycle_state(enriched, now=effective_now)
+    freshness_state = derive_freshness_state(enriched, now=effective_now)
+    evidence_strength = derive_evidence_strength(enriched)
+    enriched["publish_blockers"] = blockers
+    enriched["is_publishable"] = not blockers and lifecycle_state in {"APPROVE", "SYNC_READY", "LIVE"}
+    enriched["lifecycle_state"] = lifecycle_state
+    enriched["freshness_state"] = freshness_state
+    enriched["evidence_strength"] = evidence_strength
+    enriched["dedupe_group_id"] = dedupe_group_id(enriched)
+    enriched.setdefault("is_primary_variant", True)
+    enriched["decision_link"] = f"/entscheidung?focus={enriched.get('id')}"
+    return enriched
+
+
+def to_card_response(opp: dict[str, Any], include_preview: bool = True) -> dict[str, Any]:
+    preview = opp.get("campaign_preview") or {}
+    campaign_pack = opp.get("campaign_payload") or {}
+    measurement = campaign_pack.get("measurement_plan") or {}
+    product_mapping = campaign_pack.get("product_mapping") or {}
+    peix_context = campaign_pack.get("peix_context") or {}
+    playbook = campaign_pack.get("playbook") or {}
+    ai_meta = campaign_pack.get("ai_meta") or {}
+    region_codes = extract_region_codes_from_card_payload(opp, campaign_pack)
+    recommended_product = (
+        opp.get("recommended_product")
+        or product_mapping.get("recommended_product")
+        or opp.get("product")
+    )
+
+    trigger_ctx = opp.get("trigger_context") or {}
+    condition_key = opp.get("condition_key") or product_mapping.get("condition_key", "")
+    public_playbook = public_playbook_title(
+        playbook_key=opp.get("playbook_key") or playbook.get("key"),
+        title=opp.get("playbook_title") or playbook.get("title"),
+    )
+    public_title = public_display_title(
+        playbook_key=opp.get("playbook_key") or playbook.get("key"),
+        playbook_title=opp.get("playbook_title") or playbook.get("title"),
+        campaign_name=preview.get("campaign_name") or ((campaign_pack.get("campaign") or {}).get("campaign_name")),
+        product=recommended_product,
+        trigger_event=trigger_ctx.get("event"),
+        condition_label=(
+            opp.get("condition_label")
+            or product_mapping.get("condition_label")
+            or CONDITION_LABELS.get(condition_key)
+        ),
+    )
+
+    card = {
+        "id": opp.get("id"),
+        "status": opp.get("status"),
+        "status_label": STATUS_LABELS.get(opp.get("status", ""), opp.get("status")),
+        "type": opp.get("type"),
+        "urgency_score": opp.get("urgency_score"),
+        "brand": opp.get("brand") or "PEIX Partner",
+        "product": recommended_product or "Atemwegslinie",
+        "recommended_product": recommended_product,
+        "region": opp.get("region") or (
+            BUNDESLAND_NAMES.get(region_codes[0], region_codes[0]) if region_codes else "National"
+        ),
+        "region_codes": region_codes,
+        "region_codes_display": [BUNDESLAND_NAMES.get(c, c) for c in region_codes],
+        "budget_shift_pct": opp.get("budget_shift_pct") or (preview.get("budget") or {}).get("shift_pct") or 15.0,
+        "channel_mix": opp.get("channel_mix") or {"programmatic": 35, "social": 30, "search": 20, "ctv": 15},
+        "activation_window": {
+            "start": opp.get("activation_start") or (preview.get("activation_window") or {}).get("start"),
+            "end": opp.get("activation_end") or (preview.get("activation_window") or {}).get("end"),
+        },
+        "reason": public_reason_text(
+            reason=opp.get("recommendation_reason"),
+            event=trigger_ctx.get("event"),
+            details=trigger_ctx.get("details"),
+        ),
+        "confidence": (
+            round(float(opp.get("confidence")), 2)
+            if opp.get("confidence") is not None
+            else round(min(0.98, max(0.45, float(opp.get("urgency_score") or 50.0) / 100.0)), 2)
+        ),
+        "detail_url": opp.get("detail_url") or f"/kampagnen/{opp.get('id')}",
+        "created_at": opp.get("created_at"),
+        "updated_at": opp.get("updated_at"),
+        "expires_at": opp.get("expires_at"),
+        "campaign_name": preview.get("campaign_name") or ((campaign_pack.get("campaign") or {}).get("campaign_name")),
+        "primary_kpi": preview.get("primary_kpi") or measurement.get("primary_kpi"),
+        "mapping_status": opp.get("mapping_status") or product_mapping.get("mapping_status"),
+        "mapping_confidence": opp.get("mapping_confidence") or product_mapping.get("mapping_confidence"),
+        "mapping_reason": opp.get("mapping_reason") or product_mapping.get("mapping_reason"),
+        "condition_key": condition_key,
+        "condition_label": (
+            opp.get("condition_label")
+            or product_mapping.get("condition_label")
+            or CONDITION_LABELS.get(condition_key)
+        ),
+        "mapping_candidate_product": opp.get("mapping_candidate_product") or product_mapping.get("candidate_product"),
+        "mapping_rule_source": opp.get("rule_source") or product_mapping.get("rule_source"),
+        "peix_context": opp.get("peix_context") or peix_context,
+        "playbook_key": opp.get("playbook_key") or playbook.get("key"),
+        "playbook_title": public_playbook or opp.get("playbook_title") or playbook.get("title"),
+        "trigger_snapshot": opp.get("trigger_snapshot") or campaign_pack.get("trigger_snapshot"),
+        "guardrail_notes": opp.get("guardrail_notes") or (campaign_pack.get("guardrail_report") or {}).get("applied_fixes") or [],
+        "ai_generation_status": opp.get("ai_generation_status") or ai_meta.get("status"),
+        "strategy_mode": opp.get("strategy_mode") or campaign_pack.get("strategy_mode"),
+        "decision_brief": opp.get("decision_brief"),
+        "display_title": public_title or _build_display_title(opp, recommended_product),
+        "campaign_payload": campaign_pack,
+    }
+
+    if include_preview:
+        card["campaign_preview"] = {
+            "campaign_name": card.get("campaign_name"),
+            "activation_window": preview.get("activation_window") or card.get("activation_window"),
+            "budget": preview.get("budget") or {},
+            "primary_kpi": card.get("primary_kpi"),
+            "recommended_product": recommended_product,
+            "mapping_status": card.get("mapping_status"),
+            "peix_context": card.get("peix_context"),
+            "playbook_key": card.get("playbook_key"),
+            "playbook_title": card.get("playbook_title"),
+            "ai_generation_status": card.get("ai_generation_status"),
+        }
+
+    return enrich_card_v2(card)

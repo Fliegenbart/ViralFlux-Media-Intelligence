@@ -1,0 +1,93 @@
+import unittest
+from datetime import datetime, timedelta
+
+from app.services.media.recommendation_contracts import (
+    dedupe_group_id,
+    derive_lifecycle_state,
+    derive_publish_blockers,
+    enrich_card_v2,
+)
+
+
+def _sample_card(**overrides):
+    base = {
+        "id": "opp-1",
+        "status": "READY",
+        "product": "GeloProsed",
+        "recommended_product": "GeloProsed",
+        "mapping_status": "approved",
+        "region_codes": ["SH"],
+        "activation_window": {
+            "start": "2026-03-09T00:00:00",
+            "end": "2026-03-22T00:00:00",
+        },
+        "campaign_preview": {
+            "budget": {
+                "weekly_budget_eur": 120000.0,
+            },
+        },
+        "campaign_payload": {
+            "message_framework": {
+                "hero_message": "Norddeutschland jetzt vorbereiten.",
+            },
+            "channel_plan": [
+                {"channel": "search", "share_pct": 40.0},
+            ],
+            "guardrail_report": {
+                "passed": True,
+            },
+        },
+        "confidence": 0.82,
+        "peix_context": {"score": 67},
+        "decision_brief": {
+            "facts": [
+                {"key": "source", "label": "Quelle", "value": "AMELAG"},
+                {"key": "context", "label": "Kontext", "value": "SurvStat"},
+            ],
+        },
+        "condition_key": "erkaltung_akut",
+    }
+    base.update(overrides)
+    return base
+
+
+class RecommendationContractsV2Tests(unittest.TestCase):
+    def test_publish_blockers_flag_placeholder_product(self) -> None:
+        card = _sample_card(recommended_product="Atemwegslinie", product="Atemwegslinie")
+
+        blockers = derive_publish_blockers(card, now=datetime(2026, 3, 6, 12, 0, 0))
+
+        self.assertTrue(any("Produkt-Mapping" in blocker for blocker in blockers))
+
+    def test_expired_flights_switch_to_expired_lifecycle(self) -> None:
+        card = _sample_card(
+            activation_window={
+                "start": "2026-02-01T00:00:00",
+                "end": "2026-02-10T00:00:00",
+            }
+        )
+
+        lifecycle_state = derive_lifecycle_state(card, now=datetime(2026, 3, 6, 12, 0, 0))
+
+        self.assertEqual(lifecycle_state, "EXPIRED")
+
+    def test_enrich_card_marks_publishable_ready_package(self) -> None:
+        enriched = enrich_card_v2(_sample_card(), now=datetime(2026, 3, 6, 12, 0, 0))
+
+        self.assertEqual(enriched["lifecycle_state"], "APPROVE")
+        self.assertTrue(enriched["is_publishable"])
+        self.assertEqual(enriched["evidence_strength"], "hoch")
+
+    def test_dedupe_group_id_uses_condition_product_region_and_window(self) -> None:
+        card = _sample_card()
+
+        group_id = dedupe_group_id(card)
+
+        self.assertIn("erkaltung_akut", group_id)
+        self.assertIn("geloprosed", group_id)
+        self.assertIn("SH", group_id)
+        self.assertIn("2026-03-09", group_id)
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, Link } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import LandingPage from './pages/LandingPage';
 import MediaCockpit from './pages/MediaCockpit';
 import WeeklyReport from './pages/WeeklyReport';
@@ -110,6 +110,11 @@ const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   );
 };
 
+const LegacyRecommendationRedirect: React.FC = () => {
+  const { id } = useParams<{ id?: string }>();
+  return <Navigate to={id ? `/kampagnen/${id}` : '/kampagnen'} replace />;
+};
+
 /* ── App ────────────────────────────────────────────────────────── */
 const App: React.FC = () => {
   return (
@@ -117,17 +122,22 @@ const App: React.FC = () => {
       <ToastProvider>
         <Router>
           <Routes>
-            <Route path="/" element={<Navigate to="/lagebild" replace />} />
+            <Route path="/" element={<Navigate to="/entscheidung" replace />} />
             <Route path="/welcome" element={<LandingPage />} />
-            <Route path="/lagebild" element={<AppLayout><MediaCockpit view="lagebild" /></AppLayout>} />
-            <Route path="/empfehlungen" element={<AppLayout><MediaCockpit view="empfehlungen" /></AppLayout>} />
-            <Route path="/empfehlungen/:id" element={<AppLayout><MediaCockpit view="empfehlungen" /></AppLayout>} />
-            <Route path="/validierung" element={<AppLayout><MediaCockpit view="backtest" /></AppLayout>} />
+            <Route path="/entscheidung" element={<AppLayout><MediaCockpit view="decision" /></AppLayout>} />
+            <Route path="/regionen" element={<AppLayout><MediaCockpit view="regions" /></AppLayout>} />
+            <Route path="/kampagnen" element={<AppLayout><MediaCockpit view="campaigns" /></AppLayout>} />
+            <Route path="/kampagnen/:id" element={<AppLayout><MediaCockpit view="campaigns" /></AppLayout>} />
+            <Route path="/evidenz" element={<AppLayout><MediaCockpit view="evidence" /></AppLayout>} />
             <Route path="/bericht" element={<AppLayout><WeeklyReport /></AppLayout>} />
             {/* Legacy redirects */}
-            <Route path="/dashboard" element={<Navigate to="/lagebild" replace />} />
-            <Route path="/dashboard/recommendations/:id" element={<Navigate to="/empfehlungen" replace />} />
-            <Route path="/backtest" element={<Navigate to="/validierung" replace />} />
+            <Route path="/lagebild" element={<Navigate to="/entscheidung" replace />} />
+            <Route path="/empfehlungen" element={<Navigate to="/kampagnen" replace />} />
+            <Route path="/empfehlungen/:id" element={<LegacyRecommendationRedirect />} />
+            <Route path="/validierung" element={<Navigate to="/evidenz" replace />} />
+            <Route path="/dashboard" element={<Navigate to="/entscheidung" replace />} />
+            <Route path="/dashboard/recommendations/:id" element={<LegacyRecommendationRedirect />} />
+            <Route path="/backtest" element={<Navigate to="/evidenz" replace />} />
           </Routes>
         </Router>
       </ToastProvider>

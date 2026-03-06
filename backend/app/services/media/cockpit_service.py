@@ -623,7 +623,7 @@ class MediaCockpitService:
                     "recommended_product": recommended_product,
                     "mapping_status": product_mapping.get("mapping_status"),
                 },
-                "detail_url": f"/dashboard/recommendations/{row.opportunity_id}",
+                "detail_url": f"/kampagnen/{row.opportunity_id}",
                 "created_at": row.created_at.isoformat() if row.created_at else None,
             })
 
@@ -650,7 +650,7 @@ class MediaCockpitService:
 
             payload = {
                 "card_id": row.opportunity_id,
-                "detail_url": f"/dashboard/recommendations/{row.opportunity_id}",
+                "detail_url": f"/kampagnen/{row.opportunity_id}",
                 "status": status,
                 "urgency_score": row.urgency_score,
                 "brand": row.brand,

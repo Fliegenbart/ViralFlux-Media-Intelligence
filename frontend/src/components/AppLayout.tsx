@@ -9,10 +9,10 @@ interface Props {
 }
 
 const NAV_ITEMS = [
-  { label: 'Lagebild', path: '/lagebild' },
-  { label: 'Empfehlungen', path: '/empfehlungen' },
-  { label: 'Validierung', path: '/validierung' },
-  { label: 'Bericht', path: '/bericht' },
+  { label: 'Entscheidung', path: '/entscheidung' },
+  { label: 'Regionen', path: '/regionen' },
+  { label: 'Kampagnen', path: '/kampagnen' },
+  { label: 'Evidenz', path: '/evidenz' },
 ] as const;
 
 const AppLayout: React.FC<Props> = ({ children }) => {
@@ -20,10 +20,6 @@ const AppLayout: React.FC<Props> = ({ children }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const [pdfLoading, setPdfLoading] = useState(false);
-  const [lastUpdate] = useState(() => {
-    const d = new Date();
-    return d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-  });
 
   const isActive = (path: string) => location.pathname.startsWith(path);
 
@@ -136,7 +132,7 @@ const AppLayout: React.FC<Props> = ({ children }) => {
           {pdfLoading ? 'Wird erstellt\u2026' : 'PDF Action Brief herunterladen'}
         </button>
         <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-          Letzte Daten: {lastUpdate}
+          Datenstand wird je Ansicht direkt ausgewiesen
         </span>
       </footer>
     </div>

@@ -535,7 +535,7 @@ class MarketingOpportunityEngine:
                     "cards": playbook_cards,
                     "total_cards": len(playbook_cards),
                     "top_card_id": top_card_id,
-                    "auto_open_url": f"/dashboard/recommendations/{top_card_id}" if top_card_id else None,
+                    "auto_open_url": f"/kampagnen/{top_card_id}" if top_card_id else None,
                 }
 
         legacy = self._generate_legacy_action_cards(
@@ -771,7 +771,7 @@ class MarketingOpportunityEngine:
                     "rule_source": product_mapping.get("rule_source"),
                     "peix_context": peix_context,
                     "campaign_payload": campaign_payload,
-                    "detail_url": f"/dashboard/recommendations/{opp_id}",
+                    "detail_url": f"/kampagnen/{opp_id}",
                     "playbook_key": playbook_key,
                     "playbook_title": cfg.get("title"),
                     "trigger_snapshot": trigger_snapshot,
@@ -906,7 +906,7 @@ class MarketingOpportunityEngine:
                     "mapping_candidate_product": product_mapping.get("candidate_product"),
                     "rule_source": product_mapping.get("rule_source"),
                     "peix_context": peix_context,
-                    "detail_url": f"/dashboard/recommendations/{opp_id}",
+                    "detail_url": f"/kampagnen/{opp_id}",
                     "strategy_mode": "LEGACY",
                 }
             )
@@ -918,7 +918,7 @@ class MarketingOpportunityEngine:
             "cards": cards,
             "total_cards": len(cards),
             "top_card_id": top_card_id,
-            "auto_open_url": f"/dashboard/recommendations/{top_card_id}" if top_card_id else None,
+            "auto_open_url": f"/kampagnen/{top_card_id}" if top_card_id else None,
         }
 
     @staticmethod
@@ -2601,7 +2601,7 @@ class MarketingOpportunityEngine:
             "ai_generation_status": ai_meta.get("status"),
             "trigger_evidence": (campaign_payload or {}).get("trigger_evidence"),
             "decision_brief": decision_brief,
-            "detail_url": f"/dashboard/recommendations/{m.opportunity_id}",
+            "detail_url": f"/kampagnen/{m.opportunity_id}",
             "created_at": m.created_at.isoformat() if m.created_at else None,
             "updated_at": m.updated_at.isoformat() if m.updated_at else None,
             "expires_at": m.expires_at.isoformat() if m.expires_at else None,

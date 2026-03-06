@@ -79,6 +79,7 @@ export interface RecommendationCard {
   ai_generation_status?: string;
   strategy_mode?: string;
   campaign_preview?: CampaignPreview;
+  decision_brief?: RecommendationDecisionBrief;
   detail_url?: string;
   created_at?: string | null;
   updated_at?: string | null;
@@ -357,6 +358,81 @@ export interface RecommendationDetail extends RecommendationCard {
   trigger_evidence?: CampaignPack['trigger_evidence'];
   target_audience?: string[];
   decision_brief?: RecommendationDecisionBrief;
+}
+
+export interface ConnectorCatalogItem {
+  key: string;
+  label: string;
+  status: string;
+  description?: string;
+  supported_channels?: string[];
+  supported_objectives?: string[];
+}
+
+export interface PreparedSyncPayload {
+  opportunity_id: string;
+  connector_key: string;
+  connector_label: string;
+  generated_at: string;
+  available_connectors: ConnectorCatalogItem[];
+  readiness: {
+    state: 'ready' | 'approval_required' | 'needs_work' | string;
+    can_sync_now: boolean;
+    blockers: string[];
+    warnings: string[];
+    connector_status?: string;
+  };
+  normalized_package: {
+    campaign_name?: string;
+    workflow_status?: string;
+    brand?: string;
+    objective?: string;
+    recommended_product?: string;
+    region_codes?: string[];
+    region_labels?: string[];
+    audience_segments?: string[];
+    primary_kpi?: string;
+    secondary_kpis?: string[];
+    budget_plan?: {
+      weekly_budget_eur?: number;
+      budget_shift_pct?: number;
+      budget_shift_value_eur?: number;
+      total_flight_budget_eur?: number;
+      currency?: string;
+    };
+    activation_window?: {
+      start?: string;
+      end?: string;
+      flight_days?: number;
+    };
+    channel_plan?: CampaignChannelPlanItem[];
+    message_framework?: {
+      hero_message?: string;
+      support_points?: string[];
+      cta?: string;
+      compliance_note?: string;
+    };
+    creative_angles?: string[];
+    keyword_clusters?: string[];
+    next_steps?: Array<Record<string, unknown>>;
+    playbook?: {
+      key?: string;
+      title?: string;
+      kind?: string;
+    };
+    trigger?: {
+      source?: string;
+      event?: string;
+      details?: string;
+      lead_time_days?: number;
+    };
+    guardrails?: {
+      passed?: boolean;
+      notes?: string[];
+      applied_fixes?: string[];
+    };
+  };
+  connector_payload: Record<string, unknown>;
 }
 
 export interface ProductConditionMapping {

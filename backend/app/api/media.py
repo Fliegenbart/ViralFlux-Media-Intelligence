@@ -12,6 +12,7 @@ from app.core.config import get_settings
 from app.core.rate_limit import limiter
 from app.db.session import get_db
 from app.services.marketing_engine.opportunity_engine import MarketingOpportunityEngine
+from app.services.media.connector_payload_service import ConnectorPayloadService
 from app.services.media.cockpit_service import MediaCockpitService
 from app.services.media.product_catalog_service import (
     DEFAULT_GELO_SOURCE_URL,
@@ -129,6 +130,10 @@ class RecommendationStatusUpdateRequest(BaseModel):
     status: str
 
 
+class PrepareSyncRequest(BaseModel):
+    connector_key: Optional[str] = Field(default=None)
+
+
 class RecommendationBackfillPeixRequest(BaseModel):
     force: bool = Field(default=False)
     limit: int = Field(default=1000, ge=1, le=10000)
@@ -220,6 +225,12 @@ async def get_playbook_catalog(db: Session = Depends(get_db)):
     """Liefert aktiven Playbook-Katalog inkl. Triggerrahmen."""
     engine = MarketingOpportunityEngine(db)
     return engine.get_playbook_catalog()
+
+
+@router.get("/connectors/catalog")
+async def get_media_connector_catalog():
+    """Liefert verfügbare Media-Connectoren für spätere Tool-Syncs."""
+    return ConnectorPayloadService.get_catalog()
 
 
 @router.post("/recommendations/open-region")
@@ -447,6 +458,27 @@ async def regenerate_media_recommendation_ai(
         "campaign_pack": result.get("campaign_payload") or {},
         "trigger_evidence": result.get("trigger_evidence"),
     }
+
+
+@router.post("/recommendations/{opportunity_id}/prepare-sync")
+async def prepare_media_recommendation_sync(
+    opportunity_id: str,
+    payload: PrepareSyncRequest | None = None,
+    db: Session = Depends(get_db),
+):
+    """Erzeugt connector-ready Preview-Payloads für spätere Media-Tool-Syncs."""
+    engine = MarketingOpportunityEngine(db)
+    item = engine.get_recommendation_by_id(opportunity_id)
+    if not item:
+        raise HTTPException(status_code=404, detail=f"Recommendation {opportunity_id} nicht gefunden")
+
+    try:
+        return ConnectorPayloadService.prepare_sync_package(
+            opportunity=item,
+            connector_key=payload.connector_key if payload else None,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
 
 @router.post("/products/refresh")
@@ -815,7 +847,7 @@ def _to_card_response(opp: dict[str, Any], include_preview: bool = True) -> dict
             if opp.get("confidence") is not None
             else round(min(0.98, max(0.45, float(opp.get("urgency_score") or 50.0) / 100.0)), 2)
         ),
-        "detail_url": opp.get("detail_url") or f"/dashboard/recommendations/{opp.get('id')}",
+        "detail_url": opp.get("detail_url") or f"/kampagnen/{opp.get('id')}",
         "created_at": opp.get("created_at"),
         "updated_at": opp.get("updated_at"),
         "campaign_name": preview.get("campaign_name") or ((campaign_pack.get("campaign") or {}).get("campaign_name")),

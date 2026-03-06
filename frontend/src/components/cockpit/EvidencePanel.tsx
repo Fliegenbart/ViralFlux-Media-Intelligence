@@ -44,7 +44,7 @@ const EvidencePanel: React.FC<Props> = ({
         </div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
           <span className="step-chip">Proxy-validiert</span>
-          <span className="step-chip">Truth-Layer: {truthLayerLabel(latestCustomer)}</span>
+          <span className="step-chip">Kunden-Check: {truthLayerLabel(latestCustomer)}</span>
         </div>
       </section>
 
@@ -77,7 +77,7 @@ const EvidencePanel: React.FC<Props> = ({
 
         <div className="card subsection-card" style={{ padding: 24 }}>
           <div>
-            <div className="section-kicker">Kunden-Check (Truth-Layer)</div>
+            <div className="section-kicker">Kunden-Check</div>
             <h2 className="subsection-title" style={{ marginTop: 8 }}>
               {truthLayerLabel(latestCustomer)}
             </h2>
@@ -97,7 +97,7 @@ const EvidencePanel: React.FC<Props> = ({
             </div>
           </div>
           <p className="section-copy">
-            Unter 26 Wochen bleibt dieser Layer explorativ. Unter 52 Wochen ist er kein belastbarer Freigabebeweis für kundennahe Media-Automation.
+            Das ist kein Qualitätsurteil, sondern eine Aussage zur Datenbreite. Unter 26 Wochen zeigt der Layer erste Signale, unter 52 Wochen bleibt er im Aufbau und ist noch kein belastbarer Freigabebeweis für kundennahe Media-Automation.
           </p>
         </div>
       </section>

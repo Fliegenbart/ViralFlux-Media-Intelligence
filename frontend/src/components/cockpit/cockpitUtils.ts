@@ -106,10 +106,10 @@ export function readinessTone(isGo: boolean): { background: string; color: strin
 
 export function truthLayerLabel(backtest?: BacktestResponse | null): string {
   const points = Number(backtest?.metrics?.data_points || 0);
-  if (points >= 52) return 'stark';
-  if (points >= 26) return 'aufbauend';
-  if (points > 0) return 'schwach';
-  return 'nicht vorhanden';
+  if (points >= 52) return 'belastbar';
+  if (points >= 26) return 'im Aufbau';
+  if (points > 0) return 'erste Signale';
+  return 'noch nicht angeschlossen';
 }
 
 export function recommendationLane(card: RecommendationCard): CampaignLaneId {

@@ -90,7 +90,7 @@ const DecisionView: React.FC<Props> = ({
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
           <span className="step-chip step-chip-done">Datenstand {formatDateTime(cockpit?.map?.date)}</span>
           <span className="step-chip">Proxy-validiert</span>
-          <span className="step-chip">Truth-Layer: {truthLayerLabel(latestCustomer)}</span>
+          <span className="step-chip">Kunden-Check: {truthLayerLabel(latestCustomer)}</span>
         </div>
       </section>
 

@@ -45,20 +45,17 @@ const CampaignStudio: React.FC<Props> = ({
   }));
 
   return (
-    <div style={{ display: 'grid', gap: 20 }}>
+    <div className="page-stack">
       <section className="context-filter-rail">
-        <div>
-          <span style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)' }}>
-            Campaign Studio
-          </span>
-          <h1 style={{ margin: '6px 0 0', fontSize: 28, color: 'var(--text-primary)' }}>
-            Publishable Pakete statt loser Empfehlungen
-          </h1>
+        <div className="section-heading">
+          <span className="section-kicker">Campaign Studio</span>
+          <h1 className="section-title">Publishable Pakete statt loser Empfehlungen</h1>
+          <p className="section-copy">Von der Wochenentscheidung in einen sauberen Review- und Freigabefluss, ohne Signalchaos im Vordergrund.</p>
         </div>
         <span className="step-chip">{cards.length} Kampagnenpakete für {virus}</span>
       </section>
 
-      <section className="card" style={{ padding: 20 }}>
+      <section className="card subsection-card" style={{ padding: 24 }}>
         <div style={{ display: 'grid', gap: 16, gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
           <label style={{ display: 'grid', gap: 8 }}>
             <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Brand</span>
@@ -92,11 +89,11 @@ const CampaignStudio: React.FC<Props> = ({
       ) : (
         <section className="campaign-board">
           {grouped.map((lane) => (
-            <div key={lane.id} className="lane-column">
+              <div key={lane.id} className="lane-column">
               <div className="lane-header">
                 <div>
-                  <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>{lane.label}</div>
-                  <div style={{ marginTop: 4, fontSize: 12, color: 'var(--text-muted)' }}>{lane.description}</div>
+                  <div className="subsection-title" style={{ fontSize: 18 }}>{lane.label}</div>
+                  <div className="subsection-copy" style={{ marginTop: 4 }}>{lane.description}</div>
                 </div>
                 <span className="step-chip">{lane.cards.length}</span>
               </div>

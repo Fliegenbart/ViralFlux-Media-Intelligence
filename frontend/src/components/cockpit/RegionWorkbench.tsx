@@ -41,12 +41,10 @@ const RegionWorkbench: React.FC<Props> = ({
   }
 
   return (
-    <div style={{ display: 'grid', gap: 20 }}>
+    <div className="page-stack">
       <section className="context-filter-rail">
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <span style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)' }}>
-            Regionen priorisieren
-          </span>
+        <div className="section-heading">
+          <span className="section-kicker">Regionen priorisieren</span>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
             {VIRUS_OPTIONS.map((option) => (
               <button
@@ -64,10 +62,10 @@ const RegionWorkbench: React.FC<Props> = ({
       </section>
 
       <section className="cockpit-grid">
-        <div className="card" style={{ padding: 20 }}>
-          <div style={{ marginBottom: 12 }}>
-            <h2 style={{ margin: 0, fontSize: 20, color: 'var(--text-primary)' }}>Deutschlandkarte</h2>
-            <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--text-muted)' }}>
+        <div className="card subsection-card" style={{ padding: 24 }}>
+          <div className="section-heading" style={{ gap: 6, marginBottom: 12 }}>
+            <h2 className="subsection-title">Deutschlandkarte</h2>
+            <p className="subsection-copy">
               Klick auf ein Bundesland für Signal-Score und Kampagnenaktion.
             </p>
           </div>
@@ -79,19 +77,17 @@ const RegionWorkbench: React.FC<Props> = ({
         </div>
 
         <div style={{ display: 'grid', gap: 16 }}>
-          <div className="card" style={{ padding: 20, display: 'grid', gap: 14 }}>
+          <div className="card subsection-card" style={{ padding: 24, display: 'grid', gap: 18 }}>
             <div>
-              <div style={{ fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)' }}>
-                Regionen-Inspector
-              </div>
-              <h2 style={{ margin: '8px 0 0', fontSize: 24, color: 'var(--text-primary)' }}>
+              <div className="section-kicker">Regionen-Inspector</div>
+              <h2 className="subsection-title" style={{ marginTop: 8 }}>
                 {region?.name || 'Region wählen'}
               </h2>
             </div>
 
             {region ? (
               <>
-                <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))' }}>
+                <div className="metric-strip">
                   <div className="metric-box">
                     <span>Signal-Score</span>
                     <strong>{formatPercent(region.impact_probability || region.peix_score || 0)}</strong>
@@ -146,11 +142,11 @@ const RegionWorkbench: React.FC<Props> = ({
             )}
           </div>
 
-          <div className="card" style={{ padding: 18 }}>
+          <div className="card subsection-card" style={{ padding: 24 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
-              <div>
-                <h2 style={{ margin: 0, fontSize: 18, color: 'var(--text-primary)' }}>Top-Regionen</h2>
-                <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--text-muted)' }}>
+              <div className="section-heading" style={{ gap: 6 }}>
+                <h2 className="subsection-title">Top-Regionen</h2>
+                <p className="subsection-copy">
                   Direkt priorisiert für die Wochenplanung.
                 </p>
               </div>

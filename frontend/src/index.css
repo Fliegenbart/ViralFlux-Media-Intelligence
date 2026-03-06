@@ -2009,6 +2009,15 @@ body {
   margin-top: 18px;
 }
 
+.review-metric-grid .campaign-metric-card {
+  min-width: 0;
+}
+
+.review-metric-grid .campaign-metric-card strong {
+  font-size: clamp(1.8rem, 2.2vw, 2.2rem);
+  overflow-wrap: anywhere;
+}
+
 .workflow-rail {
   display: grid;
   gap: 12px;

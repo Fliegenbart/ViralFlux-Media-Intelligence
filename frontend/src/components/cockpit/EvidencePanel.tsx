@@ -31,7 +31,7 @@ const EvidencePanel: React.FC<Props> = ({
   const sourceItems = cockpit?.source_status?.items || [];
   const recentRuns = cockpit?.backtest_summary?.recent_runs || [];
 
-  if (loading) {
+  if (loading && !cockpit) {
     return <div className="card" style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>Lade Evidenz...</div>;
   }
 

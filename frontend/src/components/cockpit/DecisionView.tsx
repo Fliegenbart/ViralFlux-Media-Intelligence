@@ -65,7 +65,7 @@ const DecisionView: React.FC<Props> = ({
 
   const gateTone = readinessTone(isGo);
 
-  if (loading) {
+  if (loading && !cockpit) {
     return <div className="card" style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>Lade Entscheidungssystem...</div>;
   }
 

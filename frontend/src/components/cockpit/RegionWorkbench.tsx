@@ -32,7 +32,7 @@ const RegionWorkbench: React.FC<Props> = ({
   const suggestion = activeMap?.activation_suggestions?.find((item) => item.region === selectedRegion);
   const topRegions = (activeMap?.top_regions || []).slice(0, 5);
 
-  if (loading) {
+  if (loading && !cockpit) {
     return <div className="card" style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>Lade Regionen-Workbench...</div>;
   }
 

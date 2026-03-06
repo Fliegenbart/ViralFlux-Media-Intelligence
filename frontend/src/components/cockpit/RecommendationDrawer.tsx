@@ -9,6 +9,7 @@ import {
   STATUS_ACTION_LABELS,
   formatCurrency,
   formatDateShort,
+  formatDateTime,
   formatPercent,
   nextWorkflowStatus,
   statusTone,
@@ -58,8 +59,37 @@ const RecommendationDrawer: React.FC<Props> = ({
   const channelRows = detail?.campaign_pack?.channel_plan || [];
   const creativeAngles = detail?.campaign_pack?.ai_plan?.creative_angles || [];
   const keywordClusters = detail?.campaign_pack?.ai_plan?.keyword_clusters || [];
-  const nextSteps = detail?.campaign_pack?.ai_plan?.next_steps || detail?.campaign_pack?.execution_checklist || [];
+  const nextSteps = (detail?.campaign_pack?.ai_plan?.next_steps || detail?.campaign_pack?.execution_checklist || []) as Array<{
+    task?: string;
+    owner?: string;
+    eta?: string;
+  }>;
   const supportPoints = detail?.campaign_pack?.message_framework?.support_points || [];
+  const audienceSegments = detail?.campaign_pack?.targeting?.audience_segments || detail?.target_audience || [];
+  const guardrailNotes = detail?.guardrail_notes || detail?.campaign_pack?.guardrail_report?.applied_fixes || [];
+  const workflowSteps = [
+    { key: 'DRAFT', label: 'Prepare', copy: 'AI Draft und Signal-Kontext' },
+    { key: 'READY', label: 'Review', copy: 'Guardrails und Mapping prüfen' },
+    { key: 'APPROVED', label: 'Approve', copy: 'Freigabe für Team oder Kunde' },
+    { key: 'ACTIVATED', label: 'Live', copy: 'Aktiv oder sync-bereit ausgeliefert' },
+  ];
+  const normalizedStatus = String(detail?.status || '').toUpperCase();
+  const currentWorkflowIndex = Math.max(workflowSteps.findIndex((step) => step.key === normalizedStatus), 0);
+  const confidenceValue = detail?.confidence == null
+    ? null
+    : Math.round((detail.confidence <= 1 ? detail.confidence * 100 : detail.confidence));
+  const heroSummary = detail?.decision_brief?.summary_sentence || detail?.reason || 'Signal- und Playbook-basiertes Kampagnenpaket für Review und Freigabe.';
+  const syncStateTone = syncPreview?.readiness.can_sync_now
+    ? {
+        background: 'rgba(16, 185, 129, 0.10)',
+        color: '#047857',
+        border: '1px solid rgba(16, 185, 129, 0.24)',
+      }
+    : {
+        background: 'rgba(245, 158, 11, 0.12)',
+        color: '#b45309',
+        border: '1px solid rgba(245, 158, 11, 0.24)',
+      };
 
   const syncPayloadText = useMemo(
     () => (syncPreview ? JSON.stringify(syncPreview.connector_payload, null, 2) : ''),
@@ -70,53 +100,125 @@ const RecommendationDrawer: React.FC<Props> = ({
 
   return (
     <div className="drawer-overlay" role="dialog" aria-modal="true">
-      <div className="drawer-panel">
-        <div className="drawer-header">
-          <div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10 }}>
-              <span style={{ borderRadius: 999, padding: '6px 10px', fontSize: 11, fontWeight: 700, ...tone }}>
-                {detail?.status_label || detail?.status || 'Lädt'}
+      <div className="drawer-panel review-sheet">
+        <div className="drawer-header review-sheet-header">
+          <div className="review-sheet-topline">
+            <span className="campaign-status-badge" style={tone}>
+              {detail?.status_label || detail?.status || 'Lädt'}
+            </span>
+            <span className="campaign-confidence-chip">
+              {detail?.region_codes_display?.join(', ') || detail?.region || 'National'}
+            </span>
+            {detail?.updated_at && (
+              <span className="campaign-confidence-chip">
+                Aktualisiert {formatDateTime(detail.updated_at)}
               </span>
-              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                {detail?.region_codes_display?.join(', ') || detail?.region || 'National'}
-              </span>
-            </div>
-            <h2 style={{ margin: '10px 0 0', fontSize: 28, lineHeight: 1.1, color: 'var(--text-primary)' }}>
-              {detail?.campaign_name || detail?.display_title || 'Kampagnenpaket'}
-            </h2>
+            )}
           </div>
           <button className="media-button secondary" type="button" onClick={onClose}>Schließen</button>
         </div>
 
         {loading ? (
-          <div style={{ padding: 24, color: 'var(--text-muted)' }}>Lade Kampagnenpaket...</div>
+          <div className="campaign-empty-board" style={{ color: 'var(--text-muted)' }}>Lade Kampagnenpaket...</div>
         ) : detail ? (
-          <div style={{ display: 'grid', gap: 18 }}>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
-              {nextStatus && (
-                <button
-                  className="media-button"
-                  type="button"
-                  onClick={() => onAdvanceStatus(detail.id, nextStatus)}
-                  disabled={statusUpdating}
-                >
-                  {statusUpdating ? 'Aktualisiere...' : (STATUS_ACTION_LABELS[nextStatus] || nextStatus)}
-                </button>
-              )}
-              <button
-                className="media-button secondary"
-                type="button"
-                onClick={() => onRegenerateAI(detail.id)}
-                disabled={regenerating}
-              >
-                {regenerating ? 'Qwen arbeitet...' : 'Mit Qwen neu erzeugen'}
-              </button>
-            </div>
+          <div className="review-sheet-stack">
+            <section className="review-sheet-hero">
+              <div className="review-sheet-main">
+                <span className="section-kicker">Campaign Review</span>
+                <h2 className="review-sheet-title">
+                  {detail.campaign_name || detail.display_title || 'Kampagnenpaket'}
+                </h2>
+                <p className="review-sheet-copy">{heroSummary}</p>
+
+                <div className="review-chip-row">
+                  <span className="campaign-confidence-chip">
+                    {confidenceValue != null ? `${confidenceValue}% Confidence` : 'Confidence offen'}
+                  </span>
+                  <span className="campaign-confidence-chip">
+                    KPI {detail.primary_kpi || detail.campaign_pack?.measurement_plan?.primary_kpi || 'noch offen'}
+                  </span>
+                  <span className="campaign-confidence-chip">
+                    {detail.campaign_pack?.ai_meta?.provider || 'AI'} · {detail.campaign_pack?.ai_meta?.model || 'Campaign Planner'}
+                  </span>
+                </div>
+
+                <div className="review-action-row">
+                  {nextStatus && (
+                    <button
+                      className="media-button"
+                      type="button"
+                      onClick={() => onAdvanceStatus(detail.id, nextStatus)}
+                      disabled={statusUpdating}
+                    >
+                      {statusUpdating ? 'Aktualisiere...' : (STATUS_ACTION_LABELS[nextStatus] || nextStatus)}
+                    </button>
+                  )}
+                  <button
+                    className="media-button secondary"
+                    type="button"
+                    onClick={() => onRegenerateAI(detail.id)}
+                    disabled={regenerating}
+                  >
+                    {regenerating ? 'Qwen arbeitet...' : 'Mit Qwen neu erzeugen'}
+                  </button>
+                </div>
+              </div>
+
+              <aside className="review-sheet-aside">
+                <div className="campaign-focus-label">Review Snapshot</div>
+                <div className="campaign-focus-title">{detail.recommended_product || detail.product}</div>
+                <div className="campaign-focus-context">
+                  {detail.region_codes_display?.join(', ') || detail.region || 'National'}
+                </div>
+
+                <div className="campaign-metric-grid review-metric-grid">
+                  <div className="campaign-metric-card">
+                    <span>Shift</span>
+                    <strong>{formatPercent(detail.budget_shift_pct || 0)}</strong>
+                    <small>Budgetverschiebung</small>
+                  </div>
+                  <div className="campaign-metric-card">
+                    <span>Budget</span>
+                    <strong>{formatCurrency(detail.campaign_pack?.budget_plan?.weekly_budget_eur)}</strong>
+                    <small>Wochenbudget</small>
+                  </div>
+                  <div className="campaign-metric-card">
+                    <span>Flight</span>
+                    <strong>{formatDateShort(detail.activation_window?.start)}</strong>
+                    <small>Geplanter Start</small>
+                  </div>
+                  <div className="campaign-metric-card">
+                    <span>Sync</span>
+                    <strong>{syncPreview?.readiness.can_sync_now ? 'ready' : 'review'}</strong>
+                    <small>{syncPreview?.connector_label || 'noch kein Connector-Preview'}</small>
+                  </div>
+                </div>
+              </aside>
+            </section>
+
+            <section className="workflow-rail">
+              {workflowSteps.map((step, index) => {
+                const isCurrent = index === currentWorkflowIndex;
+                const isComplete = index < currentWorkflowIndex;
+                return (
+                  <div
+                    key={step.key}
+                    className={`workflow-step${isCurrent ? ' is-current' : ''}${isComplete ? ' is-complete' : ''}`}
+                  >
+                    <div className="workflow-step-index">0{index + 1}</div>
+                    <div className="workflow-step-copy">
+                      <strong>{step.label}</strong>
+                      <span>{step.copy}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </section>
 
             <section className="drawer-grid">
-              <div className="card" style={{ padding: 18 }}>
-                <h3 style={{ margin: 0, fontSize: 18, color: 'var(--text-primary)' }}>Paket-Überblick</h3>
-                <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', marginTop: 14 }}>
+              <div className="card review-card">
+                <h3 className="subsection-title">Paket-Überblick</h3>
+                <div className="review-stat-grid">
                   <div className="metric-box">
                     <span>Produkt</span>
                     <strong style={{ fontSize: 18 }}>{detail.recommended_product || detail.product}</strong>
@@ -130,52 +232,66 @@ const RecommendationDrawer: React.FC<Props> = ({
                     <strong style={{ fontSize: 18 }}>{formatCurrency(detail.campaign_pack?.budget_plan?.weekly_budget_eur)}</strong>
                   </div>
                   <div className="metric-box">
-                    <span>Flight Start</span>
+                    <span>Flight</span>
                     <strong style={{ fontSize: 18 }}>{formatDateShort(detail.activation_window?.start)}</strong>
                   </div>
                 </div>
-                <div className="soft-panel" style={{ padding: 16, marginTop: 14 }}>
-                  <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Warum jetzt?</div>
-                  <div style={{ marginTop: 6, fontSize: 14, lineHeight: 1.6, color: 'var(--text-secondary)' }}>
-                    {detail.decision_brief?.summary_sentence || detail.reason || 'Trigger- und Playbook-basierte Aktivierung.'}
+
+                <div className="soft-panel review-panel-soft">
+                  <div className="campaign-focus-label">Warum jetzt?</div>
+                  <div className="review-body-copy">{heroSummary}</div>
+                </div>
+
+                <div className="review-detail-group">
+                  <div className="campaign-focus-label">Audience</div>
+                  <div className="review-chip-row">
+                    {audienceSegments.length > 0 ? audienceSegments.map((segment) => (
+                      <span key={segment} className="step-chip">{segment}</span>
+                    )) : <span className="review-muted-copy">Keine Audience-Segmente hinterlegt.</span>}
                   </div>
                 </div>
               </div>
 
-              <div className="card" style={{ padding: 18 }}>
-                <h3 style={{ margin: 0, fontSize: 18, color: 'var(--text-primary)' }}>Creative Package</h3>
-                <div style={{ marginTop: 14, display: 'grid', gap: 14 }}>
-                  <div>
-                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Hero Message</div>
-                    <div style={{ marginTop: 6, fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>
-                      {detail.campaign_pack?.message_framework?.hero_message || 'Noch keine Hero Message'}
-                    </div>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Support Points</div>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
-                      {supportPoints.length > 0 ? supportPoints.map((point) => (
-                        <span key={point} className="step-chip">{point}</span>
-                      )) : <span style={{ color: 'var(--text-muted)' }}>Keine Support Points hinterlegt.</span>}
-                    </div>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Creative Angles</div>
-                    <div style={{ display: 'grid', gap: 8, marginTop: 8 }}>
-                      {creativeAngles.length > 0 ? creativeAngles.map((angle) => (
-                        <div key={angle} className="soft-panel" style={{ padding: 12, fontSize: 13, color: 'var(--text-secondary)' }}>
-                          {angle}
-                        </div>
-                      )) : <span style={{ color: 'var(--text-muted)' }}>Keine AI-Angles vorhanden.</span>}
-                    </div>
+              <div className="card review-card">
+                <h3 className="subsection-title">Creative Package</h3>
+                <div className="review-detail-group">
+                  <div className="campaign-focus-label">Hero Message</div>
+                  <div className="review-hero-message">
+                    {detail.campaign_pack?.message_framework?.hero_message || 'Noch keine Hero Message'}
                   </div>
                 </div>
+                <div className="review-detail-group">
+                  <div className="campaign-focus-label">Support Points</div>
+                  <div className="review-chip-row">
+                    {supportPoints.length > 0 ? supportPoints.map((point) => (
+                      <span key={point} className="step-chip">{point}</span>
+                    )) : <span className="review-muted-copy">Keine Support Points hinterlegt.</span>}
+                  </div>
+                </div>
+                <div className="review-detail-group">
+                  <div className="campaign-focus-label">Creative Angles</div>
+                  <div className="review-stack">
+                    {creativeAngles.length > 0 ? creativeAngles.map((angle) => (
+                      <div key={angle} className="soft-panel review-soft-line">
+                        {angle}
+                      </div>
+                    )) : <span className="review-muted-copy">Keine AI-Angles vorhanden.</span>}
+                  </div>
+                </div>
+                {(detail.campaign_pack?.message_framework?.compliance_note || detail.campaign_pack?.ai_plan?.compliance_hinweis) && (
+                  <div className="soft-panel review-panel-soft">
+                    <div className="campaign-focus-label">Compliance</div>
+                    <div className="review-body-copy">
+                      {detail.campaign_pack?.message_framework?.compliance_note || detail.campaign_pack?.ai_plan?.compliance_hinweis}
+                    </div>
+                  </div>
+                )}
               </div>
             </section>
 
             <section className="drawer-grid">
-              <div className="card" style={{ padding: 18 }}>
-                <h3 style={{ margin: 0, fontSize: 18, color: 'var(--text-primary)' }}>Channel Plan</h3>
+              <div className="card review-card">
+                <h3 className="subsection-title">Channel Plan</h3>
                 <div style={{ display: 'grid', gap: 10, marginTop: 14 }}>
                   {channelRows.length > 0 ? channelRows.map((row) => (
                     <div key={`${row.channel}-${row.share_pct}`} className="evidence-row">
@@ -183,59 +299,59 @@ const RecommendationDrawer: React.FC<Props> = ({
                       <strong>{formatPercent(row.share_pct || 0)}</strong>
                     </div>
                   )) : (
-                    <div style={{ color: 'var(--text-muted)' }}>Noch kein Channel-Plan vorhanden.</div>
+                    <div className="review-muted-copy">Noch kein Channel-Plan vorhanden.</div>
                   )}
                 </div>
 
-                <div style={{ marginTop: 18 }}>
-                  <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Keyword Cluster</div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
+                <div className="review-detail-group">
+                  <div className="campaign-focus-label">Keyword Cluster</div>
+                  <div className="review-chip-row">
                     {keywordClusters.length > 0 ? keywordClusters.map((keyword) => (
                       <span key={keyword} className="step-chip">{keyword}</span>
-                    )) : <span style={{ color: 'var(--text-muted)' }}>Keine Keywords hinterlegt.</span>}
+                    )) : <span className="review-muted-copy">Keine Keywords hinterlegt.</span>}
                   </div>
                 </div>
               </div>
 
-              <div className="card" style={{ padding: 18 }}>
-                <h3 style={{ margin: 0, fontSize: 18, color: 'var(--text-primary)' }}>Next Steps und Guardrails</h3>
-                <div style={{ display: 'grid', gap: 10, marginTop: 14 }}>
+              <div className="card review-card">
+                <h3 className="subsection-title">Next Steps und Guardrails</h3>
+                <div className="review-stack" style={{ marginTop: 14 }}>
                   {nextSteps.length > 0 ? nextSteps.map((step, index) => (
-                    <div key={index} className="soft-panel" style={{ padding: 12 }}>
+                    <div key={index} className="soft-panel review-soft-line">
                       <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>
-                        {String((step as { task?: string }).task || 'Nächster Schritt')}
+                        {String(step.task || 'Nächster Schritt')}
                       </div>
                       <div style={{ marginTop: 4, fontSize: 12, color: 'var(--text-muted)' }}>
-                        {String((step as { owner?: string }).owner || 'Team')} · {String((step as { eta?: string }).eta || '-')}
+                        {String(step.owner || 'Team')} · {String(step.eta || '-')}
                       </div>
                     </div>
-                  )) : <div style={{ color: 'var(--text-muted)' }}>Keine operativen Schritte hinterlegt.</div>}
+                  )) : <div className="review-muted-copy">Keine operativen Schritte hinterlegt.</div>}
                 </div>
 
-                <div className="soft-panel" style={{ padding: 16, marginTop: 16 }}>
-                  <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Guardrail Notes</div>
-                  <div style={{ display: 'grid', gap: 8, marginTop: 8 }}>
-                    {(detail.guardrail_notes || detail.campaign_pack?.guardrail_report?.applied_fixes || []).length > 0 ? (
-                      (detail.guardrail_notes || detail.campaign_pack?.guardrail_report?.applied_fixes || []).map((note) => (
-                        <div key={note} style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{note}</div>
+                <div className="soft-panel review-panel-soft">
+                  <div className="campaign-focus-label">Guardrail Notes</div>
+                  <div className="review-stack">
+                    {guardrailNotes.length > 0 ? (
+                      guardrailNotes.map((note) => (
+                        <div key={note} className="review-body-copy">{note}</div>
                       ))
                     ) : (
-                      <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Keine zusätzlichen Guardrail-Hinweise.</div>
+                      <div className="review-muted-copy">Keine zusätzlichen Guardrail-Hinweise.</div>
                     )}
                   </div>
                 </div>
               </div>
             </section>
 
-            <section className="card" style={{ padding: 18 }}>
-              <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
+            <section className="card review-card">
+              <div className="review-sync-header">
                 <div>
-                  <h3 style={{ margin: 0, fontSize: 18, color: 'var(--text-primary)' }}>Media-Tool Sync Preview</h3>
-                  <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--text-muted)' }}>
+                  <h3 className="subsection-title">Media-Tool Sync Preview</h3>
+                  <p className="subsection-copy" style={{ marginTop: 6 }}>
                     Connector-ready Paket für spätere Meta-, Google- oder DV360-Anbindung.
                   </p>
                 </div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+                <div className="review-sync-actions">
                   <select className="media-input" value={connectorKey} onChange={(event) => setConnectorKey(event.target.value)} style={{ minWidth: 160 }}>
                     {connectorCatalog.map((connector) => (
                       <option key={connector.key} value={connector.key}>
@@ -255,14 +371,14 @@ const RecommendationDrawer: React.FC<Props> = ({
               </div>
 
               {syncPreview ? (
-                <div style={{ display: 'grid', gap: 16, marginTop: 16 }}>
+                <div className="review-sync-stack">
                   <div className="drawer-grid">
-                    <div className="soft-panel" style={{ padding: 16 }}>
-                      <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Readiness</div>
-                      <div style={{ marginTop: 6, fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>
+                    <div className="soft-panel review-panel-soft">
+                      <div className="campaign-focus-label">Readiness</div>
+                      <div className="review-sync-state" style={syncStateTone}>
                         {syncPreview.readiness.can_sync_now ? 'Sync-ready' : syncPreview.readiness.state}
                       </div>
-                      <div style={{ display: 'grid', gap: 6, marginTop: 12 }}>
+                      <div className="review-stack" style={{ marginTop: 12 }}>
                         {syncPreview.readiness.blockers.map((blocker) => (
                           <div key={blocker} style={{ fontSize: 13, color: '#b45309' }}>{blocker}</div>
                         ))}
@@ -271,12 +387,12 @@ const RecommendationDrawer: React.FC<Props> = ({
                         ))}
                       </div>
                     </div>
-                    <div className="soft-panel" style={{ padding: 16 }}>
-                      <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Connector</div>
-                      <div style={{ marginTop: 6, fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>
+                    <div className="soft-panel review-panel-soft">
+                      <div className="campaign-focus-label">Connector</div>
+                      <div className="review-hero-message" style={{ fontSize: 18 }}>
                         {syncPreview.connector_label}
                       </div>
-                      <div style={{ marginTop: 8, fontSize: 13, color: 'var(--text-secondary)' }}>
+                      <div className="review-body-copy" style={{ marginTop: 8 }}>
                         Preview erzeugt am {formatDateShort(syncPreview.generated_at)}
                       </div>
                     </div>
@@ -285,7 +401,7 @@ const RecommendationDrawer: React.FC<Props> = ({
                   <pre className="sync-preview-block">{syncPayloadText}</pre>
                 </div>
               ) : (
-                <div style={{ marginTop: 14, color: 'var(--text-muted)' }}>
+                <div className="review-muted-copy" style={{ marginTop: 14 }}>
                   Noch kein Connector-Preview geladen.
                 </div>
               )}

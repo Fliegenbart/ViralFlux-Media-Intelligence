@@ -18,6 +18,7 @@ from app.core.config import get_settings
 from app.models.database import AuditLog, BacktestRun, MarketingOpportunity
 from app.services.media.ai_campaign_planner import AiCampaignPlanner
 from app.services.media.campaign_guardrails import CampaignGuardrails
+from app.services.media.copy_service import build_decision_basis_text, public_reason_text
 from app.services.media.message_library import select_gelo_message_pack
 from app.services.media.product_catalog_service import ProductCatalogService
 from app.services.media.peix_score_service import PeixEpiScoreService
@@ -2411,27 +2412,21 @@ class MarketingOpportunityEngine:
         condition_text = str(condition_label or condition_key or "relevante Lageklasse")
         rationale = (
             str(mapping_reason or "").strip()
-            or str(recommendation_reason or "").strip()
-            or str(trigger_evidence.get("details") or "").strip()
-            or str(trigger_context.get("event") or "").strip()
+            or public_reason_text(
+                reason=recommendation_reason,
+                event=trigger_evidence.get("event") or trigger_snapshot.get("event") or trigger_context.get("event"),
+                details=trigger_evidence.get("details") or trigger_snapshot.get("details"),
+            )
         )
 
-        basis_parts: list[str] = []
         source_label = trigger_evidence.get("source") or trigger_snapshot.get("source")
-        if source_label:
-            basis_parts.append(str(source_label))
         event_label = trigger_evidence.get("event") or trigger_snapshot.get("event")
-        if event_label:
-            basis_parts.append(str(event_label).replace("_", " ").lower())
         score = peix_context.get("score")
-        if score is not None:
-            try:
-                basis_parts.append(f"PeixEpiScore {float(score):.1f}")
-            except (TypeError, ValueError):
-                basis_parts.append(f"PeixEpiScore {score}")
-        if not basis_parts:
-            basis_parts.append("aktuellen epidemiologischen Signalen")
-        basis_text = " / ".join(basis_parts[:3])
+        basis_text = build_decision_basis_text(
+            source_label=source_label,
+            event=event_label,
+            score=score,
+        )
 
         budget_shift = budget_shift_pct if budget_shift_pct is not None else budget_shift_pct_fallback
 

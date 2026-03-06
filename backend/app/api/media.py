@@ -14,6 +14,11 @@ from app.db.session import get_db
 from app.services.marketing_engine.opportunity_engine import MarketingOpportunityEngine
 from app.services.media.connector_payload_service import ConnectorPayloadService
 from app.services.media.cockpit_service import MediaCockpitService
+from app.services.media.copy_service import (
+    public_display_title,
+    public_playbook_title,
+    public_reason_text,
+)
 from app.services.media.product_catalog_service import (
     DEFAULT_GELO_SOURCE_URL,
     ProductCatalogService,
@@ -44,27 +49,6 @@ BUNDESLAND_NAMES = {
     "TH": "Thüringen",
 }
 REGION_NAME_TO_CODE = {name.lower(): code for code, name in BUNDESLAND_NAMES.items()}
-
-EVENT_LABELS: dict[str, str] = {
-    "COMPETITOR_SHORTAGE_GELO-PRO": "Wettbewerber-Engpass: Erkältungsmittel",
-    "COMPETITOR_SHORTAGE_GELO-GMF": "Wettbewerber-Engpass: Bronchitis/Husten",
-    "COMPETITOR_SHORTAGE_GELO-RVC": "Wettbewerber-Engpass: Halsschmerzmittel",
-    "COMPETITOR_SHORTAGE_GELO-BRO": "Wettbewerber-Engpass: Hustenstiller",
-    "COMPETITOR_SHORTAGE_GELO-SIT": "Wettbewerber-Engpass: Sinusitis-Mittel",
-    "COMPETITOR_SHORTAGE_GELO-DUR": "Wettbewerber-Engpass: Schnupfenmittel",
-    "COMPETITOR_SHORTAGE_GELO-VOX": "Wettbewerber-Engpass: Heiserkeit-Mittel",
-    "COMPETITOR_SHORTAGE_GELO-VIT": "Wettbewerber-Engpass: Immunpräparate",
-    "COMPETITOR_SHORTAGE_GELO-MUC": "Wettbewerber-Engpass: Schleimlöser",
-    "CRITICAL_SHORTAGE_ANTIBIOTICS": "Kritischer Engpass: Antibiotika",
-    "CRITICAL_SHORTAGE_RESPIRATORY": "Kritischer Engpass: Atemwegsmedikamente",
-    "CRITICAL_SHORTAGE_FEVER": "Kritischer Engpass: Fieber-/Schmerzmittel",
-    "ORDER_VELOCITY_SURGE": "Bestellanstieg erkannt",
-    "LOW_UV_EXTENDED": "Anhaltend niedriger UV-Index",
-    "WINTER_COLD_STREAK": "Winterliche Kältewelle",
-    "LOW_SUNSHINE_FORECAST": "Wenig Sonnenschein vorhergesagt",
-    "NASSKALT_FORECAST": "Nasskaltes Wetter vorhergesagt",
-    "EXTREME_COLD_FORECAST": "Extremkälte vorhergesagt",
-}
 
 CONDITION_LABELS: dict[str, str] = {
     "erkaltung_akut": "Akute Erkältung",
@@ -788,14 +772,16 @@ async def update_media_product_mapping(
 def _build_display_title(opp: dict[str, Any], product: str | None) -> str:
     """Baut einen lesbaren Titel aus Trigger-Kontext."""
     event = (opp.get("trigger_context") or {}).get("event", "")
-    label = EVENT_LABELS.get(event)
     prod = product or opp.get("product") or "Atemwegslinie"
-    if label:
-        return f"{prod}: {label}"
-    cond = CONDITION_LABELS.get(opp.get("condition_key", ""), "")
-    if cond:
-        return f"{prod} – {cond}"
-    return prod
+    condition = CONDITION_LABELS.get(opp.get("condition_key", ""), "")
+    return public_display_title(
+        playbook_key=opp.get("playbook_key"),
+        playbook_title=opp.get("playbook_title"),
+        campaign_name=((opp.get("campaign_preview") or {}).get("campaign_name") or ((opp.get("campaign_payload") or {}).get("campaign") or {}).get("campaign_name")),
+        product=prod,
+        trigger_event=event,
+        condition_label=condition,
+    )
 
 
 def _to_card_response(opp: dict[str, Any], include_preview: bool = True) -> dict[str, Any]:
@@ -815,6 +801,22 @@ def _to_card_response(opp: dict[str, Any], include_preview: bool = True) -> dict
 
     trigger_ctx = opp.get("trigger_context") or {}
     condition_key = opp.get("condition_key") or product_mapping.get("condition_key", "")
+    public_playbook = public_playbook_title(
+        playbook_key=opp.get("playbook_key") or playbook.get("key"),
+        title=opp.get("playbook_title") or playbook.get("title"),
+    )
+    public_title = public_display_title(
+        playbook_key=opp.get("playbook_key") or playbook.get("key"),
+        playbook_title=opp.get("playbook_title") or playbook.get("title"),
+        campaign_name=preview.get("campaign_name") or ((campaign_pack.get("campaign") or {}).get("campaign_name")),
+        product=recommended_product,
+        trigger_event=trigger_ctx.get("event"),
+        condition_label=(
+            opp.get("condition_label")
+            or product_mapping.get("condition_label")
+            or CONDITION_LABELS.get(condition_key)
+        ),
+    )
 
     card = {
         "id": opp.get("id"),
@@ -837,10 +839,11 @@ def _to_card_response(opp: dict[str, Any], include_preview: bool = True) -> dict
             "end": opp.get("activation_end") or (preview.get("activation_window") or {}).get("end"),
         },
         "reason": (
-            opp.get("recommendation_reason")
-            or EVENT_LABELS.get(trigger_ctx.get("event", ""))
-            or trigger_ctx.get("details")
-            or trigger_ctx.get("event")
+            public_reason_text(
+                reason=opp.get("recommendation_reason"),
+                event=trigger_ctx.get("event"),
+                details=trigger_ctx.get("details"),
+            )
         ),
         "confidence": (
             round(float(opp.get("confidence")), 2)
@@ -865,19 +868,13 @@ def _to_card_response(opp: dict[str, Any], include_preview: bool = True) -> dict
         "mapping_rule_source": opp.get("rule_source") or product_mapping.get("rule_source"),
         "peix_context": opp.get("peix_context") or peix_context,
         "playbook_key": opp.get("playbook_key") or playbook.get("key"),
-        "playbook_title": opp.get("playbook_title") or playbook.get("title"),
+        "playbook_title": public_playbook or opp.get("playbook_title") or playbook.get("title"),
         "trigger_snapshot": opp.get("trigger_snapshot") or campaign_pack.get("trigger_snapshot"),
         "guardrail_notes": opp.get("guardrail_notes") or (campaign_pack.get("guardrail_report") or {}).get("applied_fixes") or [],
         "ai_generation_status": opp.get("ai_generation_status") or ai_meta.get("status"),
         "strategy_mode": opp.get("strategy_mode") or campaign_pack.get("strategy_mode"),
         "decision_brief": opp.get("decision_brief"),
-        "display_title": (
-            opp.get("playbook_title")
-            or playbook.get("title")
-            or preview.get("campaign_name")
-            or (campaign_pack.get("campaign") or {}).get("campaign_name")
-            or _build_display_title(opp, recommended_product)
-        ),
+        "display_title": public_title or _build_display_title(opp, recommended_product),
     }
 
     if include_preview:

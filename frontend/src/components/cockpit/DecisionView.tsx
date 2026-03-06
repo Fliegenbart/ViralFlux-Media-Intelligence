@@ -195,7 +195,7 @@ const DecisionView: React.FC<Props> = ({
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start' }}>
                   <div>
                     <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
-                      {card.campaign_name || card.display_title || card.product}
+                      {card.display_title || card.campaign_name || card.product}
                     </div>
                     <div style={{ marginTop: 4, fontSize: 12, color: 'var(--text-muted)' }}>
                       {card.region_codes_display?.join(', ') || card.region || 'National'} · {card.recommended_product || card.product}

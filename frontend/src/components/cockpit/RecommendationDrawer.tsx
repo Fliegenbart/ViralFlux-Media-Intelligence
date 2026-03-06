@@ -126,7 +126,7 @@ const RecommendationDrawer: React.FC<Props> = ({
               <div className="review-sheet-main">
                 <span className="section-kicker">Campaign Review</span>
                 <h2 className="review-sheet-title">
-                  {detail.campaign_name || detail.display_title || 'Kampagnenpaket'}
+                  {detail.display_title || detail.campaign_name || 'Kampagnenpaket'}
                 </h2>
                 <p className="review-sheet-copy">{heroSummary}</p>
 

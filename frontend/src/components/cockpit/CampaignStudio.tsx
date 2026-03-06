@@ -221,7 +221,7 @@ const CampaignStudio: React.FC<Props> = ({
 
                         <div className="campaign-work-item-head">
                           <div className="campaign-work-item-title">
-                            {card.campaign_name || card.display_title || card.product}
+                            {card.display_title || card.campaign_name || card.product}
                           </div>
                           <div className="campaign-work-item-subtitle">
                             {card.region_codes_display?.join(', ') || card.region || 'National'}

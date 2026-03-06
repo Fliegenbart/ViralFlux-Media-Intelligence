@@ -67,6 +67,8 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
     () => (recommendations.length > 0 ? recommendations : sortRecommendations(cockpit?.recommendations?.cards || [])),
     [cockpit?.recommendations?.cards, recommendations],
   );
+  const waveOutlookResult = waveOutlook || marketValidation;
+  const waveOutlookBusy = !waveOutlookResult && (waveOutlookLoading || marketValidationLoading);
 
   const loadCockpit = useCallback(async () => {
     setCockpitLoading(true);
@@ -396,8 +398,8 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
           cockpit={cockpit}
           loading={cockpitLoading}
           recommendations={displayedRecommendations}
-          waveOutlook={waveOutlook || marketValidation}
-          waveOutlookLoading={waveOutlookLoading || marketValidationLoading}
+          waveOutlook={waveOutlookResult}
+          waveOutlookLoading={waveOutlookBusy}
           onOpenRecommendation={(id) => openRecommendation(id, false)}
           onOpenRegions={() => navigate('/regionen')}
           onOpenCampaigns={() => navigate('/kampagnen')}

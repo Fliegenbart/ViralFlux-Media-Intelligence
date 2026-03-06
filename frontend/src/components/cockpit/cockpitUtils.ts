@@ -13,9 +13,18 @@ export const WORKFLOW_TRANSITIONS: Record<string, string> = {
 };
 
 export const STATUS_ACTION_LABELS: Record<string, string> = {
-  READY: 'In Review geben',
+  READY: 'In Prüfung geben',
   APPROVED: 'Freigeben',
   ACTIVATED: 'Als live markieren',
+};
+
+const KPI_LABELS: Record<string, string> = {
+  Reach: 'Reichweite',
+  CTR: 'Klickrate',
+  'Qualified Clicks': 'Qualifizierte Klicks',
+  'Qualified Visits': 'Qualifizierte Besuche',
+  'Completed Views': 'Abgeschlossene Views',
+  Awareness: 'Awareness',
 };
 
 export function formatDateTime(value?: string | null): string {
@@ -116,4 +125,49 @@ export function recommendationLane(card: RecommendationCard): CampaignLaneId {
 export function nextWorkflowStatus(status?: string | null): string | null {
   const normalized = String(status || '').toUpperCase();
   return WORKFLOW_TRANSITIONS[normalized] || null;
+}
+
+export function workflowLabel(status?: string | null): string {
+  const normalized = String(status || '').toUpperCase();
+  if (normalized === 'DRAFT') return 'Vorbereitung';
+  if (normalized === 'READY') return 'In Prüfung';
+  if (normalized === 'APPROVED') return 'Freigegeben';
+  if (normalized === 'ACTIVATED') return 'Live';
+  return status ? String(status) : 'Status offen';
+}
+
+export function readinessStateLabel(state?: string | null, canSyncNow = false): string {
+  if (canSyncNow) return 'Sync-bereit';
+
+  const normalized = String(state || '').toLowerCase();
+  if (normalized === 'ready') return 'Sync-bereit';
+  if (normalized === 'approval_required') return 'Freigabe nötig';
+  if (normalized === 'needs_work') return 'Nachschärfen';
+  if (normalized === 'review') return 'In Prüfung';
+  return state ? String(state) : 'In Prüfung';
+}
+
+export function kpiLabel(value?: string | null): string {
+  const raw = String(value || '').trim();
+  if (!raw) return 'noch offen';
+  return KPI_LABELS[raw] || raw;
+}
+
+export function aiModelLabel(provider?: string | null, model?: string | null): string {
+  const providerText = String(provider || '').trim().toLowerCase();
+  const modelText = String(model || '').trim().toLowerCase();
+
+  if (providerText.includes('qwen') || modelText.includes('qwen')) {
+    return 'KI-Plan: Qwen lokal';
+  }
+  if (providerText.includes('openai') || modelText.includes('gpt')) {
+    return 'KI-Plan: OpenAI';
+  }
+  if (providerText) {
+    return `KI-Plan: ${String(provider || '').trim()}`;
+  }
+  if (modelText) {
+    return `KI-Plan: ${String(model || '').trim()}`;
+  }
+  return 'KI-Plan';
 }

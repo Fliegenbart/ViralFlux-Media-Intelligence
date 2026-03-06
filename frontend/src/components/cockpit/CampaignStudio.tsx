@@ -3,6 +3,7 @@ import React from 'react';
 import { RecommendationCard } from '../../types/media';
 import { CAMPAIGN_LANES } from './types';
 import {
+  workflowLabel,
   formatCurrency,
   formatDateShort,
   formatPercent,
@@ -212,7 +213,7 @@ const CampaignStudio: React.FC<Props> = ({
                       >
                         <div className="campaign-work-item-top">
                           <span className="campaign-status-badge" style={tone}>
-                            {card.status_label || card.status}
+                            {card.status_label || workflowLabel(card.status)}
                           </span>
                           <span className="campaign-confidence-chip">
                             {confidenceLabel(card.confidence)}

@@ -7,12 +7,16 @@ import {
 } from '../../types/media';
 import {
   STATUS_ACTION_LABELS,
+  aiModelLabel,
   formatCurrency,
   formatDateShort,
   formatDateTime,
   formatPercent,
+  kpiLabel,
   nextWorkflowStatus,
+  readinessStateLabel,
   statusTone,
+  workflowLabel,
 } from './cockpitUtils';
 
 interface Props {
@@ -68,9 +72,9 @@ const RecommendationDrawer: React.FC<Props> = ({
   const audienceSegments = detail?.campaign_pack?.targeting?.audience_segments || detail?.target_audience || [];
   const guardrailNotes = detail?.guardrail_notes || detail?.campaign_pack?.guardrail_report?.applied_fixes || [];
   const workflowSteps = [
-    { key: 'DRAFT', label: 'Prepare', copy: 'AI Draft und Signal-Kontext' },
-    { key: 'READY', label: 'Review', copy: 'Guardrails und Mapping prüfen' },
-    { key: 'APPROVED', label: 'Approve', copy: 'Freigabe für Team oder Kunde' },
+    { key: 'DRAFT', label: 'Vorbereitung', copy: 'KI-Entwurf und Signal-Kontext' },
+    { key: 'READY', label: 'Prüfung', copy: 'Guardrails und Mapping prüfen' },
+    { key: 'APPROVED', label: 'Freigabe', copy: 'Freigabe für Team oder Kunde' },
     { key: 'ACTIVATED', label: 'Live', copy: 'Aktiv oder sync-bereit ausgeliefert' },
   ];
   const normalizedStatus = String(detail?.status || '').toUpperCase();
@@ -104,7 +108,7 @@ const RecommendationDrawer: React.FC<Props> = ({
         <div className="drawer-header review-sheet-header">
           <div className="review-sheet-topline">
             <span className="campaign-status-badge" style={tone}>
-              {detail?.status_label || detail?.status || 'Lädt'}
+              {detail?.status_label || workflowLabel(detail?.status) || 'Lädt'}
             </span>
             <span className="campaign-confidence-chip">
               {detail?.region_codes_display?.join(', ') || detail?.region || 'National'}
@@ -135,10 +139,10 @@ const RecommendationDrawer: React.FC<Props> = ({
                     {confidenceValue != null ? `${confidenceValue}% Confidence` : 'Confidence offen'}
                   </span>
                   <span className="campaign-confidence-chip">
-                    KPI {detail.primary_kpi || detail.campaign_pack?.measurement_plan?.primary_kpi || 'noch offen'}
+                    KPI {kpiLabel(detail.primary_kpi || detail.campaign_pack?.measurement_plan?.primary_kpi)}
                   </span>
                   <span className="campaign-confidence-chip">
-                    {detail.campaign_pack?.ai_meta?.provider || 'AI'} · {detail.campaign_pack?.ai_meta?.model || 'Campaign Planner'}
+                    {aiModelLabel(detail.campaign_pack?.ai_meta?.provider, detail.campaign_pack?.ai_meta?.model)}
                   </span>
                 </div>
 
@@ -189,7 +193,7 @@ const RecommendationDrawer: React.FC<Props> = ({
                   </div>
                   <div className="campaign-metric-card">
                     <span>Sync</span>
-                    <strong>{syncPreview?.readiness.can_sync_now ? 'ready' : 'review'}</strong>
+                    <strong>{readinessStateLabel(syncPreview?.readiness.state, syncPreview?.readiness.can_sync_now)}</strong>
                     <small>{syncPreview?.connector_label || 'noch kein Connector-Preview'}</small>
                   </div>
                 </div>
@@ -376,7 +380,7 @@ const RecommendationDrawer: React.FC<Props> = ({
                     <div className="soft-panel review-panel-soft">
                       <div className="campaign-focus-label">Readiness</div>
                       <div className="review-sync-state" style={syncStateTone}>
-                        {syncPreview.readiness.can_sync_now ? 'Sync-ready' : syncPreview.readiness.state}
+                        {readinessStateLabel(syncPreview.readiness.state, syncPreview.readiness.can_sync_now)}
                       </div>
                       <div className="review-stack" style={{ marginTop: 12 }}>
                         {syncPreview.readiness.blockers.map((blocker) => (

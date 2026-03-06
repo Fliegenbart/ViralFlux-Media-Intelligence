@@ -65,10 +65,10 @@ CONDITION_LABELS: dict[str, str] = {
 STATUS_LABELS: dict[str, str] = {
     "NEW": "Neu",
     "URGENT": "Dringend",
-    "DRAFT": "Entwurf",
-    "READY": "Bereit",
+    "DRAFT": "Vorbereitung",
+    "READY": "In Prüfung",
     "APPROVED": "Freigegeben",
-    "ACTIVATED": "Aktiviert",
+    "ACTIVATED": "Live",
 }
 
 

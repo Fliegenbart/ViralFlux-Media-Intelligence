@@ -229,6 +229,19 @@ async def list_backtest_runs(
     return {"total": len(runs), "runs": runs}
 
 
+@router.get("/runs/{run_id}")
+async def get_backtest_run_detail(
+    run_id: str,
+    db: Session = Depends(get_db),
+):
+    """Detailansicht für einen persistierten Backtest-Lauf inklusive Chart-Daten."""
+    service = BacktestService(db)
+    run = service.get_backtest_run(run_id)
+    if not run:
+        return {"detail": f"Backtest-Run {run_id} nicht gefunden."}
+    return run
+
+
 # ═══════════════════════════════════════════════════════════════════════
 #  PEIX VALIDATION: Historischer Backtest gegen SURVSTAT-Spitzen
 # ═══════════════════════════════════════════════════════════════════════

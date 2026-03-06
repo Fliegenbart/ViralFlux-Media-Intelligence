@@ -1,22 +1,12 @@
-import React, { useMemo } from 'react';
+import React from 'react';
 import { Link } from 'react-router-dom';
-import {
-  Area,
-  AreaChart,
-  CartesianGrid,
-  Line,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts';
 
-import { RecommendationCard } from '../../types/media';
+import { BacktestResponse, RecommendationCard } from '../../types/media';
 import { CockpitResponse } from './types';
+import { WaveOutlookPanel } from './BacktestVisuals';
 import {
   VIRUS_OPTIONS,
   formatCurrency,
-  formatDateShort,
   formatDateTime,
   formatPercent,
   readinessTone,
@@ -29,6 +19,8 @@ interface Props {
   cockpit: CockpitResponse | null;
   loading: boolean;
   recommendations: RecommendationCard[];
+  waveOutlook: BacktestResponse | null;
+  waveOutlookLoading: boolean;
   onOpenRecommendation: (id: string) => void;
   onOpenRegions: () => void;
   onOpenCampaigns: () => void;
@@ -40,6 +32,8 @@ const DecisionView: React.FC<Props> = ({
   cockpit,
   loading,
   recommendations,
+  waveOutlook,
+  waveOutlookLoading,
   onOpenRecommendation,
   onOpenRegions,
   onOpenCampaigns,
@@ -50,16 +44,6 @@ const DecisionView: React.FC<Props> = ({
   const topRegions = (cockpit?.map?.top_regions || []).slice(0, 3);
   const isGo = Boolean(latestMarket?.quality_gate?.overall_passed);
   const readiness = latestMarket?.decision_metrics?.readiness_score_0_100;
-  const timingDays = latestMarket?.timing_metrics?.best_lag_days;
-
-  const chartData = useMemo(() => {
-    const source = latestMarket?.chart_data || [];
-    return source.slice(-14).map((item) => ({
-      date: formatDateShort(item.date),
-      real: item.real_qty ?? null,
-      forecast: item.forecast_qty ?? item.predicted_qty ?? null,
-    }));
-  }, [latestMarket?.chart_data]);
 
   const heroSentence = topCard?.decision_brief?.summary_sentence
     || (topRegions.length
@@ -119,7 +103,7 @@ const DecisionView: React.FC<Props> = ({
                 {isGo ? 'GO' : 'WATCH'}
               </span>
               <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                {topCard?.playbook_title || 'Wochenentscheidung'} · {formatDateShort(cockpit?.map?.date)}
+                {topCard?.playbook_title || 'Wochenentscheidung'} · {cockpit?.map?.date ? new Date(cockpit.map.date).toLocaleDateString('de-DE') : '-'}
               </span>
             </div>
             <div>
@@ -170,38 +154,7 @@ const DecisionView: React.FC<Props> = ({
       </section>
 
       <section className="cockpit-grid">
-        <div className="card" style={{ padding: 20 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start', marginBottom: 16 }}>
-            <div>
-              <h2 style={{ margin: 0, fontSize: 20, color: 'var(--text-primary)' }}>Nationaler Forecast</h2>
-              <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--text-muted)' }}>
-                6 Wochen Verlauf plus aktuelle Forecast-Richtung
-              </p>
-            </div>
-            <div style={{ textAlign: 'right' }}>
-              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Forecast-Horizont</div>
-              <strong style={{ fontSize: 18, color: 'var(--text-primary)' }}>{timingDays ? `${timingDays} Tage` : '-'}</strong>
-            </div>
-          </div>
-          {chartData.length > 1 ? (
-            <div style={{ height: 280 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={chartData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(148, 163, 184, 0.22)" />
-                  <XAxis dataKey="date" tick={{ fill: '#64748b', fontSize: 11 }} />
-                  <YAxis tick={{ fill: '#64748b', fontSize: 11 }} />
-                  <Tooltip />
-                  <Area type="monotone" dataKey="real" stroke="#1d4ed8" fill="rgba(59,130,246,0.12)" strokeWidth={2} />
-                  <Line type="monotone" dataKey="forecast" stroke="#4338ca" strokeWidth={2.5} dot={false} />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-          ) : (
-            <div className="soft-panel" style={{ padding: 24, color: 'var(--text-muted)' }}>
-              Noch keine Forecast-Kurve im Cockpit verfügbar.
-            </div>
-          )}
-        </div>
+        <WaveOutlookPanel result={waveOutlook} loading={waveOutlookLoading} />
 
         <div style={{ display: 'grid', gap: 16 }}>
           <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))' }}>

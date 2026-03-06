@@ -656,9 +656,13 @@ export interface BacktestChartPoint {
 }
 
 export interface BacktestResponse {
+  run_id?: string;
   mode?: string;
+  status?: string;
   virus_typ?: string;
   target_source?: string;
+  target_key?: string;
+  target_label?: string;
   metrics?: BacktestMetrics;
   chart_data?: BacktestChartPoint[];
   forecast_records?: BacktestForecastRecord[];
@@ -671,6 +675,19 @@ export interface BacktestResponse {
   proof_text?: string;
   llm_insight?: string;
   model_type?: string;
+  created_at?: string;
+  lead_lag?: {
+    best_lag_points?: number;
+    best_lag_days?: number;
+    lag_step_days?: number;
+    lag_correlation?: number;
+    bio_leads_target?: boolean;
+    relative_lag_days?: number;
+    horizon_days?: number;
+    effective_lead_days?: number;
+    bio_leads_target_effective?: boolean;
+    target_leads_bio_effective?: boolean;
+  };
   walk_forward?: {
     enabled?: boolean;
     folds?: number;

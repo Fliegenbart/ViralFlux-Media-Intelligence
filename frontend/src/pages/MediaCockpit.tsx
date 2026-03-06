@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 
 import { useToast } from '../App';
 import {
+  BacktestResponse,
   ConnectorCatalogItem,
   PreparedSyncPayload,
   RecommendationCard,
@@ -55,6 +56,12 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
   const [connectorCatalog, setConnectorCatalog] = useState<ConnectorCatalogItem[]>([]);
   const [syncPreview, setSyncPreview] = useState<PreparedSyncPayload | null>(null);
   const [syncLoading, setSyncLoading] = useState(false);
+  const [marketValidation, setMarketValidation] = useState<BacktestResponse | null>(null);
+  const [marketValidationLoading, setMarketValidationLoading] = useState(false);
+  const [customerValidation, setCustomerValidation] = useState<BacktestResponse | null>(null);
+  const [customerValidationLoading, setCustomerValidationLoading] = useState(false);
+  const [waveOutlook, setWaveOutlook] = useState<BacktestResponse | null>(null);
+  const [waveOutlookLoading, setWaveOutlookLoading] = useState(false);
 
   const displayedRecommendations = useMemo(
     () => (recommendations.length > 0 ? recommendations : sortRecommendations(cockpit?.recommendations?.cards || [])),
@@ -104,6 +111,50 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
     }
   }, []);
 
+  const loadBacktestRun = useCallback(async (
+    runId: string,
+    setResult: React.Dispatch<React.SetStateAction<BacktestResponse | null>>,
+    setLoading: React.Dispatch<React.SetStateAction<boolean>>,
+    errorLabel: string,
+  ) => {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/v1/backtest/runs/${encodeURIComponent(runId)}`);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.run_id) {
+        throw new Error(data?.detail || `HTTP ${res.status}`);
+      }
+      setResult(data);
+    } catch (error) {
+      console.error(`${errorLabel} detail failed`, error);
+      setResult(null);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const loadWaveOutlook = useCallback(async (targetSource?: string | null) => {
+    setWaveOutlookLoading(true);
+    try {
+      const qs = new URLSearchParams({
+        virus_typ: virus,
+        target_source: targetSource || 'RKI_ARE',
+        horizon_days: '14',
+      });
+      const res = await fetch(`/api/v1/backtest/market?${qs.toString()}`, { method: 'POST' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data?.error) {
+        throw new Error(data?.error || `HTTP ${res.status}`);
+      }
+      setWaveOutlook(data);
+    } catch (error) {
+      console.error('Wave outlook failed', error);
+      setWaveOutlook(null);
+    } finally {
+      setWaveOutlookLoading(false);
+    }
+  }, [virus]);
+
   useEffect(() => {
     loadCockpit();
   }, [loadCockpit]);
@@ -115,6 +166,36 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
   useEffect(() => {
     loadConnectors();
   }, [loadConnectors]);
+
+  useEffect(() => {
+    const marketRunId = cockpit?.backtest_summary?.latest_market?.run_id;
+    if (!marketRunId) {
+      setMarketValidation(null);
+      setMarketValidationLoading(false);
+      return;
+    }
+    loadBacktestRun(marketRunId, setMarketValidation, setMarketValidationLoading, 'Market validation');
+  }, [cockpit?.backtest_summary?.latest_market?.run_id, loadBacktestRun]);
+
+  useEffect(() => {
+    const customerRunId = cockpit?.backtest_summary?.latest_customer?.run_id;
+    if (!customerRunId) {
+      setCustomerValidation(null);
+      setCustomerValidationLoading(false);
+      return;
+    }
+    loadBacktestRun(customerRunId, setCustomerValidation, setCustomerValidationLoading, 'Customer validation');
+  }, [cockpit?.backtest_summary?.latest_customer?.run_id, loadBacktestRun]);
+
+  useEffect(() => {
+    if (view !== 'decision' && view !== 'evidence') return;
+    loadWaveOutlook(cockpit?.backtest_summary?.latest_market?.target_source || cockpit?.backtest_summary?.latest_market?.target_key);
+  }, [
+    cockpit?.backtest_summary?.latest_market?.target_key,
+    cockpit?.backtest_summary?.latest_market?.target_source,
+    loadWaveOutlook,
+    view,
+  ]);
 
   useEffect(() => {
     if (!selectedRegion && cockpit?.map?.top_regions?.[0]?.code) {
@@ -315,6 +396,8 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
           cockpit={cockpit}
           loading={cockpitLoading}
           recommendations={displayedRecommendations}
+          waveOutlook={waveOutlook || marketValidation}
+          waveOutlookLoading={waveOutlookLoading || marketValidationLoading}
           onOpenRecommendation={(id) => openRecommendation(id, false)}
           onOpenRegions={() => navigate('/regionen')}
           onOpenCampaigns={() => navigate('/kampagnen')}
@@ -356,6 +439,10 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
         <EvidencePanel
           cockpit={cockpit}
           loading={cockpitLoading}
+          marketValidation={marketValidation}
+          marketValidationLoading={marketValidationLoading}
+          customerValidation={customerValidation}
+          customerValidationLoading={customerValidationLoading}
         />
       )}
 

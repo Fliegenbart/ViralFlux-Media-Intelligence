@@ -1,5 +1,7 @@
 import React from 'react';
 
+import { BacktestResponse } from '../../types/media';
+import { ValidationSection } from './BacktestVisuals';
 import { CockpitResponse } from './types';
 import {
   formatDateTime,
@@ -10,9 +12,20 @@ import {
 interface Props {
   cockpit: CockpitResponse | null;
   loading: boolean;
+  marketValidation: BacktestResponse | null;
+  marketValidationLoading: boolean;
+  customerValidation: BacktestResponse | null;
+  customerValidationLoading: boolean;
 }
 
-const EvidencePanel: React.FC<Props> = ({ cockpit, loading }) => {
+const EvidencePanel: React.FC<Props> = ({
+  cockpit,
+  loading,
+  marketValidation,
+  marketValidationLoading,
+  customerValidation,
+  customerValidationLoading,
+}) => {
   const latestMarket = cockpit?.backtest_summary?.latest_market;
   const latestCustomer = cockpit?.backtest_summary?.latest_customer;
   const sourceItems = cockpit?.source_status?.items || [];
@@ -89,6 +102,23 @@ const EvidencePanel: React.FC<Props> = ({ cockpit, loading }) => {
             Unter 26 Wochen bleibt dieser Layer explorativ. Unter 52 Wochen ist er kein belastbarer Freigabebeweis für kundennahe Media-Automation.
           </p>
         </div>
+      </section>
+
+      <section style={{ display: 'grid', gap: 20 }}>
+        <ValidationSection
+          title="Markt-Validierung im Verlauf"
+          subtitle="Forecast gegen Ist, inklusive Baselines. So sieht PEIX, ob das Modell die Welle früh genug erkennt und nicht nur nachzeichnet."
+          result={marketValidation}
+          loading={marketValidationLoading}
+          emptyMessage="Noch keine detaillierten Markt-Validierungsdaten verfügbar."
+        />
+        <ValidationSection
+          title="Kunden-Validierung im Verlauf"
+          subtitle="Proxy und Truth bleiben getrennt: Dieser Layer zeigt nur, wie gut das Modell an echte Kunden-Outcome-Daten anschließt."
+          result={customerValidation}
+          loading={customerValidationLoading}
+          emptyMessage="Noch keine ausreichend langen Kundenreihen für eine belastbare Truth-Validierung verfügbar."
+        />
       </section>
 
       <section className="cockpit-grid">

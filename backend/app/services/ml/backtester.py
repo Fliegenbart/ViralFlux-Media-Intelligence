@@ -1830,6 +1830,64 @@ class BacktestService:
             for row in rows
         ]
 
+    def get_backtest_run(self, run_id: str) -> dict | None:
+        """Liefert einen persistierten Backtest-Lauf inkl. Chart-Punkten."""
+        row = (
+            self.db.query(BacktestRun)
+            .filter(BacktestRun.run_id == run_id)
+            .first()
+        )
+        if not row:
+            return None
+
+        metrics = row.metrics or {}
+        points = (
+            self.db.query(BacktestPoint)
+            .filter(BacktestPoint.run_id == run_id)
+            .order_by(BacktestPoint.date.asc(), BacktestPoint.id.asc())
+            .all()
+        )
+
+        chart_data = [
+            {
+                "date": point.date.date().isoformat() if point.date else None,
+                "region": point.region,
+                "real_qty": point.real_qty,
+                "predicted_qty": point.predicted_qty,
+                "baseline_persistence": point.baseline_persistence,
+                "baseline_seasonal": point.baseline_seasonal,
+                "bio": point.bio,
+                "psycho": point.psycho,
+                "context": point.context,
+            }
+            for point in points
+            if point.date is not None
+        ]
+
+        return {
+            "run_id": row.run_id,
+            "mode": row.mode,
+            "status": row.status,
+            "virus_typ": row.virus_typ,
+            "target_source": row.target_source,
+            "target_key": row.target_key,
+            "target_label": row.target_label,
+            "metrics": metrics,
+            "decision_metrics": metrics.get("decision_metrics"),
+            "quality_gate": metrics.get("quality_gate"),
+            "timing_metrics": metrics.get("timing_metrics"),
+            "lead_lag": row.lead_lag or {},
+            "proof_text": row.proof_text,
+            "llm_insight": row.llm_insight,
+            "chart_data": chart_data,
+            "created_at": row.created_at.isoformat() if row.created_at else None,
+            "walk_forward": {
+                "horizon_days": row.horizon_days,
+                "min_train_points": row.min_train_points,
+                "strict_vintage_mode": row.strict_vintage_mode,
+            },
+        }
+
     @staticmethod
     def _seasonal_naive_baseline(train_df: pd.DataFrame, target_week: int, target_month: int) -> float:
         """Seasonal Baseline: Median der gleichen ISO-Woche (konsistent mit Residual-Training)."""

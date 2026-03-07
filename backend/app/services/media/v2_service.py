@@ -283,6 +283,7 @@ class MediaV2Service:
         )
         for index, item in enumerate(sorted_regions, start=1):
             enriched_regions[item["code"]]["priority_rank"] = index
+            item["priority_rank"] = index
 
         decision_payload = self.get_decision_payload(
             virus_typ=virus_typ,

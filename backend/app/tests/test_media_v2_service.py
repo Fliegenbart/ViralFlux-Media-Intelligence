@@ -241,6 +241,7 @@ class MediaV2ServiceTruthCoverageTests(unittest.TestCase):
         self.assertIn("severity_score", top_region)
         self.assertIn("momentum_score", top_region)
         self.assertIn("actionability_score", top_region)
+        self.assertEqual(top_region["priority_rank"], 1)
         self.assertIn(top_region["decision_mode"], {"epidemic_wave", "mixed", "supply_window"})
 
 

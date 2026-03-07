@@ -110,7 +110,7 @@ def public_event_label(event: str | None) -> str:
         if label:
             return f"zunehmende {label}"
     if not _looks_internal_key(raw):
-        return _cleanup_copy(_replace_internal_tokens(raw))
+        return _cleanup_copy(raw)
     return _humanize_token(raw)
 
 

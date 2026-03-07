@@ -117,6 +117,12 @@ class RecommendationContractsV2Tests(unittest.TestCase):
         response = to_card_response(
             _sample_card(
                 id="opp-2",
+                playbook_key="SUPPLY_SHOCK_ATTACK",
+                playbook_title="Supply-Shock Attack",
+                campaign_preview={
+                    "campaign_name": "gelo | GeloMyrto forte | Brandenburg | Supply-Shock Attack",
+                    "budget": {"weekly_budget_eur": 120000.0},
+                },
                 trigger_context={
                     "event": "SUPPLY_SHOCK_WINDOW",
                     "source": "BfArM_API",
@@ -140,6 +146,16 @@ class RecommendationContractsV2Tests(unittest.TestCase):
                         "score": 67,
                         "trigger_event": "SUPPLY_SHOCK_WINDOW",
                     },
+                    "campaign": {
+                        "campaign_name": "gelo | GeloMyrto forte | Brandenburg | Supply-Shock Attack",
+                    },
+                    "playbook": {
+                        "key": "SUPPLY_SHOCK_ATTACK",
+                        "title": "Supply-Shock Attack",
+                    },
+                    "ai_plan": {
+                        "campaign_name": "gelo | GeloMyrto forte | Brandenburg | Supply-Shock Attack",
+                    },
                     "message_framework": {
                         "hero_message": "Norddeutschland jetzt vorbereiten.",
                     },
@@ -160,6 +176,17 @@ class RecommendationContractsV2Tests(unittest.TestCase):
         self.assertEqual(
             response["campaign_payload"]["trigger_snapshot"]["event"],
             "Verfügbarkeitsfenster im Wettbewerb",
+        )
+        self.assertEqual(response["campaign_name"], "GeloMyrto forte: Verfügbarkeitsfenster nutzen")
+        self.assertEqual(response["campaign_preview"]["campaign_name"], "GeloMyrto forte: Verfügbarkeitsfenster nutzen")
+        self.assertEqual(
+            response["campaign_payload"]["campaign"]["campaign_name"],
+            "GeloMyrto forte: Verfügbarkeitsfenster nutzen",
+        )
+        self.assertEqual(response["campaign_payload"]["playbook"]["title"], "Verfügbarkeitsfenster nutzen")
+        self.assertEqual(
+            response["campaign_payload"]["ai_plan"]["campaign_name"],
+            "GeloMyrto forte: Verfügbarkeitsfenster nutzen",
         )
 
 

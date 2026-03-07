@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import Any
 
 from app.services.media.copy_service import (
+    public_campaign_name,
     public_display_title,
     public_event_label,
     public_playbook_title,
@@ -279,6 +280,23 @@ def _humanize_peix_context(peix_context: dict[str, Any] | None) -> dict[str, Any
     return cleaned
 
 
+def _humanize_campaign_name(name: Any, product: str | None = None) -> str | None:
+    raw = str(name or "").strip()
+    if not raw:
+        return None
+    return public_campaign_name(raw, product=product) or raw
+
+
+def _humanize_playbook(playbook: dict[str, Any] | None) -> dict[str, Any]:
+    cleaned = dict(playbook or {})
+    if cleaned.get("title") or cleaned.get("key"):
+        cleaned["title"] = public_playbook_title(
+            playbook_key=cleaned.get("key"),
+            title=cleaned.get("title"),
+        ) or cleaned.get("title")
+    return cleaned
+
+
 def derive_publish_blockers(card: dict[str, Any], now: datetime | None = None) -> list[str]:
     blockers = _derive_content_blockers(card, now=now)
     freshness_state = derive_freshness_state(card, now=now)
@@ -392,9 +410,31 @@ def to_card_response(opp: dict[str, Any], include_preview: bool = True) -> dict[
     trigger_context = _humanize_trigger_payload(opp.get("trigger_context") or {})
     cleaned_peix_context = _humanize_peix_context(opp.get("peix_context") or peix_context)
     cleaned_campaign_pack = dict(campaign_pack)
+    cleaned_playbook = _humanize_playbook(playbook)
+    preview_campaign_name = _humanize_campaign_name(
+        preview.get("campaign_name"),
+        product=opp.get("recommended_product") or product_mapping.get("recommended_product") or opp.get("product"),
+    )
+    payload_campaign_name = _humanize_campaign_name(
+        ((campaign_pack.get("campaign") or {}).get("campaign_name")),
+        product=opp.get("recommended_product") or product_mapping.get("recommended_product") or opp.get("product"),
+    )
+    ai_plan = dict(campaign_pack.get("ai_plan") or {})
+    if ai_plan.get("campaign_name"):
+        ai_plan["campaign_name"] = _humanize_campaign_name(
+            ai_plan.get("campaign_name"),
+            product=opp.get("recommended_product") or product_mapping.get("recommended_product") or opp.get("product"),
+        )
     cleaned_campaign_pack["trigger_snapshot"] = _humanize_trigger_payload(campaign_pack.get("trigger_snapshot"))
     cleaned_campaign_pack["trigger_evidence"] = _humanize_trigger_payload(campaign_pack.get("trigger_evidence"))
     cleaned_campaign_pack["peix_context"] = _humanize_peix_context(peix_context)
+    cleaned_campaign_pack["playbook"] = cleaned_playbook
+    if campaign_pack.get("campaign"):
+        cleaned_campaign_pack["campaign"] = dict(campaign_pack.get("campaign") or {})
+        if payload_campaign_name:
+            cleaned_campaign_pack["campaign"]["campaign_name"] = payload_campaign_name
+    if ai_plan:
+        cleaned_campaign_pack["ai_plan"] = ai_plan
     recommended_product = (
         opp.get("recommended_product")
         or product_mapping.get("recommended_product")
@@ -409,7 +449,7 @@ def to_card_response(opp: dict[str, Any], include_preview: bool = True) -> dict[
     public_title = public_display_title(
         playbook_key=opp.get("playbook_key") or playbook.get("key"),
         playbook_title=opp.get("playbook_title") or playbook.get("title"),
-        campaign_name=preview.get("campaign_name") or ((campaign_pack.get("campaign") or {}).get("campaign_name")),
+        campaign_name=preview_campaign_name or payload_campaign_name,
         product=recommended_product,
         trigger_event=trigger_context.get("event"),
         condition_label=(
@@ -453,7 +493,7 @@ def to_card_response(opp: dict[str, Any], include_preview: bool = True) -> dict[
         "created_at": opp.get("created_at"),
         "updated_at": opp.get("updated_at"),
         "expires_at": opp.get("expires_at"),
-        "campaign_name": preview.get("campaign_name") or ((campaign_pack.get("campaign") or {}).get("campaign_name")),
+        "campaign_name": preview_campaign_name or payload_campaign_name,
         "primary_kpi": preview.get("primary_kpi") or measurement.get("primary_kpi"),
         "mapping_status": opp.get("mapping_status") or product_mapping.get("mapping_status"),
         "mapping_confidence": opp.get("mapping_confidence") or product_mapping.get("mapping_confidence"),
@@ -467,8 +507,8 @@ def to_card_response(opp: dict[str, Any], include_preview: bool = True) -> dict[
         "mapping_candidate_product": opp.get("mapping_candidate_product") or product_mapping.get("candidate_product"),
         "mapping_rule_source": opp.get("rule_source") or product_mapping.get("rule_source"),
         "peix_context": cleaned_peix_context,
-        "playbook_key": opp.get("playbook_key") or playbook.get("key"),
-        "playbook_title": public_playbook or opp.get("playbook_title") or playbook.get("title"),
+        "playbook_key": opp.get("playbook_key") or cleaned_playbook.get("key"),
+        "playbook_title": public_playbook or opp.get("playbook_title") or cleaned_playbook.get("title"),
         "trigger_context": trigger_context,
         "trigger_snapshot": trigger_snapshot,
         "guardrail_notes": opp.get("guardrail_notes") or (campaign_pack.get("guardrail_report") or {}).get("applied_fixes") or [],

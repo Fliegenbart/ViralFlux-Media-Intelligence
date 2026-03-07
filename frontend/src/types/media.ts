@@ -395,6 +395,9 @@ export interface WeeklyDecisionRegion {
 export interface WeeklyDecision {
   decision_state: 'GO' | 'WATCH' | string;
   action_stage?: 'activate' | 'prepare' | string;
+  decision_mode?: 'epidemic_wave' | 'mixed' | 'supply_window' | string;
+  decision_mode_label?: string;
+  decision_mode_reason?: string;
   decision_window?: {
     start?: string | null;
     horizon_days?: number | null;
@@ -413,6 +416,10 @@ export interface WeeklyDecision {
     national_band?: string;
     top_drivers?: Array<{ label: string; strength_pct: number }>;
     context_signals?: Record<string, { value: number; weight: number; contribution: number }>;
+    driver_groups?: Record<string, { label: string; contribution: number }>;
+    decision_mode?: 'epidemic_wave' | 'mixed' | 'supply_window' | string;
+    decision_mode_label?: string;
+    decision_mode_reason?: string;
     math_stack?: {
       base_models?: string[];
       meta_learner?: string;
@@ -452,6 +459,10 @@ export interface SignalStackResponse {
     national_band?: string;
     top_drivers?: Array<{ label: string; strength_pct: number }>;
     context_signals?: Record<string, { value: number; weight: number; contribution: number }>;
+    driver_groups?: Record<string, { label: string; contribution: number }>;
+    decision_mode?: 'epidemic_wave' | 'mixed' | 'supply_window' | string;
+    decision_mode_label?: string;
+    decision_mode_reason?: string;
     math_stack?: {
       base_models?: string[];
       meta_learner?: string;
@@ -526,10 +537,17 @@ export interface MediaRegionsResponse {
       recommendation_ref?: RegionRecommendationRef | null;
       tooltip?: RegionTooltipData | null;
       forecast_direction?: string;
+      severity_score?: number;
+      momentum_score?: number;
+      actionability_score?: number;
       signal_drivers?: Array<{ label: string; strength_pct: number }>;
       layer_contributions?: Record<string, number>;
       budget_logic?: string;
       priority_explanation?: string;
+      decision_mode?: string;
+      decision_mode_label?: string;
+      decision_mode_reason?: string;
+      priority_rank?: number;
       source_trace?: string[];
     }>;
     top_regions: Array<{
@@ -538,6 +556,12 @@ export interface MediaRegionsResponse {
       trend: string;
       impact_probability?: number;
       peix_score?: number;
+      severity_score?: number;
+      momentum_score?: number;
+      actionability_score?: number;
+      decision_mode?: string;
+      decision_mode_label?: string;
+      priority_rank?: number;
       recommendation_ref?: RegionRecommendationRef | null;
       tooltip?: RegionTooltipData | null;
     }>;
@@ -584,6 +608,7 @@ export interface MediaEvidenceResponse {
   generated_at: string;
   proxy_validation?: BacktestResponse | null;
   truth_validation?: BacktestResponse | null;
+  truth_validation_legacy?: BacktestResponse | null;
   recent_runs: Array<Record<string, unknown>>;
   data_freshness: Record<string, string | null>;
   source_status: SourceStatusSummary;

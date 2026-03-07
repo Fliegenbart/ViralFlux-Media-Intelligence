@@ -51,7 +51,10 @@ const DecisionView: React.FC<Props> = ({
   const horizonMin = topCard?.decision_brief?.horizon?.min_days;
   const horizonMax = topCard?.decision_brief?.horizon?.max_days;
   const topDrivers = weeklyDecision?.signal_stack_summary?.top_drivers || [];
+  const driverGroups = weeklyDecision?.signal_stack_summary?.driver_groups || {};
   const mathStack = weeklyDecision?.signal_stack_summary?.math_stack;
+  const decisionModeLabel = weeklyDecision?.decision_mode_label || weeklyDecision?.signal_stack_summary?.decision_mode_label || 'Epi-Welle';
+  const decisionModeReason = weeklyDecision?.decision_mode_reason || weeklyDecision?.signal_stack_summary?.decision_mode_reason;
   const hiddenBacklog = decision?.campaign_summary?.hidden_backlog_cards || 0;
 
   const heroSentence = weeklyDecision?.recommended_action
@@ -128,6 +131,7 @@ const DecisionView: React.FC<Props> = ({
               <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
                 {topCard?.playbook_title || 'Wochenentscheidung'} · letzte epidemiologische Woche {weeklyDecision?.decision_window?.start ? new Date(weeklyDecision.decision_window.start).toLocaleDateString('de-DE') : '-'}
               </span>
+              <span className="campaign-confidence-chip">{decisionModeLabel}</span>
             </div>
             <div className="section-heading" style={{ gap: 12 }}>
               <h1 className="hero-title">{heroLead}</h1>
@@ -135,7 +139,7 @@ const DecisionView: React.FC<Props> = ({
               <p className="hero-copy">
                 {isGo
                   ? 'Das Modell ist im Zielkorridor. Fokus liegt auf konkret freigabefähigen regionalen Kampagnenpaketen.'
-                  : 'Die App schaltet auf defensiven Modus: vorbereiten, priorisieren und erst nach Review/Freigabe weiterziehen.'}
+                  : decisionModeReason || 'Die App schaltet auf defensiven Modus: vorbereiten, priorisieren und erst nach Review/Freigabe weiterziehen.'}
               </p>
             </div>
             <div className="action-row">
@@ -249,8 +253,15 @@ const DecisionView: React.FC<Props> = ({
             <div className="section-heading" style={{ gap: 6 }}>
               <h2 className="subsection-title">Signal- und Modellkette</h2>
               <p className="subsection-copy">
-                AMELAG und SurvStat bleiben Kernsignale. Holt-Winters, Ridge und Prophet laufen in XGBoost als Meta-Learner zusammen.
+                AMELAG und SurvStat bleiben Kernsignale. BfArM wird als Versorgungskontext gezeigt, nicht als epidemiologischer Beweis.
               </p>
+            </div>
+            <div className="review-chip-row" style={{ marginTop: 14 }}>
+              {Object.entries(driverGroups).map(([key, group]) => (
+                <span key={key} className="step-chip">
+                  {group.label} {formatPercent(group.contribution || 0)}
+                </span>
+              ))}
             </div>
             <div className="review-chip-row" style={{ marginTop: 14 }}>
               {(mathStack?.base_models || []).map((label) => (

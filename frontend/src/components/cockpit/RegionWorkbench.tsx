@@ -93,12 +93,16 @@ const RegionWorkbench: React.FC<Props> = ({
                     <strong>{formatPercent(region.impact_probability || region.peix_score || 0)}</strong>
                   </div>
                   <div className="metric-box">
-                    <span>Trend</span>
-                    <strong style={{ fontSize: 18 }}>{region.trend}</strong>
+                    <span>Severity</span>
+                    <strong>{formatPercent(region.severity_score || 0)}</strong>
                   </div>
                   <div className="metric-box">
-                    <span>Shift</span>
-                    <strong>{formatPercent(suggestion?.budget_shift_pct || 0)}</strong>
+                    <span>Momentum</span>
+                    <strong>{formatPercent(region.momentum_score || 0)}</strong>
+                  </div>
+                  <div className="metric-box">
+                    <span>Actionability</span>
+                    <strong>{formatPercent(region.actionability_score || 0)}</strong>
                   </div>
                 </div>
 
@@ -110,6 +114,9 @@ const RegionWorkbench: React.FC<Props> = ({
                     </div>
                   </div>
                   <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+                    Priorisierungsmodus: <strong style={{ color: 'var(--text-primary)' }}>{region.decision_mode_label || 'Epi-Welle'}</strong>
+                  </div>
+                  <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
                     Produktfokus: <strong style={{ color: 'var(--text-primary)' }}>{region.tooltip?.recommended_product || 'GELO Portfolio'}</strong>
                   </div>
                   <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
@@ -117,6 +124,9 @@ const RegionWorkbench: React.FC<Props> = ({
                   </div>
                   <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
                     Forecast-Richtung: <strong style={{ color: 'var(--text-primary)' }}>{region.forecast_direction || 'seitwärts'}</strong>
+                  </div>
+                  <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+                    Budgetlogik: <strong style={{ color: 'var(--text-primary)' }}>{suggestion?.budget_shift_pct ? formatPercent(suggestion.budget_shift_pct) : 'Review zuerst'}</strong>
                   </div>
                 </div>
 
@@ -180,13 +190,13 @@ const RegionWorkbench: React.FC<Props> = ({
                     <div style={{ textAlign: 'left' }}>
                       <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>{item.name}</div>
                       <div style={{ marginTop: 4, fontSize: 12, color: 'var(--text-muted)' }}>
-                        {item.tooltip?.recommended_product || 'GELO'} · {item.trend || '-'}
+                        {item.tooltip?.recommended_product || 'GELO'} · {item.decision_mode_label || item.trend || '-'}
                       </div>
                     </div>
                     <div style={{ textAlign: 'right' }}>
-                      <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--accent-violet)' }}>{formatPercent(Number(item.impact_probability || item.peix_score || 0))}</div>
+                      <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--accent-violet)' }}>{formatPercent(Number(item.actionability_score || item.impact_probability || item.peix_score || 0))}</div>
                       <div style={{ marginTop: 4, fontSize: 12, color: 'var(--text-muted)' }}>
-                        Priorität {Math.round(Number(item.recommendation_ref?.urgency_score || 0))}
+                        Priorität #{Math.round(Number(item.priority_rank || 0))}
                       </div>
                     </div>
                   </div>

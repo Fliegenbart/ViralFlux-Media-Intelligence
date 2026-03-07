@@ -125,6 +125,7 @@ class MediaV2Service:
         top_card = self._decision_focus_card(primary_cards)
         top_regions = cockpit.get("map", {}).get("top_regions", [])[:3]
         market = cockpit.get("backtest_summary", {}).get("latest_market") or {}
+        signal_summary = self.get_signal_stack(virus_typ=virus_typ).get("summary") or {}
 
         freshness_state = self._decision_freshness_state(cockpit.get("source_status", {}))
         has_truth = truth_coverage.get("coverage_weeks", 0) >= 26
@@ -157,11 +158,13 @@ class MediaV2Service:
             top_regions=top_regions,
             cockpit=cockpit,
             decision_state=decision_state,
+            signal_summary=signal_summary,
         )
         recommended_action = self._recommended_action(
             decision_state=decision_state,
             top_card=top_card,
             top_regions=top_regions,
+            decision_mode=str(signal_summary.get("decision_mode") or "epidemic_wave"),
         )
         top_products = self._decision_top_products(primary_cards, top_card)
 
@@ -197,7 +200,10 @@ class MediaV2Service:
                 "freshness_state": freshness_state,
                 "proxy_state": "passed" if market_passed else "watch",
                 "truth_state": truth_coverage.get("trust_readiness"),
-                "signal_stack_summary": self.get_signal_stack(virus_typ=virus_typ).get("summary"),
+                "decision_mode": signal_summary.get("decision_mode"),
+                "decision_mode_label": signal_summary.get("decision_mode_label"),
+                "decision_mode_reason": signal_summary.get("decision_mode_reason"),
+                "signal_stack_summary": signal_summary,
             },
             "top_recommendations": campaign_cards[:3],
             "campaign_summary": queue["summary"],
@@ -228,21 +234,55 @@ class MediaV2Service:
             peix_region = (peix.get("regions") or {}).get(code, {})
             suggestion = suggestions.get(code) or {}
             forecast_direction = self._forecast_direction(region)
+            severity_score = self._severity_score(region)
+            momentum_score = self._momentum_score(region=region, forecast_direction=forecast_direction)
+            decision_mode = self._region_decision_mode(peix_region)
+            actionability_score = self._actionability_score(
+                region=region,
+                suggestion=suggestion,
+                severity_score=severity_score,
+                momentum_score=momentum_score,
+            )
             enriched_regions[code] = {
                 **region,
                 "peix_score": region.get("peix_score") or peix_region.get("score_0_100"),
+                "severity_score": severity_score,
+                "momentum_score": momentum_score,
+                "actionability_score": actionability_score,
                 "forecast_direction": forecast_direction,
                 "signal_drivers": peix_region.get("top_drivers") or [],
                 "layer_contributions": peix_region.get("layer_contributions") or {},
                 "budget_logic": suggestion.get("reason") or region.get("tooltip", {}).get("recommendation_text"),
-                "priority_explanation": self._priority_explanation(region=region, suggestion=suggestion, forecast_direction=forecast_direction),
-                "source_trace": [
-                    "AMELAG",
-                    "SurvStat",
-                    "Forecast",
-                    "ARE",
-                ],
+                "decision_mode": decision_mode["key"],
+                "decision_mode_label": decision_mode["label"],
+                "decision_mode_reason": decision_mode["reason"],
+                "priority_explanation": self._priority_explanation(
+                    region=region,
+                    suggestion=suggestion,
+                    forecast_direction=forecast_direction,
+                    severity_score=severity_score,
+                    momentum_score=momentum_score,
+                    actionability_score=actionability_score,
+                    decision_mode=decision_mode["key"],
+                ),
+                "source_trace": self._region_source_trace(peix_region),
             }
+
+        sorted_regions = sorted(
+            [
+                {"code": code, **region}
+                for code, region in enriched_regions.items()
+            ],
+            key=lambda item: (
+                float(item.get("actionability_score") or 0.0),
+                float(item.get("severity_score") or 0.0),
+                float(item.get("momentum_score") or 0.0),
+                float(item.get("peix_score") or item.get("impact_probability") or 0.0),
+            ),
+            reverse=True,
+        )
+        for index, item in enumerate(sorted_regions, start=1):
+            enriched_regions[item["code"]]["priority_rank"] = index
 
         decision_payload = self.get_decision_payload(
             virus_typ=virus_typ,
@@ -256,12 +296,9 @@ class MediaV2Service:
             "map": {
                 **map_section,
                 "regions": enriched_regions,
+                "top_regions": sorted_regions[:5],
             },
-            "top_regions": [
-                enriched_regions.get(item.get("code"), {"code": item.get("code")}) | {"code": item.get("code")}
-                for item in map_section.get("top_regions", [])
-                if item.get("code") in enriched_regions
-            ],
+            "top_regions": sorted_regions[:5],
             "decision_state": decision_payload.get("weekly_decision", {}).get("decision_state"),
         }
 
@@ -300,19 +337,29 @@ class MediaV2Service:
     ) -> dict[str, Any]:
         cockpit = self.cockpit_service.get_cockpit_payload(virus_typ=virus_typ, target_source=target_source)
         backtest_summary = cockpit.get("backtest_summary") or {}
+        truth_coverage = self.get_truth_coverage(brand=brand)
+        latest_customer = backtest_summary.get("latest_customer")
+        truth_validation = latest_customer if truth_coverage.get("coverage_weeks", 0) > 0 else None
+        truth_validation_legacy = latest_customer if truth_validation is None and latest_customer else None
         return {
             "virus_typ": virus_typ,
             "target_source": target_source,
             "generated_at": datetime.utcnow().isoformat(),
             "proxy_validation": backtest_summary.get("latest_market"),
-            "truth_validation": backtest_summary.get("latest_customer"),
+            "truth_validation": truth_validation,
+            "truth_validation_legacy": truth_validation_legacy,
             "recent_runs": backtest_summary.get("recent_runs") or [],
             "data_freshness": cockpit.get("data_freshness") or {},
             "source_status": cockpit.get("source_status") or {},
             "signal_stack": self.get_signal_stack(virus_typ=virus_typ),
             "model_lineage": self.get_model_lineage(virus_typ=virus_typ),
-            "truth_coverage": self.get_truth_coverage(brand=brand),
-            "known_limits": self._known_limits(cockpit, virus_typ),
+            "truth_coverage": truth_coverage,
+            "known_limits": self._known_limits(
+                cockpit,
+                virus_typ,
+                truth_coverage=truth_coverage,
+                truth_validation_legacy=truth_validation_legacy,
+            ),
         }
 
     def get_signal_stack(self, *, virus_typ: str = "Influenza A") -> dict[str, Any]:
@@ -323,6 +370,7 @@ class MediaV2Service:
             for item in (cockpit.get("source_status") or {}).get("items", [])
         }
         peix = cockpit.get("peix_epi_score") or PeixEpiScoreService(self.db).build(virus_typ=virus_typ)
+        signal_groups = self._signal_group_summary(peix)
 
         items = []
         for source_key, meta in SIGNAL_GROUPS.items():
@@ -361,6 +409,7 @@ class MediaV2Service:
                     "Wetter-Kontext",
                 ],
             },
+            **signal_groups,
         }
         return {
             "virus_typ": virus_typ,
@@ -574,6 +623,7 @@ class MediaV2Service:
         top_regions: list[dict[str, Any]],
         cockpit: dict[str, Any],
         decision_state: str,
+        signal_summary: dict[str, Any],
     ) -> list[str]:
         reasons: list[str] = []
         if decision_state != "GO":
@@ -582,12 +632,19 @@ class MediaV2Service:
             reasons.append(
                 f"{top_regions[0].get('name')} führt den regionalen Signal-Stack mit {round(float(top_regions[0].get('peix_score') or top_regions[0].get('impact_probability') or 0))}/100 an."
             )
-        if top_card and top_card.get("decision_brief", {}).get("summary_sentence"):
-            reasons.append(str(top_card["decision_brief"]["summary_sentence"]))
-        top_drivers = (cockpit.get("peix_epi_score") or {}).get("top_drivers") or []
-        if top_drivers:
-            driver_labels = ", ".join(driver.get("label") for driver in top_drivers[:2] if driver.get("label"))
-            reasons.append(f"Treiber dieser Woche: {driver_labels}.")
+        if top_card:
+            if decision_state == "GO" and top_card.get("decision_brief", {}).get("summary_sentence"):
+                reasons.append(str(top_card["decision_brief"]["summary_sentence"]))
+            else:
+                title = top_card.get("display_title") or top_card.get("recommended_product") or "Das stärkste Review-Paket"
+                reasons.append(f"{title} ist das nächste priorisierte Paket für Review und Freigabe.")
+        if signal_summary.get("decision_mode_reason"):
+            reasons.append(str(signal_summary["decision_mode_reason"]))
+        else:
+            top_drivers = (cockpit.get("peix_epi_score") or {}).get("top_drivers") or []
+            if top_drivers:
+                driver_labels = ", ".join(driver.get("label") for driver in top_drivers[:2] if driver.get("label"))
+                reasons.append(f"Treiber dieser Woche: {driver_labels}.")
         while len(reasons) < 3:
             reasons.append("AMELAG, SurvStat und Forecast werden gemeinsam für die Wochenentscheidung gewichtet.")
         return reasons[:3]
@@ -608,17 +665,34 @@ class MediaV2Service:
         region: dict[str, Any],
         suggestion: dict[str, Any],
         forecast_direction: str,
+        severity_score: int,
+        momentum_score: int,
+        actionability_score: int,
+        decision_mode: str,
     ) -> str:
         trend = str(region.get("trend") or "stabil")
         name = str(region.get("name") or "Die Region")
-        score = float(region.get("peix_score") or region.get("impact_probability") or 0.0)
-        if trend == "fallend" and score >= 60:
+        if decision_mode == "supply_window":
             return (
-                f"{name} fällt kurzfristig, bleibt aber wegen hohem Ausgangsniveau und {forecast_direction}er Modellspur priorisiert."
+                f"{name} bleibt im Fokus, weil Versorgungssignal und Kontext ein Aktivierungsfenster öffnen. "
+                "Das ist keine reine Welleneskalation, sondern eine defensive Versorgungschance."
+            )
+        if momentum_score < 40 and severity_score >= 70:
+            return (
+                f"{name} beschleunigt aktuell nicht, bleibt aber wegen hohem Ausgangsniveau und hoher Aktivierbarkeit "
+                "für Review und Vorbereitung priorisiert."
+            )
+        if momentum_score >= 60 and forecast_direction == "aufwärts":
+            return (
+                f"{name} zeigt ein frühes Wellenfenster: steigende Dynamik, aufwärts gerichteter Forecast und hohe Aktivierbarkeit."
+            )
+        if trend == "fallend" and actionability_score >= 65:
+            return (
+                f"{name} fällt kurzfristig, bleibt aber für defensive Planung relevant: Niveau und Umsetzbarkeit sind noch hoch."
             )
         if suggestion.get("reason"):
             return str(suggestion["reason"])
-        return f"{name} wird aus AMELAG, SurvStat, Forecast und Kontextsignalen priorisiert."
+        return f"{name} wird aus epidemiologischer Lage, Forecast und Umsetzungschance priorisiert."
 
     def _campaign_state_counts(self, cards: list[dict[str, Any]]) -> dict[str, int]:
         counts: dict[str, int] = defaultdict(int)
@@ -762,6 +836,7 @@ class MediaV2Service:
         decision_state: str,
         top_card: dict[str, Any] | None,
         top_regions: list[dict[str, Any]],
+        decision_mode: str,
     ) -> str:
         primary_region = (
             top_card.get("decision_brief", {}).get("recommendation", {}).get("primary_region")
@@ -781,17 +856,34 @@ class MediaV2Service:
                 return f"Diese Woche freigeben: {product} in {primary_region} priorisieren."
             return "Diese Woche freigeben: die stärksten regionalen Pakete in die Aktivierung ziehen."
 
+        if decision_mode == "supply_window":
+            if primary_region and product:
+                return f"Diese Woche vorbereiten: {product} in {primary_region} als Versorgungschance absichern, aber noch keinen nationalen Shift freigeben."
+            return "Diese Woche vorbereiten: Versorgungssignale beobachten und nur reviewfähige Pakete weiterziehen."
+        if decision_mode == "mixed":
+            if primary_region and product:
+                return f"Diese Woche vorbereiten: {product} in {primary_region} priorisieren, weil Epi-Signal und Kontext gemeinsam tragen, aber noch keinen nationalen Shift freigeben."
+            return "Diese Woche vorbereiten: Epi-Signal und Kontext beobachten und keine harte Aktivierung freigeben."
         if primary_region and product:
             return f"Diese Woche vorbereiten: {product} in {primary_region} priorisieren, aber noch keinen nationalen Shift freigeben."
         if primary_region:
             return f"Diese Woche vorbereiten: {primary_region} priorisieren und nur reviewfähige Pakete weiterziehen."
         return "Diese Woche vorbereiten: Signal beobachten, Regionen priorisieren und keine harte Aktivierung freigeben."
 
-    def _known_limits(self, cockpit: dict[str, Any], virus_typ: str) -> list[str]:
+    def _known_limits(
+        self,
+        cockpit: dict[str, Any],
+        virus_typ: str,
+        *,
+        truth_coverage: dict[str, Any] | None = None,
+        truth_validation_legacy: dict[str, Any] | None = None,
+    ) -> list[str]:
         limits: list[str] = []
-        truth = self.get_truth_coverage()
+        truth = truth_coverage or self.get_truth_coverage()
         if truth.get("coverage_weeks", 0) < 26:
             limits.append("Kundennahe Truth-Daten decken noch keine 26 Wochen ab.")
+        if truth_validation_legacy and truth.get("coverage_weeks", 0) == 0:
+            limits.append("Der sichtbare Kunden-Backtest ist nur ein explorativer Legacy-Run und kein aktiver Truth-Layer.")
         if not (cockpit.get("backtest_summary", {}).get("latest_market") or {}).get("quality_gate", {}).get("overall_passed"):
             limits.append("Markt-Validierung steht aktuell auf WATCH.")
         series_points = (
@@ -802,6 +894,121 @@ class MediaV2Service:
         if series_points < 120:
             limits.append("Die virale Kernreihe ist noch relativ kurz für robuste Saisonabdeckung.")
         return limits
+
+    def _signal_group_summary(self, peix: dict[str, Any]) -> dict[str, Any]:
+        virus_scores = peix.get("virus_scores") or {}
+        context_signals = peix.get("context_signals") or {}
+
+        epidemic_core = round(sum(float(item.get("contribution") or 0.0) for item in virus_scores.values()), 1)
+        forecast_contribution = round(float((context_signals.get("forecast") or {}).get("contribution") or 0.0), 1)
+        supply_contribution = round(float((context_signals.get("shortage") or {}).get("contribution") or 0.0), 1)
+        context_contribution = round(sum(
+            float((context_signals.get(key) or {}).get("contribution") or 0.0)
+            for key in ("weather", "search", "baseline")
+        ), 1)
+
+        decision_mode = self._decision_mode_from_contributions(
+            epidemic_total=epidemic_core + forecast_contribution,
+            supply_total=supply_contribution,
+            context_total=context_contribution,
+        )
+        return {
+            "driver_groups": {
+                "epidemic_core": {"label": "Epi-Kern", "contribution": epidemic_core},
+                "forecast_model": {"label": "Forecast", "contribution": forecast_contribution},
+                "supply_window": {"label": "Versorgung", "contribution": supply_contribution},
+                "context_window": {"label": "Wetter & Baseline", "contribution": context_contribution},
+            },
+            "decision_mode": decision_mode["key"],
+            "decision_mode_label": decision_mode["label"],
+            "decision_mode_reason": decision_mode["reason"],
+        }
+
+    def _decision_mode_from_contributions(
+        self,
+        *,
+        epidemic_total: float,
+        supply_total: float,
+        context_total: float,
+    ) -> dict[str, str]:
+        if supply_total >= max(8.0, epidemic_total * 0.7):
+            return {
+                "key": "supply_window",
+                "label": "Versorgungsfenster",
+                "reason": "Das aktuelle Signal wird vor allem durch Versorgung und Kontext getrieben, nicht durch eine reine Wellenbeschleunigung.",
+            }
+        if supply_total >= 4.0 and (supply_total + context_total) >= epidemic_total:
+            return {
+                "key": "mixed",
+                "label": "Gemischtes Signal",
+                "reason": "Epi-Kern, Forecast und Kontext zeigen gleichzeitig nach oben. Die Entscheidung bleibt deshalb bewusst defensiv.",
+            }
+        return {
+            "key": "epidemic_wave",
+            "label": "Epi-Welle",
+            "reason": "AMELAG, SurvStat und Forecast tragen die Entscheidung. Versorgung bleibt Zusatzsignal, nicht Hauptbeweis.",
+        }
+
+    def _severity_score(self, region: dict[str, Any]) -> int:
+        impact = float(region.get("impact_probability") or region.get("peix_score") or 0.0)
+        intensity = float(region.get("intensity") or 0.0) * 100.0
+        return int(round(max(impact, intensity)))
+
+    def _momentum_score(self, *, region: dict[str, Any], forecast_direction: str) -> int:
+        change = max(-40.0, min(40.0, float(region.get("change_pct") or 0.0)))
+        score = 50.0 + (change * 0.7)
+        trend = str(region.get("trend") or "").lower()
+        if trend == "steigend":
+            score += 6.0
+        elif trend == "fallend":
+            score -= 6.0
+
+        if forecast_direction == "aufwärts":
+            score += 18.0
+        elif forecast_direction == "abwärts":
+            score -= 18.0
+
+        return int(round(max(0.0, min(100.0, score))))
+
+    def _actionability_score(
+        self,
+        *,
+        region: dict[str, Any],
+        suggestion: dict[str, Any],
+        severity_score: int,
+        momentum_score: int,
+    ) -> int:
+        recommendation_ref = region.get("recommendation_ref") or {}
+        urgency_score = float(recommendation_ref.get("urgency_score") or 0.0)
+        urgency_normalized = min(max(urgency_score / 2.0, 0.0), 100.0)
+        package_bonus = 10.0 if recommendation_ref.get("card_id") or suggestion.get("budget_shift_pct") else 0.0
+        actionability = (
+            severity_score * 0.50
+            + urgency_normalized * 0.25
+            + max(momentum_score, 25) * 0.15
+            + package_bonus
+        )
+        return int(round(max(0.0, min(100.0, actionability))))
+
+    def _region_decision_mode(self, peix_region: dict[str, Any]) -> dict[str, str]:
+        contributions = peix_region.get("layer_contributions") or {}
+        epidemic_total = float(contributions.get("Bio") or 0.0) + float(contributions.get("Forecast") or 0.0)
+        supply_total = float(contributions.get("Shortage") or 0.0)
+        context_total = sum(float(contributions.get(key) or 0.0) for key in ("Weather", "Search", "Baseline"))
+        return self._decision_mode_from_contributions(
+            epidemic_total=epidemic_total,
+            supply_total=supply_total,
+            context_total=context_total,
+        )
+
+    def _region_source_trace(self, peix_region: dict[str, Any]) -> list[str]:
+        trace = ["AMELAG", "SurvStat", "Forecast", "ARE"]
+        contributions = peix_region.get("layer_contributions") or {}
+        if float(contributions.get("Shortage") or 0.0) > 0:
+            trace.append("BfArM")
+        if float(contributions.get("Weather") or 0.0) > 0:
+            trace.append("Wetter")
+        return trace
 
     def _read_model_metadata(self, virus_typ: str) -> dict[str, Any]:
         slug = _virus_slug(virus_typ)

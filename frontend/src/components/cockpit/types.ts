@@ -21,10 +21,17 @@ export interface MapRegion {
   recommendation_ref?: RegionRecommendationRef | null;
   tooltip?: RegionTooltipData | null;
   forecast_direction?: string;
+  severity_score?: number;
+  momentum_score?: number;
+  actionability_score?: number;
   signal_drivers?: Array<{ label: string; strength_pct: number }>;
   layer_contributions?: Record<string, number>;
   budget_logic?: string;
   priority_explanation?: string;
+  decision_mode?: string;
+  decision_mode_label?: string;
+  decision_mode_reason?: string;
+  priority_rank?: number;
   source_trace?: string[];
 }
 

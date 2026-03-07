@@ -27,11 +27,13 @@ const EvidencePanel: React.FC<Props> = ({
 }) => {
   const latestMarket = evidence?.proxy_validation;
   const latestCustomer = evidence?.truth_validation;
+  const legacyCustomer = evidence?.truth_validation_legacy;
   const sourceItems = evidence?.source_status?.items || [];
   const recentRuns = evidence?.recent_runs || [];
   const truthCoverage = evidence?.truth_coverage;
   const signalStack = evidence?.signal_stack;
   const modelLineage = evidence?.model_lineage;
+  const driverGroups = signalStack?.summary?.driver_groups || {};
 
   if (loading && !evidence) {
     return <div className="card" style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>Lade Evidenz...</div>;
@@ -47,6 +49,7 @@ const EvidencePanel: React.FC<Props> = ({
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
           <span className="step-chip">Proxy-validiert</span>
           <span className="step-chip">Kunden-Check: {truthLayerLabel(truthCoverage || latestCustomer)}</span>
+          {signalStack?.summary?.decision_mode_label && <span className="step-chip">{signalStack.summary.decision_mode_label}</span>}
           <span className="step-chip">Drift: {modelLineage?.drift_state || '-'}</span>
         </div>
       </section>
@@ -100,8 +103,18 @@ const EvidencePanel: React.FC<Props> = ({
             </div>
           </div>
           <p className="section-copy">
-            Der Truth-Layer basiert auf importierten Outcome-Daten. Er bewertet Datenbreite und Abdeckung, nicht pauschal die Produktqualität.
+            {truthCoverage?.coverage_weeks
+              ? 'Der Truth-Layer basiert auf importierten Outcome-Daten. Er bewertet Datenbreite und Abdeckung, nicht pauschal die Produktqualität.'
+              : 'Es gibt aktuell noch keinen aktiven Truth-Layer aus angebundenen Outcome-Daten. Bis dahin bleibt der Kundenbezug explorativ und blockiert harte Freigaben.'}
           </p>
+          {!truthCoverage?.coverage_weeks && legacyCustomer && (
+            <div className="soft-panel review-panel-soft" style={{ marginTop: 14 }}>
+              <div className="campaign-focus-label">Explorativer Legacy-Run</div>
+              <div className="review-body-copy" style={{ marginTop: 8 }}>
+                {legacyCustomer.metrics?.data_points || 0} Punkte aus einem älteren Kunden-Backtest. Dieser Run bleibt sichtbar als historischer Hinweis, zählt aber nicht als aktiver Truth-Layer.
+              </div>
+            </div>
+          )}
         </div>
       </section>
 
@@ -113,13 +126,44 @@ const EvidencePanel: React.FC<Props> = ({
           loading={marketValidationLoading}
           emptyMessage="Noch keine detaillierten Markt-Validierungsdaten verfügbar."
         />
-        <ValidationSection
-          title="Kunden-Validierung im Verlauf"
-          subtitle="Proxy und Truth bleiben getrennt: Dieser Layer zeigt nur, wie gut das Modell an echte Kunden-Outcome-Daten anschließt."
-          result={customerValidation}
-          loading={customerValidationLoading}
-          emptyMessage="Noch keine ausreichend langen Kundenreihen für eine belastbare Truth-Validierung verfügbar."
-        />
+        {truthCoverage?.coverage_weeks ? (
+          <ValidationSection
+            title="Kunden-Validierung im Verlauf"
+            subtitle="Proxy und Truth bleiben getrennt: Dieser Layer zeigt nur, wie gut das Modell an echte Kunden-Outcome-Daten anschließt."
+            result={customerValidation}
+            loading={customerValidationLoading}
+            emptyMessage="Noch keine ausreichend langen Kundenreihen für eine belastbare Truth-Validierung verfügbar."
+          />
+        ) : (
+          <section className="card subsection-card" style={{ padding: 24 }}>
+            <div className="section-heading" style={{ gap: 6 }}>
+              <h2 className="subsection-title">Kunden-Validierung im Verlauf</h2>
+              <p className="subsection-copy">
+                Dieser Block bleibt leer, bis echte Outcome-Daten angeschlossen sind. Legacy-Runs werden separat nur als explorativer Hinweis gezeigt.
+              </p>
+            </div>
+            {legacyCustomer ? (
+              <div className="soft-panel" style={{ padding: 16, marginTop: 14, display: 'grid', gap: 10 }}>
+                <div className="evidence-row">
+                  <span>Legacy-Run</span>
+                  <strong>{legacyCustomer.run_id || '-'}</strong>
+                </div>
+                <div className="evidence-row">
+                  <span>Datenpunkte</span>
+                  <strong>{legacyCustomer.metrics?.data_points ?? 0}</strong>
+                </div>
+                <div className="evidence-row">
+                  <span>R²</span>
+                  <strong>{legacyCustomer.metrics?.r2_score ?? '-'}</strong>
+                </div>
+              </div>
+            ) : (
+              <div className="review-muted-copy" style={{ marginTop: 14 }}>
+                Noch kein aktiver oder historischer Kunden-Run vorhanden.
+              </div>
+            )}
+          </section>
+        )}
       </section>
 
       <section className="cockpit-grid">
@@ -153,14 +197,26 @@ const EvidencePanel: React.FC<Props> = ({
       <section className="cockpit-grid">
         <div className="card subsection-card" style={{ padding: 24 }}>
           <h2 className="subsection-title">Signal-Stack</h2>
+          <div className="review-chip-row" style={{ marginTop: 14 }}>
+            {Object.entries(driverGroups).map(([key, group]) => (
+              <span key={key} className="step-chip">
+                {group.label} {formatPercent(group.contribution || 0)}
+              </span>
+            ))}
+          </div>
           <div style={{ display: 'grid', gap: 10, marginTop: 14 }}>
             {(signalStack?.items || []).map((item) => (
               <div key={item.source_key} className="evidence-row">
                 <span>{item.label}</span>
-                <strong>{item.contribution_state}</strong>
+                <strong>{item.is_core_signal ? 'epi-kern' : item.contribution_state}</strong>
               </div>
             ))}
           </div>
+          {signalStack?.summary?.decision_mode_reason && (
+            <p className="section-copy" style={{ marginTop: 14 }}>
+              {signalStack.summary.decision_mode_reason}
+            </p>
+          )}
         </div>
 
         <div className="card subsection-card" style={{ padding: 24 }}>

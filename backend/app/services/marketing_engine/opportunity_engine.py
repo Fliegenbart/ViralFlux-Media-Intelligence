@@ -18,7 +18,14 @@ from app.core.config import get_settings
 from app.models.database import AuditLog, BacktestRun, MarketingOpportunity
 from app.services.media.ai_campaign_planner import AiCampaignPlanner
 from app.services.media.campaign_guardrails import CampaignGuardrails
-from app.services.media.copy_service import build_decision_basis_text, public_reason_text
+from app.services.media.copy_service import (
+    build_decision_basis_text,
+    build_decision_summary_text,
+    public_condition_label,
+    public_event_label,
+    public_reason_text,
+    public_source_label,
+)
 from app.services.media.message_library import select_gelo_message_pack
 from app.services.media.product_catalog_service import ProductCatalogService
 from app.services.media.peix_score_service import PeixEpiScoreService
@@ -2221,10 +2228,37 @@ class MarketingOpportunityEngine:
 
     @staticmethod
     def _fact_label(key: str) -> str:
+        overrides = {
+            "latest_incidence": "aktuelle Inzidenz",
+            "previous_incidence": "Vorwochen-Inzidenz",
+            "wow_pct": "Wochenwachstum",
+            "p75": "oberes Vergleichsniveau",
+            "bfarm_risk_score": "BfArM-Risikoscore",
+            "respiratory_shortage_count": "Engpässe Atemwege",
+            "pediatric_alert": "Kinderarznei-Hinweis",
+            "are_growth_pct": "ARE-Wachstum",
+            "weather_burden": "Wetterdruck",
+            "psycho_level": "Suchdruck",
+            "psycho_delta": "Suchtrend",
+            "pollen_score": "Pollenlage",
+            "allergy_search_level": "Allergie-Suche",
+            "allergy_search_delta": "Allergie-Trend",
+            "peix_score": "PeixEpiScore",
+            "avg_recent_incidence": "aktuelle Durchschnitts-Inzidenz",
+            "growth_pct": "Wachstum",
+            "total_infection_load": "gesamte Infektionslast",
+            "median_load": "Median im Vergleich",
+            "relative_to_median": "Abstand zum Median",
+        }
+        normalized = str(key or "").strip().lower()
+        if normalized in overrides:
+            return overrides[normalized]
+
         raw = str(key or "").strip().replace("_", " ")
         if not raw:
             return "Fakt"
-        return raw[:1].upper() + raw[1:]
+        words = [word.capitalize() for word in raw.split() if word]
+        return " ".join(words) or "Fakt"
 
     @staticmethod
     def _confidence_pct(raw_confidence: Any, urgency_score: float | None) -> float:
@@ -2241,6 +2275,35 @@ class MarketingOpportunityEngine:
             parsed = parsed * 100.0
 
         return round(max(0.0, min(100.0, float(parsed))), 1)
+
+    @staticmethod
+    def _public_fact_value(key: str, value: Any) -> Any:
+        normalized_key = str(key or "").strip().lower()
+
+        if isinstance(value, bool):
+            return "Ja" if value else "Nein"
+
+        if isinstance(value, str):
+            stripped = value.strip()
+            if not stripped:
+                return ""
+            if "source" in normalized_key:
+                return public_source_label(stripped) or stripped
+            if "event" in normalized_key:
+                return public_event_label(stripped) or stripped
+            return public_reason_text(reason=stripped)
+
+        if isinstance(value, (int, float)):
+            number = float(value)
+            if any(token in normalized_key for token in ("pct", "probability", "delta", "growth", "share", "wow")):
+                return f"{number:.1f}%"
+            if any(token in normalized_key for token in ("score", "confidence", "strength")):
+                return round(number, 1)
+            if number.is_integer():
+                return int(number)
+            return round(number, 2)
+
+        return value
 
     @staticmethod
     def _secondary_products(
@@ -2283,11 +2346,12 @@ class MarketingOpportunityEngine:
         confidence_pct: float,
     ) -> list[dict[str, Any]]:
         facts: list[dict[str, Any]] = []
-        source = (
+        raw_source = (
             trigger_evidence.get("source")
             or trigger_snapshot.get("source")
             or "Signal-Fusion"
         )
+        source = public_source_label(raw_source) or raw_source
         values = trigger_snapshot.get("values")
         if isinstance(values, dict):
             for key in sorted(values.keys()):
@@ -2297,7 +2361,7 @@ class MarketingOpportunityEngine:
                         {
                             "key": str(key),
                             "label": self._fact_label(str(key)),
-                            "value": value,
+                            "value": self._public_fact_value(str(key), value),
                             "source": source,
                         }
                     )
@@ -2307,8 +2371,8 @@ class MarketingOpportunityEngine:
             facts.append(
                 {
                     "key": "trigger_event",
-                    "label": "Trigger Event",
-                    "value": str(event),
+                    "label": "Signal",
+                    "value": public_event_label(str(event)),
                     "source": source,
                 }
             )
@@ -2430,9 +2494,12 @@ class MarketingOpportunityEngine:
 
         budget_shift = budget_shift_pct if budget_shift_pct is not None else budget_shift_pct_fallback
 
-        summary_sentence = (
-            f"Auf Basis von {basis_text} erwarten wir in den nächsten 7-14 Tagen "
-            f"{condition_text} in {primary_region}; daher empfehlen wir {primary_product}."
+        summary_sentence = build_decision_summary_text(
+            basis_text=basis_text,
+            condition_text=condition_text,
+            primary_region=primary_region,
+            primary_product=primary_product,
+            action_required=action_required,
         )
 
         return {
@@ -2450,7 +2517,7 @@ class MarketingOpportunityEngine:
             ),
             "expectation": {
                 "condition_key": condition_key,
-                "condition_label": condition_label,
+                "condition_label": public_condition_label(condition_label or condition_key),
                 "region_codes": region_codes,
                 "impact_probability": peix_context.get("impact_probability"),
                 "peix_score": peix_context.get("score"),

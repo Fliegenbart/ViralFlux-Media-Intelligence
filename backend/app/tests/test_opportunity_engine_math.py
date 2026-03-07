@@ -48,6 +48,30 @@ class OpportunityEngineMathTests(unittest.TestCase):
             "DRAFT",
         )
 
+    def test_public_fact_value_humanizes_internal_tokens_and_percentages(self) -> None:
+        self.assertEqual(
+            MarketingOpportunityEngine._public_fact_value("event", "RESPIRATORY_GROWTH_HALSSCHMERZ"),
+            "zunehmende Halsschmerz- und Heiserkeitssignale",
+        )
+        self.assertEqual(
+            MarketingOpportunityEngine._public_fact_value("source", "BfArM_API"),
+            "BfArM Engpassmonitor",
+        )
+        self.assertEqual(
+            MarketingOpportunityEngine._public_fact_value("growth_pct", 12.345),
+            "12.3%",
+        )
+
+    def test_fact_label_uses_customer_facing_overrides(self) -> None:
+        self.assertEqual(
+            MarketingOpportunityEngine._fact_label("bfarm_risk_score"),
+            "BfArM-Risikoscore",
+        )
+        self.assertEqual(
+            MarketingOpportunityEngine._fact_label("latest_incidence"),
+            "aktuelle Inzidenz",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

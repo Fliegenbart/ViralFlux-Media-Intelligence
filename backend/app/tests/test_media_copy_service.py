@@ -11,8 +11,13 @@ os.environ.setdefault("SECRET_KEY", "test")
 from app.api.media import _to_card_response
 from app.services.media.copy_service import (
     build_decision_basis_text,
+    build_decision_summary_text,
+    build_region_outlook_text,
+    build_region_recommendation_text,
     public_display_title,
+    public_event_label,
     public_reason_text,
+    public_source_label,
 )
 
 
@@ -47,8 +52,50 @@ class MediaCopyServiceTests(unittest.TestCase):
 
         self.assertEqual(
             basis,
-            "BfArM + RKI, dem Signal Verfügbarkeitsfenster im Wettbewerb und einem PeixEpiScore von 86.9",
+            "Signalen aus BfArM Engpassmonitor + RKI, dem Muster Verfügbarkeitsfenster im Wettbewerb und einem PeixEpiScore von 86.9",
         )
+
+    def test_public_source_label_humanizes_internal_source_key(self) -> None:
+        self.assertEqual(public_source_label("BfArM_API"), "BfArM Engpassmonitor")
+
+    def test_public_event_label_humanizes_respiratory_growth_code(self) -> None:
+        self.assertEqual(
+            public_event_label("RESPIRATORY_GROWTH_HALSSCHMERZ"),
+            "zunehmende Halsschmerz- und Heiserkeitssignale",
+        )
+
+    def test_build_region_copy_reads_like_customer_copy(self) -> None:
+        outlook = build_region_outlook_text(
+            virus_typ="Influenza A",
+            trend="fallend",
+            change_pct=-12.0,
+            vorhersage_delta_pct=9.0,
+        )
+        recommendation = build_region_recommendation_text(
+            region_name="Hamburg",
+            outlook_text=outlook,
+            product="GeloRevoice",
+            reason="Halsbeschwerden und Heiserkeit wahrscheinlicher werden",
+        )
+
+        self.assertEqual(
+            outlook,
+            "aktuell rückläufige Influenza A-Aktivität (-12% WoW), der Forecast zeigt jedoch wieder nach oben",
+        )
+        self.assertIn("In Hamburg sehen wir für die nächsten 7 bis 14 Tage", recommendation)
+        self.assertIn("Deshalb priorisieren wir zunächst GeloRevoice", recommendation)
+
+    def test_build_decision_summary_mentions_review_if_product_needs_confirmation(self) -> None:
+        summary = build_decision_summary_text(
+            basis_text="Signalen aus RKI SurvStat und dem Muster auffälliger Mykoplasmen-Anstieg",
+            condition_text="bronchitis_husten",
+            primary_region="Schleswig-Holstein",
+            primary_product="Produktfreigabe ausstehend",
+            action_required="review_mapping",
+        )
+
+        self.assertIn("Bronchitis und Husten", summary)
+        self.assertIn("Vor einer Freigabe", summary)
 
     def test_card_response_exposes_public_titles_and_reason(self) -> None:
         card = _to_card_response(

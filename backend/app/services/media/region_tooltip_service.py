@@ -5,18 +5,10 @@ Begründung auf Basis bestehender Signale (PeixEpiScore, Wastewater-Trend,
 Vorhersage). Kein LLM — rein template-basiert.
 """
 
-VIRUS_LABEL = {
-    "Influenza A": "Influenza-A",
-    "Influenza B": "Influenza-B",
-    "SARS-CoV-2": "SARS-CoV-2",
-    "RSV A": "RSV",
-}
-
-TREND_TEXT = {
-    "steigend": "einen steigenden {virus}-Trend ({pct} WoW)",
-    "fallend": "rückläufige {virus}-Aktivität ({pct} WoW)",
-    "stabil": "eine stabile {virus}-Lage ({pct} WoW)",
-}
+from app.services.media.copy_service import (
+    build_region_outlook_text,
+    build_region_recommendation_text,
+)
 
 BAND_URGENCY = {
     "critical": "Sofortmaßnahme",
@@ -103,28 +95,23 @@ def build_region_tooltip(
     vorhersage_delta_pct: float | None = None,
 ) -> dict:
     """Erzeuge ein Tooltip-Dict für ein einzelnes Bundesland."""
-    virus_label = VIRUS_LABEL.get(virus_typ, virus_typ)
-    pct_str = f"{change_pct:+.0f}%"
-
-    # Epi-Outlook
-    trend_template = TREND_TEXT.get(trend, TREND_TEXT["stabil"])
-    epi_outlook = trend_template.format(virus=virus_label, pct=pct_str)
-
-    if vorhersage_delta_pct is not None and abs(vorhersage_delta_pct) > 5:
-        if vorhersage_delta_pct > 0:
-            epi_outlook += " — Prognosemodell zeigt weiteren Anstieg"
-        else:
-            epi_outlook += " — Prognosemodell zeigt Rückgang"
+    epi_outlook = build_region_outlook_text(
+        virus_typ=virus_typ,
+        trend=trend,
+        change_pct=change_pct,
+        vorhersage_delta_pct=vorhersage_delta_pct,
+    )
 
     # Condition + Product
     condition = _infer_condition(trend, peix_band, top_drivers, virus_typ)
     product = CONDITION_TO_PRODUCT.get(condition, "GeloProsed")
     reason = CONDITION_TO_REASON.get(condition, "")
 
-    recommendation_text = (
-        f"In {region_name} erwarten wir in den nächsten 7\u201314 Tagen "
-        f"{epi_outlook} und empfehlen deshalb {product}, "
-        f"{reason}."
+    recommendation_text = build_region_recommendation_text(
+        region_name=region_name,
+        outlook_text=epi_outlook,
+        product=product,
+        reason=reason,
     )
 
     urgency = BAND_URGENCY.get(peix_band, "Beobachten")

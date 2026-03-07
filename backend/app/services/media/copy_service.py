@@ -109,6 +109,8 @@ def public_event_label(event: str | None) -> str:
         label = RESPIRATORY_SUFFIX_LABELS.get(suffix) or _humanize_token(suffix)
         if label:
             return f"zunehmende {label}"
+    if not _looks_internal_key(raw):
+        return _cleanup_copy(_replace_internal_tokens(raw))
     return _humanize_token(raw)
 
 

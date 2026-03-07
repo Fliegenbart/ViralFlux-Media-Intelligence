@@ -6,6 +6,7 @@ from app.services.media.recommendation_contracts import (
     derive_lifecycle_state,
     derive_publish_blockers,
     enrich_card_v2,
+    to_card_response,
 )
 
 
@@ -111,6 +112,55 @@ class RecommendationContractsV2Tests(unittest.TestCase):
         self.assertIn("geloprosed", group_id)
         self.assertIn("SH", group_id)
         self.assertIn("2026-03-09", group_id)
+
+    def test_to_card_response_humanizes_nested_trigger_fields(self) -> None:
+        response = to_card_response(
+            _sample_card(
+                id="opp-2",
+                trigger_context={
+                    "event": "SUPPLY_SHOCK_WINDOW",
+                    "source": "BfArM_API",
+                    "details": "SUPPLY_SHOCK_WINDOW in Brandenburg",
+                },
+                peix_context={
+                    "score": 67,
+                    "trigger_event": "SUPPLY_SHOCK_WINDOW",
+                },
+                campaign_payload={
+                    "trigger_snapshot": {
+                        "event": "SUPPLY_SHOCK_WINDOW",
+                        "source": "BfArM_API",
+                        "details": "SUPPLY_SHOCK_WINDOW in Brandenburg",
+                    },
+                    "trigger_evidence": {
+                        "event": "SUPPLY_SHOCK_WINDOW",
+                        "source": "BfArM_API",
+                    },
+                    "peix_context": {
+                        "score": 67,
+                        "trigger_event": "SUPPLY_SHOCK_WINDOW",
+                    },
+                    "message_framework": {
+                        "hero_message": "Norddeutschland jetzt vorbereiten.",
+                    },
+                    "channel_plan": [
+                        {"channel": "search", "share_pct": 40.0},
+                    ],
+                    "guardrail_report": {
+                        "passed": True,
+                    },
+                },
+            ),
+            include_preview=True,
+        )
+
+        self.assertEqual(response["trigger_context"]["event"], "Verfügbarkeitsfenster im Wettbewerb")
+        self.assertEqual(response["trigger_snapshot"]["source"], "BfArM Engpassmonitor")
+        self.assertEqual(response["peix_context"]["trigger_event"], "Verfügbarkeitsfenster im Wettbewerb")
+        self.assertEqual(
+            response["campaign_payload"]["trigger_snapshot"]["event"],
+            "Verfügbarkeitsfenster im Wettbewerb",
+        )
 
 
 if __name__ == "__main__":

@@ -13,6 +13,7 @@ import {
   formatPercent,
   readinessTone,
   truthLayerLabel,
+  workflowLabel,
 } from './cockpitUtils';
 
 interface Props {
@@ -51,6 +52,7 @@ const DecisionView: React.FC<Props> = ({
   const horizonMax = topCard?.decision_brief?.horizon?.max_days;
   const topDrivers = weeklyDecision?.signal_stack_summary?.top_drivers || [];
   const mathStack = weeklyDecision?.signal_stack_summary?.math_stack;
+  const hiddenBacklog = decision?.campaign_summary?.hidden_backlog_cards || 0;
 
   const heroSentence = weeklyDecision?.recommended_action
     || topCard?.decision_brief?.summary_sentence
@@ -67,6 +69,12 @@ const DecisionView: React.FC<Props> = ({
   const heroLead = primaryRegion
     ? `${isGo ? 'Aktivieren' : 'Vorbereiten'} für ${primaryRegion}${horizonLabel ? ` in ${horizonLabel}` : ''}.`
     : (isGo ? 'Aktivieren, wo das Signal trägt.' : 'Vorbereiten, wo die Welle zuerst greift.');
+  const shiftLabel = isGo && weeklyDecision?.budget_shift != null
+    ? formatPercent(weeklyDecision.budget_shift as number)
+    : 'Noch nicht freigegeben';
+  const shiftNote = isGo
+    ? 'Nationaler Shift ist freigegeben.'
+    : 'WATCH blockiert aktuell eine harte nationale Budgetverschiebung.';
 
   const gateTone = readinessTone(isGo);
 
@@ -93,7 +101,8 @@ const DecisionView: React.FC<Props> = ({
           </div>
         </div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-          <span className="step-chip step-chip-done">Datenstand {formatDateTime(weeklyDecision?.decision_window?.start)}</span>
+          <span className="step-chip step-chip-done">Letzte epidemiologische Woche {formatDateTime(weeklyDecision?.decision_window?.start)}</span>
+          <span className="step-chip">Generiert {formatDateTime(decision?.generated_at)}</span>
           <span className="step-chip">Proxy: {weeklyDecision?.proxy_state === 'passed' ? 'GO-Korridor' : 'WATCH'}</span>
           <span className="step-chip">Kunden-Check: {truthLayerLabel(decision?.truth_coverage || latestCustomer)}</span>
         </div>
@@ -117,7 +126,7 @@ const DecisionView: React.FC<Props> = ({
                 {isGo ? 'GO' : 'WATCH'}
               </span>
               <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                {topCard?.playbook_title || 'Wochenentscheidung'} · {weeklyDecision?.decision_window?.start ? new Date(weeklyDecision.decision_window.start).toLocaleDateString('de-DE') : '-'}
+                {topCard?.playbook_title || 'Wochenentscheidung'} · letzte epidemiologische Woche {weeklyDecision?.decision_window?.start ? new Date(weeklyDecision.decision_window.start).toLocaleDateString('de-DE') : '-'}
               </span>
             </div>
             <div className="section-heading" style={{ gap: 12 }}>
@@ -126,7 +135,7 @@ const DecisionView: React.FC<Props> = ({
               <p className="hero-copy">
                 {isGo
                   ? 'Das Modell ist im Zielkorridor. Fokus liegt auf konkret freigabefähigen regionalen Kampagnenpaketen.'
-                  : 'Die App schaltet auf defensiven Modus: vorbereiten, priorisieren und nur mit klaren Guardrails freigeben.'}
+                  : 'Die App schaltet auf defensiven Modus: vorbereiten, priorisieren und erst nach Review/Freigabe weiterziehen.'}
               </p>
             </div>
             <div className="action-row">
@@ -148,15 +157,17 @@ const DecisionView: React.FC<Props> = ({
             </div>
             <div className="decision-rail summary-grid">
               <div style={{ minWidth: 120 }}>
-                <div className="section-kicker" style={{ marginBottom: 6 }}>Shift</div>
-                <div className="summary-metric">
-                  {formatPercent((weeklyDecision?.budget_shift as number | undefined) || topCard?.budget_shift_pct || 0)}
-                </div>
+                <div className="section-kicker" style={{ marginBottom: 6 }}>Nationaler Shift</div>
+                <div className="summary-metric">{shiftLabel}</div>
+                <div className="summary-note" style={{ marginTop: 6 }}>{shiftNote}</div>
               </div>
               <div style={{ minWidth: 140 }}>
-                <div className="section-kicker" style={{ marginBottom: 6 }}>Budget</div>
+                <div className="section-kicker" style={{ marginBottom: 6 }}>Wochenbudget</div>
                 <div className="summary-metric">
                   {formatCurrency(topCard?.campaign_preview?.budget?.weekly_budget_eur)}
+                </div>
+                <div className="summary-note" style={{ marginTop: 6 }}>
+                  {hiddenBacklog > 0 ? `${hiddenBacklog} weitere Pakete liegen im Backlog.` : 'Der Fokus liegt auf der kuratierten Review-Queue.'}
                 </div>
               </div>
             </div>
@@ -203,10 +214,10 @@ const DecisionView: React.FC<Props> = ({
             <div className="section-heading" style={{ gap: 6 }}>
               <h2 className="subsection-title">Kampagnen, die jetzt zählen</h2>
               <p className="subsection-copy">
-                Direkter Sprung in review- oder publishable Pakete.
+                Direkter Sprung in die nächste sinnvolle Stufe statt in einen rohen Paketstapel.
               </p>
             </div>
-            {(recommendations.slice(0, 3)).map((card) => (
+            {recommendations.length > 0 ? (recommendations.slice(0, 3)).map((card) => (
               <button
                 key={card.id}
                 type="button"
@@ -222,10 +233,16 @@ const DecisionView: React.FC<Props> = ({
                       {card.region_codes_display?.join(', ') || card.region || 'National'} · {card.recommended_product || card.product}
                     </div>
                   </div>
-                  <strong style={{ fontSize: 14, color: 'var(--accent-violet)' }}>{formatPercent(card.budget_shift_pct || 0)}</strong>
+                  <strong style={{ fontSize: 14, color: 'var(--accent-violet)' }}>
+                    {isGo && card.is_publishable ? formatPercent(card.budget_shift_pct || 0) : workflowLabel(card.lifecycle_state || card.status)}
+                  </strong>
                 </div>
               </button>
-            ))}
+            )) : (
+              <div className="soft-panel" style={{ padding: 14, marginTop: 14, fontSize: 14, color: 'var(--text-secondary)' }}>
+                Noch keine kuratierten Review-Pakete im Fokus. Öffne die Kampagnenansicht, um den Backlog zu sichten oder neue Pakete zu erzeugen.
+              </div>
+            )}
           </div>
 
           <div className="card subsection-card" style={{ padding: 24 }}>

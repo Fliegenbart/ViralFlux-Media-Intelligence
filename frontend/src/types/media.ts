@@ -394,6 +394,7 @@ export interface WeeklyDecisionRegion {
 
 export interface WeeklyDecision {
   decision_state: 'GO' | 'WATCH' | string;
+  action_stage?: 'activate' | 'prepare' | string;
   decision_window?: {
     start?: string | null;
     horizon_days?: number | null;
@@ -491,6 +492,10 @@ export interface MediaDecisionResponse {
   generated_at: string;
   weekly_decision: WeeklyDecision;
   top_recommendations: RecommendationCard[];
+  campaign_summary?: {
+    visible_cards?: number;
+    hidden_backlog_cards?: number;
+  };
   wave_run_id?: string | null;
   backtest_summary?: {
     latest_market?: BacktestResponse | null;
@@ -567,6 +572,8 @@ export interface MediaCampaignsResponse {
     deduped_cards: number;
     publishable_cards: number;
     expired_cards: number;
+    visible_cards?: number;
+    hidden_backlog_cards?: number;
     states: Record<string, number>;
   };
 }

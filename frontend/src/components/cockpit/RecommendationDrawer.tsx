@@ -48,7 +48,7 @@ const RecommendationDrawer: React.FC<Props> = ({
 }) => {
   const [connectorKey, setConnectorKey] = useState<string>('meta_ads');
   const nextStatus = nextWorkflowStatus(detail?.status);
-  const tone = statusTone(detail?.status);
+  const tone = statusTone(detail?.lifecycle_state || detail?.status);
 
   useEffect(() => {
     if (syncPreview?.connector_key) {
@@ -72,12 +72,13 @@ const RecommendationDrawer: React.FC<Props> = ({
   const audienceSegments = detail?.campaign_pack?.targeting?.audience_segments || detail?.target_audience || [];
   const guardrailNotes = detail?.guardrail_notes || detail?.campaign_pack?.guardrail_report?.applied_fixes || [];
   const workflowSteps = [
-    { key: 'DRAFT', label: 'Vorbereitung', copy: 'KI-Entwurf und Signal-Kontext' },
-    { key: 'READY', label: 'Prüfung', copy: 'Guardrails und Mapping prüfen' },
-    { key: 'APPROVED', label: 'Freigabe', copy: 'Freigabe für Team oder Kunde' },
-    { key: 'ACTIVATED', label: 'Live', copy: 'Aktiv oder sync-bereit ausgeliefert' },
+    { key: 'PREPARE', label: 'Vorbereiten', copy: 'Signal-Kontext und Paketstruktur schärfen' },
+    { key: 'REVIEW', label: 'Review', copy: 'Guardrails, Mapping und Timing prüfen' },
+    { key: 'APPROVE', label: 'Freigabe', copy: 'Paket ist entscheidungsreif' },
+    { key: 'SYNC_READY', label: 'Sync', copy: 'Connector-Preview oder operative Übergabe' },
+    { key: 'LIVE', label: 'Live', copy: 'Aktiv oder bereits ausgespielt' },
   ];
-  const normalizedStatus = String(detail?.status || '').toUpperCase();
+  const normalizedStatus = String(detail?.lifecycle_state || detail?.status || '').toUpperCase();
   const currentWorkflowIndex = Math.max(workflowSteps.findIndex((step) => step.key === normalizedStatus), 0);
   const confidenceValue = detail?.confidence == null
     ? null
@@ -139,7 +140,7 @@ const RecommendationDrawer: React.FC<Props> = ({
                     {confidenceValue != null ? `${confidenceValue}% Confidence` : 'Confidence offen'}
                   </span>
                   <span className="campaign-confidence-chip">
-                    {detail.lifecycle_state || workflowLabel(detail.status)}
+                    {workflowLabel(detail.lifecycle_state || detail.status)}
                   </span>
                   <span className="campaign-confidence-chip">
                     KPI {kpiLabel(detail.primary_kpi || detail.campaign_pack?.measurement_plan?.primary_kpi)}
@@ -356,7 +357,7 @@ const RecommendationDrawer: React.FC<Props> = ({
                         <div key={note} className="review-body-copy">{note}</div>
                       ))
                     ) : (
-                      <div className="review-muted-copy">Keine offenen Blocker. Paket ist operativ konsistent.</div>
+                      <div className="review-muted-copy">{publishabilityHint(detail)}</div>
                     )}
                   </div>
                 </div>
@@ -434,3 +435,20 @@ const RecommendationDrawer: React.FC<Props> = ({
 };
 
 export default RecommendationDrawer;
+
+function publishabilityHint(detail: RecommendationDetail): string {
+  const lifecycle = String(detail.lifecycle_state || detail.status || '').toUpperCase();
+  if (detail.is_publishable) {
+    return 'Keine offenen Blocker. Paket ist direkt nutzbar.';
+  }
+  if (lifecycle === 'SYNC_READY') {
+    return 'Keine Inhaltsblocker. Paket kann jetzt in den Connector- oder Live-Schritt gehen.';
+  }
+  if (lifecycle === 'APPROVE') {
+    return 'Keine Inhaltsblocker. Paket ist freigabefähig und wartet auf die Entscheidung.';
+  }
+  if (lifecycle === 'REVIEW') {
+    return 'Keine Inhaltsblocker. Paket wartet auf Review und den nächsten Workflow-Schritt.';
+  }
+  return 'Keine Inhaltsblocker. Paket braucht noch den nächsten Workflow-Schritt.';
+}

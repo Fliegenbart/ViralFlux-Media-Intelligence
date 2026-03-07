@@ -61,25 +61,39 @@ export function formatPercent(value?: number | null, digits = 0): string {
 
 export function statusTone(status?: string | null): { background: string; color: string; border: string } {
   const normalized = String(status || '').toUpperCase();
-  if (normalized === 'ACTIVATED') {
+  if (normalized === 'ACTIVATED' || normalized === 'LIVE') {
     return {
       background: 'rgba(16, 185, 129, 0.10)',
       color: '#047857',
       border: '1px solid rgba(16, 185, 129, 0.24)',
     };
   }
-  if (normalized === 'APPROVED') {
+  if (normalized === 'APPROVED' || normalized === 'SYNC_READY') {
     return {
       background: 'rgba(10, 132, 255, 0.12)',
       color: 'var(--accent-violet)',
       border: '1px solid rgba(10, 132, 255, 0.24)',
     };
   }
-  if (normalized === 'READY') {
+  if (normalized === 'READY' || normalized === 'APPROVE') {
+    return {
+      background: 'rgba(16, 185, 129, 0.08)',
+      color: '#047857',
+      border: '1px solid rgba(16, 185, 129, 0.20)',
+    };
+  }
+  if (normalized === 'REVIEW') {
     return {
       background: 'rgba(245, 158, 11, 0.12)',
       color: '#b45309',
       border: '1px solid rgba(245, 158, 11, 0.24)',
+    };
+  }
+  if (normalized === 'EXPIRED' || normalized === 'ARCHIVED') {
+    return {
+      background: 'rgba(99, 102, 241, 0.08)',
+      color: 'var(--text-muted)',
+      border: '1px solid rgba(148, 163, 184, 0.24)',
     };
   }
   return {
@@ -143,10 +157,13 @@ export function nextWorkflowStatus(status?: string | null): string | null {
 
 export function workflowLabel(status?: string | null): string {
   const normalized = String(status || '').toUpperCase();
-  if (normalized === 'DRAFT') return 'Vorbereitung';
-  if (normalized === 'READY') return 'In Prüfung';
-  if (normalized === 'APPROVED') return 'Freigegeben';
-  if (normalized === 'ACTIVATED') return 'Live';
+  if (normalized === 'DRAFT' || normalized === 'PREPARE') return 'Vorbereiten';
+  if (normalized === 'READY' || normalized === 'REVIEW') return 'In Review';
+  if (normalized === 'APPROVE') return 'Freigabefähig';
+  if (normalized === 'APPROVED' || normalized === 'SYNC_READY') return 'Sync-bereit';
+  if (normalized === 'ACTIVATED' || normalized === 'LIVE') return 'Live';
+  if (normalized === 'EXPIRED') return 'Abgelaufen';
+  if (normalized === 'ARCHIVED' || normalized === 'DISMISSED') return 'Archiviert';
   return status ? String(status) : 'Status offen';
 }
 

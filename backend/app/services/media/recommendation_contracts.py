@@ -58,6 +58,9 @@ PLACEHOLDER_PRODUCTS = {
     "produktfreigabe ausstehend",
     "alle gelo-produkte",
 }
+PLACEHOLDER_TITLE_MARKERS = {
+    "produktfreigabe ausstehend",
+}
 MAPPING_BLOCK_STATES = {
     "needs_review",
     "pending",
@@ -187,7 +190,28 @@ def _activation_window(card: dict[str, Any], campaign_pack: dict[str, Any]) -> t
     return _parse_iso_datetime(start), _parse_iso_datetime(end)
 
 
-def derive_publish_blockers(card: dict[str, Any], now: datetime | None = None) -> list[str]:
+def _dedupe_messages(messages: list[str]) -> list[str]:
+    deduped: list[str] = []
+    seen: set[str] = set()
+    for message in messages:
+        if message not in seen:
+            deduped.append(message)
+            seen.add(message)
+    return deduped
+
+
+def _has_placeholder_title(card: dict[str, Any]) -> bool:
+    preview = card.get("campaign_preview") or {}
+    title_candidates = [
+        str(card.get("display_title") or "").strip(),
+        str(card.get("campaign_name") or "").strip(),
+        str(preview.get("campaign_name") or "").strip(),
+    ]
+    lowered = " ".join(part for part in title_candidates if part).lower()
+    return any(marker in lowered for marker in PLACEHOLDER_TITLE_MARKERS)
+
+
+def _derive_content_blockers(card: dict[str, Any], now: datetime | None = None) -> list[str]:
     effective_now = now or datetime.utcnow()
     campaign_pack = card.get("campaign_payload") or {}
     budget = (card.get("campaign_preview") or {}).get("budget") or campaign_pack.get("budget_plan") or {}
@@ -199,7 +223,9 @@ def derive_publish_blockers(card: dict[str, Any], now: datetime | None = None) -
     blockers: list[str] = []
     recommended_product = str(card.get("recommended_product") or card.get("product") or "").strip()
     if recommended_product.lower() in PLACEHOLDER_PRODUCTS:
-        blockers.append("Produkt-Mapping ist noch nicht freigabefähig.")
+        blockers.append("Produktfreigabe ist noch nicht abgeschlossen.")
+    elif _has_placeholder_title(card):
+        blockers.append("Produktfreigabe ist noch nicht abgeschlossen.")
 
     mapping_status = str(card.get("mapping_status") or "").strip().lower()
     if mapping_status in MAPPING_BLOCK_STATES:
@@ -228,7 +254,21 @@ def derive_publish_blockers(card: dict[str, Any], now: datetime | None = None) -
     if guardrails.get("passed") is False:
         blockers.append("Guardrail-Check ist noch nicht bestanden.")
 
-    return blockers
+    return _dedupe_messages(blockers)
+
+
+def derive_publish_blockers(card: dict[str, Any], now: datetime | None = None) -> list[str]:
+    blockers = _derive_content_blockers(card, now=now)
+    freshness_state = derive_freshness_state(card, now=now)
+    status = str(card.get("status") or "").strip().upper()
+
+    if freshness_state != "expired":
+        if status in {"DRAFT", "NEW", "URGENT"}:
+            blockers.append("Paket ist noch nicht in Prüfung.")
+        elif status == "READY":
+            blockers.append("Freigabe steht noch aus.")
+
+    return _dedupe_messages(blockers)
 
 
 def derive_freshness_state(card: dict[str, Any], now: datetime | None = None) -> str:
@@ -267,7 +307,7 @@ def derive_evidence_strength(card: dict[str, Any]) -> str:
 def derive_lifecycle_state(card: dict[str, Any], now: datetime | None = None) -> str:
     status = str(card.get("status") or "").upper()
     freshness_state = derive_freshness_state(card, now=now)
-    blockers = derive_publish_blockers(card, now=now)
+    blockers = _derive_content_blockers(card, now=now)
 
     if freshness_state == "expired" or status == "EXPIRED":
         return "EXPIRED"
@@ -276,14 +316,14 @@ def derive_lifecycle_state(card: dict[str, Any], now: datetime | None = None) ->
     if status == "ACTIVATED":
         return "LIVE"
     if status == "APPROVED":
-        return "SYNC_READY" if not blockers else "APPROVE"
+        return "SYNC_READY" if not blockers else "REVIEW"
     if status == "READY":
         return "APPROVE" if not blockers else "REVIEW"
-    if str(card.get("mapping_status") or "").strip().lower() in MAPPING_BLOCK_STATES:
-        return "REVIEW"
+    if status in {"DRAFT", "NEW", "URGENT"}:
+        return "REVIEW" if not blockers else "PREPARE"
     if blockers:
         return "PREPARE"
-    return "PREPARE"
+    return "REVIEW"
 
 
 def dedupe_group_id(card: dict[str, Any]) -> str:
@@ -307,7 +347,7 @@ def enrich_card_v2(card: dict[str, Any], now: datetime | None = None) -> dict[st
     freshness_state = derive_freshness_state(enriched, now=effective_now)
     evidence_strength = derive_evidence_strength(enriched)
     enriched["publish_blockers"] = blockers
-    enriched["is_publishable"] = not blockers and lifecycle_state in {"APPROVE", "SYNC_READY", "LIVE"}
+    enriched["is_publishable"] = not blockers and lifecycle_state in {"SYNC_READY", "LIVE"}
     enriched["lifecycle_state"] = lifecycle_state
     enriched["freshness_state"] = freshness_state
     enriched["evidence_strength"] = evidence_strength

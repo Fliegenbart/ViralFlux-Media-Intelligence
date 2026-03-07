@@ -41,14 +41,17 @@ const CampaignStudio: React.FC<Props> = ({
   onOpenRecommendation,
 }) => {
   const cards = campaignsView?.cards || [];
+  const stateCounts = campaignsView?.summary?.states || {};
   const grouped = CAMPAIGN_LANES.map((lane) => ({
     ...lane,
     cards: cards.filter((card) => recommendationLane(card) === lane.id),
+    total: laneStateCount(lane.id, stateCounts),
   }));
-  const reviewCount = grouped.find((lane) => lane.id === 'review')?.cards.length || 0;
-  const approveCount = grouped.find((lane) => lane.id === 'approve')?.cards.length || 0;
-  const syncCount = grouped.find((lane) => lane.id === 'sync')?.cards.length || 0;
-  const liveCount = grouped.find((lane) => lane.id === 'live')?.cards.length || 0;
+  const reviewCount = laneStateCount('review', stateCounts);
+  const approveCount = laneStateCount('approve', stateCounts);
+  const syncCount = laneStateCount('sync', stateCounts);
+  const liveCount = laneStateCount('live', stateCounts);
+  const prepareCount = laneStateCount('prepare', stateCounts);
   const aiTouchedCount = cards.filter((card) => {
     const aiStatus = String(card.ai_generation_status || card.campaign_preview?.ai_generation_status || '').trim();
     return aiStatus.length > 0;
@@ -63,6 +66,8 @@ const CampaignStudio: React.FC<Props> = ({
   const focusCopy = focusCard
     ? readableCampaignSummary(focusCard)
     : 'Sobald Pakete vorliegen, verschiebt sich der Fokus automatisch auf Review, Freigabe und Sync-Readiness.';
+  const hiddenBacklog = campaignsView?.summary?.hidden_backlog_cards ?? 0;
+  const visibleCards = campaignsView?.summary?.visible_cards ?? cards.length;
 
   return (
     <div className="page-stack">
@@ -76,7 +81,7 @@ const CampaignStudio: React.FC<Props> = ({
                 Qwen erzeugt strukturierte Pakete, das Team prüft Guardrails, Budget und Connector-Readiness in einem sauberen Freigabefluss.
               </p>
             </div>
-            <span className="step-chip">{cards.length} Pakete für {virus}</span>
+            <span className="step-chip">{visibleCards} im Board · {campaignsView?.summary?.deduped_cards ?? cards.length} priorisiert für {virus}</span>
           </div>
 
           <div className="campaign-focus-panel">
@@ -84,6 +89,11 @@ const CampaignStudio: React.FC<Props> = ({
             <div className="campaign-focus-title">{focusTitle}</div>
             <div className="campaign-focus-context">{focusContext}</div>
             <p className="campaign-focus-copy">{focusCopy}</p>
+            {hiddenBacklog > 0 && (
+              <div className="campaign-focus-context" style={{ marginTop: 10 }}>
+                {hiddenBacklog} weitere deduplizierte Pakete bleiben vorerst im Backlog und nicht im Hauptboard.
+              </div>
+            )}
           </div>
 
           <div className="campaign-metric-grid">
@@ -103,7 +113,7 @@ const CampaignStudio: React.FC<Props> = ({
               <small>Connector-Vorbereitung möglich</small>
             </div>
             <div className="campaign-metric-card">
-              <span>Publishable</span>
+              <span>Sofort nutzbar</span>
               <strong>{campaignsView?.summary?.publishable_cards ?? 0}</strong>
               <small>{liveCount} live · {aiTouchedCount} mit AI-Plan</small>
             </div>
@@ -163,6 +173,14 @@ const CampaignStudio: React.FC<Props> = ({
               <span>Dedupliziert</span>
               <strong>{campaignsView?.summary?.deduped_cards ?? cards.length}</strong>
             </div>
+            <div className="campaign-guidance-row">
+              <span>Backlog</span>
+              <strong>{hiddenBacklog}</strong>
+            </div>
+            <div className="campaign-guidance-row">
+              <span>Vorbereiten</span>
+              <strong>{prepareCount}</strong>
+            </div>
             <div className="campaign-guidance-copy">
               Gute UX hier heißt: wenige starke Pakete, klare Zustände, ein sauberer Schritt zur Freigabe.
             </div>
@@ -196,12 +214,14 @@ const CampaignStudio: React.FC<Props> = ({
                     <div className="subsection-title" style={{ fontSize: 18, marginTop: 8 }}>{lane.label}</div>
                     <div className="subsection-copy" style={{ marginTop: 6 }}>{lane.description}</div>
                   </div>
-                  <span className="step-chip">{lane.cards.length}</span>
+                  <span className="step-chip">
+                    {lane.cards.length}{lane.total > lane.cards.length ? ` / ${lane.total}` : ''}
+                  </span>
                 </div>
 
                 <div className="campaign-lane-stack">
                   {lane.cards.length > 0 ? lane.cards.map((card) => {
-                    const tone = statusTone(card.status);
+                    const tone = statusTone(card.lifecycle_state || card.status);
                     return (
                       <button
                         type="button"
@@ -211,7 +231,7 @@ const CampaignStudio: React.FC<Props> = ({
                       >
                         <div className="campaign-work-item-top">
                           <span className="campaign-status-badge" style={tone}>
-                            {card.lifecycle_state || card.status_label || workflowLabel(card.status)}
+                            {workflowLabel(card.lifecycle_state || card.status)}
                           </span>
                           <span className="campaign-confidence-chip">
                             {confidenceLabel(card.confidence)}
@@ -250,7 +270,7 @@ const CampaignStudio: React.FC<Props> = ({
                           </div>
                           <div className="campaign-inline-stat">
                             <span>Flight</span>
-                            <strong>{formatDateShort(card.activation_window?.start)}</strong>
+                            <strong>{flightWindowLabel(card)}</strong>
                           </div>
                           <div className="campaign-inline-stat">
                             <span>Budget</span>
@@ -266,7 +286,9 @@ const CampaignStudio: React.FC<Props> = ({
                     );
                   }) : (
                     <div className="campaign-empty-lane">
-                      Keine Pakete in dieser Phase.
+                      {lane.total > 0
+                        ? 'Weitere Pakete liegen im Backlog und werden bei Bedarf nachgezogen.'
+                        : 'Keine Pakete in dieser Phase.'}
                     </div>
                   )}
                 </div>
@@ -297,6 +319,11 @@ function flightWindowLabel(card: RecommendationCard): string {
 }
 
 function readableCampaignSummary(card: RecommendationCard): string {
+  const blockers = card.publish_blockers || [];
+  if (blockers.length > 0) {
+    return blockers[0];
+  }
+
   const summary = String(card.decision_brief?.summary_sentence || card.reason || '').trim();
 
   if (!summary) return 'Regionale Aktivierung entlang des aktuellen Signals.';
@@ -313,4 +340,16 @@ function humanizeTrigger(value: string): string {
     .filter(Boolean)
     .map((segment) => segment.charAt(0) + segment.slice(1).toLowerCase())
     .join(' ');
+}
+
+function laneStateCount(
+  laneId: 'prepare' | 'review' | 'approve' | 'sync' | 'live',
+  states: Record<string, number>,
+): number {
+  if (laneId === 'prepare') return Number(states.PREPARE || 0);
+  if (laneId === 'review') return Number(states.REVIEW || 0);
+  if (laneId === 'approve') return Number(states.APPROVE || 0);
+  if (laneId === 'sync') return Number(states.SYNC_READY || 0);
+  if (laneId === 'live') return Number(states.LIVE || 0);
+  return 0;
 }

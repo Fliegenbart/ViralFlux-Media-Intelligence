@@ -57,7 +57,7 @@ class RecommendationContractsV2Tests(unittest.TestCase):
 
         blockers = derive_publish_blockers(card, now=datetime(2026, 3, 6, 12, 0, 0))
 
-        self.assertTrue(any("Produkt-Mapping" in blocker for blocker in blockers))
+        self.assertTrue(any("Produktfreigabe" in blocker for blocker in blockers))
 
     def test_expired_flights_switch_to_expired_lifecycle(self) -> None:
         card = _sample_card(
@@ -71,12 +71,36 @@ class RecommendationContractsV2Tests(unittest.TestCase):
 
         self.assertEqual(lifecycle_state, "EXPIRED")
 
-    def test_enrich_card_marks_publishable_ready_package(self) -> None:
-        enriched = enrich_card_v2(_sample_card(), now=datetime(2026, 3, 6, 12, 0, 0))
+    def test_draft_package_without_content_blockers_enters_review(self) -> None:
+        enriched = enrich_card_v2(
+            _sample_card(status="DRAFT"),
+            now=datetime(2026, 3, 6, 12, 0, 0),
+        )
 
-        self.assertEqual(enriched["lifecycle_state"], "APPROVE")
+        self.assertEqual(enriched["lifecycle_state"], "REVIEW")
+        self.assertFalse(enriched["is_publishable"])
+        self.assertIn("Paket ist noch nicht in Prüfung.", enriched["publish_blockers"])
+
+    def test_enrich_card_marks_sync_ready_package_as_publishable(self) -> None:
+        enriched = enrich_card_v2(
+            _sample_card(status="APPROVED"),
+            now=datetime(2026, 3, 6, 12, 0, 0),
+        )
+
+        self.assertEqual(enriched["lifecycle_state"], "SYNC_READY")
         self.assertTrue(enriched["is_publishable"])
         self.assertEqual(enriched["evidence_strength"], "hoch")
+
+    def test_placeholder_title_adds_product_release_blocker(self) -> None:
+        card = _sample_card(
+            display_title="Produktfreigabe ausstehend: Resource Scarcity",
+            recommended_product="GeloMyrto forte",
+            product="GeloMyrto forte",
+        )
+
+        blockers = derive_publish_blockers(card, now=datetime(2026, 3, 6, 12, 0, 0))
+
+        self.assertTrue(any("Produktfreigabe" in blocker for blocker in blockers))
 
     def test_dedupe_group_id_uses_condition_product_region_and_window(self) -> None:
         card = _sample_card()

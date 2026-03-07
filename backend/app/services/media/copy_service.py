@@ -126,7 +126,7 @@ def public_source_label(source: str | None) -> str:
     normalized = _normalize_token(raw)
     if normalized in PUBLIC_SOURCE_LABELS:
         return PUBLIC_SOURCE_LABELS[normalized]
-    return _cleanup_copy(_replace_internal_tokens(raw))
+    return _cleanup_copy(raw)
 
 
 def public_condition_label(condition: str | None) -> str:
@@ -341,8 +341,10 @@ def _replace_internal_tokens(text: str) -> str:
     token_pattern = r"\b[A-Za-z0-9]+(?:[_/-][A-Za-z0-9()]+)+\b"
     for token in sorted(set(re.findall(token_pattern, result)), key=len, reverse=True):
         replacement = public_event_label(token)
-        if replacement == _humanize_token(token):
-            replacement = public_source_label(token)
+        if replacement == _cleanup_copy(token):
+            source_replacement = public_source_label(token)
+            if source_replacement != _cleanup_copy(token):
+                replacement = source_replacement
         result = result.replace(token, replacement)
     return result
 

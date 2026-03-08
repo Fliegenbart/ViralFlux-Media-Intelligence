@@ -1,10 +1,19 @@
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 
-import { BacktestResponse, MediaEvidenceResponse } from '../../types/media';
+import {
+  BacktestResponse,
+  MediaEvidenceResponse,
+  TruthImportBatchDetailResponse,
+  TruthImportBatchSummary,
+  TruthImportIssue,
+  TruthImportResponse,
+} from '../../types/media';
 import { ValidationSection } from './BacktestVisuals';
 import {
+  formatDateShort,
   formatDateTime,
   formatPercent,
+  truthFreshnessLabel,
   truthLayerLabel,
 } from './cockpitUtils';
 
@@ -15,6 +24,39 @@ interface Props {
   marketValidationLoading: boolean;
   customerValidation: BacktestResponse | null;
   customerValidationLoading: boolean;
+  truthPreview: TruthImportResponse | null;
+  truthBatchDetail: TruthImportBatchDetailResponse | null;
+  truthActionLoading: boolean;
+  truthBatchDetailLoading: boolean;
+  onSubmitTruthCsv: (payload: {
+    file: File;
+    sourceLabel: string;
+    replaceExisting: boolean;
+    validateOnly: boolean;
+  }) => Promise<void>;
+  onLoadTruthBatchDetail: (batchId: string) => Promise<void>;
+}
+
+function issueFieldLabel(fieldName?: string | null): string {
+  const normalized = String(fieldName || '').trim().toLowerCase();
+  if (!normalized) return 'Allgemein';
+  if (normalized === 'week_start') return 'Woche';
+  if (normalized === 'product') return 'Produkt';
+  if (normalized === 'region_code') return 'Region';
+  if (normalized === 'media_spend_eur') return 'Media Spend';
+  if (normalized === 'conversion') return 'Outcome';
+  if (normalized === 'row') return 'Zeile';
+  if (normalized === 'header') return 'CSV-Header';
+  return normalized;
+}
+
+function batchStatusLabel(status?: string | null): string {
+  const normalized = String(status || '').trim().toLowerCase();
+  if (normalized === 'validated') return 'Validiert';
+  if (normalized === 'imported') return 'Importiert';
+  if (normalized === 'partial_success') return 'Teilweise importiert';
+  if (normalized === 'failed') return 'Fehlgeschlagen';
+  return status ? String(status) : 'Offen';
 }
 
 const EvidencePanel: React.FC<Props> = ({
@@ -24,13 +66,35 @@ const EvidencePanel: React.FC<Props> = ({
   marketValidationLoading,
   customerValidation,
   customerValidationLoading,
+  truthPreview,
+  truthBatchDetail,
+  truthActionLoading,
+  truthBatchDetailLoading,
+  onSubmitTruthCsv,
+  onLoadTruthBatchDetail,
 }) => {
+  const [file, setFile] = useState<File | null>(null);
+  const [sourceLabel, setSourceLabel] = useState('manual_csv');
+  const [replaceExisting, setReplaceExisting] = useState(false);
+
   const latestMarket = evidence?.proxy_validation;
   const latestCustomer = evidence?.truth_validation;
   const legacyCustomer = evidence?.truth_validation_legacy;
   const sourceItems = evidence?.source_status?.items || [];
   const recentRuns = evidence?.recent_runs || [];
   const truthCoverage = evidence?.truth_coverage;
+  const truthSnapshot = evidence?.truth_snapshot;
+  const truthStatus = truthSnapshot?.coverage || truthCoverage;
+  const selectedBatch = truthBatchDetail?.batch || truthPreview?.batch_summary || truthSnapshot?.latest_batch;
+  const displayIssues = useMemo<TruthImportIssue[]>(() => {
+    if (truthPreview?.issues?.length) return truthPreview.issues;
+    if (truthBatchDetail?.issues?.length) return truthBatchDetail.issues;
+    return [];
+  }, [truthBatchDetail?.issues, truthPreview?.issues]);
+  const sourceStatusLabels = [
+    ...(truthStatus?.required_fields_present || []),
+    ...(truthStatus?.conversion_fields_present || []),
+  ];
   const signalStack = evidence?.signal_stack;
   const modelLineage = evidence?.model_lineage;
   const driverGroups = signalStack?.summary?.driver_groups || {};
@@ -48,7 +112,8 @@ const EvidencePanel: React.FC<Props> = ({
         </div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
           <span className="step-chip">Proxy-validiert</span>
-          <span className="step-chip">Kunden-Check: {truthLayerLabel(truthCoverage || latestCustomer)}</span>
+          <span className="step-chip">Kunden-Check: {truthLayerLabel(truthStatus || latestCustomer)}</span>
+          <span className="step-chip">Truth-Freshness: {truthFreshnessLabel(truthStatus?.truth_freshness_state)}</span>
           {signalStack?.summary?.decision_mode_label && <span className="step-chip">{signalStack.summary.decision_mode_label}</span>}
           <span className="step-chip">Drift: {modelLineage?.drift_state || '-'}</span>
         </div>
@@ -83,31 +148,34 @@ const EvidencePanel: React.FC<Props> = ({
 
         <div className="card subsection-card" style={{ padding: 24 }}>
           <div>
-            <div className="section-kicker">Kunden-Check</div>
+            <div className="section-kicker">Truth Status</div>
             <h2 className="subsection-title" style={{ marginTop: 8 }}>
-              {truthLayerLabel(truthCoverage || latestCustomer)}
+              {truthLayerLabel(truthStatus || latestCustomer)}
             </h2>
           </div>
           <div className="metric-strip">
             <div className="metric-box">
               <span>Wochen</span>
-              <strong>{truthCoverage?.coverage_weeks ?? 0}</strong>
+              <strong>{truthStatus?.coverage_weeks ?? 0}</strong>
             </div>
             <div className="metric-box">
-              <span>Regionen</span>
-              <strong>{truthCoverage?.regions_covered ?? 0}</strong>
+              <span>Freshness</span>
+              <strong>{truthFreshnessLabel(truthStatus?.truth_freshness_state)}</strong>
             </div>
             <div className="metric-box">
-              <span>Produkte</span>
-              <strong>{truthCoverage?.products_covered ?? 0}</strong>
+              <span>Letzter Import</span>
+              <strong>{formatDateTime(truthStatus?.last_imported_at)}</strong>
             </div>
           </div>
           <p className="section-copy">
-            {truthCoverage?.coverage_weeks
-              ? 'Der Truth-Layer basiert auf importierten Outcome-Daten. Er bewertet Datenbreite und Abdeckung, nicht pauschal die Produktqualität.'
-              : 'Es gibt aktuell noch keinen aktiven Truth-Layer aus angebundenen Outcome-Daten. Bis dahin bleibt der Kundenbezug explorativ und blockiert harte Freigaben.'}
+            Der Truth-Layer basiert in V2.1 auf validiertem CSV-Import mit Media Spend plus echten Outcome-Metriken. Er bewertet Datenbreite, Aktualität und Anschlussfähigkeit an echte Kundenergebnisse.
           </p>
-          {!truthCoverage?.coverage_weeks && legacyCustomer && (
+          <div className="review-chip-row">
+            {(sourceStatusLabels.length ? sourceStatusLabels : ['Noch keine Pflichtfelder vollständig vorhanden']).map((item) => (
+              <span key={item} className="step-chip">{item}</span>
+            ))}
+          </div>
+          {!truthStatus?.coverage_weeks && legacyCustomer && (
             <div className="soft-panel review-panel-soft" style={{ marginTop: 14 }}>
               <div className="campaign-focus-label">Explorativer Legacy-Run</div>
               <div className="review-body-copy" style={{ marginTop: 8 }}>
@@ -126,7 +194,7 @@ const EvidencePanel: React.FC<Props> = ({
           loading={marketValidationLoading}
           emptyMessage="Noch keine detaillierten Markt-Validierungsdaten verfügbar."
         />
-        {truthCoverage?.coverage_weeks ? (
+        {truthStatus?.coverage_weeks ? (
           <ValidationSection
             title="Kunden-Validierung im Verlauf"
             subtitle="Proxy und Truth bleiben getrennt: Dieser Layer zeigt nur, wie gut das Modell an echte Kunden-Outcome-Daten anschließt."
@@ -164,6 +232,208 @@ const EvidencePanel: React.FC<Props> = ({
             )}
           </section>
         )}
+      </section>
+
+      <section className="truth-analyst-grid">
+        <div className="card subsection-card" style={{ padding: 24 }}>
+          <div className="section-heading">
+            <span className="section-kicker">CSV Upload</span>
+            <h2 className="subsection-title">Truth-Import vorbereiten</h2>
+            <p className="subsection-copy">
+              Erwartet werden `week_start`, `product`, `region_code`, `media_spend_eur` plus mindestens eine echte Outcome-Metrik wie `sales_units`, `order_count` oder `revenue_eur`.
+            </p>
+          </div>
+
+          <div className="truth-form-grid">
+            <label className="campaign-field campaign-field-wide">
+              <span>Datei</span>
+              <input
+                className="media-input"
+                type="file"
+                accept=".csv,text/csv"
+                onChange={(event) => setFile(event.target.files?.[0] || null)}
+              />
+            </label>
+
+            <label className="campaign-field">
+              <span>Source Label</span>
+              <input
+                className="media-input"
+                value={sourceLabel}
+                onChange={(event) => setSourceLabel(event.target.value)}
+                placeholder="manual_csv"
+              />
+            </label>
+
+            <label className="campaign-field truth-checkbox-field">
+              <span>Replace Existing</span>
+              <div className="truth-checkbox-row">
+                <input
+                  type="checkbox"
+                  checked={replaceExisting}
+                  onChange={(event) => setReplaceExisting(event.target.checked)}
+                />
+                <small>Bestehende Truth-Zeilen für dieselbe Woche/Produkt/Region überschreiben.</small>
+              </div>
+            </label>
+          </div>
+
+          <div className="campaign-setup-footer">
+            <div className="campaign-setup-note">
+              {file ? `Bereit: ${file.name}` : 'Zuerst eine Weekly-CSV auswählen, dann validieren und erst danach importieren.'}
+            </div>
+            <div className="review-action-row">
+              <a className="media-button secondary" href={truthSnapshot?.template_url || '/api/v1/media/outcomes/template'}>
+                Template laden
+              </a>
+              <button
+                className="media-button secondary"
+                type="button"
+                disabled={!file || truthActionLoading}
+                onClick={() => file && onSubmitTruthCsv({ file, sourceLabel, replaceExisting, validateOnly: true })}
+              >
+                {truthActionLoading ? 'Validierung läuft...' : 'Zuerst validieren'}
+              </button>
+              <button
+                className="media-button primary"
+                type="button"
+                disabled={!file || truthActionLoading}
+                onClick={() => file && onSubmitTruthCsv({ file, sourceLabel, replaceExisting, validateOnly: false })}
+              >
+                {truthActionLoading ? 'Import läuft...' : 'Importieren'}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="card subsection-card" style={{ padding: 24 }}>
+          <div className="section-heading">
+            <span className="section-kicker">Import Preview</span>
+            <h2 className="subsection-title">Dry-Run und Ergebnis</h2>
+            <p className="subsection-copy">
+              Erst prüfen, dann importieren. Vorschau und importierter Batch zeigen dieselben Kennzahlen, Issues und Coverage-Projektionen.
+            </p>
+          </div>
+
+          {truthPreview?.batch_summary ? (
+            <>
+              <div className="metric-strip">
+                <div className="metric-box">
+                  <span>Status</span>
+                  <strong>{batchStatusLabel(truthPreview.batch_summary.status)}</strong>
+                </div>
+                <div className="metric-box">
+                  <span>Gültige Zeilen</span>
+                  <strong>{truthPreview.batch_summary.rows_valid}</strong>
+                </div>
+                <div className="metric-box">
+                  <span>Issues</span>
+                  <strong>{truthPreview.issues.length}</strong>
+                </div>
+              </div>
+              <div className="soft-panel review-panel-soft">
+                <div className="evidence-row">
+                  <span>Coverage nach Import</span>
+                  <strong>{truthPreview.coverage_after_import?.coverage_weeks ?? 0} Wochen</strong>
+                </div>
+                <div className="evidence-row">
+                  <span>Truth Readiness</span>
+                  <strong>{truthLayerLabel(truthPreview.coverage_after_import)}</strong>
+                </div>
+                <div className="evidence-row">
+                  <span>Truth Freshness</span>
+                  <strong>{truthFreshnessLabel(truthPreview.coverage_after_import?.truth_freshness_state)}</strong>
+                </div>
+              </div>
+              <p className="section-copy">{truthPreview.message}</p>
+            </>
+          ) : (
+            <div className="review-muted-copy">
+              Noch keine Vorschau vorhanden. Lade eine CSV hoch und starte zuerst die Validierung.
+            </div>
+          )}
+        </div>
+      </section>
+
+      <section className="truth-analyst-grid">
+        <div className="card subsection-card" style={{ padding: 24 }}>
+          <div className="section-heading">
+            <span className="section-kicker">Import History</span>
+            <h2 className="subsection-title">Letzte Batches</h2>
+          </div>
+          <div className="truth-history-list">
+            {(truthSnapshot?.recent_batches || []).length > 0 ? truthSnapshot!.recent_batches.map((batch: TruthImportBatchSummary) => (
+              <button
+                key={batch.batch_id}
+                type="button"
+                className={`truth-history-item ${selectedBatch?.batch_id === batch.batch_id ? 'is-active' : ''}`}
+                onClick={() => onLoadTruthBatchDetail(batch.batch_id)}
+              >
+                <div>
+                  <strong>{batch.file_name || batch.source_label || batch.batch_id}</strong>
+                  <span>{batchStatusLabel(batch.status)} · {formatDateTime(batch.uploaded_at)}</span>
+                </div>
+                <small>{batch.rows_imported}/{batch.rows_total} importiert</small>
+              </button>
+            )) : (
+              <div className="review-muted-copy">Noch keine Truth-Import-Batches vorhanden.</div>
+            )}
+          </div>
+        </div>
+
+        <div className="card subsection-card" style={{ padding: 24 }}>
+          <div className="section-heading">
+            <span className="section-kicker">Batch Detail</span>
+            <h2 className="subsection-title">Ausgewählter Import</h2>
+          </div>
+          {truthBatchDetailLoading ? (
+            <div className="review-muted-copy">Batch-Detail lädt...</div>
+          ) : selectedBatch ? (
+            <div className="soft-panel review-panel-soft" style={{ display: 'grid', gap: 0 }}>
+              <div className="evidence-row">
+                <span>Batch</span>
+                <strong>{selectedBatch.batch_id}</strong>
+              </div>
+              <div className="evidence-row">
+                <span>Status</span>
+                <strong>{batchStatusLabel(selectedBatch.status)}</strong>
+              </div>
+              <div className="evidence-row">
+                <span>Zeitraum</span>
+                <strong>{formatDateShort(selectedBatch.week_min)} bis {formatDateShort(selectedBatch.week_max)}</strong>
+              </div>
+              <div className="evidence-row">
+                <span>Coverage nach Import</span>
+                <strong>{selectedBatch.coverage_after_import?.coverage_weeks ?? 0} Wochen</strong>
+              </div>
+            </div>
+          ) : (
+            <div className="review-muted-copy">Wähle einen Batch aus der Historie oder validiere eine neue Datei.</div>
+          )}
+        </div>
+      </section>
+
+      <section className="card subsection-card" style={{ padding: 24 }}>
+        <div className="section-heading">
+          <span className="section-kicker">Issue Table</span>
+          <h2 className="subsection-title">Import-Probleme und Mapping-Hinweise</h2>
+          <p className="subsection-copy">
+            Jeder ausgeschlossene Datensatz bleibt sichtbar. Es gibt keine stillen `continue`-Fälle mehr.
+          </p>
+        </div>
+        <div className="truth-issue-table">
+          {displayIssues.length > 0 ? displayIssues.map((issue, index) => (
+            <div key={`${issue.issue_code}-${issue.row_number || index}`} className="truth-issue-row">
+              <div>
+                <strong>Zeile {issue.row_number ?? '-'}</strong>
+                <span>{issueFieldLabel(issue.field_name)} · {issue.issue_code}</span>
+              </div>
+              <p>{issue.message}</p>
+            </div>
+          )) : (
+            <div className="review-muted-copy">Keine Issues sichtbar. Die aktuelle Vorschau oder der ausgewählte Batch ist sauber.</div>
+          )}
+        </div>
       </section>
 
       <section className="cockpit-grid">
@@ -256,11 +526,11 @@ const EvidencePanel: React.FC<Props> = ({
         </div>
       </section>
 
-      {(evidence?.known_limits || []).length > 0 && (
+      {(truthSnapshot?.known_limits || evidence?.known_limits || []).length > 0 && (
         <section className="card subsection-card" style={{ padding: 24 }}>
           <h2 className="subsection-title">Bekannte Grenzen</h2>
           <div style={{ display: 'grid', gap: 10, marginTop: 14 }}>
-            {evidence!.known_limits.map((item) => (
+            {[...(truthSnapshot?.known_limits || []), ...(evidence?.known_limits || [])].map((item) => (
               <div key={item} className="evidence-row">
                 <span>{item}</span>
                 <strong>Limit</strong>

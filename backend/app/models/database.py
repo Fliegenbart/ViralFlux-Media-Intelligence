@@ -585,6 +585,53 @@ class MediaOutcomeRecord(Base):
     )
 
 
+class MediaOutcomeImportBatch(Base):
+    """Persistierte Import-Batches für Truth-/Outcome Uploads."""
+    __tablename__ = "media_outcome_import_batches"
+
+    id = Column(Integer, primary_key=True, index=True)
+    batch_id = Column(String, nullable=False, unique=True, index=True)
+    brand = Column(String, nullable=False, index=True, default="gelo")
+    source_label = Column(String, nullable=False, default="manual", index=True)
+    file_name = Column(String)
+    status = Column(String, nullable=False, default="validated", index=True)
+    rows_total = Column(Integer, nullable=False, default=0)
+    rows_valid = Column(Integer, nullable=False, default=0)
+    rows_imported = Column(Integer, nullable=False, default=0)
+    rows_rejected = Column(Integer, nullable=False, default=0)
+    rows_duplicate = Column(Integer, nullable=False, default=0)
+    week_min = Column(DateTime, index=True)
+    week_max = Column(DateTime, index=True)
+    coverage_after_import = Column(JSON)
+    uploaded_at = Column(DateTime, default=datetime.utcnow, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, index=True)
+
+    __table_args__ = (
+        Index("idx_media_outcome_batch_brand_uploaded", "brand", "uploaded_at"),
+        Index("idx_media_outcome_batch_status_uploaded", "status", "uploaded_at"),
+    )
+
+
+class MediaOutcomeImportIssue(Base):
+    """Persistierte Zeilenfehler und Mapping-Issues eines Truth-Imports."""
+    __tablename__ = "media_outcome_import_issues"
+
+    id = Column(Integer, primary_key=True, index=True)
+    batch_id = Column(String, nullable=False, index=True)
+    row_number = Column(Integer, nullable=True, index=True)
+    field_name = Column(String, nullable=True, index=True)
+    issue_code = Column(String, nullable=False, index=True)
+    message = Column(String, nullable=False)
+    raw_row = Column(JSON)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+    __table_args__ = (
+        Index("idx_media_outcome_issue_batch_row", "batch_id", "row_number"),
+        Index("idx_media_outcome_issue_batch_code", "batch_id", "issue_code"),
+    )
+
+
 class LabConfiguration(Base):
     """Gelernte Gewichte (Global oder pro Mandant)."""
     __tablename__ = "lab_configurations"

@@ -18,6 +18,8 @@ import {
   PreparedSyncPayload,
   RecommendationCard,
   RecommendationDetail,
+  TruthImportBatchDetailResponse,
+  TruthImportResponse,
 } from '../types/media';
 
 interface Props {
@@ -73,6 +75,10 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
   const [campaignsLoading, setCampaignsLoading] = useState(false);
   const [evidenceView, setEvidenceView] = useState<MediaEvidenceResponse | null>(null);
   const [evidenceLoading, setEvidenceLoading] = useState(false);
+  const [truthPreview, setTruthPreview] = useState<TruthImportResponse | null>(null);
+  const [truthBatchDetail, setTruthBatchDetail] = useState<TruthImportBatchDetailResponse | null>(null);
+  const [truthActionLoading, setTruthActionLoading] = useState(false);
+  const [truthBatchDetailLoading, setTruthBatchDetailLoading] = useState(false);
 
   const [generationLoading, setGenerationLoading] = useState(false);
   const [selectedRegion, setSelectedRegion] = useState<string | null>(null);
@@ -153,6 +159,20 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
     }
   }, [brand, toast, virus]);
 
+  const loadTruthBatchDetail = useCallback(async (batchId: string) => {
+    if (!batchId) return;
+    setTruthBatchDetailLoading(true);
+    try {
+      const data = await fetchJson<TruthImportBatchDetailResponse>(`/api/v1/media/outcomes/import-batches/${encodeURIComponent(batchId)}`, undefined, 12000);
+      setTruthBatchDetail(data);
+    } catch (error) {
+      console.error('Truth batch detail failed', error);
+      toast('Import-Detail konnte nicht geladen werden.', 'error');
+    } finally {
+      setTruthBatchDetailLoading(false);
+    }
+  }, [toast]);
+
   const loadConnectors = useCallback(async () => {
     try {
       const data = await fetchJson<{ connectors?: ConnectorCatalogItem[] }>('/api/v1/media/connectors/catalog', undefined, 8000);
@@ -232,6 +252,20 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
     }
     loadBacktestRun(customerRunId, setCustomerValidation, setCustomerValidationLoading, 'Customer validation');
   }, [evidenceView?.truth_validation?.run_id, loadBacktestRun, view]);
+
+  useEffect(() => {
+    if (view !== 'evidence') {
+      setTruthPreview(null);
+      setTruthBatchDetail(null);
+      return;
+    }
+    const latestBatchId = evidenceView?.truth_snapshot?.latest_batch?.batch_id;
+    if (!latestBatchId) {
+      setTruthBatchDetail(null);
+      return;
+    }
+    loadTruthBatchDetail(latestBatchId);
+  }, [evidenceView?.truth_snapshot?.latest_batch?.batch_id, loadTruthBatchDetail, view]);
 
   useEffect(() => {
     if (!selectedRegion && regionsView?.map?.top_regions?.[0]?.code) {
@@ -400,6 +434,51 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
     }
   }, [connectorCatalog, toast]);
 
+  const submitTruthCsv = useCallback(async ({
+    file,
+    sourceLabel,
+    replaceExisting,
+    validateOnly,
+  }: {
+    file: File;
+    sourceLabel: string;
+    replaceExisting: boolean;
+    validateOnly: boolean;
+  }) => {
+    setTruthActionLoading(true);
+    try {
+      const csvPayload = await file.text();
+      const data = await fetchJson<TruthImportResponse>('/api/v1/media/outcomes/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          brand,
+          source_label: sourceLabel,
+          replace_existing: replaceExisting,
+          validate_only: validateOnly,
+          file_name: file.name,
+          csv_payload: csvPayload,
+        }),
+      }, 30000);
+
+      setTruthPreview(data);
+      if (data.batch_id) {
+        await loadTruthBatchDetail(data.batch_id);
+      }
+      await Promise.all([loadEvidence(), loadDecision()]);
+      toast(
+        validateOnly ? 'Truth-Upload validiert. Vorschau ist bereit.' : 'Truth-Daten importiert und Evidenz aktualisiert.',
+        'success',
+      );
+    } catch (error) {
+      console.error('Truth upload failed', error);
+      const message = error instanceof Error ? error.message : 'Unbekannter Fehler';
+      toast(`Truth-Upload fehlgeschlagen: ${message}`, 'error');
+    } finally {
+      setTruthActionLoading(false);
+    }
+  }, [brand, loadDecision, loadEvidence, loadTruthBatchDetail, toast]);
+
   return (
     <>
       {view === 'decision' && (
@@ -455,6 +534,12 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
           marketValidationLoading={marketValidationLoading}
           customerValidation={customerValidation}
           customerValidationLoading={customerValidationLoading}
+          truthPreview={truthPreview}
+          truthBatchDetail={truthBatchDetail}
+          truthActionLoading={truthActionLoading}
+          truthBatchDetailLoading={truthBatchDetailLoading}
+          onSubmitTruthCsv={submitTruthCsv}
+          onLoadTruthBatchDetail={loadTruthBatchDetail}
         />
       )}
 

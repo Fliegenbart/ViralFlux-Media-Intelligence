@@ -411,6 +411,10 @@ export interface WeeklyDecision {
   freshness_state?: string;
   proxy_state?: string;
   truth_state?: string;
+  truth_freshness_state?: string;
+  truth_last_imported_at?: string | null;
+  truth_latest_batch_id?: string | null;
+  truth_risk_flag?: string | null;
   signal_stack_summary?: {
     peix_epi_score?: number;
     national_band?: string;
@@ -434,8 +438,67 @@ export interface TruthCoverage {
   regions_covered: number;
   products_covered: number;
   outcome_fields_present: string[];
+  required_fields_present?: string[];
+  conversion_fields_present?: string[];
   trust_readiness: string;
+  truth_freshness_state?: 'fresh' | 'stale' | 'missing' | 'unknown' | string;
   source_labels?: string[];
+  last_imported_at?: string | null;
+  latest_batch_id?: string | null;
+  latest_source_label?: string | null;
+}
+
+export interface TruthImportIssue {
+  row_number?: number | null;
+  field_name?: string | null;
+  issue_code: string;
+  message: string;
+  raw_row?: Record<string, unknown> | null;
+  created_at?: string | null;
+}
+
+export interface TruthImportBatchSummary {
+  batch_id: string;
+  brand: string;
+  source_label: string;
+  file_name?: string | null;
+  status: 'validated' | 'imported' | 'partial_success' | 'failed' | string;
+  rows_total: number;
+  rows_valid: number;
+  rows_imported: number;
+  rows_rejected: number;
+  rows_duplicate: number;
+  week_min?: string | null;
+  week_max?: string | null;
+  coverage_after_import?: TruthCoverage;
+  uploaded_at?: string | null;
+}
+
+export interface TruthImportResponse {
+  imported: number;
+  batch_id?: string | null;
+  batch_summary?: TruthImportBatchSummary;
+  issues: TruthImportIssue[];
+  preview_only: boolean;
+  coverage_after_import?: TruthCoverage;
+  coverage?: TruthCoverage;
+  message?: string;
+}
+
+export interface TruthImportBatchDetailResponse {
+  batch: TruthImportBatchSummary;
+  issues: TruthImportIssue[];
+}
+
+export interface TruthSnapshot {
+  brand: string;
+  coverage: TruthCoverage;
+  recent_batches: TruthImportBatchSummary[];
+  latest_batch?: TruthImportBatchSummary | null;
+  latest_batch_issue_count?: number;
+  template_url?: string;
+  known_limits?: string[];
+  analyst_note?: string;
 }
 
 export interface SignalStackItem {
@@ -615,6 +678,7 @@ export interface MediaEvidenceResponse {
   signal_stack: SignalStackResponse;
   model_lineage: ModelLineage;
   truth_coverage: TruthCoverage;
+  truth_snapshot?: TruthSnapshot;
   known_limits: string[];
 }
 

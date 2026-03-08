@@ -1,10 +1,11 @@
 import unittest
+from datetime import datetime, timedelta
 from unittest.mock import patch
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from app.models.database import Base
+from app.models.database import Base, BrandProduct, MediaOutcomeImportBatch, MediaOutcomeRecord, WastewaterAggregated
 from app.services.media.v2_service import MediaV2Service
 
 
@@ -15,26 +16,90 @@ class MediaV2ServiceTruthCoverageTests(unittest.TestCase):
         Base.metadata.create_all(bind=self.engine)
         self.db = TestingSessionLocal()
         self.service = MediaV2Service(self.db)
+        self._seed_brand_products()
 
     def tearDown(self) -> None:
         self.db.close()
         Base.metadata.drop_all(bind=self.engine)
         self.engine.dispose()
 
-    def test_import_outcomes_from_records_updates_truth_coverage(self) -> None:
+    def _seed_brand_products(self) -> None:
+        now = datetime.utcnow()
+        self.db.add_all([
+            BrandProduct(
+                brand="gelo",
+                product_name="GeloProsed",
+                source_url="manual://seed",
+                source_hash="seed-geloprosed",
+                active=True,
+                created_at=now,
+                updated_at=now,
+            ),
+            BrandProduct(
+                brand="gelo",
+                product_name="GeloRevoice",
+                source_url="manual://seed",
+                source_hash="seed-gelorevoice",
+                active=True,
+                created_at=now,
+                updated_at=now,
+            ),
+        ])
+        self.db.commit()
+
+    def _seed_truth_reference(self, latest_week: datetime) -> None:
+        self.db.add(
+            WastewaterAggregated(
+                datum=latest_week,
+                available_time=latest_week,
+                virus_typ="Influenza A",
+                n_standorte=12,
+                anteil_bev=0.6,
+                viruslast=1.2,
+                viruslast_normalisiert=58.0,
+            )
+        )
+        self.db.commit()
+
+    def test_validate_only_csv_returns_preview_without_persisting_outcomes(self) -> None:
+        self._seed_truth_reference(datetime(2026, 2, 16))
+        csv_payload = (
+            "week_start,product,region_code,media_spend_eur,sales_units\n"
+            "2026-02-02,GeloProsed,SH,12000,320\n"
+            "2026-02-09,GeloRevoice,Hamburg,9000,110\n"
+        )
+
+        result = self.service.import_outcomes(
+            source_label="csv_upload",
+            brand="gelo",
+            csv_payload=csv_payload,
+            validate_only=True,
+            file_name="truth.csv",
+        )
+
+        self.assertTrue(result["preview_only"])
+        self.assertEqual(result["imported"], 0)
+        self.assertEqual(result["batch_summary"]["status"], "validated")
+        self.assertEqual(result["batch_summary"]["rows_valid"], 2)
+        self.assertEqual(result["coverage_after_import"]["coverage_weeks"], 2)
+        self.assertEqual(self.db.query(MediaOutcomeRecord).count(), 0)
+        self.assertEqual(self.db.query(MediaOutcomeImportBatch).count(), 1)
+
+    def test_import_outcomes_from_records_updates_truth_coverage_and_history(self) -> None:
+        self._seed_truth_reference(datetime(2026, 2, 16))
         result = self.service.import_outcomes(
             source_label="manual_csv",
             brand="gelo",
             records=[
                 {
-                    "week_start": "2026-01-05T00:00:00",
+                    "week_start": "2026-02-02T00:00:00",
                     "product": "GeloProsed",
                     "region_code": "SH",
                     "media_spend_eur": 10000,
                     "sales_units": 120,
                 },
                 {
-                    "week_start": "2026-01-12T00:00:00",
+                    "week_start": "2026-02-09T00:00:00",
                     "product": "GeloRevoice",
                     "region_code": "HH",
                     "media_spend_eur": 9000,
@@ -44,32 +109,125 @@ class MediaV2ServiceTruthCoverageTests(unittest.TestCase):
         )
 
         self.assertEqual(result["imported"], 2)
-        self.assertEqual(result["coverage"]["coverage_weeks"], 2)
-        self.assertEqual(result["coverage"]["regions_covered"], 2)
-        self.assertEqual(result["coverage"]["products_covered"], 2)
-        self.assertIn("Media Spend", result["coverage"]["outcome_fields_present"])
-        self.assertEqual(result["coverage"]["trust_readiness"], "erste_signale")
+        self.assertEqual(result["coverage_after_import"]["coverage_weeks"], 2)
+        self.assertEqual(result["coverage_after_import"]["regions_covered"], 2)
+        self.assertEqual(result["coverage_after_import"]["products_covered"], 2)
+        self.assertIn("Media Spend", result["coverage_after_import"]["required_fields_present"])
+        self.assertIn("Sales", result["coverage_after_import"]["conversion_fields_present"])
+        self.assertEqual(result["coverage_after_import"]["trust_readiness"], "erste_signale")
+        self.assertEqual(result["coverage_after_import"]["truth_freshness_state"], "fresh")
+        self.assertEqual(result["coverage_after_import"]["latest_batch_id"], result["batch_id"])
 
-    def test_import_outcomes_supports_inline_csv_payload(self) -> None:
-        csv_payload = (
-            "week_start,product,region_code,media_spend_eur,qualified_visits\n"
-            "2026-02-02T00:00:00,GeloProsed,SH,12000,320\n"
-            "2026-02-09T00:00:00,GeloProsed,HH,14000,410\n"
-        )
+        batches = self.service.list_outcome_import_batches(brand="gelo")
+        self.assertEqual(len(batches), 1)
+        self.assertEqual(batches[0]["rows_imported"], 2)
+        self.assertEqual(batches[0]["status"], "imported")
 
+    def test_duplicate_rows_and_unknown_products_are_reported_as_issues(self) -> None:
         result = self.service.import_outcomes(
-            source_label="csv_upload",
+            source_label="manual_csv",
             brand="gelo",
-            csv_payload=csv_payload,
+            records=[
+                {
+                    "week_start": "2026-02-02T00:00:00",
+                    "product": "GeloProsed",
+                    "region_code": "SH",
+                    "media_spend_eur": 10000,
+                    "sales_units": 120,
+                },
+                {
+                    "week_start": "2026-02-02T00:00:00",
+                    "product": "GeloProsed",
+                    "region_code": "SH",
+                    "media_spend_eur": 9000,
+                    "sales_units": 99,
+                },
+                {
+                    "week_start": "2026-02-09T00:00:00",
+                    "product": "Unbekanntes Produkt",
+                    "region_code": "HH",
+                    "media_spend_eur": 5000,
+                    "sales_units": 20,
+                },
+            ],
         )
 
-        self.assertEqual(result["imported"], 2)
-        coverage = self.service.get_truth_coverage(brand="gelo")
-        self.assertEqual(coverage["coverage_weeks"], 2)
-        self.assertIn("Qualifizierte Besuche", coverage["outcome_fields_present"])
-        self.assertIn("csv_upload", coverage["source_labels"])
+        issue_codes = {issue["issue_code"] for issue in result["issues"]}
+        self.assertEqual(result["imported"], 1)
+        self.assertIn("duplicate_in_upload", issue_codes)
+        self.assertIn("unknown_product", issue_codes)
+        self.assertEqual(result["batch_summary"]["rows_duplicate"], 1)
+        self.assertEqual(result["batch_summary"]["status"], "partial_success")
 
-    def test_decision_payload_suppresses_hard_shift_in_watch(self) -> None:
+    def test_import_respects_replace_existing(self) -> None:
+        initial = self.service.import_outcomes(
+            source_label="manual_csv",
+            brand="gelo",
+            records=[{
+                "week_start": "2026-02-02T00:00:00",
+                "product": "GeloProsed",
+                "region_code": "SH",
+                "media_spend_eur": 10000,
+                "sales_units": 120,
+            }],
+        )
+        self.assertEqual(initial["imported"], 1)
+
+        blocked = self.service.import_outcomes(
+            source_label="manual_csv",
+            brand="gelo",
+            records=[{
+                "week_start": "2026-02-02T00:00:00",
+                "product": "GeloProsed",
+                "region_code": "Schleswig-Holstein",
+                "media_spend_eur": 15000,
+                "sales_units": 180,
+            }],
+            replace_existing=False,
+        )
+        self.assertEqual(blocked["imported"], 0)
+        self.assertTrue(any(issue["issue_code"] == "duplicate_existing" for issue in blocked["issues"]))
+
+        replaced = self.service.import_outcomes(
+            source_label="manual_csv",
+            brand="gelo",
+            records=[{
+                "week_start": "2026-02-02T00:00:00",
+                "product": "GeloProsed",
+                "region_code": "Schleswig-Holstein",
+                "media_spend_eur": 15000,
+                "sales_units": 180,
+            }],
+            replace_existing=True,
+        )
+        self.assertEqual(replaced["imported"], 1)
+        stored = self.db.query(MediaOutcomeRecord).one()
+        self.assertEqual(stored.region_code, "SH")
+        self.assertEqual(stored.media_spend_eur, 15000)
+
+    def test_truth_gate_marks_stale_truth_as_risk(self) -> None:
+        self._seed_truth_reference(datetime(2026, 3, 3))
+        start = datetime(2025, 7, 21)
+        records = []
+        for offset in range(30):
+            records.append({
+                "week_start": (start + timedelta(days=7 * offset)).isoformat(),
+                "product": "GeloProsed",
+                "region_code": "SH",
+                "media_spend_eur": 10000 + offset,
+                "sales_units": 120 + offset,
+            })
+        self.service.import_outcomes(
+            source_label="manual_csv",
+            brand="gelo",
+            records=records,
+        )
+
+        stale_coverage = self.service.get_truth_coverage(brand="gelo", virus_typ="Influenza A")
+        self.assertEqual(stale_coverage["trust_readiness"], "im_aufbau")
+        self.assertEqual(stale_coverage["truth_freshness_state"], "stale")
+
+    def test_decision_payload_surfaces_truth_risk_when_truth_is_not_ready(self) -> None:
         cockpit_payload = {
             "map": {
                 "date": "2026-02-25T00:00:00",
@@ -113,7 +271,15 @@ class MediaV2ServiceTruthCoverageTests(unittest.TestCase):
 
         with (
             patch.object(self.service.cockpit_service, "get_cockpit_payload", return_value=cockpit_payload),
-            patch.object(self.service, "get_truth_coverage", return_value={"coverage_weeks": 0, "trust_readiness": "noch_nicht_angeschlossen"}),
+            patch.object(self.service, "get_truth_coverage", return_value={
+                "coverage_weeks": 10,
+                "trust_readiness": "erste_signale",
+                "truth_freshness_state": "fresh",
+                "required_fields_present": ["Media Spend"],
+                "conversion_fields_present": ["Sales"],
+                "last_imported_at": "2026-03-01T00:00:00",
+                "latest_batch_id": "batch-1",
+            }),
             patch.object(self.service, "get_model_lineage", return_value={"drift_state": "warning"}),
             patch.object(self.service, "get_signal_stack", return_value={"summary": {"top_drivers": [], "math_stack": {}}}),
             patch.object(self.service, "_build_campaign_queue", return_value={
@@ -127,8 +293,8 @@ class MediaV2ServiceTruthCoverageTests(unittest.TestCase):
 
         weekly_decision = payload["weekly_decision"]
         self.assertEqual(weekly_decision["decision_state"], "WATCH")
+        self.assertIn("Truth-Layer", weekly_decision["truth_risk_flag"])
         self.assertIsNone(weekly_decision["budget_shift"])
-        self.assertIn("vorbereiten", weekly_decision["recommended_action"].lower())
 
     def test_campaigns_payload_limits_visible_board_to_eight_cards(self) -> None:
         cards = []
@@ -172,10 +338,21 @@ class MediaV2ServiceTruthCoverageTests(unittest.TestCase):
             "data_freshness": {},
             "source_status": {"items": []},
         }
+        truth_snapshot = {
+            "coverage": {
+                "coverage_weeks": 0,
+                "trust_readiness": "noch_nicht_angeschlossen",
+                "truth_freshness_state": "missing",
+                "required_fields_present": [],
+                "conversion_fields_present": [],
+            },
+            "recent_batches": [],
+            "known_limits": [],
+        }
 
         with (
             patch.object(self.service.cockpit_service, "get_cockpit_payload", return_value=cockpit_payload),
-            patch.object(self.service, "get_truth_coverage", return_value={"coverage_weeks": 0, "trust_readiness": "noch_nicht_angeschlossen"}),
+            patch.object(self.service, "get_truth_evidence", return_value=truth_snapshot),
             patch.object(self.service, "get_signal_stack", return_value={"summary": {}, "items": []}),
             patch.object(self.service, "get_model_lineage", return_value={"drift_state": "warning"}),
         ):
@@ -183,7 +360,7 @@ class MediaV2ServiceTruthCoverageTests(unittest.TestCase):
 
         self.assertIsNone(payload["truth_validation"])
         self.assertEqual(payload["truth_validation_legacy"]["run_id"], "customer-legacy")
-        self.assertTrue(any("Legacy-Run" in item for item in payload["known_limits"]))
+        self.assertEqual(payload["truth_snapshot"]["coverage"]["trust_readiness"], "noch_nicht_angeschlossen")
 
     def test_regions_payload_exposes_severity_momentum_and_actionability(self) -> None:
         cockpit_payload = {

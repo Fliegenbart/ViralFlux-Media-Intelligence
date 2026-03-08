@@ -5,7 +5,7 @@ import io
 import json
 import uuid
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -14,9 +14,12 @@ from sqlalchemy.orm import Session
 
 from app.models.database import (
     BacktestRun,
+    BrandProduct,
     ForecastAccuracyLog,
     GoogleTrendsData,
     MarketingOpportunity,
+    MediaOutcomeImportBatch,
+    MediaOutcomeImportIssue,
     MediaOutcomeRecord,
     MLForecast,
     SurvstatWeeklyData,
@@ -25,10 +28,12 @@ from app.models.database import (
 from app.services.marketing_engine.opportunity_engine import MarketingOpportunityEngine
 from app.services.media.cockpit_service import MediaCockpitService
 from app.services.media.peix_score_service import PeixEpiScoreService
+from app.services.media.product_catalog_service import ProductCatalogService
 from app.services.media.recommendation_contracts import (
     BUNDESLAND_NAMES,
     dedupe_group_id,
     enrich_card_v2,
+    normalize_region_code,
     to_card_response,
 )
 from app.services.ml.forecast_service import _ML_MODELS_DIR, _virus_slug
@@ -89,6 +94,15 @@ METRIC_FIELD_LABELS = {
     "order_count": "Orders",
     "revenue_eur": "Revenue",
 }
+REQUIRED_OUTCOME_FIELD_NAMES = ("media_spend_eur",)
+CONVERSION_OUTCOME_FIELD_NAMES = ("sales_units", "order_count", "revenue_eur")
+OPTIONAL_OUTCOME_FIELD_NAMES = ("qualified_visits", "search_lift_index", "impressions", "clicks")
+OUTCOME_TEMPLATE_HEADERS = (
+    "week_start,product,region_code,media_spend_eur,sales_units,order_count,revenue_eur,"
+    "qualified_visits,search_lift_index,impressions,clicks\n"
+    "2026-02-02,GeloProsed,SH,12000,140,,,320,18.5,240000,5800\n"
+    "2026-02-09,GeloRevoice,Hamburg,9000,,44,18500,210,12.0,120000,2900\n"
+)
 QUEUE_LIFECYCLE_PRIORITY = {
     "SYNC_READY": 5,
     "APPROVE": 4,
@@ -117,7 +131,7 @@ class MediaV2Service:
         brand: str = "gelo",
     ) -> dict[str, Any]:
         cockpit = self.cockpit_service.get_cockpit_payload(virus_typ=virus_typ, target_source=target_source)
-        truth_coverage = self.get_truth_coverage(brand=brand)
+        truth_coverage = self.get_truth_coverage(brand=brand, virus_typ=virus_typ)
         model_lineage = self.get_model_lineage(virus_typ=virus_typ)
         queue = self._build_campaign_queue(self._campaign_cards(brand=brand, limit=80), visible_limit=8)
         campaign_cards = queue["visible_cards"]
@@ -128,7 +142,8 @@ class MediaV2Service:
         signal_summary = self.get_signal_stack(virus_typ=virus_typ).get("summary") or {}
 
         freshness_state = self._decision_freshness_state(cockpit.get("source_status", {}))
-        has_truth = truth_coverage.get("coverage_weeks", 0) >= 26
+        truth_gate = self._truth_gate(truth_coverage)
+        has_truth = truth_gate["passed"]
         market_passed = bool((market.get("quality_gate") or {}).get("overall_passed"))
         publishable_cards = [card for card in primary_cards if card.get("is_publishable")]
         has_publishable = len(publishable_cards) > 0
@@ -147,7 +162,7 @@ class MediaV2Service:
         if not market_passed:
             risk_flags.append("Proxy-Validierung ist aktuell nicht im GO-Korridor.")
         if not has_truth:
-            risk_flags.append("Truth-Layer ist noch nicht breit genug für harte Freigabe.")
+            risk_flags.append(str(truth_gate["message"]))
         if drift_state == "warning":
             risk_flags.append("Modell-Drift ist im Monitoring auffällig.")
         if not has_publishable:
@@ -200,6 +215,10 @@ class MediaV2Service:
                 "freshness_state": freshness_state,
                 "proxy_state": "passed" if market_passed else "watch",
                 "truth_state": truth_coverage.get("trust_readiness"),
+                "truth_freshness_state": truth_coverage.get("truth_freshness_state"),
+                "truth_last_imported_at": truth_coverage.get("last_imported_at"),
+                "truth_latest_batch_id": truth_coverage.get("latest_batch_id"),
+                "truth_risk_flag": None if has_truth else truth_gate["message"],
                 "decision_mode": signal_summary.get("decision_mode"),
                 "decision_mode_label": signal_summary.get("decision_mode_label"),
                 "decision_mode_reason": signal_summary.get("decision_mode_reason"),
@@ -338,7 +357,8 @@ class MediaV2Service:
     ) -> dict[str, Any]:
         cockpit = self.cockpit_service.get_cockpit_payload(virus_typ=virus_typ, target_source=target_source)
         backtest_summary = cockpit.get("backtest_summary") or {}
-        truth_coverage = self.get_truth_coverage(brand=brand)
+        truth_snapshot = self.get_truth_evidence(brand=brand, virus_typ=virus_typ)
+        truth_coverage = truth_snapshot["coverage"]
         latest_customer = backtest_summary.get("latest_customer")
         truth_validation = latest_customer if truth_coverage.get("coverage_weeks", 0) > 0 else None
         truth_validation_legacy = latest_customer if truth_validation is None and latest_customer else None
@@ -355,6 +375,7 @@ class MediaV2Service:
             "signal_stack": self.get_signal_stack(virus_typ=virus_typ),
             "model_lineage": self.get_model_lineage(virus_typ=virus_typ),
             "truth_coverage": truth_coverage,
+            "truth_snapshot": truth_snapshot,
             "known_limits": self._known_limits(
                 cockpit,
                 virus_typ,
@@ -476,13 +497,20 @@ class MediaV2Service:
             "latest_forecast_created_at": latest_forecast.created_at.isoformat() if latest_forecast and latest_forecast.created_at else None,
         }
 
-    def get_truth_coverage(self, *, brand: str = "gelo") -> dict[str, Any]:
+    def get_truth_coverage(
+        self,
+        *,
+        brand: str = "gelo",
+        virus_typ: str | None = None,
+    ) -> dict[str, Any]:
         rows = (
             self.db.query(MediaOutcomeRecord)
             .filter(func.lower(MediaOutcomeRecord.brand) == str(brand).lower())
             .order_by(MediaOutcomeRecord.week_start.asc())
             .all()
         )
+        latest_import_batch = self._latest_import_batch(brand=brand)
+        reference_week = self._latest_epi_reference_week(virus_typ=virus_typ)
         if not rows:
             return {
                 "coverage_weeks": 0,
@@ -490,16 +518,33 @@ class MediaV2Service:
                 "regions_covered": 0,
                 "products_covered": 0,
                 "outcome_fields_present": [],
+                "required_fields_present": [],
+                "conversion_fields_present": [],
                 "trust_readiness": "noch_nicht_angeschlossen",
+                "truth_freshness_state": "missing",
                 "source_labels": [],
+                "last_imported_at": latest_import_batch.uploaded_at.isoformat() if latest_import_batch and latest_import_batch.uploaded_at else None,
+                "latest_batch_id": latest_import_batch.batch_id if latest_import_batch else None,
+                "latest_source_label": latest_import_batch.source_label if latest_import_batch else None,
             }
 
-        weeks = sorted({row.week_start.date().isoformat() for row in rows if row.week_start})
+        week_values = sorted({row.week_start for row in rows if row.week_start})
+        weeks = [value.date().isoformat() for value in week_values]
         regions = {row.region_code for row in rows if row.region_code}
         products = {row.product for row in rows if row.product}
         fields_present = [
             label
             for field_name, label in METRIC_FIELD_LABELS.items()
+            if any(getattr(row, field_name) is not None for row in rows)
+        ]
+        required_fields_present = [
+            METRIC_FIELD_LABELS[field_name]
+            for field_name in REQUIRED_OUTCOME_FIELD_NAMES
+            if any(getattr(row, field_name) is not None for row in rows)
+        ]
+        conversion_fields_present = [
+            METRIC_FIELD_LABELS[field_name]
+            for field_name in CONVERSION_OUTCOME_FIELD_NAMES
             if any(getattr(row, field_name) is not None for row in rows)
         ]
         coverage_weeks = len(weeks)
@@ -511,6 +556,11 @@ class MediaV2Service:
             readiness = "erste_signale"
         else:
             readiness = "noch_nicht_angeschlossen"
+        latest_week_dt = week_values[-1] if week_values else None
+        truth_freshness_state = self._truth_freshness_state(
+            latest_truth_week=latest_week_dt,
+            reference_week=reference_week,
+        )
 
         return {
             "coverage_weeks": coverage_weeks,
@@ -518,8 +568,44 @@ class MediaV2Service:
             "regions_covered": len(regions),
             "products_covered": len(products),
             "outcome_fields_present": fields_present,
+            "required_fields_present": required_fields_present,
+            "conversion_fields_present": conversion_fields_present,
             "trust_readiness": readiness,
+            "truth_freshness_state": truth_freshness_state,
             "source_labels": sorted({row.source_label for row in rows if row.source_label}),
+            "last_imported_at": latest_import_batch.uploaded_at.isoformat() if latest_import_batch and latest_import_batch.uploaded_at else None,
+            "latest_batch_id": latest_import_batch.batch_id if latest_import_batch else None,
+            "latest_source_label": latest_import_batch.source_label if latest_import_batch else None,
+        }
+
+    def get_truth_evidence(
+        self,
+        *,
+        brand: str = "gelo",
+        virus_typ: str | None = None,
+    ) -> dict[str, Any]:
+        coverage = self.get_truth_coverage(brand=brand, virus_typ=virus_typ)
+        recent_batches = self.list_outcome_import_batches(brand=brand, limit=8)
+        latest_batch = recent_batches[0] if recent_batches else None
+        issue_count = int(latest_batch.get("rows_rejected") or 0) if latest_batch else 0
+        limits: list[str] = []
+        if coverage.get("coverage_weeks", 0) < 26:
+            limits.append("Weniger als 26 Wochen Truth-Daten reichen noch nicht für harte Freigaben.")
+        if not coverage.get("required_fields_present"):
+            limits.append("Media Spend fehlt im Truth-Layer oder ist noch nicht breit genug vorhanden.")
+        if not coverage.get("conversion_fields_present"):
+            limits.append("Mindestens eine echte Outcome-Metrik wie Sales, Orders oder Revenue fehlt noch.")
+        if coverage.get("truth_freshness_state") == "stale":
+            limits.append("Der letzte Truth-Import liegt zu weit hinter der aktuellen epidemiologischen Woche.")
+        return {
+            "brand": str(brand or "gelo").strip().lower(),
+            "coverage": coverage,
+            "recent_batches": recent_batches,
+            "latest_batch": latest_batch,
+            "latest_batch_issue_count": issue_count,
+            "template_url": "/api/v1/media/outcomes/template",
+            "known_limits": limits,
+            "analyst_note": "Der Truth-Layer ist intern und basiert in V2.1 auf validiertem CSV-Import, nicht auf einer direkten Kundensystem-API.",
         }
 
     def import_outcomes(
@@ -530,70 +616,207 @@ class MediaV2Service:
         csv_payload: str | None = None,
         brand: str = "gelo",
         replace_existing: bool = False,
+        validate_only: bool = False,
+        file_name: str | None = None,
     ) -> dict[str, Any]:
-        parsed = list(records or [])
-        if csv_payload:
-            parsed.extend(self._parse_csv_payload(csv_payload, brand=brand, source_label=source_label))
-        if not parsed:
-            return {"imported": 0, "batch_id": None, "message": "Keine Outcome-Daten übergeben."}
-
-        batch_id = uuid.uuid4().hex[:12]
-        imported = 0
         brand_value = str(brand or "gelo").strip().lower()
+        source_value = str(source_label or "manual").strip() or "manual"
+        batch_id = uuid.uuid4().hex[:12]
 
-        for row in parsed:
-            week_start = self._coerce_week_start(row.get("week_start"))
-            if week_start is None:
-                continue
-            product = str(row.get("product") or "").strip()
-            region_code = str(row.get("region_code") or "").strip().upper()
-            if not product or not region_code:
-                continue
+        parsed_rows, header_issues = self._collect_outcome_rows(
+            records=records or [],
+            csv_payload=csv_payload,
+            brand=brand_value,
+            source_label=source_value,
+        )
+        batch = MediaOutcomeImportBatch(
+            batch_id=batch_id,
+            brand=brand_value,
+            source_label=source_value,
+            file_name=(file_name or "").strip() or None,
+            status="validated" if validate_only else "failed",
+            rows_total=len(parsed_rows),
+            uploaded_at=datetime.utcnow(),
+        )
+        self.db.add(batch)
+        self.db.flush()
 
-            existing = (
-                self.db.query(MediaOutcomeRecord)
-                .filter(
-                    MediaOutcomeRecord.week_start == week_start,
-                    func.lower(MediaOutcomeRecord.brand) == brand_value,
-                    MediaOutcomeRecord.product == product,
-                    MediaOutcomeRecord.region_code == region_code,
-                    MediaOutcomeRecord.source_label == source_label,
-                )
-                .first()
+        issues: list[dict[str, Any]] = list(header_issues)
+        normalized_rows: list[dict[str, Any]] = []
+        duplicate_count = 0
+        seen_keys: set[tuple[str, str, datetime, str, str]] = set()
+
+        for row in parsed_rows:
+            normalized = self._normalize_outcome_row(
+                row=row,
+                brand=brand_value,
+                source_label=source_value,
             )
-            target = existing
-            if target is None:
-                target = MediaOutcomeRecord(
-                    week_start=week_start,
-                    brand=brand_value,
-                    product=product,
-                    region_code=region_code,
-                    source_label=source_label,
-                )
-                self.db.add(target)
-
-            if existing and not replace_existing:
+            if normalized.get("issues"):
+                issues.extend(normalized["issues"])
                 continue
 
-            target.media_spend_eur = self._float_or_none(row.get("media_spend_eur"))
-            target.impressions = self._float_or_none(row.get("impressions"))
-            target.clicks = self._float_or_none(row.get("clicks"))
-            target.qualified_visits = self._float_or_none(row.get("qualified_visits"))
-            target.search_lift_index = self._float_or_none(row.get("search_lift_index"))
-            target.sales_units = self._float_or_none(row.get("sales_units"))
-            target.order_count = self._float_or_none(row.get("order_count"))
-            target.revenue_eur = self._float_or_none(row.get("revenue_eur"))
-            target.import_batch_id = batch_id
-            target.extra_data = row.get("extra_data") or {}
-            target.updated_at = datetime.utcnow()
-            imported += 1
+            dedupe_key = (
+                brand_value,
+                source_value,
+                normalized["week_start"],
+                normalized["product"],
+                normalized["region_code"],
+            )
+            if dedupe_key in seen_keys:
+                duplicate_count += 1
+                issues.append(self._issue_dict(
+                    batch_id=batch_id,
+                    row_number=row.get("row_number"),
+                    field_name="row",
+                    issue_code="duplicate_in_upload",
+                    message="Diese Kombination aus Woche, Produkt, Region und Source kommt in der Datei mehrfach vor.",
+                    raw_row=row.get("raw_row"),
+                ))
+                continue
+            seen_keys.add(dedupe_key)
+
+            existing = self._find_existing_outcome(
+                brand=brand_value,
+                source_label=source_value,
+                week_start=normalized["week_start"],
+                product=normalized["product"],
+                region_code=normalized["region_code"],
+            )
+            if existing and not replace_existing:
+                duplicate_count += 1
+                issues.append(self._issue_dict(
+                    batch_id=batch_id,
+                    row_number=row.get("row_number"),
+                    field_name="row",
+                    issue_code="duplicate_existing",
+                    message="Für diese Woche, dieses Produkt und diese Region existiert bereits ein Truth-Datensatz.",
+                    raw_row=row.get("raw_row"),
+                ))
+                continue
+
+            normalized["existing_record"] = existing
+            normalized_rows.append(normalized)
+
+        imported = 0
+        if not validate_only:
+            for row in normalized_rows:
+                target = row["existing_record"]
+                if target is None:
+                    target = MediaOutcomeRecord(
+                        week_start=row["week_start"],
+                        brand=brand_value,
+                        product=row["product"],
+                        region_code=row["region_code"],
+                        source_label=source_value,
+                    )
+                    self.db.add(target)
+
+                target.media_spend_eur = row["metrics"].get("media_spend_eur")
+                target.impressions = row["metrics"].get("impressions")
+                target.clicks = row["metrics"].get("clicks")
+                target.qualified_visits = row["metrics"].get("qualified_visits")
+                target.search_lift_index = row["metrics"].get("search_lift_index")
+                target.sales_units = row["metrics"].get("sales_units")
+                target.order_count = row["metrics"].get("order_count")
+                target.revenue_eur = row["metrics"].get("revenue_eur")
+                target.import_batch_id = batch_id
+                target.extra_data = row.get("extra_data") or {}
+                target.updated_at = datetime.utcnow()
+                imported += 1
+
+        coverage_after_import = self._project_truth_coverage(
+            brand=brand_value,
+            normalized_rows=normalized_rows,
+            virus_typ=None,
+            replace_existing=replace_existing,
+            validate_only=validate_only,
+        )
+
+        batch.rows_valid = len(normalized_rows)
+        batch.rows_imported = imported
+        batch.rows_duplicate = duplicate_count
+        batch.rows_rejected = len(parsed_rows) - len(normalized_rows)
+        batch.week_min = min((row["week_start"] for row in normalized_rows), default=None)
+        batch.week_max = max((row["week_start"] for row in normalized_rows), default=None)
+        batch.coverage_after_import = coverage_after_import
+        if validate_only:
+            batch.status = "validated"
+        elif imported and issues:
+            batch.status = "partial_success"
+        elif imported:
+            batch.status = "imported"
+        else:
+            batch.status = "failed"
+
+        if not validate_only and imported:
+            coverage_after_import["last_imported_at"] = batch.uploaded_at.isoformat() if batch.uploaded_at else None
+            coverage_after_import["latest_batch_id"] = batch_id
+            coverage_after_import["latest_source_label"] = source_value
+
+        for issue in issues:
+            issue["batch_id"] = batch_id
+        for issue in issues:
+            self.db.add(MediaOutcomeImportIssue(**issue))
 
         self.db.commit()
+        self.db.refresh(batch)
+
         return {
             "imported": imported,
             "batch_id": batch_id,
-            "coverage": self.get_truth_coverage(brand=brand_value),
+            "batch_summary": self._batch_to_dict(batch),
+            "issues": [self._issue_response(issue) for issue in issues],
+            "preview_only": validate_only,
+            "coverage_after_import": coverage_after_import,
+            "coverage": coverage_after_import,
+            "message": (
+                "Upload validiert. Es wurden noch keine Truth-Daten persistiert."
+                if validate_only
+                else ("Outcome-Daten importiert." if imported else "Import abgeschlossen, aber keine Zeilen wurden übernommen.")
+            ),
         }
+
+    def list_outcome_import_batches(
+        self,
+        *,
+        brand: str = "gelo",
+        limit: int = 20,
+    ) -> list[dict[str, Any]]:
+        rows = (
+            self.db.query(MediaOutcomeImportBatch)
+            .filter(func.lower(MediaOutcomeImportBatch.brand) == str(brand or "gelo").lower())
+            .order_by(MediaOutcomeImportBatch.uploaded_at.desc(), MediaOutcomeImportBatch.id.desc())
+            .limit(limit)
+            .all()
+        )
+        return [self._batch_to_dict(row) for row in rows]
+
+    def get_outcome_import_batch_detail(self, *, batch_id: str) -> dict[str, Any] | None:
+        batch = (
+            self.db.query(MediaOutcomeImportBatch)
+            .filter(MediaOutcomeImportBatch.batch_id == batch_id)
+            .first()
+        )
+        if not batch:
+            return None
+        issues = (
+            self.db.query(MediaOutcomeImportIssue)
+            .filter(MediaOutcomeImportIssue.batch_id == batch_id)
+            .order_by(
+                MediaOutcomeImportIssue.row_number.is_(None),
+                MediaOutcomeImportIssue.row_number.asc(),
+                MediaOutcomeImportIssue.id.asc(),
+            )
+            .all()
+        )
+        return {
+            "batch": self._batch_to_dict(batch),
+            "issues": [self._issue_to_dict(issue) for issue in issues],
+        }
+
+    def outcome_template_csv(self) -> str:
+        return OUTCOME_TEMPLATE_HEADERS
 
     def _campaign_cards(self, *, brand: str = "gelo", limit: int = 120) -> list[dict[str, Any]]:
         opportunities = self.engine.get_opportunities(
@@ -883,6 +1106,10 @@ class MediaV2Service:
         truth = truth_coverage or self.get_truth_coverage()
         if truth.get("coverage_weeks", 0) < 26:
             limits.append("Kundennahe Truth-Daten decken noch keine 26 Wochen ab.")
+        if truth.get("truth_freshness_state") == "stale":
+            limits.append("Der letzte Truth-Import liegt zu weit hinter der aktuellen epidemiologischen Woche.")
+        if not truth.get("conversion_fields_present"):
+            limits.append("Im Truth-Layer fehlt noch mindestens eine belastbare Outcome-Metrik wie Sales, Orders oder Revenue.")
         if truth_validation_legacy and truth.get("coverage_weeks", 0) == 0:
             limits.append("Der sichtbare Kunden-Backtest ist nur ein explorativer Legacy-Run und kein aktiver Truth-Layer.")
         if not (cockpit.get("backtest_summary", {}).get("latest_market") or {}).get("quality_gate", {}).get("overall_passed"):
@@ -1021,21 +1248,72 @@ class MediaV2Service:
         except (OSError, json.JSONDecodeError):
             return {}
 
+    def _collect_outcome_rows(
+        self,
+        *,
+        records: list[dict[str, Any]],
+        csv_payload: str | None,
+        brand: str,
+        source_label: str,
+    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+        rows: list[dict[str, Any]] = []
+        issues: list[dict[str, Any]] = []
+
+        for index, record in enumerate(records, start=1):
+            rows.append({
+                "row_number": index,
+                "raw_row": dict(record),
+                "values": {**record, "brand": brand, "source_label": source_label},
+            })
+
+        if csv_payload:
+            csv_rows, csv_issues = self._parse_csv_payload(
+                csv_payload,
+                brand=brand,
+                source_label=source_label,
+            )
+            rows.extend(csv_rows)
+            issues.extend(csv_issues)
+
+        return rows, issues
+
     def _parse_csv_payload(
         self,
         csv_payload: str,
         *,
         brand: str,
         source_label: str,
-    ) -> list[dict[str, Any]]:
+    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+        sanitized = csv_payload.lstrip("\ufeff")
+        reader = csv.DictReader(io.StringIO(sanitized))
+        fieldnames = [str(name or "").strip() for name in (reader.fieldnames or []) if str(name or "").strip()]
+
+        issues: list[dict[str, Any]] = []
+        missing_headers = [
+            header for header in ("week_start", "product", "region_code", "media_spend_eur")
+            if header not in fieldnames
+        ]
+        if missing_headers:
+            issues.append(self._issue_dict(
+                batch_id="preview",
+                row_number=None,
+                field_name="header",
+                issue_code="missing_headers",
+                message=f"Folgende CSV-Spalten fehlen: {', '.join(missing_headers)}.",
+                raw_row={"fieldnames": fieldnames},
+            ))
+
         rows: list[dict[str, Any]] = []
-        reader = csv.DictReader(io.StringIO(csv_payload))
-        for raw in reader:
-            row = {key: value for key, value in raw.items()}
-            row.setdefault("brand", brand)
-            row.setdefault("source_label", source_label)
-            rows.append(row)
-        return rows
+        for index, raw in enumerate(reader, start=2):
+            cleaned = {str(key or "").strip(): value for key, value in raw.items() if str(key or "").strip()}
+            cleaned.setdefault("brand", brand)
+            cleaned.setdefault("source_label", source_label)
+            rows.append({
+                "row_number": index,
+                "raw_row": cleaned,
+                "values": cleaned,
+            })
+        return rows, issues
 
     def _coerce_week_start(self, value: Any) -> datetime | None:
         if isinstance(value, datetime):
@@ -1057,3 +1335,438 @@ class MediaV2Service:
             return float(value)
         except (TypeError, ValueError):
             return None
+
+    def _truth_gate(self, truth_coverage: dict[str, Any]) -> dict[str, Any]:
+        if truth_coverage.get("coverage_weeks", 0) < 26:
+            return {
+                "passed": False,
+                "message": "Truth-Layer deckt noch keine 26 Wochen ab und bleibt deshalb explorativ.",
+            }
+        if "Media Spend" not in (truth_coverage.get("required_fields_present") or []):
+            return {
+                "passed": False,
+                "message": "Truth-Layer enthält noch keinen belastbaren Media-Spend-Verlauf.",
+            }
+        if not (truth_coverage.get("conversion_fields_present") or []):
+            return {
+                "passed": False,
+                "message": "Truth-Layer enthält noch keine ausreichenden Sales-, Order- oder Revenue-Signale.",
+            }
+        if truth_coverage.get("truth_freshness_state") == "stale":
+            return {
+                "passed": False,
+                "message": "Truth-Layer ist aktuell zu alt im Vergleich zur letzten epidemiologischen Woche.",
+            }
+        return {"passed": True, "message": None}
+
+    def _latest_import_batch(self, *, brand: str) -> MediaOutcomeImportBatch | None:
+        return (
+            self.db.query(MediaOutcomeImportBatch)
+            .filter(
+                func.lower(MediaOutcomeImportBatch.brand) == str(brand or "gelo").lower(),
+                MediaOutcomeImportBatch.status.in_(("imported", "partial_success")),
+            )
+            .order_by(MediaOutcomeImportBatch.uploaded_at.desc(), MediaOutcomeImportBatch.id.desc())
+            .first()
+        )
+
+    def _latest_epi_reference_week(self, *, virus_typ: str | None = None) -> datetime | None:
+        wastewater_query = self.db.query(func.max(WastewaterAggregated.datum))
+        if virus_typ:
+            wastewater_query = wastewater_query.filter(WastewaterAggregated.virus_typ == virus_typ)
+        wastewater_max = wastewater_query.scalar()
+        if wastewater_max:
+            return wastewater_max
+
+        survstat_max = self.db.query(func.max(SurvstatWeeklyData.week_start)).scalar()
+        return survstat_max
+
+    def _truth_freshness_state(
+        self,
+        *,
+        latest_truth_week: datetime | None,
+        reference_week: datetime | None,
+    ) -> str:
+        if latest_truth_week is None:
+            return "missing"
+        if reference_week is None:
+            return "unknown"
+        return "fresh" if (reference_week - latest_truth_week) <= timedelta(days=14) else "stale"
+
+    def _normalize_outcome_row(
+        self,
+        *,
+        row: dict[str, Any],
+        brand: str,
+        source_label: str,
+    ) -> dict[str, Any]:
+        values = row.get("values") or {}
+        raw_row = row.get("raw_row") or values
+        row_number = row.get("row_number")
+        issues: list[dict[str, Any]] = []
+
+        week_start = self._coerce_week_start(values.get("week_start"))
+        if week_start is None:
+            issues.append(self._issue_dict(
+                batch_id="preview",
+                row_number=row_number,
+                field_name="week_start",
+                issue_code="invalid_week_start",
+                message="`week_start` fehlt oder ist kein gültiges ISO-Datum.",
+                raw_row=raw_row,
+            ))
+
+        product, product_issue = self._normalize_outcome_product(
+            brand=brand,
+            raw_product=values.get("product"),
+        )
+        if product_issue:
+            issues.append(self._issue_dict(
+                batch_id="preview",
+                row_number=row_number,
+                field_name="product",
+                issue_code=product_issue["code"],
+                message=product_issue["message"],
+                raw_row=raw_row,
+            ))
+
+        region_code, region_issue = self._normalize_outcome_region(values.get("region_code"))
+        if region_issue:
+            issues.append(self._issue_dict(
+                batch_id="preview",
+                row_number=row_number,
+                field_name="region_code",
+                issue_code=region_issue["code"],
+                message=region_issue["message"],
+                raw_row=raw_row,
+            ))
+
+        metrics: dict[str, float | None] = {
+            "media_spend_eur": self._float_or_none(values.get("media_spend_eur")),
+            "impressions": self._float_or_none(values.get("impressions")),
+            "clicks": self._float_or_none(values.get("clicks")),
+            "qualified_visits": self._float_or_none(values.get("qualified_visits")),
+            "search_lift_index": self._float_or_none(values.get("search_lift_index")),
+            "sales_units": self._float_or_none(values.get("sales_units")),
+            "order_count": self._float_or_none(values.get("order_count")),
+            "revenue_eur": self._float_or_none(values.get("revenue_eur")),
+        }
+        if metrics["media_spend_eur"] is None:
+            issues.append(self._issue_dict(
+                batch_id="preview",
+                row_number=row_number,
+                field_name="media_spend_eur",
+                issue_code="missing_media_spend",
+                message="`media_spend_eur` ist Pflicht und muss numerisch befüllt sein.",
+                raw_row=raw_row,
+            ))
+        if not any(metrics[field_name] is not None for field_name in CONVERSION_OUTCOME_FIELD_NAMES):
+            issues.append(self._issue_dict(
+                batch_id="preview",
+                row_number=row_number,
+                field_name="conversion",
+                issue_code="missing_conversion_metric",
+                message="Mindestens eine Outcome-Metrik (`sales_units`, `order_count` oder `revenue_eur`) ist erforderlich.",
+                raw_row=raw_row,
+            ))
+
+        extra_data = values.get("extra_data")
+        if extra_data is None:
+            extra_data = {}
+        elif not isinstance(extra_data, dict):
+            extra_data = {"raw_extra_data": extra_data}
+
+        return {
+            "issues": issues,
+            "week_start": week_start,
+            "product": product,
+            "region_code": region_code,
+            "brand": brand,
+            "source_label": source_label,
+            "metrics": metrics,
+            "extra_data": extra_data,
+        }
+
+    def _normalize_outcome_product(
+        self,
+        *,
+        brand: str,
+        raw_product: Any,
+    ) -> tuple[str | None, dict[str, str] | None]:
+        raw_value = str(raw_product or "").strip()
+        if not raw_value:
+            return None, {"code": "missing_product", "message": "Produktname fehlt."}
+
+        normalized = ProductCatalogService._normalize_name(raw_value)
+        compact = "".join(ch for ch in normalized if ch.isalnum())
+        products = (
+            self.db.query(BrandProduct)
+            .filter(
+                func.lower(BrandProduct.brand) == str(brand or "gelo").lower(),
+                BrandProduct.active.is_(True),
+            )
+            .all()
+        )
+        if not products:
+            return None, {
+                "code": "missing_product_catalog",
+                "message": f"Für die Marke `{brand}` ist kein aktiver Produktkatalog vorhanden.",
+            }
+
+        exact_map: dict[str, str] = {}
+        compact_map: dict[str, str] = {}
+        for product in products:
+            canonical_name = str(product.product_name or "").strip()
+            normalized_name = ProductCatalogService._normalize_name(canonical_name)
+            if normalized_name:
+                exact_map.setdefault(normalized_name, canonical_name)
+                compact_map.setdefault("".join(ch for ch in normalized_name if ch.isalnum()), canonical_name)
+
+        if normalized in exact_map:
+            return exact_map[normalized], None
+        if compact in compact_map:
+            return compact_map[compact], None
+
+        fuzzy_matches = [
+            canonical
+            for norm_name, canonical in exact_map.items()
+            if normalized in norm_name or norm_name in normalized
+        ]
+        if len(fuzzy_matches) == 1:
+            return fuzzy_matches[0], None
+
+        return None, {
+            "code": "unknown_product",
+            "message": f"Produkt `{raw_value}` konnte nicht auf den aktiven Produktkatalog gemappt werden.",
+        }
+
+    def _normalize_outcome_region(self, raw_region: Any) -> tuple[str | None, dict[str, str] | None]:
+        raw_value = str(raw_region or "").strip()
+        if not raw_value:
+            return None, {"code": "missing_region", "message": "Region fehlt."}
+
+        if raw_value.lower() in {"de", "deutschland", "national"}:
+            return "DE", None
+        normalized = normalize_region_code(raw_value)
+        if normalized in BUNDESLAND_NAMES:
+            return normalized, None
+        return None, {
+            "code": "invalid_region",
+            "message": f"Region `{raw_value}` ist weder ein Bundesland-Code noch ein bekannter Bundeslandname.",
+        }
+
+    def _find_existing_outcome(
+        self,
+        *,
+        brand: str,
+        source_label: str,
+        week_start: datetime,
+        product: str,
+        region_code: str,
+    ) -> MediaOutcomeRecord | None:
+        return (
+            self.db.query(MediaOutcomeRecord)
+            .filter(
+                MediaOutcomeRecord.week_start == week_start,
+                func.lower(MediaOutcomeRecord.brand) == brand,
+                MediaOutcomeRecord.product == product,
+                MediaOutcomeRecord.region_code == region_code,
+                MediaOutcomeRecord.source_label == source_label,
+            )
+            .first()
+        )
+
+    def _project_truth_coverage(
+        self,
+        *,
+        brand: str,
+        normalized_rows: list[dict[str, Any]],
+        virus_typ: str | None,
+        replace_existing: bool,
+        validate_only: bool,
+    ) -> dict[str, Any]:
+        existing_rows = (
+            self.db.query(MediaOutcomeRecord)
+            .filter(func.lower(MediaOutcomeRecord.brand) == str(brand or "gelo").lower())
+            .all()
+        )
+        synthetic_rows = [
+            {
+                "week_start": row.week_start,
+                "brand": row.brand,
+                "product": row.product,
+                "region_code": row.region_code,
+                "source_label": row.source_label,
+                "metrics": {
+                    field_name: getattr(row, field_name)
+                    for field_name in (
+                        *REQUIRED_OUTCOME_FIELD_NAMES,
+                        *CONVERSION_OUTCOME_FIELD_NAMES,
+                        *OPTIONAL_OUTCOME_FIELD_NAMES,
+                    )
+                },
+            }
+            for row in existing_rows
+        ]
+        keyed_rows: dict[tuple[str, str, datetime, str, str], dict[str, Any]] = {}
+        for row in synthetic_rows:
+            key = (
+                str(row["brand"]).lower(),
+                str(row["source_label"]),
+                row["week_start"],
+                str(row["product"]),
+                str(row["region_code"]),
+            )
+            keyed_rows[key] = row
+
+        for row in normalized_rows:
+            key = (
+                str(brand).lower(),
+                str(row["source_label"]),
+                row["week_start"],
+                row["product"],
+                row["region_code"],
+            )
+            if key in keyed_rows and not replace_existing and validate_only:
+                continue
+            keyed_rows[key] = {
+                "week_start": row["week_start"],
+                "brand": brand,
+                "product": row["product"],
+                "region_code": row["region_code"],
+                "source_label": row["source_label"],
+                "metrics": row["metrics"],
+            }
+        return self._coverage_from_rows(list(keyed_rows.values()), brand=brand, virus_typ=virus_typ)
+
+    def _coverage_from_rows(
+        self,
+        rows: list[dict[str, Any]],
+        *,
+        brand: str,
+        virus_typ: str | None,
+    ) -> dict[str, Any]:
+        latest_import_batch = self._latest_import_batch(brand=brand)
+        reference_week = self._latest_epi_reference_week(virus_typ=virus_typ)
+        if not rows:
+            return {
+                "coverage_weeks": 0,
+                "latest_week": None,
+                "regions_covered": 0,
+                "products_covered": 0,
+                "outcome_fields_present": [],
+                "required_fields_present": [],
+                "conversion_fields_present": [],
+                "trust_readiness": "noch_nicht_angeschlossen",
+                "truth_freshness_state": "missing",
+                "source_labels": [],
+                "last_imported_at": latest_import_batch.uploaded_at.isoformat() if latest_import_batch and latest_import_batch.uploaded_at else None,
+                "latest_batch_id": latest_import_batch.batch_id if latest_import_batch else None,
+                "latest_source_label": latest_import_batch.source_label if latest_import_batch else None,
+            }
+
+        week_values = sorted({row["week_start"] for row in rows if row.get("week_start")})
+        weeks = [value.date().isoformat() for value in week_values]
+        regions = {str(row.get("region_code")) for row in rows if row.get("region_code")}
+        products = {str(row.get("product")) for row in rows if row.get("product")}
+        source_labels = sorted({str(row.get("source_label")) for row in rows if row.get("source_label")})
+        fields_present = [
+            label
+            for field_name, label in METRIC_FIELD_LABELS.items()
+            if any((row.get("metrics") or {}).get(field_name) is not None for row in rows)
+        ]
+        required_fields_present = [
+            METRIC_FIELD_LABELS[field_name]
+            for field_name in REQUIRED_OUTCOME_FIELD_NAMES
+            if any((row.get("metrics") or {}).get(field_name) is not None for row in rows)
+        ]
+        conversion_fields_present = [
+            METRIC_FIELD_LABELS[field_name]
+            for field_name in CONVERSION_OUTCOME_FIELD_NAMES
+            if any((row.get("metrics") or {}).get(field_name) is not None for row in rows)
+        ]
+        coverage_weeks = len(weeks)
+        if coverage_weeks >= 52:
+            readiness = "belastbar"
+        elif coverage_weeks >= 26:
+            readiness = "im_aufbau"
+        elif coverage_weeks > 0:
+            readiness = "erste_signale"
+        else:
+            readiness = "noch_nicht_angeschlossen"
+
+        latest_week_dt = week_values[-1] if week_values else None
+        return {
+            "coverage_weeks": coverage_weeks,
+            "latest_week": weeks[-1] if weeks else None,
+            "regions_covered": len(regions),
+            "products_covered": len(products),
+            "outcome_fields_present": fields_present,
+            "required_fields_present": required_fields_present,
+            "conversion_fields_present": conversion_fields_present,
+            "trust_readiness": readiness,
+            "truth_freshness_state": self._truth_freshness_state(
+                latest_truth_week=latest_week_dt,
+                reference_week=reference_week,
+            ),
+            "source_labels": source_labels,
+            "last_imported_at": latest_import_batch.uploaded_at.isoformat() if latest_import_batch and latest_import_batch.uploaded_at else None,
+            "latest_batch_id": latest_import_batch.batch_id if latest_import_batch else None,
+            "latest_source_label": latest_import_batch.source_label if latest_import_batch else None,
+        }
+
+    def _issue_dict(
+        self,
+        *,
+        batch_id: str,
+        row_number: int | None,
+        field_name: str | None,
+        issue_code: str,
+        message: str,
+        raw_row: Any,
+    ) -> dict[str, Any]:
+        return {
+            "batch_id": batch_id,
+            "row_number": row_number,
+            "field_name": field_name,
+            "issue_code": issue_code,
+            "message": message,
+            "raw_row": raw_row,
+        }
+
+    def _issue_response(self, issue: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "row_number": issue.get("row_number"),
+            "field_name": issue.get("field_name"),
+            "issue_code": issue.get("issue_code"),
+            "message": issue.get("message"),
+            "raw_row": issue.get("raw_row"),
+        }
+
+    def _issue_to_dict(self, issue: MediaOutcomeImportIssue) -> dict[str, Any]:
+        return {
+            "row_number": issue.row_number,
+            "field_name": issue.field_name,
+            "issue_code": issue.issue_code,
+            "message": issue.message,
+            "raw_row": issue.raw_row,
+            "created_at": issue.created_at.isoformat() if issue.created_at else None,
+        }
+
+    def _batch_to_dict(self, batch: MediaOutcomeImportBatch) -> dict[str, Any]:
+        return {
+            "batch_id": batch.batch_id,
+            "brand": batch.brand,
+            "source_label": batch.source_label,
+            "file_name": batch.file_name,
+            "status": batch.status,
+            "rows_total": batch.rows_total,
+            "rows_valid": batch.rows_valid,
+            "rows_imported": batch.rows_imported,
+            "rows_rejected": batch.rows_rejected,
+            "rows_duplicate": batch.rows_duplicate,
+            "week_min": batch.week_min.isoformat() if batch.week_min else None,
+            "week_max": batch.week_max.isoformat() if batch.week_max else None,
+            "coverage_after_import": batch.coverage_after_import or {},
+            "uploaded_at": batch.uploaded_at.isoformat() if batch.uploaded_at else None,
+        }

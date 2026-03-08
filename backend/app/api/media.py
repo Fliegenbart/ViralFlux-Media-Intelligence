@@ -1,5 +1,6 @@
 """Media API: Map-first Cockpit + Action Cards."""
 
+import io
 import math
 from datetime import date, datetime
 from decimal import Decimal
@@ -167,6 +168,8 @@ class OutcomeImportRequest(BaseModel):
     brand: str = Field(default="gelo")
     source_label: str = Field(default="manual")
     replace_existing: bool = Field(default=False)
+    validate_only: bool = Field(default=False)
+    file_name: str | None = None
     records: list[OutcomeImportRecord] = Field(default_factory=list)
     csv_payload: str | None = None
 
@@ -292,24 +295,59 @@ async def get_media_model_lineage(
 @router.get("/outcomes/coverage")
 async def get_media_outcomes_coverage(
     brand: str = "gelo",
+    virus_typ: str = "Influenza A",
     db: Session = Depends(get_db),
 ):
     """Truth-Layer Coverage über importierte Outcome-Daten."""
-    return _json_safe_response(MediaV2Service(db).get_truth_coverage(brand=brand))
+    return _json_safe_response(MediaV2Service(db).get_truth_coverage(brand=brand, virus_typ=virus_typ))
 
 
 @router.get("/evidence/truth")
 async def get_media_truth_evidence(
     brand: str = "gelo",
+    virus_typ: str = "Influenza A",
     db: Session = Depends(get_db),
 ):
-    """Kompakter Truth-Evidence Endpunkt für spätere dedizierte Client-Views."""
-    coverage = MediaV2Service(db).get_truth_coverage(brand=brand)
+    """Truth-Evidence Snapshot für Analysten-Ansicht, Coverage und Import-Historie."""
+    return _json_safe_response(MediaV2Service(db).get_truth_evidence(brand=brand, virus_typ=virus_typ))
+
+
+@router.get("/outcomes/import-batches")
+async def list_media_outcome_import_batches(
+    brand: str = "gelo",
+    limit: int = Query(default=20, ge=1, le=100),
+    db: Session = Depends(get_db),
+):
+    """Listet die letzten Truth-Import-Batches mit Status und Coverage-Snapshot."""
     return _json_safe_response({
         "brand": brand,
-        "coverage": coverage,
-        "state_label": coverage.get("trust_readiness"),
+        "batches": MediaV2Service(db).list_outcome_import_batches(brand=brand, limit=limit),
     })
+
+
+@router.get("/outcomes/import-batches/{batch_id}")
+async def get_media_outcome_import_batch_detail(
+    batch_id: str,
+    db: Session = Depends(get_db),
+):
+    """Liefert Detailansicht eines Truth-Import-Batches inklusive Issues."""
+    detail = MediaV2Service(db).get_outcome_import_batch_detail(batch_id=batch_id)
+    if not detail:
+        raise HTTPException(status_code=404, detail=f"Outcome-Import-Batch {batch_id} nicht gefunden")
+    return _json_safe_response(detail)
+
+
+@router.get("/outcomes/template")
+async def download_media_outcome_template(
+    db: Session = Depends(get_db),
+):
+    """CSV-Template für manuelle Truth-/Outcome-Uploads."""
+    content = MediaV2Service(db).outcome_template_csv()
+    return StreamingResponse(
+        io.BytesIO(content.encode("utf-8")),
+        media_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="viralflux_truth_template.csv"'},
+    )
 
 
 @router.post("/outcomes/import")
@@ -326,6 +364,8 @@ async def import_media_outcomes(
             csv_payload=payload.csv_payload,
             brand=payload.brand,
             replace_existing=payload.replace_existing,
+            validate_only=payload.validate_only,
+            file_name=payload.file_name,
         )
     )
 

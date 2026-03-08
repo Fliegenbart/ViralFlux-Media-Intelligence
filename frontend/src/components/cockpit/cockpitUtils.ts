@@ -119,6 +119,12 @@ export function readinessTone(isGo: boolean): { background: string; color: strin
 }
 
 export function truthLayerLabel(backtestOrCoverage?: BacktestResponse | TruthCoverage | null): string {
+  const readiness = String((backtestOrCoverage as TruthCoverage | undefined)?.trust_readiness || '').trim().toLowerCase();
+  if (readiness === 'belastbar') return 'belastbar';
+  if (readiness === 'im_aufbau') return 'im Aufbau';
+  if (readiness === 'erste_signale') return 'erste Signale';
+  if (readiness === 'noch_nicht_angeschlossen') return 'noch nicht angeschlossen';
+
   const coverageWeeks = Number((backtestOrCoverage as TruthCoverage | undefined)?.coverage_weeks || 0);
   if (coverageWeeks > 0) {
     if (coverageWeeks >= 52) return 'belastbar';
@@ -131,6 +137,15 @@ export function truthLayerLabel(backtestOrCoverage?: BacktestResponse | TruthCov
   if (points >= 26) return 'im Aufbau';
   if (points > 0) return 'erste Signale';
   return 'noch nicht angeschlossen';
+}
+
+export function truthFreshnessLabel(value?: string | null): string {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'fresh') return 'aktuell';
+  if (normalized === 'stale') return 'veraltet';
+  if (normalized === 'missing') return 'noch keine Truth-Daten';
+  if (normalized === 'unknown') return 'noch unklar';
+  return normalized || '-';
 }
 
 export function recommendationLane(card: RecommendationCard): CampaignLaneId {

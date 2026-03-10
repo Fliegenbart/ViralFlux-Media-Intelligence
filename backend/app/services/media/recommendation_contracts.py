@@ -11,6 +11,13 @@ from app.services.media.copy_service import (
     public_reason_text,
     public_source_label,
 )
+from app.services.media.semantic_contracts import (
+    forecast_probability_contract,
+    normalize_confidence_pct,
+    priority_score_contract,
+    ranking_signal_contract,
+    signal_confidence_contract,
+)
 
 BUNDESLAND_NAMES = {
     "BW": "Baden-Württemberg",
@@ -434,6 +441,7 @@ def to_card_response(opp: dict[str, Any], include_preview: bool = True) -> dict[
     cleaned_campaign_pack["trigger_evidence"] = _humanize_trigger_payload(campaign_pack.get("trigger_evidence"))
     cleaned_campaign_pack["peix_context"] = _humanize_peix_context(peix_context)
     cleaned_campaign_pack["playbook"] = cleaned_playbook
+    cleaned_campaign_pack["signal_contracts"] = campaign_pack.get("signal_contracts") or {}
     if campaign_pack.get("campaign"):
         cleaned_campaign_pack["campaign"] = dict(campaign_pack.get("campaign") or {})
         if payload_campaign_name:
@@ -447,6 +455,35 @@ def to_card_response(opp: dict[str, Any], include_preview: bool = True) -> dict[
     )
 
     condition_key = opp.get("condition_key") or product_mapping.get("condition_key", "")
+    signal_confidence_pct = (
+        normalize_confidence_pct(((opp.get("decision_brief") or {}).get("expectation") or {}).get("signal_confidence_pct"))
+        or normalize_confidence_pct(((opp.get("decision_brief") or {}).get("expectation") or {}).get("confidence_pct"))
+        or normalize_confidence_pct(
+            ((campaign_pack.get("forecast_assessment") or {}).get("event_forecast") or {}).get("confidence")
+        )
+    )
+    signal_score = (
+        opp.get("signal_score")
+        or cleaned_peix_context.get("signal_score")
+        or cleaned_peix_context.get("score")
+        or cleaned_peix_context.get("impact_probability")
+    )
+    priority_score = opp.get("priority_score") or opp.get("urgency_score")
+    field_contracts = {
+        "signal_score": ranking_signal_contract(source="PeixEpiScore"),
+        "impact_probability": ranking_signal_contract(
+            source="PeixEpiScore",
+            label="Legacy Signal-Score",
+        ),
+        "priority_score": priority_score_contract(source="MarketingOpportunityEngine"),
+        "signal_confidence_pct": signal_confidence_contract(
+            source=str((opp.get("trigger_context") or {}).get("source") or (opp.get("trigger_snapshot") or {}).get("source") or "Signal-Fusion"),
+            derived_from="trigger_evidence.confidence",
+        ),
+        "event_probability": forecast_probability_contract(),
+    }
+    if campaign_pack.get("signal_contracts"):
+        field_contracts.update(campaign_pack.get("signal_contracts") or {})
     public_playbook = public_playbook_title(
         playbook_key=opp.get("playbook_key") or playbook.get("key"),
         title=opp.get("playbook_title") or playbook.get("title"),
@@ -492,12 +529,10 @@ def to_card_response(opp: dict[str, Any], include_preview: bool = True) -> dict[
         "confidence": (
             round(float(opp.get("confidence")), 2)
             if opp.get("confidence") is not None
-            else round(
-                float(
-                    ((campaign_pack.get("forecast_assessment") or {}).get("event_forecast") or {}).get("confidence")
-                    or min(0.98, max(0.45, float(opp.get("urgency_score") or 50.0) / 100.0))
-                ),
-                2,
+            else (
+                round(float(signal_confidence_pct or 0.0) / 100.0, 2)
+                if signal_confidence_pct is not None
+                else None
             )
         ),
         "detail_url": opp.get("detail_url") or f"/kampagnen/{opp.get('id')}",
@@ -518,6 +553,10 @@ def to_card_response(opp: dict[str, Any], include_preview: bool = True) -> dict[
         "mapping_candidate_product": opp.get("mapping_candidate_product") or product_mapping.get("candidate_product"),
         "mapping_rule_source": opp.get("rule_source") or product_mapping.get("rule_source"),
         "peix_context": cleaned_peix_context,
+        "signal_score": signal_score,
+        "priority_score": priority_score,
+        "signal_confidence_pct": signal_confidence_pct,
+        "field_contracts": field_contracts,
         "playbook_key": opp.get("playbook_key") or cleaned_playbook.get("key"),
         "playbook_title": public_playbook or opp.get("playbook_title") or cleaned_playbook.get("title"),
         "trigger_context": trigger_context,

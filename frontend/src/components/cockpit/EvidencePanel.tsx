@@ -14,6 +14,7 @@ import {
   formatDateShort,
   formatDateTime,
   formatPercent,
+  learningStateLabel,
   truthFreshnessLabel,
   truthLayerLabel,
 } from './cockpitUtils';
@@ -114,7 +115,9 @@ const EvidencePanel: React.FC<Props> = ({
   const recentRuns = evidence?.recent_runs || [];
   const truthCoverage = evidence?.truth_coverage;
   const truthSnapshot = evidence?.truth_snapshot;
+  const truthGate = evidence?.truth_gate || truthSnapshot?.truth_gate;
   const truthStatus = truthSnapshot?.coverage || truthCoverage;
+  const outcomeLearning = evidence?.outcome_learning_summary || truthSnapshot?.outcome_learning_summary;
   const selectedBatch = truthBatchDetail?.batch || truthPreview?.batch_summary || truthSnapshot?.latest_batch;
   const displayIssues = useMemo<TruthImportIssue[]>(() => {
     if (truthPreview?.issues?.length) return truthPreview.issues;
@@ -151,6 +154,7 @@ const EvidencePanel: React.FC<Props> = ({
           <span className="step-chip">{UI_COPY.marketComparison}: validiert</span>
           <span className="step-chip">{UI_COPY.customerData}: {truthLayerLabel(truthStatus || latestCustomer)}</span>
           <span className="step-chip">{UI_COPY.customerDataFreshness}: {truthFreshnessLabel(truthStatus?.truth_freshness_state)}</span>
+          <span className="step-chip">Learning: {learningStateLabel(outcomeLearning?.learning_state || truthGate?.learning_state)}</span>
           {signalStack?.summary?.decision_mode_label && <span className="step-chip">{signalStack.summary.decision_mode_label}</span>}
           <span className="step-chip">Forecast: {monitoringStatusLabel(forecastMonitoring?.monitoring_status)}</span>
           <span className="step-chip">Drift: {modelLineage?.drift_state || '-'}</span>
@@ -208,6 +212,20 @@ const EvidencePanel: React.FC<Props> = ({
           <p className="section-copy">
             Dieser Bereich basiert auf validiertem CSV-Import mit Media Spend und echten Outcome-Metriken. Er bewertet Datenbreite, Aktualitaet und Anschlussfaehigkeit an echte Kundenergebnisse.
           </p>
+          <div className="soft-panel review-panel-soft" style={{ marginTop: 14 }}>
+            <div className="evidence-row">
+              <span>Truth-Gate</span>
+              <strong>{truthGate?.passed ? 'freigeschaltet' : learningStateLabel(truthGate?.state)}</strong>
+            </div>
+            <div className="evidence-row">
+              <span>Learning-State</span>
+              <strong>{learningStateLabel(outcomeLearning?.learning_state || truthGate?.learning_state)}</strong>
+            </div>
+            <div className="evidence-row">
+              <span>Outcome-Score</span>
+              <strong>{formatPercent(outcomeLearning?.outcome_signal_score)}</strong>
+            </div>
+          </div>
           <div className="review-chip-row">
             {(sourceStatusLabels.length ? sourceStatusLabels : ['Noch keine Pflichtfelder vollständig vorhanden']).map((item) => (
               <span key={item} className="step-chip">{item}</span>
@@ -305,6 +323,43 @@ const EvidencePanel: React.FC<Props> = ({
             )}
           </section>
         )}
+      </section>
+
+      <section className="card subsection-card" style={{ padding: 24 }}>
+        <div className="section-heading">
+          <span className="section-kicker">Outcome-Learning</span>
+          <h2 className="subsection-title">Beobachtete Wirkung statt nur Forecast und Ranking</h2>
+          <p className="subsection-copy">
+            Dieser Block zeigt, was aus importierten Outcome-Daten bereits gelernt wurde. Die Werte priorisieren, sind aber keine Forecast-Wahrscheinlichkeiten.
+          </p>
+        </div>
+        <div className="metric-strip" style={{ marginTop: 16 }}>
+          <div className="metric-box">
+            <span>Learning-State</span>
+            <strong>{learningStateLabel(outcomeLearning?.learning_state)}</strong>
+          </div>
+          <div className="metric-box">
+            <span>Outcome-Score</span>
+            <strong>{formatPercent(outcomeLearning?.outcome_signal_score)}</strong>
+          </div>
+          <div className="metric-box">
+            <span>Learning-Konfidenz</span>
+            <strong>{formatPercent(outcomeLearning?.outcome_confidence_pct)}</strong>
+          </div>
+        </div>
+        <div className="soft-panel" style={{ padding: 18, marginTop: 18, display: 'grid', gap: 10 }}>
+          {(outcomeLearning?.top_pair_learnings?.length ? outcomeLearning.top_pair_learnings : []).slice(0, 3).map((item, index) => (
+            <div key={`${item.product_key || 'product'}-${item.region_code || index}`} className="evidence-row">
+              <span>{item.product_key || item.product || 'Produkt'} · {item.region_code || 'Region'}</span>
+              <strong>{formatPercent(item.outcome_signal_score)} · {learningStateLabel(outcomeLearning?.learning_state)}</strong>
+            </div>
+          ))}
+          {!outcomeLearning?.top_pair_learnings?.length && (
+            <div className="review-muted-copy">
+              Noch keine granularen Produkt-Region-Learnings vorhanden. Sobald mehr Outcome-Reihen vorliegen, werden sie hier sichtbar.
+            </div>
+          )}
+        </div>
       </section>
 
       <section className="card subsection-card" style={{ padding: 24 }}>

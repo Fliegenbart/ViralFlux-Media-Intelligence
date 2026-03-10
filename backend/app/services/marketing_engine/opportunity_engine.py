@@ -30,6 +30,13 @@ from app.services.media.message_library import select_gelo_message_pack
 from app.services.media.product_catalog_service import ProductCatalogService
 from app.services.media.peix_score_service import PeixEpiScoreService
 from app.services.media.playbook_engine import PLAYBOOK_CATALOG, PlaybookEngine
+from app.services.media.semantic_contracts import (
+    forecast_probability_contract,
+    normalize_confidence_pct,
+    priority_score_contract,
+    ranking_signal_contract,
+    signal_confidence_contract,
+)
 from app.services.ml.forecast_contracts import DEFAULT_DECISION_HORIZON_DAYS
 from app.services.ml.forecast_decision_service import ForecastDecisionService
 
@@ -270,8 +277,10 @@ class MarketingOpportunityEngine:
                     "playbook_key": playbook_key,
                     "region_code": region_code,
                     "region_name": self._region_label(region_code) if region_code != "Gesamt" else "Deutschland",
+                    "signal_score": round(event_probability * 100.0, 1),
                     "trigger_strength": round(event_probability * 100.0, 2),
                     "confidence": round(float(event_forecast.get("confidence") or event_probability) * 100.0, 2),
+                    "signal_confidence_pct": normalize_confidence_pct(event_forecast.get("confidence")),
                     "priority_score": round(expected_value_index, 2),
                     "impact_probability": round(event_probability * 100.0, 1) if calibration_passed else None,
                     "budget_shift_pct": budget_shift_pct,
@@ -865,6 +874,7 @@ class MarketingOpportunityEngine:
             peix_context = {
                 "region_code": region_code,
                 "score": round(urgency, 1),
+                "signal_score": round(float(candidate.get("signal_score") or candidate.get("impact_probability") or urgency), 1),
                 "band": "ready" if model_readiness_status == "GO" else "watch",
                 "impact_probability": (
                     round(float(candidate.get("impact_probability") or 0.0), 1)
@@ -875,6 +885,15 @@ class MarketingOpportunityEngine:
                 "trigger_event": str(trigger_snapshot.get("event") or ""),
                 "model_readiness_status": model_readiness_status,
                 "model_backtest_run_id": latest_market_backtest.run_id if latest_market_backtest else None,
+            }
+            campaign_payload_signal_contracts = {
+                "signal_score": ranking_signal_contract(source="ForecastDecisionService"),
+                "priority_score": priority_score_contract(source="MarketingOpportunityEngine"),
+                "signal_confidence_pct": signal_confidence_contract(
+                    source="ForecastDecisionService",
+                    derived_from="event_forecast.confidence",
+                ),
+                "event_probability": forecast_probability_contract(),
             }
 
             campaign_payload = self._build_campaign_pack(
@@ -900,6 +919,7 @@ class MarketingOpportunityEngine:
             }
             campaign_payload["opportunity_assessment"] = opportunity_assessment
             campaign_payload["exploratory_signals"] = exploratory_signals
+            campaign_payload["signal_contracts"] = campaign_payload_signal_contracts
             self._merge_ai_playbook_payload(
                 campaign_payload=campaign_payload,
                 playbook_key=playbook_key,
@@ -2404,6 +2424,7 @@ class MarketingOpportunityEngine:
             return {
                 "region_code": "Gesamt",
                 "score": score,
+                "signal_score": score,
                 "band": nat.get("national_band"),
                 "impact_probability": nat.get("national_impact_probability"),
                 "drivers": nat.get("top_drivers") or [],
@@ -2414,6 +2435,7 @@ class MarketingOpportunityEngine:
         return {
             "region_code": selected_region,
             "score": peix_entry.get("score_0_100"),
+            "signal_score": peix_entry.get("score_0_100"),
             "band": peix_entry.get("risk_band"),
             "impact_probability": peix_entry.get("impact_probability"),
             "drivers": peix_entry.get("top_drivers") or [],
@@ -2459,20 +2481,9 @@ class MarketingOpportunityEngine:
         return " ".join(words) or "Fakt"
 
     @staticmethod
-    def _confidence_pct(raw_confidence: Any, urgency_score: float | None) -> float:
-        parsed: float | None = None
-        if raw_confidence is not None:
-            try:
-                parsed = float(raw_confidence)
-            except (TypeError, ValueError):
-                parsed = None
-
-        if parsed is None:
-            parsed = float(urgency_score or 50.0)
-        elif parsed <= 1.0:
-            parsed = parsed * 100.0
-
-        return round(max(0.0, min(100.0, float(parsed))), 1)
+    def _confidence_pct(raw_confidence: Any, urgency_score: float | None) -> float | None:
+        del urgency_score
+        return normalize_confidence_pct(raw_confidence)
 
     @staticmethod
     def _public_fact_value(key: str, value: Any) -> Any:
@@ -2541,7 +2552,7 @@ class MarketingOpportunityEngine:
         trigger_snapshot: dict[str, Any],
         trigger_evidence: dict[str, Any],
         peix_context: dict[str, Any],
-        confidence_pct: float,
+        confidence_pct: float | None,
         forecast_assessment: dict[str, Any] | None = None,
         opportunity_assessment: dict[str, Any] | None = None,
     ) -> list[dict[str, Any]]:
@@ -2592,8 +2603,8 @@ class MarketingOpportunityEngine:
         if score is not None:
             facts.append(
                 {
-                    "key": "peix_score",
-                    "label": "PeixEpiScore",
+                    "key": "signal_score",
+                    "label": "Signal-Score",
                     "value": score,
                     "source": "PeixEpiScore",
                 }
@@ -2610,14 +2621,15 @@ class MarketingOpportunityEngine:
                 }
             )
 
-        facts.append(
-            {
-                "key": "confidence_pct",
-                "label": "Konfidenz (%)",
-                "value": confidence_pct,
-                "source": source,
-            }
-        )
+        if confidence_pct is not None:
+            facts.append(
+                {
+                    "key": "signal_confidence_pct",
+                    "label": "Signal-Konfidenz (%)",
+                    "value": confidence_pct,
+                    "source": source,
+                }
+            )
 
         event_forecast = (forecast_assessment or {}).get("event_forecast") or {}
         if event_forecast.get("event_probability") is not None:
@@ -2764,12 +2776,32 @@ class MarketingOpportunityEngine:
                 "condition_label": public_condition_label(condition_label or condition_key),
                 "region_codes": region_codes,
                 "impact_probability": peix_context.get("impact_probability"),
+                "signal_score": peix_context.get("signal_score") or peix_context.get("score"),
                 "peix_score": peix_context.get("score"),
+                "signal_confidence_pct": confidence_pct,
                 "confidence_pct": confidence_pct,
+                "event_probability_pct": (
+                    round(float((((forecast_assessment or {}).get("event_forecast") or {}).get("event_probability") or 0.0) * 100.0), 1)
+                    if ((forecast_assessment or {}).get("event_forecast") or {}).get("event_probability") is not None
+                    else None
+                ),
                 "forecast_readiness": (forecast_assessment or {}).get("forecast_quality", {}).get("forecast_readiness"),
                 "truth_readiness": (opportunity_assessment or {}).get("truth_readiness"),
                 "expected_value_index": (opportunity_assessment or {}).get("expected_value_index"),
                 "rationale": rationale,
+                "field_contracts": {
+                    "signal_score": ranking_signal_contract(source="PeixEpiScore"),
+                    "impact_probability": ranking_signal_contract(
+                        source="PeixEpiScore",
+                        label="Legacy Signal-Score",
+                    ),
+                    "signal_confidence_pct": signal_confidence_contract(
+                        source=source,
+                        derived_from="trigger_evidence.confidence",
+                    ),
+                    "event_probability_pct": forecast_probability_contract(),
+                    "priority_score": priority_score_contract(source="MarketingOpportunityEngine"),
+                },
             },
             "recommendation": {
                 "primary_product": primary_product,
@@ -2881,6 +2913,7 @@ class MarketingOpportunityEngine:
             "status": status,
             "legacy_status": WORKFLOW_TO_LEGACY.get(status, m.status),
             "urgency_score": m.urgency_score,
+            "priority_score": m.urgency_score,
             "region_target": m.region_target,
             "trigger_context": trigger_context,
             "target_audience": m.target_audience,
@@ -2906,6 +2939,7 @@ class MarketingOpportunityEngine:
             "mapping_candidate_product": product_mapping.get("candidate_product"),
             "rule_source": product_mapping.get("rule_source"),
             "peix_context": peix_context,
+            "signal_score": peix_context.get("signal_score") or peix_context.get("score"),
             "forecast_assessment": forecast_assessment,
             "opportunity_assessment": opportunity_assessment,
             "exploratory_signals": campaign_payload.get("exploratory_signals") or [],

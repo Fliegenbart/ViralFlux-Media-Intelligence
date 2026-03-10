@@ -60,6 +60,33 @@ export function formatPercent(value?: number | null, digits = 0): string {
   return `${value.toFixed(digits)}%`;
 }
 
+export function primarySignalScore(
+  item?: { signal_score?: number | null; peix_score?: number | null; impact_probability?: number | null } | null,
+): number {
+  if (!item) return 0;
+  return Number(item.signal_score ?? item.peix_score ?? item.impact_probability ?? 0);
+}
+
+export function signalConfidencePercent(
+  signalConfidencePct?: number | null,
+  confidence?: number | null,
+): number | null {
+  if (signalConfidencePct != null && !Number.isNaN(signalConfidencePct)) {
+    return Math.round(signalConfidencePct);
+  }
+  if (confidence == null || Number.isNaN(confidence)) return null;
+  return Math.round(confidence <= 1 ? confidence * 100 : confidence);
+}
+
+export function metricContractLabel(
+  contracts: Record<string, any> | undefined,
+  key: string,
+  fallback: string,
+): string {
+  const label = contracts?.[key]?.label;
+  return typeof label === 'string' && label.trim().length > 0 ? label : fallback;
+}
+
 export function statusTone(status?: string | null): { background: string; color: string; border: string } {
   const normalized = String(status || '').toUpperCase();
   if (normalized === 'ACTIVATED' || normalized === 'LIVE') {
@@ -147,6 +174,16 @@ export function truthFreshnessLabel(value?: string | null): string {
   if (normalized === 'missing') return 'noch keine Kundendaten';
   if (normalized === 'unknown') return 'noch unklar';
   return normalized || '-';
+}
+
+export function learningStateLabel(value?: string | null): string {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'belastbar') return 'belastbar';
+  if (normalized === 'im_aufbau') return 'im Aufbau';
+  if (normalized === 'explorative') return 'explorativ';
+  if (normalized === 'missing') return 'noch nicht angeschlossen';
+  if (normalized === 'stale') return 'veraltet';
+  return value ? String(value) : '-';
 }
 
 export function recommendationLane(card: RecommendationCard): CampaignLaneId {

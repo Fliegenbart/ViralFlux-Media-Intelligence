@@ -18,6 +18,7 @@ export interface MapRegion {
   peix_score?: number;
   peix_band?: string;
   impact_probability?: number;
+  signal_score?: number;
   recommendation_ref?: RegionRecommendationRef | null;
   tooltip?: RegionTooltipData | null;
   forecast_direction?: string;
@@ -33,6 +34,7 @@ export interface MapRegion {
   decision_mode_reason?: string;
   priority_rank?: number;
   source_trace?: string[];
+  field_contracts?: Record<string, { semantics?: string; source?: string }>;
 }
 
 export interface CockpitResponse {
@@ -49,9 +51,13 @@ export interface CockpitResponse {
       region: string;
       region_name: string;
       priority: string;
+      signal_score?: number;
+      priority_score?: number;
       budget_shift_pct: number;
       channel_mix: Record<string, number>;
       reason: string;
+      score_semantics?: string;
+      field_contracts?: Record<string, { semantics?: string; source?: string }>;
     }>;
   };
   recommendations: { total: number; cards: RecommendationCard[] };

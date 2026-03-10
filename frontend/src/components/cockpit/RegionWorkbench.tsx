@@ -3,7 +3,7 @@ import React from 'react';
 import { UI_COPY } from '../../lib/copy';
 import { MediaRegionsResponse } from '../../types/media';
 import GermanyMap from './GermanyMap';
-import { formatDateShort, formatPercent, VIRUS_OPTIONS } from './cockpitUtils';
+import { formatDateShort, formatPercent, metricContractLabel, primarySignalScore, VIRUS_OPTIONS } from './cockpitUtils';
 
 interface Props {
   virus: string;
@@ -32,6 +32,7 @@ const RegionWorkbench: React.FC<Props> = ({
   const region = selectedRegion ? activeMap?.regions?.[selectedRegion] : null;
   const suggestion = activeMap?.activation_suggestions?.find((item) => item.region === selectedRegion);
   const topRegions = (activeMap?.top_regions || []).slice(0, 5);
+  const signalLabel = metricContractLabel(region?.field_contracts, 'signal_score', UI_COPY.signalScore);
 
   if (loading && !regionsView) {
     return <div className="card" style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>Lade Regionen-Workbench...</div>;
@@ -90,8 +91,8 @@ const RegionWorkbench: React.FC<Props> = ({
               <>
                 <div className="metric-strip">
                   <div className="metric-box">
-                    <span>{UI_COPY.signalScore}</span>
-                    <strong>{formatPercent(region.impact_probability || region.peix_score || 0)}</strong>
+                    <span>{signalLabel}</span>
+                    <strong>{formatPercent(primarySignalScore(region))}</strong>
                   </div>
                   <div className="metric-box">
                     <span>Severity</span>
@@ -128,6 +129,13 @@ const RegionWorkbench: React.FC<Props> = ({
                   </div>
                   <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
                     Budgetempfehlung: <strong style={{ color: 'var(--text-primary)' }}>{suggestion?.budget_shift_pct ? formatPercent(suggestion.budget_shift_pct) : 'zuerst pruefen'}</strong>
+                  </div>
+                  <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+                    Semantik: <strong style={{ color: 'var(--text-primary)' }}>
+                      {region.field_contracts?.signal_score?.semantics === 'ranking_signal'
+                        ? 'Ranking-Signal, keine Forecast-Wahrscheinlichkeit'
+                        : 'Signal-Kontext'}
+                    </strong>
                   </div>
                 </div>
 
@@ -195,7 +203,7 @@ const RegionWorkbench: React.FC<Props> = ({
                       </div>
                     </div>
                     <div style={{ textAlign: 'right' }}>
-                      <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--accent-violet)' }}>{formatPercent(Number(item.actionability_score || item.impact_probability || item.peix_score || 0))}</div>
+                      <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--accent-violet)' }}>{formatPercent(Number(item.actionability_score || primarySignalScore(item) || 0))}</div>
                       <div style={{ marginTop: 4, fontSize: 12, color: 'var(--text-muted)' }}>
                         Priorität #{Math.round(Number(item.priority_rank || 0))}
                       </div>

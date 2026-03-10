@@ -22,7 +22,14 @@ from app.models.database import (
 )
 from app.services.data_ingest.bfarm_service import get_cached_signals
 from app.services.media.peix_score_service import PeixEpiScoreService
+from app.services.media.recommendation_contracts import to_card_response
 from app.services.media.region_tooltip_service import build_region_tooltip
+from app.services.media.semantic_contracts import (
+    normalize_confidence_pct,
+    priority_score_contract,
+    ranking_signal_contract,
+    signal_confidence_contract,
+)
 
 
 BUNDESLAND_NAMES = {
@@ -93,6 +100,11 @@ class MediaCockpitService:
             peix_score=peix,
             region_recommendations=region_refs,
         )
+        signal_snapshot = self._signal_snapshot_section(
+            virus_typ=virus_typ,
+            peix_score=peix,
+            map_section=map_section,
+        )
 
         return {
             "virus_typ": virus_typ,
@@ -104,8 +116,11 @@ class MediaCockpitService:
                 source_status=source_status,
             ),
             "peix_epi_score": peix,
+            "signal_snapshot": signal_snapshot,
             "source_status": source_status,
+            "source_freshness": self._source_freshness_summary(source_status),
             "map": map_section,
+            "campaign_refs": self._campaign_refs_section(region_refs),
             "recommendations": self._recommendation_section(),
             "backtest_summary": self._backtest_summary(
                 virus_typ=virus_typ,
@@ -132,6 +147,134 @@ class MediaCockpitService:
         if normalized > effective_now:
             normalized = effective_now
         return normalized.isoformat()
+
+    @staticmethod
+    def _coerce_float(value: Any) -> float | None:
+        if value is None:
+            return None
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return None
+
+    def _ranking_signal_fields(
+        self,
+        *,
+        signal_score: Any,
+        source: str,
+        legacy_alias: Any = None,
+        label: str = "Signal-Score",
+    ) -> dict[str, Any]:
+        normalized_signal = self._coerce_float(signal_score)
+        normalized_alias = self._coerce_float(legacy_alias)
+        if normalized_signal is None:
+            normalized_signal = normalized_alias
+        if normalized_alias is None:
+            normalized_alias = normalized_signal
+
+        payload: dict[str, Any] = {
+            "score_semantics": "ranking_signal",
+            "field_contracts": {
+                "signal_score": ranking_signal_contract(source=source, label=label),
+                "impact_probability": ranking_signal_contract(
+                    source=source,
+                    label="Legacy Signal-Score",
+                ),
+            },
+        }
+        if normalized_signal is not None:
+            payload["signal_score"] = round(normalized_signal, 1)
+        if normalized_alias is not None:
+            payload["impact_probability"] = round(normalized_alias, 1)
+        return payload
+
+    @staticmethod
+    def _normalize_recommendation_ref(
+        recommendation_ref: dict[str, Any] | None,
+    ) -> dict[str, Any] | None:
+        if not recommendation_ref:
+            return None
+        return {
+            "card_id": recommendation_ref.get("card_id"),
+            "detail_url": recommendation_ref.get("detail_url"),
+            "status": recommendation_ref.get("status"),
+            "urgency_score": recommendation_ref.get("urgency_score"),
+            "brand": recommendation_ref.get("brand"),
+            "product": recommendation_ref.get("product"),
+            "priority_score": recommendation_ref.get("priority_score"),
+        }
+
+    def _signal_snapshot_section(
+        self,
+        *,
+        virus_typ: str,
+        peix_score: dict[str, Any],
+        map_section: dict[str, Any],
+    ) -> dict[str, Any]:
+        national = {
+            "virus_typ": virus_typ,
+            "band": peix_score.get("national_band"),
+            "top_drivers": peix_score.get("top_drivers") or [],
+        }
+        national.update(self._ranking_signal_fields(
+            signal_score=peix_score.get("national_score"),
+            legacy_alias=peix_score.get("national_impact_probability"),
+            source="PeixEpiScore",
+        ))
+
+        top_region = (map_section.get("top_regions") or [None])[0]
+        top_region_snapshot = None
+        if top_region:
+            top_region_snapshot = {
+                "code": top_region.get("code"),
+                "name": top_region.get("name"),
+                "trend": top_region.get("trend"),
+            }
+            top_region_snapshot.update(self._ranking_signal_fields(
+                signal_score=top_region.get("signal_score") or top_region.get("peix_score"),
+                legacy_alias=top_region.get("impact_probability"),
+                source="PeixEpiScore",
+            ))
+
+        return {
+            "national": national,
+            "top_region": top_region_snapshot,
+        }
+
+    def _source_freshness_summary(self, source_status: dict[str, Any]) -> dict[str, Any]:
+        items = source_status.get("items") or []
+        core_source_keys = ("wastewater", "survstat", "are_konsultation", "notaufnahme")
+        core_sources = [item for item in items if item.get("source_key") in core_source_keys]
+        degraded_sources = [
+            item for item in items
+            if item.get("freshness_state") in {"stale", "no_data"}
+        ]
+        return {
+            "live_ratio": source_status.get("live_ratio"),
+            "live_count": source_status.get("live_count"),
+            "total": source_status.get("total"),
+            "core_sources": core_sources,
+            "degraded_sources": degraded_sources,
+        }
+
+    def _campaign_refs_section(
+        self,
+        region_recommendations: dict[str, dict[str, Any]],
+    ) -> dict[str, Any]:
+        refs = []
+        for region_code, recommendation_ref in region_recommendations.items():
+            normalized = self._normalize_recommendation_ref(recommendation_ref)
+            if not normalized:
+                continue
+            refs.append({"region_code": region_code, **normalized})
+        refs.sort(
+            key=lambda item: float(item.get("priority_score") or item.get("urgency_score") or 0.0),
+            reverse=True,
+        )
+        return {
+            "regions_with_recommendations": len(refs),
+            "items": refs[:12],
+        }
 
     def _map_section(
         self,
@@ -197,7 +340,13 @@ class MediaCockpitService:
 
             trend = "steigend" if change_pct > 10 else "fallend" if change_pct < -10 else "stabil"
             peix_entry = peix_regions.get(code, {})
-            recommendation_ref = region_recommendations.get(code)
+            recommendation_ref = self._normalize_recommendation_ref(region_recommendations.get(code))
+            signal_fields = self._ranking_signal_fields(
+                signal_score=peix_entry.get("score_0_100"),
+                legacy_alias=peix_entry.get("impact_probability"),
+                source="PeixEpiScore",
+            )
+            tooltip_signal_score = signal_fields.get("signal_score") or signal_fields.get("impact_probability")
 
             # Vorhersage-Delta berechnen
             vorhersage_delta_pct = None
@@ -225,7 +374,6 @@ class MediaCockpitService:
                 "change_pct": round(float(change_pct), 1),
                 "peix_score": peix_entry.get("score_0_100"),
                 "peix_band": peix_entry.get("risk_band"),
-                "impact_probability": peix_entry.get("impact_probability"),
                 "recommendation_ref": recommendation_ref,
                 "tooltip": build_region_tooltip(
                     region_name=BUNDESLAND_NAMES.get(code, code),
@@ -234,11 +382,12 @@ class MediaCockpitService:
                     change_pct=round(float(change_pct), 1),
                     peix_score=peix_entry.get("score_0_100"),
                     peix_band=peix_entry.get("risk_band", "low"),
-                    impact_probability=peix_entry.get("impact_probability"),
+                    impact_probability=tooltip_signal_score,
                     top_drivers=peix_entry.get("top_drivers"),
                     vorhersage_delta_pct=vorhersage_delta_pct,
                 ),
             }
+            payload.update(signal_fields)
             regions[code] = payload
             ranking.append({"code": code, **payload})
 
@@ -249,6 +398,12 @@ class MediaCockpitService:
             peix_entry = peix_regions.get(code)
             if not peix_entry:
                 continue
+            signal_fields = self._ranking_signal_fields(
+                signal_score=peix_entry.get("score_0_100"),
+                legacy_alias=peix_entry.get("impact_probability"),
+                source="PeixEpiScore",
+            )
+            tooltip_signal_score = signal_fields.get("signal_score") or signal_fields.get("impact_probability")
             fallback_payload = {
                 "name": name,
                 "avg_viruslast": 0.0,
@@ -260,8 +415,7 @@ class MediaCockpitService:
                 "change_pct": 0.0,
                 "peix_score": peix_entry.get("score_0_100"),
                 "peix_band": peix_entry.get("risk_band"),
-                "impact_probability": peix_entry.get("impact_probability"),
-                "recommendation_ref": region_recommendations.get(code),
+                "recommendation_ref": self._normalize_recommendation_ref(region_recommendations.get(code)),
                 "tooltip": build_region_tooltip(
                     region_name=name,
                     virus_typ=virus_typ,
@@ -269,16 +423,17 @@ class MediaCockpitService:
                     change_pct=0.0,
                     peix_score=peix_entry.get("score_0_100"),
                     peix_band=peix_entry.get("risk_band", "low"),
-                    impact_probability=peix_entry.get("impact_probability"),
+                    impact_probability=tooltip_signal_score,
                     top_drivers=peix_entry.get("top_drivers"),
                 ),
             }
+            fallback_payload.update(signal_fields)
             regions[code] = fallback_payload
             ranking.append({"code": code, **fallback_payload})
 
         ranking.sort(
             key=lambda x: (
-                float(x.get("impact_probability") or 0.0),
+                float(x.get("signal_score") or x.get("peix_score") or x.get("impact_probability") or 0.0),
                 float(x.get("avg_viruslast") or 0.0),
             ),
             reverse=True,
@@ -287,12 +442,26 @@ class MediaCockpitService:
 
         activation_suggestions = []
         for item in top_regions[:5]:
-            if item["trend"] == "steigend" or (item.get("impact_probability") or 0) >= 60:
+            signal_score = float(item.get("signal_score") or item.get("impact_probability") or 0.0)
+            if item["trend"] == "steigend" or signal_score >= 60:
+                priority_score = round(
+                    min(
+                        100.0,
+                        max(
+                            signal_score,
+                            signal_score * 0.65 + (12.0 if item["trend"] == "steigend" else 0.0),
+                        ),
+                    ),
+                    1,
+                )
                 activation_suggestions.append({
                     "region": item["code"],
                     "region_name": item["name"],
-                    "priority": "high" if (item.get("impact_probability") or 0) >= 70 else "medium",
-                    "budget_shift_pct": min(45.0, max(10.0, float(item.get("impact_probability") or 0) * 0.35)),
+                    "priority": "high" if signal_score >= 70 else "medium",
+                    "signal_score": round(signal_score, 1),
+                    "priority_score": priority_score,
+                    "impact_probability": round(signal_score, 1),
+                    "budget_shift_pct": min(45.0, max(10.0, signal_score * 0.35)),
                     "channel_mix": {
                         "programmatic": 42,
                         "social": 30,
@@ -301,9 +470,18 @@ class MediaCockpitService:
                     },
                     "reason": (
                         f"{item['name']} zeigt {item['change_pct']:+.1f}% Woche-zu-Woche "
-                        f"und einen Signalscore von {item.get('peix_score', 0):.1f}."
+                        f"und einen Signalscore von {signal_score:.1f}."
                     ),
                     "recommendation_ref": item.get("recommendation_ref"),
+                    "score_semantics": "ranking_signal",
+                    "field_contracts": {
+                        "signal_score": ranking_signal_contract(source="PeixEpiScore"),
+                        "priority_score": priority_score_contract(source="MediaCockpitService"),
+                        "impact_probability": ranking_signal_contract(
+                            source="PeixEpiScore",
+                            label="Legacy Signal-Score",
+                        ),
+                    },
                 })
 
         return {
@@ -410,113 +588,171 @@ class MediaCockpitService:
         else:
             pollen_type = "Saison-Pause"
 
+        def build_tile(
+            *,
+            tile_id: str,
+            title: str,
+            value: Any,
+            unit: str,
+            subtitle: str,
+            signal_score: Any,
+            source: str,
+            data_source: str,
+            product_scope: str | None = None,
+        ) -> dict[str, Any]:
+            tile = {
+                "id": tile_id,
+                "title": title,
+                "value": value,
+                "unit": unit,
+                "subtitle": subtitle,
+                "data_source": data_source,
+            }
+            if product_scope:
+                tile["product_scope"] = product_scope
+            tile.update(self._ranking_signal_fields(
+                signal_score=signal_score,
+                source=source,
+            ))
+            return tile
+
         tiles = [
-            {
-                "id": "peix_national",
-                "title": "Signalscore Deutschland",
-                "value": peix_score.get("national_score"),
-                "unit": "/100",
-                "subtitle": f"Band: {peix_score.get('national_band', 'n/a')}",
-                "impact_probability": peix_score.get("national_impact_probability") or 0.0,
-                "score_semantics": "ranking_signal",
-                "data_source": "Fusion",
-            },
-            {
-                "id": "map_top_region",
-                "title": "Top Chancenregion",
-                "value": top_region.get("name") if top_region else "-",
-                "unit": "",
-                "subtitle": (
-                    f"Signal-Score {top_region.get('impact_probability', 0):.1f}%"
+            build_tile(
+                tile_id="peix_national",
+                title="Signalscore Deutschland",
+                value=peix_score.get("national_score"),
+                unit="/100",
+                subtitle=f"Band: {peix_score.get('national_band', 'n/a')}",
+                signal_score=peix_score.get("national_score"),
+                source="PeixEpiScore",
+                data_source="Fusion",
+            ),
+            build_tile(
+                tile_id="map_top_region",
+                title="Top Chancenregion",
+                value=top_region.get("name") if top_region else "-",
+                unit="",
+                subtitle=(
+                    f"Signal-Score {float(top_region.get('signal_score') or top_region.get('impact_probability') or 0.0):.1f}%"
                     if top_region else "Keine Daten"
                 ),
-                "impact_probability": top_region.get("impact_probability") if top_region else 0.0,
-                "score_semantics": "ranking_signal",
-                "data_source": "Karte + Score",
-            },
-            {
-                "id": "wastewater",
-                "title": f"Abwasserlast {virus_typ}",
-                "value": map_section.get("max_viruslast"),
-                "unit": "Genkopien/L",
-                "subtitle": "AMELAG/RKI",
-                "impact_probability": min(100.0, max(0.0, float((map_section.get("max_viruslast") or 0.0) / 1200000.0) * 100.0)),
-                "data_source": "AMELAG",
-            },
-            {
-                "id": "are",
-                "title": "ARE Konsultationsinzidenz",
-                "value": latest_are.konsultationsinzidenz if latest_are else None,
-                "unit": "/100k",
-                "subtitle": "RKI ARE",
-                "impact_probability": min(100.0, max(0.0, float((latest_are.konsultationsinzidenz or 0) / 8000.0) * 100.0)) if latest_are else 0.0,
-                "data_source": "RKI",
-            },
-            {
-                "id": "notaufnahme",
-                "title": f"Notaufnahme {syndrome}",
-                "value": (
+                signal_score=top_region.get("signal_score") if top_region else 0.0,
+                source="PeixEpiScore",
+                data_source="Karte + Score",
+            ),
+            build_tile(
+                tile_id="wastewater",
+                title=f"Abwasserlast {virus_typ}",
+                value=map_section.get("max_viruslast"),
+                unit="Genkopien/L",
+                subtitle="AMELAG/RKI",
+                signal_score=min(100.0, max(0.0, float((map_section.get("max_viruslast") or 0.0) / 1200000.0) * 100.0)),
+                source="AMELAG",
+                data_source="AMELAG",
+            ),
+            build_tile(
+                tile_id="are",
+                title="ARE Konsultationsinzidenz",
+                value=latest_are.konsultationsinzidenz if latest_are else None,
+                unit="/100k",
+                subtitle="RKI ARE",
+                signal_score=(
+                    min(100.0, max(0.0, float((latest_are.konsultationsinzidenz or 0) / 8000.0) * 100.0))
+                    if latest_are else 0.0
+                ),
+                source="RKI ARE",
+                data_source="RKI",
+            ),
+            build_tile(
+                tile_id="notaufnahme",
+                title=f"Notaufnahme {syndrome}",
+                value=(
                     latest_notaufnahme.relative_cases_7day_ma
                     if latest_notaufnahme and latest_notaufnahme.relative_cases_7day_ma is not None
                     else (latest_notaufnahme.relative_cases if latest_notaufnahme else None)
                 ),
-                "unit": "%",
-                "subtitle": "AKTIN/RKI",
-                "impact_probability": min(100.0, max(0.0, float((latest_notaufnahme.relative_cases_7day_ma if latest_notaufnahme and latest_notaufnahme.relative_cases_7day_ma is not None else (latest_notaufnahme.relative_cases if latest_notaufnahme else 0.0)) or 0.0) / 20.0 * 100.0)),
-                "data_source": "Notaufnahme",
-            },
-            {
-                "id": "survstat",
-                "title": "SURVSTAT Respiratory",
-                "value": round(surv_incidence, 1) if surv_incidence > 0 else None,
-                "unit": "/100k",
-                "subtitle": surv_week_label,
-                "impact_probability": min(100.0, max(0.0, surv_incidence / 150.0 * 100.0)),
-                "data_source": "SURVSTAT",
-            },
-            {
-                "id": "bfarm",
-                "title": "BfArM Engpass-Signal",
-                "value": bfarm_score,
-                "unit": "/100",
-                "subtitle": (bfarm.get("wave_type") or "BfArM"),
-                # BfArM misst Lieferengpässe, nicht Epidemie-Risiko direkt.
-                # Standalone max 40%, gewichtet mit ARE-Belastung.
-                "impact_probability": round(bfarm_score * (0.40 + 0.60 * min(1.0, float((latest_are.konsultationsinzidenz or 0) / 4000.0) if latest_are else 0.0)), 1),
-                "data_source": "BfArM",
-            },
-            {
-                "id": "weather",
-                "title": "Wetter-Risikodruck",
-                "value": round(weather_risk, 1),
-                "unit": "/100",
-                "subtitle": "DWD/BrightSky",
-                "impact_probability": round(weather_risk, 1),
-                "data_source": "Wetter",
-            },
-            {
-                "id": "pollen",
-                "title": "Pollen-Trigger",
-                "value": round(pollen_signal, 1),
-                "unit": "/100",
-                "subtitle": (
+                unit="%",
+                subtitle="AKTIN/RKI",
+                signal_score=min(
+                    100.0,
+                    max(
+                        0.0,
+                        float(
+                            (
+                                latest_notaufnahme.relative_cases_7day_ma
+                                if latest_notaufnahme and latest_notaufnahme.relative_cases_7day_ma is not None
+                                else (latest_notaufnahme.relative_cases if latest_notaufnahme else 0.0)
+                            ) or 0.0
+                        ) / 20.0 * 100.0,
+                    ),
+                ),
+                source="AKTIN/RKI",
+                data_source="Notaufnahme",
+            ),
+            build_tile(
+                tile_id="survstat",
+                title="SURVSTAT Respiratory",
+                value=round(surv_incidence, 1) if surv_incidence > 0 else None,
+                unit="/100k",
+                subtitle=surv_week_label,
+                signal_score=min(100.0, max(0.0, surv_incidence / 150.0 * 100.0)),
+                source="RKI SURVSTAT",
+                data_source="SURVSTAT",
+            ),
+            build_tile(
+                tile_id="bfarm",
+                title="BfArM Engpass-Signal",
+                value=bfarm_score,
+                unit="/100",
+                subtitle=(bfarm.get("wave_type") or "BfArM"),
+                signal_score=round(
+                    bfarm_score * (
+                        0.40 + 0.60 * min(
+                            1.0,
+                            float((latest_are.konsultationsinzidenz or 0) / 4000.0)
+                            if latest_are else 0.0,
+                        )
+                    ),
+                    1,
+                ),
+                source="BfArM",
+                data_source="BfArM",
+            ),
+            build_tile(
+                tile_id="weather",
+                title="Wetter-Risikodruck",
+                value=round(weather_risk, 1),
+                unit="/100",
+                subtitle="DWD/BrightSky",
+                signal_score=round(weather_risk, 1),
+                source="DWD/BrightSky",
+                data_source="Wetter",
+            ),
+            build_tile(
+                tile_id="pollen",
+                title="Pollen-Trigger",
+                value=round(pollen_signal, 1),
+                unit="/100",
+                subtitle=(
                     "Keine aktuellen Daten (Saison-Pause)"
                     if pollen_is_stale
-                    else f"DWD ({pollen_type}) — Relevant für GeloSitin"
+                    else f"DWD ({pollen_type}) - Relevant für GeloSitin"
                 ),
-                "impact_probability": round(pollen_signal, 1),
-                "data_source": "DWD Pollen",
-                "product_scope": "GeloSitin",
-            },
-            {
-                "id": "trends",
-                "title": "Google Trends Infekt",
-                "value": round(float(trends_avg or 0.0), 1),
-                "unit": "/100",
-                "subtitle": "14 Tage Mittel",
-                "impact_probability": round(float(trends_avg or 0.0), 1),
-                "data_source": "Google Trends",
-            },
+                signal_score=round(pollen_signal, 1),
+                source="DWD Pollen",
+                data_source="DWD Pollen",
+                product_scope="GeloSitin",
+            ),
+            build_tile(
+                tile_id="trends",
+                title="Google Trends Infekt",
+                value=round(float(trends_avg or 0.0), 1),
+                unit="/100",
+                subtitle="14 Tage Mittel",
+                signal_score=round(float(trends_avg or 0.0), 1),
+                source="Google Trends",
+                data_source="Google Trends",
+            ),
         ]
 
         live_map = {item["source_key"]: item for item in source_status.get("items", [])}
@@ -538,7 +774,13 @@ class MediaCockpitService:
             tile["is_live"] = bool(status_item.get("is_live")) if status_item else False
             tile["last_updated"] = status_item.get("last_updated") if status_item else None
 
-        tiles.sort(key=lambda row: (float(row.get("impact_probability") or 0.0), float(row.get("value") or 0.0) if isinstance(row.get("value"), (int, float)) else 0.0), reverse=True)
+        tiles.sort(
+            key=lambda row: (
+                float(row.get("signal_score") or row.get("impact_probability") or 0.0),
+                float(row.get("value") or 0.0) if isinstance(row.get("value"), (int, float)) else 0.0,
+            ),
+            reverse=True,
+        )
 
         return {
             "tiles": tiles,
@@ -567,12 +809,25 @@ class MediaCockpitService:
             ai_meta = campaign_payload.get("ai_meta") or {}
             status = LEGACY_TO_WORKFLOW.get(str(row.status or "").upper(), row.status or "DRAFT")
             recommended_product = product_mapping.get("recommended_product") or row.product or "Atemwegslinie"
-
-            cards.append({
+            decision_expectation = (campaign_payload.get("decision_brief") or {}).get("expectation") or {}
+            signal_confidence_pct = (
+                normalize_confidence_pct(decision_expectation.get("signal_confidence_pct"))
+                or normalize_confidence_pct(decision_expectation.get("confidence_pct"))
+                or normalize_confidence_pct(
+                    ((campaign_payload.get("forecast_assessment") or {}).get("event_forecast") or {}).get("confidence")
+                )
+            )
+            signal_score = (
+                self._coerce_float((peix_context or {}).get("signal_score"))
+                or self._coerce_float((peix_context or {}).get("score"))
+                or self._coerce_float((peix_context or {}).get("impact_probability"))
+            )
+            opp_payload = {
                 "id": row.opportunity_id,
                 "status": status,
                 "type": row.opportunity_type,
                 "urgency_score": row.urgency_score,
+                "priority_score": row.urgency_score,
                 "brand": row.brand or "PEIX Partner",
                 "product": recommended_product,
                 "recommended_product": recommended_product,
@@ -590,8 +845,14 @@ class MediaCockpitService:
                         else activation.get("end")
                     ),
                 },
-                "reason": row.recommendation_reason or (row.trigger_event or "Epidemiologisches Trigger-Signal"),
-                "confidence": min(0.98, max(0.45, (row.urgency_score or 50.0) / 100.0)),
+                "recommendation_reason": row.recommendation_reason or (row.trigger_event or "Epidemiologisches Trigger-Signal"),
+                "confidence": (
+                    round(float(signal_confidence_pct) / 100.0, 2)
+                    if signal_confidence_pct is not None
+                    else None
+                ),
+                "signal_score": signal_score,
+                "signal_confidence_pct": signal_confidence_pct,
                 "mapping_status": product_mapping.get("mapping_status"),
                 "mapping_confidence": product_mapping.get("mapping_confidence"),
                 "mapping_reason": product_mapping.get("mapping_reason"),
@@ -607,6 +868,7 @@ class MediaCockpitService:
                 "campaign_name": campaign.get("campaign_name"),
                 "primary_kpi": measurement.get("primary_kpi"),
                 "peix_context": peix_context,
+                "campaign_payload": campaign_payload,
                 "campaign_preview": {
                     "campaign_name": campaign.get("campaign_name"),
                     "activation_window": {
@@ -625,7 +887,18 @@ class MediaCockpitService:
                 },
                 "detail_url": f"/kampagnen/{row.opportunity_id}",
                 "created_at": row.created_at.isoformat() if row.created_at else None,
-            })
+                "updated_at": row.updated_at.isoformat() if row.updated_at else None,
+            }
+            card = to_card_response(opp_payload, include_preview=True)
+            card.setdefault("field_contracts", {})
+            card["field_contracts"]["signal_confidence_pct"] = signal_confidence_contract(
+                source=str(
+                    (campaign_payload.get("trigger_snapshot") or {}).get("source")
+                    or "Signal-Fusion"
+                ),
+                derived_from="trigger_evidence.confidence",
+            )
+            cards.append(card)
 
         return {
             "total": len(cards),
@@ -653,6 +926,7 @@ class MediaCockpitService:
                 "detail_url": f"/kampagnen/{row.opportunity_id}",
                 "status": status,
                 "urgency_score": row.urgency_score,
+                "priority_score": row.urgency_score,
                 "brand": row.brand,
                 "product": row.product,
             }

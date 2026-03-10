@@ -1,5 +1,6 @@
 import unittest
-from datetime import datetime
+from datetime import datetime, timedelta
+from unittest.mock import patch
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -9,7 +10,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.api.media import router
 from app.db.session import get_db
-from app.models.database import Base, BrandProduct, WastewaterAggregated
+from app.models.database import Base, BrandProduct, MediaOutcomeRecord, WastewaterAggregated
 
 
 class MediaV2ApiTests(unittest.TestCase):
@@ -139,6 +140,61 @@ class MediaV2ApiTests(unittest.TestCase):
         template_response = self.client.get("/api/v1/media/outcomes/template")
         self.assertEqual(template_response.status_code, 200)
         self.assertIn("week_start,product,region_code,media_spend_eur", template_response.text)
+
+    def test_recommendation_list_exposes_outcome_learning_fields(self) -> None:
+        now = datetime(2026, 3, 10)
+        for index in range(30):
+            self.db.add(
+                MediaOutcomeRecord(
+                    week_start=now - timedelta(days=7 * index),
+                    brand="gelo",
+                    product="GeloProsed",
+                    region_code="SH",
+                    media_spend_eur=10000 + index * 100,
+                    sales_units=120 + index * 2,
+                    qualified_visits=240 + index,
+                    search_lift_index=18 + (index % 4),
+                    source_label="manual",
+                )
+            )
+        self.db.commit()
+
+        opportunity = {
+            "id": "opp-1",
+            "status": "READY",
+            "type": "activation",
+            "urgency_score": 61.0,
+            "brand": "gelo",
+            "product": "GeloProsed",
+            "recommended_product": "GeloProsed",
+            "region_codes": ["SH"],
+            "budget_shift_pct": 16.0,
+            "channel_mix": {"programmatic": 35, "social": 30, "search": 20, "ctv": 15},
+            "campaign_payload": {
+                "message_framework": {"hero_message": "Norddeutschland priorisieren."},
+                "channel_plan": [{"channel": "search", "share_pct": 40.0}],
+                "guardrail_report": {"passed": True},
+            },
+            "campaign_preview": {
+                "budget": {"weekly_budget_eur": 120000.0},
+                "activation_window": {
+                    "start": "2026-03-09T00:00:00",
+                    "end": "2026-03-22T00:00:00",
+                },
+            },
+            "condition_key": "erkaltung_akut",
+        }
+
+        with patch("app.api.media.MarketingOpportunityEngine.get_opportunities", return_value=[opportunity]):
+            response = self.client.get("/api/v1/media/recommendations/list?brand=gelo")
+
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["total"], 1)
+        card = body["cards"][0]
+        self.assertIn("outcome_signal_score", card)
+        self.assertIn("outcome_confidence_pct", card)
+        self.assertEqual(card["learning_state"], "im_aufbau")
 
 
 if __name__ == "__main__":

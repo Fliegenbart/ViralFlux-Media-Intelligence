@@ -8,7 +8,11 @@ import {
   formatCurrency,
   formatDateShort,
   formatPercent,
+  learningStateLabel,
+  metricContractLabel,
+  primarySignalScore,
   recommendationLane,
+  signalConfidencePercent,
   statusTone,
 } from './cockpitUtils';
 
@@ -182,6 +186,10 @@ const CampaignStudio: React.FC<Props> = ({
               <span>Entwuerfe</span>
               <strong>{prepareCount}</strong>
             </div>
+            <div className="campaign-guidance-row">
+              <span>Learning-State</span>
+              <strong>{learningStateLabel(campaignsView?.summary?.learning_state)}</strong>
+            </div>
             <div className="campaign-guidance-copy">
               Wenige starke Vorschlaege, klare Zustaende und ein direkter Weg zur Freigabe sorgen fuer Orientierung.
             </div>
@@ -235,7 +243,11 @@ const CampaignStudio: React.FC<Props> = ({
                             {workflowLabel(card.lifecycle_state || card.status)}
                           </span>
                           <span className="campaign-confidence-chip">
-                            {confidenceLabel(card.confidence)}
+                            {confidenceLabel(
+                              card.signal_confidence_pct,
+                              card.confidence,
+                              metricContractLabel(card.field_contracts, 'signal_confidence_pct', 'Signal-Konfidenz'),
+                            )}
                           </span>
                         </div>
 
@@ -252,6 +264,17 @@ const CampaignStudio: React.FC<Props> = ({
                           {readableCampaignSummary(card)}
                         </p>
 
+                        {(card.learning_state || card.outcome_signal_score != null) && (
+                          <div className="review-chip-row" style={{ marginTop: 10 }}>
+                            <span className="step-chip">
+                              Learning {learningStateLabel(card.learning_state)}
+                            </span>
+                            <span className="step-chip">
+                              Outcome {formatPercent(card.outcome_signal_score)}
+                            </span>
+                          </div>
+                        )}
+
                         {Boolean(card.publish_blockers?.length) && (
                           <div className="review-chip-row" style={{ marginTop: 10 }}>
                             {card.publish_blockers!.slice(0, 2).map((blocker) => (
@@ -266,12 +289,12 @@ const CampaignStudio: React.FC<Props> = ({
                             <strong>{card.recommended_product || card.product}</strong>
                           </div>
                           <div className="campaign-inline-stat">
-                            <span>Shift</span>
-                            <strong>{formatPercent(card.budget_shift_pct || 0)}</strong>
+                            <span>{metricContractLabel(card.field_contracts, 'signal_score', 'Signal-Score')}</span>
+                            <strong>{formatPercent(primarySignalScore(card))}</strong>
                           </div>
                           <div className="campaign-inline-stat">
-                            <span>Flight</span>
-                            <strong>{flightWindowLabel(card)}</strong>
+                            <span>{metricContractLabel(card.field_contracts, 'priority_score', 'Priority-Score')}</span>
+                            <strong>{formatPercent(card.priority_score || card.urgency_score || 0)}</strong>
                           </div>
                           <div className="campaign-inline-stat">
                             <span>Budget</span>
@@ -304,10 +327,14 @@ const CampaignStudio: React.FC<Props> = ({
 
 export default CampaignStudio;
 
-function confidenceLabel(value?: number | null): string {
-  if (value == null || Number.isNaN(value)) return 'Confidence offen';
-  const normalized = value <= 1 ? value * 100 : value;
-  return `${Math.round(normalized)}% Confidence`;
+function confidenceLabel(
+  signalConfidencePct?: number | null,
+  confidence?: number | null,
+  label = 'Signal-Konfidenz',
+): string {
+  const normalized = signalConfidencePercent(signalConfidencePct, confidence);
+  if (normalized == null) return `${label} offen`;
+  return `${normalized}% ${label}`;
 }
 
 function flightWindowLabel(card: RecommendationCard): string {

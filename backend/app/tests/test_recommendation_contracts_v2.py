@@ -189,6 +189,38 @@ class RecommendationContractsV2Tests(unittest.TestCase):
             "GeloMyrto forte: Verfügbarkeitsfenster nutzen",
         )
 
+    def test_to_card_response_exposes_semantic_contracts_and_no_urgency_confidence_fallback(self) -> None:
+        response = to_card_response(
+            _sample_card(
+                confidence=None,
+                urgency_score=92.0,
+                decision_brief={
+                    "expectation": {
+                        "signal_score": 67.0,
+                        "signal_confidence_pct": None,
+                    },
+                },
+                campaign_payload={
+                    "message_framework": {
+                        "hero_message": "Norddeutschland jetzt vorbereiten.",
+                    },
+                    "channel_plan": [
+                        {"channel": "search", "share_pct": 40.0},
+                    ],
+                    "guardrail_report": {
+                        "passed": True,
+                    },
+                },
+            ),
+            include_preview=True,
+        )
+
+        self.assertIsNone(response["confidence"])
+        self.assertEqual(response["signal_score"], 67.0)
+        self.assertEqual(response["priority_score"], 92.0)
+        self.assertEqual(response["field_contracts"]["signal_score"]["semantics"], "ranking_signal")
+        self.assertEqual(response["field_contracts"]["priority_score"]["semantics"], "activation_priority")
+
 
 if __name__ == "__main__":
     unittest.main()

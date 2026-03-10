@@ -13,8 +13,12 @@ import {
   formatDateTime,
   formatPercent,
   kpiLabel,
+  learningStateLabel,
+  metricContractLabel,
   nextWorkflowStatus,
+  primarySignalScore,
   readinessStateLabel,
+  signalConfidencePercent,
   statusTone,
   workflowLabel,
 } from './cockpitUtils';
@@ -80,10 +84,12 @@ const RecommendationDrawer: React.FC<Props> = ({
   ];
   const normalizedStatus = String(detail?.lifecycle_state || detail?.status || '').toUpperCase();
   const currentWorkflowIndex = Math.max(workflowSteps.findIndex((step) => step.key === normalizedStatus), 0);
-  const confidenceValue = detail?.confidence == null
-    ? null
-    : Math.round((detail.confidence <= 1 ? detail.confidence * 100 : detail.confidence));
+  const confidenceValue = signalConfidencePercent(detail?.signal_confidence_pct, detail?.confidence);
   const heroSummary = detail?.decision_brief?.summary_sentence || detail?.reason || 'Signal- und regelbasierter Kampagnenvorschlag zur Pruefung und Freigabe.';
+  const signalScoreLabel = metricContractLabel(detail?.field_contracts, 'signal_score', 'Signal-Score');
+  const priorityScoreLabel = metricContractLabel(detail?.field_contracts, 'priority_score', 'Priority-Score');
+  const signalConfidenceLabel = metricContractLabel(detail?.field_contracts, 'signal_confidence_pct', 'Signal-Konfidenz');
+  const outcomeConfidenceLabel = metricContractLabel(detail?.field_contracts, 'outcome_confidence_pct', 'Learning-Konfidenz');
   const syncStateTone = syncPreview?.readiness.can_sync_now
     ? {
         background: 'rgba(16, 185, 129, 0.10)',
@@ -137,10 +143,19 @@ const RecommendationDrawer: React.FC<Props> = ({
 
                 <div className="review-chip-row">
                   <span className="campaign-confidence-chip">
-                    {confidenceValue != null ? `${confidenceValue}% Confidence` : 'Confidence offen'}
+                    {confidenceValue != null ? `${confidenceValue}% ${signalConfidenceLabel}` : `${signalConfidenceLabel} offen`}
                   </span>
                   <span className="campaign-confidence-chip">
                     {workflowLabel(detail.lifecycle_state || detail.status)}
+                  </span>
+                  <span className="campaign-confidence-chip">
+                    {signalScoreLabel} {formatPercent(primarySignalScore(detail))}
+                  </span>
+                  <span className="campaign-confidence-chip">
+                    {priorityScoreLabel} {formatPercent(detail.priority_score || detail.urgency_score || 0)}
+                  </span>
+                  <span className="campaign-confidence-chip">
+                    Learning {learningStateLabel(detail.learning_state)}
                   </span>
                   <span className="campaign-confidence-chip">
                     KPI {kpiLabel(detail.primary_kpi || detail.campaign_pack?.measurement_plan?.primary_kpi)}
@@ -249,6 +264,26 @@ const RecommendationDrawer: React.FC<Props> = ({
                   <div className="campaign-focus-label">Warum jetzt?</div>
                   <div className="review-body-copy">{heroSummary}</div>
                 </div>
+
+                {(detail.outcome_signal_score != null || detail.outcome_learning_explanation) && (
+                  <div className="soft-panel review-panel-soft">
+                    <div className="campaign-focus-label">Outcome-Learning</div>
+                    <div className="review-body-copy" style={{ marginTop: 8 }}>
+                      {detail.outcome_learning_explanation || 'Outcome-Learning ist fuer diesen Vorschlag noch nicht ausreichend angeschlossen.'}
+                    </div>
+                    <div className="review-chip-row" style={{ marginTop: 10 }}>
+                      <span className="step-chip">
+                        Outcome {formatPercent(detail.outcome_signal_score)}
+                      </span>
+                      <span className="step-chip">
+                        Learning {learningStateLabel(detail.learning_state)}
+                      </span>
+                      <span className="step-chip">
+                        {outcomeConfidenceLabel} {detail.outcome_confidence_pct != null ? formatPercent(detail.outcome_confidence_pct) : '-'}
+                      </span>
+                    </div>
+                  </div>
+                )}
 
                 <div className="review-detail-group">
                   <div className="campaign-focus-label">Zielgruppen</div>

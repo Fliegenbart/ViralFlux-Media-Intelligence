@@ -37,6 +37,16 @@ export interface CampaignPreview {
   ai_generation_status?: string;
 }
 
+export interface MetricContract {
+  label?: string;
+  semantics?: string;
+  source?: string;
+  unit?: string;
+  calibrated?: boolean;
+  derived_from?: string;
+  note?: string;
+}
+
 export interface RecommendationCard {
   id: string;
   status: WorkflowStatus | string;
@@ -57,6 +67,22 @@ export interface RecommendationCard {
   };
   reason?: string;
   confidence?: number;
+  signal_score?: number;
+  priority_score?: number;
+  signal_confidence_pct?: number | null;
+  outcome_signal_score?: number | null;
+  outcome_confidence_pct?: number | null;
+  learning_state?: string;
+  outcome_learning_scope?: string;
+  outcome_learning_explanation?: string;
+  observed_response?: {
+    response_units?: number | null;
+    response_per_1000_eur?: number | null;
+    qualified_visits?: number | null;
+    avg_search_lift_index?: number | null;
+  } | null;
+  learned_lifts?: Array<{ label: string; value?: number | null }>;
+  field_contracts?: Record<string, MetricContract>;
   campaign_name?: string;
   primary_kpi?: string;
   recommended_product?: string;
@@ -70,6 +96,7 @@ export interface RecommendationCard {
   peix_context?: {
     region_code?: string;
     score?: number;
+    signal_score?: number;
     band?: string;
     impact_probability?: number;
     drivers?: Array<{ label: string; strength_pct: number }>;
@@ -350,8 +377,12 @@ export interface DecisionExpectation {
   condition_label?: string;
   region_codes?: string[];
   impact_probability?: number;
+  signal_score?: number;
   peix_score?: number;
+  signal_confidence_pct?: number | null;
   confidence_pct?: number;
+  event_probability_pct?: number | null;
+  field_contracts?: Record<string, MetricContract>;
   rationale?: string;
 }
 
@@ -410,11 +441,30 @@ export interface WeeklyDecision {
   risk_flags: string[];
   freshness_state?: string;
   proxy_state?: string;
+  forecast_state?: string;
   truth_state?: string;
   truth_freshness_state?: string;
   truth_last_imported_at?: string | null;
   truth_latest_batch_id?: string | null;
   truth_risk_flag?: string | null;
+  truth_gate?: {
+    passed: boolean;
+    state?: string;
+    learning_state?: string;
+    message?: string | null;
+    guidance?: string | null;
+    field_contracts?: Record<string, MetricContract>;
+  };
+  learning_state?: string;
+  outcome_learning_summary?: OutcomeLearningSummary;
+  forecast_quality?: Record<string, unknown>;
+  event_forecast?: {
+    event_probability?: number | null;
+    confidence?: number | null;
+    alert_level?: string;
+    lead_time_days?: number | null;
+    probability_band?: string;
+  };
   signal_stack_summary?: {
     peix_epi_score?: number;
     national_band?: string;
@@ -430,6 +480,7 @@ export interface WeeklyDecision {
       feature_families?: string[];
     };
   };
+  field_contracts?: Record<string, MetricContract>;
 }
 
 export interface TruthCoverage {
@@ -493,6 +544,15 @@ export interface TruthImportBatchDetailResponse {
 export interface TruthSnapshot {
   brand: string;
   coverage: TruthCoverage;
+  truth_gate?: {
+    passed: boolean;
+    state?: string;
+    learning_state?: string;
+    message?: string | null;
+    guidance?: string | null;
+    field_contracts?: Record<string, MetricContract>;
+  };
+  outcome_learning_summary?: OutcomeLearningSummary;
   recent_batches: TruthImportBatchSummary[];
   latest_batch?: TruthImportBatchSummary | null;
   latest_batch_issue_count?: number;
@@ -640,6 +700,7 @@ export interface MediaRegionsResponse {
       peix_score?: number;
       peix_band?: string;
       impact_probability?: number;
+      signal_score?: number;
       recommendation_ref?: RegionRecommendationRef | null;
       tooltip?: RegionTooltipData | null;
       forecast_direction?: string;
@@ -655,12 +716,14 @@ export interface MediaRegionsResponse {
       decision_mode_reason?: string;
       priority_rank?: number;
       source_trace?: string[];
+      field_contracts?: Record<string, MetricContract>;
     }>;
     top_regions: Array<{
       code: string;
       name: string;
       trend: string;
       impact_probability?: number;
+      signal_score?: number;
       peix_score?: number;
       severity_score?: number;
       momentum_score?: number;
@@ -670,14 +733,20 @@ export interface MediaRegionsResponse {
       priority_rank?: number;
       recommendation_ref?: RegionRecommendationRef | null;
       tooltip?: RegionTooltipData | null;
+      field_contracts?: Record<string, MetricContract>;
     }>;
     activation_suggestions: Array<{
       region: string;
       region_name: string;
       priority: string;
+      signal_score?: number;
+      priority_score?: number;
+      impact_probability?: number;
       budget_shift_pct: number;
       channel_mix: Record<string, number>;
       reason: string;
+      score_semantics?: string;
+      field_contracts?: Record<string, MetricContract>;
     }>;
   };
   top_regions: Array<{
@@ -685,6 +754,7 @@ export interface MediaRegionsResponse {
     name: string;
     trend: string;
     impact_probability?: number;
+    signal_score?: number;
     peix_score?: number;
     recommendation_ref?: RegionRecommendationRef | null;
     tooltip?: RegionTooltipData | null;
@@ -705,6 +775,9 @@ export interface MediaCampaignsResponse {
     visible_cards?: number;
     hidden_backlog_cards?: number;
     states: Record<string, number>;
+    learning_state?: string;
+    outcome_signal_score?: number | null;
+    outcome_confidence_pct?: number | null;
   };
 }
 
@@ -722,8 +795,46 @@ export interface MediaEvidenceResponse {
   model_lineage: ModelLineage;
   forecast_monitoring?: ForecastMonitoring;
   truth_coverage: TruthCoverage;
+  truth_gate?: {
+    passed: boolean;
+    state?: string;
+    learning_state?: string;
+    message?: string | null;
+    guidance?: string | null;
+    field_contracts?: Record<string, MetricContract>;
+  };
   truth_snapshot?: TruthSnapshot;
+  outcome_learning_summary?: OutcomeLearningSummary;
   known_limits: string[];
+}
+
+export interface OutcomeLearningSummary {
+  learning_state?: string;
+  coverage_weeks?: number;
+  outcome_signal_score?: number | null;
+  outcome_confidence_pct?: number | null;
+  top_product_learnings?: Array<{
+    product?: string;
+    product_key?: string;
+    outcome_signal_score?: number | null;
+    outcome_confidence_pct?: number | null;
+    coverage_weeks?: number;
+  }>;
+  top_region_learnings?: Array<{
+    region_code?: string;
+    outcome_signal_score?: number | null;
+    outcome_confidence_pct?: number | null;
+    coverage_weeks?: number;
+  }>;
+  top_pair_learnings?: Array<{
+    product?: string;
+    product_key?: string;
+    region_code?: string;
+    outcome_signal_score?: number | null;
+    outcome_confidence_pct?: number | null;
+    coverage_weeks?: number;
+  }>;
+  field_contracts?: Record<string, MetricContract>;
 }
 
 export interface ConnectorCatalogItem {
@@ -908,7 +1019,10 @@ export interface BentoTile {
   value: string | number | null;
   unit?: string;
   subtitle?: string;
+  signal_score?: number;
   impact_probability: number;
+  score_semantics?: string;
+  field_contracts?: Record<string, MetricContract>;
   data_source?: string;
   is_live?: boolean;
   last_updated?: string | null;

@@ -61,6 +61,31 @@ class MediaV2ServiceTruthCoverageTests(unittest.TestCase):
         )
         self.db.commit()
 
+    def _seed_outcome_series(
+        self,
+        *,
+        start: datetime,
+        weeks: int,
+        product: str = "GeloProsed",
+        region_code: str = "SH",
+    ) -> None:
+        records = []
+        for offset in range(weeks):
+            records.append({
+                "week_start": (start + timedelta(days=7 * offset)).isoformat(),
+                "product": product,
+                "region_code": region_code,
+                "media_spend_eur": 10000 + offset * 100,
+                "sales_units": 120 + offset * 3,
+                "qualified_visits": 200 + offset * 2,
+                "search_lift_index": 18 + (offset % 5),
+            })
+        self.service.import_outcomes(
+            source_label="manual_csv",
+            brand="gelo",
+            records=records,
+        )
+
     def test_validate_only_csv_returns_preview_without_persisting_outcomes(self) -> None:
         self._seed_truth_reference(datetime(2026, 2, 16))
         csv_payload = (
@@ -295,6 +320,14 @@ class MediaV2ServiceTruthCoverageTests(unittest.TestCase):
         self.assertEqual(weekly_decision["decision_state"], "WATCH")
         self.assertIn("Kundendaten", weekly_decision["truth_risk_flag"])
         self.assertIsNone(weekly_decision["budget_shift"])
+        self.assertEqual(
+            weekly_decision["field_contracts"]["event_probability"]["semantics"],
+            "forecast_event_probability",
+        )
+        self.assertEqual(
+            weekly_decision["field_contracts"]["signal_score"]["semantics"],
+            "ranking_signal",
+        )
 
     def test_campaigns_payload_limits_visible_board_to_eight_cards(self) -> None:
         cards = []
@@ -324,6 +357,52 @@ class MediaV2ServiceTruthCoverageTests(unittest.TestCase):
         self.assertEqual(len(payload["cards"]), 8)
         self.assertEqual(payload["summary"]["visible_cards"], 8)
         self.assertEqual(payload["summary"]["hidden_backlog_cards"], 2)
+
+    def test_campaign_cards_include_outcome_learning_fields(self) -> None:
+        self._seed_truth_reference(datetime(2026, 3, 3))
+        self._seed_outcome_series(
+            start=datetime(2025, 8, 18),
+            weeks=30,
+        )
+
+        opportunity = {
+            "id": "opp-1",
+            "status": "READY",
+            "type": "activation",
+            "urgency_score": 62.0,
+            "brand": "gelo",
+            "product": "GeloProsed",
+            "recommended_product": "GeloProsed",
+            "region_codes": ["SH"],
+            "budget_shift_pct": 16.0,
+            "channel_mix": {"programmatic": 35, "social": 30, "search": 20, "ctv": 15},
+            "campaign_payload": {
+                "message_framework": {"hero_message": "Norddeutschland weiter priorisieren."},
+                "channel_plan": [{"channel": "search", "share_pct": 40.0}],
+                "guardrail_report": {"passed": True},
+            },
+            "campaign_preview": {
+                "budget": {"weekly_budget_eur": 120000.0},
+                "activation_window": {
+                    "start": "2026-03-09T00:00:00",
+                    "end": "2026-03-22T00:00:00",
+                },
+            },
+            "condition_key": "erkaltung_akut",
+        }
+
+        with patch.object(self.service.engine, "get_opportunities", return_value=[opportunity]):
+            cards = self.service._campaign_cards(brand="gelo", limit=20)
+
+        self.assertEqual(len(cards), 1)
+        card = cards[0]
+        self.assertIsNotNone(card["outcome_signal_score"])
+        self.assertIsNotNone(card["outcome_confidence_pct"])
+        self.assertEqual(card["learning_state"], "im_aufbau")
+        self.assertEqual(
+            card["field_contracts"]["outcome_signal_score"]["semantics"],
+            "observed_outcome_signal",
+        )
 
     def test_evidence_payload_hides_truth_validation_without_coverage(self) -> None:
         cockpit_payload = {
@@ -363,6 +442,7 @@ class MediaV2ServiceTruthCoverageTests(unittest.TestCase):
         self.assertEqual(payload["truth_validation_legacy"]["run_id"], "customer-legacy")
         self.assertEqual(payload["truth_snapshot"]["coverage"]["trust_readiness"], "noch_nicht_angeschlossen")
         self.assertEqual(payload["forecast_monitoring"]["monitoring_status"], "warning")
+        self.assertEqual(payload["outcome_learning_summary"]["learning_state"], "missing")
 
     def test_regions_payload_exposes_severity_momentum_and_actionability(self) -> None:
         cockpit_payload = {
@@ -387,6 +467,7 @@ class MediaV2ServiceTruthCoverageTests(unittest.TestCase):
                     "SH": {
                         "name": "Schleswig-Holstein",
                         "impact_probability": 74.0,
+                        "signal_score": 62.0,
                         "intensity": 0.9,
                         "trend": "fallend",
                         "change_pct": -18.0,
@@ -396,6 +477,7 @@ class MediaV2ServiceTruthCoverageTests(unittest.TestCase):
                     "HH": {
                         "name": "Hamburg",
                         "impact_probability": 68.0,
+                        "signal_score": 60.0,
                         "intensity": 0.6,
                         "trend": "steigend",
                         "change_pct": 12.0,
@@ -422,6 +504,89 @@ class MediaV2ServiceTruthCoverageTests(unittest.TestCase):
         self.assertIn("actionability_score", top_region)
         self.assertEqual(top_region["priority_rank"], 1)
         self.assertIn(top_region["decision_mode"], {"epidemic_wave", "mixed", "supply_window"})
+        self.assertEqual(top_region["field_contracts"]["signal_score"]["semantics"], "ranking_signal")
+
+    def test_regions_payload_prefers_signal_score_over_legacy_impact_probability(self) -> None:
+        cockpit_payload = {
+            "peix_epi_score": {
+                "regions": {
+                    "SH": {
+                        "score_0_100": 48.0,
+                        "top_drivers": [{"label": "AMELAG", "strength_pct": 55.0}],
+                        "layer_contributions": {"Bio": 18.0, "Forecast": 8.0},
+                    },
+                    "HH": {
+                        "score_0_100": 81.0,
+                        "top_drivers": [{"label": "Forecast", "strength_pct": 62.0}],
+                        "layer_contributions": {"Bio": 26.0, "Forecast": 18.0},
+                    },
+                },
+            },
+            "map": {
+                "has_data": True,
+                "date": "2026-02-25T00:00:00",
+                "regions": {
+                    "SH": {
+                        "name": "Schleswig-Holstein",
+                        "impact_probability": 91.0,
+                        "signal_score": 48.0,
+                        "intensity": 0.45,
+                        "trend": "stabil",
+                        "change_pct": 0.0,
+                        "tooltip": {"recommended_product": "GeloProsed"},
+                        "recommendation_ref": {"urgency_score": 80, "card_id": "card-sh"},
+                    },
+                    "HH": {
+                        "name": "Hamburg",
+                        "impact_probability": 64.0,
+                        "signal_score": 81.0,
+                        "intensity": 0.45,
+                        "trend": "stabil",
+                        "change_pct": 0.0,
+                        "tooltip": {"recommended_product": "GeloProsed"},
+                        "recommendation_ref": {"urgency_score": 80, "card_id": "card-hh"},
+                    },
+                },
+                "activation_suggestions": [],
+            },
+        }
+
+        with (
+            patch.object(self.service.cockpit_service, "get_cockpit_payload", return_value=cockpit_payload),
+            patch.object(self.service, "get_decision_payload", return_value={"weekly_decision": {"decision_state": "WATCH"}}),
+        ):
+            payload = self.service.get_regions_payload()
+
+        self.assertEqual(payload["top_regions"][0]["code"], "HH")
+        self.assertEqual(payload["map"]["regions"]["HH"]["signal_score"], 81.0)
+        self.assertEqual(payload["map"]["regions"]["HH"]["impact_probability"], 64.0)
+
+    def test_signal_stack_uses_feature_families_from_model_lineage(self) -> None:
+        cockpit_payload = {
+            "data_freshness": {},
+            "source_status": {"items": []},
+            "peix_epi_score": {
+                "national_score": 61.3,
+                "national_band": "high",
+                "top_drivers": [],
+                "context_signals": {},
+            },
+        }
+
+        with (
+            patch.object(self.service.cockpit_service, "get_cockpit_payload", return_value=cockpit_payload),
+            patch.object(
+                self.service,
+                "get_model_lineage",
+                return_value={"feature_families": ["AMELAG-Lags", "Google Trends", "Interne Historie"]},
+            ),
+        ):
+            payload = self.service.get_signal_stack(virus_typ="Influenza A")
+
+        self.assertEqual(
+            payload["summary"]["math_stack"]["feature_families"],
+            ["AMELAG-Lags", "Google Trends", "Interne Historie"],
+        )
 
 
 if __name__ == "__main__":

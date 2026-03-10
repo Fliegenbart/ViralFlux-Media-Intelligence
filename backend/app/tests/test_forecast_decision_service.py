@@ -261,6 +261,10 @@ class ForecastFirstOpportunityTests(unittest.TestCase):
         self.assertIn("opportunity_assessment", candidate)
         self.assertIsNotNone(candidate["impact_probability"])
 
+    def test_confidence_pct_requires_explicit_signal_confidence(self) -> None:
+        self.assertIsNone(MarketingOpportunityEngine._confidence_pct(None, 92.0))
+        self.assertEqual(MarketingOpportunityEngine._confidence_pct(0.81, None), 81.0)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -12,6 +12,9 @@ import {
   formatCurrency,
   formatDateTime,
   formatPercent,
+  learningStateLabel,
+  metricContractLabel,
+  primarySignalScore,
   readinessTone,
   truthLayerLabel,
   workflowLabel,
@@ -57,6 +60,14 @@ const DecisionView: React.FC<Props> = ({
   const decisionModeLabel = weeklyDecision?.decision_mode_label || weeklyDecision?.signal_stack_summary?.decision_mode_label || 'Regionalsignal';
   const decisionModeReason = weeklyDecision?.decision_mode_reason || weeklyDecision?.signal_stack_summary?.decision_mode_reason;
   const hiddenBacklog = decision?.campaign_summary?.hidden_backlog_cards || 0;
+  const eventProbabilityRaw = weeklyDecision?.event_forecast?.event_probability;
+  const eventProbabilityPct = eventProbabilityRaw == null
+    ? null
+    : (eventProbabilityRaw <= 1 ? eventProbabilityRaw * 100 : eventProbabilityRaw);
+  const topRegionSignal = primarySignalScore(topRegions[0]);
+  const eventProbabilityLabel = metricContractLabel(weeklyDecision?.field_contracts, 'event_probability', 'Event-Wahrscheinlichkeit');
+  const signalScoreLabel = metricContractLabel(weeklyDecision?.field_contracts, 'signal_score', 'Signal-Score');
+  const learningState = learningStateLabel(weeklyDecision?.learning_state || weeklyDecision?.truth_gate?.learning_state);
 
   const heroSentence = weeklyDecision?.recommended_action
     || topCard?.decision_brief?.summary_sentence
@@ -190,8 +201,20 @@ const DecisionView: React.FC<Props> = ({
               <strong>{readiness != null ? `${Math.round(readiness)}/100` : '-'}</strong>
             </div>
             <div className="metric-box">
+              <span>{eventProbabilityLabel}</span>
+              <strong>{formatPercent(eventProbabilityPct)}</strong>
+            </div>
+            <div className="metric-box">
+              <span>{signalScoreLabel}</span>
+              <strong>{formatPercent(topRegionSignal)}</strong>
+            </div>
+            <div className="metric-box">
               <span>Hit-Rate</span>
               <strong>{formatPercent(latestMarket?.decision_metrics?.hit_rate_pct || 0)}</strong>
+            </div>
+            <div className="metric-box">
+              <span>Learning-State</span>
+              <strong>{learningState}</strong>
             </div>
             <div className="metric-box">
               <span>False Alarms</span>
@@ -205,6 +228,9 @@ const DecisionView: React.FC<Props> = ({
               <p className="subsection-copy">
                 Die Entscheidung wird aus sichtbaren Signalen abgeleitet, nicht aus einer Black Box.
               </p>
+            </div>
+            <div className="soft-panel" style={{ padding: 14, marginTop: 14, fontSize: 13, color: 'var(--text-secondary)' }}>
+              {eventProbabilityLabel} bleibt ein Forecast-Ereignis. {signalScoreLabel} steuert nur die regionale Priorisierung und ist keine Eintrittswahrscheinlichkeit.
             </div>
             <div style={{ display: 'grid', gap: 10, marginTop: 14 }}>
               {(weeklyDecision?.why_now || []).map((reason) => (

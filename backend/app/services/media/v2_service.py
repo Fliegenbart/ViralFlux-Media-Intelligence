@@ -27,6 +27,7 @@ from app.models.database import (
 )
 from app.services.marketing_engine.opportunity_engine import MarketingOpportunityEngine
 from app.services.media.cockpit_service import MediaCockpitService
+from app.services.media.outcome_signal_service import OutcomeSignalService
 from app.services.media.peix_score_service import PeixEpiScoreService
 from app.services.media.product_catalog_service import ProductCatalogService
 from app.services.media.recommendation_contracts import (
@@ -36,6 +37,17 @@ from app.services.media.recommendation_contracts import (
     normalize_region_code,
     to_card_response,
 )
+from app.services.media.semantic_contracts import (
+    forecast_probability_contract,
+    infer_feature_families,
+    outcome_confidence_contract,
+    outcome_signal_contract,
+    priority_score_contract,
+    ranking_signal_contract,
+    signal_confidence_contract,
+    truth_readiness_contract,
+)
+from app.services.media.truth_gate_service import TruthGateService
 from app.services.ml.forecast_decision_service import ForecastDecisionService
 from app.services.ml.forecast_service import _ML_MODELS_DIR, _virus_slug
 
@@ -123,6 +135,8 @@ class MediaV2Service:
         self.db = db
         self.cockpit_service = MediaCockpitService(db)
         self.engine = MarketingOpportunityEngine(db)
+        self.truth_gate_service = TruthGateService()
+        self.outcome_signal_service = OutcomeSignalService(db)
 
     def get_decision_payload(
         self,
@@ -139,6 +153,12 @@ class MediaV2Service:
         forecast_quality = forecast_bundle.get("forecast_quality") or {}
         event_forecast = forecast_bundle.get("event_forecast") or {}
         truth_coverage = self.get_truth_coverage(brand=brand, virus_typ=virus_typ)
+        truth_gate = self.truth_gate_service.evaluate(truth_coverage)
+        outcome_learning = self.outcome_signal_service.build_learning_bundle(
+            brand=brand,
+            truth_coverage=truth_coverage,
+            truth_gate=truth_gate,
+        )["summary"]
         model_lineage = self.get_model_lineage(virus_typ=virus_typ)
         queue = self._build_campaign_queue(self._campaign_cards(brand=brand, limit=80), visible_limit=8)
         campaign_cards = queue["visible_cards"]
@@ -147,9 +167,9 @@ class MediaV2Service:
         top_regions = cockpit.get("map", {}).get("top_regions", [])[:3]
         market = cockpit.get("backtest_summary", {}).get("latest_market") or {}
         signal_summary = self.get_signal_stack(virus_typ=virus_typ).get("summary") or {}
+        top_card_contracts = ((top_card or {}).get("field_contracts") or {}) if top_card else {}
 
         freshness_state = self._decision_freshness_state(cockpit.get("source_status", {}))
-        truth_gate = self._truth_gate(truth_coverage)
         has_truth = truth_gate["passed"]
         market_passed = bool((market.get("quality_gate") or {}).get("overall_passed"))
         forecast_passed = str(forecast_quality.get("forecast_readiness") or "WATCH") == "GO"
@@ -178,6 +198,8 @@ class MediaV2Service:
             risk_flags.append("Modell-Drift ist im Monitoring auffällig.")
         if not has_publishable:
             risk_flags.append("Es gibt aktuell keinen freigabefaehigen Kampagnenvorschlag.")
+        if truth_gate.get("guidance") and truth_gate.get("learning_state") != "belastbar":
+            risk_flags.append(str(truth_gate["guidance"]))
 
         why_now = self._build_why_now(
             top_card=top_card,
@@ -186,6 +208,8 @@ class MediaV2Service:
             decision_state=decision_state,
             signal_summary=signal_summary,
         )
+        if truth_gate.get("message") and truth_gate["message"] not in why_now:
+            why_now = [str(truth_gate["message"]), *why_now][:3]
         recommended_action = self._recommended_action(
             decision_state=decision_state,
             top_card=top_card,
@@ -210,7 +234,7 @@ class MediaV2Service:
                     {
                         "code": item.get("code"),
                         "name": item.get("name"),
-                        "signal_score": item.get("peix_score") or item.get("impact_probability"),
+                        "signal_score": item.get("signal_score") or item.get("peix_score") or item.get("impact_probability"),
                         "trend": item.get("trend"),
                     }
                     for item in top_regions
@@ -233,10 +257,29 @@ class MediaV2Service:
                 "truth_last_imported_at": truth_coverage.get("last_imported_at"),
                 "truth_latest_batch_id": truth_coverage.get("latest_batch_id"),
                 "truth_risk_flag": None if has_truth else truth_gate["message"],
+                "truth_gate": truth_gate,
+                "learning_state": outcome_learning.get("learning_state"),
+                "outcome_learning_summary": outcome_learning,
                 "decision_mode": signal_summary.get("decision_mode"),
                 "decision_mode_label": signal_summary.get("decision_mode_label"),
                 "decision_mode_reason": signal_summary.get("decision_mode_reason"),
                 "signal_stack_summary": signal_summary,
+                "field_contracts": {
+                    "event_probability": forecast_probability_contract(),
+                    "signal_score": ranking_signal_contract(
+                        source="PeixEpiScore",
+                    ),
+                    "priority_score": top_card_contracts.get("priority_score")
+                    or priority_score_contract(source="MarketingOpportunityEngine"),
+                    "signal_confidence_pct": top_card_contracts.get("signal_confidence_pct")
+                    or signal_confidence_contract(
+                        source="MarketingOpportunityEngine",
+                        derived_from="trigger_evidence.confidence",
+                    ),
+                    "truth_readiness": truth_readiness_contract(),
+                    "outcome_signal_score": outcome_signal_contract(),
+                    "outcome_confidence_pct": outcome_confidence_contract(),
+                },
             },
             "top_recommendations": campaign_cards[:3],
             "campaign_summary": queue["summary"],
@@ -278,6 +321,7 @@ class MediaV2Service:
             )
             enriched_regions[code] = {
                 **region,
+                "signal_score": region.get("signal_score") or region.get("peix_score") or peix_region.get("score_0_100") or region.get("impact_probability"),
                 "peix_score": region.get("peix_score") or peix_region.get("score_0_100"),
                 "severity_score": severity_score,
                 "momentum_score": momentum_score,
@@ -299,6 +343,10 @@ class MediaV2Service:
                     decision_mode=decision_mode["key"],
                 ),
                 "source_trace": self._region_source_trace(peix_region),
+                "field_contracts": {
+                    "signal_score": ranking_signal_contract(source="PeixEpiScore"),
+                    "priority_score": priority_score_contract(source="MediaV2Service"),
+                },
             }
 
         sorted_regions = sorted(
@@ -310,7 +358,7 @@ class MediaV2Service:
                 float(item.get("actionability_score") or 0.0),
                 float(item.get("severity_score") or 0.0),
                 float(item.get("momentum_score") or 0.0),
-                float(item.get("peix_score") or item.get("impact_probability") or 0.0),
+                float(item.get("signal_score") or item.get("peix_score") or item.get("impact_probability") or 0.0),
             ),
             reverse=True,
         )
@@ -347,6 +395,13 @@ class MediaV2Service:
         primary_cards = queue["primary_cards"]
         archived_cards = queue["archived_cards"]
         visible_cards = queue["visible_cards"]
+        truth_coverage = self.get_truth_coverage(brand=brand)
+        truth_gate = self.truth_gate_service.evaluate(truth_coverage)
+        outcome_learning = self.outcome_signal_service.build_learning_bundle(
+            brand=brand,
+            truth_coverage=truth_coverage,
+            truth_gate=truth_gate,
+        )["summary"]
 
         return {
             "generated_at": datetime.utcnow().isoformat(),
@@ -359,6 +414,9 @@ class MediaV2Service:
                 "publishable_cards": len([card for card in primary_cards if card.get("is_publishable")]),
                 "expired_cards": len([card for card in cards if card.get("lifecycle_state") == "EXPIRED"]),
                 "states": self._campaign_state_counts(primary_cards),
+                "learning_state": outcome_learning.get("learning_state"),
+                "outcome_signal_score": outcome_learning.get("outcome_signal_score"),
+                "outcome_confidence_pct": outcome_learning.get("outcome_confidence_pct"),
             },
         }
 
@@ -373,6 +431,12 @@ class MediaV2Service:
         backtest_summary = cockpit.get("backtest_summary") or {}
         truth_snapshot = self.get_truth_evidence(brand=brand, virus_typ=virus_typ)
         truth_coverage = truth_snapshot["coverage"]
+        truth_gate = self.truth_gate_service.evaluate(truth_coverage)
+        outcome_learning = self.outcome_signal_service.build_learning_bundle(
+            brand=brand,
+            truth_coverage=truth_coverage,
+            truth_gate=truth_gate,
+        )["summary"]
         latest_customer = backtest_summary.get("latest_customer")
         truth_validation = latest_customer if truth_coverage.get("coverage_weeks", 0) > 0 else None
         truth_validation_legacy = latest_customer if truth_validation is None and latest_customer else None
@@ -390,7 +454,9 @@ class MediaV2Service:
             "model_lineage": self.get_model_lineage(virus_typ=virus_typ),
             "forecast_monitoring": self.get_forecast_monitoring(virus_typ=virus_typ, target_source=target_source),
             "truth_coverage": truth_coverage,
+            "truth_gate": truth_gate,
             "truth_snapshot": truth_snapshot,
+            "outcome_learning_summary": outcome_learning,
             "known_limits": self._known_limits(
                 cockpit,
                 virus_typ,
@@ -419,6 +485,7 @@ class MediaV2Service:
         }
         peix = cockpit.get("peix_epi_score") or PeixEpiScoreService(self.db).build(virus_typ=virus_typ)
         signal_groups = self._signal_group_summary(peix)
+        model_lineage = self.get_model_lineage(virus_typ=virus_typ)
 
         items = []
         for source_key, meta in SIGNAL_GROUPS.items():
@@ -448,14 +515,7 @@ class MediaV2Service:
             "math_stack": {
                 "base_models": ["Holt-Winters", "Ridge", "Prophet"],
                 "meta_learner": "XGBoost",
-                "feature_families": [
-                    "AMELAG-Lags",
-                    "Cross-Disease-Lags",
-                    "SurvStat-Lags",
-                    "Google Trends",
-                    "Schulferien",
-                    "Wetter-Kontext",
-                ],
+                "feature_families": model_lineage.get("feature_families") or [],
             },
             **signal_groups,
         }
@@ -496,6 +556,7 @@ class MediaV2Service:
 
         metadata = self._read_model_metadata(virus_typ)
         feature_names = metadata.get("feature_names") or (latest_forecast.features_used if latest_forecast else []) or []
+        feature_families = infer_feature_families(feature_names)
         drift_state = "warning" if bool(getattr(latest_accuracy, "drift_detected", False)) else ("ok" if latest_accuracy else "unknown")
         coverage_limits: list[str] = []
         training_samples = int(metadata.get("training_samples") or 0)
@@ -515,6 +576,7 @@ class MediaV2Service:
             "trained_at": metadata.get("trained_at"),
             "feature_set_version": f"meta_{len(feature_names)}",
             "feature_names": feature_names,
+            "feature_families": feature_families,
             "training_window": {
                 "start": training_window[0].isoformat() if training_window and training_window[0] else None,
                 "end": training_window[1].isoformat() if training_window and training_window[1] else None,
@@ -621,6 +683,12 @@ class MediaV2Service:
         virus_typ: str | None = None,
     ) -> dict[str, Any]:
         coverage = self.get_truth_coverage(brand=brand, virus_typ=virus_typ)
+        truth_gate = self.truth_gate_service.evaluate(coverage)
+        outcome_learning = self.outcome_signal_service.build_learning_bundle(
+            brand=brand,
+            truth_coverage=coverage,
+            truth_gate=truth_gate,
+        )["summary"]
         recent_batches = self.list_outcome_import_batches(brand=brand, limit=8)
         latest_batch = recent_batches[0] if recent_batches else None
         issue_count = int(latest_batch.get("rows_rejected") or 0) if latest_batch else 0
@@ -636,6 +704,8 @@ class MediaV2Service:
         return {
             "brand": str(brand or "gelo").strip().lower(),
             "coverage": coverage,
+            "truth_gate": truth_gate,
+            "outcome_learning_summary": outcome_learning,
             "recent_batches": recent_batches,
             "latest_batch": latest_batch,
             "latest_batch_issue_count": issue_count,
@@ -860,12 +930,82 @@ class MediaV2Service:
             limit=limit,
             normalize_status=True,
         )
-        cards = [to_card_response(opp, include_preview=True) for opp in opportunities]
+        truth_coverage = self.get_truth_coverage(brand=brand)
+        truth_gate = self.truth_gate_service.evaluate(truth_coverage)
+        learning_bundle = self.outcome_signal_service.build_learning_bundle(
+            brand=brand,
+            truth_coverage=truth_coverage,
+            truth_gate=truth_gate,
+        )
+        cards = [
+            self._attach_outcome_learning_to_card(
+                card=to_card_response(opp, include_preview=True),
+                learning_bundle=learning_bundle,
+                truth_gate=truth_gate,
+            )
+            for opp in opportunities
+        ]
         cards.sort(
             key=self._campaign_sort_key,
             reverse=True,
         )
         return cards
+
+    def _attach_outcome_learning_to_card(
+        self,
+        *,
+        card: dict[str, Any],
+        learning_bundle: dict[str, Any],
+        truth_gate: dict[str, Any],
+    ) -> dict[str, Any]:
+        learning_signal = self.outcome_signal_service.signal_for_card(
+            card=card,
+            bundle=learning_bundle,
+        )
+        learned_priority = self._learned_priority_score(
+            base_priority=float(card.get("priority_score") or card.get("urgency_score") or 0.0),
+            outcome_signal_score=learning_signal.get("outcome_signal_score"),
+            truth_gate=truth_gate,
+        )
+        updated_contracts = dict(card.get("field_contracts") or {})
+        updated_contracts.update({
+            "outcome_signal_score": outcome_signal_contract(),
+            "outcome_confidence_pct": outcome_confidence_contract(),
+            "truth_readiness": truth_readiness_contract(),
+        })
+        return card | {
+            "priority_score": learned_priority,
+            "learning_state": learning_signal.get("learning_state"),
+            "outcome_signal_score": learning_signal.get("outcome_signal_score"),
+            "outcome_confidence_pct": learning_signal.get("outcome_confidence_pct"),
+            "outcome_learning_scope": learning_signal.get("outcome_learning_scope"),
+            "outcome_learning_explanation": learning_signal.get("outcome_learning_explanation"),
+            "observed_response": learning_signal.get("observed_response"),
+            "learned_lifts": learning_signal.get("learned_lifts"),
+            "field_contracts": updated_contracts,
+        }
+
+    def _learned_priority_score(
+        self,
+        *,
+        base_priority: float,
+        outcome_signal_score: Any,
+        truth_gate: dict[str, Any],
+    ) -> float:
+        learning_state = str(truth_gate.get("learning_state") or "missing").lower()
+        if learning_state in {"missing", "explorative", "stale"}:
+            learning_weight = 0.0 if learning_state == "missing" else 0.12
+        elif learning_state == "im_aufbau":
+            learning_weight = 0.20
+        else:
+            learning_weight = 0.30
+
+        try:
+            outcome_score = float(outcome_signal_score)
+        except (TypeError, ValueError):
+            outcome_score = 0.0
+        blended = base_priority * (1.0 - learning_weight) + outcome_score * learning_weight
+        return round(max(0.0, min(100.0, blended)), 1)
 
     def _decision_freshness_state(self, source_status: dict[str, Any]) -> str:
         items = source_status.get("items") or []
@@ -890,7 +1030,7 @@ class MediaV2Service:
             reasons.append("Die epidemiologischen Signale sind relevant, aber die Freigabe bleibt vorerst im Beobachtungsmodus.")
         if top_regions:
             reasons.append(
-                f"{top_regions[0].get('name')} fuehrt die regionalen Signale mit {round(float(top_regions[0].get('peix_score') or top_regions[0].get('impact_probability') or 0))}/100 an."
+                f"{top_regions[0].get('name')} fuehrt die regionalen Signale mit {round(float(top_regions[0].get('signal_score') or top_regions[0].get('peix_score') or top_regions[0].get('impact_probability') or 0))}/100 an."
             )
         if top_card:
             if decision_state == "GO" and top_card.get("decision_brief", {}).get("summary_sentence"):
@@ -970,8 +1110,8 @@ class MediaV2Service:
             freshness == "current",
             freshness == "scheduled",
             -len(blockers),
-            float(item.get("urgency_score") or 0.0),
-            float(item.get("confidence") or 0.0),
+            float(item.get("priority_score") or item.get("urgency_score") or 0.0),
+            float(item.get("signal_confidence_pct") or item.get("confidence") or 0.0),
             str(item.get("updated_at") or item.get("created_at") or ""),
         )
 
@@ -1214,7 +1354,7 @@ class MediaV2Service:
         }
 
     def _severity_score(self, region: dict[str, Any]) -> int:
-        impact = float(region.get("impact_probability") or region.get("peix_score") or 0.0)
+        impact = float(region.get("signal_score") or region.get("impact_probability") or region.get("peix_score") or 0.0)
         intensity = float(region.get("intensity") or 0.0) * 100.0
         return int(round(max(impact, intensity)))
 
@@ -1373,27 +1513,7 @@ class MediaV2Service:
             return None
 
     def _truth_gate(self, truth_coverage: dict[str, Any]) -> dict[str, Any]:
-        if truth_coverage.get("coverage_weeks", 0) < 26:
-            return {
-                "passed": False,
-                "message": "Die Kundendaten decken noch keine 26 Wochen ab und bleiben deshalb explorativ.",
-            }
-        if "Media Spend" not in (truth_coverage.get("required_fields_present") or []):
-            return {
-                "passed": False,
-                "message": "Die Kundendaten enthalten noch keinen belastbaren Media-Spend-Verlauf.",
-            }
-        if not (truth_coverage.get("conversion_fields_present") or []):
-            return {
-                "passed": False,
-                "message": "Die Kundendaten enthalten noch keine ausreichenden Sales-, Order- oder Revenue-Signale.",
-            }
-        if truth_coverage.get("truth_freshness_state") == "stale":
-            return {
-                "passed": False,
-                "message": "Die Kundendaten sind aktuell zu alt im Vergleich zur letzten epidemiologischen Woche.",
-            }
-        return {"passed": True, "message": None}
+        return self.truth_gate_service.evaluate(truth_coverage)
 
     def _latest_import_batch(self, *, brand: str) -> MediaOutcomeImportBatch | None:
         return (

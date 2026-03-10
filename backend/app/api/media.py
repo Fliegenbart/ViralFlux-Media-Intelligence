@@ -379,6 +379,7 @@ async def generate_media_recommendations(
 ):
     """Generiert strukturierte Action-Cards für Media-Steuerung."""
     engine = MarketingOpportunityEngine(db)
+    service = MediaV2Service(db)
     generated = engine.generate_action_cards(
         brand=payload.brand,
         product=payload.product,
@@ -391,8 +392,14 @@ async def generate_media_recommendations(
         virus_typ=payload.virus_typ,
     )
 
-    cards = [_to_card_response(card) for card in generated.get("cards", [])]
-    cards.sort(key=lambda item: (item.get("urgency_score", 0), item.get("confidence", 0)), reverse=True)
+    cards = [_decorate_card_response(service, card) for card in generated.get("cards", [])]
+    cards.sort(
+        key=lambda item: (
+            item.get("priority_score", 0),
+            item.get("signal_confidence_pct", item.get("confidence", 0)) or 0,
+        ),
+        reverse=True,
+    )
     top_card_id = generated.get("top_card_id") or (cards[0].get("id") if cards else None)
 
     refinement_mode = "disabled"
@@ -446,6 +453,7 @@ async def open_or_create_region_recommendation(
     """Map-Klick Flow: vorhandene Card wiederverwenden oder regionale Draft-Card erzeugen."""
     region_code = _normalize_region_code(payload.region_code)
     engine = MarketingOpportunityEngine(db)
+    service = MediaV2Service(db)
 
     existing = engine.get_opportunities(
         brand_filter=payload.brand,
@@ -453,11 +461,17 @@ async def open_or_create_region_recommendation(
         normalize_status=True,
     )
     existing_cards = [
-        _to_card_response(item, include_preview=True)
+        _decorate_card_response(service, item, include_preview=True)
         for item in existing
         if str(item.get("status") or "").upper() not in {"DISMISSED", "EXPIRED"}
     ]
-    existing_cards.sort(key=lambda item: (item.get("urgency_score", 0), item.get("confidence", 0)), reverse=True)
+    existing_cards.sort(
+        key=lambda item: (
+            item.get("priority_score", 0),
+            item.get("signal_confidence_pct", item.get("confidence", 0)) or 0,
+        ),
+        reverse=True,
+    )
 
     for card in existing_cards:
         if region_code in _extract_region_codes_from_card(card):
@@ -480,8 +494,17 @@ async def open_or_create_region_recommendation(
         max_cards=4,
         virus_typ=payload.virus_typ,
     )
-    generated_cards = [_to_card_response(card, include_preview=True) for card in generated.get("cards", [])]
-    generated_cards.sort(key=lambda item: (item.get("urgency_score", 0), item.get("confidence", 0)), reverse=True)
+    generated_cards = [
+        _decorate_card_response(service, card, include_preview=True)
+        for card in generated.get("cards", [])
+    ]
+    generated_cards.sort(
+        key=lambda item: (
+            item.get("priority_score", 0),
+            item.get("signal_confidence_pct", item.get("confidence", 0)) or 0,
+        ),
+        reverse=True,
+    )
 
     selected = None
     for card in generated_cards:
@@ -516,6 +539,7 @@ async def list_media_recommendations(
 ):
     """Listet persistierte Action-Cards / Opportunities."""
     engine = MarketingOpportunityEngine(db)
+    service = MediaV2Service(db)
     opportunities = engine.get_opportunities(
         status_filter=status,
         min_urgency=min_urgency,
@@ -524,7 +548,10 @@ async def list_media_recommendations(
         normalize_status=True,
     )
 
-    cards = [_to_card_response(opp, include_preview=with_campaign_preview) for opp in opportunities]
+    cards = [
+        _decorate_card_response(service, opp, include_preview=with_campaign_preview)
+        for opp in opportunities
+    ]
     if region:
         region_code = _normalize_region_code(region)
         cards = [
@@ -537,7 +564,13 @@ async def list_media_recommendations(
             card for card in cards
             if str(card.get("condition_key") or "").strip().lower() == ck
         ]
-    cards.sort(key=lambda item: (item.get("urgency_score", 0), item.get("confidence", 0)), reverse=True)
+    cards.sort(
+        key=lambda item: (
+            item.get("priority_score", 0),
+            item.get("signal_confidence_pct", item.get("confidence", 0)) or 0,
+        ),
+        reverse=True,
+    )
 
     return {
         "total": len(cards),
@@ -592,13 +625,14 @@ async def get_media_recommendation_detail(
 ):
     """Liefert detaillierte Recommendation inkl. Campaign Pack."""
     engine = MarketingOpportunityEngine(db)
+    service = MediaV2Service(db)
     item = engine.get_recommendation_by_id(opportunity_id)
     if not item:
         raise HTTPException(status_code=404, detail=f"Recommendation {opportunity_id} nicht gefunden")
 
     payload = item.get("campaign_payload") or {}
     return {
-        **_to_card_response(item, include_preview=True),
+        **_decorate_card_response(service, item, include_preview=True),
         "campaign_pack": payload,
         "trigger_evidence": item.get("trigger_evidence") or payload.get("trigger_evidence"),
         "decision_brief": item.get("decision_brief"),
@@ -616,6 +650,7 @@ async def update_media_recommendation_campaign(
 ):
     """Aktualisiert editierbare Kampagnenfelder auf einer Recommendation."""
     engine = MarketingOpportunityEngine(db)
+    service = MediaV2Service(db)
     result = engine.update_campaign(
         opportunity_id,
         activation_window=payload.activation_window,
@@ -629,7 +664,7 @@ async def update_media_recommendation_campaign(
         raise HTTPException(status_code=400, detail=result["error"])
 
     return {
-        **_to_card_response(result, include_preview=True),
+        **_decorate_card_response(service, result, include_preview=True),
         "campaign_pack": result.get("campaign_payload") or {},
     }
 
@@ -642,10 +677,14 @@ async def update_media_recommendation_status(
 ):
     """Aktualisiert den Workflow-Status einer Recommendation."""
     engine = MarketingOpportunityEngine(db)
+    service = MediaV2Service(db)
     result = engine.update_status(opportunity_id, payload.status)
     if "error" in result:
         raise HTTPException(status_code=400, detail=result["error"])
-    return result
+    return {
+        **_decorate_card_response(service, result, include_preview=True),
+        "new_status": result.get("new_status") or payload.status,
+    }
 
 
 @router.post("/recommendations/{opportunity_id}/regenerate-ai")
@@ -655,11 +694,12 @@ async def regenerate_media_recommendation_ai(
 ):
     """Regeneriert KI-Plan (nur ai_* Bereiche im Campaign Payload)."""
     engine = MarketingOpportunityEngine(db)
+    service = MediaV2Service(db)
     result = engine.regenerate_ai_plan(opportunity_id)
     if "error" in result:
         raise HTTPException(status_code=400, detail=result["error"])
     return {
-        **_to_card_response(result, include_preview=True),
+        **_decorate_card_response(service, result, include_preview=True),
         "campaign_pack": result.get("campaign_payload") or {},
         "trigger_evidence": result.get("trigger_evidence"),
     }
@@ -1007,6 +1047,27 @@ def _build_display_title(opp: dict[str, Any], product: str | None) -> str:
 
 def _to_card_response(opp: dict[str, Any], include_preview: bool = True) -> dict[str, Any]:
     return contract_to_card_response(opp, include_preview=include_preview)
+
+
+def _decorate_card_response(
+    service: MediaV2Service,
+    opp: dict[str, Any],
+    *,
+    include_preview: bool = True,
+) -> dict[str, Any]:
+    card = _to_card_response(opp, include_preview=include_preview)
+    truth_coverage = service.get_truth_coverage(brand=str(card.get("brand") or "gelo"))
+    truth_gate = service.truth_gate_service.evaluate(truth_coverage)
+    learning_bundle = service.outcome_signal_service.build_learning_bundle(
+        brand=str(card.get("brand") or "gelo"),
+        truth_coverage=truth_coverage,
+        truth_gate=truth_gate,
+    )
+    return service._attach_outcome_learning_to_card(
+        card=card,
+        learning_bundle=learning_bundle,
+        truth_gate=truth_gate,
+    )
 
 
 def _normalize_region_code(value: str) -> str:

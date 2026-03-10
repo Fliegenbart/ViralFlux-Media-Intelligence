@@ -72,6 +72,36 @@ class OpportunityEngineMathTests(unittest.TestCase):
             "aktuelle Inzidenz",
         )
 
+    def test_build_decision_brief_sets_signal_confidence_contract_source(self) -> None:
+        engine = MarketingOpportunityEngine.__new__(MarketingOpportunityEngine)
+
+        brief = MarketingOpportunityEngine._build_decision_brief(
+            engine,
+            urgency_score=82.0,
+            recommendation_reason="Fruehes Nordsignal",
+            trigger_context={"source": "BfArM_API", "event": "SUPPLY_SHOCK_WINDOW"},
+            trigger_snapshot={"source": "BfArM_API", "event": "SUPPLY_SHOCK_WINDOW"},
+            trigger_evidence={"source": "BfArM_API", "confidence": 0.81},
+            peix_context={"score": 67.0, "impact_probability": 71.0},
+            region_codes=["SH"],
+            condition_key="erkaltung_akut",
+            condition_label="Akute Erkältung",
+            recommended_product="GeloProsed",
+            mapping_status="approved",
+            mapping_reason="Produkt passt zur Lageklasse.",
+            mapping_candidate_product=None,
+            suggested_products=[],
+            budget_shift_pct=18.0,
+            budget_shift_pct_fallback=None,
+            forecast_assessment={"event_forecast": {"event_probability": 0.42}},
+            opportunity_assessment={"truth_readiness": "im_aufbau", "expected_value_index": 58.0},
+        )
+
+        self.assertEqual(
+            brief["expectation"]["field_contracts"]["signal_confidence_pct"]["source"],
+            "BfArM Engpassmonitor",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

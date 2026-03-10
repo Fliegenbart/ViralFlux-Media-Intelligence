@@ -2738,6 +2738,7 @@ class MarketingOpportunityEngine:
         )
 
         source_label = trigger_evidence.get("source") or trigger_snapshot.get("source")
+        source = public_source_label(source_label or "Signal-Fusion") or (source_label or "Signal-Fusion")
         event_label = trigger_evidence.get("event") or trigger_snapshot.get("event")
         score = peix_context.get("score")
         basis_text = build_decision_basis_text(

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
+import math
 from typing import Any
 
 from sqlalchemy import func
@@ -118,6 +119,17 @@ class ForecastDecisionService:
         if age_days <= stale_days:
             return "stale"
         return "expired"
+
+    def _sanitize_json_value(self, value: Any) -> Any:
+        if isinstance(value, float):
+            return value if math.isfinite(value) else None
+        if isinstance(value, dict):
+            return {str(key): self._sanitize_json_value(item) for key, item in value.items()}
+        if isinstance(value, list):
+            return [self._sanitize_json_value(item) for item in value]
+        if isinstance(value, tuple):
+            return [self._sanitize_json_value(item) for item in value]
+        return value
 
     def _baseline_value(self, *, virus_typ: str) -> float:
         cutoff = datetime.utcnow() - timedelta(days=DEFAULT_DECISION_BASELINE_WINDOW_DAYS)
@@ -453,7 +465,7 @@ class ForecastDecisionService:
             latest_backtest=latest_backtest_payload,
             alerts=alerts,
         )
-        return snapshot.to_dict()
+        return self._sanitize_json_value(snapshot.to_dict())
 
     def get_truth_readiness(
         self,

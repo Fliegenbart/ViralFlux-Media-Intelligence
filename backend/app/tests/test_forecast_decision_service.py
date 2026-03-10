@@ -172,6 +172,23 @@ class ForecastDecisionServiceTests(unittest.TestCase):
         self.assertEqual(snapshot["drift_status"], "warning")
         self.assertTrue(any("Drift" in alert for alert in snapshot["alerts"]))
 
+    def test_build_monitoring_snapshot_sanitizes_non_finite_metrics(self) -> None:
+        self._seed_forecast_bundle_inputs()
+        latest_accuracy = (
+            self.db.query(ForecastAccuracyLog)
+            .filter(ForecastAccuracyLog.virus_typ == "Influenza A")
+            .one()
+        )
+        latest_accuracy.correlation = float("nan")
+        self.db.commit()
+
+        snapshot = ForecastDecisionService(self.db).build_monitoring_snapshot(
+            virus_typ="Influenza A",
+            target_source="RKI_ARE",
+        )
+
+        self.assertIsNone(snapshot["latest_accuracy"]["correlation"])
+
     def test_truth_readiness_requires_coverage_and_conversion_fields(self) -> None:
         now = datetime.utcnow().replace(microsecond=0)
         for index in range(26):

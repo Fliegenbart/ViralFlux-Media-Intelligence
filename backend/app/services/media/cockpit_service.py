@@ -723,6 +723,8 @@ class MediaCockpitService:
                 "target_label": row.target_label,
                 "metrics": metrics,
                 "decision_metrics": metrics.get("decision_metrics"),
+                "interval_coverage": metrics.get("interval_coverage"),
+                "event_calibration": metrics.get("event_calibration"),
                 "quality_gate": metrics.get("quality_gate"),
                 "timing_metrics": metrics.get("timing_metrics"),
                 "lead_lag": row.lead_lag or {},

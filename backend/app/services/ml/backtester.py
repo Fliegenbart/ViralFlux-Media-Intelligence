@@ -35,6 +35,12 @@ from app.models.database import (
     BacktestRun,
     BacktestPoint,
 )
+from app.services.ml.forecast_contracts import (
+    DEFAULT_DECISION_BASELINE_WINDOW_DAYS,
+    DEFAULT_DECISION_EVENT_THRESHOLD_PCT,
+    DEFAULT_DECISION_HORIZON_DAYS,
+    event_probability_from_forecast,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -51,10 +57,10 @@ class BacktestService:
         "school_holidays": 0,
         "are_consultation": 7,
     }
-    DEFAULT_MARKET_HORIZON_DAYS = 7
+    DEFAULT_MARKET_HORIZON_DAYS = DEFAULT_DECISION_HORIZON_DAYS
     DEFAULT_MIN_TRAIN_POINTS = 20
-    DECISION_EVENT_THRESHOLD_PCT = 25.0
-    DECISION_BASELINE_WINDOW_DAYS = 84  # 12 weeks
+    DECISION_EVENT_THRESHOLD_PCT = DEFAULT_DECISION_EVENT_THRESHOLD_PCT
+    DECISION_BASELINE_WINDOW_DAYS = DEFAULT_DECISION_BASELINE_WINDOW_DAYS
     QUALITY_GATE_TTD_TARGET_DAYS = 10
     QUALITY_GATE_HIT_RATE_TARGET_PCT = 70.0
     QUALITY_GATE_P90_ERROR_REL_TARGET_PCT = 35.0
@@ -1362,6 +1368,180 @@ class BacktestService:
         }
 
     @staticmethod
+    def _compute_interval_coverage_metrics(chart_data: list[dict]) -> dict:
+        """Coverage diagnostics for the historical confidence bands."""
+        historical = [
+            row for row in (chart_data or [])
+            if not row.get("is_forecast") and row.get("real_qty") is not None
+        ]
+        if not historical:
+            return {
+                "points": 0,
+                "coverage_80_pct": 0.0,
+                "coverage_95_pct": 0.0,
+                "coverage_80_gap_pct": 80.0,
+                "coverage_95_gap_pct": 95.0,
+                "coverage_80_gap_score": 0.0,
+                "interval_passed": False,
+            }
+
+        covered_80 = 0
+        covered_95 = 0
+        observed = 0
+        for row in historical:
+            try:
+                y_true = float(row["real_qty"])
+            except (TypeError, ValueError):
+                continue
+            observed += 1
+            lo_80 = row.get("ci_80_lower")
+            hi_80 = row.get("ci_80_upper")
+            lo_95 = row.get("ci_95_lower")
+            hi_95 = row.get("ci_95_upper")
+            if lo_80 is not None and hi_80 is not None and float(lo_80) <= y_true <= float(hi_80):
+                covered_80 += 1
+            if lo_95 is not None and hi_95 is not None and float(lo_95) <= y_true <= float(hi_95):
+                covered_95 += 1
+
+        if observed == 0:
+            return {
+                "points": 0,
+                "coverage_80_pct": 0.0,
+                "coverage_95_pct": 0.0,
+                "coverage_80_gap_pct": 80.0,
+                "coverage_95_gap_pct": 95.0,
+                "coverage_80_gap_score": 0.0,
+                "interval_passed": False,
+            }
+
+        coverage_80 = (covered_80 / observed) * 100.0
+        coverage_95 = (covered_95 / observed) * 100.0
+        gap_80 = abs(coverage_80 - 80.0)
+        gap_95 = abs(coverage_95 - 95.0)
+        gap_score = max(0.0, 1.0 - (gap_80 / 30.0))
+        interval_passed = gap_80 <= 15.0 and gap_95 <= 10.0
+        return {
+            "points": int(observed),
+            "coverage_80_pct": round(float(coverage_80), 1),
+            "coverage_95_pct": round(float(coverage_95), 1),
+            "coverage_80_gap_pct": round(float(gap_80), 1),
+            "coverage_95_gap_pct": round(float(gap_95), 1),
+            "coverage_80_gap_score": round(float(gap_score), 4),
+            "interval_passed": bool(interval_passed),
+        }
+
+    @staticmethod
+    def _compute_event_calibration_metrics(
+        forecast_records: list[dict],
+        threshold_pct: float = 25.0,
+    ) -> dict:
+        """Calibration check for the decision event probability."""
+        pairs: list[tuple[float, float]] = []
+        bucket_counts = [0] * 5
+        bucket_pred = [0.0] * 5
+        bucket_obs = [0.0] * 5
+
+        valid_rows = []
+        for row in forecast_records or []:
+            issue = pd.to_datetime(row.get("issue_date"), errors="coerce")
+            target = pd.to_datetime(row.get("target_date"), errors="coerce")
+            try:
+                probability = float(row.get("p_event"))
+                y_true = float(row.get("y_true"))
+            except (TypeError, ValueError):
+                continue
+            if pd.isna(issue) or pd.isna(target):
+                continue
+            if not (np.isfinite(probability) and np.isfinite(y_true)):
+                continue
+            valid_rows.append(
+                {
+                    "issue_date": issue,
+                    "target_date": target,
+                    "y_true": y_true,
+                    "p_event": min(max(probability, 0.0), 1.0),
+                }
+            )
+
+        if not valid_rows:
+            return {
+                "samples": 0,
+                "brier_score": None,
+                "ece": None,
+                "calibration_passed": False,
+                "calibration_method": "growth_sigmoid_with_oos_gate",
+                "buckets": [],
+            }
+
+        truth_rows = sorted(valid_rows, key=lambda r: r["target_date"])
+        threshold_ratio = float(threshold_pct or 0.0) / 100.0
+
+        for row in valid_rows:
+            baseline_start = row["issue_date"] - timedelta(days=BacktestService.DECISION_BASELINE_WINDOW_DAYS)
+            baseline_vals = [
+                item["y_true"]
+                for item in truth_rows
+                if baseline_start <= item["target_date"] <= row["issue_date"]
+            ]
+            if not baseline_vals:
+                baseline_vals = [item["y_true"] for item in truth_rows if item["target_date"] <= row["issue_date"]]
+            if not baseline_vals:
+                continue
+
+            baseline = float(np.median(baseline_vals))
+            if not np.isfinite(baseline) or baseline <= 0:
+                continue
+
+            observed_event = 1.0 if ((float(row["y_true"]) - baseline) / baseline) >= threshold_ratio else 0.0
+            probability = float(row["p_event"])
+            pairs.append((probability, observed_event))
+            bucket = min(int(probability * 5.0), 4)
+            bucket_counts[bucket] += 1
+            bucket_pred[bucket] += probability
+            bucket_obs[bucket] += observed_event
+
+        if not pairs:
+            return {
+                "samples": 0,
+                "brier_score": None,
+                "ece": None,
+                "calibration_passed": False,
+                "calibration_method": "growth_sigmoid_with_oos_gate",
+                "buckets": [],
+            }
+
+        probs = np.asarray([item[0] for item in pairs], dtype=float)
+        obs = np.asarray([item[1] for item in pairs], dtype=float)
+        brier = float(np.mean(np.square(probs - obs)))
+        total = float(len(pairs))
+        ece = 0.0
+        buckets: list[dict[str, Any]] = []
+        for idx, count in enumerate(bucket_counts):
+            if count <= 0:
+                continue
+            mean_pred = bucket_pred[idx] / count
+            mean_obs = bucket_obs[idx] / count
+            ece += abs(mean_pred - mean_obs) * (count / total)
+            buckets.append(
+                {
+                    "bucket": idx,
+                    "samples": int(count),
+                    "mean_predicted": round(float(mean_pred), 4),
+                    "mean_observed": round(float(mean_obs), 4),
+                }
+            )
+
+        calibration_passed = brier <= 0.25 and ece <= 0.15
+        return {
+            "samples": int(len(pairs)),
+            "brier_score": round(float(brier), 4),
+            "ece": round(float(ece), 4),
+            "calibration_passed": bool(calibration_passed),
+            "calibration_method": "growth_sigmoid_with_oos_gate",
+            "buckets": buckets,
+        }
+
+    @staticmethod
     def _build_lead_feature_set(feature_cols: list[str]) -> list[str]:
         """Feature-Subset für Lead-Optimierung (ohne Nachlaufanker)."""
         excluded = {"target_level", "target_roc"}
@@ -1658,6 +1838,10 @@ class BacktestService:
     def _build_quality_gate(
         decision_metrics: dict,
         timing_metrics: Optional[dict] = None,
+        *,
+        improvement_vs_baselines: Optional[dict] = None,
+        interval_coverage: Optional[dict] = None,
+        event_calibration: Optional[dict] = None,
     ) -> dict:
         """Leitet GO/WATCH Gate aus Decision-Metriken ab."""
         ttd_target = int(BacktestService.QUALITY_GATE_TTD_TARGET_DAYS)
@@ -1677,7 +1861,30 @@ class BacktestService:
             lead_passed = True
         else:
             lead_passed = best_lag_days >= float(lead_target)
-        overall_passed = bool(ttd_passed and hit_rate_passed and error_passed and lead_passed)
+        baseline_schema = improvement_vs_baselines or {}
+        baseline_passed = bool(
+            float(baseline_schema.get("mae_vs_persistence_pct", 0.0) or 0.0) >= 0.0
+            and float(baseline_schema.get("mae_vs_seasonal_pct", 0.0) or 0.0) >= 0.0
+        )
+        interval_passed = bool(
+            interval_coverage.get("interval_passed", True)
+            if interval_coverage is not None
+            else True
+        )
+        calibration_passed = bool(
+            event_calibration.get("calibration_passed", True)
+            if event_calibration is not None
+            else True
+        )
+        overall_passed = bool(
+            ttd_passed
+            and hit_rate_passed
+            and error_passed
+            and lead_passed
+            and baseline_passed
+            and interval_passed
+            and calibration_passed
+        )
 
         return {
             "ttd_target_days": ttd_target,
@@ -1688,7 +1895,11 @@ class BacktestService:
             "hit_rate_passed": bool(hit_rate_passed),
             "error_passed": bool(error_passed),
             "lead_passed": bool(lead_passed),
+            "baseline_passed": bool(baseline_passed),
+            "interval_passed": bool(interval_passed),
+            "event_calibration_passed": bool(calibration_passed),
             "overall_passed": bool(overall_passed),
+            "forecast_readiness": "GO" if overall_passed else "WATCH",
         }
 
     @staticmethod
@@ -1726,6 +1937,10 @@ class BacktestService:
             metrics_payload = dict(result.get("metrics", {}) or {})
             if result.get("decision_metrics") is not None:
                 metrics_payload["decision_metrics"] = result.get("decision_metrics")
+            if result.get("interval_coverage") is not None:
+                metrics_payload["interval_coverage"] = result.get("interval_coverage")
+            if result.get("event_calibration") is not None:
+                metrics_payload["event_calibration"] = result.get("event_calibration")
             if result.get("quality_gate") is not None:
                 metrics_payload["quality_gate"] = result.get("quality_gate")
             if result.get("timing_metrics") is not None:
@@ -1993,6 +2208,19 @@ class BacktestService:
             seasonal_bl = self._seasonal_naive_baseline(
                 train_target_df, target_week=target_week, target_month=target_month,
             )
+            decision_window = train_target_df[
+                train_target_df["datum"] >= (forecast_time - timedelta(days=self.DECISION_BASELINE_WINDOW_DAYS))
+            ]
+            if decision_window.empty:
+                decision_window = train_target_df
+            decision_baseline = float(decision_window["menge"].median()) if not decision_window.empty else seasonal_bl
+            p_event = event_probability_from_forecast(
+                prediction=y_hat,
+                baseline=decision_baseline if decision_baseline > 0 else max(seasonal_bl, 1.0),
+                lower_bound=max(0.0, y_hat - 1.28 * max(float(np.std(y_train)), 1.0)),
+                upper_bound=y_hat + 1.28 * max(float(np.std(y_train)), 1.0),
+                threshold_pct=float(self.DECISION_EVENT_THRESHOLD_PCT),
+            )
 
             # AMELAG Rohdaten für Chart-Anzeige
             amelag_val = self._amelag_raw_at_date(target_time, virus_typ)
@@ -2005,10 +2233,11 @@ class BacktestService:
                 "predicted_qty_level": y_hat,
                 "predicted_qty_lead": y_hat,
                 "predicted_qty_decision": y_hat,
-                "p_event": 0.0,
+                "p_event": p_event,
                 "selected_variant": "xgboost",
                 "baseline_persistence": baseline_persistence,
                 "baseline_seasonal": seasonal_bl,
+                "decision_baseline": round(decision_baseline, 4),
                 "amelag_viruslast": amelag_val,
             })
 
@@ -2106,6 +2335,7 @@ class BacktestService:
                 "y_true": float(row["real_qty"]),
                 "baseline_persistence": float(row["baseline_persistence"]),
                 "baseline_seasonal": float(row["baseline_seasonal"]),
+                "decision_baseline": float(row.get("decision_baseline") or 0.0),
                 "horizon_days": int(horizon_days),
                 "lead_days": int((row["target_time"] - row["forecast_time"]).days),
             }
@@ -2123,6 +2353,7 @@ class BacktestService:
                 "y_true": float(row["real_qty"]),
                 "baseline_persistence": float(row["baseline_persistence"]),
                 "baseline_seasonal": float(row["baseline_seasonal"]),
+                "decision_baseline": float(row.get("decision_baseline") or 0.0),
                 "horizon_days": int(horizon_days),
                 "lead_days": int((row["target_time"] - row["forecast_time"]).days),
             }
@@ -2165,11 +2396,25 @@ class BacktestService:
             threshold_pct=float(self.DECISION_EVENT_THRESHOLD_PCT),
             vintage_metrics=vintage_metrics,
         )
+        interval_coverage = self._compute_interval_coverage_metrics(historical_chart)
+        event_calibration = self._compute_event_calibration_metrics(
+            decision_forecast_records,
+            threshold_pct=float(self.DECISION_EVENT_THRESHOLD_PCT),
+        )
         timing_metrics = self._compute_timing_metrics(
             forecast_records=vintage_records,
             horizon_days=int(horizon_days),
         )
-        quality_gate = self._build_quality_gate(decision_metrics, timing_metrics)
+        quality_gate = self._build_quality_gate(
+            decision_metrics,
+            timing_metrics,
+            improvement_vs_baselines={
+                "mae_vs_persistence_pct": round((pers_mae - model_mae) / pers_mae * 100, 2),
+                "mae_vs_seasonal_pct": round((seas_mae - model_mae) / seas_mae * 100, 2),
+            },
+            interval_coverage=interval_coverage,
+            event_calibration=event_calibration,
+        )
 
         return {
             "metrics": {
@@ -2199,6 +2444,8 @@ class BacktestService:
             "decision_forecast_records": decision_forecast_records,
             "vintage_metrics": vintage_metrics,
             "decision_metrics": decision_metrics,
+            "interval_coverage": interval_coverage,
+            "event_calibration": event_calibration,
             "timing_metrics": timing_metrics,
             "quality_gate": quality_gate,
             "forecast_weeks": len(forecast_chart),
@@ -2309,7 +2556,13 @@ class BacktestService:
             forecast_records=decision_records,
             horizon_days=int(horizon_days),
         )
-        quality_gate = result.get("quality_gate") or self._build_quality_gate(decision_metrics, timing_metrics)
+        quality_gate = result.get("quality_gate") or self._build_quality_gate(
+            decision_metrics,
+            timing_metrics,
+            improvement_vs_baselines=result.get("improvement_vs_baselines"),
+            interval_coverage=result.get("interval_coverage"),
+            event_calibration=result.get("event_calibration"),
+        )
         result["decision_metrics"] = decision_metrics
         result["timing_metrics"] = timing_metrics
         result["quality_gate"] = quality_gate
@@ -2372,6 +2625,8 @@ class BacktestService:
             f"Decision-Layer: TTD median {decision_metrics.get('median_ttd_days', 0)} Tage, "
             f"Hit-Rate {decision_metrics.get('hit_rate_pct', 0):.1f}%, "
             f"False-Alarms {decision_metrics.get('false_alarm_rate_pct', 0):.1f}%, "
+            f"Interval 80% {((result.get('interval_coverage') or {}).get('coverage_80_pct', 0.0)):.1f}%, "
+            f"Brier {((result.get('event_calibration') or {}).get('brier_score', 0.0)):.3f}, "
             f"Readiness {'GO' if quality_gate.get('overall_passed') else 'WATCH'}."
         )
         result["llm_insight"] = (
@@ -2555,11 +2810,25 @@ class BacktestService:
             threshold_pct=float(self.DECISION_EVENT_THRESHOLD_PCT),
             vintage_metrics=vintage_metrics,
         )
+        interval_coverage = self._compute_interval_coverage_metrics(combined_historical)
+        event_calibration = self._compute_event_calibration_metrics(
+            decision_records,
+            threshold_pct=float(self.DECISION_EVENT_THRESHOLD_PCT),
+        )
         timing_metrics = self._compute_timing_metrics(
             forecast_records=decision_records,
             horizon_days=int(horizon_days),
         )
-        quality_gate = self._build_quality_gate(decision_metrics, timing_metrics)
+        quality_gate = self._build_quality_gate(
+            decision_metrics,
+            timing_metrics,
+            improvement_vs_baselines={
+                "mae_vs_persistence_pct": round((pers_mae - model_mae) / pers_mae * 100, 2),
+                "mae_vs_seasonal_pct": round((seas_mae - model_mae) / seas_mae * 100, 2),
+            },
+            interval_coverage=interval_coverage,
+            event_calibration=event_calibration,
+        )
         proof_text = (
             f"Kundendaten-Check über {model_metrics['data_points']} Punkte: "
             f"R²={model_metrics['r2_score']}, Korrelationsstärke={model_metrics['correlation_pct']}%, "
@@ -2568,7 +2837,9 @@ class BacktestService:
             f"Timing best_lag={timing_metrics.get('best_lag_days', 0)} Tage. "
             f"Decision-Layer: TTD median {decision_metrics.get('median_ttd_days', 0)} Tage, "
             f"Hit-Rate {decision_metrics.get('hit_rate_pct', 0):.1f}%, "
-            f"False-Alarms {decision_metrics.get('false_alarm_rate_pct', 0):.1f}%."
+            f"False-Alarms {decision_metrics.get('false_alarm_rate_pct', 0):.1f}%, "
+            f"Interval 80% {interval_coverage.get('coverage_80_pct', 0.0):.1f}%, "
+            f"Brier {float(event_calibration.get('brier_score') or 0.0):.3f}."
         )
         clean_chart_df = combined_df.replace([np.inf, -np.inf], np.nan).astype(object)
         clean_chart_df = clean_chart_df.where(pd.notna(clean_chart_df), None)
@@ -2596,6 +2867,8 @@ class BacktestService:
             "decision_forecast_records": decision_records,
             "vintage_metrics": vintage_metrics,
             "decision_metrics": decision_metrics,
+            "interval_coverage": interval_coverage,
+            "event_calibration": event_calibration,
             "timing_metrics": timing_metrics,
             "quality_gate": quality_gate,
             "proof_text": proof_text,

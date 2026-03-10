@@ -331,13 +331,18 @@ def derive_evidence_strength(card: dict[str, Any]) -> str:
     confidence = float(card.get("confidence") or 0.0)
     if confidence <= 1:
         confidence *= 100.0
+    forecast_assessment = (card.get("campaign_payload") or {}).get("forecast_assessment") or {}
+    event_forecast = forecast_assessment.get("event_forecast") or {}
+    quality = forecast_assessment.get("forecast_quality") or {}
+    event_strength = float(event_forecast.get("event_probability") or 0.0) * 100.0
     peix_score = float(
-        (card.get("peix_context") or {}).get("score")
+        event_strength
+        or (card.get("peix_context") or {}).get("score")
         or (card.get("peix_context") or {}).get("impact_probability")
         or 0.0
     )
     signal_count = len((card.get("decision_brief") or {}).get("facts") or [])
-    if confidence >= 78 and peix_score >= 60 and signal_count >= 2:
+    if confidence >= 78 and peix_score >= 60 and signal_count >= 2 and quality.get("forecast_readiness") != "WATCH":
         return "hoch"
     if confidence >= 60 or peix_score >= 50:
         return "mittel"
@@ -487,7 +492,13 @@ def to_card_response(opp: dict[str, Any], include_preview: bool = True) -> dict[
         "confidence": (
             round(float(opp.get("confidence")), 2)
             if opp.get("confidence") is not None
-            else round(min(0.98, max(0.45, float(opp.get("urgency_score") or 50.0) / 100.0)), 2)
+            else round(
+                float(
+                    ((campaign_pack.get("forecast_assessment") or {}).get("event_forecast") or {}).get("confidence")
+                    or min(0.98, max(0.45, float(opp.get("urgency_score") or 50.0) / 100.0))
+                ),
+                2,
+            )
         ),
         "detail_url": opp.get("detail_url") or f"/kampagnen/{opp.get('id')}",
         "created_at": opp.get("created_at"),
@@ -517,6 +528,9 @@ def to_card_response(opp: dict[str, Any], include_preview: bool = True) -> dict[
         "decision_brief": opp.get("decision_brief"),
         "display_title": public_title or _build_display_title(opp, recommended_product),
         "campaign_payload": cleaned_campaign_pack,
+        "forecast_assessment": campaign_pack.get("forecast_assessment") or {},
+        "opportunity_assessment": campaign_pack.get("opportunity_assessment") or {},
+        "exploratory_signals": campaign_pack.get("exploratory_signals") or [],
     }
 
     if include_preview:
@@ -528,6 +542,8 @@ def to_card_response(opp: dict[str, Any], include_preview: bool = True) -> dict[
             "recommended_product": recommended_product,
             "mapping_status": card.get("mapping_status"),
             "peix_context": card.get("peix_context"),
+            "forecast_assessment": card.get("forecast_assessment"),
+            "opportunity_assessment": card.get("opportunity_assessment"),
             "playbook_key": card.get("playbook_key"),
             "playbook_title": card.get("playbook_title"),
             "ai_generation_status": card.get("ai_generation_status"),

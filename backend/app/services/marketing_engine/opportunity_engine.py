@@ -30,6 +30,8 @@ from app.services.media.message_library import select_gelo_message_pack
 from app.services.media.product_catalog_service import ProductCatalogService
 from app.services.media.peix_score_service import PeixEpiScoreService
 from app.services.media.playbook_engine import PLAYBOOK_CATALOG, PlaybookEngine
+from app.services.ml.forecast_contracts import DEFAULT_DECISION_HORIZON_DAYS
+from app.services.ml.forecast_decision_service import ForecastDecisionService
 
 from .detectors.competitor_shortage_detector import CompetitorShortageDetector
 from .detectors.predictive_sales_spike import PredictiveSalesSpikeDetector
@@ -97,6 +99,13 @@ BUNDESLAND_NAMES = {
 }
 REGION_NAME_TO_CODE = {name.lower(): code for code, name in BUNDESLAND_NAMES.items()}
 
+FORECAST_PLAYBOOK_MAP = {
+    "Influenza A": "ERKAELTUNGSWELLE",
+    "Influenza B": "HALSSCHMERZ_HUNTER",
+    "RSV A": "SINUS_DEFENDER",
+    "SARS-CoV-2": "HALSSCHMERZ_HUNTER",
+}
+
 
 class MarketingOpportunityEngine:
     """Orchestriert alle Opportunity-Detektoren und CRM-Output."""
@@ -162,6 +171,157 @@ class MarketingOpportunityEngine:
             seasonal_val = imp.get("seasonal_naive", {}).get("mae_improvement_pct", 0)
 
         return float(persistence_val or 0.0), float(seasonal_val or 0.0)
+
+    @staticmethod
+    def _select_forecast_playbook_key(virus_typ: str) -> str:
+        return FORECAST_PLAYBOOK_MAP.get(virus_typ, "ERKAELTUNGSWELLE")
+
+    def _secondary_modifier_from_opportunities(
+        self,
+        *,
+        opportunities: list[dict[str, Any]],
+        region_code: str,
+    ) -> tuple[float, list[dict[str, Any]]]:
+        """Secondary modifiers may rank opportunities, but never create readiness."""
+        relevant: list[dict[str, Any]] = []
+        for opp in opportunities:
+            region_codes = self._extract_region_codes_from_opportunity(opp)
+            if not region_codes or region_code == "Gesamt" or region_code in region_codes:
+                relevant.append(opp)
+
+        if not relevant:
+            return 1.0, []
+
+        strongest = max(float(item.get("urgency_score") or 0.0) for item in relevant)
+        delta = max(-0.15, min(0.15, (strongest - 50.0) / 333.0))
+        modifier = round(1.0 + delta, 3)
+        exploratory_signals = [
+            {
+                "type": item.get("type"),
+                "urgency_score": round(float(item.get("urgency_score") or 0.0), 1),
+                "reason": (item.get("trigger_context") or {}).get("event")
+                or (item.get("trigger_context") or {}).get("details")
+                or item.get("type"),
+            }
+            for item in sorted(
+                relevant,
+                key=lambda row: float(row.get("urgency_score") or 0.0),
+                reverse=True,
+            )[:3]
+        ]
+        return modifier, exploratory_signals
+
+    def _forecast_first_candidates(
+        self,
+        *,
+        opportunities: list[dict[str, Any]],
+        brand: str,
+        virus_typ: str,
+        region_scope: list[str] | None,
+        max_cards: int,
+    ) -> list[dict[str, Any]]:
+        service = ForecastDecisionService(self.db)
+        forecast_bundle = service.build_forecast_bundle(
+            virus_typ=virus_typ,
+            target_source="RKI_ARE",
+        )
+        burden_forecast = forecast_bundle.get("burden_forecast") or {}
+        event_forecast = forecast_bundle.get("event_forecast") or {}
+        forecast_quality = forecast_bundle.get("forecast_quality") or {}
+        burden_points = burden_forecast.get("points") or []
+        if not burden_points:
+            return []
+
+        normalized_scope = [
+            self._normalize_region_token(item)
+            for item in (region_scope or [])
+            if item
+        ]
+        region_codes = [item for item in normalized_scope if item] or ["Gesamt"]
+        playbook_key = self._select_forecast_playbook_key(virus_typ)
+        playbook_cfg = PLAYBOOK_CATALOG.get(playbook_key) or {}
+        event_probability = float(event_forecast.get("event_probability") or 0.0)
+        calibration_passed = bool(event_forecast.get("calibration_passed"))
+        forecast_readiness = str(forecast_quality.get("forecast_readiness") or "WATCH")
+        primary_threshold = event_forecast.get("threshold_value")
+        baseline_value = event_forecast.get("baseline_value")
+
+        candidates: list[dict[str, Any]] = []
+        for region_code in region_codes[: max(1, max_cards)]:
+            modifier, exploratory_signals = self._secondary_modifier_from_opportunities(
+                opportunities=opportunities,
+                region_code=region_code,
+            )
+            opportunity_assessment = service.build_opportunity_assessment(
+                virus_typ=virus_typ,
+                target_source="RKI_ARE",
+                brand=brand,
+                secondary_modifier=modifier,
+            )
+            expected_value_index = float(opportunity_assessment.get("expected_value_index") or 0.0)
+            action_class = str(opportunity_assessment.get("action_class") or "watch_only")
+            if action_class == "customer_lift_ready":
+                budget_shift_pct = round(max(10.0, min(35.0, expected_value_index * 0.35)), 1)
+            else:
+                budget_shift_pct = 0.0
+
+            candidates.append(
+                {
+                    "playbook_key": playbook_key,
+                    "region_code": region_code,
+                    "region_name": self._region_label(region_code) if region_code != "Gesamt" else "Deutschland",
+                    "trigger_strength": round(event_probability * 100.0, 2),
+                    "confidence": round(float(event_forecast.get("confidence") or event_probability) * 100.0, 2),
+                    "priority_score": round(expected_value_index, 2),
+                    "impact_probability": round(event_probability * 100.0, 1) if calibration_passed else None,
+                    "budget_shift_pct": budget_shift_pct,
+                    "channel_mix": playbook_cfg.get("default_mix") or {},
+                    "shift_bounds": {
+                        "min": playbook_cfg.get("shift_min"),
+                        "max": playbook_cfg.get("shift_max"),
+                    },
+                    "playbook_title": playbook_cfg.get("title"),
+                    "message_direction": playbook_cfg.get("message_direction"),
+                    "condition_key": (PLAYBOOK_CATALOG.get(playbook_key) or {}).get("condition_key"),
+                    "forecast_quality": forecast_quality,
+                    "event_forecast": event_forecast,
+                    "opportunity_assessment": opportunity_assessment,
+                    "exploratory_signals": exploratory_signals,
+                    "trigger_snapshot": {
+                        "source": "ForecastDecisionService",
+                        "event": f"{virus_typ} Forecast Event Window",
+                        "details": (
+                            f"7-Tage Event-Forecast fuer {virus_typ}: "
+                            f"{round(event_probability * 100.0, 1)}% "
+                            f"bei Baseline {baseline_value} und Schwelle {primary_threshold}."
+                        ),
+                        "lead_time_days": (
+                            (forecast_quality.get("timing_metrics") or {}).get("best_lag_days")
+                            or DEFAULT_DECISION_HORIZON_DAYS
+                        ),
+                        "confidence": float(event_forecast.get("confidence") or event_probability),
+                        "values": {
+                            "event_probability_pct": round(event_probability * 100.0, 1),
+                            "threshold_pct": event_forecast.get("threshold_pct"),
+                            "baseline_value": baseline_value,
+                            "threshold_value": primary_threshold,
+                            "expected_value_index": expected_value_index,
+                            "secondary_modifier": modifier,
+                        },
+                    },
+                    "forecast_readiness": forecast_readiness,
+                    "action_class": action_class,
+                }
+            )
+
+        candidates.sort(
+            key=lambda item: (
+                float(item.get("priority_score") or 0.0),
+                float(item.get("trigger_strength") or 0.0),
+            ),
+            reverse=True,
+        )
+        return candidates[:max_cards]
 
     def generate_opportunities(self) -> dict:
         """Alle Detektoren ausführen -> Pitches -> Products -> Fuse Conquesting -> Persist -> JSON."""
@@ -572,12 +732,13 @@ class MarketingOpportunityEngine:
         max_cards: int,
         virus_typ: str,
     ) -> list[dict[str, Any]]:
-        selection = self.playbook_engine.select_candidates(
+        candidates = self._forecast_first_candidates(
+            opportunities=opportunities,
+            brand=brand,
             virus_typ=virus_typ,
             region_scope=region_scope,
             max_cards=max_cards,
         )
-        candidates = selection.get("selected") or []
         cards: list[dict[str, Any]] = []
         now = datetime.utcnow()
         # Bulk generation must stay fast/reliable for dashboards. We therefore
@@ -586,8 +747,6 @@ class MarketingOpportunityEngine:
         ai_disabled = True
         started = time.monotonic()
         latest_market_backtest = self._latest_market_backtest(virus_typ=virus_typ)
-        model_ready = self._market_backtest_is_ready(latest_market_backtest)
-        model_readiness_status = "GO" if model_ready else "WATCH"
 
         for candidate in candidates:
             # Guard against long-running multi-card generation: once vLLM times out,
@@ -637,6 +796,11 @@ class MarketingOpportunityEngine:
             )
             enriched_candidate = {
                 **candidate,
+                "forecast_assessment": {
+                    "forecast_quality": candidate.get("forecast_quality") or {},
+                    "event_forecast": candidate.get("event_forecast") or {},
+                },
+                "opportunity_assessment": candidate.get("opportunity_assessment") or {},
                 "message_direction": pack.message_direction,
                 "copy_pack": {
                     "status": pack.status,
@@ -671,11 +835,24 @@ class MarketingOpportunityEngine:
             guardrail_report = guarded["guardrail_report"]
             guardrail_notes = guarded["guardrail_notes"]
 
-            peix_score = float(candidate.get("peix_score") or 0.0)
-            workflow_status = self._derive_playbook_workflow_status(peix_score, model_ready)
+            forecast_quality = candidate.get("forecast_quality") or {}
+            event_forecast = candidate.get("event_forecast") or {}
+            opportunity_assessment = candidate.get("opportunity_assessment") or {}
+            exploratory_signals = candidate.get("exploratory_signals") or []
+            model_readiness_status = str(forecast_quality.get("forecast_readiness") or "WATCH")
+            workflow_status = (
+                "READY"
+                if model_readiness_status == "GO"
+                and str(opportunity_assessment.get("action_class") or "") == "customer_lift_ready"
+                else "DRAFT"
+            )
             urgency = float(candidate.get("priority_score") or candidate.get("trigger_strength") or 50.0)
             confidence_0_1 = round(float(candidate.get("confidence") or 60.0) / 100.0, 2)
-            budget_shift_pct = float(ai_plan.get("budget_shift_pct") or candidate.get("budget_shift_pct") or 0.0)
+            budget_shift_pct = float(
+                candidate.get("budget_shift_pct")
+                if candidate.get("budget_shift_pct") is not None
+                else (ai_plan.get("budget_shift_pct") or 0.0)
+            )
             budget_shift_value = round((weekly_budget or 0.0) * (abs(budget_shift_pct) / 100.0), 2)
             channel_mix = {
                 str(item.get("channel")).lower(): float(item.get("share_pct") or 0.0)
@@ -687,10 +864,14 @@ class MarketingOpportunityEngine:
             activation_window = self._derive_activation_window_from_days(activation_days)
             peix_context = {
                 "region_code": region_code,
-                "score": round(peix_score, 1),
-                "band": candidate.get("peix_band"),
-                "impact_probability": round(float(candidate.get("impact_probability") or 0.0), 1),
-                "drivers": candidate.get("peix_drivers") or [],
+                "score": round(urgency, 1),
+                "band": "ready" if model_readiness_status == "GO" else "watch",
+                "impact_probability": (
+                    round(float(candidate.get("impact_probability") or 0.0), 1)
+                    if candidate.get("impact_probability") is not None
+                    else None
+                ),
+                "drivers": exploratory_signals,
                 "trigger_event": str(trigger_snapshot.get("event") or ""),
                 "model_readiness_status": model_readiness_status,
                 "model_backtest_run_id": latest_market_backtest.run_id if latest_market_backtest else None,
@@ -713,6 +894,12 @@ class MarketingOpportunityEngine:
                 region_codes=[region_code] if region_code != "Gesamt" else [],
                 peix_context=peix_context,
             )
+            campaign_payload["forecast_assessment"] = {
+                "forecast_quality": forecast_quality,
+                "event_forecast": event_forecast,
+            }
+            campaign_payload["opportunity_assessment"] = opportunity_assessment
+            campaign_payload["exploratory_signals"] = exploratory_signals
             self._merge_ai_playbook_payload(
                 campaign_payload=campaign_payload,
                 playbook_key=playbook_key,
@@ -788,6 +975,9 @@ class MarketingOpportunityEngine:
                     "strategy_mode": "PLAYBOOK_AI",
                     "copy_status": pack.status,
                     "model_readiness_status": model_readiness_status,
+                    "forecast_assessment": campaign_payload.get("forecast_assessment"),
+                    "opportunity_assessment": campaign_payload.get("opportunity_assessment"),
+                    "exploratory_signals": exploratory_signals,
                 }
             )
 
@@ -2070,6 +2260,8 @@ class MarketingOpportunityEngine:
         window = payload.get("activation_window") or {}
         product_mapping = payload.get("product_mapping") or {}
         peix_context = payload.get("peix_context") or {}
+        forecast_assessment = payload.get("forecast_assessment") or {}
+        opportunity_assessment = payload.get("opportunity_assessment") or {}
         playbook = payload.get("playbook") or {}
         ai_meta = payload.get("ai_meta") or {}
         return {
@@ -2089,6 +2281,8 @@ class MarketingOpportunityEngine:
             "mapping_status": product_mapping.get("mapping_status"),
             "mapping_confidence": product_mapping.get("mapping_confidence"),
             "peix_context": peix_context,
+            "forecast_assessment": forecast_assessment,
+            "opportunity_assessment": opportunity_assessment,
             "playbook_key": playbook.get("key"),
             "playbook_title": playbook.get("title"),
             "ai_generation_status": ai_meta.get("status"),
@@ -2244,6 +2438,10 @@ class MarketingOpportunityEngine:
             "allergy_search_level": "Allergie-Suche",
             "allergy_search_delta": "Allergie-Trend",
             "peix_score": "PeixEpiScore",
+            "event_probability_pct": "Event-Wahrscheinlichkeit",
+            "expected_value_index": "Opportunity-Index",
+            "forecast_readiness": "Forecast-Readiness",
+            "truth_readiness": "Truth-Readiness",
             "avg_recent_incidence": "aktuelle Durchschnitts-Inzidenz",
             "growth_pct": "Wachstum",
             "total_infection_load": "gesamte Infektionslast",
@@ -2344,6 +2542,8 @@ class MarketingOpportunityEngine:
         trigger_evidence: dict[str, Any],
         peix_context: dict[str, Any],
         confidence_pct: float,
+        forecast_assessment: dict[str, Any] | None = None,
+        opportunity_assessment: dict[str, Any] | None = None,
     ) -> list[dict[str, Any]]:
         facts: list[dict[str, Any]] = []
         raw_source = (
@@ -2419,6 +2619,46 @@ class MarketingOpportunityEngine:
             }
         )
 
+        event_forecast = (forecast_assessment or {}).get("event_forecast") or {}
+        if event_forecast.get("event_probability") is not None:
+            facts.append(
+                {
+                    "key": "event_probability_pct",
+                    "label": "Event-Wahrscheinlichkeit",
+                    "value": round(float(event_forecast.get("event_probability") or 0.0) * 100.0, 1),
+                    "source": "ForecastDecisionService",
+                }
+            )
+        quality = (forecast_assessment or {}).get("forecast_quality") or {}
+        if quality.get("forecast_readiness"):
+            facts.append(
+                {
+                    "key": "forecast_readiness",
+                    "label": "Forecast-Readiness",
+                    "value": quality.get("forecast_readiness"),
+                    "source": "Backtest-Promotion-Gate",
+                }
+            )
+
+        if opportunity_assessment and opportunity_assessment.get("truth_readiness"):
+            facts.append(
+                {
+                    "key": "truth_readiness",
+                    "label": "Truth-Readiness",
+                    "value": opportunity_assessment.get("truth_readiness"),
+                    "source": "Outcome-Coverage",
+                }
+            )
+        if opportunity_assessment and opportunity_assessment.get("expected_value_index") is not None:
+            facts.append(
+                {
+                    "key": "expected_value_index",
+                    "label": "Opportunity-Index",
+                    "value": float(opportunity_assessment.get("expected_value_index") or 0.0),
+                    "source": "Forecast-first Ranking",
+                }
+            )
+
         return facts
 
     def _build_decision_brief(
@@ -2440,6 +2680,8 @@ class MarketingOpportunityEngine:
         suggested_products: Any,
         budget_shift_pct: float | None,
         budget_shift_pct_fallback: float | None,
+        forecast_assessment: dict[str, Any] | None = None,
+        opportunity_assessment: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         primary_region_code = region_codes[0] if region_codes else "Gesamt"
         primary_region = (
@@ -2514,6 +2756,8 @@ class MarketingOpportunityEngine:
                 trigger_evidence=trigger_evidence,
                 peix_context=peix_context,
                 confidence_pct=confidence_pct,
+                forecast_assessment=forecast_assessment,
+                opportunity_assessment=opportunity_assessment,
             ),
             "expectation": {
                 "condition_key": condition_key,
@@ -2522,6 +2766,9 @@ class MarketingOpportunityEngine:
                 "impact_probability": peix_context.get("impact_probability"),
                 "peix_score": peix_context.get("score"),
                 "confidence_pct": confidence_pct,
+                "forecast_readiness": (forecast_assessment or {}).get("forecast_quality", {}).get("forecast_readiness"),
+                "truth_readiness": (opportunity_assessment or {}).get("truth_readiness"),
+                "expected_value_index": (opportunity_assessment or {}).get("expected_value_index"),
                 "rationale": rationale,
             },
             "recommendation": {
@@ -2588,6 +2835,8 @@ class MarketingOpportunityEngine:
         campaign_preview = self._campaign_preview_from_payload(campaign_payload) if campaign_payload else None
         product_mapping = campaign_payload.get("product_mapping") or {}
         peix_context = campaign_payload.get("peix_context") or {}
+        forecast_assessment = campaign_payload.get("forecast_assessment") or {}
+        opportunity_assessment = campaign_payload.get("opportunity_assessment") or {}
         playbook = campaign_payload.get("playbook") or {}
         ai_meta = campaign_payload.get("ai_meta") or {}
         region_codes = self._extract_region_codes_from_opportunity(
@@ -2622,6 +2871,8 @@ class MarketingOpportunityEngine:
             suggested_products=m.suggested_products,
             budget_shift_pct=m.budget_shift_pct,
             budget_shift_pct_fallback=(campaign_payload.get("budget_plan") or {}).get("budget_shift_pct"),
+            forecast_assessment=forecast_assessment,
+            opportunity_assessment=opportunity_assessment,
         )
 
         return {
@@ -2655,6 +2906,9 @@ class MarketingOpportunityEngine:
             "mapping_candidate_product": product_mapping.get("candidate_product"),
             "rule_source": product_mapping.get("rule_source"),
             "peix_context": peix_context,
+            "forecast_assessment": forecast_assessment,
+            "opportunity_assessment": opportunity_assessment,
+            "exploratory_signals": campaign_payload.get("exploratory_signals") or [],
             "playbook_key": m.playbook_key or playbook.get("key"),
             "playbook_title": playbook.get("title"),
             "strategy_mode": m.strategy_mode or campaign_payload.get("strategy_mode"),

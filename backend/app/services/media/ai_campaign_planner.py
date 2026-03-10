@@ -188,6 +188,10 @@ class AiCampaignPlanner:
         hero = copy_pack.get("hero_message")
         support = copy_pack.get("support_points") or []
         compliance_note = copy_pack.get("compliance_note")
+        forecast_assessment = playbook_candidate.get("forecast_assessment") or {}
+        event_forecast = forecast_assessment.get("event_forecast") or playbook_candidate.get("event_forecast") or {}
+        opportunity_assessment = playbook_candidate.get("opportunity_assessment") or {}
+        readiness = (forecast_assessment.get("forecast_quality") or {}).get("forecast_readiness")
 
         return (
             "Du bist ein Senior Media Planner für Pharma-Brand-Cases.\n"
@@ -203,7 +207,9 @@ class AiCampaignPlanner:
             f"Kampagnenziel: {campaign_goal}\n"
             f"Playbook: {playbook_candidate.get('playbook_title')} ({playbook_candidate.get('playbook_key')})\n"
             f"Region: {playbook_candidate.get('region_name')} ({playbook_candidate.get('region_code')})\n"
-            f"PeixEpiScore: {playbook_candidate.get('peix_score')} / Signal-Score {playbook_candidate.get('impact_probability')}% (Priorisierungsscore, keine empirische Eintrittswahrscheinlichkeit)\n"
+            f"Forecast-Readiness: {readiness}\n"
+            f"Event-Wahrscheinlichkeit 7T: {round(float(event_forecast.get('event_probability') or 0.0) * 100.0, 1)}%\n"
+            f"Opportunity-Index: {opportunity_assessment.get('expected_value_index')}\n"
             f"Trigger: {trigger.get('event')} | {trigger.get('details')}\n"
             f"Message-Direction (fix): {direction}\n"
             f"Hero-Message (fix): {hero}\n"

@@ -34,13 +34,24 @@ from statsmodels.tsa.holtwinters import ExponentialSmoothing
 
 from app.core.config import get_settings
 from app.models.database import (
+    GanzimmunData,
     GoogleTrendsData,
     MLForecast,
     SchoolHolidays,
     SurvstatWeeklyData,
     WastewaterAggregated,
-    WeatherData,
 )
+from app.services.ml.forecast_contracts import (
+    DEFAULT_DECISION_EVENT_THRESHOLD_PCT,
+    DEFAULT_DECISION_HORIZON_DAYS,
+    BurdenForecast,
+    BurdenForecastPoint,
+    EventForecast,
+    ForecastQuality,
+    confidence_label,
+    event_probability_from_forecast,
+)
+from app.services.ml.training_contract import INTERNAL_HISTORY_TEST_MAP
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -60,6 +71,11 @@ META_FEATURES: list[str] = [
     "survstat_incidence",
     "survstat_lag7",
     "survstat_lag14",
+    "lab_positivity_rate",
+    "lab_signal_available",
+    "lab_baseline_mean",
+    "lab_baseline_zscore",
+    "lab_positivity_lag7",
 ]
 
 LEAKAGE_SAFE_WARMUP_ROWS = 14
@@ -80,6 +96,39 @@ SURVSTAT_VIRUS_MAP: dict[str, list[str]] = {
     "Influenza B": ["influenza, saisonal"],
     "SARS-CoV-2": ["covid-19"],
     "RSV A": ["rsv (meldepflicht gemäß ifsg)"],
+}
+
+DEFAULT_XGB_QUANTILE_CONFIG: dict[str, dict[str, Any]] = {
+    "median": {
+        "n_estimators": 200,
+        "max_depth": 5,
+        "learning_rate": 0.05,
+        "objective": "reg:quantileerror",
+        "quantile_alpha": 0.5,
+        "random_state": 42,
+        "verbosity": 0,
+        "n_jobs": 1,
+    },
+    "lower": {
+        "n_estimators": 100,
+        "max_depth": 4,
+        "learning_rate": 0.05,
+        "objective": "reg:quantileerror",
+        "quantile_alpha": 0.1,
+        "random_state": 42,
+        "verbosity": 0,
+        "n_jobs": 1,
+    },
+    "upper": {
+        "n_estimators": 100,
+        "max_depth": 4,
+        "learning_rate": 0.05,
+        "objective": "reg:quantileerror",
+        "quantile_alpha": 0.9,
+        "random_state": 42,
+        "verbosity": 0,
+        "n_jobs": 1,
+    },
 }
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -186,6 +235,7 @@ class ForecastService:
         self,
         virus_typ: str = "Influenza A",
         lookback_days: int = 900,
+        include_internal_history: bool = True,
     ) -> pd.DataFrame:
         """Build feature DataFrame from wastewater, trends, holidays, AMELAG."""
         logger.info(f"Preparing training data for {virus_typ}")
@@ -244,6 +294,19 @@ class ForecastService:
 
         # 3. School holidays
         df["schulferien"] = df["ds"].apply(lambda d: 1.0 if self._is_holiday(d) else 0.0)
+
+        if include_internal_history:
+            df = self._augment_with_internal_history(
+                df=df,
+                virus_typ=virus_typ,
+                start_date=start_date,
+            )
+        else:
+            df["lab_positivity_rate"] = 0.0
+            df["lab_signal_available"] = 0.0
+            df["lab_baseline_mean"] = 0.0
+            df["lab_baseline_zscore"] = 0.0
+            df["lab_positivity_lag7"] = 0.0
 
         # 4. Lag features
         df["lag1"] = df["y"].shift(1)
@@ -355,6 +418,10 @@ class ForecastService:
             "amelag_pred",
             "xd_load",
             "survstat_incidence",
+            "lab_positivity_rate",
+            "lab_signal_available",
+            "lab_baseline_mean",
+            "lab_baseline_zscore",
         ]
         for col in held_signal_cols:
             if col in cleaned.columns:
@@ -389,7 +456,135 @@ class ForecastService:
             "survstat_incidence": float(last_row.get("survstat_incidence", 0.0)),
             "survstat_lag7": float(last_row.get("survstat_lag7", 0.0)),
             "survstat_lag14": float(last_row.get("survstat_lag14", 0.0)),
+            "lab_positivity_rate": float(last_row.get("lab_positivity_rate", 0.0)),
+            "lab_signal_available": float(last_row.get("lab_signal_available", 0.0)),
+            "lab_baseline_mean": float(last_row.get("lab_baseline_mean", 0.0)),
+            "lab_baseline_zscore": float(last_row.get("lab_baseline_zscore", 0.0)),
+            "lab_positivity_lag7": float(last_row.get("lab_positivity_lag7", 0.0)),
         }
+
+    def _augment_with_internal_history(
+        self,
+        *,
+        df: pd.DataFrame,
+        virus_typ: str,
+        start_date: datetime,
+    ) -> pd.DataFrame:
+        history_df = self._load_internal_history_frame(
+            virus_typ=virus_typ,
+            start_date=start_date,
+        )
+        features = self._build_internal_history_feature_frame(df["ds"], history_df)
+        combined = pd.concat([df.reset_index(drop=True), features], axis=1)
+        combined["lab_positivity_lag7"] = combined["lab_positivity_rate"].shift(7)
+        return combined
+
+    def _load_internal_history_frame(
+        self,
+        *,
+        virus_typ: str,
+        start_date: datetime,
+    ) -> pd.DataFrame:
+        aliases = INTERNAL_HISTORY_TEST_MAP.get(virus_typ, [])
+        if not aliases:
+            return pd.DataFrame()
+
+        rows = (
+            self.db.query(GanzimmunData)
+            .filter(
+                GanzimmunData.datum >= start_date - timedelta(days=365 * 5),
+                GanzimmunData.anzahl_tests.isnot(None),
+                GanzimmunData.anzahl_tests > 0,
+                func.lower(GanzimmunData.test_typ).in_(aliases),
+            )
+            .order_by(GanzimmunData.datum.asc())
+            .all()
+        )
+        if not rows:
+            return pd.DataFrame()
+
+        return pd.DataFrame(
+            [
+                {
+                    "datum": pd.to_datetime(row.datum),
+                    "available_time": pd.to_datetime(row.available_time) if row.available_time else pd.NaT,
+                    "anzahl_tests": int(row.anzahl_tests or 0),
+                    "positive_ergebnisse": int(row.positive_ergebnisse or 0),
+                }
+                for row in rows
+            ]
+        )
+
+    @staticmethod
+    def _build_internal_history_feature_frame(
+        ds_index: pd.Series,
+        history_df: pd.DataFrame,
+    ) -> pd.DataFrame:
+        columns = [
+            "lab_positivity_rate",
+            "lab_signal_available",
+            "lab_baseline_mean",
+            "lab_baseline_zscore",
+        ]
+        if history_df.empty:
+            return pd.DataFrame(0.0, index=range(len(ds_index)), columns=columns)
+
+        history = history_df.copy()
+        history["datum"] = pd.to_datetime(history["datum"])
+        history["available_time"] = pd.to_datetime(history["available_time"])
+        history["effective_available"] = history["available_time"].fillna(history["datum"])
+        history["anzahl_tests"] = pd.to_numeric(
+            history["anzahl_tests"], errors="coerce",
+        ).fillna(0).clip(lower=0)
+        history["positive_ergebnisse"] = pd.to_numeric(
+            history["positive_ergebnisse"], errors="coerce",
+        ).fillna(0).clip(lower=0)
+        history = history.loc[history["anzahl_tests"] > 0].copy()
+        if history.empty:
+            return pd.DataFrame(0.0, index=range(len(ds_index)), columns=columns)
+
+        history["rate"] = history["positive_ergebnisse"] / history["anzahl_tests"]
+        iso = history["datum"].dt.isocalendar()
+        history["iso_week"] = iso.week.astype(int)
+        history["iso_year"] = iso.year.astype(int)
+
+        rows: list[dict[str, float]] = []
+        for ds in pd.to_datetime(ds_index):
+            visible = history.loc[
+                (history["datum"] <= ds)
+                & (history["effective_available"] <= ds)
+            ]
+            if visible.empty:
+                rows.append({name: 0.0 for name in columns})
+                continue
+
+            recent = visible.loc[visible["datum"] > ds - timedelta(days=14)]
+            total_tests = float(recent["anzahl_tests"].sum())
+            positivity = float(recent["positive_ergebnisse"].sum() / total_tests) if total_tests > 0 else 0.0
+
+            ds_iso = ds.isocalendar()
+            baseline_pool = visible.loc[
+                (visible["iso_week"] == int(ds_iso.week))
+                & (visible["iso_year"] < int(ds_iso.year))
+            ]
+            if len(baseline_pool) >= 2:
+                baseline_mean = float(baseline_pool["rate"].mean())
+                baseline_std = float(baseline_pool["rate"].std()) or 0.01
+                z_score = (positivity - baseline_mean) / baseline_std
+            else:
+                baseline_mean = 0.0
+                z_score = 0.0
+
+            rows.append(
+                {
+                    "lab_positivity_rate": positivity,
+                    "lab_signal_available": 1.0 if total_tests > 0 else 0.0,
+                    "lab_baseline_mean": baseline_mean,
+                    "lab_baseline_zscore": float(z_score),
+                }
+            )
+
+        return pd.DataFrame(rows, columns=columns)
 
     def _is_holiday(self, datum: datetime) -> bool:
         """Check if date falls in school holidays."""
@@ -473,7 +668,20 @@ class ForecastService:
         n_steps: int,
     ) -> tuple[np.ndarray, dict[str, float]]:
         """Base estimator 2: Ridge Regression on lag/trend features."""
-        feature_cols = ["lag1", "lag2", "lag3", "ma3", "ma5", "trends_score", "schulferien", "roc"]
+        feature_cols = [
+            "lag1",
+            "lag2",
+            "lag3",
+            "ma3",
+            "ma5",
+            "trends_score",
+            "schulferien",
+            "roc",
+            "lab_positivity_rate",
+            "lab_signal_available",
+            "lab_baseline_mean",
+            "lab_baseline_zscore",
+        ]
         available = [c for c in feature_cols if c in df.columns]
 
         if len(available) < 2:
@@ -555,7 +763,6 @@ class ForecastService:
         from the last known training values (simplified — Prophet is expensive).
         """
         y = df["y"].values
-        n = len(y)
         tscv = TimeSeriesSplit(n_splits=n_splits)
 
         oof = pd.DataFrame(index=df.index, columns=["hw_pred", "ridge_pred"], dtype=float)
@@ -587,6 +794,7 @@ class ForecastService:
         self,
         df: pd.DataFrame,
         oof: pd.DataFrame,
+        model_config: dict[str, dict[str, Any]] | None = None,
     ) -> tuple[Any, Any, Any, dict[str, float]]:
         """Train XGBoost meta-learner with quantile regression (asymmetric loss).
 
@@ -611,40 +819,18 @@ class ForecastService:
         # Replace any remaining NaN/inf
         X = np.nan_to_num(X, nan=0.0, posinf=0.0, neginf=0.0)
 
+        cfg = self._resolve_xgb_quantile_config(model_config)
+
         # ── Median model (main prediction — 50th percentile) ──
-        model_median = XGBRegressor(
-            n_estimators=200,
-            max_depth=5,
-            learning_rate=0.05,
-            objective="reg:quantileerror",
-            quantile_alpha=0.5,
-            random_state=42,
-            verbosity=0,
-        )
+        model_median = XGBRegressor(**cfg["median"])
         model_median.fit(X, y)
 
         # ── Lower bound (10th percentile) ──
-        model_lower = XGBRegressor(
-            n_estimators=100,
-            max_depth=4,
-            learning_rate=0.05,
-            objective="reg:quantileerror",
-            quantile_alpha=0.1,
-            random_state=42,
-            verbosity=0,
-        )
+        model_lower = XGBRegressor(**cfg["lower"])
         model_lower.fit(X, y)
 
         # ── Upper bound (90th percentile) ──
-        model_upper = XGBRegressor(
-            n_estimators=100,
-            max_depth=4,
-            learning_rate=0.05,
-            objective="reg:quantileerror",
-            quantile_alpha=0.9,
-            random_state=42,
-            verbosity=0,
-        )
+        model_upper = XGBRegressor(**cfg["upper"])
         model_upper.fit(X, y)
 
         # Feature importance from median model
@@ -657,6 +843,144 @@ class ForecastService:
 
         logger.info(f"XGBoost meta-learner trained on {len(y)} samples, {len(available_meta)} features")
         return model_median, model_lower, model_upper, feature_importance
+
+    @staticmethod
+    def _resolve_xgb_quantile_config(
+        model_config: dict[str, dict[str, Any]] | None,
+    ) -> dict[str, dict[str, Any]]:
+        resolved = {name: params.copy() for name, params in DEFAULT_XGB_QUANTILE_CONFIG.items()}
+        if not model_config:
+            return resolved
+
+        for name, overrides in model_config.items():
+            if name in resolved and overrides:
+                resolved[name].update(overrides)
+        return resolved
+
+    def evaluate_training_candidate(
+        self,
+        virus_typ: str,
+        *,
+        include_internal_history: bool = True,
+        model_config: dict[str, dict[str, Any]] | None = None,
+        n_windows: int = 4,
+    ) -> dict[str, Any]:
+        """Run a deterministic rolling-origin backtest for model promotion."""
+        df = self.prepare_training_data(
+            virus_typ=virus_typ,
+            include_internal_history=include_internal_history,
+        )
+
+        if df.empty or len(df) < 28:
+            return {
+                "error": f"Insufficient training data ({len(df) if not df.empty else 0} rows)",
+                "virus_typ": virus_typ,
+                "include_internal_history": include_internal_history,
+            }
+
+        date_diffs = df["ds"].diff().dt.days.dropna()
+        data_freq_days = int(date_diffs.median()) if len(date_diffs) > 0 else 7
+        data_freq_days = max(1, min(data_freq_days, 14))
+        horizon_points = max(2, self.forecast_days // data_freq_days)
+        max_windows = max(1, min(n_windows, (len(df) - 14) // horizon_points))
+        start_idx = max(20, len(df) - (max_windows * horizon_points))
+
+        predictions: list[float] = []
+        actuals: list[float] = []
+        windows: list[dict[str, Any]] = []
+
+        for cutoff in range(start_idx, len(df) - horizon_points + 1, horizon_points):
+            train_df = df.iloc[:cutoff].copy()
+            val_df = df.iloc[cutoff : cutoff + horizon_points].copy()
+            if len(train_df) < 20 or val_df.empty:
+                continue
+
+            splits = min(5, max(2, len(train_df) // 12))
+            oof = self._generate_oof_predictions(train_df, n_splits=splits)
+            model_med, _, _, _ = self._fit_xgboost_meta(
+                train_df,
+                oof,
+                model_config=model_config,
+            )
+
+            y_train = train_df["y"].values
+            hw_forecast = self._fit_holt_winters(y_train, len(val_df))
+            ridge_forecast, _ = self._fit_ridge(train_df, y_train, len(val_df))
+            prophet_proxy = np.full(
+                len(val_df),
+                float(train_df["y"].tail(min(7, len(train_df))).mean()),
+            )
+
+            available_meta = [
+                f for f in META_FEATURES
+                if f in train_df.columns or f in ("hw_pred", "ridge_pred", "prophet_pred")
+            ]
+            last_row = train_df.iloc[-1].copy()
+            window_preds: list[float] = []
+
+            for idx in range(len(val_df)):
+                feat = self._build_meta_feature_row(
+                    last_row,
+                    hw_pred=float(hw_forecast[idx]),
+                    ridge_pred=float(ridge_forecast[idx]),
+                    prophet_pred=float(prophet_proxy[idx]),
+                )
+                X_row = np.array([[feat.get(name, 0.0) for name in available_meta]])
+                X_row = np.nan_to_num(X_row, nan=0.0, posinf=0.0, neginf=0.0)
+                pred = max(0.0, float(model_med.predict(X_row)[0]))
+                window_preds.append(pred)
+                predictions.append(pred)
+                actuals.append(float(val_df.iloc[idx]["y"]))
+
+            windows.append(
+                {
+                    "train_end": train_df["ds"].iloc[-1].isoformat(),
+                    "validation_start": val_df["ds"].iloc[0].isoformat(),
+                    "validation_points": len(val_df),
+                    "mae": round(
+                        float(np.mean(np.abs(np.asarray(window_preds) - val_df["y"].values))),
+                        4,
+                    ),
+                }
+            )
+
+        if not predictions:
+            return {
+                "error": "No validation windows available",
+                "virus_typ": virus_typ,
+                "include_internal_history": include_internal_history,
+            }
+
+        metrics = self._compute_regression_metrics(predictions, actuals)
+        metrics["windows"] = windows
+        metrics["window_count"] = len(windows)
+        metrics["horizon_days"] = self.forecast_days
+        metrics["data_frequency_days"] = data_freq_days
+        metrics["training_window"] = {
+            "start": df["ds"].min().isoformat(),
+            "end": df["ds"].max().isoformat(),
+            "samples": int(len(df)),
+        }
+        metrics["include_internal_history"] = include_internal_history
+        return metrics
+
+    @staticmethod
+    def _compute_regression_metrics(
+        predicted: list[float],
+        actual: list[float],
+    ) -> dict[str, float]:
+        pred_arr = np.asarray(predicted, dtype=float)
+        act_arr = np.asarray(actual, dtype=float)
+        errors = pred_arr - act_arr
+        mae = float(np.mean(np.abs(errors)))
+        rmse = float(np.sqrt(np.mean(errors ** 2)))
+        nonzero = act_arr != 0
+        mape = float(np.mean(np.abs(errors[nonzero] / act_arr[nonzero])) * 100) if nonzero.any() else 0.0
+        return {
+            "mae": round(mae, 4),
+            "rmse": round(rmse, 4),
+            "mape": round(mape, 2),
+        }
 
     def _compute_outbreak_risk(
         self,
@@ -672,6 +996,87 @@ class ForecastService:
             return 0.5
         z = (prediction - mean_val) / std_val
         return round(_sigmoid(z), 3)
+
+    def _build_contracts(
+        self,
+        *,
+        virus_typ: str,
+        forecast_records: list[dict[str, Any]],
+        model_version: str,
+        y_history: np.ndarray,
+        quality_meta: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        burden = BurdenForecast(
+            target=virus_typ,
+            region="DE",
+            issue_date=datetime.utcnow().isoformat(),
+            horizon_days=len(forecast_records),
+            model_version=model_version,
+            points=[
+                BurdenForecastPoint(
+                    target_date=item["ds"].isoformat() if item.get("ds") else "",
+                    median=float(item.get("yhat") or 0.0),
+                    lower=(
+                        float(item["yhat_lower"])
+                        if item.get("yhat_lower") is not None
+                        else None
+                    ),
+                    upper=(
+                        float(item["yhat_upper"])
+                        if item.get("yhat_upper") is not None
+                        else None
+                    ),
+                )
+                for item in forecast_records
+            ],
+        )
+
+        baseline = float(np.median(y_history[-min(len(y_history), 84) :])) if len(y_history) > 0 else 0.0
+        event_point = (
+            forecast_records[min(DEFAULT_DECISION_HORIZON_DAYS - 1, len(forecast_records) - 1)]
+            if forecast_records
+            else {}
+        )
+        event_probability = (
+            event_probability_from_forecast(
+                prediction=float(event_point.get("yhat") or 0.0),
+                baseline=baseline if baseline > 0 else 1.0,
+                lower_bound=event_point.get("yhat_lower"),
+                upper_bound=event_point.get("yhat_upper"),
+                threshold_pct=DEFAULT_DECISION_EVENT_THRESHOLD_PCT,
+            )
+            if forecast_records
+            else None
+        )
+        confidence_value = float(quality_meta.get("confidence", 0.6)) if quality_meta else 0.6
+        event = EventForecast(
+            event_key=f"{virus_typ.lower().replace(' ', '_')}_growth_7d",
+            horizon_days=DEFAULT_DECISION_HORIZON_DAYS,
+            event_probability=event_probability,
+            threshold_pct=DEFAULT_DECISION_EVENT_THRESHOLD_PCT,
+            baseline_value=round(baseline, 3) if baseline > 0 else None,
+            threshold_value=round(baseline * 1.25, 3) if baseline > 0 else None,
+            calibration_method="live_growth_sigmoid_proxy",
+            brier_score=quality_meta.get("brier_score") if quality_meta else None,
+            ece=quality_meta.get("ece") if quality_meta else None,
+            calibration_passed=quality_meta.get("calibration_passed") if quality_meta else None,
+            confidence=confidence_value,
+            confidence_label=confidence_label(confidence_value),
+        )
+        forecast_quality = ForecastQuality(
+            forecast_readiness="GO" if quality_meta and quality_meta.get("forecast_ready") else "WATCH",
+            drift_status=str(quality_meta.get("drift_status") or "unknown") if quality_meta else "unknown",
+            freshness_status="fresh",
+            baseline_deltas=quality_meta.get("baseline_deltas") or {} if quality_meta else {},
+            timing_metrics=quality_meta.get("timing_metrics") or {} if quality_meta else {},
+            interval_coverage=quality_meta.get("interval_coverage") or {} if quality_meta else {},
+            promotion_gate=quality_meta.get("promotion_gate") or {} if quality_meta else {},
+        )
+        return {
+            "burden_forecast": burden.to_dict(),
+            "event_forecast": event.to_dict(),
+            "forecast_quality": forecast_quality.to_dict(),
+        }
 
     # ═══════════════════════════════════════════════════════════════════
     #  INFERENCE (loads pre-trained models from disk)
@@ -813,6 +1218,20 @@ class ForecastService:
             )
 
         model_version = metadata.get("version", "xgb_stack_v1_loaded")
+        contracts = self._build_contracts(
+            virus_typ=virus_typ,
+            forecast_records=forecast_records,
+            model_version=model_version,
+            y_history=y,
+            quality_meta={
+                "forecast_ready": "error" not in (metadata.get("backtest_metrics") or {}),
+                "drift_status": "unknown",
+                "baseline_deltas": {},
+                "timing_metrics": {},
+                "interval_coverage": {},
+                "promotion_gate": {},
+            },
+        )
 
         result: dict[str, Any] = {
             "virus_typ": virus_typ,
@@ -823,6 +1242,7 @@ class ForecastService:
             "feature_importance": feature_importance,
             "model_version": model_version,
             "confidence": float(self.confidence_level),
+            "contracts": contracts,
             "timestamp": datetime.utcnow(),
         }
 
@@ -973,6 +1393,20 @@ class ForecastService:
             )
 
         model_version = "xgb_stack_v1" if used_xgb else "hw_ridge_prophet_v2"
+        contracts = self._build_contracts(
+            virus_typ=virus_typ,
+            forecast_records=forecast_records,
+            model_version=model_version,
+            y_history=y,
+            quality_meta={
+                "forecast_ready": bool(used_xgb),
+                "drift_status": "unknown",
+                "baseline_deltas": {},
+                "timing_metrics": {},
+                "interval_coverage": {},
+                "promotion_gate": {},
+            },
+        )
 
         result: dict[str, Any] = {
             "virus_typ": virus_typ,
@@ -983,6 +1417,7 @@ class ForecastService:
             "feature_importance": feature_importance,
             "model_version": model_version,
             "confidence": float(self.confidence_level),
+            "contracts": contracts,
             "timestamp": datetime.utcnow(),
         }
 

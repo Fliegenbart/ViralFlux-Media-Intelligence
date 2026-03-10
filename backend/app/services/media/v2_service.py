@@ -36,6 +36,7 @@ from app.services.media.recommendation_contracts import (
     normalize_region_code,
     to_card_response,
 )
+from app.services.ml.forecast_decision_service import ForecastDecisionService
 from app.services.ml.forecast_service import _ML_MODELS_DIR, _virus_slug
 
 SIGNAL_GROUPS: dict[str, dict[str, str]] = {
@@ -131,6 +132,12 @@ class MediaV2Service:
         brand: str = "gelo",
     ) -> dict[str, Any]:
         cockpit = self.cockpit_service.get_cockpit_payload(virus_typ=virus_typ, target_source=target_source)
+        forecast_bundle = ForecastDecisionService(self.db).build_forecast_bundle(
+            virus_typ=virus_typ,
+            target_source=target_source,
+        )
+        forecast_quality = forecast_bundle.get("forecast_quality") or {}
+        event_forecast = forecast_bundle.get("event_forecast") or {}
         truth_coverage = self.get_truth_coverage(brand=brand, virus_typ=virus_typ)
         model_lineage = self.get_model_lineage(virus_typ=virus_typ)
         queue = self._build_campaign_queue(self._campaign_cards(brand=brand, limit=80), visible_limit=8)
@@ -145,12 +152,14 @@ class MediaV2Service:
         truth_gate = self._truth_gate(truth_coverage)
         has_truth = truth_gate["passed"]
         market_passed = bool((market.get("quality_gate") or {}).get("overall_passed"))
+        forecast_passed = str(forecast_quality.get("forecast_readiness") or "WATCH") == "GO"
         publishable_cards = [card for card in primary_cards if card.get("is_publishable")]
         has_publishable = len(publishable_cards) > 0
         drift_state = str(model_lineage.get("drift_state") or "unknown")
         decision_state = "GO" if all([
             freshness_state == "fresh",
             market_passed,
+            forecast_passed,
             has_truth,
             has_publishable,
             drift_state != "warning",
@@ -161,6 +170,8 @@ class MediaV2Service:
             risk_flags.append("Kernquellen sind nicht vollständig frisch.")
         if not market_passed:
             risk_flags.append("Der Marktvergleich liegt aktuell nicht im Zielkorridor.")
+        if not forecast_passed:
+            risk_flags.append("Der Forecast-Promotion-Gate steht aktuell auf WATCH.")
         if not has_truth:
             risk_flags.append(str(truth_gate["message"]))
         if drift_state == "warning":
@@ -214,6 +225,9 @@ class MediaV2Service:
                 "risk_flags": risk_flags,
                 "freshness_state": freshness_state,
                 "proxy_state": "passed" if market_passed else "watch",
+                "forecast_state": "passed" if forecast_passed else "watch",
+                "forecast_quality": forecast_quality,
+                "event_forecast": event_forecast,
                 "truth_state": truth_coverage.get("trust_readiness"),
                 "truth_freshness_state": truth_coverage.get("truth_freshness_state"),
                 "truth_last_imported_at": truth_coverage.get("last_imported_at"),
@@ -447,6 +461,15 @@ class MediaV2Service:
             .order_by(MLForecast.created_at.desc())
             .first()
         )
+        latest_market = (
+            self.db.query(BacktestRun)
+            .filter(
+                BacktestRun.mode == "MARKET_CHECK",
+                BacktestRun.virus_typ == virus_typ,
+            )
+            .order_by(BacktestRun.created_at.desc())
+            .first()
+        )
         latest_accuracy = (
             self.db.query(ForecastAccuracyLog)
             .filter(ForecastAccuracyLog.virus_typ == virus_typ)
@@ -487,6 +510,7 @@ class MediaV2Service:
             },
             "drift_state": drift_state,
             "coverage_limits": coverage_limits,
+            "forecast_quality": (latest_market.metrics or {}).get("quality_gate") if latest_market else None,
             "latest_accuracy": {
                 "computed_at": latest_accuracy.computed_at.isoformat() if latest_accuracy and latest_accuracy.computed_at else None,
                 "samples": latest_accuracy.samples if latest_accuracy else None,

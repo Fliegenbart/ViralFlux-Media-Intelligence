@@ -60,14 +60,10 @@ async def get_outbreak_score(
     Schnelle Berechnung aus gecachten/gespeicherten Daten.
     Prophet-Prognosen werden aus der DB gelesen (nicht neu berechnet).
     """
-    from app.services.fusion_engine.risk_engine_legacy import RiskEngine
+    from app.services.ml.forecast_decision_service import ForecastDecisionService
 
-    engine = RiskEngine(db)
-    shortage = _get_shortage_signals()
-
-    return engine.compute_outbreak_score(
+    return ForecastDecisionService(db).build_legacy_outbreak_score(
         virus_typ=virus_typ,
-        shortage_signals=shortage,
     )
 
 
@@ -113,10 +109,13 @@ async def get_score_history(
     db: Session = Depends(get_db),
 ):
     """Historische Outbreak Scores abrufen."""
-    from app.services.fusion_engine.risk_engine_legacy import RiskEngine
+    from app.services.ml.forecast_decision_service import ForecastDecisionService
 
-    engine = RiskEngine(db)
-    return engine.get_score_history(virus_typ=virus_typ, days=days)
+    target_virus = virus_typ or "Influenza A"
+    return ForecastDecisionService(db).get_legacy_score_history(
+        virus_typ=target_virus,
+        days=days,
+    )
 
 
 @router.post("/compute-prophet")
@@ -129,36 +128,18 @@ async def compute_with_prophet(
 
     Trainiert Prophet neu und berechnet dann den Score.
     """
-    from app.services.fusion_engine.risk_engine_legacy import RiskEngine
-    from app.services.fusion_engine.prophet_predictor import ProphetPredictor
+    from app.services.ml.forecast_decision_service import ForecastDecisionService
+    from app.services.ml.forecast_service import ForecastService
 
-    prophet_result = None
-    prophet_error = None
-
-    try:
-        predictor = ProphetPredictor(db)
-        prophet_result = predictor.fit_and_predict(
-            virus_typ=virus_typ,
-            forecast_days=forecast_days,
-        )
-    except Exception as e:
-        prophet_error = str(e)
-        logger.warning(f"Prophet fehlgeschlagen: {e}")
-
-    engine = RiskEngine(db)
-    shortage = _get_shortage_signals()
-
-    score = engine.compute_outbreak_score(
-        virus_typ=virus_typ,
-        shortage_signals=shortage,
-        prophet_result=prophet_result,
-    )
-
+    forecast = ForecastService(db).predict(virus_typ=virus_typ)
     return {
-        **score,
-        "prophet_status": "success" if prophet_result else "failed",
-        "prophet_error": prophet_error,
-        "prophet_forecast_days": prophet_result.get('forecast_days') if prophet_result else None,
+        "status": "success" if "error" not in forecast else "failed",
+        "message": "Prophet ist kein produktiver Promotion-Pfad mehr; geliefert wird der Forecast-First-Stack.",
+        "forecast_days_requested": forecast_days,
+        "forecast": forecast,
+        "risk_adapter": ForecastDecisionService(db).build_legacy_outbreak_score(
+            virus_typ=virus_typ,
+        ),
     }
 
 
@@ -168,10 +149,9 @@ async def train_meta_learner(
     db: Session = Depends(get_db),
 ):
     """XGBoost Meta-Learner trainieren (Phase B aktivieren)."""
-    from app.services.fusion_engine.risk_engine_legacy import RiskEngine
+    from app.services.ml.model_trainer import XGBoostTrainer
 
-    engine = RiskEngine(db)
-    return engine.train_meta_learner(virus_typ=virus_typ)
+    return XGBoostTrainer(db).train(virus_typ=virus_typ)
 
 
 @router.post("/upload-lab-history")

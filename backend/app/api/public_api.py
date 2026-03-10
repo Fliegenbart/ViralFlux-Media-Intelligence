@@ -204,13 +204,10 @@ async def get_public_risk(
     if plz is not None and not PLZ_PATTERN.match(plz):
         plz = None  # silently ignore invalid PLZ
 
-    from app.services.fusion_engine.risk_engine_legacy import RiskEngine
-    engine = RiskEngine(db)
-    shortage = _get_shortage_signals()
+    from app.services.ml.forecast_decision_service import ForecastDecisionService
 
-    internal = engine.compute_outbreak_score(
+    internal = ForecastDecisionService(db).build_legacy_outbreak_score(
         virus_typ=virus,
-        shortage_signals=shortage,
     )
 
     return obfuscate_result(internal)
@@ -224,11 +221,11 @@ async def get_public_risk(
 )
 @limiter.limit("50/minute")
 async def get_public_risk_all(request: Request, db: Session = Depends(get_db)):
-    from app.services.fusion_engine.risk_engine_legacy import RiskEngine
-    engine = RiskEngine(db)
-    shortage = _get_shortage_signals()
+    from app.services.ml.forecast_decision_service import ForecastDecisionService
 
-    internal = engine.compute_all_viruses(shortage_signals=shortage)
+    internal = ForecastDecisionService(db).build_all_legacy_outbreak_scores(
+        virus_types=sorted(VALID_VIRUS_TYPES),
+    )
 
     meta = ResponseMeta(
         timestamp=datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),

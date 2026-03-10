@@ -8,6 +8,7 @@ import EvidencePanel from '../components/cockpit/EvidencePanel';
 import RecommendationDrawer from '../components/cockpit/RecommendationDrawer';
 import RegionWorkbench from '../components/cockpit/RegionWorkbench';
 import { MediaCockpitView } from '../components/cockpit/types';
+import { UI_COPY } from '../lib/copy';
 import {
   BacktestResponse,
   ConnectorCatalogItem,
@@ -65,7 +66,7 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
   const [virus, setVirus] = useState('Influenza A');
   const [brand, setBrand] = useState('gelo');
   const [weeklyBudget, setWeeklyBudget] = useState(120000);
-  const [campaignGoal, setCampaignGoal] = useState('Top-of-Mind vor Erkältungswelle');
+  const [campaignGoal, setCampaignGoal] = useState<string>(UI_COPY.defaultCampaignGoal);
 
   const [decision, setDecision] = useState<MediaDecisionResponse | null>(null);
   const [decisionLoading, setDecisionLoading] = useState(false);
@@ -139,7 +140,7 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
       });
     } catch (error) {
       console.error('Campaigns fetch failed', error);
-      toast('Kampagnenpakete konnten nicht geladen werden.', 'error');
+      toast('Kampagnenvorschlaege konnten nicht geladen werden.', 'error');
     } finally {
       setCampaignsLoading(false);
     }
@@ -404,11 +405,11 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
 
       setDetail(data);
       await refreshCoreViews();
-      toast('Qwen-Plan aktualisiert.', 'success');
+      toast('KI-Plan aktualisiert.', 'success');
     } catch (error) {
       console.error('AI regeneration failed', error);
       const message = error instanceof Error ? error.message : 'Unbekannter Fehler';
-      toast(`Qwen-Regeneration fehlgeschlagen: ${message}`, 'error');
+      toast(`KI-Neuberechnung fehlgeschlagen: ${message}`, 'error');
     } finally {
       setRegenerating(false);
     }
@@ -424,11 +425,11 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
       }, 12000);
       setSyncPreview(data);
       setConnectorCatalog(data.available_connectors || connectorCatalog);
-      toast('Connector-Preview vorbereitet.', 'success');
+      toast('Uebergabevorschau vorbereitet.', 'success');
     } catch (error) {
       console.error('Prepare sync failed', error);
       const message = error instanceof Error ? error.message : 'Unbekannter Fehler';
-      toast(`Sync-Preview fehlgeschlagen: ${message}`, 'error');
+      toast(`Uebergabevorschau fehlgeschlagen: ${message}`, 'error');
     } finally {
       setSyncLoading(false);
     }
@@ -467,13 +468,13 @@ const MediaCockpit: React.FC<Props> = ({ view }) => {
       }
       await Promise.all([loadEvidence(), loadDecision()]);
       toast(
-        validateOnly ? 'Truth-Upload validiert. Vorschau ist bereit.' : 'Truth-Daten importiert und Evidenz aktualisiert.',
+        validateOnly ? 'Upload der Kundendaten validiert. Vorschau ist bereit.' : 'Kundendaten importiert und Evidenz aktualisiert.',
         'success',
       );
     } catch (error) {
       console.error('Truth upload failed', error);
       const message = error instanceof Error ? error.message : 'Unbekannter Fehler';
-      toast(`Truth-Upload fehlgeschlagen: ${message}`, 'error');
+      toast(`Upload der Kundendaten fehlgeschlagen: ${message}`, 'error');
     } finally {
       setTruthActionLoading(false);
     }

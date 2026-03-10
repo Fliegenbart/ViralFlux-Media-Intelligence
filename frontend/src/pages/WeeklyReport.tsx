@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { apiFetch } from '../lib/api';
+import { UI_COPY } from '../lib/copy';
 
 interface BriefMeta {
   id: number;
@@ -56,7 +57,7 @@ const WeeklyReport: React.FC = () => {
         const blob = await res.blob();
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
-        a.download = `PEIX_Action_Brief${week ? `_KW${week}` : ''}.pdf`;
+        a.download = `ViralFlux_Wochenbericht${week ? `_KW${week}` : ''}.pdf`;
         a.click();
         URL.revokeObjectURL(a.href);
       }
@@ -70,10 +71,10 @@ const WeeklyReport: React.FC = () => {
   return (
     <div style={{ maxWidth: 720, margin: '0 auto' }}>
       <h1 style={{ fontSize: 24, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>
-        Wochenbericht
+        {UI_COPY.weeklyReport}
       </h1>
       <p style={{ fontSize: 14, color: 'var(--text-secondary)', marginBottom: 32 }}>
-        PEIX Action Brief — KW {kw} / {now.getFullYear()}
+        ViralFlux Wochenbericht — KW {kw} / {now.getFullYear()}
       </p>
 
       {/* Action Cards */}
@@ -93,7 +94,7 @@ const WeeklyReport: React.FC = () => {
             {generating ? 'Wird erstellt...' : 'Neuen Bericht erstellen'}
           </div>
           <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-            Generiert den Action Brief fuer die aktuelle Kalenderwoche
+            Erstellt den Wochenbericht fuer die aktuelle Kalenderwoche
           </div>
         </button>
 
@@ -109,10 +110,10 @@ const WeeklyReport: React.FC = () => {
         >
           <div style={{ fontSize: 24, marginBottom: 8 }}>{downloading ? '...' : '\u2193'}</div>
           <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>
-            {downloading ? 'Download...' : 'Aktuellen Brief herunterladen'}
+            {downloading ? 'Download...' : 'Aktuellen Bericht herunterladen'}
           </div>
           <div style={{ fontSize: 12, opacity: 0.8 }}>
-            PDF Action Brief fuer GELO
+            PDF-Wochenbericht fuer GELO
           </div>
         </button>
       </div>
@@ -142,11 +143,11 @@ const WeeklyReport: React.FC = () => {
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {[
-            { title: 'Executive Summary', desc: 'PeixEpiScore, nationale Risikobewertung, Handlungsempfehlung' },
-            { title: 'Regionale Hotspots', desc: 'Top-5 Bundeslaender mit hoechster Aktivitaet und Trend' },
-            { title: 'Signal-Qualitaet', desc: 'Aktuelle Backtest-Metriken, Trefferquote und Vorlaufzeit' },
-            { title: 'Budget-Empfehlungen', desc: 'Konkrete Budget-Shifts pro Region und Channel-Mix' },
-            { title: 'Produkt-Zuordnung', desc: 'GELO-Produkte mit passender Indikation und Kampagnenvorschlag' },
+            { title: 'Zusammenfassung', desc: 'Signalscore, nationale Risikobewertung und Handlungsempfehlung' },
+            { title: 'Regionale Schwerpunkte', desc: 'Top-5 Bundeslaender mit hoechster Aktivitaet und Trend' },
+            { title: 'Signalqualitaet', desc: 'Aktuelle Backtest-Metriken, Trefferquote und Vorlaufzeit' },
+            { title: 'Budgetempfehlungen', desc: 'Konkrete Budget-Shifts pro Region und Kanalmix' },
+            { title: 'Produktpriorisierung', desc: 'GELO-Produkte mit passender Indikation und Kampagnenvorschlag' },
           ].map((item) => (
             <div key={item.title} style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
               <div style={{

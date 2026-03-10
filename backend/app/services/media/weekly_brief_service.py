@@ -60,7 +60,7 @@ class _ActionBriefPDF(FPDF):
         self.cell(0, 6, "ViralFlux Media Intelligence", align="L")
         self.cell(
             0, 6,
-            f"Action Brief - {self._calendar_week} - {datetime.now().strftime('%d.%m.%Y')}",
+            f"Wochenbericht - {self._calendar_week} - {datetime.now().strftime('%d.%m.%Y')}",
             align="R", new_x="LMARGIN", new_y="NEXT",
         )
         self.set_draw_color(*_INDIGO)
@@ -74,7 +74,7 @@ class _ActionBriefPDF(FPDF):
         self.set_text_color(*_SLATE_400)
         self.cell(
             0, 8,
-            f"Seite {self.page_no()} | Gelo Media Action Brief | Vertraulich",
+            f"Seite {self.page_no()} | Gelo Wochenbericht | Vertraulich",
             align="C",
         )
 
@@ -157,7 +157,7 @@ class WeeklyBriefService:
 
         pdf.set_font("Helvetica", "B", 20)
         pdf.set_text_color(*_INDIGO)
-        pdf.cell(0, 12, _safe(f"Gelo Media Action Brief  -  KW {iso_cal.week}/{iso_cal.year}"),
+        pdf.cell(0, 12, _safe(f"Gelo Wochenbericht  -  KW {iso_cal.week}/{iso_cal.year}"),
                  new_x="LMARGIN", new_y="NEXT")
         pdf.ln(2)
 
@@ -170,12 +170,12 @@ class WeeklyBriefService:
         ), new_x="LMARGIN", new_y="NEXT")
         pdf.ln(4)
 
-        # PeixEpiScore national
-        _section(pdf, "PeixEpiScore Deutschland")
+        # Signalscore national
+        _section(pdf, "Signalscore Deutschland")
         national_score = peix.get("national_score", 0)
         national_band = peix.get("national_band", "-")
         national_impact = peix.get("national_impact_probability", 0)
-        _kv(pdf, "Nationaler Score:", f"{national_score:.0f} / 100", bold_value=True)
+        _kv(pdf, "Nationaler Index:", f"{national_score:.0f} / 100", bold_value=True)
         _kv(pdf, "Risiko-Band:", str(national_band).upper(), bold_value=True)
         _kv(pdf, "Signal-Score:", f"{national_impact:.1f}%", bold_value=True)
         _kv(pdf, "Score-Typ:", "Priorisierungs-/Entscheidungsscore", bold_value=True)
@@ -253,7 +253,7 @@ class WeeklyBriefService:
         pdf.set_font("Helvetica", "", 9)
         pdf.set_text_color(*_SLATE_700)
         pdf.multi_cell(0, 5, _safe(
-            "Empfohlene Umschichtung basierend auf aktuellem PeixEpiScore und ML-Forecast. "
+            "Empfohlene Umschichtung basierend auf aktuellem Signalscore und Forecast. "
             "Regionen mit hohem Signal-Score sollten überproportional bespielt werden."
         ), new_x="LMARGIN", new_y="NEXT")
         pdf.ln(3)
@@ -307,7 +307,7 @@ class WeeklyBriefService:
         pdf.ln(6)
 
         # Top Action Cards
-        _section(pdf, "Produkt-Priorisierung (Top Action Cards)")
+        _section(pdf, "Produkt-Priorisierung (Top-Empfehlungen)")
         if top_cards:
             for i, card in enumerate(top_cards[:5], start=1):
                 product = card.get("recommended_product", card.get("product", "-"))
@@ -337,7 +337,7 @@ class WeeklyBriefService:
         else:
             pdf.set_font("Helvetica", "I", 10)
             pdf.set_text_color(*_SLATE_400)
-            pdf.cell(0, 7, "Keine aktiven Action Cards diese Woche.",
+            pdf.cell(0, 7, "Keine aktiven Empfehlungen in dieser Woche.",
                      new_x="LMARGIN", new_y="NEXT")
 
         # ═══════════════════════════════════════════════════════════════

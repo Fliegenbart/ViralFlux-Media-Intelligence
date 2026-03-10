@@ -812,7 +812,7 @@ class ProductCatalogService:
             confidence = candidate["fit_score"]
             candidate_product = candidate["product_name"]
         else:
-            reason = "Keine passende Zuordnung gefunden. Mapping-Review erforderlich."
+            reason = "Keine passende Zuordnung gefunden. Eine Pruefung des Mappings ist erforderlich."
             confidence = None
             candidate_product = None
 

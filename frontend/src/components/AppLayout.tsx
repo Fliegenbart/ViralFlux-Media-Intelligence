@@ -3,6 +3,7 @@ import { useLocation, useNavigate, Link } from 'react-router-dom';
 // Link used in logo below
 import { useTheme } from '../App';
 import { apiFetch } from '../lib/api';
+import { UI_COPY } from '../lib/copy';
 
 interface Props {
   children: React.ReactNode;
@@ -32,7 +33,7 @@ const AppLayout: React.FC<Props> = ({ children }) => {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'ViralFlux_Action_Brief.pdf';
+      a.download = 'ViralFlux_Wochenbericht.pdf';
       a.click();
       URL.revokeObjectURL(url);
     } catch (e) {
@@ -91,10 +92,10 @@ const AppLayout: React.FC<Props> = ({ children }) => {
             disabled={pdfLoading}
             className="media-button shell-footer-button"
           >
-            {pdfLoading ? 'Wird erstellt\u2026' : 'PDF Action Brief herunterladen'}
+            {pdfLoading ? 'Wird erstellt\u2026' : `${UI_COPY.weeklyReport} herunterladen`}
           </button>
           <span className="shell-footer-note">
-            Datenstand wird je Ansicht direkt ausgewiesen
+            Datenstand ist je Ansicht direkt sichtbar
           </span>
         </div>
       </footer>

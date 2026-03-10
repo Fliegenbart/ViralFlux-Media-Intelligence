@@ -1,5 +1,6 @@
 import React from 'react';
 
+import { UI_COPY, additionalSuggestionsText } from '../../lib/copy';
 import { MediaCampaignsResponse, RecommendationCard } from '../../types/media';
 import { CAMPAIGN_LANES } from './types';
 import {
@@ -59,13 +60,13 @@ const CampaignStudio: React.FC<Props> = ({
   const focusCard = cards.find((card) => ['approve', 'sync', 'review'].includes(recommendationLane(card))) || cards[0] || null;
   const focusTitle = focusCard
     ? (focusCard.display_title || focusCard.campaign_name || focusCard.recommended_product || focusCard.product)
-    : 'Noch keine Pakete im Review';
+    : 'Noch kein Kampagnenvorschlag im Fokus';
   const focusContext = focusCard
     ? `${focusCard.region_codes_display?.join(', ') || focusCard.region || 'National'} · ${flightWindowLabel(focusCard)}`
-    : 'Qwen kann aus Regionen und Wochenentscheidung neue reviewbare Pakete erzeugen.';
+    : 'Die KI kann aus Regionen und Wochenentscheidung neue Kampagnenvorschlaege erzeugen.';
   const focusCopy = focusCard
     ? readableCampaignSummary(focusCard)
-    : 'Sobald Pakete vorliegen, verschiebt sich der Fokus automatisch auf Review, Freigabe und Sync-Readiness.';
+    : 'Sobald Vorschlaege vorliegen, rutschen die wichtigsten Faelle automatisch in Pruefung, Freigabe und Uebergabe.';
   const hiddenBacklog = campaignsView?.summary?.hidden_backlog_cards ?? 0;
   const visibleCards = campaignsView?.summary?.visible_cards ?? cards.length;
 
@@ -76,46 +77,46 @@ const CampaignStudio: React.FC<Props> = ({
           <div className="campaign-command-top">
             <div className="section-heading" style={{ gap: 14 }}>
               <span className="section-kicker">Campaign Studio</span>
-              <h1 className="campaign-command-title">Kampagnen wie ein Review-System, nicht wie eine Liste.</h1>
+              <h1 className="campaign-command-title">Kampagnenvorschlaege mit klarer naechster Aktion.</h1>
               <p className="section-copy">
-                Qwen erzeugt strukturierte Pakete, das Team prüft Guardrails, Budget und Connector-Readiness in einem sauberen Freigabefluss.
+                Die KI erstellt Vorschlaege. Das Team prueft Inhalt, Budget und Uebergabe, bevor etwas live geht.
               </p>
             </div>
-            <span className="step-chip">{visibleCards} im Board · {campaignsView?.summary?.deduped_cards ?? cards.length} priorisiert für {virus}</span>
+            <span className="step-chip">{visibleCards} sichtbar · {campaignsView?.summary?.deduped_cards ?? cards.length} priorisiert fuer {virus}</span>
           </div>
 
           <div className="campaign-focus-panel">
-            <div className="campaign-focus-label">Nächster Review-Fokus</div>
+            <div className="campaign-focus-label">Jetzt zuerst ansehen</div>
             <div className="campaign-focus-title">{focusTitle}</div>
             <div className="campaign-focus-context">{focusContext}</div>
             <p className="campaign-focus-copy">{focusCopy}</p>
             {hiddenBacklog > 0 && (
               <div className="campaign-focus-context" style={{ marginTop: 10 }}>
-                {hiddenBacklog} weitere deduplizierte Pakete bleiben vorerst im Backlog und nicht im Hauptboard.
+                {additionalSuggestionsText(hiddenBacklog)}
               </div>
             )}
           </div>
 
           <div className="campaign-metric-grid">
             <div className="campaign-metric-card">
-              <span>In Review</span>
+              <span>Zu pruefen</span>
               <strong>{reviewCount}</strong>
-              <small>Pakete mit offener Prüfung</small>
+              <small>Vorschlaege mit offener Pruefung</small>
             </div>
             <div className="campaign-metric-card">
-              <span>Freigabefähig</span>
+              <span>Zur Freigabe</span>
               <strong>{approveCount}</strong>
-              <small>Bereit für Entscheidung</small>
+              <small>Bereit fuer die Entscheidung</small>
             </div>
             <div className="campaign-metric-card">
-              <span>Sync-ready</span>
+              <span>Zur Uebergabe</span>
               <strong>{syncCount}</strong>
-              <small>Connector-Vorbereitung möglich</small>
+              <small>Fuer Mediatools vorbereitet</small>
             </div>
             <div className="campaign-metric-card">
-              <span>Sofort nutzbar</span>
+              <span>Aktiv oder startklar</span>
               <strong>{campaignsView?.summary?.publishable_cards ?? 0}</strong>
-              <small>{liveCount} live · {aiTouchedCount} mit AI-Plan</small>
+              <small>{liveCount} aktiv · {aiTouchedCount} mit {UI_COPY.ai}-Plan</small>
             </div>
           </div>
         </article>
@@ -125,9 +126,9 @@ const CampaignStudio: React.FC<Props> = ({
             <div className="campaign-setup-head">
               <div>
                 <div className="section-kicker">Generation</div>
-                <h2 className="subsection-title">Neue Pakete aufsetzen</h2>
+                <h2 className="subsection-title">Neue Vorschlaege erstellen</h2>
               </div>
-              <span className="step-chip">Qwen</span>
+              <span className="step-chip">{UI_COPY.ai}</span>
             </div>
 
             <div className="campaign-form-grid">
@@ -152,37 +153,37 @@ const CampaignStudio: React.FC<Props> = ({
 
             <div className="campaign-setup-footer">
               <div className="campaign-setup-note">
-                AI erzeugt zuerst strukturierte Pakete. Freigabe und späterer Tool-Sync bleiben getrennt.
+                Die KI erstellt zuerst den Vorschlag. Freigabe und spaetere Uebergabe bleiben getrennt.
               </div>
               <button className="media-button" type="button" onClick={onGenerate} disabled={generationLoading}>
-                {generationLoading ? 'Qwen erzeugt Pakete...' : 'Kampagnen generieren'}
+                {generationLoading ? 'KI erstellt Vorschlaege...' : 'Vorschlaege erstellen'}
               </button>
             </div>
           </section>
 
           <section className="card campaign-guidance-card">
             <div className="campaign-guidance-row">
-              <span>Review-Fokus</span>
+              <span>Prueffokus</span>
               <strong>{reviewCount + approveCount}</strong>
             </div>
             <div className="campaign-guidance-row">
-              <span>Connector-Fokus</span>
+              <span>Uebergabefokus</span>
               <strong>{syncCount}</strong>
             </div>
             <div className="campaign-guidance-row">
-              <span>Dedupliziert</span>
+              <span>Priorisiert</span>
               <strong>{campaignsView?.summary?.deduped_cards ?? cards.length}</strong>
             </div>
             <div className="campaign-guidance-row">
-              <span>Backlog</span>
+              <span>{UI_COPY.additionalSuggestions}</span>
               <strong>{hiddenBacklog}</strong>
             </div>
             <div className="campaign-guidance-row">
-              <span>Vorbereiten</span>
+              <span>Entwuerfe</span>
               <strong>{prepareCount}</strong>
             </div>
             <div className="campaign-guidance-copy">
-              Gute UX hier heißt: wenige starke Pakete, klare Zustände, ein sauberer Schritt zur Freigabe.
+              Wenige starke Vorschlaege, klare Zustaende und ein direkter Weg zur Freigabe sorgen fuer Orientierung.
             </div>
           </section>
         </aside>
@@ -190,17 +191,17 @@ const CampaignStudio: React.FC<Props> = ({
 
       {loading ? (
         <div className="card campaign-empty-board" style={{ color: 'var(--text-muted)' }}>
-          Lade Kampagnenpakete...
+          Lade Kampagnenvorschlaege...
         </div>
       ) : cards.length === 0 ? (
         <section className="card campaign-empty-board">
-          <div className="campaign-empty-eyebrow">Campaign Queue</div>
-          <h2 className="campaign-empty-title">Noch keine reviewbaren Pakete im Board.</h2>
+          <div className="campaign-empty-eyebrow">Kampagnenuebersicht</div>
+          <h2 className="campaign-empty-title">Noch keine Kampagnenvorschlaege in der Uebersicht.</h2>
           <p className="campaign-empty-copy">
-            Starte aus der Wochenentscheidung oder einer Region ein neues Paket. Danach landen Qwen-Entwürfe direkt in einem klaren Review-State statt in einer losen Empfehlungsliste.
+            Starte aus der Wochenentscheidung oder einer Region einen neuen Vorschlag. Danach landet er direkt in einer klaren Pruefstrecke statt in einer losen Liste.
           </p>
           <button className="media-button" type="button" onClick={onGenerate} disabled={generationLoading}>
-            {generationLoading ? 'Qwen erzeugt Pakete...' : 'Jetzt erste Pakete erzeugen'}
+            {generationLoading ? 'KI erstellt Vorschlaege...' : 'Jetzt erste Vorschlaege erstellen'}
           </button>
         </section>
       ) : (
@@ -280,15 +281,15 @@ const CampaignStudio: React.FC<Props> = ({
 
                         <div className="campaign-work-item-footer">
                           <span>{flightWindowLabel(card)} · {card.evidence_strength || 'Evidenz offen'}</span>
-                          <span>Review öffnen</span>
+                          <span>Details pruefen</span>
                         </div>
                       </button>
                     );
                   }) : (
                     <div className="campaign-empty-lane">
                       {lane.total > 0
-                        ? 'Weitere Pakete liegen im Backlog und werden bei Bedarf nachgezogen.'
-                        : 'Keine Pakete in dieser Phase.'}
+                        ? additionalSuggestionsText(lane.total, 'Vorschlaege in dieser Phase')
+                        : 'Keine Vorschlaege in dieser Phase.'}
                     </div>
                   )}
                 </div>

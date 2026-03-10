@@ -1,6 +1,7 @@
 import { format, parseISO } from 'date-fns';
 import { de } from 'date-fns/locale';
 
+import { UI_COPY } from '../../lib/copy';
 import { BacktestResponse, RecommendationCard, TruthCoverage } from '../../types/media';
 import { CampaignLaneId } from './types';
 
@@ -13,9 +14,9 @@ export const WORKFLOW_TRANSITIONS: Record<string, string> = {
 };
 
 export const STATUS_ACTION_LABELS: Record<string, string> = {
-  READY: 'In Prüfung geben',
+  READY: 'Zur Pruefung geben',
   APPROVED: 'Freigeben',
-  ACTIVATED: 'Als live markieren',
+  ACTIVATED: 'Als aktiv markieren',
 };
 
 const KPI_LABELS: Record<string, string> = {
@@ -143,7 +144,7 @@ export function truthFreshnessLabel(value?: string | null): string {
   const normalized = String(value || '').trim().toLowerCase();
   if (normalized === 'fresh') return 'aktuell';
   if (normalized === 'stale') return 'veraltet';
-  if (normalized === 'missing') return 'noch keine Truth-Daten';
+  if (normalized === 'missing') return 'noch keine Kundendaten';
   if (normalized === 'unknown') return 'noch unklar';
   return normalized || '-';
 }
@@ -172,25 +173,25 @@ export function nextWorkflowStatus(status?: string | null): string | null {
 
 export function workflowLabel(status?: string | null): string {
   const normalized = String(status || '').toUpperCase();
-  if (normalized === 'DRAFT' || normalized === 'PREPARE') return 'Vorbereiten';
-  if (normalized === 'READY' || normalized === 'REVIEW') return 'In Review';
-  if (normalized === 'APPROVE') return 'Freigabefähig';
-  if (normalized === 'APPROVED' || normalized === 'SYNC_READY') return 'Sync-bereit';
-  if (normalized === 'ACTIVATED' || normalized === 'LIVE') return 'Live';
+  if (normalized === 'DRAFT' || normalized === 'PREPARE') return 'Entwurf';
+  if (normalized === 'READY' || normalized === 'REVIEW') return 'Zu pruefen';
+  if (normalized === 'APPROVE') return 'Zur Freigabe';
+  if (normalized === 'APPROVED' || normalized === 'SYNC_READY') return 'Bereit zur Uebergabe';
+  if (normalized === 'ACTIVATED' || normalized === 'LIVE') return 'Aktiv';
   if (normalized === 'EXPIRED') return 'Abgelaufen';
   if (normalized === 'ARCHIVED' || normalized === 'DISMISSED') return 'Archiviert';
   return status ? String(status) : 'Status offen';
 }
 
 export function readinessStateLabel(state?: string | null, canSyncNow = false): string {
-  if (canSyncNow) return 'Sync-bereit';
+  if (canSyncNow) return 'Bereit zur Uebergabe';
 
   const normalized = String(state || '').toLowerCase();
-  if (normalized === 'ready') return 'Sync-bereit';
+  if (normalized === 'ready') return 'Bereit zur Uebergabe';
   if (normalized === 'approval_required') return 'Freigabe nötig';
   if (normalized === 'needs_work') return 'Nachschärfen';
-  if (normalized === 'review') return 'In Prüfung';
-  return state ? String(state) : 'In Prüfung';
+  if (normalized === 'review') return 'In Pruefung';
+  return state ? String(state) : 'In Pruefung';
 }
 
 export function kpiLabel(value?: string | null): string {
@@ -204,16 +205,16 @@ export function aiModelLabel(provider?: string | null, model?: string | null): s
   const modelText = String(model || '').trim().toLowerCase();
 
   if (providerText.includes('qwen') || modelText.includes('qwen')) {
-    return 'KI-Plan: Qwen lokal';
+    return `${UI_COPY.ai}-Plan: Lokal`;
   }
   if (providerText.includes('openai') || modelText.includes('gpt')) {
-    return 'KI-Plan: OpenAI';
+    return `${UI_COPY.ai}-Plan: OpenAI`;
   }
   if (providerText) {
-    return `KI-Plan: ${String(provider || '').trim()}`;
+    return `${UI_COPY.ai}-Plan: ${String(provider || '').trim()}`;
   }
   if (modelText) {
-    return `KI-Plan: ${String(model || '').trim()}`;
+    return `${UI_COPY.ai}-Plan: ${String(model || '').trim()}`;
   }
-  return 'KI-Plan';
+  return `${UI_COPY.ai}-Plan`;
 }

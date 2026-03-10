@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../App';
+import { UI_COPY } from '../lib/copy';
 
 /* ═══ Design Tokens ══════════════════════════════════════════════════ */
 const LIGHT = {
@@ -354,7 +355,7 @@ const LandingPage: React.FC = () => {
               transition: 'all 0.2s', boxShadow: `0 2px 8px ${C.indigo}25`,
             }}
           >
-            Zum Dashboard
+            Zum Cockpit
           </button>
         </div>
       </nav>
@@ -387,15 +388,14 @@ const LandingPage: React.FC = () => {
               letterSpacing: '-0.02em', color: C.text, margin: 0, maxWidth: 560,
             }}
           >
-            GELO-Kampagnen starten,{' '}
-            <span style={{ color: C.indigo }}>bevor</span>{' '}
-            die Infektionswelle kommt.
+            Media-Budgets dorthin steuern,{' '}
+            <span style={{ color: C.indigo }}>wo</span>{' '}
+            die Nachfrage als Naechstes steigt.
           </h1>
 
           <p style={{ marginTop: 20, fontSize: 17, lineHeight: 1.65, color: C.textSec, maxWidth: 480 }}>
-            ViralFlux erkennt Atemwegsinfektionen 14 Tage frueh per Abwasser-Monitoring
-            und verschiebt euer Mediabudget automatisch in die richtigen Regionen —
-            bevor der Wettbewerb reagiert.
+            ViralFlux erkennt regionale Atemwegswellen frueh ueber Abwasser-, Versorgungs- und Kontextsignale
+            und zeigt dem Marketingteam, wo Budgets vorbereitet, erhoeht oder zurueckgenommen werden sollten.
           </p>
 
           <div style={{ marginTop: 28, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
@@ -407,7 +407,7 @@ const LandingPage: React.FC = () => {
                 transition: 'all 0.2s', boxShadow: `0 2px 8px ${C.indigo}30`,
               }}
             >
-              Signal-Board starten
+              Zum Cockpit
             </button>
             <button
               onClick={() => navigate('/dashboard?tab=product-intel')}
@@ -417,7 +417,7 @@ const LandingPage: React.FC = () => {
                 cursor: 'pointer', transition: 'all 0.2s',
               }}
             >
-              Produkt anlegen
+              Produktprofil anlegen
             </button>
           </div>
 
@@ -441,7 +441,7 @@ const LandingPage: React.FC = () => {
               fontSize: 11, fontWeight: 600, color: C.textMuted,
               textTransform: 'uppercase', letterSpacing: '0.06em',
             }}>
-              Live Lagebild
+              Live-Uebersicht
             </span>
             <span style={{
               fontSize: 10, fontWeight: 700,
@@ -453,10 +453,10 @@ const LandingPage: React.FC = () => {
             </span>
           </div>
           <div style={{ fontSize: 12, color: C.textMuted, marginBottom: 16 }}>
-            PeixEpiScore — Gesamtindex
+            {UI_COPY.signalScore} fuer Deutschland
           </div>
 
-          <ScoreGauge score={peixScore} label="PeixEpiScore" />
+          <ScoreGauge score={peixScore} label={UI_COPY.signalScore} />
 
           <div style={{ marginTop: 20, borderTop: `1px solid ${C.borderLight}`, paddingTop: 16 }}>
             <div style={{
@@ -494,18 +494,18 @@ const LandingPage: React.FC = () => {
             {[
               {
                 icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={C.indigo} strokeWidth="2" strokeLinecap="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2" /></svg>,
-                title: 'Epidemiologische Signale',
-                text: 'Abwasser-Monitoring, ARE-Inzidenz, Versorgungsengpässe und Wetterdaten fließen in den PeixEpiScore ein.',
+                title: 'Fruehe Signale',
+                text: 'Abwasser-Monitoring, ARE-Inzidenz, Versorgungsdaten und Wetterhinweise werden zu einem klaren Lagebild gebuendelt.',
               },
               {
                 icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={C.indigo} strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="10" r="3" /><path d="M12 2a8 8 0 0 0-8 8c0 5.4 7 12 8 12s8-6.6 8-12a8 8 0 0 0-8-8Z" /></svg>,
-                title: 'Regionale Zuordnung',
-                text: 'Jede Empfehlung ist bundeslandgenau. Kein Gießkannenprinzip — Budget wird dort aktiviert, wo die Epidemie ankommt.',
+                title: 'Regionale Priorisierung',
+                text: 'Jede Empfehlung ist bundeslandgenau. Budget wird dort bewegt, wo Nachfrage und Handlungsdruck tatsaechlich steigen.',
               },
               {
                 icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={C.indigo} strokeWidth="2" strokeLinecap="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /><path d="m9 12 2 2 4-4" /></svg>,
-                title: 'Review-First',
-                text: 'Kein Auto-Push in die Kampagne. Jedes Match durchläuft eine Freigabe — algorithmisch transparent und auditierbar.',
+                title: 'Klare Freigabe',
+                text: 'Nichts geht automatisch live. Jeder Vorschlag bleibt nachvollziehbar, pruefbar und steuerbar.',
               },
             ].map((card) => (
               <div
@@ -538,15 +538,15 @@ const LandingPage: React.FC = () => {
 
         {/* ═══ 02 — Workflow Flow ════════════════════════════════ */}
         <RevealSection>
-          <SectionHead num="02">Von Signal zu Freigabe</SectionHead>
+          <SectionHead num="02">Von Signal zu Entscheidung</SectionHead>
 
           <div className="lp-flow-grid">
             <div className="lp-flow-line" />
             {[
-              { num: '01', label: 'Signal', desc: 'Epidemiologische Daten aus Abwasser, Wetter und Versorgung erkennen.' },
-              { num: '02', label: 'Erwartung', desc: '14-Tage-Prognose pro Bundesland mit PeixEpiScore berechnen.' },
-              { num: '03', label: 'Produkt', desc: 'Gelo-Produkt automatisch dem passenden Indikationsfeld zuordnen.' },
-              { num: '04', label: 'Freigabe', desc: 'Match manuell prüfen, Kampagne aktivieren oder verwerfen.' },
+              { num: '01', label: 'Signal', desc: 'Fruehe Hinweise aus Abwasser, Wetter, Nachfrage und Versorgung erfassen.' },
+              { num: '02', label: 'Einschaetzung', desc: `14-Tage-Prognose pro Bundesland zu einem klaren ${UI_COPY.signalScore} verdichten.` },
+              { num: '03', label: 'Empfehlung', desc: 'Passendes Produkt und regionale Aktivierung fuer das Marketingteam vorschlagen.' },
+              { num: '04', label: 'Freigabe', desc: 'Vorschlag pruefen, Budget setzen und Kampagne gezielt starten.' },
             ].map((step, i) => (
               <div key={step.num} style={{ position: 'relative', zIndex: 1, textAlign: 'center', padding: '0 12px' }}>
                 <div style={{
@@ -586,15 +586,15 @@ const LandingPage: React.FC = () => {
                 fontSize: 11, fontWeight: 600, color: C.textMuted,
                 textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12,
               }}>
-                Dashboard-Vorschau
+                Cockpit-Vorschau
               </div>
               <h3 style={{ fontFamily: FONT_SERIF, fontSize: 24, margin: '0 0 12px' }}>
-                So sieht das Lagebild aus
+                So sieht die Wochenlage aus
               </h3>
               <p style={{ fontSize: 14, lineHeight: 1.65, color: C.textSec, margin: '0 0 20px', maxWidth: 440 }}>
-                Die Deutschlandkarte zeigt Viruslast-Hotspots in Echtzeit.
-                Beim Hovern über ein Bundesland erscheint ein konkreter
-                Kampagnenvorschlag mit epidemiologischer Begründung.
+                Die Deutschlandkarte zeigt regionale Hotspots in Echtzeit.
+                Beim Bewegen ueber ein Bundesland erscheint direkt ein konkreter
+                Kampagnenvorschlag mit Begruendung.
               </p>
 
               {/* Top regions from API */}
@@ -632,10 +632,10 @@ const LandingPage: React.FC = () => {
           <h2 style={{
             fontFamily: FONT_SERIF, fontSize: 36, margin: '0 0 16px', letterSpacing: '-0.01em',
           }}>
-            14 Tage Vorsprung fuer GELO.
+            Bis zu 14 Tage frueher Klarheit fuer GELO.
           </h2>
           <p style={{ fontSize: 16, color: C.textSec, marginBottom: 28, maxWidth: 480, marginLeft: 'auto', marginRight: 'auto' }}>
-            Starten Sie im Lagebild oder lassen Sie sich die aktuelle Signallage zeigen.
+            Starten Sie direkt im Cockpit oder holen Sie sich eine Einordnung fuer die aktuelle Woche.
           </p>
           <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
             <button
@@ -646,7 +646,7 @@ const LandingPage: React.FC = () => {
                 transition: 'all 0.2s', boxShadow: `0 4px 16px ${C.indigo}30`,
               }}
             >
-              Dashboard öffnen
+              Zum Cockpit
             </button>
             <a
               href={MAILTO}
@@ -667,7 +667,7 @@ const LandingPage: React.FC = () => {
           marginTop: 80, paddingTop: 20, paddingBottom: 12,
           borderTop: `1px solid ${C.border}`, textAlign: 'center', fontSize: 12, color: C.textMuted,
         }}>
-          PEIX Healthcare &copy; 2026 &middot; ViralFlux Media Intelligence fuer GELO
+          ViralFlux Media Intelligence &copy; 2026 &middot; fuer GELO
         </footer>
       </main>
     </div>

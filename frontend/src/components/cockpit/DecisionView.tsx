@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 
+import { UI_COPY, additionalSuggestionsText, decisionStateLabel, marketComparisonStateLabel } from '../../lib/copy';
 import {
   BacktestResponse,
   MediaDecisionResponse,
@@ -53,7 +54,7 @@ const DecisionView: React.FC<Props> = ({
   const topDrivers = weeklyDecision?.signal_stack_summary?.top_drivers || [];
   const driverGroups = weeklyDecision?.signal_stack_summary?.driver_groups || {};
   const mathStack = weeklyDecision?.signal_stack_summary?.math_stack;
-  const decisionModeLabel = weeklyDecision?.decision_mode_label || weeklyDecision?.signal_stack_summary?.decision_mode_label || 'Epi-Welle';
+  const decisionModeLabel = weeklyDecision?.decision_mode_label || weeklyDecision?.signal_stack_summary?.decision_mode_label || 'Regionalsignal';
   const decisionModeReason = weeklyDecision?.decision_mode_reason || weeklyDecision?.signal_stack_summary?.decision_mode_reason;
   const hiddenBacklog = decision?.campaign_summary?.hidden_backlog_cards || 0;
 
@@ -76,8 +77,8 @@ const DecisionView: React.FC<Props> = ({
     ? formatPercent(weeklyDecision.budget_shift as number)
     : 'Noch nicht freigegeben';
   const shiftNote = isGo
-    ? 'Nationaler Shift ist freigegeben.'
-    : 'WATCH blockiert aktuell eine harte nationale Budgetverschiebung.';
+    ? 'Eine uebergeordnete Budgetverschiebung ist freigegeben.'
+    : 'Noch keine breite Umschichtung freigeben. Regionen weiter priorisieren.';
 
   const gateTone = readinessTone(isGo);
 
@@ -106,8 +107,8 @@ const DecisionView: React.FC<Props> = ({
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
           <span className="step-chip step-chip-done">Letzte epidemiologische Woche {formatDateTime(weeklyDecision?.decision_window?.start)}</span>
           <span className="step-chip">Generiert {formatDateTime(decision?.generated_at)}</span>
-          <span className="step-chip">Proxy: {weeklyDecision?.proxy_state === 'passed' ? 'GO-Korridor' : 'WATCH'}</span>
-          <span className="step-chip">Kunden-Check: {truthLayerLabel(decision?.truth_coverage || latestCustomer)}</span>
+          <span className="step-chip">{UI_COPY.marketComparison}: {marketComparisonStateLabel(weeklyDecision?.proxy_state)}</span>
+          <span className="step-chip">{UI_COPY.customerData}: {truthLayerLabel(decision?.truth_coverage || latestCustomer)}</span>
         </div>
       </section>
 
@@ -126,7 +127,7 @@ const DecisionView: React.FC<Props> = ({
                   ...gateTone,
                 }}
               >
-                {isGo ? 'GO' : 'WATCH'}
+                {decisionStateLabel(weeklyDecision?.decision_state)}
               </span>
               <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
                 {topCard?.playbook_title || 'Wochenentscheidung'} · letzte epidemiologische Woche {weeklyDecision?.decision_window?.start ? new Date(weeklyDecision.decision_window.start).toLocaleDateString('de-DE') : '-'}
@@ -138,13 +139,13 @@ const DecisionView: React.FC<Props> = ({
               <p className="hero-context">{heroSentence}</p>
               <p className="hero-copy">
                 {isGo
-                  ? 'Das Modell ist im Zielkorridor. Fokus liegt auf konkret freigabefähigen regionalen Kampagnenpaketen.'
-                  : decisionModeReason || 'Die App schaltet auf defensiven Modus: vorbereiten, priorisieren und erst nach Review/Freigabe weiterziehen.'}
+                  ? 'Die Daten sprechen fuer konkrete regionale Kampagnenvorschlaege, die jetzt zur Freigabe bereitstehen.'
+                  : decisionModeReason || 'Noch keine harte Aktivierung. Regionen weiter priorisieren und die staerksten Vorschlaege zuerst pruefen.'}
               </p>
             </div>
             <div className="action-row">
-              <button className="media-button" type="button" onClick={onOpenCampaigns}>Kampagnen öffnen</button>
-              <button className="media-button secondary" type="button" onClick={onOpenRegions}>Regionen prüfen</button>
+              <button className="media-button" type="button" onClick={onOpenCampaigns}>Kampagnen pruefen</button>
+              <button className="media-button secondary" type="button" onClick={onOpenRegions}>Regionen ansehen</button>
               <Link className="media-button secondary" to="/bericht" style={{ textDecoration: 'none' }}>Bericht exportieren</Link>
             </div>
           </div>
@@ -171,7 +172,7 @@ const DecisionView: React.FC<Props> = ({
                   {formatCurrency(topCard?.campaign_preview?.budget?.weekly_budget_eur)}
                 </div>
                 <div className="summary-note" style={{ marginTop: 6 }}>
-                  {hiddenBacklog > 0 ? `${hiddenBacklog} weitere Pakete liegen im Backlog.` : 'Der Fokus liegt auf der kuratierten Review-Queue.'}
+                  {hiddenBacklog > 0 ? additionalSuggestionsText(hiddenBacklog) : 'Der Fokus liegt auf den naechsten pruefbaren Vorschlaegen.'}
                 </div>
               </div>
             </div>
@@ -202,7 +203,7 @@ const DecisionView: React.FC<Props> = ({
             <div className="section-heading" style={{ gap: 6 }}>
               <h2 className="subsection-title">Warum jetzt?</h2>
               <p className="subsection-copy">
-                Decision Support aus expliziten Signalen statt Black Box.
+                Die Entscheidung wird aus sichtbaren Signalen abgeleitet, nicht aus einer Black Box.
               </p>
             </div>
             <div style={{ display: 'grid', gap: 10, marginTop: 14 }}>
@@ -218,7 +219,7 @@ const DecisionView: React.FC<Props> = ({
             <div className="section-heading" style={{ gap: 6 }}>
               <h2 className="subsection-title">Kampagnen, die jetzt zählen</h2>
               <p className="subsection-copy">
-                Direkter Sprung in die nächste sinnvolle Stufe statt in einen rohen Paketstapel.
+                Direkter Sprung in die naechste sinnvolle Aktion statt in eine lange Liste.
               </p>
             </div>
             {recommendations.length > 0 ? (recommendations.slice(0, 3)).map((card) => (
@@ -244,16 +245,16 @@ const DecisionView: React.FC<Props> = ({
               </button>
             )) : (
               <div className="soft-panel" style={{ padding: 14, marginTop: 14, fontSize: 14, color: 'var(--text-secondary)' }}>
-                Noch keine kuratierten Review-Pakete im Fokus. Öffne die Kampagnenansicht, um den Backlog zu sichten oder neue Pakete zu erzeugen.
+                Noch keine Kampagnenvorschlaege im Fokus. Oeffne die Kampagnenansicht, um weitere Vorschlaege zu sichten oder neue zu erzeugen.
               </div>
             )}
           </div>
 
           <div className="card subsection-card" style={{ padding: 24 }}>
             <div className="section-heading" style={{ gap: 6 }}>
-              <h2 className="subsection-title">Signal- und Modellkette</h2>
+              <h2 className="subsection-title">Worauf die Entscheidung beruht</h2>
               <p className="subsection-copy">
-                AMELAG und SurvStat bleiben Kernsignale. BfArM wird als Versorgungskontext gezeigt, nicht als epidemiologischer Beweis.
+                Epidemiologische Kerndaten und Versorgungskontext werden getrennt bewertet.
               </p>
             </div>
             <div className="review-chip-row" style={{ marginTop: 14 }}>
@@ -283,9 +284,9 @@ const DecisionView: React.FC<Props> = ({
       {(weeklyDecision?.risk_flags || []).length > 0 && (
         <section className="card subsection-card" style={{ padding: 24 }}>
           <div className="section-heading" style={{ gap: 6 }}>
-            <h2 className="subsection-title">Risiken und Sperren</h2>
+            <h2 className="subsection-title">Was gegen eine Freigabe spricht</h2>
             <p className="subsection-copy">
-              GO/WATCH wird aus Datenfrische, Proxy, Truth, Modellzustand und Publishability abgeleitet.
+              Die Bewertung beruht auf Datenfrische, Marktvergleich, Kundendaten, Modellzustand und Freigabefaehigkeit.
             </p>
           </div>
           <div style={{ display: 'grid', gap: 10, marginTop: 14 }}>

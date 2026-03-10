@@ -1,5 +1,6 @@
 import React from 'react';
 
+import { UI_COPY } from '../../lib/copy';
 import { MediaRegionsResponse } from '../../types/media';
 import GermanyMap from './GermanyMap';
 import { formatDateShort, formatPercent, VIRUS_OPTIONS } from './cockpitUtils';
@@ -66,7 +67,7 @@ const RegionWorkbench: React.FC<Props> = ({
           <div className="section-heading" style={{ gap: 6, marginBottom: 12 }}>
             <h2 className="subsection-title">Deutschlandkarte</h2>
             <p className="subsection-copy">
-              Klick auf ein Bundesland für Signal-Score und Kampagnenaktion.
+              Klick auf ein Bundesland fuer Signalscore, Begruendung und naechsten Schritt.
             </p>
           </div>
           <GermanyMap
@@ -89,7 +90,7 @@ const RegionWorkbench: React.FC<Props> = ({
               <>
                 <div className="metric-strip">
                   <div className="metric-box">
-                    <span>Signal-Score</span>
+                    <span>{UI_COPY.signalScore}</span>
                     <strong>{formatPercent(region.impact_probability || region.peix_score || 0)}</strong>
                   </div>
                   <div className="metric-box">
@@ -114,7 +115,7 @@ const RegionWorkbench: React.FC<Props> = ({
                     </div>
                   </div>
                   <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-                    Priorisierungsmodus: <strong style={{ color: 'var(--text-primary)' }}>{region.decision_mode_label || 'Epi-Welle'}</strong>
+                    Einordnung: <strong style={{ color: 'var(--text-primary)' }}>{region.decision_mode_label || 'Regionalsignal'}</strong>
                   </div>
                   <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
                     Produktfokus: <strong style={{ color: 'var(--text-primary)' }}>{region.tooltip?.recommended_product || 'GELO Portfolio'}</strong>
@@ -126,7 +127,7 @@ const RegionWorkbench: React.FC<Props> = ({
                     Forecast-Richtung: <strong style={{ color: 'var(--text-primary)' }}>{region.forecast_direction || 'seitwärts'}</strong>
                   </div>
                   <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-                    Budgetlogik: <strong style={{ color: 'var(--text-primary)' }}>{suggestion?.budget_shift_pct ? formatPercent(suggestion.budget_shift_pct) : 'Review zuerst'}</strong>
+                    Budgetempfehlung: <strong style={{ color: 'var(--text-primary)' }}>{suggestion?.budget_shift_pct ? formatPercent(suggestion.budget_shift_pct) : 'zuerst pruefen'}</strong>
                   </div>
                 </div>
 
@@ -147,7 +148,7 @@ const RegionWorkbench: React.FC<Props> = ({
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
                   {region.recommendation_ref?.card_id ? (
                     <button className="media-button" type="button" onClick={() => onOpenRecommendation(region.recommendation_ref!.card_id)}>
-                      Kampagnenpaket öffnen
+                      Kampagnenvorschlag oeffnen
                     </button>
                   ) : (
                     <button
@@ -156,11 +157,11 @@ const RegionWorkbench: React.FC<Props> = ({
                       onClick={() => selectedRegion && onGenerateRegionCampaign(selectedRegion)}
                       disabled={!selectedRegion || regionActionLoading}
                     >
-                      {regionActionLoading ? 'Wird erzeugt...' : 'Kampagne für Region generieren'}
+                      {regionActionLoading ? 'Wird erstellt...' : 'Vorschlag fuer Region erstellen'}
                     </button>
                   )}
                   <button className="media-button secondary" type="button" onClick={() => selectedRegion && onGenerateRegionCampaign(selectedRegion)} disabled={!selectedRegion || regionActionLoading}>
-                    Region aktualisieren
+                    Empfehlung neu berechnen
                   </button>
                 </div>
               </>

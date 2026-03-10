@@ -301,7 +301,7 @@ class MediaCockpitService:
                     },
                     "reason": (
                         f"{item['name']} zeigt {item['change_pct']:+.1f}% Woche-zu-Woche "
-                        f"und PeixEpiScore {item.get('peix_score', 0):.1f}."
+                        f"und einen Signalscore von {item.get('peix_score', 0):.1f}."
                     ),
                     "recommendation_ref": item.get("recommendation_ref"),
                 })
@@ -413,7 +413,7 @@ class MediaCockpitService:
         tiles = [
             {
                 "id": "peix_national",
-                "title": "PeixEpiScore Deutschland",
+                "title": "Signalscore Deutschland",
                 "value": peix_score.get("national_score"),
                 "unit": "/100",
                 "subtitle": f"Band: {peix_score.get('national_band', 'n/a')}",

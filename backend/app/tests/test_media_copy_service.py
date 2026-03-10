@@ -52,7 +52,7 @@ class MediaCopyServiceTests(unittest.TestCase):
 
         self.assertEqual(
             basis,
-            "Signalen aus BfArM Engpassmonitor + RKI, dem Muster Verfügbarkeitsfenster im Wettbewerb und einem PeixEpiScore von 86.9",
+            "Signalen aus BfArM Engpassmonitor + RKI, dem Muster Verfügbarkeitsfenster im Wettbewerb und einem Signalscore von 86.9",
         )
 
     def test_public_source_label_humanizes_internal_source_key(self) -> None:
@@ -85,7 +85,7 @@ class MediaCopyServiceTests(unittest.TestCase):
         self.assertIn("In Hamburg sehen wir für die nächsten 7 bis 14 Tage", recommendation)
         self.assertIn("Deshalb priorisieren wir zunächst GeloRevoice", recommendation)
 
-    def test_build_decision_summary_mentions_review_if_product_needs_confirmation(self) -> None:
+    def test_build_decision_summary_mentions_freigabe_if_product_needs_confirmation(self) -> None:
         summary = build_decision_summary_text(
             basis_text="Signalen aus RKI SurvStat und dem Muster auffälliger Mykoplasmen-Anstieg",
             condition_text="bronchitis_husten",
@@ -96,6 +96,18 @@ class MediaCopyServiceTests(unittest.TestCase):
 
         self.assertIn("Bronchitis und Husten", summary)
         self.assertIn("Vor einer Freigabe", summary)
+
+    def test_build_decision_summary_uses_kampagnenvorschlag_wording(self) -> None:
+        summary = build_decision_summary_text(
+            basis_text="Signalen aus RKI SurvStat und dem Muster auffälliger Mykoplasmen-Anstieg",
+            condition_text="bronchitis_husten",
+            primary_region="Schleswig-Holstein",
+            primary_product="GeloMyrtol",
+            action_required="ready_for_activation",
+        )
+
+        self.assertIn("Kampagnenvorschlag", summary)
+        self.assertIn("Pruefung und Freigabe", summary)
 
     def test_card_response_exposes_public_titles_and_reason(self) -> None:
         card = _to_card_response(

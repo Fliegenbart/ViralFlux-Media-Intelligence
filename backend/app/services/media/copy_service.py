@@ -21,9 +21,9 @@ PUBLIC_SOURCE_LABELS: dict[str, str] = {
     "DWD": "DWD Wetterdaten",
     "DWD_POLLEN": "DWD Pollen",
     "GOOGLE_TRENDS": "Google Trends",
-    "PEIX": "PeixEpiScore",
-    "PEIXEPISCORE": "PeixEpiScore",
-    "PLAYBOOKENGINE": "Playbook-System",
+    "PEIX": "Signalscore",
+    "PEIXEPISCORE": "Signalscore",
+    "PLAYBOOKENGINE": "Empfehlungslogik",
     "SIGNAL_FUSION": "Signal-Fusion",
     "INTERNAL_ERP": "internes ERP",
     "ERP_SALES_SYNC": "ERP-Sales-Sync",
@@ -179,7 +179,7 @@ def public_display_title(
     if condition:
         return f"{prefix}: {condition}" if prefix else condition
 
-    return str(product or "Kampagnenpaket").strip() or "Kampagnenpaket"
+    return str(product or "Kampagnenvorschlag").strip() or "Kampagnenvorschlag"
 
 
 def public_campaign_name(campaign_name: str | None, product: str | None = None) -> str:
@@ -250,9 +250,9 @@ def build_decision_basis_text(
 
     if score is not None and str(score).strip() != "":
         try:
-            parts.append(f"einem PeixEpiScore von {float(score):.1f}")
+            parts.append(f"einem Signalscore von {float(score):.1f}")
         except (TypeError, ValueError):
-            parts.append(f"einem PeixEpiScore von {score}")
+            parts.append(f"einem Signalscore von {score}")
 
     if not parts:
         return "aktuellen epidemiologischen Signalen"
@@ -326,7 +326,7 @@ def build_decision_summary_text(
 
     return (
         f"Die Signale sprechen in den nächsten 7 bis 14 Tagen für {public_condition} in {primary_region}. "
-        f"{basis_sentence} Deshalb priorisieren wir {primary_product} als nächstes Paket für Review und Freigabe."
+        f"{basis_sentence} Deshalb priorisieren wir {primary_product} als naechsten Kampagnenvorschlag fuer Pruefung und Freigabe."
     ).replace("  ", " ").strip()
 
 

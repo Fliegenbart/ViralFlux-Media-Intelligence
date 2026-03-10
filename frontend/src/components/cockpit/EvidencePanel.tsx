@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 
+import { UI_COPY, decisionStateLabel } from '../../lib/copy';
 import {
   BacktestResponse,
   MediaEvidenceResponse,
@@ -108,12 +109,12 @@ const EvidencePanel: React.FC<Props> = ({
       <section className="context-filter-rail">
         <div className="section-heading">
           <span className="section-kicker">Evidenz</span>
-          <h1 className="section-title">Proxy, Truth, Signalquellen und Modellzustand</h1>
+          <h1 className="section-title">Marktvergleich, Kundendaten, Signalquellen und Modellzustand</h1>
         </div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-          <span className="step-chip">Proxy-validiert</span>
-          <span className="step-chip">Kunden-Check: {truthLayerLabel(truthStatus || latestCustomer)}</span>
-          <span className="step-chip">Truth-Freshness: {truthFreshnessLabel(truthStatus?.truth_freshness_state)}</span>
+          <span className="step-chip">{UI_COPY.marketComparison}: validiert</span>
+          <span className="step-chip">{UI_COPY.customerData}: {truthLayerLabel(truthStatus || latestCustomer)}</span>
+          <span className="step-chip">{UI_COPY.customerDataFreshness}: {truthFreshnessLabel(truthStatus?.truth_freshness_state)}</span>
           {signalStack?.summary?.decision_mode_label && <span className="step-chip">{signalStack.summary.decision_mode_label}</span>}
           <span className="step-chip">Drift: {modelLineage?.drift_state || '-'}</span>
         </div>
@@ -122,9 +123,9 @@ const EvidencePanel: React.FC<Props> = ({
       <section className="evidence-grid">
         <div className="card subsection-card" style={{ padding: 24 }}>
           <div>
-            <div className="section-kicker">Markt-Check (Proxy-Validierung)</div>
+            <div className="section-kicker">Markt-Check</div>
             <h2 className="subsection-title" style={{ marginTop: 8 }}>
-              {latestMarket?.quality_gate?.overall_passed ? 'GO' : 'WATCH'}
+              {decisionStateLabel(latestMarket?.quality_gate?.overall_passed ? 'GO' : 'WATCH')}
             </h2>
           </div>
           <div className="metric-strip">
@@ -142,13 +143,13 @@ const EvidencePanel: React.FC<Props> = ({
             </div>
           </div>
           <p className="section-copy">
-            Dieser Block zeigt, wie gut das System epidemiologische Trigger gegen Marktbewegungen trifft. Er ist ein Proxy für Planungsgüte, nicht der finale Kundenbeweis.
+            Dieser Block zeigt, wie gut das System epidemiologische Trigger gegen Marktbewegungen trifft. Er misst Planungsguete im Marktvergleich, nicht den finalen Kundennachweis.
           </p>
         </div>
 
         <div className="card subsection-card" style={{ padding: 24 }}>
           <div>
-            <div className="section-kicker">Truth Status</div>
+            <div className="section-kicker">{UI_COPY.customerData}</div>
             <h2 className="subsection-title" style={{ marginTop: 8 }}>
               {truthLayerLabel(truthStatus || latestCustomer)}
             </h2>
@@ -159,7 +160,7 @@ const EvidencePanel: React.FC<Props> = ({
               <strong>{truthStatus?.coverage_weeks ?? 0}</strong>
             </div>
             <div className="metric-box">
-              <span>Freshness</span>
+              <span>Aktualitaet</span>
               <strong>{truthFreshnessLabel(truthStatus?.truth_freshness_state)}</strong>
             </div>
             <div className="metric-box">
@@ -168,7 +169,7 @@ const EvidencePanel: React.FC<Props> = ({
             </div>
           </div>
           <p className="section-copy">
-            Der Truth-Layer basiert in V2.1 auf validiertem CSV-Import mit Media Spend plus echten Outcome-Metriken. Er bewertet Datenbreite, Aktualität und Anschlussfähigkeit an echte Kundenergebnisse.
+            Dieser Bereich basiert auf validiertem CSV-Import mit Media Spend und echten Outcome-Metriken. Er bewertet Datenbreite, Aktualitaet und Anschlussfaehigkeit an echte Kundenergebnisse.
           </p>
           <div className="review-chip-row">
             {(sourceStatusLabels.length ? sourceStatusLabels : ['Noch keine Pflichtfelder vollständig vorhanden']).map((item) => (
@@ -179,7 +180,7 @@ const EvidencePanel: React.FC<Props> = ({
             <div className="soft-panel review-panel-soft" style={{ marginTop: 14 }}>
               <div className="campaign-focus-label">Explorativer Legacy-Run</div>
               <div className="review-body-copy" style={{ marginTop: 8 }}>
-                {legacyCustomer.metrics?.data_points || 0} Punkte aus einem älteren Kunden-Backtest. Dieser Run bleibt sichtbar als historischer Hinweis, zählt aber nicht als aktiver Truth-Layer.
+                {legacyCustomer.metrics?.data_points || 0} Punkte aus einem aelteren Kunden-Backtest. Dieser Run bleibt als historischer Hinweis sichtbar, zaehlt aber nicht als aktiver Bereich fuer Kundendaten.
               </div>
             </div>
           )}
@@ -189,25 +190,25 @@ const EvidencePanel: React.FC<Props> = ({
       <section style={{ display: 'grid', gap: 20 }}>
         <ValidationSection
           title="Markt-Validierung im Verlauf"
-          subtitle="Forecast gegen Ist, inklusive Baselines. So sieht PEIX, ob das Modell die Welle früh genug erkennt und nicht nur nachzeichnet."
+          subtitle="Forecast gegen Ist, inklusive Baselines. So wird sichtbar, ob das Modell die Welle frueh erkennt und nicht nur nachzeichnet."
           result={marketValidation}
           loading={marketValidationLoading}
-          emptyMessage="Noch keine detaillierten Markt-Validierungsdaten verfügbar."
+          emptyMessage="Noch keine detaillierten Daten fuer den Marktvergleich verfuegbar."
         />
         {truthStatus?.coverage_weeks ? (
           <ValidationSection
             title="Kunden-Validierung im Verlauf"
-            subtitle="Proxy und Truth bleiben getrennt: Dieser Layer zeigt nur, wie gut das Modell an echte Kunden-Outcome-Daten anschließt."
+            subtitle="Marktvergleich und Kundendaten bleiben getrennt: Dieser Bereich zeigt nur, wie gut das Modell an echte Kunden-Outcome-Daten anschliesst."
             result={customerValidation}
             loading={customerValidationLoading}
-            emptyMessage="Noch keine ausreichend langen Kundenreihen für eine belastbare Truth-Validierung verfügbar."
+            emptyMessage="Noch keine ausreichend langen Kundenreihen fuer eine belastbare Validierung der Kundendaten verfuegbar."
           />
         ) : (
           <section className="card subsection-card" style={{ padding: 24 }}>
             <div className="section-heading" style={{ gap: 6 }}>
               <h2 className="subsection-title">Kunden-Validierung im Verlauf</h2>
               <p className="subsection-copy">
-                Dieser Block bleibt leer, bis echte Outcome-Daten angeschlossen sind. Legacy-Runs werden separat nur als explorativer Hinweis gezeigt.
+                Dieser Block bleibt leer, bis echte Outcome-Daten angeschlossen sind. Legacy-Runs erscheinen separat nur als explorativer Hinweis.
               </p>
             </div>
             {legacyCustomer ? (
@@ -227,7 +228,7 @@ const EvidencePanel: React.FC<Props> = ({
               </div>
             ) : (
               <div className="review-muted-copy" style={{ marginTop: 14 }}>
-                Noch kein aktiver oder historischer Kunden-Run vorhanden.
+                Noch kein aktiver oder historischer Kundenlauf vorhanden.
               </div>
             )}
           </section>
@@ -238,7 +239,7 @@ const EvidencePanel: React.FC<Props> = ({
         <div className="card subsection-card" style={{ padding: 24 }}>
           <div className="section-heading">
             <span className="section-kicker">CSV Upload</span>
-            <h2 className="subsection-title">Truth-Import vorbereiten</h2>
+            <h2 className="subsection-title">Import der Kundendaten vorbereiten</h2>
             <p className="subsection-copy">
               Erwartet werden `week_start`, `product`, `region_code`, `media_spend_eur` plus mindestens eine echte Outcome-Metrik wie `sales_units`, `order_count` oder `revenue_eur`.
             </p>
@@ -256,7 +257,7 @@ const EvidencePanel: React.FC<Props> = ({
             </label>
 
             <label className="campaign-field">
-              <span>Source Label</span>
+              <span>Quellenlabel</span>
               <input
                 className="media-input"
                 value={sourceLabel}
@@ -266,25 +267,25 @@ const EvidencePanel: React.FC<Props> = ({
             </label>
 
             <label className="campaign-field truth-checkbox-field">
-              <span>Replace Existing</span>
+              <span>Vorhandene Daten ersetzen</span>
               <div className="truth-checkbox-row">
                 <input
                   type="checkbox"
                   checked={replaceExisting}
                   onChange={(event) => setReplaceExisting(event.target.checked)}
                 />
-                <small>Bestehende Truth-Zeilen für dieselbe Woche/Produkt/Region überschreiben.</small>
+                <small>Bestehende Zeilen fuer dieselbe Woche, dasselbe Produkt und dieselbe Region ueberschreiben.</small>
               </div>
             </label>
           </div>
 
           <div className="campaign-setup-footer">
             <div className="campaign-setup-note">
-              {file ? `Bereit: ${file.name}` : 'Zuerst eine Weekly-CSV auswählen, dann validieren und erst danach importieren.'}
+              {file ? `Bereit: ${file.name}` : 'Zuerst eine Weekly-CSV auswaehlen, dann validieren und erst danach importieren.'}
             </div>
             <div className="review-action-row">
               <a className="media-button secondary" href={truthSnapshot?.template_url || '/api/v1/media/outcomes/template'}>
-                Template laden
+                Vorlage laden
               </a>
               <button
                 className="media-button secondary"
@@ -308,10 +309,10 @@ const EvidencePanel: React.FC<Props> = ({
 
         <div className="card subsection-card" style={{ padding: 24 }}>
           <div className="section-heading">
-            <span className="section-kicker">Import Preview</span>
-            <h2 className="subsection-title">Dry-Run und Ergebnis</h2>
+            <span className="section-kicker">Import-Vorschau</span>
+            <h2 className="subsection-title">Pruefung und Ergebnis</h2>
             <p className="subsection-copy">
-              Erst prüfen, dann importieren. Vorschau und importierter Batch zeigen dieselben Kennzahlen, Issues und Coverage-Projektionen.
+              Erst pruefen, dann importieren. Vorschau und importierter Upload zeigen dieselben Kennzahlen, Hinweise und Projektionen.
             </p>
           </div>
 
@@ -327,21 +328,21 @@ const EvidencePanel: React.FC<Props> = ({
                   <strong>{truthPreview.batch_summary.rows_valid}</strong>
                 </div>
                 <div className="metric-box">
-                  <span>Issues</span>
+                  <span>Hinweise</span>
                   <strong>{truthPreview.issues.length}</strong>
                 </div>
               </div>
               <div className="soft-panel review-panel-soft">
                 <div className="evidence-row">
-                  <span>Coverage nach Import</span>
+                  <span>Abdeckung nach Import</span>
                   <strong>{truthPreview.coverage_after_import?.coverage_weeks ?? 0} Wochen</strong>
                 </div>
                 <div className="evidence-row">
-                  <span>Truth Readiness</span>
+                  <span>Status Kundendaten</span>
                   <strong>{truthLayerLabel(truthPreview.coverage_after_import)}</strong>
                 </div>
                 <div className="evidence-row">
-                  <span>Truth Freshness</span>
+                  <span>Aktualitaet</span>
                   <strong>{truthFreshnessLabel(truthPreview.coverage_after_import?.truth_freshness_state)}</strong>
                 </div>
               </div>
@@ -358,8 +359,8 @@ const EvidencePanel: React.FC<Props> = ({
       <section className="truth-analyst-grid">
         <div className="card subsection-card" style={{ padding: 24 }}>
           <div className="section-heading">
-            <span className="section-kicker">Import History</span>
-            <h2 className="subsection-title">Letzte Batches</h2>
+            <span className="section-kicker">Import-Historie</span>
+            <h2 className="subsection-title">Letzte Uploads</h2>
           </div>
           <div className="truth-history-list">
             {(truthSnapshot?.recent_batches || []).length > 0 ? truthSnapshot!.recent_batches.map((batch: TruthImportBatchSummary) => (
@@ -376,18 +377,18 @@ const EvidencePanel: React.FC<Props> = ({
                 <small>{batch.rows_imported}/{batch.rows_total} importiert</small>
               </button>
             )) : (
-              <div className="review-muted-copy">Noch keine Truth-Import-Batches vorhanden.</div>
+              <div className="review-muted-copy">Noch keine Uploads fuer Kundendaten vorhanden.</div>
             )}
           </div>
         </div>
 
         <div className="card subsection-card" style={{ padding: 24 }}>
           <div className="section-heading">
-            <span className="section-kicker">Batch Detail</span>
-            <h2 className="subsection-title">Ausgewählter Import</h2>
+            <span className="section-kicker">Upload-Detail</span>
+            <h2 className="subsection-title">Ausgewaehlter Import</h2>
           </div>
           {truthBatchDetailLoading ? (
-            <div className="review-muted-copy">Batch-Detail lädt...</div>
+            <div className="review-muted-copy">Upload-Detail laedt...</div>
           ) : selectedBatch ? (
             <div className="soft-panel review-panel-soft" style={{ display: 'grid', gap: 0 }}>
               <div className="evidence-row">
@@ -403,22 +404,22 @@ const EvidencePanel: React.FC<Props> = ({
                 <strong>{formatDateShort(selectedBatch.week_min)} bis {formatDateShort(selectedBatch.week_max)}</strong>
               </div>
               <div className="evidence-row">
-                <span>Coverage nach Import</span>
+                <span>Abdeckung nach Import</span>
                 <strong>{selectedBatch.coverage_after_import?.coverage_weeks ?? 0} Wochen</strong>
               </div>
             </div>
           ) : (
-            <div className="review-muted-copy">Wähle einen Batch aus der Historie oder validiere eine neue Datei.</div>
+            <div className="review-muted-copy">Waehle einen Upload aus der Historie oder validiere eine neue Datei.</div>
           )}
         </div>
       </section>
 
       <section className="card subsection-card" style={{ padding: 24 }}>
         <div className="section-heading">
-          <span className="section-kicker">Issue Table</span>
+          <span className="section-kicker">Hinweis-Tabelle</span>
           <h2 className="subsection-title">Import-Probleme und Mapping-Hinweise</h2>
           <p className="subsection-copy">
-            Jeder ausgeschlossene Datensatz bleibt sichtbar. Es gibt keine stillen `continue`-Fälle mehr.
+            Jeder ausgeschlossene Datensatz bleibt sichtbar. Es gibt keine stillen Ausfaelle.
           </p>
         </div>
         <div className="truth-issue-table">
@@ -431,7 +432,7 @@ const EvidencePanel: React.FC<Props> = ({
               <p>{issue.message}</p>
             </div>
           )) : (
-            <div className="review-muted-copy">Keine Issues sichtbar. Die aktuelle Vorschau oder der ausgewählte Batch ist sauber.</div>
+            <div className="review-muted-copy">Keine Hinweise sichtbar. Die aktuelle Vorschau oder der ausgewaehlte Upload ist sauber.</div>
           )}
         </div>
       </section>
@@ -466,7 +467,7 @@ const EvidencePanel: React.FC<Props> = ({
 
       <section className="cockpit-grid">
         <div className="card subsection-card" style={{ padding: 24 }}>
-          <h2 className="subsection-title">Signal-Stack</h2>
+          <h2 className="subsection-title">Signalquellen</h2>
           <div className="review-chip-row" style={{ marginTop: 14 }}>
             {Object.entries(driverGroups).map(([key, group]) => (
               <span key={key} className="step-chip">
@@ -490,7 +491,7 @@ const EvidencePanel: React.FC<Props> = ({
         </div>
 
         <div className="card subsection-card" style={{ padding: 24 }}>
-          <h2 className="subsection-title">Model Lineage</h2>
+          <h2 className="subsection-title">Modellhistorie</h2>
           <div style={{ display: 'grid', gap: 10, marginTop: 14 }}>
             <div className="evidence-row">
               <span>Stack</span>
@@ -513,7 +514,7 @@ const EvidencePanel: React.FC<Props> = ({
       </section>
 
       <section className="card subsection-card" style={{ padding: 24 }}>
-        <h2 className="subsection-title">Recent Runs</h2>
+        <h2 className="subsection-title">Letzte Laeufe</h2>
         <div style={{ display: 'grid', gap: 10, marginTop: 14 }}>
           {recentRuns.length > 0 ? recentRuns.slice(0, 6).map((run, index) => (
             <div key={`${String(run.mode)}-${index}`} className="evidence-row">
@@ -521,7 +522,7 @@ const EvidencePanel: React.FC<Props> = ({
               <strong>{String(run.status || '-')}</strong>
             </div>
           )) : (
-            <div style={{ color: 'var(--text-muted)' }}>Noch keine Run-Historie im Cockpit vorhanden.</div>
+            <div style={{ color: 'var(--text-muted)' }}>Noch keine Laufhistorie im Cockpit vorhanden.</div>
           )}
         </div>
       </section>

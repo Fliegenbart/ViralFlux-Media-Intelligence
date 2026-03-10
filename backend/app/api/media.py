@@ -99,7 +99,7 @@ class RecommendationOpenRegionRequest(BaseModel):
     region_code: str = Field(..., min_length=2)
     brand: str = Field(default="gelo")
     product: str = Field(default="Alle Gelo-Produkte")
-    campaign_goal: str = Field(default="Top-of-Mind vor Erkältungswelle")
+    campaign_goal: str = Field(default="Sichtbarkeit aufbauen, bevor die Nachfrage steigt")
     weekly_budget: float = Field(default=100000.0, ge=0)
     virus_typ: str = Field(default="Influenza A")
 

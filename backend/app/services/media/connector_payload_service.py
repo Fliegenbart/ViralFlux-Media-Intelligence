@@ -31,7 +31,7 @@ CONNECTOR_CATALOG: tuple[dict[str, Any], ...] = (
         "key": "meta_ads",
         "label": "Meta Ads",
         "status": "preview",
-        "description": "Social-first sync preview for regional awareness and conversion flights.",
+        "description": "Vorschau fuer die regionale Uebergabe in Meta Ads.",
         "supported_channels": ["social", "video", "display"],
         "supported_objectives": ["Awareness", "Traffic", "Conversions"],
     },
@@ -39,7 +39,7 @@ CONNECTOR_CATALOG: tuple[dict[str, Any], ...] = (
         "key": "google_ads",
         "label": "Google Ads",
         "status": "preview",
-        "description": "Search/video sync preview with campaign and ad-group level targeting.",
+        "description": "Vorschau fuer die Uebergabe in Google Ads mit Kampagnen- und Anzeigengruppen-Logik.",
         "supported_channels": ["search", "video", "display"],
         "supported_objectives": ["Search", "Video", "Performance"],
     },
@@ -47,7 +47,7 @@ CONNECTOR_CATALOG: tuple[dict[str, Any], ...] = (
         "key": "dv360",
         "label": "DV360",
         "status": "preview",
-        "description": "Programmatic sync preview for display, video and CTV media packages.",
+        "description": "Vorschau fuer die programmatic Uebergabe in DV360.",
         "supported_channels": ["programmatic", "display", "video", "ctv"],
         "supported_objectives": ["Awareness", "Reach", "Consideration"],
     },
@@ -76,7 +76,7 @@ class ConnectorPayloadService:
         connector = cls._resolve_connector(connector_key)
         payload = opportunity.get("campaign_payload") or {}
         if not payload:
-            raise ValueError("Für diese Recommendation ist noch kein Campaign Package vorhanden.")
+            raise ValueError("Fuer diese Empfehlung liegt noch kein Kampagnenvorschlag vor.")
 
         normalized_package = cls._build_normalized_package(opportunity=opportunity, campaign_payload=payload)
         readiness = cls._build_readiness(
@@ -136,7 +136,7 @@ class ConnectorPayloadService:
         )
 
         return {
-            "campaign_name": campaign.get("campaign_name") or opportunity.get("campaign_name") or "Campaign Package",
+            "campaign_name": campaign.get("campaign_name") or opportunity.get("campaign_name") or "Kampagnenvorschlag",
             "workflow_status": str(opportunity.get("status") or campaign.get("status") or "DRAFT").upper(),
             "brand": opportunity.get("brand") or "gelo",
             "objective": campaign.get("objective") or ai_plan.get("objective") or "Awareness",
@@ -199,7 +199,7 @@ class ConnectorPayloadService:
 
         workflow_status = str(normalized_package.get("workflow_status") or "DRAFT").upper()
         if workflow_status not in {"APPROVED", "ACTIVATED"}:
-            blockers.append("Kampagne muss vor einem Tool-Sync zuerst freigegeben werden.")
+            blockers.append("Die Kampagne muss vor einer Uebergabe zuerst freigegeben werden.")
 
         if not normalized_package.get("campaign_name"):
             blockers.append("Kampagnenname fehlt.")
@@ -208,12 +208,12 @@ class ConnectorPayloadService:
         if not normalized_package.get("channel_plan"):
             blockers.append("Es ist kein Channel-Plan hinterlegt.")
         if not normalized_package.get("guardrails", {}).get("passed", True):
-            blockers.append("Guardrail-Prüfung ist nicht bestanden.")
+            blockers.append("Die Pruefkriterien sind noch nicht erfuellt.")
 
         if not normalized_package.get("region_codes"):
-            warnings.append("Keine regionale Zielsteuerung vorhanden; Preview wird national vorbereitet.")
+            warnings.append("Keine regionale Zielsteuerung vorhanden; die Vorschau wird national vorbereitet.")
         if not normalized_package.get("message_framework", {}).get("hero_message"):
-            warnings.append("Hero-Message fehlt und muss vor Freigabe ergänzt werden.")
+            warnings.append("Die Leitbotschaft fehlt und sollte vor der Freigabe ergaenzt werden.")
 
         connector_channels = {
             item.get("channel")

@@ -160,13 +160,13 @@ class MediaV2Service:
         if freshness_state != "fresh":
             risk_flags.append("Kernquellen sind nicht vollständig frisch.")
         if not market_passed:
-            risk_flags.append("Proxy-Validierung ist aktuell nicht im GO-Korridor.")
+            risk_flags.append("Der Marktvergleich liegt aktuell nicht im Zielkorridor.")
         if not has_truth:
             risk_flags.append(str(truth_gate["message"]))
         if drift_state == "warning":
             risk_flags.append("Modell-Drift ist im Monitoring auffällig.")
         if not has_publishable:
-            risk_flags.append("Es gibt aktuell kein freigabefähiges Kampagnenpaket.")
+            risk_flags.append("Es gibt aktuell keinen freigabefaehigen Kampagnenvorschlag.")
 
         why_now = self._build_why_now(
             top_card=top_card,
@@ -590,13 +590,13 @@ class MediaV2Service:
         issue_count = int(latest_batch.get("rows_rejected") or 0) if latest_batch else 0
         limits: list[str] = []
         if coverage.get("coverage_weeks", 0) < 26:
-            limits.append("Weniger als 26 Wochen Truth-Daten reichen noch nicht für harte Freigaben.")
+            limits.append("Weniger als 26 Wochen Kundendaten reichen noch nicht fuer belastbare Freigaben.")
         if not coverage.get("required_fields_present"):
-            limits.append("Media Spend fehlt im Truth-Layer oder ist noch nicht breit genug vorhanden.")
+            limits.append("Media Spend fehlt in den Kundendaten oder ist noch nicht breit genug vorhanden.")
         if not coverage.get("conversion_fields_present"):
             limits.append("Mindestens eine echte Outcome-Metrik wie Sales, Orders oder Revenue fehlt noch.")
         if coverage.get("truth_freshness_state") == "stale":
-            limits.append("Der letzte Truth-Import liegt zu weit hinter der aktuellen epidemiologischen Woche.")
+            limits.append("Der letzte Import der Kundendaten liegt zu weit hinter der aktuellen epidemiologischen Woche.")
         return {
             "brand": str(brand or "gelo").strip().lower(),
             "coverage": coverage,
@@ -605,7 +605,7 @@ class MediaV2Service:
             "latest_batch_issue_count": issue_count,
             "template_url": "/api/v1/media/outcomes/template",
             "known_limits": limits,
-            "analyst_note": "Der Truth-Layer ist intern und basiert in V2.1 auf validiertem CSV-Import, nicht auf einer direkten Kundensystem-API.",
+            "analyst_note": "Der Bereich fuer Kundendaten basiert aktuell auf validiertem CSV-Import und nicht auf einer direkten Kundensystem-API.",
         }
 
     def import_outcomes(
@@ -690,7 +690,7 @@ class MediaV2Service:
                     row_number=row.get("row_number"),
                     field_name="row",
                     issue_code="duplicate_existing",
-                    message="Für diese Woche, dieses Produkt und diese Region existiert bereits ein Truth-Datensatz.",
+                    message="Fuer diese Woche, dieses Produkt und diese Region existiert bereits ein Datensatz in den Kundendaten.",
                     raw_row=row.get("raw_row"),
                 ))
                 continue
@@ -771,9 +771,9 @@ class MediaV2Service:
             "coverage_after_import": coverage_after_import,
             "coverage": coverage_after_import,
             "message": (
-                "Upload validiert. Es wurden noch keine Truth-Daten persistiert."
+                "Upload validiert. Es wurden noch keine Kundendaten gespeichert."
                 if validate_only
-                else ("Outcome-Daten importiert." if imported else "Import abgeschlossen, aber keine Zeilen wurden übernommen.")
+                else ("Outcome-Daten importiert." if imported else "Import abgeschlossen, aber keine Zeilen wurden uebernommen.")
             ),
         }
 
@@ -851,17 +851,17 @@ class MediaV2Service:
     ) -> list[str]:
         reasons: list[str] = []
         if decision_state != "GO":
-            reasons.append("Die epidemiologischen Signale sind relevant, aber die Freigabegates stehen noch auf WATCH.")
+            reasons.append("Die epidemiologischen Signale sind relevant, aber die Freigabe bleibt vorerst im Beobachtungsmodus.")
         if top_regions:
             reasons.append(
-                f"{top_regions[0].get('name')} führt den regionalen Signal-Stack mit {round(float(top_regions[0].get('peix_score') or top_regions[0].get('impact_probability') or 0))}/100 an."
+                f"{top_regions[0].get('name')} fuehrt die regionalen Signale mit {round(float(top_regions[0].get('peix_score') or top_regions[0].get('impact_probability') or 0))}/100 an."
             )
         if top_card:
             if decision_state == "GO" and top_card.get("decision_brief", {}).get("summary_sentence"):
                 reasons.append(str(top_card["decision_brief"]["summary_sentence"]))
             else:
-                title = top_card.get("display_title") or top_card.get("recommended_product") or "Das stärkste Review-Paket"
-                reasons.append(f"{title} ist das nächste priorisierte Paket für Review und Freigabe.")
+                title = top_card.get("display_title") or top_card.get("recommended_product") or "Der staerkste Kampagnenvorschlag"
+                reasons.append(f"{title} ist der naechste priorisierte Vorschlag fuer Pruefung und Freigabe.")
         if signal_summary.get("decision_mode_reason"):
             reasons.append(str(signal_summary["decision_mode_reason"]))
         else:
@@ -904,7 +904,7 @@ class MediaV2Service:
         if momentum_score < 40 and severity_score >= 70:
             return (
                 f"{name} beschleunigt aktuell nicht, bleibt aber wegen hohem Ausgangsniveau und hoher Aktivierbarkeit "
-                "für Review und Vorbereitung priorisiert."
+                "fuer Pruefung und Vorbereitung priorisiert."
             )
         if momentum_score >= 60 and forecast_direction == "aufwärts":
             return (
@@ -1078,12 +1078,12 @@ class MediaV2Service:
         if decision_state == "GO":
             if primary_region and product:
                 return f"Diese Woche freigeben: {product} in {primary_region} priorisieren."
-            return "Diese Woche freigeben: die stärksten regionalen Pakete in die Aktivierung ziehen."
+            return "Diese Woche freigeben: die staerksten regionalen Vorschlaege in die Aktivierung ziehen."
 
         if decision_mode == "supply_window":
             if primary_region and product:
                 return f"Diese Woche vorbereiten: {product} in {primary_region} als Versorgungschance absichern, aber noch keinen nationalen Shift freigeben."
-            return "Diese Woche vorbereiten: Versorgungssignale beobachten und nur reviewfähige Pakete weiterziehen."
+            return "Diese Woche vorbereiten: Versorgungssignale beobachten und nur pruefbare Vorschlaege weiterziehen."
         if decision_mode == "mixed":
             if primary_region and product:
                 return f"Diese Woche vorbereiten: {product} in {primary_region} priorisieren, weil Epi-Signal und Kontext gemeinsam tragen, aber noch keinen nationalen Shift freigeben."
@@ -1091,7 +1091,7 @@ class MediaV2Service:
         if primary_region and product:
             return f"Diese Woche vorbereiten: {product} in {primary_region} priorisieren, aber noch keinen nationalen Shift freigeben."
         if primary_region:
-            return f"Diese Woche vorbereiten: {primary_region} priorisieren und nur reviewfähige Pakete weiterziehen."
+            return f"Diese Woche vorbereiten: {primary_region} priorisieren und nur pruefbare Vorschlaege weiterziehen."
         return "Diese Woche vorbereiten: Signal beobachten, Regionen priorisieren und keine harte Aktivierung freigeben."
 
     def _known_limits(
@@ -1105,13 +1105,13 @@ class MediaV2Service:
         limits: list[str] = []
         truth = truth_coverage or self.get_truth_coverage()
         if truth.get("coverage_weeks", 0) < 26:
-            limits.append("Kundennahe Truth-Daten decken noch keine 26 Wochen ab.")
+            limits.append("Kundennahe Daten decken noch keine 26 Wochen ab.")
         if truth.get("truth_freshness_state") == "stale":
-            limits.append("Der letzte Truth-Import liegt zu weit hinter der aktuellen epidemiologischen Woche.")
+            limits.append("Der letzte Import der Kundendaten liegt zu weit hinter der aktuellen epidemiologischen Woche.")
         if not truth.get("conversion_fields_present"):
-            limits.append("Im Truth-Layer fehlt noch mindestens eine belastbare Outcome-Metrik wie Sales, Orders oder Revenue.")
+            limits.append("In den Kundendaten fehlt noch mindestens eine belastbare Outcome-Metrik wie Sales, Orders oder Revenue.")
         if truth_validation_legacy and truth.get("coverage_weeks", 0) == 0:
-            limits.append("Der sichtbare Kunden-Backtest ist nur ein explorativer Legacy-Run und kein aktiver Truth-Layer.")
+            limits.append("Der sichtbare Kunden-Backtest ist nur ein explorativer Legacy-Run und noch kein aktiver Bereich fuer Kundendaten.")
         if not (cockpit.get("backtest_summary", {}).get("latest_market") or {}).get("quality_gate", {}).get("overall_passed"):
             limits.append("Markt-Validierung steht aktuell auf WATCH.")
         series_points = (
@@ -1340,22 +1340,22 @@ class MediaV2Service:
         if truth_coverage.get("coverage_weeks", 0) < 26:
             return {
                 "passed": False,
-                "message": "Truth-Layer deckt noch keine 26 Wochen ab und bleibt deshalb explorativ.",
+                "message": "Die Kundendaten decken noch keine 26 Wochen ab und bleiben deshalb explorativ.",
             }
         if "Media Spend" not in (truth_coverage.get("required_fields_present") or []):
             return {
                 "passed": False,
-                "message": "Truth-Layer enthält noch keinen belastbaren Media-Spend-Verlauf.",
+                "message": "Die Kundendaten enthalten noch keinen belastbaren Media-Spend-Verlauf.",
             }
         if not (truth_coverage.get("conversion_fields_present") or []):
             return {
                 "passed": False,
-                "message": "Truth-Layer enthält noch keine ausreichenden Sales-, Order- oder Revenue-Signale.",
+                "message": "Die Kundendaten enthalten noch keine ausreichenden Sales-, Order- oder Revenue-Signale.",
             }
         if truth_coverage.get("truth_freshness_state") == "stale":
             return {
                 "passed": False,
-                "message": "Truth-Layer ist aktuell zu alt im Vergleich zur letzten epidemiologischen Woche.",
+                "message": "Die Kundendaten sind aktuell zu alt im Vergleich zur letzten epidemiologischen Woche.",
             }
         return {"passed": True, "message": None}
 

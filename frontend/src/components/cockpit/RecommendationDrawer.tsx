@@ -72,18 +72,18 @@ const RecommendationDrawer: React.FC<Props> = ({
   const audienceSegments = detail?.campaign_pack?.targeting?.audience_segments || detail?.target_audience || [];
   const guardrailNotes = detail?.guardrail_notes || detail?.campaign_pack?.guardrail_report?.applied_fixes || [];
   const workflowSteps = [
-    { key: 'PREPARE', label: 'Vorbereiten', copy: 'Signal-Kontext und Paketstruktur schärfen' },
-    { key: 'REVIEW', label: 'Review', copy: 'Guardrails, Mapping und Timing prüfen' },
-    { key: 'APPROVE', label: 'Freigabe', copy: 'Paket ist entscheidungsreif' },
-    { key: 'SYNC_READY', label: 'Sync', copy: 'Connector-Preview oder operative Übergabe' },
-    { key: 'LIVE', label: 'Live', copy: 'Aktiv oder bereits ausgespielt' },
+    { key: 'PREPARE', label: 'Entwurf', copy: 'Signal-Kontext und Aufbau schaerfen' },
+    { key: 'REVIEW', label: 'Pruefung', copy: 'Inhalt, Timing und Hinweise pruefen' },
+    { key: 'APPROVE', label: 'Freigabe', copy: 'Vorschlag ist entscheidungsreif' },
+    { key: 'SYNC_READY', label: 'Uebergabe', copy: 'Fuer Mediatools oder operative Uebergabe bereit' },
+    { key: 'LIVE', label: 'Aktiv', copy: 'Freigegeben oder bereits ausgespielt' },
   ];
   const normalizedStatus = String(detail?.lifecycle_state || detail?.status || '').toUpperCase();
   const currentWorkflowIndex = Math.max(workflowSteps.findIndex((step) => step.key === normalizedStatus), 0);
   const confidenceValue = detail?.confidence == null
     ? null
     : Math.round((detail.confidence <= 1 ? detail.confidence * 100 : detail.confidence));
-  const heroSummary = detail?.decision_brief?.summary_sentence || detail?.reason || 'Signal- und Playbook-basiertes Kampagnenpaket für Review und Freigabe.';
+  const heroSummary = detail?.decision_brief?.summary_sentence || detail?.reason || 'Signal- und regelbasierter Kampagnenvorschlag zur Pruefung und Freigabe.';
   const syncStateTone = syncPreview?.readiness.can_sync_now
     ? {
         background: 'rgba(16, 185, 129, 0.10)',
@@ -124,14 +124,14 @@ const RecommendationDrawer: React.FC<Props> = ({
         </div>
 
         {loading ? (
-          <div className="campaign-empty-board" style={{ color: 'var(--text-muted)' }}>Lade Kampagnenpaket...</div>
+          <div className="campaign-empty-board" style={{ color: 'var(--text-muted)' }}>Lade Kampagnenvorschlag...</div>
         ) : detail ? (
           <div className="review-sheet-stack">
             <section className="review-sheet-hero">
               <div className="review-sheet-main">
-                <span className="section-kicker">Campaign Review</span>
+                <span className="section-kicker">Kampagnendetail</span>
                 <h2 className="review-sheet-title">
-                  {detail.display_title || detail.campaign_name || 'Kampagnenpaket'}
+                  {detail.display_title || detail.campaign_name || 'Kampagnenvorschlag'}
                 </h2>
                 <p className="review-sheet-copy">{heroSummary}</p>
 
@@ -167,13 +167,13 @@ const RecommendationDrawer: React.FC<Props> = ({
                     onClick={() => onRegenerateAI(detail.id)}
                     disabled={regenerating}
                   >
-                    {regenerating ? 'Qwen arbeitet...' : 'Mit Qwen neu erzeugen'}
+                    {regenerating ? 'KI arbeitet...' : 'Mit KI neu erzeugen'}
                   </button>
                 </div>
               </div>
 
               <aside className="review-sheet-aside">
-                <div className="campaign-focus-label">Review Snapshot</div>
+                <div className="campaign-focus-label">Aktueller Stand</div>
                 <div className="campaign-focus-title">{detail.recommended_product || detail.product}</div>
                 <div className="campaign-focus-context">
                   {detail.region_codes_display?.join(', ') || detail.region || 'National'}
@@ -196,9 +196,9 @@ const RecommendationDrawer: React.FC<Props> = ({
                     <small>Geplanter Start</small>
                   </div>
                   <div className="campaign-metric-card">
-                    <span>Sync</span>
+                    <span>Uebergabe</span>
                     <strong>{readinessStateLabel(syncPreview?.readiness.state, syncPreview?.readiness.can_sync_now)}</strong>
-                    <small>{syncPreview?.connector_label || 'noch kein Connector-Preview'}</small>
+                    <small>{syncPreview?.connector_label || 'noch keine Uebergabevorschau'}</small>
                   </div>
                 </div>
               </aside>
@@ -225,7 +225,7 @@ const RecommendationDrawer: React.FC<Props> = ({
 
             <section className="drawer-grid">
               <div className="card review-card">
-                <h3 className="subsection-title">Paket-Überblick</h3>
+                <h3 className="subsection-title">Ueberblick</h3>
                 <div className="review-stat-grid">
                   <div className="metric-box">
                     <span>Produkt</span>
@@ -251,39 +251,39 @@ const RecommendationDrawer: React.FC<Props> = ({
                 </div>
 
                 <div className="review-detail-group">
-                  <div className="campaign-focus-label">Audience</div>
+                  <div className="campaign-focus-label">Zielgruppen</div>
                   <div className="review-chip-row">
                     {audienceSegments.length > 0 ? audienceSegments.map((segment) => (
                       <span key={segment} className="step-chip">{segment}</span>
-                    )) : <span className="review-muted-copy">Keine Audience-Segmente hinterlegt.</span>}
+                    )) : <span className="review-muted-copy">Keine Zielgruppen hinterlegt.</span>}
                   </div>
                 </div>
               </div>
 
               <div className="card review-card">
-                <h3 className="subsection-title">Creative Package</h3>
+                <h3 className="subsection-title">Botschaften</h3>
                 <div className="review-detail-group">
-                  <div className="campaign-focus-label">Hero Message</div>
+                  <div className="campaign-focus-label">Leitbotschaft</div>
                   <div className="review-hero-message">
-                    {detail.campaign_pack?.message_framework?.hero_message || 'Noch keine Hero Message'}
+                    {detail.campaign_pack?.message_framework?.hero_message || 'Noch keine Leitbotschaft'}
                   </div>
                 </div>
                 <div className="review-detail-group">
-                  <div className="campaign-focus-label">Support Points</div>
+                  <div className="campaign-focus-label">Argumente</div>
                   <div className="review-chip-row">
                     {supportPoints.length > 0 ? supportPoints.map((point) => (
                       <span key={point} className="step-chip">{point}</span>
-                    )) : <span className="review-muted-copy">Keine Support Points hinterlegt.</span>}
+                    )) : <span className="review-muted-copy">Keine Argumente hinterlegt.</span>}
                   </div>
                 </div>
                 <div className="review-detail-group">
-                  <div className="campaign-focus-label">Creative Angles</div>
+                  <div className="campaign-focus-label">KI-Ansatze</div>
                   <div className="review-stack">
                     {creativeAngles.length > 0 ? creativeAngles.map((angle) => (
                       <div key={angle} className="soft-panel review-soft-line">
                         {angle}
                       </div>
-                    )) : <span className="review-muted-copy">Keine AI-Angles vorhanden.</span>}
+                    )) : <span className="review-muted-copy">Keine KI-Ansatze vorhanden.</span>}
                   </div>
                 </div>
                 {(detail.campaign_pack?.message_framework?.compliance_note || detail.campaign_pack?.ai_plan?.compliance_hinweis) && (
@@ -299,7 +299,7 @@ const RecommendationDrawer: React.FC<Props> = ({
 
             <section className="drawer-grid">
               <div className="card review-card">
-                <h3 className="subsection-title">Channel Plan</h3>
+                <h3 className="subsection-title">Kanalmix</h3>
                 <div style={{ display: 'grid', gap: 10, marginTop: 14 }}>
                   {channelRows.length > 0 ? channelRows.map((row) => (
                     <div key={`${row.channel}-${row.share_pct}`} className="evidence-row">
@@ -307,12 +307,12 @@ const RecommendationDrawer: React.FC<Props> = ({
                       <strong>{formatPercent(row.share_pct || 0)}</strong>
                     </div>
                   )) : (
-                    <div className="review-muted-copy">Noch kein Channel-Plan vorhanden.</div>
+                    <div className="review-muted-copy">Noch kein Kanalmix vorhanden.</div>
                   )}
                 </div>
 
                 <div className="review-detail-group">
-                  <div className="campaign-focus-label">Keyword Cluster</div>
+                  <div className="campaign-focus-label">Keyword-Cluster</div>
                   <div className="review-chip-row">
                     {keywordClusters.length > 0 ? keywordClusters.map((keyword) => (
                       <span key={keyword} className="step-chip">{keyword}</span>
@@ -322,7 +322,7 @@ const RecommendationDrawer: React.FC<Props> = ({
               </div>
 
               <div className="card review-card">
-                <h3 className="subsection-title">Next Steps und Guardrails</h3>
+                <h3 className="subsection-title">Naechste Schritte und Leitplanken</h3>
                 <div className="review-stack" style={{ marginTop: 14 }}>
                   {nextSteps.length > 0 ? nextSteps.map((step, index) => (
                     <div key={index} className="soft-panel review-soft-line">
@@ -337,20 +337,20 @@ const RecommendationDrawer: React.FC<Props> = ({
                 </div>
 
                 <div className="soft-panel review-panel-soft">
-                  <div className="campaign-focus-label">Guardrail Notes</div>
+                  <div className="campaign-focus-label">Leitplanken</div>
                   <div className="review-stack">
                     {guardrailNotes.length > 0 ? (
                       guardrailNotes.map((note) => (
                         <div key={note} className="review-body-copy">{note}</div>
                       ))
                     ) : (
-                      <div className="review-muted-copy">Keine zusätzlichen Guardrail-Hinweise.</div>
+                      <div className="review-muted-copy">Keine zusaetzlichen Hinweise.</div>
                     )}
                   </div>
                 </div>
 
                 <div className="soft-panel review-panel-soft">
-                  <div className="campaign-focus-label">Publish-Blocker</div>
+                  <div className="campaign-focus-label">Freigabe-Hinweise</div>
                   <div className="review-stack">
                     {detail.publish_blockers && detail.publish_blockers.length > 0 ? (
                       detail.publish_blockers.map((note) => (
@@ -367,9 +367,9 @@ const RecommendationDrawer: React.FC<Props> = ({
             <section className="card review-card">
               <div className="review-sync-header">
                 <div>
-                  <h3 className="subsection-title">Media-Tool Sync Preview</h3>
+                  <h3 className="subsection-title">Uebergabevorschau fuer Mediatools</h3>
                   <p className="subsection-copy" style={{ marginTop: 6 }}>
-                    Connector-ready Paket für spätere Meta-, Google- oder DV360-Anbindung.
+                    Vorbereitete Uebergabe fuer Meta, Google oder DV360.
                   </p>
                 </div>
                 <div className="review-sync-actions">
@@ -386,7 +386,7 @@ const RecommendationDrawer: React.FC<Props> = ({
                     onClick={() => onPrepareSync(detail.id, connectorKey)}
                     disabled={syncLoading}
                   >
-                    {syncLoading ? 'Bereite Sync vor...' : 'Sync vorbereiten'}
+                    {syncLoading ? 'Bereite Uebergabe vor...' : 'Uebergabe vorbereiten'}
                   </button>
                 </div>
               </div>
@@ -395,7 +395,7 @@ const RecommendationDrawer: React.FC<Props> = ({
                 <div className="review-sync-stack">
                   <div className="drawer-grid">
                     <div className="soft-panel review-panel-soft">
-                      <div className="campaign-focus-label">Readiness</div>
+                      <div className="campaign-focus-label">Status</div>
                       <div className="review-sync-state" style={syncStateTone}>
                         {readinessStateLabel(syncPreview.readiness.state, syncPreview.readiness.can_sync_now)}
                       </div>
@@ -409,7 +409,7 @@ const RecommendationDrawer: React.FC<Props> = ({
                       </div>
                     </div>
                     <div className="soft-panel review-panel-soft">
-                      <div className="campaign-focus-label">Connector</div>
+                      <div className="campaign-focus-label">Zielsystem</div>
                       <div className="review-hero-message" style={{ fontSize: 18 }}>
                         {syncPreview.connector_label}
                       </div>
@@ -423,7 +423,7 @@ const RecommendationDrawer: React.FC<Props> = ({
                 </div>
               ) : (
                 <div className="review-muted-copy" style={{ marginTop: 14 }}>
-                  Noch kein Connector-Preview geladen.
+                  Noch keine Uebergabevorschau geladen.
                 </div>
               )}
             </section>
@@ -439,16 +439,16 @@ export default RecommendationDrawer;
 function publishabilityHint(detail: RecommendationDetail): string {
   const lifecycle = String(detail.lifecycle_state || detail.status || '').toUpperCase();
   if (detail.is_publishable) {
-    return 'Keine offenen Blocker. Paket ist direkt nutzbar.';
+    return 'Keine offenen Blocker. Der Vorschlag ist direkt nutzbar.';
   }
   if (lifecycle === 'SYNC_READY') {
-    return 'Keine Inhaltsblocker. Paket kann jetzt in den Connector- oder Live-Schritt gehen.';
+    return 'Keine Inhaltsblocker. Der Vorschlag kann jetzt an ein Mediatool uebergeben oder aktiviert werden.';
   }
   if (lifecycle === 'APPROVE') {
-    return 'Keine Inhaltsblocker. Paket ist freigabefähig und wartet auf die Entscheidung.';
+    return 'Keine Inhaltsblocker. Der Vorschlag ist freigabefaehig und wartet auf die Entscheidung.';
   }
   if (lifecycle === 'REVIEW') {
-    return 'Keine Inhaltsblocker. Paket wartet auf Review und den nächsten Workflow-Schritt.';
+    return 'Keine Inhaltsblocker. Der Vorschlag wartet auf die Pruefung und den naechsten Schritt.';
   }
-  return 'Keine Inhaltsblocker. Paket braucht noch den nächsten Workflow-Schritt.';
+  return 'Keine Inhaltsblocker. Der Vorschlag braucht noch den naechsten Schritt.';
 }

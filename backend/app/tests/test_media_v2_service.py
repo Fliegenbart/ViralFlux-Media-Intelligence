@@ -293,7 +293,7 @@ class MediaV2ServiceTruthCoverageTests(unittest.TestCase):
 
         weekly_decision = payload["weekly_decision"]
         self.assertEqual(weekly_decision["decision_state"], "WATCH")
-        self.assertIn("Truth-Layer", weekly_decision["truth_risk_flag"])
+        self.assertIn("Kundendaten", weekly_decision["truth_risk_flag"])
         self.assertIsNone(weekly_decision["budget_shift"])
 
     def test_campaigns_payload_limits_visible_board_to_eight_cards(self) -> None:

@@ -8,11 +8,12 @@ import logging
 from typing import Optional
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 
 from app.api.deps import get_current_admin
 from app.core.rate_limit import limiter
 from app.core.celery_app import celery_app
+from app.services.ml.training_contract import normalize_training_selection
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -20,6 +21,23 @@ router = APIRouter()
 
 class TrainXGBoostRequest(BaseModel):
     virus_typ: Optional[str] = None  # None → train all four virus types
+    virus_types: Optional[list[str]] = None
+    include_internal_history: bool = True
+    research_mode: bool = False
+
+    @model_validator(mode="after")
+    def validate_training_selection(self) -> "TrainXGBoostRequest":
+        normalize_training_selection(
+            virus_typ=self.virus_typ,
+            virus_types=self.virus_types,
+        )
+        return self
+
+    def normalized_selection(self):
+        return normalize_training_selection(
+            virus_typ=self.virus_typ,
+            virus_types=self.virus_types,
+        )
 
 
 @router.post("/train-xgboost", status_code=status.HTTP_202_ACCEPTED)
@@ -34,9 +52,14 @@ async def train_xgboost(
     Admin-only. Returns 202 Accepted with a ``task_id`` for polling.
     """
     from app.services.ml.tasks import train_xgboost_model_task
+    selection = body.normalized_selection()
 
     try:
-        task = train_xgboost_model_task.delay(virus_typ=body.virus_typ)
+        task = train_xgboost_model_task.delay(
+            virus_types=list(selection.virus_types),
+            include_internal_history=body.include_internal_history,
+            research_mode=body.research_mode,
+        )
     except Exception as exc:
         logger.error(f"Celery enqueue failed: {exc}")
         raise HTTPException(
@@ -47,7 +70,11 @@ async def train_xgboost(
     return {
         "message": "XGBoost training gestartet",
         "task_id": task.id,
-        "virus_typ": body.virus_typ or "all",
+        "virus_typ": selection.virus_typ,
+        "virus_types": list(selection.virus_types),
+        "selection_mode": selection.mode,
+        "include_internal_history": body.include_internal_history,
+        "research_mode": body.research_mode,
         "status_url": f"/api/v1/admin/ml/status/{task.id}",
     }
 

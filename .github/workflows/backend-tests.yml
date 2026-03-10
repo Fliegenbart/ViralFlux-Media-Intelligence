@@ -27,6 +27,21 @@ jobs:
       - name: Install backend dependencies
         run: pip install -r backend/requirements.txt
 
+      - name: Run targeted backend hygiene checks
+        run: >
+          python -m flake8
+          backend/app/api/admin_ml.py
+          backend/app/services/ml/forecast_service.py
+          backend/app/services/ml/model_trainer.py
+          backend/app/services/ml/tasks.py
+          backend/app/services/ml/training_contract.py
+          backend/app/tests/test_admin_ml_api.py
+          backend/app/tests/test_forecast_service_guards.py
+          backend/app/tests/test_ml_tasks_accuracy.py
+          backend/app/tests/test_ml_training_task_contract.py
+          backend/app/tests/test_model_trainer_guards.py
+          --select=F401,F841,E741
+
       - name: Run backend tests
         working-directory: backend
         env:

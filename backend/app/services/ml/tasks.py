@@ -12,6 +12,10 @@ from typing import Any, Dict
 
 from app.core.celery_app import celery_app
 from app.db.session import get_db_context
+from app.services.ml.training_contract import (
+    SUPPORTED_VIRUS_TYPES,
+    normalize_training_selection,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -87,19 +91,34 @@ def _compute_accuracy_metrics(predicted: list[float], actual: list[float]) -> di
 def train_xgboost_model_task(
     self,
     virus_typ: str | None = None,
+    virus_types: list[str] | None = None,
+    include_internal_history: bool = True,
+    research_mode: bool = False,
 ) -> Dict[str, Any]:
     """Train and serialise XGBoost meta-learner models.
 
     Args:
         virus_typ: Single virus type to train (e.g. ``"Influenza A"``).
-            If *None*, trains all four supported virus types.
+        virus_types: Optional explicit list of virus types.
+        include_internal_history: Whether to include Ganzimmun history features.
+        research_mode: Whether to evaluate the fixed candidate set before promotion.
 
     Returns:
         JSON-safe dict with training results per virus type.
     """
     from app.services.ml.model_trainer import XGBoostTrainer
+    selection = normalize_training_selection(
+        virus_typ=virus_typ,
+        virus_types=virus_types,
+    )
 
-    logger.info(f"Celery: XGBoost training started (virus_typ={virus_typ})")
+    logger.info(
+        "Celery: XGBoost training started (virus_types=%s, mode=%s, internal=%s, research=%s)",
+        list(selection.virus_types),
+        selection.mode,
+        include_internal_history,
+        research_mode,
+    )
 
     self.update_state(
         state="PROGRESS",
@@ -109,23 +128,44 @@ def train_xgboost_model_task(
     with get_db_context() as db:
         trainer = XGBoostTrainer(db)
 
-        if virus_typ:
+        if len(selection.virus_types) == 1:
+            target_virus = selection.virus_typ or selection.virus_types[0]
             self.update_state(
                 state="PROGRESS",
-                meta={"step": f"Training {virus_typ}...", "progress": 30},
+                meta={"step": f"Training {target_virus}...", "progress": 30},
             )
-            result = trainer.train(virus_typ=virus_typ)
+            result = trainer.train(
+                virus_typ=target_virus,
+                include_internal_history=include_internal_history,
+                research_mode=research_mode,
+            )
         else:
             self.update_state(
                 state="PROGRESS",
-                meta={"step": "Training all virus types...", "progress": 30},
+                meta={
+                    "step": (
+                        "Training all virus types..."
+                        if selection.mode == "all"
+                        else "Training selected virus types..."
+                    ),
+                    "progress": 30,
+                },
             )
-            result = trainer.train_all()
+            result = trainer.train_all(
+                virus_types=list(selection.virus_types),
+                include_internal_history=include_internal_history,
+                research_mode=research_mode,
+            )
 
     logger.info("Celery: XGBoost training completed")
     return _json_safe({
         "status": "success",
         "result": result,
+        "virus_typ": selection.virus_typ,
+        "virus_types": list(selection.virus_types),
+        "selection_mode": selection.mode,
+        "include_internal_history": include_internal_history,
+        "research_mode": research_mode,
         "timestamp": datetime.utcnow().isoformat(),
     })
 
@@ -143,7 +183,7 @@ def compute_forecast_accuracy_task(self) -> Dict[str, Any]:
     self.update_state(state="PROGRESS", meta={"step": "Computing accuracy...", "progress": 10})
 
     results = {}
-    virus_types = ["Influenza A", "Influenza B", "SARS-CoV-2", "RSV A"]
+    virus_types = list(SUPPORTED_VIRUS_TYPES)
 
     with get_db_context() as db:
         from app.models.database import MLForecast, WastewaterAggregated, ForecastAccuracyLog
@@ -239,7 +279,7 @@ def compute_forecast_accuracy_task(self) -> Dict[str, Any]:
                 .all()
             )
             if len(recent_logs) >= 2:
-                mapes = [l.mape for l in recent_logs if l.mape is not None]
+                mapes = [entry.mape for entry in recent_logs if entry.mape is not None]
                 if len(mapes) >= 2 and all(m > 35 for m in mapes[:2]):
                     results[virus]["consecutive_drift"] = True
                     logger.warning(

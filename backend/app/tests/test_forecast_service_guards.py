@@ -54,6 +54,11 @@ class ForecastServiceGuardTests(unittest.TestCase):
                 "survstat_incidence": 0.9,
                 "survstat_lag7": 0.8,
                 "survstat_lag14": 0.6,
+                "lab_positivity_rate": 0.18,
+                "lab_signal_available": 1.0,
+                "lab_baseline_mean": 0.12,
+                "lab_baseline_zscore": 1.5,
+                "lab_positivity_lag7": 0.15,
             }
         )
 
@@ -66,8 +71,35 @@ class ForecastServiceGuardTests(unittest.TestCase):
 
         self.assertEqual(features["xdisease_lag7"], 0.7)
         self.assertEqual(features["xdisease_lag14"], 0.4)
+        self.assertEqual(features["lab_positivity_rate"], 0.18)
+        self.assertEqual(features["lab_baseline_zscore"], 1.5)
         self.assertEqual(features["hw_pred"], 10.0)
         self.assertEqual(features["prophet_pred"], 12.0)
+
+    def test_build_internal_history_feature_frame_respects_available_time(self) -> None:
+        ds = pd.Series(pd.to_datetime(["2024-01-10", "2024-01-20"]))
+        history = pd.DataFrame(
+            {
+                "datum": pd.to_datetime(["2024-01-05", "2024-01-12", "2023-01-18", "2023-01-19"]),
+                "available_time": pd.to_datetime(["2024-01-06", "2024-01-15", "2023-01-18", "2023-01-19"]),
+                "anzahl_tests": [100, 200, 100, 120],
+                "positive_ergebnisse": [20, 100, 10, 12],
+            }
+        )
+
+        features = ForecastService._build_internal_history_feature_frame(ds, history)
+
+        self.assertAlmostEqual(features.iloc[0]["lab_positivity_rate"], 0.2)
+        self.assertAlmostEqual(features.iloc[1]["lab_positivity_rate"], 0.5)
+        self.assertGreater(features.iloc[1]["lab_baseline_mean"], 0.0)
+        self.assertNotEqual(features.iloc[1]["lab_baseline_zscore"], 0.0)
+
+    def test_build_internal_history_feature_frame_falls_back_to_zero_without_history(self) -> None:
+        ds = pd.Series(pd.to_datetime(["2024-01-10", "2024-01-20"]))
+
+        features = ForecastService._build_internal_history_feature_frame(ds, pd.DataFrame())
+
+        self.assertTrue((features == 0.0).all().all())
 
 
 if __name__ == "__main__":

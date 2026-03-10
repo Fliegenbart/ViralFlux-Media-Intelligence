@@ -129,6 +129,27 @@ class ForecastQuality:
 
 
 @dataclass(frozen=True)
+class ForecastMonitoringSnapshot:
+    virus_typ: str
+    target_source: str
+    monitoring_status: str
+    forecast_readiness: str
+    drift_status: str
+    freshness_status: str
+    accuracy_freshness_status: str
+    backtest_freshness_status: str
+    issue_date: str | None = None
+    model_version: str | None = None
+    event_forecast: dict[str, Any] = field(default_factory=dict)
+    latest_accuracy: dict[str, Any] = field(default_factory=dict)
+    latest_backtest: dict[str, Any] = field(default_factory=dict)
+    alerts: list[str] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
 class OpportunityAssessment:
     action_class: str
     truth_readiness: str

@@ -60,6 +60,35 @@ function batchStatusLabel(status?: string | null): string {
   return status ? String(status) : 'Offen';
 }
 
+function monitoringStatusLabel(status?: string | null): string {
+  const normalized = String(status || '').trim().toLowerCase();
+  if (normalized === 'healthy') return 'Stabil';
+  if (normalized === 'warning') return 'Beobachten';
+  if (normalized === 'critical') return 'Kritisch';
+  return status ? String(status) : 'Unbekannt';
+}
+
+function monitoringFreshnessLabel(state?: string | null): string {
+  const normalized = String(state || '').trim().toLowerCase();
+  if (normalized === 'fresh') return 'frisch';
+  if (normalized === 'stale') return 'veraltet';
+  if (normalized === 'expired') return 'abgelaufen';
+  if (normalized === 'missing') return 'fehlt';
+  return state ? String(state) : '-';
+}
+
+function numberFromUnknown(value: unknown): number | null {
+  const numeric = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(numeric) ? numeric : null;
+}
+
+function formatSignedPercent(value: unknown, digits = 1): string {
+  const numeric = numberFromUnknown(value);
+  if (numeric == null) return '-';
+  const prefix = numeric > 0 ? '+' : '';
+  return `${prefix}${numeric.toFixed(digits)}%`;
+}
+
 const EvidencePanel: React.FC<Props> = ({
   evidence,
   loading,
@@ -98,6 +127,13 @@ const EvidencePanel: React.FC<Props> = ({
   ];
   const signalStack = evidence?.signal_stack;
   const modelLineage = evidence?.model_lineage;
+  const forecastMonitoring = evidence?.forecast_monitoring;
+  const latestAccuracy = forecastMonitoring?.latest_accuracy;
+  const latestBacktest = forecastMonitoring?.latest_backtest;
+  const intervalCoverage = (latestBacktest?.interval_coverage || {}) as Record<string, unknown>;
+  const eventCalibration = (latestBacktest?.event_calibration || {}) as Record<string, unknown>;
+  const leadLag = (latestBacktest?.lead_lag || {}) as Record<string, unknown>;
+  const improvementVsBaselines = (latestBacktest?.improvement_vs_baselines || {}) as Record<string, unknown>;
   const driverGroups = signalStack?.summary?.driver_groups || {};
 
   if (loading && !evidence) {
@@ -116,6 +152,7 @@ const EvidencePanel: React.FC<Props> = ({
           <span className="step-chip">{UI_COPY.customerData}: {truthLayerLabel(truthStatus || latestCustomer)}</span>
           <span className="step-chip">{UI_COPY.customerDataFreshness}: {truthFreshnessLabel(truthStatus?.truth_freshness_state)}</span>
           {signalStack?.summary?.decision_mode_label && <span className="step-chip">{signalStack.summary.decision_mode_label}</span>}
+          <span className="step-chip">Forecast: {monitoringStatusLabel(forecastMonitoring?.monitoring_status)}</span>
           <span className="step-chip">Drift: {modelLineage?.drift_state || '-'}</span>
         </div>
       </section>
@@ -185,6 +222,41 @@ const EvidencePanel: React.FC<Props> = ({
             </div>
           )}
         </div>
+
+        <div className="card subsection-card" style={{ padding: 24 }}>
+          <div>
+            <div className="section-kicker">Forecast-Monitoring</div>
+            <h2 className="subsection-title" style={{ marginTop: 8 }}>
+              {monitoringStatusLabel(forecastMonitoring?.monitoring_status)}
+            </h2>
+          </div>
+          <div className="metric-strip">
+            <div className="metric-box">
+              <span>Forecast-Gate</span>
+              <strong>{forecastMonitoring?.forecast_readiness || '-'}</strong>
+            </div>
+            <div className="metric-box">
+              <span>Forecast-Frische</span>
+              <strong>{monitoringFreshnessLabel(forecastMonitoring?.freshness_status)}</strong>
+            </div>
+            <div className="metric-box">
+              <span>Accuracy-Fenster</span>
+              <strong>{monitoringFreshnessLabel(forecastMonitoring?.accuracy_freshness_status)}</strong>
+            </div>
+          </div>
+          <p className="section-copy">
+            Dieser Block haengt direkt am Forecast-Kern: Drift, Accuracy, Backtest-Frische, Intervallabdeckung und Event-Kalibrierung werden aus demselben Stack gelesen wie die Opportunity-Gates.
+          </p>
+          <div className="review-chip-row">
+            <span className="step-chip">Backtest: {monitoringFreshnessLabel(forecastMonitoring?.backtest_freshness_status)}</span>
+            <span className="step-chip">
+              Kalibrierung: {forecastMonitoring?.event_forecast?.calibration_passed == null ? '-' : forecastMonitoring?.event_forecast?.calibration_passed ? 'ok' : 'watch'}
+            </span>
+            <span className="step-chip">
+              Samples: {latestAccuracy?.samples != null ? latestAccuracy.samples : '-'}
+            </span>
+          </div>
+        </div>
       </section>
 
       <section style={{ display: 'grid', gap: 20 }}>
@@ -232,6 +304,89 @@ const EvidencePanel: React.FC<Props> = ({
               </div>
             )}
           </section>
+        )}
+      </section>
+
+      <section className="card subsection-card" style={{ padding: 24 }}>
+        <div className="section-heading">
+          <span className="section-kicker">Forecast-Details</span>
+          <h2 className="subsection-title">Monitoring des Produktionsmodells</h2>
+          <p className="subsection-copy">
+            Hier sehen Analysten, ob der Forecast nicht nur laeuft, sondern auch mathematisch sauber ueber Accuracy, Vorlaufzeit, Intervalle und Kalibrierung im Zielkorridor bleibt.
+          </p>
+        </div>
+
+        <div className="metric-strip" style={{ marginTop: 18 }}>
+          <div className="metric-box">
+            <span>7T Event</span>
+            <strong>{formatPercent((forecastMonitoring?.event_forecast?.event_probability || 0) * 100, 1)}</strong>
+          </div>
+          <div className="metric-box">
+            <span>MAPE</span>
+            <strong>{formatPercent(latestAccuracy?.mape, 1)}</strong>
+          </div>
+          <div className="metric-box">
+            <span>Korrelation</span>
+            <strong>{latestAccuracy?.correlation != null ? formatPercent(latestAccuracy.correlation * 100, 0) : '-'}</strong>
+          </div>
+          <div className="metric-box">
+            <span>Lead Time</span>
+            <strong>{numberFromUnknown(leadLag.effective_lead_days) != null ? `${numberFromUnknown(leadLag.effective_lead_days)}T` : '-'}</strong>
+          </div>
+        </div>
+
+        <div className="soft-panel" style={{ padding: 18, marginTop: 18, display: 'grid', gap: 10 }}>
+          <div className="evidence-row">
+            <span>Modellversion</span>
+            <strong>{forecastMonitoring?.model_version || modelLineage?.model_version || '-'}</strong>
+          </div>
+          <div className="evidence-row">
+            <span>Letzter Forecast-Lauf</span>
+            <strong>{formatDateTime(forecastMonitoring?.issue_date || modelLineage?.latest_forecast_created_at)}</strong>
+          </div>
+          <div className="evidence-row">
+            <span>Letzter Accuracy-Check</span>
+            <strong>{formatDateTime(latestAccuracy?.computed_at)}</strong>
+          </div>
+          <div className="evidence-row">
+            <span>Letzter Markt-Backtest</span>
+            <strong>{formatDateTime(latestBacktest?.created_at)}</strong>
+          </div>
+          <div className="evidence-row">
+            <span>80%-Intervallabdeckung</span>
+            <strong>{formatPercent(numberFromUnknown(intervalCoverage.coverage_80_pct), 1)}</strong>
+          </div>
+          <div className="evidence-row">
+            <span>Brier Score</span>
+            <strong>{numberFromUnknown(eventCalibration.brier_score)?.toFixed(3) || '-'}</strong>
+          </div>
+          <div className="evidence-row">
+            <span>ECE</span>
+            <strong>{numberFromUnknown(eventCalibration.ece)?.toFixed(3) || '-'}</strong>
+          </div>
+          <div className="evidence-row">
+            <span>MAE vs Persistence</span>
+            <strong>{formatSignedPercent(improvementVsBaselines.mae_vs_persistence_pct)}</strong>
+          </div>
+          <div className="evidence-row">
+            <span>MAE vs Seasonal</span>
+            <strong>{formatSignedPercent(improvementVsBaselines.mae_vs_seasonal_pct)}</strong>
+          </div>
+        </div>
+
+        {forecastMonitoring?.alerts?.length ? (
+          <div className="soft-panel review-panel-soft" style={{ marginTop: 16, padding: 18 }}>
+            <div className="campaign-focus-label">Offene Monitoring-Signale</div>
+            <div style={{ display: 'grid', gap: 8, marginTop: 10 }}>
+              {forecastMonitoring.alerts.map((alert) => (
+                <div key={alert} className="review-body-copy">{alert}</div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div className="review-muted-copy" style={{ marginTop: 16 }}>
+            Aktuell gibt es keine offenen Monitoring-Warnungen fuer diesen Forecast-Stack.
+          </div>
         )}
       </section>
 

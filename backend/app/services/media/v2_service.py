@@ -388,6 +388,7 @@ class MediaV2Service:
             "source_status": cockpit.get("source_status") or {},
             "signal_stack": self.get_signal_stack(virus_typ=virus_typ),
             "model_lineage": self.get_model_lineage(virus_typ=virus_typ),
+            "forecast_monitoring": self.get_forecast_monitoring(virus_typ=virus_typ, target_source=target_source),
             "truth_coverage": truth_coverage,
             "truth_snapshot": truth_snapshot,
             "known_limits": self._known_limits(
@@ -397,6 +398,17 @@ class MediaV2Service:
                 truth_validation_legacy=truth_validation_legacy,
             ),
         }
+
+    def get_forecast_monitoring(
+        self,
+        *,
+        virus_typ: str = "Influenza A",
+        target_source: str = "RKI_ARE",
+    ) -> dict[str, Any]:
+        return ForecastDecisionService(self.db).build_monitoring_snapshot(
+            virus_typ=virus_typ,
+            target_source=target_source,
+        )
 
     def get_signal_stack(self, *, virus_typ: str = "Influenza A") -> dict[str, Any]:
         cockpit = self.cockpit_service.get_cockpit_payload(virus_typ=virus_typ, target_source="RKI_ARE")

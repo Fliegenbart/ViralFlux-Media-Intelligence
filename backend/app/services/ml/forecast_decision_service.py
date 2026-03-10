@@ -20,6 +20,7 @@ from app.services.ml.forecast_contracts import (
     BurdenForecast,
     BurdenForecastPoint,
     EventForecast,
+    ForecastMonitoringSnapshot,
     ForecastQuality,
     OpportunityAssessment,
     confidence_label,
@@ -99,6 +100,22 @@ class ForecastDecisionService:
         if age_days <= 10:
             return "fresh"
         if age_days <= 21:
+            return "stale"
+        return "expired"
+
+    def _monitoring_freshness_state(
+        self,
+        latest_created_at: datetime | None,
+        *,
+        fresh_days: float,
+        stale_days: float,
+    ) -> str:
+        if latest_created_at is None:
+            return "missing"
+        age_days = (datetime.utcnow() - latest_created_at).total_seconds() / 86400.0
+        if age_days <= fresh_days:
+            return "fresh"
+        if age_days <= stale_days:
             return "stale"
         return "expired"
 
@@ -314,6 +331,129 @@ class ForecastDecisionService:
                 "component_scores": component_scores,
             },
         }
+
+    def build_monitoring_snapshot(
+        self,
+        *,
+        virus_typ: str,
+        target_source: str = "RKI_ARE",
+    ) -> dict[str, Any]:
+        bundle = self.build_forecast_bundle(virus_typ=virus_typ, target_source=target_source)
+        burden_forecast = bundle.get("burden_forecast") or {}
+        event_forecast = bundle.get("event_forecast") or {}
+        forecast_quality = bundle.get("forecast_quality") or {}
+        latest_accuracy = self._latest_accuracy(virus_typ=virus_typ)
+        latest_market = self._latest_market_backtest(virus_typ=virus_typ, target_source=target_source)
+
+        accuracy_freshness_status = self._monitoring_freshness_state(
+            latest_accuracy.computed_at if latest_accuracy else None,
+            fresh_days=2,
+            stale_days=5,
+        )
+        backtest_freshness_status = self._monitoring_freshness_state(
+            latest_market.created_at if latest_market else None,
+            fresh_days=14,
+            stale_days=35,
+        )
+
+        latest_accuracy_payload = {
+            "computed_at": latest_accuracy.computed_at.isoformat() if latest_accuracy and latest_accuracy.computed_at else None,
+            "window_days": latest_accuracy.window_days if latest_accuracy else None,
+            "samples": latest_accuracy.samples if latest_accuracy else None,
+            "mae": latest_accuracy.mae if latest_accuracy else None,
+            "rmse": latest_accuracy.rmse if latest_accuracy else None,
+            "mape": latest_accuracy.mape if latest_accuracy else None,
+            "correlation": latest_accuracy.correlation if latest_accuracy else None,
+            "drift_detected": bool(latest_accuracy.drift_detected) if latest_accuracy else None,
+            "freshness_status": accuracy_freshness_status,
+        }
+        latest_backtest_payload = {
+            "run_id": latest_market.run_id if latest_market else None,
+            "created_at": latest_market.created_at.isoformat() if latest_market and latest_market.created_at else None,
+            "target_source": latest_market.target_source if latest_market else target_source,
+            "freshness_status": backtest_freshness_status,
+            "quality_gate": (latest_market.metrics or {}).get("quality_gate") if latest_market and latest_market.metrics else None,
+            "interval_coverage": (latest_market.metrics or {}).get("interval_coverage") if latest_market and latest_market.metrics else None,
+            "event_calibration": (latest_market.metrics or {}).get("event_calibration") if latest_market and latest_market.metrics else None,
+            "timing_metrics": (latest_market.metrics or {}).get("timing_metrics") if latest_market and latest_market.metrics else None,
+            "lead_lag": latest_market.lead_lag if latest_market else None,
+            "improvement_vs_baselines": latest_market.improvement_vs_baselines if latest_market else None,
+        }
+
+        alerts: list[str] = []
+        if not (burden_forecast.get("points") or []):
+            alerts.append("Kein aktueller Live-Forecast vorhanden.")
+        if str(forecast_quality.get("freshness_status") or "missing") != "fresh":
+            alerts.append("Live-Forecast ist nicht frisch genug.")
+        if latest_accuracy is None:
+            alerts.append("Kein Accuracy-Monitoring vorhanden.")
+        elif accuracy_freshness_status != "fresh":
+            alerts.append("Accuracy-Monitoring ist nicht frisch.")
+        if latest_accuracy and (latest_accuracy.samples or 0) < 7:
+            alerts.append("Accuracy-Monitoring basiert auf sehr wenigen Paaren.")
+        if str(forecast_quality.get("drift_status") or "unknown") == "warning":
+            alerts.append("MAPE-Drift ist im Accuracy-Monitoring aktiv.")
+        if latest_market is None:
+            alerts.append("Kein Markt-Backtest fuer das Promotion-Gate vorhanden.")
+        elif backtest_freshness_status != "fresh":
+            alerts.append("Letzter Markt-Backtest ist nicht frisch.")
+
+        promotion_gate = forecast_quality.get("promotion_gate") or {}
+        interval_coverage = forecast_quality.get("interval_coverage") or {}
+        if promotion_gate and not bool(promotion_gate.get("overall_passed")):
+            alerts.append("Forecast-Promotion-Gate steht aktuell auf WATCH.")
+        if interval_coverage and interval_coverage.get("interval_passed") is False:
+            alerts.append("Intervallabdeckung liegt ausserhalb des Zielbands.")
+        if event_forecast and event_forecast.get("calibration_passed") is False:
+            alerts.append("Event-Probability ist nicht ausreichend kalibriert.")
+
+        lead_lag = latest_backtest_payload.get("lead_lag") or {}
+        effective_lead_days = lead_lag.get("effective_lead_days")
+        if effective_lead_days is not None and float(effective_lead_days) <= 0:
+            alerts.append("Effektive Vorlaufzeit ist nicht positiv.")
+
+        critical = any(
+            condition
+            for condition in (
+                not (burden_forecast.get("points") or []),
+                str(forecast_quality.get("freshness_status") or "missing") in {"missing", "expired"},
+                latest_market is None,
+                backtest_freshness_status == "expired",
+            )
+        )
+        warning = any(
+            condition
+            for condition in (
+                bool(alerts),
+                str(forecast_quality.get("forecast_readiness") or "WATCH") != "GO",
+                accuracy_freshness_status in {"stale", "expired", "missing"},
+                str(forecast_quality.get("drift_status") or "unknown") == "warning",
+            )
+        )
+        monitoring_status = "critical" if critical else ("warning" if warning else "healthy")
+
+        snapshot = ForecastMonitoringSnapshot(
+            virus_typ=virus_typ,
+            target_source=target_source,
+            monitoring_status=monitoring_status,
+            forecast_readiness=str(forecast_quality.get("forecast_readiness") or "WATCH"),
+            drift_status=str(forecast_quality.get("drift_status") or "unknown"),
+            freshness_status=str(forecast_quality.get("freshness_status") or "missing"),
+            accuracy_freshness_status=accuracy_freshness_status,
+            backtest_freshness_status=backtest_freshness_status,
+            issue_date=burden_forecast.get("issue_date"),
+            model_version=burden_forecast.get("model_version"),
+            event_forecast={
+                "event_probability": event_forecast.get("event_probability"),
+                "confidence": event_forecast.get("confidence"),
+                "confidence_label": event_forecast.get("confidence_label"),
+                "calibration_passed": event_forecast.get("calibration_passed"),
+            },
+            latest_accuracy=latest_accuracy_payload,
+            latest_backtest=latest_backtest_payload,
+            alerts=alerts,
+        )
+        return snapshot.to_dict()
 
     def get_truth_readiness(
         self,

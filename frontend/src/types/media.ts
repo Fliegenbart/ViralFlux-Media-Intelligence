@@ -560,6 +560,49 @@ export interface ModelLineage {
   latest_forecast_created_at?: string | null;
 }
 
+export interface ForecastMonitoring {
+  virus_typ: string;
+  target_source: string;
+  monitoring_status: 'healthy' | 'warning' | 'critical' | 'unknown' | string;
+  forecast_readiness: 'GO' | 'WATCH' | string;
+  drift_status: 'ok' | 'warning' | 'unknown' | string;
+  freshness_status: 'fresh' | 'stale' | 'expired' | 'missing' | string;
+  accuracy_freshness_status?: 'fresh' | 'stale' | 'expired' | 'missing' | string;
+  backtest_freshness_status?: 'fresh' | 'stale' | 'expired' | 'missing' | string;
+  issue_date?: string | null;
+  model_version?: string | null;
+  event_forecast?: {
+    event_probability?: number | null;
+    confidence?: number | null;
+    confidence_label?: string | null;
+    calibration_passed?: boolean | null;
+  };
+  latest_accuracy?: {
+    computed_at?: string | null;
+    window_days?: number | null;
+    samples?: number | null;
+    mae?: number | null;
+    rmse?: number | null;
+    mape?: number | null;
+    correlation?: number | null;
+    drift_detected?: boolean | null;
+    freshness_status?: string | null;
+  };
+  latest_backtest?: {
+    run_id?: string | null;
+    created_at?: string | null;
+    target_source?: string | null;
+    freshness_status?: string | null;
+    quality_gate?: Record<string, unknown> | null;
+    interval_coverage?: Record<string, unknown> | null;
+    event_calibration?: Record<string, unknown> | null;
+    timing_metrics?: Record<string, unknown> | null;
+    lead_lag?: Record<string, unknown> | null;
+    improvement_vs_baselines?: Record<string, unknown> | null;
+  };
+  alerts: string[];
+}
+
 export interface MediaDecisionResponse {
   virus_typ: string;
   target_source: string;
@@ -677,6 +720,7 @@ export interface MediaEvidenceResponse {
   source_status: SourceStatusSummary;
   signal_stack: SignalStackResponse;
   model_lineage: ModelLineage;
+  forecast_monitoring?: ForecastMonitoring;
   truth_coverage: TruthCoverage;
   truth_snapshot?: TruthSnapshot;
   known_limits: string[];

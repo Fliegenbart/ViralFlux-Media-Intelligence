@@ -29,7 +29,15 @@ class ForecastDecisionServiceTests(unittest.TestCase):
         Base.metadata.drop_all(bind=self.engine)
         self.engine.dispose()
 
-    def _seed_forecast_bundle_inputs(self) -> None:
+    def _seed_forecast_bundle_inputs(
+        self,
+        *,
+        drift_detected: bool = False,
+        forecast_created_at: datetime | None = None,
+        backtest_created_at: datetime | None = None,
+        accuracy_created_at: datetime | None = None,
+        quality_gate_passed: bool = True,
+    ) -> None:
         now = datetime.utcnow().replace(microsecond=0)
         for offset in range(16):
             day = now - timedelta(days=offset * 7)
@@ -45,7 +53,7 @@ class ForecastDecisionServiceTests(unittest.TestCase):
                 )
             )
 
-        created_at = now
+        created_at = forecast_created_at or now
         for offset in range(14):
             forecast_date = now + timedelta(days=offset + 1)
             self.db.add(
@@ -79,8 +87,8 @@ class ForecastDecisionServiceTests(unittest.TestCase):
                 parameters={},
                 metrics={
                     "quality_gate": {
-                        "overall_passed": True,
-                        "forecast_readiness": "GO",
+                        "overall_passed": quality_gate_passed,
+                        "forecast_readiness": "GO" if quality_gate_passed else "WATCH",
                     },
                     "timing_metrics": {"best_lag_days": 14, "corr_at_best_lag": 0.61},
                     "interval_coverage": {
@@ -105,12 +113,12 @@ class ForecastDecisionServiceTests(unittest.TestCase):
                 llm_insight="ok",
                 lead_lag={"effective_lead_days": 14},
                 chart_points=14,
-                created_at=now,
+                created_at=backtest_created_at or now,
             )
         )
         self.db.add(
             ForecastAccuracyLog(
-                computed_at=now,
+                computed_at=accuracy_created_at or now,
                 virus_typ="Influenza A",
                 window_days=14,
                 samples=14,
@@ -118,7 +126,7 @@ class ForecastDecisionServiceTests(unittest.TestCase):
                 rmse=5.1,
                 mape=9.2,
                 correlation=0.72,
-                drift_detected=False,
+                drift_detected=drift_detected,
                 details={},
             )
         )
@@ -137,6 +145,32 @@ class ForecastDecisionServiceTests(unittest.TestCase):
         self.assertTrue(bundle["event_forecast"]["calibration_passed"])
         self.assertGreater(bundle["compatibility"]["final_risk_score"], 0.0)
         self.assertEqual(len(bundle["burden_forecast"]["points"]), 14)
+
+    def test_build_monitoring_snapshot_returns_healthy_state_for_green_stack(self) -> None:
+        self._seed_forecast_bundle_inputs()
+
+        snapshot = ForecastDecisionService(self.db).build_monitoring_snapshot(
+            virus_typ="Influenza A",
+            target_source="RKI_ARE",
+        )
+
+        self.assertEqual(snapshot["monitoring_status"], "healthy")
+        self.assertEqual(snapshot["forecast_readiness"], "GO")
+        self.assertEqual(snapshot["accuracy_freshness_status"], "fresh")
+        self.assertEqual(snapshot["backtest_freshness_status"], "fresh")
+        self.assertEqual(snapshot["alerts"], [])
+
+    def test_build_monitoring_snapshot_warns_on_drift(self) -> None:
+        self._seed_forecast_bundle_inputs(drift_detected=True)
+
+        snapshot = ForecastDecisionService(self.db).build_monitoring_snapshot(
+            virus_typ="Influenza A",
+            target_source="RKI_ARE",
+        )
+
+        self.assertEqual(snapshot["monitoring_status"], "warning")
+        self.assertEqual(snapshot["drift_status"], "warning")
+        self.assertTrue(any("Drift" in alert for alert in snapshot["alerts"]))
 
     def test_truth_readiness_requires_coverage_and_conversion_fields(self) -> None:
         now = datetime.utcnow().replace(microsecond=0)

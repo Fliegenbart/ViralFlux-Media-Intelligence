@@ -355,12 +355,14 @@ class MediaV2ServiceTruthCoverageTests(unittest.TestCase):
             patch.object(self.service, "get_truth_evidence", return_value=truth_snapshot),
             patch.object(self.service, "get_signal_stack", return_value={"summary": {}, "items": []}),
             patch.object(self.service, "get_model_lineage", return_value={"drift_state": "warning"}),
+            patch.object(self.service, "get_forecast_monitoring", return_value={"monitoring_status": "warning", "alerts": ["Drift aktiv"]}),
         ):
             payload = self.service.get_evidence_payload()
 
         self.assertIsNone(payload["truth_validation"])
         self.assertEqual(payload["truth_validation_legacy"]["run_id"], "customer-legacy")
         self.assertEqual(payload["truth_snapshot"]["coverage"]["trust_readiness"], "noch_nicht_angeschlossen")
+        self.assertEqual(payload["forecast_monitoring"]["monitoring_status"], "warning")
 
     def test_regions_payload_exposes_severity_momentum_and_actionability(self) -> None:
         cockpit_payload = {

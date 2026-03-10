@@ -91,34 +91,46 @@ async def root():
 
 @app.get("/health")
 async def health_check():
-    """Health check endpoint with ML drift status."""
+    """Health check endpoint with forecast monitoring summary."""
     db_healthy = await check_db_connection()
 
     drift_info: dict = {}
+    monitoring_info: dict = {}
     if db_healthy:
         try:
-            from app.models.database import ForecastAccuracyLog
+            from app.services.ml.forecast_decision_service import ForecastDecisionService
+            from app.services.ml.training_contract import SUPPORTED_VIRUS_TYPES
             from app.db.session import get_db_context
             with get_db_context() as db:
-                latest = (
-                    db.query(
-                        ForecastAccuracyLog.virus_typ,
-                        ForecastAccuracyLog.mape,
-                        ForecastAccuracyLog.drift_detected,
+                service = ForecastDecisionService(db)
+                for virus_typ in SUPPORTED_VIRUS_TYPES:
+                    snapshot = service.build_monitoring_snapshot(
+                        virus_typ=virus_typ,
+                        target_source="RKI_ARE",
                     )
-                    .distinct(ForecastAccuracyLog.virus_typ)
-                    .order_by(ForecastAccuracyLog.virus_typ, ForecastAccuracyLog.computed_at.desc())
-                    .all()
-                )
-                for row in latest:
-                    drift_info[row.virus_typ] = {
-                        "mape": float(row.mape) if row.mape else None,
-                        "drift": bool(row.drift_detected),
+                    latest_accuracy = snapshot.get("latest_accuracy") or {}
+                    drift_info[virus_typ] = {
+                        "mape": latest_accuracy.get("mape"),
+                        "drift": snapshot.get("drift_status") == "warning",
+                    }
+                    monitoring_info[virus_typ] = {
+                        "monitoring_status": snapshot.get("monitoring_status"),
+                        "forecast_readiness": snapshot.get("forecast_readiness"),
+                        "drift_status": snapshot.get("drift_status"),
+                        "freshness_status": snapshot.get("freshness_status"),
+                        "accuracy_freshness_status": snapshot.get("accuracy_freshness_status"),
+                        "backtest_freshness_status": snapshot.get("backtest_freshness_status"),
+                        "mape": latest_accuracy.get("mape"),
+                        "samples": latest_accuracy.get("samples"),
                     }
         except Exception:
             pass
 
     any_drift = any(v.get("drift") for v in drift_info.values())
+    any_monitoring_warning = any(
+        value.get("monitoring_status") in {"warning", "critical"}
+        for value in monitoring_info.values()
+    )
 
     return {
         "status": "healthy" if db_healthy else "unhealthy",
@@ -127,8 +139,14 @@ async def health_check():
             "database": "up" if db_healthy else "down",
             "api": "up",
             "ml_drift": "warning" if any_drift else "ok",
+            "forecast_monitoring": (
+                "warning"
+                if any_monitoring_warning
+                else ("ok" if monitoring_info else "unknown")
+            ),
         },
         "ml_accuracy": drift_info or None,
+        "forecast_monitoring": monitoring_info or None,
     }
 
 

@@ -4,7 +4,9 @@ from datetime import datetime
 import logging
 
 from app.db.session import get_db, get_db_context
+from app.services.ml.forecast_decision_service import ForecastDecisionService
 from app.services.ml.forecast_service import ForecastService
+from app.services.ml.training_contract import SUPPORTED_VIRUS_TYPES
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -101,7 +103,7 @@ async def get_forecast_status(db: Session = Depends(get_db)):
     from sqlalchemy import func
 
     status = {}
-    for virus in ['Influenza A', 'Influenza B', 'SARS-CoV-2', 'RSV A']:
+    for virus in SUPPORTED_VIRUS_TYPES:
         latest = db.query(MLForecast).filter(
             MLForecast.virus_typ == virus
         ).order_by(MLForecast.created_at.desc()).first()
@@ -119,6 +121,44 @@ async def get_forecast_status(db: Session = Depends(get_db)):
         }
 
     return {"forecasts": status, "timestamp": datetime.utcnow()}
+
+
+@router.get("/monitoring/{virus_typ}")
+async def get_forecast_monitoring(
+    virus_typ: str,
+    target_source: str = "RKI_ARE",
+    db: Session = Depends(get_db),
+):
+    """Forecast monitoring snapshot with readiness, drift and calibration gates."""
+    return ForecastDecisionService(db).build_monitoring_snapshot(
+        virus_typ=virus_typ,
+        target_source=target_source,
+    )
+
+
+@router.get("/monitoring")
+async def get_all_forecast_monitoring(
+    target_source: str = "RKI_ARE",
+    db: Session = Depends(get_db),
+):
+    """Monitoring overview for all supported virus types."""
+    service = ForecastDecisionService(db)
+    monitoring = {
+        virus: service.build_monitoring_snapshot(
+            virus_typ=virus,
+            target_source=target_source,
+        )
+        for virus in SUPPORTED_VIRUS_TYPES
+    }
+    any_warning = any(
+        snapshot.get("monitoring_status") in {"warning", "critical"}
+        for snapshot in monitoring.values()
+    )
+    return {
+        "monitoring": monitoring,
+        "any_warning": any_warning,
+        "timestamp": datetime.utcnow(),
+    }
 
 
 @router.get("/accuracy/{virus_typ}")
@@ -178,10 +218,9 @@ async def get_forecast_accuracy(virus_typ: str, limit: int = 14, db: Session = D
 async def get_all_forecast_accuracy(db: Session = Depends(get_db)):
     """Accuracy overview for all virus types (latest entry each)."""
     from app.models.database import ForecastAccuracyLog
-    from sqlalchemy import func
 
     result = {}
-    for virus in ['Influenza A', 'Influenza B', 'SARS-CoV-2', 'RSV A']:
+    for virus in SUPPORTED_VIRUS_TYPES:
         latest = (
             db.query(ForecastAccuracyLog)
             .filter(ForecastAccuracyLog.virus_typ == virus)

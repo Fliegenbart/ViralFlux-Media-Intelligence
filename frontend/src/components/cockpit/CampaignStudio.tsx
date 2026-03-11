@@ -67,10 +67,10 @@ const CampaignStudio: React.FC<Props> = ({
     : 'Noch kein Kampagnenvorschlag im Fokus';
   const focusContext = focusCard
     ? `${focusCard.region_codes_display?.join(', ') || focusCard.region || 'National'} · ${flightWindowLabel(focusCard)}`
-    : 'Die KI kann aus Regionen und Wochenentscheidung neue Kampagnenvorschlaege erzeugen.';
+    : 'Die KI kann aus Regionen und Wochenentscheidung neue Kampagnenvorschläge erzeugen.';
   const focusCopy = focusCard
     ? readableCampaignSummary(focusCard)
-    : 'Sobald Vorschlaege vorliegen, rutschen die wichtigsten Faelle automatisch in Pruefung, Freigabe und Uebergabe.';
+    : 'Sobald Vorschläge vorliegen, rutschen die wichtigsten Fälle automatisch in Prüfung, Freigabe und Übergabe.';
   const hiddenBacklog = campaignsView?.summary?.hidden_backlog_cards ?? 0;
   const visibleCards = campaignsView?.summary?.visible_cards ?? cards.length;
 
@@ -81,12 +81,12 @@ const CampaignStudio: React.FC<Props> = ({
           <div className="campaign-command-top">
             <div className="section-heading" style={{ gap: 14 }}>
               <span className="section-kicker">Campaign Studio</span>
-              <h1 className="campaign-command-title">Kampagnenvorschlaege mit klarer naechster Aktion.</h1>
+              <h1 className="campaign-command-title">Kampagnenvorschläge mit klarer nächster Aktion.</h1>
               <p className="section-copy">
-                Die KI erstellt Vorschlaege. Das Team prueft Inhalt, Budget und Uebergabe, bevor etwas live geht.
+                Die KI erstellt Vorschläge. Das Team prüft Inhalt, Budget und Übergabe, bevor etwas live geht.
               </p>
             </div>
-            <span className="step-chip">{visibleCards} sichtbar · {campaignsView?.summary?.deduped_cards ?? cards.length} priorisiert fuer {virus}</span>
+            <span className="step-chip">{visibleCards} sichtbar · {campaignsView?.summary?.deduped_cards ?? cards.length} priorisiert für {virus}</span>
           </div>
 
           <div className="campaign-focus-panel">
@@ -103,19 +103,19 @@ const CampaignStudio: React.FC<Props> = ({
 
           <div className="campaign-metric-grid">
             <div className="campaign-metric-card">
-              <span>Zu pruefen</span>
+              <span>Zu prüfen</span>
               <strong>{reviewCount}</strong>
-              <small>Vorschlaege mit offener Pruefung</small>
+              <small>Vorschläge mit offener Prüfung</small>
             </div>
             <div className="campaign-metric-card">
               <span>Zur Freigabe</span>
               <strong>{approveCount}</strong>
-              <small>Bereit fuer die Entscheidung</small>
+              <small>Bereit für die Entscheidung</small>
             </div>
             <div className="campaign-metric-card">
-              <span>Zur Uebergabe</span>
+              <span>Zur Übergabe</span>
               <strong>{syncCount}</strong>
-              <small>Fuer Mediatools vorbereitet</small>
+              <small>Für Mediatools vorbereitet</small>
             </div>
             <div className="campaign-metric-card">
               <span>Aktiv oder startklar</span>
@@ -130,7 +130,7 @@ const CampaignStudio: React.FC<Props> = ({
             <div className="campaign-setup-head">
               <div>
                 <div className="section-kicker">Generation</div>
-                <h2 className="subsection-title">Neue Vorschlaege erstellen</h2>
+                <h2 className="subsection-title">Neue Vorschläge erstellen</h2>
               </div>
               <span className="step-chip">{UI_COPY.ai}</span>
             </div>
@@ -157,21 +157,21 @@ const CampaignStudio: React.FC<Props> = ({
 
             <div className="campaign-setup-footer">
               <div className="campaign-setup-note">
-                Die KI erstellt zuerst den Vorschlag. Freigabe und spaetere Uebergabe bleiben getrennt.
+                Die KI erstellt zuerst den Vorschlag. Freigabe und spätere Übergabe bleiben getrennt.
               </div>
               <button className="media-button" type="button" onClick={onGenerate} disabled={generationLoading}>
-                {generationLoading ? 'KI erstellt Vorschlaege...' : 'Vorschlaege erstellen'}
+                {generationLoading ? 'KI erstellt Vorschläge...' : 'Vorschläge erstellen'}
               </button>
             </div>
           </section>
 
           <section className="card campaign-guidance-card">
             <div className="campaign-guidance-row">
-              <span>Prueffokus</span>
+              <span>Prüffokus</span>
               <strong>{reviewCount + approveCount}</strong>
             </div>
             <div className="campaign-guidance-row">
-              <span>Uebergabefokus</span>
+              <span>Übergabefokus</span>
               <strong>{syncCount}</strong>
             </div>
             <div className="campaign-guidance-row">
@@ -183,7 +183,7 @@ const CampaignStudio: React.FC<Props> = ({
               <strong>{hiddenBacklog}</strong>
             </div>
             <div className="campaign-guidance-row">
-              <span>Entwuerfe</span>
+              <span>Entwürfe</span>
               <strong>{prepareCount}</strong>
             </div>
             <div className="campaign-guidance-row">
@@ -191,7 +191,7 @@ const CampaignStudio: React.FC<Props> = ({
               <strong>{learningStateLabel(campaignsView?.summary?.learning_state)}</strong>
             </div>
             <div className="campaign-guidance-copy">
-              Wenige starke Vorschlaege, klare Zustaende und ein direkter Weg zur Freigabe sorgen fuer Orientierung.
+              Wenige starke Vorschläge, klare Zustände und ein direkter Weg zur Freigabe sorgen für Orientierung.
             </div>
           </section>
         </aside>
@@ -199,17 +199,17 @@ const CampaignStudio: React.FC<Props> = ({
 
       {loading ? (
         <div className="card campaign-empty-board" style={{ color: 'var(--text-muted)' }}>
-          Lade Kampagnenvorschlaege...
+          Lade Kampagnenvorschläge...
         </div>
       ) : cards.length === 0 ? (
         <section className="card campaign-empty-board">
-          <div className="campaign-empty-eyebrow">Kampagnenuebersicht</div>
-          <h2 className="campaign-empty-title">Noch keine Kampagnenvorschlaege in der Uebersicht.</h2>
+          <div className="campaign-empty-eyebrow">Kampagnenübersicht</div>
+          <h2 className="campaign-empty-title">Noch keine Kampagnenvorschläge in der Übersicht.</h2>
           <p className="campaign-empty-copy">
-            Starte aus der Wochenentscheidung oder einer Region einen neuen Vorschlag. Danach landet er direkt in einer klaren Pruefstrecke statt in einer losen Liste.
+            Starte aus der Wochenentscheidung oder einer Region einen neuen Vorschlag. Danach landet er direkt in einer klaren Prüfstrecke statt in einer losen Liste.
           </p>
           <button className="media-button" type="button" onClick={onGenerate} disabled={generationLoading}>
-            {generationLoading ? 'KI erstellt Vorschlaege...' : 'Jetzt erste Vorschlaege erstellen'}
+            {generationLoading ? 'KI erstellt Vorschläge...' : 'Jetzt erste Vorschläge erstellen'}
           </button>
         </section>
       ) : (
@@ -304,15 +304,15 @@ const CampaignStudio: React.FC<Props> = ({
 
                         <div className="campaign-work-item-footer">
                           <span>{flightWindowLabel(card)} · {card.evidence_strength || 'Evidenz offen'}</span>
-                          <span>Details pruefen</span>
+                          <span>Details prüfen</span>
                         </div>
                       </button>
                     );
                   }) : (
                     <div className="campaign-empty-lane">
                       {lane.total > 0
-                        ? additionalSuggestionsText(lane.total, 'Vorschlaege in dieser Phase')
-                        : 'Keine Vorschlaege in dieser Phase.'}
+                        ? additionalSuggestionsText(lane.total, 'Vorschläge in dieser Phase')
+                        : 'Keine Vorschläge in dieser Phase.'}
                     </div>
                   )}
                 </div>

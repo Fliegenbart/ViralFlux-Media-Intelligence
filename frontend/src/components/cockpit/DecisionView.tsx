@@ -88,7 +88,7 @@ const DecisionView: React.FC<Props> = ({
     ? formatPercent(weeklyDecision.budget_shift as number)
     : 'Noch nicht freigegeben';
   const shiftNote = isGo
-    ? 'Eine uebergeordnete Budgetverschiebung ist freigegeben.'
+    ? 'Eine übergeordnete Budgetverschiebung ist freigegeben.'
     : 'Noch keine breite Umschichtung freigeben. Regionen weiter priorisieren.';
 
   const gateTone = readinessTone(isGo);
@@ -150,12 +150,12 @@ const DecisionView: React.FC<Props> = ({
               <p className="hero-context">{heroSentence}</p>
               <p className="hero-copy">
                 {isGo
-                  ? 'Die Daten sprechen fuer konkrete regionale Kampagnenvorschlaege, die jetzt zur Freigabe bereitstehen.'
-                  : decisionModeReason || 'Noch keine harte Aktivierung. Regionen weiter priorisieren und die staerksten Vorschlaege zuerst pruefen.'}
+                  ? 'Die Daten sprechen für konkrete regionale Kampagnenvorschläge, die jetzt zur Freigabe bereitstehen.'
+                  : decisionModeReason || 'Noch keine harte Aktivierung. Regionen weiter priorisieren und die stärksten Vorschläge zuerst prüfen.'}
               </p>
             </div>
             <div className="action-row">
-              <button className="media-button" type="button" onClick={onOpenCampaigns}>Kampagnen pruefen</button>
+              <button className="media-button" type="button" onClick={onOpenCampaigns}>Kampagnen prüfen</button>
               <button className="media-button secondary" type="button" onClick={onOpenRegions}>Regionen ansehen</button>
               <Link className="media-button secondary" to="/bericht" style={{ textDecoration: 'none' }}>Bericht exportieren</Link>
             </div>
@@ -183,7 +183,7 @@ const DecisionView: React.FC<Props> = ({
                   {formatCurrency(topCard?.campaign_preview?.budget?.weekly_budget_eur)}
                 </div>
                 <div className="summary-note" style={{ marginTop: 6 }}>
-                  {hiddenBacklog > 0 ? additionalSuggestionsText(hiddenBacklog) : 'Der Fokus liegt auf den naechsten pruefbaren Vorschlaegen.'}
+                  {hiddenBacklog > 0 ? additionalSuggestionsText(hiddenBacklog) : 'Der Fokus liegt auf den nächsten prüfbaren Vorschlägen.'}
                 </div>
               </div>
             </div>
@@ -245,7 +245,7 @@ const DecisionView: React.FC<Props> = ({
             <div className="section-heading" style={{ gap: 6 }}>
               <h2 className="subsection-title">Kampagnen, die jetzt zählen</h2>
               <p className="subsection-copy">
-                Direkter Sprung in die naechste sinnvolle Aktion statt in eine lange Liste.
+                Direkter Sprung in die nächste sinnvolle Aktion statt in eine lange Liste.
               </p>
             </div>
             {recommendations.length > 0 ? (recommendations.slice(0, 3)).map((card) => (
@@ -271,7 +271,7 @@ const DecisionView: React.FC<Props> = ({
               </button>
             )) : (
               <div className="soft-panel" style={{ padding: 14, marginTop: 14, fontSize: 14, color: 'var(--text-secondary)' }}>
-                Noch keine Kampagnenvorschlaege im Fokus. Oeffne die Kampagnenansicht, um weitere Vorschlaege zu sichten oder neue zu erzeugen.
+                Noch keine Kampagnenvorschläge im Fokus. Öffne die Kampagnenansicht, um weitere Vorschläge zu sichten oder neue zu erzeugen.
               </div>
             )}
           </div>
@@ -312,7 +312,7 @@ const DecisionView: React.FC<Props> = ({
           <div className="section-heading" style={{ gap: 6 }}>
             <h2 className="subsection-title">Was gegen eine Freigabe spricht</h2>
             <p className="subsection-copy">
-              Die Bewertung beruht auf Datenfrische, Marktvergleich, Kundendaten, Modellzustand und Freigabefaehigkeit.
+              Die Bewertung beruht auf Datenfrische, Marktvergleich, Kundendaten, Modellzustand und Freigabefähigkeit.
             </p>
           </div>
           <div style={{ display: 'grid', gap: 10, marginTop: 14 }}>

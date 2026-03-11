@@ -68,7 +68,7 @@ const RegionWorkbench: React.FC<Props> = ({
           <div className="section-heading" style={{ gap: 6, marginBottom: 12 }}>
             <h2 className="subsection-title">Deutschlandkarte</h2>
             <p className="subsection-copy">
-              Klick auf ein Bundesland fuer Signalscore, Begruendung und naechsten Schritt.
+              Klick auf ein Bundesland für Signalscore, Begründung und nächsten Schritt.
             </p>
           </div>
           <GermanyMap
@@ -128,7 +128,7 @@ const RegionWorkbench: React.FC<Props> = ({
                     Forecast-Richtung: <strong style={{ color: 'var(--text-primary)' }}>{region.forecast_direction || 'seitwärts'}</strong>
                   </div>
                   <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-                    Budgetempfehlung: <strong style={{ color: 'var(--text-primary)' }}>{suggestion?.budget_shift_pct ? formatPercent(suggestion.budget_shift_pct) : 'zuerst pruefen'}</strong>
+                    Budgetempfehlung: <strong style={{ color: 'var(--text-primary)' }}>{suggestion?.budget_shift_pct ? formatPercent(suggestion.budget_shift_pct) : 'zuerst prüfen'}</strong>
                   </div>
                   <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
                     Semantik: <strong style={{ color: 'var(--text-primary)' }}>
@@ -156,7 +156,7 @@ const RegionWorkbench: React.FC<Props> = ({
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
                   {region.recommendation_ref?.card_id ? (
                     <button className="media-button" type="button" onClick={() => onOpenRecommendation(region.recommendation_ref!.card_id)}>
-                      Kampagnenvorschlag oeffnen
+                      Kampagnenvorschlag öffnen
                     </button>
                   ) : (
                     <button
@@ -165,7 +165,7 @@ const RegionWorkbench: React.FC<Props> = ({
                       onClick={() => selectedRegion && onGenerateRegionCampaign(selectedRegion)}
                       disabled={!selectedRegion || regionActionLoading}
                     >
-                      {regionActionLoading ? 'Wird erstellt...' : 'Vorschlag fuer Region erstellen'}
+                      {regionActionLoading ? 'Wird erstellt…' : 'Vorschlag für Region erstellen'}
                     </button>
                   )}
                   <button className="media-button secondary" type="button" onClick={() => selectedRegion && onGenerateRegionCampaign(selectedRegion)} disabled={!selectedRegion || regionActionLoading}>

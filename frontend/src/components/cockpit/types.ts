@@ -80,9 +80,9 @@ export interface CampaignLane {
 }
 
 export const CAMPAIGN_LANES: CampaignLane[] = [
-  { id: 'prepare', label: 'Entwuerfe', description: 'Neue Vorschlaege und offene Vorarbeit' },
-  { id: 'review', label: 'Zu pruefen', description: 'Inhalt, Timing und Hinweise pruefen' },
-  { id: 'approve', label: 'Zur Freigabe', description: 'Entscheidungsreife Vorschlaege' },
-  { id: 'sync', label: 'Zur Uebergabe', description: 'Freigegeben und fuer Mediatools vorbereitet' },
+  { id: 'prepare', label: 'Entwürfe', description: 'Neue Vorschläge und offene Vorarbeit' },
+  { id: 'review', label: 'Zu prüfen', description: 'Inhalt, Timing und Hinweise prüfen' },
+  { id: 'approve', label: 'Zur Freigabe', description: 'Entscheidungsreife Vorschläge' },
+  { id: 'sync', label: 'Zur Übergabe', description: 'Freigegeben und für Mediatools vorbereitet' },
   { id: 'live', label: 'Aktiv', description: 'Bereits freigegeben oder ausgespielt' },
 ];

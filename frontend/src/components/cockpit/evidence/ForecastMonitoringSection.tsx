@@ -64,7 +64,7 @@ const ForecastMonitoringSection: React.FC<Props> = ({
             </div>
           </div>
           <p className="section-copy">
-            Dieser Block zeigt, wie gut das System epidemiologische Trigger gegen Marktbewegungen trifft. Er misst Planungsguete im Marktvergleich, nicht den finalen Kundennachweis.
+            Dieser Block zeigt, wie gut das System epidemiologische Trigger gegen Marktbewegungen trifft. Er misst Planungsgüte im Marktvergleich, nicht den finalen Kundennachweis.
           </p>
         </div>
 
@@ -90,7 +90,7 @@ const ForecastMonitoringSection: React.FC<Props> = ({
             </div>
           </div>
           <p className="section-copy">
-            Dieser Block haengt direkt am Forecast-Kern: Drift, Accuracy, Backtest-Frische, Intervallabdeckung und Event-Kalibrierung werden aus demselben Stack gelesen wie die Opportunity-Gates.
+            Dieser Block hängt direkt am Forecast-Kern: Drift, Accuracy, Backtest-Frische, Intervallabdeckung und Event-Kalibrierung werden aus demselben Stack gelesen wie die Opportunity-Gates.
           </p>
           <div className="review-chip-row">
             <span className="step-chip">Backtest: {monitoringFreshnessLabel(forecastMonitoring?.backtest_freshness_status)}</span>
@@ -107,10 +107,10 @@ const ForecastMonitoringSection: React.FC<Props> = ({
       <section style={{ display: 'grid', gap: 20 }}>
         <ValidationSection
           title="Markt-Validierung im Verlauf"
-          subtitle="Forecast gegen Ist, inklusive Baselines. So wird sichtbar, ob das Modell die Welle frueh erkennt und nicht nur nachzeichnet."
+          subtitle="Forecast gegen Ist, inklusive Baselines. So wird sichtbar, ob das Modell die Welle früh erkennt und nicht nur nachzeichnet."
           result={marketValidation}
           loading={marketValidationLoading}
-          emptyMessage="Noch keine detaillierten Daten fuer den Marktvergleich verfuegbar."
+          emptyMessage="Noch keine detaillierten Daten für den Marktvergleich verfügbar."
         />
         {truthStatus?.coverage_weeks ? (
           <ValidationSection
@@ -118,7 +118,7 @@ const ForecastMonitoringSection: React.FC<Props> = ({
             subtitle="Marktvergleich und Kundendaten bleiben getrennt: Dieser Bereich zeigt nur, wie gut das Modell an echte Kunden-Outcome-Daten anschliesst."
             result={customerValidation}
             loading={customerValidationLoading}
-            emptyMessage="Noch keine ausreichend langen Kundenreihen fuer eine belastbare Validierung der Kundendaten verfuegbar."
+            emptyMessage="Noch keine ausreichend langen Kundenreihen für eine belastbare Validierung der Kundendaten verfügbar."
           />
         ) : (
           <section className="card subsection-card" style={{ padding: 24 }}>
@@ -157,7 +157,7 @@ const ForecastMonitoringSection: React.FC<Props> = ({
           <span className="section-kicker">Forecast-Details</span>
           <h2 className="subsection-title">Monitoring des Produktionsmodells</h2>
           <p className="subsection-copy">
-            Hier sehen Analysten, ob der Forecast nicht nur laeuft, sondern auch mathematisch sauber ueber Accuracy, Vorlaufzeit, Intervalle und Kalibrierung im Zielkorridor bleibt.
+            Hier sehen Analysten, ob der Forecast nicht nur läuft, sondern auch mathematisch sauber über Accuracy, Vorlaufzeit, Intervalle und Kalibrierung im Zielkorridor bleibt.
           </p>
         </div>
 
@@ -230,7 +230,7 @@ const ForecastMonitoringSection: React.FC<Props> = ({
           </div>
         ) : (
           <div className="review-muted-copy" style={{ marginTop: 16 }}>
-            Aktuell gibt es keine offenen Monitoring-Warnungen fuer diesen Forecast-Stack.
+            Aktuell gibt es keine offenen Monitoring-Warnungen für diesen Forecast-Stack.
           </div>
         )}
       </section>

@@ -16,7 +16,7 @@ describe('shared copy helpers', () => {
   });
 
   it('summarizes hidden suggestions without backlog wording', () => {
-    expect(additionalSuggestionsText(9)).toBe('9 weitere Kampagnenvorschlaege verfuegbar.');
+    expect(additionalSuggestionsText(9)).toBe('9 weitere Kampagnenvorschläge verfügbar.');
     expect(additionalSuggestionsText(0)).toBe('');
   });
 

@@ -78,14 +78,14 @@ const ImportValidationSection: React.FC<Props> = ({
                   checked={replaceExisting}
                   onChange={(event) => setReplaceExisting(event.target.checked)}
                 />
-                <small>Bestehende Zeilen fuer dieselbe Woche, dasselbe Produkt und dieselbe Region ueberschreiben.</small>
+                <small>Bestehende Zeilen für dieselbe Woche, dasselbe Produkt und dieselbe Region überschreiben.</small>
               </div>
             </label>
           </div>
 
           <div className="campaign-setup-footer">
             <div className="campaign-setup-note">
-              {file ? `Bereit: ${file.name}` : 'Zuerst eine Weekly-CSV auswaehlen, dann validieren und erst danach importieren.'}
+              {file ? `Bereit: ${file.name}` : 'Zuerst eine Weekly-CSV auswählen, dann validieren und erst danach importieren.'}
             </div>
             <div className="review-action-row">
               <a className="media-button secondary" href={truthSnapshot?.template_url || '/api/v1/media/outcomes/template'}>
@@ -114,9 +114,9 @@ const ImportValidationSection: React.FC<Props> = ({
         <div className="card subsection-card" style={{ padding: 24 }}>
           <div className="section-heading">
             <span className="section-kicker">Import-Vorschau</span>
-            <h2 className="subsection-title">Pruefung und Ergebnis</h2>
+            <h2 className="subsection-title">Prüfung und Ergebnis</h2>
             <p className="subsection-copy">
-              Erst pruefen, dann importieren. Vorschau und importierter Upload zeigen dieselben Kennzahlen, Hinweise und Projektionen.
+              Erst prüfen, dann importieren. Vorschau und importierter Upload zeigen dieselben Kennzahlen, Hinweise und Projektionen.
             </p>
           </div>
 
@@ -146,7 +146,7 @@ const ImportValidationSection: React.FC<Props> = ({
                   <strong>{truthLayerLabel(truthPreview.coverage_after_import)}</strong>
                 </div>
                 <div className="evidence-row">
-                  <span>Aktualitaet</span>
+                  <span>Aktualität</span>
                   <strong>{truthFreshnessLabel(truthPreview.coverage_after_import?.truth_freshness_state)}</strong>
                 </div>
               </div>
@@ -181,7 +181,7 @@ const ImportValidationSection: React.FC<Props> = ({
                 <small>{batch.rows_imported}/{batch.rows_total} importiert</small>
               </button>
             )) : (
-              <div className="review-muted-copy">Noch keine Uploads fuer Kundendaten vorhanden.</div>
+              <div className="review-muted-copy">Noch keine Uploads für Kundendaten vorhanden.</div>
             )}
           </div>
         </div>
@@ -189,10 +189,10 @@ const ImportValidationSection: React.FC<Props> = ({
         <div className="card subsection-card" style={{ padding: 24 }}>
           <div className="section-heading">
             <span className="section-kicker">Upload-Detail</span>
-            <h2 className="subsection-title">Ausgewaehlter Import</h2>
+            <h2 className="subsection-title">Ausgewählter Import</h2>
           </div>
           {truthBatchDetailLoading ? (
-            <div className="review-muted-copy">Upload-Detail laedt...</div>
+            <div className="review-muted-copy">Upload-Detail lädt…</div>
           ) : selectedBatch ? (
             <div className="soft-panel review-panel-soft" style={{ display: 'grid', gap: 0 }}>
               <div className="evidence-row">
@@ -213,7 +213,7 @@ const ImportValidationSection: React.FC<Props> = ({
               </div>
             </div>
           ) : (
-            <div className="review-muted-copy">Waehle einen Upload aus der Historie oder validiere eine neue Datei.</div>
+            <div className="review-muted-copy">Wähle einen Upload aus der Historie oder validiere eine neue Datei.</div>
           )}
         </div>
       </section>
@@ -223,7 +223,7 @@ const ImportValidationSection: React.FC<Props> = ({
           <span className="section-kicker">Hinweis-Tabelle</span>
           <h2 className="subsection-title">Import-Probleme und Mapping-Hinweise</h2>
           <p className="subsection-copy">
-            Jeder ausgeschlossene Datensatz bleibt sichtbar. Es gibt keine stillen Ausfaelle.
+            Jeder ausgeschlossene Datensatz bleibt sichtbar. Es gibt keine stillen Ausfälle.
           </p>
         </div>
         <div className="truth-issue-table">
@@ -236,7 +236,7 @@ const ImportValidationSection: React.FC<Props> = ({
               <p>{issue.message}</p>
             </div>
           )) : (
-            <div className="review-muted-copy">Keine Hinweise sichtbar. Die aktuelle Vorschau oder der ausgewaehlte Upload ist sauber.</div>
+            <div className="review-muted-copy">Keine Hinweise sichtbar. Die aktuelle Vorschau oder der ausgewählte Upload ist sauber.</div>
           )}
         </div>
       </section>

@@ -14,7 +14,7 @@ export const WORKFLOW_TRANSITIONS: Record<string, string> = {
 };
 
 export const STATUS_ACTION_LABELS: Record<string, string> = {
-  READY: 'Zur Pruefung geben',
+  READY: 'Zur Prüfung geben',
   APPROVED: 'Freigeben',
   ACTIVATED: 'Als aktiv markieren',
 };
@@ -211,9 +211,9 @@ export function nextWorkflowStatus(status?: string | null): string | null {
 export function workflowLabel(status?: string | null): string {
   const normalized = String(status || '').toUpperCase();
   if (normalized === 'DRAFT' || normalized === 'PREPARE') return 'Entwurf';
-  if (normalized === 'READY' || normalized === 'REVIEW') return 'Zu pruefen';
+  if (normalized === 'READY' || normalized === 'REVIEW') return 'Zu prüfen';
   if (normalized === 'APPROVE') return 'Zur Freigabe';
-  if (normalized === 'APPROVED' || normalized === 'SYNC_READY') return 'Bereit zur Uebergabe';
+  if (normalized === 'APPROVED' || normalized === 'SYNC_READY') return 'Bereit zur Übergabe';
   if (normalized === 'ACTIVATED' || normalized === 'LIVE') return 'Aktiv';
   if (normalized === 'EXPIRED') return 'Abgelaufen';
   if (normalized === 'ARCHIVED' || normalized === 'DISMISSED') return 'Archiviert';
@@ -221,14 +221,14 @@ export function workflowLabel(status?: string | null): string {
 }
 
 export function readinessStateLabel(state?: string | null, canSyncNow = false): string {
-  if (canSyncNow) return 'Bereit zur Uebergabe';
+  if (canSyncNow) return 'Bereit zur Übergabe';
 
   const normalized = String(state || '').toLowerCase();
-  if (normalized === 'ready') return 'Bereit zur Uebergabe';
+  if (normalized === 'ready') return 'Bereit zur Übergabe';
   if (normalized === 'approval_required') return 'Freigabe nötig';
   if (normalized === 'needs_work') return 'Nachschärfen';
-  if (normalized === 'review') return 'In Pruefung';
-  return state ? String(state) : 'In Pruefung';
+  if (normalized === 'review') return 'In Prüfung';
+  return state ? String(state) : 'In Prüfung';
 }
 
 export function kpiLabel(value?: string | null): string {

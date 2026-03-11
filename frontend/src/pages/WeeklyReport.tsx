@@ -74,7 +74,7 @@ const WeeklyReport: React.FC = () => {
         {UI_COPY.weeklyReport}
       </h1>
       <p style={{ fontSize: 14, color: 'var(--text-secondary)', marginBottom: 32 }}>
-        ViralFlux Wochenbericht — KW {kw} / {now.getFullYear()}
+        ViralFlux Wochenbericht für KW {kw} / {now.getFullYear()}
       </p>
 
       {/* Action Cards */}
@@ -94,7 +94,7 @@ const WeeklyReport: React.FC = () => {
             {generating ? 'Wird erstellt...' : 'Neuen Bericht erstellen'}
           </div>
           <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-            Erstellt den Wochenbericht fuer die aktuelle Kalenderwoche
+            Erstellt den Wochenbericht für die aktuelle Kalenderwoche
           </div>
         </button>
 
@@ -113,7 +113,7 @@ const WeeklyReport: React.FC = () => {
             {downloading ? 'Download...' : 'Aktuellen Bericht herunterladen'}
           </div>
           <div style={{ fontSize: 12, opacity: 0.8 }}>
-            PDF-Wochenbericht fuer GELO
+            PDF-Wochenbericht für GELO
           </div>
         </button>
       </div>
@@ -144,8 +144,8 @@ const WeeklyReport: React.FC = () => {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {[
             { title: 'Zusammenfassung', desc: 'Signalscore, nationale Risikobewertung und Handlungsempfehlung' },
-            { title: 'Regionale Schwerpunkte', desc: 'Top-5 Bundeslaender mit hoechster Aktivitaet und Trend' },
-            { title: 'Signalqualitaet', desc: 'Aktuelle Backtest-Metriken, Trefferquote und Vorlaufzeit' },
+            { title: 'Regionale Schwerpunkte', desc: 'Top-5 Bundesländer mit höchster Aktivität und Trend' },
+            { title: 'Signalqualität', desc: 'Aktuelle Backtest-Metriken, Trefferquote und Vorlaufzeit' },
             { title: 'Budgetempfehlungen', desc: 'Konkrete Budget-Shifts pro Region und Kanalmix' },
             { title: 'Produktpriorisierung', desc: 'GELO-Produkte mit passender Indikation und Kampagnenvorschlag' },
           ].map((item) => (

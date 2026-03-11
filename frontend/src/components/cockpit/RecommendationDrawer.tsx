@@ -76,16 +76,16 @@ const RecommendationDrawer: React.FC<Props> = ({
   const audienceSegments = detail?.campaign_pack?.targeting?.audience_segments || detail?.target_audience || [];
   const guardrailNotes = detail?.guardrail_notes || detail?.campaign_pack?.guardrail_report?.applied_fixes || [];
   const workflowSteps = [
-    { key: 'PREPARE', label: 'Entwurf', copy: 'Signal-Kontext und Aufbau schaerfen' },
-    { key: 'REVIEW', label: 'Pruefung', copy: 'Inhalt, Timing und Hinweise pruefen' },
+    { key: 'PREPARE', label: 'Entwurf', copy: 'Signal-Kontext und Aufbau schärfen' },
+    { key: 'REVIEW', label: 'Prüfung', copy: 'Inhalt, Timing und Hinweise prüfen' },
     { key: 'APPROVE', label: 'Freigabe', copy: 'Vorschlag ist entscheidungsreif' },
-    { key: 'SYNC_READY', label: 'Uebergabe', copy: 'Fuer Mediatools oder operative Uebergabe bereit' },
+    { key: 'SYNC_READY', label: 'Übergabe', copy: 'Für Mediatools oder operative Übergabe bereit' },
     { key: 'LIVE', label: 'Aktiv', copy: 'Freigegeben oder bereits ausgespielt' },
   ];
   const normalizedStatus = String(detail?.lifecycle_state || detail?.status || '').toUpperCase();
   const currentWorkflowIndex = Math.max(workflowSteps.findIndex((step) => step.key === normalizedStatus), 0);
   const confidenceValue = signalConfidencePercent(detail?.signal_confidence_pct, detail?.confidence);
-  const heroSummary = detail?.decision_brief?.summary_sentence || detail?.reason || 'Signal- und regelbasierter Kampagnenvorschlag zur Pruefung und Freigabe.';
+  const heroSummary = detail?.decision_brief?.summary_sentence || detail?.reason || 'Signal- und regelbasierter Kampagnenvorschlag zur Prüfung und Freigabe.';
   const signalScoreLabel = metricContractLabel(detail?.field_contracts, 'signal_score', 'Signal-Score');
   const priorityScoreLabel = metricContractLabel(detail?.field_contracts, 'priority_score', 'Priority-Score');
   const signalConfidenceLabel = metricContractLabel(detail?.field_contracts, 'signal_confidence_pct', 'Signal-Konfidenz');
@@ -130,7 +130,7 @@ const RecommendationDrawer: React.FC<Props> = ({
         </div>
 
         {loading ? (
-          <div className="campaign-empty-board" style={{ color: 'var(--text-muted)' }}>Lade Kampagnenvorschlag...</div>
+          <div className="campaign-empty-board" style={{ color: 'var(--text-muted)' }}>Lade Kampagnenvorschlag…</div>
         ) : detail ? (
           <div className="review-sheet-stack">
             <section className="review-sheet-hero">
@@ -211,9 +211,9 @@ const RecommendationDrawer: React.FC<Props> = ({
                     <small>Geplanter Start</small>
                   </div>
                   <div className="campaign-metric-card">
-                    <span>Uebergabe</span>
+                    <span>Übergabe</span>
                     <strong>{readinessStateLabel(syncPreview?.readiness.state, syncPreview?.readiness.can_sync_now)}</strong>
-                    <small>{syncPreview?.connector_label || 'noch keine Uebergabevorschau'}</small>
+                    <small>{syncPreview?.connector_label || 'noch keine Übergabevorschau'}</small>
                   </div>
                 </div>
               </aside>
@@ -240,7 +240,7 @@ const RecommendationDrawer: React.FC<Props> = ({
 
             <section className="drawer-grid">
               <div className="card review-card">
-                <h3 className="subsection-title">Ueberblick</h3>
+                <h3 className="subsection-title">Überblick</h3>
                 <div className="review-stat-grid">
                   <div className="metric-box">
                     <span>Produkt</span>
@@ -269,7 +269,7 @@ const RecommendationDrawer: React.FC<Props> = ({
                   <div className="soft-panel review-panel-soft">
                     <div className="campaign-focus-label">Outcome-Learning</div>
                     <div className="review-body-copy" style={{ marginTop: 8 }}>
-                      {detail.outcome_learning_explanation || 'Outcome-Learning ist fuer diesen Vorschlag noch nicht ausreichend angeschlossen.'}
+                      {detail.outcome_learning_explanation || 'Outcome-Learning ist für diesen Vorschlag noch nicht ausreichend angeschlossen.'}
                     </div>
                     <div className="review-chip-row" style={{ marginTop: 10 }}>
                       <span className="step-chip">
@@ -312,13 +312,13 @@ const RecommendationDrawer: React.FC<Props> = ({
                   </div>
                 </div>
                 <div className="review-detail-group">
-                  <div className="campaign-focus-label">KI-Ansatze</div>
+                  <div className="campaign-focus-label">KI-Ansätze</div>
                   <div className="review-stack">
                     {creativeAngles.length > 0 ? creativeAngles.map((angle) => (
                       <div key={angle} className="soft-panel review-soft-line">
                         {angle}
                       </div>
-                    )) : <span className="review-muted-copy">Keine KI-Ansatze vorhanden.</span>}
+                    )) : <span className="review-muted-copy">Keine KI-Ansätze vorhanden.</span>}
                   </div>
                 </div>
                 {(detail.campaign_pack?.message_framework?.compliance_note || detail.campaign_pack?.ai_plan?.compliance_hinweis) && (
@@ -357,7 +357,7 @@ const RecommendationDrawer: React.FC<Props> = ({
               </div>
 
               <div className="card review-card">
-                <h3 className="subsection-title">Naechste Schritte und Leitplanken</h3>
+                <h3 className="subsection-title">Nächste Schritte und Leitplanken</h3>
                 <div className="review-stack" style={{ marginTop: 14 }}>
                   {nextSteps.length > 0 ? nextSteps.map((step, index) => (
                     <div key={index} className="soft-panel review-soft-line">
@@ -379,7 +379,7 @@ const RecommendationDrawer: React.FC<Props> = ({
                         <div key={note} className="review-body-copy">{note}</div>
                       ))
                     ) : (
-                      <div className="review-muted-copy">Keine zusaetzlichen Hinweise.</div>
+                      <div className="review-muted-copy">Keine zusätzlichen Hinweise.</div>
                     )}
                   </div>
                 </div>
@@ -402,9 +402,9 @@ const RecommendationDrawer: React.FC<Props> = ({
             <section className="card review-card">
               <div className="review-sync-header">
                 <div>
-                  <h3 className="subsection-title">Uebergabevorschau fuer Mediatools</h3>
+                  <h3 className="subsection-title">Übergabevorschau für Mediatools</h3>
                   <p className="subsection-copy" style={{ marginTop: 6 }}>
-                    Vorbereitete Uebergabe fuer Meta, Google oder DV360.
+                    Vorbereitete Übergabe für Meta, Google oder DV360.
                   </p>
                 </div>
                 <div className="review-sync-actions">
@@ -421,7 +421,7 @@ const RecommendationDrawer: React.FC<Props> = ({
                     onClick={() => onPrepareSync(detail.id, connectorKey)}
                     disabled={syncLoading}
                   >
-                    {syncLoading ? 'Bereite Uebergabe vor...' : 'Uebergabe vorbereiten'}
+                    {syncLoading ? 'Bereite Übergabe vor…' : 'Übergabe vorbereiten'}
                   </button>
                 </div>
               </div>
@@ -458,7 +458,7 @@ const RecommendationDrawer: React.FC<Props> = ({
                 </div>
               ) : (
                 <div className="review-muted-copy" style={{ marginTop: 14 }}>
-                  Noch keine Uebergabevorschau geladen.
+                  Noch keine Übergabevorschau geladen.
                 </div>
               )}
             </section>
@@ -477,13 +477,13 @@ function publishabilityHint(detail: RecommendationDetail): string {
     return 'Keine offenen Blocker. Der Vorschlag ist direkt nutzbar.';
   }
   if (lifecycle === 'SYNC_READY') {
-    return 'Keine Inhaltsblocker. Der Vorschlag kann jetzt an ein Mediatool uebergeben oder aktiviert werden.';
+    return 'Keine Inhaltsblocker. Der Vorschlag kann jetzt an ein Mediatool übergeben oder aktiviert werden.';
   }
   if (lifecycle === 'APPROVE') {
-    return 'Keine Inhaltsblocker. Der Vorschlag ist freigabefaehig und wartet auf die Entscheidung.';
+    return 'Keine Inhaltsblocker. Der Vorschlag ist freigabefähig und wartet auf die Entscheidung.';
   }
   if (lifecycle === 'REVIEW') {
-    return 'Keine Inhaltsblocker. Der Vorschlag wartet auf die Pruefung und den naechsten Schritt.';
+    return 'Keine Inhaltsblocker. Der Vorschlag wartet auf die Prüfung und den nächsten Schritt.';
   }
-  return 'Keine Inhaltsblocker. Der Vorschlag braucht noch den naechsten Schritt.';
+  return 'Keine Inhaltsblocker. Der Vorschlag braucht noch den nächsten Schritt.';
 }

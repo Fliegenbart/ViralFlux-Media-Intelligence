@@ -5,8 +5,8 @@ export const UI_COPY = {
   marketComparison: 'Marktvergleich',
   customerData: 'Kundendaten',
   customerDataFreshness: 'Stand Kundendaten',
-  additionalSuggestions: 'Weitere Vorschlaege',
-  handoff: 'Uebergabe',
+  additionalSuggestions: 'Weitere Vorschläge',
+  handoff: 'Übergabe',
   weeklyReport: 'Wochenbericht',
   defaultCampaignGoal: 'Sichtbarkeit aufbauen, bevor die Nachfrage steigt',
 } as const;
@@ -19,7 +19,7 @@ export function marketComparisonStateLabel(state?: string | null): string {
   return String(state || '').toLowerCase() === 'passed' ? 'im Zielkorridor' : 'weiter beobachten';
 }
 
-export function additionalSuggestionsText(count: number, noun = 'Kampagnenvorschlaege'): string {
+export function additionalSuggestionsText(count: number, noun = 'Kampagnenvorschläge'): string {
   if (count <= 0) return '';
-  return `${count} weitere ${noun} verfuegbar.`;
+  return `${count} weitere ${noun} verfügbar.`;
 }

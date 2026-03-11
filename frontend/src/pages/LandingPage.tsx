@@ -210,11 +210,13 @@ const hoverLift = {
 
 /* ═══ Responsive CSS ═════════════════════════════════════════════════ */
 const RESPONSIVE_CSS = `
-  .lp-hero-grid { display: grid; grid-template-columns: 1fr 380px; gap: 48px; align-items: start; }
+  .lp-hero-grid { display: grid; grid-template-columns: minmax(0, 1fr) 390px; gap: 56px; align-items: start; }
   .lp-evidence-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
   .lp-flow-grid { display: grid; grid-template-columns: repeat(4, 1fr); position: relative; }
   .lp-preview-grid { display: grid; grid-template-columns: 210px 1fr; gap: 40px; align-items: center; }
   .lp-nav-actions { display: flex; gap: 10px; align-items: center; }
+  .lp-reading-copy { max-width: 54ch; }
+  .lp-section-copy { max-width: 60ch; }
   .lp-flow-line { position: absolute; top: 32px; left: 12.5%; right: 12.5%; height: 2px;
     background: linear-gradient(90deg, ${C.indigo}30, ${C.indigo}60, ${C.indigo}30); z-index: 0; }
 
@@ -291,7 +293,7 @@ const LandingPage: React.FC = () => {
             .slice(0, 3);
           if (entries.length > 0) {
             setTopRegions(entries);
-            setRecText(`Budgets in ${entries.map(e => e.bl).join(', ')} erhoehen`);
+            setRecText(`Budgets in ${entries.map(e => e.bl).join(', ')} erhöhen`);
           }
         }
       })
@@ -390,12 +392,12 @@ const LandingPage: React.FC = () => {
           >
             Media-Budgets dorthin steuern,{' '}
             <span style={{ color: C.indigo }}>wo</span>{' '}
-            die Nachfrage als Naechstes steigt.
+            die Nachfrage als Nächstes steigt.
           </h1>
 
-          <p style={{ marginTop: 20, fontSize: 17, lineHeight: 1.65, color: C.textSec, maxWidth: 480 }}>
-            ViralFlux erkennt regionale Atemwegswellen frueh ueber Abwasser-, Versorgungs- und Kontextsignale
-            und zeigt dem Marketingteam, wo Budgets vorbereitet, erhoeht oder zurueckgenommen werden sollten.
+          <p className="lp-reading-copy" style={{ marginTop: 24, fontSize: 17, lineHeight: 1.72, color: C.textSec }}>
+            ViralFlux erkennt regionale Atemwegswellen früh über Abwasser-, Versorgungs- und Kontextsignale
+            und zeigt dem Marketingteam, wo Budgets vorbereitet, erhöht oder zurückgenommen werden sollten.
           </p>
 
           <div style={{ marginTop: 28, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
@@ -418,7 +420,7 @@ const LandingPage: React.FC = () => {
           {/* Thin rule + stats */}
           <div style={{ marginTop: 36, width: 56, height: 1, background: C.rule }} />
           <div style={{ marginTop: 14, display: 'flex', gap: 24, flexWrap: 'wrap' }}>
-            {['16 Bundeslaender', '4 Virustypen', '14-Tage-Prognose'].map(s => (
+            {['16 Bundesländer', '4 Virustypen', '14-Tage-Prognose'].map(s => (
               <span key={s} style={{ fontSize: 12, color: C.textMuted, fontWeight: 500 }}>{s}</span>
             ))}
           </div>
@@ -435,7 +437,7 @@ const LandingPage: React.FC = () => {
               fontSize: 11, fontWeight: 600, color: C.textMuted,
               textTransform: 'uppercase', letterSpacing: '0.06em',
             }}>
-              Live-Uebersicht
+              Live-Übersicht
             </span>
             <span style={{
               fontSize: 10, fontWeight: 700,
@@ -447,7 +449,7 @@ const LandingPage: React.FC = () => {
             </span>
           </div>
           <div style={{ fontSize: 12, color: C.textMuted, marginBottom: 16 }}>
-            {UI_COPY.signalScore} fuer Deutschland
+            {UI_COPY.signalScore} für Deutschland
           </div>
 
           <ScoreGauge score={peixScore} label={UI_COPY.signalScore} />
@@ -467,7 +469,7 @@ const LandingPage: React.FC = () => {
             background: C.indigoSoft, fontSize: 12, color: C.textSec, lineHeight: 1.55,
           }}>
             <strong style={{ color: C.indigo, fontWeight: 600 }}>Empfehlung:</strong>{' '}
-            {recText || 'Daten werden geladen...'}
+            {recText || 'Daten werden geladen…'}
           </div>
         </div>
       </div>
@@ -488,18 +490,18 @@ const LandingPage: React.FC = () => {
             {[
               {
                 icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={C.indigo} strokeWidth="2" strokeLinecap="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2" /></svg>,
-                title: 'Fruehe Signale',
-                text: 'Abwasser-Monitoring, ARE-Inzidenz, Versorgungsdaten und Wetterhinweise werden zu einem klaren Lagebild gebuendelt.',
+                title: 'Frühe Signale',
+                text: 'Abwasser-Monitoring, ARE-Inzidenz, Versorgungsdaten und Wetterhinweise werden zu einem klaren Lagebild gebündelt.',
               },
               {
                 icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={C.indigo} strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="10" r="3" /><path d="M12 2a8 8 0 0 0-8 8c0 5.4 7 12 8 12s8-6.6 8-12a8 8 0 0 0-8-8Z" /></svg>,
                 title: 'Regionale Priorisierung',
-                text: 'Jede Empfehlung ist bundeslandgenau. Budget wird dort bewegt, wo Nachfrage und Handlungsdruck tatsaechlich steigen.',
+                text: 'Jede Empfehlung ist bundeslandgenau. Budget wird dort bewegt, wo Nachfrage und Handlungsdruck tatsächlich steigen.',
               },
               {
                 icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={C.indigo} strokeWidth="2" strokeLinecap="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /><path d="m9 12 2 2 4-4" /></svg>,
                 title: 'Klare Freigabe',
-                text: 'Nichts geht automatisch live. Jeder Vorschlag bleibt nachvollziehbar, pruefbar und steuerbar.',
+                text: 'Nichts geht automatisch live. Jeder Vorschlag bleibt nachvollziehbar, prüfbar und steuerbar.',
               },
             ].map((card) => (
               <div
@@ -519,7 +521,7 @@ const LandingPage: React.FC = () => {
                 <h3 style={{ fontFamily: FONT_SANS, fontSize: 16, fontWeight: 700, margin: '0 0 8px' }}>
                   {card.title}
                 </h3>
-                <p style={{ fontSize: 14, lineHeight: 1.6, color: C.textSec, margin: 0 }}>
+                <p className="lp-section-copy" style={{ fontSize: 14, lineHeight: 1.68, color: C.textSec, margin: 0 }}>
                   {card.text}
                 </p>
               </div>
@@ -537,10 +539,10 @@ const LandingPage: React.FC = () => {
           <div className="lp-flow-grid">
             <div className="lp-flow-line" />
             {[
-              { num: '01', label: 'Signal', desc: 'Fruehe Hinweise aus Abwasser, Wetter, Nachfrage und Versorgung erfassen.' },
-              { num: '02', label: 'Einschaetzung', desc: `14-Tage-Prognose pro Bundesland zu einem klaren ${UI_COPY.signalScore} verdichten.` },
-              { num: '03', label: 'Empfehlung', desc: 'Passendes Produkt und regionale Aktivierung fuer das Marketingteam vorschlagen.' },
-              { num: '04', label: 'Freigabe', desc: 'Vorschlag pruefen, Budget setzen und Kampagne gezielt starten.' },
+              { num: '01', label: 'Signal', desc: 'Frühe Hinweise aus Abwasser, Wetter, Nachfrage und Versorgung erfassen.' },
+              { num: '02', label: 'Einschätzung', desc: `14-Tage-Prognose pro Bundesland zu einem klaren ${UI_COPY.signalScore} verdichten.` },
+              { num: '03', label: 'Empfehlung', desc: 'Passendes Produkt und regionale Aktivierung für das Marketingteam vorschlagen.' },
+              { num: '04', label: 'Freigabe', desc: 'Vorschlag prüfen, Budget setzen und Kampagne gezielt starten.' },
             ].map((step, i) => (
               <div key={step.num} style={{ position: 'relative', zIndex: 1, textAlign: 'center', padding: '0 12px' }}>
                 <div style={{
@@ -555,7 +557,7 @@ const LandingPage: React.FC = () => {
                   {step.num}
                 </div>
                 <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>{step.label}</div>
-                <p style={{ fontSize: 13, lineHeight: 1.55, color: C.textSec, margin: 0 }}>{step.desc}</p>
+                <p className="lp-section-copy" style={{ fontSize: 13, lineHeight: 1.62, color: C.textSec, margin: 0 }}>{step.desc}</p>
               </div>
             ))}
           </div>
@@ -585,10 +587,10 @@ const LandingPage: React.FC = () => {
               <h3 style={{ fontFamily: FONT_SERIF, fontSize: 24, margin: '0 0 12px' }}>
                 So sieht die Wochenlage aus
               </h3>
-              <p style={{ fontSize: 14, lineHeight: 1.65, color: C.textSec, margin: '0 0 20px', maxWidth: 440 }}>
+              <p className="lp-section-copy" style={{ fontSize: 14, lineHeight: 1.7, color: C.textSec, margin: '0 0 20px' }}>
                 Die Deutschlandkarte zeigt regionale Hotspots in Echtzeit.
-                Beim Bewegen ueber ein Bundesland erscheint direkt ein konkreter
-                Kampagnenvorschlag mit Begruendung.
+                Beim Bewegen über ein Bundesland erscheint direkt ein konkreter
+                Kampagnenvorschlag mit Begründung.
               </p>
 
               {/* Top regions from API */}
@@ -626,10 +628,10 @@ const LandingPage: React.FC = () => {
           <h2 style={{
             fontFamily: FONT_SERIF, fontSize: 36, margin: '0 0 16px', letterSpacing: '-0.01em',
           }}>
-            Bis zu 14 Tage frueher Klarheit fuer GELO.
+            Bis zu 14 Tage früher Klarheit für GELO.
           </h2>
-          <p style={{ fontSize: 16, color: C.textSec, marginBottom: 28, maxWidth: 480, marginLeft: 'auto', marginRight: 'auto' }}>
-            Starten Sie direkt im Cockpit oder holen Sie sich eine Einordnung fuer die aktuelle Woche.
+          <p className="lp-reading-copy" style={{ fontSize: 16, lineHeight: 1.7, color: C.textSec, marginBottom: 28, marginLeft: 'auto', marginRight: 'auto' }}>
+            Starten Sie direkt im Cockpit oder holen Sie sich eine Einordnung für die aktuelle Woche.
           </p>
           <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
             <button
@@ -672,7 +674,7 @@ const LandingPage: React.FC = () => {
             </button>
           </div>
           <span className="shell-footer-note">
-            ViralFlux Media Intelligence fuer GELO
+            ViralFlux Media Intelligence für GELO
           </span>
         </div>
       </footer>

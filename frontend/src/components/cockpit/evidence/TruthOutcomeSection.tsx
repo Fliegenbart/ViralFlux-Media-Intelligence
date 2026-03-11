@@ -30,7 +30,7 @@ const TruthOutcomeSection: React.FC<Props> = ({
           <span className="section-kicker">{UI_COPY.customerData}</span>
           <h2 className="subsection-title">{truthLayerLabel(truthStatus)}</h2>
           <p className="subsection-copy">
-            Dieser Bereich basiert auf validiertem CSV-Import mit Media Spend und echten Outcome-Metriken. Er bewertet Datenbreite, Aktualitaet und Anschlussfaehigkeit an echte Kundenergebnisse.
+            Dieser Bereich basiert auf validiertem CSV-Import mit Media Spend und echten Outcome-Metriken. Er bewertet Datenbreite, Aktualität und Anschlussfähigkeit an echte Kundenergebnisse.
           </p>
         </div>
         <div className="metric-strip">
@@ -39,7 +39,7 @@ const TruthOutcomeSection: React.FC<Props> = ({
             <strong>{truthStatus?.coverage_weeks ?? 0}</strong>
           </div>
           <div className="metric-box">
-            <span>Aktualitaet</span>
+            <span>Aktualität</span>
             <strong>{truthFreshnessLabel(truthStatus?.truth_freshness_state)}</strong>
           </div>
           <div className="metric-box">
@@ -70,7 +70,7 @@ const TruthOutcomeSection: React.FC<Props> = ({
           <div className="soft-panel review-panel-soft" style={{ marginTop: 14 }}>
             <div className="campaign-focus-label">Explorativer Legacy-Run</div>
             <div className="review-body-copy" style={{ marginTop: 8 }}>
-              {legacyCustomer.metrics?.data_points || 0} Punkte aus einem aelteren Kunden-Backtest. Dieser Run bleibt als historischer Hinweis sichtbar, zaehlt aber nicht als aktiver Bereich fuer Kundendaten.
+              {legacyCustomer.metrics?.data_points || 0} Punkte aus einem älteren Kunden-Backtest. Dieser Run bleibt als historischer Hinweis sichtbar, zählt aber nicht als aktiver Bereich für Kundendaten.
             </div>
           </div>
         )}

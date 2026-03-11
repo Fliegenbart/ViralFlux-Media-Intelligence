@@ -101,7 +101,7 @@ const SourceFreshnessSection: React.FC<Props> = ({
       </section>
 
       <section className="card subsection-card" style={{ padding: 24 }}>
-        <h2 className="subsection-title">Letzte Laeufe</h2>
+        <h2 className="subsection-title">Letzte Läufe</h2>
         <div style={{ display: 'grid', gap: 10, marginTop: 14 }}>
           {recentRuns.length > 0 ? recentRuns.slice(0, 6).map((run, index) => (
             <div key={`${String(run.mode)}-${index}`} className="evidence-row">

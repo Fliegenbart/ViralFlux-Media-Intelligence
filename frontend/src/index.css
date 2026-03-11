@@ -301,13 +301,13 @@ code {
 .context-filter-rail {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  gap: 10px;
+  gap: 14px;
   border: 1px solid rgba(67, 56, 202, 0.2);
   background: linear-gradient(135deg, rgba(67,56,202,0.04), rgba(248,250,252,0.9));
   border-radius: 12px;
-  padding: 10px 12px;
+  padding: 14px 16px;
 }
 
 /* ─── Step Chips ────────────────────────────────────────────────── */
@@ -1058,7 +1058,7 @@ body {
 
 .shell-main {
   flex: 1;
-  padding: 28px 22px 132px;
+  padding: 28px 22px 52px;
   position: relative;
   z-index: 1;
 }
@@ -1069,11 +1069,9 @@ body {
 }
 
 .shell-footer {
-  position: fixed;
-  left: 22px;
-  right: 22px;
-  bottom: 18px;
-  z-index: 55;
+  position: relative;
+  z-index: 10;
+  padding: 0 22px 18px;
 }
 
 .shell-footer-inner {
@@ -1143,7 +1141,7 @@ body {
   margin: 0;
   max-width: 60ch;
   font-size: 15px;
-  line-height: 1.7;
+  line-height: 1.75;
   color: var(--text-secondary);
 }
 
@@ -1153,13 +1151,13 @@ body {
 
 .hero-grid {
   display: grid;
-  gap: 28px;
+  gap: 36px;
   grid-template-columns: minmax(0, 1.8fr) minmax(320px, 0.95fr);
 }
 
 .hero-main {
   display: grid;
-  gap: 18px;
+  gap: 22px;
   align-content: start;
 }
 
@@ -1172,9 +1170,9 @@ body {
 
 .hero-title {
   margin: 0;
-  max-width: 13ch;
+  max-width: 14ch;
   font-size: clamp(3rem, 5vw, 4.9rem);
-  line-height: 0.92;
+  line-height: 0.96;
   letter-spacing: -0.065em;
   font-weight: 700;
   color: var(--text-primary);
@@ -1186,7 +1184,7 @@ body {
 .subsection-copy {
   margin: 0;
   font-size: 15px;
-  line-height: 1.68;
+  line-height: 1.74;
   color: var(--text-secondary);
 }
 
@@ -1195,11 +1193,20 @@ body {
   font-size: 16px;
 }
 
+.subsection-copy,
+.review-muted-copy,
+.review-body-copy,
+.campaign-focus-copy,
+.campaign-guidance-copy {
+  max-width: 62ch;
+  text-wrap: pretty;
+}
+
 .action-row {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
-  padding-top: 2px;
+  padding-top: 6px;
 }
 
 .aside-summary {
@@ -1710,7 +1717,7 @@ body {
 
 .campaign-command-grid {
   display: grid;
-  gap: 24px;
+  gap: 28px;
   grid-template-columns: minmax(0, 1.3fr) minmax(320px, 0.84fr);
   align-items: start;
 }
@@ -1720,7 +1727,7 @@ body {
 .campaign-guidance-card,
 .review-card,
 .campaign-lane-shell {
-  padding: 24px;
+  padding: 28px;
 }
 
 .campaign-command-top,
@@ -1743,8 +1750,8 @@ body {
 }
 
 .campaign-focus-panel {
-  margin-top: 22px;
-  padding: 22px 24px;
+  margin-top: 26px;
+  padding: 24px 26px;
   border-radius: 28px;
   background: linear-gradient(140deg, rgba(255, 255, 255, 0.88), rgba(246, 249, 253, 0.66));
   border: 1px solid rgba(255, 255, 255, 0.86);
@@ -1786,20 +1793,20 @@ body {
 }
 
 .campaign-focus-copy {
-  margin: 12px 0 0;
+  margin: 14px 0 0;
 }
 
 .campaign-metric-grid {
   display: grid;
-  gap: 14px;
+  gap: 16px;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  margin-top: 18px;
+  margin-top: 22px;
 }
 
 .campaign-metric-card {
   display: grid;
   gap: 8px;
-  padding: 18px 18px 16px;
+  padding: 20px 20px 18px;
   border-radius: 24px;
   background: rgba(255, 255, 255, 0.58);
   border: 1px solid rgba(255, 255, 255, 0.74);
@@ -1960,13 +1967,13 @@ body {
 
 .campaign-lane-stack {
   display: grid;
-  gap: 12px;
+  gap: 14px;
 }
 
 .campaign-work-item {
   display: grid;
-  gap: 14px;
-  padding: 18px;
+  gap: 16px;
+  padding: 20px;
 }
 
 .campaign-work-item-top {
@@ -2021,7 +2028,7 @@ body {
 .campaign-work-item-copy {
   margin: 0;
   font-size: 13px;
-  line-height: 1.6;
+  line-height: 1.68;
   color: var(--text-secondary);
 }
 
@@ -2054,7 +2061,7 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding-top: 2px;
+  padding-top: 6px;
   font-size: 12px;
   color: var(--text-secondary);
 }
@@ -2286,13 +2293,11 @@ body {
   }
 
   .shell-main {
-    padding: 18px 12px 120px;
+    padding: 18px 12px 42px;
   }
 
   .shell-footer {
-    left: 12px;
-    right: 12px;
-    bottom: 12px;
+    padding: 0 12px 12px;
   }
 
   .shell-footer-inner {

@@ -84,7 +84,7 @@ const EvidencePanel: React.FC<Props> = ({
       <section className="context-filter-rail">
         <div className="section-heading">
           <span className="section-kicker">Evidenz</span>
-          <h1 className="section-title">Marktvergleich, Kundendaten, Signalquellen und Modellzustand</h1>
+          <h1 className="section-title">Warum wir dieser Woche vertrauen</h1>
         </div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
           <span className="step-chip">{UI_COPY.marketComparison}: validiert</span>

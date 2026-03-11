@@ -1,9 +1,12 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import LandingPage from './pages/LandingPage';
-import MediaCockpit from './pages/MediaCockpit';
 import WeeklyReport from './pages/WeeklyReport';
-import AppLayout from './components/AppLayout';
+import MediaShell from './pages/media/MediaShell';
+import DecisionPage from './pages/media/DecisionPage';
+import RegionsPage from './pages/media/RegionsPage';
+import CampaignsPage from './pages/media/CampaignsPage';
+import EvidencePage from './pages/media/EvidencePage';
 import './index.css';
 
 /* ── Theme ──────────────────────────────────────────────────────── */
@@ -124,12 +127,14 @@ const App: React.FC = () => {
           <Routes>
             <Route path="/" element={<Navigate to="/entscheidung" replace />} />
             <Route path="/welcome" element={<LandingPage />} />
-            <Route path="/entscheidung" element={<AppLayout><MediaCockpit view="decision" /></AppLayout>} />
-            <Route path="/regionen" element={<AppLayout><MediaCockpit view="regions" /></AppLayout>} />
-            <Route path="/kampagnen" element={<AppLayout><MediaCockpit view="campaigns" /></AppLayout>} />
-            <Route path="/kampagnen/:id" element={<AppLayout><MediaCockpit view="campaigns" /></AppLayout>} />
-            <Route path="/evidenz" element={<AppLayout><MediaCockpit view="evidence" /></AppLayout>} />
-            <Route path="/bericht" element={<AppLayout><WeeklyReport /></AppLayout>} />
+            <Route element={<MediaShell />}>
+              <Route path="/entscheidung" element={<DecisionPage />} />
+              <Route path="/regionen" element={<RegionsPage />} />
+              <Route path="/kampagnen" element={<CampaignsPage />} />
+              <Route path="/kampagnen/:id" element={<CampaignsPage />} />
+              <Route path="/evidenz" element={<EvidencePage />} />
+              <Route path="/bericht" element={<WeeklyReport />} />
+            </Route>
             {/* Legacy redirects */}
             <Route path="/lagebild" element={<Navigate to="/entscheidung" replace />} />
             <Route path="/empfehlungen" element={<Navigate to="/kampagnen" replace />} />

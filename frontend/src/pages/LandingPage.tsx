@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useTheme } from '../App';
 import { UI_COPY } from '../lib/copy';
 
@@ -32,6 +32,13 @@ const MAILTO = (() => {
   ].join('\n');
   return `mailto:sales@peix.de?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 })();
+
+const NAV_ITEMS = [
+  { label: 'Entscheidung', path: '/entscheidung' },
+  { label: 'Regionen', path: '/regionen' },
+  { label: 'Kampagnen', path: '/kampagnen' },
+  { label: 'Evidenz', path: '/evidenz' },
+] as const;
 
 /* ═══ Score Gauge ════════════════════════════════════════════════════ */
 const ScoreGauge: React.FC<{ score: number; label: string }> = ({ score, label }) => {
@@ -292,7 +299,7 @@ const LandingPage: React.FC = () => {
   }, []);
 
   return (
-    <div style={{ minHeight: '100vh', background: C.bg, fontFamily: FONT_SANS, color: C.text, overflowX: 'hidden' }}>
+    <div className="app-shell" style={{ background: C.bg, fontFamily: FONT_SANS, color: C.text, overflowX: 'hidden' }}>
       <style>{RESPONSIVE_CSS}</style>
 
       {/* Grid-paper background */}
@@ -303,69 +310,62 @@ const LandingPage: React.FC = () => {
       }} />
 
       {/* ─── Navigation ──────────────────────────────────────────── */}
-      <nav style={{
-        position: 'relative', zIndex: 10, maxWidth: 1120, margin: '0 auto',
-        padding: '20px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div style={{
-            width: 36, height: 36, borderRadius: 8, background: C.indigo,
-            display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-          }}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round">
-              <path d="M3 12h4l2-4 3 8 2-4h7" />
-            </svg>
-          </div>
-          <div>
-            <div style={{ fontSize: 14, fontWeight: 700, letterSpacing: '-0.01em' }}>
-              PEIX <span style={{ color: C.textMuted, fontWeight: 400 }}>|</span> ViralFlux
-            </div>
-            <div style={{ fontSize: 11, color: C.textMuted }}>Media Intelligence</div>
+      <header className="shell-header media-header" style={{ zIndex: 10 }}>
+        <div className="shell-header-inner">
+          <Link to="/welcome" className="shell-brand">
+            <span className="shell-logo-mark">VF</span>
+            <span className="shell-logo-copy">ViralFlux</span>
+          </Link>
+
+          <nav className="shell-nav">
+            {NAV_ITEMS.map(({ label, path }) => (
+              <button
+                key={path}
+                onClick={() => navigate(path)}
+                className="shell-nav-item"
+              >
+                {label}
+              </button>
+            ))}
+          </nav>
+
+          <div className="shell-header-spacer" />
+
+          <div className="lp-nav-actions">
+            <a
+              href={MAILTO}
+              className="media-button secondary"
+              style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}
+            >
+              Kontakt
+            </a>
+            <button
+              onClick={() => navigate('/entscheidung')}
+              className="media-button"
+              type="button"
+            >
+              Zum Cockpit
+            </button>
+            <button
+              onClick={toggleTheme}
+              className="theme-toggle"
+              title={theme === 'dark' ? 'Heller Modus' : 'Dunkler Modus'}
+              type="button"
+            >
+              {theme === 'dark' ? '\u2600\uFE0F' : '\uD83C\uDF19'}
+            </button>
           </div>
         </div>
-        <div className="lp-nav-actions">
-          <button
-            onClick={toggleTheme}
-            style={{
-              fontSize: 13, fontWeight: 500, padding: '7px 14px', borderRadius: 999, cursor: 'pointer',
-              background: theme === 'dark' ? 'rgba(99,102,241,0.15)' : 'rgba(15,23,42,0.06)',
-              color: theme === 'dark' ? '#a5b4fc' : C.textSec,
-              border: `1px solid ${theme === 'dark' ? 'rgba(99,102,241,0.3)' : C.border}`,
-              transition: 'all 0.2s',
-            }}
-            title={theme === 'dark' ? 'Heller Modus' : 'Dunkler Modus'}
-          >
-            {theme === 'dark' ? '\u2600\uFE0F' : '\u263E'}
-          </button>
-          <a
-            href={MAILTO}
-            style={{
-              fontSize: 13, fontWeight: 600, color: C.textSec, textDecoration: 'none',
-              padding: '8px 16px', borderRadius: 8, border: `1px solid ${C.border}`,
-              background: 'white', transition: 'border-color 0.2s', display: 'inline-block',
-            }}
-          >
-            Kontakt
-          </a>
-          <button
-            onClick={() => navigate('/dashboard')}
-            style={{
-              fontSize: 13, fontWeight: 600, color: 'white', padding: '8px 16px',
-              borderRadius: 8, border: 'none', background: C.indigo, cursor: 'pointer',
-              transition: 'all 0.2s', boxShadow: `0 2px 8px ${C.indigo}25`,
-            }}
-          >
-            Zum Cockpit
-          </button>
-        </div>
-      </nav>
+      </header>
 
       {/* ─── Hero ────────────────────────────────────────────────── */}
+      <main className="shell-main" style={{ zIndex: 5 }}>
+      <div className="shell-main-inner">
       <div
         className="lp-hero-grid"
         style={{
-          position: 'relative', zIndex: 5, maxWidth: 1120, margin: '0 auto',
-          padding: '40px 24px 0',
+          position: 'relative', maxWidth: 1120, margin: '0 auto',
+          padding: '12px 24px 0',
           opacity: heroVis ? 1 : 0, transform: heroVis ? 'translateY(0)' : 'translateY(18px)',
           transition: 'opacity 0.7s ease, transform 0.7s ease',
         }}
@@ -400,24 +400,18 @@ const LandingPage: React.FC = () => {
 
           <div style={{ marginTop: 28, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
             <button
-              onClick={() => navigate('/dashboard?tab=map')}
-              style={{
-                fontSize: 14, fontWeight: 600, color: 'white', padding: '12px 24px',
-                borderRadius: 8, border: 'none', background: C.indigo, cursor: 'pointer',
-                transition: 'all 0.2s', boxShadow: `0 2px 8px ${C.indigo}30`,
-              }}
+              onClick={() => navigate('/entscheidung')}
+              className="media-button"
+              type="button"
             >
               Zum Cockpit
             </button>
             <button
-              onClick={() => navigate('/dashboard?tab=product-intel')}
-              style={{
-                fontSize: 14, fontWeight: 600, color: C.amber, padding: '12px 24px',
-                borderRadius: 8, border: `2px solid ${C.amber}`, background: 'transparent',
-                cursor: 'pointer', transition: 'all 0.2s',
-              }}
+              onClick={() => navigate('/kampagnen')}
+              className="media-button secondary"
+              type="button"
             >
-              Produktprofil anlegen
+              Kampagnen ansehen
             </button>
           </div>
 
@@ -432,7 +426,7 @@ const LandingPage: React.FC = () => {
 
         {/* Right: Live Score Widget */}
         <div style={{
-          background: 'white', border: `1px solid ${C.border}`, borderRadius: 16,
+          background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 16,
           padding: '24px 20px',
           boxShadow: '0 4px 24px rgba(0,0,0,0.04), 0 1px 3px rgba(0,0,0,0.03)',
         }}>
@@ -479,7 +473,7 @@ const LandingPage: React.FC = () => {
       </div>
 
       {/* ─── Main Content ────────────────────────────────────────── */}
-      <main style={{ position: 'relative', zIndex: 5, maxWidth: 1120, margin: '0 auto', padding: '0 24px 80px' }}>
+      <div style={{ position: 'relative', maxWidth: 1120, margin: '0 auto', padding: '0 24px 80px' }}>
 
         {/* ── Divider ──────────────────────────────────────────── */}
         <div style={{ margin: '64px 0', borderTop: `1px solid ${C.border}` }} />
@@ -511,7 +505,7 @@ const LandingPage: React.FC = () => {
               <div
                 key={card.title}
                 style={{
-                  background: 'white', border: `1px solid ${C.border}`, borderRadius: 12,
+                  background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 12,
                   padding: '28px 24px', transition: 'all 0.25s ease', cursor: 'default',
                 }}
                 {...hoverLift}
@@ -577,7 +571,7 @@ const LandingPage: React.FC = () => {
           <div
             className="lp-preview-grid"
             style={{
-              background: 'white', border: `1px solid ${C.border}`, borderRadius: 16, padding: 32,
+              background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 16, padding: 32,
             }}
           >
             <MiniGermanyMap />
@@ -639,37 +633,49 @@ const LandingPage: React.FC = () => {
           </p>
           <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
             <button
-              onClick={() => navigate('/dashboard')}
-              style={{
-                fontSize: 15, fontWeight: 600, color: 'white', padding: '14px 32px',
-                borderRadius: 10, border: 'none', background: C.indigo, cursor: 'pointer',
-                transition: 'all 0.2s', boxShadow: `0 4px 16px ${C.indigo}30`,
-              }}
+              onClick={() => navigate('/entscheidung')}
+              className="media-button"
+              type="button"
             >
               Zum Cockpit
             </button>
             <a
               href={MAILTO}
-              style={{
-                fontSize: 15, fontWeight: 600, color: C.amber, padding: '14px 32px',
-                borderRadius: 10, border: `2px solid ${C.amber}`, background: 'transparent',
-                textDecoration: 'none', display: 'inline-flex', alignItems: 'center',
-                transition: 'all 0.2s',
-              }}
+              className="media-button secondary"
+              style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}
             >
               Beratung anfragen
             </a>
           </div>
         </RevealSection>
 
-        {/* ─── Footer ──────────────────────────────────────────── */}
-        <footer style={{
-          marginTop: 80, paddingTop: 20, paddingBottom: 12,
-          borderTop: `1px solid ${C.border}`, textAlign: 'center', fontSize: 12, color: C.textMuted,
-        }}>
-          ViralFlux Media Intelligence &copy; 2026 &middot; fuer GELO
-        </footer>
+      </div>
+      </div>
       </main>
+
+      <footer className="shell-footer">
+        <div className="shell-footer-inner">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+            <a
+              href={MAILTO}
+              className="media-button secondary"
+              style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}
+            >
+              Beratung anfragen
+            </a>
+            <button
+              onClick={() => navigate('/entscheidung')}
+              className="media-button"
+              type="button"
+            >
+              Wochenlage öffnen
+            </button>
+          </div>
+          <span className="shell-footer-note">
+            ViralFlux Media Intelligence fuer GELO
+          </span>
+        </div>
+      </footer>
     </div>
   );
 };

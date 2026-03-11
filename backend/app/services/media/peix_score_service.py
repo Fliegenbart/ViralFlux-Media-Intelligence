@@ -638,18 +638,18 @@ class PeixEpiScoreService:
         two_weeks_ago = now - timedelta(days=14)
         four_weeks_ago = now - timedelta(days=28)
 
-        recent = self.db.query(
+        recent = float(self.db.query(
             func.avg(GoogleTrendsData.interest_score)
         ).filter(
             GoogleTrendsData.datum >= two_weeks_ago,
-        ).scalar() or 0
+        ).scalar() or 0)
 
-        previous = self.db.query(
+        previous = float(self.db.query(
             func.avg(GoogleTrendsData.interest_score)
         ).filter(
             GoogleTrendsData.datum >= four_weeks_ago,
             GoogleTrendsData.datum < two_weeks_ago,
-        ).scalar() or 0
+        ).scalar() or 0)
 
         if previous > 0:
             slope = (recent - previous) / previous

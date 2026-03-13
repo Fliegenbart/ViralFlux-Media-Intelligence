@@ -74,6 +74,7 @@ const EvidencePanel: React.FC<Props> = ({
   const leadLag = (latestBacktest?.lead_lag || {}) as Record<string, unknown>;
   const improvementVsBaselines = (latestBacktest?.improvement_vs_baselines || {}) as Record<string, unknown>;
   const driverGroups = signalStack?.summary?.driver_groups || {};
+  const [activeTab, setActiveTab] = useState<string>('forecast');
 
   if (loading && !evidence) {
     return <div className="card" style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>Lade Evidenz...</div>;
@@ -85,8 +86,6 @@ const EvidencePanel: React.FC<Props> = ({
     { key: 'sources', label: 'Datenquellen' },
     { key: 'import', label: 'Import' },
   ] as const;
-
-  const [activeTab, setActiveTab] = useState<string>('forecast');
 
   return (
     <div className="page-stack">

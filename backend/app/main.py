@@ -1,24 +1,37 @@
-from fastapi import FastAPI, Depends
+import asyncio
+import logging
+import time
+import threading
+from datetime import datetime
+
+from fastapi import FastAPI, Depends, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from sqlalchemy.orm import Session
-import logging
-from datetime import datetime
 
-import threading
 from app.core.config import get_settings
+from app.core.logging_config import (
+    setup_logging,
+    correlation_id,
+    generate_correlation_id,
+)
+from app.core.metrics import (
+    app_info,
+    http_requests_total,
+    http_request_duration_seconds,
+)
 from app.db.session import get_db, check_db_connection, init_db
 
-# Setup Logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+# Setup structured logging BEFORE anything else
+settings = get_settings()
+setup_logging(
+    level=settings.LOG_LEVEL,
+    json_format=settings.LOG_FORMAT == "json",
 )
 logger = logging.getLogger(__name__)
-
-settings = get_settings()
 
 # FastAPI App
 app = FastAPI(
@@ -26,6 +39,12 @@ app = FastAPI(
     version=settings.APP_VERSION,
     description="Behördlich getriebene Media-Intelligence für Pharma-Marken mit 14-Tage-Frühsignal"
 )
+
+# Publish app info to Prometheus
+app_info.info({
+    "version": settings.APP_VERSION,
+    "environment": settings.ENVIRONMENT,
+})
 
 # CORS Middleware
 app.add_middleware(
@@ -37,11 +56,38 @@ app.add_middleware(
 )
 
 
+# ── Middleware: Correlation ID + Prometheus Metrics ──────────────
+@app.middleware("http")
+async def observability_middleware(request: Request, call_next) -> Response:
+    cid = request.headers.get("X-Correlation-ID") or generate_correlation_id()
+    token = correlation_id.set(cid)
+
+    start = time.perf_counter()
+    try:
+        response = await call_next(request)
+    except Exception:
+        duration = time.perf_counter() - start
+        endpoint = request.url.path
+        http_requests_total.labels(request.method, endpoint, "500").inc()
+        http_request_duration_seconds.labels(request.method, endpoint).observe(duration)
+        raise
+    finally:
+        correlation_id.reset(token)
+
+    duration = time.perf_counter() - start
+    endpoint = request.url.path
+    http_requests_total.labels(request.method, endpoint, str(response.status_code)).inc()
+    http_request_duration_seconds.labels(request.method, endpoint).observe(duration)
+
+    response.headers["X-Correlation-ID"] = cid
+    return response
+
+
 @app.on_event("startup")
 async def startup_event():
     """Initialize database on startup."""
-    logger.info(f"Starting {settings.APP_NAME} v{settings.APP_VERSION}")
-    logger.info(f"Environment: {settings.ENVIRONMENT}")
+    logger.info("Starting %s v%s", settings.APP_NAME, settings.APP_VERSION)
+    logger.info("Environment: %s", settings.ENVIRONMENT)
     
     # Runtime safety-net: initialize schema when database is empty / fresh
     # (migrations are still managed separately).
@@ -53,7 +99,7 @@ async def startup_event():
         init_db()
         logger.info("Database schema check/initialization completed.")
     except Exception as e:
-        logger.warning(f"Database schema initialization skipped due error: {e}")
+        logger.warning("Database schema initialization skipped: %s", e)
 
     # BfArM Lieferengpass-Daten im Hintergrund laden (non-blocking)
     def _bfarm_startup():
@@ -73,8 +119,10 @@ async def startup_event():
 
 @app.on_event("shutdown")
 async def shutdown_event():
-    """Cleanup on shutdown."""
+    """Graceful shutdown: allow in-flight requests to complete."""
     logger.info("Shutting down ViralFlux Media Intelligence...")
+    await asyncio.sleep(2)
+    logger.info("Shutdown complete.")
 
 
 @app.get("/")
@@ -148,6 +196,15 @@ async def health_check():
         "ml_accuracy": drift_info or None,
         "forecast_monitoring": monitoring_info or None,
     }
+
+
+@app.get("/metrics")
+async def prometheus_metrics():
+    """Prometheus metrics endpoint."""
+    return Response(
+        content=generate_latest(),
+        media_type=CONTENT_TYPE_LATEST,
+    )
 
 
 @app.get("/api/v1/status")

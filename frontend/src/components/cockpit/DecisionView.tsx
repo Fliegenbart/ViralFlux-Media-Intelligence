@@ -5,6 +5,7 @@ import { UI_COPY, additionalSuggestionsText, decisionStateLabel, marketCompariso
 import {
   BacktestResponse,
   MediaDecisionResponse,
+  MediaEvidenceResponse,
 } from '../../types/media';
 import { WaveOutlookPanel } from './BacktestVisuals';
 import {
@@ -17,6 +18,7 @@ import {
   primarySignalScore,
   readinessTone,
   truthLayerLabel,
+  truthFreshnessLabel,
   workflowLabel,
 } from './cockpitUtils';
 
@@ -24,6 +26,7 @@ interface Props {
   virus: string;
   onVirusChange: (value: string) => void;
   decision: MediaDecisionResponse | null;
+  evidence: MediaEvidenceResponse | null;
   loading: boolean;
   waveOutlook: BacktestResponse | null;
   waveOutlookLoading: boolean;
@@ -36,6 +39,7 @@ const DecisionView: React.FC<Props> = ({
   virus,
   onVirusChange,
   decision,
+  evidence,
   loading,
   waveOutlook,
   waveOutlookLoading,
@@ -46,6 +50,8 @@ const DecisionView: React.FC<Props> = ({
   const weeklyDecision = decision?.weekly_decision;
   const latestMarket = decision?.backtest_summary?.latest_market;
   const latestCustomer = decision?.backtest_summary?.latest_customer;
+  const sourceItems = evidence?.source_status?.items || [];
+  const sourceSummary = evidence?.source_status;
   const topCard = decision?.top_recommendations?.[0] || null;
   const recommendations = decision?.top_recommendations || [];
   const topRegions = weeklyDecision?.top_regions || [];
@@ -92,6 +98,14 @@ const DecisionView: React.FC<Props> = ({
     : 'Noch keine breite Umschichtung freigeben. Regionen weiter priorisieren.';
 
   const gateTone = readinessTone(isGo);
+
+  const sourceFreshnessLabel = (value?: string | null): string => {
+    const normalized = String(value || '').trim().toLowerCase();
+    if (normalized === 'live') return 'aktuell';
+    if (normalized === 'stale') return 'veraltet';
+    if (normalized === 'no_data') return 'keine Daten';
+    return value ? String(value) : '-';
+  };
 
   if (loading && !decision) {
     return <div className="card" style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>Lade Entscheidungssystem...</div>;
@@ -200,6 +214,40 @@ const DecisionView: React.FC<Props> = ({
         />
 
         <div style={{ display: 'grid', gap: 20 }}>
+          <div className="card subsection-card" style={{ padding: 24 }}>
+            <div className="section-heading" style={{ gap: 6 }}>
+              <h2 className="subsection-title">Abgefragte Werte & Datenstand</h2>
+              <p className="subsection-copy">
+                Hier siehst du, welche Eingangswerte für die Entscheidung abgefragt werden und ob sie aktuell genug sind.
+              </p>
+            </div>
+            <div className="review-chip-row" style={{ marginTop: 14 }}>
+              <span className="step-chip">
+                Quellen aktuell: {sourceSummary ? `${sourceSummary.live_count}/${sourceSummary.total}` : '-'}
+              </span>
+              <span className="step-chip">
+                Evidenz-Stand: {formatDateTime(evidence?.generated_at)}
+              </span>
+              <span className="step-chip">
+                Kundendaten: {truthFreshnessLabel(decision?.truth_coverage?.truth_freshness_state || weeklyDecision?.truth_freshness_state)}
+              </span>
+            </div>
+            <div style={{ display: 'grid', gap: 10, marginTop: 14 }}>
+              {sourceItems.length > 0 ? sourceItems.map((item) => (
+                <div key={item.source_key} className="evidence-row">
+                  <span>{item.label}</span>
+                  <strong>
+                    {sourceFreshnessLabel(item.freshness_state)} · {formatDateTime(item.last_updated)}
+                  </strong>
+                </div>
+              )) : (
+                <div className="soft-panel" style={{ padding: 14, fontSize: 14, color: 'var(--text-secondary)' }}>
+                  Der genaue Datenstand der abgefragten Werte wird noch geladen.
+                </div>
+              )}
+            </div>
+          </div>
+
           <div className="metric-strip">
             <div className="metric-box">
               <span>Readiness</span>

@@ -228,7 +228,7 @@ export const WaveOutlookPanel: React.FC<WaveOutlookPanelProps> = ({
   if (loading) {
     return (
       <div className="card" style={{ padding: 20, color: 'var(--text-muted)' }}>
-        Wellenentwicklung wird geladen...
+        Verlauf der Welle wird geladen...
       </div>
     );
   }
@@ -236,7 +236,7 @@ export const WaveOutlookPanel: React.FC<WaveOutlookPanelProps> = ({
   if (rows.length < 4) {
     return (
       <div className="card" style={{ padding: 20 }}>
-        <h2 style={{ margin: 0, fontSize: 20, color: 'var(--text-primary)' }}>Wellenentwicklung</h2>
+        <h2 style={{ margin: 0, fontSize: 20, color: 'var(--text-primary)' }}>Verlauf der Welle</h2>
         <div className="soft-panel" style={{ padding: 20, marginTop: 14, color: 'var(--text-muted)' }}>
           Noch keine ausreichend detaillierten Forecast-Daten für die Wellenkurve verfügbar.
         </div>
@@ -253,9 +253,9 @@ export const WaveOutlookPanel: React.FC<WaveOutlookPanelProps> = ({
     <div className="card" style={{ padding: 20 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start', marginBottom: 16 }}>
         <div>
-          <h2 style={{ margin: 0, fontSize: 20, color: 'var(--text-primary)' }}>Wellenentwicklung</h2>
+          <h2 style={{ margin: 0, fontSize: 20, color: 'var(--text-primary)' }}>Verlauf der Welle</h2>
           <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--text-muted)' }}>
-            Gezeigt wird die epidemiologische Welle für {selectedVirus} im Signalraum {targetLabel}. Die Kurve beschreibt Virusaktivität und Forecast, nicht die Nachfrage eines einzelnen Produkts.
+            Gezeigt wird die epidemiologische Welle für {selectedVirus} im Signalraum {targetLabel}. Die Kurve zeigt Ist-Wert, validierte Prognose, Ausblick und Saison-Baseline im Zeitverlauf.
           </p>
         </div>
         <div style={{ textAlign: 'right', fontSize: 12, color: 'var(--text-muted)' }}>

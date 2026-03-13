@@ -16,6 +16,7 @@ export function useDecisionPageData(
   toast: ToastLike = noop,
 ) {
   const [decision, setDecision] = useState<MediaDecisionResponse | null>(null);
+  const [decisionEvidence, setDecisionEvidence] = useState<MediaEvidenceResponse | null>(null);
   const [decisionLoading, setDecisionLoading] = useState(false);
   const [waveOutlook, setWaveOutlook] = useState<BacktestResponse | null>(null);
   const [waveOutlookLoading, setWaveOutlookLoading] = useState(false);
@@ -23,7 +24,23 @@ export function useDecisionPageData(
   const loadDecision = useCallback(async () => {
     setDecisionLoading(true);
     try {
-      setDecision(await mediaApi.getDecision(virus, brand));
+      const [decisionResult, evidenceResult] = await Promise.allSettled([
+        mediaApi.getDecision(virus, brand),
+        mediaApi.getEvidence(virus, brand),
+      ]);
+
+      if (decisionResult.status === 'fulfilled') {
+        setDecision(decisionResult.value);
+      } else {
+        throw decisionResult.reason;
+      }
+
+      if (evidenceResult.status === 'fulfilled') {
+        setDecisionEvidence(evidenceResult.value);
+      } else {
+        console.error('Decision evidence fetch failed', evidenceResult.reason);
+        setDecisionEvidence(null);
+      }
     } catch (error) {
       console.error('Decision fetch failed', error);
       toast('Entscheidung konnte nicht geladen werden.', 'error');
@@ -65,6 +82,7 @@ export function useDecisionPageData(
 
   return {
     decision,
+    decisionEvidence,
     decisionLoading,
     loadDecision,
     waveOutlook,

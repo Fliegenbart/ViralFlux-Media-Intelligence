@@ -12,6 +12,7 @@ const DecisionPage: React.FC = () => {
   const { virus, setVirus, brand, dataVersion, openRecommendation } = useMediaWorkflow();
   const {
     decision,
+    decisionEvidence,
     decisionLoading,
     waveOutlook,
     waveOutlookLoading,
@@ -22,6 +23,7 @@ const DecisionPage: React.FC = () => {
       virus={virus}
       onVirusChange={setVirus}
       decision={decision}
+      evidence={decisionEvidence}
       loading={decisionLoading}
       waveOutlook={waveOutlook}
       waveOutlookLoading={waveOutlookLoading}

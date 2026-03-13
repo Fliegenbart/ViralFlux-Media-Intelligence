@@ -15,6 +15,7 @@ import {
 
 import { BacktestChartPoint, BacktestResponse } from '../../types/media';
 import {
+  VIRUS_OPTIONS,
   formatDateShort,
   formatDateTime,
   formatPercent,
@@ -151,13 +152,22 @@ function detectWaveMarkers(rows: ValidationRow[]) {
 }
 
 interface WaveOutlookPanelProps {
+  virus: string;
+  onVirusChange: (value: string) => void;
   result: BacktestResponse | null;
   loading: boolean;
 }
 
-export const WaveOutlookPanel: React.FC<WaveOutlookPanelProps> = ({ result, loading }) => {
+export const WaveOutlookPanel: React.FC<WaveOutlookPanelProps> = ({
+  virus,
+  onVirusChange,
+  result,
+  loading,
+}) => {
   const rows = useMemo(() => buildValidationRows(result, 36), [result]);
   const markers = useMemo(() => detectWaveMarkers(rows), [rows]);
+  const targetLabel = result?.target_label || result?.target_source || 'Market Check';
+  const selectedVirus = result?.virus_typ || virus;
 
   if (loading) {
     return (
@@ -189,12 +199,29 @@ export const WaveOutlookPanel: React.FC<WaveOutlookPanelProps> = ({ result, load
         <div>
           <h2 style={{ margin: 0, fontSize: 20, color: 'var(--text-primary)' }}>Wellenentwicklung</h2>
           <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--text-muted)' }}>
-            Hier beginnt die Welle und so entwickelt sie sich von jetzt an weiter.
+            Gezeigt wird die epidemiologische Welle für {selectedVirus} im Signalraum {targetLabel}. Die Kurve beschreibt Virusaktivität und Forecast, nicht die Nachfrage eines einzelnen Produkts.
           </p>
         </div>
         <div style={{ textAlign: 'right', fontSize: 12, color: 'var(--text-muted)' }}>
-          {result?.target_label || result?.target_source || 'Market Check'}
+          {targetLabel}
         </div>
+      </div>
+
+      <div className="review-chip-row" style={{ marginBottom: 16 }}>
+        {VIRUS_OPTIONS.map((option) => (
+          <button
+            key={option}
+            type="button"
+            onClick={() => onVirusChange(option)}
+            className={`tab-chip ${option === selectedVirus ? 'active' : ''}`}
+          >
+            {option}
+          </button>
+        ))}
+      </div>
+
+      <div className="soft-panel" style={{ padding: 14, marginBottom: 16, fontSize: 13, color: 'var(--text-secondary)' }}>
+        Die markierten Punkte zeigen den geschätzten Beginn, den aktuellen Stand und den erwarteten Peak der {selectedVirus}-Welle. Produktvorschläge entstehen erst im nächsten Schritt aus dieser Viruslage plus Region, Forecast und Versorgung.
       </div>
 
       <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', marginBottom: 16 }}>
@@ -248,6 +275,9 @@ export const WaveOutlookPanel: React.FC<WaveOutlookPanelProps> = ({ result, load
 
       <p style={{ margin: '14px 0 0', fontSize: 14, lineHeight: 1.6, color: 'var(--text-secondary)' }}>
         {markers.narrative}
+      </p>
+      <p style={{ margin: '8px 0 0', fontSize: 12, lineHeight: 1.6, color: 'var(--text-muted)' }}>
+        Wenn du zwischen Viren wechselst, lädt diese Kurve die passende Welle neu. Eine Produktansicht wäre fachlich eine andere Kurve und ist hier aktuell noch nicht hinterlegt.
       </p>
     </div>
   );

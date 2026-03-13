@@ -192,7 +192,12 @@ const DecisionView: React.FC<Props> = ({
       </section>
 
       <section className="cockpit-grid">
-        <WaveOutlookPanel result={waveOutlook} loading={waveOutlookLoading} />
+        <WaveOutlookPanel
+          virus={virus}
+          onVirusChange={onVirusChange}
+          result={waveOutlook}
+          loading={waveOutlookLoading}
+        />
 
         <div style={{ display: 'grid', gap: 20 }}>
           <div className="metric-strip">

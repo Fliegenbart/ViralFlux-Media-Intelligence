@@ -50,6 +50,8 @@ services:
       - CELERY_BROKER_URL=redis://viralflux_redis:6379/0
       - CELERY_RESULT_BACKEND=redis://viralflux_redis:6379/0
       - SECRET_KEY=${SECRET_KEY}
+      - ADMIN_EMAIL=${ADMIN_EMAIL}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
       - ENVIRONMENT=${ENVIRONMENT:-development}
     volumes:
       - ./backend:/app
@@ -81,6 +83,8 @@ services:
       - POSTGRES_DB=${POSTGRES_DB:-virusradar_db}
       - OPENWEATHER_API_KEY=${OPENWEATHER_API_KEY}
       - SECRET_KEY=${SECRET_KEY}
+      - ADMIN_EMAIL=${ADMIN_EMAIL}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
       - ENVIRONMENT=${ENVIRONMENT:-development}
       - CELERY_BROKER_URL=redis://viralflux_redis:6379/0
       - CELERY_RESULT_BACKEND=redis://viralflux_redis:6379/0
@@ -114,6 +118,8 @@ services:
       - POSTGRES_DB=${POSTGRES_DB:-virusradar_db}
       - OPENWEATHER_API_KEY=${OPENWEATHER_API_KEY}
       - SECRET_KEY=${SECRET_KEY}
+      - ADMIN_EMAIL=${ADMIN_EMAIL}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
       - ENVIRONMENT=${ENVIRONMENT:-development}
       - CELERY_BROKER_URL=redis://viralflux_redis:6379/0
       - CELERY_RESULT_BACKEND=redis://viralflux_redis:6379/0

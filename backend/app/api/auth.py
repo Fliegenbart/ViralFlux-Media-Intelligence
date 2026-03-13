@@ -17,22 +17,26 @@ _ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "")
 _ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "")
 _ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
 
-_WEAK_PASSWORDS = {"gelo2026", "admin", "password", "123456", "test", "changeme"}
+_WEAK_PASSWORDS = {
+    "admin", "password", "123456", "test", "changeme",
+    "letmein", "welcome", "monkey", "qwerty", "abc123",
+}
 
 if not _ADMIN_EMAIL or not _ADMIN_PASSWORD:
-    if _ENVIRONMENT == "production":
-        raise RuntimeError(
-            "FATAL: ADMIN_EMAIL and ADMIN_PASSWORD must be set via environment "
-            "variables in production. Do NOT use hardcoded defaults."
-        )
-    _ADMIN_EMAIL = _ADMIN_EMAIL or "admin@gelo.de"
-    _ADMIN_PASSWORD = _ADMIN_PASSWORD or "gelo2026"
-    logger.warning("Using default admin credentials (dev only). Set ADMIN_EMAIL/ADMIN_PASSWORD in production.")
+    raise RuntimeError(
+        "FATAL: ADMIN_EMAIL and ADMIN_PASSWORD must be set via environment "
+        "variables. Generate a strong password with: openssl rand -base64 24"
+    )
 
-if _ENVIRONMENT == "production" and _ADMIN_PASSWORD.lower() in _WEAK_PASSWORDS:
+if len(_ADMIN_PASSWORD) < 12:
+    raise RuntimeError(
+        "FATAL: ADMIN_PASSWORD must be at least 12 characters long."
+    )
+
+if _ADMIN_PASSWORD.lower() in _WEAK_PASSWORDS:
     raise RuntimeError(
         "FATAL: ADMIN_PASSWORD is a known weak/default password. "
-        "Set a strong password via environment variable in production."
+        "Set a strong password via environment variable."
     )
 
 _USERS = {

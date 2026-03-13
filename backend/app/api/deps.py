@@ -1,6 +1,6 @@
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
-from jose import JWTError, jwt
+from jose import ExpiredSignatureError, JWTError, jwt
 
 from app.core.security import ALGORITHM, SECRET_KEY
 from app.schemas.token import TokenPayload
@@ -16,11 +16,22 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
     )
 
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(
+            token,
+            SECRET_KEY,
+            algorithms=[ALGORITHM],
+            options={"require_exp": True},
+        )
         token_payload = TokenPayload.model_validate(payload)
         if not token_payload.sub:
             raise credentials_exception
         return token_payload.model_dump()
+    except ExpiredSignatureError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token expired",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     except JWTError:
         raise credentials_exception
 
@@ -32,4 +43,3 @@ async def get_current_admin(current_user: dict = Depends(get_current_user)) -> d
             detail="Not enough privileges",
         )
     return current_user
-

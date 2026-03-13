@@ -1,7 +1,12 @@
+import logging
 import os
+import time
 
 from celery import Celery
 from celery.schedules import crontab
+from celery.signals import task_failure, task_success, task_prerun, task_postrun
+
+logger = logging.getLogger(__name__)
 
 # Hole die Redis-URL aus den Environment-Variablen (Fallback auf localhost fuer lokale Tests)
 BROKER_URL = os.getenv("CELERY_BROKER_URL", "redis://localhost:6379/0")
@@ -29,7 +34,57 @@ celery_app.conf.update(
     worker_prefetch_multiplier=1,  # wichtig fuer ML/LLM-Tasks
     timezone="Europe/Berlin",
     enable_utc=True,
+    # Reliability: ack after task completes, reject on worker crash
+    task_acks_late=True,
+    task_reject_on_worker_lost=True,
+    # Time limits: prevent runaway tasks
+    task_soft_time_limit=600,   # 10 min soft limit (SoftTimeLimitExceeded)
+    task_time_limit=900,        # 15 min hard kill
+    # Memory leak prevention
+    worker_max_tasks_per_child=50,
+    # Keep failed task results for inspection
+    task_store_errors_even_if_ignored=True,
 )
+
+
+# ── Task Lifecycle Signals (Metrics + Error Logging) ────────────
+_task_start_times: dict[str, float] = {}
+
+
+@task_prerun.connect
+def _on_task_prerun(task_id, task, *args, **kwargs):
+    _task_start_times[task_id] = time.perf_counter()
+
+
+@task_postrun.connect
+def _on_task_postrun(task_id, task, *args, **kwargs):
+    start = _task_start_times.pop(task_id, None)
+    if start is not None:
+        duration = time.perf_counter() - start
+        try:
+            from app.core.metrics import celery_tasks_total, celery_task_duration_seconds
+            celery_tasks_total.labels(task.name, "success").inc()
+            celery_task_duration_seconds.labels(task.name).observe(duration)
+        except Exception:
+            pass
+
+
+@task_failure.connect
+def _on_task_failure(task_id, exception, traceback, sender, *args, **kwargs):
+    _task_start_times.pop(task_id, None)
+    logger.error(
+        "Celery task FAILED: %s (id=%s) — %s: %s",
+        sender.name if sender else "unknown",
+        task_id,
+        type(exception).__name__,
+        exception,
+    )
+    try:
+        from app.core.metrics import celery_tasks_total
+        task_name = sender.name if sender else "unknown"
+        celery_tasks_total.labels(task_name, "failure").inc()
+    except Exception:
+        pass
 
 # ── Celery Beat Schedule ──────────────────────────────────────────────────────
 # Automatische Daten-Refreshes um Opportunities frisch zu halten.

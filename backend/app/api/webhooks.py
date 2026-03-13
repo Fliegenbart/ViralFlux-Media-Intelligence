@@ -21,7 +21,7 @@ def verify_api_key(x_api_key: str = Header(..., alias="X-API-Key")) -> None:
 
     We intentionally do NOT use JWT here: these calls are not from browsers/users.
     """
-    expected = os.getenv("M2M_SECRET_KEY", "GELO_ERP_SYNC_2026")
+    expected = os.getenv("M2M_SECRET_KEY", "")
     if not expected:
         logger.error("M2M_SECRET_KEY is empty; refusing all webhook requests.")
         raise HTTPException(

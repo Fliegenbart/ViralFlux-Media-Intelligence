@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 
 import { UI_COPY } from '../../lib/copy';
 import {
@@ -79,6 +79,15 @@ const EvidencePanel: React.FC<Props> = ({
     return <div className="card" style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>Lade Evidenz...</div>;
   }
 
+  const TABS = [
+    { key: 'forecast', label: 'Forecast' },
+    { key: 'truth', label: 'Kundendaten' },
+    { key: 'sources', label: 'Datenquellen' },
+    { key: 'import', label: 'Import' },
+  ] as const;
+
+  const [activeTab, setActiveTab] = useState<string>('forecast');
+
   return (
     <div className="page-stack">
       <section className="context-filter-rail">
@@ -86,60 +95,79 @@ const EvidencePanel: React.FC<Props> = ({
           <span className="section-kicker">Evidenz</span>
           <h1 className="section-title">Warum wir dieser Woche vertrauen</h1>
         </div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-          <span className="step-chip">{UI_COPY.marketComparison}: validiert</span>
-          <span className="step-chip">{UI_COPY.customerData}: {truthLayerLabel(truthStatus || latestCustomer)}</span>
-          <span className="step-chip">{UI_COPY.customerDataFreshness}: {truthFreshnessLabel(truthStatus?.truth_freshness_state)}</span>
-          <span className="step-chip">Learning: {learningStateLabel(outcomeLearning?.learning_state || truthGate?.learning_state)}</span>
-          {signalStack?.summary?.decision_mode_label && <span className="step-chip">{signalStack.summary.decision_mode_label}</span>}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
           <span className="step-chip">Forecast: {forecastMonitoring?.monitoring_status || '-'}</span>
+          <span className="step-chip">{UI_COPY.customerData}: {truthLayerLabel(truthStatus || latestCustomer)}</span>
           <span className="step-chip">Drift: {modelLineage?.drift_state || '-'}</span>
         </div>
       </section>
-      <TruthOutcomeSection
-        truthStatus={truthStatus}
-        truthGate={truthGate}
-        outcomeLearning={outcomeLearning}
-        legacyCustomer={legacyCustomer}
-        sourceStatusLabels={sourceStatusLabels}
-      />
 
-      <ForecastMonitoringSection
-        forecastMonitoring={forecastMonitoring}
-        modelLineage={modelLineage}
-        latestAccuracy={latestAccuracy}
-        latestBacktest={latestBacktest}
-        intervalCoverage={intervalCoverage}
-        eventCalibration={eventCalibration}
-        leadLag={leadLag}
-        improvementVsBaselines={improvementVsBaselines}
-        marketValidation={marketValidation}
-        marketValidationLoading={marketValidationLoading}
-        customerValidation={customerValidation}
-        customerValidationLoading={customerValidationLoading}
-        legacyCustomer={legacyCustomer}
-        truthStatus={truthStatus}
-      />
+      <div className="evidence-tab-bar" role="tablist" aria-label="Evidenz-Bereiche">
+        {TABS.map(({ key, label }) => (
+          <button
+            key={key}
+            role="tab"
+            aria-selected={activeTab === key}
+            className={`evidence-tab-btn ${activeTab === key ? 'active' : ''}`}
+            onClick={() => setActiveTab(key)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
 
-      <ImportValidationSection
-        truthSnapshot={truthSnapshot}
-        truthPreview={truthPreview}
-        truthBatchDetail={truthBatchDetail}
-        truthActionLoading={truthActionLoading}
-        truthBatchDetailLoading={truthBatchDetailLoading}
-        onSubmitTruthCsv={onSubmitTruthCsv}
-        onLoadTruthBatchDetail={onLoadTruthBatchDetail}
-      />
+      {activeTab === 'forecast' && (
+        <ForecastMonitoringSection
+          forecastMonitoring={forecastMonitoring}
+          modelLineage={modelLineage}
+          latestAccuracy={latestAccuracy}
+          latestBacktest={latestBacktest}
+          intervalCoverage={intervalCoverage}
+          eventCalibration={eventCalibration}
+          leadLag={leadLag}
+          improvementVsBaselines={improvementVsBaselines}
+          marketValidation={marketValidation}
+          marketValidationLoading={marketValidationLoading}
+          customerValidation={customerValidation}
+          customerValidationLoading={customerValidationLoading}
+          legacyCustomer={legacyCustomer}
+          truthStatus={truthStatus}
+        />
+      )}
 
-      <SourceFreshnessSection
-        evidence={evidence}
-        sourceItems={sourceItems}
-        signalStack={signalStack}
-        driverGroups={driverGroups}
-        modelLineage={modelLineage}
-        recentRuns={recentRuns}
-        truthSnapshot={truthSnapshot}
-      />
+      {activeTab === 'truth' && (
+        <TruthOutcomeSection
+          truthStatus={truthStatus}
+          truthGate={truthGate}
+          outcomeLearning={outcomeLearning}
+          legacyCustomer={legacyCustomer}
+          sourceStatusLabels={sourceStatusLabels}
+        />
+      )}
+
+      {activeTab === 'sources' && (
+        <SourceFreshnessSection
+          evidence={evidence}
+          sourceItems={sourceItems}
+          signalStack={signalStack}
+          driverGroups={driverGroups}
+          modelLineage={modelLineage}
+          recentRuns={recentRuns}
+          truthSnapshot={truthSnapshot}
+        />
+      )}
+
+      {activeTab === 'import' && (
+        <ImportValidationSection
+          truthSnapshot={truthSnapshot}
+          truthPreview={truthPreview}
+          truthBatchDetail={truthBatchDetail}
+          truthActionLoading={truthActionLoading}
+          truthBatchDetailLoading={truthBatchDetailLoading}
+          onSubmitTruthCsv={onSubmitTruthCsv}
+          onLoadTruthBatchDetail={onLoadTruthBatchDetail}
+        />
+      )}
     </div>
   );
 };

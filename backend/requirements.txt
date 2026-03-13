@@ -12,7 +12,7 @@ alembic>=1.13.1
 # Data Processing
 pandas==2.2.0
 numpy==1.26.3
-pytz==2024.1
+pytz==2026.1.post1
 openpyxl>=3.1.0
 
 # ML & Forecasting

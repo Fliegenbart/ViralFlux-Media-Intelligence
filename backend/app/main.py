@@ -56,6 +56,40 @@ app.add_middleware(
 )
 
 
+# ── Standardized Error Handlers ─────────────────────────────────
+from fastapi.exceptions import RequestValidationError
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    cid = correlation_id.get("")
+    return JSONResponse(
+        status_code=422,
+        content={
+            "error": "validation_error",
+            "detail": "Ungültige Eingabedaten",
+            "fields": [
+                {"field": ".".join(str(x) for x in e["loc"]), "message": e["msg"]}
+                for e in exc.errors()
+            ],
+            "correlation_id": cid or None,
+        },
+    )
+
+
+@app.exception_handler(Exception)
+async def generic_exception_handler(request: Request, exc: Exception):
+    cid = correlation_id.get("")
+    logger.error("Unhandled exception: %s", exc, exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={
+            "error": "internal_error",
+            "detail": "Ein interner Fehler ist aufgetreten.",
+            "correlation_id": cid or None,
+        },
+    )
+
+
 # ── Middleware: Correlation ID + Prometheus Metrics ──────────────
 @app.middleware("http")
 async def observability_middleware(request: Request, call_next) -> Response:

@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 
+import CollapsibleSection from '../CollapsibleSection';
 import { UI_COPY, additionalSuggestionsText, decisionStateLabel, marketComparisonStateLabel } from '../../lib/copy';
 import {
   BacktestResponse,
@@ -214,19 +215,13 @@ const DecisionView: React.FC<Props> = ({
         />
 
         <div style={{ display: 'grid', gap: 20 }}>
-          <div className="card subsection-card" style={{ padding: 24 }}>
-            <div className="section-heading" style={{ gap: 6 }}>
-              <h2 className="subsection-title">Abgefragte Werte & Datenstand</h2>
-              <p className="subsection-copy">
-                Hier siehst du, welche Eingangswerte für die Entscheidung abgefragt werden und ob sie aktuell genug sind.
-              </p>
-            </div>
-            <div className="review-chip-row" style={{ marginTop: 14 }}>
+          <CollapsibleSection title="Datenstand & Quellen" subtitle="Eingangswerte und deren Aktualität">
+            <div className="review-chip-row" style={{ marginTop: 8 }}>
               <span className="step-chip">
                 Quellen aktuell: {sourceSummary ? `${sourceSummary.live_count}/${sourceSummary.total}` : '-'}
               </span>
               <span className="step-chip">
-                Evidenz-Stand: {formatDateTime(evidence?.generated_at)}
+                Evidenz: {formatDateTime(evidence?.generated_at)}
               </span>
               <span className="step-chip">
                 Kundendaten: {truthFreshnessLabel(decision?.truth_coverage?.truth_freshness_state || weeklyDecision?.truth_freshness_state)}
@@ -246,7 +241,7 @@ const DecisionView: React.FC<Props> = ({
                 </div>
               )}
             </div>
-          </div>
+          </CollapsibleSection>
 
           <div className="metric-strip">
             <div className="metric-box">
@@ -329,21 +324,15 @@ const DecisionView: React.FC<Props> = ({
             )}
           </div>
 
-          <div className="card subsection-card" style={{ padding: 24 }}>
-            <div className="section-heading" style={{ gap: 6 }}>
-              <h2 className="subsection-title">Worauf die Entscheidung beruht</h2>
-              <p className="subsection-copy">
-                Epidemiologische Kerndaten und Versorgungskontext werden getrennt bewertet.
-              </p>
-            </div>
-            <div className="review-chip-row" style={{ marginTop: 14 }}>
+          <CollapsibleSection title="Modell & Signaltreiber" subtitle="Epidemiologische Kerndaten und Versorgungskontext">
+            <div className="review-chip-row" style={{ marginTop: 8 }}>
               {Object.entries(driverGroups).map(([key, group]) => (
                 <span key={key} className="step-chip">
                   {group.label} {formatPercent(group.contribution || 0)}
                 </span>
               ))}
             </div>
-            <div className="review-chip-row" style={{ marginTop: 14 }}>
+            <div className="review-chip-row" style={{ marginTop: 10 }}>
               {(mathStack?.base_models || []).map((label) => (
                 <span key={label} className="step-chip">{label}</span>
               ))}
@@ -356,7 +345,7 @@ const DecisionView: React.FC<Props> = ({
                 </span>
               ))}
             </div>
-          </div>
+          </CollapsibleSection>
         </div>
       </section>
 

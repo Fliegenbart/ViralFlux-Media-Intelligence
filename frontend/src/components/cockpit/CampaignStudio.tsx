@@ -213,7 +213,7 @@ const CampaignStudio: React.FC<Props> = ({
           </button>
         </section>
       ) : (
-        <section className="campaign-board">
+        <section className="campaign-board campaign-board-scroll">
           {grouped.map((lane, index) => (
             <div key={lane.id} className="lane-column campaign-lane-column">
               <div className="campaign-lane-shell">

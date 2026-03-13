@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { isBefore, parseISO } from 'date-fns';
 import {
   Area,
   CartesianGrid,
@@ -34,6 +35,16 @@ interface ValidationRow extends BacktestChartPoint {
   ci95Range?: number | null;
 }
 
+interface WaveMarkers {
+  lastObservedIndex: number;
+  startIndex: number;
+  peakIndex: number;
+  cooldownIndex: number;
+  lastValuedIndex: number;
+  hasProjectedDataAfterObservation: boolean;
+  narrative: string;
+}
+
 function isNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value);
 }
@@ -45,7 +56,7 @@ function median(values: number[]): number {
   return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
 }
 
-function buildValidationRows(result: BacktestResponse | null, maxPoints = 84): ValidationRow[] {
+export function buildValidationRows(result: BacktestResponse | null, maxPoints = 84): ValidationRow[] {
   const source = [...(result?.chart_data || [])]
     .filter((point) => point?.date)
     .sort((a, b) => String(a.date).localeCompare(String(b.date)));
@@ -76,13 +87,24 @@ function waveValue(row: ValidationRow): number | null {
   return null;
 }
 
-function detectWaveMarkers(rows: ValidationRow[]) {
+function parseDate(value?: string | null): Date | null {
+  if (!value) return null;
+  try {
+    return parseISO(value);
+  } catch {
+    return null;
+  }
+}
+
+export function detectWaveMarkers(rows: ValidationRow[]): WaveMarkers {
   if (!rows.length) {
     return {
-      currentIndex: -1,
+      lastObservedIndex: -1,
       startIndex: -1,
       peakIndex: -1,
       cooldownIndex: -1,
+      lastValuedIndex: -1,
+      hasProjectedDataAfterObservation: false,
       narrative: 'Noch keine Kurve verfügbar.',
     };
   }
@@ -91,25 +113,26 @@ function detectWaveMarkers(rows: ValidationRow[]) {
     .map((row) => row.actual)
     .filter(isNumber);
   const baseline = median(historicalValues);
-  const currentIndex = Math.max(
-    0,
-    rows.reduce((latest, row, index) => (isNumber(row.actual) ? index : latest), -1),
-  );
-
-  const futureRange = rows
+  const rawLastObservedIndex = rows.reduce((latest, row, index) => (isNumber(row.actual) ? index : latest), -1);
+  const valuedRows = rows
     .map((row, index) => ({ row, index }))
-    .filter(({ index, row }) => index >= currentIndex && isNumber(waveValue(row)));
+    .filter(({ row }) => isNumber(waveValue(row)));
+  const lastValuedIndex = valuedRows.length ? valuedRows[valuedRows.length - 1].index : Math.max(0, rawLastObservedIndex);
+  const lastObservedIndex = rawLastObservedIndex >= 0 ? rawLastObservedIndex : lastValuedIndex;
+  const anchorIndex = Math.max(0, valuedRows.length ? lastObservedIndex : 0);
+
+  const futureRange = valuedRows.filter(({ index }) => index >= anchorIndex);
   const peakEntry = futureRange.reduce<{ index: number; value: number } | null>((best, entry) => {
     const value = waveValue(entry.row);
     if (!isNumber(value)) return best;
     if (!best || value > best.value) return { index: entry.index, value };
     return best;
   }, null);
-  const peakIndex = peakEntry?.index ?? currentIndex;
+  const peakIndex = peakEntry?.index ?? anchorIndex;
   const peakValue = peakEntry?.value ?? baseline;
 
-  let startIndex = Math.max(0, currentIndex - 4);
-  for (let index = Math.max(1, peakIndex - 12); index <= Math.min(currentIndex, peakIndex - 2); index += 1) {
+  let startIndex = Math.max(0, lastObservedIndex - 4);
+  for (let index = Math.max(1, peakIndex - 12); index <= Math.min(lastObservedIndex, peakIndex - 2); index += 1) {
     const current = waveValue(rows[index]);
     const next = waveValue(rows[index + 1]);
     const nextTwo = waveValue(rows[index + 2]);
@@ -120,8 +143,8 @@ function detectWaveMarkers(rows: ValidationRow[]) {
     }
   }
 
-  let cooldownIndex = rows.length - 1;
-  for (let index = peakIndex + 1; index < rows.length; index += 1) {
+  let cooldownIndex = lastValuedIndex;
+  for (let index = peakIndex + 1; index <= lastValuedIndex; index += 1) {
     const value = waveValue(rows[index]);
     if (isNumber(value) && peakValue > 0 && value <= peakValue * 0.82) {
       cooldownIndex = index;
@@ -130,25 +153,57 @@ function detectWaveMarkers(rows: ValidationRow[]) {
   }
 
   const startDate = rows[startIndex]?.dateLabel || '-';
-  const currentDate = rows[currentIndex]?.dateLabel || '-';
+  const observedDate = rows[lastObservedIndex]?.dateLabel || '-';
   const peakDate = rows[peakIndex]?.dateLabel || '-';
   const cooldownDate = rows[cooldownIndex]?.dateLabel || '-';
 
-  const currentValue = waveValue(rows[currentIndex]) ?? 0;
-  const direction = peakValue > currentValue * 1.08
-    ? `Die Welle startet ab ${startDate}, baut sich über ${currentDate} weiter auf und peakt voraussichtlich um ${peakDate}.`
-    : `Die Welle ist ab ${startDate} sichtbar, liegt um ${currentDate} im Fokus und stabilisiert sich rund um ${peakDate}.`;
-  const tail = cooldownIndex > peakIndex
-    ? ` Danach erwarten wir eine Abschwächung Richtung ${cooldownDate}.`
-    : '';
+  const observedValue = waveValue(rows[lastObservedIndex]) ?? 0;
+  const hasProjectedDataAfterObservation = peakIndex > lastObservedIndex || lastValuedIndex > lastObservedIndex;
+
+  let narrative = `Die sichtbare Kurve reicht bis zum letzten beobachteten Stand vom ${observedDate}.`;
+  if (hasProjectedDataAfterObservation && peakValue > observedValue * 1.08) {
+    narrative = `Die Welle ist seit ${startDate} sichtbar. Der letzte beobachtete Stand stammt vom ${observedDate}; im Modell peakt sie voraussichtlich um ${peakDate}.`;
+  } else if (hasProjectedDataAfterObservation) {
+    narrative = `Die Welle ist seit ${startDate} sichtbar. Der letzte beobachtete Stand stammt vom ${observedDate}; danach stabilisiert sich die modellierte Kurve rund um ${peakDate}.`;
+  }
+  if (!hasProjectedDataAfterObservation) {
+    narrative = `${narrative} Danach liegen in diesem Run keine weiteren befüllten Punkte vor.`;
+  } else if (cooldownIndex > peakIndex) {
+    narrative = `${narrative} Danach erwarten wir eine Abschwächung Richtung ${cooldownDate}.`;
+  }
 
   return {
-    currentIndex,
+    lastObservedIndex,
     startIndex,
     peakIndex,
     cooldownIndex,
-    narrative: `${direction}${tail}`,
+    lastValuedIndex,
+    hasProjectedDataAfterObservation,
+    narrative,
   };
+}
+
+export function getWaveFreshnessHint(
+  rows: ValidationRow[],
+  markers: WaveMarkers,
+  now: Date = new Date(),
+): string | null {
+  if (markers.lastObservedIndex < 0 || !rows.length) return null;
+  const observedRow = rows[markers.lastObservedIndex];
+  const observedDate = parseDate(observedRow?.date);
+  const lastRowDate = parseDate(rows[rows.length - 1]?.date);
+  const hasTrailingEmptySlots = markers.lastValuedIndex >= 0 && markers.lastValuedIndex < rows.length - 1;
+
+  if (!observedDate) {
+    return hasTrailingEmptySlots
+      ? 'Nach dem letzten beobachteten Wert folgen in diesem Run noch unbelegte Datums-Slots.'
+      : null;
+  }
+
+  if (hasTrailingEmptySlots || isBefore(observedDate, now) || (lastRowDate && isBefore(observedDate, lastRowDate))) {
+    return `Letzte Beobachtung: ${observedRow.dateLabel}. Danach liegen in diesem Run noch keine Ist-Werte vor.`;
+  }
+  return null;
 }
 
 interface WaveOutlookPanelProps {
@@ -166,6 +221,7 @@ export const WaveOutlookPanel: React.FC<WaveOutlookPanelProps> = ({
 }) => {
   const rows = useMemo(() => buildValidationRows(result, 36), [result]);
   const markers = useMemo(() => detectWaveMarkers(rows), [rows]);
+  const freshnessHint = useMemo(() => getWaveFreshnessHint(rows, markers), [rows, markers]);
   const targetLabel = result?.target_label || result?.target_source || 'Market Check';
   const selectedVirus = result?.virus_typ || virus;
 
@@ -189,7 +245,7 @@ export const WaveOutlookPanel: React.FC<WaveOutlookPanelProps> = ({
   }
 
   const startDate = rows[markers.startIndex]?.dateLabel || '-';
-  const currentDate = rows[markers.currentIndex]?.dateLabel || '-';
+  const observedDate = rows[markers.lastObservedIndex]?.dateLabel || '-';
   const peakDate = rows[markers.peakIndex]?.dateLabel || '-';
   const cooldownDate = rows[markers.cooldownIndex]?.dateLabel || '-';
 
@@ -221,13 +277,19 @@ export const WaveOutlookPanel: React.FC<WaveOutlookPanelProps> = ({
       </div>
 
       <div className="soft-panel" style={{ padding: 14, marginBottom: 16, fontSize: 13, color: 'var(--text-secondary)' }}>
-        Die markierten Punkte zeigen den geschätzten Beginn, den aktuellen Stand und den erwarteten Peak der {selectedVirus}-Welle. Produktvorschläge entstehen erst im nächsten Schritt aus dieser Viruslage plus Region, Forecast und Versorgung.
+        Die markierten Punkte zeigen den geschätzten Beginn, den letzten beobachteten Stand und den erwarteten Peak der {selectedVirus}-Welle. Produktvorschläge entstehen erst im nächsten Schritt aus dieser Viruslage plus Region, Forecast und Versorgung.
       </div>
+
+      {freshnessHint && (
+        <div className="soft-panel" style={{ padding: 14, marginBottom: 16, fontSize: 13, color: 'var(--text-secondary)' }}>
+          {freshnessHint}
+        </div>
+      )}
 
       <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', marginBottom: 16 }}>
         {[
           { label: 'Welle beginnt', value: startDate, tone: '#2aa198' },
-          { label: 'Wir stehen hier', value: currentDate, tone: '#0a84ff' },
+          { label: 'Letzter Ist-Wert', value: observedDate, tone: '#0a84ff' },
           { label: 'Erwarteter Peak', value: peakDate, tone: '#ff453a' },
           { label: 'Rückgang', value: cooldownDate, tone: '#ff9f0a' },
         ].map((item) => (
@@ -252,12 +314,12 @@ export const WaveOutlookPanel: React.FC<WaveOutlookPanelProps> = ({
             <Legend />
 
             <ReferenceArea
-              x1={rows[markers.currentIndex]?.dateLabel}
-              x2={rows[rows.length - 1]?.dateLabel}
+              x1={rows[markers.lastObservedIndex]?.dateLabel}
+              x2={rows[markers.lastValuedIndex]?.dateLabel || rows[markers.lastObservedIndex]?.dateLabel}
               fill="rgba(10, 132, 255, 0.06)"
             />
             <ReferenceLine x={rows[markers.startIndex]?.dateLabel} stroke="#2aa198" strokeDasharray="4 4" label={{ value: 'Beginn', position: 'top', fill: '#2aa198', fontSize: 10 }} />
-            <ReferenceLine x={rows[markers.currentIndex]?.dateLabel} stroke="#0a84ff" strokeDasharray="4 4" label={{ value: 'Jetzt', position: 'top', fill: '#0a84ff', fontSize: 10 }} />
+            <ReferenceLine x={rows[markers.lastObservedIndex]?.dateLabel} stroke="#0a84ff" strokeDasharray="4 4" label={{ value: 'Ist-Wert', position: 'top', fill: '#0a84ff', fontSize: 10 }} />
             <ReferenceLine x={rows[markers.peakIndex]?.dateLabel} stroke="#ff453a" strokeDasharray="4 4" label={{ value: 'Peak', position: 'top', fill: '#ff453a', fontSize: 10 }} />
 
             <Area type="monotone" dataKey="ci95Base" stackId="ci95" stroke="none" fill="transparent" activeDot={false} legendType="none" />

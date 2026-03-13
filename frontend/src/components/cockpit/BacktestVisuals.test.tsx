@@ -1,0 +1,139 @@
+import '@testing-library/jest-dom';
+import React from 'react';
+import { render, screen } from '@testing-library/react';
+
+import {
+  WaveOutlookPanel,
+  buildValidationRows,
+  detectWaveMarkers,
+  getWaveFreshnessHint,
+} from './BacktestVisuals';
+import { BacktestResponse } from '../../types/media';
+
+jest.mock('recharts', () => {
+  const ReactLib = require('react');
+
+  const passthrough = ({ children }: { children?: React.ReactNode }) => ReactLib.createElement(ReactLib.Fragment, null, children);
+  const empty = () => null;
+
+  return {
+    ResponsiveContainer: passthrough,
+    ComposedChart: passthrough,
+    CartesianGrid: empty,
+    Legend: empty,
+    Line: empty,
+    ReferenceArea: empty,
+    ReferenceLine: empty,
+    Tooltip: empty,
+    XAxis: empty,
+    YAxis: empty,
+    Area: empty,
+  };
+});
+
+function buildResult(chartData: BacktestResponse['chart_data']): BacktestResponse {
+  return {
+    virus_typ: 'Influenza A',
+    target_source: 'RKI_ARE',
+    target_label: 'RKI ARE',
+    chart_data: chartData,
+  };
+}
+
+describe('wave outlook markers', () => {
+  it('uses the last observed actual point even when trailing date slots are empty', () => {
+    const rows = buildValidationRows(buildResult([
+      { date: '2026-01-12', real_qty: 1561, predicted_qty: 1089 },
+      { date: '2026-01-19', real_qty: 1613, predicted_qty: 1566 },
+      { date: '2026-01-26', real_qty: 1939, predicted_qty: 2006 },
+      { date: '2026-02-02', real_qty: 2055, predicted_qty: 2101 },
+      { date: '2026-02-09', real_qty: 1894, predicted_qty: 1979 },
+      { date: '2026-02-16', real_qty: 1700, predicted_qty: 2197 },
+      { date: '2026-02-23', real_qty: 1632, predicted_qty: 2235 },
+      { date: '2026-03-02' },
+      { date: '2026-03-09' },
+      { date: '2026-03-16' },
+    ]), 36);
+
+    const markers = detectWaveMarkers(rows);
+    const hint = getWaveFreshnessHint(rows, markers, new Date('2026-03-13T00:00:00Z'));
+
+    expect(rows[markers.lastObservedIndex]?.date).toBe('2026-02-23');
+    expect(rows[markers.lastValuedIndex]?.date).toBe('2026-02-23');
+    expect(rows[markers.peakIndex]?.date).toBe('2026-02-23');
+    expect(hint).toContain('23.02.2026');
+    expect(markers.narrative).not.toContain('Jetzt');
+  });
+
+  it('keeps projected data after the last observation in the peak narrative', () => {
+    const rows = buildValidationRows(buildResult([
+      { date: '2026-03-03', real_qty: 120, predicted_qty: 118 },
+      { date: '2026-03-10', real_qty: 140, predicted_qty: 142 },
+      { date: '2026-03-17', forecast_qty: 175, predicted_qty: 176 },
+      { date: '2026-03-24', forecast_qty: 210, predicted_qty: 208 },
+      { date: '2026-03-31', forecast_qty: 150, predicted_qty: 152 },
+    ]), 36);
+
+    const markers = detectWaveMarkers(rows);
+
+    expect(markers.hasProjectedDataAfterObservation).toBe(true);
+    expect(rows[markers.lastObservedIndex]?.date).toBe('2026-03-10');
+    expect(rows[markers.peakIndex]?.date).toBe('2026-03-24');
+    expect(markers.narrative).toContain('letzte beobachtete Stand stammt vom 10.03.2026');
+    expect(markers.narrative).toContain('24.03.2026');
+  });
+
+  it('explains when only historical values exist and no further filled points are available', () => {
+    const rows = buildValidationRows(buildResult([
+      { date: '2026-01-12', real_qty: 90 },
+      { date: '2026-01-19', real_qty: 110 },
+      { date: '2026-01-26', real_qty: 105 },
+      { date: '2026-02-02', real_qty: 98 },
+      { date: '2026-02-09' },
+      { date: '2026-02-16' },
+    ]), 36);
+
+    const markers = detectWaveMarkers(rows);
+
+    expect(markers.hasProjectedDataAfterObservation).toBe(false);
+    expect(markers.narrative).toContain('02.02.2026');
+    expect(markers.narrative).toContain('keine weiteren befüllten Punkte');
+  });
+
+  it('returns an empty-state narrative for missing rows', () => {
+    const markers = detectWaveMarkers([]);
+
+    expect(markers.lastObservedIndex).toBe(-1);
+    expect(markers.narrative).toBe('Noch keine Kurve verfügbar.');
+    expect(getWaveFreshnessHint([], markers)).toBeNull();
+  });
+});
+
+describe('WaveOutlookPanel', () => {
+  it('renders the last observed label and freshness hint instead of claiming this is today', () => {
+    const result = buildResult([
+      { date: '2026-01-12', real_qty: 1561, predicted_qty: 1089 },
+      { date: '2026-01-19', real_qty: 1613, predicted_qty: 1566 },
+      { date: '2026-01-26', real_qty: 1939, predicted_qty: 2006 },
+      { date: '2026-02-02', real_qty: 2055, predicted_qty: 2101 },
+      { date: '2026-02-09', real_qty: 1894, predicted_qty: 1979 },
+      { date: '2026-02-16', real_qty: 1700, predicted_qty: 2197 },
+      { date: '2026-02-23', real_qty: 1632, predicted_qty: 2235 },
+      { date: '2026-03-02' },
+      { date: '2026-03-09' },
+    ]);
+
+    render(
+      <WaveOutlookPanel
+        virus="Influenza A"
+        onVirusChange={() => {}}
+        result={result}
+        loading={false}
+      />,
+    );
+
+    expect(screen.getByText('Letzter Ist-Wert')).toBeInTheDocument();
+    expect(screen.getByText(/Letzte Beobachtung: 23.02.2026/)).toBeInTheDocument();
+    expect(screen.queryByText('Wir stehen hier')).not.toBeInTheDocument();
+  });
+});

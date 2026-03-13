@@ -1,16 +1,19 @@
-import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState, Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useParams } from 'react-router-dom';
-import LandingPage from './pages/LandingPage';
 import LoginPage from './pages/LoginPage';
-import WeeklyReport from './pages/WeeklyReport';
-import MediaShell from './pages/media/MediaShell';
-import DecisionPage from './pages/media/DecisionPage';
-import RegionsPage from './pages/media/RegionsPage';
-import CampaignsPage from './pages/media/CampaignsPage';
-import EvidencePage from './pages/media/EvidencePage';
 import ErrorBoundary from './components/ErrorBoundary';
+import LoadingSkeleton from './components/LoadingSkeleton';
 import { isAuthenticated, logout } from './lib/api';
 import './index.css';
+
+/* ── Lazy-loaded pages (code splitting) ────────────────────────── */
+const LandingPage = lazy(() => import('./pages/LandingPage'));
+const WeeklyReport = lazy(() => import('./pages/WeeklyReport'));
+const MediaShell = lazy(() => import('./pages/media/MediaShell'));
+const DecisionPage = lazy(() => import('./pages/media/DecisionPage'));
+const RegionsPage = lazy(() => import('./pages/media/RegionsPage'));
+const CampaignsPage = lazy(() => import('./pages/media/CampaignsPage'));
+const EvidencePage = lazy(() => import('./pages/media/EvidencePage'));
 
 /* ── Theme ──────────────────────────────────────────────────────── */
 type Theme = 'light' | 'dark';
@@ -136,6 +139,13 @@ const AuthContext = createContext<AuthContextValue>({
 
 export const useAuth = () => useContext(AuthContext);
 
+/* ── Page Loading Fallback ─────────────────────────────────────── */
+const PageFallback: React.FC = () => (
+  <div style={{ padding: 32 }}>
+    <LoadingSkeleton lines={6} />
+  </div>
+);
+
 /* ── App ────────────────────────────────────────────────────────── */
 const App: React.FC = () => {
   const [authenticated, setAuthenticated] = useState(isAuthenticated);
@@ -160,26 +170,28 @@ const App: React.FC = () => {
       <ToastProvider>
         <AuthContext.Provider value={{ authenticated, handleLogin, handleLogout }}>
           <Router>
-            <Routes>
-              <Route path="/" element={<Navigate to="/entscheidung" replace />} />
-              <Route path="/welcome" element={<LandingPage />} />
-              <Route element={<MediaShell />}>
-                <Route path="/entscheidung" element={<DecisionPage />} />
-                <Route path="/regionen" element={<RegionsPage />} />
-                <Route path="/kampagnen" element={<CampaignsPage />} />
-                <Route path="/kampagnen/:id" element={<CampaignsPage />} />
-                <Route path="/evidenz" element={<EvidencePage />} />
-                <Route path="/bericht" element={<WeeklyReport />} />
-              </Route>
-              {/* Legacy redirects */}
-              <Route path="/lagebild" element={<Navigate to="/entscheidung" replace />} />
-              <Route path="/empfehlungen" element={<Navigate to="/kampagnen" replace />} />
-              <Route path="/empfehlungen/:id" element={<LegacyRecommendationRedirect />} />
-              <Route path="/validierung" element={<Navigate to="/evidenz" replace />} />
-              <Route path="/dashboard" element={<Navigate to="/entscheidung" replace />} />
-              <Route path="/dashboard/recommendations/:id" element={<LegacyRecommendationRedirect />} />
-              <Route path="/backtest" element={<Navigate to="/evidenz" replace />} />
-            </Routes>
+            <Suspense fallback={<PageFallback />}>
+              <Routes>
+                <Route path="/" element={<Navigate to="/entscheidung" replace />} />
+                <Route path="/welcome" element={<LandingPage />} />
+                <Route element={<MediaShell />}>
+                  <Route path="/entscheidung" element={<DecisionPage />} />
+                  <Route path="/regionen" element={<RegionsPage />} />
+                  <Route path="/kampagnen" element={<CampaignsPage />} />
+                  <Route path="/kampagnen/:id" element={<CampaignsPage />} />
+                  <Route path="/evidenz" element={<EvidencePage />} />
+                  <Route path="/bericht" element={<WeeklyReport />} />
+                </Route>
+                {/* Legacy redirects */}
+                <Route path="/lagebild" element={<Navigate to="/entscheidung" replace />} />
+                <Route path="/empfehlungen" element={<Navigate to="/kampagnen" replace />} />
+                <Route path="/empfehlungen/:id" element={<LegacyRecommendationRedirect />} />
+                <Route path="/validierung" element={<Navigate to="/evidenz" replace />} />
+                <Route path="/dashboard" element={<Navigate to="/entscheidung" replace />} />
+                <Route path="/dashboard/recommendations/:id" element={<LegacyRecommendationRedirect />} />
+                <Route path="/backtest" element={<Navigate to="/evidenz" replace />} />
+              </Routes>
+            </Suspense>
           </Router>
         </AuthContext.Provider>
       </ToastProvider>

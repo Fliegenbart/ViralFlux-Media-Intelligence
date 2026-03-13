@@ -53,6 +53,8 @@ data/raw/*
 data/processed/*
 !data/raw/.gitkeep
 !data/processed/.gitkeep
+Test-Daten/
+demo-data/
 
 # ML Model Artifacts
 backend/app/ml_models/**/*.json

@@ -8,6 +8,16 @@ www.fluxengine.labpulse.ai {
 }
 
 fluxengine.labpulse.ai {
+  # Security headers
+  header {
+    Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+    X-Content-Type-Options "nosniff"
+    X-Frame-Options "DENY"
+    Referrer-Policy "strict-origin-when-cross-origin"
+    Permissions-Policy "camera=(), microphone=(), geolocation=()"
+    -Server
+  }
+
   @backend_routes {
     path /api /api/* /api/v1/* /health /docs /docs/* /openapi.json
   }

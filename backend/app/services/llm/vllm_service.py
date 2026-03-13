@@ -6,7 +6,7 @@ logger = logging.getLogger(__name__)
 
 # ENTERPRISE HARD RULES: Strictly local vLLM API - Daten verlassen den Server nie!
 VLLM_BASE_URL = os.getenv("VLLM_BASE_URL", "http://localhost:8000/v1")
-VLLM_API_KEY = "local"  # Dummy-Key, da lokales Hosting
+VLLM_API_KEY = os.getenv("VLLM_API_KEY", "local")
 MODEL_NAME = "Qwen/Qwen2.5-VL-7B-Instruct-AWQ"
 
 # Initialisiere den OpenAI Client als Wrapper für den lokalen vLLM

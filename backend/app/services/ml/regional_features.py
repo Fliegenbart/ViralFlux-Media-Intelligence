@@ -8,7 +8,7 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
-from sqlalchemy import Float, func
+from sqlalchemy import Integer, func
 from sqlalchemy.orm import Session
 
 from app.models.database import (
@@ -185,7 +185,7 @@ class RegionalFeatureBuilder:
                 func.max(WastewaterData.available_time).label("available_time"),
                 func.avg(WastewaterData.viruslast).label("viral_load"),
                 func.count(WastewaterData.id).label("site_count"),
-                func.avg(func.coalesce(WastewaterData.unter_bg, False).cast(Float)).label("under_bg_share"),
+                func.avg(func.cast(func.coalesce(WastewaterData.unter_bg, False), Integer)).label("under_bg_share"),
                 func.stddev_pop(WastewaterData.viruslast).label("viral_std"),
             )
             .filter(

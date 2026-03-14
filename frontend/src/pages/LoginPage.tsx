@@ -52,7 +52,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
           style={{
             fontSize: 20,
             fontWeight: 700,
-            marginBottom: 4,
+            marginBottom: 8,
             color: 'var(--text-primary, #1e293b)',
           }}
         >
@@ -72,13 +72,13 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
           <div
             role="alert"
             style={{
-              padding: '8px 12px',
-              borderRadius: 6,
-              background: '#fef2f2',
-              color: '#dc2626',
+              padding: '10px 14px',
+              borderRadius: 8,
+              background: 'var(--status-danger-bg, rgba(239,68,68,0.08))',
+              color: 'var(--status-danger, #dc2626)',
               fontSize: 13,
               marginBottom: 16,
-              border: '1px solid #fecaca',
+              border: '1px solid var(--status-danger-border, rgba(239,68,68,0.2))',
             }}
           >
             {error}
@@ -91,7 +91,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
             display: 'block',
             fontSize: 13,
             fontWeight: 500,
-            marginBottom: 4,
+            marginBottom: 8,
             color: 'var(--text-secondary, #475569)',
           }}
         >
@@ -107,7 +107,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
           style={{
             width: '100%',
             padding: '8px 12px',
-            borderRadius: 6,
+            borderRadius: 8,
             border: '1px solid var(--border-color, #e2e8f0)',
             fontSize: 14,
             marginBottom: 16,
@@ -123,7 +123,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
             display: 'block',
             fontSize: 13,
             fontWeight: 500,
-            marginBottom: 4,
+            marginBottom: 8,
             color: 'var(--text-secondary, #475569)',
           }}
         >
@@ -139,7 +139,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
           style={{
             width: '100%',
             padding: '8px 12px',
-            borderRadius: 6,
+            borderRadius: 8,
             border: '1px solid var(--border-color, #e2e8f0)',
             fontSize: 14,
             marginBottom: 24,
@@ -154,10 +154,10 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
           disabled={loading}
           style={{
             width: '100%',
-            padding: '10px 16px',
-            borderRadius: 6,
+            padding: '12px 18px',
+            borderRadius: 8,
             border: 'none',
-            background: loading ? '#94a3b8' : '#2563eb',
+            background: loading ? 'var(--text-muted, #94a3b8)' : 'var(--color-primary, #4338ca)',
             color: '#fff',
             fontSize: 14,
             fontWeight: 600,

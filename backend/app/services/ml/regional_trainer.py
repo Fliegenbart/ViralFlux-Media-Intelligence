@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 import json
 import logging
 import pickle
@@ -12,6 +13,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 from sklearn.isotonic import IsotonicRegression
+from sklearn.linear_model import LogisticRegression
 from xgboost import XGBClassifier, XGBRegressor
 
 from app.services.ml.regional_features import RegionalFeatureBuilder
@@ -127,6 +129,24 @@ def _json_safe(value: Any) -> Any:
     if isinstance(value, (list, tuple, set)):
         return [_json_safe(item) for item in value]
     return str(value)
+
+
+@dataclass
+class ProbabilityCalibrator:
+    """Serializable wrapper for calibration methods with a unified predict API."""
+
+    method: str
+    model: Any | None = None
+
+    def predict(self, raw_probabilities: np.ndarray) -> np.ndarray:
+        values = np.asarray(raw_probabilities, dtype=float)
+        if self.method == "identity" or self.model is None:
+            return np.clip(values, 0.001, 0.999)
+        if self.method == "isotonic":
+            return np.clip(self.model.predict(values), 0.001, 0.999)
+        if self.method == "platt":
+            return np.clip(self.model.predict_proba(values.reshape(-1, 1))[:, 1], 0.001, 0.999)
+        raise ValueError(f"Unsupported calibration method: {self.method}")
 
 
 class RegionalModelTrainer:
@@ -359,21 +379,19 @@ class RegionalModelTrainer:
                 if best is None:
                     best = candidate
                     continue
-                if candidate["precision_at_top3"] > best["precision_at_top3"]:
+                if candidate["precision"] > best["precision"]:
                     best = candidate
-                elif np.isclose(candidate["precision_at_top3"], best["precision_at_top3"]):
+                elif np.isclose(candidate["precision"], best["precision"]):
                     if candidate["pr_auc"] > best["pr_auc"]:
                         best = candidate
                     elif np.isclose(candidate["pr_auc"], best["pr_auc"]):
-                        if candidate["ece"] < best["ece"]:
+                        if candidate["precision_at_top3"] > best["precision_at_top3"]:
                             best = candidate
-                        elif np.isclose(candidate["ece"], best["ece"]) and (
-                            candidate["precision"] > best["precision"] or (
-                                np.isclose(candidate["precision"], best["precision"])
-                                and candidate["recall"] > best["recall"]
-                            )
-                        ):
-                            best = candidate
+                        elif np.isclose(candidate["precision_at_top3"], best["precision_at_top3"]):
+                            if candidate["ece"] < best["ece"]:
+                                best = candidate
+                            elif np.isclose(candidate["ece"], best["ece"]) and candidate["recall"] > best["recall"]:
+                                best = candidate
 
         if best is None:
             best = {
@@ -431,7 +449,7 @@ class RegionalModelTrainer:
                 model_train_df[feature_columns].to_numpy(),
                 model_train_df["event_label"].to_numpy(),
             )
-            calibration = self._fit_isotonic(
+            calibration = self._fit_calibrator(
                 classifier.predict_proba(cal_df[feature_columns].to_numpy())[:, 1],
                 cal_df["event_label"].to_numpy(),
             )
@@ -513,7 +531,7 @@ class RegionalModelTrainer:
                 model_train_df[feature_columns].to_numpy(),
                 model_train_df["event_label"].to_numpy(),
             )
-            calibration = self._fit_isotonic(
+            calibration = self._fit_calibrator(
                 classifier.predict_proba(cal_df[feature_columns].to_numpy())[:, 1],
                 cal_df["event_label"].to_numpy(),
             )
@@ -652,7 +670,7 @@ class RegionalModelTrainer:
             panel[feature_columns].to_numpy(),
             panel["event_label"].to_numpy(),
         )
-        calibration = self._fit_isotonic(
+        calibration = self._fit_calibrator(
             oof_frame["event_probability_raw"].to_numpy(),
             oof_frame["event_label"].to_numpy(),
         )
@@ -749,18 +767,65 @@ class RegionalModelTrainer:
         return model
 
     @staticmethod
-    def _fit_isotonic(raw_probabilities: np.ndarray, labels: np.ndarray) -> IsotonicRegression | None:
-        if len(raw_probabilities) < 20 or len(np.unique(labels)) < 2:
-            return None
-        calibration = IsotonicRegression(out_of_bounds="clip")
-        calibration.fit(raw_probabilities, labels.astype(float))
-        return calibration
+    def _fit_calibrator(self, raw_probabilities: np.ndarray, labels: np.ndarray) -> ProbabilityCalibrator:
+        raw = np.asarray(raw_probabilities, dtype=float)
+        y = np.asarray(labels, dtype=int)
+        if len(raw) < 20 or len(np.unique(y)) < 2:
+            return ProbabilityCalibrator(method="identity")
+
+        split_idx = max(10, int(len(raw) * 0.7))
+        split_idx = min(split_idx, len(raw) - 10)
+        if split_idx <= 0 or split_idx >= len(raw):
+            split_idx = len(raw)
+
+        if split_idx < len(raw):
+            fit_raw, eval_raw = raw[:split_idx], raw[split_idx:]
+            fit_y, eval_y = y[:split_idx], y[split_idx:]
+        else:
+            fit_raw, eval_raw = raw, raw
+            fit_y, eval_y = y, y
+
+        candidates: list[tuple[str, Any | None]] = [("identity", None)]
+        if len(np.unique(fit_y)) >= 2:
+            platt = LogisticRegression(random_state=42, solver="lbfgs")
+            platt.fit(fit_raw.reshape(-1, 1), fit_y)
+            candidates.append(("platt", platt))
+            if len(fit_raw) >= 20:
+                isotonic = IsotonicRegression(out_of_bounds="clip")
+                isotonic.fit(fit_raw, fit_y.astype(float))
+                candidates.append(("isotonic", isotonic))
+
+        best_method = "identity"
+        best_model: Any | None = None
+        best_metrics: tuple[float, float] | None = None
+        for method, model in candidates:
+            calibrator = ProbabilityCalibrator(method=method, model=model)
+            calibrated = calibrator.predict(eval_raw)
+            metrics = (
+                float(brier_score_safe(eval_y, calibrated)),
+                float(compute_ece(eval_y, calibrated)),
+            )
+            if best_metrics is None or metrics < best_metrics:
+                best_method = method
+                best_model = model
+                best_metrics = metrics
+
+        if best_method == "identity":
+            return ProbabilityCalibrator(method="identity")
+        if best_method == "platt":
+            final_model = LogisticRegression(random_state=42, solver="lbfgs")
+            final_model.fit(raw.reshape(-1, 1), y)
+            return ProbabilityCalibrator(method="platt", model=final_model)
+
+        final_isotonic = IsotonicRegression(out_of_bounds="clip")
+        final_isotonic.fit(raw, y.astype(float))
+        return ProbabilityCalibrator(method="isotonic", model=final_isotonic)
 
     @staticmethod
-    def _apply_calibration(calibration: IsotonicRegression | None, raw_probabilities: np.ndarray) -> np.ndarray:
+    def _apply_calibration(calibration: ProbabilityCalibrator | None, raw_probabilities: np.ndarray) -> np.ndarray:
         if calibration is None:
             return np.clip(raw_probabilities.astype(float), 0.001, 0.999)
-        return np.clip(calibration.predict(raw_probabilities.astype(float)), 0.001, 0.999)
+        return calibration.predict(np.asarray(raw_probabilities, dtype=float))
 
     def _amelag_only_probabilities(
         self,
@@ -779,7 +844,7 @@ class RegionalModelTrainer:
         )
         raw_prob = classifier.predict_proba(test_df[feature_columns].to_numpy())[:, 1]
         train_raw = classifier.predict_proba(train_df[feature_columns].to_numpy())[:, 1]
-        calibration = self._fit_isotonic(train_raw, train_df["event_label"].to_numpy())
+        calibration = self._fit_calibrator(train_raw, train_df["event_label"].to_numpy())
         return self._apply_calibration(calibration, raw_prob)
 
     @staticmethod

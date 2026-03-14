@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 
-import { BacktestResponse, MediaCampaignsResponse, MediaDecisionResponse, MediaEvidenceResponse, MediaRegionsResponse, TruthImportBatchDetailResponse, TruthImportResponse } from '../../types/media';
+import { BacktestResponse, MediaCampaignsResponse, MediaDecisionResponse, MediaEvidenceResponse, MediaRegionsResponse, RegionalBenchmarkResponse, RegionalPortfolioResponse, TruthImportBatchDetailResponse, TruthImportResponse } from '../../types/media';
 import { mediaApi } from './api';
 
 function noop() {}
@@ -20,13 +20,19 @@ export function useDecisionPageData(
   const [decisionLoading, setDecisionLoading] = useState(false);
   const [waveOutlook, setWaveOutlook] = useState<BacktestResponse | null>(null);
   const [waveOutlookLoading, setWaveOutlookLoading] = useState(false);
+  const [regionalBenchmark, setRegionalBenchmark] = useState<RegionalBenchmarkResponse | null>(null);
+  const [regionalPortfolio, setRegionalPortfolio] = useState<RegionalPortfolioResponse | null>(null);
+  const [regionalPortfolioLoading, setRegionalPortfolioLoading] = useState(false);
 
   const loadDecision = useCallback(async () => {
     setDecisionLoading(true);
+    setRegionalPortfolioLoading(true);
     try {
-      const [decisionResult, evidenceResult] = await Promise.allSettled([
+      const [decisionResult, evidenceResult, benchmarkResult, portfolioResult] = await Promise.allSettled([
         mediaApi.getDecision(virus, brand),
         mediaApi.getEvidence(virus, brand),
+        mediaApi.getRegionalBenchmark(),
+        mediaApi.getRegionalPortfolio(),
       ]);
 
       if (decisionResult.status === 'fulfilled') {
@@ -41,11 +47,26 @@ export function useDecisionPageData(
         console.error('Decision evidence fetch failed', evidenceResult.reason);
         setDecisionEvidence(null);
       }
+
+      if (benchmarkResult.status === 'fulfilled') {
+        setRegionalBenchmark(benchmarkResult.value);
+      } else {
+        console.error('Regional benchmark fetch failed', benchmarkResult.reason);
+        setRegionalBenchmark(null);
+      }
+
+      if (portfolioResult.status === 'fulfilled') {
+        setRegionalPortfolio(portfolioResult.value);
+      } else {
+        console.error('Regional portfolio fetch failed', portfolioResult.reason);
+        setRegionalPortfolio(null);
+      }
     } catch (error) {
       console.error('Decision fetch failed', error);
       toast('Entscheidung konnte nicht geladen werden.', 'error');
     } finally {
       setDecisionLoading(false);
+      setRegionalPortfolioLoading(false);
     }
   }, [brand, toast, virus]);
 
@@ -87,6 +108,9 @@ export function useDecisionPageData(
     loadDecision,
     waveOutlook,
     waveOutlookLoading,
+    regionalBenchmark,
+    regionalPortfolio,
+    regionalPortfolioLoading,
   };
 }
 

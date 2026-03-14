@@ -21,6 +21,7 @@ from app.services.ml.regional_panel_utils import (
     TARGET_WINDOW_DAYS,
 )
 from app.services.ml.regional_trainer import _virus_slug
+from app.services.ml.training_contract import SUPPORTED_VIRUS_TYPES
 
 logger = logging.getLogger(__name__)
 
@@ -269,6 +270,174 @@ class RegionalForecastService:
             "recommendations": recommendations,
         }
 
+    def benchmark_supported_viruses(
+        self,
+        *,
+        reference_virus: str = "Influenza A",
+    ) -> dict[str, Any]:
+        items: list[dict[str, Any]] = []
+        reference_metrics: dict[str, Any] | None = None
+
+        for virus_typ in SUPPORTED_VIRUS_TYPES:
+            artifacts = self._load_artifacts(virus_typ)
+            metadata = artifacts.get("metadata") or {}
+            aggregate_metrics = metadata.get("aggregate_metrics") or {}
+            quality_gate = metadata.get("quality_gate") or {"overall_passed": False, "forecast_readiness": "NO_MODEL"}
+            dataset_manifest = metadata.get("dataset_manifest") or {}
+
+            item = {
+                "virus_typ": virus_typ,
+                "status": "trained" if aggregate_metrics else "no_model",
+                "trained_at": metadata.get("trained_at"),
+                "states": int(dataset_manifest.get("states") or 0),
+                "rows": int(dataset_manifest.get("rows") or 0),
+                "truth_source": dataset_manifest.get("truth_source"),
+                "aggregate_metrics": aggregate_metrics,
+                "quality_gate": quality_gate,
+                "selection": metadata.get("label_selection") or {},
+            }
+            if virus_typ == reference_virus and aggregate_metrics:
+                reference_metrics = aggregate_metrics
+            items.append(item)
+
+        for item in items:
+            item["delta_vs_reference"] = self._metric_delta(
+                item.get("aggregate_metrics") or {},
+                reference_metrics or {},
+            )
+            item["benchmark_score"] = self._benchmark_score(item)
+
+        ranked = sorted(
+            items,
+            key=lambda item: (
+                item.get("status") == "trained",
+                bool((item.get("quality_gate") or {}).get("overall_passed")),
+                float((item.get("aggregate_metrics") or {}).get("precision_at_top3") or 0.0),
+                float((item.get("aggregate_metrics") or {}).get("pr_auc") or 0.0),
+                -float((item.get("aggregate_metrics") or {}).get("ece") or 1.0),
+                -float((item.get("aggregate_metrics") or {}).get("activation_false_positive_rate") or 1.0),
+            ),
+            reverse=True,
+        )
+        for rank, item in enumerate(ranked, start=1):
+            item["rank"] = rank
+
+        return {
+            "reference_virus": reference_virus,
+            "generated_at": datetime.utcnow().isoformat(),
+            "trained_viruses": sum(1 for item in ranked if item["status"] == "trained"),
+            "go_viruses": sum(1 for item in ranked if (item.get("quality_gate") or {}).get("overall_passed")),
+            "benchmark": ranked,
+        }
+
+    def build_portfolio_view(
+        self,
+        *,
+        horizon_days: int = 7,
+        top_n: int = 12,
+        reference_virus: str = "Influenza A",
+    ) -> dict[str, Any]:
+        benchmark_payload = self.benchmark_supported_viruses(reference_virus=reference_virus)
+        benchmark_map = {
+            item["virus_typ"]: item
+            for item in benchmark_payload.get("benchmark", [])
+            if item.get("status") == "trained"
+        }
+
+        opportunities: list[dict[str, Any]] = []
+        virus_rollup: list[dict[str, Any]] = []
+        latest_as_of_date: str | None = None
+
+        for virus_typ in SUPPORTED_VIRUS_TYPES:
+            benchmark_item = benchmark_map.get(virus_typ)
+            if not benchmark_item:
+                continue
+
+            forecast = self.predict_all_regions(virus_typ=virus_typ, horizon_days=horizon_days)
+            predictions = forecast.get("predictions") or []
+            if not predictions:
+                continue
+
+            top_prediction = predictions[0]
+            latest_as_of_date = str(max(filter(None, [latest_as_of_date, forecast.get("as_of_date")])))
+            virus_rollup.append(
+                {
+                    "virus_typ": virus_typ,
+                    "rank": benchmark_item.get("rank"),
+                    "benchmark_score": benchmark_item.get("benchmark_score"),
+                    "quality_gate": benchmark_item.get("quality_gate"),
+                    "aggregate_metrics": benchmark_item.get("aggregate_metrics"),
+                    "top_region": top_prediction.get("bundesland"),
+                    "top_region_name": top_prediction.get("bundesland_name"),
+                    "top_event_probability": top_prediction.get("event_probability_calibrated"),
+                    "top_change_pct": top_prediction.get("change_pct"),
+                    "products": GELO_PRODUCTS.get(virus_typ, ["GeloMyrtol forte"]),
+                }
+            )
+
+            for prediction in predictions:
+                action, intensity = self._portfolio_action(
+                    prediction=prediction,
+                    benchmark_item=benchmark_item,
+                )
+                opportunity = {
+                    "virus_typ": virus_typ,
+                    "bundesland": prediction["bundesland"],
+                    "bundesland_name": prediction["bundesland_name"],
+                    "rank_within_virus": prediction["rank"],
+                    "portfolio_action": action,
+                    "portfolio_intensity": intensity,
+                    "portfolio_priority_score": self._portfolio_priority_score(
+                        prediction=prediction,
+                        benchmark_item=benchmark_item,
+                    ),
+                    "event_probability_calibrated": prediction["event_probability_calibrated"],
+                    "expected_next_week_incidence": prediction["expected_next_week_incidence"],
+                    "prediction_interval": prediction["prediction_interval"],
+                    "current_known_incidence": prediction["current_known_incidence"],
+                    "change_pct": prediction["change_pct"],
+                    "trend": prediction["trend"],
+                    "quality_gate": prediction["quality_gate"],
+                    "benchmark_rank": benchmark_item.get("rank"),
+                    "benchmark_score": benchmark_item.get("benchmark_score"),
+                    "aggregate_metrics": benchmark_item.get("aggregate_metrics"),
+                    "products": GELO_PRODUCTS.get(virus_typ, ["GeloMyrtol forte"]),
+                    "channels": MEDIA_CHANNELS[intensity],
+                    "as_of_date": prediction["as_of_date"],
+                    "target_week_start": prediction["target_week_start"],
+                }
+                opportunities.append(opportunity)
+
+        opportunities.sort(
+            key=lambda item: (
+                float(item.get("portfolio_priority_score") or 0.0),
+                float(item.get("event_probability_calibrated") or 0.0),
+                float(item.get("change_pct") or 0.0),
+            ),
+            reverse=True,
+        )
+        for rank, item in enumerate(opportunities, start=1):
+            item["rank"] = rank
+
+        region_rollup = self._region_rollup(opportunities)
+        return {
+            "generated_at": datetime.utcnow().isoformat(),
+            "reference_virus": reference_virus,
+            "latest_as_of_date": latest_as_of_date,
+            "summary": {
+                "trained_viruses": benchmark_payload.get("trained_viruses", 0),
+                "go_viruses": benchmark_payload.get("go_viruses", 0),
+                "total_opportunities": len(opportunities),
+                "watchlist_opportunities": sum(1 for item in opportunities if item["portfolio_action"] == "watch"),
+                "priority_opportunities": sum(1 for item in opportunities if item["portfolio_action"] == "prioritize"),
+                "validated_opportunities": sum(1 for item in opportunities if item["portfolio_action"] in {"activate", "prepare"}),
+            },
+            "benchmark": benchmark_payload.get("benchmark", []),
+            "virus_rollup": virus_rollup,
+            "region_rollup": region_rollup,
+            "top_opportunities": opportunities[: max(int(top_n), 1)],
+        }
+
     def _load_artifacts(self, virus_typ: str) -> dict[str, Any]:
         model_dir = self.models_dir / _virus_slug(virus_typ)
         required_paths = {
@@ -310,3 +479,108 @@ class RegionalForecastService:
 
     def _latest_as_of_date(self, virus_typ: str) -> pd.Timestamp:
         return self.feature_builder.latest_available_as_of_date(virus_typ=virus_typ)
+
+    @staticmethod
+    def _metric_delta(candidate: dict[str, Any], reference: dict[str, Any]) -> dict[str, float]:
+        delta: dict[str, float] = {}
+        for metric in (
+            "precision_at_top3",
+            "precision_at_top5",
+            "pr_auc",
+            "brier_score",
+            "ece",
+            "activation_false_positive_rate",
+        ):
+            if metric in candidate and metric in reference:
+                delta[metric] = round(float(candidate[metric]) - float(reference[metric]), 6)
+        return delta
+
+    @staticmethod
+    def _benchmark_score(item: dict[str, Any]) -> float:
+        metrics = item.get("aggregate_metrics") or {}
+        quality_gate = item.get("quality_gate") or {}
+        precision = float(metrics.get("precision_at_top3") or 0.0)
+        pr_auc = float(metrics.get("pr_auc") or 0.0)
+        ece = float(metrics.get("ece") or 1.0)
+        fp_rate = float(metrics.get("activation_false_positive_rate") or 1.0)
+        score = (
+            precision * 0.4
+            + pr_auc * 0.35
+            + max(0.0, 1.0 - min(ece, 1.0)) * 0.15
+            + max(0.0, 1.0 - min(fp_rate, 1.0)) * 0.10
+        )
+        if quality_gate.get("overall_passed"):
+            score += 0.1
+        return round(score * 100.0, 2)
+
+    def _portfolio_priority_score(
+        self,
+        *,
+        prediction: dict[str, Any],
+        benchmark_item: dict[str, Any],
+    ) -> float:
+        probability = float(prediction.get("event_probability_calibrated") or 0.0)
+        change_pct = float(prediction.get("change_pct") or 0.0)
+        benchmark_score = float(benchmark_item.get("benchmark_score") or 0.0) / 100.0
+        quality_gate = prediction.get("quality_gate") or {}
+        readiness_multiplier = 1.0 if quality_gate.get("overall_passed") else 0.72
+        momentum_multiplier = 1.0 + min(max(change_pct, 0.0), 80.0) / 200.0
+        return round(probability * max(benchmark_score, 0.05) * readiness_multiplier * momentum_multiplier * 100.0, 2)
+
+    def _portfolio_action(
+        self,
+        *,
+        prediction: dict[str, Any],
+        benchmark_item: dict[str, Any],
+    ) -> tuple[str, str]:
+        probability = float(prediction.get("event_probability_calibrated") or 0.0)
+        change_pct = float(prediction.get("change_pct") or 0.0)
+        threshold = float(prediction.get("action_threshold") or 0.6)
+        quality_gate = prediction.get("quality_gate") or {}
+
+        if quality_gate.get("overall_passed") and probability >= threshold and change_pct >= 20:
+            return "activate", "high"
+        if quality_gate.get("overall_passed") and probability >= threshold:
+            return "prepare", "medium"
+        if float(benchmark_item.get("benchmark_score") or 0.0) >= 35.0 and probability >= max(0.45, threshold * 0.8):
+            return "prioritize", "medium"
+        return "watch", "low"
+
+    @staticmethod
+    def _region_rollup(opportunities: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        grouped: dict[str, list[dict[str, Any]]] = {}
+        for item in opportunities:
+            grouped.setdefault(item["bundesland"], []).append(item)
+
+        region_rollup: list[dict[str, Any]] = []
+        for bundesland, items in grouped.items():
+            ranked_items = sorted(
+                items,
+                key=lambda item: float(item.get("portfolio_priority_score") or 0.0),
+                reverse=True,
+            )
+            leader = ranked_items[0]
+            region_rollup.append(
+                {
+                    "bundesland": bundesland,
+                    "bundesland_name": leader["bundesland_name"],
+                    "leading_virus": leader["virus_typ"],
+                    "leading_probability": leader["event_probability_calibrated"],
+                    "leading_priority_score": leader["portfolio_priority_score"],
+                    "top_signals": [
+                        {
+                            "virus_typ": item["virus_typ"],
+                            "portfolio_action": item["portfolio_action"],
+                            "portfolio_priority_score": item["portfolio_priority_score"],
+                            "event_probability_calibrated": item["event_probability_calibrated"],
+                        }
+                        for item in ranked_items[:3]
+                    ],
+                }
+            )
+
+        region_rollup.sort(
+            key=lambda item: float(item.get("leading_priority_score") or 0.0),
+            reverse=True,
+        )
+        return region_rollup

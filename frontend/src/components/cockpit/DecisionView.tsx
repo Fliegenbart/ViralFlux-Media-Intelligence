@@ -7,8 +7,11 @@ import {
   BacktestResponse,
   MediaDecisionResponse,
   MediaEvidenceResponse,
+  RegionalBenchmarkResponse,
+  RegionalPortfolioResponse,
 } from '../../types/media';
 import { WaveOutlookPanel } from './BacktestVisuals';
+import RegionalPortfolioPanel from './RegionalPortfolioPanel';
 import {
   VIRUS_OPTIONS,
   formatCurrency,
@@ -31,9 +34,13 @@ interface Props {
   loading: boolean;
   waveOutlook: BacktestResponse | null;
   waveOutlookLoading: boolean;
+  regionalBenchmark: RegionalBenchmarkResponse | null;
+  regionalPortfolio: RegionalPortfolioResponse | null;
+  regionalPortfolioLoading: boolean;
   onOpenRecommendation: (id: string) => void;
   onOpenRegions: () => void;
   onOpenCampaigns: () => void;
+  onFocusPortfolioOpportunity: (virus: string, regionCode: string) => void;
 }
 
 const DecisionView: React.FC<Props> = ({
@@ -44,9 +51,13 @@ const DecisionView: React.FC<Props> = ({
   loading,
   waveOutlook,
   waveOutlookLoading,
+  regionalBenchmark,
+  regionalPortfolio,
+  regionalPortfolioLoading,
   onOpenRecommendation,
   onOpenRegions,
   onOpenCampaigns,
+  onFocusPortfolioOpportunity,
 }) => {
   const weeklyDecision = decision?.weekly_decision;
   const latestMarket = decision?.backtest_summary?.latest_market;
@@ -205,6 +216,14 @@ const DecisionView: React.FC<Props> = ({
           </div>
         </div>
       </section>
+
+      <RegionalPortfolioPanel
+        currentVirus={virus}
+        benchmark={regionalBenchmark}
+        portfolio={regionalPortfolio}
+        loading={regionalPortfolioLoading}
+        onFocusOpportunity={onFocusPortfolioOpportunity}
+      />
 
       <section className="cockpit-grid">
         <WaveOutlookPanel

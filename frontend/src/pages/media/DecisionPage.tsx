@@ -16,6 +16,9 @@ const DecisionPage: React.FC = () => {
     decisionLoading,
     waveOutlook,
     waveOutlookLoading,
+    regionalBenchmark,
+    regionalPortfolio,
+    regionalPortfolioLoading,
   } = useDecisionPageData(virus, brand, dataVersion, toast);
 
   return (
@@ -27,9 +30,16 @@ const DecisionPage: React.FC = () => {
       loading={decisionLoading}
       waveOutlook={waveOutlook}
       waveOutlookLoading={waveOutlookLoading}
+      regionalBenchmark={regionalBenchmark}
+      regionalPortfolio={regionalPortfolio}
+      regionalPortfolioLoading={regionalPortfolioLoading}
       onOpenRecommendation={(id) => openRecommendation(id, 'overlay')}
       onOpenRegions={() => navigate('/regionen')}
       onOpenCampaigns={() => navigate('/kampagnen')}
+      onFocusPortfolioOpportunity={(nextVirus, regionCode) => {
+        setVirus(nextVirus);
+        navigate('/regionen', { state: { regionCode } });
+      }}
     />
   );
 };

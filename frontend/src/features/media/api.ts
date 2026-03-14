@@ -4,6 +4,8 @@ import {
   MediaCampaignsResponse,
   MediaDecisionResponse,
   MediaEvidenceResponse,
+  RegionalBenchmarkResponse,
+  RegionalPortfolioResponse,
   MediaRegionsResponse,
   PreparedSyncPayload,
   RecommendationCard,
@@ -111,6 +113,16 @@ export const mediaApi = {
 
   async getBacktestRun(runId: string): Promise<BacktestResponse> {
     return fetchJson<BacktestResponse>(`/api/v1/backtest/runs/${encodeURIComponent(runId)}`);
+  },
+
+  async getRegionalBenchmark(referenceVirus = 'Influenza A'): Promise<RegionalBenchmarkResponse> {
+    const qs = new URLSearchParams({ reference_virus: referenceVirus });
+    return fetchJson<RegionalBenchmarkResponse>(`/api/v1/forecast/regional/benchmark?${qs.toString()}`);
+  },
+
+  async getRegionalPortfolio(referenceVirus = 'Influenza A', topN = 12): Promise<RegionalPortfolioResponse> {
+    const qs = new URLSearchParams({ reference_virus: referenceVirus, top_n: String(topN) });
+    return fetchJson<RegionalPortfolioResponse>(`/api/v1/forecast/regional/portfolio?${qs.toString()}`, undefined, 20000);
   },
 
   async getRecommendationDetail(id: string): Promise<RecommendationDetail> {

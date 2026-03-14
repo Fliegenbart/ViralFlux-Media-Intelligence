@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 
 import RegionWorkbench from '../../components/cockpit/RegionWorkbench';
 import { useToast } from '../../App';
@@ -7,6 +8,7 @@ import { useRegionsPageData } from '../../features/media/useMediaData';
 import { useMediaWorkflow } from '../../features/media/workflowContext';
 
 const RegionsPage: React.FC = () => {
+  const location = useLocation();
   const { toast } = useToast();
   const {
     virus,
@@ -27,6 +29,13 @@ const RegionsPage: React.FC = () => {
       setSelectedRegion(regionsView.map.top_regions[0].code);
     }
   }, [regionsView?.map?.top_regions, selectedRegion]);
+
+  useEffect(() => {
+    const regionCode = (location.state as { regionCode?: string } | null)?.regionCode;
+    if (regionCode) {
+      setSelectedRegion(regionCode);
+    }
+  }, [location.state]);
 
   const openOrCreateRegionCampaign = async (regionCode: string) => {
     setRegionActionLoading(true);

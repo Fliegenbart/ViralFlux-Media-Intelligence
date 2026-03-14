@@ -342,6 +342,36 @@ async def get_media_activation(
     )
 
 
+@router.get("/regional/benchmark")
+async def get_regional_benchmark(
+    reference_virus: str = "Influenza A",
+    db: Session = Depends(get_db),
+):
+    """Compare supported regional virus models against a shared benchmark virus."""
+    from app.services.ml.regional_forecast import RegionalForecastService
+
+    service = RegionalForecastService(db)
+    return service.benchmark_supported_viruses(reference_virus=reference_virus)
+
+
+@router.get("/regional/portfolio")
+async def get_regional_portfolio(
+    horizon_days: int = 7,
+    top_n: int = 12,
+    reference_virus: str = "Influenza A",
+    db: Session = Depends(get_db),
+):
+    """Prioritize regional opportunities across all supported virus lines."""
+    from app.services.ml.regional_forecast import RegionalForecastService
+
+    service = RegionalForecastService(db)
+    return service.build_portfolio_view(
+        horizon_days=horizon_days,
+        top_n=top_n,
+        reference_virus=reference_virus,
+    )
+
+
 @router.get("/regional/backtest")
 async def run_regional_backtest(
     virus_typ: str = "Influenza A",

@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 
 from app.services.ml.regional_forecast import RegionalForecastService
+from app.services.ml.training_contract import SUPPORTED_VIRUS_TYPES
 
 
 class _DummyClassifier:
@@ -113,6 +114,150 @@ class RegionalForecastServiceTests(unittest.TestCase):
         self.assertEqual(result["summary"]["total_budget_allocated"], 0.0)
         self.assertTrue(all(item["action"] == "watch" for item in result["recommendations"]))
         self.assertTrue(all(item["budget_eur"] == 0.0 for item in result["recommendations"]))
+
+    def test_benchmark_supported_viruses_ranks_by_quality_and_metrics(self) -> None:
+        service = RegionalForecastService(db=None)
+
+        artifact_payloads = {
+            "Influenza A": {
+                "metadata": {
+                    "trained_at": "2026-03-14T17:00:00",
+                    "dataset_manifest": {"states": 16, "rows": 2083, "truth_source": "survstat_kreis"},
+                    "aggregate_metrics": {
+                        "precision_at_top3": 0.18,
+                        "precision_at_top5": 0.17,
+                        "pr_auc": 0.51,
+                        "brier_score": 0.10,
+                        "ece": 0.06,
+                        "activation_false_positive_rate": 0.20,
+                    },
+                    "quality_gate": {"overall_passed": False, "forecast_readiness": "WATCH"},
+                    "label_selection": {"tau": 0.15},
+                }
+            },
+            "Influenza B": {
+                "metadata": {
+                    "trained_at": "2026-03-14T17:00:00",
+                    "dataset_manifest": {"states": 16, "rows": 2081, "truth_source": "survstat_kreis"},
+                    "aggregate_metrics": {
+                        "precision_at_top3": 0.17,
+                        "precision_at_top5": 0.16,
+                        "pr_auc": 0.49,
+                        "brier_score": 0.10,
+                        "ece": 0.05,
+                        "activation_false_positive_rate": 0.19,
+                    },
+                    "quality_gate": {"overall_passed": False, "forecast_readiness": "WATCH"},
+                    "label_selection": {"tau": 0.10},
+                }
+            },
+            "SARS-CoV-2": {
+                "metadata": {
+                    "trained_at": "2026-03-14T17:00:00",
+                    "dataset_manifest": {"states": 16, "rows": 4042, "truth_source": "survstat_kreis"},
+                    "aggregate_metrics": {
+                        "precision_at_top3": 0.0,
+                        "precision_at_top5": 0.0,
+                        "pr_auc": 0.0,
+                        "brier_score": 0.01,
+                        "ece": 0.004,
+                        "activation_false_positive_rate": 1.0,
+                    },
+                    "quality_gate": {"overall_passed": False, "forecast_readiness": "WATCH"},
+                    "label_selection": {"tau": 0.10},
+                }
+            },
+        }
+        service._load_artifacts = lambda virus_typ: artifact_payloads.get(virus_typ, {})
+
+        result = service.benchmark_supported_viruses(reference_virus="Influenza A")
+
+        self.assertEqual(result["reference_virus"], "Influenza A")
+        self.assertEqual(result["trained_viruses"], 3)
+        self.assertEqual(result["benchmark"][0]["virus_typ"], "Influenza A")
+        self.assertEqual(result["benchmark"][1]["virus_typ"], "Influenza B")
+        self.assertEqual(result["benchmark"][-1]["virus_typ"], "RSV A")
+        influenza_b = next(item for item in result["benchmark"] if item["virus_typ"] == "Influenza B")
+        self.assertAlmostEqual(influenza_b["delta_vs_reference"]["precision_at_top3"], -0.01, places=6)
+
+    def test_build_portfolio_view_prioritizes_cross_virus_opportunities(self) -> None:
+        service = RegionalForecastService(db=None)
+
+        artifact_payloads = {
+            "Influenza A": {
+                "metadata": {
+                    "aggregate_metrics": {
+                        "precision_at_top3": 0.18,
+                        "precision_at_top5": 0.17,
+                        "pr_auc": 0.51,
+                        "brier_score": 0.10,
+                        "ece": 0.06,
+                        "activation_false_positive_rate": 0.20,
+                    },
+                    "quality_gate": {"overall_passed": False, "forecast_readiness": "WATCH"},
+                }
+            },
+            "Influenza B": {
+                "metadata": {
+                    "aggregate_metrics": {
+                        "precision_at_top3": 0.17,
+                        "precision_at_top5": 0.16,
+                        "pr_auc": 0.49,
+                        "brier_score": 0.10,
+                        "ece": 0.05,
+                        "activation_false_positive_rate": 0.19,
+                    },
+                    "quality_gate": {"overall_passed": False, "forecast_readiness": "WATCH"},
+                }
+            },
+        }
+        service._load_artifacts = lambda virus_typ: artifact_payloads.get(virus_typ, {})
+        service.predict_all_regions = lambda virus_typ, horizon_days=7: {
+            "virus_typ": virus_typ,
+            "as_of_date": "2026-03-06 00:00:00",
+            "predictions": [
+                {
+                    "bundesland": "BY",
+                    "bundesland_name": "Bayern",
+                    "rank": 1,
+                    "event_probability_calibrated": 0.62 if virus_typ == "Influenza A" else 0.67,
+                    "expected_next_week_incidence": 28.0,
+                    "prediction_interval": {"lower": 24.0, "upper": 32.0},
+                    "current_known_incidence": 10.0,
+                    "change_pct": 35.0 if virus_typ == "Influenza B" else 22.0,
+                    "trend": "steigend",
+                    "quality_gate": {"overall_passed": False, "forecast_readiness": "WATCH"},
+                    "action_threshold": 0.6,
+                    "as_of_date": "2026-03-06 00:00:00",
+                    "target_week_start": "2026-03-09 00:00:00",
+                },
+                {
+                    "bundesland": "BE",
+                    "bundesland_name": "Berlin",
+                    "rank": 2,
+                    "event_probability_calibrated": 0.45,
+                    "expected_next_week_incidence": 15.0,
+                    "prediction_interval": {"lower": 12.0, "upper": 18.0},
+                    "current_known_incidence": 11.0,
+                    "change_pct": 9.0,
+                    "trend": "stabil",
+                    "quality_gate": {"overall_passed": False, "forecast_readiness": "WATCH"},
+                    "action_threshold": 0.6,
+                    "as_of_date": "2026-03-06 00:00:00",
+                    "target_week_start": "2026-03-09 00:00:00",
+                },
+            ],
+        }
+
+        result = service.build_portfolio_view(top_n=4, reference_virus="Influenza A")
+
+        self.assertEqual(result["summary"]["trained_viruses"], 2)
+        self.assertEqual(result["top_opportunities"][0]["virus_typ"], "Influenza B")
+        self.assertEqual(result["top_opportunities"][0]["bundesland"], "BY")
+        self.assertEqual(result["top_opportunities"][0]["portfolio_action"], "prioritize")
+        self.assertEqual(result["region_rollup"][0]["leading_virus"], "Influenza B")
+        self.assertIn("GeloMyrtol forte", result["top_opportunities"][0]["products"])
+        self.assertEqual(len(result["benchmark"]), len(SUPPORTED_VIRUS_TYPES))
 
 
 if __name__ == "__main__":

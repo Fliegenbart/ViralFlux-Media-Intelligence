@@ -6,3 +6,4 @@ export * from './media/evidence';
 export * from './media/decision';
 export * from './media/regions';
 export * from './media/campaigns';
+export * from './media/portfolio';

@@ -97,3 +97,50 @@ async def get_training_status(task_id: str):
         response["error"] = str(task_result.result)
 
     return response
+
+
+@router.post("/train-regional", status_code=status.HTTP_202_ACCEPTED)
+@limiter.limit("3/minute")
+async def train_regional_models(
+    request: Request,
+    virus_typ: str = Body(default="Influenza A"),
+    current_user: dict = Depends(get_current_admin),
+):
+    """Train per-Bundesland XGBoost models for regional forecasting (async via Celery)."""
+    try:
+        task = celery_app.send_task(
+            "train_regional_models_task",
+            kwargs={"virus_typ": virus_typ},
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Celery broker not reachable: {exc}",
+        ) from exc
+
+    return {
+        "status": "regional_training_started",
+        "virus_typ": virus_typ,
+        "task_id": task.id,
+        "status_url": f"/api/v1/admin/ml/task-status/{task.id}",
+    }
+
+
+@router.get("/regional/accuracy")
+async def get_regional_accuracy(
+    virus_typ: str = "Influenza A",
+    current_user: dict = Depends(get_current_admin),
+):
+    """Get accuracy summary for all trained regional models."""
+    from app.db.session import get_db_context
+    from app.services.ml.regional_trainer import RegionalModelTrainer
+
+    with get_db_context() as db:
+        trainer = RegionalModelTrainer(db)
+        summaries = trainer.get_regional_accuracy_summary(virus_typ)
+
+    return {
+        "virus_typ": virus_typ,
+        "models": summaries,
+        "total": len(summaries),
+    }

@@ -766,6 +766,7 @@ class RegionalModelTrainer:
         model.fit(X, y)
         return model
 
+    @staticmethod
     def _fit_calibrator(self, raw_probabilities: np.ndarray, labels: np.ndarray) -> ProbabilityCalibrator:
         raw = np.asarray(raw_probabilities, dtype=float)
         y = np.asarray(labels, dtype=int)

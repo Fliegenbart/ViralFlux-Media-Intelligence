@@ -91,8 +91,8 @@ export function statusTone(status?: string | null): { background: string; color:
   const normalized = String(status || '').toUpperCase();
   if (normalized === 'ACTIVATED' || normalized === 'LIVE') {
     return {
-      background: 'rgba(16, 185, 129, 0.10)',
-      color: '#047857',
+      background: 'var(--status-success-bg, rgba(16, 185, 129, 0.10))',
+      color: 'var(--status-success, #047857)',
       border: '1px solid rgba(16, 185, 129, 0.24)',
     };
   }
@@ -105,15 +105,15 @@ export function statusTone(status?: string | null): { background: string; color:
   }
   if (normalized === 'READY' || normalized === 'APPROVE') {
     return {
-      background: 'rgba(16, 185, 129, 0.08)',
-      color: '#047857',
+      background: 'var(--status-success-bg, rgba(16, 185, 129, 0.08))',
+      color: 'var(--status-success, #047857)',
       border: '1px solid rgba(16, 185, 129, 0.20)',
     };
   }
   if (normalized === 'REVIEW') {
     return {
-      background: 'rgba(245, 158, 11, 0.12)',
-      color: '#b45309',
+      background: 'var(--status-warning-bg, rgba(245, 158, 11, 0.12))',
+      color: 'var(--status-warning, #b45309)',
       border: '1px solid rgba(245, 158, 11, 0.24)',
     };
   }
@@ -134,14 +134,14 @@ export function statusTone(status?: string | null): { background: string; color:
 export function readinessTone(isGo: boolean): { background: string; color: string; border: string } {
   if (isGo) {
     return {
-      background: 'rgba(16, 185, 129, 0.10)',
-      color: '#047857',
+      background: 'var(--status-success-bg, rgba(16, 185, 129, 0.10))',
+      color: 'var(--status-success, #047857)',
       border: '1px solid rgba(16, 185, 129, 0.24)',
     };
   }
   return {
-    background: 'rgba(245, 158, 11, 0.12)',
-    color: '#b45309',
+    background: 'var(--status-warning-bg, rgba(245, 158, 11, 0.12))',
+    color: 'var(--status-warning, #b45309)',
     border: '1px solid rgba(245, 158, 11, 0.24)',
   };
 }

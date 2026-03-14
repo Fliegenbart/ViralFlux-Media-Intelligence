@@ -92,14 +92,12 @@ const GermanyMap: React.FC<Props> = ({ regions, selectedRegion, onSelectRegion }
 
   return (
     <div style={{ position: 'relative' }}>
-      <svg viewBox="0 0 420 460" style={{ width: '100%', maxHeight: 560 }}>
+      <svg viewBox="0 0 420 460" style={{ width: '100%', maxHeight: 520 }}>
         <defs>
           <filter id="vf-map-shadow" x="-20%" y="-20%" width="140%" height="140%">
             <feDropShadow dx="0" dy="2" stdDeviation="3" floodColor="#94a3b8" floodOpacity="0.2" />
           </filter>
         </defs>
-
-        <rect x="0" y="0" width="420" height="460" rx="22" fill="rgba(255, 255, 255, 0.68)" />
 
         {shapes.map((shape) => {
           const code = shape.code;

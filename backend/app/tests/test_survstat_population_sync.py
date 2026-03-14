@@ -25,15 +25,15 @@ class SurvstatPopulationSyncTests(unittest.TestCase):
 
     def test_extract_destatis_modern_records_aggregates_municipalities_to_counties(self) -> None:
         frame = [
-            [None] * 11 for _ in range(6)
+            [None] * 10 for _ in range(6)
         ]
         frame.extend([
-            [40, 41, "01", "0", "01", None, None, "Flensburg, Stadt", None, None, None],
-            [60, 61, "01", "0", "01", "0000", "000", "Flensburg, Stadt", None, None, 96326],
-            [40, 43, "01", "0", "51", None, None, "Dithmarschen", None, None, None],
-            [60, 63, "01", "0", "51", "0011", "011", "Brunsbüttel, Stadt", None, None, 12381],
-            [60, 64, "01", "0", "51", "0044", "044", "Heide, Stadt", None, None, 21844],
-            [60, 64, "01", "0", "51", "0100", "100", "Musterort", None, None, 1000],
+            [40, 41, "01", "0", "01", None, None, "Flensburg, Stadt", None, None],
+            [60, 61, "01", "0", "01", "0000", "000", "Flensburg, Stadt", None, 96326],
+            [40, 43, "01", "0", "51", None, None, "Dithmarschen", None, None],
+            [60, 63, "01", "0", "51", "0011", "011", "Brunsbüttel, Stadt", None, 12381],
+            [60, 64, "01", "0", "51", "0044", "044", "Heide, Stadt", None, 21844],
+            [60, 64, "01", "0", "51", "0100", "100", "Musterort", None, 1000],
         ])
 
         records = self.service._extract_destatis_modern_records(pd.DataFrame(frame))

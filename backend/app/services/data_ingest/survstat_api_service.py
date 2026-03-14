@@ -168,10 +168,10 @@ class SurvstatApiService:
 
     def _extract_destatis_modern_records(self, frame: pd.DataFrame) -> list[dict[str, Any]]:
         """Parse the 2024 Gemeindeverzeichnis workbook and aggregate municipalities to Kreise."""
-        if frame.shape[1] < 11:
+        if frame.shape[1] < 10:
             return []
 
-        raw = frame.iloc[:, [0, 1, 2, 3, 4, 5, 6, 7, 10]].copy()
+        raw = frame.iloc[:, [0, 1, 2, 3, 4, 5, 6, 7, 9]].copy()
         raw.columns = [
             "satzart",
             "textkennzeichen",

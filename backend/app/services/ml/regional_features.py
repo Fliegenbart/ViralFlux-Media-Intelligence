@@ -82,8 +82,9 @@ class RegionalFeatureBuilder:
     ) -> pd.DataFrame:
         """Build one inference row per Bundesland for a shared as-of date."""
         effective_as_of = pd.Timestamp(as_of_date or datetime.utcnow()).normalize()
-        start_date = effective_as_of - pd.Timedelta(days=lookback_days)
-        truth_start = start_date - pd.Timedelta(days=730)
+        history_start = effective_as_of - pd.Timedelta(days=lookback_days)
+        row_start = effective_as_of - pd.Timedelta(days=TARGET_WINDOW_DAYS[1] + 7)
+        truth_start = history_start - pd.Timedelta(days=730)
 
         wastewater = self._load_wastewater_daily(virus_typ, truth_start)
         truth = self._load_truth_series(virus_typ, truth_start)
@@ -98,11 +99,22 @@ class RegionalFeatureBuilder:
             weather=weather,
             pollen=pollen,
             holidays=holidays,
-            start_date=effective_as_of,
+            start_date=row_start,
             end_date=effective_as_of,
             include_targets=False,
         )
-        return self._finalize_panel(rows)
+        panel = self._finalize_panel(rows)
+        if panel.empty:
+            return panel
+
+        latest_rows = (
+            panel.sort_values(["bundesland", "as_of_date"])
+            .groupby("bundesland", as_index=False)
+            .tail(1)
+            .sort_values("bundesland")
+            .reset_index(drop=True)
+        )
+        return latest_rows
 
     def latest_available_as_of_date(self, virus_typ: str = "Influenza A") -> pd.Timestamp:
         row = (

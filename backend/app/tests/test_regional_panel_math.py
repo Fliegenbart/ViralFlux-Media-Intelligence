@@ -3,6 +3,7 @@ from datetime import datetime
 
 import pandas as pd
 
+from app.services.ml.regional_features import RegionalFeatureBuilder
 from app.services.ml.regional_panel_utils import (
     activation_false_positive_rate,
     build_event_label,
@@ -118,6 +119,86 @@ class RegionalPanelMathTests(unittest.TestCase):
         )
         self.assertAlmostEqual(activation_false_positive_rate(frame, threshold=None), 0.0, places=6)
         self.assertAlmostEqual(median_lead_days(frame, threshold=None), 5.0, places=6)
+
+
+class RegionalFeatureBuilderInferenceTests(unittest.TestCase):
+    def test_inference_panel_uses_latest_available_row_when_as_of_has_no_exact_wastewater_date(self) -> None:
+        class _FakeBuilder(RegionalFeatureBuilder):
+            def __init__(self):
+                self.db = None
+
+            def _load_wastewater_daily(self, virus_typ: str, start_date: pd.Timestamp) -> pd.DataFrame:
+                del virus_typ, start_date
+                rows = []
+                for state in ("BY", "BE"):
+                    for offset, value_date in enumerate(pd.date_range("2026-03-03", periods=10, freq="D"), start=1):
+                        rows.append(
+                            {
+                                "bundesland": state,
+                                "datum": pd.Timestamp(value_date),
+                                "available_time": pd.Timestamp(value_date),
+                                "viral_load": float(5 + offset),
+                                "site_count": 5,
+                                "under_bg_share": 0.2,
+                                "viral_std": 1.0,
+                            }
+                        )
+                return pd.DataFrame(rows)
+
+            def _load_truth_series(self, virus_typ: str, start_date: pd.Timestamp) -> pd.DataFrame:
+                del virus_typ, start_date
+                rows = []
+                weeks = pd.date_range("2025-12-29", periods=12, freq="7D")
+                for state in ("BY", "BE"):
+                    for idx, week_start in enumerate(weeks, start=1):
+                        rows.append(
+                            {
+                                "bundesland": state,
+                                "week_start": pd.Timestamp(week_start),
+                                "available_date": pd.Timestamp(week_start),
+                                "incidence": float(idx * 5),
+                                "truth_source": "survstat_weekly",
+                            }
+                        )
+                return pd.DataFrame(rows)
+
+            def _load_weather(self, start_date: pd.Timestamp, end_date: pd.Timestamp) -> pd.DataFrame:
+                del start_date, end_date
+                return pd.DataFrame(
+                    {
+                        "bundesland": ["BY", "BE"],
+                        "datum": [pd.Timestamp("2026-03-14"), pd.Timestamp("2026-03-14")],
+                        "available_time": [pd.Timestamp("2026-03-14"), pd.Timestamp("2026-03-14")],
+                        "data_type": ["CURRENT", "CURRENT"],
+                        "temp": [8.0, 7.0],
+                        "humidity": [70.0, 72.0],
+                    }
+                )
+
+            def _load_pollen(self, start_date: pd.Timestamp, end_date: pd.Timestamp) -> pd.DataFrame:
+                del start_date, end_date
+                return pd.DataFrame(
+                    {
+                        "bundesland": ["BY", "BE"],
+                        "datum": [pd.Timestamp("2026-03-12"), pd.Timestamp("2026-03-12")],
+                        "available_time": [pd.Timestamp("2026-03-12"), pd.Timestamp("2026-03-12")],
+                        "pollen_index": [1.0, 2.0],
+                    }
+                )
+
+            def _load_holidays(self) -> dict[str, list[tuple[pd.Timestamp, pd.Timestamp]]]:
+                return {}
+
+        builder = _FakeBuilder()
+        panel = builder.build_inference_panel(
+            virus_typ="Influenza A",
+            as_of_date=datetime(2026, 3, 14),
+            lookback_days=90,
+        )
+
+        self.assertEqual(len(panel), 2)
+        self.assertEqual(sorted(panel["bundesland"].tolist()), ["BE", "BY"])
+        self.assertTrue((panel["as_of_date"] == pd.Timestamp("2026-03-12")).all())
 
 
 if __name__ == "__main__":

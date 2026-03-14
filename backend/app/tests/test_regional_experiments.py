@@ -3,13 +3,57 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import pandas as pd
+
 from app.services.ml.regional_experiments import (
     ExperimentSpec,
+    RegionalExperimentTrainer,
     RegionalExperimentRunner,
 )
 
 
 class RegionalExperimentRunnerTests(unittest.TestCase):
+    def test_fit_final_models_uses_isotonic_calibration(self) -> None:
+        trainer = object.__new__(RegionalExperimentTrainer)
+        trainer.regressor_config = {
+            "median": {"name": "median"},
+            "lower": {"name": "lower"},
+            "upper": {"name": "upper"},
+        }
+        trainer._fit_classifier_from_frame = lambda frame, feature_columns: "classifier"
+        trainer._fit_regressor_from_frame = lambda frame, feature_columns, config: config["name"]
+
+        observed: dict[str, list[float]] = {}
+
+        def _fit_isotonic(raw_probabilities, labels):
+            observed["raw_probabilities"] = list(raw_probabilities)
+            observed["labels"] = list(labels)
+            return "calibration"
+
+        trainer._fit_isotonic = _fit_isotonic
+
+        panel = pd.DataFrame({"feature": [1.0, 2.0], "y_next_log": [0.1, 0.2]})
+        oof_frame = pd.DataFrame(
+            {
+                "event_probability_raw": [0.2, 0.8],
+                "event_label": [0, 1],
+            }
+        )
+
+        artifacts = trainer._fit_final_models(
+            panel=panel,
+            feature_columns=["feature"],
+            oof_frame=oof_frame,
+        )
+
+        self.assertEqual(observed["raw_probabilities"], [0.2, 0.8])
+        self.assertEqual(observed["labels"], [0, 1])
+        self.assertEqual(artifacts["classifier"], "classifier")
+        self.assertEqual(artifacts["calibration"], "calibration")
+        self.assertEqual(artifacts["regressor_median"], "median")
+        self.assertEqual(artifacts["regressor_lower"], "lower")
+        self.assertEqual(artifacts["regressor_upper"], "upper")
+
     def test_metric_delta_computes_expected_signed_differences(self) -> None:
         delta = RegionalExperimentRunner._metric_delta(
             {

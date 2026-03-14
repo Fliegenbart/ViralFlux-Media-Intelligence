@@ -175,7 +175,7 @@ class RegionalExperimentTrainer(RegionalModelTrainer):
                 continue
 
             classifier = self._fit_classifier_from_frame(model_train_df, feature_columns)
-            calibration = self._fit_calibrator(
+            calibration = self._fit_isotonic(
                 classifier.predict_proba(cal_df[feature_columns].to_numpy())[:, 1],
                 cal_df["event_label"].to_numpy(),
             )
@@ -253,7 +253,7 @@ class RegionalExperimentTrainer(RegionalModelTrainer):
                 continue
 
             classifier = self._fit_classifier_from_frame(model_train_df, feature_columns)
-            calibration = self._fit_calibrator(
+            calibration = self._fit_isotonic(
                 classifier.predict_proba(cal_df[feature_columns].to_numpy())[:, 1],
                 cal_df["event_label"].to_numpy(),
             )
@@ -383,7 +383,7 @@ class RegionalExperimentTrainer(RegionalModelTrainer):
         oof_frame,
     ):
         classifier = self._fit_classifier_from_frame(panel, feature_columns)
-        calibration = self._fit_calibrator(
+        calibration = self._fit_isotonic(
             oof_frame["event_probability_raw"].to_numpy(),
             oof_frame["event_label"].to_numpy(),
         )

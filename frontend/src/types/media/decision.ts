@@ -1,5 +1,5 @@
 import { BacktestResponse } from './backtest';
-import { OutcomeLearningSummary, TruthCoverage } from './evidence';
+import { BusinessValidationSummary, OutcomeLearningSummary, TruthCoverage } from './evidence';
 import { RecommendationCard } from './recommendations';
 import { MetricContract } from './shared';
 
@@ -42,6 +42,10 @@ export interface WeeklyDecision {
     guidance?: string | null;
     field_contracts?: Record<string, MetricContract>;
   };
+  business_gate?: BusinessValidationSummary;
+  business_readiness?: string;
+  business_evidence_tier?: string;
+  operator_context?: BusinessValidationSummary['operator_context'];
   learning_state?: string;
   outcome_learning_summary?: OutcomeLearningSummary;
   forecast_quality?: Record<string, unknown>;
@@ -87,4 +91,6 @@ export interface MediaDecisionResponse {
   };
   model_lineage?: import('./evidence').ModelLineage;
   truth_coverage?: TruthCoverage;
+  business_validation?: BusinessValidationSummary;
+  operator_context?: BusinessValidationSummary['operator_context'];
 }

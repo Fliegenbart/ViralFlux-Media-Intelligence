@@ -88,6 +88,45 @@ export interface OutcomeLearningSummary {
   field_contracts?: Record<string, MetricContract>;
 }
 
+export interface BusinessValidationSummary {
+  brand?: string;
+  virus_typ?: string | null;
+  operator_context?: {
+    operator?: string;
+    product_mode?: string;
+    truth_partner?: string;
+  };
+  truth_readiness?: string;
+  truth_ready?: boolean;
+  coverage_weeks?: number;
+  regions_with_spend?: number;
+  products_with_spend?: number;
+  activation_cycles?: number;
+  holdout_ready?: boolean;
+  holdout_groups?: string[];
+  holdout_labeled_rows?: number;
+  channels_present?: string[];
+  lift_metrics_available?: boolean;
+  outcome_signal_score?: number | null;
+  outcome_confidence_pct?: number | null;
+  expected_units_lift_enabled?: boolean;
+  expected_revenue_lift_enabled?: boolean;
+  action_class?: string;
+  validation_status?: string;
+  decision_scope?: string;
+  validated_for_budget_activation?: boolean;
+  evidence_tier?: string;
+  message?: string | null;
+  guidance?: string | null;
+  validation_requirements?: {
+    min_coverage_weeks?: number;
+    min_activation_cycles?: number;
+    requires_explicit_holdout_design?: boolean;
+    requires_validated_lift_metrics?: boolean;
+  };
+  field_contracts?: Record<string, MetricContract>;
+}
+
 export interface TruthSnapshot {
   brand: string;
   coverage: TruthCoverage;
@@ -99,6 +138,7 @@ export interface TruthSnapshot {
     guidance?: string | null;
     field_contracts?: Record<string, MetricContract>;
   };
+  business_validation?: BusinessValidationSummary;
   outcome_learning_summary?: OutcomeLearningSummary;
   recent_batches: TruthImportBatchSummary[];
   latest_batch?: TruthImportBatchSummary | null;
@@ -215,6 +255,8 @@ export interface MediaEvidenceResponse {
   target_source: string;
   generated_at: string;
   proxy_validation?: BacktestResponse | null;
+  business_validation?: BusinessValidationSummary;
+  operator_context?: BusinessValidationSummary['operator_context'];
   truth_validation?: BacktestResponse | null;
   truth_validation_legacy?: BacktestResponse | null;
   recent_runs: Array<Record<string, unknown>>;

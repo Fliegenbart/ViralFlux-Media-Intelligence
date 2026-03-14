@@ -1,7 +1,7 @@
 import React from 'react';
 
 import { RegionalBenchmarkResponse, RegionalPortfolioResponse } from '../../types/media';
-import { formatDateShort, formatPercent } from './cockpitUtils';
+import { businessValidationLabel, evidenceTierLabel, formatDateShort, formatPercent } from './cockpitUtils';
 
 interface Props {
   currentVirus: string;
@@ -43,6 +43,7 @@ const RegionalPortfolioPanel: React.FC<Props> = ({
         <span className="step-chip">Referenz: {benchmark?.reference_virus || portfolio?.reference_virus || 'Influenza A'}</span>
         <span className="step-chip">Trainierte Linien: {portfolio?.summary?.trained_viruses ?? benchmark?.trained_viruses ?? '-'}</span>
         <span className="step-chip">Validierte GO-Linien: {portfolio?.summary?.go_viruses ?? benchmark?.go_viruses ?? '-'}</span>
+        <span className="step-chip">Business-Evidenz: {evidenceTierLabel(portfolio?.evidence_tier || benchmark?.evidence_tier)}</span>
         <span className="step-chip">Stand {formatDateShort(portfolio?.latest_as_of_date || benchmark?.generated_at)}</span>
       </div>
 
@@ -69,6 +70,9 @@ const RegionalPortfolioPanel: React.FC<Props> = ({
                     </div>
                   </div>
                   <span className="step-chip">{item.quality_gate?.forecast_readiness || 'NO MODEL'}</span>
+                </div>
+                <div style={{ marginTop: 10, fontSize: 12, color: 'var(--text-secondary)' }}>
+                  {businessValidationLabel(item.business_gate?.validation_status)} · {evidenceTierLabel(item.evidence_tier)}
                 </div>
                 <div className="metric-strip" style={{ marginTop: 14 }}>
                   <div className="metric-box">
@@ -127,6 +131,9 @@ const RegionalPortfolioPanel: React.FC<Props> = ({
                           : item.portfolio_action === 'prepare'
                             ? 'Validiert vorbereiten'
                             : 'Weiter beobachten'}
+                    </div>
+                    <div style={{ marginTop: 6, fontSize: 12, color: 'var(--text-muted)' }}>
+                      {businessValidationLabel(item.business_gate?.validation_status)} · {evidenceTierLabel(item.evidence_tier)}
                     </div>
                   </div>
                   <div style={{ textAlign: 'right' }}>

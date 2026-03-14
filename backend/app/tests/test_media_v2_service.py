@@ -313,12 +313,24 @@ class MediaV2ServiceTruthCoverageTests(unittest.TestCase):
                 "summary": {"visible_cards": 1, "hidden_backlog_cards": 0},
             }),
             patch.object(self.service, "_campaign_cards", return_value=cards),
+            patch.object(self.service.business_validation_service, "evaluate", return_value={
+                "operator_context": {"operator": "peix", "truth_partner": "gelo"},
+                "validated_for_budget_activation": False,
+                "validation_status": "pending_holdout_design",
+                "decision_scope": "decision_support_only",
+                "evidence_tier": "truth_backed",
+                "message": "GELO-Outcome-Daten sind vorhanden, aber Holdout fehlt noch.",
+                "guidance": "Kontrollgruppen fuer kommende Aktivierungen markieren.",
+            }),
         ):
             payload = self.service.get_decision_payload()
 
         weekly_decision = payload["weekly_decision"]
         self.assertEqual(weekly_decision["decision_state"], "WATCH")
         self.assertIn("Kundendaten", weekly_decision["truth_risk_flag"])
+        self.assertEqual(weekly_decision["business_readiness"], "pending_holdout_design")
+        self.assertEqual(weekly_decision["business_evidence_tier"], "truth_backed")
+        self.assertEqual(weekly_decision["operator_context"]["operator"], "peix")
         self.assertIsNone(weekly_decision["budget_shift"])
         self.assertEqual(
             weekly_decision["field_contracts"]["event_probability"]["semantics"],
@@ -327,6 +339,10 @@ class MediaV2ServiceTruthCoverageTests(unittest.TestCase):
         self.assertEqual(
             weekly_decision["field_contracts"]["signal_score"]["semantics"],
             "ranking_signal",
+        )
+        self.assertEqual(
+            weekly_decision["field_contracts"]["business_gate"]["semantics"],
+            "business_validation_gate",
         )
 
     def test_campaigns_payload_limits_visible_board_to_eight_cards(self) -> None:

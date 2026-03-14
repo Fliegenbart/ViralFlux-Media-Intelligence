@@ -1,3 +1,5 @@
+import { BusinessValidationSummary } from './evidence';
+
 export interface RegionalBenchmarkMetrics {
   precision_at_top3?: number;
   precision_at_top5?: number;
@@ -24,6 +26,12 @@ export interface RegionalBenchmarkItem {
   truth_source?: string | string[] | null;
   aggregate_metrics?: RegionalBenchmarkMetrics;
   quality_gate?: RegionalQualityGate;
+  business_gate?: BusinessValidationSummary;
+  evidence_tier?: string;
+  model_version?: string;
+  calibration_version?: string;
+  source_coverage?: Record<string, unknown>;
+  point_in_time_snapshot?: Record<string, unknown>;
   selection?: Record<string, unknown>;
   delta_vs_reference?: Record<string, number>;
   benchmark_score?: number;
@@ -35,6 +43,8 @@ export interface RegionalBenchmarkResponse {
   generated_at: string;
   trained_viruses: number;
   go_viruses: number;
+  business_gate?: BusinessValidationSummary;
+  evidence_tier?: string;
   benchmark: RegionalBenchmarkItem[];
 }
 
@@ -56,6 +66,10 @@ export interface RegionalPortfolioOpportunity {
   change_pct?: number;
   trend?: string;
   quality_gate?: RegionalQualityGate;
+  business_gate?: BusinessValidationSummary;
+  evidence_tier?: string;
+  model_version?: string;
+  calibration_version?: string;
   benchmark_rank?: number;
   benchmark_score?: number;
   aggregate_metrics?: RegionalBenchmarkMetrics;
@@ -85,6 +99,8 @@ export interface RegionalPortfolioVirusRollup {
   rank?: number;
   benchmark_score?: number;
   quality_gate?: RegionalQualityGate;
+  business_gate?: BusinessValidationSummary;
+  evidence_tier?: string;
   aggregate_metrics?: RegionalBenchmarkMetrics;
   top_region?: string;
   top_region_name?: string;
@@ -105,6 +121,8 @@ export interface RegionalPortfolioResponse {
     priority_opportunities: number;
     validated_opportunities: number;
   };
+  business_gate?: BusinessValidationSummary;
+  evidence_tier?: string;
   benchmark: RegionalBenchmarkItem[];
   virus_rollup: RegionalPortfolioVirusRollup[];
   region_rollup: RegionalPortfolioRegionRollup[];

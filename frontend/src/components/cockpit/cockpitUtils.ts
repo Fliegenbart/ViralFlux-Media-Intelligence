@@ -186,6 +186,34 @@ export function learningStateLabel(value?: string | null): string {
   return value ? String(value) : '-';
 }
 
+export function businessValidationLabel(value?: string | null): string {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'passed_holdout_validation') return 'holdout-validiert';
+  if (normalized === 'pending_holdout_validation') return 'Holdout bereit';
+  if (normalized === 'pending_holdout_design') return 'Holdout fehlt';
+  if (normalized === 'pending_activation_history') return 'Zyklen fehlen';
+  if (normalized === 'building_truth_layer') return 'Truth im Aufbau';
+  if (normalized === 'pending_truth_connection') return 'noch nicht angeschlossen';
+  return value ? String(value) : '-';
+}
+
+export function evidenceTierLabel(value?: string | null): string {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'commercially_validated') return 'kommerziell validiert';
+  if (normalized === 'holdout_ready') return 'holdout-ready';
+  if (normalized === 'truth_backed') return 'truth-backed';
+  if (normalized === 'observational') return 'observational';
+  if (normalized === 'no_truth') return 'kein Truth-Layer';
+  return value ? String(value) : '-';
+}
+
+export function decisionScopeLabel(value?: string | null): string {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'validated_budget_activation') return 'Budgetfreigabe erlaubt';
+  if (normalized === 'decision_support_only') return 'nur Decision Support';
+  return value ? String(value) : '-';
+}
+
 export function recommendationLane(card: RecommendationCard): CampaignLaneId {
   const lifecycle = String(card.lifecycle_state || '').toUpperCase();
   if (lifecycle === 'LIVE') return 'live';

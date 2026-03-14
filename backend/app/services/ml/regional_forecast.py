@@ -13,6 +13,8 @@ import numpy as np
 import pandas as pd
 from xgboost import XGBClassifier, XGBRegressor
 
+from app.services.media.business_validation_service import BusinessValidationService
+from app.services.ml.forecast_decision_service import ForecastDecisionService
 from app.services.ml.regional_features import RegionalFeatureBuilder
 from app.services.ml.regional_panel_utils import (
     ALL_BUNDESLAENDER,
@@ -116,6 +118,12 @@ class RegionalForecastService:
         rollout_mode = metadata.get("rollout_mode") or rollout_mode_for_virus(virus_typ)
         activation_policy = metadata.get("activation_policy") or activation_policy_for_virus(virus_typ)
         signal_bundle_version = metadata.get("signal_bundle_version") or signal_bundle_version_for_virus(virus_typ)
+        model_version = metadata.get("model_version") or self._model_version(metadata)
+        calibration_version = metadata.get("calibration_version") or self._calibration_version(metadata)
+        dataset_manifest = artifacts.get("dataset_manifest") or metadata.get("dataset_manifest") or {}
+        point_in_time_snapshot = artifacts.get("point_in_time_snapshot") or metadata.get("point_in_time_snapshot") or {}
+        source_coverage = dataset_manifest.get("source_coverage") or {}
+        business_gate = self._business_gate(quality_gate=quality_gate)
         predictions = []
         for idx, row in panel.reset_index(drop=True).iterrows():
             current_incidence = float(row["current_known_incidence"] or 0.0)
@@ -147,9 +155,15 @@ class RegionalForecastService:
                     "seasonal_mad": round(float(row["seasonal_mad"] or 0.0), 2),
                     "change_pct": round(change_pct, 1),
                     "quality_gate": quality_gate,
+                    "business_gate": business_gate,
+                    "evidence_tier": business_gate.get("evidence_tier"),
                     "rollout_mode": rollout_mode,
                     "activation_policy": activation_policy,
                     "signal_bundle_version": signal_bundle_version,
+                    "model_version": model_version,
+                    "calibration_version": calibration_version,
+                    "point_in_time_snapshot": point_in_time_snapshot,
+                    "source_coverage": source_coverage,
                     "action_threshold": round(action_threshold, 4),
                     "activation_candidate": activation_candidate,
                     "current_load": round(current_incidence, 2),
@@ -170,9 +184,15 @@ class RegionalForecastService:
             "as_of_date": str(as_of_date),
             "target_window_days": list(TARGET_WINDOW_DAYS),
             "quality_gate": quality_gate,
+            "business_gate": business_gate,
+            "evidence_tier": business_gate.get("evidence_tier"),
             "rollout_mode": rollout_mode,
             "activation_policy": activation_policy,
             "signal_bundle_version": signal_bundle_version,
+            "model_version": model_version,
+            "calibration_version": calibration_version,
+            "point_in_time_snapshot": point_in_time_snapshot,
+            "source_coverage": source_coverage,
             "action_threshold": round(action_threshold, 4),
             "total_regions": len(predictions),
             "predictions": predictions,
@@ -189,6 +209,7 @@ class RegionalForecastService:
         forecast = self.predict_all_regions(virus_typ=virus_typ, horizon_days=horizon_days)
         predictions = forecast.get("predictions") or []
         quality_gate = forecast.get("quality_gate") or {"overall_passed": False}
+        business_gate = forecast.get("business_gate") or self._business_gate(quality_gate=quality_gate)
         threshold = float(forecast.get("action_threshold") or 0.6)
         rollout_mode = str(forecast.get("rollout_mode") or rollout_mode_for_virus(virus_typ))
         activation_policy = str(forecast.get("activation_policy") or activation_policy_for_virus(virus_typ))
@@ -215,6 +236,9 @@ class RegionalForecastService:
             if activation_policy == "watch_only":
                 action = "watch"
                 intensity = "low"
+            elif not business_gate.get("validated_for_budget_activation"):
+                action = "watch"
+                intensity = "low"
             elif not quality_gate.get("overall_passed"):
                 action = "watch"
                 intensity = "low"
@@ -230,7 +254,11 @@ class RegionalForecastService:
 
             budget_share = (
                 probability / max(total_prob, 1e-8)
-                if action in {"activate", "prepare"} and quality_gate.get("overall_passed")
+                if (
+                    action in {"activate", "prepare"}
+                    and quality_gate.get("overall_passed")
+                    and business_gate.get("validated_for_budget_activation")
+                )
                 else 0.0
             )
             budget_eur = round(weekly_budget_eur * budget_share, 2)
@@ -243,6 +271,8 @@ class RegionalForecastService:
                 timeline = (
                     "Nur beobachten — Shadow-Policy blockiert Aktivierung"
                     if activation_policy == "watch_only"
+                    else "Nur beobachten — Business-Gate noch nicht validiert"
+                    if not business_gate.get("validated_for_budget_activation")
                     else
                     "Nur beobachten — Quality Gate blockiert Aktivierung"
                     if not quality_gate.get("overall_passed")
@@ -266,6 +296,8 @@ class RegionalForecastService:
                     "current_load": item["current_known_incidence"],
                     "predicted_load": item["expected_next_week_incidence"],
                     "quality_gate": quality_gate,
+                    "business_gate": business_gate,
+                    "evidence_tier": business_gate.get("evidence_tier"),
                     "rollout_mode": rollout_mode,
                     "activation_policy": activation_policy,
                     "activation_threshold": threshold,
@@ -291,6 +323,8 @@ class RegionalForecastService:
                 "total_budget_allocated": round(sum(item["budget_eur"] for item in recommendations), 2),
                 "weekly_budget": weekly_budget_eur,
                 "quality_gate": quality_gate,
+                "business_gate": business_gate,
+                "evidence_tier": business_gate.get("evidence_tier"),
                 "rollout_mode": rollout_mode,
                 "activation_policy": activation_policy,
             },
@@ -306,13 +340,18 @@ class RegionalForecastService:
     ) -> dict[str, Any]:
         items: list[dict[str, Any]] = []
         reference_metrics: dict[str, Any] | None = None
+        truth_readiness = self._truth_readiness()
 
         for virus_typ in SUPPORTED_VIRUS_TYPES:
             artifacts = self._load_artifacts(virus_typ)
             metadata = artifacts.get("metadata") or {}
             aggregate_metrics = metadata.get("aggregate_metrics") or {}
             quality_gate = metadata.get("quality_gate") or {"overall_passed": False, "forecast_readiness": "NO_MODEL"}
-            dataset_manifest = metadata.get("dataset_manifest") or {}
+            dataset_manifest = artifacts.get("dataset_manifest") or metadata.get("dataset_manifest") or {}
+            business_gate = self._business_gate(
+                quality_gate=quality_gate,
+                truth_readiness=truth_readiness,
+            )
 
             item = {
                 "virus_typ": virus_typ,
@@ -321,11 +360,17 @@ class RegionalForecastService:
                 "states": int(dataset_manifest.get("states") or 0),
                 "rows": int(dataset_manifest.get("rows") or 0),
                 "truth_source": dataset_manifest.get("truth_source"),
+                "source_coverage": dataset_manifest.get("source_coverage") or {},
+                "point_in_time_snapshot": artifacts.get("point_in_time_snapshot") or metadata.get("point_in_time_snapshot") or {},
                 "aggregate_metrics": aggregate_metrics,
                 "quality_gate": quality_gate,
+                "business_gate": business_gate,
+                "evidence_tier": business_gate.get("evidence_tier"),
                 "rollout_mode": metadata.get("rollout_mode") or rollout_mode_for_virus(virus_typ),
                 "activation_policy": metadata.get("activation_policy") or activation_policy_for_virus(virus_typ),
                 "signal_bundle_version": metadata.get("signal_bundle_version") or signal_bundle_version_for_virus(virus_typ),
+                "model_version": metadata.get("model_version") or self._model_version(metadata),
+                "calibration_version": metadata.get("calibration_version") or self._calibration_version(metadata),
                 "selection": metadata.get("label_selection") or {},
                 "shadow_evaluation": metadata.get("shadow_evaluation") or {},
             }
@@ -355,6 +400,10 @@ class RegionalForecastService:
         for rank, item in enumerate(ranked, start=1):
             item["rank"] = rank
 
+        summary_business_gate = self._business_gate(
+            quality_gate={"overall_passed": any((item.get("quality_gate") or {}).get("overall_passed") for item in ranked)},
+            truth_readiness=truth_readiness,
+        )
         return {
             "reference_virus": reference_virus,
             "generated_at": datetime.utcnow().isoformat(),
@@ -365,6 +414,8 @@ class RegionalForecastService:
                 if (item.get("quality_gate") or {}).get("overall_passed")
                 and item.get("activation_policy") != "watch_only"
             ),
+            "business_gate": summary_business_gate,
+            "evidence_tier": summary_business_gate.get("evidence_tier"),
             "benchmark": ranked,
         }
 
@@ -404,6 +455,8 @@ class RegionalForecastService:
                     "rank": benchmark_item.get("rank"),
                     "benchmark_score": benchmark_item.get("benchmark_score"),
                     "quality_gate": benchmark_item.get("quality_gate"),
+                    "business_gate": benchmark_item.get("business_gate"),
+                    "evidence_tier": benchmark_item.get("evidence_tier"),
                     "rollout_mode": benchmark_item.get("rollout_mode"),
                     "activation_policy": benchmark_item.get("activation_policy"),
                     "aggregate_metrics": benchmark_item.get("aggregate_metrics"),
@@ -438,9 +491,13 @@ class RegionalForecastService:
                     "change_pct": prediction["change_pct"],
                     "trend": prediction["trend"],
                     "quality_gate": prediction["quality_gate"],
+                    "business_gate": prediction.get("business_gate") or benchmark_item.get("business_gate"),
+                    "evidence_tier": (prediction.get("business_gate") or benchmark_item.get("business_gate") or {}).get("evidence_tier"),
                     "rollout_mode": prediction.get("rollout_mode"),
                     "activation_policy": prediction.get("activation_policy"),
                     "signal_bundle_version": prediction.get("signal_bundle_version"),
+                    "model_version": prediction.get("model_version") or benchmark_item.get("model_version"),
+                    "calibration_version": prediction.get("calibration_version") or benchmark_item.get("calibration_version"),
                     "benchmark_rank": benchmark_item.get("rank"),
                     "benchmark_score": benchmark_item.get("benchmark_score"),
                     "aggregate_metrics": benchmark_item.get("aggregate_metrics"),
@@ -475,10 +532,44 @@ class RegionalForecastService:
                 "priority_opportunities": sum(1 for item in opportunities if item["portfolio_action"] == "prioritize"),
                 "validated_opportunities": sum(1 for item in opportunities if item["portfolio_action"] in {"activate", "prepare"}),
             },
+            "business_gate": benchmark_payload.get("business_gate") or self._business_gate(quality_gate={"overall_passed": False}),
+            "evidence_tier": benchmark_payload.get("evidence_tier"),
             "benchmark": benchmark_payload.get("benchmark", []),
             "virus_rollup": virus_rollup,
             "region_rollup": region_rollup,
             "top_opportunities": opportunities[: max(int(top_n), 1)],
+        }
+
+    def get_validation_summary(
+        self,
+        *,
+        virus_typ: str = "Influenza A",
+        brand: str = "gelo",
+    ) -> dict[str, Any]:
+        artifacts = self._load_artifacts(virus_typ)
+        metadata = artifacts.get("metadata") or {}
+        quality_gate = metadata.get("quality_gate") or {"overall_passed": False, "forecast_readiness": "NO_MODEL"}
+        business_gate = self._business_gate(
+            quality_gate=quality_gate,
+            brand=brand,
+        )
+        dataset_manifest = artifacts.get("dataset_manifest") or metadata.get("dataset_manifest") or {}
+        return {
+            "virus_typ": virus_typ,
+            "brand": str(brand or "gelo").strip().lower(),
+            "generated_at": datetime.utcnow().isoformat(),
+            "quality_gate": quality_gate,
+            "business_gate": business_gate,
+            "operator_context": business_gate.get("operator_context"),
+            "evidence_tier": business_gate.get("evidence_tier"),
+            "model_version": metadata.get("model_version") or self._model_version(metadata),
+            "calibration_version": metadata.get("calibration_version") or self._calibration_version(metadata),
+            "point_in_time_snapshot": artifacts.get("point_in_time_snapshot") or metadata.get("point_in_time_snapshot") or {},
+            "source_coverage": dataset_manifest.get("source_coverage") or {},
+            "signal_bundle_version": metadata.get("signal_bundle_version") or signal_bundle_version_for_virus(virus_typ),
+            "rollout_mode": metadata.get("rollout_mode") or rollout_mode_for_virus(virus_typ),
+            "activation_policy": metadata.get("activation_policy") or activation_policy_for_virus(virus_typ),
+            "aggregate_metrics": metadata.get("aggregate_metrics") or {},
         }
 
     def _load_artifacts(self, virus_typ: str) -> dict[str, Any]:
@@ -505,6 +596,8 @@ class RegionalForecastService:
         with open(required_paths["calibration"], "rb") as handle:
             calibration = pickle.load(handle)
         metadata = json.loads(required_paths["metadata"].read_text())
+        dataset_manifest_path = model_dir / "dataset_manifest.json"
+        point_in_time_path = model_dir / "point_in_time_snapshot.json"
         return {
             "classifier": classifier,
             "regressor_median": regressor_median,
@@ -512,6 +605,8 @@ class RegionalForecastService:
             "regressor_upper": regressor_upper,
             "calibration": calibration,
             "metadata": metadata,
+            "dataset_manifest": json.loads(dataset_manifest_path.read_text()) if dataset_manifest_path.exists() else None,
+            "point_in_time_snapshot": json.loads(point_in_time_path.read_text()) if point_in_time_path.exists() else None,
         }
 
     @staticmethod
@@ -567,8 +662,11 @@ class RegionalForecastService:
         benchmark_score = float(benchmark_item.get("benchmark_score") or 0.0) / 100.0
         quality_gate = prediction.get("quality_gate") or {}
         activation_policy = str(prediction.get("activation_policy") or "quality_gate")
+        business_gate = prediction.get("business_gate") or benchmark_item.get("business_gate") or {}
         if activation_policy == "watch_only":
             readiness_multiplier = 0.78
+        elif not business_gate.get("validated_for_budget_activation"):
+            readiness_multiplier = 0.84 if quality_gate.get("overall_passed") else 0.68
         else:
             readiness_multiplier = 1.0 if quality_gate.get("overall_passed") else 0.72
         momentum_multiplier = 1.0 + min(max(change_pct, 0.0), 80.0) / 200.0
@@ -585,12 +683,17 @@ class RegionalForecastService:
         threshold = float(prediction.get("action_threshold") or 0.6)
         quality_gate = prediction.get("quality_gate") or {}
         activation_policy = str(prediction.get("activation_policy") or "quality_gate")
+        business_gate = prediction.get("business_gate") or benchmark_item.get("business_gate") or {}
 
         if activation_policy == "watch_only":
             if float(benchmark_item.get("benchmark_score") or 0.0) >= 35.0 and probability >= max(0.45, threshold * 0.8):
                 return "prioritize", "medium"
             return "watch", "low"
 
+        if not business_gate.get("validated_for_budget_activation"):
+            if float(benchmark_item.get("benchmark_score") or 0.0) >= 35.0 and probability >= max(0.45, threshold * 0.8):
+                return "prioritize", "medium"
+            return "watch", "low"
         if quality_gate.get("overall_passed") and probability >= threshold and change_pct >= 20:
             return "activate", "high"
         if quality_gate.get("overall_passed") and probability >= threshold:
@@ -637,3 +740,55 @@ class RegionalForecastService:
             reverse=True,
         )
         return region_rollup
+
+    def _truth_readiness(self, *, brand: str = "gelo") -> dict[str, Any]:
+        if self.db is None:
+            return {
+                "coverage_weeks": 0,
+                "truth_readiness": "noch_nicht_angeschlossen",
+                "truth_ready": False,
+                "expected_units_lift_enabled": False,
+                "expected_revenue_lift_enabled": False,
+            }
+        return ForecastDecisionService(self.db).get_truth_readiness(brand=brand)
+
+    def _business_gate(
+        self,
+        *,
+        quality_gate: dict[str, Any],
+        truth_readiness: dict[str, Any] | None = None,
+        brand: str = "gelo",
+    ) -> dict[str, Any]:
+        forecast_ready = bool((quality_gate or {}).get("overall_passed"))
+        if self.db is None:
+            truth = truth_readiness or self._truth_readiness(brand=brand)
+            return {
+                "truth_readiness": str(truth.get("truth_readiness") or "noch_nicht_angeschlossen"),
+                "truth_ready": bool(truth.get("truth_ready")),
+                "coverage_weeks": int(truth.get("coverage_weeks") or 0),
+                "expected_units_lift_enabled": False,
+                "expected_revenue_lift_enabled": False,
+                "action_class": "watch_only" if not forecast_ready else "market_watch",
+                "validation_status": "pending_truth_connection" if int(truth.get("coverage_weeks") or 0) <= 0 else "building_truth_layer",
+                "decision_scope": "decision_support_only",
+                "validated_for_budget_activation": False,
+                "evidence_tier": "no_truth" if int(truth.get("coverage_weeks") or 0) <= 0 else "observational",
+            }
+
+        validation = BusinessValidationService(self.db).evaluate(
+            brand=brand,
+            truth_coverage=truth_readiness,
+        )
+        validation["quality_gate_passed"] = forecast_ready
+        return validation
+
+    @staticmethod
+    def _model_version(metadata: dict[str, Any]) -> str:
+        model_family = str(metadata.get("model_family") or "regional_pooled_panel")
+        trained_at = str(metadata.get("trained_at") or "unversioned")
+        return f"{model_family}:{trained_at}"
+
+    @staticmethod
+    def _calibration_version(metadata: dict[str, Any]) -> str:
+        trained_at = str(metadata.get("trained_at") or "unversioned")
+        return f"isotonic:{trained_at}"

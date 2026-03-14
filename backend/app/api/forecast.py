@@ -372,6 +372,29 @@ async def get_regional_portfolio(
     )
 
 
+@router.get("/regional/validation")
+async def get_regional_business_validation(
+    virus_typ: str = "Influenza A",
+    brand: str = "gelo",
+    db: Session = Depends(get_db),
+):
+    """Expose the commercial GELO truth status separately from forecast quality.
+
+    Returns:
+    - Business gate / evidence tier
+    - Operator context (PEIX) and truth partner (brand)
+    - Holdout / activation-cycle readiness
+    - Model lineage fragments relevant for due diligence
+    """
+    from app.services.ml.regional_forecast import RegionalForecastService
+
+    service = RegionalForecastService(db)
+    return service.get_validation_summary(
+        virus_typ=virus_typ,
+        brand=brand,
+    )
+
+
 @router.get("/regional/backtest")
 async def run_regional_backtest(
     virus_typ: str = "Influenza A",

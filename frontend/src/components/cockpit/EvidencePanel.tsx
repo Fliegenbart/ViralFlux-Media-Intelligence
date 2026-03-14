@@ -8,8 +8,6 @@ import {
   TruthImportResponse,
 } from '../../types/media';
 import {
-  learningStateLabel,
-  truthFreshnessLabel,
   truthLayerLabel,
 } from './cockpitUtils';
 import ForecastMonitoringSection from './evidence/ForecastMonitoringSection';
@@ -59,6 +57,7 @@ const EvidencePanel: React.FC<Props> = ({
   const truthSnapshot = evidence?.truth_snapshot;
   const truthGate = evidence?.truth_gate || truthSnapshot?.truth_gate;
   const truthStatus = truthSnapshot?.coverage || truthCoverage;
+  const businessValidation = evidence?.business_validation || truthSnapshot?.business_validation;
   const outcomeLearning = evidence?.outcome_learning_summary || truthSnapshot?.outcome_learning_summary;
   const sourceStatusLabels = [
     ...(truthStatus?.required_fields_present || []),
@@ -138,6 +137,7 @@ const EvidencePanel: React.FC<Props> = ({
         <TruthOutcomeSection
           truthStatus={truthStatus}
           truthGate={truthGate}
+          businessValidation={businessValidation}
           outcomeLearning={outcomeLearning}
           legacyCustomer={legacyCustomer}
           sourceStatusLabels={sourceStatusLabels}

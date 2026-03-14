@@ -164,6 +164,26 @@ class RegionalPanelMathTests(unittest.TestCase):
 
 
 class RegionalFeatureBuilderInferenceTests(unittest.TestCase):
+    def test_point_in_time_snapshot_manifest_tracks_as_of_range_and_signal_coverage(self) -> None:
+        builder = RegionalFeatureBuilder(db=None)
+        panel = pd.DataFrame(
+            {
+                "bundesland": ["BY", "BE", "BY"],
+                "as_of_date": pd.to_datetime(["2026-03-01", "2026-03-01", "2026-03-02"]),
+                "truth_source": ["survstat_kreis", "survstat_kreis", "survstat_kreis"],
+                "grippeweb_are_available": [1.0, 0.0, 1.0],
+                "ifsg_influenza_available": [1.0, 1.0, 0.0],
+                "ww_level": [2.0, 3.0, 4.0],
+            }
+        )
+
+        snapshot = builder.point_in_time_snapshot_manifest("Influenza A", panel)
+
+        self.assertEqual(snapshot["snapshot_type"], "regional_panel_as_of_training")
+        self.assertEqual(snapshot["unique_as_of_dates"], 2)
+        self.assertEqual(snapshot["dataset_manifest"]["source_coverage"]["grippeweb_are_available"], 0.6667)
+        self.assertIn("ifsg_influenza_available", snapshot["dataset_manifest"]["source_coverage"])
+
     def test_inference_panel_uses_latest_available_row_when_as_of_has_no_exact_wastewater_date(self) -> None:
         class _FakeBuilder(RegionalFeatureBuilder):
             def __init__(self):
@@ -475,6 +495,123 @@ class RegionalFeatureBuilderInferenceTests(unittest.TestCase):
         self.assertEqual(by_row["sars_notaufnahme_breach_flag"], 1.0)
         self.assertLess(by_row["sars_trends_level"], 40.0)
         self.assertGreater(by_row["sars_ww_are_log_gap"], -2.0)
+
+    def test_influenza_panel_exposes_grippeweb_and_ifsg_features_without_future_leakage(self) -> None:
+        class _FakeBuilder(RegionalFeatureBuilder):
+            def __init__(self):
+                self.db = None
+
+            def _load_wastewater_daily(self, virus_typ: str, start_date: pd.Timestamp) -> pd.DataFrame:
+                del virus_typ, start_date
+                rows = []
+                for state, base in (("BY", 10.0), ("BE", 7.0)):
+                    for offset, value_date in enumerate(pd.date_range("2026-03-03", periods=10, freq="D"), start=1):
+                        rows.append(
+                            {
+                                "bundesland": state,
+                                "datum": pd.Timestamp(value_date),
+                                "available_time": pd.Timestamp(value_date),
+                                "viral_load": float(base + offset),
+                                "site_count": 5,
+                                "under_bg_share": float(0.4 - offset * 0.02),
+                                "viral_std": float(0.5 + offset * 0.05),
+                            }
+                        )
+                return pd.DataFrame(rows)
+
+            def _load_truth_series(self, virus_typ: str, start_date: pd.Timestamp) -> pd.DataFrame:
+                del virus_typ, start_date
+                rows = []
+                weeks = pd.date_range("2025-12-29", periods=12, freq="7D")
+                for state, base in (("BY", 9.0), ("BE", 6.0)):
+                    for idx, week_start in enumerate(weeks, start=1):
+                        rows.append(
+                            {
+                                "bundesland": state,
+                                "week_start": pd.Timestamp(week_start),
+                                "available_date": pd.Timestamp(week_start),
+                                "incidence": float(base + idx * 2),
+                                "truth_source": "survstat_weekly",
+                            }
+                        )
+                return pd.DataFrame(rows)
+
+            def _load_grippeweb_signals(self, start_date: pd.Timestamp, end_date: pd.Timestamp) -> pd.DataFrame:
+                del start_date, end_date
+                return pd.DataFrame(
+                    {
+                        "bundesland": ["BY", "BY", "BE", None, None],
+                        "datum": pd.to_datetime(
+                            ["2026-03-07", "2026-03-14", "2026-03-07", "2026-03-07", "2026-03-07"]
+                        ),
+                        "available_time": pd.to_datetime(
+                            ["2026-03-08", "2026-03-16", "2026-03-08", "2026-03-08", "2026-03-08"]
+                        ),
+                        "signal_type": ["ARE", "ARE", "ARE", "ARE", "ILI"],
+                        "incidence": [18.0, 40.0, 14.0, 12.0, 6.0],
+                    }
+                )
+
+            def _load_influenza_ifsg(self, start_date: pd.Timestamp, end_date: pd.Timestamp) -> pd.DataFrame:
+                del start_date, end_date
+                return pd.DataFrame(
+                    {
+                        "bundesland": ["BY", "BY", "BE"],
+                        "datum": pd.to_datetime(["2026-03-07", "2026-03-14", "2026-03-07"]),
+                        "available_time": pd.to_datetime(["2026-03-08", "2026-03-16", "2026-03-08"]),
+                        "incidence": [15.0, 50.0, 11.0],
+                    }
+                )
+
+            def _load_rsv_ifsg(self, start_date: pd.Timestamp, end_date: pd.Timestamp) -> pd.DataFrame:
+                del start_date, end_date
+                return pd.DataFrame(
+                    {
+                        "bundesland": ["BY"],
+                        "datum": [pd.Timestamp("2026-03-07")],
+                        "available_time": [pd.Timestamp("2026-03-08")],
+                        "incidence": [4.0],
+                    }
+                )
+
+            def _load_weather(self, start_date: pd.Timestamp, end_date: pd.Timestamp) -> pd.DataFrame:
+                del start_date, end_date
+                return pd.DataFrame()
+
+            def _load_pollen(self, start_date: pd.Timestamp, end_date: pd.Timestamp) -> pd.DataFrame:
+                del start_date, end_date
+                return pd.DataFrame()
+
+            def _load_holidays(self) -> dict[str, list[tuple[pd.Timestamp, pd.Timestamp]]]:
+                return {}
+
+            def _load_state_population_map(self) -> dict[str, float]:
+                return {"BY": 13_500_000.0, "BE": 3_800_000.0}
+
+        builder = _FakeBuilder()
+        influenza_panel = builder.build_inference_panel(
+            virus_typ="Influenza A",
+            as_of_date=datetime(2026, 3, 14),
+            lookback_days=90,
+        )
+        sars_panel = builder.build_inference_panel(
+            virus_typ="SARS-CoV-2",
+            as_of_date=datetime(2026, 3, 14),
+            lookback_days=90,
+        )
+
+        self.assertIn("grippeweb_are_level", influenza_panel.columns)
+        self.assertIn("grippeweb_ili_level", influenza_panel.columns)
+        self.assertIn("ifsg_influenza_level", influenza_panel.columns)
+        self.assertNotIn("ifsg_rsv_level", influenza_panel.columns)
+        self.assertNotIn("ifsg_influenza_level", sars_panel.columns)
+
+        by_row = influenza_panel.loc[influenza_panel["bundesland"] == "BY"].iloc[0]
+        self.assertAlmostEqual(by_row["grippeweb_are_level"], 18.0, places=6)
+        self.assertAlmostEqual(by_row["ifsg_influenza_level"], 15.0, places=6)
+        self.assertAlmostEqual(by_row["grippeweb_ili_level"], 6.0, places=6)
+        self.assertEqual(by_row["grippeweb_are_available"], 1.0)
+        self.assertEqual(by_row["ifsg_influenza_available"], 1.0)
 
 
 if __name__ == "__main__":

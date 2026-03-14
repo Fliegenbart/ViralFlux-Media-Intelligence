@@ -1,8 +1,17 @@
 import React from 'react';
 
 import { UI_COPY } from '../../../lib/copy';
-import { BacktestResponse, OutcomeLearningSummary, TruthCoverage } from '../../../types/media';
-import { formatDateTime, formatPercent, learningStateLabel, truthFreshnessLabel, truthLayerLabel } from '../cockpitUtils';
+import { BacktestResponse, BusinessValidationSummary, OutcomeLearningSummary, TruthCoverage } from '../../../types/media';
+import {
+  businessValidationLabel,
+  decisionScopeLabel,
+  evidenceTierLabel,
+  formatDateTime,
+  formatPercent,
+  learningStateLabel,
+  truthFreshnessLabel,
+  truthLayerLabel,
+} from '../cockpitUtils';
 
 interface Props {
   truthStatus?: TruthCoverage | null;
@@ -11,6 +20,7 @@ interface Props {
     state?: string;
     learning_state?: string;
   } | null;
+  businessValidation?: BusinessValidationSummary | null;
   outcomeLearning?: OutcomeLearningSummary | null;
   legacyCustomer?: BacktestResponse | null;
   sourceStatusLabels: string[];
@@ -19,6 +29,7 @@ interface Props {
 const TruthOutcomeSection: React.FC<Props> = ({
   truthStatus,
   truthGate,
+  businessValidation,
   outcomeLearning,
   legacyCustomer,
   sourceStatusLabels,
@@ -66,6 +77,34 @@ const TruthOutcomeSection: React.FC<Props> = ({
             <span key={item} className="step-chip">{item}</span>
           ))}
         </div>
+        <div className="soft-panel review-panel-soft" style={{ marginTop: 14 }}>
+          <div className="evidence-row">
+            <span>Business-Gate</span>
+            <strong>{businessValidationLabel(businessValidation?.validation_status)}</strong>
+          </div>
+          <div className="evidence-row">
+            <span>Evidenz-Tier</span>
+            <strong>{evidenceTierLabel(businessValidation?.evidence_tier)}</strong>
+          </div>
+          <div className="evidence-row">
+            <span>Entscheidungsscope</span>
+            <strong>{decisionScopeLabel(businessValidation?.decision_scope)}</strong>
+          </div>
+          <div className="evidence-row">
+            <span>Holdout-Setup</span>
+            <strong>{businessValidation?.holdout_ready ? 'bereit' : 'noch offen'}</strong>
+          </div>
+        </div>
+        {(businessValidation?.message || businessValidation?.guidance) && (
+          <div className="soft-panel" style={{ padding: 16, marginTop: 14, fontSize: 14, color: 'var(--text-secondary)' }}>
+            <strong style={{ color: 'var(--text-primary)' }}>{businessValidation?.message || 'Business-Validierung im Aufbau.'}</strong>
+            {businessValidation?.guidance && (
+              <div style={{ marginTop: 8 }}>
+                {businessValidation.guidance}
+              </div>
+            )}
+          </div>
+        )}
         {!truthStatus?.coverage_weeks && legacyCustomer && (
           <div className="soft-panel review-panel-soft" style={{ marginTop: 14 }}>
             <div className="campaign-focus-label">Explorativer Legacy-Run</div>

@@ -211,11 +211,17 @@ class RegionalModelTrainer:
         )
 
         dataset_manifest = self.feature_builder.dataset_manifest(virus_typ=virus_typ, panel=panel)
+        point_in_time_manifest = self.feature_builder.point_in_time_snapshot_manifest(
+            virus_typ=virus_typ,
+            panel=panel,
+        )
         model_dir = self.models_dir / _virus_slug(virus_typ)
         metadata = {
             "virus_typ": virus_typ,
             "model_family": "regional_pooled_panel",
             "trained_at": datetime.utcnow().isoformat(),
+            "model_version": None,
+            "calibration_version": None,
             "feature_columns": feature_columns,
             "ww_only_feature_columns": ww_only_columns,
             "selected_tau": tau,
@@ -233,7 +239,14 @@ class RegionalModelTrainer:
             "quality_gate": backtest_bundle["quality_gate"],
             "aggregate_metrics": backtest_bundle["aggregate_metrics"],
             "label_selection": selection,
+            "point_in_time_snapshot": {
+                "snapshot_type": point_in_time_manifest.get("snapshot_type"),
+                "captured_at": point_in_time_manifest.get("captured_at"),
+                "unique_as_of_dates": point_in_time_manifest.get("unique_as_of_dates"),
+            },
         }
+        metadata["model_version"] = f"{metadata['model_family']}:{metadata['trained_at']}"
+        metadata["calibration_version"] = f"isotonic:{metadata['trained_at']}"
 
         if persist:
             self._persist_artifacts(
@@ -242,6 +255,7 @@ class RegionalModelTrainer:
                 metadata=metadata,
                 backtest_payload=backtest_bundle["backtest_payload"],
                 dataset_manifest=dataset_manifest,
+                point_in_time_manifest=point_in_time_manifest,
             )
 
         per_state = (backtest_bundle["backtest_payload"].get("details") or {})
@@ -305,10 +319,13 @@ class RegionalModelTrainer:
         payload: dict[str, Any] = {}
         meta_path = model_dir / "metadata.json"
         backtest_path = model_dir / "backtest.json"
+        point_in_time_path = model_dir / "point_in_time_snapshot.json"
         if meta_path.exists():
             payload["metadata"] = json.loads(meta_path.read_text())
         if backtest_path.exists():
             payload["backtest"] = json.loads(backtest_path.read_text())
+        if point_in_time_path.exists():
+            payload["point_in_time_snapshot"] = json.loads(point_in_time_path.read_text())
         return payload
 
     def _feature_columns(self, panel: pd.DataFrame) -> list[str]:
@@ -806,6 +823,7 @@ class RegionalModelTrainer:
         metadata: dict[str, Any],
         backtest_payload: dict[str, Any],
         dataset_manifest: dict[str, Any],
+        point_in_time_manifest: dict[str, Any],
     ) -> None:
         model_dir.mkdir(parents=True, exist_ok=True)
 
@@ -845,6 +863,8 @@ class RegionalModelTrainer:
 
         with open(model_dir / "dataset_manifest.json", "w") as handle:
             json.dump(_json_safe(dataset_manifest), handle, indent=2)
+        with open(model_dir / "point_in_time_snapshot.json", "w") as handle:
+            json.dump(_json_safe(point_in_time_manifest), handle, indent=2)
 
     @staticmethod
     def _calibration_split_dates(train_dates: list[pd.Timestamp]) -> tuple[list[pd.Timestamp], list[pd.Timestamp]] | None:

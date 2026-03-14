@@ -52,6 +52,7 @@ class RegionalForecastServiceTests(unittest.TestCase):
         rollout_mode: str = "gated",
         activation_policy: str = "quality_gate",
         signal_bundle_version: str = "core_panel_v1",
+        validated_for_budget_activation: bool = True,
     ) -> RegionalForecastService:
         inference_panel = pd.DataFrame(
             {
@@ -92,6 +93,17 @@ class RegionalForecastServiceTests(unittest.TestCase):
             "calibration": None,
             "metadata": metadata,
         }
+        service._business_gate = lambda quality_gate, truth_readiness=None, brand="gelo": {
+            "truth_readiness": "belastbar" if validated_for_budget_activation else "im_aufbau",
+            "truth_ready": validated_for_budget_activation,
+            "coverage_weeks": 52 if validated_for_budget_activation else 12,
+            "expected_units_lift_enabled": validated_for_budget_activation,
+            "expected_revenue_lift_enabled": validated_for_budget_activation,
+            "action_class": "customer_lift_ready" if validated_for_budget_activation else "market_watch",
+            "validation_status": "passed_holdout_validation" if validated_for_budget_activation else "pending_holdout_validation",
+            "decision_scope": "validated_budget_activation" if validated_for_budget_activation else "decision_support_only",
+            "validated_for_budget_activation": validated_for_budget_activation,
+        }
         service._test_virus_typ = virus_typ
         return service
 
@@ -116,6 +128,11 @@ class RegionalForecastServiceTests(unittest.TestCase):
         self.assertEqual(top["rollout_mode"], "gated")
         self.assertEqual(top["activation_policy"], "quality_gate")
         self.assertEqual(top["signal_bundle_version"], "core_panel_v1")
+        self.assertTrue(top["business_gate"]["validated_for_budget_activation"])
+        self.assertIn("model_version", top)
+        self.assertIn("calibration_version", top)
+        self.assertIn("point_in_time_snapshot", top)
+        self.assertIn("source_coverage", top)
 
     def test_media_activation_downgrades_to_watch_when_quality_gate_fails(self) -> None:
         service = self._make_service(quality_gate_passed=False)
@@ -130,6 +147,26 @@ class RegionalForecastServiceTests(unittest.TestCase):
         self.assertEqual(result["summary"]["total_budget_allocated"], 0.0)
         self.assertTrue(all(item["action"] == "watch" for item in result["recommendations"]))
         self.assertTrue(all(item["budget_eur"] == 0.0 for item in result["recommendations"]))
+
+    def test_media_activation_stays_watch_until_business_gate_is_validated(self) -> None:
+        service = self._make_service(
+            quality_gate_passed=True,
+            validated_for_budget_activation=False,
+        )
+
+        result = service.generate_media_activation(
+            virus_typ="Influenza A",
+            weekly_budget_eur=50000,
+            horizon_days=7,
+        )
+
+        self.assertEqual(result["summary"]["quality_gate"]["forecast_readiness"], "GO")
+        self.assertFalse(result["summary"]["business_gate"]["validated_for_budget_activation"])
+        self.assertEqual(result["summary"]["total_budget_allocated"], 0.0)
+        self.assertTrue(all(item["action"] == "watch" for item in result["recommendations"]))
+        self.assertTrue(
+            all("Business-Gate" in item["timeline"] for item in result["recommendations"])
+        )
 
     def test_sars_forecast_and_media_activation_respect_shadow_watch_policy(self) -> None:
         service = self._make_service(
@@ -222,11 +259,51 @@ class RegionalForecastServiceTests(unittest.TestCase):
         self.assertEqual(result["benchmark"][0]["virus_typ"], "Influenza A")
         self.assertEqual(result["benchmark"][1]["virus_typ"], "Influenza B")
         self.assertEqual(result["benchmark"][-1]["virus_typ"], "RSV A")
+        self.assertIn("business_gate", result)
         influenza_b = next(item for item in result["benchmark"] if item["virus_typ"] == "Influenza B")
         self.assertAlmostEqual(influenza_b["delta_vs_reference"]["precision_at_top3"], -0.01, places=6)
         sars = next(item for item in result["benchmark"] if item["virus_typ"] == "SARS-CoV-2")
         self.assertEqual(sars["rollout_mode"], "shadow")
         self.assertEqual(sars["activation_policy"], "watch_only")
+        self.assertIn("business_gate", sars)
+
+    def test_get_validation_summary_exposes_business_evidence_contract(self) -> None:
+        service = RegionalForecastService(db=None)
+        service._load_artifacts = lambda virus_typ: {
+            "metadata": {
+                "model_family": "regional_pooled_panel",
+                "trained_at": "2026-03-14T17:00:00",
+                "quality_gate": {"overall_passed": False, "forecast_readiness": "WATCH"},
+                "signal_bundle_version": "core_panel_v1",
+                "rollout_mode": "gated",
+                "activation_policy": "quality_gate",
+            },
+            "dataset_manifest": {
+                "source_coverage": {
+                    "wastewater": {"coverage_ratio": 0.92},
+                }
+            },
+            "point_in_time_snapshot": {
+                "snapshot_type": "regional_panel_as_of_training",
+                "unique_as_of_dates": 180,
+            },
+        }
+        service._business_gate = lambda quality_gate, truth_readiness=None, brand="gelo": {
+            "brand": brand,
+            "operator_context": {"operator": "peix", "truth_partner": brand},
+            "validation_status": "pending_holdout_validation",
+            "decision_scope": "decision_support_only",
+            "validated_for_budget_activation": False,
+            "evidence_tier": "holdout_ready",
+        }
+
+        result = service.get_validation_summary(virus_typ="Influenza A", brand="gelo")
+
+        self.assertEqual(result["brand"], "gelo")
+        self.assertEqual(result["business_gate"]["operator_context"]["operator"], "peix")
+        self.assertEqual(result["evidence_tier"], "holdout_ready")
+        self.assertEqual(result["source_coverage"]["wastewater"]["coverage_ratio"], 0.92)
+        self.assertEqual(result["point_in_time_snapshot"]["snapshot_type"], "regional_panel_as_of_training")
 
     def test_build_portfolio_view_prioritizes_cross_virus_opportunities(self) -> None:
         service = RegionalForecastService(db=None)
@@ -322,6 +399,7 @@ class RegionalForecastServiceTests(unittest.TestCase):
         result = service.build_portfolio_view(top_n=6, reference_virus="Influenza A")
 
         self.assertEqual(result["summary"]["trained_viruses"], 3)
+        self.assertIn("business_gate", result)
         self.assertEqual(len(result["benchmark"]), len(SUPPORTED_VIRUS_TYPES))
         influenza_b_opportunity = next(item for item in result["top_opportunities"] if item["virus_typ"] == "Influenza B")
         self.assertEqual(influenza_b_opportunity["bundesland"], "BY")

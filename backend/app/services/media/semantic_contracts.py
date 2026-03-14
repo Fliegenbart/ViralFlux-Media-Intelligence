@@ -127,6 +127,30 @@ def truth_readiness_contract(*, source: str = "MediaOutcomeRecord") -> dict[str,
     )
 
 
+def business_gate_contract(*, source: str = "BusinessValidationService") -> dict[str, Any]:
+    return build_metric_contract(
+        label="Business-Gate",
+        semantics="business_validation_gate",
+        source=source,
+        unit="state",
+        calibrated=False,
+        derived_from="truth_readiness + activation_cycles + holdout_design + lift_validation",
+        note="Beschreibt, ob epidemiologische Empfehlungen bereits als kommerziell validierte Budget-Entscheidung gelten duerfen.",
+    )
+
+
+def evidence_tier_contract(*, source: str = "BusinessValidationService") -> dict[str, Any]:
+    return build_metric_contract(
+        label="Evidenz-Tier",
+        semantics="business_evidence_tier",
+        source=source,
+        unit="state",
+        calibrated=False,
+        derived_from="truth_coverage + holdout_setup + validated_lift",
+        note="Ordnet den Reifegrad der Outcome- und Business-Validierung ein.",
+    )
+
+
 def outcome_signal_contract(*, source: str = "OutcomeSignalService") -> dict[str, Any]:
     return build_metric_contract(
         label="Outcome-Score",

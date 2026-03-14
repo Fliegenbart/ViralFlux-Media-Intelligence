@@ -14,6 +14,9 @@ import { WaveOutlookPanel } from './BacktestVisuals';
 import RegionalPortfolioPanel from './RegionalPortfolioPanel';
 import {
   VIRUS_OPTIONS,
+  businessValidationLabel,
+  decisionScopeLabel,
+  evidenceTierLabel,
   formatCurrency,
   formatDateTime,
   formatPercent,
@@ -86,6 +89,12 @@ const DecisionView: React.FC<Props> = ({
   const eventProbabilityLabel = metricContractLabel(weeklyDecision?.field_contracts, 'event_probability', 'Event-Wahrscheinlichkeit');
   const signalScoreLabel = metricContractLabel(weeklyDecision?.field_contracts, 'signal_score', 'Signal-Score');
   const learningState = learningStateLabel(weeklyDecision?.learning_state || weeklyDecision?.truth_gate?.learning_state);
+  const businessGate = weeklyDecision?.business_gate || decision?.business_validation || evidence?.business_validation;
+  const operatorContext = weeklyDecision?.operator_context || decision?.operator_context || evidence?.operator_context;
+  const businessValidationStatus = businessValidationLabel(weeklyDecision?.business_readiness || businessGate?.validation_status);
+  const businessEvidenceTier = evidenceTierLabel(weeklyDecision?.business_evidence_tier || businessGate?.evidence_tier);
+  const decisionScope = decisionScopeLabel(businessGate?.decision_scope);
+  const businessValidated = Boolean(businessGate?.validated_for_budget_activation);
 
   const heroSentence = weeklyDecision?.recommended_action
     || topCard?.decision_brief?.summary_sentence
@@ -146,6 +155,8 @@ const DecisionView: React.FC<Props> = ({
           <span className="step-chip">Generiert {formatDateTime(decision?.generated_at)}</span>
           <span className="step-chip">{UI_COPY.marketComparison}: {marketComparisonStateLabel(weeklyDecision?.proxy_state)}</span>
           <span className="step-chip">{UI_COPY.customerData}: {truthLayerLabel(decision?.truth_coverage || latestCustomer)}</span>
+          <span className="step-chip">Business-Gate: {businessValidationStatus}</span>
+          <span className="step-chip">Evidenz: {businessEvidenceTier}</span>
         </div>
       </section>
 
@@ -261,6 +272,56 @@ const DecisionView: React.FC<Props> = ({
               )}
             </div>
           </CollapsibleSection>
+
+          <div className="card subsection-card" style={{ padding: 24 }}>
+            <div className="section-heading" style={{ gap: 6 }}>
+              <h2 className="subsection-title">PEIX x GELO Freigabelogik</h2>
+              <p className="subsection-copy">
+                Der Forecast zeigt, wo eine Welle wahrscheinlich entsteht. Das Business-Gate entscheidet separat, ob PEIX daraus schon eine budgetwirksame GELO-Freigabe ableiten darf.
+              </p>
+            </div>
+            <div className="review-chip-row" style={{ marginTop: 12 }}>
+              <span className="step-chip">Operator: {(operatorContext?.operator || 'peix').toUpperCase()}</span>
+              <span className="step-chip">Truth-Partner: {(operatorContext?.truth_partner || 'gelo').toUpperCase()}</span>
+              <span className="step-chip">{decisionScope}</span>
+            </div>
+            <div className="metric-strip" style={{ marginTop: 16 }}>
+              <div className="metric-box">
+                <span>Business-Gate</span>
+                <strong>{businessValidationStatus}</strong>
+              </div>
+              <div className="metric-box">
+                <span>Evidenz-Tier</span>
+                <strong>{businessEvidenceTier}</strong>
+              </div>
+              <div className="metric-box">
+                <span>Truth-Wochen</span>
+                <strong>{businessGate?.coverage_weeks ?? decision?.truth_coverage?.coverage_weeks ?? 0}</strong>
+              </div>
+              <div className="metric-box">
+                <span>Aktivierungszyklen</span>
+                <strong>{businessGate?.activation_cycles ?? 0}</strong>
+              </div>
+              <div className="metric-box">
+                <span>Holdout-Setup</span>
+                <strong>{businessGate?.holdout_ready ? 'bereit' : 'offen'}</strong>
+              </div>
+              <div className="metric-box">
+                <span>Budgetfreigabe</span>
+                <strong>{businessValidated ? 'ja' : 'nein'}</strong>
+              </div>
+            </div>
+            <div className="soft-panel" style={{ padding: 16, marginTop: 16 }}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
+                {businessGate?.message || 'Die kommerzielle Validierung befindet sich noch im Aufbau.'}
+              </div>
+              {businessGate?.guidance && (
+                <div style={{ marginTop: 8, fontSize: 13, color: 'var(--text-secondary)' }}>
+                  {businessGate.guidance}
+                </div>
+              )}
+            </div>
+          </div>
 
           <div className="metric-strip">
             <div className="metric-box">

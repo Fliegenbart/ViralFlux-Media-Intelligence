@@ -14,9 +14,12 @@ from sqlalchemy.orm import Session
 from app.models.database import (
     AREKonsultation,
     GoogleTrendsData,
+    GrippeWebData,
+    InfluenzaData,
     KreisEinwohner,
     NotaufnahmeSyndromData,
     PollenData,
+    RSVData,
     SchoolHolidays,
     SurvstatKreisData,
     SurvstatWeeklyData,
@@ -68,6 +71,9 @@ class RegionalFeatureBuilder:
         wastewater = self._load_wastewater_daily(virus_typ, truth_start)
         wastewater_context = self._load_supported_wastewater_context(virus_typ, truth_start)
         truth = self._load_truth_series(virus_typ, truth_start)
+        grippeweb = self._load_grippeweb_signals(truth_start, end_date)
+        influenza_ifsg = self._load_influenza_ifsg(truth_start, end_date)
+        rsv_ifsg = self._load_rsv_ifsg(truth_start, end_date)
         are = self._load_are_konsultation(truth_start, end_date) if virus_typ == "SARS-CoV-2" else pd.DataFrame()
         notaufnahme = self._load_notaufnahme_covid(truth_start, end_date) if virus_typ == "SARS-CoV-2" else pd.DataFrame()
         trends = self._load_corona_test_trends(truth_start, end_date) if virus_typ == "SARS-CoV-2" else pd.DataFrame()
@@ -81,6 +87,9 @@ class RegionalFeatureBuilder:
             wastewater=wastewater,
             wastewater_context=wastewater_context,
             truth=truth,
+            grippeweb=grippeweb,
+            influenza_ifsg=influenza_ifsg,
+            rsv_ifsg=rsv_ifsg,
             are=are,
             notaufnahme=notaufnahme,
             trends=trends,
@@ -109,6 +118,9 @@ class RegionalFeatureBuilder:
         wastewater = self._load_wastewater_daily(virus_typ, truth_start)
         wastewater_context = self._load_supported_wastewater_context(virus_typ, truth_start)
         truth = self._load_truth_series(virus_typ, truth_start)
+        grippeweb = self._load_grippeweb_signals(truth_start, effective_as_of)
+        influenza_ifsg = self._load_influenza_ifsg(truth_start, effective_as_of)
+        rsv_ifsg = self._load_rsv_ifsg(truth_start, effective_as_of)
         are = self._load_are_konsultation(truth_start, effective_as_of) if virus_typ == "SARS-CoV-2" else pd.DataFrame()
         notaufnahme = (
             self._load_notaufnahme_covid(truth_start, effective_as_of)
@@ -126,6 +138,9 @@ class RegionalFeatureBuilder:
             wastewater=wastewater,
             wastewater_context=wastewater_context,
             truth=truth,
+            grippeweb=grippeweb,
+            influenza_ifsg=influenza_ifsg,
+            rsv_ifsg=rsv_ifsg,
             are=are,
             notaufnahme=notaufnahme,
             trends=trends,
@@ -208,9 +223,23 @@ class RegionalFeatureBuilder:
                 "source_lag_days": SOURCE_LAG_DAYS,
                 "rows": 0,
                 "truth_source": "unavailable",
+                "source_coverage": {},
             }
 
         truth_sources = sorted(str(value) for value in panel["truth_source"].dropna().unique())
+        source_coverage = {
+            column: round(float(panel[column].mean()), 4)
+            for column in (
+                "grippeweb_are_available",
+                "grippeweb_ili_available",
+                "ifsg_influenza_available",
+                "ifsg_rsv_available",
+                "sars_are_available",
+                "sars_notaufnahme_available",
+                "sars_trends_available",
+            )
+            if column in panel.columns
+        }
         return {
             "virus_typ": virus_typ,
             "event_definition_version": EVENT_DEFINITION_VERSION,
@@ -219,11 +248,58 @@ class RegionalFeatureBuilder:
             "source_lag_days": SOURCE_LAG_DAYS,
             "rows": int(len(panel)),
             "states": int(panel["bundesland"].nunique()),
+            "unique_as_of_dates": int(panel["as_of_date"].nunique()),
             "as_of_range": {
                 "start": str(panel["as_of_date"].min()),
                 "end": str(panel["as_of_date"].max()),
             },
             "truth_source": truth_sources[0] if len(truth_sources) == 1 else truth_sources,
+            "source_coverage": source_coverage,
+        }
+
+    def point_in_time_snapshot_manifest(self, virus_typ: str, panel: pd.DataFrame) -> dict[str, Any]:
+        dataset_manifest = self.dataset_manifest(virus_typ=virus_typ, panel=panel)
+        if panel.empty:
+            return {
+                "virus_typ": virus_typ,
+                "snapshot_type": "regional_panel_as_of_training",
+                "captured_at": datetime.utcnow().isoformat(),
+                "rows": 0,
+                "source_lag_days": SOURCE_LAG_DAYS,
+                "dataset_manifest": dataset_manifest,
+            }
+
+        state_row_counts = {
+            code: int(count)
+            for code, count in panel.groupby("bundesland")["as_of_date"].count().to_dict().items()
+        }
+        return {
+            "virus_typ": virus_typ,
+            "snapshot_type": "regional_panel_as_of_training",
+            "captured_at": datetime.utcnow().isoformat(),
+            "rows": int(len(panel)),
+            "states": int(panel["bundesland"].nunique()),
+            "unique_as_of_dates": int(panel["as_of_date"].nunique()),
+            "as_of_range": {
+                "start": str(panel["as_of_date"].min()),
+                "end": str(panel["as_of_date"].max()),
+            },
+            "state_row_counts": state_row_counts,
+            "feature_columns": sorted(
+                column for column in panel.columns
+                if column not in {
+                    "virus_typ",
+                    "bundesland",
+                    "bundesland_name",
+                    "as_of_date",
+                    "target_week_start",
+                    "target_window_days",
+                    "event_definition_version",
+                    "truth_source",
+                }
+            ),
+            "source_lag_days": SOURCE_LAG_DAYS,
+            "dataset_manifest": dataset_manifest,
         }
 
     def _load_wastewater_daily(self, virus_typ: str, start_date: pd.Timestamp) -> pd.DataFrame:
@@ -423,7 +499,121 @@ class RegionalFeatureBuilder:
             return frame
         return frame.sort_values(["bundesland", "week_start"]).reset_index(drop=True)
 
+    def _load_grippeweb_signals(self, start_date: pd.Timestamp, end_date: pd.Timestamp) -> pd.DataFrame:
+        if self.db is None:
+            return pd.DataFrame()
+        rows = (
+            self.db.query(
+                GrippeWebData.bundesland,
+                GrippeWebData.datum,
+                GrippeWebData.erkrankung_typ,
+                func.max(GrippeWebData.created_at).label("created_at"),
+                func.avg(GrippeWebData.inzidenz).label("incidence"),
+            )
+            .filter(
+                GrippeWebData.datum >= start_date.to_pydatetime(),
+                GrippeWebData.datum <= end_date.to_pydatetime(),
+                GrippeWebData.erkrankung_typ.in_(["ARE", "ILI"]),
+                GrippeWebData.altersgruppe.in_(["00+", "Gesamt"]),
+            )
+            .group_by(
+                GrippeWebData.bundesland,
+                GrippeWebData.datum,
+                GrippeWebData.erkrankung_typ,
+            )
+            .order_by(GrippeWebData.datum.asc())
+            .all()
+        )
+
+        frame = pd.DataFrame(
+            [
+                {
+                    "bundesland": normalize_state_code(row.bundesland),
+                    "datum": pd.Timestamp(row.datum).normalize(),
+                    "available_time": self._created_proxy_available_time(
+                        datum=row.datum,
+                        created_at=row.created_at,
+                        fallback_lag_days=SOURCE_LAG_DAYS["grippeweb"],
+                    ),
+                    "signal_type": str(row.erkrankung_typ or "").strip().upper(),
+                    "incidence": float(row.incidence or 0.0),
+                }
+                for row in rows
+            ]
+        )
+        if frame.empty:
+            return frame
+        return frame.sort_values(["signal_type", "bundesland", "datum"], na_position="last").reset_index(drop=True)
+
+    def _load_influenza_ifsg(self, start_date: pd.Timestamp, end_date: pd.Timestamp) -> pd.DataFrame:
+        return self._load_ifsg_signal_frame(
+            model=InfluenzaData,
+            start_date=start_date,
+            end_date=end_date,
+            lag_key="influenza_ifsg",
+        )
+
+    def _load_rsv_ifsg(self, start_date: pd.Timestamp, end_date: pd.Timestamp) -> pd.DataFrame:
+        return self._load_ifsg_signal_frame(
+            model=RSVData,
+            start_date=start_date,
+            end_date=end_date,
+            lag_key="rsv_ifsg",
+        )
+
+    def _load_ifsg_signal_frame(
+        self,
+        *,
+        model,
+        start_date: pd.Timestamp,
+        end_date: pd.Timestamp,
+        lag_key: str,
+    ) -> pd.DataFrame:
+        if self.db is None:
+            return pd.DataFrame()
+        rows = (
+            self.db.query(
+                model.region,
+                model.datum,
+                func.max(model.available_time).label("available_time"),
+                func.avg(model.inzidenz).label("incidence"),
+            )
+            .filter(
+                model.datum >= start_date.to_pydatetime(),
+                model.datum <= end_date.to_pydatetime(),
+                model.altersgruppe.in_(["00+", "Gesamt"]),
+            )
+            .group_by(
+                model.region,
+                model.datum,
+            )
+            .order_by(model.datum.asc())
+            .all()
+        )
+
+        frame = pd.DataFrame(
+            [
+                {
+                    "bundesland": normalize_state_code(row.region),
+                    "datum": pd.Timestamp(row.datum).normalize(),
+                    "available_time": effective_available_time(
+                        row.datum,
+                        row.available_time,
+                        SOURCE_LAG_DAYS[lag_key],
+                    ),
+                    "incidence": float(row.incidence or 0.0),
+                }
+                for row in rows
+                if normalize_state_code(row.region)
+            ]
+        )
+        if frame.empty:
+            return frame
+        return frame.sort_values(["bundesland", "datum"]).reset_index(drop=True)
+
     def _load_are_konsultation(self, start_date: pd.Timestamp, end_date: pd.Timestamp) -> pd.DataFrame:
+        if self.db is None:
+            return pd.DataFrame()
         rows = (
             self.db.query(
                 AREKonsultation.bundesland,
@@ -463,6 +653,8 @@ class RegionalFeatureBuilder:
         return frame.sort_values(["bundesland", "datum"]).reset_index(drop=True)
 
     def _load_notaufnahme_covid(self, start_date: pd.Timestamp, end_date: pd.Timestamp) -> pd.DataFrame:
+        if self.db is None:
+            return pd.DataFrame()
         rows = (
             self.db.query(NotaufnahmeSyndromData)
             .filter(
@@ -502,6 +694,8 @@ class RegionalFeatureBuilder:
         return frame.sort_values("datum").reset_index(drop=True)
 
     def _load_corona_test_trends(self, start_date: pd.Timestamp, end_date: pd.Timestamp) -> pd.DataFrame:
+        if self.db is None:
+            return pd.DataFrame()
         rows = (
             self.db.query(
                 GoogleTrendsData.datum,
@@ -629,6 +823,9 @@ class RegionalFeatureBuilder:
         wastewater: pd.DataFrame,
         wastewater_context: dict[str, pd.DataFrame],
         truth: pd.DataFrame,
+        grippeweb: pd.DataFrame,
+        influenza_ifsg: pd.DataFrame,
+        rsv_ifsg: pd.DataFrame,
         are: pd.DataFrame,
         notaufnahme: pd.DataFrame,
         trends: pd.DataFrame,
@@ -660,6 +857,22 @@ class RegionalFeatureBuilder:
             state: frame.sort_values("week_start").reset_index(drop=True)
             for state, frame in truth.groupby("bundesland")
         }
+        grippeweb_by_state = {
+            (signal_type, state): frame.sort_values("datum").reset_index(drop=True)
+            for (signal_type, state), frame in grippeweb.dropna(subset=["bundesland"]).groupby(["signal_type", "bundesland"])
+        } if not grippeweb.empty else {}
+        grippeweb_national = {
+            signal_type: frame.sort_values("datum").reset_index(drop=True)
+            for signal_type, frame in grippeweb.loc[grippeweb["bundesland"].isna()].groupby("signal_type")
+        } if not grippeweb.empty else {}
+        influenza_by_state = {
+            state: frame.sort_values("datum").reset_index(drop=True)
+            for state, frame in influenza_ifsg.groupby("bundesland")
+        } if not influenza_ifsg.empty else {}
+        rsv_by_state = {
+            state: frame.sort_values("datum").reset_index(drop=True)
+            for state, frame in rsv_ifsg.groupby("bundesland")
+        } if not rsv_ifsg.empty else {}
         are_by_state = {
             state: frame.sort_values("datum").reset_index(drop=True)
             for state, frame in are.groupby("bundesland")
@@ -700,6 +913,28 @@ class RegionalFeatureBuilder:
                 if len(visible_truth) < 8:
                     continue
 
+                visible_grippeweb_state = {
+                    signal_type: self._visible_signal_frame(
+                        grippeweb_by_state.get((signal_type, state)),
+                        as_of=as_of,
+                    )
+                    for signal_type in ("ARE", "ILI")
+                }
+                visible_grippeweb_national = {
+                    signal_type: self._visible_signal_frame(
+                        grippeweb_national.get(signal_type),
+                        as_of=as_of,
+                    )
+                    for signal_type in ("ARE", "ILI")
+                }
+                visible_influenza_ifsg = self._visible_signal_frame(
+                    influenza_by_state.get(state),
+                    as_of=as_of,
+                )
+                visible_rsv_ifsg = self._visible_signal_frame(
+                    rsv_by_state.get(state),
+                    as_of=as_of,
+                )
                 visible_are = None
                 if virus_typ == "SARS-CoV-2":
                     are_frame = are_by_state.get(state)
@@ -752,6 +987,10 @@ class RegionalFeatureBuilder:
                     as_of=as_of,
                     visible_ww=visible_ww,
                     visible_truth=visible_truth,
+                    visible_grippeweb_state=visible_grippeweb_state,
+                    visible_grippeweb_national=visible_grippeweb_national,
+                    visible_influenza_ifsg=visible_influenza_ifsg,
+                    visible_rsv_ifsg=visible_rsv_ifsg,
                     visible_are=visible_are,
                     visible_notaufnahme=visible_notaufnahme,
                     visible_trends=visible_trends,
@@ -805,6 +1044,10 @@ class RegionalFeatureBuilder:
         as_of: pd.Timestamp,
         visible_ww: pd.DataFrame,
         visible_truth: pd.DataFrame,
+        visible_grippeweb_state: dict[str, pd.DataFrame],
+        visible_grippeweb_national: dict[str, pd.DataFrame],
+        visible_influenza_ifsg: pd.DataFrame | None,
+        visible_rsv_ifsg: pd.DataFrame | None,
         visible_are: pd.DataFrame | None,
         visible_notaufnahme: pd.DataFrame | None,
         visible_trends: pd.DataFrame | None,
@@ -868,6 +1111,23 @@ class RegionalFeatureBuilder:
         weather_features = self._weather_features(weather_frame, as_of)
         pollen_context = self._pollen_context(pollen_frame, as_of)
         holiday_share = self._holiday_share_in_target_window(holiday_ranges, as_of)
+        grippeweb_features = self._grippeweb_context_features(
+            as_of=as_of,
+            visible_state_signals=visible_grippeweb_state,
+            visible_national_signals=visible_grippeweb_national,
+            current_known_incidence=current_known_incidence,
+            seasonal_baseline=seasonal_baseline,
+            seasonal_mad=seasonal_mad,
+        )
+        virus_specific_ifsg_features = self._virus_specific_ifsg_features(
+            virus_typ=virus_typ,
+            as_of=as_of,
+            visible_influenza_ifsg=visible_influenza_ifsg,
+            visible_rsv_ifsg=visible_rsv_ifsg,
+            current_known_incidence=current_known_incidence,
+            seasonal_baseline=seasonal_baseline,
+            seasonal_mad=seasonal_mad,
+        )
         sars_context_features = self._sars_context_features(
             virus_typ=virus_typ,
             as_of=as_of,
@@ -935,6 +1195,8 @@ class RegionalFeatureBuilder:
             "pollen_context_score": float(pollen_context),
             **weather_features,
             **cross_virus_features,
+            **grippeweb_features,
+            **virus_specific_ifsg_features,
             **sars_context_features,
         }
 
@@ -1044,6 +1306,9 @@ class RegionalFeatureBuilder:
         survstat_baseline_zscore = float((current_known_incidence - seasonal_baseline) / max(seasonal_mad, 1.0))
 
         return {
+            "sars_are_available": float(not are_frame.empty),
+            "sars_notaufnahme_available": float(not notaufnahme_frame.empty),
+            "sars_trends_available": float(not trends_frame.empty),
             "sars_are_level": float(are_level),
             "sars_are_lag7d": float(are_lag7),
             "sars_are_momentum_1w": are_momentum_1w,
@@ -1069,6 +1334,126 @@ class RegionalFeatureBuilder:
             ),
             "sars_are_survstat_zscore_gap": float(are_baseline_zscore - survstat_baseline_zscore),
         }
+
+    @staticmethod
+    def _visible_signal_frame(frame: pd.DataFrame | None, *, as_of: pd.Timestamp) -> pd.DataFrame:
+        if frame is None or frame.empty:
+            return pd.DataFrame()
+        visible = frame.loc[frame["datum"] <= as_of].copy()
+        if "available_time" in visible.columns:
+            visible = visible.loc[visible["available_time"] <= as_of].copy()
+        return visible.reset_index(drop=True)
+
+    def _grippeweb_context_features(
+        self,
+        *,
+        as_of: pd.Timestamp,
+        visible_state_signals: dict[str, pd.DataFrame],
+        visible_national_signals: dict[str, pd.DataFrame],
+        current_known_incidence: float,
+        seasonal_baseline: float,
+        seasonal_mad: float,
+    ) -> dict[str, float]:
+        features: dict[str, float] = {}
+        for signal_type in ("ARE", "ILI"):
+            signal_slug = signal_type.lower()
+            state_frame = visible_state_signals.get(signal_type)
+            if state_frame is None:
+                state_frame = pd.DataFrame()
+            national_frame = visible_national_signals.get(signal_type)
+            if national_frame is None:
+                national_frame = pd.DataFrame()
+            primary_frame = state_frame if not state_frame.empty else national_frame
+            features.update(
+                self._signal_feature_family(
+                    prefix=f"grippeweb_{signal_slug}",
+                    frame=primary_frame,
+                    as_of=as_of,
+                    current_known_incidence=current_known_incidence,
+                    seasonal_baseline=seasonal_baseline,
+                    seasonal_mad=seasonal_mad,
+                )
+            )
+            national_level = self._latest_value_as_of(national_frame, as_of, "incidence")
+            state_level = self._latest_value_as_of(state_frame, as_of, "incidence")
+            features[f"grippeweb_{signal_slug}_national_level"] = float(national_level)
+            features[f"grippeweb_{signal_slug}_national_momentum_1w"] = float(
+                self._relative_delta(
+                    national_level,
+                    self._latest_value_as_of(national_frame, as_of - pd.Timedelta(days=7), "incidence"),
+                )
+            )
+            features[f"grippeweb_{signal_slug}_state_vs_national"] = float(state_level - national_level)
+        return features
+
+    def _virus_specific_ifsg_features(
+        self,
+        *,
+        virus_typ: str,
+        as_of: pd.Timestamp,
+        visible_influenza_ifsg: pd.DataFrame | None,
+        visible_rsv_ifsg: pd.DataFrame | None,
+        current_known_incidence: float,
+        seasonal_baseline: float,
+        seasonal_mad: float,
+    ) -> dict[str, float]:
+        if virus_typ in {"Influenza A", "Influenza B"}:
+            return self._signal_feature_family(
+                prefix="ifsg_influenza",
+                frame=visible_influenza_ifsg,
+                as_of=as_of,
+                current_known_incidence=current_known_incidence,
+                seasonal_baseline=seasonal_baseline,
+                seasonal_mad=seasonal_mad,
+            )
+        if virus_typ == "RSV A":
+            return self._signal_feature_family(
+                prefix="ifsg_rsv",
+                frame=visible_rsv_ifsg,
+                as_of=as_of,
+                current_known_incidence=current_known_incidence,
+                seasonal_baseline=seasonal_baseline,
+                seasonal_mad=seasonal_mad,
+            )
+        return {}
+
+    def _signal_feature_family(
+        self,
+        *,
+        prefix: str,
+        frame: pd.DataFrame | None,
+        as_of: pd.Timestamp,
+        current_known_incidence: float,
+        seasonal_baseline: float,
+        seasonal_mad: float,
+    ) -> dict[str, float]:
+        signal_frame = frame if frame is not None else pd.DataFrame()
+        level = self._latest_value_as_of(signal_frame, as_of, "incidence")
+        lag7 = self._latest_value_as_of(signal_frame, as_of - pd.Timedelta(days=7), "incidence")
+        baseline, mad = self._seasonal_signal_baseline(
+            signal_frame,
+            target_date=as_of,
+            value_col="incidence",
+        )
+        baseline_gap = float(level - baseline)
+        baseline_zscore = float(baseline_gap / max(mad, 1.0))
+        survstat_zscore = float((current_known_incidence - seasonal_baseline) / max(seasonal_mad, 1.0))
+        return {
+            f"{prefix}_available": float(not signal_frame.empty),
+            f"{prefix}_level": float(level),
+            f"{prefix}_lag7d": float(lag7),
+            f"{prefix}_momentum_1w": float(self._relative_delta(level, lag7)),
+            f"{prefix}_baseline_gap": baseline_gap,
+            f"{prefix}_baseline_zscore": baseline_zscore,
+            f"{prefix}_survstat_log_gap": float(
+                np.log1p(max(level, 0.0)) - np.log1p(max(current_known_incidence, 0.0))
+            ),
+            f"{prefix}_survstat_zscore_gap": float(baseline_zscore - survstat_zscore),
+        }
+
+    @staticmethod
+    def _relative_delta(current_value: float, previous_value: float) -> float:
+        return float((current_value - previous_value) / max(abs(previous_value), 1.0))
 
     @staticmethod
     def _latest_value_as_of(frame: pd.DataFrame, as_of: pd.Timestamp, column: str) -> float:

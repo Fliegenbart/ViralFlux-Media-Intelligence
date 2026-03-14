@@ -26,6 +26,7 @@ from app.models.database import (
     WastewaterAggregated,
 )
 from app.services.marketing_engine.opportunity_engine import MarketingOpportunityEngine
+from app.services.media.business_validation_service import BusinessValidationService
 from app.services.media.cockpit_service import MediaCockpitService
 from app.services.media.outcome_signal_service import OutcomeSignalService
 from app.services.media.peix_score_service import PeixEpiScoreService
@@ -38,6 +39,8 @@ from app.services.media.recommendation_contracts import (
     to_card_response,
 )
 from app.services.media.semantic_contracts import (
+    business_gate_contract,
+    evidence_tier_contract,
     forecast_probability_contract,
     infer_feature_families,
     outcome_confidence_contract,
@@ -137,6 +140,7 @@ class MediaV2Service:
         self.engine = MarketingOpportunityEngine(db)
         self.truth_gate_service = TruthGateService()
         self.outcome_signal_service = OutcomeSignalService(db)
+        self.business_validation_service = BusinessValidationService(db)
 
     def get_decision_payload(
         self,
@@ -159,6 +163,13 @@ class MediaV2Service:
             truth_coverage=truth_coverage,
             truth_gate=truth_gate,
         )["summary"]
+        business_validation = self.business_validation_service.evaluate(
+            brand=brand,
+            virus_typ=virus_typ,
+            truth_coverage=truth_coverage,
+            truth_gate=truth_gate,
+            outcome_learning_summary=outcome_learning,
+        )
         model_lineage = self.get_model_lineage(virus_typ=virus_typ)
         queue = self._build_campaign_queue(self._campaign_cards(brand=brand, limit=80), visible_limit=8)
         campaign_cards = queue["visible_cards"]
@@ -171,6 +182,7 @@ class MediaV2Service:
 
         freshness_state = self._decision_freshness_state(cockpit.get("source_status", {}))
         has_truth = truth_gate["passed"]
+        has_business_validation = bool(business_validation.get("validated_for_budget_activation"))
         market_passed = bool((market.get("quality_gate") or {}).get("overall_passed"))
         forecast_passed = str(forecast_quality.get("forecast_readiness") or "WATCH") == "GO"
         publishable_cards = [card for card in primary_cards if card.get("is_publishable")]
@@ -181,6 +193,7 @@ class MediaV2Service:
             market_passed,
             forecast_passed,
             has_truth,
+            has_business_validation,
             has_publishable,
             drift_state != "warning",
         ]) else "WATCH"
@@ -194,12 +207,16 @@ class MediaV2Service:
             risk_flags.append("Der Forecast-Promotion-Gate steht aktuell auf WATCH.")
         if not has_truth:
             risk_flags.append(str(truth_gate["message"]))
+        if not has_business_validation:
+            risk_flags.append(str(business_validation.get("message") or "Business-Gate ist noch nicht validiert."))
         if drift_state == "warning":
             risk_flags.append("Modell-Drift ist im Monitoring auffällig.")
         if not has_publishable:
             risk_flags.append("Es gibt aktuell keinen freigabefaehigen Kampagnenvorschlag.")
         if truth_gate.get("guidance") and truth_gate.get("learning_state") != "belastbar":
             risk_flags.append(str(truth_gate["guidance"]))
+        if business_validation.get("guidance") and business_validation.get("decision_scope") != "validated_budget_activation":
+            risk_flags.append(str(business_validation["guidance"]))
 
         why_now = self._build_why_now(
             top_card=top_card,
@@ -258,12 +275,16 @@ class MediaV2Service:
                 "truth_latest_batch_id": truth_coverage.get("latest_batch_id"),
                 "truth_risk_flag": None if has_truth else truth_gate["message"],
                 "truth_gate": truth_gate,
+                "business_gate": business_validation,
+                "business_readiness": business_validation.get("validation_status"),
+                "business_evidence_tier": business_validation.get("evidence_tier"),
                 "learning_state": outcome_learning.get("learning_state"),
                 "outcome_learning_summary": outcome_learning,
                 "decision_mode": signal_summary.get("decision_mode"),
                 "decision_mode_label": signal_summary.get("decision_mode_label"),
                 "decision_mode_reason": signal_summary.get("decision_mode_reason"),
                 "signal_stack_summary": signal_summary,
+                "operator_context": business_validation.get("operator_context"),
                 "field_contracts": {
                     "event_probability": forecast_probability_contract(),
                     "signal_score": ranking_signal_contract(
@@ -277,6 +298,8 @@ class MediaV2Service:
                         derived_from="trigger_evidence.confidence",
                     ),
                     "truth_readiness": truth_readiness_contract(),
+                    "business_gate": business_gate_contract(),
+                    "evidence_tier": evidence_tier_contract(),
                     "outcome_signal_score": outcome_signal_contract(),
                     "outcome_confidence_pct": outcome_confidence_contract(),
                 },
@@ -287,6 +310,8 @@ class MediaV2Service:
             "backtest_summary": cockpit.get("backtest_summary"),
             "model_lineage": model_lineage,
             "truth_coverage": truth_coverage,
+            "business_validation": business_validation,
+            "operator_context": business_validation.get("operator_context"),
         }
 
     def get_regions_payload(
@@ -437,6 +462,13 @@ class MediaV2Service:
             truth_coverage=truth_coverage,
             truth_gate=truth_gate,
         )["summary"]
+        business_validation = self.business_validation_service.evaluate(
+            brand=brand,
+            virus_typ=virus_typ,
+            truth_coverage=truth_coverage,
+            truth_gate=truth_gate,
+            outcome_learning_summary=outcome_learning,
+        )
         latest_customer = backtest_summary.get("latest_customer")
         truth_validation = latest_customer if truth_coverage.get("coverage_weeks", 0) > 0 else None
         truth_validation_legacy = latest_customer if truth_validation is None and latest_customer else None
@@ -445,6 +477,8 @@ class MediaV2Service:
             "target_source": target_source,
             "generated_at": datetime.utcnow().isoformat(),
             "proxy_validation": backtest_summary.get("latest_market"),
+            "business_validation": business_validation,
+            "operator_context": business_validation.get("operator_context"),
             "truth_validation": truth_validation,
             "truth_validation_legacy": truth_validation_legacy,
             "recent_runs": backtest_summary.get("recent_runs") or [],
@@ -689,6 +723,13 @@ class MediaV2Service:
             truth_coverage=coverage,
             truth_gate=truth_gate,
         )["summary"]
+        business_validation = self.business_validation_service.evaluate(
+            brand=brand,
+            virus_typ=virus_typ,
+            truth_coverage=coverage,
+            truth_gate=truth_gate,
+            outcome_learning_summary=outcome_learning,
+        )
         recent_batches = self.list_outcome_import_batches(brand=brand, limit=8)
         latest_batch = recent_batches[0] if recent_batches else None
         issue_count = int(latest_batch.get("rows_rejected") or 0) if latest_batch else 0
@@ -705,6 +746,7 @@ class MediaV2Service:
             "brand": str(brand or "gelo").strip().lower(),
             "coverage": coverage,
             "truth_gate": truth_gate,
+            "business_validation": business_validation,
             "outcome_learning_summary": outcome_learning,
             "recent_batches": recent_batches,
             "latest_batch": latest_batch,

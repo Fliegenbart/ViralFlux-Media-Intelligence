@@ -330,3 +330,42 @@ async def get_media_activation(
         weekly_budget_eur=weekly_budget_eur,
         horizon_days=horizon_days,
     )
+
+
+@router.get("/regional/backtest")
+async def run_regional_backtest(
+    virus_typ: str = "Influenza A",
+    horizon_days: int = 7,
+    db: Session = Depends(get_db),
+):
+    """Run walk-forward backtest for all Bundesländer.
+
+    Shows how accurately the regional models would have predicted
+    virus wave events historically. Returns hit rate, false alarm rate,
+    F1 score, and MAPE per Bundesland.
+    """
+    from app.services.ml.regional_backtest import RegionalBacktester
+
+    backtester = RegionalBacktester(db)
+    return backtester.backtest_all_regions(
+        virus_typ=virus_typ,
+        horizon_days=horizon_days,
+    )
+
+
+@router.get("/regional/backtest/{bundesland}")
+async def run_region_backtest(
+    bundesland: str,
+    virus_typ: str = "Influenza A",
+    horizon_days: int = 7,
+    db: Session = Depends(get_db),
+):
+    """Run backtest for a single Bundesland with detailed timeline."""
+    from app.services.ml.regional_backtest import RegionalBacktester
+
+    backtester = RegionalBacktester(db)
+    return backtester.backtest_region(
+        virus_typ=virus_typ,
+        bundesland=bundesland.upper(),
+        horizon_days=horizon_days,
+    )

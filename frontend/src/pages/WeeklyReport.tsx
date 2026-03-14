@@ -70,7 +70,7 @@ const WeeklyReport: React.FC = () => {
 
   return (
     <div style={{ maxWidth: 720, margin: '0 auto' }}>
-      <h1 style={{ fontSize: 24, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>
+      <h1 style={{ fontSize: 24, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>
         {UI_COPY.weeklyReport}
       </h1>
       <p style={{ fontSize: 14, color: 'var(--text-secondary)', marginBottom: 32 }}>
@@ -83,14 +83,14 @@ const WeeklyReport: React.FC = () => {
           onClick={handleGenerate}
           disabled={generating}
           style={{
-            padding: '24px 20px', borderRadius: 12,
+            padding: 24, borderRadius: 12,
             border: '1px solid var(--border-color)', background: 'var(--bg-card)',
             cursor: generating ? 'wait' : 'pointer', textAlign: 'left',
             transition: 'border-color 0.2s',
           }}
         >
           <div style={{ fontSize: 24, marginBottom: 8 }}>{generating ? '...' : '+'}</div>
-          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>
+          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 8 }}>
             {generating ? 'Wird erstellt...' : 'Neuen Bericht erstellen'}
           </div>
           <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
@@ -102,14 +102,14 @@ const WeeklyReport: React.FC = () => {
           onClick={() => handleDownload()}
           disabled={downloading}
           style={{
-            padding: '24px 20px', borderRadius: 12,
+            padding: 24, borderRadius: 12,
             border: '1px solid var(--accent-violet)', background: 'var(--accent-violet)',
             cursor: downloading ? 'wait' : 'pointer', textAlign: 'left',
             color: '#fff',
           }}
         >
           <div style={{ fontSize: 24, marginBottom: 8 }}>{downloading ? '...' : '\u2193'}</div>
-          <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>
+          <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>
             {downloading ? 'Download...' : 'Aktuellen Bericht herunterladen'}
           </div>
           <div style={{ fontSize: 12, opacity: 0.8 }}>
@@ -121,8 +121,8 @@ const WeeklyReport: React.FC = () => {
       {status && (
         <div style={{
           padding: '10px 16px', borderRadius: 8, marginBottom: 24,
-          background: status.includes('Fehler') ? 'rgba(220,38,38,0.1)' : 'rgba(5,150,105,0.1)',
-          color: status.includes('Fehler') ? '#dc2626' : '#059669',
+          background: status.includes('Fehler') ? 'var(--status-danger-bg, rgba(220,38,38,0.1))' : 'var(--status-success-bg, rgba(5,150,105,0.1))',
+          color: status.includes('Fehler') ? 'var(--status-danger, #dc2626)' : 'var(--status-success, #059669)',
           fontSize: 13, fontWeight: 500,
         }}>
           {status}

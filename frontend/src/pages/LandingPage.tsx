@@ -60,7 +60,7 @@ const ScoreGauge: React.FC<{ score: number; label: string }> = ({ score, label }
 
   const R = 54, circ = 2 * Math.PI * R;
   const offset = circ - val * circ;
-  const col = val > 0.7 ? '#dc2626' : val > 0.5 ? '#d97706' : val > 0.3 ? '#2563eb' : '#059669';
+  const col = val > 0.7 ? 'var(--status-danger, #dc2626)' : val > 0.5 ? 'var(--status-warning, #d97706)' : val > 0.3 ? 'var(--status-info, #2563eb)' : 'var(--status-success, #059669)';
 
   return (
     <div style={{ textAlign: 'center' }}>
@@ -99,7 +99,7 @@ const VirusBars: React.FC<{ data?: Array<{ label: string; pct: number; color: st
   ];
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       {data.map((d, i) => (
         <div key={d.label} style={{
           opacity: vis ? 1 : 0, transform: vis ? 'translateX(0)' : 'translateX(8px)',
@@ -210,7 +210,7 @@ const hoverLift = {
 
 /* ═══ Responsive CSS ═════════════════════════════════════════════════ */
 const RESPONSIVE_CSS = `
-  .lp-hero-grid { display: grid; grid-template-columns: minmax(0, 1fr) 390px; gap: 56px; align-items: start; }
+  .lp-hero-grid { display: grid; grid-template-columns: minmax(0, 1fr) 390px; gap: 40px; align-items: start; }
   .lp-evidence-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
   .lp-flow-grid { display: grid; grid-template-columns: repeat(4, 1fr); position: relative; }
   .lp-preview-grid { display: grid; grid-template-columns: 210px 1fr; gap: 40px; align-items: center; }
@@ -429,7 +429,7 @@ const LandingPage: React.FC = () => {
         {/* Right: Live Score Widget */}
         <div style={{
           background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 16,
-          padding: '24px 20px',
+          padding: 24,
           boxShadow: '0 4px 24px rgba(0,0,0,0.04), 0 1px 3px rgba(0,0,0,0.03)',
         }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
@@ -478,7 +478,7 @@ const LandingPage: React.FC = () => {
       <div style={{ position: 'relative', maxWidth: 1120, margin: '0 auto', padding: '0 24px 80px' }}>
 
         {/* ── Divider ──────────────────────────────────────────── */}
-        <div style={{ margin: '64px 0', borderTop: `1px solid ${C.border}` }} />
+        <div style={{ margin: '48px 0', borderTop: `1px solid ${C.border}` }} />
 
         {/* ═══ 01 — Evidence / Features ══════════════════════════ */}
         <RevealSection>
@@ -508,7 +508,7 @@ const LandingPage: React.FC = () => {
                 key={card.title}
                 style={{
                   background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 12,
-                  padding: '28px 24px', transition: 'all 0.25s ease', cursor: 'default',
+                  padding: 24, transition: 'all 0.25s ease', cursor: 'default',
                 }}
                 {...hoverLift}
               >
@@ -530,7 +530,7 @@ const LandingPage: React.FC = () => {
         </RevealSection>
 
         {/* ── Divider ──────────────────────────────────────────── */}
-        <div style={{ margin: '64px 0', borderTop: `1px solid ${C.border}` }} />
+        <div style={{ margin: '48px 0', borderTop: `1px solid ${C.border}` }} />
 
         {/* ═══ 02 — Workflow Flow ════════════════════════════════ */}
         <RevealSection>
@@ -557,14 +557,14 @@ const LandingPage: React.FC = () => {
                   {step.num}
                 </div>
                 <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>{step.label}</div>
-                <p className="lp-section-copy" style={{ fontSize: 13, lineHeight: 1.62, color: C.textSec, margin: 0 }}>{step.desc}</p>
+                <p className="lp-section-copy" style={{ fontSize: 13, lineHeight: 1.7, color: C.textSec, margin: 0 }}>{step.desc}</p>
               </div>
             ))}
           </div>
         </RevealSection>
 
         {/* ── Divider ──────────────────────────────────────────── */}
-        <div style={{ margin: '64px 0', borderTop: `1px solid ${C.border}` }} />
+        <div style={{ margin: '48px 0', borderTop: `1px solid ${C.border}` }} />
 
         {/* ═══ 03 — Live Data Preview ═══════════════════════════ */}
         <RevealSection>
@@ -621,7 +621,7 @@ const LandingPage: React.FC = () => {
         </RevealSection>
 
         {/* ── Divider ──────────────────────────────────────────── */}
-        <div style={{ margin: '64px 0', borderTop: `1px solid ${C.border}` }} />
+        <div style={{ margin: '48px 0', borderTop: `1px solid ${C.border}` }} />
 
         {/* ═══ CTA ══════════════════════════════════════════════ */}
         <RevealSection style={{ textAlign: 'center' }}>

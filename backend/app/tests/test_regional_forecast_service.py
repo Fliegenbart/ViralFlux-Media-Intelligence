@@ -114,6 +114,49 @@ class RegionalForecastServiceTests(unittest.TestCase):
         self.assertTrue(all(item["action"] == "watch" for item in result["recommendations"]))
         self.assertTrue(all(item["budget_eur"] == 0.0 for item in result["recommendations"]))
 
+    def test_predict_all_regions_breaks_calibrated_probability_ties_with_raw_score(self) -> None:
+        inference_panel = pd.DataFrame(
+            {
+                "bundesland": ["BY", "BE"],
+                "bundesland_name": ["Bayern", "Berlin"],
+                "as_of_date": [pd.Timestamp("2026-03-14"), pd.Timestamp("2026-03-14")],
+                "target_week_start": [pd.Timestamp("2026-03-16"), pd.Timestamp("2026-03-16")],
+                "current_known_incidence": [10.0, 14.0],
+                "seasonal_baseline": [8.0, 9.0],
+                "seasonal_mad": [2.0, 2.5],
+                "pollen_context_score": [1.5, 0.5],
+                "f1": [1.0, 0.2],
+                "f2": [0.1, 0.8],
+            }
+        )
+        metadata = {
+            "feature_columns": ["f1", "f2"],
+            "action_threshold": 0.6,
+            "event_definition_version": "regional_survstat_v1",
+            "quality_gate": {"overall_passed": True, "forecast_readiness": "GO"},
+        }
+
+        class _FlatCalibration:
+            def predict(self, values):
+                return np.full(len(values), 0.5)
+
+        service = RegionalForecastService(db=None)
+        service.feature_builder = _FakeFeatureBuilder(inference_panel, as_of_date="2026-03-14")
+        service._load_artifacts = lambda virus_typ: {
+            "classifier": _DummyClassifier([0.35, 0.75]),
+            "regressor_median": _DummyRegressor(np.log1p([28.0, 12.0])),
+            "regressor_lower": _DummyRegressor(np.log1p([24.0, 10.0])),
+            "regressor_upper": _DummyRegressor(np.log1p([32.0, 15.0])),
+            "calibration": _FlatCalibration(),
+            "metadata": metadata,
+        }
+
+        result = service.predict_all_regions(virus_typ="Influenza A", horizon_days=7)
+
+        self.assertEqual(result["predictions"][0]["bundesland"], "BE")
+        self.assertEqual(result["predictions"][0]["rank"], 1)
+        self.assertEqual(result["predictions"][1]["bundesland"], "BY")
+
 
 if __name__ == "__main__":
     unittest.main()

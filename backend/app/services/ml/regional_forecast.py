@@ -115,6 +115,7 @@ class RegionalForecastService:
             expected_next = max(float(pred_next[idx]), 0.0)
             change_pct = ((expected_next - current_incidence) / max(current_incidence, 1.0)) * 100.0
             event_probability = float(calibrated_prob[idx])
+            raw_probability = float(raw_prob[idx])
             predictions.append(
                 {
                     "bundesland": str(row["bundesland"]),
@@ -143,12 +144,20 @@ class RegionalForecastService:
                     "data_points": int(len(panel)),
                     "last_data_date": str(as_of_date),
                     "pollen_context_score": round(float(row.get("pollen_context_score") or 0.0), 2),
+                    "_ranking_raw_probability": raw_probability,
                 }
             )
 
-        predictions.sort(key=lambda item: item["event_probability_calibrated"], reverse=True)
+        predictions.sort(
+            key=lambda item: (
+                item["event_probability_calibrated"],
+                item.get("_ranking_raw_probability", 0.0),
+            ),
+            reverse=True,
+        )
         for rank, item in enumerate(predictions, start=1):
             item["rank"] = rank
+            item.pop("_ranking_raw_probability", None)
 
         return {
             "virus_typ": virus_typ,

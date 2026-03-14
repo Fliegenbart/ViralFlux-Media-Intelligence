@@ -332,9 +332,25 @@ class RegionalModelTrainer:
                     "tau": tau,
                     "kappa": kappa,
                     "action_threshold": threshold,
+                    "precision_at_top3": precision_at_k(
+                        evaluation,
+                        k=3,
+                        score_col="event_probability_calibrated",
+                        tie_breaker_col="event_probability_raw",
+                    ),
+                    "precision_at_top5": precision_at_k(
+                        evaluation,
+                        k=5,
+                        score_col="event_probability_calibrated",
+                        tie_breaker_col="event_probability_raw",
+                    ),
                     "precision": precision,
                     "recall": recall,
                     "pr_auc": average_precision_safe(
+                        evaluation["event_label"],
+                        evaluation["event_probability_calibrated"],
+                    ),
+                    "ece": compute_ece(
                         evaluation["event_label"],
                         evaluation["event_probability_calibrated"],
                     ),
@@ -343,22 +359,33 @@ class RegionalModelTrainer:
                 if best is None:
                     best = candidate
                     continue
-                if candidate["precision"] > best["precision"]:
+                if candidate["precision_at_top3"] > best["precision_at_top3"]:
                     best = candidate
-                elif np.isclose(candidate["precision"], best["precision"]):
-                    if candidate["pr_auc"] > best["pr_auc"] or (
-                        np.isclose(candidate["pr_auc"], best["pr_auc"]) and candidate["recall"] > best["recall"]
-                    ):
+                elif np.isclose(candidate["precision_at_top3"], best["precision_at_top3"]):
+                    if candidate["pr_auc"] > best["pr_auc"]:
                         best = candidate
+                    elif np.isclose(candidate["pr_auc"], best["pr_auc"]):
+                        if candidate["ece"] < best["ece"]:
+                            best = candidate
+                        elif np.isclose(candidate["ece"], best["ece"]) and (
+                            candidate["precision"] > best["precision"] or (
+                                np.isclose(candidate["precision"], best["precision"])
+                                and candidate["recall"] > best["recall"]
+                            )
+                        ):
+                            best = candidate
 
         if best is None:
             best = {
                 "tau": 0.20,
                 "kappa": 0.5,
                 "action_threshold": 0.6,
+                "precision_at_top3": 0.0,
+                "precision_at_top5": 0.0,
                 "precision": 0.0,
                 "recall": 0.0,
                 "pr_auc": 0.0,
+                "ece": 1.0,
                 "positive_rate": 0.0,
             }
         return best
@@ -418,6 +445,7 @@ class RegionalModelTrainer:
                         "as_of_date": test_df["as_of_date"].values,
                         "event_label": test_df["event_label"].values,
                         "event_probability_calibrated": calibrated_probs,
+                        "event_probability_raw": raw_probs,
                     }
                 )
             )
@@ -548,9 +576,12 @@ class RegionalModelTrainer:
                     "selected_tau": fold_tau,
                     "selected_kappa": fold_kappa,
                     "action_threshold": fold_threshold,
+                    "selection_precision_at_top3": fold_selection.get("precision_at_top3"),
+                    "selection_precision_at_top5": fold_selection.get("precision_at_top5"),
                     "selection_precision": fold_selection.get("precision"),
                     "selection_recall": fold_selection.get("recall"),
                     "selection_pr_auc": fold_selection.get("pr_auc"),
+                    "selection_ece": fold_selection.get("ece"),
                 }
             )
             fold_frames.append(
@@ -776,8 +807,18 @@ class RegionalModelTrainer:
     def _aggregate_metrics(frame: pd.DataFrame, *, action_threshold: float) -> dict[str, float]:
         effective_threshold = None if "action_threshold" in frame.columns else action_threshold
         return {
-            "precision_at_top3": precision_at_k(frame, k=3),
-            "precision_at_top5": precision_at_k(frame, k=5),
+            "precision_at_top3": precision_at_k(
+                frame,
+                k=3,
+                score_col="event_probability_calibrated",
+                tie_breaker_col="event_probability_raw",
+            ),
+            "precision_at_top5": precision_at_k(
+                frame,
+                k=5,
+                score_col="event_probability_calibrated",
+                tie_breaker_col="event_probability_raw",
+            ),
             "pr_auc": round(
                 average_precision_safe(frame["event_label"], frame["event_probability_calibrated"]),
                 6,
@@ -859,7 +900,12 @@ class RegionalModelTrainer:
                 ),
                 "activations": int(np.sum(activation_mask)),
                 "events": int(np.sum(state_frame["event_label"] == 1)),
-                "precision_at_top3": precision_at_k(state_frame, k=3),
+                "precision_at_top3": precision_at_k(
+                    state_frame,
+                    k=3,
+                    score_col="event_probability_calibrated",
+                    tie_breaker_col="event_probability_raw",
+                ),
             }
             timeline = (
                 state_frame.sort_values("as_of_date")

@@ -298,3 +298,42 @@ def compute_forecast_accuracy_task(self) -> Dict[str, Any]:
         "results": results,
         "timestamp": datetime.utcnow().isoformat(),
     })
+
+
+@celery_app.task(bind=True, name="train_regional_models_task")
+def train_regional_models_task(
+    self,
+    virus_typ: str = "Influenza A",
+) -> Dict[str, Any]:
+    """Train per-Bundesland XGBoost regional forecast models.
+
+    Trains one model per Bundesland that has sufficient AMELAG wastewater data.
+    Each model uses regional features (wastewater, SurvStat, weather, pollen, holidays).
+    """
+    from app.services.ml.regional_trainer import RegionalModelTrainer
+
+    logger.info("Celery: Starting regional model training for %s", virus_typ)
+
+    self.update_state(
+        state="PROGRESS",
+        meta={"step": f"Training regional models for {virus_typ}...", "progress": 10},
+    )
+
+    with get_db_context() as db:
+        trainer = RegionalModelTrainer(db)
+        result = trainer.train_all_regions(virus_typ=virus_typ)
+
+    trained = result.get("trained", 0)
+    failed = result.get("failed", 0)
+    logger.info(
+        "Celery: Regional training complete for %s — %d trained, %d failed",
+        virus_typ, trained, failed,
+    )
+
+    return _json_safe({
+        "status": "success",
+        "virus_typ": virus_typ,
+        "trained": trained,
+        "failed": failed,
+        "timestamp": datetime.utcnow().isoformat(),
+    })

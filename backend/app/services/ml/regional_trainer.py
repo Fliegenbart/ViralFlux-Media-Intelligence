@@ -19,17 +19,21 @@ from app.services.ml.regional_panel_utils import (
     ALL_BUNDESLAENDER,
     BUNDESLAND_NAMES,
     EVENT_DEFINITION_VERSION,
-    MIN_EVENT_ABSOLUTE_INCIDENCE,
     TARGET_WINDOW_DAYS,
+    activation_policy_for_virus,
+    absolute_incidence_threshold,
     activation_false_positive_rate,
     average_precision_safe,
     brier_score_safe,
     build_event_label,
     choose_action_threshold,
     compute_ece,
+    event_definition_config_for_virus,
     median_lead_days,
     precision_at_k,
     quality_gate_from_metrics,
+    rollout_mode_for_virus,
+    signal_bundle_version_for_virus,
     time_based_panel_splits,
 )
 from app.services.ml.training_contract import SUPPORTED_VIRUS_TYPES
@@ -38,10 +42,7 @@ logger = logging.getLogger(__name__)
 
 _ML_MODELS_DIR = Path(__file__).resolve().parent.parent.parent / "ml_models" / "regional_panel"
 
-LABEL_TAU_GRID = [0.10, 0.15, 0.20, 0.25, 0.30]
-LABEL_KAPPA_GRID = [0.0, 0.5, 1.0]
 CALIBRATION_HOLDOUT_FRACTION = 0.20
-MIN_RECALL_FOR_SELECTION = 0.35
 
 REGIONAL_CLASSIFIER_CONFIG: dict[str, Any] = {
     "n_estimators": 160,
@@ -154,6 +155,7 @@ class RegionalModelTrainer:
         persist: bool = True,
     ) -> dict[str, Any]:
         logger.info("Training pooled regional panel model for %s", virus_typ)
+        previous_artifact = self.load_artifacts(virus_typ=virus_typ)
         panel = self.feature_builder.build_panel_training_data(virus_typ=virus_typ, lookback_days=lookback_days)
         if panel.empty or len(panel) < 200:
             return {
@@ -166,21 +168,42 @@ class RegionalModelTrainer:
         panel["y_next_log"] = np.log1p(panel["next_week_incidence"].astype(float).clip(lower=0.0))
         feature_columns = self._feature_columns(panel)
         ww_only_columns = self._ww_only_feature_columns(feature_columns)
+        event_config = event_definition_config_for_virus(virus_typ)
 
-        selection = self._select_event_definition(panel=panel, feature_columns=feature_columns)
+        selection = self._select_event_definition(
+            virus_typ=virus_typ,
+            panel=panel,
+            feature_columns=feature_columns,
+            event_config=event_config,
+        )
         tau = float(selection["tau"])
         kappa = float(selection["kappa"])
         action_threshold = float(selection["action_threshold"])
 
-        panel["event_label"] = self._event_labels(panel, tau=tau, kappa=kappa)
+        panel["event_label"] = self._event_labels(
+            panel,
+            virus_typ=virus_typ,
+            tau=tau,
+            kappa=kappa,
+            event_config=event_config,
+        )
         backtest_bundle = self._build_backtest_bundle(
+            virus_typ=virus_typ,
             panel=panel,
             feature_columns=feature_columns,
             ww_only_columns=ww_only_columns,
             tau=tau,
             kappa=kappa,
             action_threshold=action_threshold,
+            event_config=event_config,
         )
+        rollout_info = self._rollout_metadata(
+            virus_typ=virus_typ,
+            aggregate_metrics=backtest_bundle["aggregate_metrics"],
+            baseline_metrics=(backtest_bundle["backtest_payload"].get("baselines") or {}),
+            previous_artifact=previous_artifact,
+        )
+        backtest_bundle["backtest_payload"].update(_json_safe(rollout_info))
         final_artifacts = self._fit_final_models(
             panel=panel,
             feature_columns=feature_columns,
@@ -200,8 +223,13 @@ class RegionalModelTrainer:
             "action_threshold": action_threshold,
             "event_definition_version": EVENT_DEFINITION_VERSION,
             "target_window_days": list(TARGET_WINDOW_DAYS),
-            "min_event_absolute_incidence": MIN_EVENT_ABSOLUTE_INCIDENCE,
+            "min_event_absolute_incidence": event_config.min_absolute_incidence,
+            "event_definition_config": event_config.to_manifest(),
             "dataset_manifest": dataset_manifest,
+            "signal_bundle_version": rollout_info["signal_bundle_version"],
+            "rollout_mode": rollout_info["rollout_mode"],
+            "activation_policy": rollout_info["activation_policy"],
+            "shadow_evaluation": rollout_info.get("shadow_evaluation"),
             "quality_gate": backtest_bundle["quality_gate"],
             "aggregate_metrics": backtest_bundle["aggregate_metrics"],
             "label_selection": selection,
@@ -224,6 +252,8 @@ class RegionalModelTrainer:
             "failed": max(0, len(ALL_BUNDESLAENDER) - len(per_state)),
             "quality_gate": backtest_bundle["quality_gate"],
             "aggregate_metrics": backtest_bundle["aggregate_metrics"],
+            "rollout_mode": rollout_info["rollout_mode"],
+            "activation_policy": rollout_info["activation_policy"],
             "model_dir": str(model_dir),
             "backtest": backtest_bundle["backtest_payload"],
             "selection": selection,
@@ -304,8 +334,75 @@ class RegionalModelTrainer:
             }
         ]
 
+    def _rollout_metadata(
+        self,
+        *,
+        virus_typ: str,
+        aggregate_metrics: dict[str, Any],
+        baseline_metrics: dict[str, dict[str, Any]],
+        previous_artifact: dict[str, Any],
+    ) -> dict[str, Any]:
+        rollout_mode = rollout_mode_for_virus(virus_typ)
+        activation_policy = activation_policy_for_virus(virus_typ)
+        signal_bundle_version = signal_bundle_version_for_virus(virus_typ)
+        if virus_typ != "SARS-CoV-2":
+            return {
+                "signal_bundle_version": signal_bundle_version,
+                "rollout_mode": rollout_mode,
+                "activation_policy": activation_policy,
+            }
+
+        previous_metadata = previous_artifact.get("metadata") or {}
+        previous_metrics = previous_metadata.get("aggregate_metrics") or {}
+        persistence_metrics = (baseline_metrics.get("persistence") or {}).copy()
+        checks = {
+            "beats_previous_precision_at_top3": (
+                float(aggregate_metrics.get("precision_at_top3") or 0.0)
+                > float(previous_metrics.get("precision_at_top3") or 0.0)
+            ),
+            "beats_previous_pr_auc": (
+                float(aggregate_metrics.get("pr_auc") or 0.0)
+                > float(previous_metrics.get("pr_auc") or 0.0)
+            ),
+            "improves_previous_activation_fp_rate": (
+                float(aggregate_metrics.get("activation_false_positive_rate") or 1.0)
+                < float(previous_metrics.get("activation_false_positive_rate") or 1.0)
+            ),
+            "beats_persistence_precision_at_top3": (
+                float(aggregate_metrics.get("precision_at_top3") or 0.0)
+                >= float(persistence_metrics.get("precision_at_top3") or 0.0)
+            ),
+            "beats_persistence_pr_auc": (
+                float(aggregate_metrics.get("pr_auc") or 0.0)
+                >= float(persistence_metrics.get("pr_auc") or 0.0)
+            ),
+        }
+        has_previous_candidate = bool(previous_metrics)
+        overall_passed = has_previous_candidate and all(checks.values())
+        return {
+            "signal_bundle_version": signal_bundle_version,
+            "rollout_mode": rollout_mode,
+            "activation_policy": activation_policy,
+            "shadow_evaluation": {
+                "overall_passed": overall_passed,
+                "has_previous_candidate": has_previous_candidate,
+                "checks": checks,
+                "previous_candidate_metrics": previous_metrics,
+                "persistence_metrics": persistence_metrics,
+                "candidate_metrics": aggregate_metrics,
+            },
+        }
+
     @staticmethod
-    def _event_labels(panel: pd.DataFrame, *, tau: float, kappa: float) -> np.ndarray:
+    def _event_labels(
+        panel: pd.DataFrame,
+        *,
+        virus_typ: str,
+        tau: float,
+        kappa: float,
+        event_config=None,
+    ) -> np.ndarray:
+        config = event_config or event_definition_config_for_virus(virus_typ)
         return np.asarray(
             [
                 build_event_label(
@@ -315,6 +412,7 @@ class RegionalModelTrainer:
                     seasonal_mad=row.seasonal_mad,
                     tau=tau,
                     kappa=kappa,
+                    min_absolute_incidence=config.min_absolute_incidence,
                 )
                 for row in panel.itertuples()
             ],
@@ -324,14 +422,23 @@ class RegionalModelTrainer:
     def _select_event_definition(
         self,
         *,
+        virus_typ: str,
         panel: pd.DataFrame,
         feature_columns: list[str],
+        event_config=None,
     ) -> dict[str, Any]:
+        config = event_config or event_definition_config_for_virus(virus_typ)
         best: dict[str, Any] | None = None
 
-        for tau in LABEL_TAU_GRID:
-            for kappa in LABEL_KAPPA_GRID:
-                labels = self._event_labels(panel, tau=tau, kappa=kappa)
+        for tau in config.tau_grid:
+            for kappa in config.kappa_grid:
+                labels = self._event_labels(
+                    panel,
+                    virus_typ=virus_typ,
+                    tau=tau,
+                    kappa=kappa,
+                    event_config=config,
+                )
                 if labels.sum() < 12:
                     continue
                 evaluation = self._oof_classification_predictions(
@@ -344,7 +451,7 @@ class RegionalModelTrainer:
                 threshold, precision, recall = choose_action_threshold(
                     evaluation["event_probability_calibrated"],
                     evaluation["event_label"],
-                    min_recall=MIN_RECALL_FOR_SELECTION,
+                    min_recall=config.min_recall_for_selection,
                 )
                 candidate = {
                     "tau": tau,
@@ -371,8 +478,8 @@ class RegionalModelTrainer:
 
         if best is None:
             best = {
-                "tau": 0.20,
-                "kappa": 0.5,
+                "tau": float(config.tau_grid[min(len(config.tau_grid) // 2, len(config.tau_grid) - 1)]),
+                "kappa": float(config.kappa_grid[min(len(config.kappa_grid) // 2, len(config.kappa_grid) - 1)]),
                 "action_threshold": 0.6,
                 "precision": 0.0,
                 "recall": 0.0,
@@ -447,15 +554,24 @@ class RegionalModelTrainer:
     def _build_backtest_bundle(
         self,
         *,
+        virus_typ: str,
         panel: pd.DataFrame,
         feature_columns: list[str],
         ww_only_columns: list[str],
         tau: float,
         kappa: float,
         action_threshold: float,
+        event_config=None,
     ) -> dict[str, Any]:
+        config = event_config or event_definition_config_for_virus(virus_typ)
         working = panel.copy()
-        working["event_label"] = self._event_labels(working, tau=tau, kappa=kappa)
+        working["event_label"] = self._event_labels(
+            working,
+            virus_typ=virus_typ,
+            tau=tau,
+            kappa=kappa,
+            event_config=config,
+        )
         working["y_next_log"] = np.log1p(working["next_week_incidence"].astype(float).clip(lower=0.0))
         working["as_of_date"] = pd.to_datetime(working["as_of_date"]).dt.normalize()
         working["target_week_start"] = pd.to_datetime(working["target_week_start"]).dt.normalize()
@@ -478,15 +594,29 @@ class RegionalModelTrainer:
                 continue
 
             fold_selection = self._select_event_definition(
+                virus_typ=virus_typ,
                 panel=train_df,
                 feature_columns=feature_columns,
+                event_config=config,
             )
             fold_tau = float(fold_selection["tau"])
             fold_kappa = float(fold_selection["kappa"])
             fold_threshold = float(fold_selection["action_threshold"])
 
-            train_df["event_label"] = self._event_labels(train_df, tau=fold_tau, kappa=fold_kappa)
-            test_df["event_label"] = self._event_labels(test_df, tau=fold_tau, kappa=fold_kappa)
+            train_df["event_label"] = self._event_labels(
+                train_df,
+                virus_typ=virus_typ,
+                tau=fold_tau,
+                kappa=fold_kappa,
+                event_config=config,
+            )
+            test_df["event_label"] = self._event_labels(
+                test_df,
+                virus_typ=virus_typ,
+                tau=fold_tau,
+                kappa=fold_kappa,
+                event_config=config,
+            )
             if train_df["event_label"].nunique() < 2:
                 continue
 
@@ -546,6 +676,7 @@ class RegionalModelTrainer:
                 mad=test_df["seasonal_mad"].to_numpy(),
                 tau=fold_tau,
                 kappa=fold_kappa,
+                min_absolute_incidence=config.min_absolute_incidence,
             )
             climatology_prob = self._event_probability_from_prediction(
                 predicted_next=test_df["seasonal_baseline"].to_numpy(),
@@ -554,6 +685,7 @@ class RegionalModelTrainer:
                 mad=test_df["seasonal_mad"].to_numpy(),
                 tau=fold_tau,
                 kappa=fold_kappa,
+                min_absolute_incidence=config.min_absolute_incidence,
             )
 
             fold_selection_summary.append(
@@ -698,7 +830,12 @@ class RegionalModelTrainer:
                         "selected_tau": metadata["selected_tau"],
                         "selected_kappa": metadata["selected_kappa"],
                         "action_threshold": metadata["action_threshold"],
+                        "min_event_absolute_incidence": metadata["min_event_absolute_incidence"],
                         "event_definition_version": EVENT_DEFINITION_VERSION,
+                        "event_definition_config": metadata.get("event_definition_config") or {},
+                        "signal_bundle_version": metadata.get("signal_bundle_version"),
+                        "rollout_mode": metadata.get("rollout_mode"),
+                        "activation_policy": metadata.get("activation_policy"),
                         "target_window_days": list(TARGET_WINDOW_DAYS),
                     }
                 ),
@@ -778,6 +915,7 @@ class RegionalModelTrainer:
         mad: np.ndarray,
         tau: float,
         kappa: float,
+        min_absolute_incidence: float,
     ) -> np.ndarray:
         predicted_next = np.asarray(predicted_next, dtype=float)
         current_known = np.asarray(current_known, dtype=float)
@@ -785,7 +923,18 @@ class RegionalModelTrainer:
         mad = np.maximum(np.asarray(mad, dtype=float), 1.0)
 
         relative_gap = np.log1p(np.maximum(predicted_next, 0.0)) - np.log1p(np.maximum(current_known, 0.0)) - tau
-        absolute_threshold = np.maximum(MIN_EVENT_ABSOLUTE_INCIDENCE, baseline + kappa * mad)
+        absolute_threshold = np.asarray(
+            [
+                absolute_incidence_threshold(
+                    seasonal_baseline=baseline_value,
+                    seasonal_mad=mad_value,
+                    kappa=kappa,
+                    min_absolute_incidence=min_absolute_incidence,
+                )
+                for baseline_value, mad_value in zip(baseline, mad, strict=False)
+            ],
+            dtype=float,
+        )
         absolute_gap = (predicted_next - absolute_threshold) / mad
         logits = np.minimum(relative_gap / max(tau, 0.05), absolute_gap)
         return 1.0 / (1.0 + np.exp(-logits))

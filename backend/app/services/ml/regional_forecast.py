@@ -19,6 +19,9 @@ from app.services.ml.regional_panel_utils import (
     BUNDESLAND_NAMES,
     EVENT_DEFINITION_VERSION,
     TARGET_WINDOW_DAYS,
+    activation_policy_for_virus,
+    rollout_mode_for_virus,
+    signal_bundle_version_for_virus,
 )
 from app.services.ml.regional_trainer import _virus_slug
 from app.services.ml.training_contract import SUPPORTED_VIRUS_TYPES
@@ -110,12 +113,20 @@ class RegionalForecastService:
 
         action_threshold = float(metadata.get("action_threshold") or 0.6)
         quality_gate = metadata.get("quality_gate") or {"overall_passed": False, "forecast_readiness": "WATCH"}
+        rollout_mode = metadata.get("rollout_mode") or rollout_mode_for_virus(virus_typ)
+        activation_policy = metadata.get("activation_policy") or activation_policy_for_virus(virus_typ)
+        signal_bundle_version = metadata.get("signal_bundle_version") or signal_bundle_version_for_virus(virus_typ)
         predictions = []
         for idx, row in panel.reset_index(drop=True).iterrows():
             current_incidence = float(row["current_known_incidence"] or 0.0)
             expected_next = max(float(pred_next[idx]), 0.0)
             change_pct = ((expected_next - current_incidence) / max(current_incidence, 1.0)) * 100.0
             event_probability = float(calibrated_prob[idx])
+            activation_candidate = bool(
+                activation_policy != "watch_only"
+                and quality_gate.get("overall_passed")
+                and event_probability >= action_threshold
+            )
             predictions.append(
                 {
                     "bundesland": str(row["bundesland"]),
@@ -136,8 +147,11 @@ class RegionalForecastService:
                     "seasonal_mad": round(float(row["seasonal_mad"] or 0.0), 2),
                     "change_pct": round(change_pct, 1),
                     "quality_gate": quality_gate,
+                    "rollout_mode": rollout_mode,
+                    "activation_policy": activation_policy,
+                    "signal_bundle_version": signal_bundle_version,
                     "action_threshold": round(action_threshold, 4),
-                    "activation_candidate": bool(quality_gate.get("overall_passed") and event_probability >= action_threshold),
+                    "activation_candidate": activation_candidate,
                     "current_load": round(current_incidence, 2),
                     "predicted_load": round(expected_next, 2),
                     "trend": "steigend" if change_pct > 10 else "fallend" if change_pct < -10 else "stabil",
@@ -156,6 +170,9 @@ class RegionalForecastService:
             "as_of_date": str(as_of_date),
             "target_window_days": list(TARGET_WINDOW_DAYS),
             "quality_gate": quality_gate,
+            "rollout_mode": rollout_mode,
+            "activation_policy": activation_policy,
+            "signal_bundle_version": signal_bundle_version,
             "action_threshold": round(action_threshold, 4),
             "total_regions": len(predictions),
             "predictions": predictions,
@@ -173,6 +190,8 @@ class RegionalForecastService:
         predictions = forecast.get("predictions") or []
         quality_gate = forecast.get("quality_gate") or {"overall_passed": False}
         threshold = float(forecast.get("action_threshold") or 0.6)
+        rollout_mode = str(forecast.get("rollout_mode") or rollout_mode_for_virus(virus_typ))
+        activation_policy = str(forecast.get("activation_policy") or activation_policy_for_virus(virus_typ))
 
         if not predictions:
             return {
@@ -193,7 +212,10 @@ class RegionalForecastService:
         for item in predictions:
             probability = float(item["event_probability_calibrated"])
             change_pct = float(item["change_pct"])
-            if not quality_gate.get("overall_passed"):
+            if activation_policy == "watch_only":
+                action = "watch"
+                intensity = "low"
+            elif not quality_gate.get("overall_passed"):
                 action = "watch"
                 intensity = "low"
             elif probability >= threshold and change_pct >= 20:
@@ -219,6 +241,9 @@ class RegionalForecastService:
                 timeline = "In 1-2 Tagen vorbereiten — Signal oberhalb des Aktivierungsschwellenwerts"
             else:
                 timeline = (
+                    "Nur beobachten — Shadow-Policy blockiert Aktivierung"
+                    if activation_policy == "watch_only"
+                    else
                     "Nur beobachten — Quality Gate blockiert Aktivierung"
                     if not quality_gate.get("overall_passed")
                     else "Beobachten — unterhalb des validierten Aktivierungsschwellenwerts"
@@ -241,6 +266,8 @@ class RegionalForecastService:
                     "current_load": item["current_known_incidence"],
                     "predicted_load": item["expected_next_week_incidence"],
                     "quality_gate": quality_gate,
+                    "rollout_mode": rollout_mode,
+                    "activation_policy": activation_policy,
                     "activation_threshold": threshold,
                     "as_of_date": item["as_of_date"],
                     "target_week_start": item["target_week_start"],
@@ -264,6 +291,8 @@ class RegionalForecastService:
                 "total_budget_allocated": round(sum(item["budget_eur"] for item in recommendations), 2),
                 "weekly_budget": weekly_budget_eur,
                 "quality_gate": quality_gate,
+                "rollout_mode": rollout_mode,
+                "activation_policy": activation_policy,
             },
             "horizon_days": horizon_days,
             "generated_at": datetime.utcnow().isoformat(),
@@ -294,7 +323,11 @@ class RegionalForecastService:
                 "truth_source": dataset_manifest.get("truth_source"),
                 "aggregate_metrics": aggregate_metrics,
                 "quality_gate": quality_gate,
+                "rollout_mode": metadata.get("rollout_mode") or rollout_mode_for_virus(virus_typ),
+                "activation_policy": metadata.get("activation_policy") or activation_policy_for_virus(virus_typ),
+                "signal_bundle_version": metadata.get("signal_bundle_version") or signal_bundle_version_for_virus(virus_typ),
                 "selection": metadata.get("label_selection") or {},
+                "shadow_evaluation": metadata.get("shadow_evaluation") or {},
             }
             if virus_typ == reference_virus and aggregate_metrics:
                 reference_metrics = aggregate_metrics
@@ -326,7 +359,12 @@ class RegionalForecastService:
             "reference_virus": reference_virus,
             "generated_at": datetime.utcnow().isoformat(),
             "trained_viruses": sum(1 for item in ranked if item["status"] == "trained"),
-            "go_viruses": sum(1 for item in ranked if (item.get("quality_gate") or {}).get("overall_passed")),
+            "go_viruses": sum(
+                1
+                for item in ranked
+                if (item.get("quality_gate") or {}).get("overall_passed")
+                and item.get("activation_policy") != "watch_only"
+            ),
             "benchmark": ranked,
         }
 
@@ -366,6 +404,8 @@ class RegionalForecastService:
                     "rank": benchmark_item.get("rank"),
                     "benchmark_score": benchmark_item.get("benchmark_score"),
                     "quality_gate": benchmark_item.get("quality_gate"),
+                    "rollout_mode": benchmark_item.get("rollout_mode"),
+                    "activation_policy": benchmark_item.get("activation_policy"),
                     "aggregate_metrics": benchmark_item.get("aggregate_metrics"),
                     "top_region": top_prediction.get("bundesland"),
                     "top_region_name": top_prediction.get("bundesland_name"),
@@ -398,6 +438,9 @@ class RegionalForecastService:
                     "change_pct": prediction["change_pct"],
                     "trend": prediction["trend"],
                     "quality_gate": prediction["quality_gate"],
+                    "rollout_mode": prediction.get("rollout_mode"),
+                    "activation_policy": prediction.get("activation_policy"),
+                    "signal_bundle_version": prediction.get("signal_bundle_version"),
                     "benchmark_rank": benchmark_item.get("rank"),
                     "benchmark_score": benchmark_item.get("benchmark_score"),
                     "aggregate_metrics": benchmark_item.get("aggregate_metrics"),
@@ -523,7 +566,11 @@ class RegionalForecastService:
         change_pct = float(prediction.get("change_pct") or 0.0)
         benchmark_score = float(benchmark_item.get("benchmark_score") or 0.0) / 100.0
         quality_gate = prediction.get("quality_gate") or {}
-        readiness_multiplier = 1.0 if quality_gate.get("overall_passed") else 0.72
+        activation_policy = str(prediction.get("activation_policy") or "quality_gate")
+        if activation_policy == "watch_only":
+            readiness_multiplier = 0.78
+        else:
+            readiness_multiplier = 1.0 if quality_gate.get("overall_passed") else 0.72
         momentum_multiplier = 1.0 + min(max(change_pct, 0.0), 80.0) / 200.0
         return round(probability * max(benchmark_score, 0.05) * readiness_multiplier * momentum_multiplier * 100.0, 2)
 
@@ -537,6 +584,12 @@ class RegionalForecastService:
         change_pct = float(prediction.get("change_pct") or 0.0)
         threshold = float(prediction.get("action_threshold") or 0.6)
         quality_gate = prediction.get("quality_gate") or {}
+        activation_policy = str(prediction.get("activation_policy") or "quality_gate")
+
+        if activation_policy == "watch_only":
+            if float(benchmark_item.get("benchmark_score") or 0.0) >= 35.0 and probability >= max(0.45, threshold * 0.8):
+                return "prioritize", "medium"
+            return "watch", "low"
 
         if quality_gate.get("overall_passed") and probability >= threshold and change_pct >= 20:
             return "activate", "high"

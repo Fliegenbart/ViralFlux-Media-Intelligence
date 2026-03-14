@@ -10,6 +10,7 @@ from app.services.ml.regional_panel_utils import (
     choose_action_threshold,
     compute_ece,
     effective_available_time,
+    event_definition_config_for_virus,
     first_week_start_in_window,
     median_lead_days,
     precision_at_k,
@@ -64,6 +65,47 @@ class RegionalPanelMathTests(unittest.TestCase):
         baseline, mad = seasonal_baseline_and_mad(truth, pd.Timestamp("2026-01-05"))
         self.assertGreaterEqual(baseline, 12.0)
         self.assertGreaterEqual(mad, 1.0)
+
+    def test_sars_cov_2_baseline_uses_recent_capped_history(self) -> None:
+        truth = pd.DataFrame(
+            {
+                "week_start": pd.to_datetime(
+                    [
+                        "2022-06-06",
+                        "2023-06-05",
+                        "2024-06-03",
+                        "2025-06-02",
+                        "2025-06-09",
+                        "2025-06-16",
+                        "2025-06-23",
+                        "2025-06-30",
+                        "2025-07-07",
+                        "2025-07-14",
+                    ]
+                ),
+                "incidence": [160.0, 120.0, 80.0, 6.0, 7.0, 5.0, 6.0, 4.0, 5.0, 6.0],
+            }
+        )
+        default_baseline, _ = seasonal_baseline_and_mad(truth, pd.Timestamp("2026-06-08"))
+        sars_config = event_definition_config_for_virus("SARS-CoV-2")
+        sars_baseline, sars_mad = seasonal_baseline_and_mad(
+            truth,
+            pd.Timestamp("2026-06-08"),
+            max_history_weeks=sars_config.baseline_max_history_weeks,
+            upper_quantile_cap=sars_config.baseline_upper_quantile_cap,
+        )
+        self.assertGreater(default_baseline, 40.0)
+        self.assertLess(sars_baseline, default_baseline)
+        self.assertLess(sars_baseline, 10.0)
+        self.assertGreaterEqual(sars_mad, 1.0)
+
+    def test_event_definition_config_exposes_sars_specific_override(self) -> None:
+        default_config = event_definition_config_for_virus("Influenza A")
+        sars_config = event_definition_config_for_virus("SARS-CoV-2")
+        self.assertIsNone(default_config.baseline_max_history_weeks)
+        self.assertEqual(sars_config.baseline_max_history_weeks, 104)
+        self.assertEqual(sars_config.baseline_upper_quantile_cap, 0.75)
+        self.assertIn(0.05, sars_config.tau_grid)
 
     def test_time_based_panel_splits_never_use_future_dates_in_training(self) -> None:
         dates = pd.date_range("2024-01-01", periods=180, freq="D")
@@ -313,6 +355,126 @@ class RegionalFeatureBuilderInferenceTests(unittest.TestCase):
         self.assertGreater(by_row["state_population_millions"], 10.0)
         self.assertGreater(by_row["xdisease_state_level_sars_cov_2"], 0.0)
         self.assertGreater(by_row["xdisease_national_level_influenza_b"], 0.0)
+
+    def test_sars_inference_panel_exposes_hybrid_context_features_without_future_leakage(self) -> None:
+        class _FakeBuilder(RegionalFeatureBuilder):
+            def __init__(self):
+                self.db = None
+
+            def _load_wastewater_daily(self, virus_typ: str, start_date: pd.Timestamp) -> pd.DataFrame:
+                del start_date
+                rows = []
+                for state, base in (("BY", 8.0), ("BE", 5.0)):
+                    for offset, value_date in enumerate(pd.date_range("2026-03-03", periods=10, freq="D"), start=1):
+                        rows.append(
+                            {
+                                "bundesland": state,
+                                "datum": pd.Timestamp(value_date),
+                                "available_time": pd.Timestamp(value_date),
+                                "viral_load": float(base + offset),
+                                "site_count": 5 + (offset % 2),
+                                "under_bg_share": float(0.5 - offset * 0.02),
+                                "viral_std": float(0.4 + offset * 0.05),
+                            }
+                        )
+                return pd.DataFrame(rows)
+
+            def _load_truth_series(self, virus_typ: str, start_date: pd.Timestamp) -> pd.DataFrame:
+                del virus_typ, start_date
+                rows = []
+                weeks = pd.date_range("2025-12-29", periods=12, freq="7D")
+                for state, base in (("BY", 11.0), ("BE", 9.0)):
+                    for idx, week_start in enumerate(weeks, start=1):
+                        rows.append(
+                            {
+                                "bundesland": state,
+                                "week_start": pd.Timestamp(week_start),
+                                "available_date": pd.Timestamp(week_start),
+                                "incidence": float(base + idx * 3),
+                                "truth_source": "survstat_weekly",
+                            }
+                        )
+                return pd.DataFrame(rows)
+
+            def _load_are_konsultation(self, start_date: pd.Timestamp, end_date: pd.Timestamp) -> pd.DataFrame:
+                del start_date, end_date
+                return pd.DataFrame(
+                    {
+                        "bundesland": ["BY", "BY", "BE", "BE", "BY"],
+                        "datum": pd.to_datetime(
+                            ["2026-03-03", "2026-03-10", "2026-03-03", "2026-03-10", "2026-03-14"]
+                        ),
+                        "available_time": pd.to_datetime(
+                            ["2026-03-04", "2026-03-11", "2026-03-04", "2026-03-11", "2026-03-16"]
+                        ),
+                        "incidence": [16.0, 22.0, 13.0, 15.0, 28.0],
+                    }
+                )
+
+            def _load_notaufnahme_covid(self, start_date: pd.Timestamp, end_date: pd.Timestamp) -> pd.DataFrame:
+                del start_date, end_date
+                return pd.DataFrame(
+                    {
+                        "datum": pd.to_datetime(["2026-03-05", "2026-03-12", "2026-03-14"]),
+                        "available_time": pd.to_datetime(["2026-03-05", "2026-03-12", "2026-03-16"]),
+                        "level": [0.09, 0.14, 0.30],
+                        "ma7": [0.10, 0.16, 0.34],
+                        "expected_value": [0.08, 0.11, 0.20],
+                        "expected_upperbound": [0.12, 0.15, 0.25],
+                    }
+                )
+
+            def _load_corona_test_trends(self, start_date: pd.Timestamp, end_date: pd.Timestamp) -> pd.DataFrame:
+                del start_date, end_date
+                days = pd.date_range("2026-02-15", periods=29, freq="D")
+                scores = [22 + (idx % 5) for idx in range(28)] + [90]
+                available_times = list(days[:28]) + [pd.Timestamp("2026-03-16")]
+                return pd.DataFrame(
+                    {
+                        "datum": days,
+                        "available_time": available_times,
+                        "interest_score": scores,
+                    }
+                )
+
+            def _load_weather(self, start_date: pd.Timestamp, end_date: pd.Timestamp) -> pd.DataFrame:
+                del start_date, end_date
+                return pd.DataFrame()
+
+            def _load_pollen(self, start_date: pd.Timestamp, end_date: pd.Timestamp) -> pd.DataFrame:
+                del start_date, end_date
+                return pd.DataFrame()
+
+            def _load_holidays(self) -> dict[str, list[tuple[pd.Timestamp, pd.Timestamp]]]:
+                return {}
+
+            def _load_state_population_map(self) -> dict[str, float]:
+                return {"BY": 13_500_000.0, "BE": 3_800_000.0}
+
+        builder = _FakeBuilder()
+        panel = builder.build_inference_panel(
+            virus_typ="SARS-CoV-2",
+            as_of_date=datetime(2026, 3, 14),
+            lookback_days=90,
+        )
+
+        self.assertIn("sars_are_level", panel.columns)
+        self.assertIn("sars_notaufnahme_ma7", panel.columns)
+        self.assertIn("sars_trends_momentum_14_28", panel.columns)
+        self.assertIn("sars_ww_are_log_gap", panel.columns)
+        self.assertNotIn("sars_are_level", builder.build_inference_panel(
+            virus_typ="Influenza A",
+            as_of_date=datetime(2026, 3, 14),
+            lookback_days=90,
+        ).columns)
+
+        by_row = panel.loc[panel["bundesland"] == "BY"].iloc[0]
+        self.assertAlmostEqual(by_row["sars_are_level"], 22.0, places=6)
+        self.assertAlmostEqual(by_row["sars_notaufnahme_ma7"], 0.16, places=6)
+        self.assertLess(by_row["sars_notaufnahme_upper_gap"], 0.02)
+        self.assertEqual(by_row["sars_notaufnahme_breach_flag"], 1.0)
+        self.assertLess(by_row["sars_trends_level"], 40.0)
+        self.assertGreater(by_row["sars_ww_are_log_gap"], -2.0)
 
 
 if __name__ == "__main__":

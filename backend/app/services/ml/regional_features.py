@@ -12,7 +12,10 @@ from sqlalchemy import Integer, func
 from sqlalchemy.orm import Session
 
 from app.models.database import (
+    AREKonsultation,
+    GoogleTrendsData,
     KreisEinwohner,
+    NotaufnahmeSyndromData,
     PollenData,
     SchoolHolidays,
     SurvstatKreisData,
@@ -30,7 +33,9 @@ from app.services.ml.regional_panel_utils import (
     SOURCE_LAG_DAYS,
     STATE_NAME_TO_CODE,
     TARGET_WINDOW_DAYS,
+    circular_week_distance,
     effective_available_time,
+    event_definition_config_for_virus,
     first_week_start_in_window,
     normalize_state_code,
     seasonal_baseline_and_mad,
@@ -63,6 +68,9 @@ class RegionalFeatureBuilder:
         wastewater = self._load_wastewater_daily(virus_typ, truth_start)
         wastewater_context = self._load_supported_wastewater_context(virus_typ, truth_start)
         truth = self._load_truth_series(virus_typ, truth_start)
+        are = self._load_are_konsultation(truth_start, end_date) if virus_typ == "SARS-CoV-2" else pd.DataFrame()
+        notaufnahme = self._load_notaufnahme_covid(truth_start, end_date) if virus_typ == "SARS-CoV-2" else pd.DataFrame()
+        trends = self._load_corona_test_trends(truth_start, end_date) if virus_typ == "SARS-CoV-2" else pd.DataFrame()
         weather = self._load_weather(truth_start, end_date + pd.Timedelta(days=TARGET_WINDOW_DAYS[1]))
         pollen = self._load_pollen(truth_start, end_date + pd.Timedelta(days=TARGET_WINDOW_DAYS[1]))
         holidays = self._load_holidays()
@@ -73,6 +81,9 @@ class RegionalFeatureBuilder:
             wastewater=wastewater,
             wastewater_context=wastewater_context,
             truth=truth,
+            are=are,
+            notaufnahme=notaufnahme,
+            trends=trends,
             weather=weather,
             pollen=pollen,
             holidays=holidays,
@@ -98,6 +109,13 @@ class RegionalFeatureBuilder:
         wastewater = self._load_wastewater_daily(virus_typ, truth_start)
         wastewater_context = self._load_supported_wastewater_context(virus_typ, truth_start)
         truth = self._load_truth_series(virus_typ, truth_start)
+        are = self._load_are_konsultation(truth_start, effective_as_of) if virus_typ == "SARS-CoV-2" else pd.DataFrame()
+        notaufnahme = (
+            self._load_notaufnahme_covid(truth_start, effective_as_of)
+            if virus_typ == "SARS-CoV-2"
+            else pd.DataFrame()
+        )
+        trends = self._load_corona_test_trends(truth_start, effective_as_of) if virus_typ == "SARS-CoV-2" else pd.DataFrame()
         weather = self._load_weather(truth_start, effective_as_of + pd.Timedelta(days=TARGET_WINDOW_DAYS[1]))
         pollen = self._load_pollen(truth_start, effective_as_of + pd.Timedelta(days=TARGET_WINDOW_DAYS[1]))
         holidays = self._load_holidays()
@@ -108,6 +126,9 @@ class RegionalFeatureBuilder:
             wastewater=wastewater,
             wastewater_context=wastewater_context,
             truth=truth,
+            are=are,
+            notaufnahme=notaufnahme,
+            trends=trends,
             weather=weather,
             pollen=pollen,
             holidays=holidays,
@@ -177,10 +198,12 @@ class RegionalFeatureBuilder:
         return sorted(available)
 
     def dataset_manifest(self, virus_typ: str, panel: pd.DataFrame) -> dict[str, Any]:
+        event_config = event_definition_config_for_virus(virus_typ)
         if panel.empty:
             return {
                 "virus_typ": virus_typ,
                 "event_definition_version": EVENT_DEFINITION_VERSION,
+                "event_definition_config": event_config.to_manifest(),
                 "target_window_days": list(TARGET_WINDOW_DAYS),
                 "source_lag_days": SOURCE_LAG_DAYS,
                 "rows": 0,
@@ -191,6 +214,7 @@ class RegionalFeatureBuilder:
         return {
             "virus_typ": virus_typ,
             "event_definition_version": EVENT_DEFINITION_VERSION,
+            "event_definition_config": event_config.to_manifest(),
             "target_window_days": list(TARGET_WINDOW_DAYS),
             "source_lag_days": SOURCE_LAG_DAYS,
             "rows": int(len(panel)),
@@ -399,6 +423,119 @@ class RegionalFeatureBuilder:
             return frame
         return frame.sort_values(["bundesland", "week_start"]).reset_index(drop=True)
 
+    def _load_are_konsultation(self, start_date: pd.Timestamp, end_date: pd.Timestamp) -> pd.DataFrame:
+        rows = (
+            self.db.query(
+                AREKonsultation.bundesland,
+                AREKonsultation.datum,
+                func.max(AREKonsultation.available_time).label("available_time"),
+                func.avg(AREKonsultation.konsultationsinzidenz).label("incidence"),
+            )
+            .filter(
+                AREKonsultation.altersgruppe == "00+",
+                AREKonsultation.datum >= start_date.to_pydatetime(),
+                AREKonsultation.datum <= end_date.to_pydatetime(),
+            )
+            .group_by(
+                AREKonsultation.bundesland,
+                AREKonsultation.datum,
+            )
+            .all()
+        )
+        frame = pd.DataFrame(
+            [
+                {
+                    "bundesland": normalize_state_code(row.bundesland),
+                    "datum": pd.Timestamp(row.datum).normalize(),
+                    "available_time": effective_available_time(
+                        row.datum,
+                        row.available_time,
+                        SOURCE_LAG_DAYS["are_konsultation"],
+                    ),
+                    "incidence": float(row.incidence or 0.0),
+                }
+                for row in rows
+                if normalize_state_code(row.bundesland)
+            ]
+        )
+        if frame.empty:
+            return frame
+        return frame.sort_values(["bundesland", "datum"]).reset_index(drop=True)
+
+    def _load_notaufnahme_covid(self, start_date: pd.Timestamp, end_date: pd.Timestamp) -> pd.DataFrame:
+        rows = (
+            self.db.query(NotaufnahmeSyndromData)
+            .filter(
+                NotaufnahmeSyndromData.syndrome == "COVID",
+                NotaufnahmeSyndromData.ed_type == "all",
+                NotaufnahmeSyndromData.age_group == "00+",
+                NotaufnahmeSyndromData.datum >= start_date.to_pydatetime(),
+                NotaufnahmeSyndromData.datum <= end_date.to_pydatetime(),
+            )
+            .order_by(NotaufnahmeSyndromData.datum.asc())
+            .all()
+        )
+        frame = pd.DataFrame(
+            [
+                {
+                    "datum": pd.Timestamp(row.datum).normalize(),
+                    "available_time": self._created_proxy_available_time(
+                        datum=row.datum,
+                        created_at=row.created_at,
+                        fallback_lag_days=SOURCE_LAG_DAYS["notaufnahme"],
+                    ),
+                    "level": float(row.relative_cases or 0.0),
+                    "ma7": float(
+                        row.relative_cases_7day_ma
+                        if row.relative_cases_7day_ma is not None
+                        else row.relative_cases
+                        or 0.0
+                    ),
+                    "expected_value": float(row.expected_value or 0.0),
+                    "expected_upperbound": float(row.expected_upperbound or 0.0),
+                }
+                for row in rows
+            ]
+        )
+        if frame.empty:
+            return frame
+        return frame.sort_values("datum").reset_index(drop=True)
+
+    def _load_corona_test_trends(self, start_date: pd.Timestamp, end_date: pd.Timestamp) -> pd.DataFrame:
+        rows = (
+            self.db.query(
+                GoogleTrendsData.datum,
+                func.max(GoogleTrendsData.available_time).label("available_time"),
+                func.avg(GoogleTrendsData.interest_score).label("interest_score"),
+            )
+            .filter(
+                func.lower(GoogleTrendsData.keyword) == "corona test",
+                GoogleTrendsData.region == "DE",
+                GoogleTrendsData.datum >= start_date.to_pydatetime(),
+                GoogleTrendsData.datum <= end_date.to_pydatetime(),
+            )
+            .group_by(GoogleTrendsData.datum)
+            .order_by(GoogleTrendsData.datum.asc())
+            .all()
+        )
+        frame = pd.DataFrame(
+            [
+                {
+                    "datum": pd.Timestamp(row.datum).normalize(),
+                    "available_time": effective_available_time(
+                        row.datum,
+                        row.available_time,
+                        SOURCE_LAG_DAYS["google_trends"],
+                    ),
+                    "interest_score": float(row.interest_score or 0.0),
+                }
+                for row in rows
+            ]
+        )
+        if frame.empty:
+            return frame
+        return frame.sort_values("datum").reset_index(drop=True)
+
     def _load_weather(self, start_date: pd.Timestamp, end_date: pd.Timestamp) -> pd.DataFrame:
         rows = (
             self.db.query(
@@ -492,6 +629,9 @@ class RegionalFeatureBuilder:
         wastewater: pd.DataFrame,
         wastewater_context: dict[str, pd.DataFrame],
         truth: pd.DataFrame,
+        are: pd.DataFrame,
+        notaufnahme: pd.DataFrame,
+        trends: pd.DataFrame,
         weather: pd.DataFrame,
         pollen: pd.DataFrame,
         holidays: dict[str, list[tuple[pd.Timestamp, pd.Timestamp]]],
@@ -502,6 +642,7 @@ class RegionalFeatureBuilder:
     ) -> list[dict[str, Any]]:
         if wastewater.empty or truth.empty:
             return []
+        event_config = event_definition_config_for_virus(virus_typ)
 
         wastewater_by_state = {
             state: frame.sort_values("datum").reset_index(drop=True)
@@ -519,6 +660,12 @@ class RegionalFeatureBuilder:
             state: frame.sort_values("week_start").reset_index(drop=True)
             for state, frame in truth.groupby("bundesland")
         }
+        are_by_state = {
+            state: frame.sort_values("datum").reset_index(drop=True)
+            for state, frame in are.groupby("bundesland")
+        } if not are.empty else {}
+        national_notaufnahme = notaufnahme.sort_values("datum").reset_index(drop=True) if not notaufnahme.empty else None
+        national_trends = trends.sort_values("datum").reset_index(drop=True) if not trends.empty else None
         weather_by_state = {
             state: frame.sort_values("datum").reset_index(drop=True)
             for state, frame in weather.groupby("bundesland")
@@ -553,6 +700,30 @@ class RegionalFeatureBuilder:
                 if len(visible_truth) < 8:
                     continue
 
+                visible_are = None
+                if virus_typ == "SARS-CoV-2":
+                    are_frame = are_by_state.get(state)
+                    if are_frame is not None and not are_frame.empty:
+                        visible_are = are_frame.loc[
+                            (are_frame["datum"] <= as_of) & (are_frame["available_time"] <= as_of)
+                        ].copy()
+                    else:
+                        visible_are = pd.DataFrame()
+
+                visible_notaufnahme = None
+                if virus_typ == "SARS-CoV-2" and national_notaufnahme is not None:
+                    visible_notaufnahme = national_notaufnahme.loc[
+                        (national_notaufnahme["datum"] <= as_of)
+                        & (national_notaufnahme["available_time"] <= as_of)
+                    ].copy()
+
+                visible_trends = None
+                if virus_typ == "SARS-CoV-2" and national_trends is not None:
+                    visible_trends = national_trends.loc[
+                        (national_trends["datum"] <= as_of)
+                        & (national_trends["available_time"] <= as_of)
+                    ].copy()
+
                 target_week_start = self._target_week_start(as_of)
                 if target_week_start is None:
                     continue
@@ -563,7 +734,12 @@ class RegionalFeatureBuilder:
 
                 current_truth = visible_truth.iloc[-1]
                 next_truth = target_row.iloc[0] if not target_row.empty else None
-                baseline, mad = seasonal_baseline_and_mad(truth_frame, target_week_start)
+                baseline, mad = seasonal_baseline_and_mad(
+                    truth_frame,
+                    target_week_start,
+                    max_history_weeks=event_config.baseline_max_history_weeks,
+                    upper_quantile_cap=event_config.baseline_upper_quantile_cap,
+                )
                 latest_ww_snapshot = self._latest_wastewater_snapshot_by_state(wastewater_by_state, as_of)
                 latest_cross_virus_snapshots = {
                     candidate_virus: self._latest_wastewater_snapshot_by_state(candidate_frames, as_of)
@@ -576,6 +752,9 @@ class RegionalFeatureBuilder:
                     as_of=as_of,
                     visible_ww=visible_ww,
                     visible_truth=visible_truth,
+                    visible_are=visible_are,
+                    visible_notaufnahme=visible_notaufnahme,
+                    visible_trends=visible_trends,
                     weather_frame=weather_by_state.get(state),
                     pollen_frame=pollen_by_state.get(state),
                     holiday_ranges=holidays.get(state, []),
@@ -626,6 +805,9 @@ class RegionalFeatureBuilder:
         as_of: pd.Timestamp,
         visible_ww: pd.DataFrame,
         visible_truth: pd.DataFrame,
+        visible_are: pd.DataFrame | None,
+        visible_notaufnahme: pd.DataFrame | None,
+        visible_trends: pd.DataFrame | None,
         weather_frame: pd.DataFrame | None,
         pollen_frame: pd.DataFrame | None,
         holiday_ranges: list[tuple[pd.Timestamp, pd.Timestamp]],
@@ -686,6 +868,18 @@ class RegionalFeatureBuilder:
         weather_features = self._weather_features(weather_frame, as_of)
         pollen_context = self._pollen_context(pollen_frame, as_of)
         holiday_share = self._holiday_share_in_target_window(holiday_ranges, as_of)
+        sars_context_features = self._sars_context_features(
+            virus_typ=virus_typ,
+            as_of=as_of,
+            visible_are=visible_are,
+            visible_notaufnahme=visible_notaufnahme,
+            visible_trends=visible_trends,
+            ww_level=ww_level,
+            ww_slope7d=ww_slope7d,
+            current_known_incidence=current_known_incidence,
+            seasonal_baseline=seasonal_baseline,
+            seasonal_mad=seasonal_mad,
+        )
 
         return {
             "ww_level": ww_level,
@@ -741,14 +935,165 @@ class RegionalFeatureBuilder:
             "pollen_context_score": float(pollen_context),
             **weather_features,
             **cross_virus_features,
+            **sars_context_features,
+        }
+
+    @staticmethod
+    def _created_proxy_available_time(
+        *,
+        datum: datetime | pd.Timestamp,
+        created_at: datetime | pd.Timestamp | None,
+        fallback_lag_days: int = 0,
+        max_created_delay_days: int = 14,
+    ) -> pd.Timestamp:
+        base = effective_available_time(datum, None, fallback_lag_days)
+        if created_at is None or pd.isna(created_at):
+            return base
+        created_ts = pd.Timestamp(created_at)
+        if created_ts <= base + pd.Timedelta(days=max_created_delay_days):
+            return created_ts
+        return base
+
+    @staticmethod
+    def _seasonal_signal_baseline(
+        frame: pd.DataFrame | None,
+        *,
+        target_date: pd.Timestamp,
+        value_col: str,
+    ) -> tuple[float, float]:
+        if frame is None or frame.empty:
+            return 0.0, 1.0
+        hist = frame.loc[frame["datum"] < target_date, ["datum", value_col]].copy()
+        if hist.empty:
+            return 0.0, 1.0
+        iso_week = int(target_date.isocalendar().week)
+        hist["iso_week"] = hist["datum"].dt.isocalendar().week.astype(int)
+        seasonal = hist.loc[
+            hist["iso_week"].apply(lambda value: circular_week_distance(value, iso_week) <= 1)
+        ]
+        if len(seasonal) < 5:
+            seasonal = hist.tail(12)
+        if seasonal.empty:
+            seasonal = hist
+        values = seasonal[value_col].astype(float).dropna().to_numpy()
+        baseline = float(np.median(values)) if len(values) else 0.0
+        mad = float(np.median(np.abs(values - baseline))) if len(values) else 1.0
+        return baseline, max(mad, 1.0)
+
+    def _sars_context_features(
+        self,
+        *,
+        virus_typ: str,
+        as_of: pd.Timestamp,
+        visible_are: pd.DataFrame | None,
+        visible_notaufnahme: pd.DataFrame | None,
+        visible_trends: pd.DataFrame | None,
+        ww_level: float,
+        ww_slope7d: float,
+        current_known_incidence: float,
+        seasonal_baseline: float,
+        seasonal_mad: float,
+    ) -> dict[str, float]:
+        if virus_typ != "SARS-CoV-2":
+            return {}
+
+        are_frame = visible_are if visible_are is not None else pd.DataFrame()
+        are_level = self._latest_value_as_of(are_frame, as_of, "incidence")
+        are_lag7 = self._latest_value_as_of(are_frame, as_of - pd.Timedelta(days=7), "incidence")
+        are_momentum_1w = float((are_level - are_lag7) / max(abs(are_lag7), 1.0))
+        are_baseline, are_mad = self._seasonal_signal_baseline(
+            are_frame,
+            target_date=as_of,
+            value_col="incidence",
+        )
+        are_baseline_gap = float(are_level - are_baseline)
+        are_baseline_zscore = float(are_baseline_gap / max(are_mad, 1.0))
+
+        notaufnahme_frame = visible_notaufnahme if visible_notaufnahme is not None else pd.DataFrame()
+        notaufnahme_level = self._latest_value_as_of(notaufnahme_frame, as_of, "level")
+        notaufnahme_ma7 = self._latest_value_as_of(notaufnahme_frame, as_of, "ma7")
+        notaufnahme_ma7_lag7 = self._latest_value_as_of(notaufnahme_frame, as_of - pd.Timedelta(days=7), "ma7")
+        notaufnahme_expected = self._latest_value_as_of(notaufnahme_frame, as_of, "expected_value")
+        notaufnahme_upper = self._latest_value_as_of(notaufnahme_frame, as_of, "expected_upperbound")
+        notaufnahme_momentum_7d = float(
+            (notaufnahme_ma7 - notaufnahme_ma7_lag7) / max(abs(notaufnahme_ma7_lag7), 1.0)
+        )
+
+        trends_frame = visible_trends if visible_trends is not None else pd.DataFrame()
+        trends_level = self._latest_value_as_of(trends_frame, as_of, "interest_score")
+        trends_recent14 = self._window_mean(trends_frame, as_of=as_of, window_days=14, column="interest_score")
+        trends_previous14 = self._window_mean(
+            trends_frame,
+            as_of=as_of - pd.Timedelta(days=14),
+            window_days=14,
+            column="interest_score",
+        )
+        trends_recent7 = self._window_mean(trends_frame, as_of=as_of, window_days=7, column="interest_score")
+        trends_previous7 = self._window_mean(
+            trends_frame,
+            as_of=as_of - pd.Timedelta(days=7),
+            window_days=7,
+            column="interest_score",
+        )
+        trends_momentum_14_28 = float(
+            (trends_recent14 - trends_previous14) / max(abs(trends_previous14), 1.0)
+        )
+        trends_momentum_7_14 = float(
+            (trends_recent7 - trends_previous7) / max(abs(trends_previous7), 1.0)
+        )
+        survstat_baseline_zscore = float((current_known_incidence - seasonal_baseline) / max(seasonal_mad, 1.0))
+
+        return {
+            "sars_are_level": float(are_level),
+            "sars_are_lag7d": float(are_lag7),
+            "sars_are_momentum_1w": are_momentum_1w,
+            "sars_are_baseline_gap": are_baseline_gap,
+            "sars_are_baseline_zscore": are_baseline_zscore,
+            "sars_notaufnahme_level": float(notaufnahme_level),
+            "sars_notaufnahme_ma7": float(notaufnahme_ma7),
+            "sars_notaufnahme_momentum_7d": notaufnahme_momentum_7d,
+            "sars_notaufnahme_expected_gap": float(notaufnahme_ma7 - notaufnahme_expected),
+            "sars_notaufnahme_upper_gap": float(notaufnahme_ma7 - notaufnahme_upper),
+            "sars_notaufnahme_breach_flag": float(notaufnahme_ma7 > notaufnahme_upper and notaufnahme_upper > 0.0),
+            "sars_trends_level": float(trends_level),
+            "sars_trends_momentum_14_28": trends_momentum_14_28,
+            "sars_trends_acceleration_7d": float(trends_momentum_7_14 - trends_momentum_14_28),
+            "sars_ww_are_log_gap": float(np.log1p(max(ww_level, 0.0)) - np.log1p(max(are_level, 0.0))),
+            "sars_ww_are_trend_gap": float(ww_slope7d - are_momentum_1w),
+            "sars_ww_notaufnahme_log_gap": float(
+                np.log1p(max(ww_level, 0.0)) - np.log1p(max(notaufnahme_ma7, 0.0))
+            ),
+            "sars_ww_notaufnahme_trend_gap": float(ww_slope7d - notaufnahme_momentum_7d),
+            "sars_are_survstat_log_gap": float(
+                np.log1p(max(are_level, 0.0)) - np.log1p(max(current_known_incidence, 0.0))
+            ),
+            "sars_are_survstat_zscore_gap": float(are_baseline_zscore - survstat_baseline_zscore),
         }
 
     @staticmethod
     def _latest_value_as_of(frame: pd.DataFrame, as_of: pd.Timestamp, column: str) -> float:
+        if frame is None or frame.empty or "datum" not in frame.columns or column not in frame.columns:
+            return 0.0
         visible = frame.loc[frame["datum"] <= as_of]
         if visible.empty:
             return 0.0
         return float(visible.iloc[-1][column] or 0.0)
+
+    @staticmethod
+    def _window_mean(frame: pd.DataFrame | None, *, as_of: pd.Timestamp, window_days: int, column: str) -> float:
+        if (
+            frame is None
+            or frame.empty
+            or window_days <= 0
+            or "datum" not in frame.columns
+            or column not in frame.columns
+        ):
+            return 0.0
+        window_start = as_of - pd.Timedelta(days=window_days - 1)
+        visible = frame.loc[(frame["datum"] >= window_start) & (frame["datum"] <= as_of)]
+        if visible.empty:
+            return 0.0
+        return float(visible[column].astype(float).mean() or 0.0)
 
     @staticmethod
     def _latest_truth_value(frame: pd.DataFrame, lag_weeks: int) -> float:

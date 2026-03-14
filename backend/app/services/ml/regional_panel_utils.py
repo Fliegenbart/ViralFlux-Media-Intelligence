@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Iterable, Sequence
 
@@ -8,15 +9,85 @@ import numpy as np
 import pandas as pd
 
 TARGET_WINDOW_DAYS: tuple[int, int] = (3, 7)
-EVENT_DEFINITION_VERSION = "regional_survstat_v1"
+EVENT_DEFINITION_VERSION = "regional_survstat_v2"
 MIN_EVENT_ABSOLUTE_INCIDENCE = 5.0
+CORE_SIGNAL_BUNDLE_VERSION = "core_panel_v1"
+SARS_SIGNAL_BUNDLE_VERSION = "sars_hybrid_v1"
+DEFAULT_ROLLOUT_MODE = "gated"
+DEFAULT_ACTIVATION_POLICY = "quality_gate"
+SARS_SHADOW_ROLLOUT_MODE = "shadow"
+SARS_SHADOW_ACTIVATION_POLICY = "watch_only"
+
+
+@dataclass(frozen=True)
+class EventDefinitionConfig:
+    min_absolute_incidence: float = MIN_EVENT_ABSOLUTE_INCIDENCE
+    tau_grid: tuple[float, ...] = (0.10, 0.15, 0.20, 0.25, 0.30)
+    kappa_grid: tuple[float, ...] = (0.0, 0.5, 1.0)
+    min_recall_for_selection: float = 0.35
+    baseline_max_history_weeks: int | None = None
+    baseline_upper_quantile_cap: float | None = None
+
+    def to_manifest(self) -> dict[str, float | int | list[float] | None]:
+        return {
+            "min_absolute_incidence": float(self.min_absolute_incidence),
+            "tau_grid": [float(value) for value in self.tau_grid],
+            "kappa_grid": [float(value) for value in self.kappa_grid],
+            "min_recall_for_selection": float(self.min_recall_for_selection),
+            "baseline_max_history_weeks": (
+                int(self.baseline_max_history_weeks)
+                if self.baseline_max_history_weeks is not None
+                else None
+            ),
+            "baseline_upper_quantile_cap": (
+                float(self.baseline_upper_quantile_cap)
+                if self.baseline_upper_quantile_cap is not None
+                else None
+            ),
+        }
+
+
+DEFAULT_EVENT_DEFINITION_CONFIG = EventDefinitionConfig()
+VIRUS_EVENT_DEFINITION_OVERRIDES: dict[str, EventDefinitionConfig] = {
+    "SARS-CoV-2": EventDefinitionConfig(
+        tau_grid=(0.05, 0.10, 0.15, 0.20, 0.25),
+        kappa_grid=(0.0, 0.25, 0.50),
+        baseline_max_history_weeks=104,
+        baseline_upper_quantile_cap=0.75,
+    ),
+}
+
+
+def event_definition_config_for_virus(virus_typ: str) -> EventDefinitionConfig:
+    return VIRUS_EVENT_DEFINITION_OVERRIDES.get(virus_typ, DEFAULT_EVENT_DEFINITION_CONFIG)
+
+
+def signal_bundle_version_for_virus(virus_typ: str) -> str:
+    if virus_typ == "SARS-CoV-2":
+        return SARS_SIGNAL_BUNDLE_VERSION
+    return CORE_SIGNAL_BUNDLE_VERSION
+
+
+def rollout_mode_for_virus(virus_typ: str) -> str:
+    if virus_typ == "SARS-CoV-2":
+        return SARS_SHADOW_ROLLOUT_MODE
+    return DEFAULT_ROLLOUT_MODE
+
+
+def activation_policy_for_virus(virus_typ: str) -> str:
+    if virus_typ == "SARS-CoV-2":
+        return SARS_SHADOW_ACTIVATION_POLICY
+    return DEFAULT_ACTIVATION_POLICY
 
 SOURCE_LAG_DAYS: dict[str, int] = {
     "survstat_weekly": 7,
     "survstat_kreis": 7,
+    "are_konsultation": 7,
     "school_holidays": 0,
     "weather_forecast": 0,
     "pollen": 1,
+    "notaufnahme": 0,
+    "google_trends": 3,
 }
 
 ALL_BUNDESLAENDER = [
@@ -125,6 +196,9 @@ def first_week_start_in_window(
 def seasonal_baseline_and_mad(
     state_truth: pd.DataFrame,
     target_week_start: datetime | pd.Timestamp,
+    *,
+    max_history_weeks: int | None = None,
+    upper_quantile_cap: float | None = None,
 ) -> tuple[float, float]:
     target_ts = pd.Timestamp(target_week_start)
     if state_truth.empty:
@@ -133,6 +207,12 @@ def seasonal_baseline_and_mad(
     hist = state_truth.loc[state_truth["week_start"] < target_ts].copy()
     if hist.empty:
         return 0.0, 1.0
+
+    if max_history_weeks is not None and int(max_history_weeks) > 0:
+        cutoff = target_ts - pd.Timedelta(weeks=int(max_history_weeks))
+        recent_hist = hist.loc[hist["week_start"] >= cutoff].copy()
+        if not recent_hist.empty:
+            hist = recent_hist
 
     iso_week = int(target_ts.isocalendar().week)
     hist["iso_week"] = hist["week_start"].dt.isocalendar().week.astype(int)
@@ -145,10 +225,29 @@ def seasonal_baseline_and_mad(
     if seasonal.empty:
         seasonal = hist
 
-    values = seasonal["incidence"].astype(float).to_numpy()
+    values = seasonal["incidence"].astype(float).dropna().to_numpy()
+    if (
+        upper_quantile_cap is not None
+        and 0.0 < float(upper_quantile_cap) < 1.0
+        and len(values) >= 5
+    ):
+        cap = float(np.quantile(values, float(upper_quantile_cap)))
+        values = np.clip(values, a_min=0.0, a_max=max(cap, 0.0))
     baseline = float(np.median(values)) if len(values) else 0.0
     mad = float(np.median(np.abs(values - baseline))) if len(values) else 1.0
     return baseline, max(mad, 1.0)
+
+
+def absolute_incidence_threshold(
+    *,
+    seasonal_baseline: float,
+    seasonal_mad: float,
+    kappa: float,
+    min_absolute_incidence: float = MIN_EVENT_ABSOLUTE_INCIDENCE,
+) -> float:
+    baseline = max(float(seasonal_baseline or 0.0), 0.0)
+    mad = max(float(seasonal_mad or 0.0), 1.0)
+    return max(float(min_absolute_incidence), baseline + float(kappa) * mad)
 
 
 def build_event_label(
@@ -163,11 +262,14 @@ def build_event_label(
 ) -> int:
     current_val = max(float(current_known_incidence or 0.0), 0.0)
     next_val = max(float(next_week_incidence or 0.0), 0.0)
-    baseline = max(float(seasonal_baseline or 0.0), 0.0)
-    mad = max(float(seasonal_mad or 0.0), 1.0)
 
     relative_jump = math.log1p(next_val) - math.log1p(current_val)
-    absolute_threshold = max(min_absolute_incidence, baseline + float(kappa) * mad)
+    absolute_threshold = absolute_incidence_threshold(
+        seasonal_baseline=seasonal_baseline,
+        seasonal_mad=seasonal_mad,
+        kappa=kappa,
+        min_absolute_incidence=min_absolute_incidence,
+    )
     return int(relative_jump >= float(tau) and next_val >= absolute_threshold)
 
 

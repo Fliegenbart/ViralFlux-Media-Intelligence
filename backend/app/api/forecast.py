@@ -287,3 +287,46 @@ async def get_regional_feature_status(
         "details": details,
         "timestamp": datetime.utcnow(),
     }
+
+
+@router.get("/regional/predict")
+async def get_regional_predictions(
+    virus_typ: str = "Influenza A",
+    horizon_days: int = 7,
+    db: Session = Depends(get_db),
+):
+    """Get per-Bundesland virus wave predictions ranked by outbreak probability.
+
+    This is the core endpoint for the media activation use case:
+    "Which regions will see increases in the next 3-7 days?"
+    """
+    from app.services.ml.regional_forecast import RegionalForecastService
+
+    service = RegionalForecastService(db)
+    return service.predict_all_regions(virus_typ=virus_typ, horizon_days=horizon_days)
+
+
+@router.get("/regional/media-activation")
+async def get_media_activation(
+    virus_typ: str = "Influenza A",
+    weekly_budget_eur: float = 50000,
+    horizon_days: int = 7,
+    db: Session = Depends(get_db),
+):
+    """Generate regional media activation recommendations for GELO products.
+
+    Returns per-Bundesland recommendations with:
+    - Action: activate / prepare / watch / reduce
+    - Budget allocation (proportional to outbreak probability)
+    - Channel mix (Banner, CLP, Meta, LinkedIn)
+    - Product recommendation
+    - Activation timeline
+    """
+    from app.services.ml.regional_forecast import RegionalForecastService
+
+    service = RegionalForecastService(db)
+    return service.generate_media_activation(
+        virus_typ=virus_typ,
+        weekly_budget_eur=weekly_budget_eur,
+        horizon_days=horizon_days,
+    )

@@ -236,7 +236,7 @@ const DecisionView: React.FC<Props> = ({
                   </strong>
                 </div>
               )) : (
-                <div className="soft-panel" style={{ padding: 14, fontSize: 14, color: 'var(--text-secondary)' }}>
+                <div className="soft-panel" style={{ padding: 16, fontSize: 14, color: 'var(--text-secondary)' }}>
                   Der genaue Datenstand der abgefragten Werte wird noch geladen.
                 </div>
               )}
@@ -277,12 +277,12 @@ const DecisionView: React.FC<Props> = ({
                 Die Entscheidung wird aus sichtbaren Signalen abgeleitet, nicht aus einer Black Box.
               </p>
             </div>
-            <div className="soft-panel" style={{ padding: 14, marginTop: 14, fontSize: 13, color: 'var(--text-secondary)' }}>
+            <div className="soft-panel" style={{ padding: 16, marginTop: 14, fontSize: 13, color: 'var(--text-secondary)' }}>
               {eventProbabilityLabel} bleibt ein Forecast-Ereignis. {signalScoreLabel} steuert nur die regionale Priorisierung und ist keine Eintrittswahrscheinlichkeit.
             </div>
             <div style={{ display: 'grid', gap: 10, marginTop: 14 }}>
               {(weeklyDecision?.why_now || []).map((reason) => (
-                <div key={reason} className="soft-panel" style={{ padding: 14, fontSize: 14, color: 'var(--text-secondary)' }}>
+                <div key={reason} className="soft-panel" style={{ padding: 16, fontSize: 14, color: 'var(--text-secondary)' }}>
                   {reason}
                 </div>
               ))}
@@ -318,7 +318,7 @@ const DecisionView: React.FC<Props> = ({
                 </div>
               </button>
             )) : (
-              <div className="soft-panel" style={{ padding: 14, marginTop: 14, fontSize: 14, color: 'var(--text-secondary)' }}>
+              <div className="soft-panel" style={{ padding: 16, marginTop: 14, fontSize: 14, color: 'var(--text-secondary)' }}>
                 Noch keine Kampagnenvorschläge im Fokus. Öffne die Kampagnenansicht, um weitere Vorschläge zu sichten oder neue zu erzeugen.
               </div>
             )}

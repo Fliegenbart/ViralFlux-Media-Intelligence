@@ -189,6 +189,9 @@ class RegionalFeatureBuilderInferenceTests(unittest.TestCase):
             def _load_holidays(self) -> dict[str, list[tuple[pd.Timestamp, pd.Timestamp]]]:
                 return {}
 
+            def _load_state_population_map(self) -> dict[str, float]:
+                return {"BY": 13_500_000.0, "BE": 3_800_000.0}
+
         builder = _FakeBuilder()
         panel = builder.build_inference_panel(
             virus_typ="Influenza A",
@@ -199,6 +202,117 @@ class RegionalFeatureBuilderInferenceTests(unittest.TestCase):
         self.assertEqual(len(panel), 2)
         self.assertEqual(sorted(panel["bundesland"].tolist()), ["BE", "BY"])
         self.assertTrue((panel["as_of_date"] == pd.Timestamp("2026-03-12")).all())
+
+    def test_inference_panel_exposes_quality_spillover_and_cross_virus_features(self) -> None:
+        class _FakeBuilder(RegionalFeatureBuilder):
+            def __init__(self):
+                self.db = None
+
+            def _load_wastewater_daily(self, virus_typ: str, start_date: pd.Timestamp) -> pd.DataFrame:
+                del start_date
+                virus_offsets = {
+                    "Influenza A": 10.0,
+                    "Influenza B": 3.0,
+                    "SARS-CoV-2": 6.0,
+                    "RSV A": 4.0,
+                }
+                rows = []
+                for state, site_base in (("BY", 6), ("BE", 4)):
+                    for offset, value_date in enumerate(pd.date_range("2026-03-03", periods=10, freq="D"), start=1):
+                        rows.append(
+                            {
+                                "bundesland": state,
+                                "datum": pd.Timestamp(value_date),
+                                "available_time": pd.Timestamp(value_date),
+                                "viral_load": float(virus_offsets[virus_typ] + offset),
+                                "site_count": int(site_base + (offset % 3)),
+                                "under_bg_share": float(max(0.0, 0.6 - offset * 0.03)),
+                                "viral_std": float(0.5 + offset * 0.1),
+                            }
+                        )
+                return pd.DataFrame(rows)
+
+            def _load_truth_series(self, virus_typ: str, start_date: pd.Timestamp) -> pd.DataFrame:
+                del virus_typ, start_date
+                rows = []
+                weeks = pd.date_range("2025-12-29", periods=12, freq="7D")
+                for state, base in (("BY", 12.0), ("BE", 8.0)):
+                    for idx, week_start in enumerate(weeks, start=1):
+                        rows.append(
+                            {
+                                "bundesland": state,
+                                "week_start": pd.Timestamp(week_start),
+                                "available_date": pd.Timestamp(week_start),
+                                "incidence": float(base + idx * 4),
+                                "truth_source": "survstat_weekly",
+                            }
+                        )
+                return pd.DataFrame(rows)
+
+            def _load_weather(self, start_date: pd.Timestamp, end_date: pd.Timestamp) -> pd.DataFrame:
+                del start_date, end_date
+                return pd.DataFrame(
+                    {
+                        "bundesland": ["BY", "BE", "BY", "BE"],
+                        "datum": [
+                            pd.Timestamp("2026-03-11"),
+                            pd.Timestamp("2026-03-11"),
+                            pd.Timestamp("2026-03-15"),
+                            pd.Timestamp("2026-03-15"),
+                        ],
+                        "available_time": [
+                            pd.Timestamp("2026-03-11"),
+                            pd.Timestamp("2026-03-11"),
+                            pd.Timestamp("2026-03-12"),
+                            pd.Timestamp("2026-03-12"),
+                        ],
+                        "data_type": ["CURRENT", "CURRENT", "DAILY_FORECAST", "DAILY_FORECAST"],
+                        "temp": [7.0, 6.0, 10.0, 9.0],
+                        "humidity": [72.0, 70.0, 64.0, 66.0],
+                    }
+                )
+
+            def _load_pollen(self, start_date: pd.Timestamp, end_date: pd.Timestamp) -> pd.DataFrame:
+                del start_date, end_date
+                return pd.DataFrame(
+                    {
+                        "bundesland": ["BY", "BE"],
+                        "datum": [pd.Timestamp("2026-03-12"), pd.Timestamp("2026-03-12")],
+                        "available_time": [pd.Timestamp("2026-03-12"), pd.Timestamp("2026-03-12")],
+                        "pollen_index": [1.0, 2.0],
+                    }
+                )
+
+            def _load_holidays(self) -> dict[str, list[tuple[pd.Timestamp, pd.Timestamp]]]:
+                return {"BY": [(pd.Timestamp("2026-03-16"), pd.Timestamp("2026-03-18"))]}
+
+            def _load_state_population_map(self) -> dict[str, float]:
+                return {"BY": 13_500_000.0, "BE": 3_800_000.0}
+
+        builder = _FakeBuilder()
+        panel = builder.build_inference_panel(
+            virus_typ="Influenza A",
+            as_of_date=datetime(2026, 3, 14),
+            lookback_days=90,
+        )
+
+        self.assertIn("ww_site_count_delta7d", panel.columns)
+        self.assertIn("ww_missing_days7d", panel.columns)
+        self.assertIn("ww_under_bg_trend7d", panel.columns)
+        self.assertIn("national_ww_slope7d", panel.columns)
+        self.assertIn("ww_relative_to_national", panel.columns)
+        self.assertIn("state_population_millions", panel.columns)
+        self.assertIn("ww_sites_per_million", panel.columns)
+        self.assertIn("xdisease_state_level_sars_cov_2", panel.columns)
+        self.assertIn("xdisease_national_slope7d_rsv_a", panel.columns)
+
+        by_row = panel.loc[panel["bundesland"] == "BY"].iloc[0]
+        self.assertGreater(by_row["ww_site_count_delta7d"], 0.0)
+        self.assertGreaterEqual(by_row["ww_missing_days7d"], 0.0)
+        self.assertLess(by_row["ww_under_bg_trend7d"], 0.0)
+        self.assertGreater(by_row["state_population_millions"], 10.0)
+        self.assertGreater(by_row["xdisease_state_level_sars_cov_2"], 0.0)
+        self.assertGreater(by_row["xdisease_national_level_influenza_b"], 0.0)
 
 
 if __name__ == "__main__":

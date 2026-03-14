@@ -230,9 +230,20 @@ class RegionalModelTrainer:
         }
 
     def train_all_viruses_all_regions(self, lookback_days: int = 900) -> dict[str, Any]:
+        return self.train_selected_viruses_all_regions(
+            virus_types=SUPPORTED_VIRUS_TYPES,
+            lookback_days=lookback_days,
+        )
+
+    def train_selected_viruses_all_regions(
+        self,
+        *,
+        virus_types: list[str] | tuple[str, ...],
+        lookback_days: int = 900,
+    ) -> dict[str, Any]:
         return {
             virus_typ: self.train_all_regions(virus_typ=virus_typ, lookback_days=lookback_days)
-            for virus_typ in SUPPORTED_VIRUS_TYPES
+            for virus_typ in virus_types
         }
 
     def get_regional_accuracy_summary(self, virus_typ: str = "Influenza A") -> list[dict]:
@@ -283,7 +294,14 @@ class RegionalModelTrainer:
         return [
             column
             for column in feature_columns
-            if column.startswith("ww_") or column in {"neighbor_ww_level", "national_ww_level"}
+            if column.startswith("ww_")
+            or column in {
+                "neighbor_ww_level",
+                "neighbor_ww_slope7d",
+                "national_ww_level",
+                "national_ww_slope7d",
+                "national_ww_acceleration7d",
+            }
         ]
 
     @staticmethod

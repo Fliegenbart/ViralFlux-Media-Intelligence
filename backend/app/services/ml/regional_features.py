@@ -35,8 +35,13 @@ from app.services.ml.regional_panel_utils import (
     normalize_state_code,
     seasonal_baseline_and_mad,
 )
+from app.services.ml.training_contract import SUPPORTED_VIRUS_TYPES
 
 logger = logging.getLogger(__name__)
+
+
+def _feature_virus_slug(value: str) -> str:
+    return value.lower().replace("-", "_").replace(" ", "_")
 
 
 class RegionalFeatureBuilder:
@@ -56,18 +61,22 @@ class RegionalFeatureBuilder:
         truth_start = start_date - pd.Timedelta(days=730)
 
         wastewater = self._load_wastewater_daily(virus_typ, truth_start)
+        wastewater_context = self._load_supported_wastewater_context(virus_typ, truth_start)
         truth = self._load_truth_series(virus_typ, truth_start)
         weather = self._load_weather(truth_start, end_date + pd.Timedelta(days=TARGET_WINDOW_DAYS[1]))
         pollen = self._load_pollen(truth_start, end_date + pd.Timedelta(days=TARGET_WINDOW_DAYS[1]))
         holidays = self._load_holidays()
+        state_populations = self._load_state_population_map()
 
         rows = self._build_rows(
             virus_typ=virus_typ,
             wastewater=wastewater,
+            wastewater_context=wastewater_context,
             truth=truth,
             weather=weather,
             pollen=pollen,
             holidays=holidays,
+            state_populations=state_populations,
             start_date=start_date,
             end_date=end_date,
             include_targets=True,
@@ -87,18 +96,22 @@ class RegionalFeatureBuilder:
         truth_start = history_start - pd.Timedelta(days=730)
 
         wastewater = self._load_wastewater_daily(virus_typ, truth_start)
+        wastewater_context = self._load_supported_wastewater_context(virus_typ, truth_start)
         truth = self._load_truth_series(virus_typ, truth_start)
         weather = self._load_weather(truth_start, effective_as_of + pd.Timedelta(days=TARGET_WINDOW_DAYS[1]))
         pollen = self._load_pollen(truth_start, effective_as_of + pd.Timedelta(days=TARGET_WINDOW_DAYS[1]))
         holidays = self._load_holidays()
+        state_populations = self._load_state_population_map()
 
         rows = self._build_rows(
             virus_typ=virus_typ,
             wastewater=wastewater,
+            wastewater_context=wastewater_context,
             truth=truth,
             weather=weather,
             pollen=pollen,
             holidays=holidays,
+            state_populations=state_populations,
             start_date=row_start,
             end_date=effective_as_of,
             include_targets=False,
@@ -232,6 +245,20 @@ class RegionalFeatureBuilder:
             return frame
 
         return frame.sort_values(["bundesland", "datum"]).reset_index(drop=True)
+
+    def _load_supported_wastewater_context(
+        self,
+        virus_typ: str,
+        start_date: pd.Timestamp,
+    ) -> dict[str, pd.DataFrame]:
+        bundle: dict[str, pd.DataFrame] = {}
+        for candidate in SUPPORTED_VIRUS_TYPES:
+            frame = self._load_wastewater_daily(candidate, start_date)
+            if not frame.empty:
+                bundle[candidate] = frame
+        if virus_typ not in bundle:
+            bundle[virus_typ] = self._load_wastewater_daily(virus_typ, start_date)
+        return bundle
 
     def _load_truth_series(self, virus_typ: str, start_date: pd.Timestamp) -> pd.DataFrame:
         truth = self._load_truth_from_kreis(virus_typ=virus_typ, start_date=start_date)
@@ -463,10 +490,12 @@ class RegionalFeatureBuilder:
         *,
         virus_typ: str,
         wastewater: pd.DataFrame,
+        wastewater_context: dict[str, pd.DataFrame],
         truth: pd.DataFrame,
         weather: pd.DataFrame,
         pollen: pd.DataFrame,
         holidays: dict[str, list[tuple[pd.Timestamp, pd.Timestamp]]],
+        state_populations: dict[str, float],
         start_date: pd.Timestamp,
         end_date: pd.Timestamp,
         include_targets: bool,
@@ -477,6 +506,14 @@ class RegionalFeatureBuilder:
         wastewater_by_state = {
             state: frame.sort_values("datum").reset_index(drop=True)
             for state, frame in wastewater.groupby("bundesland")
+        }
+        wastewater_context_by_virus_state = {
+            candidate_virus: {
+                state: frame.sort_values("datum").reset_index(drop=True)
+                for state, frame in candidate_frame.groupby("bundesland")
+            }
+            for candidate_virus, candidate_frame in wastewater_context.items()
+            if candidate_frame is not None and not candidate_frame.empty
         }
         truth_by_state = {
             state: frame.sort_values("week_start").reset_index(drop=True)
@@ -527,7 +564,12 @@ class RegionalFeatureBuilder:
                 current_truth = visible_truth.iloc[-1]
                 next_truth = target_row.iloc[0] if not target_row.empty else None
                 baseline, mad = seasonal_baseline_and_mad(truth_frame, target_week_start)
-                latest_ww_levels = self._latest_wastewater_by_state(wastewater_by_state, as_of)
+                latest_ww_snapshot = self._latest_wastewater_snapshot_by_state(wastewater_by_state, as_of)
+                latest_cross_virus_snapshots = {
+                    candidate_virus: self._latest_wastewater_snapshot_by_state(candidate_frames, as_of)
+                    for candidate_virus, candidate_frames in wastewater_context_by_virus_state.items()
+                    if candidate_virus != virus_typ
+                }
                 feature_row = self._build_feature_row(
                     virus_typ=virus_typ,
                     state=state,
@@ -537,7 +579,9 @@ class RegionalFeatureBuilder:
                     weather_frame=weather_by_state.get(state),
                     pollen_frame=pollen_by_state.get(state),
                     holiday_ranges=holidays.get(state, []),
-                    latest_ww_levels=latest_ww_levels,
+                    latest_ww_snapshot=latest_ww_snapshot,
+                    latest_cross_virus_snapshots=latest_cross_virus_snapshots,
+                    state_population=float(state_populations.get(state, 0.0)),
                     max_site_count=max_sites.get(state, 1),
                     target_week_start=target_week_start,
                     current_known_incidence=float(current_truth["incidence"] or 0.0),
@@ -585,7 +629,9 @@ class RegionalFeatureBuilder:
         weather_frame: pd.DataFrame | None,
         pollen_frame: pd.DataFrame | None,
         holiday_ranges: list[tuple[pd.Timestamp, pd.Timestamp]],
-        latest_ww_levels: dict[str, float],
+        latest_ww_snapshot: dict[str, dict[str, float]],
+        latest_cross_virus_snapshots: dict[str, dict[str, dict[str, float]]],
+        state_population: float,
         max_site_count: int,
         target_week_start: pd.Timestamp,
         current_known_incidence: float,
@@ -596,8 +642,16 @@ class RegionalFeatureBuilder:
         ww_lag4 = self._latest_value_as_of(visible_ww, as_of - pd.Timedelta(days=4), "viral_load")
         ww_lag7 = self._latest_value_as_of(visible_ww, as_of - pd.Timedelta(days=7), "viral_load")
         ww_lag14 = self._latest_value_as_of(visible_ww, as_of - pd.Timedelta(days=14), "viral_load")
+        ww_site_lag7 = self._latest_value_as_of(visible_ww, as_of - pd.Timedelta(days=7), "site_count")
+        ww_under_bg_lag7 = self._latest_value_as_of(visible_ww, as_of - pd.Timedelta(days=7), "under_bg_share")
+        ww_dispersion_lag7 = self._latest_value_as_of(visible_ww, as_of - pd.Timedelta(days=7), "viral_std")
         ww_window7 = visible_ww.loc[visible_ww["datum"] >= as_of - pd.Timedelta(days=7)]
         ww_window28 = visible_ww.loc[visible_ww["datum"] >= as_of - pd.Timedelta(days=28)]
+        ww_level = float(ww_latest["viral_load"] or 0.0)
+        ww_site_count = float(ww_latest["site_count"] or 0.0)
+        ww_slope7d = float((ww_level - ww_lag7) / max(abs(ww_lag7), 1.0))
+        ww_slope14d = float((ww_lag7 - ww_lag14) / max(abs(ww_lag14), 1.0))
+        ww_acceleration7d = float(ww_slope7d - ww_slope14d)
 
         truth_lag1 = self._latest_truth_value(visible_truth, lag_weeks=1)
         truth_lag2 = self._latest_truth_value(visible_truth, lag_weeks=2)
@@ -605,30 +659,59 @@ class RegionalFeatureBuilder:
         truth_lag8 = self._latest_truth_value(visible_truth, lag_weeks=8)
 
         neighbor_values = [
-            latest_ww_levels.get(code, 0.0)
+            snapshot["viral_load"]
             for code in REGIONAL_NEIGHBORS.get(state, [])
-            if code in latest_ww_levels
+            if (snapshot := latest_ww_snapshot.get(code))
         ]
-        national_values = list(latest_ww_levels.values())
+        neighbor_slopes = [
+            snapshot["slope7d"]
+            for code in REGIONAL_NEIGHBORS.get(state, [])
+            if (snapshot := latest_ww_snapshot.get(code))
+        ]
+        national_values = [snapshot["viral_load"] for snapshot in latest_ww_snapshot.values()]
+        national_slopes = [snapshot["slope7d"] for snapshot in latest_ww_snapshot.values()]
+        national_accelerations = [snapshot["acceleration7d"] for snapshot in latest_ww_snapshot.values()]
+        neighbor_mean = float(np.mean(neighbor_values)) if neighbor_values else 0.0
+        national_mean = float(np.mean(national_values)) if national_values else 0.0
+        site_coverage_vs_28d = float(
+            ww_site_count / max(float(ww_window28["site_count"].median() or 0.0), 1.0)
+        )
+        state_population_millions = float(state_population / 1_000_000.0) if state_population > 0 else 0.0
+        cross_virus_features = self._cross_virus_features(
+            target_virus=virus_typ,
+            state=state,
+            latest_cross_virus_snapshots=latest_cross_virus_snapshots,
+        )
 
         weather_features = self._weather_features(weather_frame, as_of)
         pollen_context = self._pollen_context(pollen_frame, as_of)
         holiday_share = self._holiday_share_in_target_window(holiday_ranges, as_of)
 
         return {
-            "ww_level": float(ww_latest["viral_load"] or 0.0),
+            "ww_level": ww_level,
             "ww_lag4d": float(ww_lag4),
             "ww_lag7d": float(ww_lag7),
             "ww_lag14d": float(ww_lag14),
-            "ww_slope7d": float((float(ww_latest["viral_load"] or 0.0) - ww_lag7) / max(abs(ww_lag7), 1.0)),
+            "ww_slope7d": ww_slope7d,
+            "ww_acceleration7d": ww_acceleration7d,
             "ww_mean7d": float(ww_window7["viral_load"].mean() or 0.0),
             "ww_std7d": float(ww_window7["viral_load"].std(ddof=0) or 0.0),
             "ww_level_vs_28d_median": float(
-                float(ww_latest["viral_load"] or 0.0) - float(ww_window28["viral_load"].median() or 0.0)
+                ww_level - float(ww_window28["viral_load"].median() or 0.0)
             ),
-            "ww_site_coverage_ratio": float(float(ww_latest["site_count"] or 0.0) / max(float(max_site_count), 1.0)),
+            "ww_site_count": ww_site_count,
+            "ww_site_coverage_ratio": float(ww_site_count / max(float(max_site_count), 1.0)),
+            "ww_site_coverage_vs_28d": site_coverage_vs_28d,
+            "ww_site_count_delta7d": float(ww_site_count - ww_site_lag7),
+            "ww_site_count_ratio7d": float((ww_site_count - ww_site_lag7) / max(abs(ww_site_lag7), 1.0)),
+            "ww_missing_days7d": self._missing_days_in_window(visible_ww, as_of, 7),
+            "ww_missing_days14d": self._missing_days_in_window(visible_ww, as_of, 14),
+            "ww_observation_lag_days": float(max((pd.Timestamp(as_of) - pd.Timestamp(ww_latest["datum"])).days, 0)),
+            "ww_coverage_break_flag": float(site_coverage_vs_28d < 0.75),
             "ww_under_bg_share7d": float(ww_window7["under_bg_share"].mean() or 0.0),
+            "ww_under_bg_trend7d": float(float(ww_latest["under_bg_share"] or 0.0) - ww_under_bg_lag7),
             "ww_regional_dispersion7d": float(ww_window7["viral_std"].mean() or 0.0),
+            "ww_regional_dispersion_delta7d": float(float(ww_latest["viral_std"] or 0.0) - ww_dispersion_lag7),
             "survstat_current_incidence": float(current_known_incidence),
             "survstat_lag1w": float(truth_lag1),
             "survstat_lag2w": float(truth_lag2),
@@ -640,13 +723,24 @@ class RegionalFeatureBuilder:
             "survstat_seasonal_mad": float(seasonal_mad),
             "survstat_baseline_gap": float(current_known_incidence - seasonal_baseline),
             "survstat_baseline_zscore": float((current_known_incidence - seasonal_baseline) / max(seasonal_mad, 1.0)),
-            "neighbor_ww_level": float(np.mean(neighbor_values)) if neighbor_values else 0.0,
-            "national_ww_level": float(np.mean(national_values)) if national_values else 0.0,
+            "neighbor_ww_level": neighbor_mean,
+            "neighbor_ww_slope7d": float(np.mean(neighbor_slopes)) if neighbor_slopes else 0.0,
+            "national_ww_level": national_mean,
+            "national_ww_slope7d": float(np.mean(national_slopes)) if national_slopes else 0.0,
+            "national_ww_acceleration7d": float(np.mean(national_accelerations)) if national_accelerations else 0.0,
+            "ww_relative_to_neighbor_mean": float(ww_level - neighbor_mean),
+            "ww_relative_to_national": float(ww_level - national_mean),
+            "ww_share_of_national": float(ww_level / max(abs(national_mean), 1.0)),
+            "state_population_millions": state_population_millions,
+            "ww_sites_per_million": float(ww_site_count / max(state_population_millions, 0.1)),
+            "state_neighbor_count": float(len(REGIONAL_NEIGHBORS.get(state, []))),
+            "state_is_city_state": float(state in {"BE", "HB", "HH"}),
             "target_holiday_share": float(holiday_share),
             "target_holiday_any": float(holiday_share > 0.0),
             "target_week_iso": float(target_week_start.isocalendar().week),
             "pollen_context_score": float(pollen_context),
             **weather_features,
+            **cross_virus_features,
         }
 
     @staticmethod
@@ -674,6 +768,64 @@ class RegionalFeatureBuilder:
                 continue
             latest[state] = float(visible.iloc[-1]["viral_load"] or 0.0)
         return latest
+
+    @classmethod
+    def _latest_wastewater_snapshot_by_state(
+        cls,
+        wastewater_by_state: dict[str, pd.DataFrame],
+        as_of: pd.Timestamp,
+    ) -> dict[str, dict[str, float]]:
+        latest: dict[str, dict[str, float]] = {}
+        for state, frame in wastewater_by_state.items():
+            visible = frame.loc[(frame["datum"] <= as_of) & (frame["available_time"] <= as_of)]
+            if visible.empty:
+                continue
+            latest_row = visible.iloc[-1]
+            level = float(latest_row["viral_load"] or 0.0)
+            lag7 = cls._latest_value_as_of(visible, as_of - pd.Timedelta(days=7), "viral_load")
+            lag14 = cls._latest_value_as_of(visible, as_of - pd.Timedelta(days=14), "viral_load")
+            slope7 = float((level - lag7) / max(abs(lag7), 1.0))
+            slope14 = float((lag7 - lag14) / max(abs(lag14), 1.0))
+            latest[state] = {
+                "viral_load": level,
+                "slope7d": slope7,
+                "acceleration7d": float(slope7 - slope14),
+            }
+        return latest
+
+    @staticmethod
+    def _missing_days_in_window(frame: pd.DataFrame, as_of: pd.Timestamp, window_days: int) -> float:
+        if window_days <= 0:
+            return 0.0
+        window_start = as_of - pd.Timedelta(days=window_days - 1)
+        visible = frame.loc[(frame["datum"] >= window_start) & (frame["datum"] <= as_of)]
+        observed_days = int(visible["datum"].nunique()) if not visible.empty else 0
+        return float(max(window_days - observed_days, 0))
+
+    def _cross_virus_features(
+        self,
+        *,
+        target_virus: str,
+        state: str,
+        latest_cross_virus_snapshots: dict[str, dict[str, dict[str, float]]],
+    ) -> dict[str, float]:
+        features: dict[str, float] = {}
+        for candidate_virus in SUPPORTED_VIRUS_TYPES:
+            if candidate_virus == target_virus:
+                continue
+            slug = _feature_virus_slug(candidate_virus)
+            snapshot = latest_cross_virus_snapshots.get(candidate_virus, {})
+            state_metrics = snapshot.get(state, {})
+            national_levels = [metrics["viral_load"] for metrics in snapshot.values()]
+            national_slopes = [metrics["slope7d"] for metrics in snapshot.values()]
+            state_level = float(state_metrics.get("viral_load") or 0.0)
+            national_level = float(np.mean(national_levels)) if national_levels else 0.0
+            features[f"xdisease_state_level_{slug}"] = state_level
+            features[f"xdisease_state_slope7d_{slug}"] = float(state_metrics.get("slope7d") or 0.0)
+            features[f"xdisease_national_level_{slug}"] = national_level
+            features[f"xdisease_national_slope7d_{slug}"] = float(np.mean(national_slopes)) if national_slopes else 0.0
+            features[f"xdisease_relative_level_{slug}"] = float(state_level - national_level)
+        return features
 
     @staticmethod
     def _weather_features(weather_frame: pd.DataFrame | None, as_of: pd.Timestamp) -> dict[str, float]:

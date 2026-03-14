@@ -303,35 +303,82 @@ def compute_forecast_accuracy_task(self) -> Dict[str, Any]:
 @celery_app.task(bind=True, name="train_regional_models_task")
 def train_regional_models_task(
     self,
-    virus_typ: str = "Influenza A",
+    virus_typ: str | None = None,
+    virus_types: list[str] | None = None,
 ) -> Dict[str, Any]:
-    """Train pooled per-virus regional panel models across Bundesländer."""
+    """Train pooled regional panel models for one, many, or all supported viruses."""
     from app.services.ml.regional_trainer import RegionalModelTrainer
+    selection = normalize_training_selection(
+        virus_typ=virus_typ,
+        virus_types=virus_types,
+    )
 
-    logger.info("Celery: Starting regional model training for %s", virus_typ)
+    logger.info(
+        "Celery: Starting regional model training (virus_types=%s, mode=%s)",
+        list(selection.virus_types),
+        selection.mode,
+    )
 
     self.update_state(
         state="PROGRESS",
-        meta={"step": f"Training regional models for {virus_typ}...", "progress": 10},
+        meta={
+            "step": (
+                f"Training regional models for {selection.virus_typ}..."
+                if len(selection.virus_types) == 1
+                else (
+                    "Training regional models for all supported viruses..."
+                    if selection.mode == "all"
+                    else "Training regional models for selected viruses..."
+                )
+            ),
+            "progress": 10,
+        },
     )
 
     with get_db_context() as db:
         trainer = RegionalModelTrainer(db)
-        result = trainer.train_all_regions(virus_typ=virus_typ)
+        if len(selection.virus_types) == 1:
+            result = trainer.train_all_regions(virus_typ=selection.virus_types[0])
+        else:
+            result = trainer.train_selected_viruses_all_regions(virus_types=list(selection.virus_types))
 
-    trained = result.get("trained", 0)
-    failed = result.get("failed", 0)
-    logger.info(
-        "Celery: Regional training complete for %s — %d trained, %d failed",
-        virus_typ, trained, failed,
-    )
+    if len(selection.virus_types) == 1:
+        trained = result.get("trained", 0)
+        failed = result.get("failed", 0)
+        logger.info(
+            "Celery: Regional training complete for %s — %d trained, %d failed",
+            selection.virus_types[0], trained, failed,
+        )
+        aggregate_metrics = result.get("aggregate_metrics")
+        quality_gate = result.get("quality_gate")
+    else:
+        trained = sum(int((payload or {}).get("trained", 0)) for payload in result.values())
+        failed = sum(int((payload or {}).get("failed", 0)) for payload in result.values())
+        overall_status = (
+            "success"
+            if all((payload or {}).get("status") == "success" for payload in result.values())
+            else "partial_error"
+        )
+        logger.info(
+            "Celery: Regional training complete for %s viruses — %d trained, %d failed",
+            len(selection.virus_types), trained, failed,
+        )
+        aggregate_metrics = {virus: (payload or {}).get("aggregate_metrics") for virus, payload in result.items()}
+        quality_gate = {virus: (payload or {}).get("quality_gate") for virus, payload in result.items()}
 
     return _json_safe({
-        "status": result.get("status", "success"),
-        "virus_typ": virus_typ,
+        "status": (
+            result.get("status", "success")
+            if len(selection.virus_types) == 1
+            else overall_status
+        ),
+        "virus_typ": selection.virus_typ,
+        "virus_types": list(selection.virus_types),
+        "selection_mode": selection.mode,
         "trained": trained,
         "failed": failed,
-        "quality_gate": result.get("quality_gate"),
-        "aggregate_metrics": result.get("aggregate_metrics"),
+        "quality_gate": quality_gate,
+        "aggregate_metrics": aggregate_metrics,
+        "result": result,
         "timestamp": datetime.utcnow().isoformat(),
     })

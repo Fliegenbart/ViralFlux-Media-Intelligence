@@ -102,6 +102,74 @@ class AdminMLApiTests(unittest.TestCase):
                 )
                 self.assertEqual(response.status_code, 422)
 
+    def test_empty_regional_request_normalizes_to_all_supported_viruses(self) -> None:
+        with patch(
+            "app.api.admin_ml.celery_app.send_task",
+            return_value=SimpleNamespace(id="regional-all"),
+        ) as send_task_mock:
+            response = self.client.post("/api/v1/admin/ml/train-regional", json={})
+
+        self.assertEqual(response.status_code, 202)
+        self.assertEqual(response.json()["virus_types"], list(SUPPORTED_VIRUS_TYPES))
+        self.assertEqual(response.json()["selection_mode"], "all")
+        self.assertIsNone(response.json()["virus_typ"])
+        send_task_mock.assert_called_once_with(
+            "train_regional_models_task",
+            kwargs={"virus_types": list(SUPPORTED_VIRUS_TYPES)},
+        )
+
+    def test_single_regional_request_uses_canonical_name(self) -> None:
+        with patch(
+            "app.api.admin_ml.celery_app.send_task",
+            return_value=SimpleNamespace(id="regional-single"),
+        ) as send_task_mock:
+            response = self.client.post(
+                "/api/v1/admin/ml/train-regional",
+                json={"virus_typ": "influenza a"},
+            )
+
+        self.assertEqual(response.status_code, 202)
+        self.assertEqual(response.json()["virus_typ"], "Influenza A")
+        self.assertEqual(response.json()["virus_types"], ["Influenza A"])
+        self.assertEqual(response.json()["selection_mode"], "single")
+        send_task_mock.assert_called_once_with(
+            "train_regional_models_task",
+            kwargs={"virus_types": ["Influenza A"]},
+        )
+
+    def test_subset_regional_request_is_normalized_and_ordered(self) -> None:
+        with patch(
+            "app.api.admin_ml.celery_app.send_task",
+            return_value=SimpleNamespace(id="regional-subset"),
+        ) as send_task_mock:
+            response = self.client.post(
+                "/api/v1/admin/ml/train-regional",
+                json={"virus_types": ["RSV A", "Influenza A"]},
+            )
+
+        self.assertEqual(response.status_code, 202)
+        self.assertEqual(response.json()["virus_types"], ["Influenza A", "RSV A"])
+        self.assertEqual(response.json()["selection_mode"], "subset")
+        send_task_mock.assert_called_once_with(
+            "train_regional_models_task",
+            kwargs={"virus_types": ["Influenza A", "RSV A"]},
+        )
+
+    def test_invalid_regional_selection_payloads_return_422(self) -> None:
+        invalid_payloads = [
+            {"virus_typ": "Influenza A", "virus_types": ["Influenza B"]},
+            {"virus_types": []},
+            {"virus_typ": "Norovirus"},
+        ]
+
+        for payload in invalid_payloads:
+            with self.subTest(payload=payload):
+                response = self.client.post(
+                    "/api/v1/admin/ml/train-regional",
+                    json=payload,
+                )
+                self.assertEqual(response.status_code, 422)
+
 
 if __name__ == "__main__":
     unittest.main()

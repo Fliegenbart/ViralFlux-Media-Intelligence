@@ -40,6 +40,25 @@ class TrainXGBoostRequest(BaseModel):
         )
 
 
+class TrainRegionalModelsRequest(BaseModel):
+    virus_typ: Optional[str] = None  # None → train all supported regional virus models
+    virus_types: Optional[list[str]] = None
+
+    @model_validator(mode="after")
+    def validate_training_selection(self) -> "TrainRegionalModelsRequest":
+        normalize_training_selection(
+            virus_typ=self.virus_typ,
+            virus_types=self.virus_types,
+        )
+        return self
+
+    def normalized_selection(self):
+        return normalize_training_selection(
+            virus_typ=self.virus_typ,
+            virus_types=self.virus_types,
+        )
+
+
 @router.post("/train-xgboost", status_code=status.HTTP_202_ACCEPTED)
 @limiter.limit("5/minute")
 async def train_xgboost(
@@ -103,14 +122,15 @@ async def get_training_status(task_id: str):
 @limiter.limit("3/minute")
 async def train_regional_models(
     request: Request,
-    virus_typ: str = Body(default="Influenza A"),
+    body: TrainRegionalModelsRequest = Body(default_factory=TrainRegionalModelsRequest),
     current_user: dict = Depends(get_current_admin),
 ):
-    """Train the pooled regional panel model for a virus type (async via Celery)."""
+    """Train pooled regional panel models for one, many, or all supported virus types."""
+    selection = body.normalized_selection()
     try:
         task = celery_app.send_task(
             "train_regional_models_task",
-            kwargs={"virus_typ": virus_typ},
+            kwargs={"virus_types": list(selection.virus_types)},
         )
     except Exception as exc:
         raise HTTPException(
@@ -120,7 +140,9 @@ async def train_regional_models(
 
     return {
         "status": "regional_training_started",
-        "virus_typ": virus_typ,
+        "virus_typ": selection.virus_typ,
+        "virus_types": list(selection.virus_types),
+        "selection_mode": selection.mode,
         "task_id": task.id,
         "status_url": f"/api/v1/admin/ml/status/{task.id}",
     }

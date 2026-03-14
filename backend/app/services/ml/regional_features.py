@@ -244,6 +244,11 @@ class RegionalFeatureBuilder:
         if not diseases:
             return pd.DataFrame()
 
+        state_populations = self._load_state_population_map()
+        if not state_populations:
+            logger.warning("Regional truth fallback to weekly SurvStat because Kreis state populations are unavailable.")
+            return pd.DataFrame()
+
         rows = (
             self.db.query(
                 SurvstatKreisData.year,
@@ -251,7 +256,6 @@ class RegionalFeatureBuilder:
                 SurvstatKreisData.week_label,
                 KreisEinwohner.bundesland,
                 func.sum(SurvstatKreisData.fallzahl).label("total_cases"),
-                func.sum(KreisEinwohner.einwohner).label("population"),
             )
             .join(KreisEinwohner, KreisEinwohner.kreis_name == SurvstatKreisData.kreis)
             .filter(
@@ -285,8 +289,9 @@ class RegionalFeatureBuilder:
                         SOURCE_LAG_DAYS["survstat_kreis"],
                     ),
                     "incidence": (
-                        (float(row.total_cases or 0.0) / float(row.population or 0.0)) * 100_000.0
-                        if float(row.population or 0.0) > 0
+                        (float(row.total_cases or 0.0) / state_populations[normalize_state_code(row.bundesland)]) * 100_000.0
+                        if normalize_state_code(row.bundesland) in state_populations
+                        and state_populations[normalize_state_code(row.bundesland)] > 0
                         else np.nan
                     ),
                     "truth_source": "survstat_kreis",
@@ -304,6 +309,22 @@ class RegionalFeatureBuilder:
             .sort_values(["bundesland", "week_start"])
             .reset_index(drop=True)
         )
+
+    def _load_state_population_map(self) -> dict[str, float]:
+        rows = (
+            self.db.query(
+                KreisEinwohner.bundesland,
+                func.sum(KreisEinwohner.einwohner).label("population"),
+            )
+            .filter(KreisEinwohner.einwohner > 0)
+            .group_by(KreisEinwohner.bundesland)
+            .all()
+        )
+        return {
+            code: float(row.population or 0.0)
+            for row in rows
+            if (code := normalize_state_code(row.bundesland)) and float(row.population or 0.0) > 0
+        }
 
     def _load_truth_from_weekly(self, virus_typ: str, start_date: pd.Timestamp) -> pd.DataFrame:
         diseases = SURVSTAT_VIRUS_MAP.get(virus_typ, [])

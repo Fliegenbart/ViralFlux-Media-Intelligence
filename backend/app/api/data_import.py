@@ -414,13 +414,31 @@ async def discover_kreise(db: Session = Depends(get_db)):
     from app.services.data_ingest.survstat_api_service import SurvstatApiService
 
     service = SurvstatApiService(db)
-    new_count = service.discover_and_seed_kreise()
+    result = service.discover_and_seed_kreise()
 
     return {
         "success": True,
-        "new_kreise_discovered": new_count,
+        "new_kreise_discovered": result["new_seeded"],
+        "details": result,
         "message": (
-            f"{new_count} neue Kreise geseedet. "
+            f"{result['new_seeded']} neue Kreise geseedet. "
             "Einwohner-Daten müssen separat gepflegt werden."
         ),
+    }
+
+
+@router.post("/survstat-api/sync-kreis-einwohner")
+async def sync_kreis_einwohner(
+    source_url: str | None = Query(default=None),
+    db: Session = Depends(get_db),
+):
+    """Kreis-Einwohner aus dem offiziellen Destatis-Gemeindeverzeichnis synchronisieren."""
+    from app.services.data_ingest.survstat_api_service import SurvstatApiService
+
+    service = SurvstatApiService(db)
+    result = service.sync_kreis_einwohner_from_destatis(source_url=source_url)
+
+    return {
+        "success": True,
+        **result,
     }

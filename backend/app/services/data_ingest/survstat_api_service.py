@@ -17,6 +17,7 @@ zu triggern.
 
 from __future__ import annotations
 
+from io import BytesIO
 import logging
 import re
 import time
@@ -43,6 +44,36 @@ NS_SOAP = "http://www.w3.org/2003/05/soap-envelope"
 NS_ADDR = "http://www.w3.org/2005/08/addressing"
 NS_SVC = "http://tools.rki.de/SurvStat/"
 NS_MDX = "http://schemas.datacontract.org/2004/07/Rki.SurvStat.WebService.Contracts.Mdx"
+
+DESTATIS_KREIS_TEXTKENNZEICHEN = {"41", "42", "43", "44", "45"}
+DESTATIS_LAND_CODES = {
+    "01": "Schleswig-Holstein",
+    "02": "Hamburg",
+    "03": "Niedersachsen",
+    "04": "Bremen",
+    "05": "Nordrhein-Westfalen",
+    "06": "Hessen",
+    "07": "Rheinland-Pfalz",
+    "08": "Baden-Württemberg",
+    "09": "Bayern",
+    "10": "Saarland",
+    "11": "Berlin",
+    "12": "Brandenburg",
+    "13": "Mecklenburg-Vorpommern",
+    "14": "Sachsen",
+    "15": "Sachsen-Anhalt",
+    "16": "Thüringen",
+}
+DESTATIS_KREIS_POPULATION_SOURCES = (
+    {
+        "label": "destatis_gv_2024",
+        "url": "https://www.destatis.de/DE/Themen/Laender-Regionen/Regionales/Gemeindeverzeichnis/Administrativ/Archiv/GVAuszugJ/31122024_Auszug_GV.xlsx?__blob=publicationFile&v=2",
+    },
+    {
+        "label": "destatis_anschriften_2023",
+        "url": "https://www.destatis.de/DE/Themen/Laender-Regionen/Regionales/Publikationen/Downloads/anschriftenverzeichnis-5119101237005.xlsx?__blob=publicationFile&v=3",
+    },
+)
 
 
 def _tag(ns: str, local: str) -> str:
@@ -109,6 +140,249 @@ class SurvstatApiService:
             raise RuntimeError(f"SOAP Fault: {reason[:500]}")
 
         return root
+
+    @staticmethod
+    def _code(value: Any, width: int) -> str:
+        """Normalize numeric/string code values to a fixed-width digit string."""
+        if pd.isna(value):
+            return ""
+        text = str(value).strip()
+        if not text:
+            return ""
+        if text.endswith(".0"):
+            text = text[:-2]
+        digits = re.sub(r"\D", "", text)
+        if not digits:
+            return ""
+        return digits.zfill(width)[-width:]
+
+    @staticmethod
+    def _population(value: Any) -> int | None:
+        if pd.isna(value):
+            return None
+        try:
+            population = int(round(float(value)))
+        except (TypeError, ValueError):
+            return None
+        return population if population > 0 else None
+
+    def _extract_destatis_modern_records(self, frame: pd.DataFrame) -> list[dict[str, Any]]:
+        """Parse the 2024 Gemeindeverzeichnis workbook and aggregate municipalities to Kreise."""
+        if frame.shape[1] < 11:
+            return []
+
+        raw = frame.iloc[:, [0, 1, 2, 3, 4, 5, 6, 7, 10]].copy()
+        raw.columns = [
+            "satzart",
+            "textkennzeichen",
+            "land",
+            "rb",
+            "kreis",
+            "verwaltungsbezirk",
+            "gemeinde",
+            "name",
+            "population",
+        ]
+        raw = raw[raw["satzart"].notna()].copy()
+        if raw.empty:
+            return []
+
+        raw["satzart"] = raw["satzart"].apply(lambda value: self._code(value, 2))
+        raw["textkennzeichen"] = raw["textkennzeichen"].apply(lambda value: self._code(value, 2))
+        raw["land"] = raw["land"].apply(lambda value: self._code(value, 2))
+        raw["rb"] = raw["rb"].apply(lambda value: self._code(value, 1))
+        raw["kreis"] = raw["kreis"].apply(lambda value: self._code(value, 2))
+        raw["county_ags"] = raw["land"] + raw["rb"] + raw["kreis"]
+        raw["population"] = raw["population"].apply(self._population)
+
+        county_headers = raw.loc[
+            (raw["satzart"] == "40")
+            & (raw["textkennzeichen"].isin(DESTATIS_KREIS_TEXTKENNZEICHEN))
+            & raw["county_ags"].str.fullmatch(r"\d{5}")
+        , ["county_ags", "land", "name"]].copy()
+        if county_headers.empty:
+            return []
+        county_headers["name"] = county_headers["name"].astype(str).str.strip()
+
+        municipality_population = (
+            raw.loc[
+                (raw["satzart"] == "60")
+                & raw["county_ags"].str.fullmatch(r"\d{5}")
+                & raw["population"].notna(),
+                ["county_ags", "population"],
+            ]
+            .groupby("county_ags", as_index=False)["population"]
+            .sum()
+        )
+        if municipality_population.empty:
+            return []
+
+        merged = county_headers.merge(municipality_population, on="county_ags", how="inner")
+        return [
+            {
+                "ags": row.county_ags,
+                "kreis_name": row.name,
+                "bundesland": DESTATIS_LAND_CODES.get(row.land, ""),
+                "einwohner": int(row.population),
+            }
+            for row in merged.itertuples(index=False)
+            if DESTATIS_LAND_CODES.get(row.land) and int(row.population or 0) > 0
+        ]
+
+    def _extract_destatis_legacy_records(self, frame: pd.DataFrame) -> list[dict[str, Any]]:
+        """Parse the 2023 Anschriftenverzeichnis workbook with direct Kreis populations."""
+        if frame.shape[1] < 14:
+            return []
+
+        raw = frame.iloc[:, [0, 2, 3, 5, 7, 13]].copy()
+        raw.columns = ["land", "satzart", "textkennzeichen", "ags", "name", "population"]
+        raw = raw[raw["satzart"].notna()].copy()
+        if raw.empty:
+            return []
+
+        raw["satzart"] = raw["satzart"].apply(lambda value: self._code(value, 2))
+        raw["textkennzeichen"] = raw["textkennzeichen"].apply(lambda value: self._code(value, 2))
+        raw["land"] = raw["land"].apply(lambda value: self._code(value, 2))
+        raw["ags"] = raw["ags"].apply(lambda value: self._code(value, 5))
+        raw["population"] = raw["population"].apply(self._population)
+        raw["name"] = raw["name"].astype(str).str.strip()
+
+        county_rows = raw.loc[
+            (raw["satzart"] == "40")
+            & (raw["textkennzeichen"].isin(DESTATIS_KREIS_TEXTKENNZEICHEN))
+            & raw["ags"].str.fullmatch(r"\d{5}")
+            & raw["population"].notna(),
+            ["ags", "land", "name", "population"],
+        ]
+        return [
+            {
+                "ags": row.ags,
+                "kreis_name": row.name,
+                "bundesland": DESTATIS_LAND_CODES.get(row.land, ""),
+                "einwohner": int(row.population),
+            }
+            for row in county_rows.itertuples(index=False)
+            if DESTATIS_LAND_CODES.get(row.land) and int(row.population or 0) > 0
+        ]
+
+    def _parse_destatis_population_workbook(self, content: bytes) -> list[dict[str, Any]]:
+        workbook = pd.ExcelFile(BytesIO(content), engine="openpyxl")
+        for sheet_name in workbook.sheet_names:
+            frame = pd.read_excel(BytesIO(content), sheet_name=sheet_name, header=None, engine="openpyxl")
+            records = self._extract_destatis_modern_records(frame)
+            if records:
+                return records
+            records = self._extract_destatis_legacy_records(frame)
+            if records:
+                return records
+        return []
+
+    def _load_destatis_population_records(
+        self,
+        source_url: str | None = None,
+    ) -> tuple[list[dict[str, Any]], dict[str, str]]:
+        sources = (
+            [{"label": "custom", "url": source_url}]
+            if source_url
+            else list(DESTATIS_KREIS_POPULATION_SOURCES)
+        )
+        last_error: Exception | None = None
+        for source in sources:
+            try:
+                response = self.session.get(source["url"], timeout=self.REQUEST_TIMEOUT)
+                response.raise_for_status()
+                records = self._parse_destatis_population_workbook(response.content)
+                if records:
+                    return records, source
+                last_error = RuntimeError(f"Workbook without Kreis population rows: {source['url']}")
+            except Exception as exc:  # pragma: no cover - exercised via integration
+                logger.warning("Destatis population sync source failed: %s", source["url"], exc_info=exc)
+                last_error = exc
+
+        raise RuntimeError("Could not load Kreis population data from Destatis.") from last_error
+
+    def _apply_kreis_population_records(
+        self,
+        records: list[dict[str, Any]],
+        source_meta: dict[str, str],
+    ) -> dict[str, Any]:
+        existing_rows = self.db.query(KreisEinwohner).all()
+        existing_by_ags = {
+            self._code(row.ags, 5): row
+            for row in existing_rows
+            if self._code(row.ags, 5)
+        }
+        official_by_ags = {
+            self._code(record["ags"], 5): record
+            for record in records
+            if self._code(record.get("ags"), 5)
+        }
+
+        updated = 0
+        inserted = 0
+        for ags, record in official_by_ags.items():
+            existing = existing_by_ags.get(ags)
+            if existing is None:
+                self.db.add(
+                    KreisEinwohner(
+                        kreis_name=record["kreis_name"],
+                        ags=ags,
+                        bundesland=record["bundesland"],
+                        einwohner=int(record["einwohner"]),
+                        updated_at=datetime.utcnow(),
+                    )
+                )
+                inserted += 1
+                continue
+
+            changed = False
+            if int(existing.einwohner or 0) != int(record["einwohner"]):
+                existing.einwohner = int(record["einwohner"])
+                changed = True
+            if (existing.bundesland or "") != record["bundesland"]:
+                existing.bundesland = record["bundesland"]
+                changed = True
+            if changed:
+                existing.updated_at = datetime.utcnow()
+                updated += 1
+
+        self.db.commit()
+        self._einwohner_cache = None
+
+        unmatched_existing = sorted(
+            ags for ags in existing_by_ags
+            if ags and ags not in official_by_ags
+        )
+        zero_population_remaining = (
+            self.db.query(KreisEinwohner)
+            .filter(KreisEinwohner.einwohner <= 0)
+            .count()
+        )
+        return {
+            "source_label": source_meta["label"],
+            "source_url": source_meta["url"],
+            "official_records": len(official_by_ags),
+            "updated_existing": updated,
+            "inserted_missing": inserted,
+            "unmatched_existing": len(unmatched_existing),
+            "unmatched_existing_ags": unmatched_existing[:20],
+            "zero_population_remaining": zero_population_remaining,
+        }
+
+    def sync_kreis_einwohner_from_destatis(
+        self,
+        source_url: str | None = None,
+    ) -> dict[str, Any]:
+        """Refresh Kreis populations from the official Destatis workbook."""
+        records, source_meta = self._load_destatis_population_records(source_url=source_url)
+        result = self._apply_kreis_population_records(records, source_meta)
+        logger.info(
+            "Destatis Kreis population sync completed: %s updated, %s inserted, %s zero left.",
+            result["updated_existing"],
+            result["inserted_missing"],
+            result["zero_population_remaining"],
+        )
+        return result
 
     # ------------------------------------------------------------------
     #  Step 1: Metadata — discover RKI disease member IDs

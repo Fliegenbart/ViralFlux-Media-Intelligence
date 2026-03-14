@@ -1,43 +1,37 @@
-"""Regional Forecast Service.
-
-Uses per-Bundesland trained XGBoost models to generate regional
-virus wave predictions and media activation recommendations.
-
-This is the core service that answers the business question:
-"Which regions will see virus wave increases in the next 3-7 days,
-and where should we activate GELO media campaigns?"
-"""
+"""Calibrated regional forecast inference and media activation service."""
 
 from __future__ import annotations
 
 import json
 import logging
+import pickle
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 import numpy as np
-from xgboost import XGBRegressor
+import pandas as pd
+from xgboost import XGBClassifier, XGBRegressor
 
-from app.services.ml.regional_features import (
+from app.services.ml.regional_features import RegionalFeatureBuilder
+from app.services.ml.regional_panel_utils import (
     ALL_BUNDESLAENDER,
     BUNDESLAND_NAMES,
-    RegionalFeatureBuilder,
+    EVENT_DEFINITION_VERSION,
+    TARGET_WINDOW_DAYS,
 )
-from app.services.ml.regional_trainer import REGIONAL_META_FEATURES, _virus_slug
+from app.services.ml.regional_trainer import _virus_slug
 
 logger = logging.getLogger(__name__)
 
-_ML_MODELS_DIR = Path(__file__).resolve().parent.parent.parent / "ml_models" / "regional"
+_ML_MODELS_DIR = Path(__file__).resolve().parent.parent.parent / "ml_models" / "regional_panel"
 
-# Media channel recommendations based on wave intensity
 MEDIA_CHANNELS = {
     "high": ["Banner (programmatic)", "Digi-CLP (regional)", "Meta (regional)", "LinkedIn (Fachkreise)"],
     "medium": ["Banner (programmatic)", "Meta (regional)"],
     "low": ["Meta (national awareness)"],
 }
 
-# GELO product mapping by virus type
 GELO_PRODUCTS = {
     "Influenza A": ["GeloMyrtol forte", "GeloRevoice"],
     "Influenza B": ["GeloMyrtol forte", "GeloRevoice"],
@@ -47,7 +41,7 @@ GELO_PRODUCTS = {
 
 
 class RegionalForecastService:
-    """Generate per-Bundesland forecasts and media activation recommendations."""
+    """Generate calibrated pooled forecasts and gated media actions."""
 
     def __init__(self, db, models_dir: Path | None = None):
         self.db = db
@@ -60,123 +54,108 @@ class RegionalForecastService:
         bundesland: str,
         horizon_days: int = 7,
     ) -> dict[str, Any] | None:
-        """Generate forecast for a single Bundesland.
+        if horizon_days not in range(TARGET_WINDOW_DAYS[0], TARGET_WINDOW_DAYS[1] + 1):
+            horizon_days = TARGET_WINDOW_DAYS[1]
 
-        Returns dict with:
-        - current_load: current viral load
-        - predicted_load: predicted load at horizon
-        - change_pct: percentage change
-        - event_probability: probability of significant increase (>25%)
-        - confidence_interval: (lower, upper)
-        - trend: "steigend" | "stabil" | "fallend"
-        """
-        slug = _virus_slug(virus_typ)
-        bl_lower = bundesland.lower()
-        model_dir = self.models_dir / slug / bl_lower
-
-        if not (model_dir / "model_median.json").exists():
-            return None
-
-        # Load models
-        model_med = XGBRegressor()
-        model_lo = XGBRegressor()
-        model_hi = XGBRegressor()
-        model_med.load_model(str(model_dir / "model_median.json"))
-        model_lo.load_model(str(model_dir / "model_lower.json"))
-        model_hi.load_model(str(model_dir / "model_upper.json"))
-
-        # Get latest features
-        df = self.feature_builder.build_regional_training_data(
-            virus_typ=virus_typ,
-            bundesland=bundesland,
-            lookback_days=60,  # Only need recent data for prediction
-        )
-
-        if df.empty or len(df) < 7:
-            return None
-
-        # Use available features
-        meta = self._load_metadata(model_dir)
-        features = meta.get("features", REGIONAL_META_FEATURES) if meta else REGIONAL_META_FEATURES
-        available = [f for f in features if f in df.columns]
-        if len(available) < 3:
-            return None
-
-        # Latest data point as input
-        X_latest = df[available].iloc[-1:].values
-
-        pred_med = float(model_med.predict(X_latest)[0])
-        pred_lo = float(model_lo.predict(X_latest)[0])
-        pred_hi = float(model_hi.predict(X_latest)[0])
-
-        current_load = float(df["y"].iloc[-1])
-        change_pct = ((pred_med / max(current_load, 1e-8)) - 1) * 100
-
-        # Event probability: estimate from quantile spread
-        # If lower bound is already above current + 25%, high probability
-        threshold = current_load * 1.25
-        if pred_lo >= threshold:
-            event_prob = 0.9
-        elif pred_med >= threshold:
-            event_prob = 0.6 + 0.3 * ((pred_med - threshold) / max(pred_hi - pred_lo, 1e-8))
-        elif pred_hi >= threshold:
-            event_prob = 0.2 + 0.4 * ((pred_hi - threshold) / max(pred_hi - pred_med, 1e-8))
-        else:
-            event_prob = max(0.05, 0.2 * (pred_med / max(threshold, 1e-8)))
-
-        event_prob = min(max(event_prob, 0.0), 1.0)
-
-        if change_pct > 15:
-            trend = "steigend"
-        elif change_pct < -15:
-            trend = "fallend"
-        else:
-            trend = "stabil"
-
-        return {
-            "bundesland": bundesland,
-            "bundesland_name": BUNDESLAND_NAMES.get(bundesland, bundesland),
-            "virus_typ": virus_typ,
-            "current_load": round(current_load, 1),
-            "predicted_load": round(pred_med, 1),
-            "change_pct": round(change_pct, 1),
-            "event_probability": round(event_prob, 3),
-            "confidence_interval": {
-                "lower": round(pred_lo, 1),
-                "upper": round(pred_hi, 1),
-            },
-            "trend": trend,
-            "horizon_days": horizon_days,
-            "data_points": len(df),
-            "last_data_date": str(df["ds"].max()),
-        }
+        payload = self.predict_all_regions(virus_typ=virus_typ, horizon_days=horizon_days)
+        return next((item for item in payload["predictions"] if item["bundesland"] == bundesland.upper()), None)
 
     def predict_all_regions(
         self,
         virus_typ: str = "Influenza A",
         horizon_days: int = 7,
     ) -> dict[str, Any]:
-        """Generate forecasts for all Bundesländer and rank by wave probability."""
+        artifacts = self._load_artifacts(virus_typ)
+        metadata = artifacts.get("metadata") or {}
+        feature_columns = metadata.get("feature_columns") or []
+        if not artifacts or not feature_columns:
+            return {
+                "virus_typ": virus_typ,
+                "status": "no_model",
+                "message": "Keine regionalen Panel-Modelle verfügbar. Bitte Training starten.",
+                "predictions": [],
+                "top_5": [],
+                "total_regions": 0,
+            }
+
+        as_of_date = self._latest_as_of_date(virus_typ=virus_typ)
+        panel = self.feature_builder.build_inference_panel(
+            virus_typ=virus_typ,
+            as_of_date=as_of_date.to_pydatetime(),
+            lookback_days=180,
+        )
+        if panel.empty:
+            return {
+                "virus_typ": virus_typ,
+                "status": "no_data",
+                "message": "Keine regionalen Features für den aktuellen Datenstand verfügbar.",
+                "predictions": [],
+                "top_5": [],
+                "total_regions": 0,
+            }
+
+        X = panel[feature_columns].to_numpy()
+        classifier: XGBClassifier = artifacts["classifier"]
+        calibration = artifacts.get("calibration")
+        reg_median: XGBRegressor = artifacts["regressor_median"]
+        reg_lower: XGBRegressor = artifacts["regressor_lower"]
+        reg_upper: XGBRegressor = artifacts["regressor_upper"]
+
+        raw_prob = classifier.predict_proba(X)[:, 1]
+        calibrated_prob = self._apply_calibration(calibration, raw_prob)
+        pred_next = np.expm1(reg_median.predict(X))
+        pred_low = np.expm1(reg_lower.predict(X))
+        pred_high = np.expm1(reg_upper.predict(X))
+
+        action_threshold = float(metadata.get("action_threshold") or 0.6)
+        quality_gate = metadata.get("quality_gate") or {"overall_passed": False, "forecast_readiness": "WATCH"}
         predictions = []
+        for idx, row in panel.reset_index(drop=True).iterrows():
+            current_incidence = float(row["current_known_incidence"] or 0.0)
+            expected_next = max(float(pred_next[idx]), 0.0)
+            change_pct = ((expected_next - current_incidence) / max(current_incidence, 1.0)) * 100.0
+            event_probability = float(calibrated_prob[idx])
+            predictions.append(
+                {
+                    "bundesland": str(row["bundesland"]),
+                    "bundesland_name": str(row["bundesland_name"]),
+                    "virus_typ": virus_typ,
+                    "as_of_date": str(row["as_of_date"]),
+                    "target_week_start": str(row["target_week_start"]),
+                    "target_window_days": list(TARGET_WINDOW_DAYS),
+                    "event_definition_version": metadata.get("event_definition_version", EVENT_DEFINITION_VERSION),
+                    "event_probability_calibrated": round(event_probability, 4),
+                    "expected_next_week_incidence": round(expected_next, 2),
+                    "prediction_interval": {
+                        "lower": round(max(float(pred_low[idx]), 0.0), 2),
+                        "upper": round(max(float(pred_high[idx]), 0.0), 2),
+                    },
+                    "current_known_incidence": round(current_incidence, 2),
+                    "seasonal_baseline": round(float(row["seasonal_baseline"] or 0.0), 2),
+                    "seasonal_mad": round(float(row["seasonal_mad"] or 0.0), 2),
+                    "change_pct": round(change_pct, 1),
+                    "quality_gate": quality_gate,
+                    "action_threshold": round(action_threshold, 4),
+                    "activation_candidate": bool(quality_gate.get("overall_passed") and event_probability >= action_threshold),
+                    "current_load": round(current_incidence, 2),
+                    "predicted_load": round(expected_next, 2),
+                    "trend": "steigend" if change_pct > 10 else "fallend" if change_pct < -10 else "stabil",
+                    "data_points": int(len(panel)),
+                    "last_data_date": str(as_of_date),
+                    "pollen_context_score": round(float(row.get("pollen_context_score") or 0.0), 2),
+                }
+            )
 
-        for bl_code in ALL_BUNDESLAENDER:
-            try:
-                result = self.predict_region(virus_typ, bl_code, horizon_days)
-                if result:
-                    predictions.append(result)
-            except Exception as exc:
-                logger.warning("Prediction failed for %s/%s: %s", virus_typ, bl_code, exc)
-
-        # Sort by event probability (highest risk first)
-        predictions.sort(key=lambda x: x["event_probability"], reverse=True)
-
-        # Add rank
-        for i, pred in enumerate(predictions):
-            pred["rank"] = i + 1
+        predictions.sort(key=lambda item: item["event_probability_calibrated"], reverse=True)
+        for rank, item in enumerate(predictions, start=1):
+            item["rank"] = rank
 
         return {
             "virus_typ": virus_typ,
-            "horizon_days": horizon_days,
+            "as_of_date": str(as_of_date),
+            "target_window_days": list(TARGET_WINDOW_DAYS),
+            "quality_gate": quality_gate,
+            "action_threshold": round(action_threshold, 4),
             "total_regions": len(predictions),
             "predictions": predictions,
             "top_5": predictions[:5],
@@ -189,114 +168,145 @@ class RegionalForecastService:
         weekly_budget_eur: float = 50000,
         horizon_days: int = 7,
     ) -> dict[str, Any]:
-        """Generate regional media activation recommendations.
-
-        This is the core output: "Where should GELO activate media this week?"
-
-        Returns per-region recommendations with:
-        - Budget allocation (proportional to event probability)
-        - Channel mix (based on wave intensity)
-        - Product recommendation
-        - Activation timeline
-        """
-        forecast = self.predict_all_regions(virus_typ, horizon_days)
-        predictions = forecast["predictions"]
+        forecast = self.predict_all_regions(virus_typ=virus_typ, horizon_days=horizon_days)
+        predictions = forecast.get("predictions") or []
+        quality_gate = forecast.get("quality_gate") or {"overall_passed": False}
+        threshold = float(forecast.get("action_threshold") or 0.6)
 
         if not predictions:
             return {
                 "virus_typ": virus_typ,
                 "status": "no_data",
-                "message": "Keine regionalen Prognosen verfügbar. Bitte regionale Modelle trainieren.",
+                "message": "Keine regionalen Prognosen verfügbar.",
                 "recommendations": [],
             }
 
-        # Classify regions by intensity
+        gated_predictions = [
+            item
+            for item in predictions
+            if quality_gate.get("overall_passed") and float(item["event_probability_calibrated"]) >= threshold
+        ]
+        total_prob = sum(float(item["event_probability_calibrated"]) for item in gated_predictions)
+
         recommendations = []
-        total_event_prob = sum(p["event_probability"] for p in predictions)
-
-        for pred in predictions:
-            prob = pred["event_probability"]
-            change = pred["change_pct"]
-
-            # Intensity classification
-            if prob >= 0.6 and change > 20:
-                intensity = "high"
-                action = "activate"
-            elif prob >= 0.3 and change > 5:
-                intensity = "medium"
-                action = "prepare"
-            elif change < -15:
-                intensity = "low"
-                action = "reduce"
-            else:
-                intensity = "low"
+        for item in predictions:
+            probability = float(item["event_probability_calibrated"])
+            change_pct = float(item["change_pct"])
+            if not quality_gate.get("overall_passed"):
                 action = "watch"
-
-            # Budget allocation (proportional to event probability)
-            budget_share = (prob / max(total_event_prob, 1e-8)) if action in ("activate", "prepare") else 0
-            region_budget = round(weekly_budget_eur * budget_share, 2)
-
-            # Channel recommendation
-            channels = MEDIA_CHANNELS.get(intensity, MEDIA_CHANNELS["low"])
-
-            # Product recommendation
-            products = GELO_PRODUCTS.get(virus_typ, ["GeloMyrtol forte"])
-
-            # Timeline
-            if action == "activate":
-                timeline = f"Sofort aktivieren — Welle in {horizon_days} Tagen erwartet"
-            elif action == "prepare":
-                timeline = f"In 2-3 Tagen vorbereiten — Signal wird stärker"
-            elif action == "reduce":
-                timeline = "Budget reduzieren — Welle klingt ab"
+                intensity = "low"
+            elif probability >= threshold and change_pct >= 20:
+                action = "activate"
+                intensity = "high"
+            elif probability >= threshold:
+                action = "prepare"
+                intensity = "medium"
             else:
-                timeline = "Beobachten — kein Handlungsbedarf"
+                action = "watch"
+                intensity = "low"
 
-            recommendations.append({
-                "bundesland": pred["bundesland"],
-                "bundesland_name": pred["bundesland_name"],
-                "rank": pred["rank"],
-                "action": action,
-                "intensity": intensity,
-                "event_probability": pred["event_probability"],
-                "change_pct": pred["change_pct"],
-                "trend": pred["trend"],
-                "budget_eur": region_budget,
-                "channels": channels,
-                "products": products,
-                "timeline": timeline,
-                "current_load": pred["current_load"],
-                "predicted_load": pred["predicted_load"],
-            })
+            budget_share = (
+                probability / max(total_prob, 1e-8)
+                if action in {"activate", "prepare"} and quality_gate.get("overall_passed")
+                else 0.0
+            )
+            budget_eur = round(weekly_budget_eur * budget_share, 2)
 
-        activate_count = sum(1 for r in recommendations if r["action"] == "activate")
-        prepare_count = sum(1 for r in recommendations if r["action"] == "prepare")
-        total_allocated = sum(r["budget_eur"] for r in recommendations)
+            if action == "activate":
+                timeline = f"Sofort aktivieren — Wellenfenster in {TARGET_WINDOW_DAYS[0]}-{TARGET_WINDOW_DAYS[1]} Tagen"
+            elif action == "prepare":
+                timeline = "In 1-2 Tagen vorbereiten — Signal oberhalb des Aktivierungsschwellenwerts"
+            else:
+                timeline = (
+                    "Nur beobachten — Quality Gate blockiert Aktivierung"
+                    if not quality_gate.get("overall_passed")
+                    else "Beobachten — unterhalb des validierten Aktivierungsschwellenwerts"
+                )
 
-        # Generate headline
-        top_regions = [r["bundesland"] for r in recommendations[:3] if r["action"] in ("activate", "prepare")]
-        if top_regions:
-            headline = f"{virus_typ}: Budgets in {', '.join(top_regions)} erhöhen"
-        else:
-            headline = f"{virus_typ}: Nationale Lage stabil — beobachten"
+            recommendations.append(
+                {
+                    "bundesland": item["bundesland"],
+                    "bundesland_name": item["bundesland_name"],
+                    "rank": item["rank"],
+                    "action": action,
+                    "intensity": intensity,
+                    "event_probability": item["event_probability_calibrated"],
+                    "change_pct": item["change_pct"],
+                    "trend": item["trend"],
+                    "budget_eur": budget_eur,
+                    "channels": MEDIA_CHANNELS[intensity],
+                    "products": GELO_PRODUCTS.get(virus_typ, ["GeloMyrtol forte"]),
+                    "timeline": timeline,
+                    "current_load": item["current_known_incidence"],
+                    "predicted_load": item["expected_next_week_incidence"],
+                    "quality_gate": quality_gate,
+                    "activation_threshold": threshold,
+                    "as_of_date": item["as_of_date"],
+                    "target_week_start": item["target_week_start"],
+                }
+            )
+
+        active = [item for item in recommendations if item["action"] in {"activate", "prepare"}]
+        headline_regions = [item["bundesland"] for item in active[:3]]
+        headline = (
+            f"{virus_typ}: Budgets in {', '.join(headline_regions)} erhöhen"
+            if headline_regions
+            else f"{virus_typ}: aktuell kein validierter Aktivierungs-Case"
+        )
 
         return {
             "virus_typ": virus_typ,
-            "horizon_days": horizon_days,
             "headline": headline,
             "summary": {
-                "activate_regions": activate_count,
-                "prepare_regions": prepare_count,
-                "total_budget_allocated": round(total_allocated, 2),
+                "activate_regions": sum(1 for item in recommendations if item["action"] == "activate"),
+                "prepare_regions": sum(1 for item in recommendations if item["action"] == "prepare"),
+                "total_budget_allocated": round(sum(item["budget_eur"] for item in recommendations), 2),
                 "weekly_budget": weekly_budget_eur,
+                "quality_gate": quality_gate,
             },
-            "recommendations": recommendations,
+            "horizon_days": horizon_days,
             "generated_at": datetime.utcnow().isoformat(),
+            "recommendations": recommendations,
         }
 
-    def _load_metadata(self, model_dir: Path) -> dict | None:
-        meta_path = model_dir / "metadata.json"
-        if not meta_path.exists():
-            return None
-        with open(meta_path) as f:
-            return json.load(f)
+    def _load_artifacts(self, virus_typ: str) -> dict[str, Any]:
+        model_dir = self.models_dir / _virus_slug(virus_typ)
+        required_paths = {
+            "classifier": model_dir / "classifier.json",
+            "regressor_median": model_dir / "regressor_median.json",
+            "regressor_lower": model_dir / "regressor_lower.json",
+            "regressor_upper": model_dir / "regressor_upper.json",
+            "calibration": model_dir / "calibration.pkl",
+            "metadata": model_dir / "metadata.json",
+        }
+        if not all(path.exists() for path in required_paths.values()):
+            return {}
+
+        classifier = XGBClassifier()
+        classifier.load_model(str(required_paths["classifier"]))
+        regressor_median = XGBRegressor()
+        regressor_median.load_model(str(required_paths["regressor_median"]))
+        regressor_lower = XGBRegressor()
+        regressor_lower.load_model(str(required_paths["regressor_lower"]))
+        regressor_upper = XGBRegressor()
+        regressor_upper.load_model(str(required_paths["regressor_upper"]))
+        with open(required_paths["calibration"], "rb") as handle:
+            calibration = pickle.load(handle)
+        metadata = json.loads(required_paths["metadata"].read_text())
+        return {
+            "classifier": classifier,
+            "regressor_median": regressor_median,
+            "regressor_lower": regressor_lower,
+            "regressor_upper": regressor_upper,
+            "calibration": calibration,
+            "metadata": metadata,
+        }
+
+    @staticmethod
+    def _apply_calibration(calibration: Any, raw_probabilities: np.ndarray) -> np.ndarray:
+        if calibration is None:
+            return np.clip(raw_probabilities.astype(float), 0.001, 0.999)
+        return np.clip(calibration.predict(raw_probabilities.astype(float)), 0.001, 0.999)
+
+    def _latest_as_of_date(self, virus_typ: str) -> pd.Timestamp:
+        return self.feature_builder.latest_available_as_of_date(virus_typ=virus_typ)

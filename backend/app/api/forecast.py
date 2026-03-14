@@ -257,23 +257,20 @@ async def get_regional_feature_status(
     from app.services.ml.regional_features import RegionalFeatureBuilder, BUNDESLAND_NAMES
 
     builder = RegionalFeatureBuilder(db)
+    panel = builder.build_panel_training_data(virus_typ=virus_typ, lookback_days=900)
     available = builder.get_available_bundeslaender(virus_typ)
 
     details = {}
-    for bl_code in available:
-        df = builder.build_regional_training_data(
-            virus_typ=virus_typ,
-            bundesland=bl_code,
-            lookback_days=900,
-        )
+    for bl_code in sorted(available):
+        df = panel.loc[panel["bundesland"] == bl_code].copy() if not panel.empty else panel
         details[bl_code] = {
             "name": BUNDESLAND_NAMES.get(bl_code, bl_code),
             "rows": len(df),
             "sufficient": len(df) >= 30,
             "features": list(df.columns) if not df.empty else [],
             "date_range": {
-                "start": str(df["ds"].min()) if not df.empty else None,
-                "end": str(df["ds"].max()) if not df.empty else None,
+                "start": str(df["as_of_date"].min()) if not df.empty else None,
+                "end": str(df["as_of_date"].max()) if not df.empty else None,
             },
         }
 
@@ -289,16 +286,29 @@ async def get_regional_feature_status(
     }
 
 
+@router.get("/regional")
+async def get_regional_predictions_alias(
+    virus_typ: str = "Influenza A",
+    horizon_days: int = 7,
+    db: Session = Depends(get_db),
+):
+    """Alias for pooled regional predictions."""
+    from app.services.ml.regional_forecast import RegionalForecastService
+
+    service = RegionalForecastService(db)
+    return service.predict_all_regions(virus_typ=virus_typ, horizon_days=horizon_days)
+
+
 @router.get("/regional/predict")
 async def get_regional_predictions(
     virus_typ: str = "Influenza A",
     horizon_days: int = 7,
     db: Session = Depends(get_db),
 ):
-    """Get per-Bundesland virus wave predictions ranked by outbreak probability.
+    """Get pooled per-state outbreak predictions ranked by calibrated event probability.
 
-    This is the core endpoint for the media activation use case:
-    "Which regions will see increases in the next 3-7 days?"
+    Core question:
+    "Which regions are most likely to enter a relevant wave in the next 3-7 days?"
     """
     from app.services.ml.regional_forecast import RegionalForecastService
 
@@ -313,14 +323,14 @@ async def get_media_activation(
     horizon_days: int = 7,
     db: Session = Depends(get_db),
 ):
-    """Generate regional media activation recommendations for GELO products.
+    """Generate gated regional media recommendations for GELO products.
 
     Returns per-Bundesland recommendations with:
-    - Action: activate / prepare / watch / reduce
-    - Budget allocation (proportional to outbreak probability)
+    - Action: activate / prepare / watch
+    - Budget allocation only for regions above the validated action threshold
     - Channel mix (Banner, CLP, Meta, LinkedIn)
     - Product recommendation
-    - Activation timeline
+    - Activation timeline plus quality-gate context
     """
     from app.services.ml.regional_forecast import RegionalForecastService
 
@@ -338,11 +348,15 @@ async def run_regional_backtest(
     horizon_days: int = 7,
     db: Session = Depends(get_db),
 ):
-    """Run walk-forward backtest for all Bundesländer.
+    """Run leakage-safe walk-forward backtest for the pooled regional panel model.
 
-    Shows how accurately the regional models would have predicted
-    virus wave events historically. Returns hit rate, false alarm rate,
-    F1 score, and MAPE per Bundesland.
+    Returns calibration and activation metrics such as:
+    - precision@top3 / precision@top5
+    - PR-AUC
+    - Brier score
+    - ECE
+    - median lead days
+    - activation false-positive rate
     """
     from app.services.ml.regional_backtest import RegionalBacktester
 

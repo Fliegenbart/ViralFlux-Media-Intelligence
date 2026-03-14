@@ -106,7 +106,7 @@ async def train_regional_models(
     virus_typ: str = Body(default="Influenza A"),
     current_user: dict = Depends(get_current_admin),
 ):
-    """Train per-Bundesland XGBoost models for regional forecasting (async via Celery)."""
+    """Train the pooled regional panel model for a virus type (async via Celery)."""
     try:
         task = celery_app.send_task(
             "train_regional_models_task",
@@ -122,7 +122,7 @@ async def train_regional_models(
         "status": "regional_training_started",
         "virus_typ": virus_typ,
         "task_id": task.id,
-        "status_url": f"/api/v1/admin/ml/task-status/{task.id}",
+        "status_url": f"/api/v1/admin/ml/status/{task.id}",
     }
 
 
@@ -131,7 +131,7 @@ async def get_regional_accuracy(
     virus_typ: str = "Influenza A",
     current_user: dict = Depends(get_current_admin),
 ):
-    """Get accuracy summary for all trained regional models."""
+    """Get per-state accuracy summaries from the pooled regional panel backtest."""
     from app.db.session import get_db_context
     from app.services.ml.regional_trainer import RegionalModelTrainer
 

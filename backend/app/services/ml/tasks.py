@@ -305,11 +305,7 @@ def train_regional_models_task(
     self,
     virus_typ: str = "Influenza A",
 ) -> Dict[str, Any]:
-    """Train per-Bundesland XGBoost regional forecast models.
-
-    Trains one model per Bundesland that has sufficient AMELAG wastewater data.
-    Each model uses regional features (wastewater, SurvStat, weather, pollen, holidays).
-    """
+    """Train pooled per-virus regional panel models across Bundesländer."""
     from app.services.ml.regional_trainer import RegionalModelTrainer
 
     logger.info("Celery: Starting regional model training for %s", virus_typ)
@@ -331,9 +327,11 @@ def train_regional_models_task(
     )
 
     return _json_safe({
-        "status": "success",
+        "status": result.get("status", "success"),
         "virus_typ": virus_typ,
         "trained": trained,
         "failed": failed,
+        "quality_gate": result.get("quality_gate"),
+        "aggregate_metrics": result.get("aggregate_metrics"),
         "timestamp": datetime.utcnow().isoformat(),
     })

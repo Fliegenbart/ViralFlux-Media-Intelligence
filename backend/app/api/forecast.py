@@ -246,3 +246,44 @@ async def get_all_forecast_accuracy(db: Session = Depends(get_db)):
         "any_drift": any_drift,
         "timestamp": datetime.utcnow(),
     }
+
+
+@router.get("/regional/status")
+async def get_regional_feature_status(
+    virus_typ: str = "Influenza A",
+    db: Session = Depends(get_db),
+):
+    """Diagnostic endpoint: check which Bundesländer have sufficient data for regional forecasting."""
+    from app.services.ml.regional_features import RegionalFeatureBuilder, BUNDESLAND_NAMES
+
+    builder = RegionalFeatureBuilder(db)
+    available = builder.get_available_bundeslaender(virus_typ)
+
+    details = {}
+    for bl_code in available:
+        df = builder.build_regional_training_data(
+            virus_typ=virus_typ,
+            bundesland=bl_code,
+            lookback_days=900,
+        )
+        details[bl_code] = {
+            "name": BUNDESLAND_NAMES.get(bl_code, bl_code),
+            "rows": len(df),
+            "sufficient": len(df) >= 30,
+            "features": list(df.columns) if not df.empty else [],
+            "date_range": {
+                "start": str(df["ds"].min()) if not df.empty else None,
+                "end": str(df["ds"].max()) if not df.empty else None,
+            },
+        }
+
+    sufficient_count = sum(1 for d in details.values() if d["sufficient"])
+
+    return {
+        "virus_typ": virus_typ,
+        "total_bundeslaender": 16,
+        "with_wastewater_data": len(available),
+        "sufficient_for_training": sufficient_count,
+        "details": details,
+        "timestamp": datetime.utcnow(),
+    }

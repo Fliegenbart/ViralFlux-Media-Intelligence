@@ -97,25 +97,6 @@ class RegionalPanelMathTests(unittest.TestCase):
             places=6,
         )
 
-    def test_precision_at_k_uses_tie_breaker_column_for_stable_ranking(self) -> None:
-        frame = pd.DataFrame(
-            {
-                "as_of_date": pd.to_datetime(["2026-03-01", "2026-03-01", "2026-03-01"]),
-                "event_probability_calibrated": [0.5, 0.5, 0.4],
-                "event_probability_raw": [0.1, 0.9, 0.8],
-                "event_label": [0, 1, 1],
-            }
-        )
-        self.assertAlmostEqual(
-            precision_at_k(
-                frame,
-                k=1,
-                tie_breaker_col="event_probability_raw",
-            ),
-            1.0,
-            places=6,
-        )
-
     def test_compute_ece_zero_when_probabilities_match_observations_per_bin(self) -> None:
         y_true = [0, 0, 1, 1]
         probabilities = [0.0, 0.0, 1.0, 1.0]

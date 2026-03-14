@@ -292,7 +292,6 @@ def precision_at_k(
     *,
     k: int,
     score_col: str = "event_probability_calibrated",
-    tie_breaker_col: str | None = None,
     label_col: str = "event_label",
     group_col: str = "as_of_date",
 ) -> float:
@@ -301,14 +300,7 @@ def precision_at_k(
 
     precisions: list[float] = []
     for _, group in frame.groupby(group_col):
-        if tie_breaker_col and tie_breaker_col in group.columns:
-            ranked = group.sort_values(
-                by=[score_col, tie_breaker_col],
-                ascending=[False, False],
-                kind="mergesort",
-            ).head(k)
-        else:
-            ranked = group.sort_values(score_col, ascending=False, kind="mergesort").head(k)
+        ranked = group.sort_values(score_col, ascending=False).head(k)
         if ranked.empty:
             continue
         precisions.append(float(ranked[label_col].mean()))

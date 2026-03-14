@@ -172,9 +172,6 @@ def build_event_label(
 
 
 def compute_ece(y_true: Sequence[int], probabilities: Sequence[float], bins: int = 10) -> float:
-    if not y_true:
-        return 0.0
-
     y_arr = np.asarray(y_true, dtype=float)
     p_arr = np.asarray(probabilities, dtype=float)
     if len(y_arr) == 0:

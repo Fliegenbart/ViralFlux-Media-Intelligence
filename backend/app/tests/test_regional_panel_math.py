@@ -101,6 +101,11 @@ class RegionalPanelMathTests(unittest.TestCase):
         probabilities = [0.0, 0.0, 1.0, 1.0]
         self.assertEqual(compute_ece(y_true, probabilities), 0.0)
 
+    def test_compute_ece_accepts_pandas_series(self) -> None:
+        y_true = pd.Series([0, 1, 1])
+        probabilities = pd.Series([0.1, 0.8, 0.9])
+        self.assertGreaterEqual(compute_ece(y_true, probabilities), 0.0)
+
     def test_dynamic_threshold_metrics_use_row_specific_thresholds(self) -> None:
         frame = pd.DataFrame(
             {

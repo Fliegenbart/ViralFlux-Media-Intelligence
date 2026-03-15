@@ -64,18 +64,20 @@ const RegionWorkbench: React.FC<Props> = ({
       </section>
 
       <section className="cockpit-grid">
-        <div className="card subsection-card" style={{ padding: '16px 16px 8px' }}>
-          <div className="section-heading" style={{ gap: 4, marginBottom: 4, paddingInline: 8 }}>
+        <div className="card subsection-card" style={{ padding: '16px 16px 12px', gap: 8 }}>
+          <div className="section-heading" style={{ gap: 2, marginBottom: 0, paddingInline: 8 }}>
             <h2 className="subsection-title" style={{ fontSize: 14 }}>Deutschlandkarte</h2>
             <p className="subsection-copy" style={{ fontSize: 12 }}>
               Klick auf ein Bundesland für Details.
             </p>
           </div>
-          <GermanyMap
-            regions={activeMap.regions}
-            selectedRegion={selectedRegion}
-            onSelectRegion={onSelectRegion}
-          />
+          <div style={{ marginTop: -6 }}>
+            <GermanyMap
+              regions={activeMap.regions}
+              selectedRegion={selectedRegion}
+              onSelectRegion={onSelectRegion}
+            />
+          </div>
         </div>
 
         <div style={{ display: 'grid', gap: 16 }}>

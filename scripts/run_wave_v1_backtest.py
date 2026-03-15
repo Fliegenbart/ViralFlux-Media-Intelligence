@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run the synthetic wave-v1 evaluation harness."""
+"""Run the wave-v1 evaluation harness against fixtures or a real DB."""
 
 from __future__ import annotations
 
@@ -27,11 +27,14 @@ import numpy as np
 import pandas as pd
 from sklearn.metrics import mean_absolute_error
 
+from app.db.session import get_db_context
+from app.services.ml.training_contract import normalize_virus_type
 from app.services.ml.wave_prediction_fixtures import (
     FIXTURE_WAVE_SETTINGS,
     FixtureWavePredictionService,
     wave_fixture_names,
 )
+from app.services.ml.wave_prediction_service import WavePredictionService
 from app.services.ml.wave_prediction_utils import (
     build_backtest_splits,
     get_classification_feature_columns,
@@ -45,13 +48,62 @@ def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
     output_dir = _resolve_output_dir(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        if args.source == "db":
+            with get_db_context() as db:
+                service = WavePredictionService(
+                    db=db,
+                    models_dir=output_dir / "model_artifacts",
+                )
+                return _run_harness(
+                    args=args,
+                    output_dir=output_dir,
+                    service=service,
+                    source_label="db",
+                )
 
-    service = FixtureWavePredictionService(
-        fixture=args.fixture,
-        models_dir=output_dir / "model_artifacts",
-        settings=FIXTURE_WAVE_SETTINGS,
-    )
+        service = FixtureWavePredictionService(
+            fixture=args.fixture,
+            models_dir=output_dir / "model_artifacts",
+            settings=FIXTURE_WAVE_SETTINGS,
+        )
+        return _run_harness(
+            args=args,
+            output_dir=output_dir,
+            service=service,
+            source_label=f"fixture:{args.fixture}",
+        )
+    except Exception as exc:
+        _write_json(
+            output_dir / "fold_metrics.json",
+            {
+                "status": "error",
+                "source": args.source,
+                "fixture": args.fixture if args.source == "fixture" else None,
+                "pathogen": args.pathogen,
+                "region": args.region,
+                "horizon_days": int(args.horizon),
+                "error": str(exc),
+            },
+        )
+        print(f"Wave harness failed: {exc}")
+        return 1
+
+
+def _run_harness(
+    *,
+    args: argparse.Namespace,
+    output_dir: Path,
+    service: WavePredictionService,
+    source_label: str,
+) -> int:
     lookback_days = int(service.settings.WAVE_PREDICTION_LOOKBACK_DAYS)
+    source_status = _build_source_status(
+        service=service,
+        pathogen=args.pathogen,
+        lookback_days=lookback_days,
+        horizon_days=args.horizon,
+    )
 
     panel = service.build_wave_panel(
         pathogen=args.pathogen,
@@ -61,19 +113,30 @@ def main(argv: list[str] | None = None) -> int:
     )
     training_frame = panel.dropna(subset=["target_regression", "target_wave14"]).copy()
 
-    panel_summary = _build_panel_summary(panel=panel, training_frame=training_frame, settings=service.settings)
+    panel_summary = _build_panel_summary(
+        panel=panel,
+        training_frame=training_frame,
+        settings=service.settings,
+        source_status=source_status,
+        source_label=source_label,
+    )
     _write_json(output_dir / "panel_summary.json", panel_summary)
 
     leakage_spotcheck = _build_leakage_spotcheck(panel)
     leakage_spotcheck.to_csv(output_dir / "leakage_spotcheck.csv", index=False)
 
-    data_error = _preflight_error(training_frame=training_frame, settings=service.settings)
+    data_error = _preflight_error(
+        training_frame=training_frame,
+        settings=service.settings,
+        source_label=source_label,
+        source_status=source_status,
+    )
     if data_error is not None:
         _write_json(
             output_dir / "fold_metrics.json",
             {
                 "status": "error",
-                "fixture": args.fixture,
+                "source": source_label,
                 "pathogen": args.pathogen,
                 "region": args.region,
                 "horizon_days": int(args.horizon),
@@ -97,7 +160,7 @@ def main(argv: list[str] | None = None) -> int:
             output_dir / "fold_metrics.json",
             {
                 "status": "error",
-                "fixture": args.fixture,
+                "source": source_label,
                 "pathogen": args.pathogen,
                 "region": args.region,
                 "horizon_days": int(args.horizon),
@@ -115,7 +178,7 @@ def main(argv: list[str] | None = None) -> int:
     baseline_metrics = _baseline_report(training_frame=training_frame, settings=service.settings)
     fold_metrics_payload = {
         "status": "ok",
-        "fixture": args.fixture,
+        "source": source_label,
         "pathogen": args.pathogen,
         "region": args.region,
         "horizon_days": int(args.horizon),
@@ -174,15 +237,21 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _parse_args(argv: list[str] | None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Run the synthetic wave-v1 evaluation harness.")
+    parser = argparse.ArgumentParser(description="Run the wave-v1 evaluation harness.")
     parser.add_argument("--pathogen", default="Influenza A", help="Pathogen to evaluate.")
     parser.add_argument("--region", default="BY", help="Bundesland code to evaluate.")
     parser.add_argument("--horizon", type=int, default=14, help="Prediction horizon in days.")
     parser.add_argument(
+        "--source",
+        choices=("fixture", "db"),
+        default="fixture",
+        help="Use synthetic fixtures or the configured Postgres DB.",
+    )
+    parser.add_argument(
         "--fixture",
         default="default",
         choices=wave_fixture_names(),
-        help="Synthetic fixture to load.",
+        help="Synthetic fixture to load when --source=fixture.",
     )
     parser.add_argument(
         "--output-dir",
@@ -204,7 +273,14 @@ def _write_json(path: Path, payload: dict[str, Any]) -> None:
         json.dump(json_safe(payload), handle, indent=2, ensure_ascii=True)
 
 
-def _build_panel_summary(*, panel: pd.DataFrame, training_frame: pd.DataFrame, settings: Any) -> dict[str, Any]:
+def _build_panel_summary(
+    *,
+    panel: pd.DataFrame,
+    training_frame: pd.DataFrame,
+    settings: Any,
+    source_status: dict[str, Any],
+    source_label: str,
+) -> dict[str, Any]:
     feature_columns = sorted(
         set(get_regression_feature_columns(panel)) | set(get_classification_feature_columns(panel))
     ) if not panel.empty else []
@@ -246,6 +322,7 @@ def _build_panel_summary(*, panel: pd.DataFrame, training_frame: pd.DataFrame, s
             warnings.append(f"Region {region} has {int(count)} positive wave_start rows.")
 
     return {
+        "source": source_label,
         "rows": int(len(panel)),
         "training_rows": int(len(training_frame)),
         "date_range": {
@@ -265,6 +342,7 @@ def _build_panel_summary(*, panel: pd.DataFrame, training_frame: pd.DataFrame, s
             {"feature": str(feature), "missing_rate": round(float(rate), 6)}
             for feature, rate in missing_rates.head(20).items()
         ],
+        "source_status": source_status,
         "thin_series_warnings": warnings,
     }
 
@@ -314,21 +392,83 @@ def _build_leakage_spotcheck(panel: pd.DataFrame) -> pd.DataFrame:
     return spotcheck.loc[:, visible_columns]
 
 
-def _preflight_error(*, training_frame: pd.DataFrame, settings: Any) -> str | None:
+def _preflight_error(
+    *,
+    training_frame: pd.DataFrame,
+    settings: Any,
+    source_label: str,
+    source_status: dict[str, Any],
+) -> str | None:
+    truth_rows = int((source_status.get("truth") or {}).get("rows") or 0)
+    truth_hint = ""
+    if source_label == "db" and truth_rows == 0:
+        truth_hint = (
+            " SurvStat truth is currently missing; wave evaluation needs weekly or kreis-level SurvStat "
+            "imported via /api/v1/ingest/survstat-local or /api/v1/ingest/survstat-upload."
+        )
     if training_frame.empty:
-        return "No training rows available after dropping rows without targets."
+        return f"No training rows available after dropping rows without targets.{truth_hint}"
     if len(training_frame) < int(settings.WAVE_PREDICTION_MIN_TRAIN_ROWS):
         return (
-            f"Insufficient training rows for fixture run: "
-            f"{len(training_frame)} < {int(settings.WAVE_PREDICTION_MIN_TRAIN_ROWS)}."
+            f"Insufficient training rows for {source_label} run: "
+            f"{len(training_frame)} < {int(settings.WAVE_PREDICTION_MIN_TRAIN_ROWS)}.{truth_hint}"
         )
     positives = int(training_frame["target_wave14"].sum())
     if positives < int(settings.WAVE_PREDICTION_MIN_POSITIVE_ROWS):
         return (
-            f"Insufficient positive wave_start rows for fixture run: "
-            f"{positives} < {int(settings.WAVE_PREDICTION_MIN_POSITIVE_ROWS)}."
+            f"Insufficient positive wave_start rows for {source_label} run: "
+            f"{positives} < {int(settings.WAVE_PREDICTION_MIN_POSITIVE_ROWS)}.{truth_hint}"
         )
     return None
+
+
+def _build_source_status(
+    *,
+    service: WavePredictionService,
+    pathogen: str,
+    lookback_days: int,
+    horizon_days: int,
+) -> dict[str, Any]:
+    normalized_pathogen = normalize_virus_type(pathogen)
+    end_date = service._panel_end_date()
+    start_date = end_date - pd.Timedelta(days=lookback_days)
+    history_start = start_date - pd.Timedelta(days=730)
+    source_frames = service._load_source_frames(
+        pathogen=normalized_pathogen,
+        start_date=history_start,
+        end_date=end_date + pd.Timedelta(days=horizon_days),
+    )
+
+    status: dict[str, Any] = {}
+    for name, payload in source_frames.items():
+        if isinstance(payload, pd.DataFrame):
+            status[name] = _frame_source_status(payload)
+        elif isinstance(payload, dict):
+            status[name] = {
+                "entries": int(len(payload)),
+                "sample_keys": sorted(str(key) for key in list(payload.keys())[:5]),
+            }
+        else:
+            status[name] = {"type": type(payload).__name__}
+    return status
+
+
+def _frame_source_status(frame: pd.DataFrame) -> dict[str, Any]:
+    if frame is None or frame.empty:
+        return {"rows": 0}
+
+    payload: dict[str, Any] = {"rows": int(len(frame))}
+    for column in ("week_start", "datum", "available_date", "available_time"):
+        if column in frame.columns:
+            series = pd.to_datetime(frame[column], errors="coerce").dropna()
+            if not series.empty:
+                payload[f"{column}_min"] = str(series.min())
+                payload[f"{column}_max"] = str(series.max())
+    if "bundesland" in frame.columns:
+        payload["regions"] = int(frame["bundesland"].dropna().nunique())
+    elif "region" in frame.columns:
+        payload["regions"] = int(frame["region"].dropna().nunique())
+    return payload
 
 
 def _baseline_report(*, training_frame: pd.DataFrame, settings: Any) -> dict[str, Any]:

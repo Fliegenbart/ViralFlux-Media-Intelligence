@@ -1,19 +1,26 @@
 # 📡 ViralFlux Media Intelligence
 
-**Predictive Pharma Media Activation für PEIX und seine Healthcare-Marken**
+**Regionales PEIX-Mediatool für Virus-Frühwarnung und validierte Media-Entscheidungen mit GELO als Truth-Partner**
 
 ## 📋 Überblick
 
-ViralFlux Media Intelligence ist ein datengetriebenes Frühwarn- und Aktivierungssystem für Pharma-Media. Die Plattform kombiniert behördliche Signale (RKI, BfArM, DWD), erkennt regionale Nachfragewellen bis zu 14 Tage früher und steuert Budgets sowie Kampagnenausspielung in Echtzeit.
+ViralFlux Media Intelligence ist ein datengetriebenes Frühwarn- und Decision-System für PEIX. Die Plattform kombiniert AMELAG, SurvStat und weitere RKI-Signale mit Kontextdaten, um regionale Viruswellen in den nächsten 3 bis 7 Tagen früher zu erkennen und daraus priorisierte Media-Entscheidungen abzuleiten.
+
+Das System ist zweistufig aufgebaut:
+
+- **Epidemiologischer Forecast**: regionale Früherkennung pro Viruslinie
+- **Business-Gate**: separate kommerzielle Freigabe auf Basis echter Outcome-Daten
+
+GELO ist der erste Truth-Partner für diese zweite Ebene. Echte Sales-, Order- und Media-Daten werden nicht als Ersatz für die Epidemiologie genutzt, sondern als Validierung dafür, ob aus einem epidemiologischen Signal bereits eine belastbare Budgetentscheidung werden darf.
 
 ### Kernfeatures
 
-- 📊 **Signal Fusion**: RKI AMELAG, GrippeWeb, Notaufnahmesurveillance, SURVSTAT, Google Trends, Wetter, BfArM
-- 🎯 **14-Tage-Vorsprung**: Frühsignale vor klassischen Abverkaufsindikatoren
-- 📍 **Regionale Steuerung**: PLZ-nahe Trigger für Budget-Shifts
-- 📦 **Konkurrenz-Radar**: BfArM-Engpasssignale als Aktivierungshebel
-- 🧠 **LLM-Briefings**: Agentur- und Sales-fähige Handlungsempfehlungen
-- 📈 **Dashboard**: Echtzeitansicht für Trigger, Risiken und Kampagnenfenster
+- 📊 **Signal Fusion**: AMELAG, SurvStat, GrippeWeb, ARE, Notaufnahme, Wetter, Ferien, Pollen, Trends
+- 🎯 **3- bis 7-Tage-Frühwarnung**: regionale Viruswellen vor klassischer Marktreaktion erkennen
+- 🗺️ **Bundesland-Forecasts**: priorisierte Regionen, Virus-Portfolio und Watch-/Prepare-/Activate-Logik
+- 🧪 **Point-in-Time ML**: leakage-sichere as-of Datasets, Walk-forward-Backtests, Quality Gates
+- 🧾 **Business-Gate**: PEIX/GELO-Freigabelogik mit Truth-Readiness, Holdout- und Evidenzstatus
+- 📈 **Decision Cockpit**: operative Entscheidungsansicht, Wave-Verlauf, Quellenfrische und Portfolio-Ranking
 
 ## 🏗️ Architektur
 
@@ -82,7 +89,7 @@ Die App läuft dann auf:
 
 ## 🎙️ Elevator Pitch
 
-\"Wir sehen Erkältungswellen bis zu 14 Tage früher als klassische Marktindikatoren und steuern Media-Budgets automatisch in die Regionen mit anrollendem Bedarf. Für Marken wie GeloMyrtol bedeutet das: mehr Share of Voice zur richtigen Zeit, weniger Streuverlust in gesunden Regionen und offensive Aktivierung bei Lieferengpässen der Konkurrenz.\"
+\"ViralFlux ist ein PEIX-Mediatool, das regionale Viruswellen 3 bis 7 Tage früher sichtbar macht und daraus priorisierte Media-Entscheidungen ableitet. Die Epidemiologie kommt aus AMELAG, SurvStat und weiteren RKI-Signalen, die kommerzielle Validierung aus echten GELO-Outcome-Daten. So entsteht nicht nur ein besseres Radar, sondern ein messbar belastbarer Entscheidungsprozess für regionale Aktivierung.\"
 
 ## 📊 Datenquellen
 
@@ -121,9 +128,10 @@ Die App läuft dann auf:
 - **Quelle**: API oder statische Daten
 - **Relevanz**: Erkrankungsrückgang in Ferienzeiten
 
-### 8. Interne Kundendaten (Optional)
+### 8. GELO Outcome- und Truth-Daten
 - **Schnittstelle vorbereitet**: CSV/API Import
-- **Daten**: Sales, Media-KPIs, CRM/Region-Segmente
+- **Daten**: Sales, Orders, Spend, Kampagnenstarts, Kanäle, regionale Holdout-Zuordnung
+- **Rolle**: Business-Validierung, nicht Ersatz für epidemiologische Truth
 
 ## 🤖 ML Pipeline
 

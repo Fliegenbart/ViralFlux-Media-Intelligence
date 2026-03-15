@@ -78,6 +78,20 @@ CLASSIFIER_CONFIG: dict[str, Any] = {
 }
 
 
+class _ConstantBinaryClassifier:
+    """Fallback classifier for single-class training windows."""
+
+    def __init__(self, positive_probability: float, feature_count: int) -> None:
+        self.positive_probability = float(np.clip(positive_probability, 0.0, 1.0))
+        self.feature_importances_ = np.zeros(max(int(feature_count), 0), dtype=float)
+
+    def predict_proba(self, X: np.ndarray) -> np.ndarray:
+        rows = len(X)
+        positive = np.full(rows, self.positive_probability, dtype=float)
+        negative = 1.0 - positive
+        return np.column_stack([negative, positive])
+
+
 @dataclass(frozen=True)
 class _WaveRuntimeSettings:
     WAVE_PREDICTION_HORIZON_DAYS: int = 14
@@ -138,7 +152,7 @@ class WavePredictionService:
             else SUPPORTED_VIRUS_TYPES
         )
 
-        end_date = pd.Timestamp(datetime.utcnow()).normalize()
+        end_date = self._panel_end_date()
         start_date = end_date - pd.Timedelta(days=lookback)
         history_start = start_date - pd.Timedelta(days=730)
 
@@ -316,6 +330,20 @@ class WavePredictionService:
 
         X_train = train_frame[features].fillna(0.0).to_numpy(dtype=float)
         y_train = train_frame["target_wave14"].astype(int).to_numpy()
+        if train_frame["target_wave14"].nunique() < 2:
+            constant_classifier = _ConstantBinaryClassifier(
+                positive_probability=float(y_train[0]) if len(y_train) else 0.0,
+                feature_count=len(features),
+            )
+            return {
+                "classifier": constant_classifier,
+                "calibration": None,
+                "feature_columns": features,
+                "threshold": float(self.settings.WAVE_PREDICTION_CLASSIFICATION_THRESHOLD),
+                "notes": [
+                    "Single-class training window detected; using a constant classifier fallback."
+                ],
+            }
         positives = int(np.sum(y_train == 1))
         negatives = int(np.sum(y_train == 0))
         scale_pos_weight = float(negatives / positives) if positives > 0 else 1.0
@@ -359,6 +387,7 @@ class WavePredictionService:
         lookback_days: int | None = None,
         horizon_days: int | None = None,
         panel: pd.DataFrame | None = None,
+        include_oof_predictions: bool = False,
     ) -> dict[str, Any]:
         normalized_pathogen = normalize_virus_type(pathogen)
         frame = panel.copy() if panel is not None else self.build_wave_panel(
@@ -409,17 +438,27 @@ class WavePredictionService:
             probabilities = self._apply_calibration(calibration, raw_scores) if calibration is not None else None
             decision_scores = probabilities if probabilities is not None else raw_scores
             predicted_flags = (decision_scores >= threshold).astype(int)
+            output_field = "wave_probability" if probabilities is not None else "wave_score"
 
             test_frame = test_frame.copy()
+            test_frame["fold"] = fold_idx
             test_frame["regression_prediction"] = regression_pred
-            test_frame["wave_score"] = raw_scores
+            test_frame["wave_score_raw"] = raw_scores
+            test_frame["decision_score"] = decision_scores
+            test_frame["score_output_field"] = output_field
             if probabilities is not None:
                 test_frame["wave_probability"] = probabilities
+            else:
+                test_frame["wave_score"] = raw_scores
             test_frame["wave_flag"] = predicted_flags
             oof_rows.append(test_frame)
 
             y_true = test_frame["target_wave14"].astype(int).to_numpy()
             score_values = probabilities if probabilities is not None else raw_scores
+            tp = int(np.sum((y_true == 1) & (predicted_flags == 1)))
+            fp = int(np.sum((y_true == 0) & (predicted_flags == 1)))
+            tn = int(np.sum((y_true == 0) & (predicted_flags == 0)))
+            fn = int(np.sum((y_true == 1) & (predicted_flags == 0)))
             fold_metrics.append(
                 {
                     "fold": fold_idx,
@@ -427,6 +466,8 @@ class WavePredictionService:
                     "train_end": str(max(train_dates)),
                     "test_start": str(min(test_dates)),
                     "test_end": str(max(test_dates)),
+                    "rows": int(len(test_frame)),
+                    "positive_rows": int(np.sum(y_true == 1)),
                     "mae": float(mean_absolute_error(test_frame["target_regression"], regression_pred)),
                     "rmse": float(np.sqrt(np.mean((test_frame["target_regression"].to_numpy() - regression_pred) ** 2))),
                     "mape": safe_mape(test_frame["target_regression"], regression_pred),
@@ -455,18 +496,27 @@ class WavePredictionService:
                         predicted_flags,
                     ),
                     "probability_output": bool(probabilities is not None),
+                    "output_field": output_field,
+                    "tp": tp,
+                    "fp": fp,
+                    "tn": tn,
+                    "fn": fn,
                 }
             )
 
         aggregate = self._aggregate_fold_metrics(fold_metrics)
-        return {
+        oof_frame = pd.concat(oof_rows, ignore_index=True) if oof_rows else pd.DataFrame()
+        payload = {
             "status": "ok",
             "pathogen": normalized_pathogen,
             "horizon_days": int(horizon_days or self.settings.WAVE_PREDICTION_HORIZON_DAYS),
             "folds": fold_metrics,
             "aggregate_metrics": aggregate,
-            "oof_rows": len(pd.concat(oof_rows).index) if oof_rows else 0,
+            "oof_rows": int(len(oof_frame.index)),
         }
+        if include_oof_predictions:
+            payload["oof_predictions"] = json_safe(oof_frame.to_dict(orient="records"))
+        return payload
 
     def run_wave_prediction(
         self,
@@ -930,7 +980,16 @@ class WavePredictionService:
         for key in numeric_keys:
             values = [float(item[key]) for item in folds if item.get(key) is not None]
             aggregate[key] = float(np.mean(values)) if values else None
+        count_keys = ["rows", "positive_rows", "tp", "fp", "tn", "fn"]
+        for key in count_keys:
+            aggregate[key] = int(sum(int(item.get(key) or 0) for item in folds))
         aggregate["probability_output_folds"] = int(sum(1 for item in folds if item.get("probability_output")))
+        aggregate["confusion_matrix"] = {
+            "tp": aggregate["tp"],
+            "fp": aggregate["fp"],
+            "tn": aggregate["tn"],
+            "fn": aggregate["fn"],
+        }
         return aggregate
 
     def _dataset_manifest(self, panel: pd.DataFrame) -> dict[str, Any]:
@@ -978,3 +1037,7 @@ class WavePredictionService:
         except Exception:
             logger.warning("Falling back to default wave prediction settings because app settings could not be loaded.")
             return SimpleNamespace(**_WaveRuntimeSettings().__dict__)
+
+    @staticmethod
+    def _panel_end_date() -> pd.Timestamp:
+        return pd.Timestamp(datetime.utcnow()).normalize()

@@ -1,115 +1,27 @@
 import unittest
-from types import SimpleNamespace
 
 import numpy as np
 import pandas as pd
 
-from app.services.ml.wave_prediction_service import WavePredictionService
+from app.services.ml.wave_prediction_fixtures import (
+    FIXTURE_WAVE_SETTINGS,
+    FixtureWavePredictionService,
+)
 from app.services.ml.wave_prediction_utils import (
     WaveLabelConfig,
     build_backtest_splits,
     get_classification_feature_columns,
     label_wave_start,
+    weather_context_features,
 )
 
 
-TEST_SETTINGS = SimpleNamespace(
-    WAVE_PREDICTION_HORIZON_DAYS=14,
-    WAVE_PREDICTION_LOOKBACK_DAYS=120,
-    WAVE_PREDICTION_MIN_TRAIN_ROWS=20,
-    WAVE_PREDICTION_MIN_POSITIVE_ROWS=2,
-    WAVE_PREDICTION_MODEL_VERSION="wave_prediction_v1",
-    WAVE_PREDICTION_BACKTEST_FOLDS=3,
-    WAVE_PREDICTION_MIN_TRAIN_PERIODS=30,
-    WAVE_PREDICTION_MIN_TEST_PERIODS=7,
-    WAVE_PREDICTION_CLASSIFICATION_THRESHOLD=0.5,
-    WAVE_PREDICTION_ENABLE_FORECAST_WEATHER=True,
-    WAVE_PREDICTION_ENABLE_DEMOGRAPHICS=True,
-    WAVE_PREDICTION_ENABLE_INTERACTIONS=True,
-    WAVE_PREDICTION_LABEL_ABSOLUTE_THRESHOLD=10.0,
-    WAVE_PREDICTION_LABEL_SEASONAL_ZSCORE=1.5,
-    WAVE_PREDICTION_LABEL_GROWTH_OBSERVATIONS=2,
-    WAVE_PREDICTION_LABEL_GROWTH_MIN_RELATIVE_INCREASE=0.2,
-    WAVE_PREDICTION_LABEL_MAD_FLOOR=1.0,
-    WAVE_PREDICTION_CALIBRATION_HOLDOUT_FRACTION=0.2,
-    WAVE_PREDICTION_MIN_CALIBRATION_ROWS=10,
-    WAVE_PREDICTION_MIN_CALIBRATION_POSITIVES=2,
-)
+TEST_SETTINGS = FIXTURE_WAVE_SETTINGS
 
 
-class _FakeWavePredictionService(WavePredictionService):
-    def __init__(self):
-        super().__init__(db=None, settings=TEST_SETTINGS)
-
-    def _load_source_frames(self, *, pathogen: str, start_date: pd.Timestamp, end_date: pd.Timestamp) -> dict:
-        del pathogen
-        truth_rows = []
-        for week_start, incidence in [
-            ("2025-12-29", 6.0),
-            ("2026-01-05", 7.0),
-            ("2026-01-12", 8.0),
-            ("2026-01-19", 9.0),
-            ("2026-01-26", 11.0),
-            ("2026-02-02", 13.0),
-            ("2026-02-09", 12.0),
-            ("2026-02-16", 10.0),
-        ]:
-            truth_rows.append(
-                {
-                    "bundesland": "BY",
-                    "week_start": pd.Timestamp(week_start),
-                    "available_date": pd.Timestamp(week_start) + pd.Timedelta(days=7),
-                    "incidence": incidence,
-                    "truth_source": "survstat_weekly",
-                }
-            )
-        wastewater_dates = pd.date_range(start_date, end_date, freq="D")
-        wastewater = pd.DataFrame(
-            {
-                "bundesland": ["BY"] * len(wastewater_dates),
-                "datum": wastewater_dates,
-                "available_time": wastewater_dates,
-                "viral_load": np.linspace(1.0, 5.0, len(wastewater_dates)),
-            }
-        )
-        grippeweb = pd.DataFrame(
-            {
-                "bundesland": ["BY", "BY"],
-                "datum": [pd.Timestamp("2026-01-12"), pd.Timestamp("2026-01-19")],
-                "available_time": [pd.Timestamp("2026-01-19"), pd.Timestamp("2026-01-26")],
-                "signal_type": ["ARE", "ILI"],
-                "incidence": [120.0, 70.0],
-            }
-        )
-        are = pd.DataFrame(
-            {
-                "bundesland": ["BY", "BY"],
-                "datum": [pd.Timestamp("2026-01-14"), pd.Timestamp("2026-01-21")],
-                "available_time": [pd.Timestamp("2026-01-21"), pd.Timestamp("2026-01-28")],
-                "incidence": [90.0, 95.0],
-            }
-        )
-        weather = pd.DataFrame(
-            {
-                "bundesland": ["BY"] * 20,
-                "datum": pd.date_range("2026-01-01", periods=20, freq="D"),
-                "available_time": pd.date_range("2026-01-01", periods=20, freq="D"),
-                "data_type": ["CURRENT"] * 13 + ["DAILY_FORECAST"] * 7,
-                "temp": [2.0] * 20,
-                "humidity": [70.0] * 20,
-            }
-        )
-        return {
-            "wastewater": wastewater,
-            "truth": pd.DataFrame(truth_rows),
-            "grippeweb": grippeweb,
-            "influenza_ifsg": pd.DataFrame(),
-            "rsv_ifsg": pd.DataFrame(),
-            "are_consultation": are,
-            "weather": weather,
-            "holidays": {"BY": [(pd.Timestamp("2026-01-01"), pd.Timestamp("2026-01-06"))]},
-            "populations": {"BY": 13_500_000.0},
-        }
+class _FakeWavePredictionService(FixtureWavePredictionService):
+    def __init__(self, fixture: str = "default"):
+        super().__init__(fixture=fixture, settings=TEST_SETTINGS)
 
 
 class WavePredictionUtilsTests(unittest.TestCase):
@@ -215,12 +127,16 @@ class WavePredictionServiceTests(unittest.TestCase):
             horizon_days=14,
         )
         self.assertFalse(panel.empty)
-        early_row = panel.loc[panel["as_of_date"] == pd.Timestamp("2026-01-10")].tail(1)
+        early_row = panel.loc[panel["as_of_date"] == pd.Timestamp("2025-12-21")].tail(1)
         self.assertFalse(early_row.empty)
-        self.assertEqual(float(early_row.iloc[0]["truth_level"]), 6.0)
-        later_row = panel.loc[panel["as_of_date"] == pd.Timestamp("2026-01-13")].tail(1)
+        self.assertEqual(float(early_row.iloc[0]["truth_level"]), 15.044)
+        later_row = panel.loc[panel["as_of_date"] == pd.Timestamp("2025-12-22")].tail(1)
         self.assertFalse(later_row.empty)
-        self.assertEqual(float(later_row.iloc[0]["truth_level"]), 7.0)
+        self.assertEqual(float(later_row.iloc[0]["truth_level"]), 14.513)
+        self.assertLessEqual(
+            pd.Timestamp(later_row.iloc[0]["source_truth_available_date"]),
+            pd.Timestamp(later_row.iloc[0]["as_of_date"]),
+        )
 
     def test_panel_builder_handles_missing_optional_sources(self) -> None:
         class _SparseService(_FakeWavePredictionService):
@@ -251,6 +167,72 @@ class WavePredictionServiceTests(unittest.TestCase):
         )
         features = get_classification_feature_columns(frame)
         self.assertEqual(features, ["truth_level", "wastewater_level"])
+
+    def test_backtest_omits_oof_predictions_by_default(self) -> None:
+        service = _FakeWavePredictionService()
+        panel = service.build_wave_panel(
+            pathogen="Influenza A",
+            region="BY",
+            lookback_days=TEST_SETTINGS.WAVE_PREDICTION_LOOKBACK_DAYS,
+            horizon_days=14,
+        )
+        training_frame = panel.dropna(subset=["target_regression", "target_wave14"]).copy()
+        result = service.run_wave_backtest(
+            pathogen="Influenza A",
+            region="BY",
+            horizon_days=14,
+            panel=training_frame,
+        )
+        self.assertEqual(result["status"], "ok")
+        self.assertNotIn("oof_predictions", result)
+
+    def test_backtest_returns_serialized_oof_predictions_when_requested(self) -> None:
+        service = _FakeWavePredictionService()
+        panel = service.build_wave_panel(
+            pathogen="Influenza A",
+            region="BY",
+            lookback_days=TEST_SETTINGS.WAVE_PREDICTION_LOOKBACK_DAYS,
+            horizon_days=14,
+        )
+        training_frame = panel.dropna(subset=["target_regression", "target_wave14"]).copy()
+        result = service.run_wave_backtest(
+            pathogen="Influenza A",
+            region="BY",
+            horizon_days=14,
+            panel=training_frame,
+            include_oof_predictions=True,
+        )
+        self.assertEqual(result["status"], "ok")
+        self.assertIn("oof_predictions", result)
+        self.assertGreater(len(result["oof_predictions"]), 0)
+        first_row = result["oof_predictions"][0]
+        self.assertIn("fold", first_row)
+        self.assertIn("decision_score", first_row)
+        self.assertIn("score_output_field", first_row)
+        self.assertIn(first_row["score_output_field"], {"wave_probability", "wave_score"})
+        self.assertIn("tp", result["folds"][0])
+        self.assertIn("confusion_matrix", result["aggregate_metrics"])
+
+    def test_weather_forecast_features_ignore_rows_not_yet_available(self) -> None:
+        weather = pd.DataFrame(
+            {
+                "bundesland": ["BY"] * 4,
+                "datum": pd.to_datetime(["2026-01-10", "2026-01-11", "2026-01-12", "2026-01-13"]),
+                "available_time": pd.to_datetime(["2026-01-10", "2026-01-08", "2026-01-15", "2026-01-09"]),
+                "data_type": ["CURRENT", "DAILY_FORECAST", "DAILY_FORECAST", "DAILY_FORECAST"],
+                "temp": [2.0, 10.0, 99.0, 12.0],
+                "humidity": [70.0, 60.0, 5.0, 58.0],
+            }
+        )
+
+        features = weather_context_features(
+            weather,
+            as_of=pd.Timestamp("2026-01-10"),
+            enable_forecast_weather=True,
+        )
+
+        self.assertAlmostEqual(features["weather_forecast_avg_temp_next_7"], 11.0, places=6)
+        self.assertAlmostEqual(features["weather_forecast_avg_humidity_next_7"], 59.0, places=6)
 
     def test_prediction_uses_wave_score_when_calibration_missing(self) -> None:
         service = _FakeWavePredictionService()

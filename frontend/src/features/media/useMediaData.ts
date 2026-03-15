@@ -27,20 +27,28 @@ export function useDecisionPageData(
   const loadDecision = useCallback(async () => {
     setDecisionLoading(true);
     setRegionalPortfolioLoading(true);
+    let decisionLoaded = false;
     try {
-      const [decisionResult, evidenceResult, benchmarkResult, portfolioResult] = await Promise.allSettled([
-        mediaApi.getDecision(virus, brand),
-        mediaApi.getEvidence(virus, brand),
-        mediaApi.getRegionalBenchmark(),
-        mediaApi.getRegionalPortfolio(),
-      ]);
+      const decisionResult = await mediaApi.getDecision(virus, brand);
+      setDecision(decisionResult);
+      decisionLoaded = true;
+    } catch (error) {
+      console.error('Decision fetch failed', error);
+      toast('Entscheidung konnte nicht geladen werden.', 'error');
+    } finally {
+      setDecisionLoading(false);
+    }
 
-      if (decisionResult.status === 'fulfilled') {
-        setDecision(decisionResult.value);
-      } else {
-        throw decisionResult.reason;
-      }
+    if (!decisionLoaded) {
+      setRegionalPortfolioLoading(false);
+      return;
+    }
 
+    Promise.allSettled([
+      mediaApi.getEvidence(virus, brand),
+      mediaApi.getRegionalBenchmark(),
+      mediaApi.getRegionalPortfolio(),
+    ]).then(([evidenceResult, benchmarkResult, portfolioResult]) => {
       if (evidenceResult.status === 'fulfilled') {
         setDecisionEvidence(evidenceResult.value);
       } else {
@@ -61,13 +69,9 @@ export function useDecisionPageData(
         console.error('Regional portfolio fetch failed', portfolioResult.reason);
         setRegionalPortfolio(null);
       }
-    } catch (error) {
-      console.error('Decision fetch failed', error);
-      toast('Entscheidung konnte nicht geladen werden.', 'error');
-    } finally {
-      setDecisionLoading(false);
+    }).finally(() => {
       setRegionalPortfolioLoading(false);
-    }
+    });
   }, [brand, toast, virus]);
 
   useEffect(() => {

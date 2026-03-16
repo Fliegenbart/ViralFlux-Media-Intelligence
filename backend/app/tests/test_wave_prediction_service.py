@@ -234,6 +234,35 @@ class WavePredictionServiceTests(unittest.TestCase):
         self.assertAlmostEqual(features["weather_forecast_avg_temp_next_7"], 11.0, places=6)
         self.assertAlmostEqual(features["weather_forecast_avg_humidity_next_7"], 59.0, places=6)
 
+    def test_select_classification_threshold_can_tune_below_default(self) -> None:
+        service = _FakeWavePredictionService()
+        threshold = service._select_classification_threshold(
+            np.array([1, 1, 0, 0]),
+            np.array([0.08, 0.07, 0.02, 0.01]),
+            default_threshold=0.5,
+        )
+        self.assertLess(threshold, 0.5)
+        self.assertAlmostEqual(threshold, 0.07, places=6)
+
+    def test_resolve_decision_strategy_drops_calibration_when_holdout_f1_gets_worse(self) -> None:
+        service = _FakeWavePredictionService()
+
+        class _BadCalibration:
+            def predict(self, scores):
+                del scores
+                return np.array([0.0, 0.0, 1.0, 1.0])
+
+        result = service._resolve_decision_strategy(
+            y_true=np.array([1, 1, 0, 0]),
+            raw_scores=np.array([0.08, 0.07, 0.02, 0.01]),
+            calibration=_BadCalibration(),
+            default_threshold=0.5,
+        )
+
+        self.assertFalse(result["use_calibration"])
+        self.assertLess(result["threshold"], 0.5)
+        self.assertTrue(any("degraded holdout decision quality" in note for note in result["notes"]))
+
     def test_prediction_uses_wave_score_when_calibration_missing(self) -> None:
         service = _FakeWavePredictionService()
         row = pd.DataFrame(

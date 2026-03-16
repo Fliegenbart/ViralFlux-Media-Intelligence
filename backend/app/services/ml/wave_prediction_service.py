@@ -353,8 +353,15 @@ class WavePredictionService:
             fit_sample_weights = sample_weights
         classifier.fit(X_train, y_train, sample_weight=fit_sample_weights)
 
+        default_threshold = float(self.settings.WAVE_PREDICTION_CLASSIFICATION_THRESHOLD)
         calibration = None
         calibration_notes: list[str] = []
+        holdout_scores = None
+        holdout_labels = None
+        if not calibration_frame.empty and calibration_frame["target_wave14"].nunique() > 1:
+            X_holdout = calibration_frame[features].fillna(0.0).to_numpy(dtype=float)
+            holdout_labels = calibration_frame["target_wave14"].astype(int).to_numpy()
+            holdout_scores = classifier.predict_proba(X_holdout)[:, 1]
         if (
             not calibration_frame.empty
             and len(calibration_frame) >= int(self.settings.WAVE_PREDICTION_MIN_CALIBRATION_ROWS)
@@ -371,11 +378,24 @@ class WavePredictionService:
                 "Calibration skipped; classifier output must be exposed as wave_score, not wave_probability."
             )
 
+        threshold = default_threshold
+        if holdout_scores is not None and holdout_labels is not None:
+            strategy = self._resolve_decision_strategy(
+                y_true=holdout_labels,
+                raw_scores=holdout_scores,
+                calibration=calibration,
+                default_threshold=default_threshold,
+            )
+            threshold = float(strategy["threshold"])
+            if not bool(strategy["use_calibration"]):
+                calibration = None
+            calibration_notes.extend(strategy["notes"])
+
         return {
             "classifier": classifier,
             "calibration": calibration,
             "feature_columns": features,
-            "threshold": float(self.settings.WAVE_PREDICTION_CLASSIFICATION_THRESHOLD),
+            "threshold": threshold,
             "notes": calibration_notes,
         }
 
@@ -952,6 +972,109 @@ class WavePredictionService:
         if calibration is None:
             return raw_scores.astype(float)
         return np.clip(np.asarray(calibration.predict(raw_scores), dtype=float), 0.0, 1.0)
+
+    @staticmethod
+    def _select_classification_threshold(
+        y_true: np.ndarray,
+        score_values: np.ndarray,
+        *,
+        default_threshold: float,
+    ) -> float:
+        labels = np.asarray(y_true, dtype=int)
+        scores = np.clip(np.asarray(score_values, dtype=float), 0.0, 1.0)
+        if len(scores) == 0 or len(np.unique(labels)) < 2:
+            return float(default_threshold)
+
+        candidates = {
+            float(np.clip(default_threshold, 0.0, 1.0)),
+            0.0,
+            1.0,
+            *[float(value) for value in np.unique(np.round(scores, 6))],
+        }
+        best_key = None
+        best_threshold = float(default_threshold)
+        for threshold in sorted(candidates):
+            predictions = (scores >= threshold).astype(int)
+            precision = float(precision_score(labels, predictions, zero_division=0))
+            recall = float(recall_score(labels, predictions, zero_division=0))
+            f1 = float(f1_score(labels, predictions, zero_division=0))
+            far = false_alarm_rate(labels, predictions)
+            candidate = (
+                round(f1, 12),
+                round(precision, 12),
+                round(recall, 12),
+                -round(far if far is not None else 1.0, 12),
+                round(threshold, 12),
+            )
+            if best_key is None or candidate > best_key:
+                best_key = candidate
+                best_threshold = float(threshold)
+        return best_threshold
+
+    def _resolve_decision_strategy(
+        self,
+        *,
+        y_true: np.ndarray,
+        raw_scores: np.ndarray,
+        calibration: IsotonicRegression | None,
+        default_threshold: float,
+    ) -> dict[str, Any]:
+        labels = np.asarray(y_true, dtype=int)
+        raw = np.clip(np.asarray(raw_scores, dtype=float), 0.0, 1.0)
+        raw_threshold = self._select_classification_threshold(
+            labels,
+            raw,
+            default_threshold=default_threshold,
+        )
+        raw_predictions = (raw >= raw_threshold).astype(int)
+        raw_f1 = float(f1_score(labels, raw_predictions, zero_division=0))
+        notes: list[str] = []
+
+        if calibration is None:
+            if abs(raw_threshold - float(default_threshold)) > 1e-6:
+                notes.append(
+                    f"Classification threshold tuned on holdout window: {raw_threshold:.3f}."
+                )
+            return {
+                "use_calibration": False,
+                "threshold": raw_threshold,
+                "notes": notes,
+            }
+
+        calibrated = self._apply_calibration(calibration, raw)
+        calibrated_threshold = self._select_classification_threshold(
+            labels,
+            calibrated,
+            default_threshold=default_threshold,
+        )
+        calibrated_predictions = (calibrated >= calibrated_threshold).astype(int)
+        calibrated_f1 = float(f1_score(labels, calibrated_predictions, zero_division=0))
+        raw_brier = float(brier_score_loss(labels, raw))
+        calibrated_brier = float(brier_score_loss(labels, calibrated))
+
+        if calibrated_brier <= raw_brier + 1e-6 and calibrated_f1 >= raw_f1 - 1e-6:
+            if abs(calibrated_threshold - float(default_threshold)) > 1e-6:
+                notes.append(
+                    f"Classification threshold tuned on calibrated holdout scores: {calibrated_threshold:.3f}."
+                )
+            return {
+                "use_calibration": True,
+                "threshold": calibrated_threshold,
+                "notes": notes,
+            }
+
+        notes.append(
+            "Calibration skipped; isotonic mapping degraded holdout decision quality."
+        )
+        if abs(raw_threshold - float(default_threshold)) > 1e-6:
+            notes.append(
+                f"Classification threshold tuned on holdout window: {raw_threshold:.3f}."
+            )
+        return {
+            "use_calibration": False,
+            "threshold": raw_threshold,
+            "notes": notes,
+        }
 
     @staticmethod
     def _compute_calibration_summary(y_true: np.ndarray, probabilities: np.ndarray) -> float:

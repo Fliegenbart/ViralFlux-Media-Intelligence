@@ -51,6 +51,7 @@ docker-compose.override.yml
 # Data
 data/raw/*
 data/processed/*
+data/backups/*
 !data/raw/.gitkeep
 !data/processed/.gitkeep
 Test-Daten/

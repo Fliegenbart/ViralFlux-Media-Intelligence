@@ -30,7 +30,7 @@ aiohttp==3.9.1
 openai>=1.14.0
 
 # Background Tasks
-apscheduler==3.10.4
+apscheduler==3.11.2
 celery[redis]>=5.3.6
 redis>=5.0.1
 

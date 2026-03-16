@@ -25,7 +25,7 @@
   "devDependencies": {
     "@types/d3-geo": "^3.1.0",
     "@types/recharts": "^1.8.29",
-    "autoprefixer": "^10.4.17",
+    "autoprefixer": "^10.4.27",
     "postcss": "^8.5.8",
     "react-scripts": "5.0.1",
     "tailwindcss": "^3.4.1"

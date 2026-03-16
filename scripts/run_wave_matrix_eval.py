@@ -16,8 +16,8 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 BACKTEST_SCRIPT = REPO_ROOT / "scripts" / "run_wave_v1_backtest.py"
 
-DEFAULT_PATHOGENS = ["Influenza A", "SARS-CoV-2", "RSV A"]
-DEFAULT_REGIONS = ["BY", "BW", "NW", "HH"]
+DEFAULT_PATHOGENS = ["Influenza A", "SARS-CoV-2"]
+DEFAULT_REGIONS = ["BY", "HH"]
 
 os.environ.setdefault("POSTGRES_USER", "test")
 os.environ.setdefault("POSTGRES_PASSWORD", "test")
@@ -95,8 +95,14 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run the wave-v1 harness across a matrix.")
     parser.add_argument("--source", choices=["db", "fixture"], default="db")
     parser.add_argument("--fixture", default="default")
-    parser.add_argument("--pathogens", help="Comma-separated pathogen names.")
-    parser.add_argument("--regions", help="Comma-separated region codes.")
+    parser.add_argument(
+        "--pathogens",
+        help="Comma-separated pathogen names. Defaults to the current pilot scope (Influenza A,SARS-CoV-2).",
+    )
+    parser.add_argument(
+        "--regions",
+        help="Comma-separated region codes. Defaults to the current pilot scope (BY,HH).",
+    )
     parser.add_argument("--horizon", type=int, default=14)
     parser.add_argument(
         "--output-dir",

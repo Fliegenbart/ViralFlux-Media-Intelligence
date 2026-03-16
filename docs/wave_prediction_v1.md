@@ -58,6 +58,20 @@ In v1, the field name is strict:
 
 This avoids overstating model confidence and keeps the downstream API honest.
 
+## Current Pilot Scope
+
+As of 2026-03-16, the operational pilot scope is intentionally restricted to:
+
+- pathogens: `Influenza A`, `SARS-CoV-2`
+- start regions: `BY`, `HH`
+
+The current error-analysis track is:
+
+- `NW` for the pilot pathogens
+- `RSV A` across evaluated regions
+
+The detailed decision note lives in [wave_prediction_pilot_scope.md](./wave_prediction_pilot_scope.md).
+
 ## Known Limitations
 
 - v1 is a tabular gradient-boosting baseline, not a sequence model

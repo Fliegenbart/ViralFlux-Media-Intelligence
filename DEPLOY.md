@@ -16,6 +16,7 @@ Diese Anleitung beschreibt den produktiven Deploy für `https://fluxengine.labpu
 - Clean Checkout: `/opt/viralflux-media-intelligence-clean`
 - Deploy-Script: `/usr/local/bin/viralflux-deploy`
 - Versioniertes Deploy-Script im Repo: `/opt/viralflux-media-intelligence-clean/scripts/deploy-live.sh`
+- Aktuell genutztes Live-Compose-Manifest: `/opt/viralflux-media-intelligence-clean/docker-compose.yml`
 
 ## Standard-Deploy
 
@@ -27,10 +28,11 @@ Was der Command macht:
 
 1. `origin/main` fetchen
 2. lokalen Stand im clean Checkout hart auf `origin/main` setzen
-3. Frontend-Image neu bauen
-4. sicherstellen, dass `virusradar_db` und `viralflux_redis` im Clean-Netz hängen
-5. `frontend-prod`, `backend`, `celery_worker` und `celery_beat` sauber neu erzeugen
-6. Status der Live-Services ausgeben
+3. das aktuelle Live-Compose-Manifest `docker-compose.yml` verwenden
+4. Frontend-Image neu bauen
+5. sicherstellen, dass `virusradar_db` und `viralflux_redis` im Clean-Netz hängen
+6. `frontend-prod`, `backend`, `celery_worker` und `celery_beat` sauber neu erzeugen
+7. Status der Live-Services ausgeben
 
 ## Smoke-Checks nach Deploy
 
@@ -56,6 +58,7 @@ Erwartung:
 - Nicht aus dem alten, lokalen Arbeitsbaum deployen: `/opt/viralflux-media-intelligence` bleibt nur als Altbestand liegen.
 - Produktive Deploys nur über den clean Checkout + Deploy-Script.
 - Keine manuelle Anpassung der App-Dateien im clean Checkout; Änderungen gehören ins GitHub-Repo.
+- Der aktuelle Live-Pfad nutzt `docker-compose.yml`; `docker-compose.prod.yml` ist derzeit nicht der aktive Deploy-Entry-Point.
 - `virusradar_caddy_proxy` und das alte Compose-Netzwerk sind nicht mehr Teil des Live-Pfads.
 
 ## Rollback (schnell)

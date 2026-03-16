@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Production deployment script with health checks and rollback
+# Production deployment script with health checks and rollback.
+# The current live stack on fluxengine.labpulse.ai is defined in docker-compose.yml.
 set -euo pipefail
 
 REPO="${REPO:-/opt/viralflux-media-intelligence-clean}"
@@ -43,6 +44,12 @@ git checkout "$BRANCH"
 git reset --hard "origin/$BRANCH"
 NEW_COMMIT=$(git rev-parse HEAD)
 echo "[$(date)] Deploying commit: $NEW_COMMIT"
+echo "[$(date)] Using compose file: $COMPOSE_FILE"
+
+if [ ! -f "$COMPOSE_FILE" ]; then
+    echo "ERROR: Compose file not found: $COMPOSE_FILE" >&2
+    exit 1
+fi
 
 # ── Build frontend image ───────────────────────────────────────
 echo "[$(date)] Building frontend image..."

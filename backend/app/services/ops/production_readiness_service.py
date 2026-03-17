@@ -73,7 +73,7 @@ class ProductionReadinessService:
         self.models_dir = models_dir
         self.now_provider = now_provider
 
-    def build_snapshot(self) -> dict[str, Any]:
+    def build_snapshot(self, *, deep_checks: bool = True) -> dict[str, Any]:
         observed_at = self.now_provider().replace(tzinfo=None)
         components: dict[str, Any] = {
             "database": self._database_component(),
@@ -81,13 +81,14 @@ class ProductionReadinessService:
             "schema_bootstrap": self._schema_bootstrap_component(),
         }
 
-        if components["database"]["status"] == "ok":
+        if components["database"]["status"] == "ok" and deep_checks:
             with self.session_factory() as db:
                 components["forecast_monitoring"] = self._forecast_monitoring_component(db)
                 components["regional_operational"] = self._regional_operational_component(db, observed_at=observed_at)
         else:
-            components["forecast_monitoring"] = self._skipped_component("database_unavailable")
-            components["regional_operational"] = self._skipped_component("database_unavailable")
+            reason = "database_unavailable" if components["database"]["status"] != "ok" else "startup_light_mode"
+            components["forecast_monitoring"] = self._skipped_component(reason)
+            components["regional_operational"] = self._skipped_component(reason)
 
         overall_component_status = self._worst_status(
             component.get("status") for component in components.values()

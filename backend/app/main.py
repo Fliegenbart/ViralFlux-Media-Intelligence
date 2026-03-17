@@ -187,7 +187,7 @@ async def startup_event():
         actions=db_summary.get("actions") or [],
     )
 
-    readiness_snapshot = ProductionReadinessService().build_snapshot()
+    readiness_snapshot = ProductionReadinessService().build_snapshot(deep_checks=False)
     app.state.startup_readiness = readiness_snapshot
     app.state.startup_completed_at = datetime.utcnow().isoformat()
     app.state.startup_run_metadata = None

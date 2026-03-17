@@ -49,6 +49,9 @@ logger = logging.getLogger(__name__)
 _ML_MODELS_DIR = Path(__file__).resolve().parent.parent.parent / "ml_models" / "regional_panel"
 
 CALIBRATION_HOLDOUT_FRACTION = 0.20
+CALIBRATION_GUARD_FRACTION = 0.35
+MIN_CALIBRATION_GUARD_DATES = 7
+CALIBRATION_GUARD_EPSILON = 1e-6
 
 REGIONAL_CLASSIFIER_CONFIG: dict[str, Any] = {
     "n_estimators": 160,
@@ -314,6 +317,7 @@ class RegionalModelTrainer:
             panel=panel,
             feature_columns=feature_columns,
             oof_frame=backtest_bundle["oof_frame"],
+            action_threshold=action_threshold,
         )
 
         dataset_manifest = {
@@ -365,7 +369,11 @@ class RegionalModelTrainer:
             },
         }
         metadata["model_version"] = f"{metadata['model_family']}:h{horizon}:{metadata['trained_at']}"
-        metadata["calibration_version"] = f"isotonic:h{horizon}:{metadata['trained_at']}"
+        calibration_mode = str(
+            final_artifacts.get("calibration_mode")
+            or ("isotonic" if final_artifacts.get("calibration") is not None else "raw_passthrough")
+        )
+        metadata["calibration_version"] = f"{calibration_mode}:h{horizon}:{metadata['trained_at']}"
 
         if persist:
             self._persist_artifacts(
@@ -732,6 +740,7 @@ class RegionalModelTrainer:
                     panel=panel,
                     labels=labels,
                     feature_columns=feature_columns,
+                    min_recall_for_threshold=config.min_recall_for_selection,
                 )
                 if evaluation is None:
                     continue
@@ -781,6 +790,7 @@ class RegionalModelTrainer:
         panel: pd.DataFrame,
         labels: np.ndarray,
         feature_columns: list[str],
+        min_recall_for_threshold: float = 0.35,
     ) -> pd.DataFrame | None:
         working = panel.copy()
         working["event_label"] = labels.astype(int)
@@ -816,9 +826,18 @@ class RegionalModelTrainer:
                 model_train_df[feature_columns].to_numpy(),
                 model_train_df["event_label"].to_numpy(),
             )
-            calibration = self._fit_isotonic(
-                classifier.predict_proba(cal_df[feature_columns].to_numpy())[:, 1],
-                cal_df["event_label"].to_numpy(),
+            calibration, _calibration_mode = self._select_guarded_calibration(
+                calibration_frame=pd.DataFrame(
+                    {
+                        "as_of_date": cal_df["as_of_date"].values,
+                        "event_label": cal_df["event_label"].values.astype(int),
+                        "event_probability_raw": classifier.predict_proba(
+                            cal_df[feature_columns].to_numpy()
+                        )[:, 1],
+                    }
+                ),
+                raw_probability_col="event_probability_raw",
+                min_recall_for_threshold=min_recall_for_threshold,
             )
             raw_probs = classifier.predict_proba(test_df[feature_columns].to_numpy())[:, 1]
             calibrated_probs = self._apply_calibration(calibration, raw_probs)
@@ -921,9 +940,18 @@ class RegionalModelTrainer:
                 model_train_df[feature_columns].to_numpy(),
                 model_train_df["event_label"].to_numpy(),
             )
-            calibration = self._fit_isotonic(
-                classifier.predict_proba(cal_df[feature_columns].to_numpy())[:, 1],
-                cal_df["event_label"].to_numpy(),
+            calibration, calibration_mode = self._select_guarded_calibration(
+                calibration_frame=pd.DataFrame(
+                    {
+                        "as_of_date": cal_df["as_of_date"].values,
+                        "event_label": cal_df["event_label"].values.astype(int),
+                        "event_probability_raw": classifier.predict_proba(
+                            cal_df[feature_columns].to_numpy()
+                        )[:, 1],
+                    }
+                ),
+                raw_probability_col="event_probability_raw",
+                action_threshold=fold_threshold,
             )
             raw_prob = classifier.predict_proba(test_df[feature_columns].to_numpy())[:, 1]
             calibrated_prob = self._apply_calibration(calibration, raw_prob)
@@ -989,6 +1017,7 @@ class RegionalModelTrainer:
                     "selection_precision": fold_selection.get("precision"),
                     "selection_recall": fold_selection.get("recall"),
                     "selection_pr_auc": fold_selection.get("pr_auc"),
+                    "calibration_mode": calibration_mode,
                 }
             )
             fold_frames.append(
@@ -1062,14 +1091,26 @@ class RegionalModelTrainer:
         panel: pd.DataFrame,
         feature_columns: list[str],
         oof_frame: pd.DataFrame,
+        action_threshold: float = 0.5,
     ) -> dict[str, Any]:
+        calibration_frame = oof_frame.copy()
+        if "as_of_date" not in calibration_frame.columns:
+            calibration_frame["as_of_date"] = pd.date_range(
+                start="2000-01-01",
+                periods=len(calibration_frame),
+                freq="D",
+            )
+
         classifier = self._fit_classifier(
             panel[feature_columns].to_numpy(),
             panel["event_label"].to_numpy(),
         )
-        calibration = self._fit_isotonic(
-            oof_frame["event_probability_raw"].to_numpy(),
-            oof_frame["event_label"].to_numpy(),
+        calibration, calibration_mode = self._select_guarded_calibration(
+            calibration_frame=calibration_frame[
+                ["as_of_date", "event_label", "event_probability_raw"]
+            ].copy(),
+            raw_probability_col="event_probability_raw",
+            action_threshold=action_threshold,
         )
         reg_median = self._fit_regressor(
             panel[feature_columns].to_numpy(),
@@ -1089,6 +1130,7 @@ class RegionalModelTrainer:
         return {
             "classifier": classifier,
             "calibration": calibration,
+            "calibration_mode": calibration_mode,
             "regressor_median": reg_median,
             "regressor_lower": reg_lower,
             "regressor_upper": reg_upper,
@@ -1157,6 +1199,19 @@ class RegionalModelTrainer:
         return train_dates[:-calibration_size], train_dates[-calibration_size:]
 
     @staticmethod
+    def _calibration_guard_split_dates(
+        calibration_dates: list[pd.Timestamp],
+    ) -> tuple[list[pd.Timestamp], list[pd.Timestamp]] | None:
+        unique_dates = sorted({pd.Timestamp(value).normalize() for value in calibration_dates})
+        if len(unique_dates) < (MIN_CALIBRATION_GUARD_DATES * 2):
+            return None
+        guard_size = max(MIN_CALIBRATION_GUARD_DATES, int(len(unique_dates) * CALIBRATION_GUARD_FRACTION))
+        guard_size = min(guard_size, len(unique_dates) - MIN_CALIBRATION_GUARD_DATES)
+        if guard_size <= 0:
+            return None
+        return unique_dates[:-guard_size], unique_dates[-guard_size:]
+
+    @staticmethod
     def _fit_classifier(X: np.ndarray, y: np.ndarray) -> XGBClassifier:
         positives = max(int(np.sum(y == 1)), 1)
         negatives = max(int(np.sum(y == 0)), 1)
@@ -1185,6 +1240,110 @@ class RegionalModelTrainer:
         if calibration is None:
             return np.clip(raw_probabilities.astype(float), 0.001, 0.999)
         return np.clip(calibration.predict(raw_probabilities.astype(float)), 0.001, 0.999)
+
+    @staticmethod
+    def _calibration_guard_metrics(
+        *,
+        as_of_dates: Any,
+        labels: np.ndarray,
+        probabilities: np.ndarray,
+        action_threshold: float,
+    ) -> dict[str, float]:
+        clipped = RegionalModelTrainer._apply_calibration(None, np.asarray(probabilities, dtype=float))
+        guard_frame = pd.DataFrame(
+            {
+                "as_of_date": pd.to_datetime(as_of_dates).normalize(),
+                "event_label": np.asarray(labels, dtype=int),
+                "guard_probability": clipped,
+                "action_threshold": np.full(len(clipped), float(action_threshold), dtype=float),
+            }
+        )
+        return {
+            "brier_score": float(brier_score_safe(guard_frame["event_label"], clipped)),
+            "ece": float(compute_ece(guard_frame["event_label"], clipped)),
+            "precision_at_top3": float(
+                precision_at_k(
+                    guard_frame,
+                    k=3,
+                    score_col="guard_probability",
+                )
+            ),
+            "activation_false_positive_rate": float(
+                activation_false_positive_rate(
+                    guard_frame,
+                    threshold=None,
+                    score_col="guard_probability",
+                )
+            ),
+        }
+
+    def _select_guarded_calibration(
+        self,
+        *,
+        calibration_frame: pd.DataFrame,
+        raw_probability_col: str,
+        action_threshold: float | None = None,
+        min_recall_for_threshold: float = 0.35,
+        label_col: str = "event_label",
+        date_col: str = "as_of_date",
+    ) -> tuple[IsotonicRegression | None, str]:
+        if calibration_frame.empty:
+            return None, "raw_passthrough"
+
+        working = calibration_frame[[date_col, label_col, raw_probability_col]].copy()
+        working[date_col] = pd.to_datetime(working[date_col]).dt.normalize()
+
+        guard_split = self._calibration_guard_split_dates(working[date_col].tolist())
+        if not guard_split:
+            return None, "raw_passthrough"
+        fit_dates, guard_dates = guard_split
+        fit_df = working.loc[working[date_col].isin(fit_dates)].copy()
+        guard_df = working.loc[working[date_col].isin(guard_dates)].copy()
+        if fit_df.empty or guard_df.empty:
+            return None, "raw_passthrough"
+
+        calibration = self._fit_isotonic(
+            fit_df[raw_probability_col].to_numpy(),
+            fit_df[label_col].to_numpy(),
+        )
+        if calibration is None:
+            return None, "raw_passthrough"
+
+        guard_labels = guard_df[label_col].to_numpy(dtype=int)
+        raw_guard = self._apply_calibration(None, guard_df[raw_probability_col].to_numpy())
+        effective_threshold = float(action_threshold) if action_threshold is not None else float(
+            choose_action_threshold(
+                raw_guard,
+                guard_labels,
+                min_recall=min_recall_for_threshold,
+            )[0]
+        )
+        raw_metrics = self._calibration_guard_metrics(
+            as_of_dates=guard_df[date_col].to_numpy(),
+            labels=guard_labels,
+            probabilities=raw_guard,
+            action_threshold=effective_threshold,
+        )
+        calibrated_guard = self._apply_calibration(
+            calibration,
+            guard_df[raw_probability_col].to_numpy(),
+        )
+        calibrated_metrics = self._calibration_guard_metrics(
+            as_of_dates=guard_df[date_col].to_numpy(),
+            labels=guard_labels,
+            probabilities=calibrated_guard,
+            action_threshold=effective_threshold,
+        )
+        if (
+            calibrated_metrics["brier_score"] <= raw_metrics["brier_score"] + CALIBRATION_GUARD_EPSILON
+            and calibrated_metrics["ece"] <= raw_metrics["ece"] + CALIBRATION_GUARD_EPSILON
+            and calibrated_metrics["precision_at_top3"] + CALIBRATION_GUARD_EPSILON
+            >= raw_metrics["precision_at_top3"]
+            and calibrated_metrics["activation_false_positive_rate"]
+            <= raw_metrics["activation_false_positive_rate"] + CALIBRATION_GUARD_EPSILON
+        ):
+            return calibration, "isotonic_guarded"
+        return None, "raw_passthrough"
 
     def _amelag_only_probabilities(
         self,

@@ -93,6 +93,31 @@ Wichtig:
   - `failed_checks`
   - `thresholds`
 
+### Metrik-Semantik ab 2026-03-17
+
+Die Schwellen bleiben gleich, aber zwei Metriken sind seit dem
+Semantik-Fix explizit anders zu lesen:
+
+- `precision_at_top3`
+  - Mittelwert der Top-3-Praezision nur ueber `as_of_date`-Gruppen,
+    in denen mindestens ein echtes Event vorkommt.
+  - Tage ohne einziges Event werden fuer diese Kennzahl nicht mehr als
+    implizite Null-Praezision mitgemittelt.
+- `activation_false_positive_rate`
+  - Echte False-Positive-Rate ueber Negativfaelle:
+    `false_positives / all_negative_cases`.
+  - Wenn eine zeilenweise `action_threshold` vorhanden ist, wird genau
+    diese dynamische Schwelle fuer die Aktivierungsentscheidung benutzt.
+
+Wichtig:
+
+- Historische Artefakte vor diesem Fix koennen fuer diese beiden
+  Kennzahlen nicht direkt mit neu backfilled Artefakten verglichen
+  werden, ohne die geaenderte Semantik mitzudenken.
+- Nach dieser Vertragsaenderung sind Retrain, Backfill und Recompute
+  Pflicht, bevor Readiness- oder Pilot-Entscheidungen neu bewertet
+  werden.
+
 ## Artifact Contract
 
 Produktive Scoped-Artefakte liegen unter:

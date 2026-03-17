@@ -196,6 +196,160 @@ class RegionalHorizonSemanticsTests(unittest.TestCase):
         self.assertEqual(quality_gate_mock.call_args.kwargs["virus_typ"], "Influenza A")
         self.assertEqual(quality_gate_mock.call_args.kwargs["horizon_days"], 5)
 
+    def test_select_guarded_calibration_keeps_isotonic_when_guard_metrics_improve(self) -> None:
+        trainer = RegionalModelTrainer(db=None)
+        dates = pd.date_range("2026-01-01", periods=20, freq="D")
+        labels = np.array([0, 1] * 10, dtype=int)
+        calibration_frame = pd.DataFrame(
+            {
+                "as_of_date": dates,
+                "event_label": labels,
+                "event_probability_raw": np.where(labels == 1, 0.58, 0.42),
+            }
+        )
+
+        calibration_token = object()
+        trainer._fit_isotonic = lambda *_args, **_kwargs: calibration_token
+        trainer._apply_calibration = lambda calibration, raw_probabilities: (
+            np.clip(np.asarray(raw_probabilities, dtype=float), 0.001, 0.999)
+            if calibration is None
+            else np.where(np.asarray(raw_probabilities, dtype=float) >= 0.5, 0.85, 0.15)
+        )
+
+        calibration, mode = trainer._select_guarded_calibration(
+            calibration_frame=calibration_frame,
+            raw_probability_col="event_probability_raw",
+            action_threshold=0.6,
+        )
+
+        self.assertIs(calibration, calibration_token)
+        self.assertEqual(mode, "isotonic_guarded")
+
+    def test_select_guarded_calibration_rejects_isotonic_when_guard_metrics_degrade(self) -> None:
+        trainer = RegionalModelTrainer(db=None)
+        dates = pd.date_range("2026-01-01", periods=20, freq="D")
+        labels = np.array([0, 1] * 10, dtype=int)
+        calibration_frame = pd.DataFrame(
+            {
+                "as_of_date": dates,
+                "event_label": labels,
+                "event_probability_raw": np.where(labels == 1, 0.58, 0.42),
+            }
+        )
+
+        trainer._fit_isotonic = lambda *_args, **_kwargs: object()
+        trainer._apply_calibration = lambda calibration, raw_probabilities: (
+            np.clip(np.asarray(raw_probabilities, dtype=float), 0.001, 0.999)
+            if calibration is None
+            else np.where(np.asarray(raw_probabilities, dtype=float) >= 0.5, 0.55, 0.65)
+        )
+
+        calibration, mode = trainer._select_guarded_calibration(
+            calibration_frame=calibration_frame,
+            raw_probability_col="event_probability_raw",
+            action_threshold=0.6,
+        )
+
+        self.assertIsNone(calibration)
+        self.assertEqual(mode, "raw_passthrough")
+
+    def test_train_single_horizon_uses_final_calibration_mode_in_metadata(self) -> None:
+        trainer = RegionalModelTrainer(db=None)
+        dates = pd.date_range("2025-01-01", periods=220, freq="D")
+        panel = pd.DataFrame(
+            {
+                "virus_typ": ["Influenza A"] * len(dates),
+                "bundesland": ["BY"] * len(dates),
+                "bundesland_name": ["Bayern"] * len(dates),
+                "as_of_date": dates,
+                "target_date": dates + pd.Timedelta(days=7),
+                "target_week_start": dates,
+                "horizon_days": [7.0] * len(dates),
+                "truth_source": ["survstat_kreis"] * len(dates),
+                "target_truth_source": ["survstat_kreis"] * len(dates),
+                "current_known_incidence": np.linspace(5.0, 15.0, len(dates)),
+                "next_week_incidence": np.linspace(6.0, 16.0, len(dates)),
+                "seasonal_baseline": np.full(len(dates), 8.0, dtype=float),
+                "seasonal_mad": np.full(len(dates), 1.5, dtype=float),
+                "f1": np.linspace(0.1, 0.9, len(dates)),
+            }
+        )
+
+        trainer.load_artifacts = lambda *_args, **_kwargs: {}
+        trainer.feature_builder.build_panel_training_data = lambda **_kwargs: panel.copy()
+        trainer.feature_builder.dataset_manifest = lambda **_kwargs: {}
+        trainer.feature_builder.point_in_time_snapshot_manifest = lambda **_kwargs: {}
+        trainer._prepare_horizon_panel = lambda frame, horizon_days: frame.copy()
+        trainer._feature_columns = lambda _frame: ["f1"]
+        trainer._ww_only_feature_columns = lambda _columns: []
+        trainer._select_event_definition = lambda **_kwargs: {
+            "tau": 1.0,
+            "kappa": 0.5,
+            "action_threshold": 0.65,
+        }
+        trainer._event_labels = lambda frame, **_kwargs: pd.Series(
+            [idx % 2 for idx in range(len(frame))],
+            index=frame.index,
+            dtype=int,
+        )
+        trainer._build_backtest_bundle = lambda **_kwargs: {
+            "oof_frame": pd.DataFrame(
+                {
+                    "as_of_date": dates[:20],
+                    "event_label": [idx % 2 for idx in range(20)],
+                    "event_probability_raw": np.linspace(0.2, 0.8, 20),
+                }
+            ),
+            "aggregate_metrics": {
+                "precision_at_top3": 0.7,
+                "activation_false_positive_rate": 0.05,
+                "pr_auc": 0.55,
+                "brier_score": 0.08,
+                "ece": 0.04,
+            },
+            "quality_gate": {
+                "profile": "pilot_v1",
+                "overall_passed": False,
+                "forecast_readiness": "WATCH",
+                "checks": {},
+                "failed_checks": [],
+                "thresholds": {},
+            },
+            "backtest_payload": {
+                "baselines": {},
+                "details": {"BY": {"bundesland": "BY"}},
+            },
+        }
+        trainer._rollout_metadata = lambda **_kwargs: {
+            "signal_bundle_version": "core_panel_v1",
+            "rollout_mode": "gated",
+            "activation_policy": "quality_gate",
+            "shadow_evaluation": None,
+        }
+        trainer._fit_final_models = lambda **_kwargs: {
+            "classifier": None,
+            "calibration": None,
+            "calibration_mode": "raw_passthrough",
+            "regressor_median": None,
+            "regressor_lower": None,
+            "regressor_upper": None,
+        }
+        captured: dict[str, object] = {}
+        trainer._persist_artifacts = lambda **kwargs: captured.update(kwargs)
+
+        payload = trainer._train_single_horizon(
+            virus_typ="Influenza A",
+            lookback_days=900,
+            persist=True,
+            horizon_days=7,
+        )
+
+        self.assertEqual(payload["status"], "success")
+        self.assertIn("metadata", captured)
+        self.assertTrue(
+            str((captured["metadata"] or {}).get("calibration_version")).startswith("raw_passthrough:h7:")
+        )
+
     def test_trainer_load_artifacts_reads_horizon_specific_payload(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             base = Path(tmp_dir)

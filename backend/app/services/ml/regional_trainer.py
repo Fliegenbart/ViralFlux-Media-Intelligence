@@ -397,6 +397,8 @@ class RegionalModelTrainer:
             "aggregate_metrics": backtest_bundle["aggregate_metrics"],
             "rollout_mode": rollout_info["rollout_mode"],
             "activation_policy": rollout_info["activation_policy"],
+            "calibration_version": metadata["calibration_version"],
+            "selected_calibration_mode": calibration_mode,
             "model_dir": str(model_dir),
             "backtest": backtest_bundle["backtest_payload"],
             "selection": selection,

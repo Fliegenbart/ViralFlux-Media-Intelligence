@@ -8,3 +8,4 @@ export * from './media/regions';
 export * from './media/campaigns';
 export * from './media/portfolio';
 export * from './media/regional';
+export * from './media/pilot';

@@ -824,10 +824,7 @@ class RegionalModelTrainer:
             if model_train_df.empty or cal_df.empty or model_train_df["event_label"].nunique() < 2:
                 continue
 
-            classifier = self._fit_classifier(
-                model_train_df[feature_columns].to_numpy(),
-                model_train_df["event_label"].to_numpy(),
-            )
+            classifier = self._fit_classifier_from_frame(model_train_df, feature_columns)
             calibration, _calibration_mode = self._select_guarded_calibration(
                 calibration_frame=pd.DataFrame(
                     {
@@ -938,10 +935,7 @@ class RegionalModelTrainer:
             if model_train_df.empty or cal_df.empty or model_train_df["event_label"].nunique() < 2:
                 continue
 
-            classifier = self._fit_classifier(
-                model_train_df[feature_columns].to_numpy(),
-                model_train_df["event_label"].to_numpy(),
-            )
+            classifier = self._fit_classifier_from_frame(model_train_df, feature_columns)
             calibration, calibration_mode = self._select_guarded_calibration(
                 calibration_frame=pd.DataFrame(
                     {
@@ -964,20 +958,20 @@ class RegionalModelTrainer:
                 feature_columns=ww_only_columns,
             )
 
-            reg_median = self._fit_regressor(
-                train_df[feature_columns].to_numpy(),
-                train_df["y_next_log"].to_numpy(),
-                config=REGIONAL_REGRESSOR_CONFIG["median"],
+            reg_median = self._fit_regressor_from_frame(
+                train_df,
+                feature_columns,
+                REGIONAL_REGRESSOR_CONFIG["median"],
             )
-            reg_lower = self._fit_regressor(
-                train_df[feature_columns].to_numpy(),
-                train_df["y_next_log"].to_numpy(),
-                config=REGIONAL_REGRESSOR_CONFIG["lower"],
+            reg_lower = self._fit_regressor_from_frame(
+                train_df,
+                feature_columns,
+                REGIONAL_REGRESSOR_CONFIG["lower"],
             )
-            reg_upper = self._fit_regressor(
-                train_df[feature_columns].to_numpy(),
-                train_df["y_next_log"].to_numpy(),
-                config=REGIONAL_REGRESSOR_CONFIG["upper"],
+            reg_upper = self._fit_regressor_from_frame(
+                train_df,
+                feature_columns,
+                REGIONAL_REGRESSOR_CONFIG["upper"],
             )
 
             pred_log = reg_median.predict(test_df[feature_columns].to_numpy())
@@ -1103,10 +1097,7 @@ class RegionalModelTrainer:
                 freq="D",
             )
 
-        classifier = self._fit_classifier(
-            panel[feature_columns].to_numpy(),
-            panel["event_label"].to_numpy(),
-        )
+        classifier = self._fit_classifier_from_frame(panel, feature_columns)
         calibration, calibration_mode = self._select_guarded_calibration(
             calibration_frame=calibration_frame[
                 ["as_of_date", "event_label", "event_probability_raw"]
@@ -1114,20 +1105,20 @@ class RegionalModelTrainer:
             raw_probability_col="event_probability_raw",
             action_threshold=action_threshold,
         )
-        reg_median = self._fit_regressor(
-            panel[feature_columns].to_numpy(),
-            panel["y_next_log"].to_numpy(),
-            config=REGIONAL_REGRESSOR_CONFIG["median"],
+        reg_median = self._fit_regressor_from_frame(
+            panel,
+            feature_columns,
+            REGIONAL_REGRESSOR_CONFIG["median"],
         )
-        reg_lower = self._fit_regressor(
-            panel[feature_columns].to_numpy(),
-            panel["y_next_log"].to_numpy(),
-            config=REGIONAL_REGRESSOR_CONFIG["lower"],
+        reg_lower = self._fit_regressor_from_frame(
+            panel,
+            feature_columns,
+            REGIONAL_REGRESSOR_CONFIG["lower"],
         )
-        reg_upper = self._fit_regressor(
-            panel[feature_columns].to_numpy(),
-            panel["y_next_log"].to_numpy(),
-            config=REGIONAL_REGRESSOR_CONFIG["upper"],
+        reg_upper = self._fit_regressor_from_frame(
+            panel,
+            feature_columns,
+            REGIONAL_REGRESSOR_CONFIG["upper"],
         )
         return {
             "classifier": classifier,
@@ -1214,20 +1205,59 @@ class RegionalModelTrainer:
         return unique_dates[:-guard_size], unique_dates[-guard_size:]
 
     @staticmethod
-    def _fit_classifier(X: np.ndarray, y: np.ndarray) -> XGBClassifier:
+    def _fit_classifier(
+        X: np.ndarray,
+        y: np.ndarray,
+        sample_weight: np.ndarray | None = None,
+    ) -> XGBClassifier:
         positives = max(int(np.sum(y == 1)), 1)
         negatives = max(int(np.sum(y == 0)), 1)
         config = dict(REGIONAL_CLASSIFIER_CONFIG)
         config["scale_pos_weight"] = float(negatives / positives)
         model = XGBClassifier(**config)
-        model.fit(X, y)
+        fit_kwargs: dict[str, Any] = {}
+        if sample_weight is not None:
+            fit_kwargs["sample_weight"] = sample_weight
+        model.fit(X, y, **fit_kwargs)
         return model
 
     @staticmethod
-    def _fit_regressor(X: np.ndarray, y: np.ndarray, *, config: dict[str, Any]) -> XGBRegressor:
+    def _fit_regressor(
+        X: np.ndarray,
+        y: np.ndarray,
+        *,
+        config: dict[str, Any],
+        sample_weight: np.ndarray | None = None,
+    ) -> XGBRegressor:
         model = XGBRegressor(**config)
-        model.fit(X, y)
+        fit_kwargs: dict[str, Any] = {}
+        if sample_weight is not None:
+            fit_kwargs["sample_weight"] = sample_weight
+        model.fit(X, y, **fit_kwargs)
         return model
+
+    def _sample_weights(self, frame: pd.DataFrame) -> np.ndarray | None:
+        return None
+
+    def _fit_classifier_from_frame(self, frame: pd.DataFrame, feature_columns: list[str]) -> XGBClassifier:
+        return self._fit_classifier(
+            frame[feature_columns].to_numpy(),
+            frame["event_label"].to_numpy(),
+            sample_weight=self._sample_weights(frame),
+        )
+
+    def _fit_regressor_from_frame(
+        self,
+        frame: pd.DataFrame,
+        feature_columns: list[str],
+        config: dict[str, Any],
+    ) -> XGBRegressor:
+        return self._fit_regressor(
+            frame[feature_columns].to_numpy(),
+            frame["y_next_log"].to_numpy(),
+            config=config,
+            sample_weight=self._sample_weights(frame),
+        )
 
     @staticmethod
     def _fit_isotonic(raw_probabilities: np.ndarray, labels: np.ndarray) -> IsotonicRegression | None:
@@ -1358,10 +1388,7 @@ class RegionalModelTrainer:
             base_rate = float(train_df["event_label"].mean() or 0.0)
             return np.full(len(test_df), base_rate, dtype=float)
 
-        classifier = self._fit_classifier(
-            train_df[feature_columns].to_numpy(),
-            train_df["event_label"].to_numpy(),
-        )
+        classifier = self._fit_classifier_from_frame(train_df, feature_columns)
         raw_prob = classifier.predict_proba(test_df[feature_columns].to_numpy())[:, 1]
         train_raw = classifier.predict_proba(train_df[feature_columns].to_numpy())[:, 1]
         calibration = self._fit_isotonic(train_raw, train_df["event_label"].to_numpy())

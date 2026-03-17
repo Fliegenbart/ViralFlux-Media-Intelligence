@@ -25,9 +25,9 @@ def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--preset",
-        choices=("pilot_baseline", "influenza_calibration"),
+        choices=("pilot_baseline", "influenza_calibration", "rsv_ranking"),
         default="pilot_baseline",
-        help="Choose the baseline-only pilot path or the focused Influenza A/B calibration experiments.",
+        help="Choose the baseline-only pilot path, focused Influenza A/B calibration experiments, or the RSV A ranking path.",
     )
     parser.add_argument(
         "--virus",
@@ -45,8 +45,8 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--output-root",
         type=Path,
-        default=Path(BACKEND_ROOT) / "ml_models" / "regional_panel_h7_pilot_only",
-        help="Separate artifact root for pilot-only runs.",
+        default=Path(BACKEND_ROOT) / "app" / "ml_models" / "regional_panel_h7_pilot_only",
+        help="Separate persistent artifact root for pilot-only runs.",
     )
     parser.add_argument(
         "--summary-output",
@@ -61,11 +61,15 @@ def _specs_for_args(args: argparse.Namespace):
     from app.services.ml.h7_pilot_training import (
         default_h7_influenza_calibration_specs_by_virus,
         default_h7_pilot_specs_by_virus,
+        default_h7_rsv_ranking_specs_by_virus,
     )
 
     if args.preset == "influenza_calibration":
         viruses = args.viruses or ["Influenza A", "Influenza B"]
         spec_map = default_h7_influenza_calibration_specs_by_virus(viruses)
+    elif args.preset == "rsv_ranking":
+        viruses = args.viruses or ["RSV A"]
+        spec_map = default_h7_rsv_ranking_specs_by_virus(viruses)
     else:
         viruses = args.viruses or list(DAY_ONE_PILOT_VIRUS_TYPES)
         spec_map = default_h7_pilot_specs_by_virus(viruses)

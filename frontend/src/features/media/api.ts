@@ -4,6 +4,7 @@ import {
   MediaCampaignsResponse,
   MediaDecisionResponse,
   MediaEvidenceResponse,
+  PilotReportingResponse,
   RegionalAllocationResponse,
   RegionalCampaignRecommendationsResponse,
   RegionalForecastResponse,
@@ -44,6 +45,16 @@ export interface TruthImportPayload {
   validate_only: boolean;
   file_name: string;
   csv_payload: string;
+}
+
+export interface PilotReportingPayload {
+  brand?: string;
+  lookbackWeeks?: number;
+  windowStart?: string;
+  windowEnd?: string;
+  regionCode?: string;
+  product?: string;
+  includeDraft?: boolean;
 }
 
 export async function fetchJson<T>(url: string, init?: RequestInit, timeoutMs = 12000): Promise<T> {
@@ -112,6 +123,23 @@ export const mediaApi = {
   async getEvidence(virus: string, brand: string): Promise<MediaEvidenceResponse> {
     const qs = new URLSearchParams({ virus_typ: virus, brand });
     return fetchJson<MediaEvidenceResponse>(`/api/v1/media/evidence?${qs.toString()}`);
+  },
+
+  async getPilotReporting(payload: PilotReportingPayload = {}): Promise<PilotReportingResponse> {
+    const qs = new URLSearchParams();
+    if (payload.brand) qs.set('brand', payload.brand);
+    if (payload.lookbackWeeks != null) qs.set('lookback_weeks', String(payload.lookbackWeeks));
+    if (payload.windowStart) qs.set('window_start', payload.windowStart);
+    if (payload.windowEnd) qs.set('window_end', payload.windowEnd);
+    if (payload.regionCode) qs.set('region_code', payload.regionCode);
+    if (payload.product) qs.set('product', payload.product);
+    if (payload.includeDraft != null) qs.set('include_draft', String(payload.includeDraft));
+    const suffix = qs.toString();
+    return fetchJson<PilotReportingResponse>(
+      `/api/v1/media/pilot-reporting${suffix ? `?${suffix}` : ''}`,
+      undefined,
+      20000,
+    );
   },
 
   async getBacktestRun(runId: string): Promise<BacktestResponse> {

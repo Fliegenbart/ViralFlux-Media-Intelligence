@@ -42,14 +42,14 @@ The new pilot path adds:
 Default pilot-only artifacts are written under:
 
 ```text
-backend/ml_models/regional_panel_h7_pilot_only/
+backend/app/ml_models/regional_panel_h7_pilot_only/
 ```
 
 Each experiment run stays isolated below its own experiment name and
 virus slug. The canonical live baseline stays under:
 
 ```text
-backend/ml_models/regional_panel/
+backend/app/ml_models/regional_panel/
 ```
 
 This keeps comparison honest:
@@ -74,6 +74,17 @@ Runs local h7-only calibration experiments for:
 
 If `RSV A` is explicitly included, it stays on the baseline guard path.
 
+### `rsv_ranking`
+
+Runs the RSV-specific h7 ranking path for:
+
+- `RSV A`
+
+This path keeps calibration guardrails intact and focuses on feature
+subset tuning, trend/momentum/agreement weighting, and score separation
+improvements. `Influenza A` and `Influenza B` stay on the baseline guard
+path if they are explicitly included.
+
 ## Commands
 
 Run the h7 pilot-only baseline for all three pilot scopes:
@@ -81,7 +92,7 @@ Run the h7 pilot-only baseline for all three pilot scopes:
 ```bash
 python backend/scripts/run_h7_pilot_only_training.py \
   --preset pilot_baseline \
-  --output-root backend/ml_models/regional_panel_h7_pilot_only
+  --output-root backend/app/ml_models/regional_panel_h7_pilot_only
 ```
 
 Run only one pilot virus:
@@ -99,7 +110,16 @@ python backend/scripts/run_h7_pilot_only_training.py \
   --preset influenza_calibration \
   --virus "Influenza A" \
   --virus "Influenza B" \
-  --output-root backend/ml_models/regional_panel_h7_pilot_only
+  --output-root backend/app/ml_models/regional_panel_h7_pilot_only
+```
+
+Run the RSV A ranking experiments:
+
+```bash
+python backend/scripts/run_h7_pilot_only_training.py \
+  --preset rsv_ranking \
+  --virus "RSV A" \
+  --output-root backend/app/ml_models/regional_panel_h7_pilot_only
 ```
 
 Override lookback consistently across all selected specs:
@@ -122,7 +142,19 @@ contains at least:
 - `ece`
 - `calibration_version`
 - `selected_calibration_mode`
+- `calibration_mode`
+- `gate_outcome`
+- `retained`
+- `retention_reason`
+- `feature_selection`
+- `recency_weight_half_life_days`
+- `signal_agreement_weight`
 - `gate_summary`
+
+These metrics are exposed twice on purpose:
+
+- directly on each comparison row for fast diffing
+- inside the nested `metrics` object for machine-friendly grouping
 
 The JSON summary is written to:
 
@@ -136,6 +168,7 @@ Per virus, the summary contains:
 - `runs`
 - `comparison_table`
 - `best_experiment`
+- `best_retained_experiment`
 
 ## Current Live Baseline Reference
 

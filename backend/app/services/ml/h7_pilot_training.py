@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any, Sequence
 
 import numpy as np
+import pandas as pd
 from xgboost import XGBClassifier, XGBRegressor
 
 from app.services.ml.forecast_horizon_utils import (
@@ -63,12 +64,25 @@ class CalibrationExperimentSpec:
 
 
 @dataclass(frozen=True)
+class FeatureSelectionSpec:
+    """Column selection rules for a pilot-only feature subset."""
+
+    include_columns: tuple[str, ...] = ()
+    include_prefixes: tuple[str, ...] = ()
+    exclude_columns: tuple[str, ...] = ()
+    exclude_prefixes: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
 class PilotExperimentSpec:
     """Configuration for one h7-only pilot experiment run."""
 
     name: str
     description: str
     lookback_days: int = 900
+    feature_selection: FeatureSelectionSpec | None = None
+    recency_weight_half_life_days: float | None = None
+    signal_agreement_weight: float = 0.0
     classifier_overrides: dict[str, Any] | None = None
     regressor_overrides: dict[str, dict[str, Any]] | None = None
     calibration_experiments: tuple[CalibrationExperimentSpec, ...] = ()
@@ -116,6 +130,50 @@ class QuantileSmoothingCalibration:
         return np.clip(values[np.clip(bucket_ids, 0, len(values) - 1)], 0.001, 0.999)
 
 
+RSV_SIGNAL_PREFIXES = (
+    "ifsg_rsv_",
+    "survstat_",
+    "ww_",
+    "neighbor_ww_",
+    "national_ww_",
+    "grippeweb_ili_",
+    "grippeweb_are_",
+)
+
+RSV_CONTEXT_PREFIXES = RSV_SIGNAL_PREFIXES + ("state_",)
+RSV_SHARED_CONTEXT_COLUMNS = (
+    "state_population_millions",
+    "ww_sites_per_million",
+    "state_neighbor_count",
+    "state_is_city_state",
+    "target_week_iso",
+    "target_holiday_share",
+    "target_holiday_any",
+)
+
+RSV_SIGNAL_CORE_SELECTION = FeatureSelectionSpec(
+    include_prefixes=RSV_SIGNAL_PREFIXES,
+    include_columns=RSV_SHARED_CONTEXT_COLUMNS,
+    exclude_prefixes=(
+        "weather_",
+        "pollen_",
+        "xdisease_",
+        "sars_",
+    ),
+)
+
+RSV_SIGNAL_CONTEXT_SELECTION = FeatureSelectionSpec(
+    include_prefixes=RSV_CONTEXT_PREFIXES,
+    include_columns=RSV_SHARED_CONTEXT_COLUMNS,
+    exclude_prefixes=(
+        "weather_",
+        "pollen_",
+        "xdisease_",
+        "sars_",
+    ),
+)
+
+
 BASELINE_GUARD_SPEC = PilotExperimentSpec(
     name="baseline_guard",
     description="Current live-compatible guarded calibration path with raw/isotonic only.",
@@ -157,6 +215,41 @@ INFLUENZA_H7_CALIBRATION_SPECS: tuple[PilotExperimentSpec, ...] = (
 )
 
 
+RSV_H7_RANKING_SPECS: tuple[PilotExperimentSpec, ...] = (
+    BASELINE_GUARD_SPEC,
+    PilotExperimentSpec(
+        name="rsv_signal_core",
+        description="RSV-only signal subset that trims noisy weather, pollen, and cross-virus features.",
+        feature_selection=RSV_SIGNAL_CORE_SELECTION,
+    ),
+    PilotExperimentSpec(
+        name="rsv_signal_core_weighted",
+        description="RSV signal subset with stronger recency and signal-agreement weighting.",
+        feature_selection=RSV_SIGNAL_CORE_SELECTION,
+        recency_weight_half_life_days=180.0,
+        signal_agreement_weight=0.35,
+    ),
+    PilotExperimentSpec(
+        name="rsv_signal_context_regularized",
+        description="RSV signal subset with state-context dummies and tighter tree regularization.",
+        feature_selection=RSV_SIGNAL_CONTEXT_SELECTION,
+        recency_weight_half_life_days=120.0,
+        signal_agreement_weight=0.45,
+        classifier_overrides={
+            "n_estimators": 220,
+            "max_depth": 3,
+            "learning_rate": 0.04,
+            "subsample": 0.85,
+            "colsample_bytree": 0.8,
+            "min_child_weight": 4.0,
+            "gamma": 0.15,
+            "reg_lambda": 1.5,
+            "reg_alpha": 0.05,
+        },
+    ),
+)
+
+
 def default_h7_pilot_specs_by_virus(
     virus_types: Sequence[str] | None = None,
 ) -> dict[str, tuple[PilotExperimentSpec, ...]]:
@@ -180,6 +273,19 @@ def default_h7_influenza_calibration_specs_by_virus(
     return spec_map
 
 
+def default_h7_rsv_ranking_specs_by_virus(
+    virus_types: Sequence[str] | None = None,
+) -> dict[str, tuple[PilotExperimentSpec, ...]]:
+    selected = tuple(virus_types or ("RSV A",))
+    spec_map: dict[str, tuple[PilotExperimentSpec, ...]] = {}
+    for virus_typ in selected:
+        if virus_typ == "RSV A":
+            spec_map[virus_typ] = RSV_H7_RANKING_SPECS
+        else:
+            spec_map[virus_typ] = (BASELINE_GUARD_SPEC,)
+    return spec_map
+
+
 class PilotH7ExperimentTrainer(RegionalModelTrainer):
     """Regional trainer variant for h7-only pilot experiments."""
 
@@ -188,25 +294,120 @@ class PilotH7ExperimentTrainer(RegionalModelTrainer):
         db,
         *,
         models_dir: Path | None = None,
+        feature_selection: FeatureSelectionSpec | None = None,
+        recency_weight_half_life_days: float | None = None,
+        signal_agreement_weight: float = 0.0,
         classifier_config: dict[str, Any] | None = None,
         regressor_config: dict[str, dict[str, Any]] | None = None,
         calibration_experiments: Sequence[CalibrationExperimentSpec] | None = None,
     ) -> None:
         super().__init__(db, models_dir=models_dir)
+        self.feature_selection = feature_selection
+        self.recency_weight_half_life_days = recency_weight_half_life_days
+        self.signal_agreement_weight = float(signal_agreement_weight or 0.0)
         self.classifier_config = deepcopy(classifier_config or REGIONAL_CLASSIFIER_CONFIG)
         self.regressor_config = deepcopy(regressor_config or REGIONAL_REGRESSOR_CONFIG)
         self.calibration_experiments = tuple(calibration_experiments or ())
 
-    def _fit_classifier(self, X: np.ndarray, y: np.ndarray) -> XGBClassifier:
+    def _feature_columns(self, panel) -> list[str]:
+        columns = super()._feature_columns(panel)
+        if self.feature_selection is None or not columns:
+            return columns
+
+        selection = self.feature_selection
+        include_columns = set(selection.include_columns)
+        include_prefixes = selection.include_prefixes
+        exclude_columns = set(selection.exclude_columns)
+        exclude_prefixes = selection.exclude_prefixes
+
+        filtered: list[str] = []
+        for column in columns:
+            if include_columns or include_prefixes:
+                if column not in include_columns and not any(
+                    column.startswith(prefix) for prefix in include_prefixes
+                ):
+                    continue
+            if column in exclude_columns or any(column.startswith(prefix) for prefix in exclude_prefixes):
+                continue
+            filtered.append(column)
+        return filtered
+
+    def _sample_weights(self, frame) -> np.ndarray | None:
+        if frame is None or frame.empty:
+            return None
+
+        weights = np.ones(len(frame), dtype=float)
+        if self.recency_weight_half_life_days:
+            dates = np.asarray(pd.to_datetime(frame["as_of_date"]).values, dtype="datetime64[ns]")
+            if len(dates) > 0:
+                latest = dates.max()
+                age_days = (latest - dates).astype("timedelta64[D]").astype(float)
+                half_life = max(float(self.recency_weight_half_life_days), 1.0)
+                recency = np.power(0.5, age_days / half_life)
+                weights *= np.clip(recency.astype(float), 0.05, 1.0)
+
+        if self.signal_agreement_weight > 0.0:
+            agreement = self._signal_agreement_score(frame)
+            weights *= np.clip(1.0 + (self.signal_agreement_weight * agreement), 0.5, 1.75)
+
+        return np.clip(weights, 0.05, 2.0)
+
+    @staticmethod
+    def _signal_agreement_score(frame) -> np.ndarray:
+        candidate_columns = (
+            "ifsg_rsv_baseline_zscore",
+            "ifsg_rsv_momentum_1w",
+            "ifsg_rsv_survstat_zscore_gap",
+            "survstat_baseline_zscore",
+            "survstat_momentum_2w",
+            "survstat_momentum_4w",
+            "ww_slope7d",
+            "ww_acceleration7d",
+            "ww_relative_to_national",
+            "ww_relative_to_neighbor_mean",
+            "grippeweb_ili_baseline_zscore",
+            "grippeweb_ili_momentum_1w",
+            "grippeweb_are_baseline_zscore",
+            "grippeweb_are_momentum_1w",
+            "national_ww_slope7d",
+            "neighbor_ww_slope7d",
+        )
+        selected = [column for column in candidate_columns if column in frame.columns]
+        if not selected:
+            return np.zeros(len(frame), dtype=float)
+
+        values = np.asarray(frame[selected].to_numpy(dtype=float), dtype=float)
+        values = np.nan_to_num(values, nan=0.0, posinf=0.0, neginf=0.0)
+        if values.size == 0:
+            return np.zeros(len(frame), dtype=float)
+
+        directional_agreement = np.maximum(
+            np.mean(values > 0.0, axis=1) - np.mean(values < 0.0, axis=1),
+            0.0,
+        )
+        strength = np.clip(np.mean(np.abs(np.tanh(values)), axis=1), 0.0, 1.0)
+        return np.clip((0.55 * directional_agreement) + (0.45 * strength), 0.0, 1.0)
+
+    def _fit_classifier(self, X: np.ndarray, y: np.ndarray, sample_weight: np.ndarray | None = None) -> XGBClassifier:
         positives = max(int(np.sum(y == 1)), 1)
         negatives = max(int(np.sum(y == 0)), 1)
         config = deepcopy(self.classifier_config)
         config["scale_pos_weight"] = float(negatives / positives)
         model = XGBClassifier(**config)
-        model.fit(X, y)
+        fit_kwargs: dict[str, Any] = {}
+        if sample_weight is not None:
+            fit_kwargs["sample_weight"] = sample_weight
+        model.fit(X, y, **fit_kwargs)
         return model
 
-    def _fit_regressor(self, X: np.ndarray, y: np.ndarray, *, config: dict[str, Any]) -> XGBRegressor:
+    def _fit_regressor(
+        self,
+        X: np.ndarray,
+        y: np.ndarray,
+        *,
+        config: dict[str, Any],
+        sample_weight: np.ndarray | None = None,
+    ) -> XGBRegressor:
         alpha = config.get("quantile_alpha")
         override = None
         for candidate in self.regressor_config.values():
@@ -215,7 +416,10 @@ class PilotH7ExperimentTrainer(RegionalModelTrainer):
                 break
         merged_config = deepcopy(override or config)
         model = XGBRegressor(**merged_config)
-        model.fit(X, y)
+        fit_kwargs: dict[str, Any] = {}
+        if sample_weight is not None:
+            fit_kwargs["sample_weight"] = sample_weight
+        model.fit(X, y, **fit_kwargs)
         return model
 
     def _extra_guarded_calibration_candidates(
@@ -463,6 +667,68 @@ def _metric_delta(candidate: dict[str, Any], baseline: dict[str, Any]) -> dict[s
     return deltas
 
 
+def _gate_outcome(quality_gate: dict[str, Any] | None) -> str | None:
+    gate = quality_gate or {}
+    outcome = gate.get("forecast_readiness")
+    if outcome:
+        return str(outcome)
+    if gate.get("overall_passed") is not None:
+        return "GO" if bool(gate.get("overall_passed")) else "WATCH"
+    return None
+
+
+def _retention_status(
+    *,
+    candidate_metrics: dict[str, Any],
+    baseline_metrics: dict[str, Any],
+    epsilon: float = 1e-6,
+) -> tuple[bool, str]:
+    checks = {
+        "precision_at_top3": (
+            float(candidate_metrics.get("precision_at_top3") or 0.0)
+            > float(baseline_metrics.get("precision_at_top3") or 0.0) + epsilon
+        ),
+        "activation_false_positive_rate": (
+            float(candidate_metrics.get("activation_false_positive_rate") or 1.0)
+            <= float(baseline_metrics.get("activation_false_positive_rate") or 1.0) + epsilon
+        ),
+        "ece": (
+            float(candidate_metrics.get("ece") or 1.0)
+            <= float(baseline_metrics.get("ece") or 1.0) + epsilon
+        ),
+        "brier_score": (
+            float(candidate_metrics.get("brier_score") or 1.0)
+            <= float(baseline_metrics.get("brier_score") or 1.0) + epsilon
+        ),
+    }
+    if all(checks.values()):
+        return True, "precision_at_top3 improved without unbounded calibration or activation regression"
+    failed = next((name for name, passed in checks.items() if not passed), "unknown")
+    return False, f"failed_{failed}"
+
+
+def _feature_selection_payload(selection: FeatureSelectionSpec | None) -> dict[str, Any] | None:
+    if selection is None:
+        return None
+    return {
+        "include_columns": list(selection.include_columns),
+        "include_prefixes": list(selection.include_prefixes),
+        "exclude_columns": list(selection.exclude_columns),
+        "exclude_prefixes": list(selection.exclude_prefixes),
+    }
+
+
+def _flatten_comparison_metrics(metrics: dict[str, Any] | None) -> dict[str, Any]:
+    payload = metrics or {}
+    return {
+        "precision_at_top3": payload.get("precision_at_top3"),
+        "activation_false_positive_rate": payload.get("activation_false_positive_rate"),
+        "pr_auc": payload.get("pr_auc"),
+        "brier_score": payload.get("brier_score"),
+        "ece": payload.get("ece"),
+    }
+
+
 class H7PilotExperimentRunner:
     """Run h7-only pilot training and comparison output per virus."""
 
@@ -527,6 +793,9 @@ class H7PilotExperimentRunner:
             trainer = PilotH7ExperimentTrainer(
                 self.db,
                 models_dir=experiment_root,
+                feature_selection=spec.feature_selection,
+                recency_weight_half_life_days=spec.recency_weight_half_life_days,
+                signal_agreement_weight=spec.signal_agreement_weight,
                 classifier_config=self._merged_classifier_config(spec),
                 regressor_config=self._merged_regressor_config(spec),
                 calibration_experiments=spec.calibration_experiments,
@@ -549,6 +818,7 @@ class H7PilotExperimentRunner:
         ranked_runs = sorted(
             runs,
             key=lambda item: (
+                bool(item.get("retained")),
                 bool((item.get("gate_summary") or {}).get("overall_passed")),
                 float((item.get("metrics") or {}).get("precision_at_top3") or 0.0),
                 float((item.get("metrics") or {}).get("pr_auc") or 0.0),
@@ -557,6 +827,7 @@ class H7PilotExperimentRunner:
             ),
             reverse=True,
         )
+        best_retained = next((item for item in ranked_runs if item.get("retained")), None)
         comparison_table = [baseline_row, *ranked_runs]
         return {
             "virus_typ": virus_typ,
@@ -565,6 +836,7 @@ class H7PilotExperimentRunner:
             "baseline": baseline_row,
             "experiment_count": len(ranked_runs),
             "best_experiment": ranked_runs[0]["name"] if ranked_runs else None,
+            "best_retained_experiment": best_retained["name"] if best_retained else None,
             "runs": ranked_runs,
             "comparison_table": comparison_table,
         }
@@ -580,7 +852,7 @@ class H7PilotExperimentRunner:
         metrics = (metadata.get("aggregate_metrics") or backtest.get("aggregate_metrics") or {}).copy()
         quality_gate = (metadata.get("quality_gate") or backtest.get("quality_gate") or {}).copy()
         calibration_version = metadata.get("calibration_version")
-        return {
+        row = {
             "name": "live_baseline",
             "source": "baseline",
             "virus_typ": virus_typ,
@@ -595,10 +867,19 @@ class H7PilotExperimentRunner:
             "status": "available" if metadata else "missing",
             "calibration_version": calibration_version,
             "selected_calibration_mode": _selected_calibration_mode(calibration_version),
+            "calibration_mode": _selected_calibration_mode(calibration_version),
             "metrics": metrics,
             "gate_summary": _quality_gate_summary(quality_gate),
+            "gate_outcome": _gate_outcome(quality_gate),
+            "retained": True,
+            "retention_reason": "baseline_reference",
             "delta_vs_baseline": {},
+            "feature_selection": None,
+            "recency_weight_half_life_days": None,
+            "signal_agreement_weight": None,
         }
+        row.update(_flatten_comparison_metrics(metrics))
+        return row
 
     @staticmethod
     def _merged_classifier_config(spec: PilotExperimentSpec) -> dict[str, Any]:
@@ -626,7 +907,11 @@ class H7PilotExperimentRunner:
     ) -> dict[str, Any]:
         metrics = (result.get("aggregate_metrics") or {}).copy()
         calibration_version = result.get("calibration_version")
-        return {
+        retained, retention_reason = _retention_status(
+            candidate_metrics=metrics,
+            baseline_metrics=baseline_metrics,
+        )
+        row = {
             "name": spec.name,
             "description": spec.description,
             "source": "experiment",
@@ -639,8 +924,19 @@ class H7PilotExperimentRunner:
                 result.get("selected_calibration_mode")
                 or _selected_calibration_mode(calibration_version)
             ),
+            "calibration_mode": (
+                result.get("selected_calibration_mode")
+                or _selected_calibration_mode(calibration_version)
+            ),
             "metrics": metrics,
             "gate_summary": _quality_gate_summary(result.get("quality_gate") or {}),
+            "gate_outcome": _gate_outcome(result.get("quality_gate") or {}),
+            "retained": retained,
+            "retention_reason": retention_reason,
             "delta_vs_baseline": _metric_delta(metrics, baseline_metrics),
+            "feature_selection": _feature_selection_payload(spec.feature_selection),
+            "recency_weight_half_life_days": spec.recency_weight_half_life_days,
+            "signal_agreement_weight": spec.signal_agreement_weight,
         }
-
+        row.update(_flatten_comparison_metrics(metrics))
+        return row

@@ -11,6 +11,7 @@ const LandingPage = lazy(() => import('./pages/LandingPage'));
 const WeeklyReport = lazy(() => import('./pages/WeeklyReport'));
 const MediaShell = lazy(() => import('./pages/media/MediaShell'));
 const OperationalDashboardPage = lazy(() => import('./pages/media/OperationalDashboardPage'));
+const PilotPage = lazy(() => import('./pages/media/PilotPage'));
 const DecisionPage = lazy(() => import('./pages/media/DecisionPage'));
 const RegionsPage = lazy(() => import('./pages/media/RegionsPage'));
 const CampaignsPage = lazy(() => import('./pages/media/CampaignsPage'));
@@ -177,6 +178,7 @@ const App: React.FC = () => {
                 <Route path="/welcome" element={<LandingPage />} />
                 <Route element={<MediaShell />}>
                   <Route path="/dashboard" element={<OperationalDashboardPage />} />
+                  <Route path="/pilot" element={<PilotPage />} />
                   <Route path="/entscheidung" element={<DecisionPage />} />
                   <Route path="/regionen" element={<RegionsPage />} />
                   <Route path="/kampagnen" element={<CampaignsPage />} />

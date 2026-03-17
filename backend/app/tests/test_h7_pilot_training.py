@@ -13,6 +13,8 @@ from app.services.ml.h7_pilot_training import (
     PilotExperimentSpec,
     PilotH7ExperimentTrainer,
     default_h7_influenza_calibration_specs_by_virus,
+    default_h7_rsv_ranking_specs_by_virus,
+    RSV_SIGNAL_CORE_SELECTION,
 )
 
 
@@ -119,6 +121,48 @@ class H7PilotTrainingTests(unittest.TestCase):
         self.assertGreater(len(spec_map["Influenza B"]), 1)
         self.assertEqual(spec_map["RSV A"], (BASELINE_GUARD_SPEC,))
 
+    def test_rsv_ranking_default_spec_map_uses_signal_subset_and_weighted_variants(self) -> None:
+        spec_map = default_h7_rsv_ranking_specs_by_virus(["RSV A", "Influenza A"])
+
+        self.assertGreater(len(spec_map["RSV A"]), 1)
+        self.assertIsNotNone(spec_map["RSV A"][1].feature_selection)
+        self.assertEqual(spec_map["Influenza A"], (BASELINE_GUARD_SPEC,))
+
+    def test_rsv_trainer_applies_feature_subset_and_signal_weights(self) -> None:
+        trainer = PilotH7ExperimentTrainer(
+            db=None,
+            feature_selection=RSV_SIGNAL_CORE_SELECTION,
+            recency_weight_half_life_days=180.0,
+            signal_agreement_weight=0.35,
+        )
+        panel = pd.DataFrame(
+            {
+                "ifsg_rsv_level": [1.5, -0.4],
+                "survstat_baseline_zscore": [1.2, -0.2],
+                "ww_slope7d": [0.8, -0.6],
+                "weather_forecast_temp_3_7": [8.0, 10.0],
+                "state_BY": [1.0, 0.0],
+                "state_population_millions": [13.1, 13.1],
+                "ww_sites_per_million": [2.2, 1.9],
+                "target_week_iso": [6.0, 6.0],
+                "target_holiday_share": [0.0, 0.0],
+                "target_holiday_any": [0.0, 0.0],
+                "as_of_date": pd.to_datetime(["2026-06-01", "2026-06-01"]),
+                "event_label": [1, 0],
+                "y_next_log": [0.2, 0.1],
+            }
+        )
+
+        filtered_columns = trainer._feature_columns(panel)
+        weights = trainer._sample_weights(panel)
+
+        self.assertIn("ifsg_rsv_level", filtered_columns)
+        self.assertIn("survstat_baseline_zscore", filtered_columns)
+        self.assertNotIn("weather_forecast_temp_3_7", filtered_columns)
+        self.assertNotIn("state_BY", filtered_columns)
+        self.assertIsNotNone(weights)
+        self.assertGreater(float(weights[0]), float(weights[1]))
+
     def test_runner_emits_comparison_rows_with_calibration_fields(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             base_dir = Path(tmp_dir) / "baseline"
@@ -196,9 +240,15 @@ class H7PilotTrainingTests(unittest.TestCase):
 
         virus_summary = summary["viruses"]["Influenza A"]
         self.assertEqual(virus_summary["baseline"]["selected_calibration_mode"], "raw_passthrough")
+        self.assertEqual(virus_summary["baseline"]["ece"], 0.08)
         self.assertEqual(virus_summary["runs"][0]["selected_calibration_mode"], "logit_temp_guarded_t1p25")
+        self.assertEqual(virus_summary["runs"][0]["precision_at_top3"], 0.72)
         self.assertEqual(virus_summary["runs"][0]["delta_vs_baseline"]["ece"], -0.01)
+        self.assertEqual(virus_summary["runs"][0]["gate_outcome"], "WATCH")
+        self.assertTrue(virus_summary["runs"][0]["retained"])
+        self.assertEqual(virus_summary["best_retained_experiment"], "logit_temperature_grid")
         self.assertEqual(virus_summary["comparison_table"][1]["name"], "logit_temperature_grid")
+        self.assertEqual(virus_summary["comparison_table"][1]["brier_score"], 0.085)
 
 
 if __name__ == "__main__":

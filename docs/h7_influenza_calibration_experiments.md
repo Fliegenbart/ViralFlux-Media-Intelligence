@@ -72,18 +72,23 @@ python backend/scripts/run_h7_pilot_only_training.py \
   --preset influenza_calibration \
   --virus "Influenza A" \
   --virus "Influenza B" \
-  --output-root backend/ml_models/regional_panel_h7_pilot_only
+  --output-root backend/app/ml_models/regional_panel_h7_pilot_only
 ```
 
 The JSON comparison summary is written to:
 
 ```text
-backend/ml_models/regional_panel_h7_pilot_only/influenza_calibration_summary.json
+backend/app/ml_models/regional_panel_h7_pilot_only/influenza_calibration_summary.json
 ```
 
-## Comparison Table Template
+On the live worker, the same run was written to:
 
-Each output row contains:
+```text
+/app/app/ml_models/regional_panel_h7_pilot_only/influenza_calibration_summary.json
+```
+
+Each comparison row now exposes these fields directly at row level and
+also keeps the nested `metrics` object:
 
 - `precision_at_top3`
 - `activation_false_positive_rate`
@@ -94,10 +99,62 @@ Each output row contains:
 - `selected_calibration_mode`
 - `gate_summary`
 
-## Current Finding
+## Observed Comparison Results
 
-At the current live baseline, `raw_passthrough` remains the honest
-winner for both Influenza A/h7 and Influenza B/h7. The new h7-only
-experiment path is in place specifically so that additional local
-calibration candidates can be tested without triggering a full
-multi-horizon retrain or weakening the gate contract.
+Comparison rule for retention in this document:
+
+- `ece` must improve versus the live baseline
+- `precision_at_top3` must not get worse
+- `activation_false_positive_rate` must not get worse
+
+### Influenza A / h7
+
+| Run | precision_at_top3 | activation_fp_rate | pr_auc | brier | ece | calibration_version | selected_calibration_mode | Retain? | Gate |
+| --- | ---: | ---: | ---: | ---: | ---: | --- | --- | --- | --- |
+| `live_baseline` | 0.724359 | 0.052283 | 0.568928 | 0.102847 | 0.095076 | `raw_passthrough:h7:2026-03-17T15:54:41.258955` | `raw_passthrough` | baseline | `WATCH` (`ece_passed`) |
+| `baseline_guard` | 0.724359 | 0.052283 | 0.568928 | 0.102847 | 0.095076 | `raw_passthrough:h7:2026-03-17T17:40:30.506556` | `raw_passthrough` | no | `WATCH` (`ece_passed`) |
+| `logit_temperature_grid` | 0.724359 | 0.052283 | 0.599340 | 0.096200 | 0.080051 | `logit_temp_guarded_t2:h7:2026-03-17T17:43:35.563395` | `logit_temp_guarded_t2` | yes | `WATCH` (`ece_passed`) |
+| `shrinkage_blend_grid` | 0.747917 | 0.048634 | 0.585018 | 0.104295 | 0.096889 | `shrinkage_guarded_a0p3:h7:2026-03-17T17:46:40.755849` | `shrinkage_guarded_a0p3` | no | `WATCH` (`ece_passed`) |
+| `quantile_smoothing_q8` | 0.724359 | 0.052283 | 0.567420 | 0.102847 | 0.095076 | `raw_passthrough:h7:2026-03-17T17:49:43.474191` | `raw_passthrough` | no | `WATCH` (`ece_passed`) |
+
+Verdict for Influenza A:
+
+- `logit_temperature_grid` is the only honest improvement versus the live baseline.
+- It lowers `ece` by `0.015025` and `brier` by `0.006647` while leaving `precision_at_top3` and `activation_false_positive_rate` unchanged.
+- The scope still does not clear `ece_passed`, so this is an honest improvement, not a promotion to `GO`.
+
+### Influenza B / h7
+
+| Run | precision_at_top3 | activation_fp_rate | pr_auc | brier | ece | calibration_version | selected_calibration_mode | Retain? | Gate |
+| --- | ---: | ---: | ---: | ---: | ---: | --- | --- | --- | --- |
+| `live_baseline` | 0.737179 | 0.049768 | 0.632008 | 0.098856 | 0.079591 | `raw_passthrough:h7:2026-03-17T16:02:46.339488` | `raw_passthrough` | baseline | `WATCH` (`ece_passed`) |
+| `baseline_guard` | 0.737179 | 0.049768 | 0.632008 | 0.098856 | 0.079591 | `raw_passthrough:h7:2026-03-17T17:52:45.294072` | `raw_passthrough` | no | `WATCH` (`ece_passed`) |
+| `logit_temperature_grid` | 0.741453 | 0.049768 | 0.656558 | 0.094915 | 0.074984 | `logit_temp_guarded_t2:h7:2026-03-17T17:55:48.413897` | `logit_temp_guarded_t2` | yes | `WATCH` (`ece_passed`) |
+| `shrinkage_blend_grid` | 0.743750 | 0.044147 | 0.643951 | 0.098757 | 0.078599 | `shrinkage_guarded_a0p3:h7:2026-03-17T17:58:52.027940` | `shrinkage_guarded_a0p3` | yes | `WATCH` (`ece_passed`) |
+| `quantile_smoothing_q8` | 0.737179 | 0.049768 | 0.632008 | 0.098856 | 0.079591 | `raw_passthrough:h7:2026-03-17T18:01:53.403389` | `raw_passthrough` | no | `WATCH` (`ece_passed`) |
+
+Verdict for Influenza B:
+
+- `logit_temperature_grid` is the strongest honest improvement.
+- It lowers `ece` by `0.004607` and `brier` by `0.003941`, keeps `activation_false_positive_rate` flat, and slightly improves `precision_at_top3`.
+- `shrinkage_blend_grid` also qualifies as an honest improvement, but the `ece` gain is smaller at `0.000992`.
+- The scope remains `WATCH` because `ece_passed` is still not green.
+
+## Final Finding
+
+The h7-only pilot path now proves two useful points without weakening any
+gate:
+
+- Influenza A/h7 has one honest calibration winner: `logit_temp_guarded_t2`.
+- Influenza B/h7 has two honest winners, with `logit_temp_guarded_t2` clearly stronger than `shrinkage_guarded_a0p3`.
+- `quantile_smoothing_q8` did not beat `raw_passthrough` for either virus.
+- None of the honest improvements is yet large enough to move either
+  scope from `WATCH` to `GO`.
+
+That means the correct operational interpretation is:
+
+- keep the gates unchanged
+- treat `logit_temperature_grid` as the leading next-step candidate for
+  any isolated h7 promotion test
+- keep `raw_passthrough` as the truthful fallback wherever the local
+  experiment does not produce a real gain

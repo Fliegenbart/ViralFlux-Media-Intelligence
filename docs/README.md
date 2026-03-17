@@ -10,6 +10,24 @@ This repo keeps long-lived truth in a few small anchors instead of one giant pro
   [DEPLOY.md](/Users/davidwegener/Desktop/viralflux/DEPLOY.md)
 - Latest technical audit:
   [fluxengine_technical_audit_2026-03-10.md](/Users/davidwegener/Desktop/viralflux/docs/fluxengine_technical_audit_2026-03-10.md)
+- PEIX / GELO product positioning:
+  [product_positioning_peix_gelo.md](/Users/davidwegener/Desktop/viralflux/docs/product_positioning_peix_gelo.md)
+- PEIX / GELO pilot runbook:
+  [pilot_runbook_peix_gelo.md](/Users/davidwegener/Desktop/viralflux/docs/pilot_runbook_peix_gelo.md)
+- PEIX / GELO pilot reporting and ROI:
+  [pilot_reporting_and_roi.md](/Users/davidwegener/Desktop/viralflux/docs/pilot_reporting_and_roi.md)
+- Campaign recommendation layer:
+  [campaign_recommendation_layer.md](/Users/davidwegener/Desktop/viralflux/docs/campaign_recommendation_layer.md)
+- PEIX / GELO pilot output surface:
+  [peix_gelo_output_surface.md](/Users/davidwegener/Desktop/viralflux/docs/peix_gelo_output_surface.md)
+- RSV h7 ranking experiments:
+  [h7_rsv_ranking_experiments.md](/Users/davidwegener/Desktop/viralflux/docs/h7_rsv_ranking_experiments.md)
+- RSV h7 live evaluation runbook:
+  [rsv_h7_live_evaluation_runbook.md](/Users/davidwegener/Desktop/viralflux/docs/rsv_h7_live_evaluation_runbook.md)
+- RSV h7 persistent evaluation:
+  [rsv_h7_persistent_evaluation.md](/Users/davidwegener/Desktop/viralflux/docs/rsv_h7_persistent_evaluation.md)
+- RSV h7 go / no-go:
+  [rsv_h7_go_no_go.md](/Users/davidwegener/Desktop/viralflux/docs/rsv_h7_go_no_go.md)
 
 ## Module Context
 
@@ -30,4 +48,3 @@ This repo keeps long-lived truth in a few small anchors instead of one giant pro
   `.claude/skills/`
 - Guardrails and validation hooks:
   `.claude/hooks/`
-

@@ -10,7 +10,10 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.models.database import AuditLog, Base, WastewaterData
-from app.services.ml.forecast_horizon_utils import SUPPORTED_FORECAST_HORIZONS
+from app.services.ml.forecast_horizon_utils import (
+    SUPPORTED_FORECAST_HORIZONS,
+    supported_regional_horizons_for_virus,
+)
 from app.services.ml.training_contract import SUPPORTED_VIRUS_TYPES
 from app.services.ops.regional_operational_snapshot_store import RegionalOperationalSnapshotStore
 from app.services.ops.production_readiness_service import ProductionReadinessService
@@ -53,6 +56,12 @@ class ProductionReadinessServiceTests(unittest.TestCase):
                 )
             )
         self.db.commit()
+
+    def _supported_scope_count(self) -> int:
+        return sum(len(supported_regional_horizons_for_virus(virus_typ)) for virus_typ in SUPPORTED_VIRUS_TYPES)
+
+    def _unsupported_scope_count(self) -> int:
+        return (len(SUPPORTED_VIRUS_TYPES) * len(SUPPORTED_FORECAST_HORIZONS)) - self._supported_scope_count()
 
     def test_build_snapshot_reports_healthy_when_models_and_sources_are_fresh(self) -> None:
         now = datetime(2026, 3, 17, 10, 0, 0)
@@ -110,13 +119,11 @@ class ProductionReadinessServiceTests(unittest.TestCase):
             service._schema_bootstrap_component = lambda: {"status": "ok", "message": "mocked"}  # type: ignore[method-assign]
             snapshot = service.build_snapshot()
 
-        self.assertEqual(snapshot["status"], "healthy")
+        self.assertEqual(snapshot["status"], "degraded")
         self.assertEqual(snapshot["components"]["database"]["status"], "ok")
         regional = snapshot["components"]["regional_operational"]
-        self.assertEqual(
-            regional["summary"]["ready"],
-            len(SUPPORTED_VIRUS_TYPES) * len(SUPPORTED_FORECAST_HORIZONS),
-        )
+        self.assertEqual(regional["summary"]["ready"], self._supported_scope_count())
+        self.assertEqual(regional["summary"]["unsupported"], self._unsupported_scope_count())
         self.assertEqual(regional["summary"]["critical"], 0)
         self.assertEqual(snapshot["blockers"], [])
 
@@ -148,10 +155,8 @@ class ProductionReadinessServiceTests(unittest.TestCase):
 
         self.assertEqual(snapshot["status"], "unhealthy")
         regional = snapshot["components"]["regional_operational"]
-        self.assertEqual(
-            regional["summary"]["missing_models"],
-            len(SUPPORTED_VIRUS_TYPES) * len(SUPPORTED_FORECAST_HORIZONS),
-        )
+        self.assertEqual(regional["summary"]["missing_models"], self._supported_scope_count())
+        self.assertEqual(regional["summary"]["unsupported"], self._unsupported_scope_count())
         self.assertGreater(regional["summary"]["stale_sources"], 0)
         self.assertTrue(snapshot["blockers"])
 
@@ -225,7 +230,7 @@ class ProductionReadinessServiceTests(unittest.TestCase):
         self.assertEqual(snapshot["status"], "unhealthy")
         self.assertEqual(snapshot["components"]["forecast_monitoring"]["status"], "critical")
         self.assertIn("monitoring exploded", snapshot["components"]["forecast_monitoring"]["message"])
-        self.assertEqual(snapshot["components"]["regional_operational"]["status"], "ok")
+        self.assertEqual(snapshot["components"]["regional_operational"]["status"], "warning")
 
     def test_build_snapshot_uses_operational_snapshot_for_forecast_recency(self) -> None:
         now = datetime(2026, 3, 17, 10, 0, 0)
@@ -290,10 +295,11 @@ class ProductionReadinessServiceTests(unittest.TestCase):
             snapshot = service.build_snapshot()
 
         regional = snapshot["components"]["regional_operational"]
-        self.assertEqual(regional["status"], "ok")
-        first_item = regional["matrix"][0]
-        self.assertEqual(first_item["forecast_recency_basis"], "operational_snapshot")
-        self.assertEqual(first_item["forecast_recency_status"], "ok")
+        self.assertEqual(regional["status"], "warning")
+        supported_item = next(item for item in regional["matrix"] if item["model_availability"] != "unsupported")
+        self.assertEqual(supported_item["forecast_recency_basis"], "operational_snapshot")
+        self.assertEqual(supported_item["forecast_recency_status"], "ok")
+        self.assertEqual(regional["summary"]["unsupported"], self._unsupported_scope_count())
 
     def test_build_snapshot_treats_explicit_unsupported_scope_as_warning_not_missing(self) -> None:
         now = datetime(2026, 3, 17, 10, 0, 0)
@@ -335,9 +341,10 @@ class ProductionReadinessServiceTests(unittest.TestCase):
             for item in regional["matrix"]
             if item["virus_typ"] == "Influenza A" and item["horizon_days"] == 3
         )
+        unsupported_count = sum(1 for item in regional["matrix"] if item["model_availability"] == "unsupported")
         self.assertEqual(unsupported["model_availability"], "unsupported")
         self.assertEqual(unsupported["status"], "warning")
-        self.assertEqual(regional["summary"]["unsupported"], 1)
+        self.assertEqual(regional["summary"]["unsupported"], unsupported_count)
         self.assertLess(regional["summary"]["missing_models"], len(SUPPORTED_VIRUS_TYPES) * len(SUPPORTED_FORECAST_HORIZONS))
 
 

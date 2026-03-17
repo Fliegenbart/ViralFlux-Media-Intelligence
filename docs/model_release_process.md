@@ -9,6 +9,7 @@ Relevant code paths:
 - `/Users/davidwegener/Desktop/viralflux/backend/app/services/ml/regional_trainer.py`
 - `/Users/davidwegener/Desktop/viralflux/backend/app/services/ml/regional_forecast.py`
 - `/Users/davidwegener/Desktop/viralflux/backend/app/services/ops/production_readiness_service.py`
+- `/Users/davidwegener/Desktop/viralflux/backend/app/services/ops/regional_operational_snapshot_store.py`
 - `/Users/davidwegener/Desktop/viralflux/backend/scripts/backfill_regional_model_artifacts.py`
 - `/Users/davidwegener/Desktop/viralflux/backend/scripts/recompute_operational_views.py`
 
@@ -26,6 +27,12 @@ Supported production horizons:
 - `3`
 - `5`
 - `7`
+
+Support is explicit per virus/horizon scope.
+
+Current documented production exception:
+
+- `RSV A / h3` is intentionally marked unsupported because the pooled regional panel does not currently have enough stable training rows for a production-grade h3 artifact.
 
 Artifact path pattern:
 
@@ -61,6 +68,14 @@ Before promotion:
 
 Backfill all required horizons:
 
+Production-like path:
+
+```bash
+docker exec viralflux_celery_worker python /app/scripts/backfill_regional_model_artifacts.py --horizon 3 --horizon 5 --horizon 7
+```
+
+Local dev path:
+
 ```bash
 cd /Users/davidwegener/Desktop/viralflux/backend
 python scripts/backfill_regional_model_artifacts.py --horizon 3 --horizon 5 --horizon 7
@@ -81,13 +96,22 @@ Check readiness:
 Required release signals:
 
 - no missing required model
+- no unsupported scope that is still being sold as supported
 - no critical source freshness issue
-- no critical forecast recency lag
+- no critical forecast recency lag on the latest operational snapshot
 - no unexpected metadata mismatch
 
 ### Step 3. Recompute operational outputs
 
 Recompute operational layers on top of the newly available artifacts:
+
+Production-like path:
+
+```bash
+docker exec viralflux_celery_worker python /app/scripts/recompute_operational_views.py --horizon 3 --horizon 5 --horizon 7
+```
+
+Local dev path:
 
 ```bash
 cd /Users/davidwegener/Desktop/viralflux/backend
@@ -97,6 +121,7 @@ python scripts/recompute_operational_views.py --virus "Influenza A" --horizon 7
 This records:
 
 - `RECOMPUTE_OPERATIONAL_VIEWS`
+- `REGIONAL_OPERATIONAL_SNAPSHOT` per virus/horizon scope
 
 ### Step 4. Smoke test the running backend
 

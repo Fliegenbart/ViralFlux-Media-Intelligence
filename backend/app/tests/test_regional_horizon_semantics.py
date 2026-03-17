@@ -6,6 +6,7 @@ from unittest.mock import patch
 
 import pandas as pd
 
+from app.services.ml.forecast_horizon_utils import regional_horizon_support_status
 from app.services.ml.regional_forecast import RegionalForecastService
 from app.services.ml.regional_trainer import RegionalModelTrainer
 
@@ -19,6 +20,13 @@ class _LoadableModel:
 
 
 class RegionalHorizonSemanticsTests(unittest.TestCase):
+    def test_default_support_matrix_marks_rsv_h3_as_unsupported(self) -> None:
+        support = regional_horizon_support_status("RSV A", 3)
+
+        self.assertFalse(support["supported"])
+        self.assertEqual(support["supported_horizons"], [5, 7])
+        self.assertIn("pooled panel", support["reason"])
+
     def test_prepare_horizon_panel_uses_future_current_incidence_as_target(self) -> None:
         panel = pd.DataFrame(
             {

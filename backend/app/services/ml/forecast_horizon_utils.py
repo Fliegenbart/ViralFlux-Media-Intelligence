@@ -18,7 +18,14 @@ MIN_DIRECT_TRAIN_POINTS = 60
 
 # Product-level support matrix for the operational regional path.
 # Empty means "supported unless explicitly excluded".
-REGIONAL_UNSUPPORTED_HORIZON_REASONS: dict[str, dict[int, str]] = {}
+REGIONAL_UNSUPPORTED_HORIZON_REASONS: dict[str, dict[int, str]] = {
+    "RSV A": {
+        3: (
+            "Regional h3 is unsupported for RSV A because the pooled panel does not "
+            "currently provide enough stable training rows for this scope."
+        ),
+    },
+}
 
 
 @dataclass(frozen=True)

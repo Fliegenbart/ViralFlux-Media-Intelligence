@@ -4,12 +4,10 @@ import os
 from datetime import datetime, timedelta
 from typing import Any, Dict
 
+import bcrypt
 from jose import jwt
-from passlib.context import CryptContext
 
 logger = logging.getLogger(__name__)
-
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 ALGORITHM = "HS256"
 
@@ -46,11 +44,14 @@ def _normalize_password_for_bcrypt(password: str) -> str:
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(_normalize_password_for_bcrypt(plain_password), hashed_password)
+    normalized_password = _normalize_password_for_bcrypt(plain_password).encode("utf-8")
+    stored_hash = hashed_password.encode("utf-8")
+    return bcrypt.checkpw(normalized_password, stored_hash)
 
 
 def get_password_hash(password: str) -> str:
-    return pwd_context.hash(_normalize_password_for_bcrypt(password))
+    normalized_password = _normalize_password_for_bcrypt(password).encode("utf-8")
+    return bcrypt.hashpw(normalized_password, bcrypt.gensalt()).decode("utf-8")
 
 
 def create_access_token(data: Dict[str, Any], expires_delta: timedelta | None = None) -> str:

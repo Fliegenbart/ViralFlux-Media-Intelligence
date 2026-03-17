@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
 # Production deployment script with health checks and rollback.
-# The current live stack on fluxengine.labpulse.ai is defined in docker-compose.yml.
+# The canonical live stack on fluxengine.labpulse.ai is defined in docker-compose.prod.yml.
 set -euo pipefail
 
 REPO="${REPO:-/opt/viralflux-media-intelligence-clean}"
 BRANCH="${BRANCH:-main}"
 PROJECT="${PROJECT:-viralflux-media-intelligence-clean}"
-COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.yml}"
-NETWORK="${PROJECT}_virusradar_network"
+COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.prod.yml}"
 HEALTH_URL="${HEALTH_URL:-http://localhost:8000/health/live}"
 READY_URL="${READY_URL:-http://localhost:8000/health/ready}"
 MAX_HEALTH_RETRIES=15
 HEALTH_INTERVAL=4
+REQUIRED_COMPOSE_BASENAME="docker-compose.prod.yml"
 
 APP_CONTAINERS=(
   virusradar_frontend_prod
@@ -19,9 +19,15 @@ APP_CONTAINERS=(
   viralflux_celery_worker
   viralflux_celery_beat
 )
-INFRA_CONTAINERS=(
-  virusradar_db
-  viralflux_redis
+APP_SERVICES=(
+  frontend-prod
+  backend
+  celery_worker
+  celery_beat
+)
+INFRA_SERVICES=(
+  db
+  redis
 )
 
 # ── Lock: prevent concurrent deploys ───────────────────────────
@@ -52,31 +58,83 @@ if [ ! -f "$COMPOSE_FILE" ]; then
     exit 1
 fi
 
+if [ "${ALLOW_DEV_COMPOSE_LIVE:-false}" != "true" ] && [ "$(basename "$COMPOSE_FILE")" != "$REQUIRED_COMPOSE_BASENAME" ]; then
+    echo "ERROR: Live deploy refuses non-production compose file: $COMPOSE_FILE" >&2
+    exit 1
+fi
+
+compose() {
+    docker compose --project-directory "$REPO" -p "$PROJECT" -f "$COMPOSE_FILE" "$@"
+}
+
+assert_live_mode_guards() {
+    local container="$1"
+    local env_dump
+    env_dump=$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$container")
+
+    printf '%s\n' "$env_dump" | grep -qx 'ENVIRONMENT=production' || {
+        echo "ERROR: $container is not running with ENVIRONMENT=production" >&2
+        return 1
+    }
+    printf '%s\n' "$env_dump" | grep -qx 'DB_AUTO_CREATE_SCHEMA=false' || {
+        echo "ERROR: $container still allows DB_AUTO_CREATE_SCHEMA" >&2
+        return 1
+    }
+    printf '%s\n' "$env_dump" | grep -qx 'DB_ALLOW_RUNTIME_SCHEMA_UPDATES=false' || {
+        echo "ERROR: $container still allows runtime schema updates" >&2
+        return 1
+    }
+}
+
+assert_backend_readiness_flags() {
+    local env_dump
+    env_dump=$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' virusradar_backend)
+
+    printf '%s\n' "$env_dump" | grep -qx 'STARTUP_STRICT_READINESS=true' || {
+        echo "ERROR: backend is not running with STARTUP_STRICT_READINESS=true" >&2
+        return 1
+    }
+    printf '%s\n' "$env_dump" | grep -qx 'READINESS_REQUIRE_BROKER=true' || {
+        echo "ERROR: backend is not running with READINESS_REQUIRE_BROKER=true" >&2
+        return 1
+    }
+}
+
+assert_no_bind_mounts() {
+    local container="$1"
+    local bind_count
+    bind_count=$(docker inspect -f '{{range .Mounts}}{{if eq .Type "bind"}}bind{{println}}{{end}}{{end}}' "$container" | grep -c '^bind$' || true)
+    if [ "$bind_count" -gt 0 ]; then
+        echo "ERROR: $container still uses host bind mounts in live mode" >&2
+        return 1
+    fi
+}
+
 # ── Build frontend image ───────────────────────────────────────
 echo "[$(date)] Building frontend image..."
 docker build -t viralflux-media-frontend -f docker/Dockerfile.frontend .
 
-# ── Ensure network exists ──────────────────────────────────────
-docker compose --project-directory "$REPO" -p "$PROJECT" -f "$COMPOSE_FILE" up -d --no-deps frontend-prod >/dev/null 2>&1 || true
+# ── Build backend/runtime images ───────────────────────────────
+echo "[$(date)] Building backend runtime images..."
+compose build backend celery_worker celery_beat
 
-if ! docker network inspect "$NETWORK" >/dev/null 2>&1; then
-    echo "ERROR: Docker network missing: $NETWORK" >&2
-    exit 1
-fi
-
-# ── Connect infra containers ──────────────────────────────────
-for infra in "${INFRA_CONTAINERS[@]}"; do
-    if ! docker inspect "$infra" >/dev/null 2>&1; then
-        echo "ERROR: Required infra container missing: $infra" >&2
-        exit 1
-    fi
-    docker network connect "$NETWORK" "$infra" >/dev/null 2>&1 || true
-done
+# ── Bring up infra first ───────────────────────────────────────
+echo "[$(date)] Ensuring infra services are up..."
+compose up -d "${INFRA_SERVICES[@]}"
 
 # ── Deploy app containers ─────────────────────────────────────
 echo "[$(date)] Deploying app containers..."
 docker rm -f "${APP_CONTAINERS[@]}" >/dev/null 2>&1 || true
-docker compose --project-directory "$REPO" -p "$PROJECT" -f "$COMPOSE_FILE" up -d --no-deps frontend-prod backend celery_worker celery_beat
+compose up -d --no-deps "${APP_SERVICES[@]}"
+
+assert_live_mode_guards virusradar_backend
+assert_live_mode_guards viralflux_celery_worker
+assert_live_mode_guards viralflux_celery_beat
+assert_backend_readiness_flags
+assert_no_bind_mounts virusradar_backend
+assert_no_bind_mounts viralflux_celery_worker
+assert_no_bind_mounts viralflux_celery_beat
+assert_no_bind_mounts virusradar_frontend_prod
 
 # ── Liveness check ─────────────────────────────────────────────
 echo "[$(date)] Waiting for backend liveness check..."
@@ -99,7 +157,7 @@ if [ "$HEALTHY" = false ]; then
     # Rollback: reset to previous commit and redeploy
     git reset --hard "$PREV_COMMIT"
     docker rm -f "${APP_CONTAINERS[@]}" >/dev/null 2>&1 || true
-    docker compose --project-directory "$REPO" -p "$PROJECT" -f "$COMPOSE_FILE" up -d --no-deps frontend-prod backend celery_worker celery_beat
+    compose up -d --no-deps "${APP_SERVICES[@]}"
 
     echo "[$(date)] Rollback complete. Deployed commit: $PREV_COMMIT" >&2
     exit 1

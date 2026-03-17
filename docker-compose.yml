@@ -1,3 +1,5 @@
+# Development compose only.
+# Do not use this manifest for live deploys on fluxengine.labpulse.ai.
 services:
   # PostgreSQL Database mit TimescaleDB Extension
   db:

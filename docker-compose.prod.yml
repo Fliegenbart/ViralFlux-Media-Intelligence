@@ -1,3 +1,5 @@
+# Production-like live stack.
+# This manifest is the canonical deploy target for fluxengine.labpulse.ai.
 services:
   db:
     image: timescale/timescaledb:latest-pg15
@@ -81,7 +83,10 @@ services:
         condition: service_healthy
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2
     stop_grace_period: 30s
+    ports:
+      - "127.0.0.1:8000:8000"
     volumes:
+      - app_data:/app/data
       - ml_models:/app/app/ml_models
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/live', timeout=5)"]
@@ -117,6 +122,7 @@ services:
       retries: 3
       start_period: 30s
     volumes:
+      - app_data:/app/data
       - ml_models:/app/app/ml_models
     logging:
       driver: json-file
@@ -195,46 +201,29 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
+      db:
+        condition: service_healthy
       redis:
         condition: service_healthy
-    networks:
-      - virusradar_network
-
-  frontend:
-    build:
-      context: .
-      dockerfile: docker/Dockerfile.frontend
-    container_name: virusradar_frontend
-    restart: unless-stopped
-    depends_on:
-      - backend
-    networks:
-      - virusradar_network
-
-  proxy:
-    image: caddy:2.8
-    container_name: virusradar_caddy_proxy
-    restart: unless-stopped
-    depends_on:
-      - frontend
-      - backend
-    dns:
-      - 8.8.8.8
-      - 1.1.1.1
     volumes:
-      - ./docker/Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
+      - app_data:/app/data
+      - ml_models:/app/app/ml_models
+    networks:
+      - virusradar_network
+
+  frontend-prod:
+    image: viralflux-media-frontend
+    container_name: virusradar_frontend_prod
+    restart: unless-stopped
     ports:
-      - "80:80"
-      - "443:443"
+      - "172.17.0.1:18080:80"
+    depends_on:
+      - backend
     networks:
       - virusradar_network
 
   frontend-staging:
-    build:
-      context: .
-      dockerfile: docker/Dockerfile.frontend
+    image: viralflux-media-frontend
     container_name: virusradar_frontend_staging
     restart: unless-stopped
     profiles: ["staging"]
@@ -248,9 +237,8 @@ services:
 volumes:
   postgres_data:
     driver: local
+  app_data:
   ml_models:
-  caddy_data:
-  caddy_config:
 
 networks:
   virusradar_network:

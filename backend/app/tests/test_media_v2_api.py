@@ -299,6 +299,20 @@ class MediaV2ApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 401)
         self.assertEqual(response.json()["detail"], "Invalid API key")
 
+    def test_outcomes_ingest_requires_api_key_header(self) -> None:
+        response = self.client.post(
+            "/api/v1/media/outcomes/ingest",
+            json={
+                "brand": "gelo",
+                "source_system": "crm",
+                "external_batch_id": "batch-missing-key",
+                "observations": [],
+            },
+        )
+
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.json()["detail"], "Missing API key")
+
     def test_outcomes_ingest_is_idempotent_and_persists_auditable_batch(self) -> None:
         payload = {
             "brand": "gelo",

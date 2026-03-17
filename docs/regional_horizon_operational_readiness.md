@@ -124,6 +124,27 @@ curl -s https://fluxengine.labpulse.ai/health/ready
 - Source Coverage
 - Model Age
 
+### Required vs Advisory Source Coverage
+
+Source-Coverage wird nicht mehr als blindes Minimum ueber alle Rohsignale berechnet.
+
+Stattdessen gilt ein expliziter Contract:
+
+- `Influenza A` / `Influenza B`
+  - required: `grippeweb_are_available`, `grippeweb_ili_available`, `ifsg_influenza_available`
+- `RSV A`
+  - required: `grippeweb_are_available`, `grippeweb_ili_available`, `ifsg_rsv_available`
+- `SARS-CoV-2`
+  - required: `grippeweb_are_available`, `grippeweb_ili_available`, `sars_are_available`, `sars_notaufnahme_available`
+  - advisory: `sars_trends_available`
+
+Wichtig:
+
+- ein required-Source-Fail bleibt ein echter Blocker
+- ein advisory-Source-Fail bleibt sichtbar, zieht den Scope aber nur auf `warning`
+- damit wird `google_trends` fuer SARS nicht mehr als stiller Hard-Blocker behandelt, obwohl es fachlich nur ein Zusatzsignal ist
+- die Decision Engine selbst bleibt unveraendert und kann niedrige Trends-Verfuegbarkeit weiterhin ueber Unsicherheit / Cross-Source-Evidence spiegeln
+
 Interpretation:
 
 - `ok`: Scope ist operativ belastbar
@@ -167,5 +188,10 @@ Live-Stand vom `2026-03-17` nach dem produktionsnahen Backfill:
 - `RSV A`: `h5/h7` als Scoped-Artefakte vorhanden
 - `RSV A / h3`: bewusst unsupported
 - `legacy_default_window_fallback`: fuer die beobachteten Live-Scope-Artefakte nicht mehr notwendig
+
+Live-Stand nach Readiness-Contract-Haertung:
+
+- `SARS-CoV-2 / h3/h5/h7` bleibt fachlich `WATCH`, aber nicht mehr allein wegen `sars_trends_available` kritisch
+- der verbleibende SARS-Hinweis wird als advisory Coverage-Warnung ausgewiesen
 
 Wenn ein Scope trotz Backfill nicht sauber trainierbar ist, wird er nicht weichgerechnet, sondern explizit als unsupported oder kritisch dokumentiert.

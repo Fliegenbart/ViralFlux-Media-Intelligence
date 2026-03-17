@@ -39,6 +39,34 @@ _HEALTH_BY_STATUS = {
     "unknown": "degraded",
 }
 
+_REQUIRED_SOURCE_COVERAGE_KEYS: dict[str, tuple[str, ...]] = {
+    "Influenza A": (
+        "grippeweb_are_available",
+        "grippeweb_ili_available",
+        "ifsg_influenza_available",
+    ),
+    "Influenza B": (
+        "grippeweb_are_available",
+        "grippeweb_ili_available",
+        "ifsg_influenza_available",
+    ),
+    "SARS-CoV-2": (
+        "grippeweb_are_available",
+        "grippeweb_ili_available",
+        "sars_are_available",
+        "sars_notaufnahme_available",
+    ),
+    "RSV A": (
+        "grippeweb_are_available",
+        "grippeweb_ili_available",
+        "ifsg_rsv_available",
+    ),
+}
+
+_ADVISORY_SOURCE_COVERAGE_KEYS: dict[str, tuple[str, ...]] = {
+    "SARS-CoV-2": ("sars_trends_available",),
+}
+
 
 def _parse_timestamp(value: Any) -> datetime | None:
     if value is None:
@@ -393,10 +421,12 @@ class ProductionReadinessService:
         )
 
         source_coverage = dataset_manifest.get("source_coverage") or {}
-        coverage_floor = None
-        if source_coverage:
-            coverage_floor = min(float(value or 0.0) for value in source_coverage.values())
-        source_coverage_status = self._coverage_status(coverage_floor)
+        coverage_contract = self._source_coverage_contract(
+            virus_typ=virus_typ,
+            source_coverage=source_coverage,
+        )
+        coverage_floor = coverage_contract["effective_floor"]
+        source_coverage_status = str(coverage_contract["effective_status"] or "warning")
 
         model_available = bool(artifacts and not load_error and feature_columns)
         model_availability = "available" if model_available else "missing"
@@ -426,7 +456,13 @@ class ProductionReadinessService:
                 blockers.append("Operational forecast snapshot lags behind latest available source data.")
             else:
                 blockers.append("Model snapshot lags behind latest available source data.")
-        if source_coverage_status == "critical":
+        if coverage_contract["missing_required_keys"]:
+            blockers.append(
+                "Required source coverage fields are missing: "
+                + ", ".join(coverage_contract["missing_required_keys"])
+                + "."
+            )
+        elif coverage_contract["required_status"] == "critical":
             blockers.append("Source coverage is below the minimum operational threshold.")
         if artifact_transition_mode:
             blockers.append("Legacy artifact fallback is still active.")
@@ -453,6 +489,22 @@ class ProductionReadinessService:
             "forecast_recency_basis": forecast_recency_basis,
             "source_coverage_floor": round(float(coverage_floor), 4) if coverage_floor is not None else None,
             "source_coverage_status": source_coverage_status,
+            "source_coverage_required_floor": (
+                round(float(coverage_contract["required_floor"]), 4)
+                if coverage_contract["required_floor"] is not None
+                else None
+            ),
+            "source_coverage_required_status": coverage_contract["required_status"],
+            "source_coverage_required_keys": coverage_contract["required_keys"],
+            "source_coverage_optional_floor": (
+                round(float(coverage_contract["optional_floor"]), 4)
+                if coverage_contract["optional_floor"] is not None
+                else None
+            ),
+            "source_coverage_optional_status": coverage_contract["optional_status"],
+            "source_coverage_optional_keys": coverage_contract["optional_keys"],
+            "source_coverage_missing_required": coverage_contract["missing_required_keys"],
+            "source_coverage_advisories": coverage_contract["advisories"],
             "source_coverage": source_coverage,
             "dataset_rows": dataset_manifest.get("rows"),
             "dataset_states": dataset_manifest.get("states"),
@@ -511,6 +563,81 @@ class ProductionReadinessService:
         if float(coverage_floor) >= float(self.settings.READINESS_MIN_SOURCE_COVERAGE) * 0.75:
             return "warning"
         return "critical"
+
+    def _source_coverage_contract(
+        self,
+        *,
+        virus_typ: str,
+        source_coverage: dict[str, Any],
+    ) -> dict[str, Any]:
+        coverage_map = {
+            str(key): float(value or 0.0)
+            for key, value in (source_coverage or {}).items()
+        }
+        required_keys = list(_REQUIRED_SOURCE_COVERAGE_KEYS.get(virus_typ, tuple(coverage_map.keys())))
+        optional_keys = list(_ADVISORY_SOURCE_COVERAGE_KEYS.get(virus_typ, ()))
+        if coverage_map and required_keys and not any(key in coverage_map for key in required_keys):
+            required_keys = list(coverage_map.keys())
+            optional_keys = []
+        missing_required_keys = [key for key in required_keys if key not in coverage_map]
+
+        required_values = [
+            coverage_map[key]
+            for key in required_keys
+            if key in coverage_map
+        ]
+        optional_values = [
+            coverage_map[key]
+            for key in optional_keys
+            if key in coverage_map
+        ]
+
+        required_floor = min(required_values) if required_values else None
+        optional_floor = min(optional_values) if optional_values else None
+
+        required_status = "critical" if missing_required_keys else self._coverage_status(required_floor)
+        optional_status = "unknown"
+        if optional_keys:
+            if optional_values:
+                optional_status = self._coverage_status(optional_floor)
+            else:
+                optional_status = "warning"
+
+        effective_status = required_status
+        advisories: list[str] = []
+        if optional_status in {"warning", "critical"}:
+            effective_status = self._worst_status([required_status, "warning"])
+            if optional_keys:
+                if optional_values:
+                    advisories.append(
+                        "Advisory source coverage is below the ideal threshold: "
+                        + ", ".join(
+                            f"{key}={coverage_map[key]:.4f}"
+                            for key in optional_keys
+                            if key in coverage_map
+                        )
+                        + "."
+                    )
+                else:
+                    advisories.append(
+                        "Advisory source coverage fields are missing: "
+                        + ", ".join(optional_keys)
+                        + "."
+                    )
+
+        effective_floor = required_floor
+        return {
+            "required_keys": required_keys,
+            "optional_keys": optional_keys,
+            "missing_required_keys": missing_required_keys,
+            "required_floor": required_floor,
+            "required_status": required_status,
+            "optional_floor": optional_floor,
+            "optional_status": optional_status,
+            "effective_floor": effective_floor,
+            "effective_status": effective_status,
+            "advisories": advisories,
+        }
 
     @staticmethod
     def _skipped_component(reason: str) -> dict[str, Any]:

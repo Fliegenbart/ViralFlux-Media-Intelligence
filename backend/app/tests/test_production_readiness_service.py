@@ -347,6 +347,173 @@ class ProductionReadinessServiceTests(unittest.TestCase):
         self.assertEqual(regional["summary"]["unsupported"], unsupported_count)
         self.assertLess(regional["summary"]["missing_models"], len(SUPPORTED_VIRUS_TYPES) * len(SUPPORTED_FORECAST_HORIZONS))
 
+    def test_build_snapshot_treats_sars_trends_coverage_as_advisory_not_hard_blocker(self) -> None:
+        now = datetime(2026, 3, 17, 10, 0, 0)
+        self._seed_wastewater(available_time=now - timedelta(days=1))
+
+        def fake_artifacts(_self, virus_typ: str, horizon_days: int = 7):
+            coverage = {
+                "grippeweb_are_available": 0.95,
+                "grippeweb_ili_available": 0.94,
+            }
+            if virus_typ in {"Influenza A", "Influenza B"}:
+                coverage["ifsg_influenza_available"] = 0.96
+            elif virus_typ == "RSV A":
+                coverage["ifsg_rsv_available"] = 0.95
+            elif virus_typ == "SARS-CoV-2":
+                coverage.update(
+                    {
+                        "sars_are_available": 0.88,
+                        "sars_notaufnahme_available": 0.99,
+                        "sars_trends_available": 0.06,
+                    }
+                )
+
+            return {
+                "metadata": {
+                    "feature_columns": ["feature_a"],
+                    "trained_at": (now - timedelta(days=2)).isoformat(),
+                    "model_version": f"regional:{virus_typ}:h{horizon_days}",
+                    "calibration_version": f"isotonic:{virus_typ}:h{horizon_days}",
+                    "quality_gate": {"overall_passed": True, "forecast_readiness": "GO"},
+                    "dataset_manifest": {
+                        "rows": 120,
+                        "states": 16,
+                        "source_coverage": coverage,
+                        "as_of_range": {"end": (now - timedelta(days=1)).date().isoformat()},
+                    },
+                    "point_in_time_snapshot": {
+                        "as_of_range": {"end": (now - timedelta(days=1)).date().isoformat()},
+                    },
+                },
+                "dataset_manifest": {
+                    "rows": 120,
+                    "states": 16,
+                    "source_coverage": coverage,
+                    "as_of_range": {"end": (now - timedelta(days=1)).date().isoformat()},
+                },
+                "point_in_time_snapshot": {
+                    "as_of_range": {"end": (now - timedelta(days=1)).date().isoformat()},
+                },
+            }
+
+        with patch(
+            "app.services.ml.regional_forecast.RegionalForecastService._load_artifacts",
+            new=fake_artifacts,
+        ), patch(
+            "app.services.ml.forecast_decision_service.ForecastDecisionService.build_monitoring_snapshot",
+            return_value={
+                "monitoring_status": "healthy",
+                "forecast_readiness": "GO",
+                "freshness_status": "fresh",
+                "accuracy_freshness_status": "fresh",
+                "backtest_freshness_status": "fresh",
+                "model_version": "national:v1",
+            },
+        ):
+            service = ProductionReadinessService(
+                session_factory=self._session_factory,
+                now_provider=lambda: now,
+            )
+            service._broker_component = lambda: {"status": "ok", "message": "mocked"}  # type: ignore[method-assign]
+            service._schema_bootstrap_component = lambda: {"status": "ok", "message": "mocked"}  # type: ignore[method-assign]
+            snapshot = service.build_snapshot()
+
+        regional = snapshot["components"]["regional_operational"]
+        sars_item = next(
+            item
+            for item in regional["matrix"]
+            if item["virus_typ"] == "SARS-CoV-2" and item["horizon_days"] == 7
+        )
+        self.assertEqual(sars_item["status"], "warning")
+        self.assertEqual(sars_item["source_coverage_required_status"], "ok")
+        self.assertEqual(sars_item["source_coverage_optional_status"], "critical")
+        self.assertIn("sars_trends_available", sars_item["source_coverage_optional_keys"])
+        self.assertTrue(sars_item["source_coverage_advisories"])
+        self.assertNotIn("Source coverage is below the minimum operational threshold.", sars_item["blockers"])
+
+    def test_build_snapshot_keeps_required_sars_coverage_as_hard_blocker(self) -> None:
+        now = datetime(2026, 3, 17, 10, 0, 0)
+        self._seed_wastewater(available_time=now - timedelta(days=1))
+
+        def fake_artifacts(_self, virus_typ: str, horizon_days: int = 7):
+            coverage = {
+                "grippeweb_are_available": 0.95,
+                "grippeweb_ili_available": 0.94,
+            }
+            if virus_typ in {"Influenza A", "Influenza B"}:
+                coverage["ifsg_influenza_available"] = 0.96
+            elif virus_typ == "RSV A":
+                coverage["ifsg_rsv_available"] = 0.95
+            elif virus_typ == "SARS-CoV-2":
+                coverage.update(
+                    {
+                        "sars_are_available": 0.05,
+                        "sars_notaufnahme_available": 0.99,
+                        "sars_trends_available": 0.9,
+                    }
+                )
+
+            return {
+                "metadata": {
+                    "feature_columns": ["feature_a"],
+                    "trained_at": (now - timedelta(days=2)).isoformat(),
+                    "model_version": f"regional:{virus_typ}:h{horizon_days}",
+                    "calibration_version": f"isotonic:{virus_typ}:h{horizon_days}",
+                    "quality_gate": {"overall_passed": True, "forecast_readiness": "GO"},
+                    "dataset_manifest": {
+                        "rows": 120,
+                        "states": 16,
+                        "source_coverage": coverage,
+                        "as_of_range": {"end": (now - timedelta(days=1)).date().isoformat()},
+                    },
+                    "point_in_time_snapshot": {
+                        "as_of_range": {"end": (now - timedelta(days=1)).date().isoformat()},
+                    },
+                },
+                "dataset_manifest": {
+                    "rows": 120,
+                    "states": 16,
+                    "source_coverage": coverage,
+                    "as_of_range": {"end": (now - timedelta(days=1)).date().isoformat()},
+                },
+                "point_in_time_snapshot": {
+                    "as_of_range": {"end": (now - timedelta(days=1)).date().isoformat()},
+                },
+            }
+
+        with patch(
+            "app.services.ml.regional_forecast.RegionalForecastService._load_artifacts",
+            new=fake_artifacts,
+        ), patch(
+            "app.services.ml.forecast_decision_service.ForecastDecisionService.build_monitoring_snapshot",
+            return_value={
+                "monitoring_status": "healthy",
+                "forecast_readiness": "GO",
+                "freshness_status": "fresh",
+                "accuracy_freshness_status": "fresh",
+                "backtest_freshness_status": "fresh",
+                "model_version": "national:v1",
+            },
+        ):
+            service = ProductionReadinessService(
+                session_factory=self._session_factory,
+                now_provider=lambda: now,
+            )
+            service._broker_component = lambda: {"status": "ok", "message": "mocked"}  # type: ignore[method-assign]
+            service._schema_bootstrap_component = lambda: {"status": "ok", "message": "mocked"}  # type: ignore[method-assign]
+            snapshot = service.build_snapshot()
+
+        regional = snapshot["components"]["regional_operational"]
+        sars_item = next(
+            item
+            for item in regional["matrix"]
+            if item["virus_typ"] == "SARS-CoV-2" and item["horizon_days"] == 7
+        )
+        self.assertEqual(sars_item["status"], "critical")
+        self.assertEqual(sars_item["source_coverage_required_status"], "critical")
+        self.assertIn("Source coverage is below the minimum operational threshold.", sars_item["blockers"])
+
 
 if __name__ == "__main__":
     unittest.main()

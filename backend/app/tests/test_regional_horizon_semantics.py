@@ -127,6 +127,21 @@ class RegionalHorizonSemanticsTests(unittest.TestCase):
             self.assertEqual(payload["metadata"]["horizon_days"], 7)
             self.assertEqual(payload["metadata"]["requested_horizon_days"], 7)
 
+    def test_predict_all_regions_returns_explicit_unsupported_scope_when_configured(self) -> None:
+        service = RegionalForecastService(db=None)
+
+        with patch.dict(
+            "app.services.ml.forecast_horizon_utils.REGIONAL_UNSUPPORTED_HORIZON_REASONS",
+            {"Influenza A": {3: "Pilot supports only h5/h7 for this virus."}},
+            clear=False,
+        ):
+            payload = service.predict_all_regions("Influenza A", horizon_days=3)
+
+        self.assertEqual(payload["status"], "unsupported")
+        self.assertEqual(payload["horizon_days"], 3)
+        self.assertEqual(payload["supported_horizon_days_for_virus"], [5, 7])
+        self.assertEqual(payload["predictions"], [])
+
 
 if __name__ == "__main__":
     unittest.main()

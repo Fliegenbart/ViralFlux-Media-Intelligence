@@ -16,6 +16,10 @@ SUPPORTED_FORECAST_HORIZONS: tuple[int, int, int] = (3, 5, 7)
 DEFAULT_FORECAST_REGION = "DE"
 MIN_DIRECT_TRAIN_POINTS = 60
 
+# Product-level support matrix for the operational regional path.
+# Empty means "supported unless explicitly excluded".
+REGIONAL_UNSUPPORTED_HORIZON_REASONS: dict[str, dict[int, str]] = {}
+
 
 @dataclass(frozen=True)
 class HorizonSplit:
@@ -41,6 +45,27 @@ def ensure_supported_horizon(horizon_days: int) -> int:
 def horizon_artifact_subdir(horizon_days: int) -> str:
     horizon = ensure_supported_horizon(horizon_days)
     return f"horizon_{horizon}"
+
+
+def supported_regional_horizons_for_virus(virus_typ: str) -> tuple[int, ...]:
+    unsupported = REGIONAL_UNSUPPORTED_HORIZON_REASONS.get(str(virus_typ or "").strip(), {})
+    return tuple(horizon for horizon in SUPPORTED_FORECAST_HORIZONS if horizon not in unsupported)
+
+
+def regional_horizon_support_status(virus_typ: str, horizon_days: int) -> dict[str, Any]:
+    horizon = ensure_supported_horizon(horizon_days)
+    normalized_virus = str(virus_typ or "").strip()
+    supported_horizons = supported_regional_horizons_for_virus(normalized_virus)
+    unsupported = REGIONAL_UNSUPPORTED_HORIZON_REASONS.get(normalized_virus, {})
+    reason = unsupported.get(horizon)
+    supported = horizon in supported_horizons
+    return {
+        "virus_typ": normalized_virus,
+        "horizon_days": horizon,
+        "supported": supported,
+        "supported_horizons": list(supported_horizons),
+        "reason": reason,
+    }
 
 
 def model_artifact_dir(

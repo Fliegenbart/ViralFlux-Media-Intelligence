@@ -17,6 +17,7 @@ from xgboost import XGBClassifier, XGBRegressor
 from app.services.ml.forecast_horizon_utils import (
     SUPPORTED_FORECAST_HORIZONS,
     ensure_supported_horizon,
+    regional_horizon_support_status,
     regional_model_artifact_dir,
 )
 from app.services.ml.regional_features import RegionalFeatureBuilder
@@ -192,13 +193,18 @@ class RegionalModelTrainer:
             return {
                 "status": (
                     "success"
-                    if statuses and all(status == "success" for status in statuses)
+                    if statuses and all(status in {"success", "unsupported"} for status in statuses)
                     else "partial_error"
                 ),
                 "virus_typ": virus_typ,
                 "horizon_days_list": list(horizons),
                 "trained": sum(int((payload or {}).get("trained") or 0) for payload in scopes.values()),
                 "failed": sum(int((payload or {}).get("failed") or 0) for payload in scopes.values()),
+                "unsupported": sum(
+                    1
+                    for payload in scopes.values()
+                    if (payload or {}).get("status") == "unsupported"
+                ),
                 "scopes": scopes,
                 "aggregate_metrics": {
                     key: (payload or {}).get("aggregate_metrics") or {}
@@ -226,6 +232,18 @@ class RegionalModelTrainer:
         horizon_days: int,
     ) -> dict[str, Any]:
         horizon = ensure_supported_horizon(horizon_days)
+        support = regional_horizon_support_status(virus_typ, horizon)
+        if not support["supported"]:
+            return {
+                "status": "unsupported",
+                "virus_typ": virus_typ,
+                "horizon_days": horizon,
+                "target_window_days": _target_window_for_horizon(horizon),
+                "supported_horizon_days_for_virus": support["supported_horizons"],
+                "message": support["reason"] or f"{virus_typ} unterstützt h{horizon} operativ nicht.",
+                "trained": 0,
+                "failed": 0,
+            }
         logger.info("Training pooled regional panel model for %s (horizon=%s)", virus_typ, horizon)
         previous_artifact = self.load_artifacts(virus_typ=virus_typ, horizon_days=horizon)
         panel = self.feature_builder.build_panel_training_data(
@@ -489,6 +507,12 @@ class RegionalModelTrainer:
             virus_typ=virus_typ,
             horizon_days=horizon,
         )
+        if model_dir.exists() and not self._artifact_payload_from_dir(model_dir):
+            return {
+                "load_error": (
+                    f"Artefakt-Bundle für {virus_typ}/h{horizon} ist unvollständig."
+                )
+            }
         payload = self._artifact_payload_from_dir(model_dir)
         if payload:
             metadata = payload.setdefault("metadata", {})
@@ -501,6 +525,12 @@ class RegionalModelTrainer:
             return {}
 
         legacy_dir = self.models_dir / _virus_slug(virus_typ)
+        if legacy_dir.exists() and not self._artifact_payload_from_dir(legacy_dir):
+            return {
+                "load_error": (
+                    f"Legacy-Artefakt-Bundle für {virus_typ}/h{horizon} ist unvollständig."
+                )
+            }
         legacy_payload = self._artifact_payload_from_dir(legacy_dir)
         if not legacy_payload:
             return {}
@@ -1323,3 +1353,7 @@ class RegionalModelTrainer:
         precision = tp / max(tp + fp, 1.0)
         recall = tp / max(tp + fn, 1.0)
         return precision, recall
+
+
+# Backward-compatible alias for scripts and older imports.
+RegionalTrainer = RegionalModelTrainer

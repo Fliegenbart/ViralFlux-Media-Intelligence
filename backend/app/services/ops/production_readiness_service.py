@@ -16,9 +16,13 @@ from app.core.config import Settings, get_settings
 from app.db.session import get_db_context, get_last_init_summary
 from app.models.database import WastewaterData
 from app.services.ml.forecast_decision_service import ForecastDecisionService
-from app.services.ml.forecast_horizon_utils import SUPPORTED_FORECAST_HORIZONS
+from app.services.ml.forecast_horizon_utils import (
+    SUPPORTED_FORECAST_HORIZONS,
+    regional_horizon_support_status,
+)
 from app.services.ml.regional_forecast import RegionalForecastService
 from app.services.ml.training_contract import SUPPORTED_VIRUS_TYPES
+from app.services.ops.regional_operational_snapshot_store import RegionalOperationalSnapshotStore
 
 logger = logging.getLogger(__name__)
 
@@ -251,6 +255,11 @@ class ProductionReadinessService:
         observed_at: datetime,
     ) -> dict[str, Any]:
         service = RegionalForecastService(db, models_dir=self.models_dir)
+        snapshot_store = RegionalOperationalSnapshotStore(db)
+        operational_snapshots = snapshot_store.latest_scope_snapshots(
+            virus_types=SUPPORTED_VIRUS_TYPES,
+            horizon_days_list=SUPPORTED_FORECAST_HORIZONS,
+        )
         matrix: list[dict[str, Any]] = []
         for virus_typ in SUPPORTED_VIRUS_TYPES:
             latest_source_state = self._latest_source_state(db, virus_typ=virus_typ, observed_at=observed_at)
@@ -262,6 +271,7 @@ class ProductionReadinessService:
                         horizon_days=horizon_days,
                         observed_at=observed_at,
                         latest_source_state=latest_source_state,
+                        operational_snapshot=operational_snapshots.get((virus_typ, horizon_days)),
                     )
                 )
 
@@ -273,12 +283,14 @@ class ProductionReadinessService:
                 "ready": sum(1 for item in matrix if item["status"] == "ok"),
                 "warning": sum(1 for item in matrix if item["status"] == "warning"),
                 "critical": sum(1 for item in matrix if item["status"] == "critical"),
-                "missing_models": sum(1 for item in matrix if item["model_availability"] != "available"),
+                "missing_models": sum(1 for item in matrix if item["model_availability"] == "missing"),
+                "unsupported": sum(1 for item in matrix if item["model_availability"] == "unsupported"),
                 "stale_forecasts": sum(1 for item in matrix if item["forecast_recency_status"] == "critical"),
                 "stale_sources": sum(1 for item in matrix if item["source_freshness_status"] == "critical"),
                 "quality_gate_failures": sum(
                     1
                     for item in matrix
+                    if item["model_availability"] != "unsupported"
                     if str(item.get("quality_gate", {}).get("forecast_readiness") or "WATCH") != "GO"
                 ),
             },
@@ -293,7 +305,44 @@ class ProductionReadinessService:
         horizon_days: int,
         observed_at: datetime,
         latest_source_state: dict[str, Any],
+        operational_snapshot: dict[str, Any] | None,
     ) -> dict[str, Any]:
+        support = regional_horizon_support_status(virus_typ, horizon_days)
+        if not support["supported"]:
+            return {
+                "virus_typ": virus_typ,
+                "horizon_days": horizon_days,
+                "status": "warning",
+                "model_availability": "unsupported",
+                "load_error": None,
+                "artifact_transition_mode": None,
+                "quality_gate": {"overall_passed": False, "forecast_readiness": "UNSUPPORTED"},
+                "model_version": None,
+                "calibration_version": None,
+                "trained_at": None,
+                "model_age_days": None,
+                "model_age_status": "unknown",
+                "latest_available_as_of": latest_source_state.get("latest_available_as_of").isoformat()
+                if latest_source_state.get("latest_available_as_of")
+                else None,
+                "source_age_days": latest_source_state.get("source_age_days"),
+                "source_freshness_status": latest_source_state.get("status") or "unknown",
+                "point_in_time_snapshot_end": None,
+                "forecast_lag_days": None,
+                "forecast_recency_status": "unknown",
+                "forecast_recency_basis": "unsupported",
+                "source_coverage_floor": None,
+                "source_coverage_status": "unknown",
+                "source_coverage": {},
+                "dataset_rows": None,
+                "dataset_states": None,
+                "supported_horizon_days_for_virus": support["supported_horizons"],
+                "unsupported_reason": support["reason"] or f"{virus_typ} unterstützt h{horizon_days} operativ nicht.",
+                "operational_snapshot_as_of": None,
+                "operational_snapshot_generated_at": None,
+                "operational_snapshot_status": None,
+                "blockers": [],
+            }
         artifacts = service._load_artifacts(virus_typ, horizon_days=horizon_days)
         metadata = artifacts.get("metadata") or {}
         dataset_manifest = artifacts.get("dataset_manifest") or metadata.get("dataset_manifest") or {}
@@ -312,11 +361,21 @@ class ProductionReadinessService:
         source_freshness_status = latest_source_state.get("status") or "unknown"
         source_freshness_message = latest_source_state.get("message")
 
+        operational_snapshot_as_of = None
+        operational_snapshot_status = None
+        operational_snapshot_generated_at = None
+        if operational_snapshot:
+            operational_snapshot_status = str(operational_snapshot.get("forecast_status") or "ok").strip().lower()
+            operational_snapshot_as_of = _parse_timestamp(operational_snapshot.get("forecast_as_of_date"))
+            operational_snapshot_generated_at = operational_snapshot.get("recorded_at")
+
         snapshot_end = _parse_timestamp(
             ((point_in_time_snapshot.get("as_of_range") or {}).get("end"))
             or ((dataset_manifest.get("as_of_range") or {}).get("end"))
         )
-        forecast_lag_days = _day_delta(latest_source_as_of, snapshot_end)
+        forecast_recency_reference = operational_snapshot_as_of or snapshot_end
+        forecast_recency_basis = "operational_snapshot" if operational_snapshot_as_of else "training_snapshot"
+        forecast_lag_days = _day_delta(latest_source_as_of, forecast_recency_reference)
         forecast_recency_status = self._age_status(
             forecast_lag_days,
             fresh_days=self.settings.READINESS_FORECAST_LAG_FRESH_DAYS,
@@ -363,7 +422,10 @@ class ProductionReadinessService:
         if source_freshness_status == "critical":
             blockers.append(source_freshness_message or "Underlying wastewater source is stale.")
         if forecast_recency_status == "critical":
-            blockers.append("Model snapshot lags behind latest available source data.")
+            if operational_snapshot_as_of:
+                blockers.append("Operational forecast snapshot lags behind latest available source data.")
+            else:
+                blockers.append("Model snapshot lags behind latest available source data.")
         if source_coverage_status == "critical":
             blockers.append("Source coverage is below the minimum operational threshold.")
         if artifact_transition_mode:
@@ -388,11 +450,17 @@ class ProductionReadinessService:
             "point_in_time_snapshot_end": snapshot_end.isoformat() if snapshot_end else None,
             "forecast_lag_days": forecast_lag_days,
             "forecast_recency_status": forecast_recency_status,
+            "forecast_recency_basis": forecast_recency_basis,
             "source_coverage_floor": round(float(coverage_floor), 4) if coverage_floor is not None else None,
             "source_coverage_status": source_coverage_status,
             "source_coverage": source_coverage,
             "dataset_rows": dataset_manifest.get("rows"),
             "dataset_states": dataset_manifest.get("states"),
+            "supported_horizon_days_for_virus": support["supported_horizons"],
+            "unsupported_reason": None,
+            "operational_snapshot_as_of": operational_snapshot_as_of.isoformat() if operational_snapshot_as_of else None,
+            "operational_snapshot_generated_at": operational_snapshot_generated_at,
+            "operational_snapshot_status": operational_snapshot_status,
             "blockers": blockers,
         }
 

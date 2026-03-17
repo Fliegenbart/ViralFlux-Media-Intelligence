@@ -12,6 +12,7 @@ from sqlalchemy.pool import StaticPool
 from app.models.database import AuditLog, Base, WastewaterData
 from app.services.ml.forecast_horizon_utils import SUPPORTED_FORECAST_HORIZONS
 from app.services.ml.training_contract import SUPPORTED_VIRUS_TYPES
+from app.services.ops.regional_operational_snapshot_store import RegionalOperationalSnapshotStore
 from app.services.ops.production_readiness_service import ProductionReadinessService
 from app.services.ops.run_metadata_service import OperationalRunRecorder
 
@@ -225,6 +226,119 @@ class ProductionReadinessServiceTests(unittest.TestCase):
         self.assertEqual(snapshot["components"]["forecast_monitoring"]["status"], "critical")
         self.assertIn("monitoring exploded", snapshot["components"]["forecast_monitoring"]["message"])
         self.assertEqual(snapshot["components"]["regional_operational"]["status"], "ok")
+
+    def test_build_snapshot_uses_operational_snapshot_for_forecast_recency(self) -> None:
+        now = datetime(2026, 3, 17, 10, 0, 0)
+        self._seed_wastewater(available_time=now - timedelta(days=1))
+
+        def fake_artifacts(_self, virus_typ: str, horizon_days: int = 7):
+            del virus_typ
+            return {
+                "metadata": {
+                    "feature_columns": ["feature_a"],
+                    "trained_at": (now - timedelta(days=2)).isoformat(),
+                    "model_version": f"regional:{horizon_days}",
+                    "calibration_version": f"isotonic:{horizon_days}",
+                    "quality_gate": {"overall_passed": True, "forecast_readiness": "GO"},
+                },
+                "dataset_manifest": {
+                    "rows": 120,
+                    "states": 16,
+                    "source_coverage": {"ww": 0.92, "trends": 0.88},
+                    "as_of_range": {"end": (now - timedelta(days=10)).date().isoformat()},
+                },
+                "point_in_time_snapshot": {
+                    "as_of_range": {"end": (now - timedelta(days=10)).date().isoformat()},
+                },
+            }
+
+        store = RegionalOperationalSnapshotStore(self.db)
+        for virus_typ in SUPPORTED_VIRUS_TYPES:
+            for horizon_days in SUPPORTED_FORECAST_HORIZONS:
+                store.record_scope_snapshot(
+                    virus_typ=virus_typ,
+                    horizon_days=horizon_days,
+                    forecast={
+                        "as_of_date": (now - timedelta(days=1)).date().isoformat(),
+                        "predictions": [{"bundesland": "BY"}],
+                        "quality_gate": {"overall_passed": True, "forecast_readiness": "GO"},
+                    },
+                    allocation={"recommendations": [{"bundesland": "BY"}]},
+                    recommendations={"recommendations": [{"bundesland": "BY"}]},
+                )
+
+        with patch(
+            "app.services.ml.regional_forecast.RegionalForecastService._load_artifacts",
+            new=fake_artifacts,
+        ), patch(
+            "app.services.ml.forecast_decision_service.ForecastDecisionService.build_monitoring_snapshot",
+            return_value={
+                "monitoring_status": "healthy",
+                "forecast_readiness": "GO",
+                "freshness_status": "fresh",
+                "accuracy_freshness_status": "fresh",
+                "backtest_freshness_status": "fresh",
+                "model_version": "national:v1",
+            },
+        ):
+            service = ProductionReadinessService(
+                session_factory=self._session_factory,
+                now_provider=lambda: now,
+            )
+            service._broker_component = lambda: {"status": "ok", "message": "mocked"}  # type: ignore[method-assign]
+            service._schema_bootstrap_component = lambda: {"status": "ok", "message": "mocked"}  # type: ignore[method-assign]
+            snapshot = service.build_snapshot()
+
+        regional = snapshot["components"]["regional_operational"]
+        self.assertEqual(regional["status"], "ok")
+        first_item = regional["matrix"][0]
+        self.assertEqual(first_item["forecast_recency_basis"], "operational_snapshot")
+        self.assertEqual(first_item["forecast_recency_status"], "ok")
+
+    def test_build_snapshot_treats_explicit_unsupported_scope_as_warning_not_missing(self) -> None:
+        now = datetime(2026, 3, 17, 10, 0, 0)
+        self._seed_wastewater(available_time=now - timedelta(days=1))
+
+        def fake_artifacts(_self, virus_typ: str, horizon_days: int = 7):
+            del virus_typ, horizon_days
+            return {}
+
+        with patch(
+            "app.services.ml.regional_forecast.RegionalForecastService._load_artifacts",
+            new=fake_artifacts,
+        ), patch(
+            "app.services.ml.forecast_decision_service.ForecastDecisionService.build_monitoring_snapshot",
+            return_value={
+                "monitoring_status": "healthy",
+                "forecast_readiness": "GO",
+                "freshness_status": "fresh",
+                "accuracy_freshness_status": "fresh",
+                "backtest_freshness_status": "fresh",
+                "model_version": "national:v1",
+            },
+        ), patch.dict(
+            "app.services.ml.forecast_horizon_utils.REGIONAL_UNSUPPORTED_HORIZON_REASONS",
+            {"Influenza A": {3: "Pilot supports only h5/h7 for this virus."}},
+            clear=False,
+        ):
+            service = ProductionReadinessService(
+                session_factory=self._session_factory,
+                now_provider=lambda: now,
+            )
+            service._broker_component = lambda: {"status": "ok", "message": "mocked"}  # type: ignore[method-assign]
+            service._schema_bootstrap_component = lambda: {"status": "ok", "message": "mocked"}  # type: ignore[method-assign]
+            snapshot = service.build_snapshot()
+
+        regional = snapshot["components"]["regional_operational"]
+        unsupported = next(
+            item
+            for item in regional["matrix"]
+            if item["virus_typ"] == "Influenza A" and item["horizon_days"] == 3
+        )
+        self.assertEqual(unsupported["model_availability"], "unsupported")
+        self.assertEqual(unsupported["status"], "warning")
+        self.assertEqual(regional["summary"]["unsupported"], 1)
+        self.assertLess(regional["summary"]["missing_models"], len(SUPPORTED_VIRUS_TYPES) * len(SUPPORTED_FORECAST_HORIZONS))
 
 
 if __name__ == "__main__":

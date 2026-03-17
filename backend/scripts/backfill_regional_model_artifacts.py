@@ -15,7 +15,7 @@ if str(BACKEND_ROOT) not in sys.path:
 
 from app.db.session import get_db_context
 from app.services.ml.forecast_horizon_utils import SUPPORTED_FORECAST_HORIZONS
-from app.services.ml.regional_trainer import RegionalTrainer
+from app.services.ml.regional_trainer import RegionalModelTrainer
 from app.services.ml.training_contract import SUPPORTED_VIRUS_TYPES
 from app.services.ops.run_metadata_service import OperationalRunRecorder
 
@@ -47,26 +47,40 @@ def main() -> int:
     horizons = args.horizons or list(SUPPORTED_FORECAST_HORIZONS)
 
     with get_db_context() as db:
-        trainer = RegionalTrainer(db)
+        trainer = RegionalModelTrainer(db)
         results = trainer.train_selected_viruses_all_regions(
             virus_types=virus_types,
             lookback_days=args.lookback_days,
             horizon_days_list=horizons,
         )
+        scope_payloads = [
+            payload
+            for payload in (results or {}).values()
+            if isinstance(payload, dict)
+        ]
+        statuses = [str(payload.get("status") or "").strip().lower() for payload in scope_payloads]
+        overall_status = (
+            "success"
+            if statuses and all(status in {"success", "unsupported"} for status in statuses)
+            else "partial_error"
+        )
         run_metadata = OperationalRunRecorder(db).record_event(
             action="BACKFILL_REGIONAL_MODEL_ARTIFACTS",
-            status="success",
+            status=overall_status,
             summary="Regional multi-horizon artifacts backfilled.",
             metadata={
                 "virus_types": virus_types,
                 "horizons": horizons,
                 "lookback_days": args.lookback_days,
                 "results": results,
+                "successful_scopes": sum(1 for status in statuses if status == "success"),
+                "unsupported_scopes": sum(1 for status in statuses if status == "unsupported"),
+                "failed_scopes": sum(1 for status in statuses if status not in {"success", "unsupported"}),
             },
         )
 
     payload = {
-        "status": "success",
+        "status": overall_status,
         "virus_types": virus_types,
         "horizons": horizons,
         "results": results,

@@ -20,6 +20,7 @@ from app.services.ml.forecast_decision_service import ForecastDecisionService
 from app.services.ml.forecast_horizon_utils import (
     SUPPORTED_FORECAST_HORIZONS,
     ensure_supported_horizon,
+    regional_horizon_support_status,
     regional_model_artifact_dir,
 )
 from app.services.ml.regional_decision_engine import RegionalDecisionEngine
@@ -84,6 +85,15 @@ class RegionalForecastService:
         horizon_days: int = 7,
     ) -> dict[str, Any]:
         horizon = ensure_supported_horizon(horizon_days)
+        support = regional_horizon_support_status(virus_typ, horizon)
+        if not support["supported"]:
+            return self._empty_forecast_response(
+                virus_typ=virus_typ,
+                horizon_days=horizon,
+                status="unsupported",
+                message=support["reason"] or f"{virus_typ} unterstützt h{horizon} operativ nicht.",
+                supported_horizon_days_for_virus=support["supported_horizons"],
+            )
         target_window_days = self._target_window_for_horizon(horizon)
         artifacts = self._load_artifacts(virus_typ, horizon_days=horizon)
         metadata = artifacts.get("metadata") or {}
@@ -101,6 +111,7 @@ class RegionalForecastService:
                 status="no_model",
                 message=load_error,
                 artifact_transition_mode=artifact_transition_mode,
+                supported_horizon_days_for_virus=support["supported_horizons"],
             )
         if not artifacts or not feature_columns:
             message = (
@@ -118,6 +129,7 @@ class RegionalForecastService:
                 status="no_model",
                 message=message,
                 artifact_transition_mode=artifact_transition_mode,
+                supported_horizon_days_for_virus=support["supported_horizons"],
             )
 
         as_of_date = self._latest_as_of_date(virus_typ=virus_typ)
@@ -136,6 +148,7 @@ class RegionalForecastService:
                 status="no_data",
                 message=f"Keine regionalen Features für Horizon {horizon} und den aktuellen Datenstand verfügbar.",
                 artifact_transition_mode=artifact_transition_mode,
+                supported_horizon_days_for_virus=support["supported_horizons"],
             )
 
         X = panel[feature_columns].to_numpy()
@@ -248,6 +261,7 @@ class RegionalForecastService:
             "as_of_date": str(as_of_date),
             "horizon_days": horizon,
             "supported_horizon_days": list(SUPPORTED_FORECAST_HORIZONS),
+            "supported_horizon_days_for_virus": support["supported_horizons"],
             "target_window_days": list(target_window_days),
             "quality_gate": quality_gate,
             "business_gate": business_gate,
@@ -510,6 +524,7 @@ class RegionalForecastService:
         status: str,
         message: str,
         artifact_transition_mode: str | None = None,
+        supported_horizon_days_for_virus: list[int] | None = None,
     ) -> dict[str, Any]:
         horizon = ensure_supported_horizon(horizon_days)
         return {
@@ -518,6 +533,9 @@ class RegionalForecastService:
             "message": message,
             "horizon_days": horizon,
             "supported_horizon_days": list(SUPPORTED_FORECAST_HORIZONS),
+            "supported_horizon_days_for_virus": list(
+                supported_horizon_days_for_virus or SUPPORTED_FORECAST_HORIZONS
+            ),
             "target_window_days": self._target_window_for_horizon(horizon),
             "artifact_transition_mode": artifact_transition_mode,
             "predictions": [],
@@ -587,6 +605,37 @@ class RegionalForecastService:
         truth_readiness = self._truth_readiness()
 
         for virus_typ in SUPPORTED_VIRUS_TYPES:
+            support = regional_horizon_support_status(virus_typ, horizon)
+            if not support["supported"]:
+                unsupported_business_gate = self._business_gate(
+                    quality_gate={"overall_passed": False},
+                    truth_readiness=truth_readiness,
+                )
+                items.append(
+                    {
+                        "virus_typ": virus_typ,
+                        "horizon_days": horizon,
+                        "target_window_days": self._target_window_for_horizon(horizon),
+                        "status": "unsupported",
+                        "message": support["reason"] or f"{virus_typ} unterstützt h{horizon} operativ nicht.",
+                        "trained_at": None,
+                        "states": 0,
+                        "rows": 0,
+                        "truth_source": None,
+                        "source_coverage": {},
+                        "point_in_time_snapshot": {},
+                        "aggregate_metrics": {},
+                        "quality_gate": {"overall_passed": False, "forecast_readiness": "UNSUPPORTED"},
+                        "business_gate": unsupported_business_gate,
+                        "evidence_tier": unsupported_business_gate.get("evidence_tier"),
+                        "rollout_mode": rollout_mode_for_virus(virus_typ),
+                        "activation_policy": activation_policy_for_virus(virus_typ),
+                        "signal_bundle_version": signal_bundle_version_for_virus(virus_typ),
+                        "model_version": None,
+                        "calibration_version": None,
+                    }
+                )
+                continue
             artifacts = self._load_artifacts(virus_typ, horizon_days=horizon)
             metadata = artifacts.get("metadata") or {}
             load_error = str(artifacts.get("load_error") or "").strip()
@@ -823,6 +872,33 @@ class RegionalForecastService:
         horizon_days: int = 7,
     ) -> dict[str, Any]:
         horizon = ensure_supported_horizon(horizon_days)
+        support = regional_horizon_support_status(virus_typ, horizon)
+        if not support["supported"]:
+            business_gate = self._business_gate(
+                quality_gate={"overall_passed": False, "forecast_readiness": "UNSUPPORTED"},
+                brand=brand,
+            )
+            return {
+                "virus_typ": virus_typ,
+                "brand": str(brand or "gelo").strip().lower(),
+                "horizon_days": horizon,
+                "target_window_days": self._target_window_for_horizon(horizon),
+                "status": "unsupported",
+                "message": support["reason"] or f"{virus_typ} unterstützt h{horizon} operativ nicht.",
+                "generated_at": datetime.utcnow().isoformat(),
+                "quality_gate": {"overall_passed": False, "forecast_readiness": "UNSUPPORTED"},
+                "business_gate": business_gate,
+                "operator_context": business_gate.get("operator_context"),
+                "evidence_tier": business_gate.get("evidence_tier"),
+                "model_version": None,
+                "calibration_version": None,
+                "point_in_time_snapshot": {},
+                "source_coverage": {},
+                "signal_bundle_version": signal_bundle_version_for_virus(virus_typ),
+                "rollout_mode": rollout_mode_for_virus(virus_typ),
+                "activation_policy": activation_policy_for_virus(virus_typ),
+                "aggregate_metrics": {},
+            }
         artifacts = self._load_artifacts(virus_typ, horizon_days=horizon)
         metadata = artifacts.get("metadata") or {}
         load_error = str(artifacts.get("load_error") or "").strip()
@@ -861,6 +937,15 @@ class RegionalForecastService:
             virus_typ=virus_typ,
             horizon_days=horizon,
         )
+        if model_dir.exists():
+            missing_files = self._missing_artifact_files(model_dir)
+            if missing_files:
+                return {
+                    "load_error": (
+                        f"Artefakt-Bundle für {virus_typ}/h{horizon} ist unvollständig: "
+                        f"{', '.join(missing_files)}"
+                    ),
+                }
         payload = self._artifact_payload_from_dir(model_dir)
         if payload:
             metadata = dict(payload.get("metadata") or {})
@@ -884,6 +969,15 @@ class RegionalForecastService:
             return {}
 
         legacy_dir = self.models_dir / _virus_slug(virus_typ)
+        if legacy_dir.exists():
+            missing_files = self._missing_artifact_files(legacy_dir)
+            if missing_files:
+                return {
+                    "load_error": (
+                        f"Legacy-Artefakt-Bundle für {virus_typ}/h{horizon} ist unvollständig: "
+                        f"{', '.join(missing_files)}"
+                    ),
+                }
         legacy_payload = self._artifact_payload_from_dir(legacy_dir)
         if not legacy_payload:
             return {}
@@ -899,8 +993,8 @@ class RegionalForecastService:
         return legacy_payload
 
     @staticmethod
-    def _artifact_payload_from_dir(model_dir: Path) -> dict[str, Any]:
-        required_paths = {
+    def _required_artifact_paths(model_dir: Path) -> dict[str, Path]:
+        return {
             "classifier": model_dir / "classifier.json",
             "regressor_median": model_dir / "regressor_median.json",
             "regressor_lower": model_dir / "regressor_lower.json",
@@ -908,6 +1002,18 @@ class RegionalForecastService:
             "calibration": model_dir / "calibration.pkl",
             "metadata": model_dir / "metadata.json",
         }
+
+    @classmethod
+    def _missing_artifact_files(cls, model_dir: Path) -> list[str]:
+        return [
+            path.name
+            for path in cls._required_artifact_paths(model_dir).values()
+            if not path.exists()
+        ]
+
+    @classmethod
+    def _artifact_payload_from_dir(cls, model_dir: Path) -> dict[str, Any]:
+        required_paths = cls._required_artifact_paths(model_dir)
         if not all(path.exists() for path in required_paths.values()):
             return {}
 

@@ -8,7 +8,9 @@ from passlib.context import CryptContext
 
 logger = logging.getLogger(__name__)
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# Prefer bcrypt_sha256 so long randomly generated admin passwords remain valid,
+# while still accepting legacy bcrypt hashes already stored in the system.
+pwd_context = CryptContext(schemes=["bcrypt_sha256", "bcrypt"], deprecated="auto")
 
 ALGORITHM = "HS256"
 
@@ -50,4 +52,3 @@ def create_access_token(data: Dict[str, Any], expires_delta: timedelta | None = 
     expire = datetime.utcnow() + (expires_delta or timedelta(minutes=30))
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-

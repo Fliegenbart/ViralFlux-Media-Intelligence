@@ -82,9 +82,16 @@ class ProductionReadinessService:
         }
 
         if components["database"]["status"] == "ok" and deep_checks:
-            with self.session_factory() as db:
-                components["forecast_monitoring"] = self._forecast_monitoring_component(db)
-                components["regional_operational"] = self._regional_operational_component(db, observed_at=observed_at)
+            components["forecast_monitoring"] = self._safe_component(
+                "forecast_monitoring",
+                lambda: self._with_db_session(self._forecast_monitoring_component),
+            )
+            components["regional_operational"] = self._safe_component(
+                "regional_operational",
+                lambda: self._with_db_session(
+                    lambda db: self._regional_operational_component(db, observed_at=observed_at)
+                ),
+            )
         else:
             reason = "database_unavailable" if components["database"]["status"] != "ok" else "startup_light_mode"
             components["forecast_monitoring"] = self._skipped_component(reason)
@@ -112,6 +119,29 @@ class ProductionReadinessService:
     @staticmethod
     def http_status_code(snapshot: dict[str, Any]) -> int:
         return 503 if str(snapshot.get("status")) == "unhealthy" else 200
+
+    def _with_db_session(self, loader: Callable[[Session], dict[str, Any]]) -> dict[str, Any]:
+        with self.session_factory() as db:
+            return loader(db)
+
+    @staticmethod
+    def _component_failure(name: str, exc: Exception) -> dict[str, Any]:
+        return {
+            "status": "critical",
+            "message": f"{name} failed: {exc}",
+            "error_type": exc.__class__.__name__,
+        }
+
+    def _safe_component(
+        self,
+        name: str,
+        loader: Callable[[], dict[str, Any]],
+    ) -> dict[str, Any]:
+        try:
+            return loader()
+        except Exception as exc:
+            logger.exception("Production readiness component %s failed: %s", name, exc)
+            return self._component_failure(name, exc)
 
     def _database_component(self) -> dict[str, Any]:
         try:
@@ -192,6 +222,7 @@ class ProductionReadinessService:
                     }
                 )
             except Exception as exc:
+                db.rollback()
                 items.append(
                     {
                         "virus_typ": virus_typ,

@@ -171,6 +171,61 @@ class ProductionReadinessServiceTests(unittest.TestCase):
         self.assertEqual((row.new_value or {}).get("run_id"), payload["run_id"])
         self.assertTrue((row.new_value or {}).get("metadata", {}).get("ready"))
 
+    def test_build_snapshot_surfaces_component_failures_without_raising(self) -> None:
+        now = datetime(2026, 3, 17, 10, 0, 0)
+        self._seed_wastewater(available_time=now - timedelta(days=1))
+
+        def fake_artifacts(_self, virus_typ: str, horizon_days: int = 7):
+            del virus_typ
+            return {
+                "metadata": {
+                    "feature_columns": ["feature_a"],
+                    "trained_at": (now - timedelta(days=2)).isoformat(),
+                    "model_version": f"regional:{horizon_days}",
+                    "calibration_version": f"isotonic:{horizon_days}",
+                    "quality_gate": {"overall_passed": True, "forecast_readiness": "GO"},
+                    "dataset_manifest": {
+                        "rows": 120,
+                        "states": 16,
+                        "source_coverage": {"ww": 0.92, "trends": 0.88},
+                        "as_of_range": {"end": (now - timedelta(days=1)).date().isoformat()},
+                    },
+                    "point_in_time_snapshot": {
+                        "as_of_range": {"end": (now - timedelta(days=1)).date().isoformat()},
+                    },
+                },
+                "dataset_manifest": {
+                    "rows": 120,
+                    "states": 16,
+                    "source_coverage": {"ww": 0.92, "trends": 0.88},
+                    "as_of_range": {"end": (now - timedelta(days=1)).date().isoformat()},
+                },
+                "point_in_time_snapshot": {
+                    "as_of_range": {"end": (now - timedelta(days=1)).date().isoformat()},
+                },
+            }
+
+        with patch(
+            "app.services.ml.regional_forecast.RegionalForecastService._load_artifacts",
+            new=fake_artifacts,
+        ), patch.object(
+            ProductionReadinessService,
+            "_forecast_monitoring_component",
+            side_effect=RuntimeError("monitoring exploded"),
+        ):
+            service = ProductionReadinessService(
+                session_factory=self._session_factory,
+                now_provider=lambda: now,
+            )
+            service._broker_component = lambda: {"status": "ok", "message": "mocked"}  # type: ignore[method-assign]
+            service._schema_bootstrap_component = lambda: {"status": "ok", "message": "mocked"}  # type: ignore[method-assign]
+            snapshot = service.build_snapshot()
+
+        self.assertEqual(snapshot["status"], "unhealthy")
+        self.assertEqual(snapshot["components"]["forecast_monitoring"]["status"], "critical")
+        self.assertIn("monitoring exploded", snapshot["components"]["forecast_monitoring"]["message"])
+        self.assertEqual(snapshot["components"]["regional_operational"]["status"], "ok")
+
 
 if __name__ == "__main__":
     unittest.main()

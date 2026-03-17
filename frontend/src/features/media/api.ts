@@ -5,6 +5,7 @@ import {
   MediaDecisionResponse,
   MediaEvidenceResponse,
   PilotReportingResponse,
+  PilotReadoutResponse,
   RegionalAllocationResponse,
   RegionalCampaignRecommendationsResponse,
   RegionalForecastResponse,
@@ -55,6 +56,14 @@ export interface PilotReportingPayload {
   regionCode?: string;
   product?: string;
   includeDraft?: boolean;
+}
+
+export interface PilotReadoutPayload {
+  brand?: string;
+  virus?: string;
+  horizonDays?: number;
+  weeklyBudgetEur?: number;
+  topN?: number;
 }
 
 export async function fetchJson<T>(url: string, init?: RequestInit, timeoutMs = 12000): Promise<T> {
@@ -137,6 +146,21 @@ export const mediaApi = {
     const suffix = qs.toString();
     return fetchJson<PilotReportingResponse>(
       `/api/v1/media/pilot-reporting${suffix ? `?${suffix}` : ''}`,
+      undefined,
+      20000,
+    );
+  },
+
+  async getPilotReadout(payload: PilotReadoutPayload = {}): Promise<PilotReadoutResponse> {
+    const qs = new URLSearchParams();
+    if (payload.brand) qs.set('brand', payload.brand);
+    if (payload.virus) qs.set('virus_typ', payload.virus);
+    if (payload.horizonDays != null) qs.set('horizon_days', String(payload.horizonDays));
+    if (payload.weeklyBudgetEur != null) qs.set('weekly_budget_eur', String(payload.weeklyBudgetEur));
+    if (payload.topN != null) qs.set('top_n', String(payload.topN));
+    const suffix = qs.toString();
+    return fetchJson<PilotReadoutResponse>(
+      `/api/v1/media/pilot-readout${suffix ? `?${suffix}` : ''}`,
       undefined,
       20000,
     );

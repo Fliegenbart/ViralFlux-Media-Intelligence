@@ -635,6 +635,9 @@ class MediaOutcomeImportBatch(Base):
     batch_id = Column(String, nullable=False, unique=True, index=True)
     brand = Column(String, nullable=False, index=True, default="gelo")
     source_label = Column(String, nullable=False, default="manual", index=True)
+    source_system = Column(String, nullable=True, index=True)
+    external_batch_id = Column(String, nullable=True, index=True)
+    ingestion_mode = Column(String, nullable=False, default="manual_backoffice", index=True)
     file_name = Column(String)
     status = Column(String, nullable=False, default="validated", index=True)
     rows_total = Column(Integer, nullable=False, default=0)
@@ -652,6 +655,7 @@ class MediaOutcomeImportBatch(Base):
     __table_args__ = (
         Index("idx_media_outcome_batch_brand_uploaded", "brand", "uploaded_at"),
         Index("idx_media_outcome_batch_status_uploaded", "status", "uploaded_at"),
+        UniqueConstraint("source_system", "external_batch_id", name="uq_media_outcome_batch_external"),
     )
 
 

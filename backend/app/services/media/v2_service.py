@@ -752,8 +752,9 @@ class MediaV2Service:
             "latest_batch": latest_batch,
             "latest_batch_issue_count": issue_count,
             "template_url": "/api/v1/media/outcomes/template",
+            "official_ingest_url": "/api/v1/media/outcomes/ingest",
             "known_limits": limits,
-            "analyst_note": "Der Bereich fuer Kundendaten basiert aktuell auf validiertem CSV-Import und nicht auf einer direkten Kundensystem-API.",
+            "analyst_note": "Die offizielle Kundenschnittstelle ist jetzt die M2M-Ingestion unter /api/v1/media/outcomes/ingest. CSV bleibt nur als Backoffice-Fallback.",
         }
 
     def import_outcomes(
@@ -781,6 +782,7 @@ class MediaV2Service:
             batch_id=batch_id,
             brand=brand_value,
             source_label=source_value,
+            ingestion_mode="manual_backoffice",
             file_name=(file_name or "").strip() or None,
             status="validated" if validate_only else "failed",
             rows_total=len(parsed_rows),
@@ -1956,6 +1958,9 @@ class MediaV2Service:
             "batch_id": batch.batch_id,
             "brand": batch.brand,
             "source_label": batch.source_label,
+            "source_system": batch.source_system,
+            "external_batch_id": batch.external_batch_id,
+            "ingestion_mode": batch.ingestion_mode,
             "file_name": batch.file_name,
             "status": batch.status,
             "rows_total": batch.rows_total,

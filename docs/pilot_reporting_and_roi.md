@@ -88,6 +88,11 @@ Endpoint:
 
 - `GET /api/v1/media/pilot-reporting`
 
+Wichtig:
+
+- `pilot-reporting` ist jetzt ein Legacy-/Backoffice-Readout fuer historische ROI-Analysen.
+- Die kundennahe Pilot-Oberflaeche nutzt stattdessen `GET /api/v1/media/pilot-readout`.
+
 Supported query parameters:
 
 - `brand`
@@ -304,7 +309,7 @@ Known limits:
 
 For a pilot review:
 
-1. call `/api/v1/media/pilot-reporting` with explicit reporting dates
+1. call `/api/v1/media/pilot-reporting` with explicit reporting dates for historical ROI analysis
 2. review `pilot_kpi_summary`
 3. inspect `region_evidence_view` for directional wins and misses
 4. inspect `before_after_comparison` for the strongest and weakest scopes

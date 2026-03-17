@@ -13,11 +13,7 @@ const PilotPage: React.FC = () => {
   const [stage, setStage] = useState<PilotSurfaceStageFilter>('ALL');
 
   const {
-    forecast,
-    allocation,
-    campaignRecommendations,
-    evidence,
-    pilotReporting,
+    pilotReadout,
     loading,
   } = usePilotSurfaceData(
     {
@@ -25,7 +21,6 @@ const PilotPage: React.FC = () => {
       virus,
       horizonDays,
       weeklyBudget: 120000,
-      lookbackWeeks: 26,
     },
     toast,
   );
@@ -40,12 +35,7 @@ const PilotPage: React.FC = () => {
       onScopeChange={setScope}
       stage={stage}
       onStageChange={setStage}
-      weeklyBudget={120000}
-      forecast={forecast}
-      allocation={allocation}
-      campaignRecommendations={campaignRecommendations}
-      evidence={evidence}
-      pilotReporting={pilotReporting}
+      pilotReadout={pilotReadout}
       loading={loading}
     />
   );

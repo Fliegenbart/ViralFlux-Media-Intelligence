@@ -1,12 +1,11 @@
 import logging
-import os
-import secrets
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, Header, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
+from app.api.m2m_auth import verify_m2m_api_key
 from app.core.celery_app import celery_app
 from app.db.session import get_db
 from app.services.data_ingest.tasks import process_erp_sales_sync
@@ -14,26 +13,6 @@ from app.services.data_ingest.tasks import process_erp_sales_sync
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/webhooks", tags=["System Integrations"])
-
-
-def verify_api_key(x_api_key: str = Header(..., alias="X-API-Key")) -> None:
-    """Simple API-key guard for machine-to-machine integrations (ERP/IMS).
-
-    We intentionally do NOT use JWT here: these calls are not from browsers/users.
-    """
-    expected = os.getenv("M2M_SECRET_KEY", "")
-    if not expected:
-        logger.error("M2M_SECRET_KEY is empty; refusing all webhook requests.")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="M2M auth is not configured.",
-        )
-
-    if not secrets.compare_digest(x_api_key, expected):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid API key",
-        )
 
 
 class ERPSalesPayload(BaseModel):
@@ -57,7 +36,7 @@ class ERPSalesPayload(BaseModel):
 @router.post("/erp/sales-sync", status_code=status.HTTP_202_ACCEPTED)
 async def erp_sales_sync(
     payload: ERPSalesPayload,
-    _: None = Depends(verify_api_key),
+    _: None = Depends(verify_m2m_api_key),
 ):
     """Accept ERP/IMS sales data and process asynchronously via Celery."""
     try:
@@ -128,7 +107,7 @@ async def get_integration_status(db: Session = Depends(get_db)):
 @router.get("/status/{task_id}")
 async def get_webhook_task_status(
     task_id: str,
-    _: None = Depends(verify_api_key),
+    _: None = Depends(verify_m2m_api_key),
 ):
     """Polling endpoint for ERP/IMS callers (PENDING/PROGRESS/SUCCESS/FAILURE)."""
     task_result = celery_app.AsyncResult(task_id)

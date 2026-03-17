@@ -1,3 +1,4 @@
+import os
 import unittest
 from datetime import datetime, timedelta
 from unittest.mock import patch
@@ -11,11 +12,13 @@ from sqlalchemy.pool import StaticPool
 from app.api.media import router
 from app.db.schema_contracts import MLForecastSchemaMismatchError
 from app.db.session import get_db
-from app.models.database import Base, BrandProduct, MediaOutcomeRecord, WastewaterAggregated
+from app.models.database import Base, BrandProduct, MediaOutcomeImportBatch, MediaOutcomeRecord, OutcomeObservation, WastewaterAggregated
 
 
 class MediaV2ApiTests(unittest.TestCase):
     def setUp(self) -> None:
+        self.previous_m2m_secret = os.environ.get("M2M_SECRET_KEY")
+        os.environ["M2M_SECRET_KEY"] = "test-m2m-secret"
         self.engine = create_engine(
             "sqlite://",
             connect_args={"check_same_thread": False},
@@ -39,6 +42,10 @@ class MediaV2ApiTests(unittest.TestCase):
         self.client = TestClient(app)
 
     def tearDown(self) -> None:
+        if self.previous_m2m_secret is None:
+            os.environ.pop("M2M_SECRET_KEY", None)
+        else:
+            os.environ["M2M_SECRET_KEY"] = self.previous_m2m_secret
         self.db.close()
         Base.metadata.drop_all(bind=self.engine)
         self.engine.dispose()
@@ -234,6 +241,153 @@ class MediaV2ApiTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 422)
         self.assertEqual(response.json()["detail"], "window_end must be on or after window_start")
+
+    def test_pilot_readout_endpoint_returns_customer_contract(self) -> None:
+        expected_payload = {
+            "brand": "gelo",
+            "run_context": {
+                "scope_readiness": "WATCH",
+                "scope_readiness_by_section": {
+                    "forecast": "GO",
+                    "allocation": "WATCH",
+                    "recommendation": "WATCH",
+                    "evidence": "WATCH",
+                },
+            },
+            "executive_summary": {
+                "what_should_we_do_now": "Hold spend release until the business gate closes.",
+            },
+            "operational_recommendations": {
+                "regions": [{"region_code": "BE", "priority_score": 0.88}],
+            },
+            "pilot_evidence": {
+                "legacy_context": {
+                    "status": "frozen",
+                    "sunset_date": "2026-04-30",
+                },
+            },
+            "empty_state": {"code": "watch_only"},
+        }
+
+        with patch(
+            "app.services.media.pilot_readout_service.PilotReadoutService.build_readout",
+            return_value=expected_payload,
+        ) as mocked_build:
+            response = self.client.get(
+                "/api/v1/media/pilot-readout?brand=gelo&virus_typ=RSV%20A&horizon_days=7&weekly_budget_eur=120000"
+            )
+
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["executive_summary"]["what_should_we_do_now"], expected_payload["executive_summary"]["what_should_we_do_now"])
+        self.assertEqual(body["pilot_evidence"]["legacy_context"]["sunset_date"], "2026-04-30")
+        self.assertNotIn("impact_probability", str(body))
+        mocked_build.assert_called_once()
+
+    def test_outcomes_ingest_requires_valid_api_key(self) -> None:
+        response = self.client.post(
+            "/api/v1/media/outcomes/ingest",
+            json={
+                "brand": "gelo",
+                "source_system": "crm",
+                "external_batch_id": "batch-1",
+                "observations": [],
+            },
+            headers={"X-API-Key": "wrong-key"},
+        )
+
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.json()["detail"], "Invalid API key")
+
+    def test_outcomes_ingest_is_idempotent_and_persists_auditable_batch(self) -> None:
+        payload = {
+            "brand": "gelo",
+            "source_system": "crm",
+            "external_batch_id": "batch-42",
+            "observations": [
+                {
+                    "product": "GeloProsed",
+                    "region_code": "SH",
+                    "window_start": "2026-02-02T00:00:00",
+                    "window_end": "2026-02-08T00:00:00",
+                    "metric_name": "media_spend",
+                    "metric_value": 12000,
+                    "metric_unit": "eur",
+                    "channel": "search",
+                    "campaign_id": "wave-1",
+                    "holdout_group": "test",
+                    "metadata": {"incremental_lift_pct": 12.5},
+                },
+                {
+                    "product": "GeloProsed",
+                    "region_code": "SH",
+                    "window_start": "2026-02-02T00:00:00",
+                    "window_end": "2026-02-08T00:00:00",
+                    "metric_name": "sales",
+                    "metric_value": 140,
+                    "metric_unit": "units",
+                    "campaign_id": "wave-1",
+                    "holdout_group": "test",
+                },
+            ],
+        }
+
+        first = self.client.post(
+            "/api/v1/media/outcomes/ingest",
+            json=payload,
+            headers={"X-API-Key": "test-m2m-secret"},
+        )
+        second = self.client.post(
+            "/api/v1/media/outcomes/ingest",
+            json=payload,
+            headers={"X-API-Key": "test-m2m-secret"},
+        )
+
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(second.status_code, 200)
+        first_body = first.json()
+        second_body = second.json()
+        self.assertFalse(first_body["idempotent_replay"])
+        self.assertTrue(second_body["idempotent_replay"])
+        self.assertEqual(first_body["batch_id"], second_body["batch_id"])
+        self.assertEqual(first_body["batch_summary"]["ingestion_mode"], "api_ingest")
+        self.assertEqual(first_body["batch_summary"]["source_system"], "crm")
+        self.assertEqual(first_body["batch_summary"]["external_batch_id"], "batch-42")
+
+        batches = self.db.query(MediaOutcomeImportBatch).all()
+        self.assertEqual(len(batches), 1)
+        self.assertEqual(batches[0].external_batch_id, "batch-42")
+        self.assertEqual(
+            self.db.query(OutcomeObservation).count(),
+            2,
+        )
+
+    def test_outcomes_ingest_records_issues_for_invalid_metrics(self) -> None:
+        response = self.client.post(
+            "/api/v1/media/outcomes/ingest",
+            json={
+                "brand": "gelo",
+                "source_system": "crm",
+                "external_batch_id": "batch-invalid",
+                "observations": [
+                    {
+                        "product": "GeloProsed",
+                        "region_code": "SH",
+                        "window_start": "2026-02-02T00:00:00",
+                        "window_end": "2026-02-08T00:00:00",
+                        "metric_name": "unsupported_metric",
+                        "metric_value": 12000,
+                    }
+                ],
+            },
+            headers={"X-API-Key": "test-m2m-secret"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["imported"], 0)
+        self.assertEqual(body["batch_summary"]["status"], "failed")
+        self.assertEqual(body["issues"][0]["issue_code"], "unsupported_metric_name")
 
     def test_cockpit_endpoint_maps_mlforecast_schema_mismatch_to_503(self) -> None:
         with patch(

@@ -101,9 +101,11 @@ Ein Pilot-Readout bleibt intern, wenn:
 
 ### Geplante Pilot-Endpunkte
 
-- `GET /api/v1/forecast/regional/predict`
+- `GET /api/v1/media/pilot-readout`
+- `GET /api/v1/forecast/regional/decisions`
 - `GET /api/v1/forecast/regional/media-allocation`
 - `GET /api/v1/forecast/regional/campaign-recommendations`
+- `POST /api/v1/media/outcomes/ingest`
 
 ### Geplante Pilot-Virus-/Horizon-Matrix
 
@@ -135,10 +137,9 @@ Wenn No-Go-Status vorliegt:
 1. Live-, Ready- und Smoke-Status erfassen
 2. Go / No-Go festhalten
 3. Nur bei Go:
-   - Forecast-Output fuer den offiziellen Scope ziehen
-   - Allocation-Output ziehen
-   - Campaign Recommendations ziehen
-   - Truth-/Pilot-Reporting als Kontext hinzunehmen
+   - den kanonischen `pilot-readout` fuer den offiziellen Scope ziehen
+   - Outcome-/Business-Gate gegen die aktuelle GELO-Ingestion pruefen
+   - nur archivierte Live-Evaluation und denselben Readout als Wahrheit verwenden
 4. Nur bei No-Go:
    - keine externen Budget- oder Aktivierungsempfehlungen ausgeben
    - stattdessen bekannte Blocker und naechsten Fix-Schritt dokumentieren

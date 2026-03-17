@@ -59,6 +59,8 @@ class TruthLayerService:
     def upsert_observations(
         self,
         observations: list[OutcomeObservationInput],
+        *,
+        commit: bool = True,
     ) -> dict[str, Any]:
         inserted = 0
         updated = 0
@@ -101,7 +103,10 @@ class TruthLayerService:
                     setattr(existing, key, value)
                 updated += 1
 
-        self.db.commit()
+        if commit:
+            self.db.commit()
+        else:
+            self.db.flush()
         return {
             "inserted": inserted,
             "updated": updated,

@@ -2,9 +2,6 @@ import { BacktestResponse } from './backtest';
 import { BusinessValidationSummary, TruthCoverage } from './evidence';
 import { RegionalAllocationResponse, RegionalCampaignRecommendationsResponse, RegionalForecastResponse } from './regional';
 
-export type PilotSurfaceScope = 'forecast' | 'allocation' | 'recommendation' | 'evidence';
-export type PilotSurfaceStageFilter = 'ALL' | 'Activate' | 'Prepare' | 'Watch';
-
 export interface PilotReportingWindow {
   start?: string | null;
   end?: string | null;
@@ -183,13 +180,4 @@ export interface PilotReportingResponse {
     before_after_definition?: string;
     strict_hit_definition?: string;
   };
-}
-
-export interface PilotSurfaceData {
-  forecast: RegionalForecastResponse | null;
-  allocation: RegionalAllocationResponse | null;
-  campaignRecommendations: RegionalCampaignRecommendationsResponse | null;
-  evidence: import('./evidence').MediaEvidenceResponse | null;
-  pilotReporting: PilotReportingResponse | null;
-  loading: boolean;
 }

@@ -11,6 +11,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from app.api.m2m_auth import verify_m2m_api_key
 from app.core.celery_app import celery_app
 from app.core.config import get_settings
 from app.core.rate_limit import limiter
@@ -175,6 +176,28 @@ class OutcomeImportRequest(BaseModel):
     csv_payload: str | None = None
 
 
+class OutcomeIngestObservation(BaseModel):
+    product: str = Field(..., min_length=1)
+    region_code: str = Field(..., min_length=1)
+    window_start: datetime
+    window_end: datetime
+    metric_name: str = Field(..., min_length=1)
+    metric_value: float
+    metric_unit: str | None = None
+    channel: str | None = None
+    campaign_id: str | None = None
+    holdout_group: str | None = None
+    confidence_hint: float | None = Field(default=None, ge=0.0, le=1.0)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class OutcomeIngestRequest(BaseModel):
+    brand: str = Field(default="gelo")
+    source_system: str = Field(..., min_length=1)
+    external_batch_id: str = Field(..., min_length=1)
+    observations: list[OutcomeIngestObservation] = Field(default_factory=list)
+
+
 def _json_safe_response(value: Any) -> Any:
     if value is None:
         return None
@@ -317,7 +340,7 @@ async def get_media_pilot_reporting(
     include_draft: bool = Query(default=False),
     db: Session = Depends(get_db),
 ):
-    """Pilot readout for recommendation history, activations and outcome evidence."""
+    """Legacy pilot reporting for internal/backoffice evidence review."""
     from app.services.media.pilot_reporting_service import PilotReportingService
 
     try:
@@ -334,6 +357,29 @@ async def get_media_pilot_reporting(
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.get("/pilot-readout")
+async def get_media_pilot_readout(
+    brand: str = "gelo",
+    virus_typ: str = "RSV A",
+    horizon_days: int = Query(default=7, ge=3, le=14),
+    weekly_budget_eur: float = Query(default=120000.0, ge=0),
+    top_n: int = Query(default=12, ge=1, le=24),
+    db: Session = Depends(get_db),
+):
+    """Single-source customer readout for the PEIX / GELO pilot surface."""
+    from app.services.media.pilot_readout_service import PilotReadoutService
+
+    return _json_safe_response(
+        PilotReadoutService(db).build_readout(
+            brand=brand,
+            virus_typ=virus_typ,
+            horizon_days=horizon_days,
+            weekly_budget_eur=weekly_budget_eur,
+            top_n=top_n,
+        )
+    )
 
 
 @router.get("/evidence/truth")
@@ -389,7 +435,7 @@ async def import_media_outcomes(
     payload: OutcomeImportRequest,
     db: Session = Depends(get_db),
 ):
-    """Importiert Truth-/Outcome-Daten per JSON oder CSV-String für den Kundenbeweis-Layer."""
+    """Internal manual/backoffice truth import path. CSV remains a fallback only."""
     service = MediaV2Service(db)
     return _json_safe_response(
         service.import_outcomes(
@@ -400,6 +446,26 @@ async def import_media_outcomes(
             replace_existing=payload.replace_existing,
             validate_only=payload.validate_only,
             file_name=payload.file_name,
+        )
+    )
+
+
+@router.post("/outcomes/ingest")
+async def ingest_media_outcomes(
+    payload: OutcomeIngestRequest,
+    _: None = Depends(verify_m2m_api_key),
+    db: Session = Depends(get_db),
+):
+    """Official GELO machine-to-machine outcome ingestion contract."""
+    from app.services.media.outcome_ingestion_service import OutcomeIngestionService
+
+    service = OutcomeIngestionService(db)
+    return _json_safe_response(
+        service.ingest_outcomes(
+            brand=payload.brand,
+            source_system=payload.source_system,
+            external_batch_id=payload.external_batch_id,
+            observations=[item.model_dump(exclude_none=True) for item in payload.observations],
         )
     )
 

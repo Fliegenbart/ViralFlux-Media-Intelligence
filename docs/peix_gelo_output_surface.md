@@ -20,21 +20,28 @@ Sie ist bewusst keine neue Scoring- oder Decision-Engine. Die Seite liest nur vo
 
 ## Datenquellen
 
-Die Seite laedt parallel:
+Die Seite liest jetzt einen kanonischen Customer-Contract statt fuenf lose Frontend-Calls.
 
-1. regionale Forecast-Daten
-2. regionale Allocation-Daten
+Primaerer Endpunkt:
+
+- `GET /api/v1/media/pilot-readout`
+
+Dieser Readout komponiert serverseitig:
+
+1. regionalen Forecast
+2. regionale Allocation
 3. regionale Campaign Recommendations
-4. Medien-Evidenz / Truth-Kontext
-5. Pilot-Reporting fuer Evidenz und Before/After-Readouts
+4. aktuelle Gate-/Readiness-Sicht
+5. letzte archivierte Live-Evaluation
 
-Verwendete Endpunkte:
+Legacy-/Backoffice-Kontexte bleiben getrennt:
 
-- `GET /api/v1/forecast/regional/decisions`
-- `GET /api/v1/forecast/regional/media-allocation`
-- `GET /api/v1/forecast/regional/campaign-recommendations`
-- `GET /api/v1/media/evidence`
 - `GET /api/v1/media/pilot-reporting`
+  Nur noch fuer interne / historische Evidence-Analysen.
+- `POST /api/v1/media/outcomes/import`
+  Nur noch manueller Backoffice-Fallback.
+- `POST /api/v1/media/outcomes/ingest`
+  Offizielle GELO M2M-Ingestion fuer Outcome-Daten.
 
 ## Screen-Struktur
 
@@ -76,15 +83,15 @@ Die Sicht bleibt bewusst business-first:
 
 ### 3. Pilot Evidence / Readiness
 
-Dieser Block macht die Entscheidung nachvollziehbar und archivierungsfaehig.
+Dieser Block macht die Entscheidung nachvollziehbar und auditierbar.
 
 Enthaelt:
 
-- Pilot KPI Summary
-- Region Evidence Rollup
-- Before / After Vergleiche
-- Truth- und Business-Readiness
-- Methodik- und Zeitfenster-Kontext
+- Scope-Readiness fuer Forecast / Allocation / Recommendation / Evidence
+- letzte archivierte Live-Evaluation
+- Truth- / Business-Gate / Holdout / Budget-Release Status
+- fehlende Voraussetzungen in Klartext
+- quarantinierten `legacy_context` mit Sunset-Datum fuer den Altpfad
 
 ## Empty States
 
@@ -104,6 +111,7 @@ Diese Zustände sind bewusst sichtbar und sollen keine implizite Freigabe sugger
 - klare Entscheidbarkeit statt analytischer Ueberladung
 - rohe technische Begriffe nur dort, wo sie wirklich als Evidenz helfen
 - GO / WATCH / NO_GO bleibt als operative Sprache sichtbar
+- `priority_score` statt Pseudo-Probability, solange keine echte Kalibrierung vorliegt
 
 ## Nutzungslogik
 

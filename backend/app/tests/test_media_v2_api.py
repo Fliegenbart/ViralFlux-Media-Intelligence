@@ -196,6 +196,44 @@ class MediaV2ApiTests(unittest.TestCase):
         self.assertIn("outcome_confidence_pct", card)
         self.assertEqual(card["learning_state"], "im_aufbau")
 
+    def test_pilot_reporting_endpoint_returns_report_payload(self) -> None:
+        expected_payload = {
+            "brand": "gelo",
+            "summary": {"total_recommendations": 2},
+            "pilot_kpi_summary": {
+                "hit_rate": {"value": 0.5, "assessed": 2},
+            },
+            "recommendation_history": [{"opportunity_id": "pilot-opp-sh"}],
+            "activation_history": [],
+            "region_evidence_view": [],
+            "before_after_comparison": [],
+            "methodology": {"version": "pilot_reporting_v1"},
+        }
+
+        with patch(
+            "app.services.media.pilot_reporting_service.PilotReportingService.build_pilot_report",
+            return_value=expected_payload,
+        ) as mocked_build:
+            response = self.client.get(
+                "/api/v1/media/pilot-reporting?brand=gelo&lookback_weeks=12&region_code=SH&product=GeloProsed"
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["summary"]["total_recommendations"], 2)
+        mocked_build.assert_called_once()
+
+    def test_pilot_reporting_endpoint_maps_invalid_window_to_422(self) -> None:
+        with patch(
+            "app.services.media.pilot_reporting_service.PilotReportingService.build_pilot_report",
+            side_effect=ValueError("window_end must be on or after window_start"),
+        ):
+            response = self.client.get(
+                "/api/v1/media/pilot-reporting?window_start=2026-03-31T00:00:00&window_end=2026-03-01T00:00:00"
+            )
+
+        self.assertEqual(response.status_code, 422)
+        self.assertEqual(response.json()["detail"], "window_end must be on or after window_start")
+
 
 if __name__ == "__main__":
     unittest.main()

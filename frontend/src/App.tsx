@@ -10,6 +10,7 @@ import './index.css';
 const LandingPage = lazy(() => import('./pages/LandingPage'));
 const WeeklyReport = lazy(() => import('./pages/WeeklyReport'));
 const MediaShell = lazy(() => import('./pages/media/MediaShell'));
+const OperationalDashboardPage = lazy(() => import('./pages/media/OperationalDashboardPage'));
 const DecisionPage = lazy(() => import('./pages/media/DecisionPage'));
 const RegionsPage = lazy(() => import('./pages/media/RegionsPage'));
 const CampaignsPage = lazy(() => import('./pages/media/CampaignsPage'));
@@ -172,9 +173,10 @@ const App: React.FC = () => {
           <Router>
             <Suspense fallback={<PageFallback />}>
               <Routes>
-                <Route path="/" element={<Navigate to="/entscheidung" replace />} />
+                <Route path="/" element={<Navigate to="/dashboard" replace />} />
                 <Route path="/welcome" element={<LandingPage />} />
                 <Route element={<MediaShell />}>
+                  <Route path="/dashboard" element={<OperationalDashboardPage />} />
                   <Route path="/entscheidung" element={<DecisionPage />} />
                   <Route path="/regionen" element={<RegionsPage />} />
                   <Route path="/kampagnen" element={<CampaignsPage />} />
@@ -183,11 +185,10 @@ const App: React.FC = () => {
                   <Route path="/bericht" element={<WeeklyReport />} />
                 </Route>
                 {/* Legacy redirects */}
-                <Route path="/lagebild" element={<Navigate to="/entscheidung" replace />} />
+                <Route path="/lagebild" element={<Navigate to="/dashboard" replace />} />
                 <Route path="/empfehlungen" element={<Navigate to="/kampagnen" replace />} />
                 <Route path="/empfehlungen/:id" element={<LegacyRecommendationRedirect />} />
                 <Route path="/validierung" element={<Navigate to="/evidenz" replace />} />
-                <Route path="/dashboard" element={<Navigate to="/entscheidung" replace />} />
                 <Route path="/dashboard/recommendations/:id" element={<LegacyRecommendationRedirect />} />
                 <Route path="/backtest" element={<Navigate to="/evidenz" replace />} />
               </Routes>

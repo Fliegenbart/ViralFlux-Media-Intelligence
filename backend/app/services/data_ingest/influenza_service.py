@@ -9,6 +9,7 @@ import logging
 
 from app.core.config import get_settings
 from app.models.database import InfluenzaData
+from app.services.ml.nowcast_revision import capture_nowcast_snapshots
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -115,11 +116,13 @@ class InfluenzaIngestionService:
         try:
             df = self.fetch_data()
             count = self.import_data(df)
+            snapshot_rows = capture_nowcast_snapshots(self.db, ["ifsg_influenza"]).get("ifsg_influenza", 0)
 
             return {
                 "success": True,
                 "imported": count,
                 "fetched": len(df),
+                "snapshot_rows": snapshot_rows,
                 "regionen": int(df['Region'].nunique()),
                 "altersgruppen": df['Altersgruppe'].unique().tolist(),
                 "timestamp": datetime.utcnow().isoformat(),

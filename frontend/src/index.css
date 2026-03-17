@@ -2614,6 +2614,182 @@ textarea:focus-visible {
   }
 }
 
+/* ─── Operational Dashboard ───────────────────────────────────── */
+.ops-filter-group {
+  display: grid;
+  gap: 6px;
+}
+
+.ops-filter-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.ops-filter-select {
+  min-width: 170px;
+  padding: 10px 12px;
+  border-radius: 10px;
+}
+
+.ops-exec-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(300px, 0.9fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.ops-dashboard-grid,
+.ops-panel-grid {
+  display: grid;
+  gap: 18px;
+}
+
+.ops-dashboard-grid {
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+}
+
+.ops-panel-grid {
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+}
+
+.ops-summary-grid,
+.ops-stage-grid,
+.ops-rationale-grid,
+.ops-recommendation-grid {
+  display: grid;
+  gap: 14px;
+}
+
+.ops-summary-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.ops-stage-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.ops-recommendation-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.ops-rationale-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.ops-progress-track {
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.14);
+  overflow: hidden;
+}
+
+.ops-progress-fill {
+  height: 100%;
+  border-radius: 999px;
+}
+
+.ops-progress-activate { background: linear-gradient(90deg, rgba(5, 150, 105, 0.72), rgba(5, 150, 105, 0.95)); }
+.ops-progress-prepare { background: linear-gradient(90deg, rgba(245, 158, 11, 0.72), rgba(245, 158, 11, 0.95)); }
+.ops-progress-watch { background: linear-gradient(90deg, rgba(10, 132, 255, 0.6), rgba(10, 132, 255, 0.88)); }
+
+.ops-table-wrap {
+  overflow-x: auto;
+}
+
+.ops-table {
+  width: 100%;
+  min-width: 760px;
+  border-collapse: collapse;
+}
+
+.ops-table th,
+.ops-table td {
+  padding: 12px 10px;
+  text-align: left;
+  border-bottom: 1px solid var(--border-light);
+  vertical-align: top;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.ops-table th {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.ops-table tbody tr {
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.ops-table tbody tr:hover {
+  background: rgba(10, 132, 255, 0.04);
+}
+
+.ops-row-meta {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.ops-table-empty {
+  color: var(--text-muted);
+  text-align: center;
+  padding: 18px;
+}
+
+.ops-panel-title {
+  margin-bottom: 10px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.ops-rationale-list {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 8px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+[data-theme="dark"] .ops-table tbody tr:hover {
+  background: rgba(99, 102, 241, 0.08);
+}
+
+@media (max-width: 1180px) {
+  .ops-exec-grid,
+  .ops-dashboard-grid,
+  .ops-panel-grid,
+  .ops-recommendation-grid,
+  .ops-rationale-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .ops-stage-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .ops-summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .ops-filter-select {
+    min-width: 100%;
+  }
+}
+
 /* ─── Reduced Motion ──────────────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
   *,

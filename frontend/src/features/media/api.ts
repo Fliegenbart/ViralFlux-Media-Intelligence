@@ -4,6 +4,9 @@ import {
   MediaCampaignsResponse,
   MediaDecisionResponse,
   MediaEvidenceResponse,
+  RegionalAllocationResponse,
+  RegionalCampaignRecommendationsResponse,
+  RegionalForecastResponse,
   RegionalBenchmarkResponse,
   RegionalPortfolioResponse,
   MediaRegionsResponse,
@@ -123,6 +126,45 @@ export const mediaApi = {
   async getRegionalPortfolio(referenceVirus = 'Influenza A', topN = 12): Promise<RegionalPortfolioResponse> {
     const qs = new URLSearchParams({ reference_virus: referenceVirus, top_n: String(topN) });
     return fetchJson<RegionalPortfolioResponse>(`/api/v1/forecast/regional/portfolio?${qs.toString()}`, undefined, 20000);
+  },
+
+  async getRegionalForecast(
+    virus: string,
+    horizonDays: number,
+  ): Promise<RegionalForecastResponse> {
+    const qs = new URLSearchParams({
+      virus_typ: virus,
+      horizon_days: String(horizonDays),
+    });
+    return fetchJson<RegionalForecastResponse>(`/api/v1/forecast/regional/decisions?${qs.toString()}`, undefined, 20000);
+  },
+
+  async getRegionalAllocation(
+    virus: string,
+    weeklyBudgetEur: number,
+    horizonDays: number,
+  ): Promise<RegionalAllocationResponse> {
+    const qs = new URLSearchParams({
+      virus_typ: virus,
+      weekly_budget_eur: String(weeklyBudgetEur),
+      horizon_days: String(horizonDays),
+    });
+    return fetchJson<RegionalAllocationResponse>(`/api/v1/forecast/regional/media-allocation?${qs.toString()}`, undefined, 20000);
+  },
+
+  async getRegionalCampaignRecommendations(
+    virus: string,
+    weeklyBudgetEur: number,
+    horizonDays: number,
+    topN = 12,
+  ): Promise<RegionalCampaignRecommendationsResponse> {
+    const qs = new URLSearchParams({
+      virus_typ: virus,
+      weekly_budget_eur: String(weeklyBudgetEur),
+      horizon_days: String(horizonDays),
+      top_n: String(topN),
+    });
+    return fetchJson<RegionalCampaignRecommendationsResponse>(`/api/v1/forecast/regional/campaign-recommendations?${qs.toString()}`, undefined, 20000);
   },
 
   async getRecommendationDetail(id: string): Promise<RecommendationDetail> {

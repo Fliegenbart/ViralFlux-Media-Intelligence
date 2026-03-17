@@ -34,6 +34,7 @@ const MAILTO = (() => {
 })();
 
 const NAV_ITEMS = [
+  { label: 'Dashboard', path: '/dashboard' },
   { label: 'Entscheidung', path: '/entscheidung' },
   { label: 'Regionen', path: '/regionen' },
   { label: 'Kampagnen', path: '/kampagnen' },
@@ -342,7 +343,7 @@ const LandingPage: React.FC = () => {
               Kontakt
             </a>
             <button
-              onClick={() => navigate('/entscheidung')}
+              onClick={() => navigate('/dashboard')}
               className="media-button"
               type="button"
             >
@@ -402,7 +403,7 @@ const LandingPage: React.FC = () => {
 
           <div style={{ marginTop: 28, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
             <button
-              onClick={() => navigate('/entscheidung')}
+              onClick={() => navigate('/dashboard')}
               className="media-button"
               type="button"
             >
@@ -420,7 +421,7 @@ const LandingPage: React.FC = () => {
           {/* Thin rule + stats */}
           <div style={{ marginTop: 36, width: 56, height: 1, background: C.rule }} />
           <div style={{ marginTop: 14, display: 'flex', gap: 24, flexWrap: 'wrap' }}>
-            {['16 Bundesländer', '4 Virustypen', '14-Tage-Prognose'].map(s => (
+            {['16 Bundesländer', '4 Virustypen', '3 / 5 / 7 Tage Horizon'].map(s => (
               <span key={s} style={{ fontSize: 12, color: C.textMuted, fontWeight: 500 }}>{s}</span>
             ))}
           </div>
@@ -635,7 +636,7 @@ const LandingPage: React.FC = () => {
           </p>
           <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
             <button
-              onClick={() => navigate('/entscheidung')}
+              onClick={() => navigate('/dashboard')}
               className="media-button"
               type="button"
             >
@@ -666,7 +667,7 @@ const LandingPage: React.FC = () => {
               Beratung anfragen
             </a>
             <button
-              onClick={() => navigate('/entscheidung')}
+              onClick={() => navigate('/dashboard')}
               className="media-button"
               type="button"
             >

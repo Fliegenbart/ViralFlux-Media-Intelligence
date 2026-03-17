@@ -6,6 +6,7 @@ import logging
 import time
 
 from app.models.database import GoogleTrendsData
+from app.services.ml.nowcast_revision import capture_nowcast_snapshots
 
 logger = logging.getLogger(__name__)
 
@@ -122,10 +123,12 @@ class GoogleTrendsService:
                 if i < len(keyword_chunks) - 1:
                     time.sleep(15)
 
+            snapshot_rows = capture_nowcast_snapshots(self.db, ["google_trends"]).get("google_trends", 0)
             return {
                 "success": total_imported > 0,
                 "keywords_processed": len(self.KEYWORDS),
                 "records_imported": total_imported,
+                "snapshot_rows": snapshot_rows,
                 "timestamp": datetime.utcnow().isoformat()
             }
 

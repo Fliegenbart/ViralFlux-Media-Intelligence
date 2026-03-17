@@ -26,7 +26,10 @@ from app.models.database import (
     WastewaterData,
     WeatherData,
 )
+from app.services.ml.forecast_horizon_utils import ensure_supported_horizon
 from app.services.ml.forecast_service import SURVSTAT_VIRUS_MAP
+from app.services.ml.nowcast_contracts import NowcastObservation, NowcastResult
+from app.services.ml.nowcast_revision import NowcastRevisionService
 from app.services.ml.regional_panel_utils import (
     ALL_BUNDESLAENDER,
     BUNDESLAND_NAMES,
@@ -39,7 +42,6 @@ from app.services.ml.regional_panel_utils import (
     circular_week_distance,
     effective_available_time,
     event_definition_config_for_virus,
-    first_week_start_in_window,
     normalize_state_code,
     seasonal_baseline_and_mad,
 )
@@ -57,13 +59,27 @@ class RegionalFeatureBuilder:
 
     def __init__(self, db: Session):
         self.db = db
+        self._nowcast_service = NowcastRevisionService()
+
+    @property
+    def nowcast_service(self) -> NowcastRevisionService:
+        service = getattr(self, "_nowcast_service", None)
+        if service is None:
+            service = NowcastRevisionService()
+            self._nowcast_service = service
+        return service
 
     def build_panel_training_data(
         self,
         virus_typ: str = "Influenza A",
         lookback_days: int = 900,
+        horizon_days: int = 7,
+        *,
+        include_nowcast: bool = False,
+        use_revision_adjusted: bool = False,
     ) -> pd.DataFrame:
         """Build pooled training rows across all Bundesländer."""
+        horizon = ensure_supported_horizon(horizon_days)
         end_date = pd.Timestamp(datetime.utcnow()).normalize()
         start_date = end_date - pd.Timedelta(days=lookback_days)
         truth_start = start_date - pd.Timedelta(days=730)
@@ -77,8 +93,8 @@ class RegionalFeatureBuilder:
         are = self._load_are_konsultation(truth_start, end_date) if virus_typ == "SARS-CoV-2" else pd.DataFrame()
         notaufnahme = self._load_notaufnahme_covid(truth_start, end_date) if virus_typ == "SARS-CoV-2" else pd.DataFrame()
         trends = self._load_corona_test_trends(truth_start, end_date) if virus_typ == "SARS-CoV-2" else pd.DataFrame()
-        weather = self._load_weather(truth_start, end_date + pd.Timedelta(days=TARGET_WINDOW_DAYS[1]))
-        pollen = self._load_pollen(truth_start, end_date + pd.Timedelta(days=TARGET_WINDOW_DAYS[1]))
+        weather = self._load_weather(truth_start, end_date + pd.Timedelta(days=horizon))
+        pollen = self._load_pollen(truth_start, end_date + pd.Timedelta(days=horizon))
         holidays = self._load_holidays()
         state_populations = self._load_state_population_map()
 
@@ -99,7 +115,10 @@ class RegionalFeatureBuilder:
             state_populations=state_populations,
             start_date=start_date,
             end_date=end_date,
+            horizon_days=horizon,
             include_targets=True,
+            include_nowcast=include_nowcast,
+            use_revision_adjusted=use_revision_adjusted,
         )
         return self._finalize_panel(rows)
 
@@ -108,11 +127,16 @@ class RegionalFeatureBuilder:
         virus_typ: str = "Influenza A",
         as_of_date: datetime | None = None,
         lookback_days: int = 180,
+        horizon_days: int = 7,
+        *,
+        include_nowcast: bool = False,
+        use_revision_adjusted: bool = False,
     ) -> pd.DataFrame:
         """Build one inference row per Bundesland for a shared as-of date."""
+        horizon = ensure_supported_horizon(horizon_days)
         effective_as_of = pd.Timestamp(as_of_date or datetime.utcnow()).normalize()
         history_start = effective_as_of - pd.Timedelta(days=lookback_days)
-        row_start = effective_as_of - pd.Timedelta(days=TARGET_WINDOW_DAYS[1] + 7)
+        row_start = effective_as_of - pd.Timedelta(days=horizon + 7)
         truth_start = history_start - pd.Timedelta(days=730)
 
         wastewater = self._load_wastewater_daily(virus_typ, truth_start)
@@ -128,8 +152,8 @@ class RegionalFeatureBuilder:
             else pd.DataFrame()
         )
         trends = self._load_corona_test_trends(truth_start, effective_as_of) if virus_typ == "SARS-CoV-2" else pd.DataFrame()
-        weather = self._load_weather(truth_start, effective_as_of + pd.Timedelta(days=TARGET_WINDOW_DAYS[1]))
-        pollen = self._load_pollen(truth_start, effective_as_of + pd.Timedelta(days=TARGET_WINDOW_DAYS[1]))
+        weather = self._load_weather(truth_start, effective_as_of + pd.Timedelta(days=horizon))
+        pollen = self._load_pollen(truth_start, effective_as_of + pd.Timedelta(days=horizon))
         holidays = self._load_holidays()
         state_populations = self._load_state_population_map()
 
@@ -150,7 +174,10 @@ class RegionalFeatureBuilder:
             state_populations=state_populations,
             start_date=row_start,
             end_date=effective_as_of,
+            horizon_days=horizon,
             include_targets=False,
+            include_nowcast=include_nowcast,
+            use_revision_adjusted=use_revision_adjusted,
         )
         panel = self._finalize_panel(rows)
         if panel.empty:
@@ -187,10 +214,18 @@ class RegionalFeatureBuilder:
         virus_typ: str = "Influenza A",
         bundesland: str = "BY",
         lookback_days: int = 900,
+        *,
+        include_nowcast: bool = False,
+        use_revision_adjusted: bool = False,
     ) -> pd.DataFrame:
         """Backward-compatible helper returning the per-state panel slice."""
         code = normalize_state_code(bundesland) or bundesland
-        panel = self.build_panel_training_data(virus_typ=virus_typ, lookback_days=lookback_days)
+        panel = self.build_panel_training_data(
+            virus_typ=virus_typ,
+            lookback_days=lookback_days,
+            include_nowcast=include_nowcast,
+            use_revision_adjusted=use_revision_adjusted,
+        )
         if panel.empty:
             return panel
         return panel.loc[panel["bundesland"] == code].reset_index(drop=True)
@@ -226,6 +261,16 @@ class RegionalFeatureBuilder:
                 "source_coverage": {},
             }
 
+        target_window_days = (
+            list(panel["target_window_days"].iloc[0])
+            if "target_window_days" in panel.columns and len(panel) > 0
+            else list(TARGET_WINDOW_DAYS)
+        )
+        horizon_days = (
+            int(panel["horizon_days"].iloc[0])
+            if "horizon_days" in panel.columns and len(panel) > 0
+            else target_window_days[-1]
+        )
         truth_sources = sorted(str(value) for value in panel["truth_source"].dropna().unique())
         source_coverage = {
             column: round(float(panel[column].mean()), 4)
@@ -242,9 +287,10 @@ class RegionalFeatureBuilder:
         }
         return {
             "virus_typ": virus_typ,
+            "horizon_days": horizon_days,
             "event_definition_version": EVENT_DEFINITION_VERSION,
             "event_definition_config": event_config.to_manifest(),
-            "target_window_days": list(TARGET_WINDOW_DAYS),
+            "target_window_days": target_window_days,
             "source_lag_days": SOURCE_LAG_DAYS,
             "rows": int(len(panel)),
             "states": int(panel["bundesland"].nunique()),
@@ -275,6 +321,7 @@ class RegionalFeatureBuilder:
         }
         return {
             "virus_typ": virus_typ,
+            "horizon_days": dataset_manifest.get("horizon_days"),
             "snapshot_type": "regional_panel_as_of_training",
             "captured_at": datetime.utcnow().isoformat(),
             "rows": int(len(panel)),
@@ -299,6 +346,7 @@ class RegionalFeatureBuilder:
                 }
             ),
             "source_lag_days": SOURCE_LAG_DAYS,
+            "target_window_days": dataset_manifest.get("target_window_days") or list(TARGET_WINDOW_DAYS),
             "dataset_manifest": dataset_manifest,
         }
 
@@ -835,10 +883,14 @@ class RegionalFeatureBuilder:
         state_populations: dict[str, float],
         start_date: pd.Timestamp,
         end_date: pd.Timestamp,
+        horizon_days: int,
         include_targets: bool,
+        include_nowcast: bool,
+        use_revision_adjusted: bool,
     ) -> list[dict[str, Any]]:
         if wastewater.empty or truth.empty:
             return []
+        horizon = ensure_supported_horizon(horizon_days)
         event_config = event_definition_config_for_virus(virus_typ)
 
         wastewater_by_state = {
@@ -959,16 +1011,29 @@ class RegionalFeatureBuilder:
                         & (national_trends["available_time"] <= as_of)
                     ].copy()
 
-                target_week_start = self._target_week_start(as_of)
-                if target_week_start is None:
-                    continue
+                target_date = self._target_date(as_of, horizon)
+                target_week_start = self._target_week_start(as_of, horizon)
 
                 target_row = truth_frame.loc[truth_frame["week_start"] == target_week_start]
-                if include_targets and target_row.empty:
-                    continue
 
                 current_truth = visible_truth.iloc[-1]
                 next_truth = target_row.iloc[0] if not target_row.empty else None
+                truth_source = str(current_truth.get("truth_source") or "survstat_weekly")
+                truth_nowcast = self.nowcast_service.evaluate_frame(
+                    source_id=truth_source,
+                    signal_id=truth_source,
+                    frame=visible_truth,
+                    as_of_date=as_of,
+                    value_column="incidence",
+                    reference_column="week_start",
+                    available_column="available_date",
+                    region_code=state,
+                    metadata={"truth_source": truth_source},
+                )
+                effective_current_incidence = self.nowcast_service.preferred_value(
+                    truth_nowcast,
+                    use_revision_adjusted=use_revision_adjusted,
+                )
                 baseline, mad = seasonal_baseline_and_mad(
                     truth_frame,
                     target_week_start,
@@ -1001,10 +1066,14 @@ class RegionalFeatureBuilder:
                     latest_cross_virus_snapshots=latest_cross_virus_snapshots,
                     state_population=float(state_populations.get(state, 0.0)),
                     max_site_count=max_sites.get(state, 1),
+                    horizon_days=horizon,
                     target_week_start=target_week_start,
-                    current_known_incidence=float(current_truth["incidence"] or 0.0),
+                    current_known_incidence=float(effective_current_incidence),
                     seasonal_baseline=float(baseline),
                     seasonal_mad=float(mad),
+                    include_nowcast=include_nowcast,
+                    use_revision_adjusted=use_revision_adjusted,
+                    truth_nowcast=truth_nowcast,
                 )
                 if feature_row is None:
                     continue
@@ -1014,15 +1083,17 @@ class RegionalFeatureBuilder:
                     "bundesland": state,
                     "bundesland_name": BUNDESLAND_NAMES.get(state, state),
                     "as_of_date": pd.Timestamp(as_of).normalize(),
+                    "target_date": pd.Timestamp(target_date).normalize(),
                     "target_week_start": pd.Timestamp(target_week_start).normalize(),
-                    "target_window_days": list(TARGET_WINDOW_DAYS),
+                    "target_window_days": [horizon, horizon],
+                    "horizon_days": horizon,
                     "event_definition_version": EVENT_DEFINITION_VERSION,
                     "truth_source": str(
                         (next_truth.get("truth_source") if next_truth is not None else None)
                         or current_truth.get("truth_source")
                         or "survstat_weekly"
                     ),
-                    "current_known_incidence": float(current_truth["incidence"] or 0.0),
+                    "current_known_incidence": float(effective_current_incidence),
                     "next_week_incidence": (
                         float(next_truth["incidence"] or 0.0)
                         if include_targets and next_truth is not None
@@ -1058,12 +1129,30 @@ class RegionalFeatureBuilder:
         latest_cross_virus_snapshots: dict[str, dict[str, dict[str, float]]],
         state_population: float,
         max_site_count: int,
+        horizon_days: int,
         target_week_start: pd.Timestamp,
         current_known_incidence: float,
         seasonal_baseline: float,
         seasonal_mad: float,
+        include_nowcast: bool,
+        use_revision_adjusted: bool,
+        truth_nowcast: NowcastResult,
     ) -> dict[str, Any] | None:
+        nowcast_features: dict[str, float] = {}
         ww_latest = visible_ww.iloc[-1]
+        ww_nowcast = self.nowcast_service.evaluate_frame(
+            source_id="wastewater",
+            signal_id=virus_typ,
+            frame=visible_ww,
+            as_of_date=as_of,
+            value_column="viral_load",
+            region_code=state,
+            metadata={"virus_typ": virus_typ},
+        )
+        ww_level = self.nowcast_service.preferred_value(
+            ww_nowcast,
+            use_revision_adjusted=use_revision_adjusted,
+        )
         ww_lag4 = self._latest_value_as_of(visible_ww, as_of - pd.Timedelta(days=4), "viral_load")
         ww_lag7 = self._latest_value_as_of(visible_ww, as_of - pd.Timedelta(days=7), "viral_load")
         ww_lag14 = self._latest_value_as_of(visible_ww, as_of - pd.Timedelta(days=14), "viral_load")
@@ -1072,11 +1161,15 @@ class RegionalFeatureBuilder:
         ww_dispersion_lag7 = self._latest_value_as_of(visible_ww, as_of - pd.Timedelta(days=7), "viral_std")
         ww_window7 = visible_ww.loc[visible_ww["datum"] >= as_of - pd.Timedelta(days=7)]
         ww_window28 = visible_ww.loc[visible_ww["datum"] >= as_of - pd.Timedelta(days=28)]
-        ww_level = float(ww_latest["viral_load"] or 0.0)
         ww_site_count = float(ww_latest["site_count"] or 0.0)
         ww_slope7d = float((ww_level - ww_lag7) / max(abs(ww_lag7), 1.0))
         ww_slope14d = float((ww_lag7 - ww_lag14) / max(abs(ww_lag14), 1.0))
         ww_acceleration7d = float(ww_slope7d - ww_slope14d)
+        if include_nowcast:
+            nowcast_features.update(self._nowcast_feature_family("ww_level", ww_nowcast))
+            nowcast_features.update(
+                self._nowcast_feature_family("survstat_current_incidence", truth_nowcast)
+            )
 
         truth_lag1 = self._latest_truth_value(visible_truth, lag_weeks=1)
         truth_lag2 = self._latest_truth_value(visible_truth, lag_weeks=2)
@@ -1108,28 +1201,43 @@ class RegionalFeatureBuilder:
             latest_cross_virus_snapshots=latest_cross_virus_snapshots,
         )
 
-        weather_features = self._weather_features(weather_frame, as_of)
+        weather_features = self._weather_features(
+            weather_frame,
+            as_of,
+            horizon_days=horizon_days,
+        )
         pollen_context = self._pollen_context(pollen_frame, as_of)
-        holiday_share = self._holiday_share_in_target_window(holiday_ranges, as_of)
+        holiday_share = self._holiday_share_in_target_window(
+            holiday_ranges,
+            as_of,
+            horizon_days=horizon_days,
+        )
         grippeweb_features = self._grippeweb_context_features(
+            state=state,
             as_of=as_of,
             visible_state_signals=visible_grippeweb_state,
             visible_national_signals=visible_grippeweb_national,
             current_known_incidence=current_known_incidence,
             seasonal_baseline=seasonal_baseline,
             seasonal_mad=seasonal_mad,
+            include_nowcast=include_nowcast,
+            use_revision_adjusted=use_revision_adjusted,
         )
         virus_specific_ifsg_features = self._virus_specific_ifsg_features(
             virus_typ=virus_typ,
+            state=state,
             as_of=as_of,
             visible_influenza_ifsg=visible_influenza_ifsg,
             visible_rsv_ifsg=visible_rsv_ifsg,
             current_known_incidence=current_known_incidence,
             seasonal_baseline=seasonal_baseline,
             seasonal_mad=seasonal_mad,
+            include_nowcast=include_nowcast,
+            use_revision_adjusted=use_revision_adjusted,
         )
         sars_context_features = self._sars_context_features(
             virus_typ=virus_typ,
+            state=state,
             as_of=as_of,
             visible_are=visible_are,
             visible_notaufnahme=visible_notaufnahme,
@@ -1139,7 +1247,43 @@ class RegionalFeatureBuilder:
             current_known_incidence=current_known_incidence,
             seasonal_baseline=seasonal_baseline,
             seasonal_mad=seasonal_mad,
+            include_nowcast=include_nowcast,
+            use_revision_adjusted=use_revision_adjusted,
         )
+        if include_nowcast:
+            weather_nowcast = self._manual_nowcast_result(
+                source_id="weather",
+                signal_id="forecast_temp_3_7",
+                region_code=state,
+                as_of=as_of,
+                raw_value=float(weather_features.get("weather_forecast_temp_3_7") or 0.0),
+                reference_date=self._latest_reference_date(weather_frame, as_of=as_of),
+                available_time=self._latest_available_time(weather_frame, as_of=as_of),
+                coverage_ratio=1.0 if weather_frame is not None and not weather_frame.empty else 0.0,
+            )
+            pollen_nowcast = self._manual_nowcast_result(
+                source_id="pollen",
+                signal_id="context_score",
+                region_code=state,
+                as_of=as_of,
+                raw_value=float(pollen_context),
+                reference_date=self._latest_reference_date(pollen_frame, as_of=as_of),
+                available_time=self._latest_available_time(pollen_frame, as_of=as_of),
+                coverage_ratio=1.0 if pollen_frame is not None and not pollen_frame.empty else 0.0,
+            )
+            holiday_nowcast = self._manual_nowcast_result(
+                source_id="school_holidays",
+                signal_id="target_window_share",
+                region_code=state,
+                as_of=as_of,
+                raw_value=float(holiday_share),
+                reference_date=as_of,
+                available_time=as_of,
+                coverage_ratio=1.0,
+            )
+            nowcast_features.update(self._nowcast_feature_family("weather_context", weather_nowcast))
+            nowcast_features.update(self._nowcast_feature_family("pollen_context", pollen_nowcast))
+            nowcast_features.update(self._nowcast_feature_family("holiday_context", holiday_nowcast))
 
         return {
             "ww_level": ww_level,
@@ -1198,6 +1342,7 @@ class RegionalFeatureBuilder:
             **grippeweb_features,
             **virus_specific_ifsg_features,
             **sars_context_features,
+            **nowcast_features,
         }
 
     @staticmethod
@@ -1215,6 +1360,80 @@ class RegionalFeatureBuilder:
         if created_ts <= base + pd.Timedelta(days=max_created_delay_days):
             return created_ts
         return base
+
+    @staticmethod
+    def _nowcast_feature_family(prefix: str, result: NowcastResult) -> dict[str, float]:
+        return {
+            f"{prefix}_raw": float(result.raw_observed_value),
+            f"{prefix}_nowcast": float(result.revision_adjusted_value),
+            f"{prefix}_revision_risk": float(result.revision_risk_score),
+            f"{prefix}_freshness_days": float(result.source_freshness_days),
+            f"{prefix}_usable_confidence": float(result.usable_confidence_score),
+            f"{prefix}_usable": float(result.usable_for_forecast),
+            f"{prefix}_coverage_ratio": float(result.coverage_ratio),
+        }
+
+    def _manual_nowcast_result(
+        self,
+        *,
+        source_id: str,
+        signal_id: str,
+        region_code: str | None,
+        as_of: pd.Timestamp,
+        raw_value: float,
+        reference_date: pd.Timestamp | datetime | None,
+        available_time: pd.Timestamp | datetime | None,
+        coverage_ratio: float,
+    ) -> NowcastResult:
+        if reference_date is None or available_time is None:
+            return self.nowcast_service.evaluate_missing(
+                source_id=source_id,
+                signal_id=signal_id,
+                region_code=region_code,
+                as_of_date=as_of,
+            )
+        observation = NowcastObservation(
+            source_id=source_id,
+            signal_id=signal_id,
+            region_code=region_code,
+            reference_date=pd.Timestamp(reference_date).to_pydatetime(),
+            as_of_date=pd.Timestamp(as_of).to_pydatetime(),
+            raw_value=float(raw_value),
+            effective_available_time=pd.Timestamp(available_time).to_pydatetime(),
+            timing_provenance=self.nowcast_service.get_config(source_id).timing_provenance,
+            coverage_ratio=float(coverage_ratio),
+        )
+        return self.nowcast_service.evaluate(observation)
+
+    @staticmethod
+    def _latest_reference_date(
+        frame: pd.DataFrame | None,
+        *,
+        as_of: pd.Timestamp,
+        reference_column: str = "datum",
+    ) -> pd.Timestamp | None:
+        if frame is None or frame.empty or reference_column not in frame.columns:
+            return None
+        visible = frame.loc[pd.to_datetime(frame[reference_column]).dt.normalize() <= as_of]
+        if visible.empty:
+            return None
+        return pd.Timestamp(visible[reference_column].max()).normalize()
+
+    @staticmethod
+    def _latest_available_time(
+        frame: pd.DataFrame | None,
+        *,
+        as_of: pd.Timestamp,
+        available_column: str = "available_time",
+    ) -> pd.Timestamp | None:
+        if frame is None or frame.empty:
+            return None
+        if available_column not in frame.columns:
+            return RegionalFeatureBuilder._latest_reference_date(frame, as_of=as_of)
+        visible = frame.loc[pd.to_datetime(frame[available_column]).dt.normalize() <= as_of]
+        if visible.empty:
+            return None
+        return pd.Timestamp(visible[available_column].max())
 
     @staticmethod
     def _seasonal_signal_baseline(
@@ -1246,6 +1465,7 @@ class RegionalFeatureBuilder:
         self,
         *,
         virus_typ: str,
+        state: str,
         as_of: pd.Timestamp,
         visible_are: pd.DataFrame | None,
         visible_notaufnahme: pd.DataFrame | None,
@@ -1255,12 +1475,25 @@ class RegionalFeatureBuilder:
         current_known_incidence: float,
         seasonal_baseline: float,
         seasonal_mad: float,
+        include_nowcast: bool,
+        use_revision_adjusted: bool,
     ) -> dict[str, float]:
         if virus_typ != "SARS-CoV-2":
             return {}
 
         are_frame = visible_are if visible_are is not None else pd.DataFrame()
-        are_level = self._latest_value_as_of(are_frame, as_of, "incidence")
+        are_nowcast = self.nowcast_service.evaluate_frame(
+            source_id="are_konsultation",
+            signal_id="ARE",
+            frame=are_frame,
+            as_of_date=as_of,
+            value_column="incidence",
+            region_code=state,
+        )
+        are_level = self.nowcast_service.preferred_value(
+            are_nowcast,
+            use_revision_adjusted=use_revision_adjusted,
+        )
         are_lag7 = self._latest_value_as_of(are_frame, as_of - pd.Timedelta(days=7), "incidence")
         are_momentum_1w = float((are_level - are_lag7) / max(abs(are_lag7), 1.0))
         are_baseline, are_mad = self._seasonal_signal_baseline(
@@ -1272,8 +1505,19 @@ class RegionalFeatureBuilder:
         are_baseline_zscore = float(are_baseline_gap / max(are_mad, 1.0))
 
         notaufnahme_frame = visible_notaufnahme if visible_notaufnahme is not None else pd.DataFrame()
+        notaufnahme_nowcast = self.nowcast_service.evaluate_frame(
+            source_id="notaufnahme",
+            signal_id="COVID",
+            frame=notaufnahme_frame,
+            as_of_date=as_of,
+            value_column="ma7",
+            region_code="DE",
+        )
         notaufnahme_level = self._latest_value_as_of(notaufnahme_frame, as_of, "level")
-        notaufnahme_ma7 = self._latest_value_as_of(notaufnahme_frame, as_of, "ma7")
+        notaufnahme_ma7 = self.nowcast_service.preferred_value(
+            notaufnahme_nowcast,
+            use_revision_adjusted=use_revision_adjusted,
+        )
         notaufnahme_ma7_lag7 = self._latest_value_as_of(notaufnahme_frame, as_of - pd.Timedelta(days=7), "ma7")
         notaufnahme_expected = self._latest_value_as_of(notaufnahme_frame, as_of, "expected_value")
         notaufnahme_upper = self._latest_value_as_of(notaufnahme_frame, as_of, "expected_upperbound")
@@ -1282,7 +1526,18 @@ class RegionalFeatureBuilder:
         )
 
         trends_frame = visible_trends if visible_trends is not None else pd.DataFrame()
-        trends_level = self._latest_value_as_of(trends_frame, as_of, "interest_score")
+        trends_nowcast = self.nowcast_service.evaluate_frame(
+            source_id="google_trends",
+            signal_id="corona test",
+            frame=trends_frame,
+            as_of_date=as_of,
+            value_column="interest_score",
+            region_code="DE",
+        )
+        trends_level = self.nowcast_service.preferred_value(
+            trends_nowcast,
+            use_revision_adjusted=use_revision_adjusted,
+        )
         trends_recent14 = self._window_mean(trends_frame, as_of=as_of, window_days=14, column="interest_score")
         trends_previous14 = self._window_mean(
             trends_frame,
@@ -1305,7 +1560,7 @@ class RegionalFeatureBuilder:
         )
         survstat_baseline_zscore = float((current_known_incidence - seasonal_baseline) / max(seasonal_mad, 1.0))
 
-        return {
+        features = {
             "sars_are_available": float(not are_frame.empty),
             "sars_notaufnahme_available": float(not notaufnahme_frame.empty),
             "sars_trends_available": float(not trends_frame.empty),
@@ -1334,6 +1589,11 @@ class RegionalFeatureBuilder:
             ),
             "sars_are_survstat_zscore_gap": float(are_baseline_zscore - survstat_baseline_zscore),
         }
+        if include_nowcast:
+            features.update(self._nowcast_feature_family("sars_are", are_nowcast))
+            features.update(self._nowcast_feature_family("sars_notaufnahme", notaufnahme_nowcast))
+            features.update(self._nowcast_feature_family("sars_trends", trends_nowcast))
+        return features
 
     @staticmethod
     def _visible_signal_frame(frame: pd.DataFrame | None, *, as_of: pd.Timestamp) -> pd.DataFrame:
@@ -1347,12 +1607,15 @@ class RegionalFeatureBuilder:
     def _grippeweb_context_features(
         self,
         *,
+        state: str,
         as_of: pd.Timestamp,
         visible_state_signals: dict[str, pd.DataFrame],
         visible_national_signals: dict[str, pd.DataFrame],
         current_known_incidence: float,
         seasonal_baseline: float,
         seasonal_mad: float,
+        include_nowcast: bool,
+        use_revision_adjusted: bool,
     ) -> dict[str, float]:
         features: dict[str, float] = {}
         for signal_type in ("ARE", "ILI"):
@@ -1372,6 +1635,11 @@ class RegionalFeatureBuilder:
                     current_known_incidence=current_known_incidence,
                     seasonal_baseline=seasonal_baseline,
                     seasonal_mad=seasonal_mad,
+                    source_id="grippeweb",
+                    signal_id=signal_type,
+                    region_code=state if not state_frame.empty else "DE",
+                    include_nowcast=include_nowcast,
+                    use_revision_adjusted=use_revision_adjusted,
                 )
             )
             national_level = self._latest_value_as_of(national_frame, as_of, "incidence")
@@ -1390,12 +1658,15 @@ class RegionalFeatureBuilder:
         self,
         *,
         virus_typ: str,
+        state: str,
         as_of: pd.Timestamp,
         visible_influenza_ifsg: pd.DataFrame | None,
         visible_rsv_ifsg: pd.DataFrame | None,
         current_known_incidence: float,
         seasonal_baseline: float,
         seasonal_mad: float,
+        include_nowcast: bool,
+        use_revision_adjusted: bool,
     ) -> dict[str, float]:
         if virus_typ in {"Influenza A", "Influenza B"}:
             return self._signal_feature_family(
@@ -1405,6 +1676,11 @@ class RegionalFeatureBuilder:
                 current_known_incidence=current_known_incidence,
                 seasonal_baseline=seasonal_baseline,
                 seasonal_mad=seasonal_mad,
+                source_id="ifsg_influenza",
+                signal_id="Influenza",
+                region_code=state,
+                include_nowcast=include_nowcast,
+                use_revision_adjusted=use_revision_adjusted,
             )
         if virus_typ == "RSV A":
             return self._signal_feature_family(
@@ -1414,6 +1690,11 @@ class RegionalFeatureBuilder:
                 current_known_incidence=current_known_incidence,
                 seasonal_baseline=seasonal_baseline,
                 seasonal_mad=seasonal_mad,
+                source_id="ifsg_rsv",
+                signal_id="RSV",
+                region_code=state,
+                include_nowcast=include_nowcast,
+                use_revision_adjusted=use_revision_adjusted,
             )
         return {}
 
@@ -1426,9 +1707,25 @@ class RegionalFeatureBuilder:
         current_known_incidence: float,
         seasonal_baseline: float,
         seasonal_mad: float,
+        source_id: str,
+        signal_id: str,
+        region_code: str | None,
+        include_nowcast: bool,
+        use_revision_adjusted: bool,
     ) -> dict[str, float]:
         signal_frame = frame if frame is not None else pd.DataFrame()
-        level = self._latest_value_as_of(signal_frame, as_of, "incidence")
+        result = self.nowcast_service.evaluate_frame(
+            source_id=source_id,
+            signal_id=signal_id,
+            frame=signal_frame,
+            as_of_date=as_of,
+            value_column="incidence",
+            region_code=region_code,
+        )
+        level = self.nowcast_service.preferred_value(
+            result,
+            use_revision_adjusted=use_revision_adjusted,
+        )
         lag7 = self._latest_value_as_of(signal_frame, as_of - pd.Timedelta(days=7), "incidence")
         baseline, mad = self._seasonal_signal_baseline(
             signal_frame,
@@ -1438,7 +1735,7 @@ class RegionalFeatureBuilder:
         baseline_gap = float(level - baseline)
         baseline_zscore = float(baseline_gap / max(mad, 1.0))
         survstat_zscore = float((current_known_incidence - seasonal_baseline) / max(seasonal_mad, 1.0))
-        return {
+        features = {
             f"{prefix}_available": float(not signal_frame.empty),
             f"{prefix}_level": float(level),
             f"{prefix}_lag7d": float(lag7),
@@ -1450,6 +1747,9 @@ class RegionalFeatureBuilder:
             ),
             f"{prefix}_survstat_zscore_gap": float(baseline_zscore - survstat_zscore),
         }
+        if include_nowcast:
+            features.update(self._nowcast_feature_family(prefix, result))
+        return features
 
     @staticmethod
     def _relative_delta(current_value: float, previous_value: float) -> float:
@@ -1558,7 +1858,12 @@ class RegionalFeatureBuilder:
         return features
 
     @staticmethod
-    def _weather_features(weather_frame: pd.DataFrame | None, as_of: pd.Timestamp) -> dict[str, float]:
+    def _weather_features(
+        weather_frame: pd.DataFrame | None,
+        as_of: pd.Timestamp,
+        *,
+        horizon_days: int,
+    ) -> dict[str, float]:
         if weather_frame is None or weather_frame.empty:
             return {
                 "weather_forecast_temp_3_7": 0.0,
@@ -1571,14 +1876,20 @@ class RegionalFeatureBuilder:
         observed = visible.loc[
             (visible["data_type"].isin(["CURRENT", "DAILY_OBSERVATION"])) & (visible["datum"] <= as_of)
         ]
-        forecast = visible.loc[
+        target_date = RegionalFeatureBuilder._target_date(as_of, horizon_days)
+        forecast_candidates = visible.loc[
             (visible["data_type"] == "DAILY_FORECAST")
-            & (visible["datum"] > as_of + pd.Timedelta(days=TARGET_WINDOW_DAYS[0] - 1))
-            & (visible["datum"] <= as_of + pd.Timedelta(days=TARGET_WINDOW_DAYS[1]))
-        ]
+            & (visible["datum"] > as_of)
+        ].copy()
 
         obs_temp = float(observed.tail(7)["temp"].mean() or 0.0) if not observed.empty else 0.0
         obs_humidity = float(observed.tail(7)["humidity"].mean() or 0.0) if not observed.empty else 0.0
+        forecast = forecast_candidates.loc[forecast_candidates["datum"] == target_date].copy()
+        if forecast.empty and not forecast_candidates.empty:
+            forecast_candidates["target_distance_days"] = (
+                forecast_candidates["datum"] - target_date
+            ).abs() / pd.Timedelta(days=1)
+            forecast = forecast_candidates.sort_values(["target_distance_days", "datum"]).head(3)
         fc_temp = float(forecast["temp"].mean() or obs_temp)
         fc_humidity = float(forecast["humidity"].mean() or obs_humidity)
         return {
@@ -1604,28 +1915,21 @@ class RegionalFeatureBuilder:
     def _holiday_share_in_target_window(
         holiday_ranges: list[tuple[pd.Timestamp, pd.Timestamp]],
         as_of: pd.Timestamp,
+        *,
+        horizon_days: int,
     ) -> float:
-        window_days = [
-            (as_of + pd.Timedelta(days=offset)).normalize()
-            for offset in range(TARGET_WINDOW_DAYS[0], TARGET_WINDOW_DAYS[1] + 1)
-        ]
-        if not window_days:
-            return 0.0
-
-        hits = 0
-        for day in window_days:
-            if any(start <= day <= end for start, end in holiday_ranges):
-                hits += 1
-        return float(hits / len(window_days))
+        target_date = RegionalFeatureBuilder._target_date(as_of, horizon_days)
+        return float(any(start <= target_date <= end for start, end in holiday_ranges))
 
     @staticmethod
-    def _target_week_start(as_of: pd.Timestamp) -> pd.Timestamp | None:
-        week_starts = [
-            (as_of + pd.Timedelta(days=offset)).normalize()
-            for offset in range(TARGET_WINDOW_DAYS[0], TARGET_WINDOW_DAYS[1] + 1)
-            if (as_of + pd.Timedelta(days=offset)).weekday() == 0
-        ]
-        return first_week_start_in_window(as_of, week_starts)
+    def _target_date(as_of: pd.Timestamp, horizon_days: int) -> pd.Timestamp:
+        horizon = ensure_supported_horizon(horizon_days)
+        return (pd.Timestamp(as_of) + pd.Timedelta(days=horizon)).normalize()
+
+    @classmethod
+    def _target_week_start(cls, as_of: pd.Timestamp, horizon_days: int) -> pd.Timestamp:
+        target_date = cls._target_date(as_of, horizon_days)
+        return (target_date - pd.Timedelta(days=int(target_date.weekday()))).normalize()
 
     @staticmethod
     def _week_start_from_label(week_label: str) -> pd.Timestamp:

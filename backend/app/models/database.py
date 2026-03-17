@@ -345,6 +345,8 @@ class MLForecast(Base):
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
     forecast_date = Column(DateTime, nullable=False, index=True)
     virus_typ = Column(String, nullable=False)
+    region = Column(String, nullable=False, default="DE", index=True)
+    horizon_days = Column(Integer, nullable=False, default=7, index=True)
     predicted_value = Column(Float, nullable=False)
     lower_bound = Column(Float)
     upper_bound = Column(Float)
@@ -355,7 +357,8 @@ class MLForecast(Base):
     outbreak_risk_score = Column(Float, nullable=True)  # 0.0 – 1.0
 
     __table_args__ = (
-        Index('idx_forecast_date_virus', 'forecast_date', 'virus_typ'),
+        Index('idx_forecast_scope_date', 'forecast_date', 'virus_typ', 'region', 'horizon_days'),
+        Index('idx_forecast_scope_created', 'virus_typ', 'region', 'horizon_days', 'created_at'),
     )
 
 
@@ -585,6 +588,45 @@ class MediaOutcomeRecord(Base):
     )
 
 
+class OutcomeObservation(Base):
+    """Generic outcome observations kept separate from epidemiological ground truth."""
+    __tablename__ = "outcome_observations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    brand = Column(String, nullable=False, index=True, default="gelo")
+    product = Column(String, nullable=False, index=True)
+    region_code = Column(String, nullable=False, index=True)
+    window_start = Column(DateTime, nullable=False, index=True)
+    window_end = Column(DateTime, nullable=False, index=True)
+    metric_name = Column(String, nullable=False, index=True)
+    metric_value = Column(Float, nullable=False)
+    metric_unit = Column(String)
+    source_label = Column(String, nullable=False, default="manual", index=True)
+    channel = Column(String, nullable=True, index=True)
+    campaign_id = Column(String, nullable=True, index=True)
+    holdout_group = Column(String, nullable=True, index=True)
+    confidence_hint = Column(Float, nullable=True)
+    metadata_json = Column("metadata", JSON)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, index=True)
+
+    __table_args__ = (
+        UniqueConstraint(
+            "window_start",
+            "window_end",
+            "brand",
+            "product",
+            "region_code",
+            "metric_name",
+            "source_label",
+            name="uq_outcome_observation",
+        ),
+        Index("idx_outcome_obs_brand_window", "brand", "window_start"),
+        Index("idx_outcome_obs_metric_window", "metric_name", "window_start"),
+        Index("idx_outcome_obs_region_product", "region_code", "product"),
+    )
+
+
 class MediaOutcomeImportBatch(Base):
     """Persistierte Import-Batches für Truth-/Outcome Uploads."""
     __tablename__ = "media_outcome_import_batches"
@@ -723,6 +765,29 @@ class ForecastAccuracyLog(Base):
 
     __table_args__ = (
         Index('idx_accuracy_virus_computed', 'virus_typ', 'computed_at'),
+    )
+
+
+class SourceNowcastSnapshot(Base):
+    """Append-only snapshots of raw source observations for revision auditing."""
+    __tablename__ = "source_nowcast_snapshots"
+
+    id = Column(Integer, primary_key=True, index=True)
+    source_id = Column(String, nullable=False, index=True)
+    signal_id = Column(String, nullable=False, index=True)
+    region_code = Column(String, nullable=True, index=True)
+    reference_date = Column(DateTime, nullable=False, index=True)
+    effective_available_time = Column(DateTime, nullable=False, index=True)
+    raw_value = Column(Float, nullable=False)
+    snapshot_captured_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
+    timing_provenance = Column(String, nullable=False)
+    metadata_json = Column("metadata", JSON)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+    __table_args__ = (
+        Index("idx_nowcast_snapshot_source_ref", "source_id", "reference_date"),
+        Index("idx_nowcast_snapshot_signal_region", "signal_id", "region_code"),
+        Index("idx_nowcast_snapshot_capture_source", "snapshot_captured_at", "source_id"),
     )
 
 

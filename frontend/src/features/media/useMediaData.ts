@@ -1,6 +1,19 @@
 import { useCallback, useEffect, useState } from 'react';
 
-import { BacktestResponse, MediaCampaignsResponse, MediaDecisionResponse, MediaEvidenceResponse, MediaRegionsResponse, RegionalBenchmarkResponse, RegionalPortfolioResponse, TruthImportBatchDetailResponse, TruthImportResponse } from '../../types/media';
+import {
+  BacktestResponse,
+  MediaCampaignsResponse,
+  MediaDecisionResponse,
+  MediaEvidenceResponse,
+  MediaRegionsResponse,
+  RegionalAllocationResponse,
+  RegionalBenchmarkResponse,
+  RegionalCampaignRecommendationsResponse,
+  RegionalForecastResponse,
+  RegionalPortfolioResponse,
+  TruthImportBatchDetailResponse,
+  TruthImportResponse,
+} from '../../types/media';
 import { mediaApi } from './api';
 
 function noop() {}
@@ -343,5 +356,65 @@ export function useEvidencePageData(
     truthBatchDetailLoading,
     loadTruthBatchDetail,
     submitTruthCsv,
+  };
+}
+
+export function useOperationalDashboardData(
+  virus: string,
+  horizonDays: number,
+  weeklyBudget: number,
+  dataVersion: number,
+  toast: ToastLike = noop,
+) {
+  const [forecast, setForecast] = useState<RegionalForecastResponse | null>(null);
+  const [allocation, setAllocation] = useState<RegionalAllocationResponse | null>(null);
+  const [campaignRecommendations, setCampaignRecommendations] = useState<RegionalCampaignRecommendationsResponse | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const loadOperationalDashboard = useCallback(async () => {
+    setLoading(true);
+    const [forecastResult, allocationResult, recommendationResult] = await Promise.allSettled([
+      mediaApi.getRegionalForecast(virus, horizonDays),
+      mediaApi.getRegionalAllocation(virus, weeklyBudget, horizonDays),
+      mediaApi.getRegionalCampaignRecommendations(virus, weeklyBudget, horizonDays),
+    ]);
+
+    if (forecastResult.status === 'fulfilled') {
+      setForecast(forecastResult.value);
+    } else {
+      console.error('Regional forecast fetch failed', forecastResult.reason);
+      setForecast(null);
+      toast('Regionaler Forecast konnte nicht geladen werden.', 'error');
+    }
+
+    if (allocationResult.status === 'fulfilled') {
+      setAllocation(allocationResult.value);
+    } else {
+      console.error('Regional allocation fetch failed', allocationResult.reason);
+      setAllocation(null);
+      toast('Budgetallokation konnte nicht geladen werden.', 'error');
+    }
+
+    if (recommendationResult.status === 'fulfilled') {
+      setCampaignRecommendations(recommendationResult.value);
+    } else {
+      console.error('Campaign recommendations fetch failed', recommendationResult.reason);
+      setCampaignRecommendations(null);
+      toast('Campaign Recommendations konnten nicht geladen werden.', 'error');
+    }
+
+    setLoading(false);
+  }, [horizonDays, toast, virus, weeklyBudget]);
+
+  useEffect(() => {
+    loadOperationalDashboard();
+  }, [dataVersion, loadOperationalDashboard]);
+
+  return {
+    forecast,
+    allocation,
+    campaignRecommendations,
+    loading,
+    loadOperationalDashboard,
   };
 }

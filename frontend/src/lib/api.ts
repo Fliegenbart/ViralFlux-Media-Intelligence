@@ -12,7 +12,6 @@
 
 let _token: string | null = null;
 let _tokenExpiry: number | null = null;
-let _loginPromise: Promise<string> | null = null;
 
 /** Check whether a valid (non-expired) token exists. */
 export function isAuthenticated(): boolean {

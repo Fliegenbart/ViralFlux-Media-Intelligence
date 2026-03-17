@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import pickle
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -14,8 +14,17 @@ import pandas as pd
 from xgboost import XGBClassifier, XGBRegressor
 
 from app.services.media.business_validation_service import BusinessValidationService
+from app.services.media.campaign_recommendation_service import CampaignRecommendationService
+from app.services.media.truth_layer_service import TruthLayerService
 from app.services.ml.forecast_decision_service import ForecastDecisionService
+from app.services.ml.forecast_horizon_utils import (
+    SUPPORTED_FORECAST_HORIZONS,
+    ensure_supported_horizon,
+    regional_model_artifact_dir,
+)
+from app.services.ml.regional_decision_engine import RegionalDecisionEngine
 from app.services.ml.regional_features import RegionalFeatureBuilder
+from app.services.ml.regional_media_allocation_engine import RegionalMediaAllocationEngine
 from app.services.ml.regional_panel_utils import (
     ALL_BUNDESLAENDER,
     BUNDESLAND_NAMES,
@@ -45,6 +54,8 @@ GELO_PRODUCTS = {
     "RSV A": ["GeloMyrtol forte", "GeloBronchial"],
 }
 
+_TRUTH_LOOKBACK_WEEKS = 26
+
 
 class RegionalForecastService:
     """Generate calibrated pooled forecasts and gated media actions."""
@@ -53,6 +64,9 @@ class RegionalForecastService:
         self.db = db
         self.models_dir = models_dir or _ML_MODELS_DIR
         self.feature_builder = RegionalFeatureBuilder(db)
+        self.decision_engine = RegionalDecisionEngine()
+        self.media_allocation_engine = RegionalMediaAllocationEngine()
+        self.campaign_recommendation_service = CampaignRecommendationService()
 
     def predict_region(
         self,
@@ -60,10 +74,8 @@ class RegionalForecastService:
         bundesland: str,
         horizon_days: int = 7,
     ) -> dict[str, Any] | None:
-        if horizon_days not in range(TARGET_WINDOW_DAYS[0], TARGET_WINDOW_DAYS[1] + 1):
-            horizon_days = TARGET_WINDOW_DAYS[1]
-
-        payload = self.predict_all_regions(virus_typ=virus_typ, horizon_days=horizon_days)
+        horizon = ensure_supported_horizon(horizon_days)
+        payload = self.predict_all_regions(virus_typ=virus_typ, horizon_days=horizon)
         return next((item for item in payload["predictions"] if item["bundesland"] == bundesland.upper()), None)
 
     def predict_all_regions(
@@ -71,34 +83,60 @@ class RegionalForecastService:
         virus_typ: str = "Influenza A",
         horizon_days: int = 7,
     ) -> dict[str, Any]:
-        artifacts = self._load_artifacts(virus_typ)
+        horizon = ensure_supported_horizon(horizon_days)
+        target_window_days = self._target_window_for_horizon(horizon)
+        artifacts = self._load_artifacts(virus_typ, horizon_days=horizon)
         metadata = artifacts.get("metadata") or {}
+        artifact_transition_mode = str(
+            artifacts.get("artifact_transition_mode")
+            or metadata.get("artifact_transition_mode")
+            or ""
+        ).strip() or None
         feature_columns = metadata.get("feature_columns") or []
+        load_error = str(artifacts.get("load_error") or "").strip()
+        if load_error:
+            return self._empty_forecast_response(
+                virus_typ=virus_typ,
+                horizon_days=horizon,
+                status="no_model",
+                message=load_error,
+                artifact_transition_mode=artifact_transition_mode,
+            )
         if not artifacts or not feature_columns:
-            return {
-                "virus_typ": virus_typ,
-                "status": "no_model",
-                "message": "Keine regionalen Panel-Modelle verfügbar. Bitte Training starten.",
-                "predictions": [],
-                "top_5": [],
-                "total_regions": 0,
-            }
+            message = (
+                f"Kein regionales Panel-Modell für Horizon {horizon} verfügbar. "
+                "Bitte horizon-spezifisches Training starten."
+            )
+            if artifact_transition_mode == "legacy_default_window_fallback":
+                message = (
+                    f"Horizon {horizon} nutzt noch Legacy-3-7-Tage-Artefakte. "
+                    "Bitte horizon-spezifisches Retraining durchführen."
+                )
+            return self._empty_forecast_response(
+                virus_typ=virus_typ,
+                horizon_days=horizon,
+                status="no_model",
+                message=message,
+                artifact_transition_mode=artifact_transition_mode,
+            )
 
         as_of_date = self._latest_as_of_date(virus_typ=virus_typ)
         panel = self.feature_builder.build_inference_panel(
             virus_typ=virus_typ,
             as_of_date=as_of_date.to_pydatetime(),
             lookback_days=180,
+            horizon_days=horizon,
+            include_nowcast=True,
+            use_revision_adjusted=False,
         )
         if panel.empty:
-            return {
-                "virus_typ": virus_typ,
-                "status": "no_data",
-                "message": "Keine regionalen Features für den aktuellen Datenstand verfügbar.",
-                "predictions": [],
-                "top_5": [],
-                "total_regions": 0,
-            }
+            return self._empty_forecast_response(
+                virus_typ=virus_typ,
+                horizon_days=horizon,
+                status="no_data",
+                message=f"Keine regionalen Features für Horizon {horizon} und den aktuellen Datenstand verfügbar.",
+                artifact_transition_mode=artifact_transition_mode,
+            )
 
         X = panel[feature_columns].to_numpy()
         classifier: XGBClassifier = artifacts["classifier"]
@@ -130,59 +168,87 @@ class RegionalForecastService:
             expected_next = max(float(pred_next[idx]), 0.0)
             change_pct = ((expected_next - current_incidence) / max(current_incidence, 1.0)) * 100.0
             event_probability = float(calibrated_prob[idx])
+            target_date = pd.Timestamp(
+                row.get("target_date") or (pd.Timestamp(row["as_of_date"]) + pd.Timedelta(days=horizon))
+            ).normalize()
             activation_candidate = bool(
                 activation_policy != "watch_only"
                 and quality_gate.get("overall_passed")
                 and event_probability >= action_threshold
             )
-            predictions.append(
-                {
-                    "bundesland": str(row["bundesland"]),
-                    "bundesland_name": str(row["bundesland_name"]),
-                    "virus_typ": virus_typ,
-                    "as_of_date": str(row["as_of_date"]),
-                    "target_week_start": str(row["target_week_start"]),
-                    "target_window_days": list(TARGET_WINDOW_DAYS),
-                    "event_definition_version": metadata.get("event_definition_version", EVENT_DEFINITION_VERSION),
-                    "event_probability_calibrated": round(event_probability, 4),
-                    "expected_next_week_incidence": round(expected_next, 2),
-                    "prediction_interval": {
-                        "lower": round(max(float(pred_low[idx]), 0.0), 2),
-                        "upper": round(max(float(pred_high[idx]), 0.0), 2),
-                    },
-                    "current_known_incidence": round(current_incidence, 2),
-                    "seasonal_baseline": round(float(row["seasonal_baseline"] or 0.0), 2),
-                    "seasonal_mad": round(float(row["seasonal_mad"] or 0.0), 2),
-                    "change_pct": round(change_pct, 1),
-                    "quality_gate": quality_gate,
-                    "business_gate": business_gate,
-                    "evidence_tier": business_gate.get("evidence_tier"),
-                    "rollout_mode": rollout_mode,
-                    "activation_policy": activation_policy,
-                    "signal_bundle_version": signal_bundle_version,
-                    "model_version": model_version,
-                    "calibration_version": calibration_version,
-                    "point_in_time_snapshot": point_in_time_snapshot,
-                    "source_coverage": source_coverage,
-                    "action_threshold": round(action_threshold, 4),
-                    "activation_candidate": activation_candidate,
-                    "current_load": round(current_incidence, 2),
-                    "predicted_load": round(expected_next, 2),
-                    "trend": "steigend" if change_pct > 10 else "fallend" if change_pct < -10 else "stabil",
-                    "data_points": int(len(panel)),
-                    "last_data_date": str(as_of_date),
-                    "pollen_context_score": round(float(row.get("pollen_context_score") or 0.0), 2),
-                }
-            )
+            prediction = {
+                "bundesland": str(row["bundesland"]),
+                "bundesland_name": str(row["bundesland_name"]),
+                "virus_typ": virus_typ,
+                "as_of_date": str(row["as_of_date"]),
+                "target_date": str(target_date),
+                "target_week_start": str(row["target_week_start"]),
+                "target_window_days": list(target_window_days),
+                "horizon_days": horizon,
+                "event_definition_version": metadata.get("event_definition_version", EVENT_DEFINITION_VERSION),
+                "event_probability_calibrated": round(event_probability, 4),
+                "expected_next_week_incidence": round(expected_next, 2),
+                "expected_target_incidence": round(expected_next, 2),
+                "prediction_interval": {
+                    "lower": round(max(float(pred_low[idx]), 0.0), 2),
+                    "upper": round(max(float(pred_high[idx]), 0.0), 2),
+                },
+                "current_known_incidence": round(current_incidence, 2),
+                "seasonal_baseline": round(float(row["seasonal_baseline"] or 0.0), 2),
+                "seasonal_mad": round(float(row["seasonal_mad"] or 0.0), 2),
+                "change_pct": round(change_pct, 1),
+                "quality_gate": quality_gate,
+                "business_gate": business_gate,
+                "evidence_tier": business_gate.get("evidence_tier"),
+                "rollout_mode": rollout_mode,
+                "activation_policy": activation_policy,
+                "signal_bundle_version": signal_bundle_version,
+                "model_version": model_version,
+                "calibration_version": calibration_version,
+                "point_in_time_snapshot": point_in_time_snapshot,
+                "source_coverage": source_coverage,
+                "action_threshold": round(action_threshold, 4),
+                "activation_candidate": activation_candidate,
+                "current_load": round(current_incidence, 2),
+                "predicted_load": round(expected_next, 2),
+                "trend": "steigend" if change_pct > 10 else "fallend" if change_pct < -10 else "stabil",
+                "data_points": int(len(panel)),
+                "last_data_date": str(as_of_date),
+                "pollen_context_score": round(float(row.get("pollen_context_score") or 0.0), 2),
+                "state_population_millions": round(float(row.get("state_population_millions") or 0.0), 3),
+            }
+            decision = self.decision_engine.evaluate(
+                virus_typ=virus_typ,
+                prediction=prediction,
+                feature_row=row.to_dict(),
+                metadata={"aggregate_metrics": metadata.get("aggregate_metrics") or {}},
+            ).to_dict()
+            prediction["decision"] = decision
+            prediction["decision_label"] = str(decision.get("stage") or "watch").title()
+            prediction["priority_score"] = float(decision.get("decision_score") or 0.0)
+            prediction["reason_trace"] = decision.get("reason_trace") or {}
+            prediction["uncertainty_summary"] = str(decision.get("uncertainty_summary") or "")
+            prediction["decision_rank"] = None
+            predictions.append(prediction)
 
         predictions.sort(key=lambda item: item["event_probability_calibrated"], reverse=True)
         for rank, item in enumerate(predictions, start=1):
             item["rank"] = rank
 
+        ranked_decisions = sorted(
+            predictions,
+            key=self._decision_priority_sort_key,
+            reverse=True,
+        )
+        for decision_rank, item in enumerate(ranked_decisions, start=1):
+            item["decision_rank"] = decision_rank
+
         return {
             "virus_typ": virus_typ,
             "as_of_date": str(as_of_date),
-            "target_window_days": list(TARGET_WINDOW_DAYS),
+            "horizon_days": horizon,
+            "supported_horizon_days": list(SUPPORTED_FORECAST_HORIZONS),
+            "target_window_days": list(target_window_days),
             "quality_gate": quality_gate,
             "business_gate": business_gate,
             "evidence_tier": business_gate.get("evidence_tier"),
@@ -191,16 +257,20 @@ class RegionalForecastService:
             "signal_bundle_version": signal_bundle_version,
             "model_version": model_version,
             "calibration_version": calibration_version,
+            "artifact_transition_mode": artifact_transition_mode,
             "point_in_time_snapshot": point_in_time_snapshot,
             "source_coverage": source_coverage,
             "action_threshold": round(action_threshold, 4),
+            "decision_policy_version": self.decision_engine.get_config(virus_typ).version,
+            "decision_summary": self._decision_summary(predictions),
             "total_regions": len(predictions),
             "predictions": predictions,
             "top_5": predictions[:5],
+            "top_decisions": ranked_decisions[:5],
             "generated_at": datetime.utcnow().isoformat(),
         }
 
-    def generate_media_activation(
+    def generate_media_allocation(
         self,
         virus_typ: str = "Influenza A",
         weekly_budget_eur: float = 50000,
@@ -215,84 +285,118 @@ class RegionalForecastService:
         activation_policy = str(forecast.get("activation_policy") or activation_policy_for_virus(virus_typ))
 
         if not predictions:
-            return {
-                "virus_typ": virus_typ,
-                "status": "no_data",
-                "message": "Keine regionalen Prognosen verfügbar.",
-                "recommendations": [],
-            }
+            return self._empty_media_allocation_response(
+                virus_typ=virus_typ,
+                weekly_budget_eur=weekly_budget_eur,
+                horizon_days=horizon_days,
+                status=str(forecast.get("status") or "no_data"),
+                message=str(
+                    forecast.get("message")
+                    or "Keine regionalen Forecast-/Decision-Daten verfügbar."
+                ),
+                quality_gate=quality_gate,
+                business_gate=business_gate,
+                rollout_mode=rollout_mode,
+                activation_policy=activation_policy,
+            )
 
-        gated_predictions = [
-            item
-            for item in predictions
-            if quality_gate.get("overall_passed") and float(item["event_probability_calibrated"]) >= threshold
-        ]
-        total_prob = sum(float(item["event_probability_calibrated"]) for item in gated_predictions)
+        spend_enabled, spend_blockers = self._media_spend_gate(
+            quality_gate=quality_gate,
+            business_gate=business_gate,
+            activation_policy=activation_policy,
+        )
+        allocation = self.media_allocation_engine.allocate(
+            virus_typ=virus_typ,
+            predictions=predictions,
+            total_budget_eur=weekly_budget_eur,
+            spend_enabled=spend_enabled,
+            spend_blockers=spend_blockers,
+            default_products=GELO_PRODUCTS.get(virus_typ, ["GeloMyrtol forte"]),
+        )
+        allocation_by_region = {
+            item["bundesland"]: item
+            for item in allocation.get("recommendations") or []
+        }
 
         recommendations = []
         for item in predictions:
-            probability = float(item["event_probability_calibrated"])
-            change_pct = float(item["change_pct"])
-            if activation_policy == "watch_only":
-                action = "watch"
-                intensity = "low"
-            elif not business_gate.get("validated_for_budget_activation"):
-                action = "watch"
-                intensity = "low"
-            elif not quality_gate.get("overall_passed"):
-                action = "watch"
-                intensity = "low"
-            elif probability >= threshold and change_pct >= 20:
-                action = "activate"
-                intensity = "high"
-            elif probability >= threshold:
-                action = "prepare"
-                intensity = "medium"
-            else:
-                action = "watch"
-                intensity = "low"
-
-            budget_share = (
-                probability / max(total_prob, 1e-8)
-                if (
-                    action in {"activate", "prepare"}
-                    and quality_gate.get("overall_passed")
-                    and business_gate.get("validated_for_budget_activation")
-                )
-                else 0.0
+            allocation_item = allocation_by_region.get(item["bundesland"], {})
+            recommended_level = str(
+                allocation_item.get("recommended_activation_level")
+                or item.get("decision_label")
+                or "Watch"
             )
-            budget_eur = round(weekly_budget_eur * budget_share, 2)
-
-            if action == "activate":
-                timeline = f"Sofort aktivieren — Wellenfenster in {TARGET_WINDOW_DAYS[0]}-{TARGET_WINDOW_DAYS[1]} Tagen"
-            elif action == "prepare":
-                timeline = "In 1-2 Tagen vorbereiten — Signal oberhalb des Aktivierungsschwellenwerts"
-            else:
-                timeline = (
-                    "Nur beobachten — Shadow-Policy blockiert Aktivierung"
-                    if activation_policy == "watch_only"
-                    else "Nur beobachten — Business-Gate noch nicht validiert"
-                    if not business_gate.get("validated_for_budget_activation")
-                    else
-                    "Nur beobachten — Quality Gate blockiert Aktivierung"
-                    if not quality_gate.get("overall_passed")
-                    else "Beobachten — unterhalb des validierten Aktivierungsschwellenwerts"
-                )
+            action = self._media_action(
+                recommended_level=recommended_level,
+                spend_enabled=spend_enabled,
+            )
+            intensity = self._media_intensity(action)
+            budget_share = round(float(allocation_item.get("suggested_budget_share") or 0.0), 6)
+            budget_eur = round(float(allocation_item.get("suggested_budget_eur") or 0.0), 2)
+            suggested_budget_amount = round(
+                float(allocation_item.get("suggested_budget_amount") or budget_eur),
+                2,
+            )
+            allocation_reason_trace = (
+                allocation_item.get("allocation_reason_trace")
+                or allocation_item.get("reason_trace")
+                or item.get("reason_trace")
+            )
+            products = self._products_from_allocation(
+                allocation_item=allocation_item,
+                virus_typ=virus_typ,
+            )
+            truth_overlay = self._truth_layer_assessment_for_products(
+                region_code=item["bundesland"],
+                products=products,
+                target_week_start=item["target_week_start"],
+                signal_context=self._truth_signal_context(
+                    prediction=item,
+                    confidence=allocation_item.get("confidence"),
+                    stage=recommended_level,
+                ),
+                operational_action=action,
+                operational_gate_open=spend_enabled,
+            )
 
             recommendations.append(
                 {
                     "bundesland": item["bundesland"],
                     "bundesland_name": item["bundesland_name"],
                     "rank": item["rank"],
+                    "decision_rank": item.get("decision_rank"),
+                    "priority_rank": allocation_item.get("priority_rank"),
                     "action": action,
                     "intensity": intensity,
+                    "recommended_activation_level": recommended_level,
+                    "spend_readiness": allocation_item.get("spend_readiness"),
                     "event_probability": item["event_probability_calibrated"],
+                    "decision_label": item.get("decision_label"),
+                    "priority_score": item.get("priority_score"),
+                    "allocation_score": allocation_item.get("allocation_score"),
+                    "confidence": allocation_item.get("confidence"),
+                    "reason_trace": allocation_reason_trace,
+                    "allocation_reason_trace": allocation_reason_trace,
+                    "uncertainty_summary": item.get("uncertainty_summary"),
+                    "decision": item.get("decision"),
                     "change_pct": item["change_pct"],
                     "trend": item["trend"],
+                    "budget_share": budget_share,
+                    "suggested_budget_share": budget_share,
                     "budget_eur": budget_eur,
+                    "suggested_budget_eur": budget_eur,
+                    "suggested_budget_amount": suggested_budget_amount,
                     "channels": MEDIA_CHANNELS[intensity],
-                    "products": GELO_PRODUCTS.get(virus_typ, ["GeloMyrtol forte"]),
-                    "timeline": timeline,
+                    "products": products,
+                    "product_clusters": allocation_item.get("product_clusters") or [],
+                    "keyword_clusters": allocation_item.get("keyword_clusters") or [],
+                    "timeline": self._media_timeline(
+                        action=action,
+                        spend_enabled=spend_enabled,
+                        activation_policy=activation_policy,
+                        business_gate=business_gate,
+                        quality_gate=quality_gate,
+                    ),
                     "current_load": item["current_known_incidence"],
                     "predicted_load": item["expected_next_week_incidence"],
                     "quality_gate": quality_gate,
@@ -301,50 +405,191 @@ class RegionalForecastService:
                     "rollout_mode": rollout_mode,
                     "activation_policy": activation_policy,
                     "activation_threshold": threshold,
+                    "allocation_policy_version": allocation.get("allocation_policy_version"),
                     "as_of_date": item["as_of_date"],
                     "target_week_start": item["target_week_start"],
+                    "truth_layer_enabled": truth_overlay["truth_layer_enabled"],
+                    "truth_scope": truth_overlay["truth_scope"],
+                    "outcome_readiness": truth_overlay["outcome_readiness"],
+                    "evidence_status": truth_overlay["evidence_status"],
+                    "evidence_confidence": truth_overlay["evidence_confidence"],
+                    "signal_outcome_agreement": truth_overlay["signal_outcome_agreement"],
+                    "spend_gate_status": truth_overlay["spend_gate_status"],
+                    "budget_release_recommendation": truth_overlay["budget_release_recommendation"],
+                    "commercial_gate": truth_overlay["commercial_gate"],
+                    "truth_assessments": truth_overlay["truth_assessments"],
                 }
             )
 
-        active = [item for item in recommendations if item["action"] in {"activate", "prepare"}]
-        headline_regions = [item["bundesland"] for item in active[:3]]
-        headline = (
-            f"{virus_typ}: Budgets in {', '.join(headline_regions)} erhöhen"
-            if headline_regions
-            else f"{virus_typ}: aktuell kein validierter Aktivierungs-Case"
+        recommendations.sort(
+            key=lambda item: (
+                float(item.get("priority_rank") or 0),
+                -float(item.get("suggested_budget_share") or 0.0),
+            ),
         )
+        recommendations = list(recommendations)
+
+        summary = {
+            "activate_regions": sum(1 for item in recommendations if item["action"] == "activate"),
+            "prepare_regions": sum(1 for item in recommendations if item["action"] == "prepare"),
+            "watch_regions": sum(1 for item in recommendations if item["action"] == "watch"),
+            "total_budget_allocated": round(sum(item["budget_eur"] for item in recommendations), 2),
+            "budget_share_total": round(sum(item["suggested_budget_share"] for item in recommendations), 6),
+            "weekly_budget": round(float(weekly_budget_eur), 2),
+            "quality_gate": quality_gate,
+            "business_gate": business_gate,
+            "evidence_tier": business_gate.get("evidence_tier"),
+            "rollout_mode": rollout_mode,
+            "activation_policy": activation_policy,
+            "allocation_policy_version": allocation.get("allocation_policy_version"),
+            "spend_enabled": spend_enabled,
+            "spend_blockers": spend_blockers,
+        }
+        truth_layer = self._truth_layer_rollup(recommendations)
 
         return {
             "virus_typ": virus_typ,
-            "headline": headline,
-            "summary": {
-                "activate_regions": sum(1 for item in recommendations if item["action"] == "activate"),
-                "prepare_regions": sum(1 for item in recommendations if item["action"] == "prepare"),
-                "total_budget_allocated": round(sum(item["budget_eur"] for item in recommendations), 2),
-                "weekly_budget": weekly_budget_eur,
+            "headline": self._media_headline(
+                virus_typ=virus_typ,
+                recommendations=recommendations,
+                spend_enabled=spend_enabled,
+            ),
+            "summary": summary,
+            "allocation_config": allocation.get("config") or {},
+            "horizon_days": horizon_days,
+            "truth_layer": truth_layer,
+            "generated_at": datetime.utcnow().isoformat(),
+            "recommendations": recommendations,
+        }
+
+    def generate_media_activation(
+        self,
+        virus_typ: str = "Influenza A",
+        weekly_budget_eur: float = 50000,
+        horizon_days: int = 7,
+    ) -> dict[str, Any]:
+        return self.generate_media_allocation(
+            virus_typ=virus_typ,
+            weekly_budget_eur=weekly_budget_eur,
+            horizon_days=horizon_days,
+        )
+
+    def generate_campaign_recommendations(
+        self,
+        virus_typ: str = "Influenza A",
+        weekly_budget_eur: float = 50000,
+        horizon_days: int = 7,
+        top_n: int | None = None,
+    ) -> dict[str, Any]:
+        allocation_payload = self.generate_media_allocation(
+            virus_typ=virus_typ,
+            weekly_budget_eur=weekly_budget_eur,
+            horizon_days=horizon_days,
+        )
+        recommendation_payload = self.campaign_recommendation_service.recommend_from_allocation(
+            allocation_payload=allocation_payload,
+            top_n=top_n,
+        )
+        recommendation_payload.setdefault("horizon_days", horizon_days)
+        recommendation_payload.setdefault(
+            "target_window_days",
+            allocation_payload.get("target_window_days") or self._target_window_for_horizon(horizon_days),
+        )
+        return recommendation_payload
+
+    @staticmethod
+    def _target_window_for_horizon(horizon_days: int) -> list[int]:
+        horizon = ensure_supported_horizon(horizon_days)
+        return [horizon, horizon]
+
+    def _empty_forecast_response(
+        self,
+        *,
+        virus_typ: str,
+        horizon_days: int,
+        status: str,
+        message: str,
+        artifact_transition_mode: str | None = None,
+    ) -> dict[str, Any]:
+        horizon = ensure_supported_horizon(horizon_days)
+        return {
+            "virus_typ": virus_typ,
+            "status": status,
+            "message": message,
+            "horizon_days": horizon,
+            "supported_horizon_days": list(SUPPORTED_FORECAST_HORIZONS),
+            "target_window_days": self._target_window_for_horizon(horizon),
+            "artifact_transition_mode": artifact_transition_mode,
+            "predictions": [],
+            "top_5": [],
+            "top_decisions": [],
+            "decision_summary": self._decision_summary([]),
+            "total_regions": 0,
+            "generated_at": datetime.utcnow().isoformat(),
+        }
+
+    def _empty_media_allocation_response(
+        self,
+        *,
+        virus_typ: str,
+        weekly_budget_eur: float,
+        horizon_days: int,
+        status: str,
+        message: str,
+        quality_gate: dict[str, Any],
+        business_gate: dict[str, Any],
+        rollout_mode: str,
+        activation_policy: str,
+    ) -> dict[str, Any]:
+        allocation = self.media_allocation_engine.allocate(
+            virus_typ=virus_typ,
+            predictions=[],
+            total_budget_eur=weekly_budget_eur,
+            spend_enabled=False,
+            spend_blockers=[],
+            default_products=GELO_PRODUCTS.get(virus_typ, ["GeloMyrtol forte"]),
+        )
+        summary = dict(allocation.get("summary") or {})
+        summary.update(
+            {
                 "quality_gate": quality_gate,
                 "business_gate": business_gate,
                 "evidence_tier": business_gate.get("evidence_tier"),
                 "rollout_mode": rollout_mode,
                 "activation_policy": activation_policy,
-            },
+                "allocation_policy_version": allocation.get("allocation_policy_version"),
+            }
+        )
+        return {
+            "virus_typ": virus_typ,
+            "status": status,
+            "message": message,
+            "headline": allocation.get("headline") or f"{virus_typ}: keine regionalen Allocation-Empfehlungen verfügbar",
+            "summary": summary,
+            "allocation_config": allocation.get("config") or {},
             "horizon_days": horizon_days,
+            "supported_horizon_days": list(SUPPORTED_FORECAST_HORIZONS),
+            "target_window_days": self._target_window_for_horizon(horizon_days),
+            "truth_layer": self._truth_layer_rollup([]),
             "generated_at": datetime.utcnow().isoformat(),
-            "recommendations": recommendations,
+            "recommendations": [],
         }
 
     def benchmark_supported_viruses(
         self,
         *,
         reference_virus: str = "Influenza A",
+        horizon_days: int = 7,
     ) -> dict[str, Any]:
+        horizon = ensure_supported_horizon(horizon_days)
         items: list[dict[str, Any]] = []
         reference_metrics: dict[str, Any] | None = None
         truth_readiness = self._truth_readiness()
 
         for virus_typ in SUPPORTED_VIRUS_TYPES:
-            artifacts = self._load_artifacts(virus_typ)
+            artifacts = self._load_artifacts(virus_typ, horizon_days=horizon)
             metadata = artifacts.get("metadata") or {}
+            load_error = str(artifacts.get("load_error") or "").strip()
             aggregate_metrics = metadata.get("aggregate_metrics") or {}
             quality_gate = metadata.get("quality_gate") or {"overall_passed": False, "forecast_readiness": "NO_MODEL"}
             dataset_manifest = artifacts.get("dataset_manifest") or metadata.get("dataset_manifest") or {}
@@ -355,7 +600,10 @@ class RegionalForecastService:
 
             item = {
                 "virus_typ": virus_typ,
-                "status": "trained" if aggregate_metrics else "no_model",
+                "horizon_days": int(metadata.get("horizon_days") or horizon),
+                "target_window_days": metadata.get("target_window_days") or self._target_window_for_horizon(horizon),
+                "status": "trained" if aggregate_metrics and not load_error else "no_model",
+                "message": load_error or metadata.get("message"),
                 "trained_at": metadata.get("trained_at"),
                 "states": int(dataset_manifest.get("states") or 0),
                 "rows": int(dataset_manifest.get("rows") or 0),
@@ -406,6 +654,8 @@ class RegionalForecastService:
         )
         return {
             "reference_virus": reference_virus,
+            "horizon_days": horizon,
+            "target_window_days": self._target_window_for_horizon(horizon),
             "generated_at": datetime.utcnow().isoformat(),
             "trained_viruses": sum(1 for item in ranked if item["status"] == "trained"),
             "go_viruses": sum(
@@ -426,7 +676,11 @@ class RegionalForecastService:
         top_n: int = 12,
         reference_virus: str = "Influenza A",
     ) -> dict[str, Any]:
-        benchmark_payload = self.benchmark_supported_viruses(reference_virus=reference_virus)
+        horizon = ensure_supported_horizon(horizon_days)
+        benchmark_payload = self.benchmark_supported_viruses(
+            reference_virus=reference_virus,
+            horizon_days=horizon,
+        )
         benchmark_map = {
             item["virus_typ"]: item
             for item in benchmark_payload.get("benchmark", [])
@@ -442,7 +696,7 @@ class RegionalForecastService:
             if not benchmark_item:
                 continue
 
-            forecast = self.predict_all_regions(virus_typ=virus_typ, horizon_days=horizon_days)
+            forecast = self.predict_all_regions(virus_typ=virus_typ, horizon_days=horizon)
             predictions = forecast.get("predictions") or []
             if not predictions:
                 continue
@@ -472,6 +726,14 @@ class RegionalForecastService:
                 action, intensity = self._portfolio_action(
                     prediction=prediction,
                     benchmark_item=benchmark_item,
+                )
+                truth_overlay = self._truth_layer_assessment_for_products(
+                    region_code=prediction["bundesland"],
+                    products=GELO_PRODUCTS.get(virus_typ, ["GeloMyrtol forte"]),
+                    target_week_start=prediction["target_week_start"],
+                    signal_context=self._truth_signal_context(prediction=prediction),
+                    operational_action=action,
+                    operational_gate_open=action in {"activate", "prepare"},
                 )
                 opportunity = {
                     "virus_typ": virus_typ,
@@ -505,6 +767,16 @@ class RegionalForecastService:
                     "channels": MEDIA_CHANNELS[intensity],
                     "as_of_date": prediction["as_of_date"],
                     "target_week_start": prediction["target_week_start"],
+                    "truth_layer_enabled": truth_overlay["truth_layer_enabled"],
+                    "truth_scope": truth_overlay["truth_scope"],
+                    "outcome_readiness": truth_overlay["outcome_readiness"],
+                    "evidence_status": truth_overlay["evidence_status"],
+                    "evidence_confidence": truth_overlay["evidence_confidence"],
+                    "signal_outcome_agreement": truth_overlay["signal_outcome_agreement"],
+                    "spend_gate_status": truth_overlay["spend_gate_status"],
+                    "budget_release_recommendation": truth_overlay["budget_release_recommendation"],
+                    "commercial_gate": truth_overlay["commercial_gate"],
+                    "truth_assessments": truth_overlay["truth_assessments"],
                 }
                 opportunities.append(opportunity)
 
@@ -523,6 +795,8 @@ class RegionalForecastService:
         return {
             "generated_at": datetime.utcnow().isoformat(),
             "reference_virus": reference_virus,
+            "horizon_days": horizon,
+            "target_window_days": self._target_window_for_horizon(horizon),
             "latest_as_of_date": latest_as_of_date,
             "summary": {
                 "trained_viruses": benchmark_payload.get("trained_viruses", 0),
@@ -534,6 +808,7 @@ class RegionalForecastService:
             },
             "business_gate": benchmark_payload.get("business_gate") or self._business_gate(quality_gate={"overall_passed": False}),
             "evidence_tier": benchmark_payload.get("evidence_tier"),
+            "truth_layer": self._truth_layer_rollup(opportunities),
             "benchmark": benchmark_payload.get("benchmark", []),
             "virus_rollup": virus_rollup,
             "region_rollup": region_rollup,
@@ -545,9 +820,12 @@ class RegionalForecastService:
         *,
         virus_typ: str = "Influenza A",
         brand: str = "gelo",
+        horizon_days: int = 7,
     ) -> dict[str, Any]:
-        artifacts = self._load_artifacts(virus_typ)
+        horizon = ensure_supported_horizon(horizon_days)
+        artifacts = self._load_artifacts(virus_typ, horizon_days=horizon)
         metadata = artifacts.get("metadata") or {}
+        load_error = str(artifacts.get("load_error") or "").strip()
         quality_gate = metadata.get("quality_gate") or {"overall_passed": False, "forecast_readiness": "NO_MODEL"}
         business_gate = self._business_gate(
             quality_gate=quality_gate,
@@ -557,6 +835,10 @@ class RegionalForecastService:
         return {
             "virus_typ": virus_typ,
             "brand": str(brand or "gelo").strip().lower(),
+            "horizon_days": int(metadata.get("horizon_days") or horizon),
+            "target_window_days": metadata.get("target_window_days") or self._target_window_for_horizon(horizon),
+            "status": "trained" if not load_error and metadata.get("aggregate_metrics") else "no_model",
+            "message": load_error or metadata.get("message"),
             "generated_at": datetime.utcnow().isoformat(),
             "quality_gate": quality_gate,
             "business_gate": business_gate,
@@ -572,8 +854,52 @@ class RegionalForecastService:
             "aggregate_metrics": metadata.get("aggregate_metrics") or {},
         }
 
-    def _load_artifacts(self, virus_typ: str) -> dict[str, Any]:
-        model_dir = self.models_dir / _virus_slug(virus_typ)
+    def _load_artifacts(self, virus_typ: str, horizon_days: int = 7) -> dict[str, Any]:
+        horizon = ensure_supported_horizon(horizon_days)
+        model_dir = regional_model_artifact_dir(
+            self.models_dir,
+            virus_typ=virus_typ,
+            horizon_days=horizon,
+        )
+        payload = self._artifact_payload_from_dir(model_dir)
+        if payload:
+            metadata = dict(payload.get("metadata") or {})
+            metadata_horizon = metadata.get("horizon_days")
+            if metadata_horizon is None:
+                payload["load_error"] = (
+                    f"Metadaten für {virus_typ}/h{horizon} fehlen das Pflichtfeld 'horizon_days'."
+                )
+                return payload
+            if int(metadata_horizon) != horizon:
+                payload["load_error"] = (
+                    f"Metadaten-Horizon {metadata_horizon} passt nicht zur Anfrage h{horizon}."
+                )
+                return payload
+            metadata.setdefault("target_window_days", self._target_window_for_horizon(horizon))
+            metadata.setdefault("supported_horizon_days", list(SUPPORTED_FORECAST_HORIZONS))
+            payload["metadata"] = metadata
+            return payload
+
+        if horizon != 7:
+            return {}
+
+        legacy_dir = self.models_dir / _virus_slug(virus_typ)
+        legacy_payload = self._artifact_payload_from_dir(legacy_dir)
+        if not legacy_payload:
+            return {}
+
+        metadata = dict(legacy_payload.get("metadata") or {})
+        metadata["horizon_days"] = horizon
+        metadata["target_window_days"] = metadata.get("target_window_days") or list(TARGET_WINDOW_DAYS)
+        metadata["requested_horizon_days"] = horizon
+        metadata["supported_horizon_days"] = list(SUPPORTED_FORECAST_HORIZONS)
+        metadata["artifact_transition_mode"] = "legacy_default_window_fallback"
+        legacy_payload["metadata"] = metadata
+        legacy_payload["artifact_transition_mode"] = "legacy_default_window_fallback"
+        return legacy_payload
+
+    @staticmethod
+    def _artifact_payload_from_dir(model_dir: Path) -> dict[str, Any]:
         required_paths = {
             "classifier": model_dir / "classifier.json",
             "regressor_median": model_dir / "regressor_median.json",
@@ -617,6 +943,145 @@ class RegionalForecastService:
 
     def _latest_as_of_date(self, virus_typ: str) -> pd.Timestamp:
         return self.feature_builder.latest_available_as_of_date(virus_typ=virus_typ)
+
+    @staticmethod
+    def _decision_stage_sort_value(stage: str | None) -> int:
+        return {
+            "activate": 3,
+            "prepare": 2,
+            "watch": 1,
+        }.get(str(stage or "watch").strip().lower(), 0)
+
+    @classmethod
+    def _decision_priority_sort_key(cls, item: dict[str, Any]) -> tuple[float, float, float, float]:
+        decision = item.get("decision") or {}
+        return (
+            float(cls._decision_stage_sort_value(decision.get("stage"))),
+            float(item.get("priority_score") or 0.0),
+            float(item.get("event_probability_calibrated") or 0.0),
+            float(item.get("change_pct") or 0.0),
+        )
+
+    @classmethod
+    def _decision_summary(cls, predictions: list[dict[str, Any]]) -> dict[str, Any]:
+        if not predictions:
+            return {
+                "watch_regions": 0,
+                "prepare_regions": 0,
+                "activate_regions": 0,
+                "avg_priority_score": 0.0,
+                "top_region": None,
+                "top_region_decision": None,
+            }
+
+        ranked_decisions = sorted(
+            predictions,
+            key=cls._decision_priority_sort_key,
+            reverse=True,
+        )
+        top_region = ranked_decisions[0]
+        return {
+            "watch_regions": sum(1 for item in predictions if str(item.get("decision_label") or "").lower() == "watch"),
+            "prepare_regions": sum(1 for item in predictions if str(item.get("decision_label") or "").lower() == "prepare"),
+            "activate_regions": sum(1 for item in predictions if str(item.get("decision_label") or "").lower() == "activate"),
+            "avg_priority_score": round(
+                sum(float(item.get("priority_score") or 0.0) for item in predictions) / len(predictions),
+                4,
+            ),
+            "top_region": top_region.get("bundesland"),
+            "top_region_decision": top_region.get("decision_label"),
+        }
+
+    @staticmethod
+    def _media_spend_gate(
+        *,
+        quality_gate: dict[str, Any],
+        business_gate: dict[str, Any],
+        activation_policy: str,
+    ) -> tuple[bool, list[str]]:
+        blockers: list[str] = []
+        if activation_policy == "watch_only":
+            blockers.append("Activation policy 'watch_only' forces observation mode.")
+        if not business_gate.get("validated_for_budget_activation"):
+            blockers.append("Business-Gate noch nicht validiert.")
+        if not quality_gate.get("overall_passed"):
+            blockers.append("Quality Gate blockiert Aktivierung.")
+        return len(blockers) == 0, blockers
+
+    @staticmethod
+    def _media_action(
+        *,
+        recommended_level: str,
+        spend_enabled: bool,
+    ) -> str:
+        if not spend_enabled:
+            return "watch"
+        stage = str(recommended_level or "Watch").strip().lower()
+        if stage in {"activate", "prepare"}:
+            return stage
+        return "watch"
+
+    @staticmethod
+    def _media_intensity(action: str) -> str:
+        return {
+            "activate": "high",
+            "prepare": "medium",
+        }.get(str(action or "watch").strip().lower(), "low")
+
+    @staticmethod
+    def _products_from_allocation(
+        *,
+        allocation_item: dict[str, Any],
+        virus_typ: str,
+    ) -> list[str]:
+        product_clusters = allocation_item.get("product_clusters") or []
+        if product_clusters:
+            cluster = product_clusters[0] or {}
+            products = [str(item) for item in cluster.get("products") or [] if str(item).strip()]
+            if products:
+                return products
+        return GELO_PRODUCTS.get(virus_typ, ["GeloMyrtol forte"])
+
+    @staticmethod
+    def _media_timeline(
+        *,
+        action: str,
+        spend_enabled: bool,
+        activation_policy: str,
+        business_gate: dict[str, Any],
+        quality_gate: dict[str, Any],
+    ) -> str:
+        if not spend_enabled:
+            return (
+                "Nur beobachten — Shadow-Policy blockiert Aktivierung"
+                if activation_policy == "watch_only"
+                else "Nur beobachten — Business-Gate noch nicht validiert"
+                if not business_gate.get("validated_for_budget_activation")
+                else "Nur beobachten — Quality Gate blockiert Aktivierung"
+                if not quality_gate.get("overall_passed")
+                else "Nur beobachten — Spend aktuell blockiert"
+            )
+        if action == "activate":
+            return f"Sofort aktivieren — Wellenfenster in {TARGET_WINDOW_DAYS[0]}-{TARGET_WINDOW_DAYS[1]} Tagen"
+        if action == "prepare":
+            return "In 1-2 Tagen vorbereiten — Signal fuer regionale Aktivierung vorhanden"
+        return "Beobachten — unterhalb des operationalen Spend-Niveaus"
+
+    @staticmethod
+    def _media_headline(
+        *,
+        virus_typ: str,
+        recommendations: list[dict[str, Any]],
+        spend_enabled: bool,
+    ) -> str:
+        prioritized = [
+            item["bundesland"]
+            for item in recommendations
+            if item["action"] in {"activate", "prepare"} and float(item.get("suggested_budget_share") or 0.0) > 0.0
+        ]
+        if prioritized and spend_enabled:
+            return f"{virus_typ}: Budget auf {', '.join(prioritized[:3])} fokussieren"
+        return f"{virus_typ}: aktuell kein validierter Aktivierungs-Case"
 
     @staticmethod
     def _metric_delta(candidate: dict[str, Any], reference: dict[str, Any]) -> dict[str, float]:
@@ -782,13 +1247,290 @@ class RegionalForecastService:
         validation["quality_gate_passed"] = forecast_ready
         return validation
 
+    def _truth_layer_assessment_for_products(
+        self,
+        *,
+        region_code: str,
+        products: list[str],
+        target_week_start: Any,
+        signal_context: dict[str, Any],
+        operational_action: str,
+        operational_gate_open: bool,
+        brand: str = "gelo",
+    ) -> dict[str, Any]:
+        normalized_products = [
+            str(product).strip()
+            for product in products
+            if str(product or "").strip()
+        ] or [""]
+        window_start, window_end = self._truth_assessment_window(target_week_start)
+        assessments: list[dict[str, Any]] = []
+        for product in normalized_products:
+            assessment = self._truth_layer_assessment_for_product(
+                brand=brand,
+                region_code=region_code,
+                product=product or None,
+                window_start=window_start,
+                window_end=window_end,
+                signal_context=signal_context,
+            )
+            spend_gate_status, budget_release_recommendation = self._commercial_truth_gate(
+                truth_assessment=assessment,
+                operational_action=operational_action,
+                operational_gate_open=operational_gate_open,
+            )
+            assessments.append(
+                {
+                    "product": product or None,
+                    "scope": assessment.get("scope") or {},
+                    "outcome_readiness": assessment.get("outcome_readiness") or {},
+                    "evidence_status": assessment.get("evidence_status"),
+                    "evidence_confidence": assessment.get("evidence_confidence"),
+                    "signal_outcome_agreement": assessment.get("signal_outcome_agreement") or {},
+                    "holdout_eligibility": assessment.get("holdout_eligibility") or {},
+                    "commercial_gate": assessment.get("commercial_gate") or {},
+                    "metadata": assessment.get("metadata") or {},
+                    "spend_gate_status": spend_gate_status,
+                    "budget_release_recommendation": budget_release_recommendation,
+                }
+            )
+
+        primary = assessments[0]
+        return {
+            "truth_layer_enabled": bool(self.db is not None),
+            "truth_scope": {
+                "brand": str(brand or "gelo").strip().lower(),
+                "region_code": str(region_code or "").strip().upper() or None,
+                "window_start": window_start.isoformat(),
+                "window_end": window_end.isoformat(),
+                "lookback_weeks": _TRUTH_LOOKBACK_WEEKS,
+                "products": [item["product"] for item in assessments],
+                "primary_product": primary["product"],
+            },
+            "outcome_readiness": primary["outcome_readiness"],
+            "evidence_status": primary["evidence_status"],
+            "evidence_confidence": primary["evidence_confidence"],
+            "signal_outcome_agreement": primary["signal_outcome_agreement"],
+            "spend_gate_status": primary["spend_gate_status"],
+            "budget_release_recommendation": primary["budget_release_recommendation"],
+            "commercial_gate": primary["commercial_gate"],
+            "truth_assessments": assessments,
+        }
+
+    def _truth_layer_assessment_for_product(
+        self,
+        *,
+        brand: str,
+        region_code: str,
+        product: str | None,
+        window_start: datetime,
+        window_end: datetime,
+        signal_context: dict[str, Any],
+    ) -> dict[str, Any]:
+        if self.db is None:
+            return self._fallback_truth_assessment(
+                brand=brand,
+                region_code=region_code,
+                product=product,
+                window_start=window_start,
+                window_end=window_end,
+                signal_context=signal_context,
+                source_mode="unavailable",
+                message="Truth-Layer ist optional; in dieser Laufzeit ist keine Outcome-Datenbank verbunden.",
+            )
+        try:
+            return TruthLayerService(self.db).assess(
+                brand=brand,
+                region_code=region_code,
+                product=product,
+                window_start=window_start,
+                window_end=window_end,
+                signal_context=signal_context,
+            )
+        except Exception:
+            logger.exception(
+                "Truth layer assessment failed for brand=%s region=%s product=%s",
+                brand,
+                region_code,
+                product,
+            )
+            return self._fallback_truth_assessment(
+                brand=brand,
+                region_code=region_code,
+                product=product,
+                window_start=window_start,
+                window_end=window_end,
+                signal_context=signal_context,
+                source_mode="error",
+                message="Truth-Layer konnte fuer diese Scope-Abfrage nicht ausgewertet werden.",
+            )
+
+    @staticmethod
+    def _truth_assessment_window(target_week_start: Any) -> tuple[datetime, datetime]:
+        target_start = pd.Timestamp(target_week_start).normalize()
+        return (
+            (target_start - pd.Timedelta(weeks=_TRUTH_LOOKBACK_WEEKS)).to_pydatetime(),
+            (target_start + pd.Timedelta(days=6)).to_pydatetime(),
+        )
+
+    @staticmethod
+    def _truth_signal_context(
+        *,
+        prediction: dict[str, Any],
+        confidence: float | None = None,
+        stage: str | None = None,
+    ) -> dict[str, Any]:
+        decision = dict(prediction.get("decision") or {})
+        decision_stage = str(
+            stage
+            or decision.get("stage")
+            or prediction.get("decision_label")
+            or ""
+        ).strip().lower()
+        event_probability = float(prediction.get("event_probability_calibrated") or 0.0)
+        forecast_confidence = (
+            confidence
+            if confidence is not None
+            else decision.get("forecast_confidence")
+        )
+        signal_present = decision_stage in {"activate", "prepare"} or event_probability >= 0.5
+        context = {
+            "signal_present": signal_present,
+            "decision_stage": decision_stage or None,
+            "event_probability": event_probability,
+        }
+        if forecast_confidence is not None:
+            context["confidence"] = float(forecast_confidence)
+            context["forecast_confidence"] = float(forecast_confidence)
+        return context
+
+    @staticmethod
+    def _fallback_truth_assessment(
+        *,
+        brand: str,
+        region_code: str,
+        product: str | None,
+        window_start: datetime,
+        window_end: datetime,
+        signal_context: dict[str, Any],
+        source_mode: str,
+        message: str,
+    ) -> dict[str, Any]:
+        signal_present = bool(signal_context.get("signal_present"))
+        signal_confidence = signal_context.get("confidence") or signal_context.get("forecast_confidence")
+        try:
+            normalized_confidence = float(signal_confidence or signal_context.get("event_probability") or 0.0)
+        except (TypeError, ValueError):
+            normalized_confidence = 0.0
+        return {
+            "scope": {
+                "brand": str(brand or "gelo").strip().lower(),
+                "region_code": str(region_code or "").strip().upper() or None,
+                "product": str(product).strip() if product else None,
+                "window_start": window_start.isoformat(),
+                "window_end": window_end.isoformat(),
+            },
+            "outcome_readiness": {
+                "status": "missing",
+                "score": 0.0,
+                "coverage_weeks": 0,
+                "metrics_present": [],
+                "regions_present": 0,
+                "products_present": 0,
+                "spend_windows": 0,
+                "response_windows": 0,
+                "notes": [message],
+            },
+            "signal_outcome_agreement": {
+                "status": "no_outcome_support" if signal_present else "no_signal",
+                "signal_present": signal_present,
+                "historical_response_observed": False,
+                "score": round(0.2 * normalized_confidence, 4) if signal_present else None,
+                "signal_confidence": round(normalized_confidence, 4) if signal_present else None,
+                "outcome_support_score": 0.0,
+                "outcome_confidence": 0.0,
+                "notes": [message],
+            },
+            "holdout_eligibility": {
+                "eligible": False,
+                "ready": False,
+                "holdout_groups": [],
+                "reason": "No scoped outcome data is available for holdout validation.",
+            },
+            "evidence_status": "no_truth",
+            "evidence_confidence": 0.0,
+            "commercial_gate": {
+                "budget_decision_allowed": False,
+                "decision_scope": "decision_support_only",
+                "message": message,
+            },
+            "metadata": {
+                "source_mode": source_mode,
+                "observations": 0,
+                "metrics_present": [],
+                "optional_layer": True,
+            },
+        }
+
+    @staticmethod
+    def _commercial_truth_gate(
+        *,
+        truth_assessment: dict[str, Any],
+        operational_action: str,
+        operational_gate_open: bool,
+    ) -> tuple[str, str]:
+        action = str(operational_action or "watch").strip().lower()
+        evidence_status = str(truth_assessment.get("evidence_status") or "no_truth").strip().lower()
+        budget_allowed = bool((truth_assessment.get("commercial_gate") or {}).get("budget_decision_allowed"))
+
+        if action == "prioritize":
+            return "prioritize_only", "hold"
+        if action not in {"activate", "prepare"}:
+            return "not_applicable", "hold"
+        if not operational_gate_open:
+            return "blocked_operational_gate", "hold"
+        if budget_allowed or evidence_status == "commercially_validated":
+            return "released", "release"
+        if evidence_status in {"holdout_ready", "truth_backed"}:
+            return "guarded_release", "limited_release"
+        return "manual_review_required", "manual_review"
+
+    def _truth_layer_rollup(self, items: list[dict[str, Any]]) -> dict[str, Any]:
+        evidence_status_counts: dict[str, int] = {}
+        spend_gate_status_counts: dict[str, int] = {}
+        budget_release_counts: dict[str, int] = {}
+        for item in items:
+            evidence_status = str(item.get("evidence_status") or "").strip()
+            spend_gate_status = str(item.get("spend_gate_status") or "").strip()
+            budget_release = str(item.get("budget_release_recommendation") or "").strip()
+            if evidence_status:
+                evidence_status_counts[evidence_status] = evidence_status_counts.get(evidence_status, 0) + 1
+            if spend_gate_status:
+                spend_gate_status_counts[spend_gate_status] = spend_gate_status_counts.get(spend_gate_status, 0) + 1
+            if budget_release:
+                budget_release_counts[budget_release] = budget_release_counts.get(budget_release, 0) + 1
+        return {
+            "enabled": bool(self.db is not None),
+            "lookback_weeks": _TRUTH_LOOKBACK_WEEKS,
+            "scopes_evaluated": len(items),
+            "evidence_status_counts": evidence_status_counts,
+            "spend_gate_status_counts": spend_gate_status_counts,
+            "budget_release_recommendation_counts": budget_release_counts,
+        }
+
     @staticmethod
     def _model_version(metadata: dict[str, Any]) -> str:
         model_family = str(metadata.get("model_family") or "regional_pooled_panel")
         trained_at = str(metadata.get("trained_at") or "unversioned")
-        return f"{model_family}:{trained_at}"
+        horizon = metadata.get("horizon_days")
+        if horizon is None:
+            return f"{model_family}:{trained_at}"
+        return f"{model_family}:h{horizon}:{trained_at}"
 
     @staticmethod
     def _calibration_version(metadata: dict[str, Any]) -> str:
         trained_at = str(metadata.get("trained_at") or "unversioned")
-        return f"isotonic:{trained_at}"
+        horizon = metadata.get("horizon_days")
+        if horizon is None:
+            return f"isotonic:{trained_at}"
+        return f"isotonic:h{horizon}:{trained_at}"

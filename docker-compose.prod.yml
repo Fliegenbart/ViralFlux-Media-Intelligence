@@ -67,6 +67,10 @@ services:
       - ADMIN_EMAIL=${ADMIN_EMAIL:?ADMIN_EMAIL must be set in .env}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:?ADMIN_PASSWORD must be set in .env}
       - ENVIRONMENT=production
+      - DB_AUTO_CREATE_SCHEMA=false
+      - DB_ALLOW_RUNTIME_SCHEMA_UPDATES=false
+      - STARTUP_STRICT_READINESS=true
+      - READINESS_REQUIRE_BROKER=true
       - ALLOWED_ORIGINS=https://fluxengine.labpulse.ai,https://www.fluxengine.labpulse.ai,https://labpulse.belegsync.com,http://5.9.106.75:8501
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -79,6 +83,12 @@ services:
     stop_grace_period: 30s
     volumes:
       - ml_models:/app/app/ml_models
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/live', timeout=5)"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     logging:
       driver: json-file
       options:
@@ -101,7 +111,11 @@ services:
     command: celery -A app.core.celery_app worker --loglevel=info --concurrency=2
     stop_grace_period: 60s
     healthcheck:
-      disable: true
+      test: ["CMD", "python", "-c", "from app.core.celery_app import celery_app; conn = celery_app.connection_for_read(); conn.ensure_connection(max_retries=1); conn.release()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
     volumes:
       - ml_models:/app/app/ml_models
     logging:
@@ -128,6 +142,8 @@ services:
       - ADMIN_EMAIL=${ADMIN_EMAIL:?ADMIN_EMAIL must be set in .env}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:?ADMIN_PASSWORD must be set in .env}
       - ENVIRONMENT=production
+      - DB_AUTO_CREATE_SCHEMA=false
+      - DB_ALLOW_RUNTIME_SCHEMA_UPDATES=false
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
@@ -146,7 +162,11 @@ services:
     restart: unless-stopped
     command: celery -A app.core.celery_app beat --loglevel=info
     healthcheck:
-      disable: true
+      test: ["CMD", "python", "-c", "from app.core.celery_app import celery_app; conn = celery_app.connection_for_read(); conn.ensure_connection(max_retries=1); conn.release()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
     logging:
       driver: json-file
       options:
@@ -170,6 +190,8 @@ services:
       - ADMIN_EMAIL=${ADMIN_EMAIL:?ADMIN_EMAIL must be set in .env}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:?ADMIN_PASSWORD must be set in .env}
       - ENVIRONMENT=production
+      - DB_AUTO_CREATE_SCHEMA=false
+      - DB_ALLOW_RUNTIME_SCHEMA_UPDATES=false
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:

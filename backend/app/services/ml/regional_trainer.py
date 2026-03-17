@@ -14,6 +14,11 @@ import pandas as pd
 from sklearn.isotonic import IsotonicRegression
 from xgboost import XGBClassifier, XGBRegressor
 
+from app.services.ml.forecast_horizon_utils import (
+    SUPPORTED_FORECAST_HORIZONS,
+    ensure_supported_horizon,
+    regional_model_artifact_dir,
+)
 from app.services.ml.regional_features import RegionalFeatureBuilder
 from app.services.ml.regional_panel_utils import (
     ALL_BUNDESLAENDER,
@@ -95,10 +100,13 @@ EXCLUDED_MODEL_COLUMNS = {
     "bundesland",
     "bundesland_name",
     "as_of_date",
+    "target_date",
     "target_week_start",
     "target_window_days",
+    "horizon_days",
     "event_definition_version",
     "truth_source",
+    "target_truth_source",
     "current_known_incidence",
     "next_week_incidence",
     "seasonal_baseline",
@@ -130,6 +138,11 @@ def _json_safe(value: Any) -> Any:
     return str(value)
 
 
+def _target_window_for_horizon(horizon_days: int) -> list[int]:
+    horizon = ensure_supported_horizon(horizon_days)
+    return [horizon, horizon]
+
+
 class RegionalModelTrainer:
     """Train pooled per-virus panel models across all Bundesländer."""
 
@@ -143,8 +156,13 @@ class RegionalModelTrainer:
         virus_typ: str = "Influenza A",
         bundesland: str = "BY",
         lookback_days: int = 900,
+        horizon_days: int = 7,
     ) -> dict[str, Any]:
-        summary = self.train_all_regions(virus_typ=virus_typ, lookback_days=lookback_days)
+        summary = self.train_all_regions(
+            virus_typ=virus_typ,
+            lookback_days=lookback_days,
+            horizon_days=horizon_days,
+        )
         details = (summary.get("backtest") or {}).get("details") or {}
         return details.get(bundesland.upper(), {"error": f"No summary available for {bundesland.upper()}"})
 
@@ -153,15 +171,78 @@ class RegionalModelTrainer:
         virus_typ: str = "Influenza A",
         lookback_days: int = 900,
         persist: bool = True,
+        horizon_days: int = 7,
+        horizon_days_list: list[int] | None = None,
     ) -> dict[str, Any]:
-        logger.info("Training pooled regional panel model for %s", virus_typ)
-        previous_artifact = self.load_artifacts(virus_typ=virus_typ)
-        panel = self.feature_builder.build_panel_training_data(virus_typ=virus_typ, lookback_days=lookback_days)
+        horizons = self._selected_horizons(
+            horizon_days=horizon_days,
+            horizon_days_list=horizon_days_list,
+        )
+        if len(horizons) > 1:
+            scopes = {
+                f"h{horizon}": self.train_all_regions(
+                    virus_typ=virus_typ,
+                    lookback_days=lookback_days,
+                    persist=persist,
+                    horizon_days=horizon,
+                )
+                for horizon in horizons
+            }
+            statuses = [payload.get("status") for payload in scopes.values()]
+            return {
+                "status": (
+                    "success"
+                    if statuses and all(status == "success" for status in statuses)
+                    else "partial_error"
+                ),
+                "virus_typ": virus_typ,
+                "horizon_days_list": list(horizons),
+                "trained": sum(int((payload or {}).get("trained") or 0) for payload in scopes.values()),
+                "failed": sum(int((payload or {}).get("failed") or 0) for payload in scopes.values()),
+                "scopes": scopes,
+                "aggregate_metrics": {
+                    key: (payload or {}).get("aggregate_metrics") or {}
+                    for key, payload in scopes.items()
+                },
+                "quality_gate": {
+                    key: (payload or {}).get("quality_gate") or {}
+                    for key, payload in scopes.items()
+                },
+            }
+
+        return self._train_single_horizon(
+            virus_typ=virus_typ,
+            lookback_days=lookback_days,
+            persist=persist,
+            horizon_days=horizons[0],
+        )
+
+    def _train_single_horizon(
+        self,
+        *,
+        virus_typ: str,
+        lookback_days: int,
+        persist: bool,
+        horizon_days: int,
+    ) -> dict[str, Any]:
+        horizon = ensure_supported_horizon(horizon_days)
+        logger.info("Training pooled regional panel model for %s (horizon=%s)", virus_typ, horizon)
+        previous_artifact = self.load_artifacts(virus_typ=virus_typ, horizon_days=horizon)
+        panel = self.feature_builder.build_panel_training_data(
+            virus_typ=virus_typ,
+            lookback_days=lookback_days,
+            horizon_days=horizon,
+            include_nowcast=True,
+            use_revision_adjusted=False,
+        )
+        panel = self._prepare_horizon_panel(panel, horizon_days=horizon)
         if panel.empty or len(panel) < 200:
             return {
                 "status": "error",
                 "virus_typ": virus_typ,
-                "error": f"Insufficient pooled panel data ({len(panel)} rows).",
+                "horizon_days": horizon,
+                "target_window_days": _target_window_for_horizon(horizon),
+                "error": f"Insufficient pooled panel data ({len(panel)} rows) for horizon {horizon}.",
             }
 
         panel = panel.copy()
@@ -210,28 +291,41 @@ class RegionalModelTrainer:
             oof_frame=backtest_bundle["oof_frame"],
         )
 
-        dataset_manifest = self.feature_builder.dataset_manifest(virus_typ=virus_typ, panel=panel)
-        point_in_time_manifest = self.feature_builder.point_in_time_snapshot_manifest(
+        dataset_manifest = {
+            **self.feature_builder.dataset_manifest(virus_typ=virus_typ, panel=panel),
+            "horizon_days": horizon,
+            "target_window_days": _target_window_for_horizon(horizon),
+        }
+        point_in_time_manifest = {
+            **self.feature_builder.point_in_time_snapshot_manifest(virus_typ=virus_typ, panel=panel),
+            "horizon_days": horizon,
+            "target_window_days": _target_window_for_horizon(horizon),
+        }
+        model_dir = regional_model_artifact_dir(
+            self.models_dir,
             virus_typ=virus_typ,
-            panel=panel,
+            horizon_days=horizon,
         )
-        model_dir = self.models_dir / _virus_slug(virus_typ)
         metadata = {
             "virus_typ": virus_typ,
             "model_family": "regional_pooled_panel",
             "trained_at": datetime.utcnow().isoformat(),
             "model_version": None,
             "calibration_version": None,
+            "horizon_days": horizon,
+            "target_window_days": _target_window_for_horizon(horizon),
+            "supported_horizon_days": list(SUPPORTED_FORECAST_HORIZONS),
+            "forecast_target_semantics": "current_known_incidence_at_as_of_plus_horizon_days",
             "feature_columns": feature_columns,
             "ww_only_feature_columns": ww_only_columns,
             "selected_tau": tau,
             "selected_kappa": kappa,
             "action_threshold": action_threshold,
             "event_definition_version": EVENT_DEFINITION_VERSION,
-            "target_window_days": list(TARGET_WINDOW_DAYS),
             "min_event_absolute_incidence": event_config.min_absolute_incidence,
             "event_definition_config": event_config.to_manifest(),
             "dataset_manifest": dataset_manifest,
+            "nowcast_features_enabled": True,
             "signal_bundle_version": rollout_info["signal_bundle_version"],
             "rollout_mode": rollout_info["rollout_mode"],
             "activation_policy": rollout_info["activation_policy"],
@@ -245,8 +339,8 @@ class RegionalModelTrainer:
                 "unique_as_of_dates": point_in_time_manifest.get("unique_as_of_dates"),
             },
         }
-        metadata["model_version"] = f"{metadata['model_family']}:{metadata['trained_at']}"
-        metadata["calibration_version"] = f"isotonic:{metadata['trained_at']}"
+        metadata["model_version"] = f"{metadata['model_family']}:h{horizon}:{metadata['trained_at']}"
+        metadata["calibration_version"] = f"isotonic:h{horizon}:{metadata['trained_at']}"
 
         if persist:
             self._persist_artifacts(
@@ -262,6 +356,8 @@ class RegionalModelTrainer:
         return {
             "status": "success",
             "virus_typ": virus_typ,
+            "horizon_days": horizon,
+            "target_window_days": _target_window_for_horizon(horizon),
             "trained": len(per_state),
             "failed": max(0, len(ALL_BUNDESLAENDER) - len(per_state)),
             "quality_gate": backtest_bundle["quality_gate"],
@@ -273,10 +369,15 @@ class RegionalModelTrainer:
             "selection": selection,
         }
 
-    def train_all_viruses_all_regions(self, lookback_days: int = 900) -> dict[str, Any]:
+    def train_all_viruses_all_regions(
+        self,
+        lookback_days: int = 900,
+        horizon_days: int = 7,
+    ) -> dict[str, Any]:
         return self.train_selected_viruses_all_regions(
             virus_types=SUPPORTED_VIRUS_TYPES,
             lookback_days=lookback_days,
+            horizon_days=horizon_days,
         )
 
     def train_selected_viruses_all_regions(
@@ -284,14 +385,83 @@ class RegionalModelTrainer:
         *,
         virus_types: list[str] | tuple[str, ...],
         lookback_days: int = 900,
+        horizon_days: int = 7,
+        horizon_days_list: list[int] | None = None,
     ) -> dict[str, Any]:
         return {
-            virus_typ: self.train_all_regions(virus_typ=virus_typ, lookback_days=lookback_days)
+            virus_typ: self.train_all_regions(
+                virus_typ=virus_typ,
+                lookback_days=lookback_days,
+                horizon_days=horizon_days,
+                horizon_days_list=horizon_days_list,
+            )
             for virus_typ in virus_types
         }
 
-    def get_regional_accuracy_summary(self, virus_typ: str = "Influenza A") -> list[dict]:
-        artifact = self.load_artifacts(virus_typ=virus_typ)
+    @staticmethod
+    def _selected_horizons(
+        *,
+        horizon_days: int = 7,
+        horizon_days_list: list[int] | None = None,
+    ) -> tuple[int, ...]:
+        if horizon_days_list is None:
+            return (ensure_supported_horizon(horizon_days),)
+
+        normalized: list[int] = []
+        seen: set[int] = set()
+        for value in horizon_days_list:
+            horizon = ensure_supported_horizon(value)
+            if horizon in seen:
+                continue
+            seen.add(horizon)
+            normalized.append(horizon)
+        if not normalized:
+            raise ValueError("horizon_days_list must not be empty")
+        return tuple(normalized)
+
+    @staticmethod
+    def _prepare_horizon_panel(
+        panel: pd.DataFrame,
+        *,
+        horizon_days: int,
+    ) -> pd.DataFrame:
+        horizon = ensure_supported_horizon(horizon_days)
+        if panel.empty:
+            return panel.copy()
+
+        working = panel.copy()
+        working["as_of_date"] = pd.to_datetime(working["as_of_date"]).dt.normalize()
+        if "target_date" not in working.columns:
+            working["target_date"] = working["as_of_date"] + pd.Timedelta(days=horizon)
+        working["target_date"] = pd.to_datetime(working["target_date"]).dt.normalize()
+        working["target_window_days"] = [_target_window_for_horizon(horizon)] * len(working)
+        working["horizon_days"] = float(horizon)
+
+        future_targets = working[
+            ["bundesland", "as_of_date", "current_known_incidence", "truth_source"]
+        ].rename(
+            columns={
+                "as_of_date": "target_date",
+                "current_known_incidence": "target_incidence",
+                "truth_source": "target_truth_source",
+            }
+        )
+        merged = working.merge(
+            future_targets,
+            on=["bundesland", "target_date"],
+            how="left",
+        )
+        merged["next_week_incidence"] = merged["target_incidence"]
+        merged["truth_source"] = merged["target_truth_source"].fillna(merged["truth_source"])
+        merged = merged.loc[merged["target_incidence"].notna()].copy()
+        return merged.reset_index(drop=True)
+
+    def get_regional_accuracy_summary(
+        self,
+        virus_typ: str = "Influenza A",
+        horizon_days: int = 7,
+    ) -> list[dict]:
+        artifact = self.load_artifacts(virus_typ=virus_typ, horizon_days=horizon_days)
         backtest = artifact.get("backtest") or {}
         details = backtest.get("details") or {}
         summaries: list[dict] = []
@@ -301,6 +471,7 @@ class RegionalModelTrainer:
                 {
                     "bundesland": code,
                     "name": payload.get("bundesland_name", BUNDESLAND_NAMES.get(code, code)),
+                    "horizon_days": int((artifact.get("metadata") or {}).get("horizon_days") or horizon_days),
                     "samples": int(payload.get("total_windows") or 0),
                     "precision": metrics.get("precision"),
                     "recall": metrics.get("recall"),
@@ -311,11 +482,43 @@ class RegionalModelTrainer:
             )
         return summaries
 
-    def load_artifacts(self, virus_typ: str) -> dict[str, Any]:
-        model_dir = self.models_dir / _virus_slug(virus_typ)
-        if not model_dir.exists():
+    def load_artifacts(self, virus_typ: str, horizon_days: int = 7) -> dict[str, Any]:
+        horizon = ensure_supported_horizon(horizon_days)
+        model_dir = regional_model_artifact_dir(
+            self.models_dir,
+            virus_typ=virus_typ,
+            horizon_days=horizon,
+        )
+        payload = self._artifact_payload_from_dir(model_dir)
+        if payload:
+            metadata = payload.setdefault("metadata", {})
+            metadata.setdefault("horizon_days", horizon)
+            metadata.setdefault("target_window_days", _target_window_for_horizon(horizon))
+            metadata.setdefault("supported_horizon_days", list(SUPPORTED_FORECAST_HORIZONS))
+            return payload
+
+        if horizon != 7:
             return {}
 
+        legacy_dir = self.models_dir / _virus_slug(virus_typ)
+        legacy_payload = self._artifact_payload_from_dir(legacy_dir)
+        if not legacy_payload:
+            return {}
+
+        metadata = dict(legacy_payload.get("metadata") or {})
+        metadata.setdefault("horizon_days", horizon)
+        metadata["target_window_days"] = metadata.get("target_window_days") or list(TARGET_WINDOW_DAYS)
+        metadata["artifact_transition_mode"] = "legacy_default_window_fallback"
+        metadata["requested_horizon_days"] = horizon
+        metadata["artifact_dir"] = str(legacy_dir)
+        legacy_payload["metadata"] = metadata
+        legacy_payload["artifact_transition_mode"] = "legacy_default_window_fallback"
+        return legacy_payload
+
+    @staticmethod
+    def _artifact_payload_from_dir(model_dir: Path) -> dict[str, Any]:
+        if not model_dir.exists():
+            return {}
         payload: dict[str, Any] = {}
         meta_path = model_dir / "metadata.json"
         backtest_path = model_dir / "backtest.json"
@@ -728,7 +931,9 @@ class RegionalModelTrainer:
                         "bundesland": test_df["bundesland"].values,
                         "bundesland_name": test_df["bundesland_name"].values,
                         "as_of_date": test_df["as_of_date"].values,
+                        "target_date": test_df["target_date"].values if "target_date" in test_df.columns else None,
                         "target_week_start": test_df["target_week_start"].values,
+                        "horizon_days": test_df["horizon_days"].values.astype(int) if "horizon_days" in test_df.columns else np.full(len(test_df), TARGET_WINDOW_DAYS[1], dtype=int),
                         "event_label": test_df["event_label"].values.astype(int),
                         "event_probability_calibrated": calibrated_prob,
                         "event_probability_raw": raw_prob,
@@ -738,6 +943,7 @@ class RegionalModelTrainer:
                         "current_known_incidence": test_df["current_known_incidence"].values.astype(float),
                         "next_week_incidence": test_df["next_week_incidence"].values.astype(float),
                         "expected_next_week_incidence": pred_next,
+                        "expected_target_incidence": pred_next,
                         "prediction_interval_lower": pred_next_lo,
                         "prediction_interval_upper": pred_next_hi,
                         "selected_tau": fold_tau,
@@ -854,7 +1060,8 @@ class RegionalModelTrainer:
                         "signal_bundle_version": metadata.get("signal_bundle_version"),
                         "rollout_mode": metadata.get("rollout_mode"),
                         "activation_policy": metadata.get("activation_policy"),
-                        "target_window_days": list(TARGET_WINDOW_DAYS),
+                        "horizon_days": metadata.get("horizon_days"),
+                        "target_window_days": metadata.get("target_window_days") or list(TARGET_WINDOW_DAYS),
                     }
                 ),
                 handle,
@@ -1079,10 +1286,12 @@ class RegionalModelTrainer:
             )
 
         ranking.sort(key=lambda item: (item["precision"], item["pr_auc"]), reverse=True)
+        horizon = int(frame["horizon_days"].iloc[0]) if "horizon_days" in frame.columns else TARGET_WINDOW_DAYS[1]
         return {
             "virus_typ": str(frame["virus_typ"].iloc[0]),
+            "horizon_days": horizon,
             "event_definition_version": EVENT_DEFINITION_VERSION,
-            "target_window_days": list(TARGET_WINDOW_DAYS),
+            "target_window_days": _target_window_for_horizon(horizon),
             "selected_tau": tau,
             "selected_kappa": kappa,
             "action_threshold": action_threshold,

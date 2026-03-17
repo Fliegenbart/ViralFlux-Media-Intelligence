@@ -2,7 +2,7 @@ from sqlalchemy import create_engine, text, inspect
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.pool import QueuePool
 from contextlib import contextmanager
-from typing import Generator
+from typing import Any, Generator
 import logging
 
 from app.core.config import get_settings
@@ -23,6 +23,7 @@ engine = create_engine(
 
 # Session Factory
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+_LAST_INIT_SUMMARY: dict[str, Any] = {}
 
 _RUNTIME_SCHEMA_UPDATES = {
     "wastewater_data": {"available_time": "TIMESTAMP"},
@@ -110,6 +111,63 @@ _RUNTIME_INDEX_UPDATES = {
 }
 
 
+def _set_last_init_summary(summary: dict[str, Any]) -> None:
+    global _LAST_INIT_SUMMARY
+    _LAST_INIT_SUMMARY = dict(summary)
+
+
+def get_last_init_summary() -> dict[str, Any]:
+    return dict(_LAST_INIT_SUMMARY)
+
+
+def _runtime_schema_gaps(existing_tables: set[str] | None = None) -> dict[str, list[str]]:
+    try:
+        inspector = inspect(engine)
+        known_tables = existing_tables or set(inspector.get_table_names())
+    except Exception as exc:
+        logger.warning(f"Schema-Inspektion fehlgeschlagen, Gaps unbekannt: {exc}")
+        return {
+            "missing_columns": [],
+            "missing_indexes": [],
+        }
+
+    missing_columns: list[str] = []
+    missing_indexes: list[str] = []
+
+    for table_name, columns in _RUNTIME_SCHEMA_UPDATES.items():
+        if table_name not in known_tables:
+            continue
+        try:
+            existing_columns = {
+                col["name"] for col in inspector.get_columns(table_name)
+            }
+        except Exception as exc:
+            logger.warning(f"Spalten-Inspektion für {table_name} fehlgeschlagen: {exc}")
+            continue
+        for col_name in columns:
+            if col_name not in existing_columns:
+                missing_columns.append(f"{table_name}.{col_name}")
+
+    for table_name, index_defs in _RUNTIME_INDEX_UPDATES.items():
+        if table_name not in known_tables:
+            continue
+        try:
+            existing_index_names = {
+                item["name"] for item in inspector.get_indexes(table_name)
+            }
+        except Exception as exc:
+            logger.warning(f"Index-Inspektion für {table_name} fehlgeschlagen: {exc}")
+            continue
+        for index_name, _column_name in index_defs:
+            if index_name not in existing_index_names:
+                missing_indexes.append(f"{table_name}.{index_name}")
+
+    return {
+        "missing_columns": sorted(set(missing_columns)),
+        "missing_indexes": sorted(set(missing_indexes)),
+    }
+
+
 def _ensure_runtime_schema_updates():
     """Leichte Runtime-Schema-Updates für fehlende Spalten/Indizes."""
     try:
@@ -194,17 +252,78 @@ def _ensure_runtime_schema_updates():
 
 def init_db():
     """Initialize database - create all tables."""
-    logger.info("Creating database tables...")
-    try:
-        Base.metadata.create_all(bind=engine)
-        _ensure_runtime_schema_updates()
-        logger.info("Database tables created successfully.")
-    except Exception as e:
-        if "already exists" in str(e):
-            logger.info("Database tables already exist, skipping creation.")
+    logger.info("Checking database schema bootstrap state...")
+    auto_create = settings.EFFECTIVE_DB_AUTO_CREATE_SCHEMA
+    allow_runtime_updates = settings.EFFECTIVE_DB_ALLOW_RUNTIME_SCHEMA_UPDATES
+    inspector = inspect(engine)
+    existing_tables = set(inspector.get_table_names())
+    expected_tables = set(Base.metadata.tables.keys())
+    missing_tables = sorted(expected_tables - existing_tables)
+    actions: list[str] = []
+    warnings: list[str] = []
+
+    if missing_tables:
+        if auto_create:
+            Base.metadata.create_all(bind=engine)
+            actions.append("create_all")
+            existing_tables = set(inspect(engine).get_table_names())
+            missing_tables = sorted(expected_tables - existing_tables)
+        if missing_tables:
+            summary = {
+                "status": "critical",
+                "message": "Database schema is incomplete and auto-create is disabled.",
+                "auto_create_schema": auto_create,
+                "runtime_schema_updates_enabled": allow_runtime_updates,
+                "missing_tables": missing_tables,
+                "warnings": warnings,
+                "actions": actions,
+            }
+            _set_last_init_summary(summary)
+            raise RuntimeError(
+                "Fehlende DB-Tabellen ohne Auto-Create: " + ", ".join(missing_tables)
+            )
+
+    gaps = _runtime_schema_gaps(existing_tables)
+    if gaps["missing_columns"] or gaps["missing_indexes"]:
+        if allow_runtime_updates:
             _ensure_runtime_schema_updates()
-        else:
-            raise
+            actions.append("runtime_schema_updates")
+            warnings.append(
+                "Runtime schema updates were applied. Replace this with an explicit migration before release."
+            )
+            gaps = _runtime_schema_gaps()
+        if gaps["missing_columns"] or gaps["missing_indexes"]:
+            summary = {
+                "status": "critical",
+                "message": "Database schema has unapplied runtime gaps.",
+                "auto_create_schema": auto_create,
+                "runtime_schema_updates_enabled": allow_runtime_updates,
+                "missing_tables": missing_tables,
+                "runtime_schema_gaps": gaps,
+                "warnings": warnings,
+                "actions": actions,
+            }
+            _set_last_init_summary(summary)
+            details = gaps["missing_columns"] + gaps["missing_indexes"]
+            raise RuntimeError(
+                "Fehlende DB-Migrationen/Schema-Gaps: " + ", ".join(details)
+            )
+
+    summary = {
+        "status": "warning" if warnings else "ok",
+        "message": "Database schema verification completed.",
+        "auto_create_schema": auto_create,
+        "runtime_schema_updates_enabled": allow_runtime_updates,
+        "missing_tables": missing_tables,
+        "runtime_schema_gaps": gaps,
+        "warnings": warnings,
+        "actions": actions,
+        "expected_table_count": len(expected_tables),
+        "existing_table_count": len(existing_tables),
+    }
+    _set_last_init_summary(summary)
+    logger.info("Database schema verification completed successfully.")
+    return summary
 
 
 def get_db() -> Generator[Session, None, None]:

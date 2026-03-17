@@ -34,6 +34,7 @@ from app.services.data_ingest.otc_disease_clusters import (
     disease_to_cluster,
     is_otc_relevant,
 )
+from app.services.ml.nowcast_revision import capture_nowcast_snapshots
 
 logger = logging.getLogger(__name__)
 
@@ -323,6 +324,7 @@ class SurvstatIngestionService:
                 errors.append({"file": path.name, "error": str(exc)})
 
         inserted, updated = self.import_records(all_records)
+        snapshot_rows = capture_nowcast_snapshots(self.db, ["survstat_weekly"]).get("survstat_weekly", 0)
 
         # Count clusters for summary
         cluster_counts = {}
@@ -338,6 +340,7 @@ class SurvstatIngestionService:
             "records_total": len(all_records),
             "imported": inserted,
             "updated": updated,
+            "snapshot_rows": snapshot_rows,
             "latest_week": self._latest_week_label(all_records),
             "cluster_distribution": cluster_counts,
             "errors": errors,

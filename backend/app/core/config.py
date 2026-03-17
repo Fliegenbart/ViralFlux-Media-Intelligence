@@ -91,6 +91,19 @@ class Settings(BaseSettings):
     # Logging
     LOG_LEVEL: str = "INFO"
     LOG_FORMAT: str = "json"
+
+    # Operations / Startup Safety
+    DB_AUTO_CREATE_SCHEMA: bool | None = None
+    DB_ALLOW_RUNTIME_SCHEMA_UPDATES: bool | None = None
+    STARTUP_STRICT_READINESS: bool | None = None
+    READINESS_REQUIRE_BROKER: bool | None = None
+    READINESS_SOURCE_FRESH_DAYS: int = 7
+    READINESS_SOURCE_WARNING_DAYS: int = 14
+    READINESS_FORECAST_LAG_FRESH_DAYS: int = 3
+    READINESS_FORECAST_LAG_WARNING_DAYS: int = 7
+    READINESS_MODEL_MAX_AGE_DAYS: int = 45
+    READINESS_MODEL_WARNING_AGE_DAYS: int = 21
+    READINESS_MIN_SOURCE_COVERAGE: float = 0.6
     
     # Rate Limiting
     RATE_LIMIT_REQUESTS: int = 100
@@ -98,6 +111,30 @@ class Settings(BaseSettings):
     
     # Cache
     CACHE_TTL: int = 3600
+
+    @property
+    def EFFECTIVE_DB_AUTO_CREATE_SCHEMA(self) -> bool:
+        if self.DB_AUTO_CREATE_SCHEMA is not None:
+            return bool(self.DB_AUTO_CREATE_SCHEMA)
+        return self.ENVIRONMENT in {"development", "test"}
+
+    @property
+    def EFFECTIVE_DB_ALLOW_RUNTIME_SCHEMA_UPDATES(self) -> bool:
+        if self.DB_ALLOW_RUNTIME_SCHEMA_UPDATES is not None:
+            return bool(self.DB_ALLOW_RUNTIME_SCHEMA_UPDATES)
+        return self.ENVIRONMENT in {"development", "test"}
+
+    @property
+    def EFFECTIVE_STARTUP_STRICT_READINESS(self) -> bool:
+        if self.STARTUP_STRICT_READINESS is not None:
+            return bool(self.STARTUP_STRICT_READINESS)
+        return self.ENVIRONMENT == "production"
+
+    @property
+    def EFFECTIVE_READINESS_REQUIRE_BROKER(self) -> bool:
+        if self.READINESS_REQUIRE_BROKER is not None:
+            return bool(self.READINESS_REQUIRE_BROKER)
+        return self.ENVIRONMENT == "production"
     
     class Config:
         env_file = ".env"

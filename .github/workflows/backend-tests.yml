@@ -27,6 +27,13 @@ jobs:
       - name: Install backend dependencies
         run: pip install -r backend/requirements.txt
 
+      - name: Compile operational scripts
+        run: >
+          python -m py_compile
+          backend/scripts/backfill_regional_model_artifacts.py
+          backend/scripts/recompute_operational_views.py
+          backend/scripts/smoke_test_release.py
+
       - name: Run targeted backend hygiene checks
         run: >
           python -m flake8

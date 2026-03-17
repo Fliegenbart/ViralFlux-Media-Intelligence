@@ -1,15 +1,25 @@
-from fastapi import APIRouter, Depends, BackgroundTasks
+from fastapi import APIRouter, Depends, BackgroundTasks, HTTPException, Query
 from sqlalchemy.orm import Session
 from datetime import datetime
 import logging
 
 from app.db.session import get_db, get_db_context
 from app.services.ml.forecast_decision_service import ForecastDecisionService
+from app.services.ml.forecast_horizon_utils import ensure_supported_horizon
 from app.services.ml.forecast_service import ForecastService
 from app.services.ml.training_contract import SUPPORTED_VIRUS_TYPES
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+
+def _validated_regional_horizon(
+    horizon_days: int = Query(7, description="Explizit unterstützte regionale Forecast-Horizonte in Tagen."),
+) -> int:
+    try:
+        return ensure_supported_horizon(horizon_days)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 def _run_forecasts():
@@ -289,10 +299,10 @@ async def get_regional_feature_status(
 @router.get("/regional")
 async def get_regional_predictions_alias(
     virus_typ: str = "Influenza A",
-    horizon_days: int = 7,
+    horizon_days: int = Depends(_validated_regional_horizon),
     db: Session = Depends(get_db),
 ):
-    """Alias for pooled regional predictions."""
+    """Alias for pooled regional predictions including operational decision signals."""
     from app.services.ml.regional_forecast import RegionalForecastService
 
     service = RegionalForecastService(db)
@@ -302,13 +312,37 @@ async def get_regional_predictions_alias(
 @router.get("/regional/predict")
 async def get_regional_predictions(
     virus_typ: str = "Influenza A",
-    horizon_days: int = 7,
+    horizon_days: int = Depends(_validated_regional_horizon),
     db: Session = Depends(get_db),
 ):
-    """Get pooled per-state outbreak predictions ranked by calibrated event probability.
+    """Get pooled per-state outbreak predictions with decision output per region.
 
     Core question:
-    "Which regions are most likely to enter a relevant wave in the next 3-7 days?"
+    "Which regions are most likely to enter a relevant wave at the requested 3/5/7-day horizon?"
+
+    The response now includes, per region:
+    - decision_label: Watch / Prepare / Activate
+    - priority_score
+    - reason_trace
+    - uncertainty_summary
+    """
+    from app.services.ml.regional_forecast import RegionalForecastService
+
+    service = RegionalForecastService(db)
+    return service.predict_all_regions(virus_typ=virus_typ, horizon_days=horizon_days)
+
+
+@router.get("/regional/decisions")
+async def get_regional_decisions(
+    virus_typ: str = "Influenza A",
+    horizon_days: int = Depends(_validated_regional_horizon),
+    db: Session = Depends(get_db),
+):
+    """Decision-focused alias for regional forecasts.
+
+    Returns the same regional forecast payload as ``/regional/predict``, but is
+    intended for dashboard consumers that primarily render Watch/Prepare/Activate
+    outputs and their audit trail.
     """
     from app.services.ml.regional_forecast import RegionalForecastService
 
@@ -320,43 +354,98 @@ async def get_regional_predictions(
 async def get_media_activation(
     virus_typ: str = "Influenza A",
     weekly_budget_eur: float = 50000,
-    horizon_days: int = 7,
+    horizon_days: int = Depends(_validated_regional_horizon),
     db: Session = Depends(get_db),
 ):
     """Generate gated regional media recommendations for GELO products.
 
     Returns per-Bundesland recommendations with:
     - Action: activate / prepare / watch
-    - Budget allocation only for regions above the validated action threshold
+    - Heuristic regional budget allocation and priority ranks
     - Channel mix (Banner, CLP, Meta, LinkedIn)
     - Product recommendation
     - Activation timeline plus quality-gate context
+    - Reason trace, confidence and spend readiness
     """
     from app.services.ml.regional_forecast import RegionalForecastService
 
     service = RegionalForecastService(db)
-    return service.generate_media_activation(
+    return service.generate_media_allocation(
         virus_typ=virus_typ,
         weekly_budget_eur=weekly_budget_eur,
         horizon_days=horizon_days,
     )
 
 
+@router.get("/regional/media-allocation")
+async def get_media_allocation(
+    virus_typ: str = "Influenza A",
+    weekly_budget_eur: float = 50000,
+    horizon_days: int = Depends(_validated_regional_horizon),
+    db: Session = Depends(get_db),
+):
+    """Decision-driven media allocation alias for dashboard consumers.
+
+    Returns the same payload as ``/regional/media-activation``, but is named
+    explicitly for budget share and prioritization use cases.
+    """
+    from app.services.ml.regional_forecast import RegionalForecastService
+
+    service = RegionalForecastService(db)
+    return service.generate_media_allocation(
+        virus_typ=virus_typ,
+        weekly_budget_eur=weekly_budget_eur,
+        horizon_days=horizon_days,
+    )
+
+
+@router.get("/regional/campaign-recommendations")
+async def get_campaign_recommendations(
+    virus_typ: str = "Influenza A",
+    weekly_budget_eur: float = 50000,
+    horizon_days: int = Depends(_validated_regional_horizon),
+    top_n: int = 12,
+    db: Session = Depends(get_db),
+):
+    """Turn allocation into discussion-ready campaign recommendations for PEIX / GELO.
+
+    Returns per region:
+    - recommended product cluster
+    - recommended keyword cluster
+    - activation level and budget suggestion
+    - recommendation rationale and evidence class
+    - guardrail status for immediate discussion
+    """
+    from app.services.ml.regional_forecast import RegionalForecastService
+
+    service = RegionalForecastService(db)
+    return service.generate_campaign_recommendations(
+        virus_typ=virus_typ,
+        weekly_budget_eur=weekly_budget_eur,
+        horizon_days=horizon_days,
+        top_n=top_n,
+    )
+
+
 @router.get("/regional/benchmark")
 async def get_regional_benchmark(
     reference_virus: str = "Influenza A",
+    horizon_days: int = Depends(_validated_regional_horizon),
     db: Session = Depends(get_db),
 ):
     """Compare supported regional virus models against a shared benchmark virus."""
     from app.services.ml.regional_forecast import RegionalForecastService
 
     service = RegionalForecastService(db)
-    return service.benchmark_supported_viruses(reference_virus=reference_virus)
+    return service.benchmark_supported_viruses(
+        reference_virus=reference_virus,
+        horizon_days=horizon_days,
+    )
 
 
 @router.get("/regional/portfolio")
 async def get_regional_portfolio(
-    horizon_days: int = 7,
+    horizon_days: int = Depends(_validated_regional_horizon),
     top_n: int = 12,
     reference_virus: str = "Influenza A",
     db: Session = Depends(get_db),
@@ -376,6 +465,7 @@ async def get_regional_portfolio(
 async def get_regional_business_validation(
     virus_typ: str = "Influenza A",
     brand: str = "gelo",
+    horizon_days: int = Depends(_validated_regional_horizon),
     db: Session = Depends(get_db),
 ):
     """Expose the commercial GELO truth status separately from forecast quality.
@@ -392,13 +482,14 @@ async def get_regional_business_validation(
     return service.get_validation_summary(
         virus_typ=virus_typ,
         brand=brand,
+        horizon_days=horizon_days,
     )
 
 
 @router.get("/regional/backtest")
 async def run_regional_backtest(
     virus_typ: str = "Influenza A",
-    horizon_days: int = 7,
+    horizon_days: int = Depends(_validated_regional_horizon),
     db: Session = Depends(get_db),
 ):
     """Run leakage-safe walk-forward backtest for the pooled regional panel model.
@@ -424,7 +515,7 @@ async def run_regional_backtest(
 async def run_region_backtest(
     bundesland: str,
     virus_typ: str = "Influenza A",
-    horizon_days: int = 7,
+    horizon_days: int = Depends(_validated_regional_horizon),
     db: Session = Depends(get_db),
 ):
     """Run backtest for a single Bundesland with detailed timeline."""

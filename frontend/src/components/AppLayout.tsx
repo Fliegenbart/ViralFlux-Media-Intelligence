@@ -9,6 +9,7 @@ interface Props {
 }
 
 const NAV_ITEMS = [
+  { label: 'Dashboard', path: '/dashboard' },
   { label: 'Entscheidung', path: '/entscheidung' },
   { label: 'Regionen', path: '/regionen' },
   { label: 'Kampagnen', path: '/kampagnen' },

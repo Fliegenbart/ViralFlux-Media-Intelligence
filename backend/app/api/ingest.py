@@ -23,6 +23,7 @@ from app.services.data_ingest.amelag_service import AmelagIngestionService
 from app.services.data_ingest.er_admissions_service import ERAdmissionsIngestionService
 from app.services.data_ingest.survstat_service import SurvstatIngestionService
 from app.services.data_ingest.trends_service import GoogleTrendsService
+from app.services.ml.nowcast_revision import capture_nowcast_snapshots
 from app.services.data_ingest.weather_service import WeatherService
 from app.services.data_ingest.holidays_service import SchoolHolidaysService
 from app.services.data_ingest.pollen_service import PollenService
@@ -192,6 +193,7 @@ async def run_survstat_upload_import(
                 errors.append({"file": filename, "error": str(exc)})
 
     inserted, updated = service.import_records(all_records)
+    snapshot_rows = capture_nowcast_snapshots(db, ["survstat_weekly"]).get("survstat_weekly", 0)
     latest_week = service._latest_week_label(all_records)
 
     return {
@@ -201,6 +203,7 @@ async def run_survstat_upload_import(
         "records_total": len(all_records),
         "imported": inserted,
         "updated": updated,
+        "snapshot_rows": snapshot_rows,
         "latest_week": latest_week,
         "errors": errors,
         "timestamp": datetime.utcnow().isoformat(),

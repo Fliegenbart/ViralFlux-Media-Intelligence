@@ -40,6 +40,7 @@ from app.models.database import (
     SchoolHolidays,
     SurvstatWeeklyData,
     WastewaterAggregated,
+    WastewaterData,
 )
 from app.services.ml.forecast_contracts import (
     DEFAULT_DECISION_EVENT_THRESHOLD_PCT,
@@ -51,6 +52,20 @@ from app.services.ml.forecast_contracts import (
     confidence_label,
     event_probability_from_forecast,
 )
+from app.services.ml.forecast_horizon_utils import (
+    DEFAULT_FORECAST_REGION,
+    MIN_DIRECT_TRAIN_POINTS,
+    SUPPORTED_FORECAST_HORIZONS,
+    build_direct_target_frame,
+    build_walk_forward_splits,
+    compute_calibration_error,
+    compute_regression_metrics,
+    ensure_supported_horizon,
+    model_artifact_dir,
+    normalize_forecast_region,
+)
+from app.services.ml.regional_panel_utils import normalize_state_code
+from app.services.ml.regional_panel_utils import BUNDESLAND_NAMES
 from app.services.ml.training_contract import INTERNAL_HISTORY_TEST_MAP
 
 logger = logging.getLogger(__name__)
@@ -66,6 +81,30 @@ META_FEATURES: list[str] = [
     "trend_momentum_7d",
     "schulferien",
     "trends_score",
+    "xdisease_lag7",
+    "xdisease_lag14",
+    "survstat_incidence",
+    "survstat_lag7",
+    "survstat_lag14",
+    "lab_positivity_rate",
+    "lab_signal_available",
+    "lab_baseline_mean",
+    "lab_baseline_zscore",
+    "lab_positivity_lag7",
+]
+
+RIDGE_DIRECT_FEATURES: list[str] = [
+    "lag1",
+    "lag2",
+    "lag3",
+    "ma3",
+    "ma5",
+    "roc",
+    "trend_momentum_7d",
+    "amelag_lag4",
+    "amelag_lag7",
+    "trends_score",
+    "schulferien",
     "xdisease_lag7",
     "xdisease_lag14",
     "survstat_incidence",
@@ -137,7 +176,7 @@ DEFAULT_XGB_QUANTILE_CONFIG: dict[str, dict[str, Any]] = {
 
 _ML_MODELS_DIR = Path(__file__).resolve().parent.parent.parent / "ml_models"
 
-# Thread-safe cache: {virus_slug: (model_med, model_lo, model_hi, metadata)}
+# Thread-safe cache: {virus|region|horizon: (model_med, model_lo, model_hi, metadata)}
 _model_cache: dict[str, tuple[Any, Any, Any, dict[str, Any]]] = {}
 _cache_lock = threading.Lock()
 
@@ -149,6 +188,9 @@ def _virus_slug(virus_typ: str) -> str:
 
 def _load_cached_models(
     virus_typ: str,
+    *,
+    region: str = DEFAULT_FORECAST_REGION,
+    horizon_days: int = DEFAULT_DECISION_HORIZON_DAYS,
 ) -> tuple[Any, Any, Any, dict[str, Any]] | None:
     """Load XGBoost models from disk with in-memory caching.
 
@@ -158,13 +200,28 @@ def _load_cached_models(
     from xgboost import XGBRegressor
 
     slug = _virus_slug(virus_typ)
+    region_code = normalize_forecast_region(region)
+    horizon = ensure_supported_horizon(horizon_days)
+    cache_key = f"{slug}|{region_code}|{horizon}"
 
     with _cache_lock:
-        if slug in _model_cache:
-            return _model_cache[slug]
+        if cache_key in _model_cache:
+            return _model_cache[cache_key]
 
-    model_dir = _ML_MODELS_DIR / slug
+    model_dir = model_artifact_dir(
+        _ML_MODELS_DIR,
+        virus_typ=virus_typ,
+        region=region_code,
+        horizon_days=horizon,
+    )
     metadata_path = model_dir / "metadata.json"
+
+    if not metadata_path.exists() and region_code == DEFAULT_FORECAST_REGION and horizon == DEFAULT_DECISION_HORIZON_DAYS:
+        legacy_dir = _ML_MODELS_DIR / slug
+        legacy_metadata = legacy_dir / "metadata.json"
+        if legacy_metadata.exists():
+            model_dir = legacy_dir
+            metadata_path = legacy_metadata
 
     if not metadata_path.exists():
         return None
@@ -185,10 +242,10 @@ def _load_cached_models(
         result = (model_med, model_lo, model_hi, metadata)
 
         with _cache_lock:
-            _model_cache[slug] = result
+            _model_cache[cache_key] = result
 
         logger.info(
-            f"Loaded XGBoost models from disk for {virus_typ} "
+            f"Loaded XGBoost models from disk for {virus_typ}/{region_code}/h{horizon} "
             f"(version={metadata.get('version')}, "
             f"trained_at={metadata.get('trained_at')})"
         )
@@ -206,7 +263,10 @@ def invalidate_model_cache(virus_typ: str | None = None) -> None:
     """
     with _cache_lock:
         if virus_typ:
-            _model_cache.pop(_virus_slug(virus_typ), None)
+            prefix = f"{_virus_slug(virus_typ)}|"
+            for key in list(_model_cache.keys()):
+                if key.startswith(prefix):
+                    _model_cache.pop(key, None)
         else:
             _model_cache.clear()
 
@@ -236,50 +296,32 @@ class ForecastService:
         virus_typ: str = "Influenza A",
         lookback_days: int = 900,
         include_internal_history: bool = True,
+        region: str = DEFAULT_FORECAST_REGION,
     ) -> pd.DataFrame:
         """Build feature DataFrame from wastewater, trends, holidays, AMELAG."""
-        logger.info(f"Preparing training data for {virus_typ}")
+        region_code = normalize_forecast_region(region)
+        logger.info(f"Preparing training data for {virus_typ}/{region_code}")
         start_date = datetime.now() - timedelta(days=lookback_days)
 
         # 1. Wastewater viral load (target) + AMELAG vorhersage
-        wastewater = (
-            self.db.query(WastewaterAggregated)
-            .filter(
-                WastewaterAggregated.virus_typ == virus_typ,
-                WastewaterAggregated.datum >= start_date,
-            )
-            .order_by(WastewaterAggregated.datum.asc())
-            .all()
+        df = self._load_wastewater_training_frame(
+            virus_typ=virus_typ,
+            start_date=start_date,
+            region=region_code,
         )
-
-        if not wastewater:
+        if df.empty:
             logger.warning(f"No wastewater data found for {virus_typ}")
             return pd.DataFrame()
-
-        df = pd.DataFrame(
-            [
-                {
-                    "ds": w.datum,
-                    "y": w.viruslast,
-                    "viruslast_normalized": w.viruslast_normalisiert,
-                    "amelag_pred": w.vorhersage,
-                }
-                for w in wastewater
-            ]
-        )
 
         df = df.sort_values("ds").reset_index(drop=True)
         df["ds"] = pd.to_datetime(df["ds"])
 
         # 2. Google Trends
         trends_keywords = ["Grippe", "Erkältung", "Fieber"]
-        trends = (
-            self.db.query(GoogleTrendsData)
-            .filter(
-                GoogleTrendsData.keyword.in_(trends_keywords),
-                GoogleTrendsData.datum >= start_date,
-            )
-            .all()
+        trends = self._load_google_trends_rows(
+            keywords=trends_keywords,
+            start_date=start_date,
+            region=region_code,
         )
 
         if trends:
@@ -293,13 +335,16 @@ class ForecastService:
             df["trends_score"] = 0.0
 
         # 3. School holidays
-        df["schulferien"] = df["ds"].apply(lambda d: 1.0 if self._is_holiday(d) else 0.0)
+        df["schulferien"] = df["ds"].apply(
+            lambda d: 1.0 if self._is_holiday(d, region=region_code) else 0.0
+        )
 
         if include_internal_history:
             df = self._augment_with_internal_history(
                 df=df,
                 virus_typ=virus_typ,
                 start_date=start_date,
+                region=region_code,
             )
         else:
             df["lab_positivity_rate"] = 0.0
@@ -366,7 +411,7 @@ class ForecastService:
                 )
                 .filter(
                     func.lower(SurvstatWeeklyData.disease).in_(survstat_diseases),
-                    SurvstatWeeklyData.bundesland == "Gesamt",
+                    SurvstatWeeklyData.bundesland.in_(self._survstat_region_values(region_code)),
                     SurvstatWeeklyData.week > 0,
                     SurvstatWeeklyData.week_start >= start_date,
                 )
@@ -393,6 +438,7 @@ class ForecastService:
         df["survstat_lag14"] = df["survstat_incidence"].shift(14)
 
         df = self._finalize_training_frame(df)
+        df["region"] = region_code
 
         logger.info(f"Training data prepared: {len(df)} rows, {len(df.columns)} features")
         return df
@@ -434,6 +480,119 @@ class ForecastService:
         return cleaned
 
     @staticmethod
+    def _region_variants(region: str) -> list[str]:
+        region_code = normalize_forecast_region(region)
+        if region_code == DEFAULT_FORECAST_REGION:
+            return [DEFAULT_FORECAST_REGION]
+
+        variants = [region_code]
+        state_name = BUNDESLAND_NAMES.get(region_code)
+        if state_name:
+            variants.append(state_name)
+        return variants
+
+    @classmethod
+    def _survstat_region_values(cls, region: str) -> list[str]:
+        region_code = normalize_forecast_region(region)
+        if region_code == DEFAULT_FORECAST_REGION:
+            return ["Gesamt", DEFAULT_FORECAST_REGION]
+        values = cls._region_variants(region_code)
+        if "Gesamt" not in values:
+            values.append("Gesamt")
+        return values
+
+    def _load_wastewater_training_frame(
+        self,
+        *,
+        virus_typ: str,
+        start_date: datetime,
+        region: str,
+    ) -> pd.DataFrame:
+        region_code = normalize_forecast_region(region)
+        if region_code == DEFAULT_FORECAST_REGION:
+            wastewater = (
+                self.db.query(WastewaterAggregated)
+                .filter(
+                    WastewaterAggregated.virus_typ == virus_typ,
+                    WastewaterAggregated.datum >= start_date,
+                )
+                .order_by(WastewaterAggregated.datum.asc())
+                .all()
+            )
+            return pd.DataFrame(
+                [
+                    {
+                        "ds": w.datum,
+                        "y": w.viruslast,
+                        "viruslast_normalized": w.viruslast_normalisiert,
+                        "amelag_pred": w.vorhersage,
+                    }
+                    for w in wastewater
+                ]
+            )
+
+        wastewater = (
+            self.db.query(
+                WastewaterData.datum.label("ds"),
+                func.avg(WastewaterData.viruslast).label("y"),
+                func.avg(WastewaterData.viruslast_normalisiert).label("viruslast_normalized"),
+                func.avg(WastewaterData.vorhersage).label("amelag_pred"),
+            )
+            .filter(
+                WastewaterData.virus_typ == virus_typ,
+                WastewaterData.datum >= start_date,
+                WastewaterData.bundesland.in_(self._region_variants(region_code)),
+            )
+            .group_by(WastewaterData.datum)
+            .order_by(WastewaterData.datum.asc())
+            .all()
+        )
+        return pd.DataFrame(
+            [
+                {
+                    "ds": row.ds,
+                    "y": float(row.y or 0.0),
+                    "viruslast_normalized": float(row.viruslast_normalized or 0.0),
+                    "amelag_pred": float(row.amelag_pred or 0.0),
+                }
+                for row in wastewater
+            ]
+        )
+
+    def _load_google_trends_rows(
+        self,
+        *,
+        keywords: list[str],
+        start_date: datetime,
+        region: str,
+    ) -> list[GoogleTrendsData]:
+        region_code = normalize_forecast_region(region)
+        region_variants = self._region_variants(region_code)
+
+        if region_code != DEFAULT_FORECAST_REGION:
+            region_rows = (
+                self.db.query(GoogleTrendsData)
+                .filter(
+                    GoogleTrendsData.keyword.in_(keywords),
+                    GoogleTrendsData.datum >= start_date,
+                    GoogleTrendsData.region.in_(region_variants),
+                )
+                .all()
+            )
+            if region_rows:
+                return region_rows
+
+        return (
+            self.db.query(GoogleTrendsData)
+            .filter(
+                GoogleTrendsData.keyword.in_(keywords),
+                GoogleTrendsData.datum >= start_date,
+                GoogleTrendsData.region == DEFAULT_FORECAST_REGION,
+            )
+            .all()
+        )
+
+    @staticmethod
     def _build_meta_feature_row(
         last_row: pd.Series,
         *,
@@ -469,10 +628,12 @@ class ForecastService:
         df: pd.DataFrame,
         virus_typ: str,
         start_date: datetime,
+        region: str,
     ) -> pd.DataFrame:
         history_df = self._load_internal_history_frame(
             virus_typ=virus_typ,
             start_date=start_date,
+            region=region,
         )
         features = self._build_internal_history_feature_frame(df["ds"], history_df)
         combined = pd.concat([df.reset_index(drop=True), features], axis=1)
@@ -484,12 +645,13 @@ class ForecastService:
         *,
         virus_typ: str,
         start_date: datetime,
+        region: str,
     ) -> pd.DataFrame:
         aliases = INTERNAL_HISTORY_TEST_MAP.get(virus_typ, [])
         if not aliases:
             return pd.DataFrame()
 
-        rows = (
+        query = (
             self.db.query(GanzimmunData)
             .filter(
                 GanzimmunData.datum >= start_date - timedelta(days=365 * 5),
@@ -497,9 +659,13 @@ class ForecastService:
                 GanzimmunData.anzahl_tests > 0,
                 func.lower(GanzimmunData.test_typ).in_(aliases),
             )
-            .order_by(GanzimmunData.datum.asc())
-            .all()
         )
+        region_code = normalize_forecast_region(region)
+        if region_code != DEFAULT_FORECAST_REGION:
+            query = query.filter(
+                GanzimmunData.region.in_(self._region_variants(region_code)),
+            )
+        rows = query.order_by(GanzimmunData.datum.asc()).all()
         if not rows:
             return pd.DataFrame()
 
@@ -586,17 +752,18 @@ class ForecastService:
 
         return pd.DataFrame(rows, columns=columns)
 
-    def _is_holiday(self, datum: datetime) -> bool:
+    def _is_holiday(self, datum: datetime, *, region: str = DEFAULT_FORECAST_REGION) -> bool:
         """Check if date falls in school holidays."""
-        return (
-            self.db.query(SchoolHolidays)
-            .filter(
-                SchoolHolidays.start_datum <= datum,
-                SchoolHolidays.end_datum >= datum,
-            )
-            .first()
-            is not None
+        query = self.db.query(SchoolHolidays).filter(
+            SchoolHolidays.start_datum <= datum,
+            SchoolHolidays.end_datum >= datum,
         )
+        region_code = normalize_forecast_region(region)
+        if region_code != DEFAULT_FORECAST_REGION:
+            query = query.filter(
+                SchoolHolidays.bundesland.in_(self._region_variants(region_code)),
+            )
+        return query.first() is not None
 
     # ═══════════════════════════════════════════════════════════════════
     #  BASE ESTIMATORS
@@ -747,6 +914,199 @@ class ForecastService:
 
         return None
 
+    @staticmethod
+    def _direct_ridge_feature_columns(frame: pd.DataFrame) -> list[str]:
+        return [column for column in RIDGE_DIRECT_FEATURES if column in frame.columns]
+
+    def build_direct_training_panel(
+        self,
+        *,
+        virus_typ: str,
+        horizon_days: int,
+        region: str = DEFAULT_FORECAST_REGION,
+        include_internal_history: bool = True,
+        lookback_days: int = 900,
+        n_splits: int = 5,
+    ) -> pd.DataFrame:
+        horizon = ensure_supported_horizon(horizon_days)
+        raw = self.prepare_training_data(
+            virus_typ=virus_typ,
+            lookback_days=lookback_days,
+            include_internal_history=include_internal_history,
+            region=region,
+        )
+        return self._build_direct_training_panel_from_frame(
+            raw,
+            horizon_days=horizon,
+            n_splits=n_splits,
+        )
+
+    def _build_direct_training_panel_from_frame(
+        self,
+        raw: pd.DataFrame,
+        *,
+        horizon_days: int,
+        n_splits: int = 5,
+    ) -> pd.DataFrame:
+        horizon = ensure_supported_horizon(horizon_days)
+        direct = build_direct_target_frame(raw, horizon_days=horizon)
+        if direct.empty:
+            return direct
+
+        direct["prophet_pred"] = (
+            direct["current_y"]
+            .rolling(window=7, min_periods=1)
+            .mean()
+            .shift(1)
+            .ffill()
+            .bfill()
+            .fillna(float(direct["current_y"].iloc[0]))
+        )
+
+        oof = pd.DataFrame(index=direct.index, columns=["hw_pred", "ridge_pred"], dtype=float)
+        feature_cols = self._direct_ridge_feature_columns(direct)
+        n_time_splits = min(max(2, int(n_splits)), max(len(direct) // 8, 2))
+
+        try:
+            tscv = TimeSeriesSplit(n_splits=n_time_splits)
+            split_iter = list(tscv.split(direct))
+        except ValueError:
+            split_iter = []
+
+        for train_idx, val_idx in split_iter:
+            if len(train_idx) < max(MIN_DIRECT_TRAIN_POINTS, 12) or len(val_idx) < 1:
+                continue
+
+            train_panel = direct.iloc[train_idx].copy()
+            val_panel = direct.iloc[val_idx].copy()
+
+            if feature_cols:
+                ridge = Ridge(alpha=1.0)
+                ridge.fit(
+                    train_panel[feature_cols].to_numpy(dtype=float),
+                    train_panel["y_target"].to_numpy(dtype=float),
+                )
+                ridge_preds = np.maximum(
+                    ridge.predict(val_panel[feature_cols].to_numpy(dtype=float)),
+                    0.0,
+                )
+                oof.loc[val_idx, "ridge_pred"] = ridge_preds
+
+            for idx in val_idx:
+                issue_date = pd.Timestamp(direct.iloc[idx]["issue_date"])
+                history = raw.loc[raw["ds"] <= issue_date, "y"].to_numpy(dtype=float)
+                if len(history) == 0:
+                    oof.loc[idx, "hw_pred"] = 0.0
+                    continue
+                hw_forecast = self._fit_holt_winters(history, horizon)
+                hw_step = min(horizon - 1, max(len(hw_forecast) - 1, 0))
+                oof.loc[idx, "hw_pred"] = max(0.0, float(hw_forecast[hw_step]))
+
+        direct["hw_pred"] = (
+            oof["hw_pred"]
+            .ffill()
+            .bfill()
+            .fillna(direct["current_y"])
+            .astype(float)
+        )
+        direct["ridge_pred"] = (
+            oof["ridge_pred"]
+            .ffill()
+            .bfill()
+            .fillna(direct["current_y"])
+            .astype(float)
+        )
+        direct["prophet_pred"] = direct["prophet_pred"].astype(float)
+        direct = direct.replace([np.inf, -np.inf], np.nan).fillna(0.0)
+        return direct.reset_index(drop=True)
+
+    def _build_live_direct_feature_row(
+        self,
+        raw: pd.DataFrame,
+        *,
+        virus_typ: str,
+        horizon_days: int,
+        region: str = DEFAULT_FORECAST_REGION,
+    ) -> dict[str, float]:
+        horizon = ensure_supported_horizon(horizon_days)
+        if raw.empty:
+            return {}
+
+        last_row = raw.iloc[-1].copy()
+        history = raw["y"].to_numpy(dtype=float)
+        hw_forecast = self._fit_holt_winters(history, horizon)
+        hw_pred = max(0.0, float(hw_forecast[min(horizon - 1, max(len(hw_forecast) - 1, 0))]))
+
+        direct_train = build_direct_target_frame(raw, horizon_days=horizon)
+        feature_cols = self._direct_ridge_feature_columns(direct_train) if not direct_train.empty else []
+        if feature_cols and len(direct_train) >= max(MIN_DIRECT_TRAIN_POINTS, 12):
+            ridge = Ridge(alpha=1.0)
+            ridge.fit(
+                direct_train[feature_cols].to_numpy(dtype=float),
+                direct_train["y_target"].to_numpy(dtype=float),
+            )
+            ridge_row = np.array([[float(last_row.get(name, 0.0)) for name in feature_cols]], dtype=float)
+            ridge_pred = max(0.0, float(ridge.predict(ridge_row)[0]))
+        else:
+            ridge_pred = max(0.0, float(last_row.get("y", 0.0)))
+
+        prophet_forecast = self._fit_prophet(virus_typ, horizon) if normalize_forecast_region(region) == DEFAULT_FORECAST_REGION else None
+        if prophet_forecast is not None and len(prophet_forecast) >= horizon:
+            prophet_pred = max(0.0, float(prophet_forecast[horizon - 1]))
+        else:
+            prophet_pred = float(
+                raw["y"]
+                .tail(min(7, len(raw)))
+                .mean()
+            )
+
+        feature_row = self._build_meta_feature_row(
+            last_row,
+            hw_pred=hw_pred,
+            ridge_pred=ridge_pred,
+            prophet_pred=prophet_pred,
+        )
+        feature_row["horizon_days"] = float(horizon)
+        return feature_row
+
+    def _fit_xgboost_meta_from_panel(
+        self,
+        panel: pd.DataFrame,
+        *,
+        target_column: str = "y_target",
+        model_config: dict[str, dict[str, Any]] | None = None,
+    ) -> tuple[Any, Any, Any, list[str], dict[str, float]]:
+        from xgboost import XGBRegressor
+
+        available_meta = [f for f in META_FEATURES if f in panel.columns]
+        if "horizon_days" in panel.columns and "horizon_days" not in available_meta:
+            available_meta.append("horizon_days")
+        if not available_meta:
+            raise ValueError("No direct meta features available for XGBoost fitting.")
+
+        X = panel[available_meta].to_numpy(dtype=float)
+        y = panel[target_column].to_numpy(dtype=float)
+        X = np.nan_to_num(X, nan=0.0, posinf=0.0, neginf=0.0)
+
+        cfg = self._resolve_xgb_quantile_config(model_config)
+
+        model_median = XGBRegressor(**cfg["median"])
+        model_median.fit(X, y)
+
+        model_lower = XGBRegressor(**cfg["lower"])
+        model_lower.fit(X, y)
+
+        model_upper = XGBRegressor(**cfg["upper"])
+        model_upper.fit(X, y)
+
+        importance_raw = model_median.feature_importances_
+        total = float(np.sum(importance_raw)) + 1e-9
+        feature_importance = {
+            fname: round(float(imp) / total, 3)
+            for fname, imp in zip(available_meta, importance_raw)
+        }
+        return model_median, model_lower, model_upper, available_meta, feature_importance
+
     # ═══════════════════════════════════════════════════════════════════
     #  XGBOOST META-LEARNER
     # ═══════════════════════════════════════════════════════════════════
@@ -864,83 +1224,83 @@ class ForecastService:
         include_internal_history: bool = True,
         model_config: dict[str, dict[str, Any]] | None = None,
         n_windows: int = 4,
+        region: str = DEFAULT_FORECAST_REGION,
+        horizon_days: int = DEFAULT_DECISION_HORIZON_DAYS,
     ) -> dict[str, Any]:
-        """Run a deterministic rolling-origin backtest for model promotion."""
+        """Run a deterministic walk-forward backtest for direct horizon promotion."""
+        region_code = normalize_forecast_region(region)
+        horizon = ensure_supported_horizon(horizon_days)
         df = self.prepare_training_data(
             virus_typ=virus_typ,
             include_internal_history=include_internal_history,
+            region=region_code,
         )
 
-        if df.empty or len(df) < 28:
+        panel = self._build_direct_training_panel_from_frame(
+            df,
+            horizon_days=horizon,
+            n_splits=max(int(n_windows), 3),
+        )
+
+        if panel.empty or len(panel) < max(MIN_DIRECT_TRAIN_POINTS, 24):
             return {
-                "error": f"Insufficient training data ({len(df) if not df.empty else 0} rows)",
+                "error": f"Insufficient training data ({len(panel) if not panel.empty else 0} rows)",
                 "virus_typ": virus_typ,
+                "region": region_code,
+                "horizon_days": horizon,
                 "include_internal_history": include_internal_history,
             }
 
-        date_diffs = df["ds"].diff().dt.days.dropna()
-        data_freq_days = int(date_diffs.median()) if len(date_diffs) > 0 else 7
-        data_freq_days = max(1, min(data_freq_days, 14))
-        horizon_points = max(2, self.forecast_days // data_freq_days)
-        max_windows = max(1, min(n_windows, (len(df) - 14) // horizon_points))
-        start_idx = max(20, len(df) - (max_windows * horizon_points))
-
         predictions: list[float] = []
         actuals: list[float] = []
+        probabilities: list[float] = []
+        labels: list[float] = []
         windows: list[dict[str, Any]] = []
-
-        for cutoff in range(start_idx, len(df) - horizon_points + 1, horizon_points):
-            train_df = df.iloc[:cutoff].copy()
-            val_df = df.iloc[cutoff : cutoff + horizon_points].copy()
-            if len(train_df) < 20 or val_df.empty:
+        splits = build_walk_forward_splits(
+            len(panel),
+            min_train_points=max(MIN_DIRECT_TRAIN_POINTS, 24),
+            n_splits=max(int(n_windows), 3),
+        )
+        for fold, split in enumerate(splits, start=1):
+            train_panel = panel.iloc[: split.train_end_idx].copy()
+            test_panel = panel.iloc[[split.test_idx]].copy()
+            if len(train_panel) < max(MIN_DIRECT_TRAIN_POINTS, 24) or test_panel.empty:
                 continue
 
-            splits = min(5, max(2, len(train_df) // 12))
-            oof = self._generate_oof_predictions(train_df, n_splits=splits)
-            model_med, _, _, _ = self._fit_xgboost_meta(
-                train_df,
-                oof,
+            model_med, model_lo, model_hi, feature_names, _ = self._fit_xgboost_meta_from_panel(
+                train_panel,
+                target_column="y_target",
                 model_config=model_config,
             )
+            X_test = test_panel[feature_names].to_numpy(dtype=float)
+            X_test = np.nan_to_num(X_test, nan=0.0, posinf=0.0, neginf=0.0)
 
-            y_train = train_df["y"].values
-            hw_forecast = self._fit_holt_winters(y_train, len(val_df))
-            ridge_forecast, _ = self._fit_ridge(train_df, y_train, len(val_df))
-            prophet_proxy = np.full(
-                len(val_df),
-                float(train_df["y"].tail(min(7, len(train_df))).mean()),
+            pred = max(0.0, float(model_med.predict(X_test)[0]))
+            pred_lo = max(0.0, float(model_lo.predict(X_test)[0]))
+            pred_hi = max(0.0, float(model_hi.predict(X_test)[0]))
+            actual = float(test_panel.iloc[0]["y_target"])
+            current = max(float(test_panel.iloc[0]["current_y"]), 1.0)
+            baseline = float(np.median(train_panel["current_y"].tail(min(len(train_panel), 84)))) if len(train_panel) else current
+            event_probability = event_probability_from_forecast(
+                prediction=pred,
+                baseline=baseline if baseline > 0 else current,
+                lower_bound=pred_lo,
+                upper_bound=pred_hi,
+                threshold_pct=DEFAULT_DECISION_EVENT_THRESHOLD_PCT,
             )
 
-            available_meta = [
-                f for f in META_FEATURES
-                if f in train_df.columns or f in ("hw_pred", "ridge_pred", "prophet_pred")
-            ]
-            last_row = train_df.iloc[-1].copy()
-            window_preds: list[float] = []
-
-            for idx in range(len(val_df)):
-                feat = self._build_meta_feature_row(
-                    last_row,
-                    hw_pred=float(hw_forecast[idx]),
-                    ridge_pred=float(ridge_forecast[idx]),
-                    prophet_pred=float(prophet_proxy[idx]),
-                )
-                X_row = np.array([[feat.get(name, 0.0) for name in available_meta]])
-                X_row = np.nan_to_num(X_row, nan=0.0, posinf=0.0, neginf=0.0)
-                pred = max(0.0, float(model_med.predict(X_row)[0]))
-                window_preds.append(pred)
-                predictions.append(pred)
-                actuals.append(float(val_df.iloc[idx]["y"]))
-
+            predictions.append(pred)
+            actuals.append(actual)
+            probabilities.append(event_probability)
+            labels.append(float(test_panel.iloc[0]["event_target"]))
             windows.append(
                 {
-                    "train_end": train_df["ds"].iloc[-1].isoformat(),
-                    "validation_start": val_df["ds"].iloc[0].isoformat(),
-                    "validation_points": len(val_df),
-                    "mae": round(
-                        float(np.mean(np.abs(np.asarray(window_preds) - val_df["y"].values))),
-                        4,
-                    ),
+                    "fold": fold,
+                    "issue_date": pd.Timestamp(test_panel.iloc[0]["issue_date"]).isoformat(),
+                    "target_date": pd.Timestamp(test_panel.iloc[0]["target_date"]).isoformat(),
+                    "predicted": round(pred, 4),
+                    "actual": round(actual, 4),
+                    "event_probability": round(event_probability, 4),
                 }
             )
 
@@ -948,18 +1308,30 @@ class ForecastService:
             return {
                 "error": "No validation windows available",
                 "virus_typ": virus_typ,
+                "region": region_code,
+                "horizon_days": horizon,
                 "include_internal_history": include_internal_history,
             }
 
-        metrics = self._compute_regression_metrics(predictions, actuals)
+        metrics = compute_regression_metrics(predictions, actuals)
+        metrics.update(compute_calibration_error(probabilities, labels))
         metrics["windows"] = windows
         metrics["window_count"] = len(windows)
-        metrics["horizon_days"] = self.forecast_days
-        metrics["data_frequency_days"] = data_freq_days
+        metrics["horizon_days"] = horizon
+        metrics["region"] = region_code
         metrics["training_window"] = {
             "start": df["ds"].min().isoformat(),
             "end": df["ds"].max().isoformat(),
             "samples": int(len(df)),
+            "panel_rows": int(len(panel)),
+        }
+        metrics["walk_forward"] = {
+            "enabled": True,
+            "folds": len(windows),
+            "min_train_points": max(MIN_DIRECT_TRAIN_POINTS, 24),
+            "horizon_days": horizon,
+            "region": region_code,
+            "strategy": "direct",
         }
         metrics["include_internal_history"] = include_internal_history
         return metrics
@@ -1001,16 +1373,22 @@ class ForecastService:
         self,
         *,
         virus_typ: str,
+        region: str,
+        horizon_days: int,
         forecast_records: list[dict[str, Any]],
         model_version: str,
         y_history: np.ndarray,
+        issue_date: datetime | None = None,
         quality_meta: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
+        region_code = normalize_forecast_region(region)
+        horizon = ensure_supported_horizon(horizon_days)
+        issue_ts = issue_date or datetime.utcnow()
         burden = BurdenForecast(
             target=virus_typ,
-            region="DE",
-            issue_date=datetime.utcnow().isoformat(),
-            horizon_days=len(forecast_records),
+            region=region_code,
+            issue_date=issue_ts.isoformat(),
+            horizon_days=horizon,
             model_version=model_version,
             points=[
                 BurdenForecastPoint(
@@ -1033,7 +1411,7 @@ class ForecastService:
 
         baseline = float(np.median(y_history[-min(len(y_history), 84) :])) if len(y_history) > 0 else 0.0
         event_point = (
-            forecast_records[min(DEFAULT_DECISION_HORIZON_DAYS - 1, len(forecast_records) - 1)]
+            forecast_records[min(len(forecast_records) - 1, 0)]
             if forecast_records
             else {}
         )
@@ -1050,8 +1428,8 @@ class ForecastService:
         )
         confidence_value = float(quality_meta.get("confidence", 0.6)) if quality_meta else 0.6
         event = EventForecast(
-            event_key=f"{virus_typ.lower().replace(' ', '_')}_growth_7d",
-            horizon_days=DEFAULT_DECISION_HORIZON_DAYS,
+            event_key=f"{virus_typ.lower().replace(' ', '_')}_growth_h{horizon}",
+            horizon_days=horizon,
             event_probability=event_probability,
             threshold_pct=DEFAULT_DECISION_EVENT_THRESHOLD_PCT,
             baseline_value=round(baseline, 3) if baseline > 0 else None,
@@ -1082,20 +1460,38 @@ class ForecastService:
     #  INFERENCE (loads pre-trained models from disk)
     # ═══════════════════════════════════════════════════════════════════
 
-    def predict(self, virus_typ: str = "Influenza A") -> dict[str, Any]:
+    def predict(
+        self,
+        virus_typ: str = "Influenza A",
+        *,
+        region: str = DEFAULT_FORECAST_REGION,
+        horizon_days: int = DEFAULT_DECISION_HORIZON_DAYS,
+        include_internal_history: bool = True,
+    ) -> dict[str, Any]:
         """Run forecast using pre-trained models from disk.
 
         Falls back to :meth:`train_and_forecast` when no serialised
         model exists (e.g. fresh deployment before first training).
         """
-        cached = _load_cached_models(virus_typ)
+        region_code = normalize_forecast_region(region)
+        horizon = ensure_supported_horizon(horizon_days)
+        cached = _load_cached_models(
+            virus_typ,
+            region=region_code,
+            horizon_days=horizon,
+        )
 
         if cached is None:
             logger.info(
-                f"No pre-trained model found for {virus_typ}, "
+                f"No pre-trained model found for {virus_typ}/{region_code}/h{horizon}, "
                 f"falling back to in-memory train_and_forecast()"
             )
-            return self.train_and_forecast(virus_typ=virus_typ)
+            return self.train_and_forecast(
+                virus_typ=virus_typ,
+                region=region_code,
+                horizon_days=horizon,
+                include_internal_history=include_internal_history,
+            )
 
         model_med, model_lo, model_hi, metadata = cached
         return self._inference_from_loaded_models(
@@ -1104,6 +1500,9 @@ class ForecastService:
             model_lo=model_lo,
             model_hi=model_hi,
             metadata=metadata,
+            region=region_code,
+            horizon_days=horizon,
+            include_internal_history=include_internal_history,
         )
 
     def _inference_from_loaded_models(
@@ -1113,6 +1512,10 @@ class ForecastService:
         model_lo: Any,
         model_hi: Any,
         metadata: dict[str, Any],
+        *,
+        region: str = DEFAULT_FORECAST_REGION,
+        horizon_days: int = DEFAULT_DECISION_HORIZON_DAYS,
+        include_internal_history: bool = True,
     ) -> dict[str, Any]:
         """Generate forecast using pre-loaded XGBoost models.
 
@@ -1120,135 +1523,126 @@ class ForecastService:
         :meth:`train_and_forecast` (Steps 1, 4, 5, 6) but skips
         Steps 2-3 (OOF generation + XGBoost training).
         """
+        region_code = normalize_forecast_region(region)
+        horizon = ensure_supported_horizon(horizon_days)
         logger.info(
-            f"=== Inference for {virus_typ} "
+            f"=== Inference for {virus_typ}/{region_code}/h{horizon} "
             f"(model={metadata.get('version')}) ==="
         )
 
-        df = self.prepare_training_data(virus_typ=virus_typ)
+        internal_history_enabled = bool(
+            metadata.get("data_sources", {}).get("internal_history", include_internal_history)
+        )
+        df = self.prepare_training_data(
+            virus_typ=virus_typ,
+            include_internal_history=internal_history_enabled,
+            region=region_code,
+        )
 
-        if df.empty or len(df) < 10:
-            logger.error(f"Insufficient data for inference ({len(df)} rows)")
-            return {"error": "Insufficient data for inference"}
+        if df.empty or len(df) < max(MIN_DIRECT_TRAIN_POINTS, 10):
+            logger.error(
+                "Insufficient data for inference (%s rows) for %s/%s/h%s",
+                len(df),
+                virus_typ,
+                region_code,
+                horizon,
+            )
+            return {
+                "error": "Insufficient data for inference",
+                "virus_typ": virus_typ,
+                "region": region_code,
+                "horizon_days": horizon,
+            }
 
         y = df["y"].values
-        n = len(y)
+        feature_names = list(metadata.get("feature_names") or META_FEATURES)
+        live_feature_row = self._build_live_direct_feature_row(
+            df,
+            virus_typ=virus_typ,
+            horizon_days=horizon,
+            region=region_code,
+        )
+        if not live_feature_row:
+            return {
+                "error": "Failed to build live direct feature row",
+                "virus_typ": virus_typ,
+                "region": region_code,
+                "horizon_days": horizon,
+            }
 
-        # Detect data frequency
-        date_diffs = df["ds"].diff().dt.days.dropna()
-        data_freq_days = int(date_diffs.median()) if len(date_diffs) > 0 else 7
-        data_freq_days = max(1, min(data_freq_days, 14))
-        n_steps = max(2, self.forecast_days // data_freq_days + 1)
+        if "horizon_days" in live_feature_row and "horizon_days" not in feature_names:
+            feature_names.append("horizon_days")
 
-        # ── Step 1: Base estimator forecasts ──
-        hw_forecast = self._fit_holt_winters(y, n_steps)
-        ridge_forecast, ridge_importance = self._fit_ridge(df, y, n_steps)
-        prophet_forecast = self._fit_prophet(virus_typ, n_steps)
+        X_row = np.array([[live_feature_row.get(name, 0.0) for name in feature_names]], dtype=float)
+        X_row = np.nan_to_num(X_row, nan=0.0, posinf=0.0, neginf=0.0)
 
-        if prophet_forecast is None:
-            prophet_forecast = (hw_forecast + ridge_forecast) / 2.0
+        prediction = max(0.0, float(model_med.predict(X_row)[0]))
+        lower_bound = max(0.0, float(model_lo.predict(X_row)[0]))
+        upper_bound = max(0.0, float(model_hi.predict(X_row)[0]))
+        lower_bound = min(lower_bound, prediction)
+        upper_bound = max(upper_bound, prediction)
 
-        min_len = min(len(hw_forecast), len(ridge_forecast), len(prophet_forecast))
-        hw_forecast = hw_forecast[:min_len]
-        ridge_forecast = ridge_forecast[:min_len]
-        prophet_forecast = prophet_forecast[:min_len]
-        n_steps = min_len
-
-        # ── Step 4: Generate forecast via loaded XGBoost ──
-        feature_names = metadata.get("feature_names", META_FEATURES)
-        feature_importance = metadata.get("feature_importance", {})
-        last_row = df.iloc[-1].copy()
-
-        ensemble = np.zeros(n_steps)
-        lower = np.zeros(n_steps)
-        upper = np.zeros(n_steps)
-
-        for i in range(n_steps):
-            feat = self._build_meta_feature_row(
-                last_row,
-                hw_pred=float(hw_forecast[i]),
-                ridge_pred=float(ridge_forecast[i]),
-                prophet_pred=float(prophet_forecast[i]),
-            )
-
-            X_row = np.array([[feat.get(f, 0.0) for f in feature_names]])
-            X_row = np.nan_to_num(X_row, nan=0.0, posinf=0.0, neginf=0.0)
-
-            ensemble[i] = max(0.0, float(model_med.predict(X_row)[0]))
-            lower[i] = max(0.0, float(model_lo.predict(X_row)[0]))
-            upper[i] = max(0.0, float(model_hi.predict(X_row)[0]))
-
-        # ── Step 5: Interpolate to daily resolution ──
-        last_date = df["ds"].max()
-        native_dates = [last_date + timedelta(days=data_freq_days * (i + 1)) for i in range(n_steps)]
-        daily_dates = [last_date + timedelta(days=i + 1) for i in range(self.forecast_days)]
-
-        native_days = np.array([(d - last_date).days for d in native_dates])
-        daily_days = np.array([(d - last_date).days for d in daily_dates])
-
-        interp_x = np.concatenate([[0], native_days])
-        interp_y = np.concatenate([[y[-1]], ensemble])
-        interp_lo = np.concatenate([[y[-1]], lower])
-        interp_hi = np.concatenate([[y[-1]], upper])
-
-        daily_ensemble = np.maximum(np.interp(daily_days, interp_x, interp_y), 0)
-        daily_lower = np.maximum(np.interp(daily_days, interp_x, interp_lo), 0)
-        daily_upper = np.maximum(np.interp(daily_days, interp_x, interp_hi), 0)
-
-        # Monotonicity: enforce lower <= median <= upper (quantile crossing fix)
-        daily_lower = np.minimum(daily_lower, daily_ensemble)
-        daily_upper = np.maximum(daily_upper, daily_ensemble)
-
-        # ── Step 6: Outbreak risk + trend momentum ──
+        issue_date = pd.Timestamp(df["ds"].max()).to_pydatetime()
+        target_date = issue_date + timedelta(days=horizon)
         last_momentum = float(df["trend_momentum_7d"].iloc[-1]) if "trend_momentum_7d" in df.columns else 0.0
-
         forecast_records: list[dict[str, Any]] = []
-        for i in range(self.forecast_days):
-            pred = float(daily_ensemble[i])
-            risk = self._compute_outbreak_risk(pred, y)
-            forecast_records.append(
-                {
-                    "ds": daily_dates[i],
-                    "yhat": pred,
-                    "yhat_lower": float(daily_lower[i]),
-                    "yhat_upper": float(daily_upper[i]),
-                    "trend_momentum_7d": last_momentum,
-                    "outbreak_risk_score": risk,
-                }
-            )
+        risk = self._compute_outbreak_risk(prediction, y)
+        forecast_records.append(
+            {
+                "ds": target_date,
+                "yhat": prediction,
+                "yhat_lower": lower_bound,
+                "yhat_upper": upper_bound,
+                "trend_momentum_7d": last_momentum,
+                "outbreak_risk_score": risk,
+            }
+        )
 
         model_version = metadata.get("version", "xgb_stack_v1_loaded")
+        backtest_metrics = metadata.get("backtest_metrics") or {}
         contracts = self._build_contracts(
             virus_typ=virus_typ,
+            region=region_code,
+            horizon_days=horizon,
             forecast_records=forecast_records,
             model_version=model_version,
             y_history=y,
+            issue_date=issue_date,
             quality_meta={
-                "forecast_ready": "error" not in (metadata.get("backtest_metrics") or {}),
-                "drift_status": "unknown",
+                "forecast_ready": "error" not in backtest_metrics,
+                "drift_status": "ok" if "error" not in backtest_metrics else "unknown",
                 "baseline_deltas": {},
                 "timing_metrics": {},
                 "interval_coverage": {},
                 "promotion_gate": {},
+                "confidence": 1.0 - min(float(backtest_metrics.get("mape", 100.0)) / 100.0, 0.8),
+                "brier_score": backtest_metrics.get("brier_score"),
+                "ece": backtest_metrics.get("ece"),
+                "calibration_passed": backtest_metrics.get("ece", 1.0) <= 0.15 if backtest_metrics else None,
             },
         )
 
         result: dict[str, Any] = {
             "virus_typ": virus_typ,
-            "training_samples": metadata.get("training_samples", n),
-            "forecast_days": self.forecast_days,
-            "data_frequency_days": data_freq_days,
+            "region": region_code,
+            "horizon_days": horizon,
+            "training_samples": metadata.get("training_samples", len(df)),
+            "forecast_days": horizon,
+            "data_frequency_days": horizon,
             "forecast": forecast_records,
-            "feature_importance": feature_importance,
+            "feature_names": feature_names,
+            "feature_importance": metadata.get("feature_importance", {}),
             "model_version": model_version,
-            "confidence": float(self.confidence_level),
+            "confidence": contracts["event_forecast"].get("confidence"),
+            "training_window": metadata.get("training_window"),
+            "backtest_metrics": backtest_metrics,
             "contracts": contracts,
             "timestamp": datetime.utcnow(),
         }
 
         logger.info(
-            f"Inference completed for {virus_typ}: {self.forecast_days} daily points, "
-            f"model={model_version}"
+            f"Inference completed for {virus_typ}/{region_code}/h{horizon}: "
+            f"target_date={target_date.date()}, model={model_version}"
         )
         return result
 
@@ -1256,174 +1650,145 @@ class ForecastService:
     #  MAIN FORECAST PIPELINE (fallback: trains in-memory)
     # ═══════════════════════════════════════════════════════════════════
 
-    def train_and_forecast(self, virus_typ: str = "Influenza A") -> dict[str, Any]:
-        """Train stacking model and generate 14-day forecast.
+    def train_and_forecast(
+        self,
+        virus_typ: str = "Influenza A",
+        *,
+        region: str = DEFAULT_FORECAST_REGION,
+        horizon_days: int = DEFAULT_DECISION_HORIZON_DAYS,
+        include_internal_history: bool = True,
+    ) -> dict[str, Any]:
+        """Train a direct multi-horizon stack in-memory and return one forecast point."""
+        region_code = normalize_forecast_region(region)
+        horizon = ensure_supported_horizon(horizon_days)
+        logger.info(f"=== Direct stacking forecast for {virus_typ}/{region_code}/h{horizon} ===")
 
-        Pipeline:
-        1. Prepare features (wastewater, trends, holidays, AMELAG lags, momentum)
-        2. Generate out-of-fold predictions from HW + Ridge via TimeSeriesSplit
-        3. Train XGBoost meta-learner on OOF predictions + auxiliary features
-        4. Generate final forecast with confidence intervals
-        """
-        logger.info(f"=== Stacking forecast for {virus_typ} ===")
+        df = self.prepare_training_data(
+            virus_typ=virus_typ,
+            include_internal_history=include_internal_history,
+            region=region_code,
+        )
 
-        df = self.prepare_training_data(virus_typ=virus_typ)
-
-        if df.empty or len(df) < 10:
-            logger.error(f"Insufficient data for training ({len(df) if not df.empty else 0} rows)")
-            return {"error": "Insufficient training data"}
-
-        y = df["y"].values
-        n = len(y)
-
-        # Detect data frequency
-        date_diffs = df["ds"].diff().dt.days.dropna()
-        data_freq_days = int(date_diffs.median()) if len(date_diffs) > 0 else 7
-        data_freq_days = max(1, min(data_freq_days, 14))
-        n_steps = max(2, self.forecast_days // data_freq_days + 1)
-
-        logger.info(f"Data: {n} rows, freq={data_freq_days}d, n_steps={n_steps}")
-
-        # ── Step 1: Base estimator forecasts (for the actual forecast horizon) ──
-        hw_forecast = self._fit_holt_winters(y, n_steps)
-        ridge_forecast, ridge_importance = self._fit_ridge(df, y, n_steps)
-        prophet_forecast = self._fit_prophet(virus_typ, n_steps)
-
-        if prophet_forecast is None:
-            # Fallback: use average of HW and Ridge as Prophet proxy
-            prophet_forecast = (hw_forecast + ridge_forecast) / 2.0
-            logger.info("Prophet unavailable, using HW/Ridge average as proxy")
-
-        # Ensure all forecast arrays have the same length
-        min_len = min(len(hw_forecast), len(ridge_forecast), len(prophet_forecast))
-        hw_forecast = hw_forecast[:min_len]
-        ridge_forecast = ridge_forecast[:min_len]
-        prophet_forecast = prophet_forecast[:min_len]
-        n_steps = min_len
-
-        # ── Step 2: Out-of-fold predictions for meta-learner training ──
-        oof = self._generate_oof_predictions(df, n_splits=5)
-
-        # ── Step 3: Train XGBoost meta-learner ──
-        try:
-            model_med, model_lo, model_hi, feature_importance = self._fit_xgboost_meta(df, oof)
-            used_xgb = True
-        except Exception as e:
-            logger.warning(f"XGBoost meta-learner failed, falling back to weighted ensemble: {e}")
-            used_xgb = False
-            feature_importance = ridge_importance
-
-        # ── Step 4: Generate forecast ──
-        if used_xgb:
-            # Build feature rows for each forecast step
-            last_row = df.iloc[-1].copy()
-            available_meta = [f for f in META_FEATURES if f in df.columns or f in ["hw_pred", "ridge_pred", "prophet_pred"]]
-
-            ensemble = np.zeros(n_steps)
-            lower = np.zeros(n_steps)
-            upper = np.zeros(n_steps)
-
-            for i in range(n_steps):
-                feat = self._build_meta_feature_row(
-                    last_row,
-                    hw_pred=float(hw_forecast[i]),
-                    ridge_pred=float(ridge_forecast[i]),
-                    prophet_pred=float(prophet_forecast[i]),
-                )
-
-                X_row = np.array([[feat.get(f, 0.0) for f in available_meta]])
-                X_row = np.nan_to_num(X_row, nan=0.0, posinf=0.0, neginf=0.0)
-
-                ensemble[i] = max(0.0, float(model_med.predict(X_row)[0]))
-                lower[i] = max(0.0, float(model_lo.predict(X_row)[0]))
-                upper[i] = max(0.0, float(model_hi.predict(X_row)[0]))
-        else:
-            # Fallback: weighted ensemble (legacy behavior)
-            ensemble = 0.5 * hw_forecast + 0.3 * ridge_forecast + 0.2 * prophet_forecast
-            ensemble = np.maximum(ensemble, 0)
-
-            if n >= 5:
-                residuals = np.diff(y[-min(20, n) :])
-                std = float(np.std(residuals)) if len(residuals) > 1 else float(np.std(y)) * 0.1
-            else:
-                std = float(np.std(y)) * 0.1
-
-            z = 1.96
-            lower = ensemble - z * std * np.sqrt(np.arange(1, n_steps + 1))
-            upper = ensemble + z * std * np.sqrt(np.arange(1, n_steps + 1))
-            lower = np.maximum(lower, 0)
-
-        # ── Step 5: Interpolate to daily resolution ──
-        last_date = df["ds"].max()
-        native_dates = [last_date + timedelta(days=data_freq_days * (i + 1)) for i in range(n_steps)]
-        daily_dates = [last_date + timedelta(days=i + 1) for i in range(self.forecast_days)]
-
-        native_days = np.array([(d - last_date).days for d in native_dates])
-        daily_days = np.array([(d - last_date).days for d in daily_dates])
-
-        interp_x = np.concatenate([[0], native_days])
-        interp_y = np.concatenate([[y[-1]], ensemble])
-        interp_lo = np.concatenate([[y[-1]], lower])
-        interp_hi = np.concatenate([[y[-1]], upper])
-
-        daily_ensemble = np.maximum(np.interp(daily_days, interp_x, interp_y), 0)
-        daily_lower = np.maximum(np.interp(daily_days, interp_x, interp_lo), 0)
-        daily_upper = np.maximum(np.interp(daily_days, interp_x, interp_hi), 0)
-
-        # Monotonicity: enforce lower <= median <= upper (quantile crossing fix)
-        daily_lower = np.minimum(daily_lower, daily_ensemble)
-        daily_upper = np.maximum(daily_upper, daily_ensemble)
-
-        # ── Step 6: Compute per-day outbreak risk + trend momentum ──
-        last_momentum = float(df["trend_momentum_7d"].iloc[-1]) if "trend_momentum_7d" in df.columns else 0.0
-
-        forecast_records: list[dict[str, Any]] = []
-        for i in range(self.forecast_days):
-            pred = float(daily_ensemble[i])
-            risk = self._compute_outbreak_risk(pred, y)
-            forecast_records.append(
-                {
-                    "ds": daily_dates[i],
-                    "yhat": pred,
-                    "yhat_lower": float(daily_lower[i]),
-                    "yhat_upper": float(daily_upper[i]),
-                    "trend_momentum_7d": last_momentum,
-                    "outbreak_risk_score": risk,
-                }
+        panel = self._build_direct_training_panel_from_frame(
+            df,
+            horizon_days=horizon,
+            n_splits=5,
+        )
+        if panel.empty or len(panel) < max(MIN_DIRECT_TRAIN_POINTS, 24):
+            logger.error(
+                "Insufficient data for direct training (%s rows) for %s/%s/h%s",
+                len(panel) if not panel.empty else 0,
+                virus_typ,
+                region_code,
+                horizon,
             )
+            return {
+                "error": "Insufficient training data",
+                "virus_typ": virus_typ,
+                "region": region_code,
+                "horizon_days": horizon,
+            }
 
-        model_version = "xgb_stack_v1" if used_xgb else "hw_ridge_prophet_v2"
+        model_med, model_lo, model_hi, feature_names, feature_importance = (
+            self._fit_xgboost_meta_from_panel(panel, target_column="y_target")
+        )
+        live_feature_row = self._build_live_direct_feature_row(
+            df,
+            virus_typ=virus_typ,
+            horizon_days=horizon,
+            region=region_code,
+        )
+        X_row = np.array([[live_feature_row.get(name, 0.0) for name in feature_names]], dtype=float)
+        X_row = np.nan_to_num(X_row, nan=0.0, posinf=0.0, neginf=0.0)
+
+        prediction = max(0.0, float(model_med.predict(X_row)[0]))
+        lower_bound = max(0.0, float(model_lo.predict(X_row)[0]))
+        upper_bound = max(0.0, float(model_hi.predict(X_row)[0]))
+        lower_bound = min(lower_bound, prediction)
+        upper_bound = max(upper_bound, prediction)
+
+        y = df["y"].to_numpy(dtype=float)
+        issue_date = pd.Timestamp(df["ds"].max()).to_pydatetime()
+        target_date = issue_date + timedelta(days=horizon)
+        last_momentum = float(df["trend_momentum_7d"].iloc[-1]) if "trend_momentum_7d" in df.columns else 0.0
+        forecast_records = [
+            {
+                "ds": target_date,
+                "yhat": prediction,
+                "yhat_lower": lower_bound,
+                "yhat_upper": upper_bound,
+                "trend_momentum_7d": last_momentum,
+                "outbreak_risk_score": self._compute_outbreak_risk(prediction, y),
+            }
+        ]
+        try:
+            backtest_metrics = self.evaluate_training_candidate(
+                virus_typ=virus_typ,
+                include_internal_history=include_internal_history,
+                region=region_code,
+                horizon_days=horizon,
+            )
+        except Exception as exc:
+            logger.warning("Backtest evaluation failed for %s/%s/h%s: %s", virus_typ, region_code, horizon, exc)
+            backtest_metrics = {"error": str(exc)}
+
+        model_version = f"xgb_stack_direct_h{horizon}_inline"
         contracts = self._build_contracts(
             virus_typ=virus_typ,
+            region=region_code,
+            horizon_days=horizon,
             forecast_records=forecast_records,
             model_version=model_version,
             y_history=y,
+            issue_date=issue_date,
             quality_meta={
-                "forecast_ready": bool(used_xgb),
+                "forecast_ready": "error" not in backtest_metrics,
                 "drift_status": "unknown",
                 "baseline_deltas": {},
                 "timing_metrics": {},
                 "interval_coverage": {},
                 "promotion_gate": {},
+                "confidence": 1.0 - min(float(backtest_metrics.get("mape", 100.0)) / 100.0, 0.8)
+                if "error" not in backtest_metrics
+                else 0.4,
+                "brier_score": backtest_metrics.get("brier_score"),
+                "ece": backtest_metrics.get("ece"),
+                "calibration_passed": backtest_metrics.get("ece", 1.0) <= 0.15
+                if "error" not in backtest_metrics
+                else None,
             },
         )
 
         result: dict[str, Any] = {
             "virus_typ": virus_typ,
-            "training_samples": n,
-            "forecast_days": self.forecast_days,
-            "data_frequency_days": data_freq_days,
+            "region": region_code,
+            "horizon_days": horizon,
+            "training_samples": len(df),
+            "forecast_days": horizon,
+            "data_frequency_days": horizon,
             "forecast": forecast_records,
+            "feature_names": feature_names,
             "feature_importance": feature_importance,
             "model_version": model_version,
-            "confidence": float(self.confidence_level),
+            "confidence": contracts["event_forecast"].get("confidence"),
+            "training_window": {
+                "start": df["ds"].min().isoformat(),
+                "end": df["ds"].max().isoformat(),
+                "samples": int(len(df)),
+                "panel_rows": int(len(panel)),
+            },
+            "backtest_metrics": backtest_metrics,
             "contracts": contracts,
             "timestamp": datetime.utcnow(),
         }
 
         logger.info(
-            f"Forecast completed for {virus_typ}: {self.forecast_days} daily points, "
-            f"model={model_version}, features={len(feature_importance)}"
+            "Forecast completed for %s/%s/h%s: target_date=%s, features=%s",
+            virus_typ,
+            region_code,
+            horizon,
+            target_date.date(),
+            len(feature_importance),
         )
         return result
 
@@ -1435,6 +1800,8 @@ class ForecastService:
         """Save forecast to database including new stacking fields."""
         logger.info("Saving forecast to database...")
         count = 0
+        region_code = normalize_forecast_region(forecast_data.get("region"))
+        horizon = ensure_supported_horizon(forecast_data.get("horizon_days", DEFAULT_DECISION_HORIZON_DAYS))
 
         for item in forecast_data["forecast"]:
             existing = (
@@ -1442,6 +1809,8 @@ class ForecastService:
                 .filter(
                     MLForecast.forecast_date == item["ds"],
                     MLForecast.virus_typ == forecast_data["virus_typ"],
+                    MLForecast.region == region_code,
+                    MLForecast.horizon_days == horizon,
                 )
                 .first()
             )
@@ -1452,7 +1821,12 @@ class ForecastService:
                 "upper_bound": item["yhat_upper"],
                 "confidence": forecast_data.get("confidence", 0.95),
                 "model_version": forecast_data["model_version"],
-                "features_used": forecast_data.get("feature_importance", {}),
+                "features_used": {
+                    "feature_names": forecast_data.get("feature_names", []),
+                    "feature_importance": forecast_data.get("feature_importance", {}),
+                    "training_window": forecast_data.get("training_window"),
+                    "backtest_metrics": forecast_data.get("backtest_metrics"),
+                },
                 "trend_momentum_7d": item.get("trend_momentum_7d"),
                 "outbreak_risk_score": item.get("outbreak_risk_score"),
             }
@@ -1464,6 +1838,8 @@ class ForecastService:
                 forecast_record = MLForecast(
                     forecast_date=item["ds"],
                     virus_typ=forecast_data["virus_typ"],
+                    region=region_code,
+                    horizon_days=horizon,
                     **kwargs,
                 )
                 self.db.add(forecast_record)
@@ -1473,19 +1849,32 @@ class ForecastService:
         logger.info(f"Saved {count} new forecast records")
         return count
 
-    def run_forecasts_for_all_viruses(self) -> dict[str, Any]:
+    def run_forecasts_for_all_viruses(
+        self,
+        *,
+        region: str = DEFAULT_FORECAST_REGION,
+        horizon_days: int = DEFAULT_DECISION_HORIZON_DAYS,
+        include_internal_history: bool = True,
+    ) -> dict[str, Any]:
         """Run forecasts for all relevant virus types.
 
         Uses :meth:`predict` which loads pre-trained models from disk
         when available, falling back to in-memory training otherwise.
         """
+        region_code = normalize_forecast_region(region)
+        horizon = ensure_supported_horizon(horizon_days)
         virus_types = ["Influenza A", "Influenza B", "SARS-CoV-2", "RSV A"]
 
         results: dict[str, Any] = {}
         for virus in virus_types:
-            logger.info(f"Processing forecast for {virus}...")
+            logger.info(f"Processing forecast for {virus}/{region_code}/h{horizon}...")
             try:
-                forecast = self.predict(virus_typ=virus)
+                forecast = self.predict(
+                    virus_typ=virus,
+                    region=region_code,
+                    horizon_days=horizon,
+                    include_internal_history=include_internal_history,
+                )
                 if "error" not in forecast:
                     self.save_forecast(forecast)
                 results[virus] = forecast

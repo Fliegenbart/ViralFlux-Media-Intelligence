@@ -17,19 +17,25 @@ from app.core.logging_config import (
     setup_logging,
     correlation_id,
     generate_correlation_id,
+    log_event,
 )
 from app.core.metrics import (
     app_info,
     http_requests_total,
     http_request_duration_seconds,
 )
-from app.db.session import get_db, check_db_connection, init_db
+from app.db.session import get_db, get_db_context, check_db_connection, init_db
+from app.services.ops.production_readiness_service import ProductionReadinessService
+from app.services.ops.run_metadata_service import OperationalRunRecorder
 
 # Setup structured logging BEFORE anything else
 settings = get_settings()
 setup_logging(
     level=settings.LOG_LEVEL,
     json_format=settings.LOG_FORMAT == "json",
+    service_name="viralflux-api",
+    environment=settings.ENVIRONMENT,
+    app_version=settings.APP_VERSION,
 )
 logger = logging.getLogger(__name__)
 
@@ -79,7 +85,16 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 @app.exception_handler(Exception)
 async def generic_exception_handler(request: Request, exc: Exception):
     cid = correlation_id.get("")
-    logger.error("Unhandled exception: %s", exc, exc_info=True)
+    log_event(
+        logger,
+        "unhandled_exception",
+        level=logging.ERROR,
+        path=str(request.url.path),
+        method=request.method,
+        correlation_id=cid or None,
+        error_type=type(exc).__name__,
+        error_message=str(exc),
+    )
     return JSONResponse(
         status_code=500,
         content={
@@ -104,9 +119,17 @@ async def observability_middleware(request: Request, call_next) -> Response:
         endpoint = request.url.path
         http_requests_total.labels(request.method, endpoint, "500").inc()
         http_request_duration_seconds.labels(request.method, endpoint).observe(duration)
-        raise
-    finally:
+        log_event(
+            logger,
+            "http_request_failed",
+            level=logging.ERROR,
+            method=request.method,
+            path=endpoint,
+            duration_ms=round(duration * 1000.0, 2),
+            correlation_id=cid,
+        )
         correlation_id.reset(token)
+        raise
 
     duration = time.perf_counter() - start
     endpoint = request.url.path
@@ -114,26 +137,81 @@ async def observability_middleware(request: Request, call_next) -> Response:
     http_request_duration_seconds.labels(request.method, endpoint).observe(duration)
 
     response.headers["X-Correlation-ID"] = cid
+    if endpoint not in {"/health/live", "/metrics"}:
+        log_event(
+            logger,
+            "http_request_completed",
+            level=logging.INFO,
+            method=request.method,
+            path=endpoint,
+            status_code=response.status_code,
+            duration_ms=round(duration * 1000.0, 2),
+            correlation_id=cid,
+        )
+    correlation_id.reset(token)
     return response
 
 
 @app.on_event("startup")
 async def startup_event():
     """Initialize database on startup."""
-    logger.info("Starting %s v%s", settings.APP_NAME, settings.APP_VERSION)
-    logger.info("Environment: %s", settings.ENVIRONMENT)
+    log_event(
+        logger,
+        "startup_begin",
+        app_name=settings.APP_NAME,
+        app_version=settings.APP_VERSION,
+        environment=settings.ENVIRONMENT,
+        strict_startup_readiness=settings.EFFECTIVE_STARTUP_STRICT_READINESS,
+    )
     
     # Runtime safety-net: initialize schema when database is empty / fresh
     # (migrations are still managed separately).
     db_healthy = await check_db_connection()
     if not db_healthy:
+        log_event(
+            logger,
+            "startup_database_unavailable",
+            level=logging.ERROR,
+            environment=settings.ENVIRONMENT,
+        )
         raise RuntimeError("Database connection check failed on startup.")
-    logger.info("Database connection verified.")
-    try:
-        init_db()
-        logger.info("Database schema check/initialization completed.")
-    except Exception as e:
-        logger.warning("Database schema initialization skipped: %s", e)
+    log_event(logger, "startup_database_verified")
+
+    db_summary = init_db()
+    app.state.startup_db_summary = db_summary
+    log_event(
+        logger,
+        "startup_database_schema_verified",
+        schema_status=db_summary.get("status"),
+        warnings=db_summary.get("warnings") or [],
+        actions=db_summary.get("actions") or [],
+    )
+
+    readiness_snapshot = ProductionReadinessService().build_snapshot()
+    app.state.startup_readiness = readiness_snapshot
+    app.state.startup_completed_at = datetime.utcnow().isoformat()
+    app.state.startup_run_metadata = None
+
+    with get_db_context() as db:
+        app.state.startup_run_metadata = OperationalRunRecorder(db).record_event(
+            action="STARTUP_READINESS",
+            status=readiness_snapshot["status"],
+            summary="Startup readiness snapshot recorded.",
+            metadata={
+                "components": readiness_snapshot.get("components"),
+                "blockers": readiness_snapshot.get("blockers"),
+                "checked_at": readiness_snapshot.get("checked_at"),
+            },
+        )
+
+    log_event(
+        logger,
+        "startup_readiness_completed",
+        readiness_status=readiness_snapshot.get("status"),
+        blockers=readiness_snapshot.get("blockers") or [],
+    )
+    if settings.EFFECTIVE_STARTUP_STRICT_READINESS and readiness_snapshot.get("status") == "unhealthy":
+        raise RuntimeError("Startup readiness is unhealthy. See /health/ready for blockers.")
 
     # BfArM Lieferengpass-Daten im Hintergrund laden (non-blocking)
     def _bfarm_startup():
@@ -141,12 +219,19 @@ async def startup_event():
             from app.services.data_ingest.bfarm_service import BfarmIngestionService
             service = BfarmIngestionService()
             result = service.run_full_import()
-            logger.info(
-                f"BfArM Startup-Pull: {result.get('relevant_records', 0)} Meldungen, "
-                f"Score {result.get('risk_score', 0)}"
+            log_event(
+                logger,
+                "startup_bfarm_pull_completed",
+                relevant_records=result.get("relevant_records", 0),
+                risk_score=result.get("risk_score", 0),
             )
         except Exception as e:
-            logger.warning(f"BfArM Startup-Pull fehlgeschlagen (nicht kritisch): {e}")
+            log_event(
+                logger,
+                "startup_bfarm_pull_failed",
+                level=logging.WARNING,
+                error_message=str(e),
+            )
 
     threading.Thread(target=_bfarm_startup, daemon=True).start()
 
@@ -154,9 +239,9 @@ async def startup_event():
 @app.on_event("shutdown")
 async def shutdown_event():
     """Graceful shutdown: allow in-flight requests to complete."""
-    logger.info("Shutting down ViralFlux Media Intelligence...")
+    log_event(logger, "shutdown_begin")
     await asyncio.sleep(2)
-    logger.info("Shutdown complete.")
+    log_event(logger, "shutdown_complete")
 
 
 @app.get("/")
@@ -167,69 +252,47 @@ async def root():
         "version": settings.APP_VERSION,
         "environment": settings.ENVIRONMENT,
         "docs": "/docs",
+        "health_live": "/health/live",
+        "health_ready": "/health/ready",
         "status": "operational"
     }
 
 
-@app.get("/health")
-async def health_check():
-    """Health check endpoint with forecast monitoring summary."""
-    db_healthy = await check_db_connection()
+def _readiness_payload() -> dict:
+    snapshot = ProductionReadinessService().build_snapshot()
+    snapshot["startup"] = {
+        "completed_at": getattr(app.state, "startup_completed_at", None),
+        "db_summary": getattr(app.state, "startup_db_summary", None),
+        "run_metadata": getattr(app.state, "startup_run_metadata", None),
+    }
+    return snapshot
 
-    drift_info: dict = {}
-    monitoring_info: dict = {}
-    if db_healthy:
-        try:
-            from app.services.ml.forecast_decision_service import ForecastDecisionService
-            from app.services.ml.training_contract import SUPPORTED_VIRUS_TYPES
-            from app.db.session import get_db_context
-            with get_db_context() as db:
-                service = ForecastDecisionService(db)
-                for virus_typ in SUPPORTED_VIRUS_TYPES:
-                    snapshot = service.build_monitoring_snapshot(
-                        virus_typ=virus_typ,
-                        target_source="RKI_ARE",
-                    )
-                    latest_accuracy = snapshot.get("latest_accuracy") or {}
-                    drift_info[virus_typ] = {
-                        "mape": latest_accuracy.get("mape"),
-                        "drift": snapshot.get("drift_status") == "warning",
-                    }
-                    monitoring_info[virus_typ] = {
-                        "monitoring_status": snapshot.get("monitoring_status"),
-                        "forecast_readiness": snapshot.get("forecast_readiness"),
-                        "drift_status": snapshot.get("drift_status"),
-                        "freshness_status": snapshot.get("freshness_status"),
-                        "accuracy_freshness_status": snapshot.get("accuracy_freshness_status"),
-                        "backtest_freshness_status": snapshot.get("backtest_freshness_status"),
-                        "mape": latest_accuracy.get("mape"),
-                        "samples": latest_accuracy.get("samples"),
-                    }
-        except Exception:
-            pass
 
-    any_drift = any(v.get("drift") for v in drift_info.values())
-    any_monitoring_warning = any(
-        value.get("monitoring_status") in {"warning", "critical"}
-        for value in monitoring_info.values()
+@app.get("/health/live")
+async def health_live():
+    """Liveness probe: process is running and can answer requests."""
+    return {
+        "status": "alive",
+        "checked_at": datetime.utcnow().isoformat(),
+        "app_version": settings.APP_VERSION,
+        "environment": settings.ENVIRONMENT,
+    }
+
+
+@app.get("/health/ready")
+async def health_ready():
+    """Readiness probe with dependency, artifact and recency checks."""
+    snapshot = _readiness_payload()
+    return JSONResponse(
+        status_code=ProductionReadinessService.http_status_code(snapshot),
+        content=snapshot,
     )
 
-    return {
-        "status": "healthy" if db_healthy else "unhealthy",
-        "timestamp": datetime.utcnow(),
-        "components": {
-            "database": "up" if db_healthy else "down",
-            "api": "up",
-            "ml_drift": "warning" if any_drift else "ok",
-            "forecast_monitoring": (
-                "warning"
-                if any_monitoring_warning
-                else ("ok" if monitoring_info else "unknown")
-            ),
-        },
-        "ml_accuracy": drift_info or None,
-        "forecast_monitoring": monitoring_info or None,
-    }
+
+@app.get("/health")
+async def health_check():
+    """Backward-compatible detailed health endpoint."""
+    return await health_ready()
 
 
 @app.get("/metrics")

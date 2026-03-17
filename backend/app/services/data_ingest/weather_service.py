@@ -12,6 +12,7 @@ from sqlalchemy import func
 import logging
 
 from app.models.database import WeatherData
+from app.services.ml.nowcast_revision import capture_nowcast_snapshots
 
 logger = logging.getLogger(__name__)
 
@@ -494,10 +495,12 @@ class WeatherService:
                 results["forecast"] = {"error": str(e)}
 
         total_in_db = self.db.query(WeatherData).count()
+        snapshot_rows = capture_nowcast_snapshots(self.db, ["weather"]).get("weather", 0)
         return {
             "success": True,
             "source": "BrightSky (DWD)",
             "total_in_db": total_in_db,
+            "snapshot_rows": snapshot_rows,
             "details": results,
             "timestamp": datetime.utcnow().isoformat(),
         }

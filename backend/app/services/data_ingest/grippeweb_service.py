@@ -9,6 +9,7 @@ import logging
 
 from app.core.config import get_settings
 from app.models.database import GrippeWebData
+from app.services.ml.nowcast_revision import capture_nowcast_snapshots
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -142,6 +143,7 @@ class GrippeWebIngestionService:
         try:
             df = self.fetch_data()
             count = self.import_data(df)
+            snapshot_rows = capture_nowcast_snapshots(self.db, ["grippeweb"]).get("grippeweb", 0)
 
             saisons = df['Saison'].unique().tolist()
             erkrankungen = df['Erkrankung'].unique().tolist()
@@ -150,6 +152,7 @@ class GrippeWebIngestionService:
                 "success": True,
                 "imported": count,
                 "fetched": len(df),
+                "snapshot_rows": snapshot_rows,
                 "saisons": saisons,
                 "erkrankungen": erkrankungen,
                 "timestamp": datetime.utcnow().isoformat(),

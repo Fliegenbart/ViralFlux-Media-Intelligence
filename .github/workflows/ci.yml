@@ -54,6 +54,28 @@ jobs:
           ENVIRONMENT: test
         run: python -m pytest app/tests -q --tb=short
 
+  backend-ops-smoke:
+    name: Backend Ops Script Smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r backend/requirements.txt
+
+      - name: Compile ops and smoke scripts
+        run: >
+          python -m py_compile
+          backend/scripts/backfill_regional_model_artifacts.py
+          backend/scripts/recompute_operational_views.py
+          backend/scripts/smoke_test_release.py
+
   backend-security:
     name: Backend Security Scan
     runs-on: ubuntu-latest

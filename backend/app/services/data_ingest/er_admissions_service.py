@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.models.database import NotaufnahmeStandort, NotaufnahmeSyndromData
+from app.services.ml.nowcast_revision import capture_nowcast_snapshots
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -257,8 +258,13 @@ class ERAdmissionsIngestionService:
             logger.error(f"ER admissions facilities import failed: {e}")
             results['standorte'] = {"success": False, "error": str(e)}
 
+        snapshot_rows = 0
+        if results.get("syndromes", {}).get("success"):
+            snapshot_rows = capture_nowcast_snapshots(self.db, ["notaufnahme"]).get("notaufnahme", 0)
+
         return {
             "success": results.get('syndromes', {}).get("success", False),
             "results": results,
+            "snapshot_rows": snapshot_rows,
             "timestamp": datetime.utcnow().isoformat(),
         }

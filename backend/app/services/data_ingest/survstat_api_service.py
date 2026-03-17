@@ -36,6 +36,7 @@ from app.services.data_ingest.otc_disease_clusters import (
     ALL_OTC_DISEASES,
     disease_to_cluster,
 )
+from app.services.ml.nowcast_revision import capture_nowcast_snapshots
 
 logger = logging.getLogger(__name__)
 
@@ -908,6 +909,11 @@ class SurvstatApiService:
             logger.error(f"Gesamt-Aggregation fehlgeschlagen: {e}")
             errors.append(f"Gesamt-Aggregation: {e}")
 
+        snapshot_rows = capture_nowcast_snapshots(
+            self.db,
+            ["survstat_kreis", "survstat_weekly"],
+        )
+
         elapsed = round(time.time() - start, 1)
 
         result = {
@@ -919,6 +925,7 @@ class SurvstatApiService:
             "total_records": total_records,
             "db_written": db_result["inserted"],
             "gesamt_aggregated": gesamt_upserted,
+            "snapshot_rows": snapshot_rows,
             "errors": errors,
             "elapsed_seconds": elapsed,
             "timestamp": datetime.utcnow().isoformat(),

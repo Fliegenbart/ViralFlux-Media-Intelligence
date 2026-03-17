@@ -9,6 +9,7 @@ import logging
 from app.core.config import get_settings
 from app.models.database import WastewaterAggregated, WastewaterData
 from app.services.data_ingest.klaeranlage_coordinates import get_coordinates
+from app.services.ml.nowcast_revision import capture_nowcast_snapshots
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -205,8 +206,13 @@ class AmelagIngestionService:
             logger.error(f"Einzelstandorte import failed: {e}")
             results["einzelstandorte"] = {"success": False, "error": str(e)}
 
+        snapshot_rows = 0
+        if results.get("aggregiert", {}).get("success") or results.get("einzelstandorte", {}).get("success"):
+            snapshot_rows = capture_nowcast_snapshots(self.db, ["wastewater"]).get("wastewater", 0)
+
         return {
             "success": results.get("aggregiert", {}).get("success", False),
             "results": results,
+            "snapshot_rows": snapshot_rows,
             "timestamp": datetime.utcnow().isoformat()
         }

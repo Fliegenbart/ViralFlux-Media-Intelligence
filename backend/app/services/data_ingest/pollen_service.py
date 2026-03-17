@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.models.database import PollenData
+from app.services.ml.nowcast_revision import capture_nowcast_snapshots
 
 
 logger = logging.getLogger(__name__)
@@ -85,6 +86,7 @@ class PollenService:
                         )
 
         inserted, updated = self._upsert(parsed_records)
+        snapshot_rows = capture_nowcast_snapshots(self.db, ["pollen"]).get("pollen", 0)
         latest_date = max((row["datum"] for row in parsed_records), default=None)
         return {
             "success": inserted + updated > 0,
@@ -92,6 +94,7 @@ class PollenService:
             "records_total": len(parsed_records),
             "inserted": inserted,
             "updated": updated,
+            "snapshot_rows": snapshot_rows,
             "regions": sorted({row["region_code"] for row in parsed_records}),
             "pollen_types": sorted({row["pollen_type"] for row in parsed_records}),
             "last_update": last_update.isoformat() if last_update else None,

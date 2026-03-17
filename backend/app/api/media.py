@@ -302,6 +302,36 @@ async def get_media_outcomes_coverage(
     return _json_safe_response(MediaV2Service(db).get_truth_coverage(brand=brand, virus_typ=virus_typ))
 
 
+@router.get("/pilot-reporting")
+async def get_media_pilot_reporting(
+    brand: str = "gelo",
+    lookback_weeks: int = Query(default=26, ge=1, le=104),
+    window_start: datetime | None = None,
+    window_end: datetime | None = None,
+    region_code: str | None = Query(default=None),
+    product: str | None = Query(default=None),
+    include_draft: bool = Query(default=False),
+    db: Session = Depends(get_db),
+):
+    """Pilot readout for recommendation history, activations and outcome evidence."""
+    from app.services.media.pilot_reporting_service import PilotReportingService
+
+    try:
+        return _json_safe_response(
+            PilotReportingService(db).build_pilot_report(
+                brand=brand,
+                lookback_weeks=lookback_weeks,
+                window_start=window_start,
+                window_end=window_end,
+                region_code=region_code,
+                product=product,
+                include_draft=include_draft,
+            )
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
 @router.get("/evidence/truth")
 async def get_media_truth_evidence(
     brand: str = "gelo",

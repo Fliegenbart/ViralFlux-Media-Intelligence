@@ -6,6 +6,17 @@ from celery import Celery
 from celery.schedules import crontab
 from celery.signals import task_failure, task_success, task_prerun, task_postrun
 
+from app.core.config import get_settings
+from app.core.logging_config import setup_logging, log_event
+
+settings = get_settings()
+setup_logging(
+    level=settings.LOG_LEVEL,
+    json_format=settings.LOG_FORMAT == "json",
+    service_name="viralflux-celery",
+    environment=settings.ENVIRONMENT,
+    app_version=settings.APP_VERSION,
+)
 logger = logging.getLogger(__name__)
 
 # Hole die Redis-URL aus den Environment-Variablen (Fallback auf localhost fuer lokale Tests)
@@ -54,6 +65,12 @@ _task_start_times: dict[str, float] = {}
 @task_prerun.connect
 def _on_task_prerun(task_id, task, *args, **kwargs):
     _task_start_times[task_id] = time.perf_counter()
+    log_event(
+        logger,
+        "celery_task_started",
+        task_name=task.name if task else "unknown",
+        task_id=task_id,
+    )
 
 
 @task_postrun.connect
@@ -67,17 +84,26 @@ def _on_task_postrun(task_id, task, *args, **kwargs):
             celery_task_duration_seconds.labels(task.name).observe(duration)
         except Exception:
             pass
+        log_event(
+            logger,
+            "celery_task_completed",
+            task_name=task.name if task else "unknown",
+            task_id=task_id,
+            duration_ms=round(duration * 1000.0, 2),
+        )
 
 
 @task_failure.connect
 def _on_task_failure(task_id, exception, traceback, sender, *args, **kwargs):
     _task_start_times.pop(task_id, None)
-    logger.error(
-        "Celery task FAILED: %s (id=%s) — %s: %s",
-        sender.name if sender else "unknown",
-        task_id,
-        type(exception).__name__,
-        exception,
+    log_event(
+        logger,
+        "celery_task_failed",
+        level=logging.ERROR,
+        task_name=sender.name if sender else "unknown",
+        task_id=task_id,
+        error_type=type(exception).__name__,
+        error_message=str(exception),
     )
     try:
         from app.core.metrics import celery_tasks_total
@@ -85,6 +111,15 @@ def _on_task_failure(task_id, exception, traceback, sender, *args, **kwargs):
         celery_tasks_total.labels(task_name, "failure").inc()
     except Exception:
         pass
+
+
+@task_success.connect
+def _on_task_success(result, sender, **kwargs):
+    log_event(
+        logger,
+        "celery_task_success_signal",
+        task_name=sender.name if sender else "unknown",
+    )
 
 # ── Celery Beat Schedule ──────────────────────────────────────────────────────
 # Automatische Daten-Refreshes um Opportunities frisch zu halten.

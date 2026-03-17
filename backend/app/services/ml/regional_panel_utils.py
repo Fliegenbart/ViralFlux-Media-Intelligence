@@ -508,12 +508,15 @@ def precision_at_k(
     score_col: str = "event_probability_calibrated",
     label_col: str = "event_label",
     group_col: str = "as_of_date",
+    eventful_groups_only: bool = True,
 ) -> float:
     if frame.empty:
         return 0.0
 
     precisions: list[float] = []
     for _, group in frame.groupby(group_col):
+        if eventful_groups_only and float(group[label_col].sum() or 0.0) <= 0.0:
+            continue
         ranked = group.sort_values(score_col, ascending=False).head(k)
         if ranked.empty:
             continue
@@ -532,14 +535,16 @@ def activation_false_positive_rate(
     if frame.empty:
         return 0.0
     if threshold is None and threshold_col in frame.columns:
-        activated = frame.loc[frame[score_col] >= frame[threshold_col]]
+        activated_mask = frame[score_col] >= frame[threshold_col]
     else:
         effective_threshold = float(threshold or 0.5)
-        activated = frame.loc[frame[score_col] >= effective_threshold]
-    if activated.empty:
+        activated_mask = frame[score_col] >= effective_threshold
+    negative_mask = frame[label_col] == 0
+    negative_total = int(np.sum(negative_mask))
+    if negative_total <= 0:
         return 0.0
-    false_positives = activated.loc[activated[label_col] == 0]
-    return round(float(len(false_positives) / len(activated)), 6)
+    false_positives = int(np.sum(activated_mask & negative_mask))
+    return round(float(false_positives / negative_total), 6)
 
 
 def median_lead_days(

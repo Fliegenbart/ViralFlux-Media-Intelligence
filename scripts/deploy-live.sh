@@ -110,6 +110,20 @@ assert_no_bind_mounts() {
     fi
 }
 
+ensure_infra_service() {
+    local service="$1"
+    local container="$2"
+
+    if docker inspect "$container" >/dev/null 2>&1; then
+        echo "[$(date)] Reusing existing infra container: $container"
+        docker start "$container" >/dev/null 2>&1 || true
+        return 0
+    fi
+
+    echo "[$(date)] Creating infra service via compose: $service"
+    compose up -d "$service"
+}
+
 # ── Build frontend image ───────────────────────────────────────
 echo "[$(date)] Building frontend image..."
 docker build -t viralflux-media-frontend -f docker/Dockerfile.frontend .
@@ -120,7 +134,8 @@ compose build backend celery_worker celery_beat
 
 # ── Bring up infra first ───────────────────────────────────────
 echo "[$(date)] Ensuring infra services are up..."
-compose up -d "${INFRA_SERVICES[@]}"
+ensure_infra_service db virusradar_db
+ensure_infra_service redis viralflux_redis
 
 # ── Deploy app containers ─────────────────────────────────────
 echo "[$(date)] Deploying app containers..."

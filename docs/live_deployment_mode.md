@@ -76,6 +76,8 @@ Weil der Live-Pfad keine Code-Bind-Mounts verwendet, muessen Backend, Worker und
 
 Ein non-prod Compose-Deploy ist nur mit explizitem Override `ALLOW_DEV_COMPOSE_LIVE=true` moeglich und soll nicht fuer Normalbetrieb verwendet werden.
 
+Bestehende Infra-Container fuer Postgres und Redis werden im Migrationspfad bewusst wiederverwendet, falls sie bereits unter den kanonischen Namen `virusradar_db` und `viralflux_redis` laufen. Dadurch wird die Umstellung vom alten dev-lastigen Live-Stack auf den neuen Prod-Pfad ohne unnoetige Datenbank-Neuanlage moeglich.
+
 ## Failure Modes
 
 Wenn der Live-Pfad falsch konfiguriert ist, soll der Deploy hart scheitern statt still zu starten.

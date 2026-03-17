@@ -33,7 +33,7 @@ Was der Command macht:
 3. das aktuelle Live-Compose-Manifest `docker-compose.prod.yml` verwenden
 4. Frontend-Image neu bauen
 5. Backend-/Worker-/Beat-Images neu bauen, weil der Live-Pfad keine Code-Bind-Mounts mehr verwendet
-6. `db` und `redis` im Production-Compose-Projekt hochfahren
+6. `db` und `redis` im Production-Compose-Projekt hochfahren oder vorhandene Infra-Container sauber wiederverwenden
 7. `frontend-prod`, `backend`, `celery_worker` und `celery_beat` sauber neu erzeugen
 8. Guard-Checks auf `ENVIRONMENT=production`, harte DB-Flags und bind-mount-freien Live-Modus ausführen
 9. Liveness- und advisory Readiness-Snapshot prüfen

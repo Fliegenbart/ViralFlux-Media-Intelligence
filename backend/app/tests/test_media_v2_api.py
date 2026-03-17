@@ -9,6 +9,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.api.media import router
+from app.db.schema_contracts import MLForecastSchemaMismatchError
 from app.db.session import get_db
 from app.models.database import Base, BrandProduct, MediaOutcomeRecord, WastewaterAggregated
 
@@ -233,6 +234,16 @@ class MediaV2ApiTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 422)
         self.assertEqual(response.json()["detail"], "window_end must be on or after window_start")
+
+    def test_cockpit_endpoint_maps_mlforecast_schema_mismatch_to_503(self) -> None:
+        with patch(
+            "app.services.media.cockpit_service.MediaCockpitService.get_cockpit_payload",
+            side_effect=MLForecastSchemaMismatchError("MLForecast schema mismatch detected."),
+        ):
+            response = self.client.get("/api/v1/media/cockpit?virus_typ=Influenza%20A")
+
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.json()["detail"], "MLForecast schema mismatch detected.")
 
 
 if __name__ == "__main__":

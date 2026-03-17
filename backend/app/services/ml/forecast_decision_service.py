@@ -7,6 +7,7 @@ from typing import Any
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from app.db.schema_contracts import ensure_ml_forecast_schema_aligned
 from app.models.database import (
     BacktestRun,
     ForecastAccuracyLog,
@@ -28,6 +29,7 @@ from app.services.ml.forecast_contracts import (
     event_probability_from_forecast,
     normalized_expected_value_index,
 )
+from app.services.ml.forecast_horizon_utils import DEFAULT_FORECAST_REGION
 
 
 REQUIRED_OUTCOME_FIELD_NAMES = ("media_spend_eur",)
@@ -41,9 +43,14 @@ class ForecastDecisionService:
         self.db = db
 
     def _latest_forecasts(self, virus_typ: str) -> list[MLForecast]:
+        ensure_ml_forecast_schema_aligned(self.db)
         latest = (
             self.db.query(MLForecast)
-            .filter(MLForecast.virus_typ == virus_typ)
+            .filter(
+                MLForecast.virus_typ == virus_typ,
+                MLForecast.region == DEFAULT_FORECAST_REGION,
+                MLForecast.horizon_days == DEFAULT_DECISION_HORIZON_DAYS,
+            )
             .order_by(MLForecast.created_at.desc())
             .first()
         )
@@ -53,6 +60,8 @@ class ForecastDecisionService:
             self.db.query(MLForecast)
             .filter(
                 MLForecast.virus_typ == virus_typ,
+                MLForecast.region == DEFAULT_FORECAST_REGION,
+                MLForecast.horizon_days == DEFAULT_DECISION_HORIZON_DAYS,
                 MLForecast.created_at >= latest.created_at - timedelta(seconds=10),
             )
             .order_by(MLForecast.forecast_date.asc())

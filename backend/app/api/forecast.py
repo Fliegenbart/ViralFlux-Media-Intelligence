@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from datetime import datetime
 import logging
 
+from app.db.schema_contracts import MLForecastSchemaMismatchError
 from app.db.session import get_db, get_db_context
 from app.services.ml.forecast_decision_service import ForecastDecisionService
 from app.services.ml.forecast_horizon_utils import ensure_supported_horizon
@@ -140,10 +141,13 @@ async def get_forecast_monitoring(
     db: Session = Depends(get_db),
 ):
     """Forecast monitoring snapshot with readiness, drift and calibration gates."""
-    return ForecastDecisionService(db).build_monitoring_snapshot(
-        virus_typ=virus_typ,
-        target_source=target_source,
-    )
+    try:
+        return ForecastDecisionService(db).build_monitoring_snapshot(
+            virus_typ=virus_typ,
+            target_source=target_source,
+        )
+    except MLForecastSchemaMismatchError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 @router.get("/monitoring")
@@ -153,13 +157,16 @@ async def get_all_forecast_monitoring(
 ):
     """Monitoring overview for all supported virus types."""
     service = ForecastDecisionService(db)
-    monitoring = {
-        virus: service.build_monitoring_snapshot(
-            virus_typ=virus,
-            target_source=target_source,
-        )
-        for virus in SUPPORTED_VIRUS_TYPES
-    }
+    try:
+        monitoring = {
+            virus: service.build_monitoring_snapshot(
+                virus_typ=virus,
+                target_source=target_source,
+            )
+            for virus in SUPPORTED_VIRUS_TYPES
+        }
+    except MLForecastSchemaMismatchError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     any_warning = any(
         snapshot.get("monitoring_status") in {"warning", "critical"}
         for snapshot in monitoring.values()

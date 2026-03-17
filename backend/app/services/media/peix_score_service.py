@@ -25,6 +25,7 @@ import numpy as np
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from app.db.schema_contracts import ensure_ml_forecast_schema_aligned
 from app.models.database import (
     AREKonsultation,
     GanzimmunData,
@@ -39,6 +40,8 @@ from app.models.database import (
 )
 from app.services.data_ingest.bfarm_service import get_cached_signals
 from app.services.data_ingest.weather_service import CITY_STATE_MAP
+from app.services.ml.forecast_contracts import DEFAULT_DECISION_HORIZON_DAYS
+from app.services.ml.forecast_horizon_utils import DEFAULT_FORECAST_REGION
 
 logger = logging.getLogger(__name__)
 
@@ -674,8 +677,11 @@ class PeixEpiScoreService:
 
     def _forecast_signal(self, virus_typ: str) -> float:
         """Prophet/HW-Trend aus MLForecast-Tabelle (bestehende Logik)."""
+        ensure_ml_forecast_schema_aligned(self.db)
         latest = self.db.query(MLForecast).filter(
             MLForecast.virus_typ == virus_typ,
+            MLForecast.region == DEFAULT_FORECAST_REGION,
+            MLForecast.horizon_days == DEFAULT_DECISION_HORIZON_DAYS,
         ).order_by(MLForecast.created_at.desc()).first()
 
         if not latest:
@@ -683,6 +689,8 @@ class PeixEpiScoreService:
 
         forecasts = self.db.query(MLForecast).filter(
             MLForecast.virus_typ == virus_typ,
+            MLForecast.region == DEFAULT_FORECAST_REGION,
+            MLForecast.horizon_days == DEFAULT_DECISION_HORIZON_DAYS,
             MLForecast.created_at >= latest.created_at - timedelta(seconds=10),
         ).order_by(MLForecast.forecast_date.asc()).all()
 

@@ -7,6 +7,8 @@ from pydantic import BaseModel, ConfigDict, Field
 class MLForecastBase(BaseModel):
     forecast_date: datetime
     virus_typ: str = Field(..., min_length=1)
+    region: str = Field(default="DE", min_length=1)
+    horizon_days: int = Field(default=7, ge=1)
     predicted_value: float = Field(..., ge=0)
     lower_bound: float | None = None
     upper_bound: float | None = None
@@ -26,6 +28,8 @@ class MLForecastCreate(MLForecastBase):
 class MLForecastUpdate(BaseModel):
     forecast_date: datetime | None = None
     virus_typ: str | None = Field(default=None, min_length=1)
+    region: str | None = Field(default=None, min_length=1)
+    horizon_days: int | None = Field(default=None, ge=1)
     predicted_value: float | None = Field(default=None, ge=0)
     lower_bound: float | None = None
     upper_bound: float | None = None
@@ -43,4 +47,3 @@ class MLForecastResponse(MLForecastBase):
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
-

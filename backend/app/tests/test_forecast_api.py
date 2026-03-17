@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from app.api.forecast import router
+from app.db.schema_contracts import MLForecastSchemaMismatchError
 from app.db.session import get_db
 
 
@@ -373,6 +374,16 @@ class ForecastApiTests(unittest.TestCase):
         )
 
         self.assertEqual(response.status_code, 422)
+
+    def test_monitoring_endpoint_maps_schema_mismatch_to_503(self) -> None:
+        with patch(
+            "app.services.ml.forecast_decision_service.ForecastDecisionService.build_monitoring_snapshot",
+            side_effect=MLForecastSchemaMismatchError("MLForecast schema mismatch detected."),
+        ):
+            response = self.client.get("/api/v1/forecast/monitoring/Influenza%20A")
+
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.json()["detail"], "MLForecast schema mismatch detected.")
 
 
 if __name__ == "__main__":

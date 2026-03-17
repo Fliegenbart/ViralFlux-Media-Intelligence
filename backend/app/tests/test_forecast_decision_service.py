@@ -172,6 +172,51 @@ class ForecastDecisionServiceTests(unittest.TestCase):
         self.assertEqual(snapshot["drift_status"], "warning")
         self.assertTrue(any("Drift" in alert for alert in snapshot["alerts"]))
 
+    def test_latest_forecasts_are_scoped_to_national_default_horizon(self) -> None:
+        now = datetime.utcnow().replace(microsecond=0)
+        self.db.add_all([
+            MLForecast(
+                forecast_date=now + timedelta(days=1),
+                virus_typ="Influenza A",
+                region="DE",
+                horizon_days=7,
+                predicted_value=100.0,
+                created_at=now,
+            ),
+            MLForecast(
+                forecast_date=now + timedelta(days=2),
+                virus_typ="Influenza A",
+                region="DE",
+                horizon_days=7,
+                predicted_value=110.0,
+                created_at=now,
+            ),
+            MLForecast(
+                forecast_date=now + timedelta(days=1),
+                virus_typ="Influenza A",
+                region="BY",
+                horizon_days=7,
+                predicted_value=999.0,
+                created_at=now + timedelta(minutes=2),
+            ),
+            MLForecast(
+                forecast_date=now + timedelta(days=1),
+                virus_typ="Influenza A",
+                region="DE",
+                horizon_days=5,
+                predicted_value=777.0,
+                created_at=now + timedelta(minutes=3),
+            ),
+        ])
+        self.db.commit()
+
+        forecasts = ForecastDecisionService(self.db)._latest_forecasts("Influenza A")
+
+        self.assertEqual(len(forecasts), 2)
+        self.assertTrue(all(item.region == "DE" for item in forecasts))
+        self.assertTrue(all(item.horizon_days == 7 for item in forecasts))
+        self.assertEqual([item.predicted_value for item in forecasts], [100.0, 110.0])
+
     def test_build_monitoring_snapshot_sanitizes_non_finite_metrics(self) -> None:
         self._seed_forecast_bundle_inputs()
         latest_accuracy = (

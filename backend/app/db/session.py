@@ -6,6 +6,7 @@ from typing import Any, Generator
 import logging
 
 from app.core.config import get_settings
+from app.db.schema_contracts import get_required_schema_contract_gaps
 from app.models.database import Base
 
 logger = logging.getLogger(__name__)
@@ -261,6 +262,11 @@ def init_db():
     missing_tables = sorted(expected_tables - existing_tables)
     actions: list[str] = []
     warnings: list[str] = []
+    required_schema_gaps = {
+        "missing_tables": [],
+        "missing_columns": [],
+        "missing_indexes": [],
+    }
 
     if missing_tables:
         if auto_create:
@@ -283,6 +289,32 @@ def init_db():
                 "Fehlende DB-Tabellen ohne Auto-Create: " + ", ".join(missing_tables)
             )
 
+    required_schema_gaps = get_required_schema_contract_gaps(engine)
+    if (
+        required_schema_gaps["missing_tables"]
+        or required_schema_gaps["missing_columns"]
+        or required_schema_gaps["missing_indexes"]
+    ):
+        summary = {
+            "status": "critical",
+            "message": "Database schema is missing required migration-managed fields.",
+            "auto_create_schema": auto_create,
+            "runtime_schema_updates_enabled": allow_runtime_updates,
+            "missing_tables": missing_tables,
+            "required_schema_gaps": required_schema_gaps,
+            "warnings": warnings,
+            "actions": actions,
+        }
+        _set_last_init_summary(summary)
+        details = (
+            required_schema_gaps["missing_tables"]
+            + required_schema_gaps["missing_columns"]
+            + required_schema_gaps["missing_indexes"]
+        )
+        raise RuntimeError(
+            "Fehlende Pflicht-Migrationen fuer DB-Kernschema: " + ", ".join(details)
+        )
+
     gaps = _runtime_schema_gaps(existing_tables)
     if gaps["missing_columns"] or gaps["missing_indexes"]:
         if allow_runtime_updates:
@@ -299,6 +331,7 @@ def init_db():
                 "auto_create_schema": auto_create,
                 "runtime_schema_updates_enabled": allow_runtime_updates,
                 "missing_tables": missing_tables,
+                "required_schema_gaps": required_schema_gaps,
                 "runtime_schema_gaps": gaps,
                 "warnings": warnings,
                 "actions": actions,
@@ -315,6 +348,7 @@ def init_db():
         "auto_create_schema": auto_create,
         "runtime_schema_updates_enabled": allow_runtime_updates,
         "missing_tables": missing_tables,
+        "required_schema_gaps": required_schema_gaps,
         "runtime_schema_gaps": gaps,
         "warnings": warnings,
         "actions": actions,

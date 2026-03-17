@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from app.core.celery_app import celery_app
 from app.core.config import get_settings
 from app.core.rate_limit import limiter
+from app.db.schema_contracts import MLForecastSchemaMismatchError
 from app.db.session import get_db
 from app.services.marketing_engine.opportunity_engine import MarketingOpportunityEngine
 from app.services.media.connector_payload_service import ConnectorPayloadService
@@ -210,7 +211,10 @@ async def get_media_cockpit(
 ):
     """Aggregierter One-shot Payload für das Map-first Dashboard."""
     service = MediaCockpitService(db)
-    return service.get_cockpit_payload(virus_typ=virus_typ, target_source=target_source)
+    try:
+        return service.get_cockpit_payload(virus_typ=virus_typ, target_source=target_source)
+    except MLForecastSchemaMismatchError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 @router.get("/decision")

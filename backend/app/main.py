@@ -24,6 +24,7 @@ from app.core.metrics import (
     http_requests_total,
     http_request_duration_seconds,
 )
+from app.db.schema_contracts import SchemaContractMismatchError
 from app.db.session import get_db, get_db_context, check_db_connection, init_db
 from app.services.ops.production_readiness_service import ProductionReadinessService
 from app.services.ops.run_metadata_service import OperationalRunRecorder
@@ -100,6 +101,29 @@ async def generic_exception_handler(request: Request, exc: Exception):
         content={
             "error": "internal_error",
             "detail": "Ein interner Fehler ist aufgetreten.",
+            "correlation_id": cid or None,
+        },
+    )
+
+
+@app.exception_handler(SchemaContractMismatchError)
+async def schema_contract_exception_handler(request: Request, exc: SchemaContractMismatchError):
+    cid = correlation_id.get("")
+    log_event(
+        logger,
+        "schema_contract_mismatch",
+        level=logging.ERROR,
+        path=str(request.url.path),
+        method=request.method,
+        correlation_id=cid or None,
+        error_type=type(exc).__name__,
+        error_message=str(exc),
+    )
+    return JSONResponse(
+        status_code=503,
+        content={
+            "error": "schema_mismatch",
+            "detail": str(exc),
             "correlation_id": cid or None,
         },
     )

@@ -65,6 +65,7 @@ services:
       - VLLM_BASE_URL=${VLLM_BASE_URL:-http://host.docker.internal:8000/v1}
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - M2M_SECRET_KEY=${M2M_SECRET_KEY:-}
       - SECRET_KEY=${SECRET_KEY:?SECRET_KEY must be set in .env}
       - ADMIN_EMAIL=${ADMIN_EMAIL:?ADMIN_EMAIL must be set in .env}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:?ADMIN_PASSWORD must be set in .env}
@@ -144,6 +145,7 @@ services:
       - VLLM_BASE_URL=${VLLM_BASE_URL:-http://host.docker.internal:8000/v1}
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - M2M_SECRET_KEY=${M2M_SECRET_KEY:-}
       - SECRET_KEY=${SECRET_KEY:?SECRET_KEY must be set in .env}
       - ADMIN_EMAIL=${ADMIN_EMAIL:?ADMIN_EMAIL must be set in .env}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:?ADMIN_PASSWORD must be set in .env}
@@ -192,6 +194,7 @@ services:
       - VLLM_BASE_URL=${VLLM_BASE_URL:-http://host.docker.internal:8000/v1}
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - M2M_SECRET_KEY=${M2M_SECRET_KEY:-}
       - SECRET_KEY=${SECRET_KEY:?SECRET_KEY must be set in .env}
       - ADMIN_EMAIL=${ADMIN_EMAIL:?ADMIN_EMAIL must be set in .env}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:?ADMIN_PASSWORD must be set in .env}

@@ -35,7 +35,7 @@ from app.services.ml.regional_panel_utils import (
     rollout_mode_for_virus,
     signal_bundle_version_for_virus,
 )
-from app.services.ml.regional_trainer import _virus_slug
+from app.services.ml.regional_trainer import TRAINING_ONLY_PANEL_COLUMNS, _virus_slug
 from app.services.ml.training_contract import SUPPORTED_VIRUS_TYPES
 
 logger = logging.getLogger(__name__)
@@ -147,6 +147,27 @@ class RegionalForecastService:
                 horizon_days=horizon,
                 status="no_data",
                 message=f"Keine regionalen Features für Horizon {horizon} und den aktuellen Datenstand verfügbar.",
+                artifact_transition_mode=artifact_transition_mode,
+                supported_horizon_days_for_virus=support["supported_horizons"],
+            )
+
+        missing_feature_columns = sorted(
+            {
+                str(column)
+                for column in feature_columns
+                if str(column) not in panel.columns
+            }
+        )
+        if missing_feature_columns:
+            return self._empty_forecast_response(
+                virus_typ=virus_typ,
+                horizon_days=horizon,
+                status="no_model",
+                message=(
+                    f"Artefakt-Bundle für {virus_typ}/h{horizon} referenziert Inferenz-Features, "
+                    f"die im aktuellen Panel fehlen: {', '.join(missing_feature_columns)}. "
+                    "Bitte horizon-spezifisches Retraining durchführen."
+                ),
                 artifact_transition_mode=artifact_transition_mode,
                 supported_horizon_days_for_virus=support["supported_horizons"],
             )
@@ -962,6 +983,16 @@ class RegionalForecastService:
                 return payload
             metadata.setdefault("target_window_days", self._target_window_for_horizon(horizon))
             metadata.setdefault("supported_horizon_days", list(SUPPORTED_FORECAST_HORIZONS))
+            invalid_feature_columns = self._invalid_inference_feature_columns(
+                metadata.get("feature_columns") or []
+            )
+            if invalid_feature_columns:
+                payload["load_error"] = (
+                    f"Artefakt-Bundle für {virus_typ}/h{horizon} enthält trainingsinterne "
+                    f"Feature-Spalten: {', '.join(invalid_feature_columns)}. "
+                    "Bitte horizon-spezifisches Retraining durchführen."
+                )
+                return payload
             payload["metadata"] = metadata
             return payload
 
@@ -990,6 +1021,15 @@ class RegionalForecastService:
         metadata["artifact_transition_mode"] = "legacy_default_window_fallback"
         legacy_payload["metadata"] = metadata
         legacy_payload["artifact_transition_mode"] = "legacy_default_window_fallback"
+        invalid_feature_columns = self._invalid_inference_feature_columns(
+            metadata.get("feature_columns") or []
+        )
+        if invalid_feature_columns:
+            legacy_payload["load_error"] = (
+                f"Legacy-Artefakt-Bundle für {virus_typ}/h{horizon} enthält trainingsinterne "
+                f"Feature-Spalten: {', '.join(invalid_feature_columns)}. "
+                "Bitte horizon-spezifisches Retraining durchführen."
+            )
         return legacy_payload
 
     @staticmethod
@@ -1010,6 +1050,16 @@ class RegionalForecastService:
             for path in cls._required_artifact_paths(model_dir).values()
             if not path.exists()
         ]
+
+    @staticmethod
+    def _invalid_inference_feature_columns(feature_columns: list[str]) -> list[str]:
+        return sorted(
+            {
+                str(column)
+                for column in feature_columns
+                if str(column) in TRAINING_ONLY_PANEL_COLUMNS
+            }
+        )
 
     @classmethod
     def _artifact_payload_from_dir(cls, model_dir: Path) -> dict[str, Any]:

@@ -90,7 +90,12 @@ python scripts/recompute_operational_views.py --virus "Influenza A" --horizon 7 
 
 ```bash
 cd /Users/davidwegener/Desktop/viralflux/backend
-python scripts/smoke_test_release.py --base-url http://127.0.0.1:8000 --require-ready --check-regional-validation
+python scripts/smoke_test_release.py \
+  --base-url http://127.0.0.1:8000 \
+  --virus "Influenza A" \
+  --horizon 7 \
+  --budget-eur 50000 \
+  --top-n 3
 ```
 
 ## Health Endpoint Expectations

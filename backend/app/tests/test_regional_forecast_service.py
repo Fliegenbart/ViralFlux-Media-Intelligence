@@ -409,6 +409,29 @@ class RegionalForecastServiceTests(unittest.TestCase):
         self.assertEqual(result["target_window_days"], [3, 3])
         self.assertIn("Horizon 3", result["message"])
 
+    def test_predict_all_regions_returns_no_model_when_artifact_features_do_not_match_panel(self) -> None:
+        service = self._make_service()
+        service._load_artifacts = lambda virus_typ, horizon_days=7: {
+            "classifier": _DummyClassifier([0.82, 0.41]),
+            "regressor_median": _DummyRegressor(np.log1p([28.0, 12.0])),
+            "regressor_lower": _DummyRegressor(np.log1p([24.0, 10.0])),
+            "regressor_upper": _DummyRegressor(np.log1p([32.0, 15.0])),
+            "calibration": None,
+            "metadata": {
+                "feature_columns": ["f1", "target_incidence"],
+                "horizon_days": horizon_days,
+                "target_window_days": [horizon_days, horizon_days],
+                "supported_horizon_days": [3, 5, 7],
+                "quality_gate": {"overall_passed": True, "forecast_readiness": "GO"},
+            },
+        }
+
+        result = service.predict_all_regions(virus_typ="Influenza A", horizon_days=7)
+
+        self.assertEqual(result["status"], "no_model")
+        self.assertEqual(result["predictions"], [])
+        self.assertIn("target_incidence", result["message"])
+
     def test_media_activation_stays_watch_until_business_gate_is_validated(self) -> None:
         service = self._make_service(
             quality_gate_passed=True,

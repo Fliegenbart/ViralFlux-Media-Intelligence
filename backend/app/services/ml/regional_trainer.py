@@ -108,12 +108,17 @@ EXCLUDED_MODEL_COLUMNS = {
     "event_definition_version",
     "truth_source",
     "target_truth_source",
+    "target_incidence",
     "current_known_incidence",
     "next_week_incidence",
     "seasonal_baseline",
     "seasonal_mad",
     "event_label",
     "y_next_log",
+}
+
+TRAINING_ONLY_PANEL_COLUMNS = {
+    "target_incidence",
 }
 
 
@@ -519,6 +524,15 @@ class RegionalModelTrainer:
             metadata.setdefault("horizon_days", horizon)
             metadata.setdefault("target_window_days", _target_window_for_horizon(horizon))
             metadata.setdefault("supported_horizon_days", list(SUPPORTED_FORECAST_HORIZONS))
+            invalid_feature_columns = self._invalid_inference_feature_columns(
+                metadata.get("feature_columns") or []
+            )
+            if invalid_feature_columns:
+                payload["load_error"] = (
+                    f"Artefakt-Bundle für {virus_typ}/h{horizon} enthält trainingsinterne "
+                    f"Feature-Spalten: {', '.join(invalid_feature_columns)}. "
+                    "Bitte horizon-spezifisches Retraining durchführen."
+                )
             return payload
 
         if horizon != 7:
@@ -543,6 +557,15 @@ class RegionalModelTrainer:
         metadata["artifact_dir"] = str(legacy_dir)
         legacy_payload["metadata"] = metadata
         legacy_payload["artifact_transition_mode"] = "legacy_default_window_fallback"
+        invalid_feature_columns = self._invalid_inference_feature_columns(
+            metadata.get("feature_columns") or []
+        )
+        if invalid_feature_columns:
+            legacy_payload["load_error"] = (
+                f"Legacy-Artefakt-Bundle für {virus_typ}/h{horizon} enthält trainingsinterne "
+                f"Feature-Spalten: {', '.join(invalid_feature_columns)}. "
+                "Bitte horizon-spezifisches Retraining durchführen."
+            )
         return legacy_payload
 
     @staticmethod
@@ -583,6 +606,16 @@ class RegionalModelTrainer:
                 "national_ww_acceleration7d",
             }
         ]
+
+    @staticmethod
+    def _invalid_inference_feature_columns(feature_columns: list[str]) -> list[str]:
+        return sorted(
+            {
+                str(column)
+                for column in feature_columns
+                if str(column) in TRAINING_ONLY_PANEL_COLUMNS
+            }
+        )
 
     def _rollout_metadata(
         self,

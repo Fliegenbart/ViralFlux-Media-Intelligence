@@ -9,6 +9,12 @@ PROJECT="${PROJECT:-viralflux-media-intelligence-clean}"
 COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.prod.yml}"
 HEALTH_URL="${HEALTH_URL:-http://localhost:8000/health/live}"
 READY_URL="${READY_URL:-http://localhost:8000/health/ready}"
+SMOKE_BASE_URL="${SMOKE_BASE_URL:-http://localhost:8000}"
+SMOKE_VIRUS="${SMOKE_VIRUS:-Influenza A}"
+SMOKE_HORIZON="${SMOKE_HORIZON:-7}"
+SMOKE_WEEKLY_BUDGET_EUR="${SMOKE_WEEKLY_BUDGET_EUR:-50000}"
+SMOKE_TOP_N="${SMOKE_TOP_N:-3}"
+SMOKE_CHECK_COCKPIT="${SMOKE_CHECK_COCKPIT:-false}"
 MAX_HEALTH_RETRIES=15
 HEALTH_INTERVAL=4
 REQUIRED_COMPOSE_BASENAME="docker-compose.prod.yml"
@@ -132,6 +138,61 @@ start_app_services_sequentially() {
     done
 }
 
+rollback_to_previous_commit() {
+    echo "[$(date)] Rolling back to $PREV_COMMIT..." >&2
+    git reset --hard "$PREV_COMMIT"
+    docker rm -f "${APP_CONTAINERS[@]}" >/dev/null 2>&1 || true
+    start_app_services_sequentially
+    echo "[$(date)] Rollback complete. Deployed commit: $PREV_COMMIT" >&2
+}
+
+run_release_smoke() {
+    local smoke_args=(
+        --base-url "$SMOKE_BASE_URL"
+        --virus "$SMOKE_VIRUS"
+        --horizon "$SMOKE_HORIZON"
+        --budget-eur "$SMOKE_WEEKLY_BUDGET_EUR"
+        --top-n "$SMOKE_TOP_N"
+    )
+
+    if [ "$SMOKE_CHECK_COCKPIT" = "true" ]; then
+        smoke_args+=(--check-cockpit)
+    fi
+
+    set +e
+    python3 backend/scripts/smoke_test_release.py "${smoke_args[@]}" > /tmp/viralflux-release-smoke.json
+    local smoke_exit=$?
+    set -e
+
+    if [ -f /tmp/viralflux-release-smoke.json ]; then
+        cat /tmp/viralflux-release-smoke.json
+        echo ""
+    fi
+
+    case "$smoke_exit" in
+        0)
+            echo "[$(date)] Release smoke passed."
+            ;;
+        10)
+            echo "[$(date)] WARNING: Release smoke reports ready_blocked. Liveness and core business endpoints are up, but readiness is not healthy." >&2
+            ;;
+        20)
+            echo "[$(date)] ERROR: Release smoke reports business_smoke_failed. Core regional product endpoints are not reliable." >&2
+            return "$smoke_exit"
+            ;;
+        30)
+            echo "[$(date)] ERROR: Release smoke reports live_failed." >&2
+            return "$smoke_exit"
+            ;;
+        *)
+            echo "[$(date)] ERROR: Release smoke returned unexpected exit code $smoke_exit." >&2
+            return "$smoke_exit"
+            ;;
+    esac
+
+    return 0
+}
+
 # ── Build frontend image ───────────────────────────────────────
 echo "[$(date)] Building frontend image..."
 docker build -t viralflux-media-frontend -f docker/Dockerfile.frontend .
@@ -175,27 +236,15 @@ done
 
 if [ "$HEALTHY" = false ]; then
     echo "[$(date)] ERROR: Liveness check failed after $MAX_HEALTH_RETRIES attempts!" >&2
-    echo "[$(date)] Rolling back to $PREV_COMMIT..." >&2
-
-    # Rollback: reset to previous commit and redeploy
-    git reset --hard "$PREV_COMMIT"
-    docker rm -f "${APP_CONTAINERS[@]}" >/dev/null 2>&1 || true
-    start_app_services_sequentially
-
-    echo "[$(date)] Rollback complete. Deployed commit: $PREV_COMMIT" >&2
+    rollback_to_previous_commit
     exit 1
 fi
 
-# ── Readiness snapshot (advisory) ──────────────────────────────
-READY_HTTP_CODE=$(curl -s -o /tmp/viralflux-ready.json -w "%{http_code}" "$READY_URL" 2>/dev/null || echo "000")
-if [ "$READY_HTTP_CODE" = "200" ]; then
-    echo "[$(date)] Readiness snapshot OK: $READY_URL"
-else
-    echo "[$(date)] WARNING: Readiness snapshot returned HTTP $READY_HTTP_CODE: $READY_URL" >&2
-    if [ -f /tmp/viralflux-ready.json ]; then
-        cat /tmp/viralflux-ready.json >&2 || true
-        echo >&2
-    fi
+# ── Modern release smoke ───────────────────────────────────────
+echo "[$(date)] Running release smoke against live, ready and core regional product endpoints..."
+if ! run_release_smoke; then
+    rollback_to_previous_commit
+    exit 1
 fi
 
 # ── Show status ────────────────────────────────────────────────

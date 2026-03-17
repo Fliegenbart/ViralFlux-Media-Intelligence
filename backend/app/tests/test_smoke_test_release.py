@@ -1,0 +1,242 @@
+from __future__ import annotations
+
+import importlib.util
+import unittest
+from pathlib import Path
+from unittest.mock import patch
+
+
+SCRIPT_PATH = Path(__file__).resolve().parents[2] / "scripts" / "smoke_test_release.py"
+SPEC = importlib.util.spec_from_file_location("smoke_test_release", SCRIPT_PATH)
+assert SPEC and SPEC.loader
+smoke_test_release = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(smoke_test_release)
+
+
+class SmokeTestReleaseTests(unittest.TestCase):
+    def test_run_smoke_passes_on_healthy_core_path(self) -> None:
+        responses = [
+            (200, {"status": "alive", "environment": "production", "app_version": "1.0.0"}),
+            (200, {"status": "healthy", "components": {}, "blockers": []}),
+            (
+                200,
+                {
+                    "virus_typ": "Influenza A",
+                    "horizon_days": 7,
+                    "quality_gate": {"forecast_readiness": "WATCH"},
+                    "predictions": [
+                        {
+                            "bundesland": "BY",
+                            "decision_label": "Prepare",
+                            "priority_score": 0.71,
+                            "reason_trace": {"drivers": ["signal"]},
+                            "uncertainty_summary": "Moderate uncertainty.",
+                        }
+                    ],
+                },
+            ),
+            (
+                200,
+                {
+                    "virus_typ": "Influenza A",
+                    "horizon_days": 7,
+                    "summary": {"activate_regions": 1, "prepare_regions": 2, "watch_regions": 13},
+                    "recommendations": [
+                        {
+                            "bundesland": "BY",
+                            "recommended_activation_level": "Prepare",
+                            "suggested_budget_share": 0.12,
+                            "suggested_budget_amount": 6000.0,
+                            "allocation_reason_trace": {"drivers": ["decision_score"]},
+                            "confidence": 0.66,
+                        }
+                    ],
+                },
+            ),
+            (
+                200,
+                {
+                    "virus_typ": "Influenza A",
+                    "horizon_days": 7,
+                    "summary": {
+                        "top_region": "BY",
+                        "top_product_cluster": "Respiratory Core Demand",
+                        "ready_recommendations": 1,
+                    },
+                    "recommendations": [
+                        {
+                            "region": "BY",
+                            "recommended_product_cluster": {"label": "Respiratory Core Demand"},
+                            "recommended_keyword_cluster": {"label": "Respiratory Relief Search"},
+                            "activation_level": "Prepare",
+                            "suggested_budget_amount": 6000.0,
+                            "confidence": 0.66,
+                            "evidence_class": "moderate",
+                            "recommendation_rationale": {"summary": ["Signal and budget support activation."]},
+                        }
+                    ],
+                },
+            ),
+        ]
+
+        with patch.object(smoke_test_release, "_request_json", side_effect=responses):
+            exit_code, result = smoke_test_release.run_smoke(
+                base_url="http://127.0.0.1:8000",
+                timeout=5.0,
+                virus="Influenza A",
+                horizon=7,
+                budget_eur=50_000.0,
+                top_n=3,
+                target_source="RKI_ARE",
+                check_cockpit=False,
+            )
+
+        self.assertEqual(exit_code, smoke_test_release.EXIT_OK)
+        self.assertEqual(result["status"], "pass")
+        self.assertEqual(result["failure_level"], "none")
+        self.assertTrue(result["checks"]["regional_forecast"]["passed"])
+        self.assertTrue(result["checks"]["regional_allocation"]["passed"])
+        self.assertTrue(result["checks"]["regional_campaign_recommendations"]["passed"])
+
+    def test_run_smoke_flags_ready_blocked_without_business_failure(self) -> None:
+        responses = [
+            (200, {"status": "alive", "environment": "production"}),
+            (503, {"status": "unhealthy", "components": {}, "blockers": [{"component": "regional_operational"}]}),
+            (
+                200,
+                {
+                    "virus_typ": "Influenza A",
+                    "horizon_days": 7,
+                    "predictions": [
+                        {
+                            "bundesland": "BY",
+                            "decision_label": "Prepare",
+                            "priority_score": 0.71,
+                            "reason_trace": {},
+                            "uncertainty_summary": "Moderate uncertainty.",
+                        }
+                    ],
+                },
+            ),
+            (
+                200,
+                {
+                    "virus_typ": "Influenza A",
+                    "horizon_days": 7,
+                    "summary": {},
+                    "recommendations": [
+                        {
+                            "bundesland": "BY",
+                            "recommended_activation_level": "Prepare",
+                            "suggested_budget_share": 0.12,
+                            "suggested_budget_amount": 6000.0,
+                            "allocation_reason_trace": {},
+                            "confidence": 0.66,
+                        }
+                    ],
+                },
+            ),
+            (
+                200,
+                {
+                    "virus_typ": "Influenza A",
+                    "horizon_days": 7,
+                    "summary": {},
+                    "recommendations": [
+                        {
+                            "region": "BY",
+                            "recommended_product_cluster": {"label": "Respiratory Core Demand"},
+                            "recommended_keyword_cluster": {"label": "Respiratory Relief Search"},
+                            "activation_level": "Prepare",
+                            "suggested_budget_amount": 6000.0,
+                            "confidence": 0.66,
+                            "evidence_class": "moderate",
+                            "recommendation_rationale": {"summary": ["Signal and budget support activation."]},
+                        }
+                    ],
+                },
+            ),
+        ]
+
+        with patch.object(smoke_test_release, "_request_json", side_effect=responses):
+            exit_code, result = smoke_test_release.run_smoke(
+                base_url="http://127.0.0.1:8000",
+                timeout=5.0,
+                virus="Influenza A",
+                horizon=7,
+                budget_eur=50_000.0,
+                top_n=3,
+                target_source="RKI_ARE",
+                check_cockpit=False,
+            )
+
+        self.assertEqual(exit_code, smoke_test_release.EXIT_READY_BLOCKED)
+        self.assertEqual(result["status"], "warning")
+        self.assertEqual(result["failure_level"], "ready_blocked")
+        self.assertTrue(result["checks"]["health_ready"]["blocked"])
+
+    def test_run_smoke_fails_when_business_core_breaks(self) -> None:
+        responses = [
+            (200, {"status": "alive", "environment": "production"}),
+            (200, {"status": "healthy", "components": {}, "blockers": []}),
+            (500, {"detail": "server exploded"}),
+            (
+                200,
+                {
+                    "virus_typ": "Influenza A",
+                    "horizon_days": 7,
+                    "summary": {},
+                    "recommendations": [
+                        {
+                            "bundesland": "BY",
+                            "recommended_activation_level": "Prepare",
+                            "suggested_budget_share": 0.12,
+                            "suggested_budget_amount": 6000.0,
+                            "allocation_reason_trace": {},
+                            "confidence": 0.66,
+                        }
+                    ],
+                },
+            ),
+            (
+                200,
+                {
+                    "virus_typ": "Influenza A",
+                    "horizon_days": 7,
+                    "summary": {},
+                    "recommendations": [
+                        {
+                            "region": "BY",
+                            "recommended_product_cluster": {"label": "Respiratory Core Demand"},
+                            "recommended_keyword_cluster": {"label": "Respiratory Relief Search"},
+                            "activation_level": "Prepare",
+                            "suggested_budget_amount": 6000.0,
+                            "confidence": 0.66,
+                            "evidence_class": "moderate",
+                            "recommendation_rationale": {"summary": ["Signal and budget support activation."]},
+                        }
+                    ],
+                },
+            ),
+        ]
+
+        with patch.object(smoke_test_release, "_request_json", side_effect=responses):
+            exit_code, result = smoke_test_release.run_smoke(
+                base_url="http://127.0.0.1:8000",
+                timeout=5.0,
+                virus="Influenza A",
+                horizon=7,
+                budget_eur=50_000.0,
+                top_n=3,
+                target_source="RKI_ARE",
+                check_cockpit=False,
+            )
+
+        self.assertEqual(exit_code, smoke_test_release.EXIT_BUSINESS_SMOKE_FAILED)
+        self.assertEqual(result["status"], "fail")
+        self.assertEqual(result["failure_level"], "business_smoke_failed")
+        self.assertFalse(result["checks"]["regional_forecast"]["passed"])
+
+
+if __name__ == "__main__":
+    unittest.main()

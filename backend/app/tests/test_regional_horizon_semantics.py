@@ -56,6 +56,35 @@ class RegionalHorizonSemanticsTests(unittest.TestCase):
         self.assertEqual(prepared.iloc[0]["target_window_days"], [3, 3])
         self.assertEqual(prepared.iloc[0]["horizon_days"], 3.0)
 
+    def test_feature_columns_exclude_training_only_target_incidence(self) -> None:
+        panel = pd.DataFrame(
+            {
+                "bundesland": ["BY"],
+                "bundesland_name": ["Bayern"],
+                "as_of_date": [pd.Timestamp("2026-03-01")],
+                "target_date": [pd.Timestamp("2026-03-04")],
+                "target_week_start": [pd.Timestamp("2026-03-02")],
+                "target_window_days": [[3, 3]],
+                "horizon_days": [3.0],
+                "truth_source": ["survstat_kreis"],
+                "target_truth_source": ["survstat_kreis"],
+                "current_known_incidence": [10.0],
+                "target_incidence": [16.0],
+                "next_week_incidence": [16.0],
+                "seasonal_baseline": [8.0],
+                "seasonal_mad": [2.0],
+                "event_label": [1.0],
+                "y_next_log": [1.0],
+                "f1": [1.0],
+                "f2": [2.0],
+            }
+        )
+
+        trainer = RegionalModelTrainer(db=None)
+        feature_columns = trainer._feature_columns(panel)
+
+        self.assertEqual(feature_columns, ["f1", "f2"])
+
     def test_trainer_load_artifacts_reads_horizon_specific_payload(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             base = Path(tmp_dir)
@@ -134,6 +163,39 @@ class RegionalHorizonSemanticsTests(unittest.TestCase):
             self.assertEqual(payload["artifact_transition_mode"], "legacy_default_window_fallback")
             self.assertEqual(payload["metadata"]["horizon_days"], 7)
             self.assertEqual(payload["metadata"]["requested_horizon_days"], 7)
+
+    @patch("app.services.ml.regional_forecast.pickle.load", return_value="calibration")
+    @patch("app.services.ml.regional_forecast.XGBRegressor", side_effect=lambda: _LoadableModel())
+    @patch("app.services.ml.regional_forecast.XGBClassifier", side_effect=lambda: _LoadableModel())
+    def test_forecast_loader_rejects_training_only_feature_columns(
+        self,
+        _classifier_cls,
+        _regressor_cls,
+        _pickle_load,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            model_dir = base / "influenza_a" / "horizon_7"
+            model_dir.mkdir(parents=True)
+            for name in [
+                "classifier.json",
+                "regressor_median.json",
+                "regressor_lower.json",
+                "regressor_upper.json",
+                "calibration.pkl",
+            ]:
+                (model_dir / name).write_text("{}")
+            (model_dir / "metadata.json").write_text(
+                json.dumps({"feature_columns": ["f1", "target_incidence"], "horizon_days": 7})
+            )
+            (model_dir / "dataset_manifest.json").write_text(json.dumps({"rows": 10}))
+            (model_dir / "point_in_time_snapshot.json").write_text(json.dumps({"rows": 10}))
+
+            service = RegionalForecastService(db=None, models_dir=base)
+            payload = service._load_artifacts("Influenza A", horizon_days=7)
+
+            self.assertIn("load_error", payload)
+            self.assertIn("target_incidence", payload["load_error"])
 
     def test_predict_all_regions_returns_explicit_unsupported_scope_when_configured(self) -> None:
         service = RegionalForecastService(db=None)

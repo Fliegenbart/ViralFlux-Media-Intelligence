@@ -202,16 +202,18 @@ Run against the target environment:
 cd /Users/davidwegener/Desktop/viralflux/backend
 python scripts/smoke_test_release.py \
   --base-url https://your-backend.example.com \
-  --require-ready \
-  --check-regional-validation
+  --virus "Influenza A" \
+  --horizon 7 \
+  --budget-eur 50000 \
+  --top-n 3
 ```
 
 Interpretation:
 
 - non-zero exit code means release should be blocked
-- `health_live` must be `200`
-- `health_ready` must be `200` for strict production release
-- regional validation must not return a server error
+- `live_failed` means `/health/live` failed
+- `business_smoke_failed` means Forecast / Allocation / Recommendation are not release-safe
+- `ready_blocked` means the service lives, but the environment is not operationally freigegeben
 
 ## Operational Notes
 

@@ -36,8 +36,9 @@ Was der Command macht:
 6. `db` und `redis` im Production-Compose-Projekt hochfahren oder vorhandene Infra-Container sauber wiederverwenden
 7. `frontend-prod`, `backend`, `celery_worker` und `celery_beat` sauber neu erzeugen
 8. Guard-Checks auf `ENVIRONMENT=production`, harte DB-Flags und bind-mount-freien Live-Modus ausführen
-9. Liveness- und advisory Readiness-Snapshot prüfen
-10. Status der Live-Services ausgeben
+9. Liveness pruefen
+10. modernen Release-Smoke gegen Live, Ready und den regionalen Produktkern ausfuehren
+11. Status der Live-Services ausgeben
 
 ## Produktionsflags
 
@@ -49,26 +50,47 @@ Der Live-Standard setzt im Backend explizit:
 - `STARTUP_STRICT_READINESS=true`
 - `READINESS_REQUIRE_BROKER=true`
 
-## Smoke-Checks nach Deploy
+## Release-Smoke nach Deploy
+
+```bash
+cd /Users/davidwegener/Desktop/viralflux/backend
+python scripts/smoke_test_release.py \
+  --base-url https://fluxengine.labpulse.ai \
+  --virus "Influenza A" \
+  --horizon 7 \
+  --budget-eur 50000 \
+  --top-n 3
+```
+
+Der moderne Release-Smoke prueft:
+
+- `/health/live`
+- `/health/ready`
+- `/api/v1/forecast/regional/predict`
+- `/api/v1/forecast/regional/media-allocation`
+- `/api/v1/forecast/regional/campaign-recommendations`
+
+Optional kann zusaetzlich `--check-cockpit` gesetzt werden. Der Cockpit-Pfad ist aber nur advisory und nicht mehr der alleinige Go/No-Go-Indikator.
+
+Failure-Levels:
+
+- `live_failed`
+  - Prozess lebt nicht oder `/health/live` ist nicht gesund.
+  - Deploy-Script rollt zurueck.
+- `business_smoke_failed`
+  - Kernpfade Forecast / Allocation / Recommendation liefern `500`, leere oder ungueltige Payloads.
+  - Deploy-Script rollt zurueck.
+- `ready_blocked`
+  - Service lebt und Kernpfade antworten, aber `/health/ready` ist nicht healthy.
+  - Deploy bleibt sichtbar, aber der Zustand ist operativ blockiert und muss nachgezogen werden.
+
+Direkte Basischecks bleiben trotzdem sinnvoll:
 
 ```bash
 curl -I https://fluxengine.labpulse.ai
 curl https://fluxengine.labpulse.ai/health/live
 curl https://fluxengine.labpulse.ai/health/ready
-curl 'https://fluxengine.labpulse.ai/api/v1/media/cockpit?virus_typ=Influenza%20A&target_source=RKI_ARE'
-curl -X OPTIONS \
-  -H 'Origin: https://fluxengine.labpulse.ai' \
-  -H 'Access-Control-Request-Method: GET' \
-  'https://fluxengine.labpulse.ai/api/v1/media/products' -I
 ```
-
-Erwartung:
-
-- `/` -> `200`
-- `/health/live` -> JSON mit `status: alive`
-- `/health/ready` -> JSON mit Readiness-Snapshot; `200` bedeutet operativ bereit, `503` zeigt explizite Blocker
-- API-Endpunkte liefern JSON
-- CORS-Header erlaubt `https://fluxengine.labpulse.ai`
 
 ## Wichtige Hinweise
 

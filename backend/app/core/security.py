@@ -1,3 +1,4 @@
+import hashlib
 import logging
 import os
 from datetime import datetime, timedelta
@@ -8,9 +9,7 @@ from passlib.context import CryptContext
 
 logger = logging.getLogger(__name__)
 
-# Prefer bcrypt_sha256 so long randomly generated admin passwords remain valid,
-# while still accepting legacy bcrypt hashes already stored in the system.
-pwd_context = CryptContext(schemes=["bcrypt_sha256", "bcrypt"], deprecated="auto")
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 ALGORITHM = "HS256"
 
@@ -39,12 +38,19 @@ if not SECRET_KEY or SECRET_KEY in _KNOWN_PLACEHOLDERS:
     )
 
 
+def _normalize_password_for_bcrypt(password: str) -> str:
+    password_bytes = password.encode("utf-8")
+    if len(password_bytes) <= 72:
+        return password
+    return hashlib.sha256(password_bytes).hexdigest()
+
+
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(plain_password, hashed_password)
+    return pwd_context.verify(_normalize_password_for_bcrypt(plain_password), hashed_password)
 
 
 def get_password_hash(password: str) -> str:
-    return pwd_context.hash(password)
+    return pwd_context.hash(_normalize_password_for_bcrypt(password))
 
 
 def create_access_token(data: Dict[str, Any], expires_delta: timedelta | None = None) -> str:

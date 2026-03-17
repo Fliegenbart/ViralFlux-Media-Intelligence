@@ -11,7 +11,7 @@ class SecurityHashingTests(unittest.TestCase):
 
         hashed = get_password_hash(password)
 
-        self.assertTrue(hashed.startswith("$bcrypt-sha256$"))
+        self.assertTrue(hashed.startswith("$2"))
         self.assertTrue(verify_password(password, hashed))
 
     def test_legacy_bcrypt_hashes_still_verify(self):

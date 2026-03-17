@@ -6,7 +6,10 @@ from unittest.mock import patch
 
 import pandas as pd
 
-from app.services.ml.forecast_horizon_utils import regional_horizon_support_status
+from app.services.ml.forecast_horizon_utils import (
+    regional_horizon_pilot_status,
+    regional_horizon_support_status,
+)
 from app.services.ml.regional_forecast import RegionalForecastService
 from app.services.ml.regional_trainer import RegionalModelTrainer
 
@@ -26,6 +29,15 @@ class RegionalHorizonSemanticsTests(unittest.TestCase):
         self.assertFalse(support["supported"])
         self.assertEqual(support["supported_horizons"], [5, 7])
         self.assertIn("pooled panel", support["reason"])
+
+    def test_day_one_pilot_matrix_supports_only_selected_scopes(self) -> None:
+        influenza = regional_horizon_pilot_status("Influenza A", 7)
+        sars = regional_horizon_pilot_status("SARS-CoV-2", 7)
+
+        self.assertTrue(influenza["pilot_supported"])
+        self.assertEqual(influenza["pilot_supported_horizons"], [7])
+        self.assertFalse(sars["pilot_supported"])
+        self.assertIn("conditional promotion", sars["reason"])
 
     def test_prepare_horizon_panel_uses_future_current_incidence_as_target(self) -> None:
         panel = pd.DataFrame(

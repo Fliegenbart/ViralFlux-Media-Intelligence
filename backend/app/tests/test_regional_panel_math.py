@@ -14,6 +14,7 @@ from app.services.ml.regional_panel_utils import (
     first_week_start_in_window,
     median_lead_days,
     precision_at_k,
+    quality_gate_from_metrics,
     seasonal_baseline_and_mad,
     time_based_panel_splits,
 )
@@ -161,6 +162,61 @@ class RegionalPanelMathTests(unittest.TestCase):
         )
         self.assertAlmostEqual(activation_false_positive_rate(frame, threshold=None), 0.0, places=6)
         self.assertAlmostEqual(median_lead_days(frame, threshold=None), 5.0, places=6)
+
+    def test_quality_gate_keeps_strict_profile_compatible_by_default(self) -> None:
+        result = quality_gate_from_metrics(
+            metrics={
+                "precision_at_top3": 0.70,
+                "activation_false_positive_rate": 0.25,
+                "pr_auc": 0.60,
+                "brier_score": 0.09,
+                "ece": 0.05,
+            },
+            baseline_metrics={
+                "persistence": {"pr_auc": 0.52},
+                "climatology": {"pr_auc": 0.50, "brier_score": 0.10},
+                "amelag_only": {"pr_auc": 0.48},
+            },
+        )
+
+        self.assertTrue(result["overall_passed"])
+        self.assertEqual(result["forecast_readiness"], "GO")
+        self.assertEqual(result["profile"], "strict_v1")
+        self.assertEqual(result["failed_checks"], [])
+
+    def test_quality_gate_uses_pilot_profile_only_for_day_one_pilot_scope(self) -> None:
+        metrics = {
+            "precision_at_top3": 0.63,
+            "activation_false_positive_rate": 0.24,
+            "pr_auc": 0.55,
+            "brier_score": 0.096,
+            "ece": 0.05,
+        }
+        baseline_metrics = {
+            "persistence": {"pr_auc": 0.52},
+            "climatology": {"pr_auc": 0.50, "brier_score": 0.10},
+            "amelag_only": {"pr_auc": 0.48},
+        }
+
+        pilot_result = quality_gate_from_metrics(
+            metrics=metrics,
+            baseline_metrics=baseline_metrics,
+            virus_typ="Influenza A",
+            horizon_days=7,
+        )
+        strict_result = quality_gate_from_metrics(
+            metrics=metrics,
+            baseline_metrics=baseline_metrics,
+            virus_typ="Influenza A",
+            horizon_days=5,
+        )
+
+        self.assertEqual(pilot_result["profile"], "pilot_v1")
+        self.assertTrue(pilot_result["overall_passed"])
+        self.assertEqual(strict_result["profile"], "strict_v1")
+        self.assertFalse(strict_result["overall_passed"])
+        self.assertIn("precision_at_top3_passed", strict_result["failed_checks"])
+        self.assertIn("brier_passed", strict_result["failed_checks"])
 
 
 class RegionalFeatureBuilderInferenceTests(unittest.TestCase):

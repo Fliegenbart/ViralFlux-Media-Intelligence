@@ -27,7 +27,9 @@ Standardparameter:
 - `weekly_budget_eur=50000`
 - `top_n=3`
 
-Diese Kombination ist nah genug am operativen Produktkern und gleichzeitig stabil genug fuer einen schnellen Deploy-Check.
+Diese Kombination ist bewusst identisch mit dem Day-one-Pilotkandidaten `Influenza A / h7`.
+
+Sie ist nah genug am operativen Produktkern und gleichzeitig eng genug, um kein falsches Bild eines breiten Pilotvertrags zu erzeugen.
 
 ## Failure Levels
 
@@ -66,7 +68,7 @@ Folge:
 
 - Deploy bleibt sichtbar
 - Zustand ist operativ blockiert, aber kein technischer Hard-Fail
-- typische Ursachen: stale data, fehlende Artefakte, rote Quality Gates
+- typische Ursachen: rote Quality Gates, nicht freigegebener Pilot-Scope, konservative Shadow-/Watch-Policies
 
 ## Cockpit-Politik
 
@@ -130,3 +132,9 @@ Der Smoke soll nicht jedes fachliche Modellproblem loesen. Er soll klar beantwor
 - ist der Betrieb fachlich freigegeben?
 
 Genau deshalb trennt der aktuelle Smoke sauber zwischen `live_failed`, `ready_blocked` und `business_smoke_failed`.
+
+Wichtig:
+
+- `ready_blocked` ist inzwischen die ehrliche Restkategorie fuer einen lebenden, aber noch nicht fachlich freigegebenen regionalen Produktkern
+- fuer PEIX / GELO bedeutet ein `ready_blocked` nicht automatisch, dass der Deploy kaputt ist
+- es bedeutet, dass Uptime und Produktnutzbarkeit weiter sind als die operative Pilotfreigabe

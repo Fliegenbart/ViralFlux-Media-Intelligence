@@ -357,6 +357,8 @@ class RegionalExperimentTrainer(RegionalModelTrainer):
         quality_gate = __import__("app.services.ml.regional_panel_utils", fromlist=["quality_gate_from_metrics"]).quality_gate_from_metrics(
             metrics=aggregate_metrics,
             baseline_metrics=baselines,
+            virus_typ=str(panel["virus_typ"].iloc[0]) if "virus_typ" in panel.columns and not panel.empty else None,
+            horizon_days=int(panel["horizon_days"].iloc[0]) if "horizon_days" in panel.columns and not panel.empty else None,
         )
         backtest_payload = self._build_backtest_payload(
             frame=oof_frame,

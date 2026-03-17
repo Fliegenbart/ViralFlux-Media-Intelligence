@@ -13,6 +13,7 @@ import numpy as np
 import pandas as pd
 from xgboost import XGBClassifier, XGBRegressor
 
+from app.core.config import get_settings
 from app.services.media.business_validation_service import BusinessValidationService
 from app.services.media.campaign_recommendation_service import CampaignRecommendationService
 from app.services.media.truth_layer_service import TruthLayerService
@@ -34,9 +35,11 @@ from app.services.ml.regional_panel_utils import (
     activation_policy_for_virus,
     rollout_mode_for_virus,
     signal_bundle_version_for_virus,
+    sars_h7_promotion_status,
 )
 from app.services.ml.regional_trainer import TRAINING_ONLY_PANEL_COLUMNS, _virus_slug
 from app.services.ml.training_contract import SUPPORTED_VIRUS_TYPES
+from app.services.ops.regional_operational_snapshot_store import RegionalOperationalSnapshotStore
 
 logger = logging.getLogger(__name__)
 
@@ -68,6 +71,55 @@ class RegionalForecastService:
         self.decision_engine = RegionalDecisionEngine()
         self.media_allocation_engine = RegionalMediaAllocationEngine()
         self.campaign_recommendation_service = CampaignRecommendationService()
+        self.snapshot_store = RegionalOperationalSnapshotStore(db) if db is not None else None
+
+    @staticmethod
+    def _sars_h7_promotion_enabled() -> bool:
+        try:
+            return bool(get_settings().REGIONAL_SARS_H7_PROMOTION_ENABLED)
+        except Exception:
+            return False
+
+    def _effective_rollout_contract(
+        self,
+        *,
+        virus_typ: str,
+        horizon_days: int,
+        metadata: dict[str, Any],
+    ) -> tuple[str, str, dict[str, Any] | None]:
+        if virus_typ != "SARS-CoV-2" or int(horizon_days) != 7:
+            return (
+                metadata.get("rollout_mode") or rollout_mode_for_virus(virus_typ, horizon_days=horizon_days),
+                metadata.get("activation_policy")
+                or activation_policy_for_virus(virus_typ, horizon_days=horizon_days),
+                None,
+            )
+
+        recent_snapshots = (
+            self.snapshot_store.recent_scope_snapshots(
+                virus_typ=virus_typ,
+                horizon_days=horizon_days,
+                limit=2,
+            )
+            if self.snapshot_store is not None
+            else []
+        )
+        promotion = sars_h7_promotion_status(
+            recent_snapshots=recent_snapshots,
+            promotion_flag_enabled=self._sars_h7_promotion_enabled(),
+        )
+        if promotion["promoted"]:
+            return (
+                rollout_mode_for_virus(virus_typ, horizon_days=horizon_days, sars_h7_promoted=True),
+                activation_policy_for_virus(virus_typ, horizon_days=horizon_days, sars_h7_promoted=True),
+                promotion,
+            )
+        return (
+            metadata.get("rollout_mode") or rollout_mode_for_virus(virus_typ, horizon_days=horizon_days),
+            metadata.get("activation_policy")
+            or activation_policy_for_virus(virus_typ, horizon_days=horizon_days),
+            promotion,
+        )
 
     def predict_region(
         self,
@@ -187,8 +239,11 @@ class RegionalForecastService:
 
         action_threshold = float(metadata.get("action_threshold") or 0.6)
         quality_gate = metadata.get("quality_gate") or {"overall_passed": False, "forecast_readiness": "WATCH"}
-        rollout_mode = metadata.get("rollout_mode") or rollout_mode_for_virus(virus_typ)
-        activation_policy = metadata.get("activation_policy") or activation_policy_for_virus(virus_typ)
+        rollout_mode, activation_policy, sars_h7_promotion = self._effective_rollout_contract(
+            virus_typ=virus_typ,
+            horizon_days=horizon,
+            metadata=metadata,
+        )
         signal_bundle_version = metadata.get("signal_bundle_version") or signal_bundle_version_for_virus(virus_typ)
         model_version = metadata.get("model_version") or self._model_version(metadata)
         calibration_version = metadata.get("calibration_version") or self._calibration_version(metadata)
@@ -302,6 +357,7 @@ class RegionalForecastService:
             "predictions": predictions,
             "top_5": predictions[:5],
             "top_decisions": ranked_decisions[:5],
+            "sars_h7_promotion": sars_h7_promotion,
             "generated_at": datetime.utcnow().isoformat(),
         }
 

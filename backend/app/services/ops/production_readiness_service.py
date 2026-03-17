@@ -19,8 +19,10 @@ from app.services.ml.forecast_decision_service import ForecastDecisionService
 from app.services.ml.forecast_horizon_utils import (
     SUPPORTED_FORECAST_HORIZONS,
     regional_horizon_support_status,
+    regional_horizon_pilot_status,
 )
 from app.services.ml.regional_forecast import RegionalForecastService
+from app.services.ml.regional_panel_utils import sars_h7_promotion_status
 from app.services.ml.training_contract import SUPPORTED_VIRUS_TYPES
 from app.services.ops.regional_operational_snapshot_store import RegionalOperationalSnapshotStore
 
@@ -300,6 +302,11 @@ class ProductionReadinessService:
                         observed_at=observed_at,
                         latest_source_state=latest_source_state,
                         operational_snapshot=operational_snapshots.get((virus_typ, horizon_days)),
+                        recent_operational_snapshots=snapshot_store.recent_scope_snapshots(
+                            virus_typ=virus_typ,
+                            horizon_days=horizon_days,
+                            limit=2,
+                        ),
                     )
                 )
 
@@ -334,8 +341,10 @@ class ProductionReadinessService:
         observed_at: datetime,
         latest_source_state: dict[str, Any],
         operational_snapshot: dict[str, Any] | None,
+        recent_operational_snapshots: list[dict[str, Any]] | None,
     ) -> dict[str, Any]:
         support = regional_horizon_support_status(virus_typ, horizon_days)
+        pilot = regional_horizon_pilot_status(virus_typ, horizon_days)
         if not support["supported"]:
             return {
                 "virus_typ": virus_typ,
@@ -365,10 +374,15 @@ class ProductionReadinessService:
                 "dataset_rows": None,
                 "dataset_states": None,
                 "supported_horizon_days_for_virus": support["supported_horizons"],
+                "pilot_contract_supported": False,
+                "pilot_contract_reason": support["reason"],
                 "unsupported_reason": support["reason"] or f"{virus_typ} unterstützt h{horizon_days} operativ nicht.",
+                "quality_gate_profile": None,
+                "quality_gate_failed_checks": [],
                 "operational_snapshot_as_of": None,
                 "operational_snapshot_generated_at": None,
                 "operational_snapshot_status": None,
+                "sars_h7_promotion": None,
                 "blockers": [],
             }
         artifacts = service._load_artifacts(virus_typ, horizon_days=horizon_days)
@@ -427,6 +441,14 @@ class ProductionReadinessService:
         )
         coverage_floor = coverage_contract["effective_floor"]
         source_coverage_status = str(coverage_contract["effective_status"] or "warning")
+        quality_gate_profile = str(quality_gate.get("profile") or "").strip() or None
+        quality_gate_failed_checks = list(quality_gate.get("failed_checks") or [])
+        sars_promotion = None
+        if virus_typ == "SARS-CoV-2" and horizon_days == 7:
+            sars_promotion = sars_h7_promotion_status(
+                recent_snapshots=recent_operational_snapshots,
+                promotion_flag_enabled=bool(self.settings.REGIONAL_SARS_H7_PROMOTION_ENABLED),
+            )
 
         model_available = bool(artifacts and not load_error and feature_columns)
         model_availability = "available" if model_available else "missing"
@@ -509,10 +531,15 @@ class ProductionReadinessService:
             "dataset_rows": dataset_manifest.get("rows"),
             "dataset_states": dataset_manifest.get("states"),
             "supported_horizon_days_for_virus": support["supported_horizons"],
+            "pilot_contract_supported": pilot["pilot_supported"],
+            "pilot_contract_reason": pilot["reason"],
             "unsupported_reason": None,
+            "quality_gate_profile": quality_gate_profile,
+            "quality_gate_failed_checks": quality_gate_failed_checks,
             "operational_snapshot_as_of": operational_snapshot_as_of.isoformat() if operational_snapshot_as_of else None,
             "operational_snapshot_generated_at": operational_snapshot_generated_at,
             "operational_snapshot_status": operational_snapshot_status,
+            "sars_h7_promotion": sars_promotion,
             "blockers": blockers,
         }
 

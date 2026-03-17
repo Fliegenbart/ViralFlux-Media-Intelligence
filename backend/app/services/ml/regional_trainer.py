@@ -303,6 +303,7 @@ class RegionalModelTrainer:
         )
         rollout_info = self._rollout_metadata(
             virus_typ=virus_typ,
+            horizon_days=horizon,
             aggregate_metrics=backtest_bundle["aggregate_metrics"],
             baseline_metrics=(backtest_bundle["backtest_payload"].get("baselines") or {}),
             previous_artifact=previous_artifact,
@@ -621,12 +622,13 @@ class RegionalModelTrainer:
         self,
         *,
         virus_typ: str,
+        horizon_days: int = 7,
         aggregate_metrics: dict[str, Any],
         baseline_metrics: dict[str, dict[str, Any]],
         previous_artifact: dict[str, Any],
     ) -> dict[str, Any]:
-        rollout_mode = rollout_mode_for_virus(virus_typ)
-        activation_policy = activation_policy_for_virus(virus_typ)
+        rollout_mode = rollout_mode_for_virus(virus_typ, horizon_days=horizon_days)
+        activation_policy = activation_policy_for_virus(virus_typ, horizon_days=horizon_days)
         signal_bundle_version = signal_bundle_version_for_virus(virus_typ)
         if virus_typ != "SARS-CoV-2":
             return {
@@ -666,6 +668,7 @@ class RegionalModelTrainer:
             "signal_bundle_version": signal_bundle_version,
             "rollout_mode": rollout_mode,
             "activation_policy": activation_policy,
+            "shadow_promotion_candidate": bool(int(horizon_days) == 7),
             "shadow_evaluation": {
                 "overall_passed": overall_passed,
                 "has_previous_candidate": has_previous_candidate,
@@ -1028,7 +1031,12 @@ class RegionalModelTrainer:
             frame=oof_frame,
             action_threshold=action_threshold,
         )
-        quality_gate = quality_gate_from_metrics(metrics=aggregate_metrics, baseline_metrics=baselines)
+        quality_gate = quality_gate_from_metrics(
+            metrics=aggregate_metrics,
+            baseline_metrics=baselines,
+            virus_typ=virus_typ,
+            horizon_days=horizon_days,
+        )
         backtest_payload = self._build_backtest_payload(
             frame=oof_frame,
             aggregate_metrics=aggregate_metrics,

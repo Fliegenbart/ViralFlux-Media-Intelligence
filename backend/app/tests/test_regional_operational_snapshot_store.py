@@ -40,6 +40,12 @@ class RegionalOperationalSnapshotStoreTests(unittest.TestCase):
             },
             allocation={"generated_at": "2026-03-17T08:01:00", "recommendations": [{"bundesland": "BY"}]},
             recommendations={"generated_at": "2026-03-17T08:02:00", "recommendations": [{"bundesland": "BY"}]},
+            readiness={
+                "forecast_recency_status": "ok",
+                "source_coverage_required_status": "ok",
+                "pilot_contract_supported": True,
+                "pilot_contract_reason": None,
+            },
         )
 
         row = self.db.query(AuditLog).order_by(AuditLog.id.desc()).first()
@@ -53,6 +59,8 @@ class RegionalOperationalSnapshotStoreTests(unittest.TestCase):
         self.assertEqual(latest["forecast_regions"], 1)
         self.assertEqual(latest["allocation_regions"], 1)
         self.assertEqual(latest["recommendation_count"], 1)
+        self.assertEqual(latest["forecast_recency_status"], "ok")
+        self.assertTrue(latest["pilot_contract_supported"])
 
     def test_latest_scope_snapshots_prefers_newest_scope_run(self) -> None:
         store = RegionalOperationalSnapshotStore(self.db)
@@ -76,6 +84,45 @@ class RegionalOperationalSnapshotStoreTests(unittest.TestCase):
         self.assertIsNotNone(latest)
         self.assertEqual(latest["forecast_as_of_date"], "2026-03-17")
         self.assertEqual(latest["forecast_regions"], 1)
+
+    def test_recent_scope_snapshots_returns_newest_history_first(self) -> None:
+        store = RegionalOperationalSnapshotStore(self.db)
+        store.record_scope_snapshot(
+            virus_typ="SARS-CoV-2",
+            horizon_days=7,
+            forecast={
+                "as_of_date": "2026-03-10",
+                "quality_gate": {"overall_passed": True, "forecast_readiness": "GO"},
+                "predictions": [{"bundesland": "BY"}],
+            },
+            allocation={"recommendations": [{"bundesland": "BY"}]},
+            recommendations={"recommendations": [{"bundesland": "BY"}]},
+            readiness={
+                "forecast_recency_status": "ok",
+                "source_coverage_required_status": "ok",
+            },
+        )
+        store.record_scope_snapshot(
+            virus_typ="SARS-CoV-2",
+            horizon_days=7,
+            forecast={
+                "as_of_date": "2026-03-17",
+                "quality_gate": {"overall_passed": True, "forecast_readiness": "GO"},
+                "predictions": [{"bundesland": "BY"}],
+            },
+            allocation={"recommendations": [{"bundesland": "BY"}]},
+            recommendations={"recommendations": [{"bundesland": "BY"}]},
+            readiness={
+                "forecast_recency_status": "ok",
+                "source_coverage_required_status": "ok",
+            },
+        )
+
+        history = store.recent_scope_snapshots(virus_typ="SARS-CoV-2", horizon_days=7, limit=2)
+
+        self.assertEqual(len(history), 2)
+        self.assertEqual(history[0]["forecast_as_of_date"], "2026-03-17")
+        self.assertEqual(history[1]["forecast_as_of_date"], "2026-03-10")
 
 
 if __name__ == "__main__":

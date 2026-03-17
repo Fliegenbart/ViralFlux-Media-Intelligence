@@ -35,11 +35,13 @@ class RegionalOperationalSnapshotStore:
         forecast: dict[str, Any],
         allocation: dict[str, Any],
         recommendations: dict[str, Any],
+        readiness: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
+        quality_gate = forecast.get("quality_gate") or {}
         forecast_status = cls._normalized_status(forecast)
         allocation_status = cls._normalized_status(allocation)
         recommendation_status = cls._normalized_status(recommendations)
-        return {
+        metadata = {
             "virus_typ": str(virus_typ or "").strip(),
             "horizon_days": int(horizon_days),
             "forecast_status": forecast_status,
@@ -51,9 +53,14 @@ class RegionalOperationalSnapshotStore:
             "artifact_transition_mode": forecast.get("artifact_transition_mode"),
             "model_version": forecast.get("model_version"),
             "calibration_version": forecast.get("calibration_version"),
-            "quality_gate": forecast.get("quality_gate") or {},
+            "quality_gate": quality_gate,
+            "quality_gate_profile": quality_gate.get("profile"),
+            "quality_gate_failed_checks": list(quality_gate.get("failed_checks") or []),
             "business_gate": forecast.get("business_gate") or {},
+            "rollout_mode": forecast.get("rollout_mode"),
+            "activation_policy": forecast.get("activation_policy"),
             "point_in_time_snapshot": forecast.get("point_in_time_snapshot") or {},
+            "source_coverage": forecast.get("source_coverage") or {},
             "allocation_status": allocation_status,
             "allocation_generated_at": allocation.get("generated_at"),
             "allocation_regions": len(allocation.get("recommendations") or []),
@@ -61,6 +68,17 @@ class RegionalOperationalSnapshotStore:
             "recommendation_generated_at": recommendations.get("generated_at"),
             "recommendation_count": len(recommendations.get("recommendations") or []),
         }
+        if readiness:
+            metadata.update(
+                {
+                    "status": readiness.get("status"),
+                    "forecast_recency_status": readiness.get("forecast_recency_status"),
+                    "source_coverage_required_status": readiness.get("source_coverage_required_status"),
+                    "pilot_contract_supported": readiness.get("pilot_contract_supported"),
+                    "pilot_contract_reason": readiness.get("pilot_contract_reason"),
+                }
+            )
+        return metadata
 
     @classmethod
     def _scope_run_status(cls, metadata: dict[str, Any]) -> str:
@@ -85,6 +103,7 @@ class RegionalOperationalSnapshotStore:
         forecast: dict[str, Any],
         allocation: dict[str, Any],
         recommendations: dict[str, Any],
+        readiness: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         metadata = self.build_scope_metadata(
             virus_typ=virus_typ,
@@ -92,6 +111,7 @@ class RegionalOperationalSnapshotStore:
             forecast=forecast,
             allocation=allocation,
             recommendations=recommendations,
+            readiness=readiness,
         )
         return self.recorder.record_event(
             action=self.ACTION,
@@ -144,3 +164,35 @@ class RegionalOperationalSnapshotStore:
             horizon_days_list=[horizon_days],
             limit=200,
         ).get((str(virus_typ or "").strip(), int(horizon_days)))
+
+    def recent_scope_snapshots(
+        self,
+        *,
+        virus_typ: str,
+        horizon_days: int,
+        limit: int = 2,
+    ) -> list[dict[str, Any]]:
+        rows = (
+            self.db.query(AuditLog)
+            .filter(AuditLog.action == self.ACTION, AuditLog.entity_type == self.ENTITY_TYPE)
+            .order_by(AuditLog.timestamp.desc(), AuditLog.id.desc())
+            .limit(max(int(limit) * 20, 20))
+            .all()
+        )
+        target_virus = str(virus_typ or "").strip()
+        target_horizon = int(horizon_days)
+        items: list[dict[str, Any]] = []
+        for row in rows:
+            payload = dict(row.new_value or {})
+            metadata = dict(payload.get("metadata") or {})
+            if str(metadata.get("virus_typ") or "").strip() != target_virus:
+                continue
+            if int(metadata.get("horizon_days") or -1) != target_horizon:
+                continue
+            metadata["run_id"] = payload.get("run_id")
+            metadata["run_status"] = payload.get("status")
+            metadata["recorded_at"] = payload.get("timestamp")
+            items.append(metadata)
+            if len(items) >= max(int(limit), 1):
+                break
+        return items

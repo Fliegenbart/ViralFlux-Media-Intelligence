@@ -478,6 +478,98 @@ class RegionalForecastServiceTests(unittest.TestCase):
         self.assertEqual(media["summary"]["total_budget_allocated"], 0.0)
         self.assertTrue(all(item["action"] == "watch" for item in media["recommendations"]))
 
+    def test_sars_h7_stays_shadow_without_explicit_promotion_flag(self) -> None:
+        service = self._make_service(
+            quality_gate_passed=True,
+            virus_typ="SARS-CoV-2",
+            rollout_mode="shadow",
+            activation_policy="watch_only",
+            signal_bundle_version="sars_hybrid_v1",
+            inference_panel=self._decision_ready_panel(),
+            probabilities=[0.82],
+            median_values=[28.0],
+            lower_values=[24.0],
+            upper_values=[32.0],
+        )
+        service.snapshot_store = type(
+            "_SnapshotStore",
+            (),
+            {
+                "recent_scope_snapshots": staticmethod(
+                    lambda virus_typ, horizon_days, limit=2: [
+                        {
+                            "quality_gate": {"overall_passed": True},
+                            "source_coverage_required_status": "ok",
+                            "forecast_recency_status": "ok",
+                            "artifact_transition_mode": None,
+                        },
+                        {
+                            "quality_gate": {"overall_passed": True},
+                            "source_coverage_required_status": "ok",
+                            "forecast_recency_status": "ok",
+                            "artifact_transition_mode": None,
+                        },
+                    ]
+                )
+            },
+        )()
+        service._sars_h7_promotion_enabled = lambda: False
+
+        forecast = service.predict_all_regions(virus_typ="SARS-CoV-2", horizon_days=7)
+
+        top = forecast["predictions"][0]
+        self.assertEqual(top["rollout_mode"], "shadow")
+        self.assertEqual(top["activation_policy"], "watch_only")
+        self.assertFalse(top["activation_candidate"])
+        self.assertTrue(forecast["sars_h7_promotion"]["eligible"])
+        self.assertFalse(forecast["sars_h7_promotion"]["promoted"])
+
+    def test_sars_h7_promotes_only_when_flag_and_snapshot_evidence_are_present(self) -> None:
+        service = self._make_service(
+            quality_gate_passed=True,
+            virus_typ="SARS-CoV-2",
+            rollout_mode="shadow",
+            activation_policy="watch_only",
+            signal_bundle_version="sars_hybrid_v1",
+            inference_panel=self._decision_ready_panel(),
+            probabilities=[0.82],
+            median_values=[28.0],
+            lower_values=[24.0],
+            upper_values=[32.0],
+        )
+        service.snapshot_store = type(
+            "_SnapshotStore",
+            (),
+            {
+                "recent_scope_snapshots": staticmethod(
+                    lambda virus_typ, horizon_days, limit=2: [
+                        {
+                            "quality_gate": {"overall_passed": True},
+                            "source_coverage_required_status": "ok",
+                            "forecast_recency_status": "ok",
+                            "artifact_transition_mode": None,
+                        },
+                        {
+                            "quality_gate": {"overall_passed": True},
+                            "source_coverage_required_status": "ok",
+                            "forecast_recency_status": "ok",
+                            "artifact_transition_mode": None,
+                        },
+                    ]
+                )
+            },
+        )()
+        service._sars_h7_promotion_enabled = lambda: True
+
+        forecast = service.predict_all_regions(virus_typ="SARS-CoV-2", horizon_days=7)
+
+        top = forecast["predictions"][0]
+        self.assertEqual(top["rollout_mode"], "gated")
+        self.assertEqual(top["activation_policy"], "quality_gate")
+        self.assertTrue(top["activation_candidate"])
+        self.assertTrue(forecast["sars_h7_promotion"]["eligible"])
+        self.assertTrue(forecast["sars_h7_promotion"]["promoted"])
+
     def test_benchmark_supported_viruses_ranks_by_quality_and_metrics(self) -> None:
         service = RegionalForecastService(db=None)
 

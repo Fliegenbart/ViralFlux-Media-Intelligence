@@ -1,54 +1,105 @@
 # Regional Horizon Operational Readiness
 
+Stand: 2026-03-17
+
 ## Ziel
 
-Diese Notiz beschreibt den operativen Zielzustand fuer den regionalen Forecast-Pfad fuer `3/5/7` Tage sowie die reale Freigabelogik fuer Produktion.
+Dieses Dokument beschreibt den operativen Vertrag fuer den regionalen Forecast-Pfad mit echten `3/5/7`-Horizonten.
 
-## Canonical Live Scope
+Wichtig:
 
-Der operative regionale Pfad bleibt:
+- Die kanonische Decision-Hook bleibt in `RegionalForecastService.predict_all_regions(...)`.
+- Allocation und Recommendation bleiben downstream auf dem Forecast-/Decision-Output aufgebaut.
+- Readiness soll ehrlich zwischen `supported`, `pilot-supported`, `unsupported` und `shadow-only` unterscheiden.
 
-1. Training / Artifact-Backfill pro `virus_typ` und `horizon_days`
+## Canonical Live Path
+
+Der operative Pfad bleibt:
+
+1. horizon-spezifisches Training / Backtest / Artifact-Backfill
 2. `RegionalForecastService.predict_all_regions(...)`
 3. `RegionalDecisionEngine.evaluate(...)`
 4. `RegionalMediaAllocationEngine.allocate(...)`
 5. `CampaignRecommendationService`
 6. operativer Snapshot in den Audit-Trail
-7. `ProductionReadinessService` bewertet Artefakte, Gates und Snapshot-Recency
+7. `ProductionReadinessService` bewertet Verfuegbarkeit, Recency, Coverage, Quality Gate und Pilotvertrag
 
-Die Decision-Hook bleibt unveraendert im Forecast-Service.
+## Support Matrix vs Pilot Contract
 
-## Support Matrix
-
-Offiziell unterstuetzte Produkt-Horizonte sind nur:
-
-- `3`
-- `5`
-- `7`
-
-Der Code fuehrt eine explizite Support-Matrix pro Virus. Nicht unterstuetzte Kombinationen werden als `unsupported` behandelt, nicht als stiller `no_model`-Pfad.
-
-Aktueller Zielzustand fuer den Live-Betrieb:
+### Technisch supported
 
 - `Influenza A`: `3/5/7`
 - `Influenza B`: `3/5/7`
 - `SARS-CoV-2`: `3/5/7`
 - `RSV A`: `5/7`
 
-Explizit unsupported im aktuellen Produktvertrag:
+### Explizit unsupported
 
 - `RSV A / h3`
-  - Grund: Das regionale h3-Training scheitert aktuell reproduzierbar an zu wenig stabilen pooled-panel Reihen und wird deshalb nicht als halb-funktionaler `no_model`-Pfad ausgeliefert.
+  - Grund: Das regionale h3-Training liefert aktuell nicht genug stabile pooled-panel Reihen fuer einen belastbaren Scope.
 
-Falls ein Scope spaeter bewusst deaktiviert werden muss, wird er explizit in der Support-Matrix dokumentiert und Readiness-seitig als `warning` statt als falscher Model-Fehler gefuehrt.
+### Day-one pilot-supported
+
+Der erste offizielle Pilotvertrag ist absichtlich enger als der technische Support:
+
+- `Influenza A / h7`
+- `Influenza B / h7`
+- `RSV A / h7`
+
+Technisch supported, aber in diesem Pass **nicht** pilot-supported:
+
+- `Influenza A / h3,h5`
+- `Influenza B / h3,h5`
+- `RSV A / h5`
+- `SARS-CoV-2 / h3,h5,h7`
+
+Readiness spiegelt diese Trennung jetzt explizit pro Scope:
+
+- `pilot_contract_supported`
+- `pilot_contract_reason`
+
+## Quality Gate Profiles
+
+Das regionale Quality Gate bleibt binaer: `GO` oder `WATCH`.
+
+Neu ist nur, dass der Gate-Contract jetzt profilbasiert und explizit benannt ist:
+
+### `strict_v1`
+
+Default fuer alle Scopes, die nicht im Day-one-Pilotvertrag liegen.
+
+- `precision_at_top3 >= 0.70`
+- `activation_false_positive_rate <= 0.25`
+- `pr_auc >= best_baseline * 1.15`
+- `brier_score <= climatology_brier * 0.90`
+- `ece <= 0.05`
+
+### `pilot_v1`
+
+Nur fuer den engen Day-one-Pilotvertrag.
+
+- `precision_at_top3 >= 0.60`
+- `activation_false_positive_rate <= 0.25`
+- `pr_auc >= best_baseline * 1.05`
+- `brier_score <= climatology_brier * 0.97`
+- `ece <= 0.05`
+
+Wichtig:
+
+- `activation_false_positive_rate` und `ece` bleiben absichtlich unveraendert.
+- Nicht-Pilot-Scopes werden **nicht** global weichgerechnet.
+- Das persistierte `quality_gate` in den Artefakten enthaelt jetzt zusaetzlich:
+  - `profile`
+  - `failed_checks`
+  - `thresholds`
 
 ## Artifact Contract
 
-Produktive Artefakte liegen unter:
+Produktive Scoped-Artefakte liegen unter:
 
 `/app/app/ml_models/regional_panel/<virus_slug>/horizon_<h>/`
 
-Erwartete Pflichtdateien pro Scope:
+Pflichtdateien pro Scope:
 
 - `classifier.json`
 - `regressor_median.json`
@@ -64,34 +115,115 @@ Erwartete Pflichtdateien pro Scope:
 Wichtige Regeln:
 
 - unvollstaendige Scoped-Artefakte werden nicht still akzeptiert
-- `h7` faellt nur dann auf Legacy zurueck, wenn kein Scoped-Ordner existiert
-- sobald `horizon_7/` existiert, verschwindet `legacy_default_window_fallback` aus dem aktiven Pfad
+- `legacy_default_window_fallback` fuer `h7` ist kein Normalbetrieb
+- nach Gate-/Contract-Aenderungen ist Retrain + Backfill + Recompute Pflicht
 
 ## Operational Snapshot Contract
 
-Forecast-Recency wird nicht mehr nur aus dem Trainings-Snapshot abgeleitet.
+Ein `REGIONAL_OPERATIONAL_SNAPSHOT` schreibt pro `virus_typ x horizon_days` jetzt mindestens:
 
-Nach einem operativen Recompute wird pro `virus_typ` x `horizon_days` ein Snapshot in den Audit-Trail geschrieben:
-
-- `action = REGIONAL_OPERATIONAL_SNAPSHOT`
-- `entity_type = RegionalOperationalSnapshot`
 - `forecast_as_of_date`
 - `forecast_status`
 - `allocation_status`
 - `recommendation_status`
 - `artifact_transition_mode`
-- `model_version`
-- `calibration_version`
 - `quality_gate`
+- `quality_gate_profile`
+- `quality_gate_failed_checks`
 - `point_in_time_snapshot`
+- `source_coverage`
+- `forecast_recency_status`
+- `source_coverage_required_status`
+- `pilot_contract_supported`
+- `pilot_contract_reason`
+- `rollout_mode`
+- `activation_policy`
 
-`ProductionReadinessService` nutzt diesen Snapshot bevorzugt fuer `forecast_recency_status`.
+Diese Metadaten werden fuer Release-Smoke, Readiness und spaetere Policy-Promotion wiederverwendet.
+
+## Required vs Advisory Source Coverage
+
+Readiness behandelt Coverage nicht mehr als blindes Minimum ueber alle Rohsignale.
+
+### Required
+
+- `Influenza A` / `Influenza B`
+  - `grippeweb_are_available`
+  - `grippeweb_ili_available`
+  - `ifsg_influenza_available`
+- `RSV A`
+  - `grippeweb_are_available`
+  - `grippeweb_ili_available`
+  - `ifsg_rsv_available`
+- `SARS-CoV-2`
+  - `grippeweb_are_available`
+  - `grippeweb_ili_available`
+  - `sars_are_available`
+  - `sars_notaufnahme_available`
+
+### Advisory
+
+- `SARS-CoV-2`
+  - `sars_trends_available`
+
+## SARS-CoV-2 Policy
+
+`SARS-CoV-2` bleibt standardmaessig konservativ:
+
+- `rollout_mode = shadow`
+- `activation_policy = watch_only`
+
+Das gilt weiterhin fuer `h3/h5/h7`, solange keine explizite Promotion aktiviert ist.
+
+### Bedingter Promotionspfad fuer `SARS-CoV-2 / h7`
+
+Der Code enthaelt jetzt einen expliziten, aber standardmaessig deaktivierten Promotionspfad.
+
+Die Umschaltung auf:
+
+- `rollout_mode = gated`
+- `activation_policy = quality_gate`
+
+ist nur erlaubt, wenn **beides** gilt:
+
+1. die Umgebungsflag `REGIONAL_SARS_H7_PROMOTION_ENABLED=true` ist gesetzt
+2. die letzten **zwei** operativen Snapshots fuer `SARS-CoV-2 / h7` zeigen:
+   - `quality_gate.overall_passed == true`
+   - `source_coverage_required_status == "ok"`
+   - `forecast_recency_status == "ok"`
+   - kein `artifact_transition_mode`
+
+Ohne Flag bleibt der Scope selbst dann shadow/watch-only.
+
+## Readiness Semantics
+
+`regional_operational` bewertet pro Scope mindestens:
+
+- Support-Status
+- Pilotvertrag
+- Modellverfuegbarkeit
+- Legacy-Fallback aktiv oder nicht
+- Quality Gate
+- Source Freshness
+- Forecast Recency
+- Source Coverage
+- Model Age
+- bei `SARS-CoV-2 / h7`: Promotionseligibility
+
+Interpretation:
+
+- `ok`: Scope ist technisch und operativ belastbar
+- `warning`: Scope ist bewusst unsupported, shadow-only oder hat nicht-kritische Einschraenkungen
+- `critical`: Scope fehlt, ist stale oder verletzt einen harten Guardrail
+
+Wichtig:
+
+- ein nicht bestandenes Quality Gate bleibt `warning`, nicht heimlich `ok`
+- ein nicht pilot-supported Scope kann technisch `ok` sein, bleibt aber vertraglich ausserhalb des Day-one-Pilots
 
 ## Live Procedure
 
-### 1. Scoped artifacts backfillen
-
-Im produktionsnahen Compose-Pfad ueber einen laufenden App-Container ausfuehren:
+### 1. Scoped Artifacts backfillen
 
 ```bash
 docker exec viralflux_celery_worker python /app/scripts/backfill_regional_model_artifacts.py --horizon 3 --horizon 5 --horizon 7
@@ -103,95 +235,27 @@ docker exec viralflux_celery_worker python /app/scripts/backfill_regional_model_
 docker exec viralflux_celery_worker python /app/scripts/recompute_operational_views.py --horizon 3 --horizon 5 --horizon 7
 ```
 
-Per Default laufen dabei alle unterstuetzten Viren. Die Recompute-Ausgabe schreibt pro Scope einen operativen Snapshot in den Audit-Trail.
-
 ### 3. Readiness pruefen
 
 ```bash
 curl -s https://fluxengine.labpulse.ai/health/ready
 ```
 
-## Readiness Semantics
+## Realer Live-Stand am 2026-03-17
 
-`regional_operational` bewertet pro Scope mindestens:
+Nach dem produktionsnahen Backfill und der Recency-Haertung gilt live:
 
-- Support-Status
-- Modellverfuegbarkeit
-- Legacy-Fallback aktiv oder nicht
-- Quality Gate
-- Source Freshness
-- Forecast Recency
-- Source Coverage
-- Model Age
+- `health/live = 200`
+- `health/ready = 200` mit `status=degraded`
+- moderner Release-Smoke = `ready_blocked`
+- `missing_models = 0`
+- `stale_forecasts = 0`
+- `critical = 0`
+- `unsupported = 1`
+- `quality_gate_failures` bleiben der Hauptgrund fuer `warning`
 
-### Required vs Advisory Source Coverage
+Das heisst:
 
-Source-Coverage wird nicht mehr als blindes Minimum ueber alle Rohsignale berechnet.
-
-Stattdessen gilt ein expliziter Contract:
-
-- `Influenza A` / `Influenza B`
-  - required: `grippeweb_are_available`, `grippeweb_ili_available`, `ifsg_influenza_available`
-- `RSV A`
-  - required: `grippeweb_are_available`, `grippeweb_ili_available`, `ifsg_rsv_available`
-- `SARS-CoV-2`
-  - required: `grippeweb_are_available`, `grippeweb_ili_available`, `sars_are_available`, `sars_notaufnahme_available`
-  - advisory: `sars_trends_available`
-
-Wichtig:
-
-- ein required-Source-Fail bleibt ein echter Blocker
-- ein advisory-Source-Fail bleibt sichtbar, zieht den Scope aber nur auf `warning`
-- damit wird `google_trends` fuer SARS nicht mehr als stiller Hard-Blocker behandelt, obwohl es fachlich nur ein Zusatzsignal ist
-- die Decision Engine selbst bleibt unveraendert und kann niedrige Trends-Verfuegbarkeit weiterhin ueber Unsicherheit / Cross-Source-Evidence spiegeln
-
-Interpretation:
-
-- `ok`: Scope ist operativ belastbar
-- `warning`: Scope ist bewusst unsupported oder hat nur nicht-kritische Einschraenkungen
-- `critical`: Scope fehlt, ist stale oder verletzt einen harten operativen Guardrail
-
-## Was rot halten darf
-
-Die Readiness bleibt absichtlich rot, wenn:
-
-- ein offiziell unterstuetzter Scope kein Artefakt hat
-- nur Legacy-`h7` aktiv ist
-- kein operativer Snapshot fuer den Scope existiert und der Trainings-Snapshot stale ist
-- Source Coverage unter den Mindestwert faellt
-- das Quality Gate nicht auf `GO` steht
-
-## Live Report
-
-Der Live-Stand muss nach jedem Backfill/Recompute neu aus `GET /health/ready` abgelesen werden.
-
-Empfohlene Berichtstruktur:
-
-- `green`: Scope hat `status=ok`
-- `yellow`: Scope hat `status=warning`
-- `unsupported`: Scope ist explizit unsupported
-- `red`: Scope hat `status=critical`
-
-## Erwarteter Erfolg fuer diese Härtung
-
-Nach erfolgreichem Backfill und Recompute sollten sich die roten Punkte sichtbar reduzieren:
-
-- `missing_models` fuer `h3/h5` gegen `0`
-- `legacy_default_window_fallback` fuer `h7` gegen `0`
-- `forecast_recency_status` aus operativen Snapshots statt aus Trainings-Lag
-
-Live-Stand vom `2026-03-17` nach dem produktionsnahen Backfill:
-
-- `Influenza A`: `h3/h5/h7` als Scoped-Artefakte vorhanden
-- `Influenza B`: `h3/h5/h7` als Scoped-Artefakte vorhanden
-- `SARS-CoV-2`: `h3/h5/h7` als Scoped-Artefakte vorhanden
-- `RSV A`: `h5/h7` als Scoped-Artefakte vorhanden
-- `RSV A / h3`: bewusst unsupported
-- `legacy_default_window_fallback`: fuer die beobachteten Live-Scope-Artefakte nicht mehr notwendig
-
-Live-Stand nach Readiness-Contract-Haertung:
-
-- `SARS-CoV-2 / h3/h5/h7` bleibt fachlich `WATCH`, aber nicht mehr allein wegen `sars_trends_available` kritisch
-- der verbleibende SARS-Hinweis wird als advisory Coverage-Warnung ausgewiesen
-
-Wenn ein Scope trotz Backfill nicht sauber trainierbar ist, wird er nicht weichgerechnet, sondern explizit als unsupported oder kritisch dokumentiert.
+- der regionale Produktkern lebt wieder
+- die Support-Matrix ist technisch weitgehend sauber
+- die eigentliche Pilotfreigabe haengt jetzt vor allem an Quality Gate, Pilotvertrag und dem konservativen SARS-Policy-Layer

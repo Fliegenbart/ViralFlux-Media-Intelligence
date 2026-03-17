@@ -3,10 +3,12 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Iterable, Sequence
+from typing import Any, Iterable, Mapping, Sequence
 
 import numpy as np
 import pandas as pd
+
+from app.services.ml.forecast_horizon_utils import regional_horizon_pilot_status
 
 TARGET_WINDOW_DAYS: tuple[int, int] = (3, 7)
 EVENT_DEFINITION_VERSION = "regional_survstat_v2"
@@ -17,6 +19,9 @@ DEFAULT_ROLLOUT_MODE = "gated"
 DEFAULT_ACTIVATION_POLICY = "quality_gate"
 SARS_SHADOW_ROLLOUT_MODE = "shadow"
 SARS_SHADOW_ACTIVATION_POLICY = "watch_only"
+STRICT_QUALITY_GATE_PROFILE_NAME = "strict_v1"
+PILOT_QUALITY_GATE_PROFILE_NAME = "pilot_v1"
+SARS_H7_PROMOTION_REQUIRED_SNAPSHOTS = 2
 
 
 @dataclass(frozen=True)
@@ -47,6 +52,44 @@ class EventDefinitionConfig:
         }
 
 
+@dataclass(frozen=True)
+class RegionalQualityGateProfile:
+    name: str
+    precision_at_top3_min: float
+    activation_false_positive_rate_max: float
+    pr_auc_vs_best_baseline_multiplier: float
+    brier_vs_climatology_multiplier: float
+    ece_max: float
+
+    def thresholds(self) -> dict[str, float]:
+        return {
+            "precision_at_top3": float(self.precision_at_top3_min),
+            "activation_false_positive_rate": float(self.activation_false_positive_rate_max),
+            "pr_auc_vs_best_baseline_multiplier": float(self.pr_auc_vs_best_baseline_multiplier),
+            "brier_vs_climatology_multiplier": float(self.brier_vs_climatology_multiplier),
+            "ece": float(self.ece_max),
+        }
+
+
+STRICT_QUALITY_GATE_PROFILE = RegionalQualityGateProfile(
+    name=STRICT_QUALITY_GATE_PROFILE_NAME,
+    precision_at_top3_min=0.70,
+    activation_false_positive_rate_max=0.25,
+    pr_auc_vs_best_baseline_multiplier=1.15,
+    brier_vs_climatology_multiplier=0.90,
+    ece_max=0.05,
+)
+
+PILOT_QUALITY_GATE_PROFILE = RegionalQualityGateProfile(
+    name=PILOT_QUALITY_GATE_PROFILE_NAME,
+    precision_at_top3_min=0.60,
+    activation_false_positive_rate_max=0.25,
+    pr_auc_vs_best_baseline_multiplier=1.05,
+    brier_vs_climatology_multiplier=0.97,
+    ece_max=0.05,
+)
+
+
 DEFAULT_EVENT_DEFINITION_CONFIG = EventDefinitionConfig()
 VIRUS_EVENT_DEFINITION_OVERRIDES: dict[str, EventDefinitionConfig] = {
     "SARS-CoV-2": EventDefinitionConfig(
@@ -68,16 +111,82 @@ def signal_bundle_version_for_virus(virus_typ: str) -> str:
     return CORE_SIGNAL_BUNDLE_VERSION
 
 
-def rollout_mode_for_virus(virus_typ: str) -> str:
-    if virus_typ == "SARS-CoV-2":
+def rollout_mode_for_virus(
+    virus_typ: str,
+    *,
+    horizon_days: int | None = None,
+    sars_h7_promoted: bool = False,
+) -> str:
+    if virus_typ == "SARS-CoV-2" and not (int(horizon_days or 0) == 7 and sars_h7_promoted):
         return SARS_SHADOW_ROLLOUT_MODE
     return DEFAULT_ROLLOUT_MODE
 
 
-def activation_policy_for_virus(virus_typ: str) -> str:
-    if virus_typ == "SARS-CoV-2":
+def activation_policy_for_virus(
+    virus_typ: str,
+    *,
+    horizon_days: int | None = None,
+    sars_h7_promoted: bool = False,
+) -> str:
+    if virus_typ == "SARS-CoV-2" and not (int(horizon_days or 0) == 7 and sars_h7_promoted):
         return SARS_SHADOW_ACTIVATION_POLICY
     return DEFAULT_ACTIVATION_POLICY
+
+
+def quality_gate_profile_for_scope(
+    *,
+    virus_typ: str | None = None,
+    horizon_days: int | None = None,
+) -> RegionalQualityGateProfile:
+    if virus_typ is None or horizon_days is None:
+        return STRICT_QUALITY_GATE_PROFILE
+    pilot = regional_horizon_pilot_status(str(virus_typ), int(horizon_days))
+    if pilot["pilot_supported"]:
+        return PILOT_QUALITY_GATE_PROFILE
+    return STRICT_QUALITY_GATE_PROFILE
+
+
+def sars_h7_promotion_status(
+    *,
+    recent_snapshots: Sequence[Mapping[str, Any]] | None,
+    promotion_flag_enabled: bool = False,
+) -> dict[str, Any]:
+    snapshots = [dict(item) for item in (recent_snapshots or []) if item]
+    relevant = snapshots[:SARS_H7_PROMOTION_REQUIRED_SNAPSHOTS]
+    if len(relevant) < SARS_H7_PROMOTION_REQUIRED_SNAPSHOTS:
+        return {
+            "eligible": False,
+            "promoted": False,
+            "promotion_flag_enabled": bool(promotion_flag_enabled),
+            "required_snapshots": SARS_H7_PROMOTION_REQUIRED_SNAPSHOTS,
+            "evaluated_snapshots": len(relevant),
+            "reason": "Waiting for two consecutive operational snapshots before SARS h7 promotion is allowed.",
+        }
+
+    def _snapshot_passes(snapshot: Mapping[str, Any]) -> bool:
+        quality_gate = dict(snapshot.get("quality_gate") or {})
+        return bool(
+            quality_gate.get("overall_passed")
+            and str(snapshot.get("source_coverage_required_status") or "").strip().lower() == "ok"
+            and str(snapshot.get("forecast_recency_status") or "").strip().lower() == "ok"
+            and not str(snapshot.get("artifact_transition_mode") or "").strip()
+        )
+
+    eligible = all(_snapshot_passes(snapshot) for snapshot in relevant)
+    if eligible and promotion_flag_enabled:
+        reason = "SARS h7 promotion flag is enabled and the last two operational snapshots passed all promotion gates."
+    elif eligible:
+        reason = "SARS h7 is eligible for promotion, but the explicit promotion flag is still disabled."
+    else:
+        reason = "SARS h7 has not yet produced two consecutive operational snapshots that pass quality, coverage, recency, and non-legacy checks."
+    return {
+        "eligible": eligible,
+        "promoted": bool(eligible and promotion_flag_enabled),
+        "promotion_flag_enabled": bool(promotion_flag_enabled),
+        "required_snapshots": SARS_H7_PROMOTION_REQUIRED_SNAPSHOTS,
+        "evaluated_snapshots": len(relevant),
+        "reason": reason,
+    }
 
 SOURCE_LAG_DAYS: dict[str, int] = {
     "survstat_weekly": 7,
@@ -460,7 +569,10 @@ def quality_gate_from_metrics(
     *,
     metrics: dict[str, float],
     baseline_metrics: dict[str, dict[str, float]],
+    virus_typ: str | None = None,
+    horizon_days: int | None = None,
 ) -> dict[str, object]:
+    profile = quality_gate_profile_for_scope(virus_typ=virus_typ, horizon_days=horizon_days)
     baseline_pr_auc = max(
         float((baseline_metrics.get(name) or {}).get("pr_auc") or 0.0)
         for name in ("persistence", "climatology", "amelag_only")
@@ -468,23 +580,31 @@ def quality_gate_from_metrics(
     climatology_brier = float((baseline_metrics.get("climatology") or {}).get("brier_score") or 1.0)
 
     checks = {
-        "precision_at_top3_passed": float(metrics.get("precision_at_top3") or 0.0) >= 0.70,
-        "activation_fp_rate_passed": float(metrics.get("activation_false_positive_rate") or 1.0) <= 0.25,
-        "pr_auc_passed": float(metrics.get("pr_auc") or 0.0) >= baseline_pr_auc * 1.15,
-        "brier_passed": float(metrics.get("brier_score") or 1.0) <= climatology_brier * 0.90,
-        "ece_passed": float(metrics.get("ece") or 1.0) <= 0.05,
+        "precision_at_top3_passed": (
+            float(metrics.get("precision_at_top3") or 0.0) >= profile.precision_at_top3_min
+        ),
+        "activation_fp_rate_passed": (
+            float(metrics.get("activation_false_positive_rate") or 1.0)
+            <= profile.activation_false_positive_rate_max
+        ),
+        "pr_auc_passed": (
+            float(metrics.get("pr_auc") or 0.0)
+            >= baseline_pr_auc * profile.pr_auc_vs_best_baseline_multiplier
+        ),
+        "brier_passed": (
+            float(metrics.get("brier_score") or 1.0)
+            <= climatology_brier * profile.brier_vs_climatology_multiplier
+        ),
+        "ece_passed": float(metrics.get("ece") or 1.0) <= profile.ece_max,
     }
     overall_passed = all(checks.values())
+    failed_checks = [key for key, passed in checks.items() if not passed]
     return {
         "overall_passed": overall_passed,
         "forecast_readiness": "GO" if overall_passed else "WATCH",
+        "profile": profile.name,
         "checks": checks,
-        "thresholds": {
-            "precision_at_top3": 0.70,
-            "activation_false_positive_rate": 0.25,
-            "pr_auc_vs_best_baseline_multiplier": 1.15,
-            "brier_vs_climatology_multiplier": 0.90,
-            "ece": 0.05,
-        },
+        "failed_checks": failed_checks,
+        "thresholds": profile.thresholds(),
         "baseline_metrics": baseline_metrics,
     }

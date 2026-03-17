@@ -104,6 +104,7 @@ class Settings(BaseSettings):
     READINESS_MODEL_MAX_AGE_DAYS: int = 45
     READINESS_MODEL_WARNING_AGE_DAYS: int = 21
     READINESS_MIN_SOURCE_COVERAGE: float = 0.6
+    REGIONAL_SARS_H7_PROMOTION_ENABLED: bool = False
     
     # Rate Limiting
     RATE_LIMIT_REQUESTS: int = 100

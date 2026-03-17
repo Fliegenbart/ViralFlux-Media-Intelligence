@@ -27,6 +27,34 @@ REGIONAL_UNSUPPORTED_HORIZON_REASONS: dict[str, dict[int, str]] = {
     },
 }
 
+# Day-one pilot contract. Scopes not listed here remain technically supported,
+# but are not part of the official pilot release until explicitly promoted.
+REGIONAL_NON_PILOT_HORIZON_REASONS: dict[str, dict[int, str]] = {
+    "Influenza A": {
+        3: "Influenza A h3 remains outside the day-one pilot and stays in evidence-building mode.",
+        5: "Influenza A h5 remains outside the day-one pilot and stays in evidence-building mode.",
+    },
+    "Influenza B": {
+        3: "Influenza B h3 remains outside the day-one pilot and stays in evidence-building mode.",
+        5: "Influenza B h5 remains outside the day-one pilot and stays in evidence-building mode.",
+    },
+    "RSV A": {
+        5: "RSV A h5 is technically supported but not part of the initial day-one pilot contract.",
+    },
+    "SARS-CoV-2": {
+        3: (
+            "SARS-CoV-2 h3 stays shadow-only for now and is not part of the day-one pilot contract."
+        ),
+        5: (
+            "SARS-CoV-2 h5 stays shadow-only for now and is not part of the day-one pilot contract."
+        ),
+        7: (
+            "SARS-CoV-2 h7 is prepared for conditional promotion, but remains shadow-only until "
+            "the explicit promotion flag is enabled after consecutive operational evidence."
+        ),
+    },
+}
+
 
 @dataclass(frozen=True)
 class HorizonSplit:
@@ -59,6 +87,13 @@ def supported_regional_horizons_for_virus(virus_typ: str) -> tuple[int, ...]:
     return tuple(horizon for horizon in SUPPORTED_FORECAST_HORIZONS if horizon not in unsupported)
 
 
+def pilot_supported_regional_horizons_for_virus(virus_typ: str) -> tuple[int, ...]:
+    normalized_virus = str(virus_typ or "").strip()
+    supported = supported_regional_horizons_for_virus(normalized_virus)
+    non_pilot = REGIONAL_NON_PILOT_HORIZON_REASONS.get(normalized_virus, {})
+    return tuple(horizon for horizon in supported if horizon not in non_pilot)
+
+
 def regional_horizon_support_status(virus_typ: str, horizon_days: int) -> dict[str, Any]:
     horizon = ensure_supported_horizon(horizon_days)
     normalized_virus = str(virus_typ or "").strip()
@@ -72,6 +107,24 @@ def regional_horizon_support_status(virus_typ: str, horizon_days: int) -> dict[s
         "supported": supported,
         "supported_horizons": list(supported_horizons),
         "reason": reason,
+    }
+
+
+def regional_horizon_pilot_status(virus_typ: str, horizon_days: int) -> dict[str, Any]:
+    support = regional_horizon_support_status(virus_typ, horizon_days)
+    normalized_virus = str(virus_typ or "").strip()
+    pilot_supported_horizons = pilot_supported_regional_horizons_for_virus(normalized_virus)
+    non_pilot = REGIONAL_NON_PILOT_HORIZON_REASONS.get(normalized_virus, {})
+    reason = non_pilot.get(int(horizon_days))
+    pilot_supported = bool(support["supported"]) and int(horizon_days) in pilot_supported_horizons
+    return {
+        "virus_typ": normalized_virus,
+        "horizon_days": int(horizon_days),
+        "supported": bool(support["supported"]),
+        "pilot_supported": pilot_supported,
+        "supported_horizons": list(support["supported_horizons"]),
+        "pilot_supported_horizons": list(pilot_supported_horizons),
+        "reason": None if pilot_supported else (reason or support["reason"]),
     }
 
 

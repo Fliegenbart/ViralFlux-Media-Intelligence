@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+from datetime import datetime
 import json
 import sys
 from pathlib import Path
@@ -20,6 +21,7 @@ from app.services.ml.forecast_horizon_utils import (
 )
 from app.services.ml.regional_forecast import RegionalForecastService
 from app.services.ml.training_contract import SUPPORTED_VIRUS_TYPES
+from app.services.ops.production_readiness_service import ProductionReadinessService
 from app.services.ops.regional_operational_snapshot_store import RegionalOperationalSnapshotStore
 from app.services.ops.run_metadata_service import OperationalRunRecorder
 
@@ -52,9 +54,16 @@ def main() -> int:
 
     with get_db_context() as db:
         service = RegionalForecastService(db)
+        readiness_service = ProductionReadinessService()
         snapshot_store = RegionalOperationalSnapshotStore(db)
+        observed_at = datetime.utcnow().replace(tzinfo=None)
         scopes: list[dict[str, object]] = []
         for virus_typ in virus_types:
+            latest_source_state = readiness_service._latest_source_state(
+                db,
+                virus_typ=virus_typ,
+                observed_at=observed_at,
+            )
             for horizon_days in horizons:
                 support = regional_horizon_support_status(virus_typ, horizon_days)
                 if support["supported"]:
@@ -101,12 +110,33 @@ def main() -> int:
                         "message": forecast["message"],
                     }
 
+                provisional_snapshot = snapshot_store.build_scope_metadata(
+                    virus_typ=virus_typ,
+                    horizon_days=horizon_days,
+                    forecast=forecast,
+                    allocation=allocation,
+                    recommendations=recommendations,
+                )
+                readiness_item = readiness_service._regional_matrix_item(
+                    service=service,
+                    virus_typ=virus_typ,
+                    horizon_days=horizon_days,
+                    observed_at=observed_at,
+                    latest_source_state=latest_source_state,
+                    operational_snapshot=provisional_snapshot,
+                    recent_operational_snapshots=snapshot_store.recent_scope_snapshots(
+                        virus_typ=virus_typ,
+                        horizon_days=horizon_days,
+                        limit=2,
+                    ),
+                )
                 scope_snapshot = snapshot_store.record_scope_snapshot(
                     virus_typ=virus_typ,
                     horizon_days=horizon_days,
                     forecast=forecast,
                     allocation=allocation,
                     recommendations=recommendations,
+                    readiness=readiness_item,
                 )
                 scopes.append(
                     {
@@ -120,6 +150,10 @@ def main() -> int:
                         "recommendation_count": len(recommendations.get("recommendations") or []),
                         "artifact_transition_mode": forecast.get("artifact_transition_mode"),
                         "forecast_as_of_date": forecast.get("as_of_date"),
+                        "pilot_contract_supported": readiness_item.get("pilot_contract_supported"),
+                        "quality_gate_profile": readiness_item.get("quality_gate_profile"),
+                        "quality_gate_failed_checks": readiness_item.get("quality_gate_failed_checks"),
+                        "sars_h7_promotion": readiness_item.get("sars_h7_promotion"),
                         "validation": validation,
                         "snapshot_run_id": scope_snapshot.get("run_id"),
                     }

@@ -20,8 +20,8 @@ APP_CONTAINERS=(
   viralflux_celery_beat
 )
 APP_SERVICES=(
-  frontend-prod
   backend
+  frontend-prod
   celery_worker
   celery_beat
 )
@@ -124,6 +124,14 @@ ensure_infra_service() {
     compose up -d "$service"
 }
 
+start_app_services_sequentially() {
+    local service
+    for service in "${APP_SERVICES[@]}"; do
+        echo "[$(date)] Starting app service: $service"
+        compose up -d --no-deps "$service"
+    done
+}
+
 # ── Build frontend image ───────────────────────────────────────
 echo "[$(date)] Building frontend image..."
 docker build -t viralflux-media-frontend -f docker/Dockerfile.frontend .
@@ -140,7 +148,7 @@ ensure_infra_service redis viralflux_redis
 # ── Deploy app containers ─────────────────────────────────────
 echo "[$(date)] Deploying app containers..."
 docker rm -f "${APP_CONTAINERS[@]}" >/dev/null 2>&1 || true
-compose up -d --no-deps "${APP_SERVICES[@]}"
+start_app_services_sequentially
 
 assert_live_mode_guards virusradar_backend
 assert_live_mode_guards viralflux_celery_worker
@@ -172,7 +180,7 @@ if [ "$HEALTHY" = false ]; then
     # Rollback: reset to previous commit and redeploy
     git reset --hard "$PREV_COMMIT"
     docker rm -f "${APP_CONTAINERS[@]}" >/dev/null 2>&1 || true
-    compose up -d --no-deps "${APP_SERVICES[@]}"
+    start_app_services_sequentially
 
     echo "[$(date)] Rollback complete. Deployed commit: $PREV_COMMIT" >&2
     exit 1

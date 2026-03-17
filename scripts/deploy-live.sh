@@ -8,7 +8,8 @@ BRANCH="${BRANCH:-main}"
 PROJECT="${PROJECT:-viralflux-media-intelligence-clean}"
 COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.yml}"
 NETWORK="${PROJECT}_virusradar_network"
-HEALTH_URL="${HEALTH_URL:-http://localhost:8000/health}"
+HEALTH_URL="${HEALTH_URL:-http://localhost:8000/health/live}"
+READY_URL="${READY_URL:-http://localhost:8000/health/ready}"
 MAX_HEALTH_RETRIES=15
 HEALTH_INTERVAL=4
 
@@ -77,22 +78,22 @@ echo "[$(date)] Deploying app containers..."
 docker rm -f "${APP_CONTAINERS[@]}" >/dev/null 2>&1 || true
 docker compose --project-directory "$REPO" -p "$PROJECT" -f "$COMPOSE_FILE" up -d --no-deps frontend-prod backend celery_worker celery_beat
 
-# ── Health check ───────────────────────────────────────────────
-echo "[$(date)] Waiting for backend health check..."
+# ── Liveness check ─────────────────────────────────────────────
+echo "[$(date)] Waiting for backend liveness check..."
 HEALTHY=false
 for i in $(seq 1 $MAX_HEALTH_RETRIES); do
     sleep "$HEALTH_INTERVAL"
     HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$HEALTH_URL" 2>/dev/null || echo "000")
     if [ "$HTTP_CODE" = "200" ]; then
         HEALTHY=true
-        echo "[$(date)] Health check passed (attempt $i/$MAX_HEALTH_RETRIES)"
+        echo "[$(date)] Liveness check passed (attempt $i/$MAX_HEALTH_RETRIES)"
         break
     fi
-    echo "[$(date)] Health check attempt $i/$MAX_HEALTH_RETRIES: HTTP $HTTP_CODE"
+    echo "[$(date)] Liveness check attempt $i/$MAX_HEALTH_RETRIES: HTTP $HTTP_CODE"
 done
 
 if [ "$HEALTHY" = false ]; then
-    echo "[$(date)] ERROR: Health check failed after $MAX_HEALTH_RETRIES attempts!" >&2
+    echo "[$(date)] ERROR: Liveness check failed after $MAX_HEALTH_RETRIES attempts!" >&2
     echo "[$(date)] Rolling back to $PREV_COMMIT..." >&2
 
     # Rollback: reset to previous commit and redeploy
@@ -102,6 +103,18 @@ if [ "$HEALTHY" = false ]; then
 
     echo "[$(date)] Rollback complete. Deployed commit: $PREV_COMMIT" >&2
     exit 1
+fi
+
+# ── Readiness snapshot (advisory) ──────────────────────────────
+READY_HTTP_CODE=$(curl -s -o /tmp/viralflux-ready.json -w "%{http_code}" "$READY_URL" 2>/dev/null || echo "000")
+if [ "$READY_HTTP_CODE" = "200" ]; then
+    echo "[$(date)] Readiness snapshot OK: $READY_URL"
+else
+    echo "[$(date)] WARNING: Readiness snapshot returned HTTP $READY_HTTP_CODE: $READY_URL" >&2
+    if [ -f /tmp/viralflux-ready.json ]; then
+        cat /tmp/viralflux-ready.json >&2 || true
+        echo >&2
+    fi
 fi
 
 # ── Show status ────────────────────────────────────────────────

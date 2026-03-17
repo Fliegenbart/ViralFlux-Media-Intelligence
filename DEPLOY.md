@@ -38,7 +38,8 @@ Was der Command macht:
 
 ```bash
 curl -I https://fluxengine.labpulse.ai
-curl https://fluxengine.labpulse.ai/health
+curl https://fluxengine.labpulse.ai/health/live
+curl https://fluxengine.labpulse.ai/health/ready
 curl 'https://fluxengine.labpulse.ai/api/v1/media/cockpit?virus_typ=Influenza%20A&target_source=RKI_ARE'
 curl -X OPTIONS \
   -H 'Origin: https://fluxengine.labpulse.ai' \
@@ -49,7 +50,8 @@ curl -X OPTIONS \
 Erwartung:
 
 - `/` -> `200`
-- `/health` -> JSON mit `status: healthy`
+- `/health/live` -> JSON mit `status: alive`
+- `/health/ready` -> JSON mit Readiness-Snapshot; `200` bedeutet operativ bereit, `503` zeigt explizite Blocker
 - API-Endpunkte liefern JSON
 - CORS-Header erlaubt `https://fluxengine.labpulse.ai`
 

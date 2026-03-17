@@ -4,6 +4,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+import numpy as np
 import pandas as pd
 
 from app.services.ml.forecast_horizon_utils import (
@@ -96,6 +97,104 @@ class RegionalHorizonSemanticsTests(unittest.TestCase):
         feature_columns = trainer._feature_columns(panel)
 
         self.assertEqual(feature_columns, ["f1", "f2"])
+
+    @patch("app.services.ml.regional_trainer.quality_gate_from_metrics")
+    @patch("app.services.ml.regional_trainer.time_based_panel_splits")
+    def test_build_backtest_bundle_passes_requested_horizon_into_quality_gate(
+        self,
+        splits_mock,
+        quality_gate_mock,
+    ) -> None:
+        class _Classifier:
+            def predict_proba(self, values):
+                probs = np.full(len(values), 0.6, dtype=float)
+                return np.column_stack([1.0 - probs, probs])
+
+        class _Regressor:
+            def predict(self, values):
+                return np.log1p(np.full(len(values), 20.0, dtype=float))
+
+        trainer = RegionalModelTrainer(db=None)
+        dates = pd.to_datetime(
+            [
+                "2026-01-01",
+                "2026-01-08",
+                "2026-01-15",
+                "2026-01-22",
+                "2026-01-29",
+                "2026-02-05",
+            ]
+        )
+        panel = pd.DataFrame(
+            {
+                "virus_typ": ["Influenza A"] * 6,
+                "bundesland": ["BY"] * 6,
+                "bundesland_name": ["Bayern"] * 6,
+                "as_of_date": dates,
+                "target_date": dates + pd.Timedelta(days=5),
+                "target_week_start": dates,
+                "horizon_days": [5.0] * 6,
+                "current_known_incidence": [10.0, 11.0, 12.0, 13.0, 14.0, 15.0],
+                "next_week_incidence": [12.0, 13.0, 14.0, 15.0, 16.0, 17.0],
+                "seasonal_baseline": [8.0] * 6,
+                "seasonal_mad": [1.5] * 6,
+                "y_next_log": np.log1p([12.0, 13.0, 14.0, 15.0, 16.0, 17.0]),
+                "f1": [0.1, 0.2, 0.3, 0.4, 0.5, 0.6],
+            }
+        )
+        splits_mock.return_value = [(dates[:4], dates[4:])]
+        quality_gate_mock.return_value = {
+            "profile": "pilot_v1",
+            "overall_passed": True,
+            "forecast_readiness": "GO",
+            "checks": {},
+            "baseline_metrics": {},
+            "failed_checks": [],
+            "thresholds": {},
+        }
+        trainer._event_labels = lambda frame, **_: pd.Series(
+            [idx % 2 for idx in range(len(frame))],
+            index=frame.index,
+            dtype=int,
+        )
+        trainer._calibration_split_dates = lambda train_dates: (train_dates[:2], train_dates[2:])
+        trainer._fit_classifier = lambda *_args, **_kwargs: _Classifier()
+        trainer._fit_isotonic = lambda *_args, **_kwargs: object()
+        trainer._apply_calibration = lambda _calibration, raw_prob: raw_prob
+        trainer._amelag_only_probabilities = lambda *, train_df, test_df, feature_columns: np.full(
+            len(test_df), 0.25, dtype=float
+        )
+        trainer._fit_regressor = lambda *_args, **_kwargs: _Regressor()
+        trainer._event_probability_from_prediction = lambda **kwargs: np.full(
+            len(kwargs["predicted_next"]), 0.3, dtype=float
+        )
+        trainer._aggregate_metrics = lambda **_kwargs: {
+            "precision_at_top3": 0.61,
+            "activation_false_positive_rate": 0.2,
+            "pr_auc": 0.66,
+            "brier_score": 0.1,
+            "ece": 0.04,
+        }
+        trainer._baseline_metrics = lambda **_kwargs: {
+            "best_baseline": 0.6,
+            "climatology_brier": 0.11,
+        }
+        trainer._build_backtest_payload = lambda **kwargs: {"baselines": kwargs["baselines"]}
+
+        bundle = trainer._build_backtest_bundle(
+            virus_typ="Influenza A",
+            panel=panel,
+            feature_columns=["f1"],
+            ww_only_columns=[],
+            tau=1.1,
+            kappa=0.5,
+            action_threshold=0.42,
+            horizon_days=5,
+        )
+
+        self.assertEqual(bundle["quality_gate"]["profile"], "pilot_v1")
+        self.assertEqual(quality_gate_mock.call_args.kwargs["virus_typ"], "Influenza A")
+        self.assertEqual(quality_gate_mock.call_args.kwargs["horizon_days"], 5)
 
     def test_trainer_load_artifacts_reads_horizon_specific_payload(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:

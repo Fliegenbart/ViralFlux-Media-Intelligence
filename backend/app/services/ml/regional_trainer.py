@@ -299,6 +299,7 @@ class RegionalModelTrainer:
             tau=tau,
             kappa=kappa,
             action_threshold=action_threshold,
+            horizon_days=horizon,
             event_config=event_config,
         )
         rollout_info = self._rollout_metadata(
@@ -847,6 +848,7 @@ class RegionalModelTrainer:
         tau: float,
         kappa: float,
         action_threshold: float,
+        horizon_days: int = 7,
         event_config=None,
     ) -> dict[str, Any]:
         config = event_config or event_definition_config_for_virus(virus_typ)

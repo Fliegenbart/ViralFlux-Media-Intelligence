@@ -104,6 +104,7 @@ class Settings(BaseSettings):
     READINESS_MODEL_MAX_AGE_DAYS: int = 45
     READINESS_MODEL_WARNING_AGE_DAYS: int = 21
     READINESS_MIN_SOURCE_COVERAGE: float = 0.6
+    CORE_PRODUCTION_SCOPES: str = "RSV A:h7"
     REGIONAL_SARS_H7_PROMOTION_ENABLED: bool = False
     
     # Rate Limiting
@@ -136,6 +137,31 @@ class Settings(BaseSettings):
         if self.READINESS_REQUIRE_BROKER is not None:
             return bool(self.READINESS_REQUIRE_BROKER)
         return self.ENVIRONMENT == "production"
+
+    @property
+    def EFFECTIVE_CORE_PRODUCTION_SCOPES(self) -> list[tuple[str, int]]:
+        scopes: list[tuple[str, int]] = []
+        seen: set[tuple[str, int]] = set()
+        raw_value = str(self.CORE_PRODUCTION_SCOPES or "").strip()
+        for item in raw_value.split(","):
+            token = item.strip()
+            if not token or ":" not in token:
+                continue
+            virus_part, horizon_part = token.rsplit(":", 1)
+            virus_typ = virus_part.strip()
+            horizon_token = horizon_part.strip().lower()
+            if horizon_token.startswith("h"):
+                horizon_token = horizon_token[1:]
+            try:
+                horizon_days = int(horizon_token)
+            except ValueError:
+                continue
+            scope = (virus_typ, horizon_days)
+            if scope in seen:
+                continue
+            seen.add(scope)
+            scopes.append(scope)
+        return scopes
     
     class Config:
         env_file = ".env"

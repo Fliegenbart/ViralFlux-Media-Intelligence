@@ -127,6 +127,132 @@ class ProductionReadinessServiceTests(unittest.TestCase):
         self.assertEqual(regional["summary"]["critical"], 0)
         self.assertEqual(snapshot["blockers"], [])
 
+    def test_build_core_snapshot_reports_healthy_for_allowlisted_scope_even_if_global_snapshot_stays_degraded(self) -> None:
+        now = datetime(2026, 3, 17, 10, 0, 0)
+        self._seed_wastewater(available_time=now - timedelta(days=1))
+
+        def fake_artifacts(_self, virus_typ: str, horizon_days: int = 7):
+            coverage = {
+                "grippeweb_are_available": 0.95,
+                "grippeweb_ili_available": 0.94,
+            }
+            if virus_typ in {"Influenza A", "Influenza B"}:
+                coverage["ifsg_influenza_available"] = 0.96
+            elif virus_typ == "RSV A":
+                coverage["ifsg_rsv_available"] = 0.95
+            else:
+                coverage.update(
+                    {
+                        "sars_are_available": 0.91,
+                        "sars_notaufnahme_available": 0.93,
+                        "sars_trends_available": 0.30,
+                    }
+                )
+
+            return {
+                "metadata": {
+                    "feature_columns": ["feature_a"],
+                    "trained_at": (now - timedelta(days=2)).isoformat(),
+                    "model_version": f"regional:{virus_typ}:h{horizon_days}",
+                    "calibration_version": f"isotonic:{virus_typ}:h{horizon_days}",
+                    "quality_gate": {"overall_passed": True, "forecast_readiness": "GO"},
+                    "dataset_manifest": {
+                        "rows": 120,
+                        "states": 16,
+                        "source_coverage": coverage,
+                        "as_of_range": {"end": (now - timedelta(days=1)).date().isoformat()},
+                    },
+                    "point_in_time_snapshot": {
+                        "as_of_range": {"end": (now - timedelta(days=1)).date().isoformat()},
+                    },
+                },
+                "dataset_manifest": {
+                    "rows": 120,
+                    "states": 16,
+                    "source_coverage": coverage,
+                    "as_of_range": {"end": (now - timedelta(days=1)).date().isoformat()},
+                },
+                "point_in_time_snapshot": {
+                    "as_of_range": {"end": (now - timedelta(days=1)).date().isoformat()},
+                },
+            }
+
+        with patch(
+            "app.services.ml.regional_forecast.RegionalForecastService._load_artifacts",
+            new=fake_artifacts,
+        ), patch(
+            "app.services.ml.forecast_decision_service.ForecastDecisionService.build_monitoring_snapshot",
+            return_value={
+                "monitoring_status": "warning",
+                "forecast_readiness": "WATCH",
+                "freshness_status": "fresh",
+                "accuracy_freshness_status": "fresh",
+                "backtest_freshness_status": "fresh",
+                "model_version": "national:v1",
+            },
+        ):
+            service = ProductionReadinessService(
+                session_factory=self._session_factory,
+                now_provider=lambda: now,
+            )
+            service.settings.CORE_PRODUCTION_SCOPES = "RSV A:h7"
+            service._broker_component = lambda: {"status": "ok", "message": "mocked"}  # type: ignore[method-assign]
+            service._schema_bootstrap_component = lambda: {"status": "ok", "message": "mocked"}  # type: ignore[method-assign]
+            snapshot = service.build_snapshot()
+            core_snapshot = service.build_core_snapshot()
+
+        self.assertEqual(snapshot["status"], "degraded")
+        self.assertEqual(core_snapshot["status"], "healthy")
+        self.assertEqual(core_snapshot["scope_mode"], "core_production")
+        self.assertEqual(core_snapshot["scope_allowlist"], [{"virus_typ": "RSV A", "horizon_days": 7}])
+        core_component = core_snapshot["components"]["core_regional_operational"]
+        self.assertEqual(core_component["status"], "ok")
+        self.assertEqual(core_component["summary"]["ready"], 1)
+        self.assertEqual(core_component["summary"]["warning"], 0)
+        self.assertEqual(core_component["summary"]["critical"], 0)
+
+    def test_build_core_snapshot_turns_unhealthy_when_allowlisted_scope_is_unsupported(self) -> None:
+        now = datetime(2026, 3, 17, 10, 0, 0)
+        self._seed_wastewater(available_time=now - timedelta(days=1))
+
+        def fake_artifacts(_self, virus_typ: str, horizon_days: int = 7):
+            del virus_typ, horizon_days
+            return {}
+
+        with patch(
+            "app.services.ml.regional_forecast.RegionalForecastService._load_artifacts",
+            new=fake_artifacts,
+        ), patch(
+            "app.services.ml.forecast_decision_service.ForecastDecisionService.build_monitoring_snapshot",
+            return_value={
+                "monitoring_status": "healthy",
+                "forecast_readiness": "GO",
+                "freshness_status": "fresh",
+                "accuracy_freshness_status": "fresh",
+                "backtest_freshness_status": "fresh",
+                "model_version": "national:v1",
+            },
+        ):
+            service = ProductionReadinessService(
+                session_factory=self._session_factory,
+                now_provider=lambda: now,
+            )
+            service.settings.CORE_PRODUCTION_SCOPES = "RSV A:h3"
+            service._broker_component = lambda: {"status": "ok", "message": "mocked"}  # type: ignore[method-assign]
+            service._schema_bootstrap_component = lambda: {"status": "ok", "message": "mocked"}  # type: ignore[method-assign]
+            snapshot = service.build_core_snapshot()
+
+        self.assertEqual(snapshot["status"], "unhealthy")
+        core_component = snapshot["components"]["core_regional_operational"]
+        self.assertEqual(core_component["status"], "critical")
+        self.assertEqual(core_component["summary"]["critical"], 1)
+        item = core_component["matrix"][0]
+        self.assertEqual(item["virus_typ"], "RSV A")
+        self.assertEqual(item["horizon_days"], 3)
+        self.assertEqual(item["model_availability"], "unsupported")
+        self.assertFalse(item["core_scope_passed"])
+        self.assertIn("Core scope has no loadable regional model artifacts.", item["blockers"])
+
     def test_build_snapshot_flags_missing_models_and_stale_sources(self) -> None:
         now = datetime(2026, 3, 17, 10, 0, 0)
         self._seed_wastewater(available_time=now - timedelta(days=30))

@@ -18,6 +18,8 @@ This repo keeps long-lived truth in a few small anchors instead of one giant pro
   [pilot_reporting_and_roi.md](/Users/davidwegener/Desktop/viralflux/docs/pilot_reporting_and_roi.md)
 - Live readiness blockers:
   [live_readiness_blockers_current.md](/Users/davidwegener/Desktop/viralflux/docs/live_readiness_blockers_current.md)
+- Core production readiness:
+  [core_production_readiness.md](/Users/davidwegener/Desktop/viralflux/docs/core_production_readiness.md)
 - Ops and pilot ticket set:
   [ops_and_pilot_ticket_set.md](/Users/davidwegener/Desktop/viralflux/docs/ops_and_pilot_ticket_set.md)
 - Pilot blocker resolution path:

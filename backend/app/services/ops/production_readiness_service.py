@@ -150,6 +150,53 @@ class ProductionReadinessService:
             "blockers": blockers,
         }
 
+    def build_core_snapshot(self, *, deep_checks: bool = True) -> dict[str, Any]:
+        observed_at = self.now_provider().replace(tzinfo=None)
+        allowlist = [
+            {"virus_typ": virus_typ, "horizon_days": horizon_days}
+            for virus_typ, horizon_days in self.settings.EFFECTIVE_CORE_PRODUCTION_SCOPES
+        ]
+        components: dict[str, Any] = {
+            "database": self._database_component(),
+            "celery_broker": self._broker_component(),
+            "schema_bootstrap": self._schema_bootstrap_component(),
+        }
+
+        if components["database"]["status"] == "ok" and deep_checks:
+            components["core_regional_operational"] = self._safe_component(
+                "core_regional_operational",
+                lambda: self._with_db_session(
+                    lambda db: self._core_regional_operational_component(
+                        db,
+                        observed_at=observed_at,
+                    )
+                ),
+            )
+        else:
+            reason = "database_unavailable" if components["database"]["status"] != "ok" else "startup_light_mode"
+            components["core_regional_operational"] = self._skipped_component(reason)
+
+        overall_component_status = self._worst_status(
+            component.get("status") for component in components.values()
+        )
+        overall_status = _HEALTH_BY_STATUS.get(overall_component_status, "degraded")
+        blockers = [
+            {"component": name, "message": component.get("message")}
+            for name, component in components.items()
+            if component.get("status") == "critical"
+        ]
+
+        return {
+            "status": overall_status,
+            "checked_at": observed_at.isoformat(),
+            "environment": self.settings.ENVIRONMENT,
+            "app_version": self.settings.APP_VERSION,
+            "scope_mode": "core_production",
+            "scope_allowlist": allowlist,
+            "components": components,
+            "blockers": blockers,
+        }
+
     @staticmethod
     def http_status_code(snapshot: dict[str, Any]) -> int:
         return 503 if str(snapshot.get("status")) == "unhealthy" else 200
@@ -328,6 +375,68 @@ class ProductionReadinessService:
                     if item["model_availability"] != "unsupported"
                     if str(item.get("quality_gate", {}).get("forecast_readiness") or "WATCH") != "GO"
                 ),
+            },
+            "matrix": matrix,
+        }
+
+    def _core_regional_operational_component(
+        self,
+        db: Session,
+        *,
+        observed_at: datetime,
+    ) -> dict[str, Any]:
+        allowlist = list(self.settings.EFFECTIVE_CORE_PRODUCTION_SCOPES)
+        if not allowlist:
+            return {
+                "status": "unknown",
+                "message": "No core production scopes are configured.",
+                "summary": {
+                    "ready": 0,
+                    "warning": 0,
+                    "critical": 0,
+                    "scopes": 0,
+                },
+                "matrix": [],
+            }
+
+        service = RegionalForecastService(db, models_dir=self.models_dir)
+        snapshot_store = RegionalOperationalSnapshotStore(db)
+        operational_snapshots = snapshot_store.latest_scope_snapshots(
+            virus_types=sorted({virus_typ for virus_typ, _ in allowlist}),
+            horizon_days_list=sorted({horizon_days for _, horizon_days in allowlist}),
+        )
+        latest_source_states: dict[str, dict[str, Any]] = {}
+        matrix: list[dict[str, Any]] = []
+
+        for virus_typ, horizon_days in allowlist:
+            latest_source_state = latest_source_states.get(virus_typ)
+            if latest_source_state is None:
+                latest_source_state = self._latest_source_state(db, virus_typ=virus_typ, observed_at=observed_at)
+                latest_source_states[virus_typ] = latest_source_state
+            item = self._regional_matrix_item(
+                service=service,
+                virus_typ=virus_typ,
+                horizon_days=horizon_days,
+                observed_at=observed_at,
+                latest_source_state=latest_source_state,
+                operational_snapshot=operational_snapshots.get((virus_typ, horizon_days)),
+                recent_operational_snapshots=snapshot_store.recent_scope_snapshots(
+                    virus_typ=virus_typ,
+                    horizon_days=horizon_days,
+                    limit=2,
+                ),
+            )
+            matrix.append(self._core_scope_item(item))
+
+        overall_status = self._worst_status(item["status"] for item in matrix)
+        return {
+            "status": overall_status,
+            "message": "Core production readiness evaluated.",
+            "summary": {
+                "ready": sum(1 for item in matrix if item["status"] == "ok"),
+                "warning": sum(1 for item in matrix if item["status"] == "warning"),
+                "critical": sum(1 for item in matrix if item["status"] == "critical"),
+                "scopes": len(matrix),
             },
             "matrix": matrix,
         }
@@ -580,6 +689,58 @@ class ProductionReadinessService:
             "message": "Wastewater source freshness evaluated.",
             "latest_available_as_of": latest_available_as_of,
             "source_age_days": source_age_days,
+        }
+
+    def _core_scope_item(self, item: dict[str, Any]) -> dict[str, Any]:
+        model_availability = str(item.get("model_availability") or "missing")
+        pilot_contract_supported = bool(item.get("pilot_contract_supported"))
+        quality_gate = item.get("quality_gate") or {}
+        quality_readiness = str(quality_gate.get("forecast_readiness") or "WATCH").upper()
+        source_freshness_status = str(item.get("source_freshness_status") or "unknown").lower()
+        forecast_recency_status = str(item.get("forecast_recency_status") or "unknown").lower()
+        source_coverage_required_status = str(item.get("source_coverage_required_status") or "unknown").lower()
+        artifact_transition_mode = str(item.get("artifact_transition_mode") or "").strip()
+
+        availability_status = "ok" if model_availability == "available" else "critical"
+        contract_status = "ok" if pilot_contract_supported else "critical"
+        quality_status = "ok" if quality_readiness == "GO" else "warning"
+        transition_status = "warning" if artifact_transition_mode else "ok"
+
+        status = self._worst_status(
+            [
+                availability_status,
+                contract_status,
+                source_freshness_status,
+                forecast_recency_status,
+                source_coverage_required_status,
+                quality_status,
+                transition_status,
+            ]
+        )
+
+        blockers = list(item.get("blockers") or [])
+        if model_availability != "available":
+            blockers.append("Core scope has no loadable regional model artifacts.")
+        if not pilot_contract_supported:
+            blockers.append("Scope is not part of the active core production contract.")
+        if quality_readiness != "GO":
+            blockers.append("Core scope quality gate is not at GO.")
+        if source_freshness_status != "ok":
+            blockers.append("Core scope source freshness is not in the OK window.")
+        if forecast_recency_status != "ok":
+            blockers.append("Core scope forecast recency is not in the OK window.")
+        if source_coverage_required_status != "ok":
+            blockers.append("Core scope required source coverage is not OK.")
+        if artifact_transition_mode:
+            blockers.append("Core scope still uses an artifact transition fallback.")
+
+        return {
+            **item,
+            "portfolio_status": item.get("status"),
+            "status": status,
+            "scope_contract": "core_production",
+            "core_scope_passed": status == "ok",
+            "blockers": list(dict.fromkeys(blockers)),
         }
 
     def _coverage_status(self, coverage_floor: float | None) -> str:

@@ -278,12 +278,23 @@ async def root():
         "docs": "/docs",
         "health_live": "/health/live",
         "health_ready": "/health/ready",
+        "health_core_ready": "/health/core-ready",
         "status": "operational"
     }
 
 
 def _readiness_payload() -> dict:
     snapshot = ProductionReadinessService().build_snapshot()
+    snapshot["startup"] = {
+        "completed_at": getattr(app.state, "startup_completed_at", None),
+        "db_summary": getattr(app.state, "startup_db_summary", None),
+        "run_metadata": getattr(app.state, "startup_run_metadata", None),
+    }
+    return snapshot
+
+
+def _core_readiness_payload() -> dict:
+    snapshot = ProductionReadinessService().build_core_snapshot()
     snapshot["startup"] = {
         "completed_at": getattr(app.state, "startup_completed_at", None),
         "db_summary": getattr(app.state, "startup_db_summary", None),
@@ -307,6 +318,16 @@ async def health_live():
 async def health_ready():
     """Readiness probe with dependency, artifact and recency checks."""
     snapshot = _readiness_payload()
+    return JSONResponse(
+        status_code=ProductionReadinessService.http_status_code(snapshot),
+        content=snapshot,
+    )
+
+
+@app.get("/health/core-ready")
+async def health_core_ready():
+    """Core production readiness for explicitly supported live scopes."""
+    snapshot = _core_readiness_payload()
     return JSONResponse(
         status_code=ProductionReadinessService.http_status_code(snapshot),
         content=snapshot,

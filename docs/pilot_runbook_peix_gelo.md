@@ -1,37 +1,57 @@
 # Pilot Runbook PEIX / GELO
 
-Stand: 2026-03-17
+Stand: 2026-03-18
 
 ## Zweck
 
-Dieses Runbook beschreibt, wie ein interner PEIX-/GELO-Pilot operativ vorbereitet, geprueft und nur bei echter Freigabe extern genutzt wird.
+Dieses Runbook beschreibt den **eng geschnittenen Forecast-First-Pilot** fuer PEIX / GELO.
 
 Wichtig:
 
-- Das Runbook ist bewusst streng.
-- `live erreichbar` bedeutet nicht `pilotfreigegeben`.
-- Wenn die Gate-Checks rot sind, werden keine externen Handlungsempfehlungen aus dem System verschickt.
+- `live erreichbar` ist nicht automatisch `commercially validated`
+- der Pilot darf heute schon als **Forecast- und Priorisierungs-Tool** gezeigt werden
+- eine **Budget- oder ROI-Freigabe** bleibt eine zweite Stufe und braucht GELO-Outcome-Daten
+
+## Zwei Freigabestufen
+
+### 1. Forecast-First GO
+
+Forecast-First GO bedeutet:
+
+- der Scope ist technisch und epidemiologisch tragfaehig
+- der Forecast ist fuer den Kunden sichtbar und erklaerbar
+- Regionen koennen priorisiert werden
+- Budget darf als **Szenario-Split** gezeigt werden
+- Commercial Validation darf noch `WATCH` oder `NO_GO` sein
+
+### 2. Commercial GO
+
+Commercial GO bedeutet zusaetzlich:
+
+- GELO-Outcome-Daten sind angeschlossen
+- Aktivierungszyklen und Holdout-Logik sind sichtbar
+- Lift-/Outcome-Evidenz ist stark genug fuer eine validierte Budgetfreigabe
 
 ## Rollen
 
 ### ViralFlux Produkt / Ops
 
 - prueft Live-, Ready- und Smoke-Status
-- bewertet bekannte Limitierungen
-- dokumentiert Go / No-Go
-- ist verantwortlich fuer Incident- und Rollback-Entscheidungen
+- prueft den scoped `pilot-readout`
+- trennt Forecast-Readiness von Commercial-Validation
+- ist verantwortlich fuer Incident-, Rollback- und Freigabeentscheidungen
 
 ### PEIX
 
-- bewertet operative Verwendbarkeit der Empfehlungen
-- entscheidet nicht allein ueber technische Freigabe
-- nutzt Outputs nur in freigegebenen Scope-Kombinationen
+- nutzt den Forecast-First-Pilot fuer Kundengespraeche
+- verkauft zunaechst Priorisierung, Timing und Szenario-Splits
+- verspricht ohne GELO-Outcome-Daten keine validierte ROI-Optimierung
 
 ### GELO
 
-- bewertet Produktcluster, Keywordcluster und Budget-Guardrails
-- entscheidet mit ueber fachliche Akzeptanz
-- bekommt keine als "produktiv" bezeichneten Empfehlungen aus einem roten Gate-Zustand
+- bekommt bereits einen belastbaren Forecast-Readout
+- liefert spaeter Spend-, Sales-, Orders- oder Revenue-Daten fuer den Commercial Layer
+- entscheidet mit ueber Produkt-, Keyword- und Aktivierungslogik
 
 ## Vor jedem Pilot-Readout
 
@@ -52,10 +72,11 @@ Erwartung:
 curl -s https://fluxengine.labpulse.ai/health/ready
 ```
 
-Erwartung fuer echte Pilot-Freigabe:
+Erwartung fuer den Forecast-First-Pilot:
 
 - kein `unhealthy`
-- keine kritischen Blocker im offiziell freizugebenden Pilot-Scope
+- keine kritischen Blocker im aktiven Demo-Scope
+- Warning-only Degradation darf sichtbar bleiben, solange sie den aktiven Demo-Scope nicht fachlich entwertet
 
 ### 3. Produktkern-Smoke
 
@@ -63,86 +84,72 @@ Erwartung fuer echte Pilot-Freigabe:
 cd /Users/davidwegener/Desktop/viralflux/backend
 python scripts/smoke_test_release.py \
   --base-url https://fluxengine.labpulse.ai \
-  --virus "Influenza A" \
+  --virus "RSV A" \
   --horizon 7 \
-  --budget-eur 50000 \
+  --budget-eur 120000 \
   --top-n 3
 ```
 
-Erwartung fuer echte Pilot-Freigabe:
+Erwartung fuer den Forecast-First-Pilot:
 
 - kein `live_failed`
 - kein `business_smoke_failed`
-- idealerweise auch kein `ready_blocked`
+- `ready_blocked` ist nur dann kritisch, wenn der aktive Demo-Scope selbst fachlich kippt
 
-## Go / No-Go Entscheidung
+### 4. Kanonischen Pilot-Readout pruefen
 
-### Go
+```bash
+curl -s "https://fluxengine.labpulse.ai/api/v1/media/pilot-readout?brand=gelo&virus_typ=RSV%20A&horizon_days=7&weekly_budget_eur=120000"
+```
 
-Ein Pilot-Readout darf extern genutzt werden, wenn:
+Erwartung fuer den Forecast-First-Pilot:
 
-1. `health/live` gruen ist
-2. `health/ready` nicht `unhealthy` ist
-3. der Produktkern-Smoke nicht faellt
-4. die verwendete Virus-/Horizon-Kombination offiziell supported ist
-5. die bekannten Limitierungen den konkreten Readout nicht entwerten
+- `forecast_readiness = GO`
+- `scope_readiness = GO`
+- `pilot_mode = forecast_first`
+- `budget_mode = scenario_split` oder `validated_allocation`
 
-### No-Go
+Commercial-Layer darf dabei noch sein:
 
-Ein Pilot-Readout bleibt intern, wenn:
+- `commercial_validation_status = WATCH` oder `NO_GO`
+- `budget_release_status = WATCH`
 
-1. `health/live` nicht gruen ist
-2. `health/ready = 503`
-3. Forecast / Allocation / Recommendation live `500` liefern
-4. die Kombination offiziell unsupported ist
-5. Recency, Source-Coverage oder Quality-Gates den Scope fachlich entwerten
+## Offizieller Forecast-First-Pilot-Scope
 
-## Offizieller Pilot-Scope
+Nur dieser Scope ist heute fuer externe Demos freigegeben:
 
-### Geplante Pilot-Endpunkte
+- `brand = gelo`
+- `virus_typ = RSV A`
+- `horizon_days = 7`
+- nur die kanonische `/pilot`-Surface bzw. `GET /api/v1/media/pilot-readout`
 
-- `GET /api/v1/media/pilot-readout`
-- `GET /api/v1/forecast/regional/decisions`
-- `GET /api/v1/forecast/regional/media-allocation`
-- `GET /api/v1/forecast/regional/campaign-recommendations`
-- `POST /api/v1/media/outcomes/ingest`
+## Was im Forecast-First-Pilot gezeigt werden darf
 
-### Geplante Pilot-Virus-/Horizon-Matrix
+- Regionen-Ranking mit `decision_stage`, `priority_score`, `event_probability`, `reason_trace`
+- klare Timing- und Priorisierungsstory fuer Top-Regionen
+- Budget als **forecast-basierter Szenario-Split**
+- sichtbare Unsicherheit / Confidence
+- klare Trennung zwischen:
+  - `Forecast Ready`
+  - `Commercial Validation Pending`
 
-- `Influenza A`: `3/5/7`
-- `Influenza B`: `3/5/7`
-- `SARS-CoV-2`: `3/5/7`
-- `RSV A`: `5/7`
-- `RSV A / 3`: unsupported
+## Was noch nicht behauptet werden darf
 
-### Aktueller externer Freigabestand
+- keine bereits bewiesene Umsatz- oder ROI-Optimierung
+- keine implizite Spend-Freigabe ohne GELO-Outcome-Daten
+- kein generelles Plattform-GO ueber andere Viren oder Horizonte hinweg
 
-- keine Kombination ist heute extern freigegeben
+## Empfohlener Ablauf pro GELO-Meeting
 
-## Was im Pilot offiziell gezeigt werden darf
-
-Nur wenn Go-Status vorliegt:
-
-- Regionen-Ranking mit `decision_label`, `priority_score`, `reason_trace`
-- Budget-/Allocation-Empfehlungen mit `recommended_activation_level`, `suggested_budget_share`, `suggested_budget_amount`
-- Campaign Recommendations mit Produktcluster, Keywordcluster, Evidenzklasse und Rationale
-
-Wenn No-Go-Status vorliegt:
-
-- nur interner Technik-/Readiness-Status
-- keine operativen Kundenempfehlungen als freigegebene Wahrheit
-
-## Empfohlener Ablauf pro Pilot-Meeting
-
-1. Live-, Ready- und Smoke-Status erfassen
-2. Go / No-Go festhalten
-3. Nur bei Go:
-   - den kanonischen `pilot-readout` fuer den offiziellen Scope ziehen
-   - Outcome-/Business-Gate gegen die aktuelle GELO-Ingestion pruefen
-   - nur archivierte Live-Evaluation und denselben Readout als Wahrheit verwenden
-4. Nur bei No-Go:
-   - keine externen Budget- oder Aktivierungsempfehlungen ausgeben
-   - stattdessen bekannte Blocker und naechsten Fix-Schritt dokumentieren
+1. `health/live`
+2. `health/ready`
+3. Produktkern-Smoke
+4. scoped `pilot-readout`
+5. Forecast-First GO oder NO_GO festhalten
+6. nur dann den Forecast und die Szenario-Splits zeigen
+7. Commercial Validation separat einordnen:
+   - was schon vorhanden ist
+   - was GELO-Daten spaeter freischalten
 
 ## Eskalationslogik
 
@@ -150,34 +157,40 @@ Wenn No-Go-Status vorliegt:
 
 - Incident
 - kein Pilotbetrieb
-- Deploy / Rollback / Plattformproblem priorisieren
 
-### Fall B: `ready_blocked`
+### Fall B: `business_smoke_failed`
 
-- System laeuft technisch
-- kein externer Pilot-Output ohne expliziten internen Vorbehalt
-- Daten-/Artefakt-/Recency-Blocker zuerst beheben
+- harter Produktkern-Blocker
+- kein Forecast-First-GO
 
-### Fall C: `business_smoke_failed`
+### Fall C: `scope_readiness != GO` im scoped `pilot-readout`
 
-- haertester Pilot-Blocker fuer den Produktkern
-- keine externen Handlungsempfehlungen
-- Kernpfad-Fix vor jeder weiteren Pilotfreigabe
+- kein externer Forecast-First-Pilot fuer diesen Scope
+- erst Forecast-/Evaluation-/Promotion-Pfad reparieren
 
-## Aktueller Ist-Zustand am 2026-03-17
+### Fall D: `scope_readiness = GO`, aber `commercial_validation_status != GO`
+
+- Forecast-First-Pilot darf gezeigt werden
+- Commercial Optimization darf **nicht** behauptet werden
+
+## Aktueller Ist-Zustand am 2026-03-18
 
 - `health/live` = gruen
-- `health/ready` = `503`
-- moderner Kernpfad-Smoke = `business_smoke_failed`
-- regionale Forecast-, Allocation- und Recommendation-Endpunkte liefern aktuell `500`
-- `RSV A / h3` ist bewusst unsupported
+- `/health/ready` = degraded, aber nicht unhealthy
+- `RSV A / h7` ist forecast-seitig tragfaehig
+- der kanonische `pilot-readout` trennt jetzt Forecast-Readiness und Commercial-Validation
+- GELO-Outcome-Daten fehlen weiterhin fuer den Commercial Layer
 
 ## Harte operative Aussage
 
-Am 17. Maerz 2026 ist der richtige Modus fuer PEIX / GELO:
+Am 18. Maerz 2026 ist der richtige Modus fuer PEIX / GELO:
 
 - System live zeigen: ja
-- Produktbild und Pilot-Scope diskutieren: ja
-- operative Empfehlungen extern freigeben: nein
+- Forecast und regionale Priorisierung zeigen: ja
+- forecast-basierte Budget-Szenario-Splits zeigen: ja
+- validierte Commercial- oder ROI-Claims machen: nein
 
-Der Pilot darf erst geoeffnet werden, wenn der Kernpfad-Smoke gruen ist und die regionale Readiness nicht mehr durch kritische operative Blocker dominiert wird.
+Der richtige Satz fuer GELO ist:
+
+- "Hier seht ihr bereits einen echten Forecast und eine belastbare Regionen-Priorisierung."
+- "Wenn wir jetzt eure echten Outcome-Daten anschliessen, wird daraus zusaetzlich der validierte Commercial Layer."

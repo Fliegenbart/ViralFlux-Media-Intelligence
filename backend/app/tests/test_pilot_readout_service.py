@@ -164,6 +164,21 @@ class PilotReadoutServiceTests(unittest.TestCase):
         return service
 
     def test_build_readout_returns_watch_when_commercial_data_is_missing(self) -> None:
+        archive_dir = Path(self.tempdir.name) / "rsv_a_h7_rsv_ranking" / "20260317T193728Z_forecast_first"
+        archive_dir.mkdir(parents=True)
+        (archive_dir / "report.json").write_text(json.dumps({
+            "run_id": "live-eval-forecast-first",
+            "generated_at": "2026-03-17T19:37:28Z",
+            "selected_experiment_name": "rsv_signal_core",
+            "calibration_mode": "raw_passthrough",
+            "gate_outcome": "GO",
+            "retained": True,
+            "comparison_table": [
+                {"role": "baseline", "name": "baseline"},
+                {"role": "experiment", "name": "rsv_signal_core"},
+            ],
+        }))
+
         service = self._service()
         service.business_validation_service.evaluate = lambda **_: {
             "coverage_weeks": 12,
@@ -176,9 +191,21 @@ class PilotReadoutServiceTests(unittest.TestCase):
 
         payload = service.build_readout(brand="gelo", virus_typ="RSV A", horizon_days=7)
 
-        self.assertEqual(payload["run_context"]["scope_readiness"], "WATCH")
+        self.assertEqual(payload["run_context"]["scope_readiness"], "GO")
+        self.assertEqual(payload["run_context"]["forecast_readiness"], "GO")
+        self.assertEqual(payload["run_context"]["commercial_validation_status"], "WATCH")
+        self.assertEqual(payload["run_context"]["budget_mode"], "scenario_split")
+        self.assertEqual(payload["run_context"]["pilot_mode"], "forecast_first")
         self.assertEqual(payload["run_context"]["gate_snapshot"]["epidemiology_status"], "GO")
         self.assertEqual(payload["run_context"]["gate_snapshot"]["budget_release_status"], "WATCH")
+        self.assertEqual(payload["run_context"]["gate_snapshot"]["commercial_validation_status"], "WATCH")
+        self.assertEqual(payload["executive_summary"]["budget_mode"], "scenario_split")
+        self.assertEqual(payload["executive_summary"]["budget_recommendation"]["budget_mode"], "scenario_split")
+        self.assertEqual(payload["empty_state"]["code"], "ready")
+        self.assertIn(
+            "forecast-based planning scenario",
+            payload["executive_summary"]["what_should_we_do_now"],
+        )
         self.assertIn("Validated incremental lift metrics are still missing.", payload["run_context"]["gate_snapshot"]["missing_requirements"])
         self.assertFalse(_scan_for_key(payload, "impact_probability"))
 
@@ -211,6 +238,9 @@ class PilotReadoutServiceTests(unittest.TestCase):
         payload = service.build_readout(brand="gelo", virus_typ="RSV A", horizon_days=7)
 
         self.assertEqual(payload["run_context"]["scope_readiness"], "GO")
+        self.assertEqual(payload["run_context"]["forecast_readiness"], "GO")
+        self.assertEqual(payload["run_context"]["commercial_validation_status"], "GO")
+        self.assertEqual(payload["run_context"]["budget_mode"], "validated_allocation")
         self.assertEqual(payload["pilot_evidence"]["evaluation"]["selected_experiment_name"], "rsv_signal_core")
         self.assertEqual(payload["pilot_evidence"]["legacy_context"]["status"], "frozen")
         self.assertEqual(payload["pilot_evidence"]["legacy_context"]["sunset_date"], "2026-04-30")

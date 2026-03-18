@@ -97,6 +97,19 @@ class PilotReadoutService:
             allocation=allocation,
             recommendations=recommendations,
         )
+        forecast_readiness = self._forecast_first_scope_readiness(
+            forecast=forecast,
+            evaluation=evaluation,
+        )
+        commercial_validation_status = self._commercial_validation_status(
+            truth_coverage=truth_coverage,
+            business_validation=business_validation,
+        )
+        budget_mode = self._budget_mode(business_validation=business_validation)
+        validation_disclaimer = self._validation_disclaimer(
+            business_validation=business_validation,
+            budget_mode=budget_mode,
+        )
         scope_readiness_by_section = {
             "forecast": self._forecast_scope_readiness(forecast),
             "allocation": self._allocation_scope_readiness(allocation),
@@ -106,11 +119,7 @@ class PilotReadoutService:
                 evaluation=evaluation,
             ),
         }
-        overall_scope_readiness = self._overall_scope_readiness(
-            forecast=forecast,
-            business_validation=business_validation,
-            evaluation=evaluation,
-        )
+        overall_scope_readiness = forecast_readiness
         missing_requirements = self._missing_requirements(
             truth_coverage=truth_coverage,
             business_validation=business_validation,
@@ -120,6 +129,8 @@ class PilotReadoutService:
             truth_coverage=truth_coverage,
             business_validation=business_validation,
             evaluation=evaluation,
+            forecast_readiness=forecast_readiness,
+            commercial_validation_status=commercial_validation_status,
             overall_scope_readiness=overall_scope_readiness,
             missing_requirements=missing_requirements,
         )
@@ -131,6 +142,10 @@ class PilotReadoutService:
             allocation=allocation,
             recommendations=recommendations,
             region_rows=region_rows,
+            forecast_readiness=forecast_readiness,
+            commercial_validation_status=commercial_validation_status,
+            budget_mode=budget_mode,
+            validation_disclaimer=validation_disclaimer,
             overall_scope_readiness=overall_scope_readiness,
             gate_snapshot=gate_snapshot,
         )
@@ -155,6 +170,11 @@ class PilotReadoutService:
                 "artifact_transition_mode": forecast.get("artifact_transition_mode"),
                 "rollout_mode": forecast.get("rollout_mode"),
                 "activation_policy": forecast.get("activation_policy"),
+                "forecast_readiness": forecast_readiness,
+                "commercial_validation_status": commercial_validation_status,
+                "pilot_mode": "forecast_first",
+                "budget_mode": budget_mode,
+                "validation_disclaimer": validation_disclaimer,
                 "scope_readiness": overall_scope_readiness,
                 "scope_readiness_by_section": scope_readiness_by_section,
                 "promotion_status": self._promotion_status(
@@ -293,6 +313,10 @@ class PilotReadoutService:
         allocation: dict[str, Any],
         recommendations: dict[str, Any],
         region_rows: list[dict[str, Any]],
+        forecast_readiness: str,
+        commercial_validation_status: str,
+        budget_mode: str,
+        validation_disclaimer: str,
         overall_scope_readiness: str,
         gate_snapshot: dict[str, Any],
     ) -> dict[str, Any]:
@@ -304,9 +328,13 @@ class PilotReadoutService:
             blocked_reasons = self._unique_non_empty(
                 blocked_reasons + gate_snapshot["missing_requirements"]
             )
-        if overall_scope_readiness == "GO":
+        if overall_scope_readiness == "GO" and gate_snapshot.get("budget_release_status") == "GO":
             recommendation_text = (
                 f"Prioritize {lead_region.get('region_name')} now and release the planned weekly budget in the recommended split."
+            )
+        elif overall_scope_readiness == "GO":
+            recommendation_text = (
+                f"Prioritize {lead_region.get('region_name')} now and use the regional split below as a forecast-based planning scenario while commercial validation is still pending."
             )
         elif lead_region:
             recommendation_text = (
@@ -317,6 +345,11 @@ class PilotReadoutService:
         return {
             "what_should_we_do_now": recommendation_text,
             "decision_stage": lead_stage,
+            "forecast_readiness": forecast_readiness,
+            "commercial_validation_status": commercial_validation_status,
+            "pilot_mode": "forecast_first",
+            "budget_mode": budget_mode,
+            "validation_disclaimer": validation_disclaimer,
             "scope_readiness": overall_scope_readiness,
             "headline": recommendations.get("headline")
             or allocation.get("headline")
@@ -325,7 +358,9 @@ class PilotReadoutService:
             "budget_recommendation": {
                 "weekly_budget_eur": round(float(weekly_budget_eur), 2),
                 "recommended_active_budget_eur": allocation.get("summary", {}).get("total_budget_allocated"),
+                "scenario_budget_eur": allocation.get("summary", {}).get("total_budget_allocated"),
                 "spend_enabled": bool(allocation.get("summary", {}).get("spend_enabled")),
+                "budget_mode": budget_mode,
                 "blocked_reasons": blocked_reasons,
             },
             "confidence_summary": {
@@ -345,21 +380,32 @@ class PilotReadoutService:
         truth_coverage: dict[str, Any],
         business_validation: dict[str, Any],
         evaluation: dict[str, Any] | None,
+        forecast_readiness: str,
+        commercial_validation_status: str,
         overall_scope_readiness: str,
         missing_requirements: list[str],
     ) -> dict[str, Any]:
         quality_gate = forecast.get("quality_gate") or {}
         latest_evaluation = evaluation or {}
+        budget_mode = self._budget_mode(business_validation=business_validation)
         return {
             "scope_readiness": overall_scope_readiness,
+            "forecast_readiness": forecast_readiness,
             "epidemiology_status": self._epidemiology_status(forecast),
             "commercial_data_status": self._commercial_data_status(
                 truth_coverage=truth_coverage,
                 business_validation=business_validation,
             ),
+            "commercial_validation_status": commercial_validation_status,
             "holdout_status": "GO" if business_validation.get("holdout_ready") else "WATCH",
             "budget_release_status": (
                 "GO" if business_validation.get("validated_for_budget_activation") else "WATCH"
+            ),
+            "pilot_mode": "forecast_first",
+            "budget_mode": budget_mode,
+            "validation_disclaimer": self._validation_disclaimer(
+                business_validation=business_validation,
+                budget_mode=budget_mode,
             ),
             "missing_requirements": missing_requirements,
             "coverage_weeks": truth_coverage.get("coverage_weeks"),
@@ -417,7 +463,12 @@ class PilotReadoutService:
         status = str(allocation.get("status") or "").strip().lower()
         if status in {"no_model", "unsupported", "no_data"} or not (allocation.get("recommendations") or []):
             return "NO_GO"
-        if bool((allocation.get("summary") or {}).get("spend_enabled")):
+        if any(
+            item.get("suggested_budget_share") is not None
+            or item.get("suggested_budget_amount") is not None
+            or item.get("budget_eur") is not None
+            for item in (allocation.get("recommendations") or [])
+        ):
             return "GO"
         return "WATCH"
 
@@ -427,6 +478,10 @@ class PilotReadoutService:
             return "NO_GO"
         if int(recommendations.get("summary", {}).get("ready_recommendations") or 0) > 0:
             return "GO"
+        if int(recommendations.get("summary", {}).get("guarded_recommendations") or 0) > 0:
+            return "GO"
+        if int(recommendations.get("summary", {}).get("observe_only_recommendations") or 0) > 0:
+            return "GO"
         return "WATCH"
 
     def _evidence_scope_readiness(
@@ -435,17 +490,16 @@ class PilotReadoutService:
         business_validation: dict[str, Any],
         evaluation: dict[str, Any] | None,
     ) -> str:
-        if business_validation.get("validated_for_budget_activation") and evaluation and evaluation.get("gate_outcome") == "GO":
+        if evaluation and evaluation.get("gate_outcome") == "GO" and evaluation.get("retained") is True:
             return "GO"
         if evaluation or business_validation.get("coverage_weeks") or business_validation.get("validation_status"):
             return "WATCH"
         return "NO_GO"
 
-    def _overall_scope_readiness(
+    def _forecast_first_scope_readiness(
         self,
         *,
         forecast: dict[str, Any],
-        business_validation: dict[str, Any],
         evaluation: dict[str, Any] | None,
     ) -> str:
         forecast_readiness = self._forecast_scope_readiness(forecast)
@@ -453,7 +507,6 @@ class PilotReadoutService:
             return "NO_GO"
         if (
             forecast_readiness == "GO"
-            and business_validation.get("validated_for_budget_activation")
             and evaluation
             and evaluation.get("gate_outcome") == "GO"
             and evaluation.get("retained") is True
@@ -479,6 +532,39 @@ class PilotReadoutService:
         if business_validation.get("validated_for_budget_activation"):
             return "GO"
         return "WATCH"
+
+    def _commercial_validation_status(
+        self,
+        *,
+        truth_coverage: dict[str, Any],
+        business_validation: dict[str, Any],
+    ) -> str:
+        return self._commercial_data_status(
+            truth_coverage=truth_coverage,
+            business_validation=business_validation,
+        )
+
+    @staticmethod
+    def _budget_mode(
+        *,
+        business_validation: dict[str, Any],
+    ) -> str:
+        if business_validation.get("validated_for_budget_activation"):
+            return "validated_allocation"
+        return "scenario_split"
+
+    @staticmethod
+    def _validation_disclaimer(
+        *,
+        business_validation: dict[str, Any],
+        budget_mode: str,
+    ) -> str:
+        if budget_mode == "validated_allocation" and business_validation.get("validated_for_budget_activation"):
+            return "Forecast and commercial validation are aligned for this scope."
+        return (
+            "This budget view is a forecast-based planning scenario. "
+            "Commercial validation for GELO budget release is still pending."
+        )
 
     def _promotion_status(
         self,
@@ -512,22 +598,28 @@ class PilotReadoutService:
                 "title": "The model path exists, but there is not enough live data for a pilot decision right now.",
                 "body": "We keep the surface readable, but no hard recommendation is shown.",
             }
+        if overall_scope_readiness == "GO":
+            return {
+                "code": "ready",
+                "title": "The scope is customer-ready.",
+                "body": "The current recommendation chain is consistent enough for a forecast-first pilot discussion.",
+            }
         if overall_scope_readiness == "NO_GO":
             return {
                 "code": "no_go",
                 "title": "The scope remains intentionally blocked.",
                 "body": "Hard gates are still failing, so spend release stays closed.",
             }
-        if gate_snapshot.get("budget_release_status") != "GO":
+        if gate_snapshot.get("forecast_readiness") != "GO":
             return {
                 "code": "watch_only",
-                "title": "The pilot can prioritize regions, but budget release stays on watch.",
-                "body": "Epidemiology is usable, yet the commercial evidence gate is not fully closed.",
+                "title": "The pilot is visible, but the forecast path is not fully ready yet.",
+                "body": "Keep the scope on watch until the forecast evidence and promotion path are stable enough for a clean client-facing readout.",
             }
         return {
-            "code": "ready",
-            "title": "The scope is customer-ready.",
-            "body": "The current recommendation chain is consistent enough for a pilot discussion and budget allocation review.",
+            "code": "watch_only",
+            "title": "The forecast is usable, but commercial validation is still pending.",
+            "body": "Use the current split as a scenario for planning and explain that GELO outcome data will unlock commercial validation later.",
         }
 
     def _latest_live_evaluation(

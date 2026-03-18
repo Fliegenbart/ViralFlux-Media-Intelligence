@@ -14,7 +14,7 @@ function buildReadout({
   horizonDays,
   leadRegion,
   emptyState = 'ready',
-  scopeReadiness = 'WATCH',
+  scopeReadiness = 'GO',
   budgetReleaseStatus = 'WATCH',
 }: {
   virus: string;
@@ -24,29 +24,43 @@ function buildReadout({
   scopeReadiness?: 'GO' | 'WATCH' | 'NO_GO';
   budgetReleaseStatus?: 'GO' | 'WATCH' | 'NO_GO';
 }) {
-  const allocationScopeStatus: 'GO' | 'WATCH' = budgetReleaseStatus === 'GO' ? 'GO' : 'WATCH';
+  const allocationScopeStatus: 'GO' | 'WATCH' = scopeReadiness === 'NO_GO' ? 'WATCH' : 'GO';
   const epidemiologyStatus: 'GO' | 'NO_GO' = scopeReadiness === 'NO_GO' ? 'NO_GO' : 'GO';
   const commercialStatus: 'GO' | 'WATCH' | 'NO_GO' = budgetReleaseStatus;
   const holdoutStatus: 'GO' | 'WATCH' = budgetReleaseStatus === 'GO' ? 'GO' : 'WATCH';
+  const budgetMode = budgetReleaseStatus === 'GO' ? 'validated_allocation' : 'scenario_split';
+  const validationDisclaimer = budgetReleaseStatus === 'GO'
+    ? 'Forecast and commercial validation are aligned for this scope.'
+    : 'This budget view is a forecast-based planning scenario. Commercial validation for GELO budget release is still pending.';
   return {
     pilotReadout: {
       brand: 'gelo',
       virus_typ: virus,
       horizon_days: horizonDays,
       run_context: {
+        forecast_readiness: scopeReadiness,
+        commercial_validation_status: commercialStatus,
+        pilot_mode: 'forecast_first',
+        budget_mode: budgetMode,
+        validation_disclaimer: validationDisclaimer,
         scope_readiness: scopeReadiness,
         scope_readiness_by_section: {
-          forecast: scopeReadiness,
+          forecast: epidemiologyStatus,
           allocation: allocationScopeStatus,
-          recommendation: scopeReadiness,
+          recommendation: allocationScopeStatus,
           evidence: allocationScopeStatus,
         },
         gate_snapshot: {
+          forecast_readiness: scopeReadiness,
           scope_readiness: scopeReadiness,
           epidemiology_status: epidemiologyStatus,
           commercial_data_status: commercialStatus,
+          commercial_validation_status: commercialStatus,
           holdout_status: holdoutStatus,
           budget_release_status: budgetReleaseStatus,
+          pilot_mode: 'forecast_first',
+          budget_mode: budgetMode,
+          validation_disclaimer: validationDisclaimer,
           missing_requirements: budgetReleaseStatus === 'GO'
             ? []
             : ['Validated incremental lift metrics are still missing.'],
@@ -63,8 +77,15 @@ function buildReadout({
         },
       },
       executive_summary: {
-        what_should_we_do_now: `Prioritize ${leadRegion} for ${virus}.`,
+        what_should_we_do_now: budgetReleaseStatus === 'GO'
+          ? `Prioritize ${leadRegion} for ${virus}.`
+          : `Prioritize ${leadRegion} for ${virus} and use the split below as a forecast-based planning scenario while commercial validation is still pending.`,
         decision_stage: leadRegion === 'Berlin' ? 'Activate' : 'Watch',
+        forecast_readiness: scopeReadiness,
+        commercial_validation_status: commercialStatus,
+        pilot_mode: 'forecast_first',
+        budget_mode: budgetMode,
+        validation_disclaimer: validationDisclaimer,
         scope_readiness: scopeReadiness,
         headline: `${virus} pilot summary`,
         top_regions: [
@@ -81,8 +102,10 @@ function buildReadout({
         ],
         budget_recommendation: {
           weekly_budget_eur: 120000,
-          recommended_active_budget_eur: budgetReleaseStatus === 'GO' ? 120000 : 0,
+          recommended_active_budget_eur: 120000,
+          scenario_budget_eur: 120000,
           spend_enabled: budgetReleaseStatus === 'GO',
+          budget_mode: budgetMode,
           blocked_reasons: budgetReleaseStatus === 'GO'
             ? []
             : ['Budget release is still blocked.'],
@@ -175,11 +198,16 @@ function buildReadout({
           ],
         },
         readiness: {
+          forecast_readiness: scopeReadiness,
           scope_readiness: scopeReadiness,
           epidemiology_status: epidemiologyStatus,
           commercial_data_status: commercialStatus,
+          commercial_validation_status: commercialStatus,
           holdout_status: holdoutStatus,
           budget_release_status: budgetReleaseStatus,
+          pilot_mode: 'forecast_first',
+          budget_mode: budgetMode,
+          validation_disclaimer: validationDisclaimer,
           missing_requirements: budgetReleaseStatus === 'GO'
             ? []
             : ['Validated incremental lift metrics are still missing.'],
@@ -201,7 +229,7 @@ function buildReadout({
           : emptyState === 'no_data'
             ? 'The model path exists, but there is not enough live data for a pilot decision right now.'
             : emptyState === 'watch_only'
-              ? 'The pilot can prioritize regions, but budget release stays on watch.'
+              ? 'The forecast is usable, but commercial validation is still pending.'
               : emptyState === 'no_go'
                 ? 'The scope remains intentionally blocked.'
                 : 'The scope is customer-ready.',
@@ -230,10 +258,14 @@ describe('PilotPage', () => {
     expect(screen.getByText('PEIX / GELO Pilot Surface')).toBeInTheDocument();
     expect(screen.getByText('What should we do now?')).toBeInTheDocument();
     expect(screen.getByText('Executive Spotlight')).toBeInTheDocument();
+    expect(screen.getByText('Forecast Ready')).toBeInTheDocument();
+    expect(screen.getAllByText('Commercial Validation').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Scenario Split').length).toBeGreaterThan(0);
+    expect(screen.getByRole('heading', { name: 'What PEIX can already show GELO' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Operational Recommendations' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Pilot Evidence / Readiness' })).toBeInTheDocument();
     expect(screen.getByText('Current Gate Outcome')).toBeInTheDocument();
-    expect(screen.getByText('Prioritize Berlin for RSV A.')).toBeInTheDocument();
+    expect(screen.getByText(/Prioritize Berlin for RSV A and use the split below as a forecast-based planning scenario/i)).toBeInTheDocument();
     expect(screen.getAllByText('Berlin is the current lead region.')).toHaveLength(2);
   });
 
@@ -249,7 +281,7 @@ describe('PilotPage', () => {
     render(<PilotPage />);
 
     expect(screen.getAllByText('GO').length).toBeGreaterThan(0);
-    expect(screen.getByText('Enabled')).toBeInTheDocument();
+    expect(screen.getAllByText('Validated Allocation').length).toBeGreaterThan(0);
     expect(screen.getAllByText('rsv_signal_core').length).toBeGreaterThan(0);
   });
 
@@ -263,7 +295,7 @@ describe('PilotPage', () => {
     render(<PilotPage />);
 
     fireEvent.change(screen.getByLabelText('Virus'), { target: { value: 'Influenza B' } });
-    expect(screen.getByText('Prioritize Bayern for Influenza B.')).toBeInTheDocument();
+    expect(screen.getByText(/Prioritize Bayern for Influenza B and use the split below as a forecast-based planning scenario/i)).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText('Horizon'), { target: { value: '5' } });
     expect(mockedUsePilotSurfaceData).toHaveBeenLastCalledWith(expect.objectContaining({
@@ -321,7 +353,7 @@ describe('PilotPage', () => {
 
     render(<PilotPage />);
 
-    expect(screen.getByText('The pilot can prioritize regions, but budget release stays on watch.')).toBeInTheDocument();
+    expect(screen.getByText('The forecast is usable, but commercial validation is still pending.')).toBeInTheDocument();
     expect(screen.getAllByText('Validated incremental lift metrics are still missing.').length).toBeGreaterThan(0);
   });
 

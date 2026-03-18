@@ -28,10 +28,15 @@ export interface PilotReadoutRegion {
 
 export interface PilotReadoutGateSnapshot {
   scope_readiness?: PilotReadoutStatus;
+  forecast_readiness?: PilotReadoutStatus;
   epidemiology_status?: PilotReadoutStatus;
   commercial_data_status?: PilotReadoutStatus;
+  commercial_validation_status?: PilotReadoutStatus;
   holdout_status?: PilotReadoutStatus;
   budget_release_status?: PilotReadoutStatus;
+  pilot_mode?: string | null;
+  budget_mode?: string | null;
+  validation_disclaimer?: string | null;
   missing_requirements?: string[];
   coverage_weeks?: number | null;
   truth_freshness_state?: string | null;
@@ -68,6 +73,11 @@ export interface PilotReadoutResponse {
     artifact_transition_mode?: string | null;
     rollout_mode?: string | null;
     activation_policy?: string | null;
+    forecast_readiness?: PilotReadoutStatus;
+    commercial_validation_status?: PilotReadoutStatus;
+    pilot_mode?: string | null;
+    budget_mode?: string | null;
+    validation_disclaimer?: string | null;
     scope_readiness?: PilotReadoutStatus;
     scope_readiness_by_section?: Partial<Record<PilotSurfaceScope, PilotReadoutStatus>>;
     promotion_status?: string | null;
@@ -76,13 +86,20 @@ export interface PilotReadoutResponse {
   executive_summary?: {
     what_should_we_do_now?: string;
     decision_stage?: string | null;
+    forecast_readiness?: PilotReadoutStatus;
+    commercial_validation_status?: PilotReadoutStatus;
+    pilot_mode?: string | null;
+    budget_mode?: string | null;
+    validation_disclaimer?: string | null;
     scope_readiness?: PilotReadoutStatus;
     headline?: string | null;
     top_regions?: PilotReadoutRegion[];
     budget_recommendation?: {
       weekly_budget_eur?: number | null;
       recommended_active_budget_eur?: number | null;
+      scenario_budget_eur?: number | null;
       spend_enabled?: boolean;
+      budget_mode?: string | null;
       blocked_reasons?: string[];
     };
     confidence_summary?: {

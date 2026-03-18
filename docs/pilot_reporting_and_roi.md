@@ -4,6 +4,13 @@
 
 This document describes the pilot reporting and audit layer for PEIX / GELO readouts.
 
+Important:
+
+- the customer-facing product can now run in **Forecast-First** mode without GELO outcome data
+- this reporting and ROI layer is therefore the **second layer**, not the first product claim
+- before GELO data exists, `/pilot` may already show forecast, prioritization, and scenario splits
+- only after GELO data flows does this reporting layer become the commercial validation surface
+
 Relevant files:
 
 - `/Users/davidwegener/Desktop/viralflux/backend/app/services/media/pilot_reporting_service.py`
@@ -11,7 +18,7 @@ Relevant files:
 - `/Users/davidwegener/Desktop/viralflux/backend/app/models/database.py`
 - `/Users/davidwegener/Desktop/viralflux/backend/app/services/media/truth_layer_service.py`
 
-The goal is not media mix modeling. The goal is a reproducible pilot readout that answers:
+The goal is not media mix modeling. The goal is a reproducible audit layer that answers:
 
 - what was recommended
 - what was activated
@@ -20,7 +27,7 @@ The goal is not media mix modeling. The goal is a reproducible pilot readout tha
 
 ## Integration Point
 
-The reporting layer sits after the operational recommendation flow.
+The reporting layer sits after the operational recommendation flow and after the Forecast-First pilot surface.
 
 Current path:
 
@@ -28,9 +35,33 @@ Current path:
 2. Decision
 3. Allocation
 4. Campaign recommendation
-5. Pilot reporting
+5. Customer-facing `pilot-readout`
+6. Pilot reporting / ROI audit
 
 The reporting layer does not rewrite epidemiological or allocation logic. It reads persisted recommendation and outcome records and turns them into an audit-ready readout.
+
+## Forecast-First vs Commercial Validation
+
+### Forecast-First
+
+This is the first product layer for PEIX / GELO.
+
+It is already valid when:
+
+- the active scope is forecast-ready
+- regions can be prioritized
+- scenario-based budget splits can be shown
+- commercial evidence is still pending
+
+### Commercial Validation
+
+This reporting layer becomes commercially relevant when:
+
+- GELO spend and outcome data are ingested
+- activations and holdouts are visible
+- before/after and lift evidence can be attached to the same recommendation chain
+
+Until then, ROI language stays out of the primary customer claim.
 
 ## Data Sources
 
@@ -92,6 +123,8 @@ Wichtig:
 
 - `pilot-reporting` ist jetzt ein Legacy-/Backoffice-Readout fuer historische ROI-Analysen.
 - Die kundennahe Pilot-Oberflaeche nutzt stattdessen `GET /api/v1/media/pilot-readout`.
+- `pilot-readout` ist damit die Forecast-First-Leseschicht.
+- `pilot-reporting` ist die spaetere Commercial- und Audit-Schicht.
 
 Supported query parameters:
 

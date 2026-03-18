@@ -9,7 +9,7 @@ const PilotPage: React.FC = () => {
   const { toast } = useToast();
   const [virus, setVirus] = useState('RSV A');
   const [horizonDays, setHorizonDays] = useState(7);
-  const [scope, setScope] = useState<PilotSurfaceScope>('recommendation');
+  const [scope, setScope] = useState<PilotSurfaceScope>('forecast');
   const [stage, setStage] = useState<PilotSurfaceStageFilter>('ALL');
 
   const {

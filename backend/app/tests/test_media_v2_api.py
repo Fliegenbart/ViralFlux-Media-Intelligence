@@ -246,6 +246,10 @@ class MediaV2ApiTests(unittest.TestCase):
         expected_payload = {
             "brand": "gelo",
             "run_context": {
+                "forecast_readiness": "GO",
+                "commercial_validation_status": "WATCH",
+                "pilot_mode": "forecast_first",
+                "budget_mode": "scenario_split",
                 "scope_readiness": "WATCH",
                 "scope_readiness_by_section": {
                     "forecast": "GO",
@@ -281,6 +285,8 @@ class MediaV2ApiTests(unittest.TestCase):
         body = response.json()
         self.assertEqual(body["executive_summary"]["what_should_we_do_now"], expected_payload["executive_summary"]["what_should_we_do_now"])
         self.assertEqual(body["pilot_evidence"]["legacy_context"]["sunset_date"], "2026-04-30")
+        self.assertEqual(body["run_context"]["pilot_mode"], "forecast_first")
+        self.assertEqual(body["run_context"]["budget_mode"], "scenario_split")
         self.assertNotIn("impact_probability", str(body))
         mocked_build.assert_called_once()
 

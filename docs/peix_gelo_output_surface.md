@@ -8,6 +8,12 @@ Diese Oberfläche uebersetzt die bestehenden Forecast-, Allocation-, Recommendat
 
 Sie ist bewusst keine neue Scoring- oder Decision-Engine. Die Seite liest nur vorhandene Backend-Outputs und ordnet sie so, dass ein Kunde die aktuelle Lage schnell versteht.
 
+Seit dem Forecast-First-Update gilt:
+
+- die Seite darf bereits ohne GELO-Outcome-Daten einen echten Forecast zeigen
+- Forecast-Readiness und Commercial-Validation werden bewusst getrennt dargestellt
+- Budget wird ohne GELO-Daten als `scenario_split` und nicht als bewiesene ROI-Freigabe gezeigt
+
 ## Route
 
 - Frontend-Route: `/pilot`
@@ -16,7 +22,7 @@ Sie ist bewusst keine neue Scoring- oder Decision-Engine. Die Seite liest nur vo
 - Haupt-UI: `frontend/src/components/cockpit/PilotSurface.tsx`
 - Datenhook: `frontend/src/features/media/usePilotSurfaceData.ts`
 - API-Client: `frontend/src/features/media/api.ts`
-- Typen: `frontend/src/types/media/pilot.ts`
+- Typen: `frontend/src/types/media/pilotReadout.ts`
 
 ## Datenquellen
 
@@ -33,6 +39,14 @@ Dieser Readout komponiert serverseitig:
 3. regionale Campaign Recommendations
 4. aktuelle Gate-/Readiness-Sicht
 5. letzte archivierte Live-Evaluation
+
+Wichtige Customer-Facing Felder:
+
+- `forecast_readiness`
+- `commercial_validation_status`
+- `pilot_mode = forecast_first`
+- `budget_mode = scenario_split | validated_allocation`
+- `validation_disclaimer`
 
 Legacy-/Backoffice-Kontexte bleiben getrennt:
 
@@ -53,10 +67,13 @@ Enthaelt:
 
 - aktuelle Lead-Region
 - Entscheidungstage
-- empfohlene Budgetspitze
+- forecast-basierte Budgetspitze bzw. Szenario-Split
 - Confidence / Uncertainty
 - kurze Reason-Trace in Klartext
 - die wichtigsten Regionen im aktuellen Filter
+- getrennte Spur fuer:
+  - `Forecast Ready`
+  - `Commercial Validation`
 
 ### 2. Operational Recommendations
 
@@ -104,6 +121,11 @@ Die Seite zeigt explizite, kundenlesbare Leermodi:
 
 Diese Zustände sind bewusst sichtbar und sollen keine implizite Freigabe suggerieren.
 
+Wichtig:
+
+- `ready` kann jetzt fuer den Forecast-First-Pilot gelten, auch wenn der Commercial Layer noch nicht `GO` ist
+- der Commercial-Upgrade-Pfad bleibt im Screen sichtbar
+
 ## Designprinzipien
 
 - keine neue Business-Logik im Frontend
@@ -112,6 +134,7 @@ Diese Zustände sind bewusst sichtbar und sollen keine implizite Freigabe sugger
 - rohe technische Begriffe nur dort, wo sie wirklich als Evidenz helfen
 - GO / WATCH / NO_GO bleibt als operative Sprache sichtbar
 - `priority_score` statt Pseudo-Probability, solange keine echte Kalibrierung vorliegt
+- kein ROI- oder Lift-Claim ohne echte GELO-Outcome-Daten
 
 ## Nutzungslogik
 
@@ -123,3 +146,8 @@ Die Oberflaeche ist fuer den Pilot-Review gedacht:
 4. Readiness beurteilen
 
 Die Seite ist damit die kundennahe Leseschicht fuer PEIX, die GELO in Meetings eine klare und nachvollziehbare Budget- und Priorisierungsstory liefert.
+
+Die ehrliche Standardsprache ist:
+
+- "Hier seht ihr bereits einen echten Forecast und eine belastbare Regionen-Priorisierung."
+- "Mit euren Outcome-Daten wird daraus zusaetzlich der validierte Commercial Layer."

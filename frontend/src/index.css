@@ -1321,6 +1321,37 @@ body {
   color: rgba(248, 245, 255, 0.82);
 }
 
+.pilot-hero__track-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.pilot-track-card {
+  display: grid;
+  gap: 12px;
+  padding: 18px;
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(18px);
+}
+
+.pilot-track-card__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.pilot-track-card__copy {
+  margin: 0;
+  color: rgba(248, 245, 255, 0.86);
+  line-height: 1.65;
+}
+
 .pilot-hero__meta {
   font-size: 0.82rem;
   color: rgba(248, 245, 255, 0.74);
@@ -1669,6 +1700,46 @@ body {
     #ffffff;
 }
 
+.pilot-value-grid {
+  display: grid;
+  gap: 18px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.pilot-value-card {
+  position: relative;
+  overflow: hidden;
+  display: grid;
+  gap: 14px;
+  padding: 28px 30px;
+  border-radius: 30px;
+  border: 1px solid rgba(119, 70, 194, 0.08);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(246, 240, 255, 0.9)),
+    #ffffff;
+  box-shadow:
+    0 28px 70px rgba(94, 59, 162, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+.pilot-value-card::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto auto 0;
+  width: 100%;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(172, 124, 255, 0.36), rgba(172, 124, 255, 0));
+}
+
+.pilot-value-card h2 {
+  margin: 0;
+  font-family: 'DM Serif Display', Georgia, serif;
+  font-size: clamp(1.7rem, 2.8vw, 2.25rem);
+  line-height: 1.02;
+  letter-spacing: -0.03em;
+  color: #23123f;
+}
+
 .pilot-section {
   display: grid;
   gap: 24px;
@@ -2010,6 +2081,7 @@ body {
 }
 
 [data-theme="dark"] .pilot-control-rail,
+[data-theme="dark"] .pilot-track-card,
 [data-theme="dark"] .pilot-spotlight,
 [data-theme="dark"] .pilot-readiness-card {
   background: rgba(255, 255, 255, 0.06);
@@ -2021,6 +2093,7 @@ body {
 }
 
 [data-theme="dark"] .pilot-empty-state,
+[data-theme="dark"] .pilot-value-card,
 [data-theme="dark"] .pilot-section,
 [data-theme="dark"] .pilot-comparison-panel,
 [data-theme="dark"] .pilot-legacy-note {
@@ -2034,6 +2107,7 @@ body {
 }
 
 [data-theme="dark"] .pilot-empty-state__title,
+[data-theme="dark"] .pilot-value-card h2,
 [data-theme="dark"] .pilot-section__headline h2,
 [data-theme="dark"] .pilot-feature-card__heading h3,
 [data-theme="dark"] .pilot-evaluation-highlight strong,
@@ -2043,6 +2117,7 @@ body {
 }
 
 [data-theme="dark"] .pilot-empty-state__body,
+[data-theme="dark"] .pilot-track-card__copy,
 [data-theme="dark"] .pilot-section__headline p,
 [data-theme="dark"] .pilot-muted-copy,
 [data-theme="dark"] .pilot-blocker-list li,
@@ -2140,7 +2215,9 @@ body {
   }
 
   .pilot-readiness-grid,
+  .pilot-hero__track-grid,
   .pilot-summary-strip,
+  .pilot-value-grid,
   .pilot-evidence-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -2161,7 +2238,9 @@ body {
   }
 
   .pilot-readiness-grid,
+  .pilot-hero__track-grid,
   .pilot-summary-strip,
+  .pilot-value-grid,
   .pilot-evidence-grid,
   .pilot-spotlight__metrics,
   .pilot-feature-card__metrics,
@@ -2202,6 +2281,11 @@ body {
   }
 
   .pilot-readiness-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .pilot-hero__track-grid,
+  .pilot-value-grid {
     grid-template-columns: 1fr;
   }
 }

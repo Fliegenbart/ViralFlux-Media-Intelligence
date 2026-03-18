@@ -16,6 +16,12 @@ This repo keeps long-lived truth in a few small anchors instead of one giant pro
   [pilot_runbook_peix_gelo.md](/Users/davidwegener/Desktop/viralflux/docs/pilot_runbook_peix_gelo.md)
 - PEIX / GELO pilot reporting and ROI:
   [pilot_reporting_and_roi.md](/Users/davidwegener/Desktop/viralflux/docs/pilot_reporting_and_roi.md)
+- Live readiness blockers:
+  [live_readiness_blockers_current.md](/Users/davidwegener/Desktop/viralflux/docs/live_readiness_blockers_current.md)
+- Ops and pilot ticket set:
+  [ops_and_pilot_ticket_set.md](/Users/davidwegener/Desktop/viralflux/docs/ops_and_pilot_ticket_set.md)
+- Pilot blocker resolution path:
+  [pilot_blocker_resolution_path.md](/Users/davidwegener/Desktop/viralflux/docs/pilot_blocker_resolution_path.md)
 - Campaign recommendation layer:
   [campaign_recommendation_layer.md](/Users/davidwegener/Desktop/viralflux/docs/campaign_recommendation_layer.md)
 - PEIX / GELO pilot output surface:

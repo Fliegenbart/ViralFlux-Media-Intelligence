@@ -8,7 +8,7 @@ import {
   PilotSurfaceScope,
   PilotSurfaceStageFilter,
 } from '../../types/media';
-import { VIRUS_OPTIONS, formatCurrency, formatDateShort, formatDateTime, formatPercent } from './cockpitUtils';
+import { VIRUS_OPTIONS, formatCurrency, formatDateShort, formatDateTime } from './cockpitUtils';
 
 interface Props {
   virus: string;
@@ -41,48 +41,41 @@ function normalizeStage(value?: string | null): string {
   return String(value || '').trim().toLowerCase();
 }
 
+function stageLabel(value?: string | null): string {
+  const normalized = normalizeStage(value);
+  if (normalized === 'activate') return 'Activate';
+  if (normalized === 'prepare') return 'Prepare';
+  if (normalized === 'watch') return 'Watch';
+  return value ? String(value) : 'Watch';
+}
+
 function matchesStage(value: string | undefined, filter: PilotSurfaceStageFilter): boolean {
   if (filter === 'ALL') return true;
   return normalizeStage(value) === normalizeStage(filter);
 }
 
-function readinessTone(value?: PilotReadoutStatus | null): React.CSSProperties {
-  if (value === 'GO') {
-    return {
-      background: 'rgba(5, 150, 105, 0.12)',
-      color: 'var(--status-success)',
-      border: '1px solid rgba(5, 150, 105, 0.22)',
-    };
-  }
-  if (value === 'WATCH') {
-    return {
-      background: 'rgba(245, 158, 11, 0.12)',
-      color: 'var(--status-warning)',
-      border: '1px solid rgba(245, 158, 11, 0.24)',
-    };
-  }
-  return {
-    background: 'rgba(239, 68, 68, 0.12)',
-    color: 'var(--status-danger)',
-    border: '1px solid rgba(239, 68, 68, 0.24)',
-  };
+function readinessModifier(value?: PilotReadoutStatus | null): 'go' | 'watch' | 'no-go' {
+  if (value === 'GO') return 'go';
+  if (value === 'WATCH') return 'watch';
+  return 'no-go';
 }
 
-function stageTone(value?: string | null): React.CSSProperties {
+function stageModifier(value?: string | null): 'go' | 'prepare' | 'watch' {
   const normalized = normalizeStage(value);
-  if (normalized === 'activate') return readinessTone('GO');
-  if (normalized === 'prepare') return readinessTone('WATCH');
-  return {
-    background: 'rgba(59, 130, 246, 0.10)',
-    color: 'var(--status-info)',
-    border: '1px solid rgba(59, 130, 246, 0.22)',
-  };
+  if (normalized === 'activate') return 'go';
+  if (normalized === 'prepare') return 'prepare';
+  return 'watch';
 }
 
 function formatFractionPercent(value?: number | null, digits = 0): string {
   if (value == null || Number.isNaN(value)) return '-';
   const normalized = value <= 1 ? value * 100 : value;
-  return formatPercent(normalized, digits);
+  return `${normalized.toFixed(digits)}%`;
+}
+
+function formatTableMetric(value: unknown, digits = 3): string {
+  if (typeof value !== 'number' || Number.isNaN(value)) return '-';
+  return value.toFixed(digits);
 }
 
 function scopeCopy(scope: PilotSurfaceScope): string {
@@ -96,102 +89,174 @@ function sectionReadiness(
   return pilotReadout?.run_context?.scope_readiness_by_section?.[scope] || 'NO_GO';
 }
 
-function RegionRow({ row }: { row: PilotReadoutRegion }) {
+function regionIdentity(row?: PilotReadoutRegion | null): string {
+  return row?.region_name || row?.region_code || '-';
+}
+
+function nonEmpty(values: Array<string | null | undefined>): string[] {
+  return values
+    .map((item) => String(item || '').trim())
+    .filter(Boolean);
+}
+
+function uniqueValues(values: Array<string | null | undefined>): string[] {
+  return Array.from(new Set(nonEmpty(values)));
+}
+
+function badgeClassName(
+  kind: 'readiness' | 'stage',
+  value?: string | null,
+): string {
+  if (kind === 'readiness') {
+    return `pilot-badge pilot-badge--${readinessModifier(value as PilotReadoutStatus | undefined)}`;
+  }
+  return `pilot-badge pilot-badge--${stageModifier(value)}`;
+}
+
+function EmptyState({
+  code,
+  title,
+  body,
+  supportingReasons,
+}: {
+  code?: string;
+  title?: string;
+  body?: string;
+  supportingReasons?: string[];
+}) {
+  const modifier = (() => {
+    if (code === 'no_model') return 'no-model';
+    if (code === 'no_data') return 'no-data';
+    if (code === 'no_go') return 'no-go';
+    return 'watch-only';
+  })();
+
   return (
-    <article
-      style={{
-        display: 'grid',
-        gap: 12,
-        padding: 16,
-        borderRadius: 18,
-        border: '1px solid rgba(148, 163, 184, 0.18)',
-        background: 'rgba(255, 255, 255, 0.88)',
-        boxShadow: '0 14px 40px rgba(15, 23, 42, 0.06)',
-      }}
-    >
-      <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-        <strong style={{ fontSize: 18 }}>{row.region_name || row.region_code || '-'}</strong>
-        <span style={{ ...stageTone(row.decision_stage), borderRadius: 999, padding: '5px 10px', fontSize: 12, fontWeight: 700 }}>
-          {row.decision_stage || 'Watch'}
+    <section className={`pilot-empty-state pilot-empty-state--${modifier}`}>
+      <div className="pilot-empty-state__kicker">Current Pilot State</div>
+      <h2 className="pilot-empty-state__title">{title || 'No customer-facing pilot state is available yet.'}</h2>
+      <p className="pilot-empty-state__body">{body || 'The pilot stays visible, but this scope is not ready for a clean business decision.'}</p>
+      {supportingReasons && supportingReasons.length > 0 && (
+        <ul className="pilot-empty-state__list">
+          {supportingReasons.slice(0, 3).map((item) => (
+            <li key={item}>{item}</li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+function FeaturedRegionCard({
+  row,
+  lead = false,
+}: {
+  row: PilotReadoutRegion;
+  lead?: boolean;
+}) {
+  const reasonTrace = nonEmpty(row.reason_trace || []);
+  const focusCopy = nonEmpty([
+    row.recommended_product,
+    row.recommended_keywords,
+    row.campaign_recommendation,
+  ]).join(' · ');
+
+  return (
+    <article className={`pilot-feature-card${lead ? ' pilot-feature-card--lead' : ''}`}>
+      <div className="pilot-feature-card__top">
+        <span className="pilot-feature-card__rank">#{row.priority_rank || '-'}</span>
+        <span className={badgeClassName('stage', row.decision_stage)}>
+          {stageLabel(row.decision_stage)}
         </span>
       </div>
 
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
-          gap: 10,
-        }}
-      >
-        <div>
-          <div className="cockpit-label">Priority Score</div>
-          <div className="cockpit-value">{formatFractionPercent(row.priority_score, row.priority_score != null && row.priority_score <= 1 ? 0 : 0)}</div>
+      <div className="pilot-feature-card__heading">
+        <h3>{regionIdentity(row)}</h3>
+        <p>{focusCopy || 'Noch kein produktiver Fokus im Recommendation-Layer vorhanden.'}</p>
+      </div>
+
+      <div className="pilot-feature-card__metrics">
+        <div className="pilot-inline-metric">
+          <span>Priority Score</span>
+          <strong>{formatFractionPercent(row.priority_score, 0)}</strong>
         </div>
-        <div>
-          <div className="cockpit-label">Wave Chance</div>
-          <div className="cockpit-value">{formatFractionPercent(row.event_probability, 0)}</div>
+        <div className="pilot-inline-metric">
+          <span>Wave Chance</span>
+          <strong>{formatFractionPercent(row.event_probability, 0)}</strong>
         </div>
-        <div>
-          <div className="cockpit-label">Budget</div>
-          <div className="cockpit-value">{formatCurrency(row.budget_amount_eur)}</div>
+        <div className="pilot-inline-metric">
+          <span>Budget</span>
+          <strong>{formatCurrency(row.budget_amount_eur)}</strong>
         </div>
-        <div>
-          <div className="cockpit-label">Confidence</div>
-          <div className="cockpit-value">{formatFractionPercent(row.confidence, 0)}</div>
+        <div className="pilot-inline-metric">
+          <span>Confidence</span>
+          <strong>{formatFractionPercent(row.confidence, 0)}</strong>
         </div>
       </div>
 
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-          gap: 12,
-        }}
-      >
-        <div>
-          <div className="cockpit-label">Produktfokus</div>
-          <div>{row.recommended_product || '-'}</div>
-        </div>
-        <div>
-          <div className="cockpit-label">Keyword-/Campaign-Fokus</div>
-          <div>{row.recommended_keywords || row.campaign_recommendation || '-'}</div>
-        </div>
-      </div>
-
-      <div>
-        <div className="cockpit-label">Warum jetzt?</div>
-        <ul style={{ margin: '6px 0 0', paddingLeft: 18 }}>
-          {(row.reason_trace || []).slice(0, 3).map((item) => (
+      <div className="pilot-feature-card__reasoning">
+        <div className="pilot-section-label">Warum jetzt?</div>
+        <ul>
+          {(reasonTrace.length > 0 ? reasonTrace : ['Keine zusätzliche Klartext-Begründung vorhanden.']).slice(0, 3).map((item) => (
             <li key={item}>{item}</li>
           ))}
-          {(!row.reason_trace || row.reason_trace.length === 0) && <li>Keine zusätzliche Klartext-Begründung vorhanden.</li>}
         </ul>
       </div>
 
       {(row.uncertainty_summary || row.budget_release_recommendation) && (
-        <div
-          style={{
-            display: 'grid',
-            gap: 6,
-            padding: 12,
-            borderRadius: 14,
-            background: 'rgba(15, 23, 42, 0.04)',
-          }}
-        >
+        <div className="pilot-feature-card__footer">
           {row.uncertainty_summary && (
             <div>
-              <div className="cockpit-label">Unsicherheit</div>
-              <div>{row.uncertainty_summary}</div>
+              <span>Unsicherheit</span>
+              <p>{row.uncertainty_summary}</p>
             </div>
           )}
           {row.budget_release_recommendation && (
             <div>
-              <div className="cockpit-label">Budget-Hinweis</div>
-              <div>{row.budget_release_recommendation}</div>
+              <span>Release Note</span>
+              <p>{row.budget_release_recommendation}</p>
             </div>
           )}
         </div>
       )}
+    </article>
+  );
+}
+
+function RankedRegionRow({ row }: { row: PilotReadoutRegion }) {
+  const reason = nonEmpty(row.reason_trace || [row.uncertainty_summary || ''])[0] || 'Keine zusätzliche Klartext-Begründung vorhanden.';
+
+  return (
+    <article className="pilot-ranked-row">
+      <div className="pilot-ranked-row__rank">#{row.priority_rank || '-'}</div>
+
+      <div className="pilot-ranked-row__main">
+        <div className="pilot-ranked-row__heading">
+          <strong>{regionIdentity(row)}</strong>
+          <span className={badgeClassName('stage', row.decision_stage)}>
+            {stageLabel(row.decision_stage)}
+          </span>
+        </div>
+        <div className="pilot-ranked-row__focus">
+          {nonEmpty([row.recommended_product, row.recommended_keywords, row.campaign_recommendation]).join(' · ') || 'Noch keine operative Fokussierung vorhanden.'}
+        </div>
+        <div className="pilot-ranked-row__reason">{reason}</div>
+      </div>
+
+      <div className="pilot-ranked-row__stats">
+        <div className="pilot-ranked-stat">
+          <span>Budget</span>
+          <strong>{formatCurrency(row.budget_amount_eur)}</strong>
+        </div>
+        <div className="pilot-ranked-stat">
+          <span>Wave Chance</span>
+          <strong>{formatFractionPercent(row.event_probability, 0)}</strong>
+        </div>
+        <div className="pilot-ranked-stat">
+          <span>Confidence</span>
+          <strong>{formatFractionPercent(row.confidence, 0)}</strong>
+        </div>
+      </div>
     </article>
   );
 }
@@ -208,463 +273,414 @@ const PilotSurface: React.FC<Props> = ({
   pilotReadout,
   loading,
 }) => {
-  const regions = (pilotReadout?.operational_recommendations?.regions || []).filter((item) => matchesStage(item.decision_stage, stage));
-  const visibleRegions = regions.length > 0
-    ? regions
-    : (pilotReadout?.operational_recommendations?.regions || []);
+  const allRegions = pilotReadout?.operational_recommendations?.regions || [];
+  const filteredRegions = allRegions.filter((item) => matchesStage(item.decision_stage, stage));
+  const visibleRegions = filteredRegions.length > 0 ? filteredRegions : allRegions;
+  const featuredRegions = visibleRegions.slice(0, 3);
+  const rankedRegions = visibleRegions.slice(3);
   const executive = pilotReadout?.executive_summary;
   const evidence = pilotReadout?.pilot_evidence;
   const gateSnapshot = pilotReadout?.run_context?.gate_snapshot;
   const currentScopeStatus = sectionReadiness(pilotReadout, scope);
   const evaluationRows = (evidence?.evaluation?.comparison_table || []) as Array<Record<string, unknown>>;
+  const heroRegion = executive?.top_regions?.[0] || allRegions[0] || null;
+  const leadOperationalRegion = allRegions[0] || null;
+  const heroReasonTrace = uniqueValues([
+    ...(executive?.reason_trace || []),
+    ...(heroRegion?.reason_trace || []),
+  ]);
+  const heroBlockers = uniqueValues([
+    ...(executive?.budget_recommendation?.blocked_reasons || []),
+    ...(gateSnapshot?.missing_requirements || []),
+  ]);
+  const currentScopeCopy = scopeCopy(scope);
+  const generatedAtLabel = formatDateTime(
+    pilotReadout?.run_context?.generated_at
+    || pilotReadout?.generated_at
+    || evidence?.evaluation?.generated_at
+    || null,
+  );
+  const asOfLabel = formatDateShort(pilotReadout?.run_context?.as_of_date || null);
+  const targetWeekLabel = formatDateShort(pilotReadout?.run_context?.target_week_start || null);
+  const focusProduct = leadOperationalRegion?.recommended_product || heroRegion?.recommended_product;
+  const focusKeyword = leadOperationalRegion?.recommended_keywords || heroRegion?.recommended_keywords;
+  const scopeCards: Array<{ key: PilotSurfaceScope; label: string; value: PilotReadoutStatus }> = [
+    { key: 'forecast', label: 'Forecast', value: sectionReadiness(pilotReadout, 'forecast') },
+    { key: 'allocation', label: 'Allocation', value: sectionReadiness(pilotReadout, 'allocation') },
+    { key: 'recommendation', label: 'Recommendation', value: sectionReadiness(pilotReadout, 'recommendation') },
+    { key: 'evidence', label: 'Evidence', value: sectionReadiness(pilotReadout, 'evidence') },
+  ];
+  const readinessRows = [
+    { label: 'Epidemiology', value: gateSnapshot?.epidemiology_status || 'NO_GO' },
+    { label: 'Commercial Data', value: gateSnapshot?.commercial_data_status || 'NO_GO' },
+    { label: 'Holdout', value: gateSnapshot?.holdout_status || 'WATCH' },
+    { label: 'Budget Release', value: gateSnapshot?.budget_release_status || 'WATCH' },
+  ];
 
   if (loading) {
-    return <LoadingSkeleton lines={10} />;
+    return (
+      <div className="pilot-surface pilot-surface--loading">
+        <LoadingSkeleton lines={10} />
+      </div>
+    );
+  }
+
+  if (!pilotReadout) {
+    return (
+      <div className="pilot-surface">
+        <EmptyState
+          code="no_data"
+          title="The pilot surface is currently unavailable."
+          body="The customer-facing readout could not be loaded. The backend contract stays unchanged, but the page has no usable payload right now."
+        />
+      </div>
+    );
   }
 
   return (
-    <div style={{ display: 'grid', gap: 24 }}>
-      <section
-        style={{
-          display: 'grid',
-          gap: 18,
-          padding: 24,
-          borderRadius: 28,
-          background: 'linear-gradient(135deg, rgba(255,255,255,0.96), rgba(238, 244, 255, 0.94))',
-          border: '1px solid rgba(148, 163, 184, 0.18)',
-          boxShadow: '0 20px 50px rgba(15, 23, 42, 0.08)',
-        }}
-      >
-        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
-          <div style={{ display: 'grid', gap: 8 }}>
-            <span className="cockpit-label">PEIX / GELO Pilot Surface</span>
-            <h1 style={{ margin: 0, fontSize: 32, lineHeight: 1.1 }}>Regional viral-wave guidance with one honest decision chain.</h1>
-            <div style={{ color: 'var(--text-muted)' }}>
-              {scopeCopy(scope)}
+    <div className="pilot-surface">
+      <section className="pilot-hero">
+        <div className="pilot-hero__grid">
+          <div className="pilot-hero__content">
+            <div className="pilot-hero__eyebrow-row">
+              <span className="pilot-kicker">PEIX / GELO Pilot Surface</span>
+              <span className="pilot-kicker pilot-kicker--muted">
+                {currentScopeCopy}
+              </span>
             </div>
-          </div>
-          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-start' }}>
-            <span style={{ ...readinessTone(pilotReadout?.run_context?.scope_readiness), borderRadius: 999, padding: '8px 14px', fontSize: 12, fontWeight: 700 }}>
-              {pilotReadout?.run_context?.scope_readiness || 'NO_GO'}
-            </span>
-            <span style={{ ...stageTone(executive?.decision_stage), borderRadius: 999, padding: '8px 14px', fontSize: 12, fontWeight: 700 }}>
-              {executive?.decision_stage || 'Watch'}
-            </span>
-          </div>
-        </div>
 
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-            gap: 12,
-          }}
-        >
-          <label style={{ display: 'grid', gap: 6 }}>
-            <span className="cockpit-label">Virus</span>
-            <select value={virus} onChange={(event) => onVirusChange(event.target.value)}>
-              {VIRUS_OPTIONS.map((item) => (
-                <option key={item} value={item}>{item}</option>
-              ))}
-            </select>
-          </label>
-          <label style={{ display: 'grid', gap: 6 }}>
-            <span className="cockpit-label">Horizon</span>
-            <select value={horizonDays} onChange={(event) => onHorizonChange(Number(event.target.value))}>
-              {HORIZON_OPTIONS.map((item) => (
-                <option key={item} value={item}>{`h${item}`}</option>
-              ))}
-            </select>
-          </label>
-          <div style={{ display: 'grid', gap: 6 }}>
-            <span className="cockpit-label">Scope</span>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              {SCOPE_OPTIONS.map((item) => (
-                <button
-                  key={item.key}
-                  type="button"
-                  onClick={() => onScopeChange(item.key)}
-                  style={{
-                    borderRadius: 999,
-                    padding: '8px 12px',
-                    border: scope === item.key ? '1px solid rgba(10, 132, 255, 0.34)' : '1px solid rgba(148, 163, 184, 0.18)',
-                    background: scope === item.key ? 'rgba(10, 132, 255, 0.10)' : '#fff',
-                    color: 'inherit',
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                  }}
-                >
-                  {item.label}
-                </button>
-              ))}
+            <div className="pilot-hero__badge-row">
+              <span className={badgeClassName('readiness', pilotReadout?.run_context?.scope_readiness)}>
+                {pilotReadout?.run_context?.scope_readiness || 'NO_GO'}
+              </span>
+              <span className={badgeClassName('stage', executive?.decision_stage)}>
+                {stageLabel(executive?.decision_stage)}
+              </span>
             </div>
-          </div>
-          <div style={{ display: 'grid', gap: 6 }}>
-            <span className="cockpit-label">Stage</span>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              {STAGE_OPTIONS.map((item) => (
-                <button
-                  key={item.key}
-                  type="button"
-                  onClick={() => onStageChange(item.key)}
-                  style={{
-                    borderRadius: 999,
-                    padding: '8px 12px',
-                    border: stage === item.key ? '1px solid rgba(10, 132, 255, 0.34)' : '1px solid rgba(148, 163, 184, 0.18)',
-                    background: stage === item.key ? 'rgba(10, 132, 255, 0.10)' : '#fff',
-                    color: 'inherit',
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                  }}
-                >
-                  {item.label}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
 
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-            gap: 12,
-          }}
-        >
-          <div className="cockpit-stat-card">
-            <div className="cockpit-label">Forecast</div>
-            <div className="cockpit-value">{sectionReadiness(pilotReadout, 'forecast')}</div>
+            <div className="pilot-hero__copy">
+              <p className="pilot-section-label">What should we do now?</p>
+              <h1 className="pilot-hero__title">{executive?.what_should_we_do_now || 'No executive summary is available yet.'}</h1>
+              <p className="pilot-hero__subtitle">
+                {executive?.headline || 'Regional viral-wave guidance with one honest decision chain.'}
+              </p>
+            </div>
+
+            <div className="pilot-hero__meta">
+              <span>Updated {generatedAtLabel}</span>
+              <span>Datenstand {asOfLabel}</span>
+              <span>Zielwoche {targetWeekLabel}</span>
+            </div>
+
+            <div className="pilot-control-rail">
+              <label className="pilot-filter-group" htmlFor="pilot-virus">
+                <span className="pilot-filter-label">Virus</span>
+                <select
+                  id="pilot-virus"
+                  className="pilot-select"
+                  value={virus}
+                  onChange={(event) => onVirusChange(event.target.value)}
+                >
+                  {VIRUS_OPTIONS.map((item) => (
+                    <option key={item} value={item}>{item}</option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="pilot-filter-group" htmlFor="pilot-horizon">
+                <span className="pilot-filter-label">Horizon</span>
+                <select
+                  id="pilot-horizon"
+                  className="pilot-select"
+                  value={horizonDays}
+                  onChange={(event) => onHorizonChange(Number(event.target.value))}
+                >
+                  {HORIZON_OPTIONS.map((item) => (
+                    <option key={item} value={item}>{`h${item}`}</option>
+                  ))}
+                </select>
+              </label>
+
+              <div className="pilot-filter-group">
+                <span className="pilot-filter-label">Scope</span>
+                <div className="pilot-pill-row">
+                  {SCOPE_OPTIONS.map((item) => (
+                    <button
+                      key={item.key}
+                      type="button"
+                      className={`pilot-pill${scope === item.key ? ' active' : ''}`}
+                      onClick={() => onScopeChange(item.key)}
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="pilot-filter-group">
+                <span className="pilot-filter-label">Stage</span>
+                <div className="pilot-pill-row">
+                  {STAGE_OPTIONS.map((item) => (
+                    <button
+                      key={item.key}
+                      type="button"
+                      className={`pilot-pill${stage === item.key ? ' active' : ''}`}
+                      onClick={() => onStageChange(item.key)}
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="pilot-readiness-grid">
+              {scopeCards.map((item) => (
+                <article
+                  key={item.key}
+                  className={`pilot-readiness-card${scope === item.key ? ' pilot-readiness-card--active' : ''}`}
+                >
+                  <span>{item.label}</span>
+                  <strong>{item.value}</strong>
+                </article>
+              ))}
+            </div>
           </div>
-          <div className="cockpit-stat-card">
-            <div className="cockpit-label">Allocation</div>
-            <div className="cockpit-value">{sectionReadiness(pilotReadout, 'allocation')}</div>
-          </div>
-          <div className="cockpit-stat-card">
-            <div className="cockpit-label">Recommendation</div>
-            <div className="cockpit-value">{sectionReadiness(pilotReadout, 'recommendation')}</div>
-          </div>
-          <div className="cockpit-stat-card">
-            <div className="cockpit-label">Evidence</div>
-            <div className="cockpit-value">{sectionReadiness(pilotReadout, 'evidence')}</div>
-          </div>
+
+          <aside className="pilot-spotlight">
+            <div className="pilot-spotlight__head">
+              <span className="pilot-kicker pilot-kicker--light">Executive Spotlight</span>
+              <span className={badgeClassName('stage', heroRegion?.decision_stage || executive?.decision_stage)}>
+                {stageLabel(heroRegion?.decision_stage || executive?.decision_stage)}
+              </span>
+            </div>
+
+            <div className="pilot-spotlight__title-block">
+              <p>Lead Region</p>
+              <h2>{regionIdentity(heroRegion)}</h2>
+              <span>{nonEmpty([focusProduct, focusKeyword]).join(' · ') || 'No product or keyword focus is currently available.'}</span>
+            </div>
+
+            <div className="pilot-spotlight__metrics">
+              <div className="pilot-spotlight__metric">
+                <span>Budget State</span>
+                <strong>{executive?.budget_recommendation?.spend_enabled ? 'Enabled' : 'Hold'}</strong>
+              </div>
+              <div className="pilot-spotlight__metric">
+                <span>Recommended Budget</span>
+                <strong>{formatCurrency(executive?.budget_recommendation?.recommended_active_budget_eur)}</strong>
+              </div>
+              <div className="pilot-spotlight__metric">
+                <span>Wave Chance</span>
+                <strong>{formatFractionPercent(executive?.confidence_summary?.lead_region_event_probability, 0)}</strong>
+              </div>
+              <div className="pilot-spotlight__metric">
+                <span>Confidence</span>
+                <strong>{formatFractionPercent(executive?.confidence_summary?.lead_region_confidence, 0)}</strong>
+              </div>
+            </div>
+
+            <div className="pilot-spotlight__reason">
+              <div className="pilot-section-label">Reason Trace</div>
+              <ul>
+                {(heroReasonTrace.length > 0 ? heroReasonTrace : ['No short-form reason trace is currently available.']).slice(0, 3).map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            </div>
+
+            {executive?.uncertainty_summary && (
+              <div className="pilot-spotlight__note">
+                <span>Uncertainty</span>
+                <p>{executive.uncertainty_summary}</p>
+              </div>
+            )}
+          </aside>
         </div>
       </section>
 
       {pilotReadout?.empty_state?.code && pilotReadout.empty_state.code !== 'ready' && (
-        <section
-          style={{
-            display: 'grid',
-            gap: 8,
-            padding: 18,
-            borderRadius: 20,
-            ...readinessTone(pilotReadout?.run_context?.scope_readiness),
-          }}
-        >
-          <strong>{pilotReadout.empty_state.title}</strong>
-          <span>{pilotReadout.empty_state.body}</span>
-        </section>
+        <EmptyState
+          code={pilotReadout.empty_state.code}
+          title={pilotReadout.empty_state.title}
+          body={pilotReadout.empty_state.body}
+          supportingReasons={heroBlockers}
+        />
       )}
 
-      <section
-        style={{
-          display: 'grid',
-          gap: 18,
-          padding: 22,
-          borderRadius: 24,
-          background: '#fff',
-          border: '1px solid rgba(148, 163, 184, 0.18)',
-        }}
-      >
-        <div style={{ display: 'grid', gap: 6 }}>
-          <span className="cockpit-label">Executive Summary</span>
-          <h2 style={{ margin: 0 }}>What should we do now?</h2>
-          <div style={{ color: 'var(--text-muted)' }}>{executive?.what_should_we_do_now || 'No executive summary is available yet.'}</div>
-        </div>
-
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-            gap: 12,
-          }}
-        >
-          <div className="cockpit-stat-card">
-            <div className="cockpit-label">Lead Region</div>
-            <div className="cockpit-value">{executive?.top_regions?.[0]?.region_name || '-'}</div>
+      <section className="pilot-section">
+        <div className="pilot-section__header">
+          <div className="pilot-section__headline">
+            <span className="pilot-kicker">Operational Recommendations</span>
+            <h2>Operational Recommendations</h2>
+            <p>{pilotReadout?.operational_recommendations?.summary?.headline || currentScopeCopy}</p>
           </div>
-          <div className="cockpit-stat-card">
-            <div className="cockpit-label">Decision Stage</div>
-            <div className="cockpit-value">{executive?.decision_stage || '-'}</div>
-          </div>
-          <div className="cockpit-stat-card">
-            <div className="cockpit-label">Budget Release</div>
-            <div className="cockpit-value">
-              {executive?.budget_recommendation?.spend_enabled ? 'enabled' : 'hold'}
-            </div>
-          </div>
-          <div className="cockpit-stat-card">
-            <div className="cockpit-label">Recommended Budget</div>
-            <div className="cockpit-value">
-              {formatCurrency(executive?.budget_recommendation?.recommended_active_budget_eur)}
-            </div>
-          </div>
-        </div>
-
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
-            gap: 12,
-          }}
-        >
-          {(executive?.top_regions || []).slice(0, 3).map((item) => (
-            <div
-              key={item.region_code || item.region_name}
-              style={{
-                display: 'grid',
-                gap: 8,
-                padding: 16,
-                borderRadius: 18,
-                background: 'rgba(15, 23, 42, 0.03)',
-                border: '1px solid rgba(148, 163, 184, 0.14)',
-              }}
-            >
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
-                <strong>{item.region_name || item.region_code}</strong>
-                <span style={{ ...stageTone(item.decision_stage), borderRadius: 999, padding: '4px 8px', fontSize: 12, fontWeight: 700 }}>
-                  {item.decision_stage || 'Watch'}
-                </span>
-              </div>
-              <div>Priority Score: {formatFractionPercent(item.priority_score, item.priority_score != null && item.priority_score <= 1 ? 0 : 0)}</div>
-              <div>Wave Chance: {formatFractionPercent(item.event_probability, 0)}</div>
-              <div>Budget: {formatCurrency(item.budget_amount_eur)}</div>
-            </div>
-          ))}
-        </div>
-
-        {(executive?.reason_trace || []).length > 0 && (
-          <div>
-            <div className="cockpit-label">Reason Trace</div>
-            <ul style={{ margin: '8px 0 0', paddingLeft: 18 }}>
-              {(executive?.reason_trace || []).map((item) => (
-                <li key={item}>{item}</li>
-              ))}
-            </ul>
-          </div>
-        )}
-      </section>
-
-      <section
-        style={{
-          display: 'grid',
-          gap: 18,
-          padding: 22,
-          borderRadius: 24,
-          background: '#fff',
-          border: '1px solid rgba(148, 163, 184, 0.18)',
-        }}
-      >
-        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
-          <div style={{ display: 'grid', gap: 6 }}>
-            <span className="cockpit-label">Operational Recommendations</span>
-            <h2 style={{ margin: 0 }}>{pilotReadout?.operational_recommendations?.summary?.headline || 'Current recommendation chain'}</h2>
-            <div style={{ color: 'var(--text-muted)' }}>{scopeCopy(scope)}</div>
-          </div>
-          <span style={{ ...readinessTone(currentScopeStatus), borderRadius: 999, padding: '8px 14px', fontSize: 12, fontWeight: 700 }}>
+          <span className={badgeClassName('readiness', currentScopeStatus)}>
             {currentScopeStatus}
           </span>
         </div>
 
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
-            gap: 12,
-          }}
-        >
-          <div className="cockpit-stat-card">
-            <div className="cockpit-label">Aktive Regionen</div>
-            <div className="cockpit-value">{pilotReadout?.operational_recommendations?.summary?.activate_regions ?? '-'}</div>
+        <div className="pilot-summary-strip">
+          <div className="pilot-summary-stat">
+            <span>Activate Regionen</span>
+            <strong>{pilotReadout?.operational_recommendations?.summary?.activate_regions ?? '-'}</strong>
           </div>
-          <div className="cockpit-stat-card">
-            <div className="cockpit-label">Prepare Regionen</div>
-            <div className="cockpit-value">{pilotReadout?.operational_recommendations?.summary?.prepare_regions ?? '-'}</div>
+          <div className="pilot-summary-stat">
+            <span>Prepare Regionen</span>
+            <strong>{pilotReadout?.operational_recommendations?.summary?.prepare_regions ?? '-'}</strong>
           </div>
-          <div className="cockpit-stat-card">
-            <div className="cockpit-label">Watch Regionen</div>
-            <div className="cockpit-value">{pilotReadout?.operational_recommendations?.summary?.watch_regions ?? '-'}</div>
+          <div className="pilot-summary-stat">
+            <span>Watch Regionen</span>
+            <strong>{pilotReadout?.operational_recommendations?.summary?.watch_regions ?? '-'}</strong>
           </div>
-          <div className="cockpit-stat-card">
-            <div className="cockpit-label">Bereite Empfehlungen</div>
-            <div className="cockpit-value">{pilotReadout?.operational_recommendations?.summary?.ready_recommendations ?? '-'}</div>
+          <div className="pilot-summary-stat">
+            <span>Bereite Empfehlungen</span>
+            <strong>{pilotReadout?.operational_recommendations?.summary?.ready_recommendations ?? '-'}</strong>
           </div>
         </div>
 
-        <div style={{ display: 'grid', gap: 14 }}>
-          {visibleRegions.map((row) => (
-            <RegionRow key={row.region_code || row.region_name} row={row} />
+        <div className="pilot-feature-grid">
+          {featuredRegions.map((row, index) => (
+            <FeaturedRegionCard
+              key={row.region_code || `${row.region_name}-${index}`}
+              row={row}
+              lead={index === 0}
+            />
           ))}
-          {visibleRegions.length === 0 && (
-            <div
-              style={{
-                padding: 18,
-                borderRadius: 18,
-                border: '1px dashed rgba(148, 163, 184, 0.3)',
-                color: 'var(--text-muted)',
-              }}
-            >
-              Kein Regions-Output passt aktuell zum gewählten Stage-Filter.
-            </div>
-          )}
-        </div>
-      </section>
-
-      <section
-        style={{
-          display: 'grid',
-          gap: 18,
-          padding: 22,
-          borderRadius: 24,
-          background: '#fff',
-          border: '1px solid rgba(148, 163, 184, 0.18)',
-        }}
-      >
-        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
-          <div style={{ display: 'grid', gap: 6 }}>
-            <span className="cockpit-label">Pilot Evidence / Readiness</span>
-            <h2 style={{ margin: 0 }}>Can PEIX defend this recommendation with GELO-facing evidence?</h2>
-          </div>
-          <span style={{ ...readinessTone(evidence?.scope_readiness), borderRadius: 999, padding: '8px 14px', fontSize: 12, fontWeight: 700 }}>
-            {evidence?.scope_readiness || 'NO_GO'}
-          </span>
         </div>
 
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-            gap: 12,
-          }}
-        >
-          <div className="cockpit-stat-card">
-            <div className="cockpit-label">Epidemiology</div>
-            <div className="cockpit-value">{gateSnapshot?.epidemiology_status || '-'}</div>
-          </div>
-          <div className="cockpit-stat-card">
-            <div className="cockpit-label">Commercial Data</div>
-            <div className="cockpit-value">{gateSnapshot?.commercial_data_status || '-'}</div>
-          </div>
-          <div className="cockpit-stat-card">
-            <div className="cockpit-label">Holdout</div>
-            <div className="cockpit-value">{gateSnapshot?.holdout_status || '-'}</div>
-          </div>
-          <div className="cockpit-stat-card">
-            <div className="cockpit-label">Budget Release</div>
-            <div className="cockpit-value">{gateSnapshot?.budget_release_status || '-'}</div>
-          </div>
-        </div>
-
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-            gap: 16,
-          }}
-        >
-          <div
-            style={{
-              display: 'grid',
-              gap: 10,
-              padding: 18,
-              borderRadius: 18,
-              background: 'rgba(15, 23, 42, 0.03)',
-              border: '1px solid rgba(148, 163, 184, 0.14)',
-            }}
-          >
-            <div className="cockpit-label">Letzte Live-Evaluation</div>
-            <div>
-              Variante: <strong>{evidence?.evaluation?.selected_experiment_name || 'noch keine archivierte Evaluation'}</strong>
-            </div>
-            <div>Gate: {evidence?.evaluation?.gate_outcome || '-'}</div>
-            <div>Retained: {String(Boolean(evidence?.evaluation?.retained))}</div>
-            <div>Calibrated Mode: {evidence?.evaluation?.calibration_mode || '-'}</div>
-            <div>Generiert: {formatDateTime(evidence?.evaluation?.generated_at)}</div>
-          </div>
-
-          <div
-            style={{
-              display: 'grid',
-              gap: 10,
-              padding: 18,
-              borderRadius: 18,
-              background: 'rgba(15, 23, 42, 0.03)',
-              border: '1px solid rgba(148, 163, 184, 0.14)',
-            }}
-          >
-            <div className="cockpit-label">Aktuelle Blocker</div>
-            <ul style={{ margin: 0, paddingLeft: 18 }}>
-              {(gateSnapshot?.missing_requirements || []).map((item) => (
-                <li key={item}>{item}</li>
-              ))}
-              {(gateSnapshot?.missing_requirements || []).length === 0 && <li>Keine zusätzlichen Produkt-Blocker gemeldet.</li>}
-            </ul>
-          </div>
-        </div>
-
-        {evaluationRows.length > 0 && (
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr>
-                  {['Role', 'Variant', 'P@Top3', 'AFP Rate', 'ECE', 'Brier', 'Gate', 'Retained'].map((label) => (
-                    <th key={label} style={{ textAlign: 'left', padding: '10px 12px', borderBottom: '1px solid rgba(148, 163, 184, 0.18)' }}>
-                      {label}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {evaluationRows.map((row) => (
-                  <tr key={`${String(row.role)}-${String(row.name)}`}>
-                    <td style={{ padding: '10px 12px', borderBottom: '1px solid rgba(148, 163, 184, 0.12)' }}>{String(row.role || '-')}</td>
-                    <td style={{ padding: '10px 12px', borderBottom: '1px solid rgba(148, 163, 184, 0.12)' }}>{String(row.name || '-')}</td>
-                    <td style={{ padding: '10px 12px', borderBottom: '1px solid rgba(148, 163, 184, 0.12)' }}>{typeof row.precision_at_top3 === 'number' ? row.precision_at_top3.toFixed(6) : '-'}</td>
-                    <td style={{ padding: '10px 12px', borderBottom: '1px solid rgba(148, 163, 184, 0.12)' }}>{typeof row.activation_false_positive_rate === 'number' ? row.activation_false_positive_rate.toFixed(6) : '-'}</td>
-                    <td style={{ padding: '10px 12px', borderBottom: '1px solid rgba(148, 163, 184, 0.12)' }}>{typeof row.ece === 'number' ? row.ece.toFixed(6) : '-'}</td>
-                    <td style={{ padding: '10px 12px', borderBottom: '1px solid rgba(148, 163, 184, 0.12)' }}>{typeof row.brier === 'number' ? row.brier.toFixed(6) : '-'}</td>
-                    <td style={{ padding: '10px 12px', borderBottom: '1px solid rgba(148, 163, 184, 0.12)' }}>{String(row.gate_outcome || '-')}</td>
-                    <td style={{ padding: '10px 12px', borderBottom: '1px solid rgba(148, 163, 184, 0.12)' }}>{String(row.retained ?? '-')}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        {rankedRegions.length > 0 && (
+          <div className="pilot-ranked-stack">
+            <div className="pilot-section-label">Remaining Ranked Regions</div>
+            {rankedRegions.map((row) => (
+              <RankedRegionRow key={row.region_code || row.region_name} row={row} />
+            ))}
           </div>
         )}
 
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-            gap: 12,
-          }}
-        >
-          <div className="cockpit-stat-card">
-            <div className="cockpit-label">Coverage Weeks</div>
-            <div className="cockpit-value">{gateSnapshot?.coverage_weeks ?? '-'}</div>
+        {visibleRegions.length === 0 && (
+          <div className="pilot-ranked-empty">
+            Kein Regions-Output passt aktuell zum gewählten Stage-Filter.
           </div>
-          <div className="cockpit-stat-card">
-            <div className="cockpit-label">Truth Freshness</div>
-            <div className="cockpit-value">{String(gateSnapshot?.truth_freshness_state || '-')}</div>
+        )}
+      </section>
+
+      <section className="pilot-section pilot-section--evidence">
+        <div className="pilot-section__header">
+          <div className="pilot-section__headline">
+            <span className="pilot-kicker">Pilot Evidence / Readiness</span>
+            <h2>Pilot Evidence / Readiness</h2>
+            <p>
+              Honest readiness, gate blockers, and retained evaluation evidence for the current scope.
+            </p>
           </div>
-          <div className="cockpit-stat-card">
-            <div className="cockpit-label">Validation Status</div>
-            <div className="cockpit-value">{String(gateSnapshot?.validation_status || '-')}</div>
-          </div>
-          <div className="cockpit-stat-card">
-            <div className="cockpit-label">Legacy Sunset</div>
-            <div className="cockpit-value">{formatDateShort(evidence?.legacy_context?.sunset_date)}</div>
-          </div>
+          <span className={badgeClassName('readiness', evidence?.scope_readiness || pilotReadout?.run_context?.scope_readiness)}>
+            {evidence?.scope_readiness || pilotReadout?.run_context?.scope_readiness || 'NO_GO'}
+          </span>
         </div>
+
+        <div className="pilot-evidence-grid">
+          <article className="pilot-evidence-card">
+            <div className="pilot-section-label">Current Gate Outcome</div>
+            <div className="pilot-gate-list">
+              {readinessRows.map((item) => (
+                <div key={item.label} className="pilot-gate-row">
+                  <span>{item.label}</span>
+                  <strong className={badgeClassName('readiness', item.value)}>{item.value}</strong>
+                </div>
+              ))}
+            </div>
+            <div className="pilot-evidence-card__footer">
+              <span>Validation Status</span>
+              <strong>{gateSnapshot?.validation_status || '-'}</strong>
+            </div>
+          </article>
+
+          <article className="pilot-evidence-card">
+            <div className="pilot-section-label">Commercial Blockers</div>
+            {heroBlockers.length > 0 ? (
+              <ul className="pilot-blocker-list">
+                {heroBlockers.slice(0, 6).map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            ) : (
+              <p className="pilot-muted-copy">No active commercial blockers are currently reported for this scope.</p>
+            )}
+            <div className="pilot-evidence-card__footer">
+              <span>Coverage Weeks</span>
+              <strong>{gateSnapshot?.coverage_weeks ?? '-'}</strong>
+            </div>
+          </article>
+
+          <article className="pilot-evidence-card">
+            <div className="pilot-section-label">Live Evaluation Winner</div>
+            <div className="pilot-evaluation-highlight">
+              <strong>{evidence?.evaluation?.selected_experiment_name || 'No retained winner yet.'}</strong>
+              <span>{evidence?.evaluation?.calibration_mode || '-'}</span>
+            </div>
+            <div className="pilot-evaluation-meta">
+              <div>
+                <span>Gate Outcome</span>
+                <strong>{evidence?.evaluation?.gate_outcome || '-'}</strong>
+              </div>
+              <div>
+                <span>Retained</span>
+                <strong>{evidence?.evaluation?.retained ? 'Yes' : 'No'}</strong>
+              </div>
+              <div>
+                <span>Generated</span>
+                <strong>{formatDateTime(evidence?.evaluation?.generated_at || null)}</strong>
+              </div>
+            </div>
+          </article>
+        </div>
+
+        <div className="pilot-comparison-panel">
+          <div className="pilot-section-label">Comparison Metrics</div>
+          {evaluationRows.length > 0 ? (
+            <div className="pilot-comparison-table-wrap">
+              <table className="pilot-comparison-table">
+                <thead>
+                  <tr>
+                    <th>Track</th>
+                    <th>precision_at_top3</th>
+                    <th>activation_fp_rate</th>
+                    <th>ece</th>
+                    <th>brier</th>
+                    <th>gate_outcome</th>
+                    <th>retained</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {evaluationRows.map((row, index) => (
+                    <tr key={`${String(row.name || row.role || 'row')}-${index}`}>
+                      <td>{String(row.name || row.role || '-')}</td>
+                      <td>{formatTableMetric(row.precision_at_top3)}</td>
+                      <td>{formatTableMetric(row.activation_false_positive_rate)}</td>
+                      <td>{formatTableMetric(row.ece)}</td>
+                      <td>{formatTableMetric(row.brier)}</td>
+                      <td>{String(row.gate_outcome || '-')}</td>
+                      <td>{row.retained === true ? 'Yes' : row.retained === false ? 'No' : '-'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="pilot-ranked-empty">
+              Keine archivierte Vergleichstabelle fuer diesen Scope verfuegbar.
+            </div>
+          )}
+        </div>
+
+        {evidence?.legacy_context?.note && (
+          <div className="pilot-legacy-note">
+            <span className="pilot-section-label">Legacy Context</span>
+            <p>{evidence.legacy_context.note}</p>
+            <small>Sunset: {evidence.legacy_context.sunset_date || '-'}</small>
+          </div>
+        )}
       </section>
     </div>
   );

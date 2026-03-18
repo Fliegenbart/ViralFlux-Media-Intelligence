@@ -229,10 +229,28 @@ describe('PilotPage', () => {
 
     expect(screen.getByText('PEIX / GELO Pilot Surface')).toBeInTheDocument();
     expect(screen.getByText('What should we do now?')).toBeInTheDocument();
-    expect(screen.getByText('Operational Recommendations')).toBeInTheDocument();
-    expect(screen.getByText('Pilot Evidence / Readiness')).toBeInTheDocument();
+    expect(screen.getByText('Executive Spotlight')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Operational Recommendations' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Pilot Evidence / Readiness' })).toBeInTheDocument();
+    expect(screen.getByText('Current Gate Outcome')).toBeInTheDocument();
     expect(screen.getByText('Prioritize Berlin for RSV A.')).toBeInTheDocument();
     expect(screen.getAllByText('Berlin is the current lead region.')).toHaveLength(2);
+  });
+
+  it('renders GO readiness directly from backend data without client-side reinterpretation', () => {
+    mockedUsePilotSurfaceData.mockReturnValue(buildReadout({
+      virus: 'RSV A',
+      horizonDays: 7,
+      leadRegion: 'Berlin',
+      scopeReadiness: 'GO',
+      budgetReleaseStatus: 'GO',
+    }));
+
+    render(<PilotPage />);
+
+    expect(screen.getAllByText('GO').length).toBeGreaterThan(0);
+    expect(screen.getByText('Enabled')).toBeInTheDocument();
+    expect(screen.getAllByText('rsv_signal_core').length).toBeGreaterThan(0);
   });
 
   it('supports virus, horizon, scope, and stage filters without inventing new client logic', () => {
@@ -256,7 +274,7 @@ describe('PilotPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Evidence' }));
     expect(screen.getAllByText('Pilot-Evidenz, Gates und Readiness').length).toBeGreaterThan(0);
 
-    const operationalSection = screen.getByText('Operational Recommendations').closest('section');
+    const operationalSection = screen.getByRole('heading', { name: 'Operational Recommendations' }).closest('section');
     expect(operationalSection).not.toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Watch' }));
     expect(within(operationalSection as HTMLElement).queryByText('Berlin')).not.toBeInTheDocument();
@@ -304,7 +322,7 @@ describe('PilotPage', () => {
     render(<PilotPage />);
 
     expect(screen.getByText('The pilot can prioritize regions, but budget release stays on watch.')).toBeInTheDocument();
-    expect(screen.getByText('Validated incremental lift metrics are still missing.')).toBeInTheDocument();
+    expect(screen.getAllByText('Validated incremental lift metrics are still missing.').length).toBeGreaterThan(0);
   });
 
   it('renders the no_go empty state', () => {

@@ -203,10 +203,10 @@ class PilotReadoutServiceTests(unittest.TestCase):
         self.assertEqual(payload["executive_summary"]["budget_recommendation"]["budget_mode"], "scenario_split")
         self.assertEqual(payload["empty_state"]["code"], "ready")
         self.assertIn(
-            "forecast-based planning scenario",
+            "forecast-basierten Szenario-Split",
             payload["executive_summary"]["what_should_we_do_now"],
         )
-        self.assertIn("Validated incremental lift metrics are still missing.", payload["run_context"]["gate_snapshot"]["missing_requirements"])
+        self.assertIn("Validierte inkrementelle Lift-Metriken fehlen noch.", payload["run_context"]["gate_snapshot"]["missing_requirements"])
         self.assertFalse(_scan_for_key(payload, "impact_probability"))
 
     def test_build_readout_returns_go_when_scope_and_business_gate_both_pass(self) -> None:

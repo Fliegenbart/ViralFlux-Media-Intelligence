@@ -25,16 +25,16 @@ interface Props {
 
 const HORIZON_OPTIONS = [3, 5, 7] as const;
 const STAGE_OPTIONS: Array<{ key: PilotSurfaceStageFilter; label: string }> = [
-  { key: 'ALL', label: 'Alle Stages' },
-  { key: 'Activate', label: 'Activate' },
-  { key: 'Prepare', label: 'Prepare' },
-  { key: 'Watch', label: 'Watch' },
+  { key: 'ALL', label: 'Alle Stufen' },
+  { key: 'Activate', label: 'Jetzt aktivieren' },
+  { key: 'Prepare', label: 'Vorbereiten' },
+  { key: 'Watch', label: 'Beobachten' },
 ];
 const SCOPE_OPTIONS: Array<{ key: PilotSurfaceScope; label: string; copy: string }> = [
   { key: 'forecast', label: 'Forecast', copy: 'Epidemiologische Lage und Priorisierung' },
-  { key: 'allocation', label: 'Allocation', copy: 'Budgetlogik und Freigabestatus' },
-  { key: 'recommendation', label: 'Recommendation', copy: 'Produkt-, Keyword- und Kampagnenplan' },
-  { key: 'evidence', label: 'Evidence', copy: 'Pilot-Evidenz, Gates und Readiness' },
+  { key: 'allocation', label: 'Allokation', copy: 'Budgetlogik und Freigabestatus' },
+  { key: 'recommendation', label: 'Empfehlung', copy: 'Produkt-, Keyword- und Kampagnenplan' },
+  { key: 'evidence', label: 'Evidenz', copy: 'Pilot-Evidenz und Freigabestatus' },
 ];
 
 function normalizeStage(value?: string | null): string {
@@ -43,10 +43,10 @@ function normalizeStage(value?: string | null): string {
 
 function stageLabel(value?: string | null): string {
   const normalized = normalizeStage(value);
-  if (normalized === 'activate') return 'Activate';
-  if (normalized === 'prepare') return 'Prepare';
-  if (normalized === 'watch') return 'Watch';
-  return value ? String(value) : 'Watch';
+  if (normalized === 'activate') return 'Jetzt aktivieren';
+  if (normalized === 'prepare') return 'Vorbereiten';
+  if (normalized === 'watch') return 'Beobachten';
+  return value ? String(value) : 'Beobachten';
 }
 
 function matchesStage(value: string | undefined, filter: PilotSurfaceStageFilter): boolean {
@@ -83,28 +83,28 @@ function scopeCopy(scope: PilotSurfaceScope): string {
 }
 
 function budgetModeLabel(value?: string | null): string {
-  if (value === 'validated_allocation') return 'Validated Allocation';
-  return 'Scenario Split';
+  if (value === 'validated_allocation') return 'Validierte Allokation';
+  return 'Szenario-Split';
 }
 
 function forecastReadinessCopy(value?: PilotReadoutStatus | null): string {
   if (value === 'GO') {
-    return 'Regional viral pressure can already be shown, ranked, and discussed externally.';
+    return 'Die regionale virale Dynamik ist belastbar genug, um sie extern zu zeigen, zu priorisieren und zu besprechen.';
   }
   if (value === 'WATCH') {
-    return 'The forecast path exists, but evidence or promotion is not stable enough for a clean external readout yet.';
+    return 'Der Forecast-Pfad ist sichtbar, aber Evidenz oder Promotion sind noch nicht stabil genug für eine saubere externe Freigabe.';
   }
-  return 'The current scope is not forecast-ready.';
+  return 'Der aktuelle Scope ist noch nicht forecast-fähig.';
 }
 
 function commercialValidationCopy(value?: PilotReadoutStatus | null): string {
   if (value === 'GO') {
-    return 'Commercial validation is closed and budget release can rely on outcome-backed evidence.';
+    return 'Die kommerzielle Validierung ist abgeschlossen und die Budgetfreigabe kann sich auf echte Outcome-Evidenz stützen.';
   }
   if (value === 'WATCH') {
-    return 'Commercial validation is building, but GELO outcome evidence is not complete enough for a hard ROI claim yet.';
+    return 'Die kommerzielle Validierung baut sich auf, aber die GELO-Outcome-Evidenz ist noch nicht stark genug für einen harten ROI-Claim.';
   }
-  return 'No GELO outcome basis is connected yet, so commercial validation is still missing.';
+  return 'Es ist noch keine GELO-Outcome-Basis angeschlossen, deshalb fehlt die kommerzielle Validierung noch.';
 }
 
 function sectionReadiness(
@@ -158,9 +158,9 @@ function EmptyState({
 
   return (
     <section className={`pilot-empty-state pilot-empty-state--${modifier}`}>
-      <div className="pilot-empty-state__kicker">Current Pilot State</div>
-      <h2 className="pilot-empty-state__title">{title || 'No customer-facing pilot state is available yet.'}</h2>
-      <p className="pilot-empty-state__body">{body || 'The pilot stays visible, but this scope is not ready for a clean business decision.'}</p>
+      <div className="pilot-empty-state__kicker">Aktueller Pilotstatus</div>
+      <h2 className="pilot-empty-state__title">{title || 'Aktuell liegt noch kein kundenfähiger Pilotstatus vor.'}</h2>
+      <p className="pilot-empty-state__body">{body || 'Der Pilot bleibt sichtbar, aber dieser Scope ist noch nicht bereit für eine saubere Geschäftsentscheidung.'}</p>
       {supportingReasons && supportingReasons.length > 0 && (
         <ul className="pilot-empty-state__list">
           {supportingReasons.slice(0, 3).map((item) => (
@@ -197,24 +197,24 @@ function FeaturedRegionCard({
 
       <div className="pilot-feature-card__heading">
         <h3>{regionIdentity(row)}</h3>
-        <p>{focusCopy || 'Noch kein produktiver Fokus im Recommendation-Layer vorhanden.'}</p>
+        <p>{focusCopy || 'Aktuell ist noch kein Produkt- oder Keyword-Fokus hinterlegt.'}</p>
       </div>
 
       <div className="pilot-feature-card__metrics">
         <div className="pilot-inline-metric">
-          <span>Priority Score</span>
+          <span>Priorität</span>
           <strong>{formatFractionPercent(row.priority_score, 0)}</strong>
         </div>
         <div className="pilot-inline-metric">
-          <span>Wave Chance</span>
+          <span>Wellenwahrscheinlichkeit</span>
           <strong>{formatFractionPercent(row.event_probability, 0)}</strong>
         </div>
         <div className="pilot-inline-metric">
-          <span>Budget Split</span>
+          <span>Budget-Split</span>
           <strong>{formatCurrency(row.budget_amount_eur)}</strong>
         </div>
         <div className="pilot-inline-metric">
-          <span>Confidence</span>
+          <span>Vertrauensniveau</span>
           <strong>{formatFractionPercent(row.confidence, 0)}</strong>
         </div>
       </div>
@@ -238,7 +238,7 @@ function FeaturedRegionCard({
           )}
           {row.budget_release_recommendation && (
             <div>
-              <span>Release Note</span>
+              <span>Freigabehinweis</span>
               <p>{row.budget_release_recommendation}</p>
             </div>
           )}
@@ -263,22 +263,22 @@ function RankedRegionRow({ row }: { row: PilotReadoutRegion }) {
           </span>
         </div>
         <div className="pilot-ranked-row__focus">
-          {nonEmpty([row.recommended_product, row.recommended_keywords, row.campaign_recommendation]).join(' · ') || 'Noch keine operative Fokussierung vorhanden.'}
+          {nonEmpty([row.recommended_product, row.recommended_keywords, row.campaign_recommendation]).join(' · ') || 'Aktuell ist noch keine operative Fokussierung hinterlegt.'}
         </div>
         <div className="pilot-ranked-row__reason">{reason}</div>
       </div>
 
       <div className="pilot-ranked-row__stats">
         <div className="pilot-ranked-stat">
-          <span>Budget Split</span>
+          <span>Budget-Split</span>
           <strong>{formatCurrency(row.budget_amount_eur)}</strong>
         </div>
         <div className="pilot-ranked-stat">
-          <span>Wave Chance</span>
+          <span>Wellenwahrscheinlichkeit</span>
           <strong>{formatFractionPercent(row.event_probability, 0)}</strong>
         </div>
         <div className="pilot-ranked-stat">
-          <span>Confidence</span>
+          <span>Vertrauensniveau</span>
           <strong>{formatFractionPercent(row.confidence, 0)}</strong>
         </div>
       </div>
@@ -344,7 +344,7 @@ const PilotSurface: React.FC<Props> = ({
     || pilotReadout?.run_context?.validation_disclaimer
     || gateSnapshot?.validation_disclaimer
     || '';
-  const scenarioBudgetLabel = budgetMode === 'validated_allocation' ? 'Validated Budget' : 'Scenario Budget';
+  const scenarioBudgetLabel = budgetMode === 'validated_allocation' ? 'Validiertes Budget' : 'Szenariobudget';
   const focusProduct = leadOperationalRegion?.recommended_product || heroRegion?.recommended_product;
   const focusKeyword = leadOperationalRegion?.recommended_keywords || heroRegion?.recommended_keywords;
   const scopeCards: Array<{ key: PilotSurfaceScope; label: string; value: PilotReadoutStatus }> = [
@@ -354,10 +354,10 @@ const PilotSurface: React.FC<Props> = ({
     { key: 'evidence', label: 'Evidence', value: sectionReadiness(pilotReadout, 'evidence') },
   ];
   const readinessRows = [
-    { label: 'Forecast Readiness', value: forecastReadiness },
-    { label: 'Commercial Validation', value: commercialValidationStatus },
-    { label: 'Holdout', value: gateSnapshot?.holdout_status || 'WATCH' },
-    { label: 'Budget Release', value: gateSnapshot?.budget_release_status || 'WATCH' },
+    { label: 'Forecast-Readiness', value: forecastReadiness },
+    { label: 'Kommerzielle Validierung', value: commercialValidationStatus },
+    { label: 'Test-/Kontrolllogik', value: gateSnapshot?.holdout_status || 'WATCH' },
+    { label: 'Budgetfreigabe', value: gateSnapshot?.budget_release_status || 'WATCH' },
   ];
 
   if (loading) {
@@ -373,8 +373,8 @@ const PilotSurface: React.FC<Props> = ({
       <div className="pilot-surface">
         <EmptyState
           code="no_data"
-          title="The pilot surface is currently unavailable."
-          body="The customer-facing readout could not be loaded. The backend contract stays unchanged, but the page has no usable payload right now."
+          title="Die Pilotansicht ist aktuell nicht verfügbar."
+          body="Der kundennahe Readout konnte gerade nicht geladen werden. Die Datenbasis bleibt unverändert, aber im Moment liegt kein nutzbarer Payload vor."
         />
       </div>
     );
@@ -386,7 +386,7 @@ const PilotSurface: React.FC<Props> = ({
         <div className="pilot-hero__grid">
           <div className="pilot-hero__content">
             <div className="pilot-hero__eyebrow-row">
-              <span className="pilot-kicker">PEIX / GELO Pilot Surface</span>
+              <span className="pilot-kicker">PEIX / GELO Pilotansicht</span>
               <span className="pilot-kicker pilot-kicker--muted">
                 {currentScopeCopy}
               </span>
@@ -402,17 +402,17 @@ const PilotSurface: React.FC<Props> = ({
             </div>
 
             <div className="pilot-hero__copy">
-              <p className="pilot-section-label">What should we do now?</p>
-              <h1 className="pilot-hero__title">{executive?.what_should_we_do_now || 'No executive summary is available yet.'}</h1>
+              <p className="pilot-section-label">Was sollten wir jetzt tun?</p>
+              <h1 className="pilot-hero__title">{executive?.what_should_we_do_now || 'Aktuell liegt noch keine belastbare Kurzempfehlung vor.'}</h1>
               <p className="pilot-hero__subtitle">
-                {executive?.headline || 'Regional viral-wave guidance with one honest decision chain.'}
+                {executive?.headline || 'Regionale Forecast-, Priorisierungs- und Budgetlogik in einer ehrlichen Entscheidungskette.'}
               </p>
             </div>
 
             <div className="pilot-hero__track-grid">
               <article className="pilot-track-card">
                 <div className="pilot-track-card__head">
-                  <span className="pilot-section-label">Forecast Ready</span>
+                  <span className="pilot-section-label">Forecast bereit</span>
                   <span className={badgeClassName('readiness', forecastReadiness)}>
                     {forecastReadiness}
                   </span>
@@ -422,7 +422,7 @@ const PilotSurface: React.FC<Props> = ({
 
               <article className="pilot-track-card">
                 <div className="pilot-track-card__head">
-                  <span className="pilot-section-label">Commercial Validation</span>
+                  <span className="pilot-section-label">Kommerzielle Validierung</span>
                   <span className={badgeClassName('readiness', commercialValidationStatus)}>
                     {commercialValidationStatus}
                   </span>
@@ -432,19 +432,19 @@ const PilotSurface: React.FC<Props> = ({
 
               <article className="pilot-track-card">
                 <div className="pilot-track-card__head">
-                  <span className="pilot-section-label">Budget Logic</span>
+                  <span className="pilot-section-label">Budgetmodus</span>
                   <span className={badgeClassName('readiness', budgetMode === 'validated_allocation' ? 'GO' : 'WATCH')}>
                     {budgetModeLabel(budgetMode)}
                   </span>
                 </div>
                 <p className="pilot-track-card__copy">
-                  {validationDisclaimer || 'The current budget view stays readable, but without an implied ROI guarantee.'}
+                  {validationDisclaimer || 'Die aktuelle Budgetsicht bleibt lesbar, aber ohne implizite ROI-Garantie.'}
                 </p>
               </article>
             </div>
 
             <div className="pilot-hero__meta">
-              <span>Updated {generatedAtLabel}</span>
+              <span>Aktualisiert {generatedAtLabel}</span>
               <span>Datenstand {asOfLabel}</span>
               <span>Zielwoche {targetWeekLabel}</span>
             </div>
@@ -526,21 +526,21 @@ const PilotSurface: React.FC<Props> = ({
 
           <aside className="pilot-spotlight">
             <div className="pilot-spotlight__head">
-              <span className="pilot-kicker pilot-kicker--light">Executive Spotlight</span>
+              <span className="pilot-kicker pilot-kicker--light">Fokusbereich</span>
               <span className={badgeClassName('stage', heroRegion?.decision_stage || executive?.decision_stage)}>
                 {stageLabel(heroRegion?.decision_stage || executive?.decision_stage)}
               </span>
             </div>
 
             <div className="pilot-spotlight__title-block">
-              <p>Lead Region</p>
+              <p>Fokusregion</p>
               <h2>{regionIdentity(heroRegion)}</h2>
-              <span>{nonEmpty([focusProduct, focusKeyword]).join(' · ') || 'No product or keyword focus is currently available.'}</span>
+              <span>{nonEmpty([focusProduct, focusKeyword]).join(' · ') || 'Aktuell ist noch kein Produkt- oder Keyword-Fokus hinterlegt.'}</span>
             </div>
 
             <div className="pilot-spotlight__metrics">
               <div className="pilot-spotlight__metric">
-                <span>Budget Mode</span>
+                <span>Budgetmodus</span>
                 <strong>{budgetModeLabel(budgetMode)}</strong>
               </div>
               <div className="pilot-spotlight__metric">
@@ -548,19 +548,19 @@ const PilotSurface: React.FC<Props> = ({
                 <strong>{formatCurrency(executive?.budget_recommendation?.scenario_budget_eur || executive?.budget_recommendation?.recommended_active_budget_eur)}</strong>
               </div>
               <div className="pilot-spotlight__metric">
-                <span>Wave Chance</span>
+                <span>Wellenwahrscheinlichkeit</span>
                 <strong>{formatFractionPercent(executive?.confidence_summary?.lead_region_event_probability, 0)}</strong>
               </div>
               <div className="pilot-spotlight__metric">
-                <span>Confidence</span>
+                <span>Vertrauensniveau</span>
                 <strong>{formatFractionPercent(executive?.confidence_summary?.lead_region_confidence, 0)}</strong>
               </div>
             </div>
 
             <div className="pilot-spotlight__reason">
-              <div className="pilot-section-label">Reason Trace</div>
+              <div className="pilot-section-label">Begründung</div>
               <ul>
-                {(heroReasonTrace.length > 0 ? heroReasonTrace : ['No short-form reason trace is currently available.']).slice(0, 3).map((item) => (
+                {(heroReasonTrace.length > 0 ? heroReasonTrace : ['Aktuell liegt keine kurze Begründung vor.']).slice(0, 3).map((item) => (
                   <li key={item}>{item}</li>
                 ))}
               </ul>
@@ -568,14 +568,14 @@ const PilotSurface: React.FC<Props> = ({
 
             {executive?.uncertainty_summary && (
               <div className="pilot-spotlight__note">
-                <span>Uncertainty</span>
+                <span>Unsicherheit</span>
                 <p>{executive.uncertainty_summary}</p>
               </div>
             )}
 
             {validationDisclaimer && (
               <div className="pilot-spotlight__note">
-                <span>Validation Note</span>
+                <span>Validierungshinweis</span>
                 <p>{validationDisclaimer}</p>
               </div>
             )}
@@ -585,22 +585,22 @@ const PilotSurface: React.FC<Props> = ({
 
       <section className="pilot-value-grid">
         <article className="pilot-value-card">
-          <span className="pilot-section-label">Already Live</span>
-          <h2>What PEIX can already show GELO</h2>
+          <span className="pilot-section-label">Schon heute sichtbar</span>
+          <h2>Was PEIX GELO heute schon zeigen kann</h2>
           <ul className="pilot-blocker-list">
-            <li>Regional viral waves are ranked early and with a visible confidence trail.</li>
-            <li>Top regions are prioritized with a clear timing and stage recommendation.</li>
-            <li>The budget view already shows a forecast-based scenario split for the current week.</li>
+            <li>Regionale virale Wellen werden frueh erkannt und mit sichtbarem Vertrauensniveau eingeordnet.</li>
+            <li>Top-Regionen werden klar priorisiert und mit einer verständlichen Stufenempfehlung versehen.</li>
+            <li>Die Budgetsicht zeigt bereits einen forecast-basierten Szenario-Split fuer die aktuelle Woche.</li>
           </ul>
         </article>
 
         <article className="pilot-value-card">
-          <span className="pilot-section-label">What GELO Data Unlocks</span>
-          <h2>What becomes stronger with outcome data</h2>
+          <span className="pilot-section-label">Was GELO-Daten freischalten</span>
+          <h2>Was mit Outcome-Daten noch stärker wird</h2>
           <ul className="pilot-blocker-list">
-            <li>Sales and spend can be mirrored against the same regional signal.</li>
-            <li>Holdout and lift evidence can move the scope from scenario planning to validated budget release.</li>
-            <li>The commercial layer can then prove where the forecast translated into business impact.</li>
+            <li>Spend- und Sales-Daten koennen gegen genau dasselbe regionale Signal gespiegelt werden.</li>
+            <li>Test-/Kontrolllogik und Lift-Evidenz koennen den Scope von Szenarioplanung zu validierter Budgetfreigabe entwickeln.</li>
+            <li>Der kommerzielle Layer kann dann zeigen, wo der Forecast wirklich in Business-Wirkung uebergegangen ist.</li>
           </ul>
         </article>
       </section>
@@ -617,12 +617,12 @@ const PilotSurface: React.FC<Props> = ({
       <section className="pilot-section">
         <div className="pilot-section__header">
           <div className="pilot-section__headline">
-            <span className="pilot-kicker">Operational Recommendations</span>
-            <h2>Operational Recommendations</h2>
+            <span className="pilot-kicker">Operative Empfehlungen</span>
+            <h2>Operative Empfehlungen</h2>
             <p>
               {budgetMode === 'validated_allocation'
-                ? 'Validated regional recommendation chain for the current scope.'
-                : 'Forecast-first region and budget scenario for the current scope.'}
+                ? 'Validierte regionale Empfehlungskette fuer den aktuellen Scope.'
+                : 'Forecast-basierte Regionen- und Budgetsicht fuer den aktuellen Scope.'}
             </p>
           </div>
           <span className={badgeClassName('readiness', currentScopeStatus)}>
@@ -632,19 +632,19 @@ const PilotSurface: React.FC<Props> = ({
 
         <div className="pilot-summary-strip">
           <div className="pilot-summary-stat">
-            <span>Activate Regionen</span>
+            <span>Aktivieren-Regionen</span>
             <strong>{pilotReadout?.operational_recommendations?.summary?.activate_regions ?? '-'}</strong>
           </div>
           <div className="pilot-summary-stat">
-            <span>Prepare Regionen</span>
+            <span>Vorbereiten-Regionen</span>
             <strong>{pilotReadout?.operational_recommendations?.summary?.prepare_regions ?? '-'}</strong>
           </div>
           <div className="pilot-summary-stat">
-            <span>Watch Regionen</span>
+            <span>Beobachten-Regionen</span>
             <strong>{pilotReadout?.operational_recommendations?.summary?.watch_regions ?? '-'}</strong>
           </div>
           <div className="pilot-summary-stat">
-            <span>Bereite Empfehlungen</span>
+            <span>Freigegebene Empfehlungen</span>
             <strong>{pilotReadout?.operational_recommendations?.summary?.ready_recommendations ?? '-'}</strong>
           </div>
         </div>
@@ -661,7 +661,7 @@ const PilotSurface: React.FC<Props> = ({
 
         {rankedRegions.length > 0 && (
           <div className="pilot-ranked-stack">
-            <div className="pilot-section-label">Remaining Ranked Regions</div>
+            <div className="pilot-section-label">Weitere priorisierte Regionen</div>
             {rankedRegions.map((row) => (
               <RankedRegionRow key={row.region_code || row.region_name} row={row} />
             ))}
@@ -678,10 +678,10 @@ const PilotSurface: React.FC<Props> = ({
       <section className="pilot-section pilot-section--evidence">
         <div className="pilot-section__header">
           <div className="pilot-section__headline">
-            <span className="pilot-kicker">Pilot Evidence / Readiness</span>
-            <h2>Pilot Evidence / Readiness</h2>
+            <span className="pilot-kicker">Pilot-Evidenz und Freigabestatus</span>
+            <h2>Pilot-Evidenz und Freigabestatus</h2>
             <p>
-              Forecast evidence stays visible as its own layer. Commercial validation remains separate and explicit.
+              Forecast-Evidenz bleibt als eigene Ebene sichtbar. Die kommerzielle Validierung bleibt davon getrennt und wird explizit ausgewiesen.
             </p>
           </div>
           <span className={badgeClassName('readiness', evidence?.scope_readiness || pilotReadout?.run_context?.scope_readiness)}>
@@ -691,7 +691,7 @@ const PilotSurface: React.FC<Props> = ({
 
         <div className="pilot-evidence-grid">
           <article className="pilot-evidence-card">
-            <div className="pilot-section-label">Current Gate Outcome</div>
+            <div className="pilot-section-label">Aktueller Freigabestatus</div>
             <div className="pilot-gate-list">
               {readinessRows.map((item) => (
                 <div key={item.label} className="pilot-gate-row">
@@ -701,13 +701,13 @@ const PilotSurface: React.FC<Props> = ({
               ))}
             </div>
             <div className="pilot-evidence-card__footer">
-              <span>Validation Status</span>
+              <span>Validierungsstatus</span>
               <strong>{gateSnapshot?.validation_status || '-'}</strong>
             </div>
           </article>
 
           <article className="pilot-evidence-card">
-            <div className="pilot-section-label">Commercial Validation</div>
+            <div className="pilot-section-label">Kommerzielle Validierung</div>
             {heroBlockers.length > 0 ? (
               <ul className="pilot-blocker-list">
                 {heroBlockers.slice(0, 6).map((item) => (
@@ -715,31 +715,31 @@ const PilotSurface: React.FC<Props> = ({
                 ))}
               </ul>
             ) : (
-              <p className="pilot-muted-copy">No active commercial blockers are currently reported for this scope.</p>
+              <p className="pilot-muted-copy">Fuer diesen Scope sind aktuell keine weiteren kommerziellen Blocker ausgewiesen.</p>
             )}
             <div className="pilot-evidence-card__footer">
-              <span>{budgetMode === 'validated_allocation' ? 'Commercial Mode' : 'Current Budget Mode'}</span>
+              <span>{budgetMode === 'validated_allocation' ? 'Kommerzieller Modus' : 'Aktueller Budgetmodus'}</span>
               <strong>{budgetModeLabel(budgetMode)}</strong>
             </div>
           </article>
 
           <article className="pilot-evidence-card">
-            <div className="pilot-section-label">Live Evaluation Winner</div>
+            <div className="pilot-section-label">Aktueller Evaluationssieger</div>
             <div className="pilot-evaluation-highlight">
-              <strong>{evidence?.evaluation?.selected_experiment_name || 'No retained winner yet.'}</strong>
+              <strong>{evidence?.evaluation?.selected_experiment_name || 'Aktuell liegt noch kein retained Winner vor.'}</strong>
               <span>{evidence?.evaluation?.calibration_mode || '-'}</span>
             </div>
             <div className="pilot-evaluation-meta">
               <div>
-                <span>Gate Outcome</span>
+                <span>Freigabe</span>
                 <strong>{evidence?.evaluation?.gate_outcome || '-'}</strong>
               </div>
               <div>
-                <span>Retained</span>
-                <strong>{evidence?.evaluation?.retained ? 'Yes' : 'No'}</strong>
+                <span>Beibehalten</span>
+                <strong>{evidence?.evaluation?.retained ? 'Ja' : 'Nein'}</strong>
               </div>
               <div>
-                <span>Generated</span>
+                <span>Erzeugt</span>
                 <strong>{formatDateTime(evidence?.evaluation?.generated_at || null)}</strong>
               </div>
             </div>
@@ -747,19 +747,19 @@ const PilotSurface: React.FC<Props> = ({
         </div>
 
         <div className="pilot-comparison-panel">
-          <div className="pilot-section-label">Comparison Metrics</div>
+          <div className="pilot-section-label">Vergleichsmetriken</div>
           {evaluationRows.length > 0 ? (
             <div className="pilot-comparison-table-wrap">
               <table className="pilot-comparison-table">
                 <thead>
                   <tr>
-                    <th>Track</th>
+                    <th>Variante</th>
                     <th>precision_at_top3</th>
                     <th>activation_fp_rate</th>
                     <th>ece</th>
                     <th>brier</th>
-                    <th>gate_outcome</th>
-                    <th>retained</th>
+                    <th>Freigabe</th>
+                    <th>Beibehalten</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -771,7 +771,7 @@ const PilotSurface: React.FC<Props> = ({
                       <td>{formatTableMetric(row.ece)}</td>
                       <td>{formatTableMetric(row.brier)}</td>
                       <td>{String(row.gate_outcome || '-')}</td>
-                      <td>{row.retained === true ? 'Yes' : row.retained === false ? 'No' : '-'}</td>
+                      <td>{row.retained === true ? 'Ja' : row.retained === false ? 'Nein' : '-'}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -779,16 +779,16 @@ const PilotSurface: React.FC<Props> = ({
             </div>
           ) : (
             <div className="pilot-ranked-empty">
-              Keine archivierte Vergleichstabelle fuer diesen Scope verfuegbar.
+              Fuer diesen Scope ist aktuell keine archivierte Vergleichstabelle verfuegbar.
             </div>
           )}
         </div>
 
         {evidence?.legacy_context?.note && (
           <div className="pilot-legacy-note">
-            <span className="pilot-section-label">Legacy Context</span>
+            <span className="pilot-section-label">Altpfad</span>
             <p>{evidence.legacy_context.note}</p>
-            <small>Sunset: {evidence.legacy_context.sunset_date || '-'}</small>
+            <small>Abschaltung: {evidence.legacy_context.sunset_date || '-'}</small>
           </div>
         )}
       </section>

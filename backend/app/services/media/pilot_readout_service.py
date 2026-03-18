@@ -210,7 +210,7 @@ class PilotReadoutService:
                     "status": "frozen",
                     "sunset_date": _LEGACY_RISK_ENGINE_CUTOFF_DATE,
                     "customer_surface_exposed": False,
-                    "note": "Legacy risk-engine and supply-shock evidence are quarantined and do not drive this pilot verdict.",
+                    "note": "Der alte Risk-Engine- und Supply-Shock-Pfad ist isoliert und bestimmt dieses Piloturteil nicht mehr.",
                 },
             },
         }
@@ -246,7 +246,7 @@ class PilotReadoutService:
                 recommendation_item.get("activation_level")
                 or allocation_item.get("recommended_activation_level")
                 or prediction.get("decision_label")
-                or "Watch"
+                or "Beobachten"
             )
             reason_trace = self._unique_non_empty(
                 [
@@ -321,7 +321,7 @@ class PilotReadoutService:
         gate_snapshot: dict[str, Any],
     ) -> dict[str, Any]:
         lead_region = region_rows[0] if region_rows else {}
-        lead_stage = str(lead_region.get("decision_stage") or "Watch")
+        lead_stage = str(lead_region.get("decision_stage") or "Beobachten")
         reason_trace = list(lead_region.get("reason_trace") or [])[:3]
         blocked_reasons = list(allocation.get("summary", {}).get("spend_blockers") or [])
         if gate_snapshot["missing_requirements"]:
@@ -330,18 +330,18 @@ class PilotReadoutService:
             )
         if overall_scope_readiness == "GO" and gate_snapshot.get("budget_release_status") == "GO":
             recommendation_text = (
-                f"Prioritize {lead_region.get('region_name')} now and release the planned weekly budget in the recommended split."
+                f"Fokussiere {lead_region.get('region_name')} jetzt und gib das Wochenbudget in der empfohlenen Verteilung frei."
             )
         elif overall_scope_readiness == "GO":
             recommendation_text = (
-                f"Prioritize {lead_region.get('region_name')} now and use the regional split below as a forecast-based planning scenario while commercial validation is still pending."
+                f"Fokussiere {lead_region.get('region_name')} jetzt und nutze die Verteilung unten als forecast-basierten Szenario-Split, solange die kommerzielle Validierung noch aussteht."
             )
         elif lead_region:
             recommendation_text = (
-                f"Keep {lead_region.get('region_name')} at the top of the plan, but hold spend release until the remaining gate requirements are closed."
+                f"Behalte {lead_region.get('region_name')} ganz oben auf dem Plan, aber gib Budget erst frei, wenn die offenen Gate-Anforderungen geschlossen sind."
             )
         else:
-            recommendation_text = "No customer-ready recommendation is available for this scope yet."
+            recommendation_text = "Für diesen Scope liegt aktuell noch keine belastbare Kundenempfehlung vor."
         return {
             "what_should_we_do_now": recommendation_text,
             "decision_stage": lead_stage,
@@ -434,19 +434,19 @@ class PilotReadoutService:
         requirements: list[str] = []
         coverage_weeks = int(truth_coverage.get("coverage_weeks") or 0)
         if coverage_weeks <= 0:
-            requirements.append("No GELO commercial outcome data is connected yet.")
+            requirements.append("Es sind noch keine GELO-Outcome-Daten angeschlossen.")
         elif coverage_weeks < 26:
-            requirements.append("At least 26 weeks of GELO outcome history are still missing.")
+            requirements.append("Es fehlen noch mindestens 26 Wochen GELO-Outcome-Historie.")
         if not truth_coverage.get("required_fields_present"):
-            requirements.append("Weekly media spend is not yet present in the GELO outcome layer.")
+            requirements.append("Wöchentliche Media-Spend-Daten fehlen noch in der GELO-Outcome-Schicht.")
         if not truth_coverage.get("conversion_fields_present"):
-            requirements.append("Sales, orders, or revenue metrics are still missing from the GELO outcome layer.")
+            requirements.append("Sales-, Orders- oder Revenue-Metriken fehlen noch in der GELO-Outcome-Schicht.")
         if int(business_validation.get("activation_cycles") or 0) < 2:
-            requirements.append("At least two clearly labeled activation cycles are still required.")
+            requirements.append("Es werden noch mindestens zwei klar markierte Aktivierungszyklen benötigt.")
         if not business_validation.get("holdout_ready"):
-            requirements.append("A test/control or holdout design is still missing.")
+            requirements.append("Eine Test-/Kontrolllogik beziehungsweise ein Holdout-Design fehlt noch.")
         if not business_validation.get("lift_metrics_available"):
-            requirements.append("Validated incremental lift metrics are still missing.")
+            requirements.append("Validierte inkrementelle Lift-Metriken fehlen noch.")
         return requirements
 
     def _forecast_scope_readiness(self, forecast: dict[str, Any]) -> str:
@@ -560,10 +560,10 @@ class PilotReadoutService:
         budget_mode: str,
     ) -> str:
         if budget_mode == "validated_allocation" and business_validation.get("validated_for_budget_activation"):
-            return "Forecast and commercial validation are aligned for this scope."
+            return "Forecast und kommerzielle Validierung greifen für diesen Scope bereits sauber zusammen."
         return (
-            "This budget view is a forecast-based planning scenario. "
-            "Commercial validation for GELO budget release is still pending."
+            "Diese Budgetsicht ist ein forecast-basierter Szenario-Split. "
+            "Die kommerzielle Validierung für die Budgetfreigabe von GELO steht noch aus."
         )
 
     def _promotion_status(
@@ -589,37 +589,37 @@ class PilotReadoutService:
         if status in {"no_model", "unsupported"}:
             return {
                 "code": "no_model",
-                "title": "No customer-ready model is available for this scope.",
-                "body": "Switch the virus or horizon until the regional forecast path is available again.",
+                "title": "Für diesen Scope ist aktuell kein kundenfähiges Modell verfügbar.",
+                "body": "Wechsle Virus oder Horizont, bis der regionale Forecast-Pfad wieder verfügbar ist.",
             }
         if status == "no_data" or not (forecast.get("predictions") or []):
             return {
                 "code": "no_data",
-                "title": "The model path exists, but there is not enough live data for a pilot decision right now.",
-                "body": "We keep the surface readable, but no hard recommendation is shown.",
+                "title": "Der Modellpfad existiert, aber aktuell reichen die Live-Daten noch nicht für eine Pilotentscheidung.",
+                "body": "Die Oberfläche bleibt lesbar, aber es wird keine harte Empfehlung gezeigt.",
             }
         if overall_scope_readiness == "GO":
             return {
                 "code": "ready",
-                "title": "The scope is customer-ready.",
-                "body": "The current recommendation chain is consistent enough for a forecast-first pilot discussion.",
+                "title": "Dieser Scope ist für den Forecast-First-Pilot bereit.",
+                "body": "Die aktuelle Empfehlungskette ist konsistent genug für ein kundenseitiges Forecast-Gespräch.",
             }
         if overall_scope_readiness == "NO_GO":
             return {
                 "code": "no_go",
-                "title": "The scope remains intentionally blocked.",
-                "body": "Hard gates are still failing, so spend release stays closed.",
+                "title": "Dieser Scope bleibt bewusst gesperrt.",
+                "body": "Harte Gates schlagen noch fehl, deshalb bleibt die Budgetfreigabe geschlossen.",
             }
         if gate_snapshot.get("forecast_readiness") != "GO":
             return {
                 "code": "watch_only",
-                "title": "The pilot is visible, but the forecast path is not fully ready yet.",
-                "body": "Keep the scope on watch until the forecast evidence and promotion path are stable enough for a clean client-facing readout.",
+                "title": "Der Pilot ist sichtbar, aber der Forecast-Pfad ist noch nicht stabil genug.",
+                "body": "Belasse den Scope auf WATCH, bis Forecast-Evidenz und Promotion-Pfad stark genug für einen sauberen kundenseitigen Readout sind.",
             }
         return {
             "code": "watch_only",
-            "title": "The forecast is usable, but commercial validation is still pending.",
-            "body": "Use the current split as a scenario for planning and explain that GELO outcome data will unlock commercial validation later.",
+            "title": "Der Forecast ist nutzbar, die kommerzielle Validierung steht aber noch aus.",
+            "body": "Nutze die aktuelle Verteilung als Szenario-Split für die Planung und erkläre, dass GELO-Outcome-Daten später die kommerzielle Validierung freischalten.",
         }
 
     def _latest_live_evaluation(

@@ -30,8 +30,8 @@ function buildReadout({
   const holdoutStatus: 'GO' | 'WATCH' = budgetReleaseStatus === 'GO' ? 'GO' : 'WATCH';
   const budgetMode = budgetReleaseStatus === 'GO' ? 'validated_allocation' : 'scenario_split';
   const validationDisclaimer = budgetReleaseStatus === 'GO'
-    ? 'Forecast and commercial validation are aligned for this scope.'
-    : 'This budget view is a forecast-based planning scenario. Commercial validation for GELO budget release is still pending.';
+    ? 'Forecast und kommerzielle Validierung greifen für diesen Scope bereits sauber zusammen.'
+    : 'Diese Budgetsicht ist ein forecast-basierter Szenario-Split. Die kommerzielle Validierung für die Budgetfreigabe von GELO steht noch aus.';
   return {
     pilotReadout: {
       brand: 'gelo',
@@ -63,7 +63,7 @@ function buildReadout({
           validation_disclaimer: validationDisclaimer,
           missing_requirements: budgetReleaseStatus === 'GO'
             ? []
-            : ['Validated incremental lift metrics are still missing.'],
+            : ['Validierte inkrementelle Lift-Metriken fehlen noch.'],
           coverage_weeks: 18,
           validation_status: budgetReleaseStatus === 'GO'
             ? 'passed_holdout_validation'
@@ -78,8 +78,8 @@ function buildReadout({
       },
       executive_summary: {
         what_should_we_do_now: budgetReleaseStatus === 'GO'
-          ? `Prioritize ${leadRegion} for ${virus}.`
-          : `Prioritize ${leadRegion} for ${virus} and use the split below as a forecast-based planning scenario while commercial validation is still pending.`,
+          ? `Fokussiere ${leadRegion} jetzt für ${virus}.`
+          : `Fokussiere ${leadRegion} jetzt für ${virus} und nutze die Verteilung unten als forecast-basierten Szenario-Split, solange die kommerzielle Validierung noch aussteht.`,
         decision_stage: leadRegion === 'Berlin' ? 'Activate' : 'Watch',
         forecast_readiness: scopeReadiness,
         commercial_validation_status: commercialStatus,
@@ -87,7 +87,7 @@ function buildReadout({
         budget_mode: budgetMode,
         validation_disclaimer: validationDisclaimer,
         scope_readiness: scopeReadiness,
-        headline: `${virus} pilot summary`,
+        headline: `${virus} Pilotübersicht`,
         top_regions: [
           {
             region_code: leadRegion === 'Berlin' ? 'BE' : 'BY',
@@ -108,7 +108,7 @@ function buildReadout({
           budget_mode: budgetMode,
           blocked_reasons: budgetReleaseStatus === 'GO'
             ? []
-            : ['Budget release is still blocked.'],
+            : ['Die Budgetfreigabe ist aktuell noch blockiert.'],
         },
         confidence_summary: {
           lead_region_confidence: 0.72,
@@ -210,7 +210,7 @@ function buildReadout({
           validation_disclaimer: validationDisclaimer,
           missing_requirements: budgetReleaseStatus === 'GO'
             ? []
-            : ['Validated incremental lift metrics are still missing.'],
+            : ['Validierte inkrementelle Lift-Metriken fehlen noch.'],
           coverage_weeks: 18,
           validation_status: budgetReleaseStatus === 'GO'
             ? 'passed_holdout_validation'
@@ -225,14 +225,14 @@ function buildReadout({
       empty_state: {
         code: emptyState,
         title: emptyState === 'no_model'
-          ? 'No customer-ready model is available for this scope.'
+          ? 'Für diesen Scope ist aktuell kein kundenfähiges Modell verfügbar.'
           : emptyState === 'no_data'
-            ? 'The model path exists, but there is not enough live data for a pilot decision right now.'
+            ? 'Der Modellpfad existiert, aber aktuell reichen die Live-Daten noch nicht für eine Pilotentscheidung.'
             : emptyState === 'watch_only'
-              ? 'The forecast is usable, but commercial validation is still pending.'
+              ? 'Der Forecast ist nutzbar, die kommerzielle Validierung steht aber noch aus.'
               : emptyState === 'no_go'
-                ? 'The scope remains intentionally blocked.'
-                : 'The scope is customer-ready.',
+                ? 'Dieser Scope bleibt bewusst gesperrt.'
+                : 'Dieser Scope ist für den Forecast-First-Pilot bereit.',
         body: 'Surface body',
       },
     },
@@ -255,17 +255,17 @@ describe('PilotPage', () => {
 
     render(<PilotPage />);
 
-    expect(screen.getByText('PEIX / GELO Pilot Surface')).toBeInTheDocument();
-    expect(screen.getByText('What should we do now?')).toBeInTheDocument();
-    expect(screen.getByText('Executive Spotlight')).toBeInTheDocument();
-    expect(screen.getByText('Forecast Ready')).toBeInTheDocument();
-    expect(screen.getAllByText('Commercial Validation').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Scenario Split').length).toBeGreaterThan(0);
-    expect(screen.getByRole('heading', { name: 'What PEIX can already show GELO' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Operational Recommendations' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Pilot Evidence / Readiness' })).toBeInTheDocument();
-    expect(screen.getByText('Current Gate Outcome')).toBeInTheDocument();
-    expect(screen.getByText(/Prioritize Berlin for RSV A and use the split below as a forecast-based planning scenario/i)).toBeInTheDocument();
+    expect(screen.getByText('PEIX / GELO Pilotansicht')).toBeInTheDocument();
+    expect(screen.getByText('Was sollten wir jetzt tun?')).toBeInTheDocument();
+    expect(screen.getByText('Fokusbereich')).toBeInTheDocument();
+    expect(screen.getByText('Forecast bereit')).toBeInTheDocument();
+    expect(screen.getAllByText('Kommerzielle Validierung').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Szenario-Split').length).toBeGreaterThan(0);
+    expect(screen.getByRole('heading', { name: 'Was PEIX GELO heute schon zeigen kann' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Operative Empfehlungen' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Pilot-Evidenz und Freigabestatus' })).toBeInTheDocument();
+    expect(screen.getByText('Aktueller Freigabestatus')).toBeInTheDocument();
+    expect(screen.getByText(/Fokussiere Berlin jetzt für RSV A und nutze die Verteilung unten als forecast-basierten Szenario-Split/i)).toBeInTheDocument();
     expect(screen.getAllByText('Berlin is the current lead region.')).toHaveLength(2);
   });
 
@@ -281,7 +281,7 @@ describe('PilotPage', () => {
     render(<PilotPage />);
 
     expect(screen.getAllByText('GO').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Validated Allocation').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Validierte Allokation').length).toBeGreaterThan(0);
     expect(screen.getAllByText('rsv_signal_core').length).toBeGreaterThan(0);
   });
 
@@ -295,7 +295,7 @@ describe('PilotPage', () => {
     render(<PilotPage />);
 
     fireEvent.change(screen.getByLabelText('Virus'), { target: { value: 'Influenza B' } });
-    expect(screen.getByText(/Prioritize Bayern for Influenza B and use the split below as a forecast-based planning scenario/i)).toBeInTheDocument();
+    expect(screen.getByText(/Fokussiere Bayern jetzt für Influenza B und nutze die Verteilung unten als forecast-basierten Szenario-Split/i)).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText('Horizon'), { target: { value: '5' } });
     expect(mockedUsePilotSurfaceData).toHaveBeenLastCalledWith(expect.objectContaining({
@@ -303,12 +303,12 @@ describe('PilotPage', () => {
       horizonDays: 5,
     }), expect.any(Function));
 
-    fireEvent.click(screen.getByRole('button', { name: 'Evidence' }));
-    expect(screen.getAllByText('Pilot-Evidenz, Gates und Readiness').length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole('button', { name: 'Evidenz' }));
+    expect(screen.getAllByText('Pilot-Evidenz und Freigabestatus').length).toBeGreaterThan(0);
 
-    const operationalSection = screen.getByRole('heading', { name: 'Operational Recommendations' }).closest('section');
+    const operationalSection = screen.getByRole('heading', { name: 'Operative Empfehlungen' }).closest('section');
     expect(operationalSection).not.toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Watch' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Beobachten' }));
     expect(within(operationalSection as HTMLElement).queryByText('Berlin')).not.toBeInTheDocument();
     expect(within(operationalSection as HTMLElement).getByText('Bayern')).toBeInTheDocument();
   });
@@ -325,7 +325,7 @@ describe('PilotPage', () => {
 
     render(<PilotPage />);
 
-    expect(screen.getByText('No customer-ready model is available for this scope.')).toBeInTheDocument();
+    expect(screen.getByText('Für diesen Scope ist aktuell kein kundenfähiges Modell verfügbar.')).toBeInTheDocument();
   });
 
   it('renders the no_data empty state', () => {
@@ -338,7 +338,7 @@ describe('PilotPage', () => {
 
     render(<PilotPage />);
 
-    expect(screen.getByText('The model path exists, but there is not enough live data for a pilot decision right now.')).toBeInTheDocument();
+    expect(screen.getByText('Der Modellpfad existiert, aber aktuell reichen die Live-Daten noch nicht für eine Pilotentscheidung.')).toBeInTheDocument();
   });
 
   it('renders the watch_only empty state', () => {
@@ -353,8 +353,8 @@ describe('PilotPage', () => {
 
     render(<PilotPage />);
 
-    expect(screen.getByText('The forecast is usable, but commercial validation is still pending.')).toBeInTheDocument();
-    expect(screen.getAllByText('Validated incremental lift metrics are still missing.').length).toBeGreaterThan(0);
+    expect(screen.getByText('Der Forecast ist nutzbar, die kommerzielle Validierung steht aber noch aus.')).toBeInTheDocument();
+    expect(screen.getAllByText('Validierte inkrementelle Lift-Metriken fehlen noch.').length).toBeGreaterThan(0);
   });
 
   it('renders the no_go empty state', () => {
@@ -369,6 +369,6 @@ describe('PilotPage', () => {
 
     render(<PilotPage />);
 
-    expect(screen.getByText('The scope remains intentionally blocked.')).toBeInTheDocument();
+    expect(screen.getByText('Dieser Scope bleibt bewusst gesperrt.')).toBeInTheDocument();
   });
 });

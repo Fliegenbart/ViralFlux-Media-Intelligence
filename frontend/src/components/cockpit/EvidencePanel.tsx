@@ -10,7 +10,13 @@ import {
 import {
   truthLayerLabel,
 } from './cockpitUtils';
-import { monitoringStatusLabel } from './evidence/evidenceUtils';
+import {
+  monitoringStatusLabel,
+  readinessGateLabel,
+  runModeLabel,
+  sanitizeEvidenceCopy,
+  sourceFreshnessLabel,
+} from './evidence/evidenceUtils';
 import ForecastMonitoringSection from './evidence/ForecastMonitoringSection';
 import ImportValidationSection from './evidence/ImportValidationSection';
 import SourceFreshnessSection from './evidence/SourceFreshnessSection';
@@ -125,7 +131,7 @@ const EvidencePanel: React.FC<Props> = ({
     {
       label: 'Forecast-Monitoring',
       value: monitoringStatusLabel(forecastMonitoring?.monitoring_status),
-      note: forecastMonitoring?.forecast_readiness || 'Status offen',
+      note: readinessGateLabel(forecastMonitoring?.forecast_readiness) || 'Status offen',
     },
     {
       label: UI_COPY.customerData,
@@ -139,7 +145,7 @@ const EvidencePanel: React.FC<Props> = ({
     },
     {
       label: 'Importstatus',
-      value: latestImportStatus,
+      value: monitoringStatusLabel(latestImportStatus),
       note: truthPreview?.preview_only ? 'Aktuell nur Vorschau geprüft' : 'Letzter Batch oder Frischestatus',
     },
   ];
@@ -157,7 +163,7 @@ const EvidencePanel: React.FC<Props> = ({
     },
     {
       label: 'Drift',
-      value: modelLineage?.drift_state || '-',
+      value: monitoringStatusLabel(modelLineage?.drift_state),
       icon: 'timeline',
     },
   ];
@@ -239,7 +245,7 @@ const EvidencePanel: React.FC<Props> = ({
             <div className="evidence-source-pills">
               {(sourceFocus.length ? sourceFocus : [{ source_key: 'none', label: 'Noch keine Quelle', freshness_state: 'offen' }]).map((item) => (
                 <span key={item.source_key} className="evidence-source-pill">
-                  {item.label} · {item.freshness_state}
+                  {item.label} · {sourceFreshnessLabel(item.freshness_state)}
                 </span>
               ))}
             </div>
@@ -271,9 +277,9 @@ const EvidencePanel: React.FC<Props> = ({
                 <p>{activeTabMeta.description}</p>
               </div>
               <div className="evidence-primary-stage__chips">
-                <span className="step-chip">Forecast: {forecastMonitoring?.monitoring_status || '-'}</span>
+                <span className="step-chip">Forecast: {monitoringStatusLabel(forecastMonitoring?.monitoring_status)}</span>
                 <span className="step-chip">{UI_COPY.customerData}: {truthLayerLabel(truthStatus || latestCustomer)}</span>
-                <span className="step-chip">Import: {latestImportStatus}</span>
+                <span className="step-chip">Import: {monitoringStatusLabel(latestImportStatus)}</span>
               </div>
             </div>
 
@@ -344,7 +350,8 @@ const EvidencePanel: React.FC<Props> = ({
                 ))}
               </div>
               <p>
-                {signalStack?.summary?.decision_mode_reason || 'Der Stack zeigt hier die Felder und Spuren, die für die aktuelle Prüfung gerade am wichtigsten sind.'}
+                {sanitizeEvidenceCopy(signalStack?.summary?.decision_mode_reason)
+                  || 'Der Stack zeigt hier die Felder und Spuren, die für die aktuelle Prüfung gerade am wichtigsten sind.'}
               </p>
             </div>
 
@@ -354,8 +361,8 @@ const EvidencePanel: React.FC<Props> = ({
               <div className="evidence-support-card__list">
                 {runPreview.length > 0 ? runPreview.map((run, index) => (
                   <div key={`${String(run.mode)}-${index}`} className="evidence-row">
-                    <span>{String(run.mode || 'Run')}</span>
-                    <strong>{String(run.status || '-')}</strong>
+                    <span>{runModeLabel(String(run.mode || 'Run'))}</span>
+                    <strong>{monitoringStatusLabel(String(run.status || '-'))}</strong>
                   </div>
                 )) : (
                   <div className="evidence-row">

@@ -12,6 +12,7 @@ import {
   truthFreshnessLabel,
   truthLayerLabel,
 } from '../cockpitUtils';
+import { sanitizeEvidenceCopy } from './evidenceUtils';
 
 interface Props {
   truthStatus?: TruthCoverage | null;
@@ -97,10 +98,10 @@ const TruthOutcomeSection: React.FC<Props> = ({
         </div>
         {(businessValidation?.message || businessValidation?.guidance) && (
           <div className="soft-panel" style={{ padding: 16, marginTop: 14, fontSize: 14, color: 'var(--text-secondary)' }}>
-            <strong style={{ color: 'var(--text-primary)' }}>{businessValidation?.message || 'Business-Validierung im Aufbau.'}</strong>
+            <strong style={{ color: 'var(--text-primary)' }}>{sanitizeEvidenceCopy(businessValidation?.message) || 'Business-Validierung im Aufbau.'}</strong>
             {businessValidation?.guidance && (
               <div style={{ marginTop: 8 }}>
-                {businessValidation.guidance}
+                {sanitizeEvidenceCopy(businessValidation.guidance)}
               </div>
             )}
           </div>

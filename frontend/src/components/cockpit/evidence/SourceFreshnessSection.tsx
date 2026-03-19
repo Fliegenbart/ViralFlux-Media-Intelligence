@@ -2,6 +2,7 @@ import React from 'react';
 
 import { MediaEvidenceResponse, ModelLineage, SignalStackResponse, SourceStatusItem, TruthSnapshot } from '../../../types/media';
 import { formatDateTime, formatPercent } from '../cockpitUtils';
+import { monitoringStatusLabel, runModeLabel, sanitizeEvidenceCopy, sourceFreshnessLabel } from './evidenceUtils';
 
 interface Props {
   evidence: MediaEvidenceResponse | null;
@@ -44,7 +45,7 @@ const SourceFreshnessSection: React.FC<Props> = ({
               <div key={item.source_key} className="evidence-row">
                 <span>{item.label}</span>
                 <strong style={{ color: item.status_color === 'green' ? '#047857' : item.status_color === 'amber' ? '#b45309' : '#b91c1c' }}>
-                  {item.freshness_state}
+                  {sourceFreshnessLabel(item.freshness_state)}
                 </strong>
               </div>
             ))}
@@ -66,13 +67,13 @@ const SourceFreshnessSection: React.FC<Props> = ({
             {(signalStack?.items || []).map((item) => (
               <div key={item.source_key} className="evidence-row">
                 <span>{item.label}</span>
-                <strong>{item.is_core_signal ? 'epi-kern' : item.contribution_state}</strong>
+                <strong>{item.is_core_signal ? 'Epi-Kern' : monitoringStatusLabel(item.contribution_state)}</strong>
               </div>
             ))}
           </div>
           {signalStack?.summary?.decision_mode_reason && (
             <p className="section-copy" style={{ marginTop: 14 }}>
-              {signalStack.summary.decision_mode_reason}
+              {sanitizeEvidenceCopy(signalStack.summary.decision_mode_reason)}
             </p>
           )}
         </div>
@@ -105,8 +106,8 @@ const SourceFreshnessSection: React.FC<Props> = ({
         <div style={{ display: 'grid', gap: 10, marginTop: 14 }}>
           {recentRuns.length > 0 ? recentRuns.slice(0, 6).map((run, index) => (
             <div key={`${String(run.mode)}-${index}`} className="evidence-row">
-              <span>{String(run.mode || 'Run')}</span>
-              <strong>{String(run.status || '-')}</strong>
+              <span>{runModeLabel(String(run.mode || 'Run'))}</span>
+              <strong>{monitoringStatusLabel(String(run.status || '-'))}</strong>
             </div>
           )) : (
             <div style={{ color: 'var(--text-muted)' }}>Noch keine Laufhistorie im Cockpit vorhanden.</div>

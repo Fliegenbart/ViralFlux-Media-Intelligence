@@ -3,7 +3,14 @@ import React from 'react';
 import { ValidationSection } from '../BacktestVisuals';
 import { BacktestResponse, ForecastMonitoring, ModelLineage, TruthCoverage } from '../../../types/media';
 import { formatDateTime, formatPercent } from '../cockpitUtils';
-import { formatSignedPercent, monitoringFreshnessLabel, monitoringStatusLabel, numberFromUnknown } from './evidenceUtils';
+import {
+  formatSignedPercent,
+  monitoringFreshnessLabel,
+  monitoringStatusLabel,
+  numberFromUnknown,
+  readinessGateLabel,
+  sanitizeEvidenceCopy,
+} from './evidenceUtils';
 import { decisionStateLabel } from '../../../lib/copy';
 
 interface Props {
@@ -78,7 +85,7 @@ const ForecastMonitoringSection: React.FC<Props> = ({
           <div className="metric-strip">
             <div className="metric-box">
               <span>Forecast-Gate</span>
-              <strong>{forecastMonitoring?.forecast_readiness || '-'}</strong>
+              <strong>{readinessGateLabel(forecastMonitoring?.forecast_readiness)}</strong>
             </div>
             <div className="metric-box">
               <span>Forecast-Frische</span>
@@ -95,7 +102,7 @@ const ForecastMonitoringSection: React.FC<Props> = ({
           <div className="review-chip-row">
             <span className="step-chip">Backtest: {monitoringFreshnessLabel(forecastMonitoring?.backtest_freshness_status)}</span>
             <span className="step-chip">
-              Kalibrierung: {forecastMonitoring?.event_forecast?.calibration_passed == null ? '-' : forecastMonitoring.event_forecast.calibration_passed ? 'ok' : 'watch'}
+              Kalibrierung: {forecastMonitoring?.event_forecast?.calibration_passed == null ? '-' : forecastMonitoring.event_forecast.calibration_passed ? 'stabil' : 'Beobachten'}
             </span>
             <span className="step-chip">
               Samples: {latestAccuracy?.samples != null ? latestAccuracy.samples : '-'}
@@ -224,7 +231,7 @@ const ForecastMonitoringSection: React.FC<Props> = ({
             <div className="campaign-focus-label">Offene Monitoring-Signale</div>
             <div style={{ display: 'grid', gap: 8, marginTop: 10 }}>
               {forecastMonitoring.alerts.map((alert) => (
-                <div key={alert} className="review-body-copy">{alert}</div>
+                <div key={alert} className="review-body-copy">{sanitizeEvidenceCopy(alert)}</div>
               ))}
             </div>
           </div>

@@ -21,6 +21,7 @@ import {
   formatDateTime,
   formatPercent,
 } from './cockpitUtils';
+import { sanitizeEvidenceCopy } from './evidence/evidenceUtils';
 
 interface ValidationRow extends BacktestChartPoint {
   actual?: number | null;
@@ -437,7 +438,7 @@ export const ValidationSection: React.FC<ValidationSectionProps> = ({
         <div className="soft-panel" style={{ padding: 16 }}>
           <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Interpretation</div>
           <div style={{ marginTop: 6, fontSize: 14, lineHeight: 1.6, color: 'var(--text-secondary)' }}>
-            {result?.proof_text || result?.llm_insight}
+            {sanitizeEvidenceCopy(result?.proof_text || result?.llm_insight)}
           </div>
         </div>
       )}

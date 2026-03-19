@@ -24,6 +24,13 @@ function metricToneClass(tone: 'success' | 'warning' | 'neutral') {
   return 'now-status-pill';
 }
 
+function stageToneForDisplay(value?: string | null): 'success' | 'warning' | 'neutral' {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'aktivieren') return 'success';
+  if (normalized === 'vorbereiten') return 'warning';
+  return 'neutral';
+}
+
 function extractPercent(value?: string | null): number {
   if (!value) return 0;
   const normalized = value.replace(',', '.').replace(/[^\d.]/g, '');
@@ -50,6 +57,10 @@ const NowWorkspace: React.FC<Props> = ({
   const pageLead = view.note || 'Hier steht nur das, was für diese Woche wirklich zählt. Alles Weitere ordnen wir darunter.';
   const spotlightLead = focusRegion?.reason || view.note || 'Hier bündelt sich aktuell das stärkste Signal.';
   const primaryCampaignLabel = view.primaryRecommendationId ? 'Nächste Kampagne' : 'Kampagnenvorschlag';
+  const heroPrimaryStatus = focusRegion?.stage || primaryMetric?.value || 'Arbeitslage';
+  const heroSecondaryStatus = primaryMetric?.value && primaryMetric.value !== focusRegion?.stage
+    ? `Freigabe ${primaryMetric.value}`
+    : 'Arbeitslage aktiv';
 
   const prioritizedRegions = [
     ...(focusRegion ? [{
@@ -189,10 +200,10 @@ const NowWorkspace: React.FC<Props> = ({
                   </div>
 
                   <div className="now-spotlight-card__status">
-                    <span className={metricToneClass(primaryMetric?.tone || 'neutral')}>
-                      {primaryMetric?.value || 'Arbeitslage'}
+                    <span className={metricToneClass(focusRegion?.stage ? stageToneForDisplay(focusRegion.stage) : (primaryMetric?.tone || 'neutral'))}>
+                      {heroPrimaryStatus}
                     </span>
-                    <span className="campaign-confidence-chip">{focusRegion?.stage || 'Fokus aktiv'}</span>
+                    <span className="campaign-confidence-chip">{heroSecondaryStatus}</span>
                   </div>
                 </div>
 

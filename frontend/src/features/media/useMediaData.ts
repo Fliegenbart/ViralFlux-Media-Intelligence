@@ -255,6 +255,17 @@ function cleanCopy(value?: string | null): string {
     return 'Ein belastbarer Abgleich mit Outcome-Daten fehlt noch.';
   }
 
+  if (/^Der Forecast-Promotion-Gate steht aktuell auf WATCH\.$/i.test(normalized)) {
+    return 'Das Forecast-Promotion-Gate steht aktuell noch auf Beobachten.';
+  }
+
+  const decisionBriefMatch = normalized.match(
+    /^Die Signale sprechen in den nächsten \d+ bis \d+ Tagen für (.+?) in (.+?)\..*Deshalb priorisieren wir (.+?) als nächsten Kampagnenvorschlag für Prüfung und Freigabe\.$/i,
+  );
+  if (decisionBriefMatch) {
+    return `${decisionBriefMatch[2]} bleibt als prüfbarer Kampagnenvorschlag im Blick. ${decisionBriefMatch[3]} ist dafür aktuell die passendste Produktoption.`;
+  }
+
   return normalized
     .replace(/\s+—\s+/g, ' — ')
     .replace(/\s+\./g, '.');
@@ -262,6 +273,12 @@ function cleanCopy(value?: string | null): string {
 
 function firstCleanText(...values: Array<string | null | undefined>): string {
   return values.map((value) => cleanCopy(value)).find(Boolean) || '-';
+}
+
+function textMentionsRegion(text: string, regionName?: string | null): boolean {
+  const cleanedRegionName = cleanCopy(regionName);
+  if (!text || !cleanedRegionName || cleanedRegionName === '-') return false;
+  return text.toLowerCase().includes(cleanedRegionName.toLowerCase());
 }
 
 function regionTrendLabel(value?: string | null): string {
@@ -451,19 +468,19 @@ function buildNowPageViewModel(
     `${primaryCampaignRegionName} · ${stageLabel(leadCampaign?.activation_level || focusStageValue)}`,
   );
   const primaryCampaignCopy = firstCleanText(
-    topCard?.decision_brief?.summary_sentence,
-    topCard?.reason,
     uniqueText([
       ...(leadCampaign?.recommendation_rationale?.why || []),
       ...(leadCampaign?.recommendation_rationale?.guardrails || []),
+      leadCampaign?.timeline,
       ...(leadCampaign?.recommendation_rationale?.evidence_notes || []),
     ].map((item) => cleanCopy(item)), 2).join(' '),
+    topCard?.reason,
+    topCard?.decision_brief?.summary_sentence,
     'Der nächste prüfbare Kampagnenvorschlag liegt bereit.',
   );
 
   const reasons = uniqueText([
     ...(weeklyDecision?.why_now || []),
-    topCard?.decision_brief?.summary_sentence,
     focusCampaign?.recommendation_rationale?.why?.[0],
     focusPrediction?.decision?.explanation_summary,
     focusPrediction?.reason_trace?.why?.[0],
@@ -540,15 +557,21 @@ function buildNowPageViewModel(
     body: emptyMessage || 'Wechsle Virus oder Horizont oder prüfe die Datenqualität im Evidenz-Bereich.',
   };
 
+  const cleanedDecisionSummary = cleanCopy(weeklyDecision?.recommended_action);
+  const focusAlignedSummary = textMentionsRegion(cleanedDecisionSummary, focusRegionName)
+    ? cleanedDecisionSummary
+    : firstCleanText(
+      `${focusRegionName} steht diese Woche im Mittelpunkt. ${focusReason}`,
+      cleanedDecisionSummary,
+      topCard?.decision_brief?.summary_sentence,
+      `Die stärkste nächste Aktion liegt aktuell in ${focusRegionName}.`,
+    );
+
   return {
     hasData,
     generatedAt: decision?.generated_at || forecast?.generated_at || allocation?.generated_at || campaignRecommendations?.generated_at || evidence?.generated_at || null,
     title: `${focusStage}: ${focusRegionName}`,
-    summary: firstCleanText(
-      weeklyDecision?.recommended_action,
-      topCard?.decision_brief?.summary_sentence,
-      `Die stärkste nächste Aktion liegt aktuell in ${focusRegionName}.`,
-    ),
+    summary: focusAlignedSummary,
     note: buildNowPageNote(focusStage),
     primaryActionLabel: topCard?.id ? 'Nächste Kampagne öffnen' : 'Kampagnen prüfen',
     primaryRecommendationId: topCard?.id || null,

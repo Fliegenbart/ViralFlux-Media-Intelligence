@@ -42,11 +42,33 @@ const RegionWorkbench: React.FC<Props> = ({
     return <div className="card" style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>Keine Kartendaten vorhanden.</div>;
   }
 
+  const primaryRegion = region || topRegions[0] || null;
+  const primaryReason = region?.priority_explanation
+    || suggestion?.reason
+    || region?.tooltip?.recommendation_text
+    || 'Diese Region bündelt aktuell das stärkste Signal aus Forecast, Kontext und Nachfrage.'
+    ;
+  const primaryActionLabel = region?.recommendation_ref?.card_id
+    ? 'Kampagnenvorschlag öffnen'
+    : 'Vorschlag für Region erstellen';
+  const primaryAction = () => {
+    if (!selectedRegion) return;
+    if (region?.recommendation_ref?.card_id) {
+      onOpenRecommendation(region.recommendation_ref.card_id);
+      return;
+    }
+    onGenerateRegionCampaign(selectedRegion);
+  };
+
   return (
     <div className="page-stack">
       <section className="context-filter-rail">
         <div className="section-heading">
           <span className="section-kicker">Regionen priorisieren</span>
+          <h1 className="section-title">Eine Region. Ein Grund. Ein nächster Schritt.</h1>
+          <p className="section-copy">
+            Wähle ein Bundesland aus und arbeite es fokussiert ab, statt mehrere Signale gleichzeitig zu jonglieren.
+          </p>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
             {VIRUS_OPTIONS.map((option) => (
               <button
@@ -63,12 +85,95 @@ const RegionWorkbench: React.FC<Props> = ({
         <span className="step-chip">Stand {formatDateShort(activeMap.date)}</span>
       </section>
 
+      <section className="card hero-card" style={{ padding: 28 }}>
+        <div className="hero-grid" style={{ alignItems: 'start' }}>
+          <div className="hero-main">
+            <div className="hero-status-row">
+              <span className="campaign-confidence-chip">{primaryRegion?.name || 'Region wählen'}</span>
+              <span className="campaign-confidence-chip">
+                {region?.decision_mode_label || suggestion?.priority || 'Regionalsignal'}
+              </span>
+              <span className="campaign-confidence-chip">Stand {formatDateShort(activeMap.date)}</span>
+            </div>
+
+            <div className="section-heading" style={{ gap: 10 }}>
+              <h2 className="hero-title">{region?.name || 'Wähle ein Bundesland auf der Karte'}</h2>
+              <p className="hero-context">{primaryReason}</p>
+              <p className="hero-copy">
+                {region
+                  ? 'Unten kannst du die Region auf der Karte prüfen oder direkt in den passenden Kampagnenpfad springen.'
+                  : 'Sobald eine Region gewählt ist, zeigen wir hier nur die wichtigsten Gründe und genau eine Hauptaktion.'}
+              </p>
+            </div>
+
+            <div className="metric-strip">
+              <div className="metric-box">
+                <span>{signalLabel}</span>
+                <strong>{formatPercent(primarySignalScore(region || primaryRegion))}</strong>
+              </div>
+              <div className="metric-box">
+                <span>Actionability</span>
+                <strong>{formatPercent(Number(region?.actionability_score || primaryRegion?.actionability_score || 0))}</strong>
+              </div>
+              <div className="metric-box">
+                <span>Forecast-Richtung</span>
+                <strong style={{ fontSize: 18 }}>{region?.forecast_direction || 'seitwärts'}</strong>
+              </div>
+              <div className="metric-box">
+                <span>Budgetempfehlung</span>
+                <strong>
+                  {suggestion?.budget_shift_pct ? formatPercent(suggestion.budget_shift_pct) : 'zuerst prüfen'}
+                </strong>
+              </div>
+            </div>
+
+            <div className="action-row">
+              <button
+                className="media-button"
+                type="button"
+                onClick={primaryAction}
+                disabled={!selectedRegion || regionActionLoading}
+              >
+                {regionActionLoading ? 'Wird vorbereitet…' : primaryActionLabel}
+              </button>
+            </div>
+          </div>
+
+          <aside className="soft-panel aside-summary" style={{ padding: 24 }}>
+            <div>
+              <div className="section-kicker">Kurz erklärt</div>
+              <div className="summary-headline" style={{ fontSize: '1.55rem' }}>
+                {region?.tooltip?.recommended_product || 'GELO Portfolio'}
+              </div>
+              <div className="summary-note">
+                {region?.signal_drivers?.slice(0, 3).map((driver) => driver.label).join(' · ') || 'Treiber folgen nach Auswahl der Region.'}
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gap: 10 }}>
+              <div className="evidence-row">
+                <span>Signaländerung</span>
+                <strong>{formatPercent(region?.change_pct || 0, 1)}</strong>
+              </div>
+              <div className="evidence-row">
+                <span>Produktfokus</span>
+                <strong>{region?.tooltip?.recommended_product || 'GELO Portfolio'}</strong>
+              </div>
+              <div className="evidence-row">
+                <span>Ableitung</span>
+                <strong>{(region?.source_trace || []).join(', ') || 'AMELAG, SurvStat, Forecast'}</strong>
+              </div>
+            </div>
+          </aside>
+        </div>
+      </section>
+
       <section className="cockpit-grid">
         <div className="card subsection-card" style={{ padding: '16px 16px 12px', gap: 8 }}>
           <div className="section-heading" style={{ gap: 2, marginBottom: 0, paddingInline: 8 }}>
             <h2 className="subsection-title" style={{ fontSize: 14 }}>Deutschlandkarte</h2>
             <p className="subsection-copy" style={{ fontSize: 12 }}>
-              Klick auf ein Bundesland für Details.
+              Klick auf ein Bundesland, um den Fokus oben zu wechseln.
             </p>
           </div>
           <div style={{ marginTop: -6 }}>
@@ -91,30 +196,11 @@ const RegionWorkbench: React.FC<Props> = ({
 
             {region ? (
               <>
-                <div className="metric-strip">
-                  <div className="metric-box">
-                    <span>{signalLabel}</span>
-                    <strong>{formatPercent(primarySignalScore(region))}</strong>
-                  </div>
-                  <div className="metric-box">
-                    <span>Severity</span>
-                    <strong>{formatPercent(region.severity_score || 0)}</strong>
-                  </div>
-                  <div className="metric-box">
-                    <span>Momentum</span>
-                    <strong>{formatPercent(region.momentum_score || 0)}</strong>
-                  </div>
-                  <div className="metric-box">
-                    <span>Actionability</span>
-                    <strong>{formatPercent(region.actionability_score || 0)}</strong>
-                  </div>
-                </div>
-
                 <div className="soft-panel" style={{ padding: 16, display: 'grid', gap: 10 }}>
                   <div>
                     <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Warum jetzt?</div>
                     <div style={{ marginTop: 4, fontSize: 14, lineHeight: 1.6, color: 'var(--text-secondary)' }}>
-                      {region.priority_explanation || suggestion?.reason || region.tooltip?.recommendation_text || 'Regionale Auffälligkeit aus Abwasser, Forecast und Kontextsignalen.'}
+                      {primaryReason}
                     </div>
                   </div>
                   <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
@@ -132,13 +218,6 @@ const RegionWorkbench: React.FC<Props> = ({
                   <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
                     Budgetempfehlung: <strong style={{ color: 'var(--text-primary)' }}>{suggestion?.budget_shift_pct ? formatPercent(suggestion.budget_shift_pct) : 'zuerst prüfen'}</strong>
                   </div>
-                  <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-                    Semantik: <strong style={{ color: 'var(--text-primary)' }}>
-                      {region.field_contracts?.signal_score?.semantics === 'ranking_signal'
-                        ? 'Ranking-Signal, keine Forecast-Wahrscheinlichkeit'
-                        : 'Signal-Kontext'}
-                    </strong>
-                  </div>
                 </div>
 
                 <div className="soft-panel" style={{ padding: 16, display: 'grid', gap: 10 }}>
@@ -153,26 +232,6 @@ const RegionWorkbench: React.FC<Props> = ({
                   <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
                     Ableitung aus: <strong style={{ color: 'var(--text-primary)' }}>{(region.source_trace || []).join(', ') || 'AMELAG, SurvStat, Forecast'}</strong>
                   </div>
-                </div>
-
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
-                  {region.recommendation_ref?.card_id ? (
-                    <button className="media-button" type="button" onClick={() => onOpenRecommendation(region.recommendation_ref!.card_id)}>
-                      Kampagnenvorschlag öffnen
-                    </button>
-                  ) : (
-                    <button
-                      className="media-button"
-                      type="button"
-                      onClick={() => selectedRegion && onGenerateRegionCampaign(selectedRegion)}
-                      disabled={!selectedRegion || regionActionLoading}
-                    >
-                      {regionActionLoading ? 'Wird erstellt…' : 'Vorschlag für Region erstellen'}
-                    </button>
-                  )}
-                  <button className="media-button secondary" type="button" onClick={() => selectedRegion && onGenerateRegionCampaign(selectedRegion)} disabled={!selectedRegion || regionActionLoading}>
-                    Empfehlung neu berechnen
-                  </button>
                 </div>
               </>
             ) : (

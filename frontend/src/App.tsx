@@ -10,9 +10,8 @@ import './index.css';
 const LandingPage = lazy(() => import('./pages/LandingPage'));
 const WeeklyReport = lazy(() => import('./pages/WeeklyReport'));
 const MediaShell = lazy(() => import('./pages/media/MediaShell'));
-const OperationalDashboardPage = lazy(() => import('./pages/media/OperationalDashboardPage'));
+const NowPage = lazy(() => import('./pages/media/NowPage'));
 const PilotPage = lazy(() => import('./pages/media/PilotPage'));
-const DecisionPage = lazy(() => import('./pages/media/DecisionPage'));
 const RegionsPage = lazy(() => import('./pages/media/RegionsPage'));
 const CampaignsPage = lazy(() => import('./pages/media/CampaignsPage'));
 const EvidencePage = lazy(() => import('./pages/media/EvidencePage'));
@@ -174,12 +173,11 @@ const App: React.FC = () => {
           <Router>
             <Suspense fallback={<PageFallback />}>
               <Routes>
-                <Route path="/" element={<Navigate to="/dashboard" replace />} />
+                <Route path="/" element={<Navigate to="/jetzt" replace />} />
                 <Route path="/welcome" element={<LandingPage />} />
                 <Route element={<MediaShell />}>
-                  <Route path="/dashboard" element={<OperationalDashboardPage />} />
+                  <Route path="/jetzt" element={<NowPage />} />
                   <Route path="/pilot" element={<PilotPage />} />
-                  <Route path="/entscheidung" element={<DecisionPage />} />
                   <Route path="/regionen" element={<RegionsPage />} />
                   <Route path="/kampagnen" element={<CampaignsPage />} />
                   <Route path="/kampagnen/:id" element={<CampaignsPage />} />
@@ -187,7 +185,9 @@ const App: React.FC = () => {
                   <Route path="/bericht" element={<WeeklyReport />} />
                 </Route>
                 {/* Legacy redirects */}
-                <Route path="/lagebild" element={<Navigate to="/dashboard" replace />} />
+                <Route path="/dashboard" element={<Navigate to="/jetzt" replace />} />
+                <Route path="/entscheidung" element={<Navigate to="/jetzt" replace />} />
+                <Route path="/lagebild" element={<Navigate to="/jetzt" replace />} />
                 <Route path="/empfehlungen" element={<Navigate to="/kampagnen" replace />} />
                 <Route path="/empfehlungen/:id" element={<LegacyRecommendationRedirect />} />
                 <Route path="/validierung" element={<Navigate to="/evidenz" replace />} />

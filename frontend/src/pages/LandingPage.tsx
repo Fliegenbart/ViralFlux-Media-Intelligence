@@ -34,8 +34,7 @@ const MAILTO = (() => {
 })();
 
 const NAV_ITEMS = [
-  { label: 'Dashboard', path: '/dashboard' },
-  { label: 'Entscheidung', path: '/entscheidung' },
+  { label: 'Jetzt', path: '/jetzt' },
   { label: 'Regionen', path: '/regionen' },
   { label: 'Kampagnen', path: '/kampagnen' },
   { label: 'Evidenz', path: '/evidenz' },
@@ -343,7 +342,7 @@ const LandingPage: React.FC = () => {
               Kontakt
             </a>
             <button
-              onClick={() => navigate('/dashboard')}
+              onClick={() => navigate('/jetzt')}
               className="media-button"
               type="button"
             >
@@ -403,7 +402,7 @@ const LandingPage: React.FC = () => {
 
           <div style={{ marginTop: 28, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
             <button
-              onClick={() => navigate('/dashboard')}
+              onClick={() => navigate('/jetzt')}
               className="media-button"
               type="button"
             >
@@ -636,7 +635,7 @@ const LandingPage: React.FC = () => {
           </p>
           <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
             <button
-              onClick={() => navigate('/dashboard')}
+              onClick={() => navigate('/jetzt')}
               className="media-button"
               type="button"
             >
@@ -667,7 +666,7 @@ const LandingPage: React.FC = () => {
               Beratung anfragen
             </a>
             <button
-              onClick={() => navigate('/dashboard')}
+              onClick={() => navigate('/jetzt')}
               className="media-button"
               type="button"
             >

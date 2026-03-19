@@ -73,128 +73,63 @@ const CampaignStudio: React.FC<Props> = ({
     : 'Sobald Vorschläge vorliegen, rutschen die wichtigsten Fälle automatisch in Prüfung, Freigabe und Übergabe.';
   const hiddenBacklog = campaignsView?.summary?.hidden_backlog_cards ?? 0;
   const visibleCards = campaignsView?.summary?.visible_cards ?? cards.length;
+  const reviewHeadline = focusCard ? 'Jetzt zuerst prüfen' : 'Noch kein prüfbarer Vorschlag im Fokus';
+  const reviewContext = focusCard
+    ? 'Die wichtigste offene Kampagne steht oben. Alles andere folgt darunter in den Status-Spalten.'
+    : 'Sobald Vorschläge vorliegen, landet der stärkste Fall automatisch hier oben.';
 
   return (
     <div className="page-stack">
-      <section className="campaign-command-grid">
-        <article className="card campaign-command-card">
-          <div className="campaign-command-top">
-            <div className="section-heading" style={{ gap: 14 }}>
-              <span className="section-kicker">Campaign Studio</span>
-              <h1 className="campaign-command-title">Kampagnenvorschläge mit klarer nächster Aktion.</h1>
-              <p className="section-copy">
-                Die KI erstellt Vorschläge. Das Team prüft Inhalt, Budget und Übergabe, bevor etwas live geht.
-              </p>
+      <section className="card subsection-card" style={{ padding: 28 }}>
+        <div className="section-heading" style={{ gap: 10 }}>
+          <span className="section-kicker">Kampagnen</span>
+          <h1 className="section-title">Kampagnen mit klarer nächster Aktion.</h1>
+          <p className="section-copy">
+            Zuerst zeigen wir die Fälle für Prüfung und Freigabe. Neue Vorschläge bleiben möglich, stehen aber bewusst nicht im Vordergrund.
+          </p>
+        </div>
+
+        <div className="campaign-focus-panel" style={{ marginTop: 0 }}>
+          <div className="campaign-focus-label">{reviewHeadline}</div>
+          <div className="campaign-focus-title">{focusTitle}</div>
+          <div className="campaign-focus-context">{focusContext}</div>
+          <p className="campaign-focus-copy">{focusCopy}</p>
+          <p className="campaign-focus-copy" style={{ marginTop: 8 }}>{reviewContext}</p>
+          {hiddenBacklog > 0 && (
+            <div className="campaign-focus-context" style={{ marginTop: 10 }}>
+              {additionalSuggestionsText(hiddenBacklog)}
             </div>
-            <span className="step-chip">{visibleCards} sichtbar · {campaignsView?.summary?.deduped_cards ?? cards.length} priorisiert für {virus}</span>
+          )}
+          <div className="action-row" style={{ marginTop: 16 }}>
+            <button
+              className="media-button"
+              type="button"
+              onClick={() => (focusCard ? onOpenRecommendation(focusCard.id) : onGenerate())}
+              disabled={generationLoading && !focusCard}
+            >
+              {focusCard ? 'Jetzt zuerst prüfen' : (generationLoading ? 'KI erstellt Vorschläge...' : 'Erste Vorschläge erstellen')}
+            </button>
           </div>
+        </div>
 
-          <div className="campaign-focus-panel">
-            <div className="campaign-focus-label">Jetzt zuerst ansehen</div>
-            <div className="campaign-focus-title">{focusTitle}</div>
-            <div className="campaign-focus-context">{focusContext}</div>
-            <p className="campaign-focus-copy">{focusCopy}</p>
-            {hiddenBacklog > 0 && (
-              <div className="campaign-focus-context" style={{ marginTop: 10 }}>
-                {additionalSuggestionsText(hiddenBacklog)}
-              </div>
-            )}
+        <div className="metric-strip">
+          <div className="metric-box">
+            <span>Zu prüfen</span>
+            <strong>{reviewCount}</strong>
           </div>
-
-          <div className="campaign-metric-grid">
-            <div className="campaign-metric-card">
-              <span>Zu prüfen</span>
-              <strong>{reviewCount}</strong>
-              <small>Vorschläge mit offener Prüfung</small>
-            </div>
-            <div className="campaign-metric-card">
-              <span>Zur Freigabe</span>
-              <strong>{approveCount}</strong>
-              <small>Bereit für die Entscheidung</small>
-            </div>
-            <div className="campaign-metric-card">
-              <span>Zur Übergabe</span>
-              <strong>{syncCount}</strong>
-              <small>Für Mediatools vorbereitet</small>
-            </div>
-            <div className="campaign-metric-card">
-              <span>Aktiv oder startklar</span>
-              <strong>{campaignsView?.summary?.publishable_cards ?? 0}</strong>
-              <small>{liveCount} aktiv · {aiTouchedCount} mit {UI_COPY.ai}-Plan</small>
-            </div>
+          <div className="metric-box">
+            <span>Zur Freigabe</span>
+            <strong>{approveCount}</strong>
           </div>
-        </article>
-
-        <aside className="campaign-side-stack">
-          <section className="card campaign-setup-card">
-            <div className="campaign-setup-head">
-              <div>
-                <div className="section-kicker">Generation</div>
-                <h2 className="subsection-title">Neue Vorschläge erstellen</h2>
-              </div>
-              <span className="step-chip">{UI_COPY.ai}</span>
-            </div>
-
-            <div className="campaign-form-grid">
-              <label className="campaign-field">
-                <span>Brand</span>
-                <input className="media-input" value={brand} onChange={(event) => onBrandChange(event.target.value)} />
-              </label>
-              <label className="campaign-field">
-                <span>Wochenbudget</span>
-                <input
-                  className="media-input"
-                  type="number"
-                  value={budget}
-                  onChange={(event) => onBudgetChange(Number(event.target.value || 0))}
-                />
-              </label>
-              <label className="campaign-field campaign-field-wide">
-                <span>Ziel</span>
-                <input className="media-input" value={goal} onChange={(event) => onGoalChange(event.target.value)} />
-              </label>
-            </div>
-
-            <div className="campaign-setup-footer">
-              <div className="campaign-setup-note">
-                Die KI erstellt zuerst den Vorschlag. Freigabe und spätere Übergabe bleiben getrennt.
-              </div>
-              <button className="media-button" type="button" onClick={onGenerate} disabled={generationLoading}>
-                {generationLoading ? 'KI erstellt Vorschläge...' : 'Vorschläge erstellen'}
-              </button>
-            </div>
-          </section>
-
-          <section className="card campaign-guidance-card">
-            <div className="campaign-guidance-row">
-              <span>Prüffokus</span>
-              <strong>{reviewCount + approveCount}</strong>
-            </div>
-            <div className="campaign-guidance-row">
-              <span>Übergabefokus</span>
-              <strong>{syncCount}</strong>
-            </div>
-            <div className="campaign-guidance-row">
-              <span>Priorisiert</span>
-              <strong>{campaignsView?.summary?.deduped_cards ?? cards.length}</strong>
-            </div>
-            <div className="campaign-guidance-row">
-              <span>{UI_COPY.additionalSuggestions}</span>
-              <strong>{hiddenBacklog}</strong>
-            </div>
-            <div className="campaign-guidance-row">
-              <span>Entwürfe</span>
-              <strong>{prepareCount}</strong>
-            </div>
-            <div className="campaign-guidance-row">
-              <span>Learning-State</span>
-              <strong>{learningStateLabel(campaignsView?.summary?.learning_state)}</strong>
-            </div>
-            <div className="campaign-guidance-copy">
-              Wenige starke Vorschläge, klare Zustände und ein direkter Weg zur Freigabe sorgen für Orientierung.
-            </div>
-          </section>
-        </aside>
+          <div className="metric-box">
+            <span>Zur Übergabe</span>
+            <strong>{syncCount}</strong>
+          </div>
+          <div className="metric-box">
+            <span>Aktiv oder startklar</span>
+            <strong>{campaignsView?.summary?.publishable_cards ?? 0}</strong>
+          </div>
+        </div>
       </section>
 
       {loading ? (
@@ -321,6 +256,83 @@ const CampaignStudio: React.FC<Props> = ({
           ))}
         </section>
       )}
+
+      <section className="campaign-support-grid">
+        <section className="card campaign-setup-card campaign-compact-card">
+          <div className="campaign-setup-head">
+            <div>
+              <div className="section-kicker">Generation</div>
+              <h2 className="subsection-title">Neue Vorschläge erstellen</h2>
+            </div>
+            <span className="step-chip">{UI_COPY.ai}</span>
+          </div>
+
+          <div className="campaign-form-grid">
+            <label className="campaign-field">
+              <span>Brand</span>
+              <input className="media-input" value={brand} onChange={(event) => onBrandChange(event.target.value)} />
+            </label>
+            <label className="campaign-field">
+              <span>Wochenbudget</span>
+              <input
+                className="media-input"
+                type="number"
+                value={budget}
+                onChange={(event) => onBudgetChange(Number(event.target.value || 0))}
+              />
+            </label>
+            <label className="campaign-field campaign-field-wide">
+              <span>Ziel</span>
+              <input className="media-input" value={goal} onChange={(event) => onGoalChange(event.target.value)} />
+            </label>
+          </div>
+
+          <div className="campaign-setup-footer">
+            <div className="campaign-setup-note">
+              Die KI erstellt zuerst den Entwurf. Prüfung, Freigabe und Übergabe bleiben bewusst getrennt.
+            </div>
+            <button className="media-button" type="button" onClick={onGenerate} disabled={generationLoading}>
+              {generationLoading ? 'KI erstellt Vorschläge...' : 'Vorschläge erstellen'}
+            </button>
+          </div>
+        </section>
+
+        <section className="card campaign-guidance-card campaign-compact-card">
+          <div className="section-heading" style={{ gap: 6 }}>
+            <h2 className="subsection-title">Systemstand</h2>
+            <p className="subsection-copy">
+              Ein kurzer Überblick, damit du den Arbeitsstapel schnell einschätzen kannst.
+            </p>
+          </div>
+          <div className="campaign-guidance-row">
+            <span>Prüffokus</span>
+            <strong>{reviewCount + approveCount}</strong>
+          </div>
+          <div className="campaign-guidance-row">
+            <span>Übergabefokus</span>
+            <strong>{syncCount}</strong>
+          </div>
+          <div className="campaign-guidance-row">
+            <span>Priorisiert</span>
+            <strong>{campaignsView?.summary?.deduped_cards ?? cards.length}</strong>
+          </div>
+          <div className="campaign-guidance-row">
+            <span>{UI_COPY.additionalSuggestions}</span>
+            <strong>{hiddenBacklog}</strong>
+          </div>
+          <div className="campaign-guidance-row">
+            <span>Entwürfe</span>
+            <strong>{prepareCount}</strong>
+          </div>
+          <div className="campaign-guidance-row">
+            <span>Learning-State</span>
+            <strong>{learningStateLabel(campaignsView?.summary?.learning_state)}</strong>
+          </div>
+          <div className="campaign-guidance-copy">
+            {visibleCards} sichtbar · {campaignsView?.summary?.deduped_cards ?? cards.length} priorisiert für {virus} · {liveCount} aktiv · {aiTouchedCount} mit {UI_COPY.ai}-Plan
+          </div>
+        </section>
+      </section>
     </div>
   );
 };

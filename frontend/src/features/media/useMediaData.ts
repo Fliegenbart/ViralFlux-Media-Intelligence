@@ -467,17 +467,25 @@ function buildNowPageViewModel(
     leadCampaign?.timeline,
     `${primaryCampaignRegionName} · ${stageLabel(leadCampaign?.activation_level || focusStageValue)}`,
   );
-  const primaryCampaignCopy = firstCleanText(
-    uniqueText([
-      ...(leadCampaign?.recommendation_rationale?.why || []),
-      ...(leadCampaign?.recommendation_rationale?.guardrails || []),
-      leadCampaign?.timeline,
-      ...(leadCampaign?.recommendation_rationale?.evidence_notes || []),
-    ].map((item) => cleanCopy(item)), 2).join(' '),
-    topCard?.reason,
-    topCard?.decision_brief?.summary_sentence,
-    'Der nächste prüfbare Kampagnenvorschlag liegt bereit.',
-  );
+  const leadCampaignNarrative = uniqueText([
+    ...(leadCampaign?.recommendation_rationale?.why || []),
+    ...(leadCampaign?.recommendation_rationale?.guardrails || []),
+    leadCampaign?.timeline,
+    ...(leadCampaign?.recommendation_rationale?.evidence_notes || []),
+  ].map((item) => cleanCopy(item)), 2).join(' ');
+  const primaryCampaignCopy = topCard?.id
+    ? firstCleanText(
+      topCard?.decision_brief?.summary_sentence,
+      topCard?.reason,
+      leadCampaignNarrative,
+      'Der nächste prüfbare Kampagnenvorschlag liegt bereit.',
+    )
+    : firstCleanText(
+      leadCampaignNarrative,
+      topCard?.reason,
+      topCard?.decision_brief?.summary_sentence,
+      'Der nächste prüfbare Kampagnenvorschlag liegt bereit.',
+    );
 
   const reasons = uniqueText([
     ...(weeklyDecision?.why_now || []),

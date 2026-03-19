@@ -394,12 +394,12 @@ export const ValidationSection: React.FC<ValidationSectionProps> = ({
         </div>
         {decisionMetrics ? (
           <div className="metric-box">
-            <span>Hit-Rate</span>
+            <span>Trefferquote</span>
             <strong>{formatPercent(decisionMetrics.hit_rate_pct || 0)}</strong>
           </div>
         ) : (
           <div className="metric-box">
-            <span>sMAPE</span>
+            <span>Abweichung (sMAPE)</span>
             <strong>{metrics?.smape != null ? `${metrics.smape.toFixed(1)}%` : '-'}</strong>
           </div>
         )}
@@ -423,7 +423,7 @@ export const ValidationSection: React.FC<ValidationSectionProps> = ({
               <Line yAxisId="left" type="monotone" dataKey="actual" name="Ist" stroke="#0a84ff" strokeWidth={2.5} dot={false} />
               <Line yAxisId="left" type="monotone" dataKey="model" name="Modell" stroke="#5e5ce6" strokeWidth={2.2} dot={false} />
               <Line yAxisId="left" type="monotone" dataKey="seasonal" name="Saison-Baseline" stroke="#ff9f0a" strokeWidth={1.6} dot={false} strokeDasharray="3 3" />
-              <Line yAxisId="left" type="monotone" dataKey="persistence" name="Persistence" stroke="#64748b" strokeWidth={1.4} dot={false} strokeDasharray="3 3" />
+              <Line yAxisId="left" type="monotone" dataKey="persistence" name="Persistenz-Basis" stroke="#64748b" strokeWidth={1.4} dot={false} strokeDasharray="3 3" />
               {hasBio && <Line yAxisId="right" type="monotone" dataKey="bio" name="Bio-Signal" stroke="#7c3aed" strokeWidth={1.8} dot={false} />}
             </ComposedChart>
           </ResponsiveContainer>
@@ -436,7 +436,7 @@ export const ValidationSection: React.FC<ValidationSectionProps> = ({
 
       {(result?.proof_text || result?.llm_insight) && (
         <div className="soft-panel" style={{ padding: 16 }}>
-          <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Interpretation</div>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Einordnung</div>
           <div style={{ marginTop: 6, fontSize: 14, lineHeight: 1.6, color: 'var(--text-secondary)' }}>
             {sanitizeEvidenceCopy(result?.proof_text || result?.llm_insight)}
           </div>

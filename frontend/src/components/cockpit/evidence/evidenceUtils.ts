@@ -84,7 +84,7 @@ export function sanitizeEvidenceCopy(value?: string | null): string {
   const raw = String(value || '').trim();
   if (!raw) return '';
 
-  const normalized = raw
+  let normalized = raw
     .replace(/zukuenftige/g, 'zukünftige')
     .replace(/naechste/g, 'nächste')
     .replace(/naechsten/g, 'nächsten')
@@ -95,23 +95,32 @@ export function sanitizeEvidenceCopy(value?: string | null): string {
     .replace(/\bMARKET_CHECK\b/g, 'Markt-Check')
     .replace(/\bTRUTH_VALIDATION\b/g, 'Kunden-Validierung')
     .replace(/\bFORECAST_MONITORING\b/g, 'Forecast-Monitoring')
-    .replace(/Readiness\b/g, 'Readiness')
+    .replace(/\bReadiness\b/g, 'Einsatzreife')
     .replace(/0T Lead/g, '0 Tage Vorlauf')
     .replace(/Decision-Layer:/g, 'Entscheidungsebene:')
     .replace(/Walk-forward Backtest:/g, 'Walk-forward-Backtest:')
-    .replace(/corr@best/g, 'Korrelation am besten Punkt')
+    .replace(/corr@best/g, 'beste Korrelation')
     .replace(/\bbest_lag\b/g, 'bester Lag')
-    .replace(/\bFalse-Alarms\b/g, 'False-Alarms')
+    .replace(/\bFalse-Alarms\b/g, 'Fehlalarme')
     .replace(/\s+/g, ' ')
     .trim();
 
-  const leadSentence = normalized.match(/^Prognose und Ist-Wert sind effektiv gleichzeitig \(0 Tage Vorlauf\)\./i);
-  if (leadSentence) {
-    return normalized.replace(
+  if (/^Prognose und Ist-Wert sind effektiv gleichzeitig \(0 Tage Vorlauf\)\./i.test(normalized)) {
+    normalized = normalized.replace(
       /^Prognose und Ist-Wert sind effektiv gleichzeitig \(0 Tage Vorlauf\)\./i,
       'Prognose und Ist-Wert liegen aktuell ohne messbaren Vorlauf übereinander.',
     );
   }
+
+  normalized = normalized.replace(
+    /Timing: bester Lag=(\d+) Tage, beste Korrelation=([\d.]+)\./i,
+    (_, lag, correlation) => `Timing: Der beste Vergleich liegt bei ${lag} Tagen Verschiebung, die Korrelation liegt dort bei ${correlation}.`,
+  );
+
+  normalized = normalized.replace(
+    /Einsatzreife Beobachten\./i,
+    'Status Beobachten.',
+  );
 
   return normalized;
 }

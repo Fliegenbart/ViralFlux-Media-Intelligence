@@ -58,15 +58,15 @@ const ForecastMonitoringSection: React.FC<Props> = ({
           </div>
           <div className="metric-strip">
             <div className="metric-box">
-              <span>Readiness</span>
+              <span>Einsatzreife</span>
               <strong>{marketValidation?.decision_metrics?.readiness_score_0_100 != null ? `${Math.round(marketValidation.decision_metrics.readiness_score_0_100)}/100` : '-'}</strong>
             </div>
             <div className="metric-box">
-              <span>Hit-Rate</span>
+              <span>Trefferquote</span>
               <strong>{formatPercent(marketValidation?.decision_metrics?.hit_rate_pct || 0)}</strong>
             </div>
             <div className="metric-box">
-              <span>False Alarms</span>
+              <span>Fehlalarme</span>
               <strong>{formatPercent(marketValidation?.decision_metrics?.false_alarm_rate_pct || 0)}</strong>
             </div>
           </div>
@@ -84,7 +84,7 @@ const ForecastMonitoringSection: React.FC<Props> = ({
           </div>
           <div className="metric-strip">
             <div className="metric-box">
-              <span>Forecast-Gate</span>
+              <span>Freigabe-Gate</span>
               <strong>{readinessGateLabel(forecastMonitoring?.forecast_readiness)}</strong>
             </div>
             <div className="metric-box">
@@ -92,7 +92,7 @@ const ForecastMonitoringSection: React.FC<Props> = ({
               <strong>{monitoringFreshnessLabel(forecastMonitoring?.freshness_status)}</strong>
             </div>
             <div className="metric-box">
-              <span>Accuracy-Fenster</span>
+              <span>Genauigkeitsfenster</span>
               <strong>{monitoringFreshnessLabel(forecastMonitoring?.accuracy_freshness_status)}</strong>
             </div>
           </div>
@@ -162,19 +162,19 @@ const ForecastMonitoringSection: React.FC<Props> = ({
       <section className="card subsection-card" style={{ padding: 24 }}>
         <div className="section-heading">
           <span className="section-kicker">Forecast-Details</span>
-          <h2 className="subsection-title">Monitoring des Produktionsmodells</h2>
+          <h2 className="subsection-title">Stabilität des Produktionsmodells</h2>
           <p className="subsection-copy">
-            Hier sehen Analysten, ob der Forecast nicht nur läuft, sondern auch mathematisch sauber über Accuracy, Vorlaufzeit, Intervalle und Kalibrierung im Zielkorridor bleibt.
+            Hier sehen wir, ob der Forecast nicht nur läuft, sondern auch bei Genauigkeit, Vorlauf, Intervallen und Kalibrierung im Zielkorridor bleibt.
           </p>
         </div>
 
         <div className="metric-strip" style={{ marginTop: 18 }}>
           <div className="metric-box">
-            <span>7T Event</span>
+            <span>7-Tage-Event</span>
             <strong>{formatPercent((forecastMonitoring?.event_forecast?.event_probability || 0) * 100, 1)}</strong>
           </div>
           <div className="metric-box">
-            <span>MAPE</span>
+            <span>Durchschnittsfehler</span>
             <strong>{formatPercent(latestAccuracy?.mape, 1)}</strong>
           </div>
           <div className="metric-box">
@@ -182,8 +182,8 @@ const ForecastMonitoringSection: React.FC<Props> = ({
             <strong>{latestAccuracy?.correlation != null ? formatPercent(latestAccuracy.correlation * 100, 0) : '-'}</strong>
           </div>
           <div className="metric-box">
-            <span>Lead Time</span>
-            <strong>{numberFromUnknown(leadLag.effective_lead_days) != null ? `${numberFromUnknown(leadLag.effective_lead_days)}T` : '-'}</strong>
+            <span>Vorlauf</span>
+            <strong>{numberFromUnknown(leadLag.effective_lead_days) != null ? `${numberFromUnknown(leadLag.effective_lead_days)} Tage` : '-'}</strong>
           </div>
         </div>
 
@@ -217,11 +217,11 @@ const ForecastMonitoringSection: React.FC<Props> = ({
             <strong>{numberFromUnknown(eventCalibration.ece)?.toFixed(3) || '-'}</strong>
           </div>
           <div className="evidence-row">
-            <span>MAE vs Persistence</span>
+            <span>Fehler ggü. Persistenz-Basis</span>
             <strong>{formatSignedPercent(improvementVsBaselines.mae_vs_persistence_pct)}</strong>
           </div>
           <div className="evidence-row">
-            <span>MAE vs Seasonal</span>
+            <span>Fehler ggü. Saison-Basis</span>
             <strong>{formatSignedPercent(improvementVsBaselines.mae_vs_seasonal_pct)}</strong>
           </div>
         </div>

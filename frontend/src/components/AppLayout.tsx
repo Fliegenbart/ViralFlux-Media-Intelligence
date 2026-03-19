@@ -9,18 +9,23 @@ interface Props {
 }
 
 const PRIMARY_NAV_ITEMS = [
-  { label: 'Jetzt', path: '/jetzt', helper: 'Die klare Lage und die nächste Aktion' },
-  { label: 'Regionen', path: '/regionen', helper: 'Regionale Arbeitspakete und Fokusmärkte' },
-  { label: 'Kampagnen', path: '/kampagnen', helper: 'Empfehlungen, Cluster und Assets' },
+  { label: 'Jetzt', path: '/jetzt', helper: 'Die klare Lage und die nächste Aktion', icon: 'bolt' },
+  { label: 'Regionen', path: '/regionen', helper: 'Regionale Arbeitspakete und Fokusmärkte', icon: 'location_on' },
+  { label: 'Kampagnen', path: '/kampagnen', helper: 'Empfehlungen, Cluster und Assets', icon: 'auto_awesome' },
 ] as const;
 
 const UTILITY_NAV_ITEMS = [
-  { label: 'Qualität', path: '/evidenz', helper: 'Datenqualität, Validierung und Readiness' },
-  { label: 'Bericht', path: '/bericht', helper: 'Export und Management-Überblick' },
+  { label: 'Qualität', path: '/evidenz', helper: 'Datenqualität, Validierung und Readiness', icon: 'analytics' },
+  { label: 'Bericht', path: '/bericht', helper: 'Export und Management-Überblick', icon: 'description' },
 ] as const;
 
 const SECONDARY_NAV_ITEMS = [
-  { label: 'Pilotansicht', path: '/pilot', helper: 'Kundentaugliche PEIX / GELO Surface' },
+  { label: 'Pilotansicht', path: '/pilot', helper: 'Kundentaugliche PEIX / GELO Surface', icon: 'travel_explore' },
+] as const;
+
+const HEADER_CONTEXT_TABS = [
+  { label: 'Arbeitslage', path: '/jetzt' },
+  { label: 'Prüfansicht', path: '/evidenz' },
 ] as const;
 
 const SECTION_META = [
@@ -220,18 +225,20 @@ const AppLayout: React.FC<Props> = ({ children }) => {
           aria-label="Operator Navigation"
         >
           <div className="operator-sidebar__brand-row">
-            <div className="operator-sidebar__brand-block">
-              <Link to="/welcome" className="shell-brand operator-shell-brand" aria-label="ViralFlux Startseite">
-                <span className="shell-logo-mark" aria-hidden="true">VF</span>
-                <span className="shell-logo-copy">ViralFlux</span>
-              </Link>
-              <p className="operator-sidebar__brand-copy">Media Intelligence Curator</p>
-            </div>
+            <Link to="/welcome" className="operator-wordmark" aria-label="ViralFlux Startseite">
+              ViralFlux
+            </Link>
           </div>
 
-          <div className="operator-sidebar__section-label">Arbeitsbereich</div>
+          <div className="operator-sidebar__brand-block">
+            <p className="operator-sidebar__brand-copy">Media Intelligence</p>
+            <p className="operator-sidebar__brand-note">
+              Dein Operator-Raum für klare Signale, nächste Schritte und schnelle Prüfung.
+            </p>
+          </div>
+
           <nav className="operator-nav" role="navigation" aria-label="Operator Bereiche">
-            {PRIMARY_NAV_ITEMS.map(({ label, path, helper }) => {
+            {PRIMARY_NAV_ITEMS.map(({ label, path, helper, icon }) => {
               const active = isActive(path);
               return (
                 <button
@@ -239,69 +246,67 @@ const AppLayout: React.FC<Props> = ({ children }) => {
                   onClick={() => handleNavClick(path)}
                   className={`operator-nav-item ${active ? 'active' : ''}`}
                   aria-current={active ? 'page' : undefined}
+                  title={helper}
                 >
+                  <span className="material-symbols-outlined operator-nav-item__icon" aria-hidden="true">{icon}</span>
                   <span className="operator-nav-item__label">{label}</span>
-                  <span className="operator-nav-item__helper">{helper}</span>
                 </button>
               );
             })}
           </nav>
 
-          <div className="operator-sidebar__section-label">Hilfen</div>
-          <div className="operator-nav operator-nav--secondary">
-            {UTILITY_NAV_ITEMS.map(({ label, path, helper }) => {
+          <div className="operator-sidebar__section-label">Mehr</div>
+          <nav className="operator-nav operator-nav--secondary" aria-label="Weitere Bereiche">
+            {[...UTILITY_NAV_ITEMS, ...SECONDARY_NAV_ITEMS].map(({ label, path, helper, icon }) => {
               const active = isActive(path);
               return (
                 <button
                   key={path}
                   onClick={() => handleNavClick(path)}
-                  className={`operator-nav-item operator-nav-item--secondary ${active ? 'active' : ''}`}
+                  className={`operator-nav-item ${active ? 'active' : ''} operator-nav-item--secondary`}
                   aria-current={active ? 'page' : undefined}
+                  title={helper}
                 >
+                  <span className="material-symbols-outlined operator-nav-item__icon" aria-hidden="true">{icon}</span>
                   <span className="operator-nav-item__label">{label}</span>
-                  <span className="operator-nav-item__helper">{helper}</span>
                 </button>
               );
             })}
-          </div>
-
-          <div className="operator-sidebar__section-label">Kundensicht</div>
-          <div className="operator-nav operator-nav--secondary">
-            {SECONDARY_NAV_ITEMS.map(({ label, path, helper }) => {
-              const active = isActive(path);
-              return (
-                <button
-                  key={path}
-                  onClick={() => handleNavClick(path)}
-                  className={`operator-nav-item operator-nav-item--secondary ${active ? 'active' : ''}`}
-                  aria-current={active ? 'page' : undefined}
-                >
-                  <span className="operator-nav-item__label">{label}</span>
-                  <span className="operator-nav-item__helper">{helper}</span>
-                </button>
-              );
-            })}
-          </div>
+          </nav>
 
           <div className="operator-sidebar__rail">
-            <section className="operator-rail-card">
-              <span className="operator-rail-card__kicker">{currentSection.kicker}</span>
-              <strong>{currentSection.title}</strong>
-              <p>{currentSection.description}</p>
-            </section>
-
-            <section className="operator-rail-card operator-rail-card--muted">
-              <span className="operator-rail-card__kicker">Export</span>
+            <section className="operator-status-card">
+              <span className="operator-status-card__kicker">Status</span>
+              <strong>{operatorStatusLabel}</strong>
+              <p>{currentSection.title}</p>
               <button
                 onClick={handlePdfDownload}
                 disabled={pdfLoading}
-                className="media-button operator-report-button"
+                className="operator-status-card__button"
                 aria-busy={pdfLoading}
               >
-                {pdfLoading ? 'Wird erstellt\u2026' : `${UI_COPY.weeklyReport} herunterladen`}
+                {pdfLoading ? 'Wird erstellt...' : 'Bericht exportieren'}
               </button>
-              <p>Der Export zieht die aktuelle Lage in einen managementfähigen PDF-Stand.</p>
             </section>
+
+            <div className="operator-sidebar__footer-links">
+              <button
+                type="button"
+                className="operator-sidebar-link"
+                onClick={() => handleNavClick('/welcome')}
+              >
+                <span className="material-symbols-outlined" aria-hidden="true">home</span>
+                <span>Startseite</span>
+              </button>
+              <button
+                type="button"
+                className="operator-sidebar-link"
+                onClick={handleLogout}
+              >
+                <span className="material-symbols-outlined" aria-hidden="true">logout</span>
+                <span>Abmelden</span>
+              </button>
+            </div>
           </div>
         </aside>
 
@@ -322,49 +327,68 @@ const AppLayout: React.FC<Props> = ({ children }) => {
                 </button>
 
                 <div className="operator-search-shell" aria-label={operatorSearchLabel}>
-                  <span className="operator-search-shell__icon" aria-hidden="true">⌕</span>
-                  <span className="operator-search-shell__text">{operatorSearchLabel}</span>
+                  <span className="material-symbols-outlined operator-search-shell__icon" aria-hidden="true">search</span>
+                  <input
+                    type="search"
+                    className="operator-search-shell__input"
+                    placeholder={`${operatorSearchLabel}...`}
+                    aria-label={operatorSearchLabel}
+                  />
                 </div>
+
+                <nav className="operator-top-tabs" aria-label="Kontextnavigation">
+                  {HEADER_CONTEXT_TABS.map(({ label, path }) => {
+                    const active = isActive(path);
+                    return (
+                      <button
+                        key={path}
+                        type="button"
+                        onClick={() => handleNavClick(path)}
+                        className={`operator-top-tabs__item ${active ? 'active' : ''}`}
+                        aria-current={active ? 'page' : undefined}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                </nav>
               </div>
 
               <div className="operator-header__actions">
-                <span className="operator-header__status-pill">{operatorStatusLabel}</span>
                 <button
-                  onClick={() => handleNavClick('/pilot')}
-                  className="operator-header__link"
+                  onClick={handlePdfDownload}
+                  disabled={pdfLoading}
+                  className="operator-header__primary"
+                  aria-busy={pdfLoading}
                 >
-                  Zur Pilotansicht
+                  {pdfLoading ? 'Wird erstellt...' : UI_COPY.weeklyReport}
+                </button>
+                <button
+                  type="button"
+                  className="operator-icon-button"
+                  aria-label="Benachrichtigungen"
+                >
+                  <span className="material-symbols-outlined" aria-hidden="true">notifications</span>
                 </button>
                 <button
                   onClick={toggle}
-                  className="theme-toggle"
+                  className="operator-icon-button"
                   aria-label={theme === 'dark' ? 'Helles Design aktivieren' : 'Dunkles Design aktivieren'}
                 >
-                  {theme === 'dark' ? '\u2600\uFE0F' : '\uD83C\uDF19'}
+                  <span className="material-symbols-outlined" aria-hidden="true">
+                    {theme === 'dark' ? 'light_mode' : 'dark_mode'}
+                  </span>
                 </button>
                 <button
                   onClick={handleLogout}
-                  className="theme-toggle"
+                  className="operator-profile-pill"
                   aria-label="Abmelden"
                   title="Abmelden"
                 >
-                  {'\u23FB'}
+                  <span className="operator-avatar" aria-hidden="true">VF</span>
+                  <span className="operator-profile-pill__copy">Operator</span>
+                  <span className="material-symbols-outlined" aria-hidden="true">logout</span>
                 </button>
-              </div>
-            </div>
-
-            <div className="operator-header__meta">
-              <button
-                type="button"
-                className="operator-header__status-dot"
-                aria-hidden="true"
-              />
-              <div className="operator-header__copy-block">
-                <div className="operator-header__kicker">{currentSection.kicker}</div>
-                <div className="operator-header__title-row">
-                  <h1 className="operator-header__title">{currentSection.title}</h1>
-                </div>
-                <p className="operator-header__copy">{currentSection.description}</p>
               </div>
             </div>
           </header>

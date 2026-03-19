@@ -18,28 +18,17 @@ interface Props {
 
 const HORIZON_OPTIONS = [3, 5, 7];
 
-function toneStyle(tone: 'success' | 'warning' | 'neutral'): React.CSSProperties {
-  if (tone === 'success') {
-    return {
-      background: 'rgba(5, 150, 105, 0.12)',
-      color: 'var(--status-success)',
-      border: '1px solid rgba(5, 150, 105, 0.22)',
-    };
-  }
+function metricToneClass(tone: 'success' | 'warning' | 'neutral') {
+  if (tone === 'success') return 'now-status-pill now-status-pill--success';
+  if (tone === 'warning') return 'now-status-pill now-status-pill--warning';
+  return 'now-status-pill';
+}
 
-  if (tone === 'warning') {
-    return {
-      background: 'rgba(245, 158, 11, 0.12)',
-      color: 'var(--status-warning)',
-      border: '1px solid rgba(245, 158, 11, 0.24)',
-    };
-  }
-
-  return {
-    background: 'rgba(10, 132, 255, 0.10)',
-    color: 'var(--status-info)',
-    border: '1px solid rgba(10, 132, 255, 0.2)',
-  };
+function extractPercent(value?: string | null): number {
+  if (!value) return 0;
+  const normalized = value.replace(',', '.').replace(/[^\d.]/g, '');
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : 0;
 }
 
 const NowWorkspace: React.FC<Props> = ({
@@ -57,32 +46,77 @@ const NowWorkspace: React.FC<Props> = ({
   const focusRegion = view.focusRegion;
   const primaryMetric = view.metrics[0];
   const leadingReasons = view.reasons.slice(0, 3);
+  const focusProbability = extractPercent(focusRegion?.probabilityLabel);
+
+  const prioritizedRegions = [
+    ...(focusRegion ? [{
+      key: focusRegion.code,
+      rank: '01',
+      name: focusRegion.name,
+      detail: focusRegion.reason,
+      stage: focusRegion.stage,
+      value: focusRegion.probabilityLabel,
+      accent: 'primary',
+      intensity: Math.max(32, Math.min(96, focusProbability || 78)),
+    }] : []),
+    ...view.relatedRegions.slice(0, 2).map((region, index) => ({
+      key: region.code,
+      rank: `0${index + 2}`,
+      name: region.name,
+      detail: region.reason,
+      stage: region.stage,
+      value: region.probabilityLabel,
+      accent: index === 0 ? 'secondary' : 'tertiary',
+      intensity: Math.max(22, Math.min(88, extractPercent(region.probabilityLabel) || (60 - index * 10))),
+    })),
+  ];
+
+  const updateItems = [
+    ...view.quality.slice(0, 3).map((item, index) => ({
+      key: `quality-${index}`,
+      icon: 'verified',
+      title: item.label,
+      body: item.value,
+      meta: 'Qualität',
+    })),
+    ...view.risks.slice(0, 2).map((risk, index) => ({
+      key: `risk-${index}`,
+      icon: 'warning',
+      title: index === 0 ? 'Offener Prüfpunkt' : 'Weiterer Hinweis',
+      body: risk,
+      meta: 'Risiko',
+    })),
+  ];
 
   if (loading && !view.hasData) {
-    return <div className="card" style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>Lade klare Arbeitslage...</div>;
+    return (
+      <div className="card" style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>
+        Lade klare Arbeitslage...
+      </div>
+    );
   }
 
   return (
-    <div className="page-stack">
-      <section className="context-filter-rail now-toolbar">
-        <div className="section-heading">
-          <span className="section-kicker">Jetzt</span>
-          <h1 className="section-title">Klare Lage. Klare nächste Aktion.</h1>
-          <p className="section-copy">
-            Oben steht nur das, was für diese Woche zählt. Begründung, Qualität und Risiken folgen darunter.
+    <div className="page-stack now-template-page">
+      <section className="now-page-header">
+        <div className="now-page-header__copy">
+          <span className="now-page-header__kicker">Live Intelligence Engine</span>
+          <h1 className="now-page-header__title">Klare Lage. Klare nächste Aktion.</h1>
+          <p className="now-page-header__text">
+            {view.summary || 'Oben steht nur das, was für diese Woche wirklich zählt. Details, Qualität und Risiken folgen darunter.'}
           </p>
         </div>
 
-        <div className="now-toolbar__controls">
-          <div className="ops-filter-group">
-            <span className="ops-filter-label">Virus</span>
-            <div className="review-chip-row">
+        <div className="now-page-header__controls">
+          <div className="now-filter-shell">
+            <span className="now-filter-shell__label">Virus</span>
+            <div className="now-filter-shell__chips">
               {VIRUS_OPTIONS.map((option) => (
                 <button
                   key={option}
                   type="button"
                   onClick={() => onVirusChange(option)}
-                  className={`tab-chip ${option === virus ? 'active' : ''}`}
+                  className={`now-filter-chip ${option === virus ? 'active' : ''}`}
                 >
                   {option}
                 </button>
@@ -90,28 +124,26 @@ const NowWorkspace: React.FC<Props> = ({
             </div>
           </div>
 
-          <div className="ops-filter-group">
-            <span className="ops-filter-label">Horizont</span>
-            <div className="review-chip-row">
+          <div className="now-filter-shell">
+            <span className="now-filter-shell__label">Horizont</span>
+            <div className="now-filter-shell__chips">
               {HORIZON_OPTIONS.map((option) => (
                 <button
                   key={option}
                   type="button"
                   onClick={() => onHorizonChange(option)}
-                  className={`tab-chip ${option === horizonDays ? 'active' : ''}`}
+                  className={`now-filter-chip ${option === horizonDays ? 'active' : ''}`}
                 >
                   {option} Tage
                 </button>
               ))}
             </div>
           </div>
-        </div>
 
-        <div className="review-chip-row">
-          <span className="step-chip">Stand {formatDateTime(view.generatedAt)}</span>
-          <button className="media-button secondary" type="button" onClick={onOpenEvidence}>
-            Warum vertrauen wir dem?
-          </button>
+          <div className="now-live-status">
+            <span className="now-live-status__dot" aria-hidden="true" />
+            <span>Stand {formatDateTime(view.generatedAt)}</span>
+          </div>
         </div>
       </section>
 
@@ -128,126 +160,226 @@ const NowWorkspace: React.FC<Props> = ({
         </section>
       ) : (
         <>
-          <section className="card hero-card now-dashboard-hero" style={{ padding: 32 }}>
-            <div className="hero-grid now-hero-grid">
-              <div className="hero-main">
-                <div className="hero-status-row">
-                  <span
-                    style={{
-                      ...toneStyle(primaryMetric?.tone || 'neutral'),
-                      padding: '8px 12px',
-                      borderRadius: 999,
-                      fontSize: 12,
-                      fontWeight: 800,
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.08em',
-                    }}
-                  >
-                    {primaryMetric?.value || 'Arbeitslage'}
-                  </span>
-                  {focusRegion && <span className="campaign-confidence-chip">{focusRegion.stage}</span>}
-                  <span className="campaign-confidence-chip">Fokus {focusRegion?.name || '-'}</span>
-                  <span className="campaign-confidence-chip">Stand {formatDateTime(view.generatedAt)}</span>
-                </div>
-
-                <div className="section-heading" style={{ gap: 12 }}>
-                  <span className="section-kicker">Aktuelle Lage</span>
-                  <h2 className="hero-title">{view.title}</h2>
-                  <p className="hero-context">{view.summary}</p>
-                  <p className="hero-copy">{view.note}</p>
-                </div>
-
-                <div className="action-row">
-                  <button
-                    className="media-button"
-                    type="button"
-                    onClick={() => (
-                      view.primaryRecommendationId
-                        ? onOpenRecommendation(view.primaryRecommendationId)
-                        : onOpenCampaigns()
-                    )}
-                  >
-                    {view.primaryActionLabel}
-                  </button>
-                  <button
-                    className="media-button secondary"
-                    type="button"
-                    onClick={() => onOpenRegions(focusRegion?.code || undefined)}
-                  >
-                    Fokusregion öffnen
-                  </button>
-                  <button className="media-button secondary" type="button" onClick={onOpenEvidence}>
-                    Qualität prüfen
-                  </button>
-                </div>
-
-                <div className="now-proof-strip">
-                  <div className="section-kicker">Wichtigste Gründe</div>
-                  <div className="now-proof-strip__items">
-                    {(leadingReasons.length ? leadingReasons : ['Noch keine Kurzbegründung verfügbar.']).map((reason) => (
-                      <div key={reason} className="soft-panel now-proof-card">
-                        {reason}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              <aside className="soft-panel aside-summary now-focus-card" style={{ padding: 24 }}>
-                <div>
-                  <div className="section-kicker">Fokusregion</div>
-                  <div className="summary-headline">{focusRegion?.name || '-'}</div>
-                  <div className="summary-note">{focusRegion?.reason || 'Noch keine kurze Einordnung verfügbar.'}</div>
-                </div>
-
-                <div className="summary-grid now-focus-card__grid">
-                  <div>
-                    <div className="section-kicker" style={{ marginBottom: 6 }}>Stage</div>
-                    <div className="summary-metric" style={{ fontSize: '1.45rem' }}>{focusRegion?.stage || '-'}</div>
-                  </div>
-                  <div>
-                    <div className="section-kicker" style={{ marginBottom: 6 }}>Produkt</div>
-                    <div className="summary-note" style={{ marginTop: 0 }}>{focusRegion?.product || '-'}</div>
-                  </div>
-                  <div>
-                    <div className="section-kicker" style={{ marginBottom: 6 }}>Wahrscheinlichkeit</div>
-                    <div className="summary-note" style={{ marginTop: 0 }}>{focusRegion?.probabilityLabel || '-'}</div>
-                  </div>
-                  <div>
-                    <div className="section-kicker" style={{ marginBottom: 6 }}>Budget</div>
-                    <div className="summary-note" style={{ marginTop: 0 }}>{focusRegion?.budgetLabel || '-'}</div>
-                  </div>
-                </div>
-
-                <div className="soft-panel now-focus-card__campaign" style={{ padding: 16 }}>
-                  <div className="section-kicker">Nächste Kampagne</div>
-                  <div style={{ marginTop: 8, fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>
-                    {view.primaryCampaignTitle}
-                  </div>
-                  <div style={{ marginTop: 6, fontSize: 13, color: 'var(--text-muted)' }}>
-                    {view.primaryCampaignContext}
-                  </div>
-                  <p className="campaign-focus-copy" style={{ marginTop: 10 }}>
-                    {view.primaryCampaignCopy}
-                  </p>
-                </div>
-              </aside>
-            </div>
-          </section>
-
           <section className="now-metrics-grid">
             {view.metrics.map((metric) => (
               <div className="card now-metric-card" key={metric.label} data-testid="now-metric">
                 <div className="now-metric-card__top">
-                  <span className="now-metric-card__label">{metric.label}</span>
-                  <span
-                    className={`now-metric-card__dot now-metric-card__dot--${metric.tone || 'neutral'}`}
-                    aria-hidden="true"
-                  />
+                  <span className="now-metric-card__icon material-symbols-outlined" aria-hidden="true">
+                    {metric.tone === 'success' ? 'trending_up' : metric.tone === 'warning' ? 'warning' : 'insights'}
+                  </span>
+                  <span className={metricToneClass(metric.tone || 'neutral')}>{metric.value}</span>
                 </div>
+                <span className="now-metric-card__label">{metric.label}</span>
                 <strong>{metric.value}</strong>
               </div>
             ))}
+          </section>
+
+          <section className="now-template-layout">
+            <div className="now-template-main">
+              <section className="card now-spotlight-card">
+                <div className="now-spotlight-card__header">
+                  <div>
+                    <span className="now-section-kicker">Aktuelle Lage</span>
+                    <h2 className="now-spotlight-card__title">{view.title}</h2>
+                    <p className="now-spotlight-card__subtitle">{view.note}</p>
+                  </div>
+
+                  <div className="now-spotlight-card__status">
+                    <span className={metricToneClass(primaryMetric?.tone || 'neutral')}>
+                      {primaryMetric?.value || 'Arbeitslage'}
+                    </span>
+                    <span className="campaign-confidence-chip">{focusRegion?.stage || 'Fokus aktiv'}</span>
+                  </div>
+                </div>
+
+                <div className="now-spotlight-card__badges">
+                  <span className="step-chip">Fokus {focusRegion?.name || '-'}</span>
+                  <span className="step-chip">{focusRegion?.probabilityLabel || '-'}</span>
+                  <span className="step-chip">{focusRegion?.budgetLabel || '-'}</span>
+                  <span className="step-chip">Stand {formatDateTime(view.generatedAt)}</span>
+                </div>
+
+                <div className="now-spotlight-card__content">
+                  <div className="now-spotlight-card__story">
+                    <p className="now-spotlight-card__copy">{view.summary}</p>
+
+                    <div className="action-row">
+                      <button
+                        className="media-button"
+                        type="button"
+                        onClick={() => (
+                          view.primaryRecommendationId
+                            ? onOpenRecommendation(view.primaryRecommendationId)
+                            : onOpenCampaigns()
+                        )}
+                      >
+                        {view.primaryActionLabel}
+                      </button>
+                      <button className="media-button secondary" type="button" onClick={onOpenEvidence}>
+                        Warum vertrauen wir dem?
+                      </button>
+                      <button
+                        className="media-button secondary"
+                        type="button"
+                        onClick={() => onOpenRegions(focusRegion?.code || undefined)}
+                      >
+                        Fokusregion öffnen
+                      </button>
+                    </div>
+
+                    <div className="now-proof-strip">
+                      <div className="section-kicker">Wichtigste Gründe</div>
+                      <div className="now-proof-strip__items">
+                        {(leadingReasons.length ? leadingReasons : ['Noch keine Kurzbegründung verfügbar.']).map((reason) => (
+                          <div key={reason} className="soft-panel now-proof-card">
+                            {reason}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  <aside className="soft-panel now-focus-panel">
+                    <div>
+                      <div className="section-kicker">Fokusregion</div>
+                      <div className="summary-headline">{focusRegion?.name || '-'}</div>
+                      <div className="summary-note">{focusRegion?.reason || 'Noch keine kurze Einordnung verfügbar.'}</div>
+                    </div>
+
+                    <div className="now-focus-panel__grid">
+                      <div>
+                        <div className="section-kicker">Stage</div>
+                        <div className="summary-metric">{focusRegion?.stage || '-'}</div>
+                      </div>
+                      <div>
+                        <div className="section-kicker">Produkt</div>
+                        <div className="summary-note">{focusRegion?.product || '-'}</div>
+                      </div>
+                      <div>
+                        <div className="section-kicker">Wahrscheinlichkeit</div>
+                        <div className="summary-note">{focusRegion?.probabilityLabel || '-'}</div>
+                      </div>
+                      <div>
+                        <div className="section-kicker">Budget</div>
+                        <div className="summary-note">{focusRegion?.budgetLabel || '-'}</div>
+                      </div>
+                    </div>
+
+                    <div className="soft-panel now-focus-panel__campaign">
+                      <div className="section-kicker">Nächste Kampagne</div>
+                      <div className="now-focus-panel__campaign-title">{view.primaryCampaignTitle}</div>
+                      <div className="summary-note">{view.primaryCampaignContext}</div>
+                      <p className="campaign-focus-copy">{view.primaryCampaignCopy}</p>
+                    </div>
+                  </aside>
+                </div>
+              </section>
+
+              <section className="now-priority-section">
+                <div className="now-priority-section__header">
+                  <h3>Priorisierte Regionen</h3>
+                  <button className="now-inline-link" type="button" onClick={() => onOpenRegions()}>
+                    Vollständige Analyse
+                  </button>
+                </div>
+
+                <div className="now-priority-list">
+                  {(prioritizedRegions.length ? prioritizedRegions : [{
+                    key: 'placeholder',
+                    rank: '01',
+                    name: 'Noch keine priorisierte Region',
+                    detail: 'Sobald eine klare Fokusregion vorliegt, erscheint sie hier im Dashboard.',
+                    stage: 'Offen',
+                    value: '-',
+                    accent: 'primary',
+                    intensity: 24,
+                  }]).map((item) => (
+                    <button
+                      type="button"
+                      key={item.key}
+                      className="card now-priority-card"
+                      onClick={() => onOpenRegions(item.key && item.key !== 'placeholder' ? String(item.key) : undefined)}
+                    >
+                      <div className="now-priority-card__rank">{item.rank}</div>
+                      <div className="now-priority-card__copy">
+                        <h4>{item.name}</h4>
+                        <p>{item.detail}</p>
+                      </div>
+                      <div className="now-priority-card__bars" aria-hidden="true">
+                        {[0.42, 0.6, 0.34, 0.76, 0.92, item.intensity / 100].map((value, index) => (
+                          <span
+                            key={`${item.key}-${index}`}
+                            className={`now-priority-card__bar now-priority-card__bar--${item.accent}`}
+                            style={{ height: `${Math.max(22, Math.round(value * 48))}px` }}
+                          />
+                        ))}
+                      </div>
+                      <div className="now-priority-card__meta">
+                        <strong>{item.value}</strong>
+                        <span>{item.stage}</span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </section>
+
+              <section className="now-map-card">
+                <div className="now-map-card__content">
+                  <h3>Regionale Dynamik</h3>
+                  <p>
+                    Diese Fläche ersetzt das Demo-Monitoring der Vorlage durch eine klare Operator-Sicht auf Fokusregion, Bewegung und nächsten Schritt.
+                  </p>
+                  <button
+                    className="now-map-card__button"
+                    type="button"
+                    onClick={() => onOpenRegions(focusRegion?.code ? String(focusRegion.code) : undefined)}
+                  >
+                    Regionen öffnen
+                  </button>
+                </div>
+                <div className="now-map-card__visual" aria-hidden="true">
+                  <span style={{ height: 92 }} />
+                  <span style={{ height: 148 }} />
+                  <span style={{ height: 118 }} />
+                  <span style={{ height: 176 }} />
+                </div>
+              </section>
+            </div>
+
+            <aside className="card now-live-feed">
+              <div className="now-live-feed__header">
+                <h3>Aktuelle Prüfhinweise</h3>
+                <span className="now-live-feed__badge">Realtime</span>
+              </div>
+
+              <div className="now-live-feed__items">
+                {(updateItems.length ? updateItems : [{
+                  key: 'empty',
+                  icon: 'info',
+                  title: 'Noch keine Hinweise',
+                  body: 'Sobald neue Qualitäts- oder Risiko-Hinweise vorliegen, erscheinen sie hier.',
+                  meta: 'Status',
+                }]).map((item, index) => (
+                  <div key={item.key} className={`now-live-feed__item ${index > 0 ? 'now-live-feed__item--muted' : ''}`}>
+                    <div className="now-live-feed__avatar">
+                      <span className="material-symbols-outlined" aria-hidden="true">{item.icon}</span>
+                    </div>
+                    <div className="now-live-feed__copy">
+                      <div className="now-live-feed__item-top">
+                        <strong>{item.title}</strong>
+                        <span>{item.meta}</span>
+                      </div>
+                      <p>{item.body}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <button className="now-live-feed__button" type="button" onClick={onOpenEvidence}>
+                Alle Qualitätsdetails ansehen
+              </button>
+            </aside>
           </section>
 
           <section className="now-secondary-grid">

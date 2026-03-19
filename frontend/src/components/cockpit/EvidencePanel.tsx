@@ -77,7 +77,11 @@ const EvidencePanel: React.FC<Props> = ({
   const [activeTab, setActiveTab] = useState<string>('forecast');
 
   if (loading && !evidence) {
-    return <div className="card" style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>Lade Evidenz...</div>;
+    return (
+      <div className="card" style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>
+        Lade Evidenz...
+      </div>
+    );
   }
 
   const TABS = [
@@ -86,26 +90,31 @@ const EvidencePanel: React.FC<Props> = ({
       label: 'Forecast',
       kicker: 'Monitoring',
       description: 'Produktionsmodell, Markt-Check und die Frage, ob der Forecast aktuell stabil genug ist.',
+      icon: 'insights',
     },
     {
       key: 'truth',
       label: 'Kundendaten',
       kicker: 'Outcome',
       description: 'CSV-Import, Business-Gate und beobachtete Wirkung statt nur Forecast und Ranking.',
+      icon: 'check_circle',
     },
     {
       key: 'sources',
       label: 'Datenquellen',
       kicker: 'Stack',
       description: 'Frische, Quellenstatus und Modellhistorie für den epidemiologischen Kern.',
+      icon: 'hub',
     },
     {
       key: 'import',
       label: 'Import',
       kicker: 'Batches',
       description: 'Neue Kundendaten prüfen, Uploads nachvollziehen und Probleme in einer Spur sehen.',
+      icon: 'upload_file',
     },
   ] as const;
+
   const activeTabMeta = TABS.find(({ key }) => key === activeTab) || TABS[0];
   const sourceAttentionCount = sourceItems.filter((item) => String(item.status_color || '').toLowerCase() !== 'green').length;
   const latestImportStatus = truthBatchDetail?.batch?.status
@@ -135,34 +144,65 @@ const EvidencePanel: React.FC<Props> = ({
     },
   ];
 
+  const railSignals = [
+    {
+      label: 'Forecast',
+      value: monitoringStatusLabel(forecastMonitoring?.monitoring_status),
+      icon: 'monitoring',
+    },
+    {
+      label: UI_COPY.customerData,
+      value: truthLayerLabel(truthStatus || latestCustomer),
+      icon: 'dataset',
+    },
+    {
+      label: 'Drift',
+      value: modelLineage?.drift_state || '-',
+      icon: 'timeline',
+    },
+  ];
+
+  const sourceFocus = sourceItems.slice(0, 4);
+  const runPreview = recentRuns.slice(0, 3);
+
   return (
-    <div className="page-stack evidence-page-shell">
-      <section className="context-filter-rail evidence-toolbar">
-        <div className="section-heading">
-          <span className="section-kicker">Evidenz</span>
-          <h1 className="section-title">Warum wir dieser Woche vertrauen</h1>
-          <p className="section-copy">
-            Diese Seite ist bewusst eine Analyse- und Prüfstrecke. Links wählen wir die Spur, rechts prüfen wir Forecast, Datenquellen und Kundendaten im Detail.
+    <div className="page-stack evidence-template-page">
+      <section className="evidence-page-header">
+        <div className="evidence-page-header__copy">
+          <span className="evidence-page-header__kicker">Media Intelligence</span>
+          <h1 className="evidence-page-header__title">Warum wir dieser Woche vertrauen</h1>
+          <p className="evidence-page-header__text">
+            Diese Ansicht bleibt bewusst eine Analyse- und Prüfstrecke. Links liegt der Kontext, rechts die eigentliche Arbeitsfläche.
           </p>
         </div>
-        <div className="review-chip-row">
-          <span className="step-chip">Forecast: {forecastMonitoring?.monitoring_status || '-'}</span>
-          <span className="step-chip">{UI_COPY.customerData}: {truthLayerLabel(truthStatus || latestCustomer)}</span>
-          <span className="step-chip">Drift: {modelLineage?.drift_state || '-'}</span>
-          <span className="step-chip">Aktive Spur: {activeTabMeta.label}</span>
+
+        <div className="evidence-page-header__switch">
+          {TABS.map(({ key, label, icon }) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setActiveTab(key)}
+              className={`evidence-switch-chip ${activeTab === key ? 'active' : ''}`}
+            >
+              <span className="material-symbols-outlined" aria-hidden="true">{icon}</span>
+              <span>{label}</span>
+            </button>
+          ))}
         </div>
       </section>
 
-      <section className="evidence-analysis-layout">
-        <aside className="card evidence-analysis-sidebar" style={{ padding: 24 }}>
-          <div className="section-heading" style={{ gap: 6 }}>
-            <span className="section-kicker">Analysepfade</span>
-            <h2 className="subsection-title">Wo wir prüfen</h2>
-            <p className="subsection-copy">{activeTabMeta.description}</p>
+      <section className="evidence-template-layout">
+        <aside className="evidence-filter-rail">
+          <div className="evidence-filter-rail__block">
+            <h3>
+              <span className="material-symbols-outlined" aria-hidden="true">filter_list</span>
+              Analysepfade
+            </h3>
+            <p>Der linke Bereich ersetzt die Social-Demo der Vorlage durch echte ViralFlux-Prüfpfade.</p>
           </div>
 
-          <div className="evidence-sidebar__tab-list" role="tablist" aria-label="Evidenz-Bereiche">
-            {TABS.map(({ key, label, kicker, description }) => (
+          <div className="evidence-filter-rail__tabs" role="tablist" aria-label="Evidenz-Bereiche">
+            {TABS.map(({ key, label, kicker, description, icon }) => (
               <button
                 key={key}
                 type="button"
@@ -171,6 +211,7 @@ const EvidencePanel: React.FC<Props> = ({
                 className={`evidence-sidebar-tab ${activeTab === key ? 'active' : ''}`}
                 onClick={() => setActiveTab(key)}
               >
+                <span className="evidence-sidebar-tab__icon material-symbols-outlined" aria-hidden="true">{icon}</span>
                 <span className="evidence-sidebar-tab__kicker">{kicker}</span>
                 <strong>{label}</strong>
                 <small>{description}</small>
@@ -178,25 +219,40 @@ const EvidencePanel: React.FC<Props> = ({
             ))}
           </div>
 
-          <div className="evidence-sidebar__summary">
-            <div className="soft-panel evidence-sidebar__note">
-              <div className="section-kicker">Aktuell</div>
-              <strong>{activeTabMeta.label}</strong>
-              <p>{activeTabMeta.description}</p>
+          <div className="evidence-filter-rail__block">
+            <span className="evidence-filter-rail__label">Systemstatus</span>
+            <div className="evidence-status-list">
+              {railSignals.map((item) => (
+                <div key={item.label} className="evidence-status-row">
+                  <span className="evidence-status-row__icon material-symbols-outlined" aria-hidden="true">{item.icon}</span>
+                  <div>
+                    <strong>{item.label}</strong>
+                    <p>{item.value}</p>
+                  </div>
+                </div>
+              ))}
             </div>
-            <div className="soft-panel evidence-sidebar__note">
-              <div className="section-kicker">Kundendaten</div>
-              <strong>{truthLayerLabel(truthStatus || latestCustomer)}</strong>
-              <p>
-                {truthStatus?.coverage_weeks != null
-                  ? `${truthStatus.coverage_weeks} Wochen Coverage verbunden.`
-                  : 'Noch keine belastbare Kundendaten-Coverage verbunden.'}
-              </p>
+          </div>
+
+          <div className="evidence-filter-rail__block">
+            <span className="evidence-filter-rail__label">Quellenfokus</span>
+            <div className="evidence-source-pills">
+              {(sourceFocus.length ? sourceFocus : [{ source_key: 'none', label: 'Noch keine Quelle', freshness_state: 'offen' }]).map((item) => (
+                <span key={item.source_key} className="evidence-source-pill">
+                  {item.label} · {item.freshness_state}
+                </span>
+              ))}
             </div>
+          </div>
+
+          <div className="evidence-brief-card">
+            <span className="material-symbols-outlined" aria-hidden="true">auto_awesome</span>
+            <h4>Kurzbriefing</h4>
+            <p>{activeTabMeta.description}</p>
           </div>
         </aside>
 
-        <div className="evidence-analysis-main">
+        <div className="evidence-template-main">
           <section className="evidence-overview-grid">
             {overviewCards.map((card) => (
               <div key={card.label} className="card evidence-overview-card" style={{ padding: 22 }}>
@@ -207,61 +263,109 @@ const EvidencePanel: React.FC<Props> = ({
             ))}
           </section>
 
-          <div className="evidence-analysis-content">
-            {activeTab === 'forecast' && (
-              <ForecastMonitoringSection
-                forecastMonitoring={forecastMonitoring}
-                modelLineage={modelLineage}
-                latestAccuracy={latestAccuracy}
-                latestBacktest={latestBacktest}
-                intervalCoverage={intervalCoverage}
-                eventCalibration={eventCalibration}
-                leadLag={leadLag}
-                improvementVsBaselines={improvementVsBaselines}
-                marketValidation={marketValidation}
-                marketValidationLoading={marketValidationLoading}
-                customerValidation={customerValidation}
-                customerValidationLoading={customerValidationLoading}
-                legacyCustomer={legacyCustomer}
-                truthStatus={truthStatus}
-              />
-            )}
+          <section className="card evidence-primary-stage">
+            <div className="evidence-primary-stage__header">
+              <div>
+                <span className="section-kicker">{activeTabMeta.kicker}</span>
+                <h2>{activeTabMeta.label} im Detail</h2>
+                <p>{activeTabMeta.description}</p>
+              </div>
+              <div className="evidence-primary-stage__chips">
+                <span className="step-chip">Forecast: {forecastMonitoring?.monitoring_status || '-'}</span>
+                <span className="step-chip">{UI_COPY.customerData}: {truthLayerLabel(truthStatus || latestCustomer)}</span>
+                <span className="step-chip">Import: {latestImportStatus}</span>
+              </div>
+            </div>
 
-            {activeTab === 'truth' && (
-              <TruthOutcomeSection
-                truthStatus={truthStatus}
-                truthGate={truthGate}
-                businessValidation={businessValidation}
-                outcomeLearning={outcomeLearning}
-                legacyCustomer={legacyCustomer}
-                sourceStatusLabels={sourceStatusLabels}
-              />
-            )}
+            <div className="evidence-analysis-content">
+              {activeTab === 'forecast' && (
+                <ForecastMonitoringSection
+                  forecastMonitoring={forecastMonitoring}
+                  modelLineage={modelLineage}
+                  latestAccuracy={latestAccuracy}
+                  latestBacktest={latestBacktest}
+                  intervalCoverage={intervalCoverage}
+                  eventCalibration={eventCalibration}
+                  leadLag={leadLag}
+                  improvementVsBaselines={improvementVsBaselines}
+                  marketValidation={marketValidation}
+                  marketValidationLoading={marketValidationLoading}
+                  customerValidation={customerValidation}
+                  customerValidationLoading={customerValidationLoading}
+                  legacyCustomer={legacyCustomer}
+                  truthStatus={truthStatus}
+                />
+              )}
 
-            {activeTab === 'sources' && (
-              <SourceFreshnessSection
-                evidence={evidence}
-                sourceItems={sourceItems}
-                signalStack={signalStack}
-                driverGroups={driverGroups}
-                modelLineage={modelLineage}
-                recentRuns={recentRuns}
-                truthSnapshot={truthSnapshot}
-              />
-            )}
+              {activeTab === 'truth' && (
+                <TruthOutcomeSection
+                  truthStatus={truthStatus}
+                  truthGate={truthGate}
+                  businessValidation={businessValidation}
+                  outcomeLearning={outcomeLearning}
+                  legacyCustomer={legacyCustomer}
+                  sourceStatusLabels={sourceStatusLabels}
+                />
+              )}
 
-            {activeTab === 'import' && (
-              <ImportValidationSection
-                truthSnapshot={truthSnapshot}
-                truthPreview={truthPreview}
-                truthBatchDetail={truthBatchDetail}
-                truthActionLoading={truthActionLoading}
-                truthBatchDetailLoading={truthBatchDetailLoading}
-                onSubmitTruthCsv={onSubmitTruthCsv}
-                onLoadTruthBatchDetail={onLoadTruthBatchDetail}
-              />
-            )}
-          </div>
+              {activeTab === 'sources' && (
+                <SourceFreshnessSection
+                  evidence={evidence}
+                  sourceItems={sourceItems}
+                  signalStack={signalStack}
+                  driverGroups={driverGroups}
+                  modelLineage={modelLineage}
+                  recentRuns={recentRuns}
+                  truthSnapshot={truthSnapshot}
+                />
+              )}
+
+              {activeTab === 'import' && (
+                <ImportValidationSection
+                  truthSnapshot={truthSnapshot}
+                  truthPreview={truthPreview}
+                  truthBatchDetail={truthBatchDetail}
+                  truthActionLoading={truthActionLoading}
+                  truthBatchDetailLoading={truthBatchDetailLoading}
+                  onSubmitTruthCsv={onSubmitTruthCsv}
+                  onLoadTruthBatchDetail={onLoadTruthBatchDetail}
+                />
+              )}
+            </div>
+          </section>
+
+          <section className="evidence-support-grid">
+            <div className="card evidence-support-card">
+              <div className="section-kicker">Signal-Stack</div>
+              <h3>Worauf der aktuelle Pfad gerade schaut</h3>
+              <div className="evidence-source-pills">
+                {(sourceStatusLabels.length ? sourceStatusLabels : ['Noch keine markierten Felder vorhanden.']).slice(0, 6).map((item) => (
+                  <span key={item} className="evidence-source-pill">{item}</span>
+                ))}
+              </div>
+              <p>
+                {signalStack?.summary?.decision_mode_reason || 'Der Stack zeigt hier die Felder und Spuren, die für die aktuelle Prüfung gerade am wichtigsten sind.'}
+              </p>
+            </div>
+
+            <div className="card evidence-support-card">
+              <div className="section-kicker">Letzte Läufe</div>
+              <h3>Welche Runs zuletzt auffällig waren</h3>
+              <div className="evidence-support-card__list">
+                {runPreview.length > 0 ? runPreview.map((run, index) => (
+                  <div key={`${String(run.mode)}-${index}`} className="evidence-row">
+                    <span>{String(run.mode || 'Run')}</span>
+                    <strong>{String(run.status || '-')}</strong>
+                  </div>
+                )) : (
+                  <div className="evidence-row">
+                    <span>Historie</span>
+                    <strong>Noch keine Laufhistorie vorhanden</strong>
+                  </div>
+                )}
+              </div>
+            </div>
+          </section>
         </div>
       </section>
     </div>

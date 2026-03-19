@@ -8,6 +8,7 @@ interface LoginPageProps {
 const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(true);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -27,146 +28,148 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
   };
 
   return (
-    <div
-      style={{
-        minHeight: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: 'var(--bg-primary, #f8fafc)',
-      }}
-    >
-      <form
-        onSubmit={handleSubmit}
-        style={{
-          width: '100%',
-          maxWidth: 380,
-          padding: 32,
-          borderRadius: 12,
-          background: 'var(--bg-secondary, #fff)',
-          border: '1px solid var(--border-color, #e2e8f0)',
-          boxShadow: '0 4px 24px rgba(0,0,0,0.08)',
-        }}
-      >
-        <h1
-          style={{
-            fontSize: 20,
-            fontWeight: 700,
-            marginBottom: 8,
-            color: 'var(--text-primary, #1e293b)',
-          }}
-        >
-          ViralFlux
-        </h1>
-        <p
-          style={{
-            fontSize: 13,
-            color: 'var(--text-muted, #64748b)',
-            marginBottom: 24,
-          }}
-        >
-          Media Intelligence Login
-        </p>
+    <div className="login-page">
+      <div className="login-grid-pattern" aria-hidden="true" />
+      <div className="login-page__glow login-page__glow--left" aria-hidden="true" />
+      <div className="login-page__glow login-page__glow--right" aria-hidden="true" />
 
-        {error && (
-          <div
-            role="alert"
-            style={{
-              padding: '10px 14px',
-              borderRadius: 8,
-              background: 'var(--status-danger-bg, rgba(239,68,68,0.08))',
-              color: 'var(--status-danger, #dc2626)',
-              fontSize: 13,
-              marginBottom: 16,
-              border: '1px solid var(--status-danger-border, rgba(239,68,68,0.2))',
-            }}
-          >
-            {error}
+      <div className="login-page__inner">
+        <section className="login-brand-panel" aria-label="ViralFlux Einordnung">
+          <div className="login-brand-panel__brand">
+            <span className="login-brand-panel__wordmark">ViralFlux</span>
+            <p className="login-brand-panel__subtitle">Media Intelligence Curator</p>
           </div>
-        )}
 
-        <label
-          htmlFor="login-email"
-          style={{
-            display: 'block',
-            fontSize: 13,
-            fontWeight: 500,
-            marginBottom: 8,
-            color: 'var(--text-secondary, #475569)',
-          }}
-        >
-          E-Mail
-        </label>
-        <input
-          id="login-email"
-          type="email"
-          required
-          autoComplete="username"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          style={{
-            width: '100%',
-            padding: '8px 12px',
-            borderRadius: 8,
-            border: '1px solid var(--border-color, #e2e8f0)',
-            fontSize: 14,
-            marginBottom: 16,
-            background: 'var(--bg-primary, #f8fafc)',
-            color: 'var(--text-primary, #1e293b)',
-            boxSizing: 'border-box',
-          }}
-        />
+          <div className="login-brand-panel__copy">
+            <h1 className="login-brand-panel__headline">
+              Transformiere Komplexität in <span>klare Entscheidungen.</span>
+            </h1>
+            <p className="login-brand-panel__text">
+              Relevante Signale, klare Prioritäten und ein ruhiger Operator-Raum für Entscheidungen mit Substanz.
+            </p>
+          </div>
 
-        <label
-          htmlFor="login-password"
-          style={{
-            display: 'block',
-            fontSize: 13,
-            fontWeight: 500,
-            marginBottom: 8,
-            color: 'var(--text-secondary, #475569)',
-          }}
-        >
-          Passwort
-        </label>
-        <input
-          id="login-password"
-          type="password"
-          required
-          autoComplete="current-password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          style={{
-            width: '100%',
-            padding: '8px 12px',
-            borderRadius: 8,
-            border: '1px solid var(--border-color, #e2e8f0)',
-            fontSize: 14,
-            marginBottom: 24,
-            background: 'var(--bg-primary, #f8fafc)',
-            color: 'var(--text-primary, #1e293b)',
-            boxSizing: 'border-box',
-          }}
-        />
+          <div className="login-live-pill">
+            <span className="login-live-pill__pulse" aria-hidden="true" />
+            <span>Live Intelligence Active</span>
+          </div>
+        </section>
 
-        <button
-          type="submit"
-          disabled={loading}
-          style={{
-            width: '100%',
-            padding: '12px 18px',
-            borderRadius: 8,
-            border: 'none',
-            background: loading ? 'var(--text-muted, #94a3b8)' : 'var(--color-primary, #4338ca)',
-            color: '#fff',
-            fontSize: 14,
-            fontWeight: 600,
-            cursor: loading ? 'not-allowed' : 'pointer',
-          }}
-        >
-          {loading ? 'Anmelden...' : 'Anmelden'}
-        </button>
-      </form>
+        <section className="login-card-shell">
+          <div className="login-card">
+            <div className="login-card__mobile-brand">ViralFlux</div>
+
+            <header className="login-card__header">
+              <h2>Willkommen zurück</h2>
+              <p>Bitte gib deine Zugangsdaten ein.</p>
+            </header>
+
+            <form className="login-form" onSubmit={handleSubmit}>
+              {error && (
+                <div role="alert" className="login-error">
+                  <span className="material-symbols-outlined" aria-hidden="true">error</span>
+                  <span>{error}</span>
+                </div>
+              )}
+
+              <label className="login-field">
+                <span className="login-field__label">E-Mail Adresse</span>
+                <span className="login-input-shell">
+                  <span className="material-symbols-outlined login-input-shell__icon" aria-hidden="true">alternate_email</span>
+                  <input
+                    id="login-email"
+                    type="email"
+                    required
+                    autoComplete="username"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="name@firma.de"
+                    className="login-input"
+                  />
+                </span>
+              </label>
+
+              <label className="login-field">
+                <span className="login-field__label-row">
+                  <span className="login-field__label">Passwort</span>
+                  <button
+                    type="button"
+                    className="login-inline-link login-inline-link--disabled"
+                    disabled
+                    title="Passwort-Reset ist noch nicht aktiviert."
+                  >
+                    Passwort vergessen?
+                  </button>
+                </span>
+                <span className="login-input-shell">
+                  <span className="material-symbols-outlined login-input-shell__icon" aria-hidden="true">lock</span>
+                  <input
+                    id="login-password"
+                    type="password"
+                    required
+                    autoComplete="current-password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className="login-input"
+                  />
+                </span>
+              </label>
+
+              <label className="login-checkbox">
+                <input
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                />
+                <span>Angemeldet bleiben</span>
+              </label>
+
+              <button type="submit" disabled={loading} className="login-submit">
+                <span>{loading ? 'Anmelden...' : 'Anmelden'}</span>
+                <span className="material-symbols-outlined" aria-hidden="true">login</span>
+              </button>
+
+              <div className="login-divider">
+                <span>Oder SSO nutzen</span>
+              </div>
+
+              <div className="login-sso-grid" aria-label="SSO Platzhalter">
+                <button
+                  type="button"
+                  className="login-sso-button"
+                  disabled
+                  title="Google SSO ist in diesem Schritt noch nicht aktiv."
+                >
+                  <span className="login-sso-button__badge">G</span>
+                  <span>Google</span>
+                </button>
+                <button
+                  type="button"
+                  className="login-sso-button"
+                  disabled
+                  title="Azure AD ist in diesem Schritt noch nicht aktiv."
+                >
+                  <span className="material-symbols-outlined" aria-hidden="true">corporate_fare</span>
+                  <span>Azure AD</span>
+                </button>
+              </div>
+            </form>
+
+            <footer className="login-card__footer">
+              <p>
+                Noch kein Konto? <span>Bitte intern freischalten lassen.</span>
+              </p>
+            </footer>
+          </div>
+        </section>
+      </div>
+
+      <div className="login-footer-links" aria-label="Rechtliche Hinweise">
+        <button type="button" disabled>Datenschutz</button>
+        <button type="button" disabled>Impressum</button>
+        <button type="button" disabled>Systemstatus</button>
+      </div>
     </div>
   );
 };

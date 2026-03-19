@@ -92,6 +92,214 @@ function uniqueText(values: Array<string | null | undefined>, limit = 4): string
     .slice(0, limit);
 }
 
+function localizedNumber(value: number, digits = 1): string {
+  return new Intl.NumberFormat('de-DE', {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  }).format(value);
+}
+
+function percentFromModelValue(raw: string): string {
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed)) return raw;
+  const percentage = parsed <= 1 ? parsed * 100 : parsed;
+  const digits = percentage >= 10 ? 0 : 1;
+  return `${localizedNumber(percentage, digits)} %`;
+}
+
+function replaceGermanAscii(value: string): string {
+  return value
+    .replace(/fuehrt/g, 'führt')
+    .replace(/Fuehrt/g, 'Führt')
+    .replace(/fuer/g, 'für')
+    .replace(/Fuer/g, 'Für')
+    .replace(/pruefbare/g, 'prüfbare')
+    .replace(/Pruefbare/g, 'Prüfbare')
+    .replace(/pruefbar/g, 'prüfbar')
+    .replace(/Pruefbar/g, 'Prüfbar')
+    .replace(/Pruefung/g, 'Prüfung')
+    .replace(/pruefung/g, 'prüfung')
+    .replace(/Vorschlaege/g, 'Vorschläge')
+    .replace(/vorschlaege/g, 'vorschläge')
+    .replace(/naechsten/g, 'nächsten')
+    .replace(/Naechsten/g, 'Nächsten')
+    .replace(/naechste/g, 'nächste')
+    .replace(/Naechste/g, 'Nächste')
+    .replace(/naechster/g, 'nächster')
+    .replace(/Naechster/g, 'Nächster')
+    .replace(/freigabefaehigen/g, 'freigabefähigen')
+    .replace(/Freigabefaehigen/g, 'Freigabefähigen')
+    .replace(/faehigen/g, 'fähigen')
+    .replace(/Faehigen/g, 'Fähigen')
+    .replace(/zukuenftige/g, 'zukünftige')
+    .replace(/Zukuenftige/g, 'Zukünftige')
+    .replace(/ueber/g, 'über')
+    .replace(/Ueber/g, 'Über');
+}
+
+function cleanCopy(value?: string | null): string {
+  const raw = replaceGermanAscii(String(value || '').trim());
+  if (!raw) return '';
+
+  const normalized = raw.replace(/\s+/g, ' ').trim();
+
+  const stageWatchMatch = normalized.match(/^(.+?) stays on Watch with budget share ([\d.]+)%\.$/i);
+  if (stageWatchMatch) {
+    return `${stageWatchMatch[1]} bleibt vorerst im Beobachtungsmodus.`;
+  }
+
+  const activationThresholdMatch = normalized.match(
+    /^Event probability ([\d.]+) clears the Activate threshold ([\d.]+)\.$/i,
+  );
+  if (activationThresholdMatch) {
+    return `Die Event-Wahrscheinlichkeit von ${percentFromModelValue(activationThresholdMatch[1])} liegt über der Aktivierungsschwelle von ${percentFromModelValue(activationThresholdMatch[2])}.`;
+  }
+
+  const prepareThresholdMatch = normalized.match(
+    /^Event probability ([\d.]+) clears the Prepare threshold ([\d.]+), but not all Activate conditions are met\.$/i,
+  );
+  if (prepareThresholdMatch) {
+    return `Die Event-Wahrscheinlichkeit von ${percentFromModelValue(prepareThresholdMatch[1])} spricht für Vorbereitung, aber noch nicht für eine volle Aktivierung.`;
+  }
+
+  const belowThresholdMatch = normalized.match(
+    /^Event probability ([\d.]+) stays below the rule set needed for Prepare\/Activate\.$/i,
+  );
+  if (belowThresholdMatch) {
+    return `Die Event-Wahrscheinlichkeit von ${percentFromModelValue(belowThresholdMatch[1])} reicht aktuell nicht für Vorbereitung oder Aktivierung.`;
+  }
+
+  const confidenceMatch = normalized.match(/^Forecast confidence is usable at ([\d.]+)\.$/i);
+  if (confidenceMatch) {
+    return `Die Prognose ist mit ${percentFromModelValue(confidenceMatch[1])} Konfidenz nutzbar.`;
+  }
+
+  const sourceFreshnessMatch = normalized.match(/^Primary sources are fresh on average \(([\d.]+) days old\)\.$/i);
+  if (sourceFreshnessMatch) {
+    return `Die wichtigsten Quellen sind im Schnitt ${localizedNumber(Number(sourceFreshnessMatch[1]), 1)} Tage alt und damit aktuell.`;
+  }
+
+  const trendSupportMatch = normalized.match(/^Recent trend acceleration is supportive \(([-\d.]+)\)\.$/i);
+  if (trendSupportMatch) {
+    return `Die jüngste Dynamik stützt die Einschätzung zusätzlich.`;
+  }
+
+  const trendWeakMatch = normalized.match(/^Trend acceleration is not yet convincing \(([-\d.]+)\)\.$/i);
+  if (trendWeakMatch) {
+    return 'Die aktuelle Dynamik ist noch nicht stark genug für einen klaren nächsten Schritt.';
+  }
+
+  if (/^Cross-source agreement does not clearly confirm an upward move\.$/i.test(normalized)) {
+    return 'Die Quellen bestätigen einen Aufwärtstrend noch nicht eindeutig.';
+  }
+
+  if (/^Regional forecast quality gate is currently not passed\.$/i.test(normalized)) {
+    return 'Das regionale Qualitäts-Gate ist aktuell noch nicht bestanden.';
+  }
+
+  if (/^Remaining uncertainty: no positive cross-source agreement, quality gate not passed\.$/i.test(normalized)) {
+    return 'Es bleibt Unsicherheit, weil die Quellen noch kein klares gemeinsames Signal zeigen und das Qualitäts-Gate noch nicht bestanden ist.';
+  }
+
+  if (/^Watch from the decision engine sets the base activation level\.$/i.test(normalized)) {
+    return 'Die Region bleibt vorerst im Beobachtungsmodus.';
+  }
+
+  const rankDriverMatch = normalized.match(/^Priority score ([\d.]+) and event probability ([\d.]+) drive the ranking\.$/i);
+  if (rankDriverMatch) {
+    return 'Die Rangfolge wird vor allem durch Prioritätsscore und Event-Wahrscheinlichkeit bestimmt.';
+  }
+
+  if (/^Watch regions are observation-first and usually receive no spend\.$/i.test(normalized)) {
+    return 'Beobachtungsregionen erhalten vorerst kein zusätzliches Budget.';
+  }
+
+  const allocationConfidenceMatch = normalized.match(
+    /^Allocation confidence ([\d.]+) and priority rank (\d+) keep the region in the current wave plan\.$/i,
+  );
+  if (allocationConfidenceMatch) {
+    return 'Die Region bleibt damit als Beobachtung im aktuellen Wochenplan.';
+  }
+
+  const lowPenaltyMatch = normalized.match(/^Confidence ([\d.]+) keeps the allocation penalty low\.$/i);
+  if (lowPenaltyMatch) {
+    return 'Die Konfidenz bleibt solide, reicht aber noch nicht für eine Freigabe.';
+  }
+
+  const populationWeightMatch = normalized.match(/^Population weighting contributes ([\d.]+) to addressable reach\.$/i);
+  if (populationWeightMatch) {
+    return 'Die Reichweitenlogik spricht für die Region, ändert aber noch nichts an der Freigabe.';
+  }
+
+  const watchBecauseMatch = normalized.match(
+    /^(.+?): Watch because event probability is ([\d.]+), forecast confidence is ([\d.]+), trend acceleration is ([-\d.]+), and cross-source direction is (up|down|flat)\.$/i,
+  );
+  if (watchBecauseMatch) {
+    const directionLabel = watchBecauseMatch[5].toLowerCase() === 'up'
+      ? 'aufwärts'
+      : watchBecauseMatch[5].toLowerCase() === 'down'
+        ? 'abwärts'
+        : 'seitwärts';
+    return `${watchBecauseMatch[1]} bleibt vorerst im Beobachtungsmodus. Event-Wahrscheinlichkeit und Quellenlage reichen noch nicht für einen sicheren nächsten Schritt, die Richtung zeigt aktuell eher ${directionLabel}.`;
+  }
+
+  if (/^Recommendation stays discussion-only for now\.$/i.test(normalized)) {
+    return 'Die Empfehlung bleibt vorerst ein Diskussionsvorschlag.';
+  }
+
+  if (/^Evidence class is no_truth\.$/i.test(normalized)) {
+    return 'Es liegen noch keine Outcome-Daten vor.';
+  }
+
+  if (/^Signal\/outcome agreement is no_signal\.$/i.test(normalized)) {
+    return 'Ein belastbarer Abgleich mit Outcome-Daten fehlt noch.';
+  }
+
+  return normalized
+    .replace(/\s+—\s+/g, ' — ')
+    .replace(/\s+\./g, '.');
+}
+
+function firstCleanText(...values: Array<string | null | undefined>): string {
+  return values.map((value) => cleanCopy(value)).find(Boolean) || '-';
+}
+
+function regionTrendLabel(value?: string | null): string {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'rising' || normalized === 'up' || normalized === 'steigend') return 'steigend';
+  if (normalized === 'falling' || normalized === 'down' || normalized === 'fallend') return 'fallend';
+  if (normalized === 'flat' || normalized === 'stabil') return 'stabil';
+  return normalized || '';
+}
+
+function regionSignalSentence(
+  regionName?: string | null,
+  signalScore?: number | null,
+  trend?: string | null,
+): string {
+  const cleanedName = cleanCopy(regionName);
+  const roundedScore = signalScore == null || Number.isNaN(signalScore) ? null : Math.round(signalScore);
+  const trendLabel = regionTrendLabel(trend);
+
+  if (cleanedName && roundedScore != null && trendLabel) {
+    return `${cleanedName} liegt mit ${roundedScore}/100 im Wochenvergleich vorn, der Trend wirkt aktuell ${trendLabel}.`;
+  }
+  if (cleanedName && roundedScore != null) {
+    return `${cleanedName} liegt mit ${roundedScore}/100 im Wochenvergleich weit vorne.`;
+  }
+  return '';
+}
+
+function buildNowPageNote(stage: string): string {
+  if (stage === 'Aktivieren') {
+    return 'Die Lage ist stark genug für einen klaren nächsten Schritt. Kampagnenvorschlag, Qualität und Risiken bleiben direkt darunter sichtbar.';
+  }
+  if (stage === 'Vorbereiten') {
+    return 'Die Lage spricht für Vorbereitung. Fokusregion, Kampagnenvorschlag und Prüfhinweise sind direkt darunter gebündelt.';
+  }
+  return 'Noch keine Freigabe. Wir beobachten die Fokusregion, halten die Begründung sichtbar und prüfen erst dann den nächsten Kampagnenvorschlag.';
+}
+
 function probabilityPercent(value?: number | null): number | null {
   if (value == null || Number.isNaN(value)) return null;
   return value <= 1 ? value * 100 : value;
@@ -109,10 +317,6 @@ function stageTone(value?: string | null): 'success' | 'warning' | 'neutral' {
   if (normalized === 'activate' || normalized === 'go') return 'success';
   if (normalized === 'prepare') return 'warning';
   return 'neutral';
-}
-
-function firstNonEmpty(...values: Array<string | null | undefined>): string {
-  return values.map((value) => String(value || '').trim()).find(Boolean) || '-';
 }
 
 function buildNowPageViewModel(
@@ -133,47 +337,76 @@ function buildNowPageViewModel(
   const leadPrediction = sortedPredictions[0] || null;
   const leadAllocation = allocation?.recommendations?.[0] || null;
   const leadCampaign = campaignRecommendations?.recommendations?.[0] || null;
-  const topRegion = weeklyDecision?.top_regions?.[0];
+  const topRegion = weeklyDecision?.top_regions?.[0] || null;
 
-  const focusRegionCode = leadPrediction?.bundesland || leadAllocation?.bundesland || leadCampaign?.region || topRegion?.code || null;
-  const focusRegionName = firstNonEmpty(
+  const findPredictionForRegion = (code?: string | null, name?: string | null) => sortedPredictions.find((item) => (
+    (code && item.bundesland === code)
+    || (name && item.bundesland_name === name)
+  )) || null;
+  const findCampaignForRegion = (code?: string | null, name?: string | null) => (
+    campaignRecommendations?.recommendations?.find((item) => (
+      (code && (item.bundesland === code || item.region === code))
+      || (name && item.region_name === name)
+    )) || null
+  );
+  const findAllocationForRegion = (code?: string | null, name?: string | null) => (
+    allocation?.recommendations?.find((item) => (
+      (code && item.bundesland === code)
+      || (name && item.bundesland_name === name)
+    )) || null
+  );
+
+  const focusRegionCode = topRegion?.code
+    || leadCampaign?.bundesland
+    || leadCampaign?.region
+    || topCard?.region_codes?.[0]
+    || leadAllocation?.bundesland
+    || leadPrediction?.bundesland
+    || null;
+  const focusRegionName = firstCleanText(
+    topRegion?.name,
+    topCard?.decision_brief?.recommendation?.primary_region,
     leadCampaign?.region_name,
     leadAllocation?.bundesland_name,
     leadPrediction?.bundesland_name,
-    topRegion?.name,
-    topCard?.decision_brief?.recommendation?.primary_region,
     'Deutschland',
   );
-  const focusStageValue = leadCampaign?.activation_level
-    || leadAllocation?.recommended_activation_level
-    || leadPrediction?.decision_label
-    || weeklyDecision?.action_stage
+  const focusPrediction = findPredictionForRegion(focusRegionCode, focusRegionName) || leadPrediction;
+  const focusCampaign = findCampaignForRegion(focusRegionCode, focusRegionName) || leadCampaign;
+  const focusAllocation = findAllocationForRegion(focusRegionCode, focusRegionName) || leadAllocation;
+  const focusStageValue = weeklyDecision?.action_stage
     || weeklyDecision?.decision_state
+    || focusCampaign?.activation_level
+    || focusAllocation?.recommended_activation_level
+    || focusPrediction?.decision_label
     || 'Watch';
   const focusStage = stageLabel(focusStageValue);
   const focusProbabilityLabel = formatPercent(
-    probabilityPercent(leadPrediction?.event_probability_calibrated ?? weeklyDecision?.event_forecast?.event_probability),
+    probabilityPercent(focusPrediction?.event_probability_calibrated ?? weeklyDecision?.event_forecast?.event_probability),
     1,
   );
   const focusBudgetLabel = formatCurrency(
     topCard?.campaign_preview?.budget?.weekly_budget_eur
-    || leadCampaign?.suggested_budget_amount
-    || leadAllocation?.suggested_budget_amount
-    || weeklyBudget,
+    ?? focusCampaign?.suggested_budget_amount
+    ?? focusAllocation?.suggested_budget_amount
+    ?? weeklyBudget,
   );
-  const focusReason = firstNonEmpty(
-    weeklyDecision?.recommended_action,
+  const focusReason = firstCleanText(
+    (weeklyDecision?.why_now || []).find((item) => String(item || '').includes(focusRegionName)),
+    regionSignalSentence(focusRegionName, topRegion?.signal_score, topRegion?.trend),
+    focusCampaign?.recommendation_rationale?.why?.find((item) => String(item || '').includes(focusRegionName)),
     topCard?.decision_brief?.summary_sentence,
-    leadCampaign?.recommendation_rationale?.why?.[0],
-    leadPrediction?.decision?.explanation_summary,
-    leadPrediction?.reason_trace?.why?.[0],
-    leadAllocation?.uncertainty_summary,
+    focusPrediction?.decision?.explanation_summary,
+    focusPrediction?.reason_trace?.why?.[0],
+    focusAllocation?.uncertainty_summary,
     'Hier bündelt sich aktuell das stärkste Signal.',
   );
-  const focusProduct = firstNonEmpty(
+  const focusProduct = firstCleanText(
     topCard?.recommended_product,
-    leadCampaign?.recommended_product_cluster?.label,
-    leadAllocation?.products?.[0],
+    focusCampaign?.products?.[0],
+    focusCampaign?.recommended_product_cluster?.products?.[0],
+    focusCampaign?.recommended_product_cluster?.label,
+    focusAllocation?.products?.[0],
     weeklyDecision?.top_products?.[0],
     'GELO Portfolio',
   );
@@ -190,58 +423,106 @@ function buildNowPageViewModel(
     || evidence?.business_validation?.evidence_tier,
   );
   const sourceSummary = evidence?.source_status;
-  const primaryCampaignTitle = firstNonEmpty(
+  const primaryCampaignRegionName = firstCleanText(
+    topCard?.decision_brief?.recommendation?.primary_region,
+    leadCampaign?.region_name,
+    focusRegionName,
+  );
+  const primaryCampaignProduct = firstCleanText(
+    topCard?.recommended_product,
+    leadCampaign?.products?.[0],
+    leadCampaign?.recommended_product_cluster?.products?.[0],
+    leadCampaign?.recommended_product_cluster?.label,
+    focusProduct,
+  );
+  const primaryCampaignTitle = firstCleanText(
+    primaryCampaignProduct !== '-' && primaryCampaignRegionName !== '-'
+      ? `${primaryCampaignProduct} in ${primaryCampaignRegionName}`
+      : '',
     topCard?.display_title,
     topCard?.campaign_name,
-    topCard?.recommended_product,
-    leadCampaign?.recommended_product_cluster?.label,
     'Kampagnenvorschlag prüfen',
   );
-  const primaryCampaignContext = firstNonEmpty(
-    `${topCard?.region_codes_display?.join(', ') || focusRegionName} · ${workflowLabel(topCard?.lifecycle_state || topCard?.status)}`,
-    `${focusRegionName} · ${focusStage}`,
+  const primaryCampaignContext = firstCleanText(
+    topCard?.region_codes_display?.length
+      ? `${topCard.region_codes_display.join(', ')} · ${workflowLabel(topCard?.lifecycle_state || topCard?.status)}`
+      : '',
+    leadCampaign?.timeline,
+    `${primaryCampaignRegionName} · ${stageLabel(leadCampaign?.activation_level || focusStageValue)}`,
   );
-  const primaryCampaignCopy = firstNonEmpty(
+  const primaryCampaignCopy = firstCleanText(
     topCard?.decision_brief?.summary_sentence,
     topCard?.reason,
-    leadCampaign?.recommendation_rationale?.why?.[0],
+    uniqueText([
+      ...(leadCampaign?.recommendation_rationale?.why || []),
+      ...(leadCampaign?.recommendation_rationale?.guardrails || []),
+      ...(leadCampaign?.recommendation_rationale?.evidence_notes || []),
+    ].map((item) => cleanCopy(item)), 2).join(' '),
     'Der nächste prüfbare Kampagnenvorschlag liegt bereit.',
   );
 
   const reasons = uniqueText([
     ...(weeklyDecision?.why_now || []),
     topCard?.decision_brief?.summary_sentence,
-    leadCampaign?.recommendation_rationale?.why?.[0],
-    leadPrediction?.decision?.explanation_summary,
-    leadPrediction?.reason_trace?.why?.[0],
-  ], 4);
+    focusCampaign?.recommendation_rationale?.why?.[0],
+    focusPrediction?.decision?.explanation_summary,
+    focusPrediction?.reason_trace?.why?.[0],
+    regionSignalSentence(focusRegionName, topRegion?.signal_score, topRegion?.trend),
+  ].map((item) => cleanCopy(item)), 4);
 
   const risks = uniqueText([
     ...(weeklyDecision?.risk_flags || []),
-    leadPrediction?.uncertainty_summary,
-    ...(leadPrediction?.reason_trace?.uncertainty || []),
-    leadAllocation?.uncertainty_summary,
-    ...(Array.isArray(leadAllocation?.reason_trace)
+    focusPrediction?.uncertainty_summary,
+    ...(focusPrediction?.reason_trace?.uncertainty || []),
+    focusAllocation?.uncertainty_summary,
+    ...(Array.isArray(focusAllocation?.reason_trace)
       ? []
-      : ((leadAllocation?.reason_trace as { uncertainty?: string[] } | undefined)?.uncertainty || [])),
+      : ((focusAllocation?.reason_trace as { uncertainty?: string[] } | undefined)?.uncertainty || [])),
     evidence?.truth_snapshot?.truth_gate?.guidance,
-  ], 4);
+    decision?.business_validation?.guidance,
+  ].map((item) => cleanCopy(item)), 4);
 
-  const relatedRegions = sortedPredictions
-    .filter((item) => item.bundesland !== focusRegionCode)
+  const decisionRelatedRegions = (weeklyDecision?.top_regions || [])
+    .filter((item) => item.code !== focusRegionCode && item.name !== focusRegionName)
+    .slice(0, 3)
+    .map((item, index) => {
+      const relatedPrediction = findPredictionForRegion(item.code, item.name);
+      return {
+        code: item.code || relatedPrediction?.bundesland || item.name || `region-${index + 1}`,
+        name: firstCleanText(item.name, relatedPrediction?.bundesland_name),
+        stage: stageLabel(relatedPrediction?.decision_label || focusStageValue),
+        probabilityLabel: relatedPrediction
+          ? formatPercent(probabilityPercent(relatedPrediction.event_probability_calibrated), 1)
+          : item.signal_score != null
+            ? `${Math.round(item.signal_score)}/100`
+            : '-',
+        reason: firstCleanText(
+          regionSignalSentence(item.name, item.signal_score, item.trend),
+          relatedPrediction?.reason_trace?.why?.[0],
+          relatedPrediction?.decision?.explanation_summary,
+          relatedPrediction?.uncertainty_summary,
+          'Weitere regionale Priorität für diese Woche.',
+        ),
+      };
+    });
+
+  const forecastRelatedRegions = sortedPredictions
+    .filter((item) => item.bundesland !== focusRegionCode && item.bundesland_name !== focusRegionName)
     .slice(0, 3)
     .map((item) => ({
       code: item.bundesland,
-      name: item.bundesland_name,
+      name: cleanCopy(item.bundesland_name),
       stage: stageLabel(item.decision_label),
       probabilityLabel: formatPercent(probabilityPercent(item.event_probability_calibrated), 1),
-      reason: firstNonEmpty(
+      reason: firstCleanText(
         item.reason_trace?.why?.[0],
         item.decision?.explanation_summary,
         item.uncertainty_summary,
         'Weitere regionale Priorität für diese Woche.',
       ),
     }));
+
+  const relatedRegions = decisionRelatedRegions.length > 0 ? decisionRelatedRegions : forecastRelatedRegions;
 
   const hasData = Boolean(
     decision
@@ -251,7 +532,7 @@ function buildNowPageViewModel(
     || (campaignRecommendations?.recommendations || []).length,
   );
 
-  const emptyMessage = forecast?.message || allocation?.message || campaignRecommendations?.message;
+  const emptyMessage = cleanCopy(forecast?.message || allocation?.message || campaignRecommendations?.message);
   const emptyState = hasData ? null : {
     title: forecast?.status === 'no_model'
       ? 'Für diesen Scope ist noch kein regionales Modell verfügbar.'
@@ -263,14 +544,12 @@ function buildNowPageViewModel(
     hasData,
     generatedAt: decision?.generated_at || forecast?.generated_at || allocation?.generated_at || campaignRecommendations?.generated_at || evidence?.generated_at || null,
     title: `${focusStage}: ${focusRegionName}`,
-    summary: firstNonEmpty(
+    summary: firstCleanText(
       weeklyDecision?.recommended_action,
       topCard?.decision_brief?.summary_sentence,
       `Die stärkste nächste Aktion liegt aktuell in ${focusRegionName}.`,
     ),
-    note: topCard?.is_publishable
-      ? 'Die nächste sinnvolle Aktion ist oben sichtbar. Begründung, Qualität und Risiken folgen darunter.'
-      : 'Die nächste sinnvolle Aktion ist oben sichtbar. Erst prüfen, dann freigeben.',
+    note: buildNowPageNote(focusStage),
     primaryActionLabel: topCard?.id ? 'Nächste Kampagne öffnen' : 'Kampagnen prüfen',
     primaryRecommendationId: topCard?.id || null,
     primaryCampaignTitle,

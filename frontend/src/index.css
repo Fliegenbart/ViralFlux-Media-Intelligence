@@ -5123,7 +5123,7 @@ textarea:focus-visible {
 }
 
 .now-template-page {
-  gap: 26px;
+  gap: 32px;
 }
 
 .now-page-header,
@@ -5138,7 +5138,7 @@ textarea:focus-visible {
 .evidence-page-header__copy {
   display: grid;
   gap: 10px;
-  max-width: 760px;
+  max-width: 820px;
 }
 
 .now-page-header__kicker,
@@ -5162,9 +5162,9 @@ textarea:focus-visible {
 .now-page-header__text,
 .evidence-page-header__text {
   margin: 0;
-  max-width: 58ch;
+  max-width: 52ch;
   color: var(--text-secondary);
-  font-size: 15px;
+  font-size: 16px;
   line-height: 1.7;
 }
 
@@ -5251,12 +5251,14 @@ textarea:focus-visible {
 }
 
 .now-metrics-grid {
-  gap: 20px;
+  gap: 24px;
 }
 
 .now-metric-card {
-  gap: 8px;
+  gap: 10px;
   padding: 24px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 22px 48px rgba(5, 52, 92, 0.06);
 }
 
 .now-metric-card__top {
@@ -5304,16 +5306,18 @@ textarea:focus-visible {
 
 .now-template-main {
   display: grid;
-  gap: 24px;
+  gap: 28px;
 }
 
 .now-spotlight-card {
   display: grid;
-  gap: 20px;
-  padding: 28px;
+  gap: 24px;
+  padding: 34px;
   background:
-    radial-gradient(circle at top right, rgba(81, 72, 216, 0.08), transparent 24%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(255, 255, 255, 0.86));
+    radial-gradient(circle at 88% 12%, rgba(81, 72, 216, 0.12), transparent 24%),
+    radial-gradient(circle at 20% 100%, rgba(227, 224, 249, 0.72), transparent 28%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.99), rgba(255, 255, 255, 0.9));
+  box-shadow: 0 34px 72px rgba(5, 52, 92, 0.08);
 }
 
 .now-spotlight-card__header,
@@ -5355,6 +5359,31 @@ textarea:focus-visible {
   line-height: 1.7;
 }
 
+.now-story-intro {
+  display: grid;
+  gap: 6px;
+  padding: 16px 18px;
+  border-radius: 22px;
+  background: rgba(239, 244, 255, 0.82);
+  border: 1px solid rgba(145, 180, 228, 0.14);
+}
+
+.now-story-intro__label {
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.now-story-intro__copy {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.6;
+}
+
 .now-spotlight-card__status,
 .now-spotlight-card__badges,
 .evidence-primary-stage__chips,
@@ -5374,8 +5403,10 @@ textarea:focus-visible {
 }
 
 .now-focus-panel {
-  min-width: 300px;
-  padding: 20px;
+  min-width: 320px;
+  padding: 24px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(239, 244, 255, 0.9));
+  border: 1px solid rgba(145, 180, 228, 0.16);
 }
 
 .now-focus-panel__grid {
@@ -5389,7 +5420,8 @@ textarea:focus-visible {
 }
 
 .now-focus-panel__campaign {
-  padding: 16px;
+  padding: 18px;
+  background: rgba(81, 72, 216, 0.05);
 }
 
 .now-focus-panel__campaign-title {
@@ -5401,7 +5433,7 @@ textarea:focus-visible {
 
 .now-priority-section {
   display: grid;
-  gap: 14px;
+  gap: 18px;
 }
 
 .now-priority-section__header h3,
@@ -5425,7 +5457,7 @@ textarea:focus-visible {
 
 .now-priority-list {
   display: grid;
-  gap: 14px;
+  gap: 18px;
 }
 
 .now-priority-card {
@@ -5433,12 +5465,19 @@ textarea:focus-visible {
   display: flex;
   align-items: center;
   gap: 18px;
-  padding: 20px;
-  border-radius: 24px;
+  padding: 22px;
+  border-radius: 28px;
   background: rgba(255, 255, 255, 0.92);
   border: 1px solid rgba(255, 255, 255, 0.82);
-  box-shadow: 0 22px 46px rgba(5, 52, 92, 0.06);
+  box-shadow: 0 26px 54px rgba(5, 52, 92, 0.07);
   cursor: pointer;
+  transition: transform 180ms ease, box-shadow 180ms ease, background 180ms ease;
+}
+
+.now-priority-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 30px 66px rgba(5, 52, 92, 0.1);
+  background: rgba(255, 255, 255, 0.98);
 }
 
 .now-priority-card__rank {
@@ -5520,16 +5559,18 @@ textarea:focus-visible {
 .now-map-card {
   position: relative;
   overflow: hidden;
-  min-height: 260px;
+  min-height: 290px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 18px;
-  padding: 30px;
+  padding: 34px;
   border-radius: 32px;
   background:
-    radial-gradient(circle at 84% 20%, rgba(81, 72, 216, 0.08), transparent 20%),
-    linear-gradient(180deg, #eff4ff 0%, #e7efff 100%);
+    radial-gradient(circle at 82% 18%, rgba(81, 72, 216, 0.12), transparent 22%),
+    radial-gradient(circle at 16% 85%, rgba(255, 255, 255, 0.42), transparent 24%),
+    linear-gradient(180deg, #eff4ff 0%, #e5eeff 100%);
+  box-shadow: 0 28px 64px rgba(5, 52, 92, 0.08);
 }
 
 .now-map-card__content {
@@ -5555,18 +5596,20 @@ textarea:focus-visible {
 .now-map-card__visual {
   display: flex;
   align-items: flex-end;
-  gap: 10px;
+  gap: 12px;
   margin-right: 10px;
 }
 
 .now-map-card__visual span {
-  width: 18px;
+  width: 20px;
   border-radius: 999px;
   background: linear-gradient(180deg, rgba(81, 72, 216, 0.2), rgba(81, 72, 216, 0.84));
 }
 
 .now-live-feed {
-  padding: 26px;
+  padding: 30px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 28px 60px rgba(5, 52, 92, 0.07);
 }
 
 .now-live-feed__badge {
@@ -5585,7 +5628,7 @@ textarea:focus-visible {
 
 .now-live-feed__items {
   display: grid;
-  gap: 20px;
+  gap: 22px;
 }
 
 .now-live-feed__item {
@@ -5641,6 +5684,7 @@ textarea:focus-visible {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  width: 100%;
   border-radius: 16px;
   border: 1px solid rgba(145, 180, 228, 0.2);
   color: var(--text-secondary);
@@ -5855,6 +5899,7 @@ textarea:focus-visible {
 [data-theme="dark"] .now-filter-shell,
 [data-theme="dark"] .now-live-status,
 [data-theme="dark"] .now-priority-card,
+[data-theme="dark"] .now-story-intro,
 [data-theme="dark"] .operator-search-shell,
 [data-theme="dark"] .login-input-shell,
 [data-theme="dark"] .login-sso-button,
@@ -5868,6 +5913,16 @@ textarea:focus-visible {
 [data-theme="dark"] .operator-status-card,
 [data-theme="dark"] .evidence-brief-card {
   background: rgba(99, 102, 241, 0.18);
+}
+
+[data-theme="dark"] .now-focus-panel,
+[data-theme="dark"] .now-live-feed {
+  background: rgba(17, 23, 39, 0.9);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+[data-theme="dark"] .now-focus-panel__campaign {
+  background: rgba(99, 102, 241, 0.12);
 }
 
 [data-theme="dark"] .now-map-card {

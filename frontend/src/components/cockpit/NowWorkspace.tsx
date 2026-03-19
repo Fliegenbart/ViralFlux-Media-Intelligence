@@ -47,6 +47,9 @@ const NowWorkspace: React.FC<Props> = ({
   const primaryMetric = view.metrics[0];
   const leadingReasons = view.reasons.slice(0, 3);
   const focusProbability = extractPercent(focusRegion?.probabilityLabel);
+  const pageLead = view.note || 'Hier steht nur das, was für diese Woche wirklich zählt. Alles Weitere ordnen wir darunter.';
+  const spotlightLead = focusRegion?.reason || view.note || 'Hier bündelt sich aktuell das stärkste Signal.';
+  const primaryCampaignLabel = view.primaryRecommendationId ? 'Nächste Kampagne' : 'Kampagnenvorschlag';
 
   const prioritizedRegions = [
     ...(focusRegion ? [{
@@ -103,7 +106,7 @@ const NowWorkspace: React.FC<Props> = ({
           <span className="now-page-header__kicker">Live Intelligence Engine</span>
           <h1 className="now-page-header__title">Klare Lage. Klare nächste Aktion.</h1>
           <p className="now-page-header__text">
-            {view.summary || 'Oben steht nur das, was für diese Woche wirklich zählt. Details, Qualität und Risiken folgen darunter.'}
+            {pageLead}
           </p>
         </div>
 
@@ -182,7 +185,7 @@ const NowWorkspace: React.FC<Props> = ({
                   <div>
                     <span className="now-section-kicker">Aktuelle Lage</span>
                     <h2 className="now-spotlight-card__title">{view.title}</h2>
-                    <p className="now-spotlight-card__subtitle">{view.note}</p>
+                    <p className="now-spotlight-card__subtitle">{spotlightLead}</p>
                   </div>
 
                   <div className="now-spotlight-card__status">
@@ -195,13 +198,22 @@ const NowWorkspace: React.FC<Props> = ({
 
                 <div className="now-spotlight-card__badges">
                   <span className="step-chip">Fokus {focusRegion?.name || '-'}</span>
+                  <span className="step-chip">{focusRegion?.stage || '-'}</span>
                   <span className="step-chip">{focusRegion?.probabilityLabel || '-'}</span>
-                  <span className="step-chip">{focusRegion?.budgetLabel || '-'}</span>
                   <span className="step-chip">Stand {formatDateTime(view.generatedAt)}</span>
                 </div>
 
                 <div className="now-spotlight-card__content">
                   <div className="now-spotlight-card__story">
+                    <div className="now-story-intro">
+                      <span className="now-story-intro__label">Wo wir jetzt hinschauen</span>
+                      <p className="now-story-intro__copy">
+                        {focusRegion?.name
+                          ? `${focusRegion.name} steht im Mittelpunkt der aktuellen Wochenentscheidung.`
+                          : 'Die aktuelle Wochenentscheidung bündelt die stärkste Lage direkt hier.'}
+                      </p>
+                    </div>
+
                     <p className="now-spotlight-card__copy">{view.summary}</p>
 
                     <div className="action-row">
@@ -229,7 +241,7 @@ const NowWorkspace: React.FC<Props> = ({
                     </div>
 
                     <div className="now-proof-strip">
-                      <div className="section-kicker">Wichtigste Gründe</div>
+                      <div className="section-kicker">Darum schauen wir genau hier hin</div>
                       <div className="now-proof-strip__items">
                         {(leadingReasons.length ? leadingReasons : ['Noch keine Kurzbegründung verfügbar.']).map((reason) => (
                           <div key={reason} className="soft-panel now-proof-card">
@@ -249,7 +261,7 @@ const NowWorkspace: React.FC<Props> = ({
 
                     <div className="now-focus-panel__grid">
                       <div>
-                        <div className="section-kicker">Stage</div>
+                        <div className="section-kicker">Status</div>
                         <div className="summary-metric">{focusRegion?.stage || '-'}</div>
                       </div>
                       <div>
@@ -267,7 +279,7 @@ const NowWorkspace: React.FC<Props> = ({
                     </div>
 
                     <div className="soft-panel now-focus-panel__campaign">
-                      <div className="section-kicker">Nächste Kampagne</div>
+                      <div className="section-kicker">{primaryCampaignLabel}</div>
                       <div className="now-focus-panel__campaign-title">{view.primaryCampaignTitle}</div>
                       <div className="summary-note">{view.primaryCampaignContext}</div>
                       <p className="campaign-focus-copy">{view.primaryCampaignCopy}</p>
@@ -278,7 +290,7 @@ const NowWorkspace: React.FC<Props> = ({
 
               <section className="now-priority-section">
                 <div className="now-priority-section__header">
-                  <h3>Priorisierte Regionen</h3>
+                  <h3>Wohin schauen wir als Nächstes?</h3>
                   <button className="now-inline-link" type="button" onClick={() => onOpenRegions()}>
                     Vollständige Analyse
                   </button>
@@ -328,14 +340,14 @@ const NowWorkspace: React.FC<Props> = ({
                 <div className="now-map-card__content">
                   <h3>Regionale Dynamik</h3>
                   <p>
-                    Diese Fläche ersetzt das Demo-Monitoring der Vorlage durch eine klare Operator-Sicht auf Fokusregion, Bewegung und nächsten Schritt.
+                    Die Fläche bündelt die Bewegung hinter der Wochenlage. Links steht die Fokusregion, darunter die nächsten Prüfpfade und rechts die kompakten Hinweise für den zweiten Blick.
                   </p>
                   <button
                     className="now-map-card__button"
                     type="button"
                     onClick={() => onOpenRegions(focusRegion?.code ? String(focusRegion.code) : undefined)}
                   >
-                    Regionen öffnen
+                    Regionen im Detail
                   </button>
                 </div>
                 <div className="now-map-card__visual" aria-hidden="true">
@@ -349,8 +361,8 @@ const NowWorkspace: React.FC<Props> = ({
 
             <aside className="card now-live-feed">
               <div className="now-live-feed__header">
-                <h3>Aktuelle Prüfhinweise</h3>
-                <span className="now-live-feed__badge">Realtime</span>
+                <h3>Prüfhinweise</h3>
+                <span className="now-live-feed__badge">Live</span>
               </div>
 
               <div className="now-live-feed__items">
@@ -387,7 +399,7 @@ const NowWorkspace: React.FC<Props> = ({
               <div className="section-heading" style={{ gap: 6 }}>
                 <h2 className="subsection-title">Warum jetzt?</h2>
                 <p className="subsection-copy">
-                  Die wichtigsten Gründe für die aktuelle Priorisierung.
+                  Die stärksten Gründe für die aktuelle Wochenentscheidung.
                 </p>
               </div>
               <div className="now-callout-list">

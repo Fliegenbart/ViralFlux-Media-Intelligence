@@ -126,7 +126,7 @@ const CampaignStudio: React.FC<Props> = ({
                   onClick={() => (focusCard ? onOpenRecommendation(focusCard.id) : onGenerate())}
                   disabled={generationLoading && !focusCard}
                 >
-                  {focusCard ? 'Diesen Fall öffnen' : (generationLoading ? 'KI erstellt Vorschläge...' : 'Erste Vorschläge erstellen')}
+                  {focusCard ? 'Diesen Fall öffnen' : (generationLoading ? 'Vorschläge werden erstellt...' : 'Erste Vorschläge erstellen')}
                 </button>
               </div>
             </div>
@@ -156,7 +156,7 @@ const CampaignStudio: React.FC<Props> = ({
                 <strong>{activeCards.length}</strong>
               </div>
               <div className="evidence-row">
-                <span>Mit KI-Unterstützung</span>
+                <span>Automatisch angereichert</span>
                 <strong>{aiTouchedCount}</strong>
               </div>
             </div>
@@ -182,7 +182,7 @@ const CampaignStudio: React.FC<Props> = ({
             Starte aus der Wochenentscheidung oder einer Region einen neuen Vorschlag. Danach landet er direkt in einer klaren Arbeitsphase.
           </p>
           <button className="media-button" type="button" onClick={onGenerate} disabled={generationLoading}>
-            {generationLoading ? 'KI erstellt Vorschläge...' : 'Jetzt erste Vorschläge erstellen'}
+            {generationLoading ? 'Vorschläge werden erstellt...' : 'Jetzt erste Vorschläge erstellen'}
           </button>
         </section>
       ) : (
@@ -269,7 +269,7 @@ const CampaignStudio: React.FC<Props> = ({
       >
         <div className="workspace-two-column">
           <section className="soft-panel workspace-detail-panel">
-            <div className="section-kicker">Generation</div>
+            <div className="section-kicker">Erstellung</div>
             <div className="campaign-form-grid" style={{ marginTop: 16 }}>
               <label className="campaign-field">
                 <span>Marke</span>
@@ -291,10 +291,10 @@ const CampaignStudio: React.FC<Props> = ({
             </div>
             <div className="campaign-setup-footer">
               <div className="campaign-setup-note">
-                Die KI erzeugt zuerst einen Entwurf. Prüfung und Freigabe bleiben bewusst davor.
+                Das System erstellt zuerst einen Entwurf. Prüfung und Freigabe bleiben bewusst davor.
               </div>
               <button className="media-button" type="button" onClick={onGenerate} disabled={generationLoading}>
-                {generationLoading ? 'KI erstellt Vorschläge...' : 'Vorschläge erstellen'}
+                {generationLoading ? 'Vorschläge werden erstellt...' : 'Vorschläge erstellen'}
               </button>
             </div>
           </section>

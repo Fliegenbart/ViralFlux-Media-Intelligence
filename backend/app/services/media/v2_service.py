@@ -101,14 +101,14 @@ SIGNAL_GROUPS: dict[str, dict[str, str]] = {
 
 CORE_SIGNAL_KEYS = {"wastewater", "survstat", "are_konsultation", "notaufnahme"}
 METRIC_FIELD_LABELS = {
-    "media_spend_eur": "Media Spend",
-    "impressions": "Impressions",
-    "clicks": "Clicks",
+    "media_spend_eur": "Mediabudget",
+    "impressions": "Impressionen",
+    "clicks": "Klicks",
     "qualified_visits": "Qualifizierte Besuche",
-    "search_lift_index": "Search Lift",
-    "sales_units": "Sales",
-    "order_count": "Orders",
-    "revenue_eur": "Revenue",
+    "search_lift_index": "Suchanstieg",
+    "sales_units": "Verkäufe",
+    "order_count": "Bestellungen",
+    "revenue_eur": "Umsatz",
 }
 REQUIRED_OUTCOME_FIELD_NAMES = ("media_spend_eur",)
 CONVERSION_OUTCOME_FIELD_NAMES = ("sales_units", "order_count", "revenue_eur")
@@ -204,15 +204,15 @@ class MediaV2Service:
         if not market_passed:
             risk_flags.append("Der Marktvergleich liegt aktuell nicht im Zielkorridor.")
         if not forecast_passed:
-            risk_flags.append("Der Forecast-Promotion-Gate steht aktuell auf WATCH.")
+            risk_flags.append("Die Vorhersage ist aktuell noch nicht freigegeben.")
         if not has_truth:
             risk_flags.append(str(truth_gate["message"]))
         if not has_business_validation:
-            risk_flags.append(str(business_validation.get("message") or "Business-Gate ist noch nicht validiert."))
+            risk_flags.append(str(business_validation.get("message") or "Die Freigabe auf Basis von Kundendaten ist noch nicht validiert."))
         if drift_state == "warning":
             risk_flags.append("Modell-Drift ist im Monitoring auffällig.")
         if not has_publishable:
-            risk_flags.append("Es gibt aktuell keinen freigabefaehigen Kampagnenvorschlag.")
+            risk_flags.append("Es gibt aktuell keinen freigabefähigen Kampagnenvorschlag.")
         if truth_gate.get("guidance") and truth_gate.get("learning_state") != "belastbar":
             risk_flags.append(str(truth_gate["guidance"]))
         if business_validation.get("guidance") and business_validation.get("decision_scope") != "validated_budget_activation":
@@ -597,7 +597,7 @@ class MediaV2Service:
         if training_samples and training_samples < 52:
             coverage_limits.append("Trainingsfenster ist noch relativ kurz.")
         if latest_accuracy and (latest_accuracy.samples or 0) < 14:
-            coverage_limits.append("Forecast-Accuracy basiert auf kleinem Monitoring-Fenster.")
+            coverage_limits.append("Die Vorhersagegenauigkeit basiert noch auf einem kleinen Monitoring-Fenster.")
         if not metadata:
             coverage_limits.append("Kein serialisiertes Modell-Metadata gefunden.")
 
@@ -735,11 +735,11 @@ class MediaV2Service:
         issue_count = int(latest_batch.get("rows_rejected") or 0) if latest_batch else 0
         limits: list[str] = []
         if coverage.get("coverage_weeks", 0) < 26:
-            limits.append("Weniger als 26 Wochen Kundendaten reichen noch nicht fuer belastbare Freigaben.")
+            limits.append("Weniger als 26 Wochen Kundendaten reichen noch nicht für belastbare Freigaben.")
         if not coverage.get("required_fields_present"):
-            limits.append("Media Spend fehlt in den Kundendaten oder ist noch nicht breit genug vorhanden.")
+            limits.append("Mediabudget fehlt in den Kundendaten oder ist noch nicht breit genug vorhanden.")
         if not coverage.get("conversion_fields_present"):
-            limits.append("Mindestens eine echte Outcome-Metrik wie Sales, Orders oder Revenue fehlt noch.")
+            limits.append("Mindestens eine echte Wirkungszahl wie Verkäufe, Bestellungen oder Umsatz fehlt noch.")
         if coverage.get("truth_freshness_state") == "stale":
             limits.append("Der letzte Import der Kundendaten liegt zu weit hinter der aktuellen epidemiologischen Woche.")
         return {
@@ -923,7 +923,7 @@ class MediaV2Service:
             "message": (
                 "Upload validiert. Es wurden noch keine Kundendaten gespeichert."
                 if validate_only
-                else ("Outcome-Daten importiert." if imported else "Import abgeschlossen, aber keine Zeilen wurden uebernommen.")
+                else ("Kundendaten importiert." if imported else "Import abgeschlossen, aber keine Zeilen wurden übernommen.")
             ),
         }
 
@@ -1080,8 +1080,8 @@ class MediaV2Service:
             if decision_state == "GO" and top_card.get("decision_brief", {}).get("summary_sentence"):
                 reasons.append(str(top_card["decision_brief"]["summary_sentence"]))
             else:
-                title = top_card.get("display_title") or top_card.get("recommended_product") or "Der staerkste Kampagnenvorschlag"
-                reasons.append(f"{title} ist der naechste priorisierte Vorschlag fuer Pruefung und Freigabe.")
+                title = top_card.get("display_title") or top_card.get("recommended_product") or "Der stärkste Kampagnenvorschlag"
+                reasons.append(f"{title} ist der nächste priorisierte Vorschlag für Prüfung und Freigabe.")
         if signal_summary.get("decision_mode_reason"):
             reasons.append(str(signal_summary["decision_mode_reason"]))
         else:
@@ -1090,7 +1090,7 @@ class MediaV2Service:
                 driver_labels = ", ".join(driver.get("label") for driver in top_drivers[:2] if driver.get("label"))
                 reasons.append(f"Treiber dieser Woche: {driver_labels}.")
         while len(reasons) < 3:
-            reasons.append("AMELAG, SurvStat und Forecast werden gemeinsam für die Wochenentscheidung gewichtet.")
+            reasons.append("AMELAG, SurvStat und Vorhersage werden gemeinsam für die Wochenentscheidung gewichtet.")
         return reasons[:3]
 
     def _forecast_direction(self, region: dict[str, Any]) -> str:
@@ -1123,12 +1123,12 @@ class MediaV2Service:
             )
         if momentum_score < 40 and severity_score >= 70:
             return (
-                f"{name} beschleunigt aktuell nicht, bleibt aber wegen hohem Ausgangsniveau und hoher Aktivierbarkeit "
-                "fuer Pruefung und Vorbereitung priorisiert."
+                f"{name} beschleunigt aktuell nicht, bleibt aber wegen hohem Ausgangsniveau und hoher Umsetzbarkeit "
+                "für Prüfung und Vorbereitung priorisiert."
             )
         if momentum_score >= 60 and forecast_direction == "aufwärts":
             return (
-                f"{name} zeigt ein frühes Wellenfenster: steigende Dynamik, aufwärts gerichteter Forecast und hohe Aktivierbarkeit."
+                f"{name} zeigt ein frühes Signal: steigende Dynamik, aufwärts gerichtete Vorhersage und hohe Umsetzbarkeit."
             )
         if trend == "fallend" and actionability_score >= 65:
             return (
@@ -1136,7 +1136,7 @@ class MediaV2Service:
             )
         if suggestion.get("reason"):
             return str(suggestion["reason"])
-        return f"{name} wird aus epidemiologischer Lage, Forecast und Umsetzungschance priorisiert."
+        return f"{name} wird aus epidemiologischer Lage, Vorhersage und Umsetzungschance priorisiert."
 
     def _campaign_state_counts(self, cards: list[dict[str, Any]]) -> dict[str, int]:
         counts: dict[str, int] = defaultdict(int)
@@ -1298,12 +1298,12 @@ class MediaV2Service:
         if decision_state == "GO":
             if primary_region and product:
                 return f"Diese Woche freigeben: {product} in {primary_region} priorisieren."
-            return "Diese Woche freigeben: die staerksten regionalen Vorschlaege in die Aktivierung ziehen."
+            return "Diese Woche freigeben: die stärksten regionalen Vorschläge in die Aktivierung ziehen."
 
         if decision_mode == "supply_window":
             if primary_region and product:
                 return f"Diese Woche vorbereiten: {product} in {primary_region} als Versorgungschance absichern, aber noch keinen nationalen Shift freigeben."
-            return "Diese Woche vorbereiten: Versorgungssignale beobachten und nur pruefbare Vorschlaege weiterziehen."
+            return "Diese Woche vorbereiten: Versorgungssignale beobachten und nur prüfbare Vorschläge weiterziehen."
         if decision_mode == "mixed":
             if primary_region and product:
                 return f"Diese Woche vorbereiten: {product} in {primary_region} priorisieren, weil Epi-Signal und Kontext gemeinsam tragen, aber noch keinen nationalen Shift freigeben."
@@ -1311,7 +1311,7 @@ class MediaV2Service:
         if primary_region and product:
             return f"Diese Woche vorbereiten: {product} in {primary_region} priorisieren, aber noch keinen nationalen Shift freigeben."
         if primary_region:
-            return f"Diese Woche vorbereiten: {primary_region} priorisieren und nur pruefbare Vorschlaege weiterziehen."
+            return f"Diese Woche vorbereiten: {primary_region} priorisieren und nur prüfbare Vorschläge weiterziehen."
         return "Diese Woche vorbereiten: Signal beobachten, Regionen priorisieren und keine harte Aktivierung freigeben."
 
     def _known_limits(
@@ -1329,11 +1329,11 @@ class MediaV2Service:
         if truth.get("truth_freshness_state") == "stale":
             limits.append("Der letzte Import der Kundendaten liegt zu weit hinter der aktuellen epidemiologischen Woche.")
         if not truth.get("conversion_fields_present"):
-            limits.append("In den Kundendaten fehlt noch mindestens eine belastbare Outcome-Metrik wie Sales, Orders oder Revenue.")
+            limits.append("In den Kundendaten fehlt noch mindestens eine belastbare Wirkungszahl wie Verkäufe, Bestellungen oder Umsatz.")
         if truth_validation_legacy and truth.get("coverage_weeks", 0) == 0:
-            limits.append("Der sichtbare Kunden-Backtest ist nur ein explorativer Legacy-Run und noch kein aktiver Bereich fuer Kundendaten.")
+            limits.append("Der sichtbare frühere Kundenlauf ist nur ein explorativer Hinweis und noch kein aktiver Bereich für Kundendaten.")
         if not (cockpit.get("backtest_summary", {}).get("latest_market") or {}).get("quality_gate", {}).get("overall_passed"):
-            limits.append("Markt-Validierung steht aktuell auf WATCH.")
+            limits.append("Der Marktvergleich steht aktuell auf Beobachten.")
         series_points = (
             self.db.query(func.count(WastewaterAggregated.id))
             .filter(WastewaterAggregated.virus_typ == virus_typ)
@@ -1363,9 +1363,9 @@ class MediaV2Service:
         return {
             "driver_groups": {
                 "epidemic_core": {"label": "Epi-Kern", "contribution": epidemic_core},
-                "forecast_model": {"label": "Forecast", "contribution": forecast_contribution},
+                "forecast_model": {"label": "Vorhersage", "contribution": forecast_contribution},
                 "supply_window": {"label": "Versorgung", "contribution": supply_contribution},
-                "context_window": {"label": "Wetter & Baseline", "contribution": context_contribution},
+                "context_window": {"label": "Wetter und Grundrauschen", "contribution": context_contribution},
             },
             "decision_mode": decision_mode["key"],
             "decision_mode_label": decision_mode["label"],
@@ -1389,12 +1389,12 @@ class MediaV2Service:
             return {
                 "key": "mixed",
                 "label": "Gemischtes Signal",
-                "reason": "Epi-Kern, Forecast und Kontext zeigen gleichzeitig nach oben. Die Entscheidung bleibt deshalb bewusst defensiv.",
+                "reason": "Epi-Kern, Vorhersage und Kontext zeigen gleichzeitig nach oben. Die Entscheidung bleibt deshalb bewusst defensiv.",
             }
         return {
             "key": "epidemic_wave",
-            "label": "Epi-Welle",
-            "reason": "AMELAG, SurvStat und Forecast tragen die Entscheidung. Versorgung bleibt Zusatzsignal, nicht Hauptbeweis.",
+            "label": "Atemwegswelle",
+            "reason": "AMELAG, SurvStat und Vorhersage tragen die Entscheidung. Versorgung bleibt Zusatzsignal, nicht Hauptbeweis.",
         }
 
     def _severity_score(self, region: dict[str, Any]) -> int:
@@ -1450,7 +1450,7 @@ class MediaV2Service:
         )
 
     def _region_source_trace(self, peix_region: dict[str, Any]) -> list[str]:
-        trace = ["AMELAG", "SurvStat", "Forecast", "ARE"]
+        trace = ["AMELAG", "SurvStat", "Vorhersage", "ARE"]
         contributions = peix_region.get("layer_contributions") or {}
         if float(contributions.get("Shortage") or 0.0) > 0:
             trace.append("BfArM")
@@ -1666,7 +1666,7 @@ class MediaV2Service:
                 row_number=row_number,
                 field_name="conversion",
                 issue_code="missing_conversion_metric",
-                message="Mindestens eine Outcome-Metrik (`sales_units`, `order_count` oder `revenue_eur`) ist erforderlich.",
+                message="Mindestens eine Wirkungszahl (`sales_units`, `order_count` oder `revenue_eur`) ist erforderlich.",
                 raw_row=raw_row,
             ))
 

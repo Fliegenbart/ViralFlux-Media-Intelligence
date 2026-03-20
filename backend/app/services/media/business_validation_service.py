@@ -93,43 +93,43 @@ class BusinessValidationService:
             decision_scope = "validated_budget_activation"
             evidence_tier = "commercially_validated"
             action_class = "customer_lift_ready"
-            message = "GELO-Outcome-Daten haben belastbare Aktivierungszyklen und Holdout-Evidenz fuer Budgetfreigaben."
-            guidance = "Budgetempfehlungen duerfen jetzt epidemiologisches Signal und validierte Business-Evidenz gemeinsam nutzen."
+            message = "Die GELO-Kundendaten zeigen belastbare Aktivierungszyklen und eine belastbare Validierung mit Vergleichsgruppe."
+            guidance = "Budgetempfehlungen dürfen jetzt epidemiologisches Signal und belastbare Geschäftsdaten gemeinsam nutzen."
         elif int(coverage.get("coverage_weeks") or 0) <= 0:
             validation_status = "pending_truth_connection"
             decision_scope = "decision_support_only"
             evidence_tier = "no_truth"
             action_class = "watch_only"
-            message = "Es fehlen noch echte GELO-Outcome-Daten fuer eine kommerzielle Validierung."
-            guidance = "Zuerst Spend-, Sales- oder Order-Daten importieren, bevor Budgetfreigaben bewertet werden."
+            message = "Es fehlen noch echte GELO-Kundendaten für eine kommerzielle Validierung."
+            guidance = "Zuerst Mediabudget sowie Verkaufs- oder Bestelldaten importieren, bevor Budgetfreigaben bewertet werden."
         elif int(coverage.get("coverage_weeks") or 0) < _MIN_COVERAGE_WEEKS:
             validation_status = "building_truth_layer"
             decision_scope = "decision_support_only"
             evidence_tier = "observational"
             action_class = "market_watch"
-            message = "Die GELO-Truth-Historie ist angeschlossen, aber fuer kommerzielle Freigaben noch zu kurz."
-            guidance = "Mindestens 26 Wochen Outcome-Historie aufbauen, bevor Holdout-Validierung bewertet wird."
+            message = "Die GELO-Kundendatenhistorie ist angeschlossen, für kommerzielle Freigaben aber noch zu kurz."
+            guidance = "Mindestens 26 Wochen Kundendaten aufbauen, bevor die Validierung mit Vergleichsgruppe bewertet wird."
         elif summary.activation_cycles < _MIN_ACTIVATION_CYCLES:
             validation_status = "pending_activation_history"
             decision_scope = "decision_support_only"
             evidence_tier = "truth_backed"
             action_class = "market_watch"
-            message = "Die Truth-Historie ist vorhanden, aber es gibt noch zu wenige echte Aktivierungszyklen."
+            message = "Die Kundendatenhistorie ist vorhanden, aber es gibt noch zu wenige echte Aktivierungszyklen."
             guidance = "Mindestens zwei klar erkennbare Aktivierungszyklen dokumentieren, bevor Budgetfreigaben validiert werden."
         elif not holdout_ready:
             validation_status = "pending_holdout_design"
             decision_scope = "decision_support_only"
             evidence_tier = "truth_backed"
             action_class = "market_watch"
-            message = "GELO-Outcome-Daten sind vorhanden, aber es fehlt noch ein explizites Holdout- oder Kontrollgruppendesign."
-            guidance = "Zukuenftige Aktivierungen mit Test-/Kontrollgruppen markieren, damit inkrementeller Lift validiert werden kann."
+            message = "GELO-Kundendaten sind vorhanden, aber es fehlt noch ein klares Design mit Vergleichsgruppe."
+            guidance = "Zukünftige Aktivierungen mit Test- und Vergleichsgruppen markieren, damit die zusätzliche Wirkung sauber geprüft werden kann."
         else:
             validation_status = "pending_holdout_validation"
             decision_scope = "decision_support_only"
             evidence_tier = "holdout_ready"
             action_class = "market_watch"
-            message = "Holdout-Design ist erkennbar, aber es fehlen noch belastbare Lift-Metriken fuer eine Budgetfreigabe."
-            guidance = "Outcome-Importe um inkrementelle Lift- oder Kontrollgruppen-Auswertung erweitern."
+            message = "Das Design mit Vergleichsgruppe ist erkennbar, aber es fehlen noch belastbare Werte zur zusätzlichen Wirkung."
+            guidance = "Die Kundendaten-Importe um Auswertungen zur Mehrwirkung oder Vergleichsgruppen ergänzen."
 
         return {
             "brand": brand_value,
@@ -196,13 +196,13 @@ class BusinessValidationService:
             "coverage_weeks": len(week_values),
             "trust_readiness": "belastbar" if len(week_values) >= 52 else "im_aufbau" if len(week_values) >= 26 else "erste_signale" if week_values else "noch_nicht_angeschlossen",
             "truth_freshness_state": "unknown",
-            "required_fields_present": ["Media Spend"] if any(row.media_spend_eur is not None for row in rows) else [],
+            "required_fields_present": ["Mediabudget"] if any(row.media_spend_eur is not None for row in rows) else [],
             "conversion_fields_present": [
                 label
                 for field_name, label in (
-                    ("sales_units", "Sales"),
-                    ("order_count", "Orders"),
-                    ("revenue_eur", "Revenue"),
+                    ("sales_units", "Verkäufe"),
+                    ("order_count", "Bestellungen"),
+                    ("revenue_eur", "Umsatz"),
                 )
                 if any(getattr(row, field_name) is not None for row in rows)
             ],
@@ -213,10 +213,10 @@ class BusinessValidationService:
         coverage = dict(truth_coverage or {})
         required = coverage.get("required_fields_present")
         if isinstance(required, bool):
-            coverage["required_fields_present"] = ["Media Spend"] if required else []
+            coverage["required_fields_present"] = ["Mediabudget"] if required else []
         conversion = coverage.get("conversion_fields_present")
         if isinstance(conversion, bool):
-            coverage["conversion_fields_present"] = ["Outcome"] if conversion else []
+            coverage["conversion_fields_present"] = ["Wirkungsdaten"] if conversion else []
         if "trust_readiness" not in coverage and "truth_readiness" in coverage:
             coverage["trust_readiness"] = coverage.get("truth_readiness")
         if "truth_freshness_state" not in coverage:

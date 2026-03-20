@@ -45,7 +45,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
               Klar sehen, <span>wo die nächste virale Welle beginnt.</span>
             </h1>
             <p className="login-brand-panel__text">
-              Die Arbeitsansicht zeigt im 3-, 5- oder 7-Tage-Fenster, wo das früheste regionale Signal entsteht und was als Nächstes zu tun ist.
+              Die Arbeitsansicht zeigt im 3-, 5- oder 7-Tage-Fenster, wo eine Welle wahrscheinlich zuerst beginnt und welcher Schritt jetzt sinnvoll ist.
             </p>
           </div>
 
@@ -131,15 +131,15 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
               </button>
 
               <div className="login-divider">
-                <span>Oder SSO nutzen</span>
+                <span>Oder mit Firmenkonto anmelden</span>
               </div>
 
-              <div className="login-sso-grid" aria-label="SSO Platzhalter">
+              <div className="login-sso-grid" aria-label="Platzhalter für Firmenanmeldung">
                 <button
                   type="button"
                   className="login-sso-button"
                   disabled
-                  title="Google SSO ist in diesem Schritt noch nicht aktiv."
+                  title="Google-Anmeldung ist in diesem Schritt noch nicht aktiv."
                 >
                   <span className="login-sso-button__badge">G</span>
                   <span>Google</span>
@@ -148,7 +148,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
                   type="button"
                   className="login-sso-button"
                   disabled
-                  title="Azure AD ist in diesem Schritt noch nicht aktiv."
+                  title="Azure-Anmeldung ist in diesem Schritt noch nicht aktiv."
                 >
                   <span className="material-symbols-outlined" aria-hidden="true">corporate_fare</span>
                   <span>Azure AD</span>

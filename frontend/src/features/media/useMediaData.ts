@@ -237,7 +237,10 @@ function cleanCopy(value?: string | null): string {
     return 'Ein belastbarer Abgleich mit Kundendaten fehlt noch.';
   }
 
-  if (/^Der Forecast-Promotion-Gate steht aktuell auf WATCH\.$/i.test(normalized)) {
+  if (
+    /^Der Forecast-Promotion-Gate steht aktuell auf WATCH\.$/i.test(normalized)
+    || /^Der Freigabestatus der Vorhersage steht aktuell auf WATCH\.$/i.test(normalized)
+  ) {
     return 'Die Vorhersage ist aktuell noch nicht freigegeben.';
   }
 

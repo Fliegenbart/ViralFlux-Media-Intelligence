@@ -20,25 +20,25 @@ const SECTION_META = [
     path: '/jetzt',
     kicker: 'PEIX Arbeitsansicht',
     title: 'Jetzt',
-    description: 'Hier steht nur das, was diese Woche wirklich wichtig ist: Lage, Grund, nächster Schritt und Vertrauen.',
+    description: 'Hier siehst du die wichtigste Entscheidung der Woche, warum sie gilt und was du als Nächstes tun solltest.',
   },
   {
     path: '/regionen',
     kicker: 'PEIX Arbeitsansicht',
     title: 'Regionen',
-    description: 'Hier prüfen wir genau eine Region nach der anderen und halten die Hauptaktion klar sichtbar.',
+    description: 'Hier prüfen wir eine Region nach der anderen und sehen sofort, warum sie gerade wichtig ist.',
   },
   {
     path: '/kampagnen',
     kicker: 'PEIX Arbeitsansicht',
     title: 'Kampagnen',
-    description: 'Hier landet immer zuerst der wichtigste Fall. Alles Weitere ordnet sich danach.',
+    description: 'Hier bearbeiten wir immer zuerst den wichtigsten Fall und ordnen alles andere darunter ein.',
   },
   {
     path: '/evidenz',
     kicker: 'Qualität',
     title: 'Qualität',
-    description: 'Hier beantworten wir nur vier Fragen: Ist die Vorhersage stabil, sind die Daten frisch, sind Kundendaten da und gibt es Blocker?',
+    description: 'Hier prüfen wir, ob die Vorhersage trägt, die Daten frisch sind, Kundendaten vorliegen und ob noch Blocker offen sind.',
   },
 ] as const;
 

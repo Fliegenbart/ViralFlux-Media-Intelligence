@@ -395,7 +395,7 @@ const LandingPage: React.FC = () => {
           </h1>
 
           <p className="lp-reading-copy" style={{ marginTop: 24, fontSize: 17, lineHeight: 1.72, color: C.textSec }}>
-            PEIX x GELO zeigt im 3-, 5- oder 7-Tage-Fenster, in welcher Region das früheste relevante Signal entsteht. So wird früh sichtbar, wo die nächste Welle voraussichtlich beginnt und welcher Schritt sinnvoll ist.
+            PEIX x GELO zeigt im 3-, 5- oder 7-Tage-Fenster, in welcher Region das früheste relevante Signal entsteht. So wird früh sichtbar, wo eine Welle wahrscheinlich zuerst beginnt und was wir jetzt tun sollten.
           </p>
 
           <div style={{ marginTop: 28, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
@@ -489,12 +489,12 @@ const LandingPage: React.FC = () => {
               {
                 icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={C.indigo} strokeWidth="2" strokeLinecap="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2" /></svg>,
                 title: '3 bis 7 Tage Vorlauf',
-                text: 'Abwasser, ARE, Versorgung und Kontextsignale werden so verbunden, dass wir frühe Veränderungen vor dem sichtbaren Peak erkennen.',
+                text: 'Abwasser, ARE, Versorgung und weitere Signale werden so verbunden, dass wir frühe Veränderungen mehrere Tage vor dem sichtbaren Höhepunkt erkennen.',
               },
               {
                 icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={C.indigo} strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="10" r="3" /><path d="M12 2a8 8 0 0 0-8 8c0 5.4 7 12 8 12s8-6.6 8-12a8 8 0 0 0-8-8Z" /></svg>,
                 title: 'Frühester Startpunkt',
-                text: 'Jede Empfehlung ist bundeslandgenau. Wir zeigen, in welcher Region die nächste Welle voraussichtlich zuerst anzieht.',
+                text: 'Jede Empfehlung ist bundeslandgenau. Wir zeigen, in welcher Region eine Welle voraussichtlich zuerst anzieht.',
               },
               {
                 icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={C.indigo} strokeWidth="2" strokeLinecap="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /><path d="m9 12 2 2 4-4" /></svg>,
@@ -587,7 +587,7 @@ const LandingPage: React.FC = () => {
               </h3>
               <p className="lp-section-copy" style={{ fontSize: 14, lineHeight: 1.7, color: C.textSec, margin: '0 0 20px' }}>
                 Die Deutschlandkarte zeigt, wo das früheste relevante Signal aktuell entsteht.
-                Damit wird sichtbar, in welcher Region die nächste Welle voraussichtlich zuerst anzieht und welcher Kampagnenpfad daraus folgt.
+                Damit wird sichtbar, in welcher Region eine Welle voraussichtlich zuerst anzieht und welcher Kampagnenpfad daraus folgt.
               </p>
 
               {/* Top regions from API */}
@@ -628,7 +628,7 @@ const LandingPage: React.FC = () => {
             3 bis 7 Tage früher sehen, wo die nächste Welle beginnt.
           </h2>
           <p className="lp-reading-copy" style={{ fontSize: 16, lineHeight: 1.7, color: C.textSec, marginBottom: 28, marginLeft: 'auto', marginRight: 'auto' }}>
-            PEIX x GELO zeigt früh, in welcher Region eine virale Welle zuerst anzieht. Starte direkt in der Arbeitsansicht oder lass dir die aktuelle Wochenlage einordnen.
+            PEIX x GELO zeigt früh, in welcher Region eine virale Welle zuerst anzieht. Starte direkt in der Arbeitsansicht oder schau dir zuerst die aktuelle Wochenlage an.
           </p>
           <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
             <button

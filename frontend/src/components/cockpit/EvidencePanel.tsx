@@ -12,6 +12,7 @@ import ForecastMonitoringSection from './evidence/ForecastMonitoringSection';
 import ImportValidationSection from './evidence/ImportValidationSection';
 import SourceFreshnessSection from './evidence/SourceFreshnessSection';
 import TruthOutcomeSection from './evidence/TruthOutcomeSection';
+import { monitoringStatusLabel, runModeLabel } from './evidence/evidenceUtils';
 import WorkspaceStatusPanel from './WorkspaceStatusPanel';
 
 interface Props {
@@ -214,8 +215,8 @@ const EvidencePanel: React.FC<Props> = ({
             <div style={{ display: 'grid', gap: 10, marginTop: 12 }}>
               {recentRuns.length > 0 ? recentRuns.slice(0, 3).map((run, index) => (
                 <div key={`${String(run.mode)}-${index}`} className="evidence-row">
-                  <span>{String(run.mode || 'Lauf')}</span>
-                  <strong>{String(run.status || '-')}</strong>
+                  <span>{runModeLabel(String(run.mode || 'Lauf'))}</span>
+                  <strong>{monitoringStatusLabel(String(run.status || '-'))}</strong>
                 </div>
               )) : (
                 <div className="workspace-note-card">Noch keine Laufhistorie vorhanden.</div>

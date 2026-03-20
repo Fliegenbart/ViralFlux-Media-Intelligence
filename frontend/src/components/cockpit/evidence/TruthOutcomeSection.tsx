@@ -1,6 +1,7 @@
 import React from 'react';
 
 import { UI_COPY } from '../../../lib/copy';
+import { normalizeGermanText } from '../../../lib/plainLanguage';
 import { BacktestResponse, BusinessValidationSummary, OutcomeLearningSummary, TruthCoverage } from '../../../types/media';
 import {
   businessValidationLabel,
@@ -75,7 +76,7 @@ const TruthOutcomeSection: React.FC<Props> = ({
         </div>
         <div className="review-chip-row">
           {(sourceStatusLabels.length ? sourceStatusLabels : ['Noch keine Pflichtfelder vollständig vorhanden']).map((item) => (
-            <span key={item} className="step-chip">{item}</span>
+            <span key={item} className="step-chip">{normalizeGermanText(item)}</span>
           ))}
         </div>
         <div className="soft-panel review-panel-soft" style={{ marginTop: 14 }}>
@@ -92,13 +93,13 @@ const TruthOutcomeSection: React.FC<Props> = ({
             <strong>{decisionScopeLabel(businessValidation?.decision_scope)}</strong>
           </div>
           <div className="evidence-row">
-            <span>Holdout-Test</span>
+            <span>Vergleichsgruppentest</span>
             <strong>{businessValidation?.holdout_ready ? 'bereit' : 'noch offen'}</strong>
           </div>
         </div>
         {(businessValidation?.message || businessValidation?.guidance) && (
           <div className="soft-panel" style={{ padding: 16, marginTop: 14, fontSize: 14, color: 'var(--text-secondary)' }}>
-            <strong style={{ color: 'var(--text-primary)' }}>{sanitizeEvidenceCopy(businessValidation?.message) || 'Business-Validierung im Aufbau.'}</strong>
+            <strong style={{ color: 'var(--text-primary)' }}>{sanitizeEvidenceCopy(businessValidation?.message) || 'Die Freigabe auf Basis von Kundendaten ist noch im Aufbau.'}</strong>
             {businessValidation?.guidance && (
               <div style={{ marginTop: 8 }}>
                 {sanitizeEvidenceCopy(businessValidation.guidance)}

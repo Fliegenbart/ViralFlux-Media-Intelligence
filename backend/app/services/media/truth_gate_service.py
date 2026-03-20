@@ -20,8 +20,8 @@ class TruthGateService:
                 passed=False,
                 state="missing",
                 learning_state="missing",
-                message="Es sind noch keine echten Outcome-Daten angeschlossen.",
-                guidance="Aktivierungen bleiben explorativ, bis erste Truth-Daten importiert sind.",
+                message="Es sind noch keine echten Kundendaten angeschlossen.",
+                guidance="Aktivierungen bleiben vorerst im Prüfmodus, bis erste Kundendaten importiert sind.",
             )
         if freshness_state == "stale":
             return self._result(
@@ -29,7 +29,7 @@ class TruthGateService:
                 state="stale",
                 learning_state="stale",
                 message="Die Kundendaten sind aktuell zu alt im Vergleich zur letzten epidemiologischen Woche.",
-                guidance="Outcome-Learnings werden angezeigt, aber nicht als harte Freigabegrundlage verwendet.",
+                guidance="Erkenntnisse aus Kundendaten bleiben sichtbar, zählen aber noch nicht als sichere Freigabegrundlage.",
             )
         if coverage_weeks < 26:
             return self._result(
@@ -37,23 +37,23 @@ class TruthGateService:
                 state="explorative",
                 learning_state="explorative",
                 message="Die Kundendaten decken noch keine 26 Wochen ab und bleiben deshalb explorativ.",
-                guidance="Outcome-Signale dürfen priorisieren helfen, aber keine Freigabe dominieren.",
+                guidance="Die Kundendaten dürfen bei der Priorisierung helfen, sollen die Freigabe aber noch nicht bestimmen.",
             )
-        if "Media Spend" not in required_fields:
+        if not ({"Media Spend", "Mediabudget"} & required_fields):
             return self._result(
                 passed=False,
                 state="incomplete",
                 learning_state="im_aufbau",
-                message="Die Kundendaten enthalten noch keinen belastbaren Media-Spend-Verlauf.",
-                guidance="Ohne Media Spend bleibt die Lernschleife methodisch unvollständig.",
+                message="Die Kundendaten enthalten noch keinen belastbaren Verlauf des Mediabudgets.",
+                guidance="Ohne Mediabudget bleibt die Lernschleife unvollständig.",
             )
         if not conversion_fields:
             return self._result(
                 passed=False,
                 state="incomplete",
                 learning_state="im_aufbau",
-                message="Die Kundendaten enthalten noch keine ausreichenden Sales-, Order- oder Revenue-Signale.",
-                guidance="Ohne echte Outcome-Metrik bleibt der Outcome-Layer nur teilweise angeschlossen.",
+                message="Die Kundendaten enthalten noch keine ausreichenden Signale zu Verkäufen, Bestellungen oder Umsatz.",
+                guidance="Ohne echte Wirkungszahl bleibt die Kundendatenbasis nur teilweise angeschlossen.",
             )
 
         learning_state = "belastbar" if truth_state == "belastbar" else "im_aufbau"
@@ -62,7 +62,7 @@ class TruthGateService:
             state="ready",
             learning_state=learning_state,
             message=None,
-            guidance="Outcome-Learnings dürfen die Priorisierung jetzt aktiv mitsteuern.",
+            guidance="Erkenntnisse aus Kundendaten dürfen die Priorisierung jetzt sichtbar mitsteuern.",
         )
 
     def _result(

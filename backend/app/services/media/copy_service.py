@@ -21,8 +21,8 @@ PUBLIC_SOURCE_LABELS: dict[str, str] = {
     "DWD": "DWD Wetterdaten",
     "DWD_POLLEN": "DWD Pollen",
     "GOOGLE_TRENDS": "Google Trends",
-    "PEIX": "Signalscore",
-    "PEIXEPISCORE": "Signalscore",
+    "PEIX": "Signalwert",
+    "PEIXEPISCORE": "Signalwert",
     "PLAYBOOKENGINE": "Empfehlungslogik",
     "SIGNAL_FUSION": "Signal-Fusion",
     "INTERNAL_ERP": "internes ERP",
@@ -250,9 +250,9 @@ def build_decision_basis_text(
 
     if score is not None and str(score).strip() != "":
         try:
-            parts.append(f"einem Signalscore von {float(score):.1f}")
+            parts.append(f"einem Signalwert von {float(score):.1f}")
         except (TypeError, ValueError):
-            parts.append(f"einem Signalscore von {score}")
+            parts.append(f"einem Signalwert von {score}")
 
     if not parts:
         return "aktuellen epidemiologischen Signalen"
@@ -283,11 +283,11 @@ def build_region_outlook_text(
     if vorhersage_delta_pct is None or abs(vorhersage_delta_pct) <= 5:
         return text
     if trend == "fallend" and vorhersage_delta_pct > 0:
-        return f"{text}, der Forecast zeigt jedoch wieder nach oben"
+        return f"{text}, die Vorhersage zeigt jedoch wieder nach oben"
     if trend == "steigend" and vorhersage_delta_pct > 0:
-        return f"{text} mit weiter positivem Forecast"
+        return f"{text} mit weiter positiver Vorhersage"
     if vorhersage_delta_pct < 0:
-        return f"{text}, der Forecast deutet eher auf Entspannung"
+        return f"{text}, die Vorhersage deutet eher auf Entspannung"
     return text
 
 
@@ -302,7 +302,7 @@ def build_region_recommendation_text(
     if not reason_text.startswith("weil"):
         reason_text = f"weil {reason_text}"
     return (
-        f"In {region_name} sehen wir für die nächsten 7 bis 14 Tage {outlook_text}. "
+        f"In {region_name} sehen wir für die nächsten 3 bis 7 Tage {outlook_text}. "
         f"Deshalb priorisieren wir zunächst {product}, {reason_text}."
     )
 
@@ -320,13 +320,13 @@ def build_decision_summary_text(
 
     if action_required == "review_mapping" or "Produktfreigabe" in str(primary_product):
         return (
-            f"Die Signale sprechen in den nächsten 7 bis 14 Tagen für {public_condition} in {primary_region}. "
+            f"Die Signale sprechen in den nächsten 3 bis 7 Tagen für {public_condition} in {primary_region}. "
             f"{basis_sentence} Vor einer Freigabe muss das passende Produkt noch bestätigt werden."
         ).replace("  ", " ").strip()
 
     return (
-        f"Die Signale sprechen in den nächsten 7 bis 14 Tagen für {public_condition} in {primary_region}. "
-        f"{basis_sentence} Deshalb priorisieren wir {primary_product} als naechsten Kampagnenvorschlag fuer Pruefung und Freigabe."
+        f"Die Signale sprechen in den nächsten 3 bis 7 Tagen für {public_condition} in {primary_region}. "
+        f"{basis_sentence} Deshalb priorisieren wir {primary_product} als nächsten Kampagnenvorschlag für Prüfung und Freigabe."
     ).replace("  ", " ").strip()
 
 

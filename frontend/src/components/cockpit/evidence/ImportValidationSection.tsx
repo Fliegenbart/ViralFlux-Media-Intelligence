@@ -196,7 +196,7 @@ const ImportValidationSection: React.FC<Props> = ({
           ) : selectedBatch ? (
             <div className="soft-panel review-panel-soft" style={{ display: 'grid', gap: 0 }}>
               <div className="evidence-row">
-                <span>Batch</span>
+                <span>Import-ID</span>
                 <strong>{selectedBatch.batch_id}</strong>
               </div>
               <div className="evidence-row">

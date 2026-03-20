@@ -188,9 +188,9 @@ export function learningStateLabel(value?: string | null): string {
 
 export function businessValidationLabel(value?: string | null): string {
   const normalized = String(value || '').trim().toLowerCase();
-  if (normalized === 'passed_holdout_validation') return 'mit Holdout bestätigt';
-  if (normalized === 'pending_holdout_validation') return 'Holdout bereit';
-  if (normalized === 'pending_holdout_design') return 'Holdout fehlt';
+  if (normalized === 'passed_holdout_validation') return 'mit Vergleichsgruppe bestätigt';
+  if (normalized === 'pending_holdout_validation') return 'Vergleichsgruppe bereit';
+  if (normalized === 'pending_holdout_design') return 'Vergleichsgruppe fehlt';
   if (normalized === 'pending_activation_history') return 'zu wenig Kampagnenhistorie';
   if (normalized === 'building_truth_layer') return 'Kundendatenbasis im Aufbau';
   if (normalized === 'pending_truth_connection') return 'noch nicht angeschlossen';
@@ -200,7 +200,7 @@ export function businessValidationLabel(value?: string | null): string {
 export function evidenceTierLabel(value?: string | null): string {
   const normalized = String(value || '').trim().toLowerCase();
   if (normalized === 'commercially_validated') return 'kommerziell bestätigt';
-  if (normalized === 'holdout_ready') return 'Holdout bereit';
+  if (normalized === 'holdout_ready') return 'Vergleichsgruppe bereit';
   if (normalized === 'truth_backed') return 'durch Kundendaten gestützt';
   if (normalized === 'observational') return 'beobachtend';
   if (normalized === 'no_truth') return 'keine Kundendatenbasis';

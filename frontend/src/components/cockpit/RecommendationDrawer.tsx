@@ -80,7 +80,7 @@ const RecommendationDrawer: React.FC<Props> = ({
     { key: 'PREPARE', label: 'Entwurf', copy: 'Signal-Kontext und Aufbau schärfen' },
     { key: 'REVIEW', label: 'Prüfung', copy: 'Inhalt, Timing und Hinweise prüfen' },
     { key: 'APPROVE', label: 'Freigabe', copy: 'Vorschlag ist entscheidungsreif' },
-    { key: 'SYNC_READY', label: 'Übergabe', copy: 'Für Mediatools oder operative Übergabe bereit' },
+    { key: 'SYNC_READY', label: 'Übergabe', copy: 'Für Plattformen oder operative Übergabe bereit' },
     { key: 'LIVE', label: 'Aktiv', copy: 'Freigegeben oder bereits ausgespielt' },
   ];
   const normalizedStatus = String(detail?.lifecycle_state || detail?.status || '').toUpperCase();
@@ -187,7 +187,7 @@ const RecommendationDrawer: React.FC<Props> = ({
                     onClick={() => onRegenerateAI(detail.id)}
                     disabled={regenerating}
                   >
-                    {regenerating ? 'KI arbeitet...' : 'Mit KI neu erzeugen'}
+                    {regenerating ? 'Wird neu erstellt...' : 'Neu erstellen'}
                   </button>
                 </div>
               </div>
@@ -317,13 +317,13 @@ const RecommendationDrawer: React.FC<Props> = ({
                   </div>
                 </div>
                 <div className="review-detail-group">
-                  <div className="campaign-focus-label">KI-Ansätze</div>
+                  <div className="campaign-focus-label">Textansätze</div>
                   <div className="review-stack">
                     {creativeAngles.length > 0 ? creativeAngles.map((angle) => (
                       <div key={angle} className="soft-panel review-soft-line">
                         {normalizeGermanText(angle)}
                       </div>
-                    )) : <span className="review-muted-copy">Keine KI-Ansätze vorhanden.</span>}
+                    )) : <span className="review-muted-copy">Keine Textansätze vorhanden.</span>}
                   </div>
                 </div>
                 {(detail.campaign_pack?.message_framework?.compliance_note || detail.campaign_pack?.ai_plan?.compliance_hinweis) && (
@@ -407,7 +407,7 @@ const RecommendationDrawer: React.FC<Props> = ({
             <section className="card review-card">
               <div className="review-sync-header">
                 <div>
-                  <h3 className="subsection-title">Übergabevorschau für Mediatools</h3>
+                  <h3 className="subsection-title">Übergabevorschau für Plattformen</h3>
                   <p className="subsection-copy" style={{ marginTop: 6 }}>
                     Vorbereitete Übergabe für Meta, Google oder DV360.
                   </p>

@@ -74,7 +74,7 @@ const WeeklyReport: React.FC = () => {
         {UI_COPY.weeklyReport}
       </h1>
       <p style={{ fontSize: 14, color: 'var(--text-secondary)', marginBottom: 32 }}>
-        ViralFlux Wochenbericht für KW {kw} / {now.getFullYear()}
+        PEIX x GELO Wochenbericht für KW {kw} / {now.getFullYear()}
       </p>
 
       {/* Action Cards */}
@@ -113,7 +113,7 @@ const WeeklyReport: React.FC = () => {
             {downloading ? 'Download...' : 'Aktuellen Bericht herunterladen'}
           </div>
           <div style={{ fontSize: 12, opacity: 0.8 }}>
-            PDF-Wochenbericht für GELO
+            PDF-Wochenbericht für PEIX x GELO
           </div>
         </button>
       </div>
@@ -143,10 +143,10 @@ const WeeklyReport: React.FC = () => {
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {[
-            { title: 'Zusammenfassung', desc: 'Signalscore, nationale Risikobewertung und Handlungsempfehlung' },
-            { title: 'Regionale Schwerpunkte', desc: 'Top-5 Bundesländer mit höchster Aktivität und Trend' },
-            { title: 'Signalqualität', desc: 'Aktuelle Backtest-Metriken, Trefferquote und Vorlaufzeit' },
-            { title: 'Budgetempfehlungen', desc: 'Konkrete Budget-Shifts pro Region und Kanalmix' },
+            { title: 'Zusammenfassung', desc: 'Signalwert, nationale Einordnung und empfohlener nächster Schritt' },
+            { title: 'Regionale Schwerpunkte', desc: 'Die Regionen mit dem frühesten Signal und ihrer aktuellen Richtung' },
+            { title: 'Signalqualität', desc: 'Rückblicktest, Trefferquote und Vorlaufzeit der Vorhersage' },
+            { title: 'Budgetempfehlungen', desc: 'Konkrete Budgetänderungen pro Region und Kanalmix' },
             { title: 'Produktpriorisierung', desc: 'GELO-Produkte mit passender Indikation und Kampagnenvorschlag' },
           ].map((item) => (
             <div key={item.title} style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>

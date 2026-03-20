@@ -160,7 +160,7 @@ class OutcomeSignalService:
             "outcome_confidence_pct": None,
             "learning_state": summary.get("learning_state") or "missing",
             "outcome_learning_scope": "none",
-            "outcome_learning_explanation": "Noch keine belastbaren Outcome-Learnings fuer Produkt oder Region vorhanden.",
+            "outcome_learning_explanation": "Noch keine belastbaren Erkenntnisse aus Kundendaten für Produkt oder Region vorhanden.",
             "observed_response": None,
             "learned_lifts": [],
         }
@@ -333,7 +333,7 @@ class OutcomeSignalService:
                     "value": round(response_per_1000, 2),
                 },
                 {
-                    "label": "Search Lift",
+                    "label": "Suchanstieg",
                     "value": round(search_avg, 1) if bucket["search_lift_rows"] else None,
                 },
             ],
@@ -361,9 +361,9 @@ class OutcomeSignalService:
         weeks = int(best.get("coverage_weeks") or 0)
         score = round(float(best.get("outcome_signal_score") or 0.0))
         if match_type == "pair" and product and region:
-            return f"Beobachtetes Learning fuer {product} in {region}: {weeks} Wochen Outcome-Daten stuetzen einen Outcome-Score von {score}/100."
+            return f"Beobachtete Wirkung für {product} in {region}: {weeks} Wochen Kundendaten stützen ein Wirkungssignal von {score}/100."
         if match_type == "product" and product:
-            return f"Produkt-Learning fuer {product}: {weeks} Wochen Outcome-Daten tragen die Priorisierung mit."
+            return f"Produktsignal für {product}: {weeks} Wochen Kundendaten tragen die Priorisierung mit."
         if match_type == "region" and region:
-            return f"Region-Learning fuer {region}: beobachtete Outcomes bleiben in der Priorisierung sichtbar."
-        return "Outcome-Learning ist angeschlossen, aber noch nicht fein granular genug fuer eine konkrete Zuordnung."
+            return f"Regionsignal für {region}: beobachtete Wirkungen bleiben in der Priorisierung sichtbar."
+        return "Die Kundendatenbasis ist angeschlossen, aber noch nicht fein genug für eine klare Zuordnung."

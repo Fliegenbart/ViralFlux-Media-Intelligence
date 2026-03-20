@@ -160,6 +160,13 @@ def _tile_display_title(title: str | None) -> str:
     return raw.replace("Signalscore", "Signalwert")
 
 
+def _normalize_tile_line(text: str) -> str:
+    normalized = str(text or "")
+    for source, replacement in _TILE_LABELS.items():
+        normalized = normalized.replace(source, replacement)
+    return normalized.replace("Signalscore", "Signalwert")
+
+
 class WeeklyBriefService:
     """Assembles cockpit data into a weekly PDF action brief."""
 
@@ -280,8 +287,9 @@ class WeeklyBriefService:
             display_val = f"{value}{unit}" if unit else str(value)
             impact_str = f"Signalwert: {impact:.0f}%" if impact is not None else ""
             live_marker = "[LIVE]" if is_live else "[STALE]"
+            signal_line = _normalize_tile_line(f"  {live_marker} {title}: {display_val}   {impact_str}")
             pdf.cell(0, 6,
-                     _safe(f"  {live_marker} {title}: {display_val}   {impact_str}"),
+                     _safe(signal_line),
                      new_x="LMARGIN", new_y="NEXT")
         pdf.ln(2)
 

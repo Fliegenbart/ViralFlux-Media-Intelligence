@@ -136,13 +136,12 @@ def _source_display_label(source: str | None) -> str:
 
 def _dedupe_cards(cards: list[dict[str, Any]]) -> list[dict[str, Any]]:
     unique_cards: list[dict[str, Any]] = []
-    seen: set[tuple[str, str, tuple[str, ...]]] = set()
+    seen: set[tuple[str, str]] = set()
 
     for card in cards:
         product = str(card.get("recommended_product", card.get("product", "")) or "").strip().lower()
         reason = str(card.get("reason", card.get("recommendation_reason", "")) or "").strip().lower()
-        regions = tuple(sorted(str(region).strip().upper() for region in card.get("region_codes", []) if region))
-        signature = (product, reason, regions)
+        signature = (product, reason)
         if signature in seen:
             continue
         seen.add(signature)

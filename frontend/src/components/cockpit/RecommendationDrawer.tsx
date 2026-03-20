@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 
+import { normalizeGermanText } from '../../lib/plainLanguage';
 import {
   ConnectorCatalogItem,
   PreparedSyncPayload,
@@ -85,11 +86,15 @@ const RecommendationDrawer: React.FC<Props> = ({
   const normalizedStatus = String(detail?.lifecycle_state || detail?.status || '').toUpperCase();
   const currentWorkflowIndex = Math.max(workflowSteps.findIndex((step) => step.key === normalizedStatus), 0);
   const confidenceValue = signalConfidencePercent(detail?.signal_confidence_pct, detail?.confidence);
-  const heroSummary = detail?.decision_brief?.summary_sentence || detail?.reason || 'Signal- und regelbasierter Kampagnenvorschlag zur Prüfung und Freigabe.';
-  const signalScoreLabel = metricContractLabel(detail?.field_contracts, 'signal_score', 'Signal-Score');
-  const priorityScoreLabel = metricContractLabel(detail?.field_contracts, 'priority_score', 'Priority-Score');
-  const signalConfidenceLabel = metricContractLabel(detail?.field_contracts, 'signal_confidence_pct', 'Signal-Konfidenz');
-  const outcomeConfidenceLabel = metricContractLabel(detail?.field_contracts, 'outcome_confidence_pct', 'Learning-Konfidenz');
+  const heroSummary = normalizeGermanText(
+    detail?.decision_brief?.summary_sentence
+    || detail?.reason
+    || 'Kampagnenvorschlag aus aktueller Vorhersage und Fokusregion zur Prüfung und Freigabe.',
+  );
+  const signalScoreLabel = normalizeGermanText(metricContractLabel(detail?.field_contracts, 'signal_score', 'Signalwert'));
+  const priorityScoreLabel = normalizeGermanText(metricContractLabel(detail?.field_contracts, 'priority_score', 'Priorität'));
+  const signalConfidenceLabel = normalizeGermanText(metricContractLabel(detail?.field_contracts, 'signal_confidence_pct', 'Signalsicherheit'));
+  const outcomeConfidenceLabel = normalizeGermanText(metricContractLabel(detail?.field_contracts, 'outcome_confidence_pct', 'Sicherheit aus Kundendaten'));
   const syncStateTone = syncPreview?.readiness.can_sync_now
     ? {
         background: 'rgba(16, 185, 129, 0.10)',
@@ -137,7 +142,7 @@ const RecommendationDrawer: React.FC<Props> = ({
               <div className="review-sheet-main">
                 <span className="section-kicker">Kampagnendetail</span>
                 <h2 className="review-sheet-title">
-                  {detail.display_title || detail.campaign_name || 'Kampagnenvorschlag'}
+                  {normalizeGermanText(detail.display_title || detail.campaign_name || 'Kampagnenvorschlag')}
                 </h2>
                 <p className="review-sheet-copy">{heroSummary}</p>
 
@@ -155,10 +160,10 @@ const RecommendationDrawer: React.FC<Props> = ({
                     {priorityScoreLabel} {formatPercent(detail.priority_score || detail.urgency_score || 0)}
                   </span>
                   <span className="campaign-confidence-chip">
-                    Learning {learningStateLabel(detail.learning_state)}
+                    Lernstand {learningStateLabel(detail.learning_state)}
                   </span>
                   <span className="campaign-confidence-chip">
-                    KPI {kpiLabel(detail.primary_kpi || detail.campaign_pack?.measurement_plan?.primary_kpi)}
+                    Zielgröße {kpiLabel(detail.primary_kpi || detail.campaign_pack?.measurement_plan?.primary_kpi)}
                   </span>
                   <span className="campaign-confidence-chip">
                     {aiModelLabel(detail.campaign_pack?.ai_meta?.provider, detail.campaign_pack?.ai_meta?.model)}
@@ -189,14 +194,14 @@ const RecommendationDrawer: React.FC<Props> = ({
 
               <aside className="review-sheet-aside">
                 <div className="campaign-focus-label">Aktueller Stand</div>
-                <div className="campaign-focus-title">{detail.recommended_product || detail.product}</div>
+                <div className="campaign-focus-title">{normalizeGermanText(detail.recommended_product || detail.product)}</div>
                 <div className="campaign-focus-context">
-                  {detail.region_codes_display?.join(', ') || detail.region || 'National'}
+                  {normalizeGermanText(detail.region_codes_display?.join(', ') || detail.region || 'National')}
                 </div>
 
                 <div className="campaign-metric-grid review-metric-grid">
                   <div className="campaign-metric-card">
-                    <span>Shift</span>
+                    <span>Änderung</span>
                     <strong>{formatPercent(detail.budget_shift_pct || 0)}</strong>
                     <small>Budgetverschiebung</small>
                   </div>
@@ -206,7 +211,7 @@ const RecommendationDrawer: React.FC<Props> = ({
                     <small>Wochenbudget</small>
                   </div>
                   <div className="campaign-metric-card">
-                    <span>Flight</span>
+                    <span>Startfenster</span>
                     <strong>{formatDateShort(detail.activation_window?.start)}</strong>
                     <small>Geplanter Start</small>
                   </div>
@@ -244,10 +249,10 @@ const RecommendationDrawer: React.FC<Props> = ({
                 <div className="review-stat-grid">
                   <div className="metric-box">
                     <span>Produkt</span>
-                    <strong style={{ fontSize: 18 }}>{detail.recommended_product || detail.product}</strong>
+                    <strong style={{ fontSize: 18 }}>{normalizeGermanText(detail.recommended_product || detail.product)}</strong>
                   </div>
                   <div className="metric-box">
-                    <span>Budget-Shift</span>
+                    <span>Budgetänderung</span>
                     <strong>{formatPercent(detail.budget_shift_pct || 0)}</strong>
                   </div>
                   <div className="metric-box">
@@ -255,7 +260,7 @@ const RecommendationDrawer: React.FC<Props> = ({
                     <strong style={{ fontSize: 18 }}>{formatCurrency(detail.campaign_pack?.budget_plan?.weekly_budget_eur)}</strong>
                   </div>
                   <div className="metric-box">
-                    <span>Flight</span>
+                    <span>Startfenster</span>
                     <strong style={{ fontSize: 18 }}>{formatDateShort(detail.activation_window?.start)}</strong>
                   </div>
                 </div>
@@ -267,16 +272,16 @@ const RecommendationDrawer: React.FC<Props> = ({
 
                 {(detail.outcome_signal_score != null || detail.outcome_learning_explanation) && (
                   <div className="soft-panel review-panel-soft">
-                    <div className="campaign-focus-label">Outcome-Learning</div>
+                    <div className="campaign-focus-label">Wirkung aus Kundendaten</div>
                     <div className="review-body-copy" style={{ marginTop: 8 }}>
-                      {detail.outcome_learning_explanation || 'Outcome-Learning ist für diesen Vorschlag noch nicht ausreichend angeschlossen.'}
+                      {normalizeGermanText(detail.outcome_learning_explanation) || 'Kundendaten sind für diesen Vorschlag noch nicht stark genug angeschlossen.'}
                     </div>
                     <div className="review-chip-row" style={{ marginTop: 10 }}>
                       <span className="step-chip">
-                        Outcome {formatPercent(detail.outcome_signal_score)}
+                        Wirkungssignal {formatPercent(detail.outcome_signal_score)}
                       </span>
                       <span className="step-chip">
-                        Learning {learningStateLabel(detail.learning_state)}
+                        Lernstand {learningStateLabel(detail.learning_state)}
                       </span>
                       <span className="step-chip">
                         {outcomeConfidenceLabel} {detail.outcome_confidence_pct != null ? formatPercent(detail.outcome_confidence_pct) : '-'}
@@ -307,7 +312,7 @@ const RecommendationDrawer: React.FC<Props> = ({
                   <div className="campaign-focus-label">Argumente</div>
                   <div className="review-chip-row">
                     {supportPoints.length > 0 ? supportPoints.map((point) => (
-                      <span key={point} className="step-chip">{point}</span>
+                      <span key={point} className="step-chip">{normalizeGermanText(point)}</span>
                     )) : <span className="review-muted-copy">Keine Argumente hinterlegt.</span>}
                   </div>
                 </div>
@@ -316,7 +321,7 @@ const RecommendationDrawer: React.FC<Props> = ({
                   <div className="review-stack">
                     {creativeAngles.length > 0 ? creativeAngles.map((angle) => (
                       <div key={angle} className="soft-panel review-soft-line">
-                        {angle}
+                        {normalizeGermanText(angle)}
                       </div>
                     )) : <span className="review-muted-copy">Keine KI-Ansätze vorhanden.</span>}
                   </div>
@@ -347,10 +352,10 @@ const RecommendationDrawer: React.FC<Props> = ({
                 </div>
 
                 <div className="review-detail-group">
-                  <div className="campaign-focus-label">Keyword-Cluster</div>
+                  <div className="campaign-focus-label">Suchthemen</div>
                   <div className="review-chip-row">
                     {keywordClusters.length > 0 ? keywordClusters.map((keyword) => (
-                      <span key={keyword} className="step-chip">{keyword}</span>
+                      <span key={keyword} className="step-chip">{normalizeGermanText(keyword)}</span>
                     )) : <span className="review-muted-copy">Keine Keywords hinterlegt.</span>}
                   </div>
                 </div>
@@ -362,10 +367,10 @@ const RecommendationDrawer: React.FC<Props> = ({
                   {nextSteps.length > 0 ? nextSteps.map((step, index) => (
                     <div key={index} className="soft-panel review-soft-line">
                       <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>
-                        {String(step.task || 'Nächster Schritt')}
+                        {normalizeGermanText(String(step.task || 'Nächster Schritt'))}
                       </div>
                       <div style={{ marginTop: 4, fontSize: 12, color: 'var(--text-muted)' }}>
-                        {String(step.owner || 'Team')} · {String(step.eta || '-')}
+                        {normalizeGermanText(String(step.owner || 'Team'))} · {normalizeGermanText(String(step.eta || '-'))}
                       </div>
                     </div>
                   )) : <div className="review-muted-copy">Keine operativen Schritte hinterlegt.</div>}
@@ -376,7 +381,7 @@ const RecommendationDrawer: React.FC<Props> = ({
                   <div className="review-stack">
                     {guardrailNotes.length > 0 ? (
                       guardrailNotes.map((note) => (
-                        <div key={note} className="review-body-copy">{note}</div>
+                        <div key={note} className="review-body-copy">{normalizeGermanText(note)}</div>
                       ))
                     ) : (
                       <div className="review-muted-copy">Keine zusätzlichen Hinweise.</div>
@@ -389,7 +394,7 @@ const RecommendationDrawer: React.FC<Props> = ({
                   <div className="review-stack">
                     {detail.publish_blockers && detail.publish_blockers.length > 0 ? (
                       detail.publish_blockers.map((note) => (
-                        <div key={note} className="review-body-copy">{note}</div>
+                        <div key={note} className="review-body-copy">{normalizeGermanText(note)}</div>
                       ))
                     ) : (
                       <div className="review-muted-copy">{publishabilityHint(detail)}</div>

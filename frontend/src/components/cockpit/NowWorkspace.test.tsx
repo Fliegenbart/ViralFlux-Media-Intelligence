@@ -15,6 +15,13 @@ function buildView(): NowPageViewModel {
     title: 'Aktivieren: Berlin',
     summary: 'Berlin ist diese Woche der klarste nächste Schritt.',
     note: 'Die nächste sinnvolle Aktion steht oben. Qualität und Risiken folgen darunter.',
+    proof: {
+      headline: 'Wir sehen im 7-Tage-Fenster das früheste relevante Signal aktuell in Berlin.',
+      supportingText: 'Die Vorhersage spricht im Moment klar dafür, dass die nächste relevante Welle dort zuerst anzieht.',
+      proofPoints: ['7 Tage Vorhersage', 'Berlin zeigt aktuell das früheste relevante Signal.'],
+      cautionText: 'Die Lage bleibt nachvollziehbar, aber keine Vorhersage ist eine Garantie.',
+      assertive: true,
+    },
     primaryActionLabel: 'Nächste Kampagne öffnen',
     primaryRecommendationId: 'rec-1',
     primaryCampaignTitle: 'Respiratory Core Demand',
@@ -46,8 +53,8 @@ function buildView(): NowPageViewModel {
     quality: [
       { label: 'Quellen aktuell', value: '6/7' },
       { label: 'Kundendaten', value: 'im Aufbau' },
-      { label: 'Business-Gate', value: 'Holdout bereit' },
-      { label: 'Evidenz', value: 'observational' },
+      { label: 'Freigabestatus', value: 'Holdout bereit' },
+      { label: 'Belegstufe', value: 'beobachtend' },
     ],
     relatedRegions: [
       {
@@ -123,12 +130,12 @@ describe('NowWorkspace', () => {
       />,
     );
 
-    expect(screen.getByText('Klare Lage. Klare nächste Aktion.')).toBeInTheDocument();
-    expect(screen.getByText('Berlin ist diese Woche der klarste nächste Schritt.')).toBeInTheDocument();
+    expect(screen.getByText('Wo die nächste virale Welle zuerst anzieht')).toBeInTheDocument();
+    expect(screen.getByText('Wir sehen im 7-Tage-Fenster das früheste relevante Signal aktuell in Berlin.')).toBeInTheDocument();
     expect(screen.getByText('Wie sicher ist das?')).toBeInTheDocument();
-    expect(screen.getByText('Was danach wichtig wird')).toBeInTheDocument();
-    expect(screen.getByText('Was noch offen ist')).toBeInTheDocument();
-    expect(screen.getByText('Technische Details')).toBeInTheDocument();
+    expect(screen.getByText('Als Nächstes prüfen')).toBeInTheDocument();
+    expect(screen.getByText('Was wir noch prüfen')).toBeInTheDocument();
+    expect(screen.getByText('Weitere Details')).toBeInTheDocument();
   });
 
   it('opens the primary recommendation from the hero action', () => {

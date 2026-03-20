@@ -42,10 +42,10 @@ const ImportValidationSection: React.FC<Props> = ({
       <section className="truth-analyst-grid">
         <div className="card subsection-card" style={{ padding: 24 }}>
           <div className="section-heading">
-            <span className="section-kicker">CSV Upload</span>
+            <span className="section-kicker">CSV-Import</span>
             <h2 className="subsection-title">Import der Kundendaten vorbereiten</h2>
             <p className="subsection-copy">
-              Erwartet werden `week_start`, `product`, `region_code`, `media_spend_eur` plus mindestens eine echte Outcome-Metrik wie `sales_units`, `order_count` oder `revenue_eur`.
+              Erwartet werden `week_start`, `product`, `region_code`, `media_spend_eur` plus mindestens eine echte Kundenmetrik wie `sales_units`, `order_count` oder `revenue_eur`.
             </p>
           </div>
 
@@ -61,7 +61,7 @@ const ImportValidationSection: React.FC<Props> = ({
             </label>
 
             <label className="campaign-field">
-              <span>Quellenlabel</span>
+              <span>Quellenname</span>
               <input
                 className="media-input"
                 value={sourceLabel}
@@ -85,11 +85,11 @@ const ImportValidationSection: React.FC<Props> = ({
 
           <div className="campaign-setup-footer">
             <div className="campaign-setup-note">
-              {file ? `Bereit: ${file.name}` : 'Zuerst eine Weekly-CSV auswählen, dann validieren und erst danach importieren.'}
+              {file ? `Bereit: ${file.name}` : 'Zuerst eine Wochen-CSV auswählen, dann prüfen und erst danach importieren.'}
             </div>
             <div className="review-action-row">
               <a className="media-button secondary" href={truthSnapshot?.template_url || '/api/v1/media/outcomes/template'}>
-                Vorlage laden
+                CSV-Vorlage laden
               </a>
               <button
                 className="media-button secondary"
@@ -97,7 +97,7 @@ const ImportValidationSection: React.FC<Props> = ({
                 disabled={!file || truthActionLoading}
                 onClick={() => file && onSubmitTruthCsv({ file, sourceLabel, replaceExisting, validateOnly: true })}
               >
-                {truthActionLoading ? 'Validierung läuft...' : 'Zuerst validieren'}
+                {truthActionLoading ? 'Prüfung läuft...' : 'Datei prüfen'}
               </button>
               <button
                 className="media-button primary"
@@ -105,7 +105,7 @@ const ImportValidationSection: React.FC<Props> = ({
                 disabled={!file || truthActionLoading}
                 onClick={() => file && onSubmitTruthCsv({ file, sourceLabel, replaceExisting, validateOnly: false })}
               >
-                {truthActionLoading ? 'Import läuft...' : 'Importieren'}
+                {truthActionLoading ? 'Import läuft...' : 'Import starten'}
               </button>
             </div>
           </div>
@@ -116,7 +116,7 @@ const ImportValidationSection: React.FC<Props> = ({
             <span className="section-kicker">Import-Vorschau</span>
             <h2 className="subsection-title">Prüfung und Ergebnis</h2>
             <p className="subsection-copy">
-              Erst prüfen, dann importieren. Vorschau und importierter Upload zeigen dieselben Kennzahlen, Hinweise und Projektionen.
+              Erst prüfen, dann importieren. Vorschau und importierte Datei zeigen dieselben Kennzahlen und Hinweise.
             </p>
           </div>
 
@@ -154,7 +154,7 @@ const ImportValidationSection: React.FC<Props> = ({
             </>
           ) : (
             <div className="review-muted-copy">
-              Noch keine Vorschau vorhanden. Lade eine CSV hoch und starte zuerst die Validierung.
+              Noch keine Vorschau vorhanden. Lade eine CSV hoch und starte zuerst die Prüfung.
             </div>
           )}
         </div>
@@ -164,7 +164,7 @@ const ImportValidationSection: React.FC<Props> = ({
         <div className="card subsection-card" style={{ padding: 24 }}>
           <div className="section-heading">
             <span className="section-kicker">Import-Historie</span>
-            <h2 className="subsection-title">Letzte Uploads</h2>
+            <h2 className="subsection-title">Letzte Importe</h2>
           </div>
           <div className="truth-history-list">
             {(truthSnapshot?.recent_batches || []).length > 0 ? truthSnapshot!.recent_batches.map((batch: TruthImportBatchSummary) => (
@@ -181,18 +181,18 @@ const ImportValidationSection: React.FC<Props> = ({
                 <small>{batch.rows_imported}/{batch.rows_total} importiert</small>
               </button>
             )) : (
-              <div className="review-muted-copy">Noch keine Uploads für Kundendaten vorhanden.</div>
+              <div className="review-muted-copy">Noch keine Importe für Kundendaten vorhanden.</div>
             )}
           </div>
         </div>
 
         <div className="card subsection-card" style={{ padding: 24 }}>
           <div className="section-heading">
-            <span className="section-kicker">Upload-Detail</span>
+            <span className="section-kicker">Import-Details</span>
             <h2 className="subsection-title">Ausgewählter Import</h2>
           </div>
           {truthBatchDetailLoading ? (
-            <div className="review-muted-copy">Upload-Detail lädt…</div>
+            <div className="review-muted-copy">Import-Details laden…</div>
           ) : selectedBatch ? (
             <div className="soft-panel review-panel-soft" style={{ display: 'grid', gap: 0 }}>
               <div className="evidence-row">
@@ -213,7 +213,7 @@ const ImportValidationSection: React.FC<Props> = ({
               </div>
             </div>
           ) : (
-            <div className="review-muted-copy">Wähle einen Upload aus der Historie oder validiere eine neue Datei.</div>
+            <div className="review-muted-copy">Wähle einen Import aus der Historie oder prüfe eine neue Datei.</div>
           )}
         </div>
       </section>
@@ -221,7 +221,7 @@ const ImportValidationSection: React.FC<Props> = ({
       <section className="card subsection-card" style={{ padding: 24 }}>
         <div className="section-heading">
           <span className="section-kicker">Hinweis-Tabelle</span>
-          <h2 className="subsection-title">Import-Probleme und Mapping-Hinweise</h2>
+          <h2 className="subsection-title">Probleme und Zuordnungshinweise</h2>
           <p className="subsection-copy">
             Jeder ausgeschlossene Datensatz bleibt sichtbar. Es gibt keine stillen Ausfälle.
           </p>
@@ -236,7 +236,7 @@ const ImportValidationSection: React.FC<Props> = ({
               <p>{issue.message}</p>
             </div>
           )) : (
-            <div className="review-muted-copy">Keine Hinweise sichtbar. Die aktuelle Vorschau oder der ausgewählte Upload ist sauber.</div>
+            <div className="review-muted-copy">Keine Hinweise sichtbar. Die aktuelle Vorschau oder der ausgewählte Import ist sauber.</div>
           )}
         </div>
       </section>

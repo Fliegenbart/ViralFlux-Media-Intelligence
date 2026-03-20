@@ -12,7 +12,7 @@ const PRIMARY_NAV_ITEMS = [
   { label: 'Jetzt', path: '/jetzt', helper: 'Die wichtigste Wochenentscheidung und der nächste Schritt', icon: 'bolt' },
   { label: 'Regionen', path: '/regionen', helper: 'Eine Region fokussiert prüfen und weiterbearbeiten', icon: 'location_on' },
   { label: 'Kampagnen', path: '/kampagnen', helper: 'Den wichtigsten Fall zuerst prüfen und freigeben', icon: 'auto_awesome' },
-  { label: 'Qualität', path: '/evidenz', helper: 'Forecast, Quellen, Kundendaten und Blocker prüfen', icon: 'verified' },
+  { label: 'Qualität', path: '/evidenz', helper: 'Vorhersage, Quellen, Kundendaten und Blocker prüfen', icon: 'verified' },
 ] as const;
 
 const SECTION_META = [
@@ -38,7 +38,7 @@ const SECTION_META = [
     path: '/evidenz',
     kicker: 'Qualität',
     title: 'Qualität',
-    description: 'Hier beantworten wir nur vier Fragen: Ist der Forecast stabil, sind die Daten frisch, sind Kundendaten da und gibt es Blocker?',
+    description: 'Hier beantworten wir nur vier Fragen: Ist die Vorhersage stabil, sind die Daten frisch, sind Kundendaten da und gibt es Blocker?',
   },
 ] as const;
 
@@ -53,13 +53,13 @@ const AppLayout: React.FC<Props> = ({ children }) => {
   const isActive = (path: string) => location.pathname.startsWith(path);
   const currentSection = SECTION_META.find(({ path }) => location.pathname.startsWith(path)) || {
     kicker: 'PEIX Arbeitsansicht',
-    title: 'Media Intelligence',
-    description: 'Die Arbeitslage bleibt in einer kompakten PEIX-Ansicht gebündelt.',
+    title: 'Arbeitsansicht',
+    description: 'Die Wochenlage bleibt in einer kompakten PEIX-Ansicht gebündelt.',
   };
   const operatorStatusLabel = location.pathname.startsWith('/jetzt')
-    ? 'Live-Lage aktiv'
+    ? 'Wochenlage aktiv'
     : location.pathname.startsWith('/evidenz')
-      ? 'Qualität aktiv'
+      ? 'Qualität im Blick'
       : 'Arbeitsbereich aktiv';
 
   const handlePdfDownload = async () => {
@@ -71,7 +71,7 @@ const AppLayout: React.FC<Props> = ({ children }) => {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'ViralFlux_Wochenbericht.pdf';
+      a.download = 'PEIX_GELO_Wochenbericht.pdf';
       a.click();
       URL.revokeObjectURL(url);
     } catch (e) {
@@ -99,7 +99,7 @@ const AppLayout: React.FC<Props> = ({ children }) => {
         <aside
           id="operator-sidebar"
           className={`operator-sidebar ${mobileMenuOpen ? 'operator-sidebar--open' : ''}`}
-          aria-label="Operator Navigation"
+          aria-label="Navigation Arbeitsansicht"
         >
           <div className="operator-sidebar__brand-row">
             <Link to="/welcome" className="operator-wordmark" aria-label="ViralFlux Startseite">
@@ -108,13 +108,13 @@ const AppLayout: React.FC<Props> = ({ children }) => {
           </div>
 
           <div className="operator-sidebar__brand-block">
-            <p className="operator-sidebar__brand-copy">Media Intelligence</p>
+            <p className="operator-sidebar__brand-copy">PEIX x GELO</p>
             <p className="operator-sidebar__brand-note">
-              Dein Operator-Raum für klare Signale, nächste Schritte und schnelle Prüfung.
+              Frühwarnung für regionale Nachfrage mit klarer Begründung und einfachem nächsten Schritt.
             </p>
           </div>
 
-          <nav className="operator-nav" role="navigation" aria-label="Operator Bereiche">
+          <nav className="operator-nav" role="navigation" aria-label="Arbeitsbereiche">
             {PRIMARY_NAV_ITEMS.map(({ label, path, helper, icon }) => {
               const active = isActive(path);
               return (
@@ -219,7 +219,7 @@ const AppLayout: React.FC<Props> = ({ children }) => {
                   title="Abmelden"
                 >
                   <span className="operator-avatar" aria-hidden="true">VF</span>
-                  <span className="operator-profile-pill__copy">Operator</span>
+                  <span className="operator-profile-pill__copy">PEIX</span>
                   <span className="material-symbols-outlined" aria-hidden="true">logout</span>
                 </button>
               </div>

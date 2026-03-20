@@ -64,7 +64,7 @@ const RegionWorkbench: React.FC<Props> = ({
   const primaryReason = region?.priority_explanation
     || suggestion?.reason
     || region?.tooltip?.recommendation_text
-    || 'Diese Region bündelt aktuell das stärkste Signal aus Forecast, Kontext und Nachfrage.';
+    || 'Diese Region zeigt aktuell das früheste relevante Signal aus Vorhersage, Versorgung und Nachfrage.';
   const primaryActionLabel = region?.recommendation_ref?.card_id
     ? 'Kampagnenvorschlag öffnen'
     : 'Vorschlag für Region erstellen';
@@ -82,9 +82,9 @@ const RegionWorkbench: React.FC<Props> = ({
       <section className="context-filter-rail">
         <div className="section-heading" style={{ marginBottom: 0 }}>
           <span className="section-kicker">Regionen</span>
-          <h1 className="section-title">Eine Region. Ein Grund. Ein nächster Schritt.</h1>
+          <h1 className="section-title">Hier sehen wir den wahrscheinlichen frühen Start</h1>
           <p className="section-copy">
-            Die Karte hilft nur bei der Auswahl. Die eigentliche Arbeit passiert an einer Region nach der anderen.
+            Die Karte hilft nur bei der Auswahl. Entscheidend ist, wo das früheste relevante Signal entsteht und was wir daraus als Nächstes tun.
           </p>
         </div>
 
@@ -122,11 +122,11 @@ const RegionWorkbench: React.FC<Props> = ({
                 <strong>{formatPercent(primarySignalScore(region || primaryRegion))}</strong>
               </div>
               <div className="metric-box">
-                <span>Actionability</span>
+                <span>Umsetzbarkeit</span>
                 <strong>{formatPercent(Number(region?.actionability_score || primaryRegion?.actionability_score || 0))}</strong>
               </div>
               <div className="metric-box">
-                <span>Forecast-Richtung</span>
+                <span>Richtung der Vorhersage</span>
                 <strong style={{ fontSize: 18 }}>{region?.forecast_direction || 'seitwärts'}</strong>
               </div>
               <div className="metric-box">
@@ -149,12 +149,12 @@ const RegionWorkbench: React.FC<Props> = ({
 
           <aside className="soft-panel workspace-priority-card__aside">
             <div>
-              <div className="section-kicker">Kurz erklärt</div>
+              <div className="section-kicker">Warum diese Region</div>
               <div className="summary-headline" style={{ fontSize: '1.55rem', marginTop: 8 }}>
-                {region?.tooltip?.recommended_product || 'GELO Portfolio'}
+                {region ? `${region.name} liegt aktuell vorn.` : 'Frühester Startpunkt'}
               </div>
               <div className="summary-note" style={{ marginTop: 8 }}>
-                {region?.signal_drivers?.slice(0, 3).map((driver) => driver.label).join(' · ') || 'Treiber folgen nach Auswahl der Region.'}
+                {region?.signal_drivers?.slice(0, 3).map((driver) => driver.label).join(' · ') || 'Die wichtigsten Treiber erscheinen nach Auswahl der Region.'}
               </div>
             </div>
 
@@ -172,8 +172,8 @@ const RegionWorkbench: React.FC<Props> = ({
                 <strong>{formatPercent(region?.change_pct || 0, 1)}</strong>
               </div>
               <div className="evidence-row">
-                <span>Ableitung</span>
-                <strong>{(region?.source_trace || []).join(', ') || 'AMELAG, SurvStat, Forecast'}</strong>
+                <span>Grundlage</span>
+                <strong>{(region?.source_trace || []).join(', ') || 'AMELAG, SurvStat, Vorhersage'}</strong>
               </div>
             </div>
           </aside>
@@ -252,7 +252,7 @@ const RegionWorkbench: React.FC<Props> = ({
               <div className="workspace-note-card">{primaryReason}</div>
               <div className="workspace-note-card">
                 {region
-                  ? 'Wenn die Region passt, springst du direkt in den passenden Kampagnenpfad.'
+                  ? 'Hier sehen wir den frühen Startpunkt zuerst. Wenn die Region passt, springst du direkt in den passenden Kampagnenpfad.'
                   : 'Sobald eine Region gewählt ist, steht hier genau ein klarer Arbeitsgrund.'}
               </div>
             </div>
@@ -273,12 +273,12 @@ const RegionWorkbench: React.FC<Props> = ({
                 <strong>{formatPercent(region?.change_pct || 0, 1)}</strong>
               </div>
               <div className="evidence-row">
-                <span>Forecast-Richtung</span>
+                <span>Richtung der Vorhersage</span>
                 <strong>{region?.forecast_direction || 'seitwärts'}</strong>
               </div>
               <div className="evidence-row">
                 <span>Quellen</span>
-                <strong>{(region?.source_trace || []).join(', ') || 'AMELAG, SurvStat, Forecast'}</strong>
+                <strong>{(region?.source_trace || []).join(', ') || 'AMELAG, SurvStat, Vorhersage'}</strong>
               </div>
             </div>
           </div>

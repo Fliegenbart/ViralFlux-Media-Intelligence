@@ -27,7 +27,7 @@ const SourceFreshnessSection: React.FC<Props> = ({
     <>
       <section className="cockpit-grid">
         <div className="card subsection-card" style={{ padding: 24 }}>
-          <h2 className="subsection-title">Datenfrische</h2>
+          <h2 className="subsection-title">Stand der Daten</h2>
           <div style={{ display: 'grid', gap: 10, marginTop: 14 }}>
             {Object.entries(evidence?.data_freshness || {}).map(([key, value]) => (
               <div key={key} className="evidence-row">
@@ -39,7 +39,7 @@ const SourceFreshnessSection: React.FC<Props> = ({
         </div>
 
         <div className="card subsection-card" style={{ padding: 24 }}>
-          <h2 className="subsection-title">Quellenstatus</h2>
+          <h2 className="subsection-title">Stand der Quellen</h2>
           <div style={{ display: 'grid', gap: 10, marginTop: 14 }}>
             {sourceItems.map((item) => (
               <div key={item.source_key} className="evidence-row">
@@ -67,7 +67,7 @@ const SourceFreshnessSection: React.FC<Props> = ({
             {(signalStack?.items || []).map((item) => (
               <div key={item.source_key} className="evidence-row">
                 <span>{item.label}</span>
-                <strong>{item.is_core_signal ? 'Epi-Kern' : monitoringStatusLabel(item.contribution_state)}</strong>
+                <strong>{item.is_core_signal ? 'Kernsignal' : monitoringStatusLabel(item.contribution_state)}</strong>
               </div>
             ))}
           </div>
@@ -82,7 +82,7 @@ const SourceFreshnessSection: React.FC<Props> = ({
           <h2 className="subsection-title">Modellhistorie</h2>
           <div style={{ display: 'grid', gap: 10, marginTop: 14 }}>
             <div className="evidence-row">
-              <span>Stack</span>
+              <span>Datenbasis</span>
               <strong>{[...(modelLineage?.base_estimators || []), modelLineage?.meta_learner].filter(Boolean).join(' → ') || '-'}</strong>
             </div>
             <div className="evidence-row">
@@ -110,7 +110,7 @@ const SourceFreshnessSection: React.FC<Props> = ({
               <strong>{monitoringStatusLabel(String(run.status || '-'))}</strong>
             </div>
           )) : (
-            <div style={{ color: 'var(--text-muted)' }}>Noch keine Laufhistorie im Cockpit vorhanden.</div>
+            <div style={{ color: 'var(--text-muted)' }}>Noch keine Laufhistorie vorhanden.</div>
           )}
         </div>
       </section>
@@ -122,7 +122,7 @@ const SourceFreshnessSection: React.FC<Props> = ({
             {[...(truthSnapshot?.known_limits || []), ...(evidence?.known_limits || [])].map((item) => (
               <div key={item} className="evidence-row">
                 <span>{item}</span>
-                <strong>Limit</strong>
+                <strong>Grenze</strong>
               </div>
             ))}
           </div>

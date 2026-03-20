@@ -73,6 +73,14 @@ export interface WorkspaceStatusSummary {
   items: WorkspaceStatusItem[];
 }
 
+export interface PredictionNarrative {
+  headline: string;
+  supportingText: string;
+  proofPoints: string[];
+  cautionText: string;
+  assertive: boolean;
+}
+
 export interface PeixDriver {
   label: string;
   strength_pct: number;

@@ -71,36 +71,36 @@ const ForecastMonitoringSection: React.FC<Props> = ({
             </div>
           </div>
           <p className="section-copy">
-            Dieser Block zeigt, wie gut das System epidemiologische Trigger gegen Marktbewegungen trifft. Er misst Planungsgüte im Marktvergleich, nicht den finalen Kundennachweis.
+            Dieser Block zeigt, wie gut das System frühe epidemiologische Signale gegen Marktbewegungen trifft. Er belegt den Vorlauf im Marktvergleich, nicht den finalen Kundennachweis.
           </p>
         </div>
 
         <div className="card subsection-card" style={{ padding: 24 }}>
           <div>
-            <div className="section-kicker">Forecast-Monitoring</div>
+            <div className="section-kicker">Vorhersage</div>
             <h2 className="subsection-title" style={{ marginTop: 8 }}>
               {monitoringStatusLabel(forecastMonitoring?.monitoring_status)}
             </h2>
           </div>
           <div className="metric-strip">
             <div className="metric-box">
-              <span>Freigabe-Gate</span>
+              <span>Prüfstatus</span>
               <strong>{readinessGateLabel(forecastMonitoring?.forecast_readiness)}</strong>
             </div>
             <div className="metric-box">
-              <span>Forecast-Frische</span>
+              <span>Stand der Vorhersage</span>
               <strong>{monitoringFreshnessLabel(forecastMonitoring?.freshness_status)}</strong>
             </div>
             <div className="metric-box">
-              <span>Genauigkeitsfenster</span>
+              <span>Stand der Genauigkeit</span>
               <strong>{monitoringFreshnessLabel(forecastMonitoring?.accuracy_freshness_status)}</strong>
             </div>
           </div>
           <p className="section-copy">
-            Dieser Block hängt direkt am Forecast-Kern: Drift, Accuracy, Backtest-Frische, Intervallabdeckung und Event-Kalibrierung werden aus demselben Stack gelesen wie die Opportunity-Gates.
+            Dieser Block zeigt, ob wir die aktuelle Vorhersage wirklich vertreten können. Wir prüfen Drift, Genauigkeit, Rückblicktest, Intervalle und Kalibrierung auf derselben Datenbasis wie die Wochenlage.
           </p>
           <div className="review-chip-row">
-            <span className="step-chip">Backtest: {monitoringFreshnessLabel(forecastMonitoring?.backtest_freshness_status)}</span>
+            <span className="step-chip">Rückblicktest: {monitoringFreshnessLabel(forecastMonitoring?.backtest_freshness_status)}</span>
             <span className="step-chip">
               Kalibrierung: {forecastMonitoring?.event_forecast?.calibration_passed == null ? '-' : forecastMonitoring.event_forecast.calibration_passed ? 'stabil' : 'Beobachten'}
             </span>
@@ -114,7 +114,7 @@ const ForecastMonitoringSection: React.FC<Props> = ({
       <section style={{ display: 'grid', gap: 20 }}>
         <ValidationSection
           title="Markt-Validierung im Verlauf"
-          subtitle="Forecast gegen Ist, inklusive Baselines. So wird sichtbar, ob das Modell die Welle früh erkennt und nicht nur nachzeichnet."
+          subtitle="Vorhersage gegen Ist, inklusive Vergleichslinien. So wird sichtbar, ob das Modell die Welle früh erkennt und nicht nur nachzeichnet."
           result={marketValidation}
           loading={marketValidationLoading}
           emptyMessage="Noch keine detaillierten Daten für den Marktvergleich verfügbar."
@@ -122,7 +122,7 @@ const ForecastMonitoringSection: React.FC<Props> = ({
         {truthStatus?.coverage_weeks ? (
           <ValidationSection
             title="Kunden-Validierung im Verlauf"
-            subtitle="Marktvergleich und Kundendaten bleiben getrennt: Dieser Bereich zeigt nur, wie gut das Modell an echte Kunden-Outcome-Daten anschliesst."
+            subtitle="Marktvergleich und Kundendaten bleiben getrennt. Dieser Bereich zeigt nur, wie gut das Modell an echte Kundendaten anschließt."
             result={customerValidation}
             loading={customerValidationLoading}
             emptyMessage="Noch keine ausreichend langen Kundenreihen für eine belastbare Validierung der Kundendaten verfügbar."
@@ -132,13 +132,13 @@ const ForecastMonitoringSection: React.FC<Props> = ({
             <div className="section-heading" style={{ gap: 6 }}>
               <h2 className="subsection-title">Kunden-Validierung im Verlauf</h2>
               <p className="subsection-copy">
-                Dieser Block bleibt leer, bis echte Outcome-Daten angeschlossen sind. Legacy-Runs erscheinen separat nur als explorativer Hinweis.
+                Dieser Block bleibt leer, bis echte Kundendaten angeschlossen sind. Frühere Läufe erscheinen separat nur als Hinweis.
               </p>
             </div>
             {legacyCustomer ? (
               <div className="soft-panel" style={{ padding: 16, marginTop: 14, display: 'grid', gap: 10 }}>
                 <div className="evidence-row">
-                  <span>Legacy-Run</span>
+                  <span>Früherer Lauf</span>
                   <strong>{legacyCustomer.run_id || '-'}</strong>
                 </div>
                 <div className="evidence-row">
@@ -161,20 +161,20 @@ const ForecastMonitoringSection: React.FC<Props> = ({
 
       <section className="card subsection-card" style={{ padding: 24 }}>
         <div className="section-heading">
-          <span className="section-kicker">Forecast-Details</span>
-          <h2 className="subsection-title">Stabilität des Produktionsmodells</h2>
+          <span className="section-kicker">Vorhersage-Details</span>
+          <h2 className="subsection-title">Stabilität des Modells</h2>
           <p className="subsection-copy">
-            Hier sehen wir, ob der Forecast nicht nur läuft, sondern auch bei Genauigkeit, Vorlauf, Intervallen und Kalibrierung im Zielkorridor bleibt.
+            Hier sehen wir, ob die Vorhersage nicht nur läuft, sondern auch bei Genauigkeit, Vorlauf, Intervallen und Kalibrierung im Zielkorridor bleibt.
           </p>
         </div>
 
         <div className="metric-strip" style={{ marginTop: 18 }}>
           <div className="metric-box">
-            <span>7-Tage-Event</span>
+            <span>7-Tage-Fenster</span>
             <strong>{formatPercent((forecastMonitoring?.event_forecast?.event_probability || 0) * 100, 1)}</strong>
           </div>
           <div className="metric-box">
-            <span>Durchschnittsfehler</span>
+            <span>Mittlerer Fehler</span>
             <strong>{formatPercent(latestAccuracy?.mape, 1)}</strong>
           </div>
           <div className="metric-box">
@@ -182,7 +182,7 @@ const ForecastMonitoringSection: React.FC<Props> = ({
             <strong>{latestAccuracy?.correlation != null ? formatPercent(latestAccuracy.correlation * 100, 0) : '-'}</strong>
           </div>
           <div className="metric-box">
-            <span>Vorlauf</span>
+            <span>Vorlauf im Rückblicktest</span>
             <strong>{numberFromUnknown(leadLag.effective_lead_days) != null ? `${numberFromUnknown(leadLag.effective_lead_days)} Tage` : '-'}</strong>
           </div>
         </div>
@@ -193,15 +193,15 @@ const ForecastMonitoringSection: React.FC<Props> = ({
             <strong>{forecastMonitoring?.model_version || modelLineage?.model_version || '-'}</strong>
           </div>
           <div className="evidence-row">
-            <span>Letzter Forecast-Lauf</span>
+            <span>Letzter Vorhersagelauf</span>
             <strong>{formatDateTime(forecastMonitoring?.issue_date || modelLineage?.latest_forecast_created_at)}</strong>
           </div>
           <div className="evidence-row">
-            <span>Letzter Accuracy-Check</span>
+            <span>Letzter Genauigkeitscheck</span>
             <strong>{formatDateTime(latestAccuracy?.computed_at)}</strong>
           </div>
           <div className="evidence-row">
-            <span>Letzter Markt-Backtest</span>
+            <span>Letzter Markt-Rückblicktest</span>
             <strong>{formatDateTime(latestBacktest?.created_at)}</strong>
           </div>
           <div className="evidence-row">
@@ -228,7 +228,7 @@ const ForecastMonitoringSection: React.FC<Props> = ({
 
         {forecastMonitoring?.alerts?.length ? (
           <div className="soft-panel review-panel-soft" style={{ marginTop: 16, padding: 18 }}>
-            <div className="campaign-focus-label">Offene Monitoring-Signale</div>
+            <div className="campaign-focus-label">Hinweise aus der Vorhersage-Prüfung</div>
             <div style={{ display: 'grid', gap: 8, marginTop: 10 }}>
               {forecastMonitoring.alerts.map((alert) => (
                 <div key={alert} className="review-body-copy">{sanitizeEvidenceCopy(alert)}</div>
@@ -237,7 +237,7 @@ const ForecastMonitoringSection: React.FC<Props> = ({
           </div>
         ) : (
           <div className="review-muted-copy" style={{ marginTop: 16 }}>
-            Aktuell gibt es keine offenen Monitoring-Warnungen für diesen Forecast-Stack.
+            Aktuell gibt es keine offenen Warnhinweise aus der Vorhersage-Prüfung.
           </div>
         )}
       </section>

@@ -24,8 +24,8 @@ const KPI_LABELS: Record<string, string> = {
   CTR: 'Klickrate',
   'Qualified Clicks': 'Qualifizierte Klicks',
   'Qualified Visits': 'Qualifizierte Besuche',
-  'Completed Views': 'Abgeschlossene Views',
-  Awareness: 'Awareness',
+  'Completed Views': 'Vollständige Videoaufrufe',
+  Awareness: 'Bekanntheit',
 };
 
 export function formatDateTime(value?: string | null): string {
@@ -188,29 +188,29 @@ export function learningStateLabel(value?: string | null): string {
 
 export function businessValidationLabel(value?: string | null): string {
   const normalized = String(value || '').trim().toLowerCase();
-  if (normalized === 'passed_holdout_validation') return 'holdout-validiert';
+  if (normalized === 'passed_holdout_validation') return 'mit Holdout bestätigt';
   if (normalized === 'pending_holdout_validation') return 'Holdout bereit';
   if (normalized === 'pending_holdout_design') return 'Holdout fehlt';
-  if (normalized === 'pending_activation_history') return 'Zyklen fehlen';
-  if (normalized === 'building_truth_layer') return 'Truth im Aufbau';
+  if (normalized === 'pending_activation_history') return 'zu wenig Kampagnenhistorie';
+  if (normalized === 'building_truth_layer') return 'Kundendatenbasis im Aufbau';
   if (normalized === 'pending_truth_connection') return 'noch nicht angeschlossen';
   return value ? String(value) : '-';
 }
 
 export function evidenceTierLabel(value?: string | null): string {
   const normalized = String(value || '').trim().toLowerCase();
-  if (normalized === 'commercially_validated') return 'kommerziell validiert';
-  if (normalized === 'holdout_ready') return 'holdout-ready';
-  if (normalized === 'truth_backed') return 'truth-backed';
-  if (normalized === 'observational') return 'observational';
-  if (normalized === 'no_truth') return 'kein Truth-Layer';
+  if (normalized === 'commercially_validated') return 'kommerziell bestätigt';
+  if (normalized === 'holdout_ready') return 'Holdout bereit';
+  if (normalized === 'truth_backed') return 'durch Kundendaten gestützt';
+  if (normalized === 'observational') return 'beobachtend';
+  if (normalized === 'no_truth') return 'keine Kundendatenbasis';
   return value ? String(value) : '-';
 }
 
 export function decisionScopeLabel(value?: string | null): string {
   const normalized = String(value || '').trim().toLowerCase();
-  if (normalized === 'validated_budget_activation') return 'Budgetfreigabe erlaubt';
-  if (normalized === 'decision_support_only') return 'nur Decision Support';
+  if (normalized === 'validated_budget_activation') return 'Budgetfreigabe möglich';
+  if (normalized === 'decision_support_only') return 'nur Entscheidungshilfe';
   return value ? String(value) : '-';
 }
 
@@ -270,13 +270,13 @@ export function aiModelLabel(provider?: string | null, model?: string | null): s
   const modelText = String(model || '').trim().toLowerCase();
 
   if (providerText.includes('qwen') || modelText.includes('qwen')) {
-    return `${UI_COPY.ai}-Plan: Lokal`;
+    return `${UI_COPY.ai}-Unterstützung: lokal`;
   }
   if (providerText.includes('openai') || modelText.includes('gpt')) {
-    return `${UI_COPY.ai}-Plan: OpenAI`;
+    return `${UI_COPY.ai}-Unterstützung: OpenAI`;
   }
   if (providerText) {
-    return `${UI_COPY.ai}-Plan: ${String(provider || '').trim()}`;
+    return `${UI_COPY.ai}-Unterstützung: ${String(provider || '').trim()}`;
   }
   if (modelText) {
     return `${UI_COPY.ai}-Plan: ${String(model || '').trim()}`;

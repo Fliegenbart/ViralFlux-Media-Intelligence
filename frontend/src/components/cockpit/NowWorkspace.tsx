@@ -36,6 +36,7 @@ const NowWorkspace: React.FC<Props> = ({
   onOpenEvidence,
 }) => {
   const focusRegion = view.focusRegion;
+  const proof = view.proof;
   const leadReasons = view.reasons.slice(0, 3);
   const relatedRegions = view.relatedRegions.slice(0, 3);
   const mainActionLabel = view.primaryActionLabel || 'Kampagnen prüfen';
@@ -43,7 +44,7 @@ const NowWorkspace: React.FC<Props> = ({
   if (loading && !view.hasData) {
     return (
       <div className="card" style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>
-        Lade klare Arbeitslage...
+        Lade Wochenlage...
       </div>
     );
   }
@@ -52,10 +53,10 @@ const NowWorkspace: React.FC<Props> = ({
     <div className="page-stack now-template-page">
       <section className="context-filter-rail">
         <div className="section-heading" style={{ marginBottom: 0 }}>
-          <span className="section-kicker">Diese Woche zuerst</span>
-          <h1 className="section-title">Klare Lage. Klare nächste Aktion.</h1>
+          <span className="section-kicker">Diese Woche im Blick</span>
+          <h1 className="section-title">Wo die nächste virale Welle zuerst anzieht</h1>
           <p className="section-copy">
-            Wir zeigen zuerst nur die wichtigste Entscheidung, warum sie gerade zählt und was der nächste sinnvolle Schritt ist.
+            Wir zeigen zuerst nur das 3-, 5- oder 7-Tage-Fenster, die Region mit dem frühesten Signal und den nächsten sinnvollen Schritt.
           </p>
         </div>
 
@@ -108,9 +109,25 @@ const NowWorkspace: React.FC<Props> = ({
               <div>
                 <div className="section-heading" style={{ gap: 8 }}>
                   <span className="section-kicker">Hauptentscheidung</span>
-                  <h2 className="section-title workspace-priority-card__title">{view.summary}</h2>
-                  <p className="section-copy">{view.note}</p>
+                  <h2 className="section-title workspace-priority-card__title">{proof?.headline || view.summary}</h2>
+                  <p className="section-copy">{proof?.supportingText || view.note}</p>
                 </div>
+
+                {proof?.proofPoints?.length ? (
+                  <div className="workspace-note-list" style={{ marginTop: 16 }}>
+                    {proof.proofPoints.map((point) => (
+                      <div key={point} className="workspace-note-card">
+                        {point}
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+
+                {proof?.cautionText ? (
+                  <p className="subsection-copy" style={{ marginTop: 14 }}>
+                    {proof.cautionText}
+                  </p>
+                ) : null}
 
                 <div className="review-chip-row" style={{ marginTop: 14 }}>
                   <span className="step-chip">Fokus {focusRegion?.name || '-'}</span>
@@ -144,14 +161,14 @@ const NowWorkspace: React.FC<Props> = ({
                 </div>
               </div>
 
-              <aside className="soft-panel workspace-priority-card__aside">
-                <div>
-                  <div className="section-kicker">Warum jetzt?</div>
-                  <div className="workspace-priority-card__reasons">
-                    {(leadReasons.length ? leadReasons : ['Noch keine kurze Begründung verfügbar.']).map((reason) => (
-                      <div key={reason} className="workspace-note-card">
-                        {reason}
-                      </div>
+          <aside className="soft-panel workspace-priority-card__aside">
+            <div>
+              <div className="section-kicker">Warum wir das sagen</div>
+              <div className="workspace-priority-card__reasons">
+                {(leadReasons.length ? leadReasons : ['Noch keine kurze Begründung verfügbar.']).map((reason) => (
+                  <div key={reason} className="workspace-note-card">
+                    {reason}
+                  </div>
                     ))}
                   </div>
                 </div>
@@ -165,10 +182,10 @@ const NowWorkspace: React.FC<Props> = ({
                     <span>Produktfokus</span>
                     <strong>{focusRegion?.product || '-'}</strong>
                   </div>
-                  <div className="evidence-row">
-                    <span>Wahrscheinlichkeit</span>
-                    <strong>{focusRegion?.probabilityLabel || '-'}</strong>
-                  </div>
+                <div className="evidence-row">
+                  <span>Vorhersagesignal</span>
+                  <strong>{focusRegion?.probabilityLabel || '-'}</strong>
+                </div>
                   <div className="evidence-row">
                     <span>Budgethinweis</span>
                     <strong>{focusRegion?.budgetLabel || '-'}</strong>
@@ -187,7 +204,7 @@ const NowWorkspace: React.FC<Props> = ({
           <section className="workspace-two-column">
             <section className="card subsection-card" style={{ padding: 24 }}>
               <div className="section-heading" style={{ gap: 6 }}>
-                <h2 className="subsection-title">Was danach wichtig wird</h2>
+                <h2 className="subsection-title">Als Nächstes prüfen</h2>
                 <p className="subsection-copy">
                   Nach der Fokusregion sind das die nächsten sinnvollen Prüfpfade.
                 </p>
@@ -218,7 +235,7 @@ const NowWorkspace: React.FC<Props> = ({
 
             <section className="card subsection-card" style={{ padding: 24 }}>
               <div className="section-heading" style={{ gap: 6 }}>
-                <h2 className="subsection-title">Was noch offen ist</h2>
+                <h2 className="subsection-title">Was wir noch prüfen</h2>
                 <p className="subsection-copy">
                   Diese Punkte sprechen für Vorsicht oder für einen kurzen zweiten Blick.
                 </p>
@@ -234,7 +251,7 @@ const NowWorkspace: React.FC<Props> = ({
           </section>
 
           <CollapsibleSection
-            title="Technische Details"
+            title="Weitere Details"
             subtitle="Nur für den zweiten Blick: zusätzliche Qualitätswerte, weitere Gründe und Detailhinweise."
           >
             <div className="workspace-two-column">

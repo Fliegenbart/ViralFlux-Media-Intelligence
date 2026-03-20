@@ -128,7 +128,7 @@ describe('RegionWorkbench', () => {
       />,
     );
 
-    expect(screen.getByText('Eine Region. Ein Grund. Ein nächster Schritt.')).toBeInTheDocument();
+    expect(screen.getByText('Hier sehen wir den wahrscheinlichen frühen Start')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Kampagnenvorschlag öffnen' })).toBeInTheDocument();
     expect(screen.queryByText('Empfehlung neu berechnen')).not.toBeInTheDocument();
 

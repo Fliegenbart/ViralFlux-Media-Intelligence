@@ -24,10 +24,10 @@ const FONT_SERIF = "'DM Serif Display', Georgia, 'Times New Roman', serif";
 const FONT_SANS = "'DM Sans', 'Inter', system-ui, sans-serif";
 
 const MAILTO = (() => {
-  const subject = 'POC Anfrage ViralFlux Media Intelligence';
+  const subject = 'POC Anfrage PEIX x GELO';
   const body = [
     'Hallo PEIX Team,', '',
-    'wir möchten ein kurzes Beratungsgespräch zu ViralFlux vereinbaren.', '',
+    'wir möchten ein kurzes Beratungsgespräch zu PEIX x GELO vereinbaren.', '',
     'Marke/Produkt:', 'Regionen:', 'Gewünschter Termin:', '', 'Viele Grüße',
   ].join('\n');
   return `mailto:sales@peix.de?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
@@ -37,7 +37,7 @@ const NAV_ITEMS = [
   { label: 'Jetzt', path: '/jetzt' },
   { label: 'Regionen', path: '/regionen' },
   { label: 'Kampagnen', path: '/kampagnen' },
-  { label: 'Evidenz', path: '/evidenz' },
+  { label: 'Qualität', path: '/evidenz' },
 ] as const;
 
 /* ═══ Score Gauge ════════════════════════════════════════════════════ */
@@ -293,7 +293,7 @@ const LandingPage: React.FC = () => {
             .slice(0, 3);
           if (entries.length > 0) {
             setTopRegions(entries);
-            setRecText(`Budgets in ${entries.map(e => e.bl).join(', ')} erhöhen`);
+            setRecText(`Das früheste Signal sehen wir aktuell in ${entries.map((entry) => entry.name).join(', ')}.`);
           }
         }
       })
@@ -380,7 +380,7 @@ const LandingPage: React.FC = () => {
             fontSize: 11, fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', marginBottom: 24,
           }}>
             <span style={{ width: 6, height: 6, borderRadius: '50%', background: C.indigo, opacity: 0.5 }} />
-            Epidemiologische Intelligence
+            PEIX x GELO Frühwarnung
           </div>
 
           <h1
@@ -390,14 +390,12 @@ const LandingPage: React.FC = () => {
               letterSpacing: '-0.02em', color: C.text, margin: 0, maxWidth: 560,
             }}
           >
-            Media-Budgets dorthin steuern,{' '}
-            <span style={{ color: C.indigo }}>wo</span>{' '}
-            die Nachfrage als Nächstes steigt.
+            Erkennen, <span style={{ color: C.indigo }}>wo</span>{' '}
+            die nächste virale Welle zuerst anzieht.
           </h1>
 
           <p className="lp-reading-copy" style={{ marginTop: 24, fontSize: 17, lineHeight: 1.72, color: C.textSec }}>
-            ViralFlux erkennt regionale Atemwegswellen früh über Abwasser-, Versorgungs- und Kontextsignale
-            und zeigt dem Marketingteam, wo Budgets vorbereitet, erhöht oder zurückgenommen werden sollten.
+            PEIX x GELO zeigt im 3-, 5- oder 7-Tage-Fenster, in welcher Region das früheste relevante Signal entsteht. So wird früh sichtbar, wo die nächste Welle voraussichtlich beginnt und welcher Schritt sinnvoll ist.
           </p>
 
           <div style={{ marginTop: 28, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
@@ -406,7 +404,7 @@ const LandingPage: React.FC = () => {
               className="media-button"
               type="button"
             >
-              Zum Cockpit
+              Arbeitsansicht öffnen
             </button>
             <button
               onClick={() => navigate('/kampagnen')}
@@ -420,7 +418,7 @@ const LandingPage: React.FC = () => {
           {/* Thin rule + stats */}
           <div style={{ marginTop: 36, width: 56, height: 1, background: C.rule }} />
           <div style={{ marginTop: 14, display: 'flex', gap: 24, flexWrap: 'wrap' }}>
-            {['16 Bundesländer', '4 Virustypen', '3 / 5 / 7 Tage Horizon'].map(s => (
+            {['16 Bundesländer', '4 Virustypen', '3 / 5 / 7 Tage Vorlauf'].map(s => (
               <span key={s} style={{ fontSize: 12, color: C.textMuted, fontWeight: 500 }}>{s}</span>
             ))}
           </div>
@@ -490,18 +488,18 @@ const LandingPage: React.FC = () => {
             {[
               {
                 icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={C.indigo} strokeWidth="2" strokeLinecap="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2" /></svg>,
-                title: 'Frühe Signale',
-                text: 'Abwasser-Monitoring, ARE-Inzidenz, Versorgungsdaten und Wetterhinweise werden zu einem klaren Lagebild gebündelt.',
+                title: '3 bis 7 Tage Vorlauf',
+                text: 'Abwasser, ARE, Versorgung und Kontextsignale werden so verbunden, dass wir frühe Veränderungen vor dem sichtbaren Peak erkennen.',
               },
               {
                 icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={C.indigo} strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="10" r="3" /><path d="M12 2a8 8 0 0 0-8 8c0 5.4 7 12 8 12s8-6.6 8-12a8 8 0 0 0-8-8Z" /></svg>,
-                title: 'Regionale Priorisierung',
-                text: 'Jede Empfehlung ist bundeslandgenau. Budget wird dort bewegt, wo Nachfrage und Handlungsdruck tatsächlich steigen.',
+                title: 'Frühester Startpunkt',
+                text: 'Jede Empfehlung ist bundeslandgenau. Wir zeigen, in welcher Region die nächste Welle voraussichtlich zuerst anzieht.',
               },
               {
                 icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={C.indigo} strokeWidth="2" strokeLinecap="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /><path d="m9 12 2 2 4-4" /></svg>,
-                title: 'Klare Freigabe',
-                text: 'Nichts geht automatisch live. Jeder Vorschlag bleibt nachvollziehbar, prüfbar und steuerbar.',
+                title: 'Begründung statt Blackbox',
+                text: 'Jede Aussage bleibt nachvollziehbar. Die Vorhersage wird mit Gründen, Quellenstand und Prüfstatus sichtbar gemacht.',
               },
             ].map((card) => (
               <div
@@ -534,15 +532,15 @@ const LandingPage: React.FC = () => {
 
         {/* ═══ 02 — Workflow Flow ════════════════════════════════ */}
         <RevealSection>
-          <SectionHead num="02">Von Signal zu Entscheidung</SectionHead>
+          <SectionHead num="02">Von Signal zu klarer Wochenlage</SectionHead>
 
           <div className="lp-flow-grid">
             <div className="lp-flow-line" />
             {[
               { num: '01', label: 'Signal', desc: 'Frühe Hinweise aus Abwasser, Wetter, Nachfrage und Versorgung erfassen.' },
-              { num: '02', label: 'Einschätzung', desc: `14-Tage-Prognose pro Bundesland zu einem klaren ${UI_COPY.signalScore} verdichten.` },
-              { num: '03', label: 'Empfehlung', desc: 'Passendes Produkt und regionale Aktivierung für das Marketingteam vorschlagen.' },
-              { num: '04', label: 'Freigabe', desc: 'Vorschlag prüfen, Budget setzen und Kampagne gezielt starten.' },
+              { num: '02', label: 'Vorhersage', desc: `3-, 5- oder 7-Tage-Vorhersage pro Bundesland zu einem klaren ${UI_COPY.signalScore} verdichten.` },
+              { num: '03', label: 'Region', desc: 'Die Region mit dem frühesten relevanten Signal und dem passenden Produktfokus sichtbar machen.' },
+              { num: '04', label: 'Nächster Schritt', desc: 'Vorschlag prüfen, freigeben und die Kampagne gezielt vorbereiten oder starten.' },
             ].map((step, i) => (
               <div key={step.num} style={{ position: 'relative', zIndex: 1, textAlign: 'center', padding: '0 12px' }}>
                 <div style={{
@@ -568,7 +566,7 @@ const LandingPage: React.FC = () => {
 
         {/* ═══ 03 — Live Data Preview ═══════════════════════════ */}
         <RevealSection>
-          <SectionHead num="03">Regionale Lagebeurteilung</SectionHead>
+          <SectionHead num="03">Wo die Welle zuerst beginnt</SectionHead>
 
           <div
             className="lp-preview-grid"
@@ -588,9 +586,8 @@ const LandingPage: React.FC = () => {
                 So sieht die Wochenlage aus
               </h3>
               <p className="lp-section-copy" style={{ fontSize: 14, lineHeight: 1.7, color: C.textSec, margin: '0 0 20px' }}>
-                Die Deutschlandkarte zeigt regionale Hotspots in Echtzeit.
-                Beim Bewegen über ein Bundesland erscheint direkt ein konkreter
-                Kampagnenvorschlag mit Begründung.
+                Die Deutschlandkarte zeigt, wo das früheste relevante Signal aktuell entsteht.
+                Damit wird sichtbar, in welcher Region die nächste Welle voraussichtlich zuerst anzieht und welcher Kampagnenpfad daraus folgt.
               </p>
 
               {/* Top regions from API */}
@@ -628,10 +625,10 @@ const LandingPage: React.FC = () => {
           <h2 style={{
             fontFamily: FONT_SERIF, fontSize: 36, margin: '0 0 16px', letterSpacing: '-0.01em',
           }}>
-            Bis zu 14 Tage früher Klarheit für GELO.
+            3 bis 7 Tage früher sehen, wo die nächste Welle beginnt.
           </h2>
           <p className="lp-reading-copy" style={{ fontSize: 16, lineHeight: 1.7, color: C.textSec, marginBottom: 28, marginLeft: 'auto', marginRight: 'auto' }}>
-            Starten Sie direkt im Cockpit oder holen Sie sich eine Einordnung für die aktuelle Woche.
+            PEIX x GELO zeigt früh, in welcher Region eine virale Welle zuerst anzieht. Starte direkt in der Arbeitsansicht oder lass dir die aktuelle Wochenlage einordnen.
           </p>
           <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
             <button
@@ -639,7 +636,7 @@ const LandingPage: React.FC = () => {
               className="media-button"
               type="button"
             >
-              Zum Cockpit
+              Arbeitsansicht öffnen
             </button>
             <a
               href={MAILTO}
@@ -674,7 +671,7 @@ const LandingPage: React.FC = () => {
             </button>
           </div>
           <span className="shell-footer-note">
-            ViralFlux Media Intelligence für GELO
+            PEIX x GELO Frühwarnung für regionale Nachfrage
           </span>
         </div>
       </footer>

@@ -40,9 +40,9 @@ const TruthOutcomeSection: React.FC<Props> = ({
       <section className="card subsection-card" style={{ padding: 24 }}>
         <div className="section-heading">
           <span className="section-kicker">{UI_COPY.customerData}</span>
-          <h2 className="subsection-title">{truthLayerLabel(truthStatus)}</h2>
+          <h2 className="subsection-title">Kundendatenbasis {truthLayerLabel(truthStatus)}</h2>
           <p className="subsection-copy">
-            Dieser Bereich basiert auf validiertem CSV-Import mit Media Spend und echten Outcome-Metriken. Er bewertet Datenbreite, Aktualität und Anschlussfähigkeit an echte Kundenergebnisse.
+            Dieser Bereich basiert auf validiertem CSV-Import mit Mediabudget und echten Kundendaten. Er zeigt, wie gut die Daten die Empfehlung zusätzlich stützen.
           </p>
         </div>
         <div className="metric-strip">
@@ -61,15 +61,15 @@ const TruthOutcomeSection: React.FC<Props> = ({
         </div>
         <div className="soft-panel review-panel-soft" style={{ marginTop: 14 }}>
           <div className="evidence-row">
-            <span>Truth-Gate</span>
+            <span>Freigabestatus Kundendaten</span>
             <strong>{truthGate?.passed ? 'freigeschaltet' : learningStateLabel(truthGate?.state)}</strong>
           </div>
           <div className="evidence-row">
-            <span>Learning-State</span>
+            <span>Lernstand</span>
             <strong>{learningStateLabel(outcomeLearning?.learning_state || truthGate?.learning_state)}</strong>
           </div>
           <div className="evidence-row">
-            <span>Outcome-Score</span>
+            <span>Wirkungssignal</span>
             <strong>{formatPercent(outcomeLearning?.outcome_signal_score)}</strong>
           </div>
         </div>
@@ -80,19 +80,19 @@ const TruthOutcomeSection: React.FC<Props> = ({
         </div>
         <div className="soft-panel review-panel-soft" style={{ marginTop: 14 }}>
           <div className="evidence-row">
-            <span>Business-Gate</span>
+            <span>Freigabestatus</span>
             <strong>{businessValidationLabel(businessValidation?.validation_status)}</strong>
           </div>
           <div className="evidence-row">
-            <span>Evidenz-Tier</span>
+            <span>Belegstufe</span>
             <strong>{evidenceTierLabel(businessValidation?.evidence_tier)}</strong>
           </div>
           <div className="evidence-row">
-            <span>Entscheidungsscope</span>
+            <span>Entscheidungsrahmen</span>
             <strong>{decisionScopeLabel(businessValidation?.decision_scope)}</strong>
           </div>
           <div className="evidence-row">
-            <span>Holdout-Setup</span>
+            <span>Holdout-Test</span>
             <strong>{businessValidation?.holdout_ready ? 'bereit' : 'noch offen'}</strong>
           </div>
         </div>
@@ -108,7 +108,7 @@ const TruthOutcomeSection: React.FC<Props> = ({
         )}
         {!truthStatus?.coverage_weeks && legacyCustomer && (
           <div className="soft-panel review-panel-soft" style={{ marginTop: 14 }}>
-            <div className="campaign-focus-label">Explorativer Legacy-Run</div>
+            <div className="campaign-focus-label">Früherer Kundenlauf</div>
             <div className="review-body-copy" style={{ marginTop: 8 }}>
               {legacyCustomer.metrics?.data_points || 0} Punkte aus einem älteren Kunden-Backtest. Dieser Run bleibt als historischer Hinweis sichtbar, zählt aber nicht als aktiver Bereich für Kundendaten.
             </div>
@@ -118,23 +118,23 @@ const TruthOutcomeSection: React.FC<Props> = ({
 
       <section className="card subsection-card" style={{ padding: 24 }}>
         <div className="section-heading">
-          <span className="section-kicker">Outcome-Learning</span>
-          <h2 className="subsection-title">Beobachtete Wirkung statt nur Forecast und Ranking</h2>
+          <span className="section-kicker">Beobachtete Wirkung</span>
+          <h2 className="subsection-title">Was die Kundendaten zusätzlich stützen</h2>
           <p className="subsection-copy">
-            Dieser Block zeigt, was aus importierten Outcome-Daten bereits gelernt wurde. Die Werte priorisieren, sind aber keine Forecast-Wahrscheinlichkeiten.
+            Dieser Block zeigt, was aus importierten Kundendaten bereits gelernt wurde. Die Werte helfen bei der Priorisierung, sind aber keine Aussage über eine sichere Welle.
           </p>
         </div>
         <div className="metric-strip" style={{ marginTop: 16 }}>
           <div className="metric-box">
-            <span>Learning-State</span>
+            <span>Lernstand</span>
             <strong>{learningStateLabel(outcomeLearning?.learning_state)}</strong>
           </div>
           <div className="metric-box">
-            <span>Outcome-Score</span>
+            <span>Wirkungssignal</span>
             <strong>{formatPercent(outcomeLearning?.outcome_signal_score)}</strong>
           </div>
           <div className="metric-box">
-            <span>Learning-Konfidenz</span>
+            <span>Sicherheit aus Kundendaten</span>
             <strong>{formatPercent(outcomeLearning?.outcome_confidence_pct)}</strong>
           </div>
         </div>
@@ -147,7 +147,7 @@ const TruthOutcomeSection: React.FC<Props> = ({
           ))}
           {!outcomeLearning?.top_pair_learnings?.length && (
             <div className="review-muted-copy">
-              Noch keine granularen Produkt-Region-Learnings vorhanden. Sobald mehr Outcome-Reihen vorliegen, werden sie hier sichtbar.
+              Noch keine granularen Produkt-Region-Lernmuster vorhanden. Sobald mehr Reihen aus Kundendaten vorliegen, werden sie hier sichtbar.
             </div>
           )}
         </div>

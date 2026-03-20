@@ -21,7 +21,7 @@ describe('shared copy helpers', () => {
   });
 
   it('describes the market comparison state in plain language', () => {
-    expect(marketComparisonStateLabel('passed')).toBe('im Zielkorridor');
-    expect(marketComparisonStateLabel('watch')).toBe('weiter beobachten');
+    expect(marketComparisonStateLabel('passed')).toBe('belastbar');
+    expect(marketComparisonStateLabel('watch')).toBe('noch prüfen');
   });
 });

@@ -1,6 +1,7 @@
 import React from 'react';
 
 import { additionalSuggestionsText } from '../../lib/copy';
+import { normalizeGermanText } from '../../lib/plainLanguage';
 import { MediaCampaignsResponse, RecommendationCard, WorkspaceStatusSummary } from '../../types/media';
 import CollapsibleSection from '../CollapsibleSection';
 import {
@@ -58,10 +59,10 @@ const CampaignStudio: React.FC<Props> = ({
   const activeCount = laneStateCount('live', stateCounts);
   const focusCard = cards.find((card) => ['review', 'approve', 'sync'].includes(recommendationLane(card))) || prepareCards[0] || cards[0] || null;
   const focusTitle = focusCard
-    ? (focusCard.display_title || focusCard.campaign_name || focusCard.recommended_product || focusCard.product)
+    ? normalizeGermanText(focusCard.display_title || focusCard.campaign_name || focusCard.recommended_product || focusCard.product)
     : 'Noch kein Kampagnenvorschlag im Fokus';
   const focusContext = focusCard
-    ? `${focusCard.region_codes_display?.join(', ') || focusCard.region || 'National'} · ${flightWindowLabel(focusCard)}`
+    ? normalizeGermanText(`${focusCard.region_codes_display?.join(', ') || focusCard.region || 'National'} · ${flightWindowLabel(focusCard)}`)
     : 'Neue Vorschläge lassen sich weiterhin erzeugen, stehen aber bewusst nicht mehr vor der eigentlichen Arbeit.';
   const focusCopy = focusCard
     ? readableCampaignSummary(focusCard)
@@ -105,7 +106,7 @@ const CampaignStudio: React.FC<Props> = ({
               <span className="section-kicker">Kampagnen</span>
               <h1 className="section-title workspace-priority-card__title">Jetzt zuerst prüfen</h1>
               <p className="section-copy">
-                Oben steht immer nur der wichtigste Fall. Alles Weitere ordnet sich darunter in drei klare Arbeitsphasen.
+                Oben steht immer nur der wichtigste Fall. Er leitet sich aus der aktuellen Vorhersage und der Region mit dem frühesten Signal ab.
               </p>
             </div>
 
@@ -133,7 +134,7 @@ const CampaignStudio: React.FC<Props> = ({
 
           <aside className="soft-panel workspace-priority-card__aside">
             <div>
-              <div className="section-kicker">Stapelüberblick</div>
+              <div className="section-kicker">Überblick</div>
               <div className="workspace-note-list" style={{ marginTop: 12 }}>
                 <div className="workspace-note-card">{prepareCount} Fälle in Vorbereitung</div>
                 <div className="workspace-note-card">{approvalCount} Fälle in Freigabe</div>
@@ -155,7 +156,7 @@ const CampaignStudio: React.FC<Props> = ({
                 <strong>{activeCards.length}</strong>
               </div>
               <div className="evidence-row">
-                <span>Mit KI-Plan</span>
+                <span>Mit KI-Unterstützung</span>
                 <strong>{aiTouchedCount}</strong>
               </div>
             </div>
@@ -166,7 +167,7 @@ const CampaignStudio: React.FC<Props> = ({
       <WorkspaceStatusPanel
         status={workspaceStatus}
         title="Bevor wir freigeben"
-        intro="Der Kampagnenstapel bleibt bewusst eng an Forecast, Datenfrische, Kundendaten und offene Blocker gekoppelt."
+        intro="Der Kampagnenstapel bleibt bewusst eng an Vorhersage, Datenfrische, Kundendaten und offene Blocker gekoppelt."
       />
 
       {loading ? (
@@ -244,7 +245,7 @@ const CampaignStudio: React.FC<Props> = ({
                       </div>
 
                       <div className="campaign-work-item-footer">
-                        <span>{flightWindowLabel(card)} · {card.evidence_strength || 'Evidenz offen'}</span>
+                        <span>{flightWindowLabel(card)} · {normalizeGermanText(card.evidence_strength || 'Prüfstatus offen')}</span>
                         <span>Details prüfen</span>
                       </div>
                     </button>
@@ -271,7 +272,7 @@ const CampaignStudio: React.FC<Props> = ({
             <div className="section-kicker">Generation</div>
             <div className="campaign-form-grid" style={{ marginTop: 16 }}>
               <label className="campaign-field">
-                <span>Brand</span>
+                <span>Marke</span>
                 <input className="media-input" value={brand} onChange={(event) => onBrandChange(event.target.value)} />
               </label>
               <label className="campaign-field">
@@ -306,7 +307,7 @@ const CampaignStudio: React.FC<Props> = ({
                 <strong>{virus}</strong>
               </div>
               <div className="evidence-row">
-                <span>Learning-State</span>
+                <span>Lernstand</span>
                 <strong>{learningStateLabel(campaignsView?.summary?.learning_state)}</strong>
               </div>
               <div className="evidence-row">
@@ -341,7 +342,7 @@ function flightWindowLabel(card: RecommendationCard): string {
   const start = formatDateShort(card.activation_window?.start);
   const end = formatDateShort(card.activation_window?.end);
 
-  if (start === '-' && end === '-') return 'Flight offen';
+  if (start === '-' && end === '-') return 'Startfenster offen';
   if (end === '-' || start === end) return `Start ${start}`;
   return `${start} – ${end}`;
 }
@@ -349,25 +350,25 @@ function flightWindowLabel(card: RecommendationCard): string {
 function readableCampaignSummary(card: RecommendationCard): string {
   const blockers = card.publish_blockers || [];
   if (blockers.length > 0) {
-    return blockers[0];
+    return normalizeGermanText(blockers[0]);
   }
 
-  const summary = String(card.decision_brief?.summary_sentence || card.reason || '').trim();
+  const summary = normalizeGermanText(String(card.decision_brief?.summary_sentence || card.reason || '').trim());
 
-  if (!summary) return 'Regionale Aktivierung entlang des aktuellen Signals.';
+  if (!summary) return 'Kampagnenvorschlag aus aktueller Vorhersage und Fokusregion.';
   if (/^[A-Z0-9_]+$/.test(summary)) {
-    return `${humanizeTrigger(summary)} als Trigger erkannt.`;
+    return `Auslöser: ${humanizeTrigger(summary)}.`;
   }
 
   return summary;
 }
 
 function humanizeTrigger(value: string): string {
-  return value
+  return normalizeGermanText(value
     .split('_')
     .filter(Boolean)
     .map((segment) => segment.charAt(0) + segment.slice(1).toLowerCase())
-    .join(' ');
+    .join(' '));
 }
 
 function laneStateCount(

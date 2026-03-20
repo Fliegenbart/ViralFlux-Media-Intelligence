@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 
 import { decisionStateLabel } from '../../lib/copy';
+import { buildPredictionNarrative, normalizeGermanText } from '../../lib/plainLanguage';
 import {
   BacktestResponse,
   MediaCampaignsResponse,
@@ -14,6 +15,7 @@ import {
   RegionalPortfolioResponse,
   TruthImportBatchDetailResponse,
   TruthImportResponse,
+  PredictionNarrative,
 } from '../../types/media';
 import {
   businessValidationLabel,
@@ -27,6 +29,7 @@ import {
 } from '../../components/cockpit/cockpitUtils';
 import {
   monitoringStatusLabel,
+  numberFromUnknown,
   readinessGateLabel,
   sanitizeEvidenceCopy,
 } from '../../components/cockpit/evidence/evidenceUtils';
@@ -70,6 +73,7 @@ export interface NowPageViewModel {
   title: string;
   summary: string;
   note: string;
+  proof: PredictionNarrative | null;
   primaryActionLabel: string;
   primaryRecommendationId: string | null;
   primaryCampaignTitle: string;
@@ -115,38 +119,8 @@ function percentFromModelValue(raw: string): string {
   return `${localizedNumber(percentage, digits)} %`;
 }
 
-function replaceGermanAscii(value: string): string {
-  return value
-    .replace(/fuehrt/g, 'führt')
-    .replace(/Fuehrt/g, 'Führt')
-    .replace(/fuer/g, 'für')
-    .replace(/Fuer/g, 'Für')
-    .replace(/pruefbare/g, 'prüfbare')
-    .replace(/Pruefbare/g, 'Prüfbare')
-    .replace(/pruefbar/g, 'prüfbar')
-    .replace(/Pruefbar/g, 'Prüfbar')
-    .replace(/Pruefung/g, 'Prüfung')
-    .replace(/pruefung/g, 'prüfung')
-    .replace(/Vorschlaege/g, 'Vorschläge')
-    .replace(/vorschlaege/g, 'vorschläge')
-    .replace(/naechsten/g, 'nächsten')
-    .replace(/Naechsten/g, 'Nächsten')
-    .replace(/naechste/g, 'nächste')
-    .replace(/Naechste/g, 'Nächste')
-    .replace(/naechster/g, 'nächster')
-    .replace(/Naechster/g, 'Nächster')
-    .replace(/freigabefaehigen/g, 'freigabefähigen')
-    .replace(/Freigabefaehigen/g, 'Freigabefähigen')
-    .replace(/faehigen/g, 'fähigen')
-    .replace(/Faehigen/g, 'Fähigen')
-    .replace(/zukuenftige/g, 'zukünftige')
-    .replace(/Zukuenftige/g, 'Zukünftige')
-    .replace(/ueber/g, 'über')
-    .replace(/Ueber/g, 'Über');
-}
-
 function cleanCopy(value?: string | null): string {
-  const raw = replaceGermanAscii(String(value || '').trim());
+  const raw = normalizeGermanText(String(value || '').trim());
   if (!raw) return '';
 
   const normalized = raw.replace(/\s+/g, ' ').trim();
@@ -160,26 +134,26 @@ function cleanCopy(value?: string | null): string {
     /^Event probability ([\d.]+) clears the Activate threshold ([\d.]+)\.$/i,
   );
   if (activationThresholdMatch) {
-    return `Die Event-Wahrscheinlichkeit von ${percentFromModelValue(activationThresholdMatch[1])} liegt über der Aktivierungsschwelle von ${percentFromModelValue(activationThresholdMatch[2])}.`;
+    return `Die Vorhersage liegt mit ${percentFromModelValue(activationThresholdMatch[1])} über der Schwelle für eine Aktivierung.`;
   }
 
   const prepareThresholdMatch = normalized.match(
     /^Event probability ([\d.]+) clears the Prepare threshold ([\d.]+), but not all Activate conditions are met\.$/i,
   );
   if (prepareThresholdMatch) {
-    return `Die Event-Wahrscheinlichkeit von ${percentFromModelValue(prepareThresholdMatch[1])} spricht für Vorbereitung, aber noch nicht für eine volle Aktivierung.`;
+    return `Die Vorhersage spricht mit ${percentFromModelValue(prepareThresholdMatch[1])} für Vorbereitung, aber noch nicht für eine volle Aktivierung.`;
   }
 
   const belowThresholdMatch = normalized.match(
     /^Event probability ([\d.]+) stays below the rule set needed for Prepare\/Activate\.$/i,
   );
   if (belowThresholdMatch) {
-    return `Die Event-Wahrscheinlichkeit von ${percentFromModelValue(belowThresholdMatch[1])} reicht aktuell nicht für Vorbereitung oder Aktivierung.`;
+    return `Die Vorhersage reicht mit ${percentFromModelValue(belowThresholdMatch[1])} aktuell nicht für Vorbereitung oder Aktivierung.`;
   }
 
   const confidenceMatch = normalized.match(/^Forecast confidence is usable at ([\d.]+)\.$/i);
   if (confidenceMatch) {
-    return `Die Prognose ist mit ${percentFromModelValue(confidenceMatch[1])} Konfidenz nutzbar.`;
+    return `Die Vorhersage ist mit ${percentFromModelValue(confidenceMatch[1])} Signalsicherheit nutzbar.`;
   }
 
   const sourceFreshnessMatch = normalized.match(/^Primary sources are fresh on average \(([\d.]+) days old\)\.$/i);
@@ -202,11 +176,11 @@ function cleanCopy(value?: string | null): string {
   }
 
   if (/^Regional forecast quality gate is currently not passed\.$/i.test(normalized)) {
-    return 'Das regionale Qualitäts-Gate ist aktuell noch nicht bestanden.';
+    return 'Die regionale Vorhersage ist aktuell noch nicht stark genug für eine Freigabe.';
   }
 
   if (/^Remaining uncertainty: no positive cross-source agreement, quality gate not passed\.$/i.test(normalized)) {
-    return 'Es bleibt Unsicherheit, weil die Quellen noch kein klares gemeinsames Signal zeigen und das Qualitäts-Gate noch nicht bestanden ist.';
+    return 'Es bleibt Unsicherheit, weil die Quellen noch kein klares gemeinsames Signal zeigen und die Vorhersage noch nicht freigegeben ist.';
   }
 
   if (/^Watch from the decision engine sets the base activation level\.$/i.test(normalized)) {
@@ -215,7 +189,7 @@ function cleanCopy(value?: string | null): string {
 
   const rankDriverMatch = normalized.match(/^Priority score ([\d.]+) and event probability ([\d.]+) drive the ranking\.$/i);
   if (rankDriverMatch) {
-    return 'Die Rangfolge wird vor allem durch Prioritätsscore und Event-Wahrscheinlichkeit bestimmt.';
+    return 'Die Rangfolge entsteht vor allem aus Prioritätssignal und Vorhersage.';
   }
 
   if (/^Watch regions are observation-first and usually receive no spend\.$/i.test(normalized)) {
@@ -256,15 +230,15 @@ function cleanCopy(value?: string | null): string {
   }
 
   if (/^Evidence class is no_truth\.$/i.test(normalized)) {
-    return 'Es liegen noch keine Outcome-Daten vor.';
+    return 'Es liegen noch keine Kundendaten vor.';
   }
 
   if (/^Signal\/outcome agreement is no_signal\.$/i.test(normalized)) {
-    return 'Ein belastbarer Abgleich mit Outcome-Daten fehlt noch.';
+    return 'Ein belastbarer Abgleich mit Kundendaten fehlt noch.';
   }
 
   if (/^Der Forecast-Promotion-Gate steht aktuell auf WATCH\.$/i.test(normalized)) {
-    return 'Das Forecast-Promotion-Gate steht aktuell noch auf Beobachten.';
+    return 'Die Vorhersage ist aktuell noch nicht freigegeben.';
   }
 
   const decisionBriefMatch = normalized.match(
@@ -317,12 +291,12 @@ function regionSignalSentence(
 
 function buildNowPageNote(stage: string): string {
   if (stage === 'Aktivieren') {
-    return 'Die Lage ist stark genug für einen klaren nächsten Schritt. Kampagnenvorschlag, Qualität und Risiken bleiben direkt darunter sichtbar.';
+    return 'Die Vorhersage ist stark genug für einen klaren nächsten Schritt. Kampagnenvorschlag, Begründung und Risiken bleiben direkt darunter sichtbar.';
   }
   if (stage === 'Vorbereiten') {
-    return 'Die Lage spricht für Vorbereitung. Fokusregion, Kampagnenvorschlag und Prüfhinweise sind direkt darunter gebündelt.';
+    return 'Die Vorhersage spricht für Vorbereitung. Fokusregion, Kampagnenvorschlag und Prüfhinweise sind direkt darunter gebündelt.';
   }
-  return 'Noch keine Freigabe. Wir beobachten die Fokusregion, halten die Begründung sichtbar und prüfen erst dann den nächsten Kampagnenvorschlag.';
+  return 'Noch keine Freigabe. Wir zeigen die früheste Region, halten die Begründung sichtbar und prüfen erst dann den nächsten Kampagnenvorschlag.';
 }
 
 function probabilityPercent(value?: number | null): number | null {
@@ -406,7 +380,7 @@ function buildWorkspaceStatus(
     ? `${truthStatus.coverage_weeks ?? 0} Wochen verbunden${lastImportAt ? ` · letzter Import ${formatDateTime(lastImportAt)}` : ''}`
     : 'Noch keine Kundendaten verbunden.';
   const forecastDetail = evidence?.forecast_monitoring
-    ? `Monitoring ${monitoringStatusLabel(evidence.forecast_monitoring.monitoring_status)} · Forecast ${truthFreshnessLabel(evidence.forecast_monitoring.freshness_status)}`
+    ? `Prüfung ${monitoringStatusLabel(evidence.forecast_monitoring.monitoring_status)} · Vorhersage ${truthFreshnessLabel(evidence.forecast_monitoring.freshness_status)}`
     : 'Noch kein detaillierter Monitoring-Status verfügbar.';
 
   return {
@@ -423,7 +397,7 @@ function buildWorkspaceStatus(
     items: [
       {
         key: 'forecast_status',
-        question: 'Ist der Forecast stabil?',
+        question: 'Ist die Vorhersage stabil?',
         value: forecastStatus,
         detail: forecastDetail,
         tone: forecastStatusTone(forecastStatus),
@@ -460,6 +434,7 @@ function buildNowPageViewModel(
   allocation: RegionalAllocationResponse | null,
   campaignRecommendations: RegionalCampaignRecommendationsResponse | null,
   weeklyBudget: number,
+  horizonDays: number,
 ): NowPageViewModel {
   const weeklyDecision = decision?.weekly_decision;
   const topCard = decision?.top_recommendations?.[0] || null;
@@ -533,7 +508,7 @@ function buildNowPageViewModel(
     focusPrediction?.decision?.explanation_summary,
     focusPrediction?.reason_trace?.why?.[0],
     focusAllocation?.uncertainty_summary,
-    'Hier bündelt sich aktuell das stärkste Signal.',
+    'Hier sehen wir aktuell das früheste relevante Signal.',
   );
   const focusProduct = firstCleanText(
     topCard?.recommended_product,
@@ -603,6 +578,17 @@ function buildNowPageViewModel(
       topCard?.decision_brief?.summary_sentence,
       'Der nächste prüfbare Kampagnenvorschlag liegt bereit.',
     );
+
+  const forecastProofStatus = evidence?.forecast_monitoring?.forecast_readiness
+    ? readinessGateLabel(evidence.forecast_monitoring.forecast_readiness)
+    : monitoringStatusLabel(
+      evidence?.forecast_monitoring?.monitoring_status
+      || weeklyDecision?.forecast_state
+      || weeklyDecision?.decision_state,
+    );
+  const leadDays = numberFromUnknown(
+    evidence?.forecast_monitoring?.latest_backtest?.lead_lag?.effective_lead_days,
+  );
 
   const reasons = uniqueText([
     ...(weeklyDecision?.why_now || []),
@@ -679,25 +665,42 @@ function buildNowPageViewModel(
     title: forecast?.status === 'no_model'
       ? 'Für diesen Scope ist noch kein regionales Modell verfügbar.'
       : 'Für diesen Scope liegen gerade keine belastbaren Arbeitsdaten vor.',
-    body: emptyMessage || 'Wechsle Virus oder Horizont oder prüfe die Datenqualität im Evidenz-Bereich.',
+    body: emptyMessage || 'Wechsle Virus oder Zeitraum oder prüfe die Qualität.',
   };
 
   const cleanedDecisionSummary = cleanCopy(weeklyDecision?.recommended_action);
-  const focusAlignedSummary = textMentionsRegion(cleanedDecisionSummary, focusRegionName)
-    ? cleanedDecisionSummary
-    : firstCleanText(
-      `${focusRegionName} steht diese Woche im Mittelpunkt. ${focusReason}`,
-      cleanedDecisionSummary,
-      topCard?.decision_brief?.summary_sentence,
-      `Die stärkste nächste Aktion liegt aktuell in ${focusRegionName}.`,
-    );
+  const proof = focusRegionName
+    ? buildPredictionNarrative({
+      horizonDays,
+      regionName: focusRegionName,
+      forecastStatus: forecastProofStatus,
+      proofPoints: uniqueText([
+        `${horizonDays} Tage Vorhersagefenster.`,
+        `${focusRegionName} zeigt aktuell das früheste relevante Signal.`,
+        leadDays && leadDays > 0 ? `Der letzte Marktvergleich zeigt rund ${leadDays} Tage Vorlauf.` : null,
+        sourceSummary ? `${sourceSummary.live_count || 0}/${sourceSummary.total || 0} Quellen sind aktuell.` : null,
+        reasons[0],
+      ], 3),
+    })
+    : null;
+  const focusAlignedSummary = proof?.headline || (
+    textMentionsRegion(cleanedDecisionSummary, focusRegionName)
+      ? cleanedDecisionSummary
+      : firstCleanText(
+        `${focusRegionName} steht diese Woche im Mittelpunkt. ${focusReason}`,
+        cleanedDecisionSummary,
+        topCard?.decision_brief?.summary_sentence,
+        `Die stärkste nächste Aktion liegt aktuell in ${focusRegionName}.`,
+      )
+  );
 
   return {
     hasData,
     generatedAt: decision?.generated_at || forecast?.generated_at || allocation?.generated_at || campaignRecommendations?.generated_at || evidence?.generated_at || null,
     title: `${focusStage}: ${focusRegionName}`,
     summary: focusAlignedSummary,
-    note: buildNowPageNote(focusStage),
+    note: proof?.supportingText || buildNowPageNote(focusStage),
+    proof,
     primaryActionLabel: topCard?.id ? 'Nächste Kampagne öffnen' : 'Kampagnen prüfen',
     primaryRecommendationId: topCard?.id || null,
     primaryCampaignTitle,
@@ -715,22 +718,22 @@ function buildNowPageViewModel(
     } : null,
     metrics: [
       {
-        label: 'Freigabe',
+        label: 'Freigabestatus',
         value: decisionState,
         tone: stageTone(weeklyDecision?.decision_state),
       },
       {
-        label: 'Event-Wahrscheinlichkeit',
+        label: 'Vorhersagesignal',
         value: focusProbabilityLabel,
         tone: stageTone(focusStageValue),
       },
       {
-        label: 'Empfohlenes Budget',
+        label: 'Empfohlenes Wochenbudget',
         value: focusBudgetLabel,
         tone: 'neutral',
       },
       {
-        label: 'Vertrauen',
+        label: 'Kundendatenbasis',
         value: trustValue,
         tone: trustValue === 'belastbar' ? 'success' : trustValue === 'im Aufbau' ? 'warning' : 'neutral',
       },
@@ -747,11 +750,11 @@ function buildNowPageViewModel(
         value: trustValue,
       },
       {
-        label: 'Business-Gate',
+        label: 'Freigabestatus',
         value: businessValue,
       },
       {
-        label: 'Evidenz',
+        label: 'Belegstufe',
         value: evidenceValue,
       },
     ],
@@ -813,7 +816,7 @@ export function useNowPageData(
     } else {
       console.error('Now page forecast fetch failed', forecastResult.reason);
       setForecast(null);
-      toast('Der regionale Forecast konnte nicht geladen werden.', 'error');
+      toast('Die regionale Vorhersage konnte nicht geladen werden.', 'error');
     }
 
     if (allocationResult.status === 'fulfilled') {
@@ -848,7 +851,7 @@ export function useNowPageData(
     loading,
     loadNowPage,
     workspaceStatus: buildWorkspaceStatus(decision, evidence),
-    view: buildNowPageViewModel(decision, evidence, forecast, allocation, campaignRecommendations, weeklyBudget),
+    view: buildNowPageViewModel(decision, evidence, forecast, allocation, campaignRecommendations, weeklyBudget, horizonDays),
   };
 }
 
@@ -1031,7 +1034,7 @@ export function useCampaignsPageData(
     } else {
       console.error('Campaigns fetch failed', campaignsResult.reason);
       setCampaignsView(null);
-      toast('Kampagnenvorschlaege konnten nicht geladen werden.', 'error');
+      toast('Kampagnenvorschläge konnten nicht geladen werden.', 'error');
     }
 
     if (evidenceResult.status === 'fulfilled') {
@@ -1080,7 +1083,7 @@ export function useEvidencePageData(
       setEvidence(await mediaApi.getEvidence(virus, brand));
     } catch (error) {
       console.error('Evidence fetch failed', error);
-      toast('Evidenz konnte nicht geladen werden.', 'error');
+      toast('Qualität konnte nicht geladen werden.', 'error');
     } finally {
       setEvidenceLoading(false);
     }
@@ -1127,13 +1130,13 @@ export function useEvidencePageData(
       }
       await loadEvidence();
       toast(
-        validateOnly ? 'Upload der Kundendaten validiert. Vorschau ist bereit.' : 'Kundendaten importiert und Evidenz aktualisiert.',
+        validateOnly ? 'Kundendaten geprüft. Die Vorschau ist bereit.' : 'Kundendaten importiert und Qualität aktualisiert.',
         'success',
       );
     } catch (error) {
       console.error('Truth upload failed', error);
       const message = error instanceof Error ? error.message : 'Unbekannter Fehler';
-      toast(`Upload der Kundendaten fehlgeschlagen: ${message}`, 'error');
+      toast(`Import der Kundendaten fehlgeschlagen: ${message}`, 'error');
     } finally {
       setTruthActionLoading(false);
     }
@@ -1248,7 +1251,7 @@ export function useOperationalDashboardData(
     } else {
       console.error('Regional forecast fetch failed', forecastResult.reason);
       setForecast(null);
-      toast('Regionaler Forecast konnte nicht geladen werden.', 'error');
+      toast('Die regionale Vorhersage konnte nicht geladen werden.', 'error');
     }
 
     if (allocationResult.status === 'fulfilled') {
@@ -1264,7 +1267,7 @@ export function useOperationalDashboardData(
     } else {
       console.error('Campaign recommendations fetch failed', recommendationResult.reason);
       setCampaignRecommendations(null);
-      toast('Campaign Recommendations konnten nicht geladen werden.', 'error');
+      toast('Kampagnenempfehlungen konnten nicht geladen werden.', 'error');
     }
 
     setLoading(false);

@@ -24,7 +24,7 @@ describe('App routing', () => {
     expect(await screen.findByText('Jetzt Mock')).toBeInTheDocument();
     expect(window.location.pathname).toBe('/jetzt');
 
-    const operatorNav = screen.getByRole('navigation', { name: 'Operator Bereiche' });
+    const operatorNav = screen.getByRole('navigation', { name: 'Arbeitsbereiche' });
     const navButtons = within(operatorNav).getAllByRole('button');
 
     expect(navButtons).toHaveLength(4);

@@ -37,21 +37,21 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
         <section className="login-brand-panel" aria-label="ViralFlux Einordnung">
           <div className="login-brand-panel__brand">
             <span className="login-brand-panel__wordmark">ViralFlux</span>
-            <p className="login-brand-panel__subtitle">Media Intelligence Curator</p>
+            <p className="login-brand-panel__subtitle">PEIX x GELO</p>
           </div>
 
           <div className="login-brand-panel__copy">
             <h1 className="login-brand-panel__headline">
-              Transformiere Komplexität in <span>klare Entscheidungen.</span>
+              Klar sehen, <span>wo die nächste virale Welle beginnt.</span>
             </h1>
             <p className="login-brand-panel__text">
-              Relevante Signale, klare Prioritäten und ein ruhiger Operator-Raum für Entscheidungen mit Substanz.
+              Die Arbeitsansicht zeigt im 3-, 5- oder 7-Tage-Fenster, wo das früheste regionale Signal entsteht und was als Nächstes zu tun ist.
             </p>
           </div>
 
           <div className="login-live-pill">
             <span className="login-live-pill__pulse" aria-hidden="true" />
-            <span>Live Intelligence Active</span>
+            <span>Live-Daten aktiv</span>
           </div>
         </section>
 
@@ -73,7 +73,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
               )}
 
               <label className="login-field">
-                <span className="login-field__label">E-Mail Adresse</span>
+                <span className="login-field__label">E-Mail-Adresse</span>
                 <span className="login-input-shell">
                   <span className="material-symbols-outlined login-input-shell__icon" aria-hidden="true">alternate_email</span>
                   <input

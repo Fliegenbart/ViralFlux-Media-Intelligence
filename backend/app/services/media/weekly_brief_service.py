@@ -1,9 +1,9 @@
-"""Weekly Media Action Brief — automatisierter PDF-Report für Gelo.
+"""PEIX x GELO Wochenbericht als automatisierter PDF-Report.
 
 Generiert jeden Montag ein 3-seitiges PDF:
-  Seite 1: Lagebild Deutschland (PeixEpiScore, Bento-Tiles, Top-Regionen)
-  Seite 2: Budget-Empfehlung (regionale Allokation + Produkt-Priorisierung)
-  Seite 3: Beweis (Business Pitch Backtest + Forecast-Accuracy)
+  Seite 1: Lagebild Deutschland (PeixEpiScore, Bento-Tiles, Regionen mit frühem Signal)
+  Seite 2: Arbeitsvorschlag (regionale Allokation + Produkt-Priorisierung)
+  Seite 3: Begründung (Rückblicktest + Stabilität der Vorhersage)
 """
 
 from __future__ import annotations
@@ -48,7 +48,7 @@ def _safe(text: Any) -> str:
 
 
 class _ActionBriefPDF(FPDF):
-    """Custom FPDF for Gelo Action Brief."""
+    """Custom FPDF for the PEIX x GELO weekly brief."""
 
     def __init__(self, calendar_week: str):
         super().__init__()
@@ -57,7 +57,7 @@ class _ActionBriefPDF(FPDF):
     def header(self):
         self.set_font("Helvetica", "B", 9)
         self.set_text_color(*_SLATE_400)
-        self.cell(0, 6, "ViralFlux Media Intelligence", align="L")
+        self.cell(0, 6, "PEIX x GELO Frühwarnung", align="L")
         self.cell(
             0, 6,
             f"Wochenbericht - {self._calendar_week} - {datetime.now().strftime('%d.%m.%Y')}",
@@ -74,7 +74,7 @@ class _ActionBriefPDF(FPDF):
         self.set_text_color(*_SLATE_400)
         self.cell(
             0, 8,
-            f"Seite {self.page_no()} | Gelo Wochenbericht | Vertraulich",
+            f"Seite {self.page_no()} | PEIX x GELO Wochenbericht | Vertraulich",
             align="C",
         )
 
@@ -157,28 +157,28 @@ class WeeklyBriefService:
 
         pdf.set_font("Helvetica", "B", 20)
         pdf.set_text_color(*_INDIGO)
-        pdf.cell(0, 12, _safe(f"Gelo Wochenbericht  -  KW {iso_cal.week}/{iso_cal.year}"),
+        pdf.cell(0, 12, _safe(f"PEIX x GELO Wochenbericht  -  KW {iso_cal.week}/{iso_cal.year}"),
                  new_x="LMARGIN", new_y="NEXT")
         pdf.ln(2)
 
         pdf.set_font("Helvetica", "", 10)
         pdf.set_text_color(*_SLATE_700)
         pdf.multi_cell(0, 6, _safe(
-            f"Automatisierte Lageeinschätzung für Gelo OTC-Produkte "
-            f"basierend auf epidemiologischen Echtzeit-Signalen. "
+            f"Automatisierte Lageeinschätzung für PEIX und GELO. "
+            f"Sie zeigt, wo in den nächsten 3 bis 7 Tagen die frühesten regionalen Signale einer Atemwegswelle entstehen könnten. "
             f"Generiert: {now.strftime('%d.%m.%Y %H:%M')} UTC."
         ), new_x="LMARGIN", new_y="NEXT")
         pdf.ln(4)
 
         # Signalscore national
-        _section(pdf, "Signalscore Deutschland")
+        _section(pdf, "Signalbild Deutschland")
         national_score = peix.get("national_score", 0)
         national_band = peix.get("national_band", "-")
         national_impact = peix.get("national_impact_probability", 0)
         _kv(pdf, "Nationaler Index:", f"{national_score:.0f} / 100", bold_value=True)
         _kv(pdf, "Risiko-Band:", str(national_band).upper(), bold_value=True)
-        _kv(pdf, "Signal-Score:", f"{national_impact:.1f}%", bold_value=True)
-        _kv(pdf, "Score-Typ:", "Priorisierungs-/Entscheidungsscore", bold_value=True)
+        _kv(pdf, "Signalwert:", f"{national_impact:.1f}%", bold_value=True)
+        _kv(pdf, "Einordnung:", "Priorisierung für frühe regionale Signale", bold_value=True)
         _kv(pdf, "Dominanter Virus:", virus_typ)
         pdf.ln(2)
 
@@ -194,7 +194,7 @@ class WeeklyBriefService:
             pdf.set_font("Helvetica", "B" if is_live else "", 9)
             pdf.set_text_color(*_SLATE_700)
             display_val = f"{value}{unit}" if unit else str(value)
-            impact_str = f"Signal-Score: {impact:.0f}%" if impact is not None else ""
+            impact_str = f"Signalwert: {impact:.0f}%" if impact is not None else ""
             live_marker = "[LIVE]" if is_live else "[STALE]"
             pdf.cell(0, 6,
                      _safe(f"  {live_marker} {title}: {display_val}   {impact_str}"),
@@ -202,7 +202,7 @@ class WeeklyBriefService:
         pdf.ln(2)
 
         # Top-Regionen
-        _section(pdf, "Top-Regionen nach Signal-Score")
+        _section(pdf, "Regionen mit dem frühesten Signal")
         if region_list:
             # Table header
             pdf.set_font("Helvetica", "B", 9)
@@ -210,7 +210,7 @@ class WeeklyBriefService:
             pdf.set_fill_color(*_INDIGO)
             pdf.cell(40, 7, "  Region", fill=True)
             pdf.cell(25, 7, "Score", align="C", fill=True)
-            pdf.cell(25, 7, "Signal", align="C", fill=True)
+            pdf.cell(25, 7, "Frühsignal", align="C", fill=True)
             pdf.cell(25, 7, "Trend", align="C", fill=True)
             pdf.cell(0, 7, "Änderung", align="C", fill=True,
                      new_x="LMARGIN", new_y="NEXT")
@@ -238,23 +238,23 @@ class WeeklyBriefService:
                          new_x="LMARGIN", new_y="NEXT")
 
         # ═══════════════════════════════════════════════════════════════
-        # SEITE 2: BUDGET-EMPFEHLUNG
+        # SEITE 2: ARBEITSVORSCHLAG
         # ═══════════════════════════════════════════════════════════════
         pdf.add_page()
 
         pdf.set_font("Helvetica", "B", 16)
         pdf.set_text_color(*_INDIGO)
-        pdf.cell(0, 10, "Budget-Empfehlung & Produkt-Priorisierung",
+        pdf.cell(0, 10, "Arbeitsvorschlag für Regionen und Produkte",
                  new_x="LMARGIN", new_y="NEXT")
         pdf.ln(2)
 
         # Regionale Allokation
-        _section(pdf, "Regionale Budget-Allokation")
+        _section(pdf, "Regionale Budget-Prüfung")
         pdf.set_font("Helvetica", "", 9)
         pdf.set_text_color(*_SLATE_700)
         pdf.multi_cell(0, 5, _safe(
-            "Empfohlene Umschichtung basierend auf aktuellem Signalscore und Forecast. "
-            "Regionen mit hohem Signal-Score sollten überproportional bespielt werden."
+            "Hinweis für Budget- und Produktprüfung basierend auf Signalwert und Vorhersage im 3-, 5- oder 7-Tage-Fenster. "
+            "Die Tabelle ist eine Priorisierung, keine automatische Freigabe."
         ), new_x="LMARGIN", new_y="NEXT")
         pdf.ln(3)
 
@@ -264,7 +264,7 @@ class WeeklyBriefService:
         pdf.set_fill_color(*_INDIGO)
         pdf.cell(45, 7, "  Region", fill=True)
         pdf.cell(25, 7, "Score", align="C", fill=True)
-        pdf.cell(25, 7, "Signal", align="C", fill=True)
+        pdf.cell(25, 7, "Frühsignal", align="C", fill=True)
         pdf.cell(30, 7, "Empfehlung", align="C", fill=True)
         pdf.cell(0, 7, "Begründung", fill=True, new_x="LMARGIN", new_y="NEXT")
 
@@ -275,19 +275,19 @@ class WeeklyBriefService:
 
             if impact >= 80:
                 shift = "+30-40%"
-                reason = "Kritisch - Sofort aktivieren"
+                reason = "sehr frühes Signal - zuerst prüfen"
                 color = _RED
             elif impact >= 60:
                 shift = "+15-25%"
-                reason = "Hoch - Budget erhöhen"
+                reason = "frühes Signal - Budgeterhöhung prüfen"
                 color = _AMBER
             elif impact >= 40:
                 shift = "Halten"
-                reason = "Mittel - Beobachten"
+                reason = "beobachten - noch nicht freigeben"
                 color = _SLATE_700
             else:
                 shift = "-10-20%"
-                reason = "Niedrig - Umschichten"
+                reason = "späteres Signal - eher umschichten"
                 color = _GREEN
 
             bg = _BG if i % 2 == 0 else _WHITE
@@ -307,7 +307,7 @@ class WeeklyBriefService:
         pdf.ln(6)
 
         # Top Action Cards
-        _section(pdf, "Produkt-Priorisierung (Top-Empfehlungen)")
+        _section(pdf, "Produkt-Priorisierung zur Prüfung")
         if top_cards:
             for i, card in enumerate(top_cards[:5], start=1):
                 product = card.get("recommended_product", card.get("product", "-"))
@@ -326,7 +326,7 @@ class WeeklyBriefService:
                 if card_regions:
                     pdf.cell(0, 5,
                              _safe(f"   Regionen: {', '.join(card_regions[:5])}  |  "
-                                   f"Budget-Shift: +{float(budget_shift or 0):.1f}%"),
+                                   f"Budgetänderung: +{float(budget_shift or 0):.1f}%"),
                              new_x="LMARGIN", new_y="NEXT")
                 if reason:
                     pdf.set_font("Helvetica", "I", 8)
@@ -341,17 +341,17 @@ class WeeklyBriefService:
                      new_x="LMARGIN", new_y="NEXT")
 
         # ═══════════════════════════════════════════════════════════════
-        # SEITE 3: BEWEIS
+        # SEITE 3: BEGRÜNDUNG
         # ═══════════════════════════════════════════════════════════════
         pdf.add_page()
 
         pdf.set_font("Helvetica", "B", 16)
         pdf.set_text_color(*_INDIGO)
-        pdf.cell(0, 10, "Beweis: ML-Signal-Vorteil", new_x="LMARGIN", new_y="NEXT")
+        pdf.cell(0, 10, "Warum wir die Vorhersage vertreten", new_x="LMARGIN", new_y="NEXT")
         pdf.ln(2)
 
         # Business Pitch Report
-        _section(pdf, "Retrospektiver Nachweis (SurvStat-Backtest)")
+        _section(pdf, "Rückblicktest auf frühere Wellen")
 
         pitch_results = self._run_backtest_pitches()
         if pitch_results:
@@ -379,31 +379,31 @@ class WeeklyBriefService:
             pdf.set_font("Helvetica", "B", 11)
             pdf.set_text_color(*_INDIGO)
             pdf.cell(0, 8, _safe(
-                f"Durchschnittlicher Früherkennungsvorteil: {avg_ttd:.0f} Tage vor RKI-Peak"
+                f"Durchschnittlicher Vorlauf im Rückblicktest: {avg_ttd:.0f} Tage vor dem RKI-Peak"
             ), new_x="LMARGIN", new_y="NEXT")
         else:
             pdf.set_font("Helvetica", "I", 10)
             pdf.set_text_color(*_SLATE_400)
-            pdf.cell(0, 7, "Backtest-Daten nicht verfügbar.",
+            pdf.cell(0, 7, "Daten aus dem Rückblicktest sind nicht verfügbar.",
                      new_x="LMARGIN", new_y="NEXT")
 
         pdf.ln(4)
 
         # Data Freshness
-        _section(pdf, "Datenquellen-Status")
+        _section(pdf, "Stand der Datenquellen")
         for source, ts_str in freshness.items():
             if not ts_str:
                 continue
             try:
                 ts = datetime.fromisoformat(str(ts_str).replace("Z", "+00:00"))
                 age_days = (now - ts.replace(tzinfo=None)).total_seconds() / 86400
-                status = "LIVE" if age_days < 7 else "STALE"
+                status = "AKTUELL" if age_days < 7 else "ALT"
             except (ValueError, TypeError):
                 age_days = -1
                 status = "?"
 
             pdf.set_font("Helvetica", "", 9)
-            color = _GREEN if status == "LIVE" else _RED
+            color = _GREEN if status == "AKTUELL" else _RED
             pdf.set_text_color(*color)
             pdf.cell(15, 5, _safe(f"[{status}]"))
             pdf.set_text_color(*_SLATE_700)
@@ -419,10 +419,9 @@ class WeeklyBriefService:
         pdf.set_font("Helvetica", "I", 8)
         pdf.set_text_color(*_SLATE_400)
         pdf.multi_cell(0, 4, _safe(
-            "Disclaimer: Dieser Report basiert auf retrospektiver Analyse epidemiologischer "
-            "Signale. Die genannten Vorsprungszeiträume sind historische Werte und stellen "
-            "keine Garantie für künftige Performance dar. Alle Empfehlungen dienen als "
-            "Entscheidungshilfe - die finale Mediaplanung obliegt dem Kunden."
+            "Hinweis: Dieser Bericht zeigt wahrscheinliche frühe Starts einer Welle auf Basis historischer Analysen und aktueller Signale. "
+            "Die genannten Vorlaufzeiten sind historische Werte und keine Garantie für die nächste Woche. "
+            "Alle Empfehlungen dienen als Entscheidungshilfe; die finale Mediaplanung bleibt eine fachliche Freigabe."
         ), new_x="LMARGIN", new_y="NEXT")
 
         # ── Output ──

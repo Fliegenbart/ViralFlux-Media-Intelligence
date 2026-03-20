@@ -77,7 +77,7 @@ const EvidencePanel: React.FC<Props> = ({
   if (loading && !evidence) {
     return (
       <div className="card" style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>
-        Lade Evidenz...
+        Lade Qualität...
       </div>
     );
   }
@@ -87,14 +87,14 @@ const EvidencePanel: React.FC<Props> = ({
       <section className="context-filter-rail">
         <div className="section-heading" style={{ marginBottom: 0 }}>
           <span className="section-kicker">Qualität</span>
-          <h1 className="section-title">Warum wir dieser Lage vertrauen</h1>
+          <h1 className="section-title">Warum wir die Vorhersage vertreten</h1>
           <p className="section-copy">
-            Diese Seite ist bewusst kein zweites Dashboard. Sie beantwortet nur vier Fragen: Forecast, Datenfrische, Kundendaten und offene Blocker.
+            Hier belegen wir, warum wir das 3-, 5- oder 7-Tage-Fenster vertreten und wo wir den frühen Start einer Welle sehen.
           </p>
         </div>
 
         <div className="soft-panel" style={{ padding: 16, maxWidth: 360 }}>
-          <div className="section-kicker">Worauf wir zuerst schauen</div>
+          <div className="section-kicker">Kurzfazit</div>
           <p className="section-copy" style={{ margin: '10px 0 0' }}>
             {workspaceStatus?.summary || 'Sobald Qualitätsdaten vorliegen, fassen wir hier den schnellsten Prüfpfad zusammen.'}
           </p>
@@ -103,14 +103,14 @@ const EvidencePanel: React.FC<Props> = ({
 
       <WorkspaceStatusPanel
         status={workspaceStatus}
-        title="Vier schnelle Antworten"
-        intro="Wenn hier etwas wackelt, gehen wir tiefer in Forecast, Kundendaten, Quellen oder Import."
+        title="Vier schnelle Fragen"
+        intro="Wenn hier etwas wackelt, gehen wir tiefer in Vorhersage, Kundendaten, Quellen oder Import."
       />
 
       {workspaceStatus?.blockers?.length ? (
         <section className="card subsection-card" style={{ padding: 24 }}>
           <div className="section-heading" style={{ gap: 6 }}>
-            <h2 className="subsection-title">Worauf wir zuerst schauen</h2>
+            <h2 className="subsection-title">Offene Punkte zuerst</h2>
             <p className="subsection-copy">
               Das sind die wichtigsten offenen Punkte, bevor wir blind weitermachen.
             </p>
@@ -126,8 +126,8 @@ const EvidencePanel: React.FC<Props> = ({
       ) : null}
 
       <CollapsibleSection
-        title="1. Forecast prüfen"
-        subtitle="Ist das Modell stabil genug, um die aktuelle Lage belastbar zu tragen?"
+        title="1. Vorhersage prüfen"
+        subtitle="Ist das Modell stabil genug, um das 3-, 5- oder 7-Tage-Fenster belastbar zu tragen?"
         defaultOpen
       >
         <ForecastMonitoringSection
@@ -150,7 +150,7 @@ const EvidencePanel: React.FC<Props> = ({
 
       <CollapsibleSection
         title="2. Kundendaten prüfen"
-        subtitle="Sind echte Outcome-Daten angeschlossen und stark genug, um die Empfehlung zusätzlich zu stützen?"
+        subtitle="Sind echte Kundendaten angeschlossen und stark genug, um die Empfehlung zusätzlich zu stützen?"
       >
         <TruthOutcomeSection
           truthStatus={truthStatus}
@@ -164,7 +164,7 @@ const EvidencePanel: React.FC<Props> = ({
 
       <CollapsibleSection
         title="3. Quellen prüfen"
-        subtitle="Wie frisch sind Quellen, Signal-Stack und Modellhistorie wirklich?"
+        subtitle="Wie frisch sind Quellen, Signalsystem und Modellhistorie wirklich?"
       >
         <SourceFreshnessSection
           evidence={evidence}
@@ -194,14 +194,14 @@ const EvidencePanel: React.FC<Props> = ({
 
       <section className="card subsection-card" style={{ padding: 24 }}>
         <div className="section-heading" style={{ gap: 6 }}>
-          <h2 className="subsection-title">Kurz zusammengefasst</h2>
+          <h2 className="subsection-title">Technischer Überblick</h2>
           <p className="subsection-copy">
             Nur die wichtigsten technischen Hinweise, falls wir schnell die Quelle eines Problems verstehen wollen.
           </p>
         </div>
         <div className="workspace-two-column">
           <div className="soft-panel workspace-detail-panel">
-            <div className="section-kicker">Signal-Stack</div>
+            <div className="section-kicker">Signalsystem</div>
             <div className="workspace-note-list" style={{ marginTop: 12 }}>
               {(sourceStatusLabels.length ? sourceStatusLabels : ['Noch keine markierten Felder vorhanden.']).slice(0, 6).map((item) => (
                 <div key={item} className="workspace-note-card">{item}</div>
@@ -214,7 +214,7 @@ const EvidencePanel: React.FC<Props> = ({
             <div style={{ display: 'grid', gap: 10, marginTop: 12 }}>
               {recentRuns.length > 0 ? recentRuns.slice(0, 3).map((run, index) => (
                 <div key={`${String(run.mode)}-${index}`} className="evidence-row">
-                  <span>{String(run.mode || 'Run')}</span>
+                  <span>{String(run.mode || 'Lauf')}</span>
                   <strong>{String(run.status || '-')}</strong>
                 </div>
               )) : (

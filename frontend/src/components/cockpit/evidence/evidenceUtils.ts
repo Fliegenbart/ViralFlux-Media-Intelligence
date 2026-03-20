@@ -1,22 +1,24 @@
+import { normalizeGermanText } from '../../../lib/plainLanguage';
+
 export function issueFieldLabel(fieldName?: string | null): string {
   const normalized = String(fieldName || '').trim().toLowerCase();
   if (!normalized) return 'Allgemein';
   if (normalized === 'week_start') return 'Woche';
   if (normalized === 'product') return 'Produkt';
   if (normalized === 'region_code') return 'Region';
-  if (normalized === 'media_spend_eur') return 'Media Spend';
-  if (normalized === 'conversion') return 'Outcome';
+  if (normalized === 'media_spend_eur') return 'Mediabudget';
+  if (normalized === 'conversion') return 'Wirkungsdaten';
   if (normalized === 'row') return 'Zeile';
   if (normalized === 'header') return 'CSV-Header';
-  return normalized;
+  return normalizeGermanText(normalized);
 }
 
 function fallbackLabel(value?: string | null): string {
   const normalized = String(value || '').trim();
   if (!normalized) return 'Offen';
-  return normalized
+  return normalizeGermanText(normalized
     .replace(/_/g, ' ')
-    .replace(/\b\w/g, (char) => char.toUpperCase());
+    .replace(/\b\w/g, (char) => char.toUpperCase()));
 }
 
 export function batchStatusLabel(status?: string | null): string {
@@ -74,34 +76,32 @@ export function runModeLabel(mode?: string | null): string {
   const normalized = String(mode || '').trim().toLowerCase();
   if (normalized === 'market_check') return 'Markt-Check';
   if (normalized === 'truth_validation') return 'Kunden-Validierung';
-  if (normalized === 'forecast_monitoring') return 'Forecast-Monitoring';
+  if (normalized === 'forecast_monitoring') return 'Prüfung der Vorhersage';
   if (normalized === 'source_status') return 'Quellenstatus';
   if (normalized === 'import_validation') return 'Import-Prüfung';
   return fallbackLabel(mode);
 }
 
 export function sanitizeEvidenceCopy(value?: string | null): string {
-  const raw = String(value || '').trim();
+  const raw = normalizeGermanText(String(value || '').trim());
   if (!raw) return '';
 
   let normalized = raw
-    .replace(/zukuenftige/g, 'zukünftige')
-    .replace(/naechste/g, 'nächste')
-    .replace(/naechsten/g, 'nächsten')
-    .replace(/anschliesst/g, 'anschließt')
     .replace(/\bWATCH\b/g, 'Beobachten')
     .replace(/\bwarning\b/g, 'Beobachten')
     .replace(/\bvalidated\b/g, 'Validiert')
     .replace(/\bMARKET_CHECK\b/g, 'Markt-Check')
     .replace(/\bTRUTH_VALIDATION\b/g, 'Kunden-Validierung')
-    .replace(/\bFORECAST_MONITORING\b/g, 'Forecast-Monitoring')
+    .replace(/\bFORECAST_MONITORING\b/g, 'Prüfung der Vorhersage')
     .replace(/\bReadiness\b/g, 'Einsatzreife')
     .replace(/0T Lead/g, '0 Tage Vorlauf')
     .replace(/Decision-Layer:/g, 'Entscheidungsebene:')
-    .replace(/Walk-forward Backtest:/g, 'Walk-forward-Backtest:')
+    .replace(/Walk-forward Backtest:/g, 'Walk-forward-Rückblicktest:')
     .replace(/corr@best/g, 'beste Korrelation')
     .replace(/\bbest_lag\b/g, 'bester Lag')
     .replace(/\bFalse-Alarms\b/g, 'Fehlalarme')
+    .replace(/\bOutcome-Daten\b/g, 'Kundendaten')
+    .replace(/\bBacktest\b/g, 'Rückblicktest')
     .replace(/\s+/g, ' ')
     .trim();
 
@@ -122,7 +122,7 @@ export function sanitizeEvidenceCopy(value?: string | null): string {
     'Status Beobachten.',
   );
 
-  return normalized;
+  return normalizeGermanText(normalized);
 }
 
 export function numberFromUnknown(value: unknown): number | null {

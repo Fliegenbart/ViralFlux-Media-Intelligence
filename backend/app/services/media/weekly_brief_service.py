@@ -41,6 +41,15 @@ _SOURCE_LABELS = {
     "backtest": "Rückblicktest",
 }
 
+_TILE_LABELS = {
+    "SURVSTAT Respiratory": "SurvStat Atemwege",
+    "Top Chancenregion": "Früheste Signalregion",
+    "Signalscore Deutschland": "Signalwert Deutschland",
+    "BfArM Engpass-Signal": "BfArM-Engpasssignal",
+    "Google Trends Infekt": "Google Trends Atemwege",
+    "ARE Konsultationsinzidenz": "ARE-Konsultationsinzidenz",
+}
+
 
 def _safe(text: Any) -> str:
     """Sanitize text for Latin-1 encoding (core PDF fonts).
@@ -140,6 +149,15 @@ def _dedupe_cards(cards: list[dict[str, Any]]) -> list[dict[str, Any]]:
         unique_cards.append(card)
 
     return unique_cards
+
+
+def _tile_display_title(title: str | None) -> str:
+    raw = str(title or "").strip()
+    if not raw:
+        return "-"
+    if raw in _TILE_LABELS:
+        return _TILE_LABELS[raw]
+    return raw.replace("Signalscore", "Signalwert")
 
 
 class WeeklyBriefService:
@@ -251,7 +269,7 @@ class WeeklyBriefService:
         # Bento-Tiles Zusammenfassung
         _section(pdf, "Signal-Übersicht")
         for tile in tiles[:8]:
-            title = tile.get("title", "")
+            title = _tile_display_title(tile.get("title", ""))
             value = tile.get("value", "")
             unit = tile.get("unit", "")
             impact = tile.get("impact_probability")

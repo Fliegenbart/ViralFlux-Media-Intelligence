@@ -45,7 +45,7 @@ const ImportValidationSection: React.FC<Props> = ({
             <span className="section-kicker">CSV-Import</span>
             <h2 className="subsection-title">Import der Kundendaten vorbereiten</h2>
             <p className="subsection-copy">
-              Erwartet werden `week_start`, `product`, `region_code`, `media_spend_eur` plus mindestens eine echte Kundenmetrik wie `sales_units`, `order_count` oder `revenue_eur`.
+              Wir brauchen `week_start`, `product`, `region_code`, `media_spend_eur` und mindestens eine Wirkungszahl wie `sales_units`, `order_count` oder `revenue_eur`.
             </p>
           </div>
 
@@ -61,7 +61,7 @@ const ImportValidationSection: React.FC<Props> = ({
             </label>
 
             <label className="campaign-field">
-              <span>Quellenname</span>
+              <span>Name der Quelle</span>
               <input
                 className="media-input"
                 value={sourceLabel}
@@ -220,8 +220,8 @@ const ImportValidationSection: React.FC<Props> = ({
 
       <section className="card subsection-card" style={{ padding: 24 }}>
         <div className="section-heading">
-          <span className="section-kicker">Hinweis-Tabelle</span>
-          <h2 className="subsection-title">Probleme und Zuordnungshinweise</h2>
+          <span className="section-kicker">Hinweise</span>
+          <h2 className="subsection-title">Probleme und Hinweise zur Zuordnung</h2>
           <p className="subsection-copy">
             Jeder ausgeschlossene Datensatz bleibt sichtbar. Es gibt keine stillen Ausfälle.
           </p>

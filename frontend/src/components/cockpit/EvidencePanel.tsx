@@ -90,7 +90,7 @@ const EvidencePanel: React.FC<Props> = ({
           <span className="section-kicker">Qualität</span>
           <h1 className="section-title">Warum wir die Vorhersage vertreten</h1>
           <p className="section-copy">
-            Hier belegen wir, warum wir das 3-, 5- oder 7-Tage-Fenster vertreten und wo wir den frühen Start einer Welle sehen.
+            Hier zeigen wir, warum wir das 3-, 5- oder 7-Tage-Fenster vertreten und woran wir den frühen Start einer Welle erkennen.
           </p>
         </div>
 
@@ -105,7 +105,7 @@ const EvidencePanel: React.FC<Props> = ({
       <WorkspaceStatusPanel
         status={workspaceStatus}
         title="Vier schnelle Fragen"
-        intro="Wenn hier etwas wackelt, gehen wir tiefer in Vorhersage, Kundendaten, Quellen oder Import."
+        intro="Wenn hier etwas offen bleibt, gehen wir tiefer in Vorhersage, Kundendaten, Quellen oder Import."
       />
 
       {workspaceStatus?.blockers?.length ? (
@@ -113,7 +113,7 @@ const EvidencePanel: React.FC<Props> = ({
           <div className="section-heading" style={{ gap: 6 }}>
             <h2 className="subsection-title">Offene Punkte zuerst</h2>
             <p className="subsection-copy">
-              Das sind die wichtigsten offenen Punkte, bevor wir blind weitermachen.
+              Das sind die wichtigsten offenen Punkte, bevor wir weitergehen.
             </p>
           </div>
           <div className="workspace-note-list">
@@ -195,9 +195,9 @@ const EvidencePanel: React.FC<Props> = ({
 
       <section className="card subsection-card" style={{ padding: 24 }}>
         <div className="section-heading" style={{ gap: 6 }}>
-          <h2 className="subsection-title">Technischer Überblick</h2>
+          <h2 className="subsection-title">Technischer Blick</h2>
           <p className="subsection-copy">
-            Nur die wichtigsten technischen Hinweise, falls wir schnell die Quelle eines Problems verstehen wollen.
+            Nur wenn wir tiefer prüfen müssen: die wichtigsten technischen Hinweise auf einen Blick.
           </p>
         </div>
         <div className="workspace-two-column">

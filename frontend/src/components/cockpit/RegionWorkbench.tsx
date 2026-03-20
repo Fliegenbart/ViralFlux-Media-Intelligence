@@ -49,7 +49,7 @@ const RegionWorkbench: React.FC<Props> = ({
   if (loading && !regionsView) {
     return (
       <div className="card" style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>
-        Lade Regionen-Workbench...
+        Lade Regionen...
       </div>
     );
   }
@@ -93,9 +93,9 @@ const RegionWorkbench: React.FC<Props> = ({
       <section className="context-filter-rail">
         <div className="section-heading" style={{ marginBottom: 0 }}>
           <span className="section-kicker">Regionen</span>
-          <h1 className="section-title">Hier sehen wir den wahrscheinlichen frühen Start</h1>
+          <h1 className="section-title">Wo eine Welle wahrscheinlich zuerst beginnt</h1>
           <p className="section-copy">
-            Die Karte hilft nur bei der Auswahl. Entscheidend ist, wo das früheste relevante Signal entsteht und was wir daraus als Nächstes tun.
+            Die Karte hilft nur bei der Auswahl. Entscheidend ist, wo wir das früheste relevante Signal sehen und was wir als Nächstes tun.
           </p>
         </div>
 
@@ -137,7 +137,7 @@ const RegionWorkbench: React.FC<Props> = ({
                 <strong>{formatPercent(Number(region?.actionability_score || primaryRegion?.actionability_score || 0))}</strong>
               </div>
               <div className="metric-box">
-                <span>Richtung der Vorhersage</span>
+                <span>Tendenz</span>
                 <strong style={{ fontSize: 18 }}>{region?.forecast_direction || 'seitwärts'}</strong>
               </div>
               <div className="metric-box">
@@ -183,7 +183,7 @@ const RegionWorkbench: React.FC<Props> = ({
                 <strong>{formatPercent(region?.change_pct || 0, 1)}</strong>
               </div>
               <div className="evidence-row">
-                <span>Grundlage</span>
+                <span>Wichtige Quellen</span>
                 <strong>{sourceTraceLabel}</strong>
               </div>
             </div>
@@ -202,7 +202,7 @@ const RegionWorkbench: React.FC<Props> = ({
           <div className="section-heading" style={{ gap: 6, marginBottom: 0 }}>
             <h2 className="subsection-title">Region auswählen</h2>
             <p className="subsection-copy">
-              Die Karte ist nur die Auswahlhilfe. Klick auf ein Bundesland, um oben den Fokus zu wechseln.
+              Klick auf ein Bundesland. Oben wechselt dann sofort der Fokus.
             </p>
           </div>
           <div style={{ marginTop: 10 }}>
@@ -216,7 +216,7 @@ const RegionWorkbench: React.FC<Props> = ({
 
         <section className="card subsection-card" style={{ padding: 24 }}>
           <div className="section-heading" style={{ gap: 6 }}>
-            <h2 className="subsection-title">Weitere priorisierte Regionen</h2>
+            <h2 className="subsection-title">Weitere Regionen mit frühem Signal</h2>
             <p className="subsection-copy">
               Falls die Fokusregion erledigt ist, sind das die nächsten sinnvollen Kandidaten.
             </p>
@@ -284,7 +284,7 @@ const RegionWorkbench: React.FC<Props> = ({
                 <strong>{formatPercent(region?.change_pct || 0, 1)}</strong>
               </div>
               <div className="evidence-row">
-                <span>Richtung der Vorhersage</span>
+                <span>Tendenz</span>
                 <strong>{region?.forecast_direction || 'seitwärts'}</strong>
               </div>
               <div className="evidence-row">

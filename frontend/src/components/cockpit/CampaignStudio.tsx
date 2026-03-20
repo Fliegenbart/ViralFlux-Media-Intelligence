@@ -106,7 +106,7 @@ const CampaignStudio: React.FC<Props> = ({
               <span className="section-kicker">Kampagnen</span>
               <h1 className="section-title workspace-priority-card__title">Jetzt zuerst prüfen</h1>
               <p className="section-copy">
-                Oben steht immer nur der wichtigste Fall. Er leitet sich aus der aktuellen Vorhersage und der Region mit dem frühesten Signal ab.
+                Oben steht immer nur der wichtigste Fall. Er kommt direkt aus der aktuellen Vorhersage und der Region mit dem frühesten Signal.
               </p>
             </div>
 
@@ -156,7 +156,7 @@ const CampaignStudio: React.FC<Props> = ({
                 <strong>{activeCards.length}</strong>
               </div>
               <div className="evidence-row">
-                <span>Automatisch angereichert</span>
+                <span>Automatisch erstellt oder ergänzt</span>
                 <strong>{aiTouchedCount}</strong>
               </div>
             </div>
@@ -167,7 +167,7 @@ const CampaignStudio: React.FC<Props> = ({
       <WorkspaceStatusPanel
         status={workspaceStatus}
         title="Bevor wir freigeben"
-        intro="Der Kampagnenstapel bleibt bewusst eng an Vorhersage, Datenfrische, Kundendaten und offene Blocker gekoppelt."
+        intro="Die Kampagnenarbeit bleibt bewusst eng an Vorhersage, Datenfrische, Kundendaten und offenen Punkten."
       />
 
       {loading ? (

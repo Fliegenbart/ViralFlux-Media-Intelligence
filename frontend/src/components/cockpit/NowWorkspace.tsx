@@ -54,9 +54,9 @@ const NowWorkspace: React.FC<Props> = ({
       <section className="context-filter-rail">
         <div className="section-heading" style={{ marginBottom: 0 }}>
           <span className="section-kicker">Diese Woche im Blick</span>
-          <h1 className="section-title">Wo die nächste virale Welle zuerst anzieht</h1>
+          <h1 className="section-title">Wo eine Welle wahrscheinlich zuerst beginnt</h1>
           <p className="section-copy">
-            Wir zeigen zuerst nur das 3-, 5- oder 7-Tage-Fenster, die Region mit dem frühesten Signal und den nächsten sinnvollen Schritt.
+            Zuerst siehst du nur das 3-, 5- oder 7-Tage-Fenster, die Region mit dem frühesten Signal und den nächsten Schritt.
           </p>
         </div>
 
@@ -206,7 +206,7 @@ const NowWorkspace: React.FC<Props> = ({
               <div className="section-heading" style={{ gap: 6 }}>
                 <h2 className="subsection-title">Als Nächstes prüfen</h2>
                 <p className="subsection-copy">
-                  Nach der Fokusregion sind das die nächsten sinnvollen Prüfpfade.
+                  Nach der Fokusregion sind das die nächsten Regionen, die wir prüfen sollten.
                 </p>
               </div>
               <div style={{ display: 'grid', gap: 12 }}>
@@ -237,7 +237,7 @@ const NowWorkspace: React.FC<Props> = ({
               <div className="section-heading" style={{ gap: 6 }}>
                 <h2 className="subsection-title">Was wir noch prüfen</h2>
                 <p className="subsection-copy">
-                  Diese Punkte sprechen für Vorsicht oder für einen kurzen zweiten Blick.
+                  Diese Punkte bremsen noch oder brauchen einen kurzen zweiten Blick.
                 </p>
               </div>
               <div className="workspace-note-list">
@@ -252,7 +252,7 @@ const NowWorkspace: React.FC<Props> = ({
 
           <CollapsibleSection
             title="Weitere Details"
-            subtitle="Nur für den zweiten Blick: zusätzliche Qualitätswerte, weitere Gründe und Detailhinweise."
+            subtitle="Nur für den zweiten Blick: zusätzliche Gründe, Qualitätswerte und Hinweise."
           >
             <div className="workspace-two-column">
               <div className="soft-panel workspace-detail-panel">

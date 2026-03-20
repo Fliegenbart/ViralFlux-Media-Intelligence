@@ -51,7 +51,7 @@ const ForecastMonitoringSection: React.FC<Props> = ({
       <section className="evidence-grid">
         <div className="card subsection-card" style={{ padding: 24 }}>
           <div>
-            <div className="section-kicker">Markt-Check</div>
+            <div className="section-kicker">Marktabgleich</div>
             <h2 className="subsection-title" style={{ marginTop: 8 }}>
               {decisionStateLabel(marketValidation?.quality_gate?.overall_passed ? 'GO' : 'WATCH')}
             </h2>
@@ -71,7 +71,7 @@ const ForecastMonitoringSection: React.FC<Props> = ({
             </div>
           </div>
           <p className="section-copy">
-            Dieser Block zeigt, wie gut das System frühe epidemiologische Signale gegen Marktbewegungen trifft. Er belegt den Vorlauf im Marktvergleich, nicht den finalen Kundennachweis.
+            Hier sehen wir, wie gut das System frühe Signale gegen echte Marktbewegungen trifft. Das stützt den zeitlichen Vorlauf, ersetzt aber noch keinen Kundennachweis.
           </p>
         </div>
 
@@ -97,7 +97,7 @@ const ForecastMonitoringSection: React.FC<Props> = ({
             </div>
           </div>
           <p className="section-copy">
-            Dieser Block zeigt, ob wir die aktuelle Vorhersage wirklich vertreten können. Wir prüfen Drift, Genauigkeit, Rückblicktest, Intervalle und Kalibrierung auf derselben Datenbasis wie die Wochenlage.
+            Hier prüfen wir, ob die aktuelle Vorhersage trägt. Dafür schauen wir auf Genauigkeit, Rückblicktest, Warnsignale und Kalibrierung.
           </p>
           <div className="review-chip-row">
             <span className="step-chip">Rückblicktest: {monitoringFreshnessLabel(forecastMonitoring?.backtest_freshness_status)}</span>
@@ -114,7 +114,7 @@ const ForecastMonitoringSection: React.FC<Props> = ({
       <section style={{ display: 'grid', gap: 20 }}>
         <ValidationSection
           title="Markt-Validierung im Verlauf"
-          subtitle="Vorhersage gegen Ist, inklusive Vergleichslinien. So wird sichtbar, ob das Modell die Welle früh erkennt und nicht nur nachzeichnet."
+          subtitle="Hier sehen wir, ob das Modell eine Welle früh erkennt und nicht nur nachläuft."
           result={marketValidation}
           loading={marketValidationLoading}
           emptyMessage="Noch keine detaillierten Daten für den Marktvergleich verfügbar."
@@ -162,9 +162,9 @@ const ForecastMonitoringSection: React.FC<Props> = ({
       <section className="card subsection-card" style={{ padding: 24 }}>
         <div className="section-heading">
           <span className="section-kicker">Vorhersage-Details</span>
-          <h2 className="subsection-title">Stabilität des Modells</h2>
+          <h2 className="subsection-title">Wie stabil die Vorhersage ist</h2>
           <p className="subsection-copy">
-            Hier sehen wir, ob die Vorhersage nicht nur läuft, sondern auch bei Genauigkeit, Vorlauf, Intervallen und Kalibrierung im Zielkorridor bleibt.
+            Hier sehen wir, ob die Vorhersage nicht nur läuft, sondern bei Genauigkeit, Vorlauf und Kalibrierung im Zielkorridor bleibt.
           </p>
         </div>
 

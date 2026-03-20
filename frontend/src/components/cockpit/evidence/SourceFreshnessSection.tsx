@@ -79,11 +79,11 @@ const SourceFreshnessSection: React.FC<Props> = ({
         </div>
 
         <div className="card subsection-card" style={{ padding: 24 }}>
-          <h2 className="subsection-title">Modellhistorie</h2>
+          <h2 className="subsection-title">Modell und Datenbasis</h2>
           <div style={{ display: 'grid', gap: 10, marginTop: 14 }}>
             <div className="evidence-row">
               <span>Datenbasis</span>
-              <strong>{[...(modelLineage?.base_estimators || []), modelLineage?.meta_learner].filter(Boolean).join(' → ') || '-'}</strong>
+                <strong>{[...(modelLineage?.base_estimators || []), modelLineage?.meta_learner].filter(Boolean).join(' → ') || '-'}</strong>
             </div>
             <div className="evidence-row">
               <span>Version</span>

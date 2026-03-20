@@ -6117,6 +6117,112 @@ textarea:focus-visible {
   padding: 0 24px 24px;
 }
 
+/* ─── Workspace Panels ─────────────────────────────────────────── */
+.workspace-priority-grid,
+.workspace-two-column,
+.workspace-phase-grid,
+.workspace-status-grid {
+  display: grid;
+  gap: 20px;
+}
+
+.workspace-priority-grid {
+  grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.85fr);
+  align-items: start;
+}
+
+.workspace-two-column {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.workspace-phase-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.workspace-status-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-top: 18px;
+}
+
+.workspace-priority-card__title {
+  max-width: 18ch;
+}
+
+.workspace-priority-card__aside,
+.workspace-detail-panel {
+  display: grid;
+  gap: 18px;
+  padding: 20px;
+}
+
+.workspace-note-list,
+.workspace-priority-card__reasons {
+  display: grid;
+  gap: 10px;
+}
+
+.workspace-note-card {
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  background: var(--bg-secondary);
+  padding: 14px 16px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.workspace-status-card {
+  border-radius: 18px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  padding: 18px;
+  display: grid;
+  gap: 8px;
+}
+
+.workspace-status-card__question {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.workspace-status-card strong {
+  color: var(--text-primary);
+  font-size: 20px;
+  line-height: 1.1;
+}
+
+.workspace-status-card p,
+.workspace-status-panel__footer {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.workspace-status-card--success {
+  border-color: rgba(16, 185, 129, 0.24);
+  background: rgba(16, 185, 129, 0.08);
+}
+
+.workspace-status-card--warning {
+  border-color: rgba(245, 158, 11, 0.24);
+  background: rgba(245, 158, 11, 0.08);
+}
+
+.workspace-status-card--neutral {
+  border-color: rgba(145, 180, 228, 0.2);
+}
+
+.workspace-status-panel__footer {
+  margin-top: 16px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 10px 18px;
+}
+
 /* ─── Evidence Tabs ───────────────────────────────────────────── */
 .evidence-tab-bar {
   display: flex;
@@ -6588,6 +6694,11 @@ textarea:focus-visible {
     grid-template-columns: 1fr;
   }
 
+  .workspace-phase-grid,
+  .workspace-status-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .ops-stage-grid {
     grid-template-columns: 1fr;
   }
@@ -6619,6 +6730,13 @@ textarea:focus-visible {
 
   .operator-toolbar-selects {
     display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .workspace-priority-grid,
+  .workspace-two-column,
+  .workspace-phase-grid,
+  .workspace-status-grid {
     grid-template-columns: 1fr;
   }
 }

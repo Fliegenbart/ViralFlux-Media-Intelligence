@@ -45,6 +45,34 @@ export interface SourceStatusSummary {
   live_ratio: number;
 }
 
+export type WorkspaceStatusKey =
+  | 'forecast_status'
+  | 'data_freshness'
+  | 'customer_data_status'
+  | 'open_blockers';
+
+export type WorkspaceStatusTone = 'success' | 'warning' | 'neutral';
+
+export interface WorkspaceStatusItem {
+  key: WorkspaceStatusKey;
+  question: string;
+  value: string;
+  detail: string;
+  tone: WorkspaceStatusTone;
+}
+
+export interface WorkspaceStatusSummary {
+  forecast_status: string;
+  data_freshness: string;
+  customer_data_status: string;
+  open_blockers: string;
+  last_import_at: string | null;
+  blocker_count: number;
+  blockers: string[];
+  summary: string;
+  items: WorkspaceStatusItem[];
+}
+
 export interface PeixDriver {
   label: string;
   strength_pct: number;

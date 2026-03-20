@@ -20,7 +20,7 @@ const RegionsPage: React.FC = () => {
     invalidateData,
     openRecommendation,
   } = useMediaWorkflow();
-  const { regionsView, regionsLoading, loadRegions } = useRegionsPageData(virus, brand, dataVersion, toast);
+  const { regionsView, regionsLoading, loadRegions, workspaceStatus } = useRegionsPageData(virus, brand, dataVersion, toast);
   const [selectedRegion, setSelectedRegion] = useState<string | null>(null);
   const [regionActionLoading, setRegionActionLoading] = useState(false);
 
@@ -68,6 +68,7 @@ const RegionsPage: React.FC = () => {
       virus={virus}
       onVirusChange={setVirus}
       regionsView={regionsView}
+      workspaceStatus={workspaceStatus}
       loading={regionsLoading}
       selectedRegion={selectedRegion}
       onSelectRegion={setSelectedRegion}

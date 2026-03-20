@@ -4,6 +4,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 
 import NowWorkspace from './NowWorkspace';
 import { NowPageViewModel } from '../../features/media/useMediaData';
+import { WorkspaceStatusSummary } from '../../types/media';
 
 const noop = () => {};
 
@@ -61,8 +62,51 @@ function buildView(): NowPageViewModel {
   };
 }
 
+function buildWorkspaceStatus(): WorkspaceStatusSummary {
+  return {
+    forecast_status: 'Freigabe bereit',
+    data_freshness: 'Aktuell',
+    customer_data_status: 'im Aufbau',
+    open_blockers: '1 offen',
+    last_import_at: '2026-03-17T08:00:00Z',
+    blocker_count: 1,
+    blockers: ['Die Revision der Quelldaten bleibt sichtbar.'],
+    summary: 'Vor dem nächsten Schritt sollten wir zuerst die offenen Punkte prüfen.',
+    items: [
+      {
+        key: 'forecast_status',
+        question: 'Ist der Forecast stabil?',
+        value: 'Freigabe bereit',
+        detail: 'Monitoring Stabil · Forecast aktuell',
+        tone: 'success',
+      },
+      {
+        key: 'data_freshness',
+        question: 'Sind die Daten frisch?',
+        value: 'Aktuell',
+        detail: '6/7 Quellen aktuell',
+        tone: 'success',
+      },
+      {
+        key: 'customer_data_status',
+        question: 'Sind Kundendaten verbunden?',
+        value: 'im Aufbau',
+        detail: '24 Wochen verbunden',
+        tone: 'warning',
+      },
+      {
+        key: 'open_blockers',
+        question: 'Gibt es offene Blocker?',
+        value: '1 offen',
+        detail: 'Die Revision der Quelldaten bleibt sichtbar.',
+        tone: 'warning',
+      },
+    ],
+  };
+}
+
 describe('NowWorkspace', () => {
-  it('shows a focused hero with four metrics and quality follow-up', () => {
+  it('shows one main decision, the trust block and the next region flow', () => {
     render(
       <NowWorkspace
         virus="Influenza A"
@@ -70,6 +114,7 @@ describe('NowWorkspace', () => {
         horizonDays={7}
         onHorizonChange={noop}
         view={buildView()}
+        workspaceStatus={buildWorkspaceStatus()}
         loading={false}
         onOpenRecommendation={noop}
         onOpenRegions={noop}
@@ -79,11 +124,11 @@ describe('NowWorkspace', () => {
     );
 
     expect(screen.getByText('Klare Lage. Klare nächste Aktion.')).toBeInTheDocument();
-    expect(screen.getByText('Aktivieren: Berlin')).toBeInTheDocument();
-    expect(screen.getByText('Warum vertrauen wir dem?')).toBeInTheDocument();
-    expect(screen.getByText('Qualität & Vertrauen')).toBeInTheDocument();
-    expect(screen.getByText('Weitere Regionen')).toBeInTheDocument();
-    expect(screen.getAllByTestId('now-metric')).toHaveLength(4);
+    expect(screen.getByText('Berlin ist diese Woche der klarste nächste Schritt.')).toBeInTheDocument();
+    expect(screen.getByText('Wie sicher ist das?')).toBeInTheDocument();
+    expect(screen.getByText('Was danach wichtig wird')).toBeInTheDocument();
+    expect(screen.getByText('Was noch offen ist')).toBeInTheDocument();
+    expect(screen.getByText('Technische Details')).toBeInTheDocument();
   });
 
   it('opens the primary recommendation from the hero action', () => {
@@ -96,6 +141,7 @@ describe('NowWorkspace', () => {
         horizonDays={7}
         onHorizonChange={noop}
         view={buildView()}
+        workspaceStatus={buildWorkspaceStatus()}
         loading={false}
         onOpenRecommendation={onOpenRecommendation}
         onOpenRegions={noop}

@@ -1,7 +1,10 @@
 import React from 'react';
 
-import { formatDateTime, VIRUS_OPTIONS } from './cockpitUtils';
+import { WorkspaceStatusSummary } from '../../types/media';
+import CollapsibleSection from '../CollapsibleSection';
 import { NowPageViewModel } from '../../features/media/useMediaData';
+import { formatDateTime, VIRUS_OPTIONS } from './cockpitUtils';
+import WorkspaceStatusPanel from './WorkspaceStatusPanel';
 
 interface Props {
   virus: string;
@@ -9,6 +12,7 @@ interface Props {
   horizonDays: number;
   onHorizonChange: (value: number) => void;
   view: NowPageViewModel;
+  workspaceStatus: WorkspaceStatusSummary | null;
   loading: boolean;
   onOpenRecommendation: (id: string) => void;
   onOpenRegions: (regionCode?: string) => void;
@@ -18,32 +22,13 @@ interface Props {
 
 const HORIZON_OPTIONS = [3, 5, 7];
 
-function metricToneClass(tone: 'success' | 'warning' | 'neutral') {
-  if (tone === 'success') return 'now-status-pill now-status-pill--success';
-  if (tone === 'warning') return 'now-status-pill now-status-pill--warning';
-  return 'now-status-pill';
-}
-
-function stageToneForDisplay(value?: string | null): 'success' | 'warning' | 'neutral' {
-  const normalized = String(value || '').trim().toLowerCase();
-  if (normalized === 'aktivieren') return 'success';
-  if (normalized === 'vorbereiten') return 'warning';
-  return 'neutral';
-}
-
-function extractPercent(value?: string | null): number {
-  if (!value) return 0;
-  const normalized = value.replace(',', '.').replace(/[^\d.]/g, '');
-  const parsed = Number(normalized);
-  return Number.isFinite(parsed) ? parsed : 0;
-}
-
 const NowWorkspace: React.FC<Props> = ({
   virus,
   onVirusChange,
   horizonDays,
   onHorizonChange,
   view,
+  workspaceStatus,
   loading,
   onOpenRecommendation,
   onOpenRegions,
@@ -51,56 +36,9 @@ const NowWorkspace: React.FC<Props> = ({
   onOpenEvidence,
 }) => {
   const focusRegion = view.focusRegion;
-  const primaryMetric = view.metrics[0];
-  const leadingReasons = view.reasons.slice(0, 3);
-  const focusProbability = extractPercent(focusRegion?.probabilityLabel);
-  const pageLead = view.note || 'Hier steht nur das, was für diese Woche wirklich zählt. Alles Weitere ordnen wir darunter.';
-  const spotlightLead = focusRegion?.reason || view.note || 'Hier bündelt sich aktuell das stärkste Signal.';
-  const primaryCampaignLabel = view.primaryRecommendationId ? 'Nächste Kampagne' : 'Kampagnenvorschlag';
-  const heroPrimaryStatus = focusRegion?.stage || primaryMetric?.value || 'Arbeitslage';
-  const heroSecondaryStatus = primaryMetric?.value && primaryMetric.value !== focusRegion?.stage
-    ? `Freigabe ${primaryMetric.value}`
-    : 'Arbeitslage aktiv';
-
-  const prioritizedRegions = [
-    ...(focusRegion ? [{
-      key: focusRegion.code,
-      rank: '01',
-      name: focusRegion.name,
-      detail: focusRegion.reason,
-      stage: focusRegion.stage,
-      value: focusRegion.probabilityLabel,
-      accent: 'primary',
-      intensity: Math.max(32, Math.min(96, focusProbability || 78)),
-    }] : []),
-    ...view.relatedRegions.slice(0, 2).map((region, index) => ({
-      key: region.code,
-      rank: `0${index + 2}`,
-      name: region.name,
-      detail: region.reason,
-      stage: region.stage,
-      value: region.probabilityLabel,
-      accent: index === 0 ? 'secondary' : 'tertiary',
-      intensity: Math.max(22, Math.min(88, extractPercent(region.probabilityLabel) || (60 - index * 10))),
-    })),
-  ];
-
-  const updateItems = [
-    ...view.quality.slice(0, 3).map((item, index) => ({
-      key: `quality-${index}`,
-      icon: 'verified',
-      title: item.label,
-      body: item.value,
-      meta: 'Qualität',
-    })),
-    ...view.risks.slice(0, 2).map((risk, index) => ({
-      key: `risk-${index}`,
-      icon: 'warning',
-      title: index === 0 ? 'Offener Prüfpunkt' : 'Weiterer Hinweis',
-      body: risk,
-      meta: 'Risiko',
-    })),
-  ];
+  const leadReasons = view.reasons.slice(0, 3);
+  const relatedRegions = view.relatedRegions.slice(0, 3);
+  const mainActionLabel = view.primaryActionLabel || 'Kampagnen prüfen';
 
   if (loading && !view.hasData) {
     return (
@@ -112,52 +50,43 @@ const NowWorkspace: React.FC<Props> = ({
 
   return (
     <div className="page-stack now-template-page">
-      <section className="now-page-header">
-        <div className="now-page-header__copy">
-          <span className="now-page-header__kicker">Live Intelligence Engine</span>
-          <h1 className="now-page-header__title">Klare Lage. Klare nächste Aktion.</h1>
-          <p className="now-page-header__text">
-            {pageLead}
+      <section className="context-filter-rail">
+        <div className="section-heading" style={{ marginBottom: 0 }}>
+          <span className="section-kicker">Diese Woche zuerst</span>
+          <h1 className="section-title">Klare Lage. Klare nächste Aktion.</h1>
+          <p className="section-copy">
+            Wir zeigen zuerst nur die wichtigste Entscheidung, warum sie gerade zählt und was der nächste sinnvolle Schritt ist.
           </p>
         </div>
 
-        <div className="now-page-header__controls">
-          <div className="now-filter-shell">
-            <span className="now-filter-shell__label">Virus</span>
-            <div className="now-filter-shell__chips">
-              {VIRUS_OPTIONS.map((option) => (
-                <button
-                  key={option}
-                  type="button"
-                  onClick={() => onVirusChange(option)}
-                  className={`now-filter-chip ${option === virus ? 'active' : ''}`}
-                >
-                  {option}
-                </button>
-              ))}
-            </div>
+        <div style={{ display: 'grid', gap: 12, justifyItems: 'start' }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            {VIRUS_OPTIONS.map((option) => (
+              <button
+                key={option}
+                type="button"
+                onClick={() => onVirusChange(option)}
+                className={`tab-chip ${option === virus ? 'active' : ''}`}
+              >
+                {option}
+              </button>
+            ))}
           </div>
 
-          <div className="now-filter-shell">
-            <span className="now-filter-shell__label">Horizont</span>
-            <div className="now-filter-shell__chips">
-              {HORIZON_OPTIONS.map((option) => (
-                <button
-                  key={option}
-                  type="button"
-                  onClick={() => onHorizonChange(option)}
-                  className={`now-filter-chip ${option === horizonDays ? 'active' : ''}`}
-                >
-                  {option} Tage
-                </button>
-              ))}
-            </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            {HORIZON_OPTIONS.map((option) => (
+              <button
+                key={option}
+                type="button"
+                onClick={() => onHorizonChange(option)}
+                className={`tab-chip ${option === horizonDays ? 'active' : ''}`}
+              >
+                {option} Tage
+              </button>
+            ))}
           </div>
 
-          <div className="now-live-status">
-            <span className="now-live-status__dot" aria-hidden="true" />
-            <span>Stand {formatDateTime(view.generatedAt)}</span>
-          </div>
+          <span className="step-chip">Stand {formatDateTime(view.generatedAt)}</span>
         </div>
       </section>
 
@@ -168,286 +97,103 @@ const NowWorkspace: React.FC<Props> = ({
             <p className="subsection-copy">{view.emptyState.body}</p>
           </div>
           <div className="action-row">
-            <button className="media-button secondary" type="button" onClick={onOpenEvidence}>Evidenz prüfen</button>
+            <button className="media-button secondary" type="button" onClick={onOpenEvidence}>Qualität prüfen</button>
             <button className="media-button secondary" type="button" onClick={() => onOpenRegions()}>Regionen öffnen</button>
           </div>
         </section>
       ) : (
         <>
-          <section className="now-metrics-grid">
-            {view.metrics.map((metric) => (
-              <div className="card now-metric-card" key={metric.label} data-testid="now-metric">
-                <div className="now-metric-card__top">
-                  <span className="now-metric-card__icon material-symbols-outlined" aria-hidden="true">
-                    {metric.tone === 'success' ? 'trending_up' : metric.tone === 'warning' ? 'warning' : 'insights'}
-                  </span>
-                  <span className={metricToneClass(metric.tone || 'neutral')}>{metric.value}</span>
-                </div>
-                <span className="now-metric-card__label">{metric.label}</span>
-                <strong>{metric.value}</strong>
-              </div>
-            ))}
-          </section>
-
-          <section className="now-template-layout">
-            <div className="now-template-main">
-              <section className="card now-spotlight-card">
-                <div className="now-spotlight-card__header">
-                  <div>
-                    <span className="now-section-kicker">Aktuelle Lage</span>
-                    <h2 className="now-spotlight-card__title">{view.title}</h2>
-                    <p className="now-spotlight-card__subtitle">{spotlightLead}</p>
-                  </div>
-
-                  <div className="now-spotlight-card__status">
-                    <span className={metricToneClass(focusRegion?.stage ? stageToneForDisplay(focusRegion.stage) : (primaryMetric?.tone || 'neutral'))}>
-                      {heroPrimaryStatus}
-                    </span>
-                    <span className="campaign-confidence-chip">{heroSecondaryStatus}</span>
-                  </div>
+          <section className="card subsection-card workspace-priority-card" style={{ padding: 28 }}>
+            <div className="workspace-priority-grid">
+              <div>
+                <div className="section-heading" style={{ gap: 8 }}>
+                  <span className="section-kicker">Hauptentscheidung</span>
+                  <h2 className="section-title workspace-priority-card__title">{view.summary}</h2>
+                  <p className="section-copy">{view.note}</p>
                 </div>
 
-                <div className="now-spotlight-card__badges">
+                <div className="review-chip-row" style={{ marginTop: 14 }}>
                   <span className="step-chip">Fokus {focusRegion?.name || '-'}</span>
                   <span className="step-chip">{focusRegion?.stage || '-'}</span>
                   <span className="step-chip">{focusRegion?.probabilityLabel || '-'}</span>
-                  <span className="step-chip">Stand {formatDateTime(view.generatedAt)}</span>
+                  <span className="step-chip">{focusRegion?.budgetLabel || '-'}</span>
                 </div>
 
-                <div className="now-spotlight-card__content">
-                  <div className="now-spotlight-card__story">
-                    <div className="now-story-intro">
-                      <span className="now-story-intro__label">Wo wir jetzt hinschauen</span>
-                      <p className="now-story-intro__copy">
-                        {focusRegion?.name
-                          ? `${focusRegion.name} steht im Mittelpunkt der aktuellen Wochenentscheidung.`
-                          : 'Die aktuelle Wochenentscheidung bündelt die stärkste Lage direkt hier.'}
-                      </p>
-                    </div>
-
-                    <p className="now-spotlight-card__copy">{view.summary}</p>
-
-                    <div className="action-row">
-                      <button
-                        className="media-button"
-                        type="button"
-                        onClick={() => (
-                          view.primaryRecommendationId
-                            ? onOpenRecommendation(view.primaryRecommendationId)
-                            : onOpenCampaigns()
-                        )}
-                      >
-                        {view.primaryActionLabel}
-                      </button>
-                      <button className="media-button secondary" type="button" onClick={onOpenEvidence}>
-                        Warum vertrauen wir dem?
-                      </button>
-                      <button
-                        className="media-button secondary"
-                        type="button"
-                        onClick={() => onOpenRegions(focusRegion?.code || undefined)}
-                      >
-                        Fokusregion öffnen
-                      </button>
-                    </div>
-
-                    <div className="now-proof-strip">
-                      <div className="section-kicker">Darum schauen wir genau hier hin</div>
-                      <div className="now-proof-strip__items">
-                        {(leadingReasons.length ? leadingReasons : ['Noch keine Kurzbegründung verfügbar.']).map((reason) => (
-                          <div key={reason} className="soft-panel now-proof-card">
-                            {reason}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-
-                  <aside className="soft-panel now-focus-panel">
-                    <div>
-                      <div className="section-kicker">Fokusregion</div>
-                      <div className="summary-headline">{focusRegion?.name || '-'}</div>
-                      <div className="summary-note">{focusRegion?.reason || 'Noch keine kurze Einordnung verfügbar.'}</div>
-                    </div>
-
-                    <div className="now-focus-panel__grid">
-                      <div>
-                        <div className="section-kicker">Status</div>
-                        <div className="summary-metric">{focusRegion?.stage || '-'}</div>
-                      </div>
-                      <div>
-                        <div className="section-kicker">Produkt</div>
-                        <div className="summary-note">{focusRegion?.product || '-'}</div>
-                      </div>
-                      <div>
-                        <div className="section-kicker">Wahrscheinlichkeit</div>
-                        <div className="summary-note">{focusRegion?.probabilityLabel || '-'}</div>
-                      </div>
-                      <div>
-                        <div className="section-kicker">Budget</div>
-                        <div className="summary-note">{focusRegion?.budgetLabel || '-'}</div>
-                      </div>
-                    </div>
-
-                    <div className="soft-panel now-focus-panel__campaign">
-                      <div className="section-kicker">{primaryCampaignLabel}</div>
-                      <div className="now-focus-panel__campaign-title">{view.primaryCampaignTitle}</div>
-                      <div className="summary-note">{view.primaryCampaignContext}</div>
-                      <p className="campaign-focus-copy">{view.primaryCampaignCopy}</p>
-                    </div>
-                  </aside>
-                </div>
-              </section>
-
-              <section className="now-priority-section">
-                <div className="now-priority-section__header">
-                  <h3>Wohin schauen wir als Nächstes?</h3>
-                  <button className="now-inline-link" type="button" onClick={() => onOpenRegions()}>
-                    Vollständige Analyse
-                  </button>
-                </div>
-
-                <div className="now-priority-list">
-                  {(prioritizedRegions.length ? prioritizedRegions : [{
-                    key: 'placeholder',
-                    rank: '01',
-                    name: 'Noch keine priorisierte Region',
-                    detail: 'Sobald eine klare Fokusregion vorliegt, erscheint sie hier im Dashboard.',
-                    stage: 'Offen',
-                    value: '-',
-                    accent: 'primary',
-                    intensity: 24,
-                  }]).map((item) => (
-                    <button
-                      type="button"
-                      key={item.key}
-                      className="card now-priority-card"
-                      onClick={() => onOpenRegions(item.key && item.key !== 'placeholder' ? String(item.key) : undefined)}
-                    >
-                      <div className="now-priority-card__rank">{item.rank}</div>
-                      <div className="now-priority-card__copy">
-                        <h4>{item.name}</h4>
-                        <p>{item.detail}</p>
-                      </div>
-                      <div className="now-priority-card__bars" aria-hidden="true">
-                        {[0.42, 0.6, 0.34, 0.76, 0.92, item.intensity / 100].map((value, index) => (
-                          <span
-                            key={`${item.key}-${index}`}
-                            className={`now-priority-card__bar now-priority-card__bar--${item.accent}`}
-                            style={{ height: `${Math.max(22, Math.round(value * 48))}px` }}
-                          />
-                        ))}
-                      </div>
-                      <div className="now-priority-card__meta">
-                        <strong>{item.value}</strong>
-                        <span>{item.stage}</span>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </section>
-
-              <section className="now-map-card">
-                <div className="now-map-card__content">
-                  <h3>Regionale Dynamik</h3>
-                  <p>
-                    Die Fläche bündelt die Bewegung hinter der Wochenlage. Links steht die Fokusregion, darunter die nächsten Prüfpfade und rechts die kompakten Hinweise für den zweiten Blick.
-                  </p>
+                <div className="action-row" style={{ marginTop: 20 }}>
                   <button
-                    className="now-map-card__button"
+                    className="media-button"
                     type="button"
-                    onClick={() => onOpenRegions(focusRegion?.code ? String(focusRegion.code) : undefined)}
+                    onClick={() => (
+                      view.primaryRecommendationId
+                        ? onOpenRecommendation(view.primaryRecommendationId)
+                        : onOpenCampaigns()
+                    )}
                   >
-                    Regionen im Detail
+                    {mainActionLabel}
+                  </button>
+                  <button
+                    className="media-button secondary"
+                    type="button"
+                    onClick={() => onOpenRegions(focusRegion?.code || undefined)}
+                  >
+                    Fokusregion öffnen
+                  </button>
+                  <button className="media-button secondary" type="button" onClick={onOpenEvidence}>
+                    Qualität prüfen
                   </button>
                 </div>
-                <div className="now-map-card__visual" aria-hidden="true">
-                  <span style={{ height: 92 }} />
-                  <span style={{ height: 148 }} />
-                  <span style={{ height: 118 }} />
-                  <span style={{ height: 176 }} />
-                </div>
-              </section>
-            </div>
-
-            <aside className="card now-live-feed">
-              <div className="now-live-feed__header">
-                <h3>Prüfhinweise</h3>
-                <span className="now-live-feed__badge">Live</span>
               </div>
 
-              <div className="now-live-feed__items">
-                {(updateItems.length ? updateItems : [{
-                  key: 'empty',
-                  icon: 'info',
-                  title: 'Noch keine Hinweise',
-                  body: 'Sobald neue Qualitäts- oder Risiko-Hinweise vorliegen, erscheinen sie hier.',
-                  meta: 'Status',
-                }]).map((item, index) => (
-                  <div key={item.key} className={`now-live-feed__item ${index > 0 ? 'now-live-feed__item--muted' : ''}`}>
-                    <div className="now-live-feed__avatar">
-                      <span className="material-symbols-outlined" aria-hidden="true">{item.icon}</span>
-                    </div>
-                    <div className="now-live-feed__copy">
-                      <div className="now-live-feed__item-top">
-                        <strong>{item.title}</strong>
-                        <span>{item.meta}</span>
+              <aside className="soft-panel workspace-priority-card__aside">
+                <div>
+                  <div className="section-kicker">Warum jetzt?</div>
+                  <div className="workspace-priority-card__reasons">
+                    {(leadReasons.length ? leadReasons : ['Noch keine kurze Begründung verfügbar.']).map((reason) => (
+                      <div key={reason} className="workspace-note-card">
+                        {reason}
                       </div>
-                      <p>{item.body}</p>
-                    </div>
+                    ))}
                   </div>
-                ))}
-              </div>
+                </div>
 
-              <button className="now-live-feed__button" type="button" onClick={onOpenEvidence}>
-                Alle Qualitätsdetails ansehen
-              </button>
-            </aside>
+                <div style={{ display: 'grid', gap: 10 }}>
+                  <div className="evidence-row">
+                    <span>Fokusregion</span>
+                    <strong>{focusRegion?.name || '-'}</strong>
+                  </div>
+                  <div className="evidence-row">
+                    <span>Produktfokus</span>
+                    <strong>{focusRegion?.product || '-'}</strong>
+                  </div>
+                  <div className="evidence-row">
+                    <span>Wahrscheinlichkeit</span>
+                    <strong>{focusRegion?.probabilityLabel || '-'}</strong>
+                  </div>
+                  <div className="evidence-row">
+                    <span>Budgethinweis</span>
+                    <strong>{focusRegion?.budgetLabel || '-'}</strong>
+                  </div>
+                </div>
+              </aside>
+            </div>
           </section>
 
-          <section className="now-secondary-grid">
-            <div className="card subsection-card" style={{ padding: 24 }}>
-              <div className="section-heading" style={{ gap: 6 }}>
-                <h2 className="subsection-title">Warum jetzt?</h2>
-                <p className="subsection-copy">
-                  Die stärksten Gründe für die aktuelle Wochenentscheidung.
-                </p>
-              </div>
-              <div className="now-callout-list">
-                {(view.reasons.length ? view.reasons : ['Noch keine Begründungen verfügbar.']).map((reason) => (
-                  <div key={reason} className="soft-panel now-callout-card">
-                    {reason}
-                  </div>
-                ))}
-              </div>
-            </div>
+          <WorkspaceStatusPanel
+            status={workspaceStatus}
+            title="Wie sicher ist das?"
+            intro="Diese vier Antworten helfen uns, ob wir direkt handeln oder erst noch etwas prüfen sollten."
+          />
 
-            <div className="card subsection-card" style={{ padding: 24 }}>
+          <section className="workspace-two-column">
+            <section className="card subsection-card" style={{ padding: 24 }}>
               <div className="section-heading" style={{ gap: 6 }}>
-                <h2 className="subsection-title">Qualität & Vertrauen</h2>
-                <p className="subsection-copy">
-                  Diese Punkte helfen beim schnellen Gegencheck, ohne die Hauptsicht zu überladen.
-                </p>
-              </div>
-              <div className="now-quality-list">
-                {(view.quality.length ? view.quality : [{ label: 'Qualität', value: 'Noch offen' }]).map((item) => (
-                  <div key={item.label} className="evidence-row">
-                    <span>{item.label}</span>
-                    <strong>{item.value}</strong>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="card subsection-card" style={{ padding: 24 }}>
-              <div className="section-heading" style={{ gap: 6 }}>
-                <h2 className="subsection-title">Weitere Regionen</h2>
+                <h2 className="subsection-title">Was danach wichtig wird</h2>
                 <p className="subsection-copy">
                   Nach der Fokusregion sind das die nächsten sinnvollen Prüfpfade.
                 </p>
               </div>
-              <div className="now-region-list">
-                {view.relatedRegions.length > 0 ? view.relatedRegions.map((region) => (
+              <div style={{ display: 'grid', gap: 12 }}>
+                {relatedRegions.length > 0 ? relatedRegions.map((region) => (
                   <button
                     type="button"
                     key={region.code}
@@ -465,27 +211,57 @@ const NowWorkspace: React.FC<Props> = ({
                     <p className="campaign-focus-copy" style={{ marginTop: 10 }}>{region.reason}</p>
                   </button>
                 )) : (
-                  <div className="soft-panel now-callout-card">Aktuell gibt es keine weiteren priorisierten Regionen.</div>
+                  <div className="workspace-note-card">Aktuell gibt es keine weiteren priorisierten Regionen.</div>
                 )}
               </div>
-            </div>
+            </section>
 
-            <div className="card subsection-card" style={{ padding: 24 }}>
+            <section className="card subsection-card" style={{ padding: 24 }}>
               <div className="section-heading" style={{ gap: 6 }}>
-                <h2 className="subsection-title">Risiken</h2>
+                <h2 className="subsection-title">Was noch offen ist</h2>
                 <p className="subsection-copy">
-                  Diese Punkte sprechen für Vorsicht oder für einen zweiten Blick.
+                  Diese Punkte sprechen für Vorsicht oder für einen kurzen zweiten Blick.
                 </p>
               </div>
-              <div className="now-callout-list">
-                {(view.risks.length ? view.risks : ['Aktuell gibt es keine offenen Risiken im Fokus.']).map((risk) => (
-                  <div key={risk} className="soft-panel now-callout-card">
+              <div className="workspace-note-list">
+                {((workspaceStatus?.blockers?.length ? workspaceStatus.blockers : view.risks).slice(0, 4)).map((risk) => (
+                  <div key={risk} className="workspace-note-card">
                     {risk}
                   </div>
                 ))}
               </div>
-            </div>
+            </section>
           </section>
+
+          <CollapsibleSection
+            title="Technische Details"
+            subtitle="Nur für den zweiten Blick: zusätzliche Qualitätswerte, weitere Gründe und Detailhinweise."
+          >
+            <div className="workspace-two-column">
+              <div className="soft-panel workspace-detail-panel">
+                <div className="section-kicker">Qualitätswerte</div>
+                <div style={{ display: 'grid', gap: 10, marginTop: 12 }}>
+                  {(view.quality.length ? view.quality : [{ label: 'Qualität', value: 'Noch offen' }]).map((item) => (
+                    <div key={item.label} className="evidence-row">
+                      <span>{item.label}</span>
+                      <strong>{item.value}</strong>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="soft-panel workspace-detail-panel">
+                <div className="section-kicker">Weitere Begründungen</div>
+                <div className="workspace-note-list" style={{ marginTop: 12 }}>
+                  {(view.reasons.length > 3 ? view.reasons.slice(3) : view.risks).map((item) => (
+                    <div key={item} className="workspace-note-card">
+                      {item}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </CollapsibleSection>
         </>
       )}
     </div>

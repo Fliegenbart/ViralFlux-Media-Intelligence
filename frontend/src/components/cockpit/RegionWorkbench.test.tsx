@@ -118,6 +118,7 @@ describe('RegionWorkbench', () => {
         virus="Influenza A"
         onVirusChange={noop}
         regionsView={buildRegionsView()}
+        workspaceStatus={null}
         loading={false}
         selectedRegion="BE"
         onSelectRegion={noop}

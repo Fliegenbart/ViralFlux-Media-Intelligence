@@ -11,6 +11,7 @@ const EvidencePage: React.FC = () => {
   const {
     evidence,
     evidenceLoading,
+    workspaceStatus,
     marketValidation,
     marketValidationLoading,
     customerValidation,
@@ -26,6 +27,7 @@ const EvidencePage: React.FC = () => {
   return (
     <EvidencePanel
       evidence={evidence}
+      workspaceStatus={workspaceStatus}
       loading={evidenceLoading}
       marketValidation={marketValidation}
       marketValidationLoading={marketValidationLoading}

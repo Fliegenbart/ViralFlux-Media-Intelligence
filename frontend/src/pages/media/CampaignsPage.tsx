@@ -25,7 +25,7 @@ const CampaignsPage: React.FC = () => {
     closeRecommendation,
     recommendationOverlayMode,
   } = useMediaWorkflow();
-  const { campaignsView, campaignsLoading, loadCampaigns } = useCampaignsPageData(brand, dataVersion, toast);
+  const { campaignsView, campaignsLoading, loadCampaigns, workspaceStatus } = useCampaignsPageData(virus, brand, dataVersion, toast);
   const [generationLoading, setGenerationLoading] = useState(false);
 
   useEffect(() => {
@@ -70,6 +70,7 @@ const CampaignsPage: React.FC = () => {
       brand={brand}
       budget={weeklyBudget}
       goal={campaignGoal}
+      workspaceStatus={workspaceStatus}
       loading={campaignsLoading}
       generationLoading={generationLoading}
       onBrandChange={setBrand}

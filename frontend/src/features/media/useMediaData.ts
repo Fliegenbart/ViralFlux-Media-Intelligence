@@ -18,12 +18,20 @@ import {
 import {
   businessValidationLabel,
   evidenceTierLabel,
+  formatDateTime,
   formatCurrency,
   formatPercent,
+  truthFreshnessLabel,
   truthLayerLabel,
   workflowLabel,
 } from '../../components/cockpit/cockpitUtils';
+import {
+  monitoringStatusLabel,
+  readinessGateLabel,
+  sanitizeEvidenceCopy,
+} from '../../components/cockpit/evidence/evidenceUtils';
 import { mediaApi } from './api';
+import { WorkspaceStatusSummary } from '../../types/media';
 
 function noop() {}
 
@@ -334,6 +342,115 @@ function stageTone(value?: string | null): 'success' | 'warning' | 'neutral' {
   if (normalized === 'activate' || normalized === 'go') return 'success';
   if (normalized === 'prepare') return 'warning';
   return 'neutral';
+}
+
+function forecastStatusTone(value: string): 'success' | 'warning' | 'neutral' {
+  const normalized = value.trim().toLowerCase();
+  if (normalized === 'stabil' || normalized === 'freigabe bereit') return 'success';
+  if (normalized === 'beobachten') return 'warning';
+  return 'neutral';
+}
+
+function customerStatusTone(value: string): 'success' | 'warning' | 'neutral' {
+  const normalized = value.trim().toLowerCase();
+  if (normalized === 'belastbar') return 'success';
+  if (normalized === 'im aufbau' || normalized === 'erste signale') return 'warning';
+  return 'neutral';
+}
+
+function buildWorkspaceStatus(
+  decision: MediaDecisionResponse | null,
+  evidence: MediaEvidenceResponse | null,
+): WorkspaceStatusSummary | null {
+  if (!decision && !evidence) return null;
+
+  const truthStatus = decision?.truth_coverage
+    || evidence?.truth_snapshot?.coverage
+    || evidence?.truth_coverage
+    || null;
+  const sourceSummary = evidence?.source_status || null;
+  const sourceItems = sourceSummary?.items || [];
+  const sourceAttentionCount = sourceItems.filter((item) => String(item.status_color || '').toLowerCase() !== 'green').length;
+  const forecastStatus = evidence?.forecast_monitoring?.forecast_readiness
+    ? readinessGateLabel(evidence.forecast_monitoring.forecast_readiness)
+    : monitoringStatusLabel(
+      evidence?.forecast_monitoring?.monitoring_status
+      || decision?.weekly_decision?.forecast_state
+      || decision?.weekly_decision?.decision_state,
+    );
+  const dataFreshness = sourceSummary
+    ? (sourceAttentionCount > 0 ? 'Beobachten' : 'Aktuell')
+    : 'Unbekannt';
+  const customerDataStatus = truthLayerLabel(truthStatus);
+  const lastImportAt = truthStatus?.last_imported_at
+    || evidence?.truth_snapshot?.latest_batch?.uploaded_at
+    || decision?.weekly_decision?.truth_last_imported_at
+    || null;
+
+  const blockers = uniqueText([
+    ...(decision?.weekly_decision?.risk_flags || []),
+    decision?.weekly_decision?.truth_risk_flag,
+    evidence?.truth_gate?.guidance,
+    evidence?.business_validation?.guidance,
+    evidence?.business_validation?.message,
+    ...(evidence?.forecast_monitoring?.alerts || []),
+    evidence?.truth_snapshot?.analyst_note,
+  ].map((item) => cleanCopy(sanitizeEvidenceCopy(item))), 4);
+
+  const blockerCount = blockers.length;
+  const openBlockers = blockerCount > 0 ? `${blockerCount} offen` : 'Keine';
+  const sourceDetail = sourceSummary
+    ? `${sourceSummary.live_count || 0}/${sourceSummary.total || 0} Quellen aktuell${sourceAttentionCount > 0 ? `, ${sourceAttentionCount} mit Prüfbedarf` : ''}`
+    : 'Noch kein Quellenstatus verfügbar.';
+  const customerDetail = truthStatus
+    ? `${truthStatus.coverage_weeks ?? 0} Wochen verbunden${lastImportAt ? ` · letzter Import ${formatDateTime(lastImportAt)}` : ''}`
+    : 'Noch keine Kundendaten verbunden.';
+  const forecastDetail = evidence?.forecast_monitoring
+    ? `Monitoring ${monitoringStatusLabel(evidence.forecast_monitoring.monitoring_status)} · Forecast ${truthFreshnessLabel(evidence.forecast_monitoring.freshness_status)}`
+    : 'Noch kein detaillierter Monitoring-Status verfügbar.';
+
+  return {
+    forecast_status: forecastStatus,
+    data_freshness: dataFreshness,
+    customer_data_status: customerDataStatus,
+    open_blockers: openBlockers,
+    last_import_at: lastImportAt,
+    blocker_count: blockerCount,
+    blockers,
+    summary: blockerCount > 0
+      ? 'Vor dem nächsten Schritt sollten wir zuerst die offenen Punkte prüfen.'
+      : 'Die Lage ist klar genug für den nächsten sinnvollen Schritt.',
+    items: [
+      {
+        key: 'forecast_status',
+        question: 'Ist der Forecast stabil?',
+        value: forecastStatus,
+        detail: forecastDetail,
+        tone: forecastStatusTone(forecastStatus),
+      },
+      {
+        key: 'data_freshness',
+        question: 'Sind die Daten frisch?',
+        value: dataFreshness,
+        detail: sourceDetail,
+        tone: sourceSummary ? (sourceAttentionCount > 0 ? 'warning' : 'success') : 'neutral',
+      },
+      {
+        key: 'customer_data_status',
+        question: 'Sind Kundendaten verbunden?',
+        value: customerDataStatus,
+        detail: customerDetail,
+        tone: customerStatusTone(customerDataStatus),
+      },
+      {
+        key: 'open_blockers',
+        question: 'Gibt es offene Blocker?',
+        value: openBlockers,
+        detail: blockerCount > 0 ? blockers[0] : 'Aktuell gibt es keine offenen Blocker.',
+        tone: blockerCount > 0 ? 'warning' : 'success',
+      },
+    ],
+  };
 }
 
 function buildNowPageViewModel(
@@ -730,6 +847,7 @@ export function useNowPageData(
     campaignRecommendations,
     loading,
     loadNowPage,
+    workspaceStatus: buildWorkspaceStatus(decision, evidence),
     view: buildNowPageViewModel(decision, evidence, forecast, allocation, campaignRecommendations, weeklyBudget),
   };
 }
@@ -851,17 +969,32 @@ export function useRegionsPageData(
 ) {
   const [regionsView, setRegionsView] = useState<MediaRegionsResponse | null>(null);
   const [regionsLoading, setRegionsLoading] = useState(false);
+  const [workspaceStatus, setWorkspaceStatus] = useState<WorkspaceStatusSummary | null>(null);
 
   const loadRegions = useCallback(async () => {
     setRegionsLoading(true);
-    try {
-      setRegionsView(await mediaApi.getRegions(virus, brand));
-    } catch (error) {
-      console.error('Regions fetch failed', error);
+    const [regionsResult, evidenceResult] = await Promise.allSettled([
+      mediaApi.getRegions(virus, brand),
+      mediaApi.getEvidence(virus, brand),
+    ]);
+
+    if (regionsResult.status === 'fulfilled') {
+      setRegionsView(regionsResult.value);
+    } else {
+      console.error('Regions fetch failed', regionsResult.reason);
+      setRegionsView(null);
       toast('Regionen konnten nicht geladen werden.', 'error');
-    } finally {
-      setRegionsLoading(false);
     }
+
+    if (evidenceResult.status === 'fulfilled') {
+      setWorkspaceStatus(buildWorkspaceStatus(null, evidenceResult.value));
+    } else {
+      console.error('Regions evidence fetch failed', evidenceResult.reason);
+      setWorkspaceStatus(null);
+      toast('Der Qualitätsstatus für Regionen konnte nicht geladen werden.', 'error');
+    }
+
+    setRegionsLoading(false);
   }, [brand, toast, virus]);
 
   useEffect(() => {
@@ -872,28 +1005,45 @@ export function useRegionsPageData(
     regionsView,
     regionsLoading,
     loadRegions,
+    workspaceStatus,
   };
 }
 
 export function useCampaignsPageData(
+  virus: string,
   brand: string,
   dataVersion: number,
   toast: ToastLike = noop,
 ) {
   const [campaignsView, setCampaignsView] = useState<MediaCampaignsResponse | null>(null);
   const [campaignsLoading, setCampaignsLoading] = useState(false);
+  const [workspaceStatus, setWorkspaceStatus] = useState<WorkspaceStatusSummary | null>(null);
 
   const loadCampaigns = useCallback(async () => {
     setCampaignsLoading(true);
-    try {
-      setCampaignsView(await mediaApi.getCampaigns(brand));
-    } catch (error) {
-      console.error('Campaigns fetch failed', error);
+    const [campaignsResult, evidenceResult] = await Promise.allSettled([
+      mediaApi.getCampaigns(brand),
+      mediaApi.getEvidence(virus, brand),
+    ]);
+
+    if (campaignsResult.status === 'fulfilled') {
+      setCampaignsView(campaignsResult.value);
+    } else {
+      console.error('Campaigns fetch failed', campaignsResult.reason);
+      setCampaignsView(null);
       toast('Kampagnenvorschlaege konnten nicht geladen werden.', 'error');
-    } finally {
-      setCampaignsLoading(false);
     }
-  }, [brand, toast]);
+
+    if (evidenceResult.status === 'fulfilled') {
+      setWorkspaceStatus(buildWorkspaceStatus(null, evidenceResult.value));
+    } else {
+      console.error('Campaigns evidence fetch failed', evidenceResult.reason);
+      setWorkspaceStatus(null);
+      toast('Der Qualitätsstatus für Kampagnen konnte nicht geladen werden.', 'error');
+    }
+
+    setCampaignsLoading(false);
+  }, [brand, toast, virus]);
 
   useEffect(() => {
     loadCampaigns();
@@ -903,6 +1053,7 @@ export function useCampaignsPageData(
     campaignsView,
     campaignsLoading,
     loadCampaigns,
+    workspaceStatus,
   };
 }
 
@@ -1058,6 +1209,7 @@ export function useEvidencePageData(
     evidence,
     evidenceLoading,
     loadEvidence,
+    workspaceStatus: buildWorkspaceStatus(null, evidence),
     marketValidation,
     marketValidationLoading,
     customerValidation,

@@ -16,7 +16,7 @@ jest.mock('./pages/media/NowPage', () => ({
 import App from './App';
 
 describe('App routing', () => {
-  it('redirects legacy dashboard routes to /jetzt and shows only three primary nav items', async () => {
+  it('redirects legacy dashboard routes to /jetzt and shows the four PEIX work areas', async () => {
     window.history.pushState({}, '', '/dashboard');
 
     render(<App />);
@@ -27,10 +27,11 @@ describe('App routing', () => {
     const operatorNav = screen.getByRole('navigation', { name: 'Operator Bereiche' });
     const navButtons = within(operatorNav).getAllByRole('button');
 
-    expect(navButtons).toHaveLength(3);
+    expect(navButtons).toHaveLength(4);
     expect(within(operatorNav).getByRole('button', { name: /Jetzt/i })).toBeInTheDocument();
     expect(within(operatorNav).getByRole('button', { name: /Regionen/i })).toBeInTheDocument();
     expect(within(operatorNav).getByRole('button', { name: /Kampagnen/i })).toBeInTheDocument();
+    expect(within(operatorNav).getByRole('button', { name: /Qualität/i })).toBeInTheDocument();
     expect(within(operatorNav).queryByRole('button', { name: /Dashboard/i })).not.toBeInTheDocument();
   });
 });

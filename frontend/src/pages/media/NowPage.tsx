@@ -20,6 +20,7 @@ const NowPage: React.FC = () => {
   const [horizonDays, setHorizonDays] = useState(7);
   const {
     loading,
+    workspaceStatus,
     view,
   } = useNowPageData(virus, brand, horizonDays, weeklyBudget, dataVersion, toast);
 
@@ -30,6 +31,7 @@ const NowPage: React.FC = () => {
       horizonDays={horizonDays}
       onHorizonChange={setHorizonDays}
       view={view}
+      workspaceStatus={workspaceStatus}
       loading={loading}
       onOpenRecommendation={(id) => openRecommendation(id, 'overlay')}
       onOpenRegions={(regionCode) => navigate('/regionen', { state: regionCode ? { regionCode } : undefined })}

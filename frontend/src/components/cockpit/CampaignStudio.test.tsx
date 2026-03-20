@@ -86,6 +86,7 @@ describe('CampaignStudio', () => {
         brand="gelo"
         budget={120000}
         goal="Sichtbarkeit steigern"
+        workspaceStatus={null}
         loading={false}
         generationLoading={false}
         onBrandChange={noop}
@@ -96,12 +97,13 @@ describe('CampaignStudio', () => {
       />,
     );
 
-    expect(screen.getByText('Kampagnen mit klarer nächster Aktion.')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Jetzt zuerst prüfen' })).toBeInTheDocument();
-    expect(screen.getByText('Neue Vorschläge erstellen')).toBeInTheDocument();
-    expect(screen.getByText('Systemstand')).toBeInTheDocument();
+    expect(screen.getByText('Jetzt zuerst prüfen')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Diesen Fall öffnen' })).toBeInTheDocument();
+    expect(screen.getByText('Vorbereitung')).toBeInTheDocument();
+    expect(screen.getByText('Freigabe')).toBeInTheDocument();
+    expect(screen.getByText('Weitere Vorschläge erstellen')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Jetzt zuerst prüfen' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Diesen Fall öffnen' }));
 
     expect(onOpenRecommendation).toHaveBeenCalledWith('rec-review');
   });

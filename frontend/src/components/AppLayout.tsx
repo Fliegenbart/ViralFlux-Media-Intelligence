@@ -9,61 +9,36 @@ interface Props {
 }
 
 const PRIMARY_NAV_ITEMS = [
-  { label: 'Jetzt', path: '/jetzt', helper: 'Die klare Lage und die nächste Aktion', icon: 'bolt' },
-  { label: 'Regionen', path: '/regionen', helper: 'Regionale Arbeitspakete und Fokusmärkte', icon: 'location_on' },
-  { label: 'Kampagnen', path: '/kampagnen', helper: 'Empfehlungen, Cluster und Assets', icon: 'auto_awesome' },
-] as const;
-
-const UTILITY_NAV_ITEMS = [
-  { label: 'Qualität', path: '/evidenz', helper: 'Datenqualität, Validierung und Readiness', icon: 'analytics' },
-  { label: 'Bericht', path: '/bericht', helper: 'Export und Management-Überblick', icon: 'description' },
-] as const;
-
-const SECONDARY_NAV_ITEMS = [
-  { label: 'Pilotansicht', path: '/pilot', helper: 'Kundentaugliche PEIX / GELO Surface', icon: 'travel_explore' },
-] as const;
-
-const HEADER_CONTEXT_TABS = [
-  { label: 'Arbeitslage', path: '/jetzt' },
-  { label: 'Prüfansicht', path: '/evidenz' },
+  { label: 'Jetzt', path: '/jetzt', helper: 'Die wichtigste Wochenentscheidung und der nächste Schritt', icon: 'bolt' },
+  { label: 'Regionen', path: '/regionen', helper: 'Eine Region fokussiert prüfen und weiterbearbeiten', icon: 'location_on' },
+  { label: 'Kampagnen', path: '/kampagnen', helper: 'Den wichtigsten Fall zuerst prüfen und freigeben', icon: 'auto_awesome' },
+  { label: 'Qualität', path: '/evidenz', helper: 'Forecast, Quellen, Kundendaten und Blocker prüfen', icon: 'verified' },
 ] as const;
 
 const SECTION_META = [
   {
     path: '/jetzt',
-    kicker: 'Operator Workspace',
-    title: 'Jetzt entscheiden',
-    description: 'Hier stehen die klare Lage, die Fokusregion und die nächste sinnvolle Aktion an erster Stelle.',
-  },
-  {
-    path: '/pilot',
-    kicker: 'Pilot Surface',
-    title: 'PEIX / GELO Pilot',
-    description: 'Diese Ansicht bleibt als kundentaugliche Forecast-First-Oberfläche bewusst separat.',
+    kicker: 'PEIX Arbeitsansicht',
+    title: 'Jetzt',
+    description: 'Hier steht nur das, was diese Woche wirklich wichtig ist: Lage, Grund, nächster Schritt und Vertrauen.',
   },
   {
     path: '/regionen',
-    kicker: 'Operator Workspace',
-    title: 'Regionensteuerung',
-    description: 'Hier arbeiten wir eine Region nach der anderen ab, mit klarem Grund und nächstem Schritt.',
+    kicker: 'PEIX Arbeitsansicht',
+    title: 'Regionen',
+    description: 'Hier prüfen wir genau eine Region nach der anderen und halten die Hauptaktion klar sichtbar.',
   },
   {
     path: '/kampagnen',
-    kicker: 'Operator Workspace',
-    title: 'Kampagnensteuerung',
-    description: 'Hier prüfen und priorisieren wir konkrete Kampagnen statt lange Listen zu verwalten.',
+    kicker: 'PEIX Arbeitsansicht',
+    title: 'Kampagnen',
+    description: 'Hier landet immer zuerst der wichtigste Fall. Alles Weitere ordnet sich danach.',
   },
   {
     path: '/evidenz',
     kicker: 'Qualität',
-    title: 'Evidenz und Readiness',
-    description: 'Hier prüfen wir bewusst erst auf der zweiten Ebene, wie belastbar Daten und Freigabe wirklich sind.',
-  },
-  {
-    path: '/bericht',
-    kicker: 'Utility',
-    title: 'Wochenbericht',
-    description: 'Hier liegt der exportierbare Management-Überblick zur aktuellen Arbeitslage.',
+    title: 'Qualität',
+    description: 'Hier beantworten wir nur vier Fragen: Ist der Forecast stabil, sind die Daten frisch, sind Kundendaten da und gibt es Blocker?',
   },
 ] as const;
 
@@ -76,24 +51,16 @@ const AppLayout: React.FC<Props> = ({ children }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const isActive = (path: string) => location.pathname.startsWith(path);
-  const isPilotRoute = location.pathname.startsWith('/pilot');
   const currentSection = SECTION_META.find(({ path }) => location.pathname.startsWith(path)) || {
-    kicker: 'Operator Workspace',
+    kicker: 'PEIX Arbeitsansicht',
     title: 'Media Intelligence',
-    description: 'Die aktuelle Arbeitslage bleibt in einem kompakten Operator-Raum gebündelt.',
+    description: 'Die Arbeitslage bleibt in einer kompakten PEIX-Ansicht gebündelt.',
   };
   const operatorStatusLabel = location.pathname.startsWith('/jetzt')
     ? 'Live-Lage aktiv'
     : location.pathname.startsWith('/evidenz')
-      ? 'Prüfmodus aktiv'
-      : location.pathname.startsWith('/bericht')
-        ? 'Export bereit'
-        : 'Arbeitsbereich aktiv';
-  const operatorSearchLabel = location.pathname.startsWith('/jetzt')
-    ? 'Suche in der aktuellen Lage'
-    : location.pathname.startsWith('/evidenz')
-      ? 'Suche in Evidenz und Readiness'
-      : `Suche in ${currentSection.title}`;
+      ? 'Qualität aktiv'
+      : 'Arbeitsbereich aktiv';
 
   const handlePdfDownload = async () => {
     setPdfLoading(true);
@@ -118,96 +85,6 @@ const AppLayout: React.FC<Props> = ({ children }) => {
     navigate(path);
     setMobileMenuOpen(false);
   };
-
-  if (isPilotRoute) {
-    return (
-      <div className="app-shell app-shell--pilot">
-        <header className="shell-header media-header">
-          <div className="shell-header-inner">
-            <Link to="/welcome" className="shell-brand" aria-label="ViralFlux Startseite">
-              <span className="shell-logo-mark" aria-hidden="true">VF</span>
-              <span className="shell-logo-copy">ViralFlux</span>
-            </Link>
-
-            <button
-              className="shell-mobile-toggle"
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              aria-label={mobileMenuOpen ? 'Navigation schließen' : 'Navigation öffnen'}
-              aria-expanded={mobileMenuOpen}
-              aria-controls="shell-nav-menu"
-            >
-              <span style={{ fontSize: 20, lineHeight: 1 }}>
-                {mobileMenuOpen ? '\u2715' : '\u2630'}
-              </span>
-            </button>
-
-            <nav
-              id="shell-nav-menu"
-              className={`shell-nav ${mobileMenuOpen ? 'shell-nav--open' : ''}`}
-              role="navigation"
-              aria-label="Hauptnavigation"
-            >
-              {[...PRIMARY_NAV_ITEMS, ...UTILITY_NAV_ITEMS, ...SECONDARY_NAV_ITEMS].map(({ label, path }) => {
-                const active = isActive(path);
-                return (
-                  <button
-                    key={path}
-                    onClick={() => handleNavClick(path)}
-                    className={`shell-nav-item ${active ? 'active' : ''}`}
-                    aria-current={active ? 'page' : undefined}
-                  >
-                    {label}
-                  </button>
-                );
-              })}
-            </nav>
-
-            <div className="shell-header-spacer" />
-
-            <button
-              onClick={toggle}
-              className="theme-toggle"
-              aria-label={theme === 'dark' ? 'Helles Design aktivieren' : 'Dunkles Design aktivieren'}
-            >
-              {theme === 'dark' ? '\u2600\uFE0F' : '\uD83C\uDF19'}
-            </button>
-
-            <button
-              onClick={handleLogout}
-              className="theme-toggle"
-              aria-label="Abmelden"
-              title="Abmelden"
-              style={{ marginLeft: 4 }}
-            >
-              {'\u23FB'}
-            </button>
-          </div>
-        </header>
-
-        <main className="shell-main" id="main-content">
-          <div className="shell-main-inner">
-            {children}
-          </div>
-        </main>
-
-        <footer className="shell-footer">
-          <div className="shell-footer-inner">
-            <button
-              onClick={handlePdfDownload}
-              disabled={pdfLoading}
-              className="media-button shell-footer-button"
-              aria-busy={pdfLoading}
-            >
-              {pdfLoading ? 'Wird erstellt\u2026' : `${UI_COPY.weeklyReport} herunterladen`}
-            </button>
-            <span className="shell-footer-note">
-              Datenstand ist je Ansicht direkt sichtbar
-            </span>
-          </div>
-        </footer>
-      </div>
-    );
-  }
 
   return (
     <div className="app-shell app-shell--operator">
@@ -245,25 +122,6 @@ const AppLayout: React.FC<Props> = ({ children }) => {
                   key={path}
                   onClick={() => handleNavClick(path)}
                   className={`operator-nav-item ${active ? 'active' : ''}`}
-                  aria-current={active ? 'page' : undefined}
-                  title={helper}
-                >
-                  <span className="material-symbols-outlined operator-nav-item__icon" aria-hidden="true">{icon}</span>
-                  <span className="operator-nav-item__label">{label}</span>
-                </button>
-              );
-            })}
-          </nav>
-
-          <div className="operator-sidebar__section-label">Mehr</div>
-          <nav className="operator-nav operator-nav--secondary" aria-label="Weitere Bereiche">
-            {[...UTILITY_NAV_ITEMS, ...SECONDARY_NAV_ITEMS].map(({ label, path, helper, icon }) => {
-              const active = isActive(path);
-              return (
-                <button
-                  key={path}
-                  onClick={() => handleNavClick(path)}
-                  className={`operator-nav-item ${active ? 'active' : ''} operator-nav-item--secondary`}
                   aria-current={active ? 'page' : undefined}
                   title={helper}
                 >
@@ -326,32 +184,7 @@ const AppLayout: React.FC<Props> = ({ children }) => {
                   </span>
                 </button>
 
-                <div className="operator-search-shell" aria-label={operatorSearchLabel}>
-                  <span className="material-symbols-outlined operator-search-shell__icon" aria-hidden="true">search</span>
-                  <input
-                    type="search"
-                    className="operator-search-shell__input"
-                    placeholder={`${operatorSearchLabel}...`}
-                    aria-label={operatorSearchLabel}
-                  />
-                </div>
-
-                <nav className="operator-top-tabs" aria-label="Kontextnavigation">
-                  {HEADER_CONTEXT_TABS.map(({ label, path }) => {
-                    const active = isActive(path);
-                    return (
-                      <button
-                        key={path}
-                        type="button"
-                        onClick={() => handleNavClick(path)}
-                        className={`operator-top-tabs__item ${active ? 'active' : ''}`}
-                        aria-current={active ? 'page' : undefined}
-                      >
-                        {label}
-                      </button>
-                    );
-                  })}
-                </nav>
+                <span className="operator-header__status-pill">PEIX Arbeitsansicht</span>
               </div>
 
               <div className="operator-header__actions">
@@ -389,6 +222,17 @@ const AppLayout: React.FC<Props> = ({ children }) => {
                   <span className="operator-profile-pill__copy">Operator</span>
                   <span className="material-symbols-outlined" aria-hidden="true">logout</span>
                 </button>
+              </div>
+            </div>
+
+            <div className="operator-header__meta">
+              <div className="operator-header__copy-block">
+                <div className="operator-header__kicker">{currentSection.kicker}</div>
+                <div className="operator-header__title-row">
+                  <span className="operator-header__status-dot" aria-hidden="true" />
+                  <h1 className="operator-header__title">{currentSection.title}</h1>
+                </div>
+                <p className="operator-header__copy">{currentSection.description}</p>
               </div>
             </div>
           </header>

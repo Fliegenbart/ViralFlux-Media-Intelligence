@@ -167,6 +167,19 @@ def _normalize_tile_line(text: str) -> str:
     return normalized.replace("Signalscore", "Signalwert")
 
 
+def _action_card_title(card: dict[str, Any]) -> str:
+    title = str(
+        card.get("display_title")
+        or card.get("recommended_product")
+        or card.get("product")
+        or "Kampagnenvorschlag"
+    ).strip()
+    reason = str(card.get("reason") or card.get("recommendation_reason") or "").strip()
+    if reason and reason.lower() not in title.lower():
+        return f"{title}: {reason}"
+    return title
+
+
 class WeeklyBriefService:
     """Assembles cockpit data into a weekly PDF action brief."""
 
@@ -402,7 +415,7 @@ class WeeklyBriefService:
         _section(pdf, "Produkt-Priorisierung zur Prüfung")
         if top_cards:
             for i, card in enumerate(top_cards[:5], start=1):
-                product = card.get("recommended_product", card.get("product", "-"))
+                product = _action_card_title(card)
                 urgency = float(card.get("urgency_score", 0) or 0)
                 reason = card.get("reason", card.get("recommendation_reason", ""))
                 card_regions = card.get("region_codes", [])
@@ -461,8 +474,8 @@ class WeeklyBriefService:
 
                 pdf.set_font("Helvetica", "", 9)
                 _kv(pdf, "RKI-Peak:", f"{peak_date} ({peak_cases:,} Fälle)".replace(",", "."))
-                _kv(pdf, "Erstes ML-Signal:", str(first_alert))
-                _kv(pdf, "Vorsprung:", f"{ttd} Tage", bold_value=True)
+                _kv(pdf, "Erstes Frühsignal:", str(first_alert))
+                _kv(pdf, "Abstand bis zum späteren Peak:", f"{ttd} Tage", bold_value=True)
                 pdf.ln(2)
 
             # Summary
@@ -471,8 +484,20 @@ class WeeklyBriefService:
             pdf.set_font("Helvetica", "B", 11)
             pdf.set_text_color(*_INDIGO)
             pdf.cell(0, 8, _safe(
-                f"Durchschnittlicher Vorlauf im Rückblicktest: {avg_ttd:.0f} Tage vor dem RKI-Peak"
+                f"Im Rückblick lag das erste Signal im Schnitt {avg_ttd:.0f} Tage vor dem späteren RKI-Peak."
             ), new_x="LMARGIN", new_y="NEXT")
+            pdf.set_font("Helvetica", "", 9)
+            pdf.set_text_color(*_SLATE_700)
+            pdf.multi_cell(
+                0,
+                5,
+                _safe(
+                    "Für die operative Steuerung nutzen wir trotzdem nur das kurze 3-, 5- oder 7-Tage-Fenster. "
+                    "Der große historische Abstand zeigt vor allem, dass frühe Signale oft lange vor dem späteren Peak sichtbar werden."
+                ),
+                new_x="LMARGIN",
+                new_y="NEXT",
+            )
         else:
             pdf.set_font("Helvetica", "I", 10)
             pdf.set_text_color(*_SLATE_400)

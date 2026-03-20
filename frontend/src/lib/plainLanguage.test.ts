@@ -9,6 +9,10 @@ describe('plain language helpers', () => {
     expect(normalizeGermanText('Media Intelligence Curator')).toBe('Frühwarnung für regionale Nachfrage');
     expect(normalizeGermanText('Learning-State')).toBe('Lernstand');
     expect(normalizeGermanText('Koennen wir die Vorschlaege oeffnen?')).toBe('Können wir die Vorschläge öffnen?');
+    expect(normalizeGermanText('Outcome-Daten')).toBe('Kundendaten');
+    expect(normalizeGermanText('Wirkungsdaten-Daten')).toBe('Wirkungsdaten');
+    expect(normalizeGermanText('Kundendaten-Daten')).toBe('Kundendaten');
+    expect(normalizeGermanText('Epi-Welle mit ML-Prognose und Aktivierbarkeit')).toBe('Atemwegswelle mit Modellvorhersage und Umsetzbarkeit');
   });
 
   it('builds an assertive prediction narrative for stable states', () => {

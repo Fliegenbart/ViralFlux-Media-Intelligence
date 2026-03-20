@@ -1,6 +1,7 @@
 import React from 'react';
 
 import { MediaRegionsResponse, WorkspaceStatusSummary } from '../../types/media';
+import { normalizeGermanText } from '../../lib/plainLanguage';
 import CollapsibleSection from '../CollapsibleSection';
 import { UI_COPY } from '../../lib/copy';
 import GermanyMap from './GermanyMap';
@@ -61,10 +62,20 @@ const RegionWorkbench: React.FC<Props> = ({
     );
   }
 
-  const primaryReason = region?.priority_explanation
-    || suggestion?.reason
-    || region?.tooltip?.recommendation_text
-    || 'Diese Region zeigt aktuell das früheste relevante Signal aus Vorhersage, Versorgung und Nachfrage.';
+  const primaryReason = normalizeGermanText(
+    region?.priority_explanation
+      || suggestion?.reason
+      || region?.tooltip?.recommendation_text
+      || 'Diese Region zeigt aktuell das früheste relevante Signal aus Vorhersage, Versorgung und Nachfrage.',
+  );
+  const driverSummary = normalizeGermanText(
+    region?.signal_drivers?.slice(0, 3).map((driver) => driver.label).join(' · ')
+      || 'Die wichtigsten Treiber erscheinen nach Auswahl der Region.',
+  );
+  const decisionModeLabel = normalizeGermanText(region?.decision_mode_label || suggestion?.priority || 'Regionalsignal');
+  const sourceTraceLabel = normalizeGermanText(
+    (region?.source_trace || []).join(', ') || 'AMELAG, SurvStat, Vorhersage',
+  );
   const primaryActionLabel = region?.recommendation_ref?.card_id
     ? 'Kampagnenvorschlag öffnen'
     : 'Vorschlag für Region erstellen';
@@ -101,7 +112,7 @@ const RegionWorkbench: React.FC<Props> = ({
               </button>
             ))}
           </div>
-          <span className="step-chip">Stand {formatDateShort(activeMap.date)}</span>
+          <span className="step-chip">Datenstand {formatDateShort(activeMap.date)}</span>
         </div>
       </section>
 
@@ -151,17 +162,17 @@ const RegionWorkbench: React.FC<Props> = ({
             <div>
               <div className="section-kicker">Warum diese Region</div>
               <div className="summary-headline" style={{ fontSize: '1.55rem', marginTop: 8 }}>
-                {region ? `${region.name} liegt aktuell vorn.` : 'Frühester Startpunkt'}
+                {region ? `Das früheste Signal sehen wir aktuell in ${region.name}.` : 'Frühester Startpunkt'}
               </div>
               <div className="summary-note" style={{ marginTop: 8 }}>
-                {region?.signal_drivers?.slice(0, 3).map((driver) => driver.label).join(' · ') || 'Die wichtigsten Treiber erscheinen nach Auswahl der Region.'}
+                {driverSummary}
               </div>
             </div>
 
             <div style={{ display: 'grid', gap: 10 }}>
               <div className="evidence-row">
                 <span>Einordnung</span>
-                <strong>{region?.decision_mode_label || suggestion?.priority || 'Regionalsignal'}</strong>
+                <strong>{decisionModeLabel}</strong>
               </div>
               <div className="evidence-row">
                 <span>Produktfokus</span>
@@ -173,7 +184,7 @@ const RegionWorkbench: React.FC<Props> = ({
               </div>
               <div className="evidence-row">
                 <span>Grundlage</span>
-                <strong>{(region?.source_trace || []).join(', ') || 'AMELAG, SurvStat, Vorhersage'}</strong>
+                <strong>{sourceTraceLabel}</strong>
               </div>
             </div>
           </aside>
@@ -222,7 +233,7 @@ const RegionWorkbench: React.FC<Props> = ({
                   <div style={{ textAlign: 'left' }}>
                     <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>{item.name}</div>
                     <div style={{ marginTop: 4, fontSize: 12, color: 'var(--text-muted)' }}>
-                      {item.tooltip?.recommended_product || 'GELO'} · {item.decision_mode_label || item.trend || '-'}
+                      {item.tooltip?.recommended_product || 'GELO'} · {normalizeGermanText(item.decision_mode_label || item.trend || '-')}
                     </div>
                   </div>
                   <div style={{ textAlign: 'right' }}>
@@ -263,7 +274,7 @@ const RegionWorkbench: React.FC<Props> = ({
             <div className="review-chip-row" style={{ marginTop: 12 }}>
               {(region?.signal_drivers || []).map((driver) => (
                 <span key={driver.label} className="step-chip">
-                  {driver.label} {formatPercent(driver.strength_pct || 0)}
+                  {normalizeGermanText(driver.label)} {formatPercent(driver.strength_pct || 0)}
                 </span>
               ))}
             </div>
@@ -278,7 +289,7 @@ const RegionWorkbench: React.FC<Props> = ({
               </div>
               <div className="evidence-row">
                 <span>Quellen</span>
-                <strong>{(region?.source_trace || []).join(', ') || 'AMELAG, SurvStat, Vorhersage'}</strong>
+                <strong>{sourceTraceLabel}</strong>
               </div>
             </div>
           </div>

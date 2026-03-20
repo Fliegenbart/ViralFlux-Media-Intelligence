@@ -47,11 +47,13 @@ const UI_REPLACEMENTS: Array<[RegExp, string]> = [
   [/\bOperator-Raum\b/g, 'Arbeitsbereich'],
   [/\bOperator\b/g, 'Arbeitsbereich'],
   [/\bActionability\b/g, 'Umsetzbarkeit'],
+  [/\bAktivierbarkeit\b/g, 'Umsetzbarkeit'],
   [/\bBrand\b/g, 'Marke'],
   [/\bFlight\b/g, 'Startfenster'],
   [/\bLearning-State\b/g, 'Lernstand'],
   [/\bOutcome-Learning\b/g, 'Wirkung aus Kundendaten'],
   [/\bOutcome-Score\b/g, 'Wirkungssignal'],
+  [/\bOutcome-Daten\b/g, 'Kundendaten'],
   [/\bOutcome\b/g, 'Wirkungsdaten'],
   [/\bTruth-Gate\b/g, 'Freigabestatus Kundendaten'],
   [/\bTruth-Layer\b/g, 'Kundendatenbasis'],
@@ -69,14 +71,17 @@ const UI_REPLACEMENTS: Array<[RegExp, string]> = [
   [/\bDecision Support\b/g, 'Entscheidungshilfe'],
   [/\bMedia Spend\b/g, 'Mediabudget'],
   [/\bSignal-Score\b/g, 'Signalwert'],
+  [/\bSignalscore\b/g, 'Signalwert'],
   [/\bPriority-Score\b/g, 'Priorität'],
   [/\bLearning-Konfidenz\b/g, 'Sicherheit aus Kundendaten'],
   [/\bShift\b/g, 'Änderung'],
   [/\bForecast-Monitoring\b/g, 'Prüfung der Vorhersage'],
   [/\bForecast-Frische\b/g, 'Frische der Vorhersage'],
   [/\bForecast-Richtung\b/g, 'Richtung der Vorhersage'],
+  [/\bML-Prognose\b/g, 'Modellvorhersage'],
   [/\bForecast\b/g, 'Vorhersage'],
   [/\bHorizon\b/g, 'Zeitraum'],
+  [/\bEpi-Welle\b/g, 'Atemwegswelle'],
   [/\bActive\b/g, 'Aktiv'],
 ];
 
@@ -92,7 +97,12 @@ export function normalizeGermanText(value?: string | null): string {
     text = text.replace(pattern, replacement);
   }
 
-  return text.replace(/\s+/g, ' ').trim();
+  return text
+    .replace(/\bWirkungsdaten-Daten\b/g, 'Wirkungsdaten')
+    .replace(/\bKundendaten-Daten\b/g, 'Kundendaten')
+    .replace(/\bVorhersage-Promotion-Status\b/g, 'Freigabestatus der Vorhersage')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 export function buildPredictionNarrative({

@@ -28,6 +28,19 @@ _RED = (220, 38, 38)
 _WHITE = (255, 255, 255)
 _BG = (248, 250, 252)
 
+_SOURCE_LABELS = {
+    "wastewater": "Abwasser",
+    "are konsultation": "ARE-Konsultation",
+    "survstat": "SurvStat",
+    "notaufnahme": "Notaufnahme",
+    "weather": "Wetter",
+    "pollen": "Pollen",
+    "google trends": "Google Trends",
+    "bfarm shortage": "BfArM-Engpässe",
+    "marketing": "Kundendaten",
+    "backtest": "Rückblicktest",
+}
+
 
 def _safe(text: Any) -> str:
     """Sanitize text for Latin-1 encoding (core PDF fonts).
@@ -101,6 +114,34 @@ def _kv(pdf: FPDF, label: str, value: str, bold_value: bool = False) -> None:
     pdf.cell(0, 7, _safe(value), new_x="LMARGIN", new_y="NEXT")
 
 
+def _source_display_label(source: str | None) -> str:
+    raw = str(source or "").strip()
+    if not raw:
+        return "-"
+    normalized = raw.lower().replace("_", " ").replace("-", " ")
+    normalized = " ".join(normalized.split())
+    if normalized in _SOURCE_LABELS:
+        return _SOURCE_LABELS[normalized]
+    return raw.replace("_", " ").title()
+
+
+def _dedupe_cards(cards: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    unique_cards: list[dict[str, Any]] = []
+    seen: set[tuple[str, str, tuple[str, ...]]] = set()
+
+    for card in cards:
+        product = str(card.get("recommended_product", card.get("product", "")) or "").strip().lower()
+        reason = str(card.get("reason", card.get("recommendation_reason", "")) or "").strip().lower()
+        regions = tuple(sorted(str(region).strip().upper() for region in card.get("region_codes", []) if region))
+        signature = (product, reason, regions)
+        if signature in seen:
+            continue
+        seen.add(signature)
+        unique_cards.append(card)
+
+    return unique_cards
+
+
 class WeeklyBriefService:
     """Assembles cockpit data into a weekly PDF action brief."""
 
@@ -142,9 +183,9 @@ class WeeklyBriefService:
         )
 
         # Sort cards by urgency
-        top_cards = sorted(
+        top_cards = _dedupe_cards(sorted(
             cards, key=lambda c: float(c.get("urgency_score", 0) or 0), reverse=True,
-        )[:5]
+        ))[:5]
 
         # Build PDF
         pdf = _ActionBriefPDF(calendar_week)
@@ -169,6 +210,31 @@ class WeeklyBriefService:
             f"Generiert: {now.strftime('%d.%m.%Y %H:%M')} UTC."
         ), new_x="LMARGIN", new_y="NEXT")
         pdf.ln(4)
+
+        if region_list:
+            top_region = region_list[0]
+            top_region_name = top_region.get("name", top_region.get("code", "der Fokusregion"))
+            top_region_score = float(top_region.get("peix_score", top_region.get("score_0_100", 0)) or 0)
+            top_region_impact = float(top_region.get("impact_probability", 0) or 0)
+            pdf.set_fill_color(238, 242, 255)
+            pdf.set_draw_color(*_INDIGO)
+            pdf.set_line_width(0.2)
+            pdf.set_font("Helvetica", "B", 10)
+            pdf.set_text_color(*_INDIGO)
+            pdf.multi_cell(
+                0,
+                7,
+                _safe(
+                    "Aktuelle Hauptaussage: "
+                    f"Das früheste relevante Signal sehen wir derzeit in {top_region_name}. "
+                    f"Die Region führt die Priorisierung mit {top_region_score:.0f}/100 und einem Frühsignal von {top_region_impact:.0f}% an."
+                ),
+                border=1,
+                fill=True,
+                new_x="LMARGIN",
+                new_y="NEXT",
+            )
+            pdf.ln(4)
 
         # Signalscore national
         _section(pdf, "Signalbild Deutschland")
@@ -402,16 +468,21 @@ class WeeklyBriefService:
                 age_days = -1
                 status = "?"
 
-            pdf.set_font("Helvetica", "", 9)
-            color = _GREEN if status == "AKTUELL" else _RED
+            pdf.set_font("Helvetica", "B", 8)
+            color = _GREEN if status == "AKTUELL" else _RED if status == "ALT" else _AMBER
             pdf.set_text_color(*color)
-            pdf.cell(15, 5, _safe(f"[{status}]"))
+            pdf.cell(20, 5, _safe(f"[{status}]"))
             pdf.set_text_color(*_SLATE_700)
-            pdf.cell(40, 5, _safe(source.replace("_", " ").title()))
+            pdf.cell(56, 5, _safe(_source_display_label(source)))
             pdf.set_text_color(*_SLATE_400)
-            pdf.cell(0, 5,
-                     _safe(f"{age_days:.1f} Tage alt" if age_days >= 0 else "Unbekannt"),
-                     new_x="LMARGIN", new_y="NEXT")
+            pdf.set_font("Helvetica", "", 9)
+            pdf.cell(
+                0,
+                5,
+                _safe(f"{age_days:.1f} Tage alt" if age_days >= 0 else "Zeit nicht bekannt"),
+                new_x="LMARGIN",
+                new_y="NEXT",
+            )
 
         pdf.ln(6)
 

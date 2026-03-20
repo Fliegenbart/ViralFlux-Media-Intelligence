@@ -184,7 +184,7 @@ const AppLayout: React.FC<Props> = ({ children }) => {
                   </span>
                 </button>
 
-                <span className="operator-header__status-pill">PEIX Arbeitsansicht</span>
+                <span className="operator-header__status-pill">PEIX x GELO</span>
               </div>
 
               <div className="operator-header__actions">

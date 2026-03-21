@@ -66,7 +66,14 @@ export interface PilotReadoutPayload {
   topN?: number;
 }
 
-export async function fetchJson<T>(url: string, init?: RequestInit, timeoutMs = 12000): Promise<T> {
+const DEFAULT_FETCH_TIMEOUT_MS = 20000;
+const HEAVY_FETCH_TIMEOUT_MS = 45000;
+
+export async function fetchJson<T>(
+  url: string,
+  init?: RequestInit,
+  timeoutMs = DEFAULT_FETCH_TIMEOUT_MS,
+): Promise<T> {
   const controller = new AbortController();
   const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
 
@@ -112,7 +119,7 @@ export function sortRecommendations(cards: RecommendationCard[]): Recommendation
 export const mediaApi = {
   async getDecision(virus: string, brand: string): Promise<MediaDecisionResponse> {
     const qs = new URLSearchParams({ virus_typ: virus, brand });
-    return fetchJson<MediaDecisionResponse>(`/api/v1/media/decision?${qs.toString()}`);
+    return fetchJson<MediaDecisionResponse>(`/api/v1/media/decision?${qs.toString()}`, undefined, DEFAULT_FETCH_TIMEOUT_MS);
   },
 
   async getRegions(virus: string, brand: string): Promise<MediaRegionsResponse> {
@@ -131,7 +138,7 @@ export const mediaApi = {
 
   async getEvidence(virus: string, brand: string): Promise<MediaEvidenceResponse> {
     const qs = new URLSearchParams({ virus_typ: virus, brand });
-    return fetchJson<MediaEvidenceResponse>(`/api/v1/media/evidence?${qs.toString()}`);
+    return fetchJson<MediaEvidenceResponse>(`/api/v1/media/evidence?${qs.toString()}`, undefined, DEFAULT_FETCH_TIMEOUT_MS);
   },
 
   async getPilotReporting(payload: PilotReportingPayload = {}): Promise<PilotReportingResponse> {
@@ -188,7 +195,7 @@ export const mediaApi = {
       virus_typ: virus,
       horizon_days: String(horizonDays),
     });
-    return fetchJson<RegionalForecastResponse>(`/api/v1/forecast/regional/decisions?${qs.toString()}`, undefined, 20000);
+    return fetchJson<RegionalForecastResponse>(`/api/v1/forecast/regional/decisions?${qs.toString()}`, undefined, HEAVY_FETCH_TIMEOUT_MS);
   },
 
   async getRegionalAllocation(
@@ -201,7 +208,7 @@ export const mediaApi = {
       weekly_budget_eur: String(weeklyBudgetEur),
       horizon_days: String(horizonDays),
     });
-    return fetchJson<RegionalAllocationResponse>(`/api/v1/forecast/regional/media-allocation?${qs.toString()}`, undefined, 20000);
+    return fetchJson<RegionalAllocationResponse>(`/api/v1/forecast/regional/media-allocation?${qs.toString()}`, undefined, HEAVY_FETCH_TIMEOUT_MS);
   },
 
   async getRegionalCampaignRecommendations(
@@ -216,7 +223,7 @@ export const mediaApi = {
       horizon_days: String(horizonDays),
       top_n: String(topN),
     });
-    return fetchJson<RegionalCampaignRecommendationsResponse>(`/api/v1/forecast/regional/campaign-recommendations?${qs.toString()}`, undefined, 20000);
+    return fetchJson<RegionalCampaignRecommendationsResponse>(`/api/v1/forecast/regional/campaign-recommendations?${qs.toString()}`, undefined, HEAVY_FETCH_TIMEOUT_MS);
   },
 
   async getRecommendationDetail(id: string): Promise<RecommendationDetail> {

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { decisionStateLabel } from '../../lib/copy';
 import { buildPredictionNarrative, normalizeGermanText } from '../../lib/plainLanguage';
@@ -780,23 +780,24 @@ export function useNowPageData(
   const [allocation, setAllocation] = useState<RegionalAllocationResponse | null>(null);
   const [campaignRecommendations, setCampaignRecommendations] = useState<RegionalCampaignRecommendationsResponse | null>(null);
   const [loading, setLoading] = useState(false);
+  const loadVersionRef = useRef(0);
 
   const loadNowPage = useCallback(async () => {
-    setLoading(true);
+    const loadVersion = loadVersionRef.current + 1;
+    loadVersionRef.current = loadVersion;
+    const isCurrentLoad = () => loadVersionRef.current === loadVersion;
 
-    const [
-      decisionResult,
-      evidenceResult,
-      forecastResult,
-      allocationResult,
-      recommendationResult,
-    ] = await Promise.allSettled([
+    setLoading(true);
+    setForecast(null);
+    setAllocation(null);
+    setCampaignRecommendations(null);
+
+    const [decisionResult, evidenceResult] = await Promise.allSettled([
       mediaApi.getDecision(virus, brand),
       mediaApi.getEvidence(virus, brand),
-      mediaApi.getRegionalForecast(virus, horizonDays),
-      mediaApi.getRegionalAllocation(virus, weeklyBudget, horizonDays),
-      mediaApi.getRegionalCampaignRecommendations(virus, weeklyBudget, horizonDays),
     ]);
+
+    if (!isCurrentLoad()) return;
 
     if (decisionResult.status === 'fulfilled') {
       setDecision(decisionResult.value);
@@ -814,35 +815,64 @@ export function useNowPageData(
       toast('Die Qualitätsdaten konnten nicht geladen werden.', 'error');
     }
 
+    setLoading(false);
+
+    if (!isCurrentLoad()) return;
+
+    let backgroundLoadFailed = false;
+
+    const forecastResult = await mediaApi.getRegionalForecast(virus, horizonDays)
+      .then((value) => ({ status: 'fulfilled' as const, value }))
+      .catch((reason) => ({ status: 'rejected' as const, reason }));
+
+    if (!isCurrentLoad()) return;
+
     if (forecastResult.status === 'fulfilled') {
       setForecast(forecastResult.value);
     } else {
       console.error('Now page forecast fetch failed', forecastResult.reason);
       setForecast(null);
-      toast('Die regionale Vorhersage konnte nicht geladen werden.', 'error');
+      backgroundLoadFailed = true;
     }
+
+    const allocationResult = await mediaApi.getRegionalAllocation(virus, weeklyBudget, horizonDays)
+      .then((value) => ({ status: 'fulfilled' as const, value }))
+      .catch((reason) => ({ status: 'rejected' as const, reason }));
+
+    if (!isCurrentLoad()) return;
 
     if (allocationResult.status === 'fulfilled') {
       setAllocation(allocationResult.value);
     } else {
       console.error('Now page allocation fetch failed', allocationResult.reason);
       setAllocation(null);
-      toast('Die Budgetallokation konnte nicht geladen werden.', 'error');
+      backgroundLoadFailed = true;
     }
+
+    const recommendationResult = await mediaApi.getRegionalCampaignRecommendations(virus, weeklyBudget, horizonDays)
+      .then((value) => ({ status: 'fulfilled' as const, value }))
+      .catch((reason) => ({ status: 'rejected' as const, reason }));
+
+    if (!isCurrentLoad()) return;
 
     if (recommendationResult.status === 'fulfilled') {
       setCampaignRecommendations(recommendationResult.value);
     } else {
       console.error('Now page recommendation fetch failed', recommendationResult.reason);
       setCampaignRecommendations(null);
-      toast('Die Kampagnenempfehlungen konnten nicht geladen werden.', 'error');
+      backgroundLoadFailed = true;
     }
 
-    setLoading(false);
+    if (backgroundLoadFailed) {
+      toast('Ein Teil der Regionaldaten laedt laenger als erwartet. Die Wochenlage bleibt trotzdem sichtbar.', 'info');
+    }
   }, [brand, horizonDays, toast, virus, weeklyBudget]);
 
   useEffect(() => {
     loadNowPage();
+    return () => {
+      loadVersionRef.current += 1;
+    };
   }, [dataVersion, loadNowPage]);
 
   return {

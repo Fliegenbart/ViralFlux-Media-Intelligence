@@ -1,10 +1,17 @@
 import React from 'react';
 
-import { WorkspaceStatusSummary } from '../../types/media';
+import { BacktestResponse, WorkspaceStatusSummary } from '../../types/media';
 import CollapsibleSection from '../CollapsibleSection';
 import { NowPageViewModel } from '../../features/media/useMediaData';
+import { WaveOutlookPanel } from './BacktestVisuals';
 import { formatDateTime, VIRUS_OPTIONS } from './cockpitUtils';
 import WorkspaceStatusPanel from './WorkspaceStatusPanel';
+import {
+  OperatorChipRail,
+  OperatorPanel,
+  OperatorSection,
+  OperatorStat,
+} from './operator/OperatorPrimitives';
 
 interface Props {
   virus: string;
@@ -14,6 +21,8 @@ interface Props {
   view: NowPageViewModel;
   workspaceStatus: WorkspaceStatusSummary | null;
   loading: boolean;
+  waveOutlook: BacktestResponse | null;
+  waveOutlookLoading: boolean;
   onOpenRecommendation: (id: string) => void;
   onOpenRegions: (regionCode?: string) => void;
   onOpenCampaigns: () => void;
@@ -30,6 +39,8 @@ const NowWorkspace: React.FC<Props> = ({
   view,
   workspaceStatus,
   loading,
+  waveOutlook,
+  waveOutlookLoading,
   onOpenRecommendation,
   onOpenRegions,
   onOpenCampaigns,
@@ -43,25 +54,29 @@ const NowWorkspace: React.FC<Props> = ({
 
   if (loading && !view.hasData) {
     return (
-      <div className="card" style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>
-        Lade Wochenlage...
-      </div>
+      <OperatorSection
+        kicker="Diese Woche im Blick"
+        title="Wo die nächste virale Welle zuerst anzieht"
+        description="Wir holen gerade die aktuelle Wochenlage. Gleich siehst du wieder das wichtigste Signal zuerst."
+        tone="muted"
+        className="now-template-page operator-toolbar-shell"
+      >
+        <div className="workspace-note-card">Lade Wochenlage...</div>
+      </OperatorSection>
     );
   }
 
   return (
     <div className="page-stack now-template-page">
-      <section className="context-filter-rail">
-        <div className="section-heading" style={{ marginBottom: 0 }}>
-          <span className="section-kicker">Diese Woche im Blick</span>
-          <h1 className="section-title">Wo eine Welle wahrscheinlich zuerst beginnt</h1>
-          <p className="section-copy">
-            Zuerst siehst du nur das 3-, 5- oder 7-Tage-Fenster, die Region mit dem frühesten Signal und den nächsten Schritt.
-          </p>
-        </div>
-
-        <div style={{ display: 'grid', gap: 12, justifyItems: 'start' }}>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+      <OperatorSection
+        kicker="Proof"
+        title="Warum wir frueher sehen, was kommt"
+        description="Ganz oben steht der sichtbare Verlauf der Welle. Erst danach kommt die Entscheidung fuer diese Woche."
+        tone="accent"
+        className="operator-toolbar-shell"
+      >
+        <div className="now-toolbar">
+          <OperatorChipRail className="review-chip-row">
             {VIRUS_OPTIONS.map((option) => (
               <button
                 key={option}
@@ -72,9 +87,9 @@ const NowWorkspace: React.FC<Props> = ({
                 {option}
               </button>
             ))}
-          </div>
+          </OperatorChipRail>
 
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+          <OperatorChipRail className="review-chip-row">
             {HORIZON_OPTIONS.map((option) => (
               <button
                 key={option}
@@ -85,36 +100,51 @@ const NowWorkspace: React.FC<Props> = ({
                 {option} Tage
               </button>
             ))}
-          </div>
+          </OperatorChipRail>
 
           <span className="step-chip">Stand {formatDateTime(view.generatedAt)}</span>
         </div>
-      </section>
+
+        <div className="now-proof-stage">
+          <WaveOutlookPanel
+            virus={virus}
+            onVirusChange={onVirusChange}
+            result={waveOutlook}
+            loading={waveOutlookLoading}
+            showVirusSelector={false}
+          />
+        </div>
+      </OperatorSection>
 
       {view.emptyState ? (
-        <section className="card subsection-card" style={{ padding: 28 }}>
-          <div className="section-heading" style={{ gap: 6 }}>
-            <h2 className="subsection-title">{view.emptyState.title}</h2>
-            <p className="subsection-copy">{view.emptyState.body}</p>
-          </div>
+        <OperatorSection
+          kicker="Keine Wochenlage"
+          title={view.emptyState.title}
+          description={view.emptyState.body}
+          tone="muted"
+        >
           <div className="action-row">
-            <button className="media-button secondary" type="button" onClick={onOpenEvidence}>Qualität prüfen</button>
-            <button className="media-button secondary" type="button" onClick={() => onOpenRegions()}>Regionen öffnen</button>
+            <button className="media-button secondary" type="button" onClick={onOpenEvidence}>
+              Qualität prüfen
+            </button>
+            <button className="media-button secondary" type="button" onClick={() => onOpenRegions()}>
+              Regionen öffnen
+            </button>
           </div>
-        </section>
+        </OperatorSection>
       ) : (
         <>
-          <section className="card subsection-card workspace-priority-card" style={{ padding: 28 }}>
-            <div className="workspace-priority-grid">
-              <div>
-                <div className="section-heading" style={{ gap: 8 }}>
-                  <span className="section-kicker">Hauptentscheidung</span>
-                  <h2 className="section-title workspace-priority-card__title">{proof?.headline || view.summary}</h2>
-                  <p className="section-copy">{proof?.supportingText || view.note}</p>
-                </div>
-
+          <OperatorSection
+            kicker="Hauptentscheidung"
+            title={proof?.headline || view.summary}
+            description={proof?.supportingText || view.note}
+            tone="accent"
+            className="now-hero-shell"
+          >
+            <div className="workspace-priority-grid now-hero-grid">
+              <div className="now-focus-card">
                 {proof?.proofPoints?.length ? (
-                  <div className="workspace-note-list" style={{ marginTop: 16 }}>
+                  <div className="workspace-note-list">
                     {proof.proofPoints.map((point) => (
                       <div key={point} className="workspace-note-card">
                         {point}
@@ -124,19 +154,19 @@ const NowWorkspace: React.FC<Props> = ({
                 ) : null}
 
                 {proof?.cautionText ? (
-                  <p className="subsection-copy" style={{ marginTop: 14 }}>
+                  <p className="subsection-copy" style={{ margin: 0 }}>
                     {proof.cautionText}
                   </p>
                 ) : null}
 
-                <div className="review-chip-row" style={{ marginTop: 14 }}>
+                <OperatorChipRail className="review-chip-row">
                   <span className="step-chip">Fokus {focusRegion?.name || '-'}</span>
                   <span className="step-chip">{focusRegion?.stage || '-'}</span>
                   <span className="step-chip">{focusRegion?.probabilityLabel || '-'}</span>
                   <span className="step-chip">{focusRegion?.budgetLabel || '-'}</span>
-                </div>
+                </OperatorChipRail>
 
-                <div className="action-row" style={{ marginTop: 20 }}>
+                <div className="action-row">
                   <button
                     className="media-button"
                     type="button"
@@ -161,39 +191,51 @@ const NowWorkspace: React.FC<Props> = ({
                 </div>
               </div>
 
-          <aside className="soft-panel workspace-priority-card__aside">
-            <div>
-              <div className="section-kicker">Warum wir das sagen</div>
-              <div className="workspace-priority-card__reasons">
-                {(leadReasons.length ? leadReasons : ['Noch keine kurze Begründung verfügbar.']).map((reason) => (
-                  <div key={reason} className="workspace-note-card">
-                    {reason}
-                  </div>
-                    ))}
-                  </div>
+              <OperatorPanel
+                eyebrow="Warum wir das sagen"
+                title={focusRegion?.name ? `${focusRegion.name} im Detail` : 'Frühester Startpunkt'}
+                description={
+                  focusRegion
+                    ? `Aktueller Status: ${focusRegion.stage || 'nicht klassifiziert'}`
+                    : 'Sobald die Fokusregion feststeht, sammeln wir hier die kurzen Belege.'
+                }
+                tone="muted"
+                className="workspace-priority-card__aside"
+              >
+                <div className="workspace-priority-card__reasons">
+                  {(leadReasons.length ? leadReasons : ['Noch keine kurze Begründung verfügbar.']).map((reason) => (
+                    <div key={reason} className="workspace-note-card">
+                      {reason}
+                    </div>
+                  ))}
                 </div>
 
-                <div style={{ display: 'grid', gap: 10 }}>
-                  <div className="evidence-row">
-                    <span>Fokusregion</span>
-                    <strong>{focusRegion?.name || '-'}</strong>
-                  </div>
-                  <div className="evidence-row">
-                    <span>Produktfokus</span>
-                    <strong>{focusRegion?.product || '-'}</strong>
-                  </div>
-                <div className="evidence-row">
-                  <span>Vorhersagesignal</span>
-                  <strong>{focusRegion?.probabilityLabel || '-'}</strong>
+                <div className="operator-stat-grid">
+                  <OperatorStat
+                    label="Fokusregion"
+                    value={focusRegion?.name || '-'}
+                    meta={focusRegion?.stage || 'noch nicht ausgewählt'}
+                    tone="accent"
+                  />
+                  <OperatorStat
+                    label="Produktfokus"
+                    value={focusRegion?.product || '-'}
+                    meta="für die nächste Aktion"
+                  />
+                  <OperatorStat
+                    label="Vorhersagesignal"
+                    value={focusRegion?.probabilityLabel || '-'}
+                    meta="frühestes relevantes Signal"
+                  />
+                  <OperatorStat
+                    label="Budgethinweis"
+                    value={focusRegion?.budgetLabel || '-'}
+                    meta="für den nächsten Arbeitsschritt"
+                  />
                 </div>
-                  <div className="evidence-row">
-                    <span>Budgethinweis</span>
-                    <strong>{focusRegion?.budgetLabel || '-'}</strong>
-                  </div>
-                </div>
-              </aside>
+              </OperatorPanel>
             </div>
-          </section>
+          </OperatorSection>
 
           <WorkspaceStatusPanel
             status={workspaceStatus}
@@ -202,14 +244,11 @@ const NowWorkspace: React.FC<Props> = ({
           />
 
           <section className="workspace-two-column">
-            <section className="card subsection-card" style={{ padding: 24 }}>
-              <div className="section-heading" style={{ gap: 6 }}>
-                <h2 className="subsection-title">Als Nächstes prüfen</h2>
-                <p className="subsection-copy">
-                  Nach der Fokusregion sind das die nächsten Regionen, die wir prüfen sollten.
-                </p>
-              </div>
-              <div style={{ display: 'grid', gap: 12 }}>
+            <OperatorPanel
+              title="Als Nächstes prüfen"
+              description="Nach der Fokusregion sind das die nächsten Regionen, die wir prüfen sollten."
+            >
+              <div className="workspace-note-list">
                 {relatedRegions.length > 0 ? relatedRegions.map((region) => (
                   <button
                     type="button"
@@ -231,15 +270,12 @@ const NowWorkspace: React.FC<Props> = ({
                   <div className="workspace-note-card">Aktuell gibt es keine weiteren priorisierten Regionen.</div>
                 )}
               </div>
-            </section>
+            </OperatorPanel>
 
-            <section className="card subsection-card" style={{ padding: 24 }}>
-              <div className="section-heading" style={{ gap: 6 }}>
-                <h2 className="subsection-title">Was wir noch prüfen</h2>
-                <p className="subsection-copy">
-                  Diese Punkte bremsen noch oder brauchen einen kurzen zweiten Blick.
-                </p>
-              </div>
+            <OperatorPanel
+              title="Was wir noch prüfen"
+              description="Diese Punkte bremsen noch oder brauchen einen kurzen zweiten Blick."
+            >
               <div className="workspace-note-list">
                 {((workspaceStatus?.blockers?.length ? workspaceStatus.blockers : view.risks).slice(0, 4)).map((risk) => (
                   <div key={risk} className="workspace-note-card">
@@ -247,7 +283,7 @@ const NowWorkspace: React.FC<Props> = ({
                   </div>
                 ))}
               </div>
-            </section>
+            </OperatorPanel>
           </section>
 
           <CollapsibleSection
@@ -255,28 +291,31 @@ const NowWorkspace: React.FC<Props> = ({
             subtitle="Nur für den zweiten Blick: zusätzliche Gründe, Qualitätswerte und Hinweise."
           >
             <div className="workspace-two-column">
-              <div className="soft-panel workspace-detail-panel">
-                <div className="section-kicker">Qualitätswerte</div>
-                <div style={{ display: 'grid', gap: 10, marginTop: 12 }}>
+              <OperatorPanel title="Qualitätswerte" description="Die wichtigsten Qualitätswerte auf einen Blick.">
+                <div className="operator-stat-grid">
                   {(view.quality.length ? view.quality : [{ label: 'Qualität', value: 'Noch offen' }]).map((item) => (
-                    <div key={item.label} className="evidence-row">
-                      <span>{item.label}</span>
-                      <strong>{item.value}</strong>
-                    </div>
+                    <OperatorStat
+                      key={item.label}
+                      label={item.label}
+                      value={item.value}
+                      tone="muted"
+                    />
                   ))}
                 </div>
-              </div>
+              </OperatorPanel>
 
-              <div className="soft-panel workspace-detail-panel">
-                <div className="section-kicker">Weitere Begründungen</div>
-                <div className="workspace-note-list" style={{ marginTop: 12 }}>
+              <OperatorPanel
+                title="Weitere Begründungen"
+                description="Die längeren Gründe bleiben hier gesammelt und leicht aufklappbar."
+              >
+                <div className="workspace-note-list">
                   {(view.reasons.length > 3 ? view.reasons.slice(3) : view.risks).map((item) => (
                     <div key={item} className="workspace-note-card">
                       {item}
                     </div>
                   ))}
                 </div>
-              </div>
+              </OperatorPanel>
             </div>
           </CollapsibleSection>
         </>

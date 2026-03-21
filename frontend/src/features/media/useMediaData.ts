@@ -779,6 +779,8 @@ export function useNowPageData(
   const [forecast, setForecast] = useState<RegionalForecastResponse | null>(null);
   const [allocation, setAllocation] = useState<RegionalAllocationResponse | null>(null);
   const [campaignRecommendations, setCampaignRecommendations] = useState<RegionalCampaignRecommendationsResponse | null>(null);
+  const [waveOutlook, setWaveOutlook] = useState<BacktestResponse | null>(null);
+  const [waveOutlookLoading, setWaveOutlookLoading] = useState(false);
   const [loading, setLoading] = useState(false);
   const loadVersionRef = useRef(0);
 
@@ -791,6 +793,8 @@ export function useNowPageData(
     setForecast(null);
     setAllocation(null);
     setCampaignRecommendations(null);
+    setWaveOutlook(null);
+    setWaveOutlookLoading(false);
 
     const [decisionResult, evidenceResult] = await Promise.allSettled([
       mediaApi.getDecision(virus, brand),
@@ -819,7 +823,27 @@ export function useNowPageData(
 
     if (!isCurrentLoad()) return;
 
+    let proofGraphFailed = false;
     let backgroundLoadFailed = false;
+    const waveRunId = decisionResult.status === 'fulfilled' ? decisionResult.value.wave_run_id : null;
+
+    if (waveRunId) {
+      setWaveOutlookLoading(true);
+      const waveOutlookResult = await mediaApi.getBacktestRun(waveRunId)
+        .then((value) => ({ status: 'fulfilled' as const, value }))
+        .catch((reason) => ({ status: 'rejected' as const, reason }));
+
+      if (!isCurrentLoad()) return;
+
+      if (waveOutlookResult.status === 'fulfilled') {
+        setWaveOutlook(waveOutlookResult.value?.run_id ? waveOutlookResult.value : null);
+      } else {
+        console.error('Now page wave outlook fetch failed', waveOutlookResult.reason);
+        setWaveOutlook(null);
+        proofGraphFailed = true;
+      }
+      setWaveOutlookLoading(false);
+    }
 
     const forecastResult = await mediaApi.getRegionalForecast(virus, horizonDays)
       .then((value) => ({ status: 'fulfilled' as const, value }))
@@ -863,6 +887,10 @@ export function useNowPageData(
       backgroundLoadFailed = true;
     }
 
+    if (proofGraphFailed) {
+      toast('Der Verlaufsgraph konnte nicht geladen werden. Die Wochenlage bleibt trotzdem sichtbar.', 'info');
+    }
+
     if (backgroundLoadFailed) {
       toast('Ein Teil der Regionaldaten laedt laenger als erwartet. Die Wochenlage bleibt trotzdem sichtbar.', 'info');
     }
@@ -881,6 +909,8 @@ export function useNowPageData(
     forecast,
     allocation,
     campaignRecommendations,
+    waveOutlook,
+    waveOutlookLoading,
     loading,
     loadNowPage,
     workspaceStatus: buildWorkspaceStatus(decision, evidence),

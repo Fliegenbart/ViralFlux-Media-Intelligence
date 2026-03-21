@@ -13,6 +13,12 @@ import {
   VIRUS_OPTIONS,
 } from './cockpitUtils';
 import WorkspaceStatusPanel from './WorkspaceStatusPanel';
+import {
+  OperatorChipRail,
+  OperatorPanel,
+  OperatorSection,
+  OperatorStat,
+} from './operator/OperatorPrimitives';
 
 interface Props {
   virus: string;
@@ -48,17 +54,27 @@ const RegionWorkbench: React.FC<Props> = ({
 
   if (loading && !regionsView) {
     return (
-      <div className="card" style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>
-        Lade Regionen...
-      </div>
+      <OperatorSection
+        kicker="Regionen"
+        title="Hier sehen wir den wahrscheinlichen frühen Start"
+        description="Wir holen gerade die Kartendaten. Gleich siehst du wieder, welche Region zuerst relevant wird."
+        tone="muted"
+      >
+        <div className="workspace-note-card">Lade Regionen...</div>
+      </OperatorSection>
     );
   }
 
   if (!activeMap?.has_data) {
     return (
-      <div className="card" style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>
-        Keine Kartendaten vorhanden.
-      </div>
+      <OperatorSection
+        kicker="Regionen"
+        title="Hier sehen wir den wahrscheinlichen frühen Start"
+        description="Für diese Auswahl liegen gerade keine Kartendaten vor."
+        tone="muted"
+      >
+        <div className="workspace-note-card">Keine Kartendaten vorhanden.</div>
+      </OperatorSection>
     );
   }
 
@@ -90,17 +106,15 @@ const RegionWorkbench: React.FC<Props> = ({
 
   return (
     <div className="page-stack">
-      <section className="context-filter-rail">
-        <div className="section-heading" style={{ marginBottom: 0 }}>
-          <span className="section-kicker">Regionen</span>
-          <h1 className="section-title">Wo eine Welle wahrscheinlich zuerst beginnt</h1>
-          <p className="section-copy">
-            Die Karte hilft nur bei der Auswahl. Entscheidend ist, wo wir das früheste relevante Signal sehen und was wir als Nächstes tun.
-          </p>
-        </div>
-
-        <div style={{ display: 'grid', gap: 12, justifyItems: 'start' }}>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+      <OperatorSection
+        kicker="Regionen"
+        title="Hier sehen wir den wahrscheinlichen frühen Start"
+        description="Die Karte hilft nur bei der Auswahl. Entscheidend ist, wo wir das früheste relevante Signal sehen und was wir als Nächstes tun."
+        tone="muted"
+        className="operator-toolbar-shell"
+      >
+        <div className="now-toolbar">
+          <OperatorChipRail className="review-chip-row">
             {VIRUS_OPTIONS.map((option) => (
               <button
                 key={option}
@@ -111,42 +125,46 @@ const RegionWorkbench: React.FC<Props> = ({
                 {option}
               </button>
             ))}
-          </div>
+          </OperatorChipRail>
+
           <span className="step-chip">Datenstand {formatDateShort(activeMap.date)}</span>
         </div>
-      </section>
+      </OperatorSection>
 
-      <section className="card subsection-card workspace-priority-card" style={{ padding: 28 }}>
-        <div className="workspace-priority-grid">
-          <div>
-            <div className="section-heading" style={{ gap: 8 }}>
-              <span className="section-kicker">Ausgewählte Region</span>
-              <h2 className="section-title workspace-priority-card__title">
-                {region?.name || 'Wähle ein Bundesland auf der Karte'}
-              </h2>
-              <p className="section-copy">{primaryReason}</p>
+      <OperatorSection
+        kicker="Ausgewählte Region"
+        title={region?.name || 'Wähle ein Bundesland auf der Karte'}
+        description={primaryReason}
+        tone="accent"
+        className="now-hero-shell"
+      >
+        <div className="workspace-priority-grid now-hero-grid">
+          <div className="now-focus-card">
+            <div className="operator-stat-grid">
+              <OperatorStat
+                label={signalLabel}
+                value={formatPercent(primarySignalScore(region || primaryRegion))}
+                meta="Frühestes Signal"
+                tone="accent"
+              />
+              <OperatorStat
+                label="Umsetzbarkeit"
+                value={formatPercent(Number(region?.actionability_score || primaryRegion?.actionability_score || 0))}
+                meta="Prüfwert für die nächste Aktion"
+              />
+              <OperatorStat
+                label="Tendenz"
+                value={region?.forecast_direction || 'seitwärts'}
+                meta="Richtung des frühen Signals"
+              />
+              <OperatorStat
+                label="Budgethinweis"
+                value={suggestion?.budget_shift_pct ? formatPercent(suggestion.budget_shift_pct) : 'zuerst prüfen'}
+                meta="ohne voreilige Freigabe"
+              />
             </div>
 
-            <div className="metric-strip" style={{ marginTop: 18 }}>
-              <div className="metric-box">
-                <span>{signalLabel}</span>
-                <strong>{formatPercent(primarySignalScore(region || primaryRegion))}</strong>
-              </div>
-              <div className="metric-box">
-                <span>Umsetzbarkeit</span>
-                <strong>{formatPercent(Number(region?.actionability_score || primaryRegion?.actionability_score || 0))}</strong>
-              </div>
-              <div className="metric-box">
-                <span>Tendenz</span>
-                <strong style={{ fontSize: 18 }}>{region?.forecast_direction || 'seitwärts'}</strong>
-              </div>
-              <div className="metric-box">
-                <span>Budgethinweis</span>
-                <strong>{suggestion?.budget_shift_pct ? formatPercent(suggestion.budget_shift_pct) : 'zuerst prüfen'}</strong>
-              </div>
-            </div>
-
-            <div className="action-row" style={{ marginTop: 20 }}>
+            <div className="action-row">
               <button
                 className="media-button"
                 type="button"
@@ -158,38 +176,29 @@ const RegionWorkbench: React.FC<Props> = ({
             </div>
           </div>
 
-          <aside className="soft-panel workspace-priority-card__aside">
-            <div>
-              <div className="section-kicker">Warum diese Region</div>
-              <div className="summary-headline" style={{ fontSize: '1.55rem', marginTop: 8 }}>
-                {region ? `Das früheste Signal sehen wir aktuell in ${region.name}.` : 'Frühester Startpunkt'}
+          <OperatorPanel
+            eyebrow="Warum diese Region"
+            title={region ? `Das früheste Signal sehen wir aktuell in ${region.name}.` : 'Frühester Startpunkt'}
+            description={driverSummary}
+            tone="muted"
+          >
+            <div className="workspace-note-list">
+              <div className="workspace-note-card">
+                Einordnung: {decisionModeLabel}
               </div>
-              <div className="summary-note" style={{ marginTop: 8 }}>
-                {driverSummary}
+              <div className="workspace-note-card">
+                Produktfokus: {region?.tooltip?.recommended_product || 'GELO Portfolio'}
               </div>
-            </div>
-
-            <div style={{ display: 'grid', gap: 10 }}>
-              <div className="evidence-row">
-                <span>Einordnung</span>
-                <strong>{decisionModeLabel}</strong>
+              <div className="workspace-note-card">
+                Signaländerung: {formatPercent(region?.change_pct || 0, 1)}
               </div>
-              <div className="evidence-row">
-                <span>Produktfokus</span>
-                <strong>{region?.tooltip?.recommended_product || 'GELO Portfolio'}</strong>
-              </div>
-              <div className="evidence-row">
-                <span>Signaländerung</span>
-                <strong>{formatPercent(region?.change_pct || 0, 1)}</strong>
-              </div>
-              <div className="evidence-row">
-                <span>Wichtige Quellen</span>
-                <strong>{sourceTraceLabel}</strong>
+              <div className="workspace-note-card">
+                Wichtige Quellen: {sourceTraceLabel}
               </div>
             </div>
-          </aside>
+          </OperatorPanel>
         </div>
-      </section>
+      </OperatorSection>
 
       <WorkspaceStatusPanel
         status={workspaceStatus}
@@ -198,30 +207,22 @@ const RegionWorkbench: React.FC<Props> = ({
       />
 
       <section className="workspace-two-column">
-        <section className="card subsection-card" style={{ padding: '18px 18px 12px' }}>
-          <div className="section-heading" style={{ gap: 6, marginBottom: 0 }}>
-            <h2 className="subsection-title">Region auswählen</h2>
-            <p className="subsection-copy">
-              Klick auf ein Bundesland. Oben wechselt dann sofort der Fokus.
-            </p>
-          </div>
-          <div style={{ marginTop: 10 }}>
-            <GermanyMap
-              regions={activeMap.regions}
-              selectedRegion={selectedRegion}
-              onSelectRegion={onSelectRegion}
-            />
-          </div>
-        </section>
+        <OperatorPanel
+          title="Region auswählen"
+          description="Klick auf ein Bundesland. Oben wechselt dann sofort der Fokus."
+        >
+          <GermanyMap
+            regions={activeMap.regions}
+            selectedRegion={selectedRegion}
+            onSelectRegion={onSelectRegion}
+          />
+        </OperatorPanel>
 
-        <section className="card subsection-card" style={{ padding: 24 }}>
-          <div className="section-heading" style={{ gap: 6 }}>
-            <h2 className="subsection-title">Weitere Regionen mit frühem Signal</h2>
-            <p className="subsection-copy">
-              Falls die Fokusregion erledigt ist, sind das die nächsten sinnvollen Kandidaten.
-            </p>
-          </div>
-          <div style={{ display: 'grid', gap: 10 }}>
+        <OperatorPanel
+          title="Weitere Regionen mit frühem Signal"
+          description="Falls die Fokusregion erledigt ist, sind das die nächsten sinnvollen Kandidaten."
+        >
+          <div className="workspace-note-list">
             {topRegions.map((item) => (
               <button
                 type="button"
@@ -248,7 +249,7 @@ const RegionWorkbench: React.FC<Props> = ({
               </button>
             ))}
           </div>
-        </section>
+        </OperatorPanel>
       </section>
 
       <CollapsibleSection
@@ -257,9 +258,11 @@ const RegionWorkbench: React.FC<Props> = ({
         defaultOpen
       >
         <div className="workspace-two-column">
-          <div className="soft-panel workspace-detail-panel">
-            <div className="section-kicker">Begründung</div>
-            <div className="workspace-note-list" style={{ marginTop: 12 }}>
+          <OperatorPanel
+            title="Begründung"
+            description="Die kurze Begründung bleibt zuerst sichtbar."
+          >
+            <div className="workspace-note-list">
               <div className="workspace-note-card">{primaryReason}</div>
               <div className="workspace-note-card">
                 {region
@@ -267,32 +270,31 @@ const RegionWorkbench: React.FC<Props> = ({
                   : 'Sobald eine Region gewählt ist, steht hier genau ein klarer Arbeitsgrund.'}
               </div>
             </div>
-          </div>
+          </OperatorPanel>
 
-          <div className="soft-panel workspace-detail-panel">
-            <div className="section-kicker">Treiber und Rohdetails</div>
-            <div className="review-chip-row" style={{ marginTop: 12 }}>
+          <OperatorPanel
+            title="Treiber und Rohdetails"
+            description="Die signalgebenden Details bleiben gesammelt und gut lesbar."
+          >
+            <div className="review-chip-row">
               {(region?.signal_drivers || []).map((driver) => (
                 <span key={driver.label} className="step-chip">
                   {normalizeGermanText(driver.label)} {formatPercent(driver.strength_pct || 0)}
                 </span>
               ))}
             </div>
-            <div style={{ display: 'grid', gap: 10, marginTop: 12 }}>
-              <div className="evidence-row">
-                <span>Signaländerung</span>
-                <strong>{formatPercent(region?.change_pct || 0, 1)}</strong>
+            <div className="workspace-note-list">
+              <div className="workspace-note-card">
+                Signaländerung: {formatPercent(region?.change_pct || 0, 1)}
               </div>
-              <div className="evidence-row">
-                <span>Tendenz</span>
-                <strong>{region?.forecast_direction || 'seitwärts'}</strong>
+              <div className="workspace-note-card">
+                Tendenz: {region?.forecast_direction || 'seitwärts'}
               </div>
-              <div className="evidence-row">
-                <span>Quellen</span>
-                <strong>{sourceTraceLabel}</strong>
+              <div className="workspace-note-card">
+                Quellen: {sourceTraceLabel}
               </div>
             </div>
-          </div>
+          </OperatorPanel>
         </div>
       </CollapsibleSection>
     </div>

@@ -14,6 +14,7 @@ import SourceFreshnessSection from './evidence/SourceFreshnessSection';
 import TruthOutcomeSection from './evidence/TruthOutcomeSection';
 import { monitoringStatusLabel, runModeLabel } from './evidence/evidenceUtils';
 import WorkspaceStatusPanel from './WorkspaceStatusPanel';
+import { OperatorPanel, OperatorSection } from './operator/OperatorPrimitives';
 
 interface Props {
   evidence: MediaEvidenceResponse | null;
@@ -77,30 +78,60 @@ const EvidencePanel: React.FC<Props> = ({
 
   if (loading && !evidence) {
     return (
-      <div className="card" style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>
-        Lade Qualität...
-      </div>
+      <OperatorSection
+        kicker="Qualität"
+        title="Warum wir die Vorhersage vertreten"
+        description="Wir holen gerade die Qualitätsdaten. Gleich siehst du wieder die wichtigsten Prüfpfade."
+        tone="muted"
+      >
+        <div className="workspace-note-card">Lade Qualität...</div>
+      </OperatorSection>
     );
   }
 
   return (
     <div className="page-stack evidence-template-page">
-      <section className="context-filter-rail">
-        <div className="section-heading" style={{ marginBottom: 0 }}>
-          <span className="section-kicker">Qualität</span>
-          <h1 className="section-title">Warum wir die Vorhersage vertreten</h1>
-          <p className="section-copy">
-            Hier zeigen wir, warum wir das 3-, 5- oder 7-Tage-Fenster vertreten und woran wir den frühen Start einer Welle erkennen.
-          </p>
-        </div>
+      <OperatorSection
+        kicker="Qualität"
+        title="Warum wir die Vorhersage vertreten"
+        description="Hier zeigen wir, warum wir das 3-, 5- oder 7-Tage-Fenster vertreten und woran wir den frühen Start einer Welle erkennen."
+        tone="muted"
+        className="operator-toolbar-shell"
+      >
+        <div className="workspace-priority-grid">
+          <OperatorPanel
+            eyebrow="Prüffokus"
+            title="Was zuerst wichtig ist"
+            description="Das Kurzfazit bleibt oben, damit wir nicht erst durch die Detailblöcke springen müssen."
+            tone="muted"
+          >
+            <div className="workspace-note-list">
+              <div className="workspace-note-card">
+                {workspaceStatus?.summary || 'Sobald Qualitätsdaten vorliegen, fassen wir hier den schnellsten Prüfpfad zusammen.'}
+              </div>
+              <div className="workspace-note-card">
+                Prüfpfad: Vorhersage, Kundendaten, Quellen und Import.
+              </div>
+            </div>
+          </OperatorPanel>
 
-        <div className="soft-panel" style={{ padding: 16, maxWidth: 360 }}>
-          <div className="section-kicker">Kurzfazit</div>
-          <p className="section-copy" style={{ margin: '10px 0 0' }}>
-            {workspaceStatus?.summary || 'Sobald Qualitätsdaten vorliegen, fassen wir hier den schnellsten Prüfpfad zusammen.'}
-          </p>
+          <OperatorPanel
+            eyebrow="Kurzfazit"
+            title="Was gerade im Blick bleibt"
+            description="Das Kurzfazit steht oben, damit man nicht erst durch die Detailblöcke springen muss."
+            tone="muted"
+          >
+            <div className="workspace-note-list">
+              <div className="workspace-note-card">
+                {workspaceStatus?.summary || 'Noch kein zusammengefasster Qualitätsstatus vorhanden.'}
+              </div>
+              <div className="workspace-note-card">
+                Wenn hier etwas offen bleibt, gehen wir tiefer in die vier Prüfbereiche.
+              </div>
+            </div>
+          </OperatorPanel>
         </div>
-      </section>
+      </OperatorSection>
 
       <WorkspaceStatusPanel
         status={workspaceStatus}
@@ -109,13 +140,12 @@ const EvidencePanel: React.FC<Props> = ({
       />
 
       {workspaceStatus?.blockers?.length ? (
-        <section className="card subsection-card" style={{ padding: 24 }}>
-          <div className="section-heading" style={{ gap: 6 }}>
-            <h2 className="subsection-title">Offene Punkte zuerst</h2>
-            <p className="subsection-copy">
-              Das sind die wichtigsten offenen Punkte, bevor wir weitergehen.
-            </p>
-          </div>
+        <OperatorSection
+          kicker="Offene Punkte"
+          title="Offene Punkte zuerst"
+          description="Das sind die wichtigsten offenen Punkte, bevor wir weitergehen."
+          tone="muted"
+        >
           <div className="workspace-note-list">
             {workspaceStatus.blockers.map((blocker) => (
               <div key={blocker} className="workspace-note-card">
@@ -123,7 +153,7 @@ const EvidencePanel: React.FC<Props> = ({
               </div>
             ))}
           </div>
-        </section>
+        </OperatorSection>
       ) : null}
 
       <CollapsibleSection
@@ -193,38 +223,40 @@ const EvidencePanel: React.FC<Props> = ({
         />
       </CollapsibleSection>
 
-      <section className="card subsection-card" style={{ padding: 24 }}>
-        <div className="section-heading" style={{ gap: 6 }}>
-          <h2 className="subsection-title">Technischer Blick</h2>
-          <p className="subsection-copy">
-            Nur wenn wir tiefer prüfen müssen: die wichtigsten technischen Hinweise auf einen Blick.
-          </p>
-        </div>
+      <OperatorSection
+        kicker="Technischer Blick"
+        title="Die wichtigsten technischen Hinweise auf einen Blick"
+        description="Nur wenn wir tiefer prüfen müssen, öffnen wir hier die Rohdaten und Laufhistorie."
+        tone="muted"
+      >
         <div className="workspace-two-column">
-          <div className="soft-panel workspace-detail-panel">
-            <div className="section-kicker">Signalsystem</div>
-            <div className="workspace-note-list" style={{ marginTop: 12 }}>
+          <OperatorPanel
+            title="Signalsystem"
+            description="Die markierten Felder zeigen, welche Daten gerade in die Qualitätssicherung eingehen."
+          >
+            <div className="workspace-note-list">
               {(sourceStatusLabels.length ? sourceStatusLabels : ['Noch keine markierten Felder vorhanden.']).slice(0, 6).map((item) => (
                 <div key={item} className="workspace-note-card">{item}</div>
               ))}
             </div>
-          </div>
+          </OperatorPanel>
 
-          <div className="soft-panel workspace-detail-panel">
-            <div className="section-kicker">Letzte Läufe</div>
-            <div style={{ display: 'grid', gap: 10, marginTop: 12 }}>
+          <OperatorPanel
+            title="Letzte Läufe"
+            description="Hier siehst du, wann die Prüfungen zuletzt gelaufen sind."
+          >
+            <div className="workspace-note-list">
               {recentRuns.length > 0 ? recentRuns.slice(0, 3).map((run, index) => (
-                <div key={`${String(run.mode)}-${index}`} className="evidence-row">
-                  <span>{runModeLabel(String(run.mode || 'Lauf'))}</span>
-                  <strong>{monitoringStatusLabel(String(run.status || '-'))}</strong>
+                <div key={`${String(run.mode)}-${index}`} className="workspace-note-card">
+                  {runModeLabel(String(run.mode || 'Lauf'))} · {monitoringStatusLabel(String(run.status || '-'))}
                 </div>
               )) : (
                 <div className="workspace-note-card">Noch keine Laufhistorie vorhanden.</div>
               )}
             </div>
-          </div>
+          </OperatorPanel>
         </div>
-      </section>
+      </OperatorSection>
     </div>
   );
 };

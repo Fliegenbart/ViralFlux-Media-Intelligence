@@ -22,6 +22,8 @@ const NowPage: React.FC = () => {
     loading,
     workspaceStatus,
     view,
+    waveOutlook,
+    waveOutlookLoading,
   } = useNowPageData(virus, brand, horizonDays, weeklyBudget, dataVersion, toast);
 
   return (
@@ -33,6 +35,8 @@ const NowPage: React.FC = () => {
       view={view}
       workspaceStatus={workspaceStatus}
       loading={loading}
+      waveOutlook={waveOutlook}
+      waveOutlookLoading={waveOutlookLoading}
       onOpenRecommendation={(id) => openRecommendation(id, 'overlay')}
       onOpenRegions={(regionCode) => navigate('/regionen', { state: regionCode ? { regionCode } : undefined })}
       onOpenCampaigns={() => navigate('/kampagnen')}

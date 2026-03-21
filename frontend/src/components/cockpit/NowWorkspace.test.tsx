@@ -123,6 +123,8 @@ describe('NowWorkspace', () => {
         view={buildView()}
         workspaceStatus={buildWorkspaceStatus()}
         loading={false}
+        waveOutlook={null}
+        waveOutlookLoading={false}
         onOpenRecommendation={noop}
         onOpenRegions={noop}
         onOpenCampaigns={noop}
@@ -130,7 +132,8 @@ describe('NowWorkspace', () => {
       />,
     );
 
-    expect(screen.getByText('Wo die nächste virale Welle zuerst anzieht')).toBeInTheDocument();
+    expect(screen.getByText('Warum wir frueher sehen, was kommt')).toBeInTheDocument();
+    expect(screen.getByText('Verlauf der Welle')).toBeInTheDocument();
     expect(screen.getByText('Wir sehen im 7-Tage-Fenster das früheste relevante Signal aktuell in Berlin.')).toBeInTheDocument();
     expect(screen.getByText('Wie sicher ist das?')).toBeInTheDocument();
     expect(screen.getByText('Als Nächstes prüfen')).toBeInTheDocument();
@@ -150,6 +153,8 @@ describe('NowWorkspace', () => {
         view={buildView()}
         workspaceStatus={buildWorkspaceStatus()}
         loading={false}
+        waveOutlook={null}
+        waveOutlookLoading={false}
         onOpenRecommendation={onOpenRecommendation}
         onOpenRegions={noop}
         onOpenCampaigns={noop}

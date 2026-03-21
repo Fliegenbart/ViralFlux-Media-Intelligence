@@ -212,6 +212,7 @@ interface WaveOutlookPanelProps {
   onVirusChange: (value: string) => void;
   result: BacktestResponse | null;
   loading: boolean;
+  showVirusSelector?: boolean;
 }
 
 export const WaveOutlookPanel: React.FC<WaveOutlookPanelProps> = ({
@@ -219,6 +220,7 @@ export const WaveOutlookPanel: React.FC<WaveOutlookPanelProps> = ({
   onVirusChange,
   result,
   loading,
+  showVirusSelector = true,
 }) => {
   const rows = useMemo(() => buildValidationRows(result, 36), [result]);
   const markers = useMemo(() => detectWaveMarkers(rows), [rows]);
@@ -264,18 +266,20 @@ export const WaveOutlookPanel: React.FC<WaveOutlookPanelProps> = ({
         </div>
       </div>
 
-      <div className="review-chip-row" style={{ marginBottom: 16 }}>
-        {VIRUS_OPTIONS.map((option) => (
-          <button
-            key={option}
-            type="button"
-            onClick={() => onVirusChange(option)}
-            className={`tab-chip ${option === selectedVirus ? 'active' : ''}`}
-          >
-            {option}
-          </button>
-        ))}
-      </div>
+      {showVirusSelector ? (
+        <div className="review-chip-row" style={{ marginBottom: 16 }}>
+          {VIRUS_OPTIONS.map((option) => (
+            <button
+              key={option}
+              type="button"
+              onClick={() => onVirusChange(option)}
+              className={`tab-chip ${option === selectedVirus ? 'active' : ''}`}
+            >
+              {option}
+            </button>
+          ))}
+        </div>
+      ) : null}
 
       <div className="soft-panel" style={{ padding: 16, marginBottom: 16, fontSize: 13, color: 'var(--text-secondary)' }}>
         Die markierten Punkte zeigen den geschätzten Beginn, den letzten beobachteten Stand und den erwarteten Peak der {selectedVirus}-Welle. Produktvorschläge entstehen erst im nächsten Schritt aus dieser Viruslage plus Region, Forecast und Versorgung.

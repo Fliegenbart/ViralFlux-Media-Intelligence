@@ -17,6 +17,11 @@ import {
   statusTone,
 } from './cockpitUtils';
 import WorkspaceStatusPanel from './WorkspaceStatusPanel';
+import {
+  OperatorPanel,
+  OperatorSection,
+  OperatorStat,
+} from './operator/OperatorPrimitives';
 
 interface Props {
   campaignsView: MediaCampaignsResponse | null;
@@ -99,18 +104,17 @@ const CampaignStudio: React.FC<Props> = ({
 
   return (
     <div className="page-stack">
-      <section className="card subsection-card workspace-priority-card" style={{ padding: 28 }}>
+      <OperatorSection
+        kicker="Kampagnen"
+        title="Jetzt zuerst prüfen"
+        description="Oben steht immer nur der wichtigste Fall. Er kommt direkt aus der aktuellen Vorhersage und der Region mit dem frühesten Signal."
+        tone="accent"
+        className="campaign-hero-shell"
+      >
         <div className="workspace-priority-grid">
           <div>
-            <div className="section-heading" style={{ gap: 8 }}>
-              <span className="section-kicker">Kampagnen</span>
-              <h1 className="section-title workspace-priority-card__title">Jetzt zuerst prüfen</h1>
-              <p className="section-copy">
-                Oben steht immer nur der wichtigste Fall. Er kommt direkt aus der aktuellen Vorhersage und der Region mit dem frühesten Signal.
-              </p>
-            </div>
-
             <div className="campaign-focus-panel" style={{ marginTop: 0 }}>
+              <div className="campaign-focus-label">Fokusfall</div>
               <div className="campaign-focus-title">{focusTitle}</div>
               <div className="campaign-focus-context">{focusContext}</div>
               <p className="campaign-focus-copy">{focusCopy}</p>
@@ -132,37 +136,26 @@ const CampaignStudio: React.FC<Props> = ({
             </div>
           </div>
 
-          <aside className="soft-panel workspace-priority-card__aside">
-            <div>
-              <div className="section-kicker">Überblick</div>
-              <div className="workspace-note-list" style={{ marginTop: 12 }}>
-                <div className="workspace-note-card">{prepareCount} Fälle in Vorbereitung</div>
-                <div className="workspace-note-card">{approvalCount} Fälle in Freigabe</div>
-                <div className="workspace-note-card">{activeCount} aktive oder startklare Kampagnen</div>
-              </div>
+          <OperatorPanel
+            eyebrow="Überblick"
+            title="Wie viele Fälle sind wo"
+            description="Die Phasen zeigen, wo die Arbeit gerade steckt."
+            tone="muted"
+          >
+            <div className="operator-stat-grid">
+              <OperatorStat label="Vorbereitung" value={prepareCount} meta="offene Fälle" />
+              <OperatorStat label="Freigabe" value={approvalCount} meta="Entscheidungsreife" />
+              <OperatorStat label="Aktiv" value={activeCount} meta="laufende Fälle" />
+              <OperatorStat label="Sichtbar" value={visibleCards} meta="in der Übersicht" />
             </div>
 
-            <div style={{ display: 'grid', gap: 10 }}>
-              <div className="evidence-row">
-                <span>Sichtbar</span>
-                <strong>{visibleCards}</strong>
-              </div>
-              <div className="evidence-row">
-                <span>Priorisiert</span>
-                <strong>{campaignsView?.summary?.deduped_cards ?? cards.length}</strong>
-              </div>
-              <div className="evidence-row">
-                <span>Aktiv</span>
-                <strong>{activeCards.length}</strong>
-              </div>
-              <div className="evidence-row">
-                <span>Automatisch erstellt oder ergänzt</span>
-                <strong>{aiTouchedCount}</strong>
-              </div>
+            <div className="workspace-note-list">
+              <div className="workspace-note-card">{campaignsView?.summary?.deduped_cards ?? cards.length} priorisierte Fälle</div>
+              <div className="workspace-note-card">{aiTouchedCount} automatisch erstellt oder ergänzt</div>
             </div>
-          </aside>
+          </OperatorPanel>
         </div>
-      </section>
+      </OperatorSection>
 
       <WorkspaceStatusPanel
         status={workspaceStatus}
@@ -171,31 +164,39 @@ const CampaignStudio: React.FC<Props> = ({
       />
 
       {loading ? (
-        <div className="card campaign-empty-board" style={{ color: 'var(--text-muted)' }}>
-          Lade Kampagnenvorschläge...
-        </div>
+        <OperatorSection
+          kicker="Kampagnenübersicht"
+          title="Lade Kampagnenvorschläge..."
+          description="Einen Moment, wir holen die aktuelle Phase und den Fokusfall."
+          tone="muted"
+        >
+          <div className="workspace-note-card">Die Übersicht wird gerade aufgebaut.</div>
+        </OperatorSection>
       ) : cards.length === 0 ? (
-        <section className="card campaign-empty-board">
-          <div className="campaign-empty-eyebrow">Kampagnenübersicht</div>
-          <h2 className="campaign-empty-title">Noch keine Kampagnenvorschläge in der Übersicht.</h2>
-          <p className="campaign-empty-copy">
-            Starte aus der Wochenentscheidung oder einer Region einen neuen Vorschlag. Danach landet er direkt in einer klaren Arbeitsphase.
-          </p>
-          <button className="media-button" type="button" onClick={onGenerate} disabled={generationLoading}>
-            {generationLoading ? 'Vorschläge werden erstellt...' : 'Jetzt erste Vorschläge erstellen'}
-          </button>
-        </section>
+        <OperatorSection
+          kicker="Kampagnenübersicht"
+          title="Noch keine Kampagnenvorschläge in der Übersicht."
+          description="Starte aus der Wochenentscheidung oder einer Region einen neuen Vorschlag. Danach landet er direkt in einer klaren Arbeitsphase."
+          tone="muted"
+        >
+          <div className="action-row">
+            <button className="media-button" type="button" onClick={onGenerate} disabled={generationLoading}>
+              {generationLoading ? 'Vorschläge werden erstellt...' : 'Jetzt erste Vorschläge erstellen'}
+            </button>
+          </div>
+        </OperatorSection>
       ) : (
         <section className="workspace-phase-grid">
           {phaseGroups.map((group) => (
-            <section key={group.id} className="card subsection-card workspace-phase-column" style={{ padding: 20 }}>
-              <div className="section-heading" style={{ gap: 6 }}>
-                <span className="section-kicker">{group.label}</span>
-                <h2 className="subsection-title">{group.total}</h2>
-                <p className="subsection-copy">{group.description}</p>
-              </div>
-
-              <div className="campaign-lane-stack" style={{ marginTop: 14 }}>
+            <OperatorPanel
+              key={group.id}
+              eyebrow="Arbeitsphase"
+              title={phaseTitle(group.id)}
+              description={group.description}
+              actions={<span className="step-chip">{group.total} Fälle</span>}
+              className="campaign-lane-column"
+            >
+              <div className="campaign-lane-stack">
                 {group.cards.length > 0 ? group.cards.map((card) => {
                   const tone = statusTone(card.lifecycle_state || card.status);
                   return (
@@ -258,7 +259,7 @@ const CampaignStudio: React.FC<Props> = ({
                   </div>
                 )}
               </div>
-            </section>
+            </OperatorPanel>
           ))}
         </section>
       )}
@@ -268,9 +269,11 @@ const CampaignStudio: React.FC<Props> = ({
         subtitle="Dieser Bereich bleibt bewusst nachgeordnet. Erst prüfen wir den wichtigsten Fall, dann erzeugen wir neue Entwürfe."
       >
         <div className="workspace-two-column">
-          <section className="soft-panel workspace-detail-panel">
-            <div className="section-kicker">Erstellung</div>
-            <div className="campaign-form-grid" style={{ marginTop: 16 }}>
+          <OperatorPanel
+            title="Erstellung"
+            description="Neue Vorschläge entstehen erst nach dem prüfbaren Fokusfall."
+          >
+            <div className="campaign-form-grid">
               <label className="campaign-field">
                 <span>Marke</span>
                 <input className="media-input" value={brand} onChange={(event) => onBrandChange(event.target.value)} />
@@ -297,29 +300,27 @@ const CampaignStudio: React.FC<Props> = ({
                 {generationLoading ? 'Vorschläge werden erstellt...' : 'Vorschläge erstellen'}
               </button>
             </div>
-          </section>
+          </OperatorPanel>
 
-          <section className="soft-panel workspace-detail-panel">
-            <div className="section-kicker">Arbeitskontext</div>
-            <div style={{ display: 'grid', gap: 10, marginTop: 12 }}>
-              <div className="evidence-row">
-                <span>Virus</span>
-                <strong>{virus}</strong>
+          <OperatorPanel
+            title="Arbeitskontext"
+            description="Diese Werte helfen, den generierten Vorschlag einzuordnen."
+          >
+            <div className="workspace-note-list">
+              <div className="workspace-note-card">
+                Virus: {virus}
               </div>
-              <div className="evidence-row">
-                <span>Lernstand</span>
-                <strong>{learningStateLabel(campaignsView?.summary?.learning_state)}</strong>
+              <div className="workspace-note-card">
+                Lernstand: {learningStateLabel(campaignsView?.summary?.learning_state)}
               </div>
-              <div className="evidence-row">
-                <span>Zusätzliche Vorschläge</span>
-                <strong>{hiddenBacklog}</strong>
+              <div className="workspace-note-card">
+                Zusätzliche Vorschläge: {hiddenBacklog}
               </div>
-              <div className="evidence-row">
-                <span>Aktiv</span>
-                <strong>{activeCount}</strong>
+              <div className="workspace-note-card">
+                Aktiv: {activeCount}
               </div>
             </div>
-          </section>
+          </OperatorPanel>
         </div>
       </CollapsibleSection>
     </div>
@@ -381,4 +382,10 @@ function laneStateCount(
   if (laneId === 'sync') return Number(states.SYNC_READY || 0);
   if (laneId === 'live') return Number(states.LIVE || 0);
   return 0;
+}
+
+function phaseTitle(id: 'prepare' | 'approval' | 'active'): string {
+  if (id === 'prepare') return 'Entwürfe';
+  if (id === 'approval') return 'Freigaben';
+  return 'Aktive Fälle';
 }

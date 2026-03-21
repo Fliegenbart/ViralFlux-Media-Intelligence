@@ -2,6 +2,7 @@ import React from 'react';
 
 import { WorkspaceStatusSummary } from '../../types/media';
 import { formatDateTime } from './cockpitUtils';
+import { OperatorSection } from './operator/OperatorPrimitives';
 
 interface Props {
   status: WorkspaceStatusSummary | null;
@@ -17,12 +18,13 @@ const WorkspaceStatusPanel: React.FC<Props> = ({
   if (!status) return null;
 
   return (
-    <section className="card subsection-card workspace-status-panel" style={{ padding: 24 }}>
-      <div className="section-heading" style={{ gap: 6 }}>
-        <h2 className="subsection-title">{title}</h2>
-        <p className="subsection-copy">{intro}</p>
-      </div>
-
+    <OperatorSection
+      kicker="Arbeitsstatus"
+      title={title}
+      description={intro}
+      tone="muted"
+      className="workspace-status-panel"
+    >
       <div className="workspace-status-grid">
         {status.items.map((item) => (
           <article
@@ -42,7 +44,7 @@ const WorkspaceStatusPanel: React.FC<Props> = ({
           Letzter Kundendaten-Import: {status.last_import_at ? formatDateTime(status.last_import_at) : 'noch keiner'}
         </span>
       </div>
-    </section>
+    </OperatorSection>
   );
 };
 

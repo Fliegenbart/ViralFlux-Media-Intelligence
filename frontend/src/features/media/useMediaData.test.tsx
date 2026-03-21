@@ -9,6 +9,7 @@ jest.mock('./api', () => ({
   mediaApi: {
     getDecision: jest.fn(),
     getEvidence: jest.fn(),
+    getBacktestRun: jest.fn(),
     getRegionalForecast: jest.fn(),
     getRegionalAllocation: jest.fn(),
     getRegionalCampaignRecommendations: jest.fn(),
@@ -54,6 +55,7 @@ describe('useNowPageData', () => {
     const callOrder: string[] = [];
     const decisionDeferred = createDeferred<any>();
     const evidenceDeferred = createDeferred<any>();
+    const backtestDeferred = createDeferred<any>();
     const forecastDeferred = createDeferred<any>();
     const allocationDeferred = createDeferred<any>();
     const recommendationDeferred = createDeferred<any>();
@@ -65,6 +67,10 @@ describe('useNowPageData', () => {
     mockedMediaApi.getEvidence.mockImplementation(() => {
       callOrder.push('evidence');
       return evidenceDeferred.promise;
+    });
+    mockedMediaApi.getBacktestRun.mockImplementation(() => {
+      callOrder.push('backtest');
+      return backtestDeferred.promise;
     });
     mockedMediaApi.getRegionalForecast.mockImplementation(() => {
       callOrder.push('forecast');
@@ -97,6 +103,7 @@ describe('useNowPageData', () => {
           top_regions: [{ code: 'BE', name: 'Berlin', signal_score: 63.4, trend: 'rising' }],
         },
         top_recommendations: [],
+        wave_run_id: 'wave-1',
       });
       await Promise.resolve();
     });
@@ -123,7 +130,19 @@ describe('useNowPageData', () => {
       expect(screen.getByTestId('loading-state')).toHaveTextContent('ready');
     });
     expect(screen.getByTestId('has-data')).toHaveTextContent('yes');
-    expect(callOrder).toEqual(['decision', 'evidence', 'forecast']);
+    expect(callOrder).toEqual(['decision', 'evidence', 'backtest']);
+
+    await act(async () => {
+      backtestDeferred.resolve({
+        run_id: 'wave-1',
+        chart_data: [],
+      });
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(callOrder).toEqual(['decision', 'evidence', 'backtest', 'forecast']);
+    });
 
     await act(async () => {
       forecastDeferred.resolve({
@@ -134,7 +153,7 @@ describe('useNowPageData', () => {
     });
 
     await waitFor(() => {
-      expect(callOrder).toEqual(['decision', 'evidence', 'forecast', 'allocation']);
+      expect(callOrder).toEqual(['decision', 'evidence', 'backtest', 'forecast', 'allocation']);
     });
 
     await act(async () => {
@@ -146,7 +165,7 @@ describe('useNowPageData', () => {
     });
 
     await waitFor(() => {
-      expect(callOrder).toEqual(['decision', 'evidence', 'forecast', 'allocation', 'recommendation']);
+      expect(callOrder).toEqual(['decision', 'evidence', 'backtest', 'forecast', 'allocation', 'recommendation']);
     });
 
     await act(async () => {

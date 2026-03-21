@@ -82,7 +82,7 @@ const RegionWorkbench: React.FC<Props> = ({
     region?.priority_explanation
       || suggestion?.reason
       || region?.tooltip?.recommendation_text
-      || 'Diese Region zeigt aktuell das früheste relevante Signal aus Vorhersage, Versorgung und Nachfrage.',
+      || 'Diese Region zeigt aktuell die stärkste Dynamik aus Vorhersage, Versorgung und Nachfrage.',
   );
   const driverSummary = normalizeGermanText(
     region?.signal_drivers?.slice(0, 3).map((driver) => driver.label).join(' · ')
@@ -144,18 +144,18 @@ const RegionWorkbench: React.FC<Props> = ({
               <OperatorStat
                 label={signalLabel}
                 value={formatPercent(primarySignalScore(region || primaryRegion))}
-                meta="Frühestes Signal"
+                meta="Aktuelle Dynamik"
                 tone="accent"
               />
               <OperatorStat
-                label="Umsetzbarkeit"
+                label="Handlungsreife"
                 value={formatPercent(Number(region?.actionability_score || primaryRegion?.actionability_score || 0))}
                 meta="Prüfwert für die nächste Aktion"
               />
               <OperatorStat
                 label="Tendenz"
                 value={region?.forecast_direction || 'seitwärts'}
-                meta="Richtung des frühen Signals"
+                meta="Richtung der Entwicklung"
               />
               <OperatorStat
                 label="Budgethinweis"
@@ -178,7 +178,7 @@ const RegionWorkbench: React.FC<Props> = ({
 
           <OperatorPanel
             eyebrow="Warum diese Region"
-            title={region ? `Das früheste Signal sehen wir aktuell in ${region.name}.` : 'Frühester Startpunkt'}
+            title={region ? `Die größte Dynamik sehen wir aktuell in ${region.name}.` : 'Wichtigste Region'}
             description={driverSummary}
             tone="muted"
           >
@@ -190,7 +190,7 @@ const RegionWorkbench: React.FC<Props> = ({
                 Produktfokus: {region?.tooltip?.recommended_product || 'GELO Portfolio'}
               </div>
               <div className="workspace-note-card">
-                Signaländerung: {formatPercent(region?.change_pct || 0, 1)}
+                Veränderung: {formatPercent(region?.change_pct || 0, 1)}
               </div>
               <div className="workspace-note-card">
                 Wichtige Quellen: {sourceTraceLabel}
@@ -219,7 +219,7 @@ const RegionWorkbench: React.FC<Props> = ({
         </OperatorPanel>
 
         <OperatorPanel
-          title="Weitere Regionen mit frühem Signal"
+          title="Weitere Regionen mit hoher Dynamik"
           description="Wenn die erste Region erledigt ist, findest du hier die nächsten sinnvollen Kandidaten."
         >
           <div className="workspace-note-list">

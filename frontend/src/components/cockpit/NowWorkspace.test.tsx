@@ -16,9 +16,9 @@ function buildView(): NowPageViewModel {
     summary: 'Berlin ist diese Woche der klarste nächste Schritt.',
     note: 'Die nächste sinnvolle Aktion steht oben. Qualität und Risiken folgen darunter.',
     proof: {
-      headline: 'Wir sehen im 7-Tage-Fenster das früheste relevante Signal aktuell in Berlin.',
-      supportingText: 'Die Vorhersage spricht im Moment klar dafür, dass die nächste relevante Welle dort zuerst anzieht.',
-      proofPoints: ['7 Tage Vorhersage', 'Berlin zeigt aktuell das früheste relevante Signal.'],
+      headline: 'Unsere Prognose zeigt im 7-Tage-Fenster die größte Dynamik aktuell in Berlin.',
+      supportingText: 'Damit wird früh sichtbar, wo du als Nächstes priorisieren und Budget gezielter einsetzen solltest.',
+      proofPoints: ['7 Tage Vorhersage', 'Berlin zeigt aktuell die größte Dynamik.'],
       cautionText: 'Die Lage bleibt nachvollziehbar, aber keine Vorhersage ist eine Garantie.',
       assertive: true,
     },
@@ -31,7 +31,7 @@ function buildView(): NowPageViewModel {
       code: 'BE',
       name: 'Berlin',
       stage: 'Aktivieren',
-      reason: 'Berlin bündelt das stärkste Signal aus Forecast und Kontext.',
+      reason: 'Berlin bündelt aktuell die stärkste Dynamik aus Vorhersage und Kontext.',
       product: 'GeloMyrtol forte',
       probabilityLabel: '81.0%',
       budgetLabel: '55.200 €',
@@ -44,7 +44,7 @@ function buildView(): NowPageViewModel {
       { label: 'Vertrauen', value: 'im Aufbau', tone: 'warning' },
     ],
     reasons: [
-      'Das Signal liegt klar über der Aktivierungsschwelle.',
+      'Die Entwicklung liegt klar über der Aktivierungsschwelle.',
       'Die Fokusregion zeigt die stärkste Dynamik.',
     ],
     risks: [
@@ -134,7 +134,7 @@ describe('NowWorkspace', () => {
 
     expect(screen.getByText('Was sich gerade entwickelt')).toBeInTheDocument();
     expect(screen.getByText('Verlauf der Welle')).toBeInTheDocument();
-    expect(screen.getByText('Wir sehen im 7-Tage-Fenster das früheste relevante Signal aktuell in Berlin.')).toBeInTheDocument();
+    expect(screen.getByText('Unsere Prognose zeigt im 7-Tage-Fenster die größte Dynamik aktuell in Berlin.')).toBeInTheDocument();
     expect(screen.getByText('Was vor dem nächsten Schritt geklärt sein sollte')).toBeInTheDocument();
     expect(screen.getByText('Danach anschauen')).toBeInTheDocument();
     expect(screen.getByText('Noch offen')).toBeInTheDocument();

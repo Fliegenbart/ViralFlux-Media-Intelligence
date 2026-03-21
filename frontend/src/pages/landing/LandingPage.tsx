@@ -18,7 +18,7 @@ import {
 } from './LandingWidgets';
 
 const MAILTO = (() => {
-  const subject = 'POC Anfrage PEIX x GELO';
+  const subject = 'Beratungsgespraech: PEIX x GELO Fruehwarnung';
   const body = [
     'Hallo PEIX Team,',
     '',
@@ -53,7 +53,7 @@ const FEATURE_STATS = [
   {
     label: 'Ort',
     value: 'Bundeslandgenau',
-    meta: 'Wir zeigen, in welcher Region eine Welle voraussichtlich zuerst anzieht.',
+    meta: 'Wir zeigen, in welcher Region die Nachfrage als Nächstes anzieht.',
     tone: 'default' as const,
   },
   {
@@ -66,7 +66,7 @@ const FEATURE_STATS = [
 
 const FLOW_STEPS = [
   {
-    label: 'Signal',
+    label: 'Frühe Hinweise',
     value: '01',
     meta: 'Frühe Hinweise aus Abwasser, Wetter, Nachfrage und Versorgung erfassen.',
     tone: 'default' as const,
@@ -80,7 +80,7 @@ const FLOW_STEPS = [
   {
     label: 'Region',
     value: '03',
-    meta: 'Die Region mit dem frühesten relevanten Signal und dem passenden Produktfokus sichtbar machen.',
+    meta: 'Die Region mit der größten Dynamik und dem passenden Produktfokus sichtbar machen.',
     tone: 'default' as const,
   },
   {
@@ -225,7 +225,7 @@ const LandingPage: React.FC = () => {
         const regions = buildTopRegions(data.regions);
         if (regions.length > 0) {
           setTopRegions(regions);
-          setRecText(`Das früheste Signal sehen wir aktuell in ${regions.map((region) => region.name).join(', ')}.`);
+          setRecText(`Die stärkste Dynamik sehen wir aktuell in ${regions.map((region) => region.name).join(', ')}.`);
         }
       })
       .catch((error) => {
@@ -299,17 +299,17 @@ const LandingPage: React.FC = () => {
                   </OperatorChipRail>
 
                   <h1 className="landing-hero-title">
-                    Erkennen, wo die nächste virale Welle zuerst anzieht.
+                    Regionale Krankheitswellen früher erkennen und Budgets gezielter einsetzen.
                   </h1>
 
                   <p className="operator-section-shell__copy landing-hero-copytext">
-                    PEIX x GELO zeigt im 3-, 5- oder 7-Tage-Fenster, in welcher Region das früheste relevante Signal entsteht.
-                    So wird schnell klar, wo eine Welle wahrscheinlich startet und was jetzt sinnvoll ist.
+                    Unsere Frühwarnung zeigt 3 bis 7 Tage im Voraus, wo Atemwegserkrankungen ansteigen.
+                    So kannst du Regionen früher priorisieren, Streuverluste senken und dein Mediabudget gezielter einsetzen.
                   </p>
 
                   <div className="landing-action-row">
                     <button type="button" onClick={openCockpit} className="media-button">
-                      Arbeitsansicht öffnen
+                      Wochenlage prüfen
                     </button>
                     <button type="button" onClick={openCampaigns} className="media-button secondary">
                       Kampagnen ansehen
@@ -346,7 +346,7 @@ const LandingPage: React.FC = () => {
                   <div className="landing-live-divider" />
 
                   <div className="landing-live-rail">
-                    <span className="landing-live-subtitle">Viruslast-Signale</span>
+                    <span className="landing-live-subtitle">Aktuelle Entwicklung</span>
                     <VirusBars data={virusData} palette={palette} />
                   </div>
 
@@ -362,7 +362,7 @@ const LandingPage: React.FC = () => {
             <OperatorSection
               kicker="01"
               title="Was macht ViralFlux anders"
-              description="Die Seite ist bewusst auf wenige, klare Aussagen reduziert. Erst das Signal, dann die Region, dann der nächste Schritt."
+              description="ViralFlux hilft dir, Nachfrage früher zu erkennen und daraus direkt einen sinnvollen nächsten Schritt abzuleiten."
             >
               <div className="operator-stat-grid">
                 {FEATURE_STATS.map((feature) => (
@@ -381,8 +381,8 @@ const LandingPage: React.FC = () => {
           <RevealSection delay={0.08}>
             <OperatorSection
               kicker="02"
-              title="Von Signal zu klarer Wochenlage"
-              description="Aus einzelnen Datenpunkten wird eine gut lesbare Kette: Signal erfassen, Lage verdichten, Region priorisieren, Entscheidung treffen."
+              title="Von frühen Hinweisen zur klaren Wochenlage"
+              description="Aus vielen Datenquellen wird eine einfache Reihenfolge: Lage verstehen, Region priorisieren, nächsten Schritt festlegen."
               tone="muted"
             >
               <div className="landing-flow-grid">
@@ -403,7 +403,7 @@ const LandingPage: React.FC = () => {
             <OperatorSection
               kicker="03"
               title="Wo die Welle zuerst beginnt"
-              description="Die Karte zeigt, wo das früheste relevante Signal aktuell entsteht. Rechts daneben liegt die kurze Einordnung für die drei wichtigsten Regionen."
+              description="Die Karte zeigt, wo die größte Dynamik gerade entsteht. Rechts daneben siehst du die drei wichtigsten Regionen im Überblick."
             >
               <div className="landing-preview-grid">
                 <MiniGermanyMap palette={palette} />
@@ -411,7 +411,7 @@ const LandingPage: React.FC = () => {
                 <OperatorPanel
                   eyebrow="Cockpit-Vorschau"
                   title="So sieht die Wochenlage aus"
-                  description="Die Deutschlandkarte zeigt, wo das früheste relevante Signal aktuell entsteht."
+                  description="Die Deutschlandkarte zeigt, wo du jetzt zuerst hinschauen solltest."
                   tone="muted"
                 >
                   <div className="landing-region-list">
@@ -441,15 +441,15 @@ const LandingPage: React.FC = () => {
           <RevealSection delay={0.16}>
             <OperatorSection
               kicker="Nächster Schritt"
-              title="3 bis 7 Tage früher sehen, wo die nächste Welle beginnt."
-              description="PEIX x GELO zeigt früh, in welcher Region eine virale Welle zuerst anzieht. Starte direkt in der Arbeitsansicht oder schau dir zuerst die aktuelle Wochenlage an."
+              title="3 bis 7 Tage früher erkennen, wo Nachfrage anzieht."
+              description="Starte direkt in der Wochenlage und sieh sofort, welche Region wichtig wird und welcher nächste Schritt sinnvoll ist."
               tone="accent"
               className="landing-cta-section"
             >
               <div className="landing-cta-body">
                 <div className="landing-action-row landing-action-row--center">
                   <button type="button" onClick={openCockpit} className="media-button">
-                    Arbeitsansicht öffnen
+                    Wochenlage prüfen
                   </button>
                   <a
                     href={MAILTO}

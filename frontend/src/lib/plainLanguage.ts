@@ -46,8 +46,8 @@ const UI_REPLACEMENTS: Array<[RegExp, string]> = [
   [/\bLive Intelligence Active\b/g, 'Live-Daten aktiv'],
   [/\bOperator-Raum\b/g, 'Arbeitsbereich'],
   [/\bOperator\b/g, 'Arbeitsbereich'],
-  [/\bActionability\b/g, 'Umsetzbarkeit'],
-  [/\bAktivierbarkeit\b/g, 'Umsetzbarkeit'],
+  [/\bActionability\b/g, 'Handlungsreife'],
+  [/\bAktivierbarkeit\b/g, 'Handlungsreife'],
   [/\bBrand\b/g, 'Marke'],
   [/\bFlight\b/g, 'Startfenster'],
   [/\bLearning-State\b/g, 'Lernstand'],
@@ -142,8 +142,8 @@ export function buildPredictionNarrative({
 
   if (assertive) {
     return {
-      headline: `Wir sehen im ${horizonDays}-Tage-Fenster das früheste relevante Signal aktuell in ${cleanedRegion}.`,
-      supportingText: `Die Vorhersage spricht im Moment klar dafür, dass die nächste relevante Welle dort zuerst anzieht.`,
+      headline: `Unsere Prognose zeigt im ${horizonDays}-Tage-Fenster die größte Dynamik aktuell in ${cleanedRegion}.`,
+      supportingText: 'Damit wird früh sichtbar, wo du als Nächstes priorisieren und Budget gezielter einsetzen solltest.',
       proofPoints: visibleProofPoints,
       cautionText: 'Die Lage bleibt nachvollziehbar, aber keine Vorhersage ist eine Garantie.',
       assertive: true,
@@ -151,8 +151,8 @@ export function buildPredictionNarrative({
   }
 
   return {
-    headline: `Im ${horizonDays}-Tage-Fenster zeigt die Vorhersage das früheste relevante Signal aktuell in ${cleanedRegion}.`,
-    supportingText: 'Der wahrscheinlichste frühe Start liegt derzeit dort. Vor einer Freigabe prüfen wir noch Modell- und Datenlage.',
+    headline: `Im ${horizonDays}-Tage-Fenster deuten die Daten aktuell auf die größte Dynamik in ${cleanedRegion} hin.`,
+    supportingText: 'Dort solltest du zuerst hinschauen. Vor einer Freigabe prüfen wir noch Datenlage und Stabilität.',
     proofPoints: visibleProofPoints,
     cautionText: 'Die Richtung ist erkennbar, aber Warnhinweise bleiben sichtbar und werden vor einer Freigabe geprüft.',
     assertive: false,

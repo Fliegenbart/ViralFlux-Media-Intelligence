@@ -153,7 +153,7 @@ function cleanCopy(value?: string | null): string {
 
   const confidenceMatch = normalized.match(/^Forecast confidence is usable at ([\d.]+)\.$/i);
   if (confidenceMatch) {
-    return `Die Vorhersage ist mit ${percentFromModelValue(confidenceMatch[1])} Signalsicherheit nutzbar.`;
+    return `Die Vorhersage ist mit ${percentFromModelValue(confidenceMatch[1])} Sicherheit nutzbar.`;
   }
 
   const sourceFreshnessMatch = normalized.match(/^Primary sources are fresh on average \(([\d.]+) days old\)\.$/i);
@@ -180,7 +180,7 @@ function cleanCopy(value?: string | null): string {
   }
 
   if (/^Remaining uncertainty: no positive cross-source agreement, quality gate not passed\.$/i.test(normalized)) {
-    return 'Es bleibt Unsicherheit, weil die Quellen noch kein klares gemeinsames Signal zeigen und die Vorhersage noch nicht freigegeben ist.';
+    return 'Es bleibt Unsicherheit, weil die Quellen noch kein klares gemeinsames Bild zeigen und die Vorhersage noch nicht freigegeben ist.';
   }
 
   if (/^Watch from the decision engine sets the base activation level\.$/i.test(normalized)) {
@@ -284,10 +284,10 @@ function regionSignalSentence(
   const trendLabel = regionTrendLabel(trend);
 
   if (cleanedName && roundedScore != null && trendLabel) {
-    return `${cleanedName} liegt mit ${roundedScore}/100 im Wochenvergleich vorn, der Trend wirkt aktuell ${trendLabel}.`;
+    return `${cleanedName} zeigt mit ${roundedScore}/100 aktuell die größte Dynamik, der Trend wirkt ${trendLabel}.`;
   }
   if (cleanedName && roundedScore != null) {
-    return `${cleanedName} liegt mit ${roundedScore}/100 im Wochenvergleich weit vorne.`;
+    return `${cleanedName} liegt mit ${roundedScore}/100 im Wochenvergleich klar vorne.`;
   }
   return '';
 }
@@ -511,7 +511,7 @@ function buildNowPageViewModel(
     focusPrediction?.decision?.explanation_summary,
     focusPrediction?.reason_trace?.why?.[0],
     focusAllocation?.uncertainty_summary,
-    'Hier sehen wir aktuell das früheste relevante Signal.',
+    'Hier sehen wir aktuell die größte Dynamik.',
   );
   const focusProduct = firstCleanText(
     topCard?.recommended_product,
@@ -679,7 +679,7 @@ function buildNowPageViewModel(
       forecastStatus: forecastProofStatus,
       proofPoints: uniqueText([
         `${horizonDays} Tage Vorhersagefenster.`,
-        `${focusRegionName} zeigt aktuell das früheste relevante Signal.`,
+        `${focusRegionName} zeigt aktuell die größte Dynamik.`,
         leadDays && leadDays > 0 ? `Der letzte Marktvergleich zeigt rund ${leadDays} Tage Vorlauf.` : null,
         sourceSummary ? `${sourceSummary.live_count || 0}/${sourceSummary.total || 0} Quellen sind aktuell.` : null,
         reasons[0],

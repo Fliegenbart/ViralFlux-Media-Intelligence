@@ -12,7 +12,7 @@ describe('plain language helpers', () => {
     expect(normalizeGermanText('Outcome-Daten')).toBe('Kundendaten');
     expect(normalizeGermanText('Wirkungsdaten-Daten')).toBe('Wirkungsdaten');
     expect(normalizeGermanText('Kundendaten-Daten')).toBe('Kundendaten');
-    expect(normalizeGermanText('Epi-Welle mit ML-Prognose und Aktivierbarkeit')).toBe('Atemwegswelle mit Modellvorhersage und Umsetzbarkeit');
+    expect(normalizeGermanText('Epi-Welle mit ML-Prognose und Aktivierbarkeit')).toBe('Atemwegswelle mit Modellvorhersage und Handlungsreife');
   });
 
   it('builds an assertive prediction narrative for stable states', () => {

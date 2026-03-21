@@ -57,7 +57,7 @@ const NowWorkspace: React.FC<Props> = ({
       <OperatorSection
         kicker="Diese Woche im Blick"
         title="Wo die nächste virale Welle zuerst anzieht"
-        description="Wir holen gerade die aktuelle Wochenlage. Gleich siehst du wieder das wichtigste Signal zuerst."
+        description="Wir holen gerade die aktuelle Wochenlage. Gleich siehst du wieder, was jetzt wichtig ist."
         tone="muted"
         className="now-template-page operator-toolbar-shell"
       >
@@ -225,7 +225,7 @@ const NowWorkspace: React.FC<Props> = ({
                   <OperatorStat
                     label="Vorhersagesignal"
                     value={focusRegion?.probabilityLabel || '-'}
-                    meta="frühestes relevantes Signal"
+                    meta="Wichtigste Entwicklung"
                   />
                   <OperatorStat
                     label="Budgethinweis"

@@ -45,7 +45,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
               Klar sehen, <span>wo die nächste virale Welle beginnt.</span>
             </h1>
             <p className="login-brand-panel__text">
-              Die Arbeitsansicht zeigt im 3-, 5- oder 7-Tage-Fenster, wo eine Welle wahrscheinlich zuerst beginnt und welcher Schritt jetzt sinnvoll ist.
+              Nach dem Login siehst du sofort, wo du zuerst hinschauen solltest, welche Region wichtig wird und welcher nächste Schritt sinnvoll ist.
             </p>
           </div>
 

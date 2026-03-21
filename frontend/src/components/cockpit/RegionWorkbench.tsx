@@ -109,7 +109,7 @@ const RegionWorkbench: React.FC<Props> = ({
       <OperatorSection
         kicker="Regionen"
         title="Hier sehen wir den wahrscheinlichen frühen Start"
-        description="Die Karte hilft nur bei der Auswahl. Entscheidend ist, wo wir das früheste relevante Signal sehen und was wir als Nächstes tun."
+        description="Hier findest du die Region, die du als Nächstes prüfen solltest."
         tone="muted"
         className="operator-toolbar-shell"
       >
@@ -202,8 +202,8 @@ const RegionWorkbench: React.FC<Props> = ({
 
       <WorkspaceStatusPanel
         status={workspaceStatus}
-        title="Bevor wir handeln"
-        intro="Diese vier Antworten helfen uns, ob die Region direkt in die Kampagnenarbeit gehen kann."
+        title="Was vor dem Start noch geklärt sein sollte"
+        intro="Hier siehst du, ob du für diese Region direkt weitermachen kannst."
       />
 
       <section className="workspace-two-column">
@@ -220,7 +220,7 @@ const RegionWorkbench: React.FC<Props> = ({
 
         <OperatorPanel
           title="Weitere Regionen mit frühem Signal"
-          description="Falls die Fokusregion erledigt ist, sind das die nächsten sinnvollen Kandidaten."
+          description="Wenn die erste Region erledigt ist, findest du hier die nächsten sinnvollen Kandidaten."
         >
           <div className="workspace-note-list">
             {topRegions.map((item) => (
@@ -254,7 +254,7 @@ const RegionWorkbench: React.FC<Props> = ({
 
       <CollapsibleSection
         title={region ? `Warum ${region.name}?` : 'Warum diese Region?'}
-        subtitle="Die wichtigsten Gründe und Treiber liegen hier gesammelt und bleiben für den zweiten Blick aufklappbar."
+        subtitle="Hier findest du die wichtigsten Gründe für die Auswahl dieser Region."
         defaultOpen
       >
         <div className="workspace-two-column">

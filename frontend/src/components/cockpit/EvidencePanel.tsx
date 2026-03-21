@@ -80,8 +80,8 @@ const EvidencePanel: React.FC<Props> = ({
     return (
       <OperatorSection
         kicker="Qualität"
-        title="Warum wir die Vorhersage vertreten"
-        description="Wir holen gerade die Qualitätsdaten. Gleich siehst du wieder die wichtigsten Prüfpfade."
+        title="Was vor dem Handeln noch geprüft wird"
+        description="Wir laden gerade die Qualitätsdaten. Gleich siehst du wieder, was noch offen ist."
         tone="muted"
       >
         <div className="workspace-note-card">Lade Qualität...</div>
@@ -93,16 +93,16 @@ const EvidencePanel: React.FC<Props> = ({
     <div className="page-stack evidence-template-page">
       <OperatorSection
         kicker="Qualität"
-        title="Warum wir die Vorhersage vertreten"
-        description="Hier zeigen wir, warum wir das 3-, 5- oder 7-Tage-Fenster vertreten und woran wir den frühen Start einer Welle erkennen."
+        title="Was vor dem Handeln noch geprüft wird"
+        description="Hier siehst du, ob Vorhersage, Daten und Kundensignale für den nächsten Schritt ausreichen."
         tone="muted"
         className="operator-toolbar-shell"
       >
         <div className="workspace-priority-grid">
           <OperatorPanel
-            eyebrow="Prüffokus"
-            title="Was zuerst wichtig ist"
-            description="Das Kurzfazit bleibt oben, damit wir nicht erst durch die Detailblöcke springen müssen."
+            eyebrow="Schneller Überblick"
+            title="Was du zuerst wissen solltest"
+            description="Hier steht kurz, was gerade wichtig ist."
             tone="muted"
           >
             <div className="workspace-note-list">
@@ -110,15 +110,15 @@ const EvidencePanel: React.FC<Props> = ({
                 {workspaceStatus?.summary || 'Sobald Qualitätsdaten vorliegen, fassen wir hier den schnellsten Prüfpfad zusammen.'}
               </div>
               <div className="workspace-note-card">
-                Prüfpfad: Vorhersage, Kundendaten, Quellen und Import.
+                Geprüft werden Vorhersage, Kundendaten, Quellen und Importe.
               </div>
             </div>
           </OperatorPanel>
 
           <OperatorPanel
-            eyebrow="Kurzfazit"
-            title="Was gerade im Blick bleibt"
-            description="Das Kurzfazit steht oben, damit man nicht erst durch die Detailblöcke springen muss."
+            eyebrow="Nächster Schritt"
+            title="Worauf du jetzt achten solltest"
+            description="Wenn hier etwas offen ist, findest du darunter die passende Detailstelle."
             tone="muted"
           >
             <div className="workspace-note-list">
@@ -126,7 +126,7 @@ const EvidencePanel: React.FC<Props> = ({
                 {workspaceStatus?.summary || 'Noch kein zusammengefasster Qualitätsstatus vorhanden.'}
               </div>
               <div className="workspace-note-card">
-                Wenn hier etwas offen bleibt, gehen wir tiefer in die vier Prüfbereiche.
+                Offene Punkte kannst du direkt in den vier Bereichen darunter nachverfolgen.
               </div>
             </div>
           </OperatorPanel>
@@ -135,8 +135,8 @@ const EvidencePanel: React.FC<Props> = ({
 
       <WorkspaceStatusPanel
         status={workspaceStatus}
-        title="Vier schnelle Fragen"
-        intro="Wenn hier etwas offen bleibt, gehen wir tiefer in Vorhersage, Kundendaten, Quellen oder Import."
+        title="Was noch offen ist"
+        intro="Hier siehst du sofort, ob du weitermachen kannst oder welcher Bereich zuerst geklärt werden sollte."
       />
 
       {workspaceStatus?.blockers?.length ? (
@@ -158,7 +158,7 @@ const EvidencePanel: React.FC<Props> = ({
 
       <CollapsibleSection
         title="1. Vorhersage prüfen"
-        subtitle="Ist das Modell stabil genug, um das 3-, 5- oder 7-Tage-Fenster belastbar zu tragen?"
+        subtitle="Hier siehst du, wie verlässlich die Vorhersage im Moment ist."
         defaultOpen
       >
         <ForecastMonitoringSection
@@ -181,7 +181,7 @@ const EvidencePanel: React.FC<Props> = ({
 
       <CollapsibleSection
         title="2. Kundendaten prüfen"
-        subtitle="Sind echte Kundendaten angeschlossen und stark genug, um die Empfehlung zusätzlich zu stützen?"
+        subtitle="Hier siehst du, ob echte Kundendaten die Entscheidung zusätzlich stützen."
       >
         <TruthOutcomeSection
           truthStatus={truthStatus}
@@ -195,7 +195,7 @@ const EvidencePanel: React.FC<Props> = ({
 
       <CollapsibleSection
         title="3. Quellen prüfen"
-        subtitle="Wie frisch sind Quellen, Signalsystem und Modellhistorie wirklich?"
+        subtitle="Hier siehst du, ob die zugrunde liegenden Daten noch aktuell genug sind."
       >
         <SourceFreshnessSection
           evidence={evidence}
@@ -210,7 +210,7 @@ const EvidencePanel: React.FC<Props> = ({
 
       <CollapsibleSection
         title="4. Import prüfen"
-        subtitle="Neue Kundendaten validieren, importieren und vorhandene Batches nachvollziehen."
+        subtitle="Hier kannst du neue Kundendaten prüfen und bestehende Importe nachvollziehen."
       >
         <ImportValidationSection
           truthSnapshot={truthSnapshot}
@@ -224,15 +224,15 @@ const EvidencePanel: React.FC<Props> = ({
       </CollapsibleSection>
 
       <OperatorSection
-        kicker="Technischer Blick"
-        title="Die wichtigsten technischen Hinweise auf einen Blick"
-        description="Nur wenn wir tiefer prüfen müssen, öffnen wir hier die Rohdaten und Laufhistorie."
+        kicker="Mehr Details"
+        title="Zusätzliche Hinweise"
+        description="Wenn du tiefer prüfen musst, findest du hier weitere technische Details."
         tone="muted"
       >
         <div className="workspace-two-column">
           <OperatorPanel
             title="Signalsystem"
-            description="Die markierten Felder zeigen, welche Daten gerade in die Qualitätssicherung eingehen."
+            description="Hier siehst du, welche Daten gerade in die Prüfung einfließen."
           >
             <div className="workspace-note-list">
               {(sourceStatusLabels.length ? sourceStatusLabels : ['Noch keine markierten Felder vorhanden.']).slice(0, 6).map((item) => (
@@ -243,7 +243,7 @@ const EvidencePanel: React.FC<Props> = ({
 
           <OperatorPanel
             title="Letzte Läufe"
-            description="Hier siehst du, wann die Prüfungen zuletzt gelaufen sind."
+            description="Hier siehst du, wann zuletzt geprüft wurde."
           >
             <div className="workspace-note-list">
               {recentRuns.length > 0 ? recentRuns.slice(0, 3).map((run, index) => (

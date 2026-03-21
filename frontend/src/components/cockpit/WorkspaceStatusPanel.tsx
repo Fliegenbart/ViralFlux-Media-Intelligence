@@ -12,8 +12,8 @@ interface Props {
 
 const WorkspaceStatusPanel: React.FC<Props> = ({
   status,
-  title = 'Wie sicher ist das?',
-  intro = 'Vier schnelle Antworten, damit wir wissen, ob wir direkt handeln oder erst prüfen sollten.',
+  title = 'Was noch offen ist',
+  intro = 'Hier siehst du schnell, ob du direkt weitergehen kannst oder vorher noch etwas prüfen musst.',
 }) => {
   if (!status) return null;
 

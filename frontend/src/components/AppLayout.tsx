@@ -9,36 +9,36 @@ interface Props {
 }
 
 const PRIMARY_NAV_ITEMS = [
-  { label: 'Jetzt', path: '/jetzt', helper: 'Die wichtigste Wochenentscheidung und der nächste Schritt', icon: 'bolt' },
-  { label: 'Regionen', path: '/regionen', helper: 'Eine Region fokussiert prüfen und weiterbearbeiten', icon: 'location_on' },
-  { label: 'Kampagnen', path: '/kampagnen', helper: 'Den wichtigsten Fall zuerst prüfen und freigeben', icon: 'auto_awesome' },
-  { label: 'Qualität', path: '/evidenz', helper: 'Vorhersage, Quellen, Kundendaten und Blocker prüfen', icon: 'verified' },
+  { label: 'Jetzt', path: '/jetzt', helper: 'Hier beginnt dein Wochenfokus', icon: 'bolt' },
+  { label: 'Regionen', path: '/regionen', helper: 'Hier wählst du die passende Region aus', icon: 'location_on' },
+  { label: 'Kampagnen', path: '/kampagnen', helper: 'Hier prüfst und bearbeitest du konkrete Fälle', icon: 'auto_awesome' },
+  { label: 'Qualität', path: '/evidenz', helper: 'Hier siehst du, was noch geklärt werden muss', icon: 'verified' },
 ] as const;
 
 const SECTION_META = [
   {
     path: '/jetzt',
-    kicker: 'PEIX Arbeitsansicht',
+    kicker: 'Wochenfokus',
     title: 'Jetzt',
-    description: 'Hier siehst du die wichtigste Entscheidung der Woche, warum sie gilt und was du als Nächstes tun solltest.',
+    description: 'Hier siehst du zuerst, was gerade passiert und was du als Nächstes tun solltest.',
   },
   {
     path: '/regionen',
-    kicker: 'PEIX Arbeitsansicht',
+    kicker: 'Regionen',
     title: 'Regionen',
-    description: 'Hier prüfen wir eine Region nach der anderen und sehen sofort, warum sie gerade wichtig ist.',
+    description: 'Hier findest du die Region, die du als Nächstes prüfen solltest.',
   },
   {
     path: '/kampagnen',
-    kicker: 'PEIX Arbeitsansicht',
+    kicker: 'Kampagnen',
     title: 'Kampagnen',
-    description: 'Hier bearbeiten wir immer zuerst den wichtigsten Fall und ordnen alles andere darunter ein.',
+    description: 'Hier bearbeitest du zuerst den wichtigsten Fall und danach die nächsten.',
   },
   {
     path: '/evidenz',
     kicker: 'Qualität',
     title: 'Qualität',
-    description: 'Hier prüfen wir, ob die Vorhersage trägt, die Daten frisch sind, Kundendaten vorliegen und ob noch Blocker offen sind.',
+    description: 'Hier siehst du, ob du handeln kannst oder ob noch etwas fehlt.',
   },
 ] as const;
 
@@ -52,9 +52,9 @@ const AppLayout: React.FC<Props> = ({ children }) => {
 
   const isActive = (path: string) => location.pathname.startsWith(path);
   const currentSection = SECTION_META.find(({ path }) => location.pathname.startsWith(path)) || {
-    kicker: 'PEIX Arbeitsansicht',
+    kicker: 'Arbeitsbereich',
     title: 'Arbeitsansicht',
-    description: 'Die Wochenlage bleibt in einer kompakten PEIX-Ansicht gebündelt.',
+    description: 'Hier bleibt dein aktueller Arbeitsstand an einem Ort.',
   };
   const operatorStatusLabel = location.pathname.startsWith('/jetzt')
     ? 'Wochenlage aktiv'
@@ -110,7 +110,7 @@ const AppLayout: React.FC<Props> = ({ children }) => {
           <div className="operator-sidebar__brand-block">
             <p className="operator-sidebar__brand-copy">PEIX x GELO</p>
             <p className="operator-sidebar__brand-note">
-              Frühwarnung für regionale Nachfrage mit klarer Begründung und einfachem nächsten Schritt.
+              Zeigt dir früh, wo du zuerst hinschauen und handeln solltest.
             </p>
           </div>
 

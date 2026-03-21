@@ -294,12 +294,12 @@ function regionSignalSentence(
 
 function buildNowPageNote(stage: string): string {
   if (stage === 'Aktivieren') {
-    return 'Die Vorhersage ist stark genug für einen klaren nächsten Schritt. Kampagnenvorschlag, Begründung und Risiken bleiben direkt darunter sichtbar.';
+    return 'Du kannst hier direkt in den nächsten Schritt gehen. Die wichtigsten Hinweise stehen direkt darunter.';
   }
   if (stage === 'Vorbereiten') {
-    return 'Die Vorhersage spricht für Vorbereitung. Fokusregion, Kampagnenvorschlag und Prüfhinweise sind direkt darunter gebündelt.';
+    return 'Die Lage ist wichtig, aber noch nicht ganz freigegeben. Unten siehst du sofort, was du prüfen solltest.';
   }
-  return 'Noch keine Freigabe. Wir zeigen die früheste Region, halten die Begründung sichtbar und prüfen erst dann den nächsten Kampagnenvorschlag.';
+  return 'Im Moment geht es vor allem um Beobachtung. Du siehst trotzdem direkt, welche Region zuerst wichtig wird und was noch offen ist.';
 }
 
 function probabilityPercent(value?: number | null): number | null {

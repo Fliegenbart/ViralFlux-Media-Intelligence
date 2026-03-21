@@ -107,7 +107,7 @@ const CampaignStudio: React.FC<Props> = ({
       <OperatorSection
         kicker="Kampagnen"
         title="Jetzt zuerst prüfen"
-        description="Oben steht immer nur der wichtigste Fall. Er kommt direkt aus der aktuellen Vorhersage und der Region mit dem frühesten Signal."
+        description="Hier steht immer zuerst der Fall, um den du dich jetzt kümmern solltest."
         tone="accent"
         className="campaign-hero-shell"
       >
@@ -139,7 +139,7 @@ const CampaignStudio: React.FC<Props> = ({
           <OperatorPanel
             eyebrow="Überblick"
             title="Wie viele Fälle sind wo"
-            description="Die Phasen zeigen, wo die Arbeit gerade steckt."
+            description="Hier siehst du, wie viele Fälle gerade vorbereitet, freigegeben oder aktiv sind."
             tone="muted"
           >
             <div className="operator-stat-grid">
@@ -159,8 +159,8 @@ const CampaignStudio: React.FC<Props> = ({
 
       <WorkspaceStatusPanel
         status={workspaceStatus}
-        title="Bevor wir freigeben"
-        intro="Die Kampagnenarbeit bleibt bewusst eng an Vorhersage, Datenfrische, Kundendaten und offenen Punkten."
+        title="Was vor der Freigabe noch geklärt sein sollte"
+        intro="Hier siehst du, ob du einen Fall direkt freigeben kannst oder erst noch etwas prüfen musst."
       />
 
       {loading ? (
@@ -176,7 +176,7 @@ const CampaignStudio: React.FC<Props> = ({
         <OperatorSection
           kicker="Kampagnenübersicht"
           title="Noch keine Kampagnenvorschläge in der Übersicht."
-          description="Starte aus der Wochenentscheidung oder einer Region einen neuen Vorschlag. Danach landet er direkt in einer klaren Arbeitsphase."
+          description="Sobald ein Vorschlag erstellt wurde, erscheint er hier direkt in der passenden Arbeitsphase."
           tone="muted"
         >
           <div className="action-row">
@@ -266,12 +266,12 @@ const CampaignStudio: React.FC<Props> = ({
 
       <CollapsibleSection
         title="Weitere Vorschläge erstellen"
-        subtitle="Dieser Bereich bleibt bewusst nachgeordnet. Erst prüfen wir den wichtigsten Fall, dann erzeugen wir neue Entwürfe."
+        subtitle="Wenn der wichtigste Fall geklärt ist, kannst du hier weitere Vorschläge anlegen."
       >
         <div className="workspace-two-column">
           <OperatorPanel
             title="Erstellung"
-            description="Neue Vorschläge entstehen erst nach dem prüfbaren Fokusfall."
+            description="Hier legst du neue Vorschläge mit wenigen Angaben an."
           >
             <div className="campaign-form-grid">
               <label className="campaign-field">
@@ -294,7 +294,7 @@ const CampaignStudio: React.FC<Props> = ({
             </div>
             <div className="campaign-setup-footer">
               <div className="campaign-setup-note">
-                Das System erstellt zuerst einen Entwurf. Prüfung und Freigabe bleiben bewusst davor.
+                Neue Vorschläge starten als Entwurf und können danach geprüft werden.
               </div>
               <button className="media-button" type="button" onClick={onGenerate} disabled={generationLoading}>
                 {generationLoading ? 'Vorschläge werden erstellt...' : 'Vorschläge erstellen'}
@@ -304,7 +304,7 @@ const CampaignStudio: React.FC<Props> = ({
 
           <OperatorPanel
             title="Arbeitskontext"
-            description="Diese Werte helfen, den generierten Vorschlag einzuordnen."
+            description="Diese Angaben helfen dir, neue Vorschläge schneller einzuordnen."
           >
             <div className="workspace-note-list">
               <div className="workspace-note-card">

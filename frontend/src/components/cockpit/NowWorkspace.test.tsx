@@ -132,12 +132,12 @@ describe('NowWorkspace', () => {
       />,
     );
 
-    expect(screen.getByText('Warum wir frueher sehen, was kommt')).toBeInTheDocument();
+    expect(screen.getByText('Was sich gerade entwickelt')).toBeInTheDocument();
     expect(screen.getByText('Verlauf der Welle')).toBeInTheDocument();
     expect(screen.getByText('Wir sehen im 7-Tage-Fenster das früheste relevante Signal aktuell in Berlin.')).toBeInTheDocument();
-    expect(screen.getByText('Wie sicher ist das?')).toBeInTheDocument();
-    expect(screen.getByText('Als Nächstes prüfen')).toBeInTheDocument();
-    expect(screen.getByText('Was wir noch prüfen')).toBeInTheDocument();
+    expect(screen.getByText('Was vor dem nächsten Schritt geklärt sein sollte')).toBeInTheDocument();
+    expect(screen.getByText('Danach anschauen')).toBeInTheDocument();
+    expect(screen.getByText('Noch offen')).toBeInTheDocument();
     expect(screen.getByText('Weitere Details')).toBeInTheDocument();
   });
 

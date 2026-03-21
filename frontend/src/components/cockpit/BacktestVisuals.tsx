@@ -258,7 +258,7 @@ export const WaveOutlookPanel: React.FC<WaveOutlookPanelProps> = ({
         <div>
           <h2 style={{ margin: 0, fontSize: 20, color: 'var(--text-primary)' }}>Verlauf der Welle</h2>
           <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--text-muted)' }}>
-            Gezeigt wird die epidemiologische Welle für {selectedVirus} im Signalraum {targetLabel}. Die Kurve zeigt Ist-Wert, validierte Prognose, Ausblick und Saison-Baseline im Zeitverlauf.
+            Hier siehst du, wie sich {selectedVirus} entwickelt hat und wie es in den nächsten Tagen voraussichtlich weitergeht.
           </p>
         </div>
         <div style={{ textAlign: 'right', fontSize: 12, color: 'var(--text-muted)' }}>
@@ -282,7 +282,7 @@ export const WaveOutlookPanel: React.FC<WaveOutlookPanelProps> = ({
       ) : null}
 
       <div className="soft-panel" style={{ padding: 16, marginBottom: 16, fontSize: 13, color: 'var(--text-secondary)' }}>
-        Die markierten Punkte zeigen den geschätzten Beginn, den letzten beobachteten Stand und den erwarteten Peak der {selectedVirus}-Welle. Produktvorschläge entstehen erst im nächsten Schritt aus dieser Viruslage plus Region, Forecast und Versorgung.
+        Die markierten Punkte helfen dir, den Start, den letzten bekannten Stand und den wahrscheinlichen Höhepunkt schnell zu erkennen.
       </div>
 
       {freshnessHint && (
@@ -344,7 +344,7 @@ export const WaveOutlookPanel: React.FC<WaveOutlookPanelProps> = ({
         {markers.narrative}
       </p>
       <p style={{ margin: '8px 0 0', fontSize: 12, lineHeight: 1.6, color: 'var(--text-muted)' }}>
-        Wenn du zwischen Viren wechselst, lädt diese Kurve die passende Welle neu. Eine Produktansicht wäre fachlich eine andere Kurve und ist hier aktuell noch nicht hinterlegt.
+        Wenn du das Virus wechselst, passt sich die Kurve automatisch an.
       </p>
     </div>
   );

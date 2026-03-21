@@ -69,9 +69,9 @@ const NowWorkspace: React.FC<Props> = ({
   return (
     <div className="page-stack now-template-page">
       <OperatorSection
-        kicker="Proof"
-        title="Warum wir frueher sehen, was kommt"
-        description="Ganz oben steht der sichtbare Verlauf der Welle. Erst danach kommt die Entscheidung fuer diese Woche."
+        kicker="Verlauf"
+        title="Was sich gerade entwickelt"
+        description="Hier siehst du zuerst den Verlauf der Welle. So erkennst du schneller, warum diese Woche wichtig ist."
         tone="accent"
         className="operator-toolbar-shell"
       >
@@ -183,21 +183,21 @@ const NowWorkspace: React.FC<Props> = ({
                     type="button"
                     onClick={() => onOpenRegions(focusRegion?.code || undefined)}
                   >
-                    Fokusregion öffnen
+                    Region öffnen
                   </button>
                   <button className="media-button secondary" type="button" onClick={onOpenEvidence}>
-                    Qualität prüfen
+                    Offene Punkte prüfen
                   </button>
                 </div>
               </div>
 
               <OperatorPanel
-                eyebrow="Warum wir das sagen"
-                title={focusRegion?.name ? `${focusRegion.name} im Detail` : 'Frühester Startpunkt'}
+                eyebrow="Darum ist sie wichtig"
+                title={focusRegion?.name ? `${focusRegion.name} im Fokus` : 'Wichtigste Region'}
                 description={
                   focusRegion
-                    ? `Aktueller Status: ${focusRegion.stage || 'nicht klassifiziert'}`
-                    : 'Sobald die Fokusregion feststeht, sammeln wir hier die kurzen Belege.'
+                    ? `Aktueller Stand: ${focusRegion.stage || 'noch offen'}`
+                    : 'Sobald die wichtigste Region feststeht, fassen wir hier die wichtigsten Punkte zusammen.'
                 }
                 tone="muted"
                 className="workspace-priority-card__aside"
@@ -239,14 +239,14 @@ const NowWorkspace: React.FC<Props> = ({
 
           <WorkspaceStatusPanel
             status={workspaceStatus}
-            title="Wie sicher ist das?"
-            intro="Diese vier Antworten helfen uns, ob wir direkt handeln oder erst noch etwas prüfen sollten."
+            title="Was vor dem nächsten Schritt geklärt sein sollte"
+            intro="Hier siehst du auf einen Blick, ob du direkt weitergehen kannst oder ob noch etwas fehlt."
           />
 
           <section className="workspace-two-column">
             <OperatorPanel
-              title="Als Nächstes prüfen"
-              description="Nach der Fokusregion sind das die nächsten Regionen, die wir prüfen sollten."
+              title="Danach anschauen"
+              description="Wenn die erste Region erledigt ist, findest du hier die nächsten sinnvollen Kandidaten."
             >
               <div className="workspace-note-list">
                 {relatedRegions.length > 0 ? relatedRegions.map((region) => (
@@ -273,8 +273,8 @@ const NowWorkspace: React.FC<Props> = ({
             </OperatorPanel>
 
             <OperatorPanel
-              title="Was wir noch prüfen"
-              description="Diese Punkte bremsen noch oder brauchen einen kurzen zweiten Blick."
+              title="Noch offen"
+              description="Diese Punkte solltest du klären, bevor du weitergehst."
             >
               <div className="workspace-note-list">
                 {((workspaceStatus?.blockers?.length ? workspaceStatus.blockers : view.risks).slice(0, 4)).map((risk) => (
@@ -288,10 +288,10 @@ const NowWorkspace: React.FC<Props> = ({
 
           <CollapsibleSection
             title="Weitere Details"
-            subtitle="Nur für den zweiten Blick: zusätzliche Gründe, Qualitätswerte und Hinweise."
+            subtitle="Hier findest du zusätzliche Hinweise, falls du tiefer einsteigen möchtest."
           >
             <div className="workspace-two-column">
-              <OperatorPanel title="Qualitätswerte" description="Die wichtigsten Qualitätswerte auf einen Blick.">
+              <OperatorPanel title="Kennzahlen" description="Die wichtigsten Werte kurz zusammengefasst.">
                 <div className="operator-stat-grid">
                   {(view.quality.length ? view.quality : [{ label: 'Qualität', value: 'Noch offen' }]).map((item) => (
                     <OperatorStat
@@ -305,8 +305,8 @@ const NowWorkspace: React.FC<Props> = ({
               </OperatorPanel>
 
               <OperatorPanel
-                title="Weitere Begründungen"
-                description="Die längeren Gründe bleiben hier gesammelt und leicht aufklappbar."
+                title="Weitere Hinweise"
+                description="Hier stehen zusätzliche Punkte, die für die Einordnung hilfreich sind."
               >
                 <div className="workspace-note-list">
                   {(view.reasons.length > 3 ? view.reasons.slice(3) : view.risks).map((item) => (

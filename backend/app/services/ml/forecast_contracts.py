@@ -106,6 +106,9 @@ class EventForecast:
     calibration_passed: bool | None = None
     confidence: float | None = None
     confidence_label: str | None = None
+    probability_source: str | None = None
+    learned_model_version: str | None = None
+    fallback_used: bool | None = None
 
     def to_dict(self) -> dict[str, Any]:
         payload = asdict(self)

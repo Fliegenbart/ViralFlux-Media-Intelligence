@@ -1,0 +1,103 @@
+import json
+import tempfile
+import unittest
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+
+from app.services.ml.benchmarking.artifacts import write_benchmark_artifacts
+from app.services.ml.benchmarking.contracts import BenchmarkArtifactSummary
+from app.services.ml.benchmarking.metrics import summarize_probabilistic_metrics
+from app.services.ml.benchmarking.registry import ForecastRegistry
+from app.services.ml.forecast_orchestrator import ForecastOrchestrator
+
+
+class ForecastBenchmarkingTests(unittest.TestCase):
+    def test_summarize_probabilistic_metrics_returns_wis_coverage_and_event_metrics(self) -> None:
+        metrics = summarize_probabilistic_metrics(
+            y_true=[10.0, 12.0, 14.0],
+            quantile_predictions={
+                0.025: [7.0, 9.0, 11.0],
+                0.1: [8.0, 10.0, 12.0],
+                0.25: [9.0, 11.0, 13.0],
+                0.5: [10.0, 12.0, 14.0],
+                0.75: [11.0, 13.0, 15.0],
+                0.9: [12.0, 14.0, 16.0],
+                0.975: [13.0, 15.0, 17.0],
+            },
+            baseline_quantiles={
+                0.1: [7.0, 9.0, 11.0],
+                0.5: [9.0, 11.0, 13.0],
+                0.9: [11.0, 13.0, 15.0],
+            },
+            event_labels=[0, 1, 1],
+            event_probabilities=[0.2, 0.7, 0.8],
+            action_threshold=0.6,
+        )
+
+        self.assertIn("wis", metrics)
+        self.assertIn("relative_wis", metrics)
+        self.assertIn("coverage_95", metrics)
+        self.assertIn("pinball_loss", metrics)
+        self.assertIn("brier_score", metrics)
+        self.assertIn("decision_utility", metrics)
+
+    def test_registry_promotes_better_relative_wis_candidate(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            registry = ForecastRegistry(registry_root=Path(tmpdir))
+            scope = registry.record_evaluation(
+                virus_typ="Influenza A",
+                horizon_days=7,
+                model_family="regional_pooled_panel",
+                metrics={"relative_wis": 0.98, "coverage_95": 0.95, "brier_score": 0.09, "ece": 0.05},
+                metadata={"model_version": "baseline"},
+                promote=True,
+            )
+            self.assertEqual(scope["champion"]["model_family"], "regional_pooled_panel")
+
+            promoted = registry.should_promote(
+                candidate_metrics={"relative_wis": 0.94, "coverage_95": 0.95, "brier_score": 0.08, "ece": 0.04},
+                champion_metrics=scope["champion"]["metrics"],
+            )
+            self.assertTrue(promoted)
+
+    def test_orchestrator_resolves_revision_policy_from_metadata(self) -> None:
+        orchestrator = ForecastOrchestrator()
+
+        self.assertEqual(
+            orchestrator.resolve_revision_policy(
+                metadata={"revision_policy_metadata": {"default_policy": "adaptive"}}
+            ),
+            "adaptive",
+        )
+        self.assertEqual(
+            orchestrator.resolve_revision_policy(
+                metadata={"revision_policy_metadata": {"default_policy": "raw"}},
+                requested_policy="adjusted",
+            ),
+            "adjusted",
+        )
+
+    def test_artifact_writer_persists_summary_and_report(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir)
+            summary = BenchmarkArtifactSummary(
+                virus_typ="Influenza A",
+                horizon_days=7,
+                issue_dates=["2026-03-01"],
+                primary_metric="relative_wis",
+                champion_name="regional_pooled_panel",
+                metrics={"relative_wis": 0.94},
+                leaderboard=[{"candidate": "regional_pooled_panel", "relative_wis": 0.94, "coverage_95": 0.95, "brier_score": 0.08, "decision_utility": 0.71, "samples": 12}],
+            )
+            paths = write_benchmark_artifacts(
+                output_dir=output_dir,
+                summary=summary,
+                diagnostics=[{"fold": 1, "candidate": "regional_pooled_panel"}],
+            )
+
+            self.assertTrue(Path(paths["summary"]).exists())
+            self.assertTrue(Path(paths["report"]).exists())
+            payload = json.loads(Path(paths["summary"]).read_text())
+            self.assertEqual(payload["champion_name"], "regional_pooled_panel")

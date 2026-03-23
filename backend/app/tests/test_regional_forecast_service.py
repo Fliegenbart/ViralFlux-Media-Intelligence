@@ -225,6 +225,9 @@ class RegionalForecastServiceTests(unittest.TestCase):
         self.assertEqual(top["rollout_mode"], "gated")
         self.assertEqual(top["activation_policy"], "quality_gate")
         self.assertEqual(top["signal_bundle_version"], "core_panel_v1")
+        self.assertEqual(top["champion_model_family"], "regional_pooled_panel")
+        self.assertEqual(top["ensemble_component_weights"], {"regional_pooled_panel": 1.0})
+        self.assertEqual(top["revision_policy_used"], "raw")
         self.assertTrue(top["business_gate"]["validated_for_budget_activation"])
         self.assertIn("model_version", top)
         self.assertIn("calibration_version", top)
@@ -244,6 +247,7 @@ class RegionalForecastServiceTests(unittest.TestCase):
         self.assertEqual(result["horizon_days"], 5)
         self.assertEqual(result["target_window_days"], [5, 5])
         self.assertEqual(service.feature_builder.last_horizon_days, 5)
+        self.assertEqual(result["revision_policy_used"], "raw")
         top = result["predictions"][0]
         self.assertEqual(top["horizon_days"], 5)
         self.assertEqual(top["target_window_days"], [5, 5])

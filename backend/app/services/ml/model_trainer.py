@@ -29,6 +29,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from app.services.ml.benchmarking.registry import ForecastRegistry
 from app.services.ml.forecast_horizon_utils import (
     DEFAULT_FORECAST_REGION,
     DEFAULT_FORECAST_REGION,
@@ -45,6 +46,7 @@ from app.services.ml.training_contract import (
 logger = logging.getLogger(__name__)
 
 _ML_MODELS_DIR = Path(__file__).resolve().parent.parent.parent / "ml_models"
+_REGISTRY_DIR = Path(__file__).resolve().parent.parent.parent / "ml_models" / "forecast_registry"
 
 
 def _virus_slug(virus_typ: str) -> str:
@@ -99,6 +101,7 @@ class XGBoostTrainer:
         self.db = db
         self.models_dir = models_dir or _ML_MODELS_DIR
         self._forecast_svc = ForecastService(db)
+        self.registry = ForecastRegistry(registry_root=_REGISTRY_DIR)
 
     # ------------------------------------------------------------------
     # Public API
@@ -286,6 +289,14 @@ class XGBoostTrainer:
             existing_metrics=(current_metadata or {}).get("backtest_metrics"),
             candidate_metrics=best_candidate.get("backtest_metrics"),
         )
+        registry_payload = self.registry.record_evaluation(
+            virus_typ=virus_typ,
+            horizon_days=horizon,
+            model_family="direct_xgb_stack",
+            metrics=best_candidate.get("backtest_metrics") or {},
+            metadata={"region": region_code},
+            promote=promoted,
+        )
 
         prophet_mode = (
             "full_prophet"
@@ -330,6 +341,7 @@ class XGBoostTrainer:
                 },
                 "existing_live_model_found": current_metadata is not None,
             },
+            "registry_scope": registry_payload,
             "promoted": promoted,
             "promoted_at": datetime.utcnow().isoformat() if promoted else None,
             "rejected_reason": None if promoted else "candidate_did_not_beat_live_model",
@@ -377,8 +389,11 @@ class XGBoostTrainer:
         return min(
             valid,
             key=lambda item: (
+                float(item["backtest_metrics"].get("relative_wis", item["backtest_metrics"].get("wis", float("inf")))),
+                float(item["backtest_metrics"].get("pinball_loss", float("inf"))),
+                float(item["backtest_metrics"].get("ece", float("inf"))),
+                -float(item["backtest_metrics"].get("decision_utility", float("-inf"))),
                 float(item["backtest_metrics"].get("mape", float("inf"))),
-                float(item["backtest_metrics"].get("rmse", float("inf"))),
                 item["name"],
             ),
         )
@@ -391,17 +406,11 @@ class XGBoostTrainer:
     ) -> bool:
         if not candidate_metrics or "error" in candidate_metrics:
             return False
-        if not existing_metrics or "mape" not in existing_metrics:
+        if not existing_metrics:
             return True
-
-        candidate_mape = float(candidate_metrics.get("mape", float("inf")))
-        existing_mape = float(existing_metrics.get("mape", float("inf")))
-        if candidate_mape < existing_mape:
-            return True
-        if candidate_mape > existing_mape:
-            return False
-        return float(candidate_metrics.get("rmse", float("inf"))) < float(
-            existing_metrics.get("rmse", float("inf")),
+        return ForecastRegistry().should_promote(
+            candidate_metrics=candidate_metrics,
+            champion_metrics=existing_metrics,
         )
 
     def _read_existing_metadata(

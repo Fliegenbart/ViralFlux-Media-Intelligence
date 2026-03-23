@@ -14,12 +14,18 @@ import pandas as pd
 from sklearn.isotonic import IsotonicRegression
 from xgboost import XGBClassifier, XGBRegressor
 
+from app.services.ml.benchmarking.contracts import CANONICAL_FORECAST_QUANTILES, quantile_key
+from app.services.ml.benchmarking.leaderboard import build_leaderboard
+from app.services.ml.benchmarking.metrics import summarize_probabilistic_metrics
+from app.services.ml.benchmarking.registry import ForecastRegistry
+from app.services.ml.forecast_orchestrator import ForecastOrchestrator
 from app.services.ml.forecast_horizon_utils import (
     SUPPORTED_FORECAST_HORIZONS,
     ensure_supported_horizon,
     regional_horizon_support_status,
     regional_model_artifact_dir,
 )
+from app.services.ml.models.event_classifier import LearnedEventModel
 from app.services.ml.regional_features import RegionalFeatureBuilder
 from app.services.ml.regional_panel_utils import (
     ALL_BUNDESLAENDER,
@@ -47,6 +53,7 @@ from app.services.ml.training_contract import SUPPORTED_VIRUS_TYPES
 logger = logging.getLogger(__name__)
 
 _ML_MODELS_DIR = Path(__file__).resolve().parent.parent.parent / "ml_models" / "regional_panel"
+_REGISTRY_DIR = Path(__file__).resolve().parent.parent.parent / "ml_models" / "forecast_registry"
 
 CALIBRATION_HOLDOUT_FRACTION = 0.20
 CALIBRATION_GUARD_FRACTION = 0.35
@@ -152,6 +159,17 @@ def _target_window_for_horizon(horizon_days: int) -> list[int]:
     return [horizon, horizon]
 
 
+def _quantile_regressor_config(quantile: float) -> dict[str, Any]:
+    if np.isclose(quantile, 0.5):
+        config = dict(REGIONAL_REGRESSOR_CONFIG["median"])
+    elif quantile < 0.5:
+        config = dict(REGIONAL_REGRESSOR_CONFIG["lower"])
+    else:
+        config = dict(REGIONAL_REGRESSOR_CONFIG["upper"])
+    config["quantile_alpha"] = float(quantile)
+    return config
+
+
 class RegionalModelTrainer:
     """Train pooled per-virus panel models across all Bundesländer."""
 
@@ -159,6 +177,8 @@ class RegionalModelTrainer:
         self.db = db
         self.models_dir = models_dir or _ML_MODELS_DIR
         self.feature_builder = RegionalFeatureBuilder(db)
+        self.registry = ForecastRegistry(registry_root=_REGISTRY_DIR)
+        self.orchestrator = ForecastOrchestrator(registry_root=_REGISTRY_DIR)
 
     def train_region(
         self,
@@ -260,6 +280,7 @@ class RegionalModelTrainer:
             horizon_days=horizon,
             include_nowcast=True,
             use_revision_adjusted=False,
+            revision_policy="raw",
         )
         panel = self._prepare_horizon_panel(panel, horizon_days=horizon)
         if panel.empty or len(panel) < 200:
@@ -313,11 +334,16 @@ class RegionalModelTrainer:
             previous_artifact=previous_artifact,
         )
         backtest_bundle["backtest_payload"].update(_json_safe(rollout_info))
+        backtest_bundle["backtest_payload"]["benchmark_summary"] = _json_safe(backtest_bundle.get("benchmark_summary") or {})
         final_artifacts = self._fit_final_models(
             panel=panel,
             feature_columns=feature_columns,
             oof_frame=backtest_bundle["oof_frame"],
             action_threshold=action_threshold,
+        )
+        calibration_mode = str(
+            final_artifacts.get("calibration_mode")
+            or ("isotonic" if final_artifacts.get("calibration") is not None else "raw_passthrough")
         )
 
         dataset_manifest = {
@@ -355,13 +381,33 @@ class RegionalModelTrainer:
             "event_definition_config": event_config.to_manifest(),
             "dataset_manifest": dataset_manifest,
             "nowcast_features_enabled": True,
+            "forecast_quantiles": [float(value) for value in CANONICAL_FORECAST_QUANTILES],
             "signal_bundle_version": rollout_info["signal_bundle_version"],
             "rollout_mode": rollout_info["rollout_mode"],
             "activation_policy": rollout_info["activation_policy"],
             "shadow_evaluation": rollout_info.get("shadow_evaluation"),
             "quality_gate": backtest_bundle["quality_gate"],
             "aggregate_metrics": backtest_bundle["aggregate_metrics"],
+            "benchmark_summary": backtest_bundle.get("benchmark_summary") or {},
             "label_selection": selection,
+            "revision_policy_metadata": {
+                "default_policy": "raw",
+                "supported_policies": ["raw", "adjusted", "adaptive"],
+                "selection_basis": "fallback_no_benchmark_evidence",
+                "source_policies": {},
+            },
+            "learned_event_model": (
+                final_artifacts["learned_event_model"].metadata()
+                if final_artifacts.get("learned_event_model") is not None
+                else {
+                    "model_family": "learned_event_xgb",
+                    "action_threshold": action_threshold,
+                    "calibration_mode": calibration_mode,
+                    "calibration_enabled": final_artifacts.get("calibration") is not None,
+                }
+            ),
+            "ensemble_component_weights": {"regional_pooled_panel": 1.0},
+            "hierarchy_driver_attribution": {"state": 1.0, "cluster": 0.0, "national": 0.0},
             "point_in_time_snapshot": {
                 "snapshot_type": point_in_time_manifest.get("snapshot_type"),
                 "captured_at": point_in_time_manifest.get("captured_at"),
@@ -369,11 +415,31 @@ class RegionalModelTrainer:
             },
         }
         metadata["model_version"] = f"{metadata['model_family']}:h{horizon}:{metadata['trained_at']}"
-        calibration_mode = str(
-            final_artifacts.get("calibration_mode")
-            or ("isotonic" if final_artifacts.get("calibration") is not None else "raw_passthrough")
-        )
         metadata["calibration_version"] = f"{calibration_mode}:h{horizon}:{metadata['trained_at']}"
+        registry_scope = self.registry.load_scope(virus_typ=virus_typ, horizon_days=horizon)
+        current_champion_metrics = ((registry_scope.get("champion") or {}).get("metrics") or {})
+        promotion_candidate_metrics = {
+            **(backtest_bundle.get("benchmark_summary") or {}).get("metrics", {}),
+            **backtest_bundle["aggregate_metrics"],
+        }
+        promote = self.registry.should_promote(
+            candidate_metrics=promotion_candidate_metrics,
+            champion_metrics=current_champion_metrics,
+        )
+        registry_payload = self.registry.record_evaluation(
+            virus_typ=virus_typ,
+            horizon_days=horizon,
+            model_family="regional_pooled_panel",
+            metrics=promotion_candidate_metrics,
+            metadata={
+                "model_version": metadata["model_version"],
+                "calibration_version": metadata["calibration_version"],
+                "rollout_mode": metadata["rollout_mode"],
+            },
+            promote=promote,
+        )
+        metadata["registry_status"] = "champion" if promote else "challenger"
+        metadata["registry_scope"] = registry_payload
 
         if persist:
             self._persist_artifacts(
@@ -1039,9 +1105,12 @@ class RegionalModelTrainer:
                         "expected_target_incidence": pred_next,
                         "prediction_interval_lower": pred_next_lo,
                         "prediction_interval_upper": pred_next_hi,
+                        "residual": test_df["next_week_incidence"].values.astype(float) - pred_next,
+                        "absolute_error": np.abs(test_df["next_week_incidence"].values.astype(float) - pred_next),
                         "selected_tau": fold_tau,
                         "selected_kappa": fold_kappa,
                         "action_threshold": fold_threshold,
+                        "calibration_mode": calibration_mode,
                     }
                 )
             )
@@ -1056,6 +1125,29 @@ class RegionalModelTrainer:
         )
         baselines = self._baseline_metrics(
             frame=oof_frame,
+            action_threshold=action_threshold,
+        )
+        benchmark_frame = oof_frame.copy()
+        benchmark_frame["candidate"] = "regional_pooled_panel"
+        benchmark_frame["y_true"] = benchmark_frame["next_week_incidence"].astype(float)
+        benchmark_frame["q_0.1"] = benchmark_frame["prediction_interval_lower"].astype(float)
+        benchmark_frame["q_0.5"] = benchmark_frame["expected_target_incidence"].astype(float)
+        benchmark_frame["q_0.9"] = benchmark_frame["prediction_interval_upper"].astype(float)
+        benchmark_frame["event_probability"] = benchmark_frame["event_probability_calibrated"].astype(float)
+        benchmark_metrics = summarize_probabilistic_metrics(
+            y_true=benchmark_frame["y_true"].to_numpy(dtype=float),
+            quantile_predictions={
+                0.1: benchmark_frame["q_0.1"].to_numpy(dtype=float),
+                0.5: benchmark_frame["q_0.5"].to_numpy(dtype=float),
+                0.9: benchmark_frame["q_0.9"].to_numpy(dtype=float),
+            },
+            event_labels=benchmark_frame["event_label"].to_numpy(dtype=int),
+            event_probabilities=benchmark_frame["event_probability"].to_numpy(dtype=float),
+            action_threshold=action_threshold,
+        )
+        benchmark_leaderboard = build_leaderboard(
+            benchmark_frame,
+            group_by=("virus_typ", "horizon_days", "bundesland"),
             action_threshold=action_threshold,
         )
         quality_gate = quality_gate_from_metrics(
@@ -1077,6 +1169,11 @@ class RegionalModelTrainer:
         return {
             "oof_frame": oof_frame,
             "aggregate_metrics": aggregate_metrics,
+            "benchmark_summary": {
+                "primary_metric": "relative_wis",
+                "leaderboard": benchmark_leaderboard,
+                "metrics": benchmark_metrics,
+            },
             "quality_gate": quality_gate,
             "backtest_payload": backtest_payload,
         }
@@ -1120,6 +1217,40 @@ class RegionalModelTrainer:
             feature_columns,
             REGIONAL_REGRESSOR_CONFIG["upper"],
         )
+        quantile_regressors: dict[float, XGBRegressor] = {
+            0.1: reg_lower,
+            0.5: reg_median,
+            0.9: reg_upper,
+        }
+        for quantile in CANONICAL_FORECAST_QUANTILES:
+            if quantile in quantile_regressors:
+                continue
+            quantile_regressors[float(quantile)] = self._fit_regressor_from_frame(
+                panel,
+                feature_columns,
+                _quantile_regressor_config(float(quantile)),
+            )
+        learned_event_model = None
+        if "event_label" in panel.columns and panel["event_label"].nunique() >= 2:
+            calibration_rows = max(int(len(panel) * CALIBRATION_HOLDOUT_FRACTION), 20)
+            calibration_rows = min(calibration_rows, max(len(panel) - 20, 0))
+            calibration_frame_full = panel.tail(calibration_rows).copy() if calibration_rows > 0 else pd.DataFrame()
+            train_frame_full = panel.iloc[:-calibration_rows].copy() if calibration_rows > 0 else panel.copy()
+            if train_frame_full["event_label"].nunique() >= 2:
+                learned_event_model = LearnedEventModel.fit(
+                    X_train=train_frame_full[feature_columns].to_numpy(),
+                    y_train=train_frame_full["event_label"].to_numpy(),
+                    X_calibration=(
+                        calibration_frame_full[feature_columns].to_numpy()
+                        if not calibration_frame_full.empty and calibration_frame_full["event_label"].nunique() >= 2
+                        else None
+                    ),
+                    y_calibration=(
+                        calibration_frame_full["event_label"].to_numpy()
+                        if not calibration_frame_full.empty and calibration_frame_full["event_label"].nunique() >= 2
+                        else None
+                    ),
+                )
         return {
             "classifier": classifier,
             "calibration": calibration,
@@ -1127,6 +1258,8 @@ class RegionalModelTrainer:
             "regressor_median": reg_median,
             "regressor_lower": reg_lower,
             "regressor_upper": reg_upper,
+            "quantile_regressors": quantile_regressors,
+            "learned_event_model": learned_event_model,
         }
 
     def _persist_artifacts(
@@ -1145,6 +1278,8 @@ class RegionalModelTrainer:
         final_artifacts["regressor_median"].save_model(str(model_dir / "regressor_median.json"))
         final_artifacts["regressor_lower"].save_model(str(model_dir / "regressor_lower.json"))
         final_artifacts["regressor_upper"].save_model(str(model_dir / "regressor_upper.json"))
+        for quantile, model in sorted((final_artifacts.get("quantile_regressors") or {}).items()):
+            model.save_model(str(model_dir / f"{quantile_key(float(quantile))}.json"))
 
         with open(model_dir / "calibration.pkl", "wb") as handle:
             pickle.dump(final_artifacts["calibration"], handle)
@@ -1548,6 +1683,21 @@ class RegionalModelTrainer:
 
         ranking.sort(key=lambda item: (item["precision"], item["pr_auc"]), reverse=True)
         horizon = int(frame["horizon_days"].iloc[0]) if "horizon_days" in frame.columns else TARGET_WINDOW_DAYS[1]
+        fold_diagnostics = []
+        for fold, fold_frame in frame.groupby("fold"):
+            fold_diagnostics.append(
+                {
+                    "fold": int(fold),
+                    "rows": int(len(fold_frame)),
+                    "mean_absolute_error": round(float(fold_frame["absolute_error"].mean() or 0.0), 6)
+                    if "absolute_error" in fold_frame.columns
+                    else None,
+                    "mean_residual": round(float(fold_frame["residual"].mean() or 0.0), 6)
+                    if "residual" in fold_frame.columns
+                    else None,
+                    "calibration_mode": str(fold_frame["calibration_mode"].iloc[0]) if "calibration_mode" in fold_frame.columns else None,
+                }
+            )
         return {
             "virus_typ": str(frame["virus_typ"].iloc[0]),
             "horizon_days": horizon,
@@ -1564,6 +1714,7 @@ class RegionalModelTrainer:
             "backtested": len(details),
             "failed": max(0, len(ALL_BUNDESLAENDER) - len(details)),
             "ranking": _json_safe(ranking),
+            "fold_diagnostics": _json_safe(fold_diagnostics),
             "details": _json_safe(details),
             "generated_at": datetime.utcnow().isoformat(),
         }

@@ -77,6 +77,8 @@ class RegionalFeatureBuilder:
         *,
         include_nowcast: bool = False,
         use_revision_adjusted: bool = False,
+        revision_policy: str | None = None,
+        source_revision_policy: dict[str, str] | None = None,
     ) -> pd.DataFrame:
         """Build pooled training rows across all Bundesländer."""
         horizon = ensure_supported_horizon(horizon_days)
@@ -119,6 +121,11 @@ class RegionalFeatureBuilder:
             include_targets=True,
             include_nowcast=include_nowcast,
             use_revision_adjusted=use_revision_adjusted,
+            revision_policy=self._resolve_revision_policy(
+                revision_policy=revision_policy,
+                use_revision_adjusted=use_revision_adjusted,
+            ),
+            source_revision_policy=source_revision_policy,
         )
         return self._finalize_panel(rows)
 
@@ -131,6 +138,8 @@ class RegionalFeatureBuilder:
         *,
         include_nowcast: bool = False,
         use_revision_adjusted: bool = False,
+        revision_policy: str | None = None,
+        source_revision_policy: dict[str, str] | None = None,
     ) -> pd.DataFrame:
         """Build one inference row per Bundesland for a shared as-of date."""
         horizon = ensure_supported_horizon(horizon_days)
@@ -178,6 +187,11 @@ class RegionalFeatureBuilder:
             include_targets=False,
             include_nowcast=include_nowcast,
             use_revision_adjusted=use_revision_adjusted,
+            revision_policy=self._resolve_revision_policy(
+                revision_policy=revision_policy,
+                use_revision_adjusted=use_revision_adjusted,
+            ),
+            source_revision_policy=source_revision_policy,
         )
         panel = self._finalize_panel(rows)
         if panel.empty:
@@ -217,6 +231,8 @@ class RegionalFeatureBuilder:
         *,
         include_nowcast: bool = False,
         use_revision_adjusted: bool = False,
+        revision_policy: str | None = None,
+        source_revision_policy: dict[str, str] | None = None,
     ) -> pd.DataFrame:
         """Backward-compatible helper returning the per-state panel slice."""
         code = normalize_state_code(bundesland) or bundesland
@@ -225,6 +241,8 @@ class RegionalFeatureBuilder:
             lookback_days=lookback_days,
             include_nowcast=include_nowcast,
             use_revision_adjusted=use_revision_adjusted,
+            revision_policy=revision_policy,
+            source_revision_policy=source_revision_policy,
         )
         if panel.empty:
             return panel
@@ -887,6 +905,8 @@ class RegionalFeatureBuilder:
         include_targets: bool,
         include_nowcast: bool,
         use_revision_adjusted: bool,
+        revision_policy: str,
+        source_revision_policy: dict[str, str] | None,
     ) -> list[dict[str, Any]]:
         if wastewater.empty or truth.empty:
             return []
@@ -1032,7 +1052,13 @@ class RegionalFeatureBuilder:
                 )
                 effective_current_incidence = self.nowcast_service.preferred_value(
                     truth_nowcast,
-                    use_revision_adjusted=use_revision_adjusted,
+                    use_revision_adjusted=self._use_revision_adjusted_for_source(
+                        source_id=truth_source,
+                        result=truth_nowcast,
+                        revision_policy=revision_policy,
+                        source_revision_policy=source_revision_policy,
+                        fallback_use_revision_adjusted=use_revision_adjusted,
+                    ),
                 )
                 baseline, mad = seasonal_baseline_and_mad(
                     truth_frame,
@@ -1073,6 +1099,8 @@ class RegionalFeatureBuilder:
                     seasonal_mad=float(mad),
                     include_nowcast=include_nowcast,
                     use_revision_adjusted=use_revision_adjusted,
+                    revision_policy=revision_policy,
+                    source_revision_policy=source_revision_policy,
                     truth_nowcast=truth_nowcast,
                 )
                 if feature_row is None:
@@ -1136,6 +1164,8 @@ class RegionalFeatureBuilder:
         seasonal_mad: float,
         include_nowcast: bool,
         use_revision_adjusted: bool,
+        revision_policy: str,
+        source_revision_policy: dict[str, str] | None,
         truth_nowcast: NowcastResult,
     ) -> dict[str, Any] | None:
         nowcast_features: dict[str, float] = {}
@@ -1151,7 +1181,13 @@ class RegionalFeatureBuilder:
         )
         ww_level = self.nowcast_service.preferred_value(
             ww_nowcast,
-            use_revision_adjusted=use_revision_adjusted,
+            use_revision_adjusted=self._use_revision_adjusted_for_source(
+                source_id="wastewater",
+                result=ww_nowcast,
+                revision_policy=revision_policy,
+                source_revision_policy=source_revision_policy,
+                fallback_use_revision_adjusted=use_revision_adjusted,
+            ),
         )
         ww_lag4 = self._latest_value_as_of(visible_ww, as_of - pd.Timedelta(days=4), "viral_load")
         ww_lag7 = self._latest_value_as_of(visible_ww, as_of - pd.Timedelta(days=7), "viral_load")
@@ -1222,6 +1258,8 @@ class RegionalFeatureBuilder:
             seasonal_mad=seasonal_mad,
             include_nowcast=include_nowcast,
             use_revision_adjusted=use_revision_adjusted,
+            revision_policy=revision_policy,
+            source_revision_policy=source_revision_policy,
         )
         virus_specific_ifsg_features = self._virus_specific_ifsg_features(
             virus_typ=virus_typ,
@@ -1234,6 +1272,8 @@ class RegionalFeatureBuilder:
             seasonal_mad=seasonal_mad,
             include_nowcast=include_nowcast,
             use_revision_adjusted=use_revision_adjusted,
+            revision_policy=revision_policy,
+            source_revision_policy=source_revision_policy,
         )
         sars_context_features = self._sars_context_features(
             virus_typ=virus_typ,
@@ -1249,6 +1289,8 @@ class RegionalFeatureBuilder:
             seasonal_mad=seasonal_mad,
             include_nowcast=include_nowcast,
             use_revision_adjusted=use_revision_adjusted,
+            revision_policy=revision_policy,
+            source_revision_policy=source_revision_policy,
         )
         if include_nowcast:
             weather_nowcast = self._manual_nowcast_result(
@@ -1373,6 +1415,36 @@ class RegionalFeatureBuilder:
             f"{prefix}_coverage_ratio": float(result.coverage_ratio),
         }
 
+    @staticmethod
+    def _resolve_revision_policy(
+        *,
+        revision_policy: str | None,
+        use_revision_adjusted: bool,
+    ) -> str:
+        candidate = str(revision_policy or "").strip().lower()
+        if candidate in {"raw", "adjusted", "adaptive"}:
+            return candidate
+        return "adjusted" if use_revision_adjusted else "raw"
+
+    @staticmethod
+    def _use_revision_adjusted_for_source(
+        *,
+        source_id: str,
+        result: NowcastResult,
+        revision_policy: str,
+        source_revision_policy: dict[str, str] | None,
+        fallback_use_revision_adjusted: bool,
+    ) -> bool:
+        source_override = str((source_revision_policy or {}).get(source_id) or "").strip().lower()
+        effective_policy = source_override or str(revision_policy or "").strip().lower()
+        if effective_policy == "adjusted":
+            return True
+        if effective_policy == "raw":
+            return False
+        if effective_policy == "adaptive":
+            return bool(result.correction_applied and result.usable_for_forecast)
+        return bool(fallback_use_revision_adjusted)
+
     def _manual_nowcast_result(
         self,
         *,
@@ -1477,6 +1549,8 @@ class RegionalFeatureBuilder:
         seasonal_mad: float,
         include_nowcast: bool,
         use_revision_adjusted: bool,
+        revision_policy: str,
+        source_revision_policy: dict[str, str] | None,
     ) -> dict[str, float]:
         if virus_typ != "SARS-CoV-2":
             return {}
@@ -1492,7 +1566,13 @@ class RegionalFeatureBuilder:
         )
         are_level = self.nowcast_service.preferred_value(
             are_nowcast,
-            use_revision_adjusted=use_revision_adjusted,
+            use_revision_adjusted=self._use_revision_adjusted_for_source(
+                source_id="are_konsultation",
+                result=are_nowcast,
+                revision_policy=revision_policy,
+                source_revision_policy=source_revision_policy,
+                fallback_use_revision_adjusted=use_revision_adjusted,
+            ),
         )
         are_lag7 = self._latest_value_as_of(are_frame, as_of - pd.Timedelta(days=7), "incidence")
         are_momentum_1w = float((are_level - are_lag7) / max(abs(are_lag7), 1.0))
@@ -1516,7 +1596,13 @@ class RegionalFeatureBuilder:
         notaufnahme_level = self._latest_value_as_of(notaufnahme_frame, as_of, "level")
         notaufnahme_ma7 = self.nowcast_service.preferred_value(
             notaufnahme_nowcast,
-            use_revision_adjusted=use_revision_adjusted,
+            use_revision_adjusted=self._use_revision_adjusted_for_source(
+                source_id="notaufnahme",
+                result=notaufnahme_nowcast,
+                revision_policy=revision_policy,
+                source_revision_policy=source_revision_policy,
+                fallback_use_revision_adjusted=use_revision_adjusted,
+            ),
         )
         notaufnahme_ma7_lag7 = self._latest_value_as_of(notaufnahme_frame, as_of - pd.Timedelta(days=7), "ma7")
         notaufnahme_expected = self._latest_value_as_of(notaufnahme_frame, as_of, "expected_value")
@@ -1536,7 +1622,13 @@ class RegionalFeatureBuilder:
         )
         trends_level = self.nowcast_service.preferred_value(
             trends_nowcast,
-            use_revision_adjusted=use_revision_adjusted,
+            use_revision_adjusted=self._use_revision_adjusted_for_source(
+                source_id="google_trends",
+                result=trends_nowcast,
+                revision_policy=revision_policy,
+                source_revision_policy=source_revision_policy,
+                fallback_use_revision_adjusted=use_revision_adjusted,
+            ),
         )
         trends_recent14 = self._window_mean(trends_frame, as_of=as_of, window_days=14, column="interest_score")
         trends_previous14 = self._window_mean(
@@ -1616,6 +1708,8 @@ class RegionalFeatureBuilder:
         seasonal_mad: float,
         include_nowcast: bool,
         use_revision_adjusted: bool,
+        revision_policy: str,
+        source_revision_policy: dict[str, str] | None,
     ) -> dict[str, float]:
         features: dict[str, float] = {}
         for signal_type in ("ARE", "ILI"):
@@ -1640,6 +1734,8 @@ class RegionalFeatureBuilder:
                     region_code=state if not state_frame.empty else "DE",
                     include_nowcast=include_nowcast,
                     use_revision_adjusted=use_revision_adjusted,
+                    revision_policy=revision_policy,
+                    source_revision_policy=source_revision_policy,
                 )
             )
             national_level = self._latest_value_as_of(national_frame, as_of, "incidence")
@@ -1667,6 +1763,8 @@ class RegionalFeatureBuilder:
         seasonal_mad: float,
         include_nowcast: bool,
         use_revision_adjusted: bool,
+        revision_policy: str,
+        source_revision_policy: dict[str, str] | None,
     ) -> dict[str, float]:
         if virus_typ in {"Influenza A", "Influenza B"}:
             return self._signal_feature_family(
@@ -1681,6 +1779,8 @@ class RegionalFeatureBuilder:
                 region_code=state,
                 include_nowcast=include_nowcast,
                 use_revision_adjusted=use_revision_adjusted,
+                revision_policy=revision_policy,
+                source_revision_policy=source_revision_policy,
             )
         if virus_typ == "RSV A":
             return self._signal_feature_family(
@@ -1695,6 +1795,8 @@ class RegionalFeatureBuilder:
                 region_code=state,
                 include_nowcast=include_nowcast,
                 use_revision_adjusted=use_revision_adjusted,
+                revision_policy=revision_policy,
+                source_revision_policy=source_revision_policy,
             )
         return {}
 
@@ -1712,6 +1814,8 @@ class RegionalFeatureBuilder:
         region_code: str | None,
         include_nowcast: bool,
         use_revision_adjusted: bool,
+        revision_policy: str,
+        source_revision_policy: dict[str, str] | None,
     ) -> dict[str, float]:
         signal_frame = frame if frame is not None else pd.DataFrame()
         result = self.nowcast_service.evaluate_frame(
@@ -1724,7 +1828,13 @@ class RegionalFeatureBuilder:
         )
         level = self.nowcast_service.preferred_value(
             result,
-            use_revision_adjusted=use_revision_adjusted,
+            use_revision_adjusted=self._use_revision_adjusted_for_source(
+                source_id=source_id,
+                result=result,
+                revision_policy=revision_policy,
+                source_revision_policy=source_revision_policy,
+                fallback_use_revision_adjusted=use_revision_adjusted,
+            ),
         )
         lag7 = self._latest_value_as_of(signal_frame, as_of - pd.Timedelta(days=7), "incidence")
         baseline, mad = self._seasonal_signal_baseline(

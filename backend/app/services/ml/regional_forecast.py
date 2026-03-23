@@ -18,6 +18,7 @@ from app.services.media.business_validation_service import BusinessValidationSer
 from app.services.media.campaign_recommendation_service import CampaignRecommendationService
 from app.services.media.truth_layer_service import TruthLayerService
 from app.services.ml.forecast_decision_service import ForecastDecisionService
+from app.services.ml.forecast_orchestrator import ForecastOrchestrator
 from app.services.ml.forecast_horizon_utils import (
     SUPPORTED_FORECAST_HORIZONS,
     ensure_supported_horizon,
@@ -68,6 +69,7 @@ class RegionalForecastService:
         self.db = db
         self.models_dir = models_dir or _ML_MODELS_DIR
         self.feature_builder = RegionalFeatureBuilder(db)
+        self.orchestrator = ForecastOrchestrator()
         self.decision_engine = RegionalDecisionEngine()
         self.media_allocation_engine = RegionalMediaAllocationEngine()
         self.campaign_recommendation_service = CampaignRecommendationService()
@@ -185,14 +187,29 @@ class RegionalForecastService:
             )
 
         as_of_date = self._latest_as_of_date(virus_typ=virus_typ)
-        panel = self.feature_builder.build_inference_panel(
-            virus_typ=virus_typ,
-            as_of_date=as_of_date.to_pydatetime(),
-            lookback_days=180,
-            horizon_days=horizon,
-            include_nowcast=True,
-            use_revision_adjusted=False,
-        )
+        revision_policy = self.orchestrator.resolve_revision_policy(metadata=metadata)
+        revision_policy_metadata = metadata.get("revision_policy_metadata") or {}
+        source_revision_policy = revision_policy_metadata.get("source_policies") or {}
+        try:
+            panel = self.feature_builder.build_inference_panel(
+                virus_typ=virus_typ,
+                as_of_date=as_of_date.to_pydatetime(),
+                lookback_days=180,
+                horizon_days=horizon,
+                include_nowcast=True,
+                use_revision_adjusted=False,
+                revision_policy=revision_policy,
+                source_revision_policy=source_revision_policy,
+            )
+        except TypeError:
+            panel = self.feature_builder.build_inference_panel(
+                virus_typ=virus_typ,
+                as_of_date=as_of_date.to_pydatetime(),
+                lookback_days=180,
+                horizon_days=horizon,
+                include_nowcast=True,
+                use_revision_adjusted=False,
+            )
         if panel.empty:
             return self._empty_forecast_response(
                 virus_typ=virus_typ,
@@ -247,6 +264,13 @@ class RegionalForecastService:
         signal_bundle_version = metadata.get("signal_bundle_version") or signal_bundle_version_for_virus(virus_typ)
         model_version = metadata.get("model_version") or self._model_version(metadata)
         calibration_version = metadata.get("calibration_version") or self._calibration_version(metadata)
+        champion_model_family = str(metadata.get("model_family") or "regional_pooled_panel")
+        ensemble_component_weights = metadata.get("ensemble_component_weights") or {champion_model_family: 1.0}
+        hierarchy_driver_attribution = metadata.get("hierarchy_driver_attribution") or {"state": 1.0, "cluster": 0.0, "national": 0.0}
+        benchmark_evidence_reference = (
+            ((metadata.get("registry_scope") or {}).get("champion") or {}).get("created_at")
+            or ((metadata.get("benchmark_summary") or {}).get("primary_metric"))
+        )
         dataset_manifest = artifacts.get("dataset_manifest") or metadata.get("dataset_manifest") or {}
         point_in_time_snapshot = artifacts.get("point_in_time_snapshot") or metadata.get("point_in_time_snapshot") or {}
         source_coverage = dataset_manifest.get("source_coverage") or {}
@@ -292,6 +316,11 @@ class RegionalForecastService:
                 "rollout_mode": rollout_mode,
                 "activation_policy": activation_policy,
                 "signal_bundle_version": signal_bundle_version,
+                "champion_model_family": champion_model_family,
+                "ensemble_component_weights": ensemble_component_weights,
+                "hierarchy_driver_attribution": hierarchy_driver_attribution,
+                "revision_policy_used": revision_policy,
+                "benchmark_evidence_reference": benchmark_evidence_reference,
                 "model_version": model_version,
                 "calibration_version": calibration_version,
                 "point_in_time_snapshot": point_in_time_snapshot,
@@ -345,6 +374,11 @@ class RegionalForecastService:
             "rollout_mode": rollout_mode,
             "activation_policy": activation_policy,
             "signal_bundle_version": signal_bundle_version,
+            "champion_model_family": champion_model_family,
+            "ensemble_component_weights": ensemble_component_weights,
+            "hierarchy_driver_attribution": hierarchy_driver_attribution,
+            "revision_policy_used": revision_policy,
+            "benchmark_evidence_reference": benchmark_evidence_reference,
             "model_version": model_version,
             "calibration_version": calibration_version,
             "artifact_transition_mode": artifact_transition_mode,

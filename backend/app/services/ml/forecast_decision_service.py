@@ -170,6 +170,44 @@ class ForecastDecisionService:
             return float(values[mid])
         return float((values[mid - 1] + values[mid]) / 2.0)
 
+    @staticmethod
+    def _stored_event_forecast(forecast: MLForecast | None) -> dict[str, Any]:
+        if forecast is None:
+            return {}
+        payload = (forecast.features_used or {}).get("event_forecast") or {}
+        return payload if isinstance(payload, dict) else {}
+
+    def _resolve_live_event_probability(
+        self,
+        *,
+        horizon_forecast: MLForecast | None,
+        baseline_value: float,
+    ) -> tuple[float | None, str, str | None, bool]:
+        stored = self._stored_event_forecast(horizon_forecast)
+        stored_probability = stored.get("event_probability")
+        if stored_probability is not None:
+            return (
+                float(stored_probability),
+                str(stored.get("probability_source") or stored.get("calibration_method") or "learned"),
+                stored.get("learned_model_version"),
+                bool(stored.get("fallback_used")),
+            )
+
+        if horizon_forecast is not None and baseline_value > 0:
+            return (
+                event_probability_from_forecast(
+                    prediction=float(horizon_forecast.predicted_value or 0.0),
+                    baseline=baseline_value,
+                    lower_bound=horizon_forecast.lower_bound,
+                    upper_bound=horizon_forecast.upper_bound,
+                    threshold_pct=DEFAULT_DECISION_EVENT_THRESHOLD_PCT,
+                ),
+                "heuristic_sigmoid_proxy",
+                None,
+                True,
+            )
+        return None, "heuristic_sigmoid_proxy", None, True
+
     def build_forecast_bundle(
         self,
         *,
@@ -218,15 +256,10 @@ class ForecastDecisionService:
             max(len(forecasts) - 1, 0),
         )
         horizon_forecast = forecasts[horizon_index] if forecasts else None
-        raw_event_probability = None
-        if horizon_forecast is not None and baseline_value > 0:
-            raw_event_probability = event_probability_from_forecast(
-                prediction=float(horizon_forecast.predicted_value or 0.0),
-                baseline=baseline_value,
-                lower_bound=horizon_forecast.lower_bound,
-                upper_bound=horizon_forecast.upper_bound,
-                threshold_pct=DEFAULT_DECISION_EVENT_THRESHOLD_PCT,
-            )
+        raw_event_probability, probability_source, learned_model_version, fallback_used = self._resolve_live_event_probability(
+            horizon_forecast=horizon_forecast,
+            baseline_value=baseline_value,
+        )
 
         market_metrics = latest_market.metrics if latest_market and latest_market.metrics else {}
         quality_gate = market_metrics.get("quality_gate") or {}
@@ -279,6 +312,7 @@ class ForecastDecisionService:
             ),
             calibration_method=str(
                 event_calibration.get("calibration_method")
+                or probability_source
                 or "growth_sigmoid_with_oos_gate"
             ),
             brier_score=(
@@ -298,6 +332,9 @@ class ForecastDecisionService:
             ),
             confidence=confidence_value,
             confidence_label=confidence_label(confidence_value),
+            probability_source=probability_source,
+            learned_model_version=learned_model_version,
+            fallback_used=fallback_used,
         )
 
         forecast_quality = ForecastQuality(

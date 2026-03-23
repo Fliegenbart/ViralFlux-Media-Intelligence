@@ -33,6 +33,7 @@ from sqlalchemy.orm import Session
 from statsmodels.tsa.holtwinters import ExponentialSmoothing
 
 from app.core.config import get_settings
+from app.services.ml.benchmarking.metrics import summarize_probabilistic_metrics
 from app.models.database import (
     GanzimmunData,
     GoogleTrendsData,
@@ -1252,6 +1253,11 @@ class ForecastService:
             }
 
         predictions: list[float] = []
+        predictions_lo: list[float] = []
+        predictions_hi: list[float] = []
+        baseline_predictions: list[float] = []
+        baseline_predictions_lo: list[float] = []
+        baseline_predictions_hi: list[float] = []
         actuals: list[float] = []
         probabilities: list[float] = []
         labels: list[float] = []
@@ -1281,6 +1287,7 @@ class ForecastService:
             actual = float(test_panel.iloc[0]["y_target"])
             current = max(float(test_panel.iloc[0]["current_y"]), 1.0)
             baseline = float(np.median(train_panel["current_y"].tail(min(len(train_panel), 84)))) if len(train_panel) else current
+            persistence_scale = max(float(np.std(train_panel["y_target"].to_numpy(dtype=float))) if len(train_panel) > 1 else 1.0, 1.0)
             event_probability = event_probability_from_forecast(
                 prediction=pred,
                 baseline=baseline if baseline > 0 else current,
@@ -1290,6 +1297,11 @@ class ForecastService:
             )
 
             predictions.append(pred)
+            predictions_lo.append(pred_lo)
+            predictions_hi.append(pred_hi)
+            baseline_predictions.append(current)
+            baseline_predictions_lo.append(max(current - persistence_scale, 0.0))
+            baseline_predictions_hi.append(current + persistence_scale)
             actuals.append(actual)
             probabilities.append(event_probability)
             labels.append(float(test_panel.iloc[0]["event_target"]))
@@ -1315,6 +1327,24 @@ class ForecastService:
 
         metrics = compute_regression_metrics(predictions, actuals)
         metrics.update(compute_calibration_error(probabilities, labels))
+        metrics.update(
+            summarize_probabilistic_metrics(
+                y_true=actuals,
+                quantile_predictions={
+                    0.1: predictions_lo,
+                    0.5: predictions,
+                    0.9: predictions_hi,
+                },
+                baseline_quantiles={
+                    0.1: baseline_predictions_lo,
+                    0.5: baseline_predictions,
+                    0.9: baseline_predictions_hi,
+                },
+                event_labels=labels,
+                event_probabilities=probabilities,
+                action_threshold=0.5,
+            )
+        )
         metrics["windows"] = windows
         metrics["window_count"] = len(windows)
         metrics["horizon_days"] = horizon
@@ -1440,6 +1470,9 @@ class ForecastService:
             calibration_passed=quality_meta.get("calibration_passed") if quality_meta else None,
             confidence=confidence_value,
             confidence_label=confidence_label(confidence_value),
+            probability_source=(quality_meta.get("probability_source") if quality_meta else None) or "heuristic_sigmoid_proxy",
+            learned_model_version=(quality_meta.get("learned_model_version") if quality_meta else None),
+            fallback_used=bool((quality_meta.get("fallback_used") if quality_meta else True)),
         )
         forecast_quality = ForecastQuality(
             forecast_readiness="GO" if quality_meta and quality_meta.get("forecast_ready") else "WATCH",
@@ -1826,6 +1859,8 @@ class ForecastService:
                     "feature_importance": forecast_data.get("feature_importance", {}),
                     "training_window": forecast_data.get("training_window"),
                     "backtest_metrics": forecast_data.get("backtest_metrics"),
+                    "event_forecast": ((forecast_data.get("contracts") or {}).get("event_forecast") or {}),
+                    "forecast_quality": ((forecast_data.get("contracts") or {}).get("forecast_quality") or {}),
                 },
                 "trend_momentum_7d": item.get("trend_momentum_7d"),
                 "outbreak_risk_score": item.get("outbreak_risk_score"),

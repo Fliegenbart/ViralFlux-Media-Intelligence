@@ -68,7 +68,22 @@ class ProductionReadinessServiceTests(unittest.TestCase):
         self._seed_wastewater(available_time=now - timedelta(days=1))
 
         def fake_artifacts(_self, virus_typ: str, horizon_days: int = 7):
-            del virus_typ
+            coverage = {
+                "grippeweb_are_available": 0.95,
+                "grippeweb_ili_available": 0.94,
+            }
+            if virus_typ in {"Influenza A", "Influenza B"}:
+                coverage["ifsg_influenza_available"] = 0.96
+            elif virus_typ == "RSV A":
+                coverage["ifsg_rsv_available"] = 0.95
+            else:
+                coverage.update(
+                    {
+                        "sars_are_available": 0.91,
+                        "sars_notaufnahme_available": 0.93,
+                        "sars_trends_available": 0.30,
+                    }
+                )
             return {
                 "metadata": {
                     "feature_columns": ["feature_a"],
@@ -79,7 +94,7 @@ class ProductionReadinessServiceTests(unittest.TestCase):
                     "dataset_manifest": {
                         "rows": 120,
                         "states": 16,
-                        "source_coverage": {"ww": 0.92, "trends": 0.88},
+                        "source_coverage": coverage,
                         "as_of_range": {"end": (now - timedelta(days=1)).date().isoformat()},
                     },
                     "point_in_time_snapshot": {
@@ -89,7 +104,7 @@ class ProductionReadinessServiceTests(unittest.TestCase):
                 "dataset_manifest": {
                     "rows": 120,
                     "states": 16,
-                    "source_coverage": {"ww": 0.92, "trends": 0.88},
+                    "source_coverage": coverage,
                     "as_of_range": {"end": (now - timedelta(days=1)).date().isoformat()},
                 },
                 "point_in_time_snapshot": {
@@ -119,10 +134,13 @@ class ProductionReadinessServiceTests(unittest.TestCase):
             service._schema_bootstrap_component = lambda: {"status": "ok", "message": "mocked"}  # type: ignore[method-assign]
             snapshot = service.build_snapshot()
 
-        self.assertEqual(snapshot["status"], "degraded")
+        self.assertEqual(snapshot["status"], "healthy")
         self.assertEqual(snapshot["components"]["database"]["status"], "ok")
+        self.assertEqual(snapshot["components"]["core_regional_operational"]["status"], "ok")
+        self.assertIn("core_regional_operational", snapshot["blocking_components"])
+        self.assertIn("forecast_monitoring", snapshot["advisory_components"])
         regional = snapshot["components"]["regional_operational"]
-        self.assertEqual(regional["summary"]["ready"], self._supported_scope_count())
+        self.assertEqual(regional["status"], "warning")
         self.assertEqual(regional["summary"]["unsupported"], self._unsupported_scope_count())
         self.assertEqual(regional["summary"]["critical"], 0)
         self.assertEqual(snapshot["blockers"], [])
@@ -201,7 +219,7 @@ class ProductionReadinessServiceTests(unittest.TestCase):
             snapshot = service.build_snapshot()
             core_snapshot = service.build_core_snapshot()
 
-        self.assertEqual(snapshot["status"], "degraded")
+        self.assertEqual(snapshot["status"], "healthy")
         self.assertEqual(core_snapshot["status"], "healthy")
         self.assertEqual(core_snapshot["scope_mode"], "core_production")
         self.assertEqual(core_snapshot["scope_allowlist"], [{"virus_typ": "RSV A", "horizon_days": 7}])
@@ -308,7 +326,22 @@ class ProductionReadinessServiceTests(unittest.TestCase):
         self._seed_wastewater(available_time=now - timedelta(days=1))
 
         def fake_artifacts(_self, virus_typ: str, horizon_days: int = 7):
-            del virus_typ
+            coverage = {
+                "grippeweb_are_available": 0.95,
+                "grippeweb_ili_available": 0.94,
+            }
+            if virus_typ in {"Influenza A", "Influenza B"}:
+                coverage["ifsg_influenza_available"] = 0.96
+            elif virus_typ == "RSV A":
+                coverage["ifsg_rsv_available"] = 0.95
+            else:
+                coverage.update(
+                    {
+                        "sars_are_available": 0.91,
+                        "sars_notaufnahme_available": 0.93,
+                        "sars_trends_available": 0.30,
+                    }
+                )
             return {
                 "metadata": {
                     "feature_columns": ["feature_a"],
@@ -319,7 +352,7 @@ class ProductionReadinessServiceTests(unittest.TestCase):
                     "dataset_manifest": {
                         "rows": 120,
                         "states": 16,
-                        "source_coverage": {"ww": 0.92, "trends": 0.88},
+                        "source_coverage": coverage,
                         "as_of_range": {"end": (now - timedelta(days=1)).date().isoformat()},
                     },
                     "point_in_time_snapshot": {
@@ -329,7 +362,7 @@ class ProductionReadinessServiceTests(unittest.TestCase):
                 "dataset_manifest": {
                     "rows": 120,
                     "states": 16,
-                    "source_coverage": {"ww": 0.92, "trends": 0.88},
+                    "source_coverage": coverage,
                     "as_of_range": {"end": (now - timedelta(days=1)).date().isoformat()},
                 },
                 "point_in_time_snapshot": {
@@ -353,7 +386,7 @@ class ProductionReadinessServiceTests(unittest.TestCase):
             service._schema_bootstrap_component = lambda: {"status": "ok", "message": "mocked"}  # type: ignore[method-assign]
             snapshot = service.build_snapshot()
 
-        self.assertEqual(snapshot["status"], "unhealthy")
+        self.assertEqual(snapshot["status"], "degraded")
         self.assertEqual(snapshot["components"]["forecast_monitoring"]["status"], "critical")
         self.assertIn("monitoring exploded", snapshot["components"]["forecast_monitoring"]["message"])
         self.assertEqual(snapshot["components"]["regional_operational"]["status"], "warning")

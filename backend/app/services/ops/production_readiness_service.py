@@ -103,7 +103,8 @@ class ProductionReadinessService:
         now_provider: Callable[[], datetime] = datetime.utcnow,
     ) -> None:
         self.session_factory = session_factory
-        self.settings = settings or get_settings()
+        base_settings = settings or get_settings()
+        self.settings = base_settings.model_copy(deep=True)
         self.models_dir = models_dir
         self.now_provider = now_provider
 
@@ -114,30 +115,62 @@ class ProductionReadinessService:
             "celery_broker": self._broker_component(),
             "schema_bootstrap": self._schema_bootstrap_component(),
         }
+        blocking_components = ["database", "celery_broker", "schema_bootstrap"]
+        advisory_components: list[str] = []
+        has_core_scopes = bool(self.settings.EFFECTIVE_CORE_PRODUCTION_SCOPES)
 
         if components["database"]["status"] == "ok" and deep_checks:
             components["forecast_monitoring"] = self._safe_component(
                 "forecast_monitoring",
                 lambda: self._with_db_session(self._forecast_monitoring_component),
             )
+            advisory_components.append("forecast_monitoring")
             components["regional_operational"] = self._safe_component(
                 "regional_operational",
                 lambda: self._with_db_session(
                     lambda db: self._regional_operational_component(db, observed_at=observed_at)
                 ),
             )
+            if has_core_scopes:
+                advisory_components.append("regional_operational")
+                components["core_regional_operational"] = self._safe_component(
+                    "core_regional_operational",
+                    lambda: self._with_db_session(
+                        lambda db: self._core_regional_operational_component(
+                            db,
+                            observed_at=observed_at,
+                        )
+                    ),
+                )
+                blocking_components.append("core_regional_operational")
+            else:
+                blocking_components.append("regional_operational")
         else:
             reason = "database_unavailable" if components["database"]["status"] != "ok" else "startup_light_mode"
             components["forecast_monitoring"] = self._skipped_component(reason)
             components["regional_operational"] = self._skipped_component(reason)
+            advisory_components.extend(["forecast_monitoring", "regional_operational"])
+            if has_core_scopes:
+                components["core_regional_operational"] = self._skipped_component(reason)
+                blocking_components.append("core_regional_operational")
 
         overall_component_status = self._worst_status(
-            component.get("status") for component in components.values()
+            components[name].get("status")
+            for name in blocking_components
+            if name in components
         )
         overall_status = _HEALTH_BY_STATUS.get(overall_component_status, "degraded")
+        if overall_status == "healthy":
+            advisory_has_critical = any(
+                str((components.get(name) or {}).get("status") or "unknown") == "critical"
+                for name in advisory_components
+            )
+            if advisory_has_critical:
+                overall_status = "degraded"
         blockers = [
             {"component": name, "message": component.get("message")}
             for name, component in components.items()
+            if name in blocking_components
             if component.get("status") == "critical"
         ]
 
@@ -146,6 +179,8 @@ class ProductionReadinessService:
             "checked_at": observed_at.isoformat(),
             "environment": self.settings.ENVIRONMENT,
             "app_version": self.settings.APP_VERSION,
+            "blocking_components": blocking_components,
+            "advisory_components": advisory_components,
             "components": components,
             "blockers": blockers,
         }
@@ -193,6 +228,8 @@ class ProductionReadinessService:
             "app_version": self.settings.APP_VERSION,
             "scope_mode": "core_production",
             "scope_allowlist": allowlist,
+            "blocking_components": ["database", "celery_broker", "schema_bootstrap", "core_regional_operational"],
+            "advisory_components": [],
             "components": components,
             "blockers": blockers,
         }

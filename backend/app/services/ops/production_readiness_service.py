@@ -737,6 +737,12 @@ class ProductionReadinessService:
         forecast_recency_status = str(item.get("forecast_recency_status") or "unknown").lower()
         source_coverage_required_status = str(item.get("source_coverage_required_status") or "unknown").lower()
         artifact_transition_mode = str(item.get("artifact_transition_mode") or "").strip()
+        source_freshness_core_status = (
+            "ok"
+            if source_freshness_status == "warning"
+            and forecast_recency_status == "ok"
+            else source_freshness_status
+        )
 
         availability_status = "ok" if model_availability == "available" else "critical"
         contract_status = "ok" if pilot_contract_supported else "critical"
@@ -747,7 +753,7 @@ class ProductionReadinessService:
             [
                 availability_status,
                 contract_status,
-                source_freshness_status,
+                source_freshness_core_status,
                 forecast_recency_status,
                 source_coverage_required_status,
                 quality_status,
@@ -756,13 +762,16 @@ class ProductionReadinessService:
         )
 
         blockers = list(item.get("blockers") or [])
+        advisories = []
         if model_availability != "available":
             blockers.append("Core scope has no loadable regional model artifacts.")
         if not pilot_contract_supported:
             blockers.append("Scope is not part of the active core production contract.")
         if quality_readiness != "GO":
             blockers.append("Core scope quality gate is not at GO.")
-        if source_freshness_status != "ok":
+        if source_freshness_status == "warning" and forecast_recency_status == "ok":
+            advisories.append("Core scope source freshness is outside the ideal window, but forecast recency is current.")
+        elif source_freshness_status != "ok":
             blockers.append("Core scope source freshness is not in the OK window.")
         if forecast_recency_status != "ok":
             blockers.append("Core scope forecast recency is not in the OK window.")
@@ -777,6 +786,7 @@ class ProductionReadinessService:
             "status": status,
             "scope_contract": "core_production",
             "core_scope_passed": status == "ok",
+            "core_scope_advisories": advisories,
             "blockers": list(dict.fromkeys(blockers)),
         }
 

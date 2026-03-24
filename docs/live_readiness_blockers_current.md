@@ -99,6 +99,12 @@ Current live matrix summary:
 | RSV A / h5 | No | `WATCH` | Non-pilot scope, source freshness warning, quality failures |
 | RSV A / h7 | Yes | `GO` | Source freshness warning only |
 
+Current product interpretation:
+
+- `h7` is the only actively prioritized horizon for productization and release communication.
+- `h5` is paused and should not drive roadmap or release decisions.
+- `h3` is reserve-only: Influenza A/B h3 are no longer treated as broken, but they are also not active release targets.
+
 Why the code marks the component as warning:
 - `_regional_matrix_item()` computes each row status as the worst of:
   - model availability

@@ -1,10 +1,16 @@
 # Regional Horizon Operational Readiness
 
-Stand: 2026-03-17
+Stand: 2026-03-24
 
 ## Ziel
 
 Dieses Dokument beschreibt den operativen Vertrag fuer den regionalen Forecast-Pfad mit echten `3/5/7`-Horizonten.
+
+Seit dem Scope-Entscheid vom 24.03.2026 gilt aber produktseitig klar:
+
+- `h7` ist der einzige aktiv priorisierte Horizon.
+- `h5` ist vorerst pausiert.
+- `h3` bleibt als Reserve-/Beobachtungspfad erhalten, wird aber nicht aktiv produktisiert.
 
 Wichtig:
 
@@ -48,10 +54,18 @@ Der erste offizielle Pilotvertrag ist absichtlich enger als der technische Suppo
 
 Technisch supported, aber in diesem Pass **nicht** pilot-supported:
 
-- `Influenza A / h3,h5`
-- `Influenza B / h3,h5`
-- `RSV A / h5`
+- `Influenza A / h3`
+- `Influenza B / h3`
 - `SARS-CoV-2 / h3,h5,h7`
+- `Influenza A / h5`
+- `Influenza B / h5`
+- `RSV A / h5`
+
+Interpretation fuer die aktuelle Produktarbeit:
+
+- `h7` ist die aktive Ausbau-, Freigabe- und Kommunikationslinie.
+- `h3` ist kein Fehlerfall mehr, sondern ein Reservepfad mit teilweiser Benchmark-Evidenz bei Influenza.
+- `h5` bleibt technisch vorhanden, wird aber aktuell nicht mehr aktiv verfolgt.
 
 Readiness spiegelt diese Trennung jetzt explizit pro Scope:
 
@@ -66,7 +80,7 @@ Neu ist nur, dass der Gate-Contract jetzt profilbasiert und explizit benannt ist
 
 ### `strict_v1`
 
-Default fuer alle Scopes, die nicht im Day-one-Pilotvertrag liegen.
+Default fuer alle Scopes, die nicht im aktiven `h7`-Pilotvertrag liegen.
 
 - `precision_at_top3 >= 0.70`
 - `activation_false_positive_rate <= 0.25`
@@ -88,6 +102,7 @@ Wichtig:
 
 - `activation_false_positive_rate` und `ece` bleiben absichtlich unveraendert.
 - Nicht-Pilot-Scopes werden **nicht** global weichgerechnet.
+- Das gilt bewusst auch fuer `Influenza A / h3` und `Influenza B / h3`: Benchmark-Potenzial allein reicht nicht fuer operative Freigabe.
 - Das persistierte `quality_gate` in den Artefakten enthaelt jetzt zusaetzlich:
   - `profile`
   - `failed_checks`

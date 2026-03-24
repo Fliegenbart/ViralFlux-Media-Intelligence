@@ -132,12 +132,27 @@ Sobald ein Pilot-Scope freigegeben ist, gelten mindestens diese Outputs als offi
 - `Influenza B / h7`
 - `RSV A / h7`
 
+### Reserve-/Beobachtungspfad, nicht aktiv priorisiert
+
+- `Influenza A / h3`
+- `Influenza B / h3`
+- `SARS-CoV-2 / h3`
+
+Interpretation:
+
+- `Influenza A / h3` und `Influenza B / h3` zeigen inzwischen positive Hierarchie-Benchmark-Evidenz.
+- Trotzdem bleiben sie ausserhalb der aktiven Produktfreigabe, solange das operative Quality Gate nicht gruener wird.
+
+### Pausiert im h7-first-Fokus
+
+- `Influenza A / h5`
+- `Influenza B / h5`
+- `RSV A / h5`
+- `SARS-CoV-2 / h5`
+
 ### Nicht pilot-supported in diesem Pass
 
-- `Influenza A / h3,h5`
-- `Influenza B / h3,h5`
-- `RSV A / h5`
-- `SARS-CoV-2 / h3,h5,h7`
+- `SARS-CoV-2 / h7`
 
 ### SARS-CoV-2 Sonderregel
 
@@ -156,6 +171,7 @@ Sobald ein Pilot-Scope freigegeben ist, gelten mindestens diese Outputs als offi
 4. `forecast_monitoring` steht fachlich weiter auf `WATCH`.
 5. `SARS-CoV-2` bleibt standardmaessig shadow/watch-only.
 6. Der Day-one-Pilot-Scope ist enger als der technische Support und muss auch in Sales-/Pilotkommunikation so benannt werden.
+7. `h7` ist die einzige aktiv priorisierte Produktlinie; `h5` ist pausiert und `h3` bleibt Reserve.
 
 ## Freigabeentscheidung
 

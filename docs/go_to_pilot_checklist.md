@@ -1,6 +1,6 @@
 # Go-To-Pilot Checklist
 
-Stand: 2026-03-17
+Stand: 2026-03-24
 
 ## Aktueller Entscheidungsstand
 
@@ -8,6 +8,12 @@ Stand: 2026-03-17
 - Ready for pilot: nein
 - Fully production-grade: nein
 - Aktuelle Freigabe: `PILOT GATE CLOSED`
+
+Produktentscheidung seit 24.03.2026:
+
+- `h7` ist der einzige aktiv priorisierte Horizon.
+- `h5` ist pausiert.
+- `h3` bleibt als Reservepfad erhalten, wird aber nicht aktiv freigeplant.
 
 Diese Bewertung basiert auf dem tatsaechlich laufenden System:
 
@@ -75,12 +81,28 @@ Wichtig:
 - `Influenza B / h7`
 - `RSV A / h7`
 
+### Reserve-/Beobachtungspfad, nicht aktiv priorisiert
+
+- `Influenza A / h3`
+- `Influenza B / h3`
+- `SARS-CoV-2 / h3`
+
+Wichtig:
+
+- `Influenza A / h3` und `Influenza B / h3` sind keine Fehlerfaelle mehr.
+- Beide bestehen den Hierarchie-Benchmark, aber noch nicht das operative Quality Gate.
+- Deshalb bleiben sie ausserhalb der aktiven Produktfreigabe.
+
+### Pausiert im h7-first-Fokus
+
+- `Influenza A / h5`
+- `Influenza B / h5`
+- `RSV A / h5`
+- `SARS-CoV-2 / h5`
+
 ### Noch nicht pilot-supported
 
-- `Influenza A / h3,h5`
-- `Influenza B / h3,h5`
-- `RSV A / h5`
-- `SARS-CoV-2 / h3,h5,h7`
+- `SARS-CoV-2 / h7`
 
 ### SARS-Sonderfall
 
@@ -100,6 +122,9 @@ Wichtig:
 - [ ] Die Day-one-Pilot-Scopes sind noch nicht formal `GO`.
 - [ ] `SARS-CoV-2` bleibt standardmaessig shadow/watch-only.
 - [ ] Externe operative Empfehlungen sollten weiter unter manuellem Freigabevorbehalt bleiben.
+- [x] `h7` ist als einzige aktive Produktlinie definiert.
+- [x] `h5` wird nicht mehr als aktive Ausbau- oder Freigabelinie behandelt.
+- [x] `h3` wird nicht mehr als Fehlerfall beschrieben, sondern als Reserve ohne aktuelle Prioritaet.
 
 ## Interne Freigabelogik
 
@@ -134,5 +159,5 @@ Interne Position fuer PEIX / GELO:
 
 - Das System ist live sichtbar und technisch belastbarer als zuvor.
 - Der Produktkern ist wieder benutzbar.
-- Der Pilotvertrag darf jetzt enger und ehrlicher gefuehrt werden.
+- Der Pilotvertrag soll jetzt bewusst als `h7-first` gefuehrt werden.
 - Externe operative Empfehlungen bleiben gesperrt, bis mindestens ein Day-one-Pilot-Scope fachlich auf `GO` steht.

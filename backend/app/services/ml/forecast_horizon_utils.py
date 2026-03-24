@@ -31,25 +31,40 @@ REGIONAL_UNSUPPORTED_HORIZON_REASONS: dict[str, dict[int, str]] = {
 # but are not part of the official pilot release until explicitly promoted.
 REGIONAL_NON_PILOT_HORIZON_REASONS: dict[str, dict[int, str]] = {
     "Influenza A": {
-        3: "Influenza A h3 remains outside the day-one pilot and stays in evidence-building mode.",
-        5: "Influenza A h5 remains outside the day-one pilot and stays in evidence-building mode.",
+        3: (
+            "Influenza A h3 remains outside the active h7-first product scope. "
+            "The hierarchy benchmark is promising, but the scope stays reserve-only until the quality gate is strong enough."
+        ),
+        5: (
+            "Influenza A h5 is technically supported, but paused in the current h7-first product focus "
+            "because it has not shown convincing added value."
+        ),
     },
     "Influenza B": {
-        3: "Influenza B h3 remains outside the day-one pilot and stays in evidence-building mode.",
-        5: "Influenza B h5 remains outside the day-one pilot and stays in evidence-building mode.",
+        3: (
+            "Influenza B h3 remains outside the active h7-first product scope. "
+            "The hierarchy benchmark is promising, but the scope stays reserve-only until the quality gate is strong enough."
+        ),
+        5: (
+            "Influenza B h5 is technically supported, but paused in the current h7-first product focus "
+            "because it has not shown convincing added value."
+        ),
     },
     "RSV A": {
-        5: "RSV A h5 is technically supported but not part of the initial day-one pilot contract.",
+        5: (
+            "RSV A h5 is technically supported, but paused in the current h7-first product focus "
+            "because h7 is the only actively prioritized horizon."
+        ),
     },
     "SARS-CoV-2": {
         3: (
-            "SARS-CoV-2 h3 stays shadow-only for now and is not part of the day-one pilot contract."
+            "SARS-CoV-2 h3 stays shadow/watch-only and is not part of the active h7-first product scope."
         ),
         5: (
-            "SARS-CoV-2 h5 stays shadow-only for now and is not part of the day-one pilot contract."
+            "SARS-CoV-2 h5 stays paused and shadow/watch-only in the current h7-first product focus."
         ),
         7: (
-            "SARS-CoV-2 h7 is prepared for conditional promotion, but remains shadow-only until "
+            "SARS-CoV-2 h7 is the only SARS scope still under active consideration, but remains shadow-only until "
             "the explicit promotion flag is enabled after consecutive operational evidence."
         ),
     },

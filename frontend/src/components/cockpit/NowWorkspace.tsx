@@ -30,8 +30,6 @@ interface Props {
   onOpenEvidence: () => void;
 }
 
-const HORIZON_OPTIONS = [3, 5, 7];
-
 const NowWorkspace: React.FC<Props> = ({
   virus,
   onVirusChange,
@@ -126,20 +124,6 @@ const NowWorkspace: React.FC<Props> = ({
               </button>
             ))}
           </OperatorChipRail>
-
-          <OperatorChipRail className="review-chip-row">
-            {HORIZON_OPTIONS.map((option) => (
-              <button
-                key={option}
-                type="button"
-                onClick={() => onHorizonChange(option)}
-                className={`tab-chip ${option === horizonDays ? 'active' : ''}`}
-              >
-                {option} Tage
-              </button>
-            ))}
-          </OperatorChipRail>
-
           <span className="step-chip">Stand {formatDateTime(view.generatedAt)}</span>
         </div>
 

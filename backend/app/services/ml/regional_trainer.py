@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import pickle
+import traceback
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -60,6 +61,10 @@ CALIBRATION_HOLDOUT_FRACTION = 0.20
 CALIBRATION_GUARD_FRACTION = 0.35
 MIN_CALIBRATION_GUARD_DATES = 7
 CALIBRATION_GUARD_EPSILON = 1e-6
+HIERARCHY_BLEND_WEIGHT_GRID = tuple(round(value, 2) for value in np.linspace(0.0, 1.0, 11))
+HIERARCHY_BLEND_MIN_TOTAL_SAMPLES = 12
+HIERARCHY_BLEND_MIN_REGIME_SAMPLES = 6
+HIERARCHY_BLEND_EPSILON = 1e-6
 
 REGIONAL_CLASSIFIER_CONFIG: dict[str, Any] = {
     "n_estimators": 160,
@@ -281,229 +286,294 @@ class RegionalModelTrainer:
                 "trained": 0,
                 "failed": 0,
             }
-        logger.info("Training pooled regional panel model for %s (horizon=%s)", virus_typ, horizon)
-        previous_artifact = self.load_artifacts(virus_typ=virus_typ, horizon_days=horizon)
-        panel = self.feature_builder.build_panel_training_data(
-            virus_typ=virus_typ,
-            lookback_days=lookback_days,
-            horizon_days=horizon,
-            include_nowcast=True,
-            use_revision_adjusted=False,
-            revision_policy="raw",
-        )
-        panel = self._prepare_horizon_panel(panel, horizon_days=horizon)
-        if panel.empty or len(panel) < 200:
+        try:
+            logger.info("Training pooled regional panel model for %s (horizon=%s)", virus_typ, horizon)
+            previous_artifact = self.load_artifacts(virus_typ=virus_typ, horizon_days=horizon)
+            panel = self.feature_builder.build_panel_training_data(
+                virus_typ=virus_typ,
+                lookback_days=lookback_days,
+                horizon_days=horizon,
+                include_nowcast=True,
+                use_revision_adjusted=False,
+                revision_policy="raw",
+            )
+            panel = self._prepare_horizon_panel(panel, horizon_days=horizon)
+            if panel.empty or len(panel) < 200:
+                return {
+                    "status": "error",
+                    "virus_typ": virus_typ,
+                    "horizon_days": horizon,
+                    "target_window_days": _target_window_for_horizon(horizon),
+                    "error": f"Insufficient pooled panel data ({len(panel)} rows) for horizon {horizon}.",
+                }
+
+            panel = panel.copy()
+            panel["y_next_log"] = np.log1p(panel["next_week_incidence"].astype(float).clip(lower=0.0))
+            feature_columns = self._feature_columns(panel)
+            hierarchy_feature_columns = GeoHierarchyHelper.hierarchy_feature_columns(feature_columns)
+            ww_only_columns = self._ww_only_feature_columns(feature_columns)
+            event_config = event_definition_config_for_virus(virus_typ)
+
+            selection = self._select_event_definition(
+                virus_typ=virus_typ,
+                panel=panel,
+                feature_columns=feature_columns,
+                event_config=event_config,
+            )
+            tau = float(selection["tau"])
+            kappa = float(selection["kappa"])
+            action_threshold = float(selection["action_threshold"])
+
+            panel["event_label"] = self._event_labels(
+                panel,
+                virus_typ=virus_typ,
+                tau=tau,
+                kappa=kappa,
+                event_config=event_config,
+            )
+            backtest_bundle = self._build_backtest_bundle(
+                virus_typ=virus_typ,
+                panel=panel,
+                feature_columns=feature_columns,
+                hierarchy_feature_columns=hierarchy_feature_columns,
+                ww_only_columns=ww_only_columns,
+                tau=tau,
+                kappa=kappa,
+                action_threshold=action_threshold,
+                horizon_days=horizon,
+                event_config=event_config,
+            )
+            rollout_info = self._rollout_metadata(
+                virus_typ=virus_typ,
+                horizon_days=horizon,
+                aggregate_metrics=backtest_bundle["aggregate_metrics"],
+                baseline_metrics=(backtest_bundle["backtest_payload"].get("baselines") or {}),
+                previous_artifact=previous_artifact,
+            )
+            backtest_bundle["backtest_payload"].update(_json_safe(rollout_info))
+            backtest_bundle["backtest_payload"]["benchmark_summary"] = _json_safe(backtest_bundle.get("benchmark_summary") or {})
+            final_artifacts = self._fit_final_models(
+                panel=panel,
+                feature_columns=feature_columns,
+                hierarchy_feature_columns=hierarchy_feature_columns,
+                oof_frame=backtest_bundle["oof_frame"],
+                action_threshold=action_threshold,
+            )
+            calibration_mode = str(
+                final_artifacts.get("calibration_mode")
+                or ("isotonic" if final_artifacts.get("calibration") is not None else "raw_passthrough")
+            )
+
+            dataset_manifest = {
+                **self.feature_builder.dataset_manifest(virus_typ=virus_typ, panel=panel),
+                "horizon_days": horizon,
+                "target_window_days": _target_window_for_horizon(horizon),
+            }
+            point_in_time_manifest = {
+                **self.feature_builder.point_in_time_snapshot_manifest(virus_typ=virus_typ, panel=panel),
+                "horizon_days": horizon,
+                "target_window_days": _target_window_for_horizon(horizon),
+            }
+            hierarchy_metadata = self._build_hierarchy_metadata(
+                panel=panel,
+                oof_frame=backtest_bundle["oof_frame"],
+            )
+            hierarchy_benchmark = (backtest_bundle.get("benchmark_summary") or {}).get("hierarchy_benchmark") or {}
+            hierarchy_diagnostics = (backtest_bundle.get("benchmark_summary") or {}).get("hierarchy_diagnostics") or {}
+            cluster_homogeneity = (backtest_bundle.get("benchmark_summary") or {}).get("cluster_homogeneity") or {}
+            hierarchy_metadata["enabled"] = bool(hierarchy_benchmark.get("promote_reconciliation"))
+            hierarchy_metadata["selection_basis"] = hierarchy_benchmark.get("selection_basis") or "benchmark_pending"
+            hierarchy_metadata["benchmark_metrics"] = hierarchy_benchmark.get("comparison") or {}
+            hierarchy_metadata["component_diagnostics"] = hierarchy_diagnostics
+            hierarchy_metadata["cluster_homogeneity"] = cluster_homogeneity
+            hierarchy_metadata["model_modes"] = final_artifacts.get("hierarchy_model_modes") or {}
+            hierarchy_metadata["aggregate_blend_policy"] = {
+                "cluster": ((hierarchy_diagnostics.get("cluster") or {}).get("blend_policy") or {}),
+                "national": ((hierarchy_diagnostics.get("national") or {}).get("blend_policy") or {}),
+            }
+            policy_reference_date = pd.to_datetime(panel["as_of_date"], errors="coerce").max() if "as_of_date" in panel.columns else None
+            cluster_blend_resolution = GeoHierarchyHelper.resolve_blend_weight_policy(
+                hierarchy_metadata["aggregate_blend_policy"].get("cluster"),
+                as_of_date=policy_reference_date or datetime.utcnow(),
+                horizon_days=horizon,
+                fallback=float(((hierarchy_diagnostics.get("cluster") or {}).get("recommended_blend_weight") or 0.0)),
+            )
+            national_blend_resolution = GeoHierarchyHelper.resolve_blend_weight_policy(
+                hierarchy_metadata["aggregate_blend_policy"].get("national"),
+                as_of_date=policy_reference_date or datetime.utcnow(),
+                horizon_days=horizon,
+                fallback=float(((hierarchy_diagnostics.get("national") or {}).get("recommended_blend_weight") or 0.0)),
+            )
+            hierarchy_metadata["aggregate_blend_weights"] = {
+                "cluster": float(cluster_blend_resolution.get("weight") or 0.0),
+                "national": float(national_blend_resolution.get("weight") or 0.0),
+            }
+            hierarchy_metadata["aggregate_blend_context"] = {
+                "regime": cluster_blend_resolution.get("regime") or national_blend_resolution.get("regime"),
+                "cluster": cluster_blend_resolution,
+                "national": national_blend_resolution,
+            }
+            model_dir = regional_model_artifact_dir(
+                self.models_dir,
+                virus_typ=virus_typ,
+                horizon_days=horizon,
+            )
+            metadata = {
+                "virus_typ": virus_typ,
+                "model_family": "regional_pooled_panel",
+                "trained_at": datetime.utcnow().isoformat(),
+                "model_version": None,
+                "calibration_version": None,
+                "horizon_days": horizon,
+                "target_window_days": _target_window_for_horizon(horizon),
+                "supported_horizon_days": list(SUPPORTED_FORECAST_HORIZONS),
+                "forecast_target_semantics": "current_known_incidence_at_as_of_plus_horizon_days",
+                "feature_columns": feature_columns,
+                "hierarchy_feature_columns": hierarchy_feature_columns,
+                "ww_only_feature_columns": ww_only_columns,
+                "selected_tau": tau,
+                "selected_kappa": kappa,
+                "action_threshold": action_threshold,
+                "event_definition_version": EVENT_DEFINITION_VERSION,
+                "min_event_absolute_incidence": event_config.min_absolute_incidence,
+                "event_definition_config": event_config.to_manifest(),
+                "dataset_manifest": dataset_manifest,
+                "nowcast_features_enabled": True,
+                "forecast_quantiles": [float(value) for value in CANONICAL_FORECAST_QUANTILES],
+                "signal_bundle_version": rollout_info["signal_bundle_version"],
+                "rollout_mode": rollout_info["rollout_mode"],
+                "activation_policy": rollout_info["activation_policy"],
+                "shadow_evaluation": rollout_info.get("shadow_evaluation"),
+                "quality_gate": backtest_bundle["quality_gate"],
+                "aggregate_metrics": backtest_bundle["aggregate_metrics"],
+                "benchmark_summary": backtest_bundle.get("benchmark_summary") or {},
+                "label_selection": selection,
+                "revision_policy_metadata": {
+                    "default_policy": "raw",
+                    "supported_policies": ["raw", "adjusted", "adaptive"],
+                    "selection_basis": "fallback_no_benchmark_evidence",
+                    "source_policies": {},
+                },
+                "learned_event_model": (
+                    final_artifacts["learned_event_model"].metadata()
+                    if final_artifacts.get("learned_event_model") is not None
+                    else {
+                        "model_family": "learned_event_xgb",
+                        "action_threshold": action_threshold,
+                        "calibration_mode": calibration_mode,
+                        "calibration_enabled": final_artifacts.get("calibration") is not None,
+                    }
+                ),
+                "ensemble_component_weights": {"regional_pooled_panel": 1.0},
+                "hierarchy_driver_attribution": hierarchy_metadata["hierarchy_driver_attribution"],
+                "reconciliation_method": hierarchy_metadata["reconciliation_method"],
+                "hierarchy_consistency_status": hierarchy_metadata["hierarchy_consistency_status"],
+                "hierarchy_reconciliation": hierarchy_metadata,
+                "point_in_time_snapshot": {
+                    "snapshot_type": point_in_time_manifest.get("snapshot_type"),
+                    "captured_at": point_in_time_manifest.get("captured_at"),
+                    "unique_as_of_dates": point_in_time_manifest.get("unique_as_of_dates"),
+                },
+            }
+            metadata["model_version"] = f"{metadata['model_family']}:h{horizon}:{metadata['trained_at']}"
+            metadata["calibration_version"] = f"{calibration_mode}:h{horizon}:{metadata['trained_at']}"
+            registry_scope = self.registry.load_scope(virus_typ=virus_typ, horizon_days=horizon)
+            current_champion_metrics = ((registry_scope.get("champion") or {}).get("metrics") or {})
+            promotion_candidate_metrics = {
+                **(backtest_bundle.get("benchmark_summary") or {}).get("metrics", {}),
+                **backtest_bundle["aggregate_metrics"],
+            }
+            promote = self.registry.should_promote(
+                candidate_metrics=promotion_candidate_metrics,
+                champion_metrics=current_champion_metrics,
+            )
+            registry_payload = self.registry.record_evaluation(
+                virus_typ=virus_typ,
+                horizon_days=horizon,
+                model_family="regional_pooled_panel",
+                metrics=promotion_candidate_metrics,
+                metadata={
+                    "model_version": metadata["model_version"],
+                    "calibration_version": metadata["calibration_version"],
+                    "rollout_mode": metadata["rollout_mode"],
+                },
+                promote=promote,
+            )
+            metadata["registry_status"] = "champion" if promote else "challenger"
+            metadata["registry_scope"] = registry_payload
+            backtest_bundle["backtest_payload"]["hierarchy_reconciliation"] = _json_safe(hierarchy_metadata)
+
+            if persist:
+                self._persist_artifacts(
+                    model_dir=model_dir,
+                    final_artifacts=final_artifacts,
+                    metadata=metadata,
+                    backtest_payload=backtest_bundle["backtest_payload"],
+                    dataset_manifest=dataset_manifest,
+                    point_in_time_manifest=point_in_time_manifest,
+                )
+
+            per_state = (backtest_bundle["backtest_payload"].get("details") or {})
             return {
-                "status": "error",
+                "status": "success",
                 "virus_typ": virus_typ,
                 "horizon_days": horizon,
                 "target_window_days": _target_window_for_horizon(horizon),
-                "error": f"Insufficient pooled panel data ({len(panel)} rows) for horizon {horizon}.",
-            }
-
-        panel = panel.copy()
-        panel["y_next_log"] = np.log1p(panel["next_week_incidence"].astype(float).clip(lower=0.0))
-        feature_columns = self._feature_columns(panel)
-        hierarchy_feature_columns = GeoHierarchyHelper.hierarchy_feature_columns(feature_columns)
-        ww_only_columns = self._ww_only_feature_columns(feature_columns)
-        event_config = event_definition_config_for_virus(virus_typ)
-
-        selection = self._select_event_definition(
-            virus_typ=virus_typ,
-            panel=panel,
-            feature_columns=feature_columns,
-            event_config=event_config,
-        )
-        tau = float(selection["tau"])
-        kappa = float(selection["kappa"])
-        action_threshold = float(selection["action_threshold"])
-
-        panel["event_label"] = self._event_labels(
-            panel,
-            virus_typ=virus_typ,
-            tau=tau,
-            kappa=kappa,
-            event_config=event_config,
-        )
-        backtest_bundle = self._build_backtest_bundle(
-            virus_typ=virus_typ,
-            panel=panel,
-            feature_columns=feature_columns,
-            hierarchy_feature_columns=hierarchy_feature_columns,
-            ww_only_columns=ww_only_columns,
-            tau=tau,
-            kappa=kappa,
-            action_threshold=action_threshold,
-            horizon_days=horizon,
-            event_config=event_config,
-        )
-        rollout_info = self._rollout_metadata(
-            virus_typ=virus_typ,
-            horizon_days=horizon,
-            aggregate_metrics=backtest_bundle["aggregate_metrics"],
-            baseline_metrics=(backtest_bundle["backtest_payload"].get("baselines") or {}),
-            previous_artifact=previous_artifact,
-        )
-        backtest_bundle["backtest_payload"].update(_json_safe(rollout_info))
-        backtest_bundle["backtest_payload"]["benchmark_summary"] = _json_safe(backtest_bundle.get("benchmark_summary") or {})
-        final_artifacts = self._fit_final_models(
-            panel=panel,
-            feature_columns=feature_columns,
-            hierarchy_feature_columns=hierarchy_feature_columns,
-            oof_frame=backtest_bundle["oof_frame"],
-            action_threshold=action_threshold,
-        )
-        calibration_mode = str(
-            final_artifacts.get("calibration_mode")
-            or ("isotonic" if final_artifacts.get("calibration") is not None else "raw_passthrough")
-        )
-
-        dataset_manifest = {
-            **self.feature_builder.dataset_manifest(virus_typ=virus_typ, panel=panel),
-            "horizon_days": horizon,
-            "target_window_days": _target_window_for_horizon(horizon),
-        }
-        point_in_time_manifest = {
-            **self.feature_builder.point_in_time_snapshot_manifest(virus_typ=virus_typ, panel=panel),
-            "horizon_days": horizon,
-            "target_window_days": _target_window_for_horizon(horizon),
-        }
-        hierarchy_metadata = self._build_hierarchy_metadata(
-            panel=panel,
-            oof_frame=backtest_bundle["oof_frame"],
-        )
-        hierarchy_benchmark = (backtest_bundle.get("benchmark_summary") or {}).get("hierarchy_benchmark") or {}
-        hierarchy_diagnostics = (backtest_bundle.get("benchmark_summary") or {}).get("hierarchy_diagnostics") or {}
-        cluster_homogeneity = (backtest_bundle.get("benchmark_summary") or {}).get("cluster_homogeneity") or {}
-        hierarchy_metadata["enabled"] = bool(hierarchy_benchmark.get("promote_reconciliation"))
-        hierarchy_metadata["selection_basis"] = hierarchy_benchmark.get("selection_basis") or "benchmark_pending"
-        hierarchy_metadata["benchmark_metrics"] = hierarchy_benchmark.get("comparison") or {}
-        hierarchy_metadata["component_diagnostics"] = hierarchy_diagnostics
-        hierarchy_metadata["cluster_homogeneity"] = cluster_homogeneity
-        hierarchy_metadata["model_modes"] = final_artifacts.get("hierarchy_model_modes") or {}
-        hierarchy_metadata["aggregate_blend_weights"] = {
-            "cluster": float(((hierarchy_diagnostics.get("cluster") or {}).get("recommended_blend_weight") or 0.0)),
-            "national": float(((hierarchy_diagnostics.get("national") or {}).get("recommended_blend_weight") or 0.0)),
-        }
-        model_dir = regional_model_artifact_dir(
-            self.models_dir,
-            virus_typ=virus_typ,
-            horizon_days=horizon,
-        )
-        metadata = {
-            "virus_typ": virus_typ,
-            "model_family": "regional_pooled_panel",
-            "trained_at": datetime.utcnow().isoformat(),
-            "model_version": None,
-            "calibration_version": None,
-            "horizon_days": horizon,
-            "target_window_days": _target_window_for_horizon(horizon),
-            "supported_horizon_days": list(SUPPORTED_FORECAST_HORIZONS),
-            "forecast_target_semantics": "current_known_incidence_at_as_of_plus_horizon_days",
-            "feature_columns": feature_columns,
-            "hierarchy_feature_columns": hierarchy_feature_columns,
-            "ww_only_feature_columns": ww_only_columns,
-            "selected_tau": tau,
-            "selected_kappa": kappa,
-            "action_threshold": action_threshold,
-            "event_definition_version": EVENT_DEFINITION_VERSION,
-            "min_event_absolute_incidence": event_config.min_absolute_incidence,
-            "event_definition_config": event_config.to_manifest(),
-            "dataset_manifest": dataset_manifest,
-            "nowcast_features_enabled": True,
-            "forecast_quantiles": [float(value) for value in CANONICAL_FORECAST_QUANTILES],
-            "signal_bundle_version": rollout_info["signal_bundle_version"],
-            "rollout_mode": rollout_info["rollout_mode"],
-            "activation_policy": rollout_info["activation_policy"],
-            "shadow_evaluation": rollout_info.get("shadow_evaluation"),
-            "quality_gate": backtest_bundle["quality_gate"],
-            "aggregate_metrics": backtest_bundle["aggregate_metrics"],
-            "benchmark_summary": backtest_bundle.get("benchmark_summary") or {},
-            "label_selection": selection,
-            "revision_policy_metadata": {
-                "default_policy": "raw",
-                "supported_policies": ["raw", "adjusted", "adaptive"],
-                "selection_basis": "fallback_no_benchmark_evidence",
-                "source_policies": {},
-            },
-            "learned_event_model": (
-                final_artifacts["learned_event_model"].metadata()
-                if final_artifacts.get("learned_event_model") is not None
-                else {
-                    "model_family": "learned_event_xgb",
-                    "action_threshold": action_threshold,
-                    "calibration_mode": calibration_mode,
-                    "calibration_enabled": final_artifacts.get("calibration") is not None,
-                }
-            ),
-            "ensemble_component_weights": {"regional_pooled_panel": 1.0},
-            "hierarchy_driver_attribution": hierarchy_metadata["hierarchy_driver_attribution"],
-            "reconciliation_method": hierarchy_metadata["reconciliation_method"],
-            "hierarchy_consistency_status": hierarchy_metadata["hierarchy_consistency_status"],
-            "hierarchy_reconciliation": hierarchy_metadata,
-            "point_in_time_snapshot": {
-                "snapshot_type": point_in_time_manifest.get("snapshot_type"),
-                "captured_at": point_in_time_manifest.get("captured_at"),
-                "unique_as_of_dates": point_in_time_manifest.get("unique_as_of_dates"),
-            },
-        }
-        metadata["model_version"] = f"{metadata['model_family']}:h{horizon}:{metadata['trained_at']}"
-        metadata["calibration_version"] = f"{calibration_mode}:h{horizon}:{metadata['trained_at']}"
-        registry_scope = self.registry.load_scope(virus_typ=virus_typ, horizon_days=horizon)
-        current_champion_metrics = ((registry_scope.get("champion") or {}).get("metrics") or {})
-        promotion_candidate_metrics = {
-            **(backtest_bundle.get("benchmark_summary") or {}).get("metrics", {}),
-            **backtest_bundle["aggregate_metrics"],
-        }
-        promote = self.registry.should_promote(
-            candidate_metrics=promotion_candidate_metrics,
-            champion_metrics=current_champion_metrics,
-        )
-        registry_payload = self.registry.record_evaluation(
-            virus_typ=virus_typ,
-            horizon_days=horizon,
-            model_family="regional_pooled_panel",
-            metrics=promotion_candidate_metrics,
-            metadata={
-                "model_version": metadata["model_version"],
+                "trained": len(per_state),
+                "failed": max(0, len(ALL_BUNDESLAENDER) - len(per_state)),
+                "quality_gate": backtest_bundle["quality_gate"],
+                "aggregate_metrics": backtest_bundle["aggregate_metrics"],
+                "rollout_mode": rollout_info["rollout_mode"],
+                "activation_policy": rollout_info["activation_policy"],
                 "calibration_version": metadata["calibration_version"],
-                "rollout_mode": metadata["rollout_mode"],
-            },
-            promote=promote,
-        )
-        metadata["registry_status"] = "champion" if promote else "challenger"
-        metadata["registry_scope"] = registry_payload
-        backtest_bundle["backtest_payload"]["hierarchy_reconciliation"] = _json_safe(hierarchy_metadata)
-
-        if persist:
-            self._persist_artifacts(
-                model_dir=model_dir,
-                final_artifacts=final_artifacts,
-                metadata=metadata,
-                backtest_payload=backtest_bundle["backtest_payload"],
-                dataset_manifest=dataset_manifest,
-                point_in_time_manifest=point_in_time_manifest,
+                "selected_calibration_mode": calibration_mode,
+                "model_dir": str(model_dir),
+                "benchmark_summary": backtest_bundle.get("benchmark_summary") or {},
+                "hierarchy_reconciliation": hierarchy_metadata,
+                "backtest": backtest_bundle["backtest_payload"],
+                "selection": selection,
+            }
+        except Exception as exc:
+            logger.exception(
+                "Training pooled regional panel model failed for %s (horizon=%s)",
+                virus_typ,
+                horizon,
+            )
+            return self._training_error_payload(
+                virus_typ=virus_typ,
+                horizon_days=horizon,
+                exc=exc,
+                lookback_days=lookback_days,
             )
 
-        per_state = (backtest_bundle["backtest_payload"].get("details") or {})
+    @staticmethod
+    def _training_error_payload(
+        *,
+        virus_typ: str,
+        horizon_days: int,
+        exc: Exception,
+        lookback_days: int,
+    ) -> dict[str, Any]:
+        error_message = str(exc) or exc.__class__.__name__
+        hint = (
+            "Der Backtest konnte keine gueltigen Zeit-Folds aufbauen. Wahrscheinlich gibt es fuer diesen Scope "
+            "zu wenig stabile Trainingsfenster oder in den Folds fehlt genug Klassenvielfalt fuer Training/Kalibrierung."
+            if "no valid folds" in error_message.lower()
+            else "Bitte Fold-Bildung, Datenmenge und Klassenverteilung fuer diesen Scope pruefen."
+        )
         return {
-            "status": "success",
+            "status": "error",
             "virus_typ": virus_typ,
-            "horizon_days": horizon,
-            "target_window_days": _target_window_for_horizon(horizon),
-            "trained": len(per_state),
-            "failed": max(0, len(ALL_BUNDESLAENDER) - len(per_state)),
-            "quality_gate": backtest_bundle["quality_gate"],
-            "aggregate_metrics": backtest_bundle["aggregate_metrics"],
-            "rollout_mode": rollout_info["rollout_mode"],
-            "activation_policy": rollout_info["activation_policy"],
-            "calibration_version": metadata["calibration_version"],
-            "selected_calibration_mode": calibration_mode,
-            "model_dir": str(model_dir),
-            "benchmark_summary": backtest_bundle.get("benchmark_summary") or {},
-            "hierarchy_reconciliation": hierarchy_metadata,
-            "backtest": backtest_bundle["backtest_payload"],
-            "selection": selection,
+            "horizon_days": int(horizon_days),
+            "target_window_days": _target_window_for_horizon(horizon_days),
+            "lookback_days": int(lookback_days),
+            "trained": 0,
+            "failed": len(ALL_BUNDESLAENDER),
+            "error": error_message,
+            "error_type": exc.__class__.__name__,
+            "error_stage": "train_single_horizon",
+            "diagnostic_hint": hint,
+            "traceback_tail": traceback.format_exc(limit=8).strip().splitlines()[-8:],
         }
 
     def train_all_viruses_all_regions(
@@ -1472,6 +1542,7 @@ class RegionalModelTrainer:
         for as_of_date in sorted(working_oof["as_of_date"].dropna().unique()):
             date_value = pd.Timestamp(as_of_date).normalize()
             date_frame = working_oof.loc[working_oof["as_of_date"] == date_value].copy()
+            target_regime = GeoHierarchyHelper.season_regime(date_value)
             state_order = _state_order_from_codes(date_frame["bundesland"].astype(str).tolist())
             if not state_order:
                 continue
@@ -1479,6 +1550,11 @@ class RegionalModelTrainer:
             available_states = [state for state in state_order if state in date_frame.index]
             if not available_states:
                 continue
+            target_horizon_days = (
+                int(date_frame["horizon_days"].dropna().iloc[-1])
+                if "horizon_days" in date_frame.columns and date_frame["horizon_days"].notna().any()
+                else None
+            )
             state_quantiles = {
                 0.1: np.asarray([float(date_frame.at[state, "prediction_interval_lower"]) for state in available_states], dtype=float),
                 0.5: np.asarray([float(date_frame.at[state, "expected_target_incidence"]) for state in available_states], dtype=float),
@@ -1562,8 +1638,20 @@ class RegionalModelTrainer:
                     0.5: np.asarray([float(date_frame["national_expected_target_incidence"].dropna().iloc[-1])], dtype=float),
                     0.9: np.asarray([float(date_frame["national_prediction_interval_upper"].dropna().iloc[-1])], dtype=float),
                 }
-            cluster_blend_weight = self._estimate_hierarchy_blend_weight(historical_cluster_rows)
-            national_blend_weight = self._estimate_hierarchy_blend_weight(historical_national_rows)
+            cluster_blend_choice = self._estimate_hierarchy_blend_choice(
+                historical_cluster_rows,
+                target_as_of_date=date_value,
+                target_regime=target_regime,
+                target_horizon_days=target_horizon_days,
+            )
+            national_blend_choice = self._estimate_hierarchy_blend_choice(
+                historical_national_rows,
+                target_as_of_date=date_value,
+                target_regime=target_regime,
+                target_horizon_days=target_horizon_days,
+            )
+            cluster_blend_weight = float(cluster_blend_choice.get("weight") or 0.0)
+            national_blend_weight = float(national_blend_choice.get("weight") or 0.0)
             cluster_quantiles = self._blend_hierarchy_quantiles(
                 model_quantiles=model_cluster_quantiles,
                 baseline_quantiles=derived_cluster_quantiles,
@@ -1621,10 +1709,13 @@ class RegionalModelTrainer:
                         "prediction_interval_upper": upper,
                         "residual": y_true - expected_target,
                         "absolute_error": abs(y_true - expected_target),
+                        "season_regime": target_regime,
                         "reconciliation_method": reconciled_meta.get("reconciliation_method"),
                         "hierarchy_consistency_status": reconciled_meta.get("hierarchy_consistency_status"),
                         "cluster_blend_weight": cluster_blend_weight,
                         "national_blend_weight": national_blend_weight,
+                        "cluster_blend_scope": cluster_blend_choice.get("scope"),
+                        "national_blend_scope": national_blend_choice.get("scope"),
                     }
                 )
             residual_row: dict[str, float] = {}
@@ -1643,13 +1734,27 @@ class RegionalModelTrainer:
                 for idx, truth_value in enumerate(cluster_truth):
                     historical_cluster_rows.append(
                         {
+                            "fold": date_frame["fold"].dropna().iloc[-1] if "fold" in date_frame.columns and date_frame["fold"].notna().any() else None,
+                            "as_of_date": date_value,
+                            "horizon_days": target_horizon_days,
+                            "regime": target_regime,
                             "model": float(model_cluster_quantiles[0.5][idx]) if model_cluster_quantiles is not None else np.nan,
                             "baseline": float(derived_cluster_quantiles[0.5][idx]),
                             "truth": float(truth_value),
+                            "model_q_0.1": float(model_cluster_quantiles[0.1][idx]) if model_cluster_quantiles is not None else np.nan,
+                            "model_q_0.5": float(model_cluster_quantiles[0.5][idx]) if model_cluster_quantiles is not None else np.nan,
+                            "model_q_0.9": float(model_cluster_quantiles[0.9][idx]) if model_cluster_quantiles is not None else np.nan,
+                            "baseline_q_0.1": float(derived_cluster_quantiles[0.1][idx]),
+                            "baseline_q_0.5": float(derived_cluster_quantiles[0.5][idx]),
+                            "baseline_q_0.9": float(derived_cluster_quantiles[0.9][idx]),
                         }
                     )
             historical_national_rows.append(
                 {
+                    "fold": date_frame["fold"].dropna().iloc[-1] if "fold" in date_frame.columns and date_frame["fold"].notna().any() else None,
+                    "as_of_date": date_value,
+                    "horizon_days": target_horizon_days,
+                    "regime": target_regime,
                     "model": float(model_national_quantiles[0.5][0]) if model_national_quantiles is not None else np.nan,
                     "baseline": float(derived_national_quantiles[0.5][0]),
                     "truth": float(
@@ -1658,6 +1763,12 @@ class RegionalModelTrainer:
                             weights=np.asarray([float(state_weights.get(state, 1.0)) for state in available_states], dtype=float),
                         )
                     ),
+                    "model_q_0.1": float(model_national_quantiles[0.1][0]) if model_national_quantiles is not None else np.nan,
+                    "model_q_0.5": float(model_national_quantiles[0.5][0]) if model_national_quantiles is not None else np.nan,
+                    "model_q_0.9": float(model_national_quantiles[0.9][0]) if model_national_quantiles is not None else np.nan,
+                    "baseline_q_0.1": float(derived_national_quantiles[0.1][0]),
+                    "baseline_q_0.5": float(derived_national_quantiles[0.5][0]),
+                    "baseline_q_0.9": float(derived_national_quantiles[0.9][0]),
                 }
             )
 
@@ -1666,33 +1777,232 @@ class RegionalModelTrainer:
         return pd.DataFrame(records)
 
     @staticmethod
-    def _estimate_hierarchy_blend_weight(
-        history_rows: list[dict[str, float]],
+    def _prepare_hierarchy_history_frame(
+        history_rows: list[dict[str, Any]],
+    ) -> pd.DataFrame:
+        if not history_rows:
+            return pd.DataFrame()
+        history = pd.DataFrame(history_rows).replace([np.inf, -np.inf], np.nan).copy()
+        required_baseline = {"baseline_q_0.1", "baseline_q_0.5", "baseline_q_0.9", "truth"}
+        if history.empty or not required_baseline.issubset(history.columns):
+            return pd.DataFrame()
+        if "as_of_date" in history.columns:
+            history["as_of_date"] = pd.to_datetime(history["as_of_date"], errors="coerce").dt.normalize()
+        if "regime" not in history.columns and "as_of_date" in history.columns:
+            history["regime"] = history["as_of_date"].apply(GeoHierarchyHelper.season_regime)
+        history["horizon_days"] = pd.to_numeric(
+            history.get("horizon_days"),
+            errors="coerce",
+        )
+        return history.dropna(subset=["truth", "baseline_q_0.1", "baseline_q_0.5", "baseline_q_0.9"]).copy()
+
+    @staticmethod
+    def _quantile_blend_metrics(
+        history: pd.DataFrame,
         *,
-        min_samples: int = 12,
-    ) -> float:
-        if len(history_rows) < min_samples:
-            return 0.0
-        history = pd.DataFrame(history_rows)
-        if history.empty or not {"model", "baseline", "truth"}.issubset(history.columns):
-            return 0.0
-        history = history.replace([np.inf, -np.inf], np.nan).dropna(subset=["baseline", "truth"])
+        blend_weight: float,
+    ) -> dict[str, float]:
         if history.empty:
-            return 0.0
-        history["model_abs_error"] = (history["model"] - history["truth"]).abs()
-        history["baseline_abs_error"] = (history["baseline"] - history["truth"]).abs()
-        baseline_mae = float(history["baseline_abs_error"].mean())
-        model_history = history.dropna(subset=["model_abs_error"])
-        if model_history.empty:
-            return 0.0
-        model_mae = float(model_history["model_abs_error"].mean())
-        if not np.isfinite(model_mae) or not np.isfinite(baseline_mae):
-            return 0.0
-        if model_mae >= baseline_mae:
-            return 0.0
-        model_score = 1.0 / max(model_mae, 1e-6)
-        baseline_score = 1.0 / max(baseline_mae, 1e-6)
-        return round(float(model_score / (model_score + baseline_score)), 6)
+            return {"wis": float("inf"), "crps": float("inf")}
+        baseline_quantiles = {
+            0.1: history["baseline_q_0.1"].to_numpy(dtype=float),
+            0.5: history["baseline_q_0.5"].to_numpy(dtype=float),
+            0.9: history["baseline_q_0.9"].to_numpy(dtype=float),
+        }
+        if blend_weight <= 0.0:
+            blended_quantiles = baseline_quantiles
+        else:
+            blended_quantiles = {}
+            for quantile in (0.1, 0.5, 0.9):
+                baseline = history[f"baseline_q_{quantile}"].to_numpy(dtype=float)
+                model_series = history.get(f"model_q_{quantile}")
+                if model_series is None:
+                    model = baseline
+                else:
+                    model = (
+                        pd.to_numeric(model_series, errors="coerce")
+                        .fillna(pd.Series(baseline, index=history.index))
+                        .to_numpy(dtype=float)
+                    )
+                blended_quantiles[quantile] = (blend_weight * model) + ((1.0 - blend_weight) * baseline)
+        metrics = summarize_probabilistic_metrics(
+            y_true=history["truth"].to_numpy(dtype=float),
+            quantile_predictions=blended_quantiles,
+        )
+        return {
+            "wis": float(metrics.get("wis") or float("inf")),
+            "crps": float(metrics.get("crps") or float("inf")),
+            "coverage_80": float(metrics.get("coverage_80") or 0.0),
+        }
+
+    @staticmethod
+    def _blend_weight_improves(
+        *,
+        baseline_metrics: dict[str, float],
+        candidate_metrics: dict[str, float],
+    ) -> bool:
+        baseline_wis = float(baseline_metrics.get("wis") or float("inf"))
+        baseline_crps = float(baseline_metrics.get("crps") or float("inf"))
+        candidate_wis = float(candidate_metrics.get("wis") or float("inf"))
+        candidate_crps = float(candidate_metrics.get("crps") or float("inf"))
+        if candidate_wis < baseline_wis - HIERARCHY_BLEND_EPSILON and candidate_crps <= baseline_crps + HIERARCHY_BLEND_EPSILON:
+            return True
+        if abs(candidate_wis - baseline_wis) <= HIERARCHY_BLEND_EPSILON and candidate_crps < baseline_crps - HIERARCHY_BLEND_EPSILON:
+            return True
+        return False
+
+    def _estimate_hierarchy_blend_choice(
+        self,
+        history_rows: list[dict[str, Any]],
+        *,
+        target_as_of_date: pd.Timestamp | None = None,
+        target_regime: str | None = None,
+        target_horizon_days: int | None = None,
+        min_total_samples: int = HIERARCHY_BLEND_MIN_TOTAL_SAMPLES,
+        min_regime_samples: int = HIERARCHY_BLEND_MIN_REGIME_SAMPLES,
+    ) -> dict[str, Any]:
+        history = self._prepare_hierarchy_history_frame(history_rows)
+        if history.empty:
+            return {
+                "weight": 0.0,
+                "scope": "insufficient_history",
+                "samples": 0,
+                "regime": target_regime,
+                "horizon_days": target_horizon_days,
+            }
+
+        if target_as_of_date is not None and "as_of_date" in history.columns:
+            history = history.loc[history["as_of_date"] < pd.Timestamp(target_as_of_date).normalize()].copy()
+        if history.empty:
+            return {
+                "weight": 0.0,
+                "scope": "insufficient_history",
+                "samples": 0,
+                "regime": target_regime,
+                "horizon_days": target_horizon_days,
+            }
+
+        if target_horizon_days is not None and "horizon_days" in history.columns and history["horizon_days"].notna().any():
+            horizon_history = history.loc[history["horizon_days"] == float(target_horizon_days)].copy()
+            if not horizon_history.empty:
+                history = horizon_history
+
+        selected = history
+        scope = "all_history"
+        minimum_required = int(min_total_samples)
+        if target_regime:
+            regime_history = history.loc[history.get("regime") == str(target_regime)].copy()
+            if len(regime_history) >= int(min_regime_samples):
+                selected = regime_history
+                scope = "same_regime"
+                minimum_required = int(min_regime_samples)
+            else:
+                scope = "horizon_fallback"
+
+        if len(selected) < minimum_required:
+            return {
+                "weight": 0.0,
+                "scope": "insufficient_history",
+                "samples": int(len(selected)),
+                "regime": target_regime,
+                "horizon_days": target_horizon_days,
+            }
+
+        baseline_metrics = self._quantile_blend_metrics(selected, blend_weight=0.0)
+        candidate_rows: list[dict[str, Any]] = []
+        for weight in HIERARCHY_BLEND_WEIGHT_GRID:
+            metrics = self._quantile_blend_metrics(selected, blend_weight=float(weight))
+            candidate_rows.append(
+                {
+                    "weight": round(float(weight), 6),
+                    "wis": round(float(metrics["wis"]), 6),
+                    "crps": round(float(metrics["crps"]), 6),
+                    "coverage_80": round(float(metrics.get("coverage_80") or 0.0), 6),
+                }
+            )
+        candidate_rows.sort(
+            key=lambda item: (
+                float(item.get("wis") or float("inf")),
+                float(item.get("crps") or float("inf")),
+                abs(float(item.get("weight") or 0.0)),
+            )
+        )
+        best = candidate_rows[0] if candidate_rows else {
+            "weight": 0.0,
+            "wis": baseline_metrics["wis"],
+            "crps": baseline_metrics["crps"],
+            "coverage_80": baseline_metrics.get("coverage_80", 0.0),
+        }
+        selected_row = best if self._blend_weight_improves(baseline_metrics=baseline_metrics, candidate_metrics=best) else {
+            "weight": 0.0,
+            "wis": round(float(baseline_metrics["wis"]), 6),
+            "crps": round(float(baseline_metrics["crps"]), 6),
+            "coverage_80": round(float(baseline_metrics.get("coverage_80") or 0.0), 6),
+        }
+        return {
+            "weight": round(float(selected_row["weight"]), 6),
+            "scope": scope if float(selected_row["weight"]) > 0.0 else f"{scope}_baseline_only",
+            "samples": int(len(selected)),
+            "regime": target_regime,
+            "horizon_days": target_horizon_days,
+            "wis": round(float(selected_row["wis"]), 6),
+            "crps": round(float(selected_row["crps"]), 6),
+            "baseline_wis": round(float(baseline_metrics["wis"]), 6),
+            "baseline_crps": round(float(baseline_metrics["crps"]), 6),
+            "top_candidates": candidate_rows[:3],
+        }
+
+    def _build_hierarchy_blend_policy(
+        self,
+        history_rows: list[dict[str, Any]],
+        *,
+        horizon_days: int | None,
+    ) -> dict[str, Any]:
+        history = self._prepare_hierarchy_history_frame(history_rows)
+        if history.empty:
+            return {
+                "version": "fold_probabilistic_wis_crps_v1",
+                "horizon_days": horizon_days,
+                "fallback": {
+                    "weight": 0.0,
+                    "scope": "insufficient_history",
+                    "samples": 0,
+                },
+                "by_regime": {},
+            }
+
+        fallback = self._estimate_hierarchy_blend_choice(
+            history.to_dict("records"),
+            target_horizon_days=horizon_days,
+            target_regime=None,
+        )
+        regimes = sorted({str(value) for value in history.get("regime", pd.Series(dtype=str)).dropna().astype(str).tolist()})
+        by_regime = {
+            regime: self._estimate_hierarchy_blend_choice(
+                history.to_dict("records"),
+                target_horizon_days=horizon_days,
+                target_regime=regime,
+            )
+            for regime in regimes
+        }
+        return {
+            "version": "fold_probabilistic_wis_crps_v1",
+            "horizon_days": horizon_days,
+            "fallback": fallback,
+            "by_regime": by_regime,
+        }
+
+    def _estimate_hierarchy_blend_weight(
+        self,
+        history_rows: list[dict[str, Any]],
+        *,
+        min_samples: int = HIERARCHY_BLEND_MIN_TOTAL_SAMPLES,
+    ) -> float:
+        choice = self._estimate_hierarchy_blend_choice(
+            history_rows,
+            min_total_samples=min_samples,
+        )
+        return float(choice.get("weight") or 0.0)
 
     @staticmethod
     def _blend_hierarchy_quantiles(
@@ -1727,26 +2037,72 @@ class RegionalModelTrainer:
                 weights = pd.to_numeric(date_frame["state_population_millions"], errors="coerce").fillna(1.0).clip(lower=1e-6)
             else:
                 weights = pd.Series(1.0, index=date_frame.index, dtype=float)
+            baseline_lower_series = (
+                pd.to_numeric(date_frame["prediction_interval_lower"], errors="coerce")
+                if "prediction_interval_lower" in date_frame.columns
+                else pd.to_numeric(date_frame["expected_target_incidence"], errors="coerce")
+            )
+            baseline_upper_series = (
+                pd.to_numeric(date_frame["prediction_interval_upper"], errors="coerce")
+                if "prediction_interval_upper" in date_frame.columns
+                else pd.to_numeric(date_frame["expected_target_incidence"], errors="coerce")
+            )
             if "cluster_id" in date_frame.columns and date_frame["cluster_id"].notna().any():
                 for cluster_id, cluster_frame in date_frame.dropna(subset=["cluster_id"]).groupby("cluster_id", dropna=False):
                     cluster_weights = weights.loc[cluster_frame.index]
+                    cluster_baseline_lower = baseline_lower_series.loc[cluster_frame.index]
+                    cluster_baseline_upper = baseline_upper_series.loc[cluster_frame.index]
                     cluster_rows.append(
                         {
+                            "as_of_date": pd.Timestamp(as_of_date).normalize(),
+                            "regime": GeoHierarchyHelper.season_regime(as_of_date),
+                            "horizon_days": int(cluster_frame["horizon_days"].iloc[-1]) if "horizon_days" in cluster_frame.columns else None,
                             "truth": float(np.average(cluster_frame["next_week_incidence"].astype(float), weights=cluster_weights)),
                             "baseline": float(np.average(cluster_frame["expected_target_incidence"].astype(float), weights=cluster_weights)),
                             "model": float(cluster_frame["cluster_expected_target_incidence"].iloc[-1]),
+                            "baseline_q_0.1": float(np.average(cluster_baseline_lower.astype(float), weights=cluster_weights)),
+                            "baseline_q_0.5": float(np.average(cluster_frame["expected_target_incidence"].astype(float), weights=cluster_weights)),
+                            "baseline_q_0.9": float(np.average(cluster_baseline_upper.astype(float), weights=cluster_weights)),
+                            "model_q_0.1": float(
+                                cluster_frame["cluster_prediction_interval_lower"].iloc[-1]
+                                if "cluster_prediction_interval_lower" in cluster_frame.columns
+                                else cluster_frame["cluster_expected_target_incidence"].iloc[-1]
+                            ),
+                            "model_q_0.5": float(cluster_frame["cluster_expected_target_incidence"].iloc[-1]),
+                            "model_q_0.9": float(
+                                cluster_frame["cluster_prediction_interval_upper"].iloc[-1]
+                                if "cluster_prediction_interval_upper" in cluster_frame.columns
+                                else cluster_frame["cluster_expected_target_incidence"].iloc[-1]
+                            ),
                         }
                     )
             if "national_expected_target_incidence" in date_frame.columns and date_frame["national_expected_target_incidence"].notna().any():
                 national_rows.append(
                     {
+                        "as_of_date": pd.Timestamp(as_of_date).normalize(),
+                        "regime": GeoHierarchyHelper.season_regime(as_of_date),
+                        "horizon_days": int(date_frame["horizon_days"].iloc[-1]) if "horizon_days" in date_frame.columns else None,
                         "truth": float(np.average(date_frame["next_week_incidence"].astype(float), weights=weights)),
                         "baseline": float(np.average(date_frame["expected_target_incidence"].astype(float), weights=weights)),
                         "model": float(date_frame["national_expected_target_incidence"].iloc[-1]),
+                        "baseline_q_0.1": float(np.average(baseline_lower_series.astype(float), weights=weights)),
+                        "baseline_q_0.5": float(np.average(date_frame["expected_target_incidence"].astype(float), weights=weights)),
+                        "baseline_q_0.9": float(np.average(baseline_upper_series.astype(float), weights=weights)),
+                        "model_q_0.1": float(
+                            date_frame["national_prediction_interval_lower"].iloc[-1]
+                            if "national_prediction_interval_lower" in date_frame.columns
+                            else date_frame["national_expected_target_incidence"].iloc[-1]
+                        ),
+                        "model_q_0.5": float(date_frame["national_expected_target_incidence"].iloc[-1]),
+                        "model_q_0.9": float(
+                            date_frame["national_prediction_interval_upper"].iloc[-1]
+                            if "national_prediction_interval_upper" in date_frame.columns
+                            else date_frame["national_expected_target_incidence"].iloc[-1]
+                        ),
                     }
                 )
 
-        def _summarize(rows: list[dict[str, float]]) -> dict[str, Any]:
+        def _summarize(rows: list[dict[str, Any]]) -> dict[str, Any]:
             if not rows:
                 return {"samples": 0}
             frame = pd.DataFrame(rows).dropna(subset=["truth", "baseline"])
@@ -1756,17 +2112,27 @@ class RegionalModelTrainer:
             model_frame = frame.dropna(subset=["model"]).copy()
             model_mae = float(model_frame["model"].sub(model_frame["truth"]).abs().mean()) if not model_frame.empty else None
             baseline_mae = float(frame["baseline_abs_error"].mean())
-            recommended_weight = self._estimate_hierarchy_blend_weight(rows)
+            baseline_metrics = self._quantile_blend_metrics(frame, blend_weight=0.0)
+            model_metrics = self._quantile_blend_metrics(frame, blend_weight=1.0)
+            horizon_values = pd.to_numeric(frame.get("horizon_days"), errors="coerce").dropna().astype(int)
+            horizon_days = int(horizon_values.mode().iloc[0]) if not horizon_values.empty else None
+            blend_policy = self._build_hierarchy_blend_policy(rows, horizon_days=horizon_days)
+            recommended_weight = float(((blend_policy.get("fallback") or {}).get("weight")) or 0.0)
             return {
                 "samples": int(len(frame)),
                 "baseline_mae": round(float(baseline_mae), 6),
                 "model_mae": round(float(model_mae), 6) if model_mae is not None else None,
+                "baseline_wis": round(float(baseline_metrics.get("wis") or 0.0), 6),
+                "model_wis": round(float(model_metrics.get("wis") or 0.0), 6),
+                "baseline_crps": round(float(baseline_metrics.get("crps") or 0.0), 6),
+                "model_crps": round(float(model_metrics.get("crps") or 0.0), 6),
                 "mae_delta_model_minus_baseline": (
                     round(float(model_mae - baseline_mae), 6)
                     if model_mae is not None
                     else None
                 ),
                 "recommended_blend_weight": recommended_weight,
+                "blend_policy": blend_policy,
             }
 
         return {

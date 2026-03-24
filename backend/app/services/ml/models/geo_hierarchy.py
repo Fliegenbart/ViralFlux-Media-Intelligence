@@ -86,6 +86,68 @@ class GeoHierarchyHelper:
             return float(default)
         return float(float(numerator) / denominator_value)
 
+    @staticmethod
+    def season_regime(as_of_date: Any) -> str:
+        timestamp = pd.Timestamp(as_of_date)
+        month = int(timestamp.month)
+        if month in {11, 12, 1, 2, 3}:
+            return "respiratory_peak"
+        if month in {4, 5, 10}:
+            return "shoulder"
+        return "off_season"
+
+    @classmethod
+    def resolve_blend_weight_policy(
+        cls,
+        policy: dict[str, Any] | None,
+        *,
+        as_of_date: Any,
+        horizon_days: int | None = None,
+        fallback: float = 0.0,
+    ) -> dict[str, Any]:
+        regime = cls.season_regime(as_of_date)
+        if not policy:
+            return {
+                "weight": float(fallback),
+                "scope": "legacy_fallback",
+                "regime": regime,
+                "samples": 0,
+            }
+
+        policy_horizon = policy.get("horizon_days")
+        if (
+            horizon_days is not None
+            and policy_horizon is not None
+            and int(policy_horizon) != int(horizon_days)
+        ):
+            return {
+                "weight": float(fallback),
+                "scope": "horizon_mismatch_fallback",
+                "regime": regime,
+                "samples": 0,
+            }
+
+        regime_entry = ((policy.get("by_regime") or {}).get(regime) or {})
+        fallback_entry = policy.get("fallback") or {}
+        entry = regime_entry or fallback_entry
+        scope = (
+            str(entry.get("scope") or "")
+            or ("same_regime" if regime_entry else "policy_fallback")
+        )
+        weight = entry.get("weight", fallback)
+        try:
+            resolved_weight = float(weight)
+        except (TypeError, ValueError):
+            resolved_weight = float(fallback)
+        return {
+            "weight": resolved_weight,
+            "scope": scope,
+            "regime": regime,
+            "samples": int(entry.get("samples") or 0),
+            "wis": entry.get("wis"),
+            "crps": entry.get("crps"),
+        }
+
     @classmethod
     def _attach_context_features(
         cls,

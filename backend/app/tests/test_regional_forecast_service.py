@@ -213,6 +213,9 @@ class RegionalForecastServiceTests(unittest.TestCase):
         self.assertEqual(result["component_model_family"], "regional_pooled_panel")
         self.assertEqual(result["reconciliation_method"], "not_reconciled")
         self.assertEqual(result["hierarchy_consistency_status"], "not_checked")
+        self.assertIn("aggregate_blend_weights_resolved", result)
+        self.assertIn("aggregate_blend_weight_scope", result)
+        self.assertIn("blend_regime", result)
         self.assertEqual(result["benchmark_metrics"], {})
         self.assertIn("tsfm_metadata", result)
         self.assertEqual(result["total_regions"], 2)
@@ -238,6 +241,9 @@ class RegionalForecastServiceTests(unittest.TestCase):
         self.assertEqual(top["ensemble_component_weights"], {"regional_pooled_panel": 1.0})
         self.assertEqual(top["reconciliation_method"], "not_reconciled")
         self.assertEqual(top["hierarchy_consistency_status"], "not_checked")
+        self.assertIn("aggregate_blend_weights_resolved", top)
+        self.assertIn("aggregate_blend_weight_scope", top)
+        self.assertIn("blend_regime", top)
         self.assertEqual(top["benchmark_metrics"], {})
         self.assertEqual(top["revision_policy_used"], "raw")
         self.assertIn("tsfm_metadata", top)
@@ -251,6 +257,35 @@ class RegionalForecastServiceTests(unittest.TestCase):
         self.assertIn("priority_score", top)
         self.assertIn("reason_trace", top)
         self.assertIn("uncertainty_summary", top)
+
+    def test_predict_all_regions_exposes_regime_sensitive_blend_metadata(self) -> None:
+        service = self._make_service(
+            quality_gate_passed=True,
+            hierarchy_reconciliation={
+                "enabled": True,
+                "cluster_assignments": {"BY": "south", "BE": "east"},
+                "aggregate_blend_weights": {"cluster": 0.0, "national": 0.0},
+                "aggregate_blend_policy": {
+                    "cluster": {
+                        "horizon_days": 7,
+                        "fallback": {"weight": 0.15, "scope": "all_history", "samples": 24},
+                        "by_regime": {
+                            "respiratory_peak": {"weight": 0.55, "scope": "same_regime", "samples": 10}
+                        },
+                    },
+                    "national": {
+                        "horizon_days": 7,
+                        "fallback": {"weight": 0.25, "scope": "all_history", "samples": 24},
+                    },
+                },
+            },
+        )
+
+        result = service.predict_all_regions(virus_typ="Influenza A", horizon_days=7)
+
+        self.assertEqual(result["blend_regime"], "respiratory_peak")
+        self.assertAlmostEqual(float(result["aggregate_blend_weights_resolved"]["cluster"]), 0.55, places=6)
+        self.assertEqual(result["aggregate_blend_weight_scope"]["cluster"], "same_regime")
 
     def test_predict_all_regions_passes_horizon_five_through_to_inference_and_contract(self) -> None:
         service = self._make_service(quality_gate_passed=True)

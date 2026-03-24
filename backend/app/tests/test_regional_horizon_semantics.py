@@ -1,8 +1,10 @@
 import json
+import importlib.util
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
+from types import SimpleNamespace
 
 import numpy as np
 import pandas as pd
@@ -13,6 +15,16 @@ from app.services.ml.forecast_horizon_utils import (
 )
 from app.services.ml.regional_forecast import RegionalForecastService
 from app.services.ml.regional_trainer import RegionalModelTrainer
+
+_BACKTEST_SCRIPT_PATH = Path(__file__).resolve().parents[3] / "scripts" / "run_regional_hierarchy_backtest.py"
+_BACKTEST_SCRIPT_SPEC = importlib.util.spec_from_file_location(
+    "run_regional_hierarchy_backtest",
+    _BACKTEST_SCRIPT_PATH,
+)
+assert _BACKTEST_SCRIPT_SPEC is not None and _BACKTEST_SCRIPT_SPEC.loader is not None
+_BACKTEST_SCRIPT_MODULE = importlib.util.module_from_spec(_BACKTEST_SCRIPT_SPEC)
+_BACKTEST_SCRIPT_SPEC.loader.exec_module(_BACKTEST_SCRIPT_MODULE)
+_build_report = _BACKTEST_SCRIPT_MODULE._build_report
 
 
 class _LoadableModel:
@@ -97,6 +109,65 @@ class RegionalHorizonSemanticsTests(unittest.TestCase):
         feature_columns = trainer._feature_columns(panel)
 
         self.assertEqual(feature_columns, ["f1", "f2"])
+
+    def test_train_single_horizon_returns_structured_error_payload_when_backtest_fails(self) -> None:
+        trainer = RegionalModelTrainer(db=None)
+        panel = pd.DataFrame(
+            {
+                "as_of_date": pd.date_range("2026-01-01", periods=200, freq="D"),
+                "next_week_incidence": np.linspace(1.0, 200.0, 200),
+                "current_known_incidence": np.linspace(1.0, 200.0, 200),
+                "bundesland": ["BY"] * 200,
+                "bundesland_name": ["Bayern"] * 200,
+                "f1": np.linspace(0.0, 1.0, 200),
+            }
+        )
+        trainer.feature_builder = SimpleNamespace(
+            build_panel_training_data=lambda **_kwargs: panel.copy(),
+        )
+        trainer.load_artifacts = lambda **_kwargs: {}
+        trainer._prepare_horizon_panel = lambda frame, horizon_days: frame.copy()
+        trainer._feature_columns = lambda frame: ["f1"]
+        trainer._select_event_definition = lambda **_kwargs: {
+            "tau": 1.0,
+            "kappa": 0.5,
+            "action_threshold": 0.6,
+        }
+        trainer._event_labels = lambda frame, **_kwargs: np.zeros(len(frame), dtype=int)
+        trainer._build_backtest_bundle = lambda **_kwargs: (_ for _ in ()).throw(
+            ValueError("Regional backtest produced no valid folds.")
+        )
+
+        result = trainer._train_single_horizon(
+            virus_typ="Influenza A",
+            lookback_days=900,
+            persist=False,
+            horizon_days=3,
+        )
+
+        self.assertEqual(result["status"], "error")
+        self.assertEqual(result["error_type"], "ValueError")
+        self.assertEqual(result["error_stage"], "train_single_horizon")
+        self.assertIn("no valid folds", result["error"].lower())
+        self.assertIn("zeit-folds", result["diagnostic_hint"].lower())
+        self.assertTrue(result["traceback_tail"])
+
+    def test_backtest_report_renders_structured_error_payload(self) -> None:
+        report = _build_report(
+            {
+                "status": "error",
+                "virus_typ": "Influenza A",
+                "horizon_days": 3,
+                "error_type": "ValueError",
+                "error": "Regional backtest produced no valid folds.",
+                "diagnostic_hint": "Bitte Fold-Bildung pruefen.",
+                "traceback_tail": ["ValueError: Regional backtest produced no valid folds."],
+            }
+        )
+
+        self.assertIn("- Status: `error`", report)
+        self.assertIn("- Error type: `ValueError`", report)
+        self.assertIn("## Traceback Tail", report)
 
     @patch("app.services.ml.regional_trainer.quality_gate_from_metrics")
     @patch("app.services.ml.regional_trainer.time_based_panel_splits")

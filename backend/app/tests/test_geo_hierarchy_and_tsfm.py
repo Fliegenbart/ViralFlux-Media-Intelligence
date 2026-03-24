@@ -193,6 +193,36 @@ class GeoHierarchyAndTSFMTests(unittest.TestCase):
         self.assertEqual(missing.reason, "import_failed")
         self.assertEqual(missing.metadata()["challenger_mode"], "zero_shot_quantile")
 
+    def test_resolve_blend_weight_policy_prefers_matching_regime(self) -> None:
+        policy = {
+            "version": "fold_probabilistic_wis_crps_v1",
+            "horizon_days": 7,
+            "fallback": {"weight": 0.2, "scope": "all_history", "samples": 18, "wis": 2.4, "crps": 1.0},
+            "by_regime": {
+                "respiratory_peak": {"weight": 0.6, "scope": "same_regime", "samples": 8, "wis": 1.8, "crps": 0.7},
+            },
+        }
+
+        peak = GeoHierarchyHelper.resolve_blend_weight_policy(
+            policy,
+            as_of_date="2026-01-15",
+            horizon_days=7,
+            fallback=0.0,
+        )
+        summer = GeoHierarchyHelper.resolve_blend_weight_policy(
+            policy,
+            as_of_date="2026-07-15",
+            horizon_days=7,
+            fallback=0.0,
+        )
+
+        self.assertEqual(peak["regime"], "respiratory_peak")
+        self.assertAlmostEqual(float(peak["weight"]), 0.6, places=6)
+        self.assertEqual(peak["scope"], "same_regime")
+        self.assertEqual(summer["regime"], "off_season")
+        self.assertAlmostEqual(float(summer["weight"]), 0.2, places=6)
+        self.assertEqual(summer["scope"], "all_history")
+
     def test_trainer_builds_hierarchy_metadata_with_residual_history(self) -> None:
         trainer = RegionalModelTrainer(db=None)
         panel = pd.DataFrame(
@@ -240,6 +270,55 @@ class GeoHierarchyAndTSFMTests(unittest.TestCase):
 
         self.assertEqual(diagnostics["cluster"]["recommended_blend_weight"], 0.0)
         self.assertEqual(diagnostics["national"]["recommended_blend_weight"], 0.0)
+
+    def test_estimate_hierarchy_blend_choice_is_regime_sensitive(self) -> None:
+        trainer = RegionalModelTrainer(db=None)
+        history_rows = []
+        for day in range(6):
+            history_rows.append(
+                {
+                    "as_of_date": pd.Timestamp("2026-01-01") + pd.Timedelta(days=day),
+                    "horizon_days": 7,
+                    "regime": "respiratory_peak",
+                    "truth": 10.0,
+                    "baseline_q_0.1": 6.0,
+                    "baseline_q_0.5": 12.0,
+                    "baseline_q_0.9": 18.0,
+                    "model_q_0.1": 9.0,
+                    "model_q_0.5": 10.0,
+                    "model_q_0.9": 11.0,
+                }
+            )
+        for day in range(6):
+            history_rows.append(
+                {
+                    "as_of_date": pd.Timestamp("2026-07-01") + pd.Timedelta(days=day),
+                    "horizon_days": 7,
+                    "regime": "off_season",
+                    "truth": 10.0,
+                    "baseline_q_0.1": 9.0,
+                    "baseline_q_0.5": 10.0,
+                    "baseline_q_0.9": 11.0,
+                    "model_q_0.1": 4.0,
+                    "model_q_0.5": 15.0,
+                    "model_q_0.9": 21.0,
+                }
+            )
+
+        peak_choice = trainer._estimate_hierarchy_blend_choice(
+            history_rows,
+            target_regime="respiratory_peak",
+            target_horizon_days=7,
+        )
+        summer_choice = trainer._estimate_hierarchy_blend_choice(
+            history_rows,
+            target_regime="off_season",
+            target_horizon_days=7,
+        )
+
+        self.assertGreater(float(peak_choice["weight"]), 0.0)
+        self.assertEqual(peak_choice["scope"], "same_regime")
+        self.assertEqual(float(summer_choice["weight"]), 0.0)
 
     def test_trainer_predicts_independent_cluster_and_national_inputs(self) -> None:
         trainer = RegionalModelTrainer(db=None)

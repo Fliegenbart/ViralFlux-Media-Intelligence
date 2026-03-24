@@ -268,6 +268,29 @@ class RegionalForecastService:
         hierarchy_feature_columns = metadata.get("hierarchy_feature_columns") or feature_columns
         hierarchy_model_modes = hierarchy_meta.get("model_modes") or {}
         hierarchy_cluster_assignments = hierarchy_meta.get("cluster_assignments") or {}
+        aggregate_blend_weights = hierarchy_meta.get("aggregate_blend_weights") or {}
+        aggregate_blend_policy = hierarchy_meta.get("aggregate_blend_policy") or {}
+        cluster_blend_resolution = GeoHierarchyHelper.resolve_blend_weight_policy(
+            aggregate_blend_policy.get("cluster"),
+            as_of_date=as_of_date,
+            horizon_days=horizon,
+            fallback=float(aggregate_blend_weights.get("cluster") or 0.0),
+        )
+        national_blend_resolution = GeoHierarchyHelper.resolve_blend_weight_policy(
+            aggregate_blend_policy.get("national"),
+            as_of_date=as_of_date,
+            horizon_days=horizon,
+            fallback=float(aggregate_blend_weights.get("national") or 0.0),
+        )
+        resolved_blend_weights = {
+            "cluster": float(cluster_blend_resolution.get("weight") or 0.0),
+            "national": float(national_blend_resolution.get("weight") or 0.0),
+        }
+        blend_weight_scope = {
+            "cluster": cluster_blend_resolution.get("scope"),
+            "national": national_blend_resolution.get("scope"),
+        }
+        blend_regime = cluster_blend_resolution.get("regime") or national_blend_resolution.get("regime")
         state_weights = {
             str(row["bundesland"]): float(row.get("state_population_millions") or 1.0)
             for _, row in panel.iterrows()
@@ -283,7 +306,6 @@ class RegionalForecastService:
                 hierarchy_cluster_assignments = current_clusters
             cluster_quantiles = None
             national_quantiles = None
-            aggregate_blend_weights = hierarchy_meta.get("aggregate_blend_weights") or {}
             cluster_feature_frame = GeoHierarchyHelper.aggregate_feature_frame(
                 panel,
                 feature_columns=hierarchy_feature_columns,
@@ -386,7 +408,7 @@ class RegionalForecastService:
                 cluster_quantiles = GeoHierarchyHelper.blend_quantiles(
                     model_quantiles=model_cluster_quantiles,
                     baseline_quantiles=derived_cluster_quantiles,
-                    blend_weight=float(aggregate_blend_weights.get("cluster") or 0.0),
+                    blend_weight=float(resolved_blend_weights.get("cluster") or 0.0),
                 )
             if not national_feature_frame.empty and national_model_bundle:
                 national_X = national_feature_frame[hierarchy_feature_columns].to_numpy(dtype=float)
@@ -398,11 +420,11 @@ class RegionalForecastService:
                 national_quantiles = GeoHierarchyHelper.blend_quantiles(
                     model_quantiles=model_national_quantiles,
                     baseline_quantiles=derived_national_quantiles,
-                    blend_weight=float(aggregate_blend_weights.get("national") or 0.0),
+                    blend_weight=float(resolved_blend_weights.get("national") or 0.0),
                 )
-            cluster_weight = float(aggregate_blend_weights.get("cluster") or 0.0)
-            national_weight = float(aggregate_blend_weights.get("national") or 0.0)
-            if aggregate_blend_weights and cluster_weight <= 0.0 and national_weight <= 0.0:
+            cluster_weight = float(resolved_blend_weights.get("cluster") or 0.0)
+            national_weight = float(resolved_blend_weights.get("national") or 0.0)
+            if (aggregate_blend_weights or aggregate_blend_policy) and cluster_weight <= 0.0 and national_weight <= 0.0:
                 reconciled_quantiles = quantile_predictions
                 reconciled_meta = {
                     "reconciliation_method": "state_sum_passthrough",
@@ -445,6 +467,9 @@ class RegionalForecastService:
                         if cluster_model_bundle or national_model_bundle
                         else hierarchy_meta.get("aggregate_input_strategy") or "state_only"
                     ),
+                    "aggregate_blend_weights_resolved": resolved_blend_weights,
+                    "aggregate_blend_weight_scope": blend_weight_scope,
+                    "blend_regime": blend_regime,
                     "cluster_assignments": hierarchy_cluster_assignments,
                     "cluster_order": reconciled_meta.get("cluster_order") or hierarchy_meta.get("cluster_order") or [],
                     "national_quantiles": {
@@ -477,6 +502,17 @@ class RegionalForecastService:
         hierarchy_driver_attribution = metadata.get("hierarchy_driver_attribution") or {"state": 1.0, "cluster": 0.0, "national": 0.0}
         reconciliation_method = str(metadata.get("reconciliation_method") or "not_reconciled")
         hierarchy_consistency_status = str(metadata.get("hierarchy_consistency_status") or "not_checked")
+        aggregate_blend_weights_resolved = (
+            (hierarchy_meta.get("aggregate_blend_weights_resolved") or {})
+            if hierarchy_meta
+            else {}
+        ) or resolved_blend_weights
+        aggregate_blend_weight_scope = (
+            (hierarchy_meta.get("aggregate_blend_weight_scope") or {})
+            if hierarchy_meta
+            else {}
+        ) or blend_weight_scope
+        active_blend_regime = str((hierarchy_meta.get("blend_regime") if hierarchy_meta else None) or blend_regime or "")
         benchmark_evidence_reference = (
             ((metadata.get("registry_scope") or {}).get("champion") or {}).get("created_at")
             or ((metadata.get("benchmark_summary") or {}).get("primary_metric"))
@@ -543,6 +579,9 @@ class RegionalForecastService:
                 "cluster_id": hierarchy_cluster_assignments.get(str(row["bundesland"])),
                 "reconciliation_method": reconciliation_method,
                 "hierarchy_consistency_status": hierarchy_consistency_status,
+                "aggregate_blend_weights_resolved": aggregate_blend_weights_resolved,
+                "aggregate_blend_weight_scope": aggregate_blend_weight_scope,
+                "blend_regime": active_blend_regime,
                 "revision_policy_used": revision_policy,
                 "benchmark_evidence_reference": benchmark_evidence_reference,
                 "benchmark_metrics": benchmark_metrics,
@@ -609,6 +648,9 @@ class RegionalForecastService:
             "national_forecast_quantiles": national_forecast_quantiles,
             "reconciliation_method": reconciliation_method,
             "hierarchy_consistency_status": hierarchy_consistency_status,
+            "aggregate_blend_weights_resolved": aggregate_blend_weights_resolved,
+            "aggregate_blend_weight_scope": aggregate_blend_weight_scope,
+            "blend_regime": active_blend_regime,
             "revision_policy_used": revision_policy,
             "benchmark_evidence_reference": benchmark_evidence_reference,
             "benchmark_metrics": benchmark_metrics,

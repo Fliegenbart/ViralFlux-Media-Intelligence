@@ -64,6 +64,43 @@ def _extract_candidate_map(result: dict[str, Any]) -> dict[str, dict[str, Any]]:
 
 
 def _build_report(result: dict[str, Any]) -> str:
+    status = str(result.get("status") or "unknown")
+    if status != "success":
+        lines = [
+            "# Regional Hierarchy Backtest",
+            "",
+            f"- Virus: `{result.get('virus_typ')}`",
+            f"- Horizon: `{result.get('horizon_days')}`",
+            f"- Generated at: `{datetime.utcnow().isoformat()}`",
+            f"- Status: `{status}`",
+        ]
+        if result.get("supported_horizon_days_for_virus") is not None:
+            lines.append(
+                f"- Supported horizons for virus: `{result.get('supported_horizon_days_for_virus')}`"
+            )
+        if result.get("error_type"):
+            lines.append(f"- Error type: `{result.get('error_type')}`")
+        if result.get("error"):
+            lines.append(f"- Error: `{result.get('error')}`")
+        if result.get("diagnostic_hint"):
+            lines.append(f"- Diagnostic hint: `{result.get('diagnostic_hint')}`")
+        traceback_tail = result.get("traceback_tail") or []
+        if traceback_tail:
+            lines.extend(
+                [
+                    "",
+                    "## Traceback Tail",
+                    "",
+                    "```text",
+                    *[str(line) for line in traceback_tail],
+                    "```",
+                    "",
+                ]
+            )
+        else:
+            lines.append("")
+        return "\n".join(lines) + "\n"
+
     candidate_map = _extract_candidate_map(result)
     raw_metrics = candidate_map.get("regional_pooled_panel") or {}
     reconciled_metrics = candidate_map.get("regional_pooled_panel_mint") or {}
@@ -103,23 +140,59 @@ def _build_report(result: dict[str, Any]) -> str:
             **{key: _format_metric((hierarchy_diagnostics.get("national") or {}).get(key)) for key in ("samples", "baseline_mae", "model_mae", "mae_delta_model_minus_baseline", "recommended_blend_weight")}
         ),
         "",
-        "## Cluster Homogeneity",
+        "## Learned Blend Policy",
         "",
-        "| Metric | Value |",
-        "| --- | ---: |",
-        f"| Rating | {cluster_homogeneity.get('homogeneity_rating') or '-'} |",
-        f"| Evaluation Dates | {_format_metric(cluster_homogeneity.get('evaluation_dates'))} |",
-        f"| Mean Within-Cluster Correlation | {_format_metric(cluster_homogeneity.get('within_cluster_corr_mean'))} |",
-        f"| Mean Between-Cluster Correlation | {_format_metric(cluster_homogeneity.get('between_cluster_corr_mean'))} |",
-        f"| Separation Gap | {_format_metric(cluster_homogeneity.get('separation_gap'))} |",
-        f"| State Reassignment Rate | {_format_metric(cluster_homogeneity.get('state_reassignment_rate'))} |",
-        f"| Stable States Share | {_format_metric(cluster_homogeneity.get('stable_states_share'))} |",
-        "",
-        "### Latest Cluster Snapshot",
-        "",
-        "| Cluster | Members | Within Corr Mean | Incidence Range | Hot State | Hot State Pop Share |",
-        "| --- | ---: | ---: | ---: | --- | ---: |",
+        "| Level | Scope | Regime | Samples | Weight | WIS | CRPS |",
+        "| --- | --- | --- | ---: | ---: | ---: | ---: |",
     ]
+
+    for level in ("cluster", "national"):
+        policy = ((hierarchy_diagnostics.get(level) or {}).get("blend_policy") or {})
+        fallback = policy.get("fallback") or {}
+        lines.append(
+            "| {level} | {scope} | all_regimes | {samples} | {weight} | {wis} | {crps} |".format(
+                level=level,
+                scope=fallback.get("scope") or "-",
+                samples=_format_metric(fallback.get("samples")),
+                weight=_format_metric(fallback.get("weight")),
+                wis=_format_metric(fallback.get("wis")),
+                crps=_format_metric(fallback.get("crps")),
+            )
+        )
+        for regime, payload in sorted((policy.get("by_regime") or {}).items()):
+            lines.append(
+                "| {level} | {scope} | {regime} | {samples} | {weight} | {wis} | {crps} |".format(
+                    level=level,
+                    scope=payload.get("scope") or "-",
+                    regime=regime,
+                    samples=_format_metric(payload.get("samples")),
+                    weight=_format_metric(payload.get("weight")),
+                    wis=_format_metric(payload.get("wis")),
+                    crps=_format_metric(payload.get("crps")),
+                )
+            )
+
+    lines.extend(
+        [
+            "",
+            "## Cluster Homogeneity",
+            "",
+            "| Metric | Value |",
+            "| --- | ---: |",
+            f"| Rating | {cluster_homogeneity.get('homogeneity_rating') or '-'} |",
+            f"| Evaluation Dates | {_format_metric(cluster_homogeneity.get('evaluation_dates'))} |",
+            f"| Mean Within-Cluster Correlation | {_format_metric(cluster_homogeneity.get('within_cluster_corr_mean'))} |",
+            f"| Mean Between-Cluster Correlation | {_format_metric(cluster_homogeneity.get('between_cluster_corr_mean'))} |",
+            f"| Separation Gap | {_format_metric(cluster_homogeneity.get('separation_gap'))} |",
+            f"| State Reassignment Rate | {_format_metric(cluster_homogeneity.get('state_reassignment_rate'))} |",
+            f"| Stable States Share | {_format_metric(cluster_homogeneity.get('stable_states_share'))} |",
+            "",
+            "### Latest Cluster Snapshot",
+            "",
+            "| Cluster | Members | Within Corr Mean | Incidence Range | Hot State | Hot State Pop Share |",
+            "| --- | ---: | ---: | ---: | --- | ---: |",
+        ]
+    )
     latest_clusters = cluster_homogeneity.get("latest_clusters") or {}
     for cluster_id, payload in sorted(latest_clusters.items()):
         lines.append(
@@ -142,6 +215,7 @@ def _build_report(result: dict[str, Any]) -> str:
             "- `regional_pooled_panel` ist der rohe regionale Forecast ohne nachträgliche Hierarchie-Abstimmung.",
             "- `regional_pooled_panel_mint` ist derselbe Forecast nach MinT-artiger Reconciliation über Länder, Cluster und national.",
             "- Die Komponentendiagnostik zeigt, ob eher das Cluster- oder das National-Modell gegen die bessere State-Summen-Basis verliert.",
+            "- `Learned Blend Policy` zeigt, welches Gewicht das System für Peak-, Schulter- oder Off-Season aus vergangenen Folds gelernt hat.",
             "- Die Homogenitätsdiagnose zeigt, ob die States innerhalb eines Clusters historisch wirklich ähnlich genug laufen und ob die Cluster stabil bleiben.",
             "- `Recommended Blend Weight` nahe `0` bedeutet: Die zusätzliche Aggregate-Ebene sollte aktuell kaum Einfluss bekommen.",
             "- Benchmark-Entscheidung: `{selection}`.".format(

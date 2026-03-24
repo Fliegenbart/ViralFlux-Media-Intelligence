@@ -28,6 +28,8 @@ from app.services.ml.forecast_horizon_utils import (
 from app.services.ml.regional_decision_engine import RegionalDecisionEngine
 from app.services.ml.regional_features import RegionalFeatureBuilder
 from app.services.ml.regional_media_allocation_engine import RegionalMediaAllocationEngine
+from app.services.ml.models.geo_hierarchy import GeoHierarchyHelper
+from app.services.ml.models.tsfm_adapter import TSFMAdapter
 from app.services.ml.regional_panel_utils import (
     ALL_BUNDESLAENDER,
     BUNDESLAND_NAMES,
@@ -247,12 +249,217 @@ class RegionalForecastService:
         reg_median: XGBRegressor = artifacts["regressor_median"]
         reg_lower: XGBRegressor = artifacts["regressor_lower"]
         reg_upper: XGBRegressor = artifacts["regressor_upper"]
+        quantile_regressors: dict[float, XGBRegressor] = artifacts.get("quantile_regressors") or {}
+        hierarchy_models = artifacts.get("hierarchy_models") or {}
 
         raw_prob = classifier.predict_proba(X)[:, 1]
         calibrated_prob = self._apply_calibration(calibration, raw_prob)
-        pred_next = np.expm1(reg_median.predict(X))
-        pred_low = np.expm1(reg_lower.predict(X))
-        pred_high = np.expm1(reg_upper.predict(X))
+        quantile_predictions: dict[float, np.ndarray] = {
+            0.1: np.expm1(reg_lower.predict(X)),
+            0.5: np.expm1(reg_median.predict(X)),
+            0.9: np.expm1(reg_upper.predict(X)),
+        }
+        for quantile, model in sorted(quantile_regressors.items()):
+            if quantile in quantile_predictions:
+                continue
+            quantile_predictions[float(quantile)] = np.expm1(model.predict(X))
+
+        hierarchy_meta = metadata.get("hierarchy_reconciliation") or {}
+        hierarchy_feature_columns = metadata.get("hierarchy_feature_columns") or feature_columns
+        hierarchy_model_modes = hierarchy_meta.get("model_modes") or {}
+        hierarchy_cluster_assignments = hierarchy_meta.get("cluster_assignments") or {}
+        state_weights = {
+            str(row["bundesland"]): float(row.get("state_population_millions") or 1.0)
+            for _, row in panel.iterrows()
+        } if "state_population_millions" in panel.columns else {}
+        if hierarchy_meta.get("enabled"):
+            current_clusters = GeoHierarchyHelper.build_dynamic_clusters(
+                panel,
+                state_col="bundesland",
+                value_col="current_known_incidence",
+                date_col="as_of_date",
+            )
+            if current_clusters:
+                hierarchy_cluster_assignments = current_clusters
+            cluster_quantiles = None
+            national_quantiles = None
+            aggregate_blend_weights = hierarchy_meta.get("aggregate_blend_weights") or {}
+            cluster_feature_frame = GeoHierarchyHelper.aggregate_feature_frame(
+                panel,
+                feature_columns=hierarchy_feature_columns,
+                cluster_assignments=hierarchy_cluster_assignments,
+                level="cluster",
+            )
+            national_feature_frame = GeoHierarchyHelper.aggregate_feature_frame(
+                panel,
+                feature_columns=hierarchy_feature_columns,
+                level="national",
+            )
+            derived_cluster_quantiles = {
+                quantile: GeoHierarchyHelper._aggregate_states(
+                    np.asarray(values, dtype=float),
+                    state_order=[str(value) for value in panel["bundesland"].tolist()],
+                    cluster_assignments=hierarchy_cluster_assignments,
+                    cluster_order=GeoHierarchyHelper._cluster_order(
+                        [str(value) for value in panel["bundesland"].tolist()],
+                        hierarchy_cluster_assignments,
+                    ),
+                    state_weights=state_weights,
+                )[0]
+                for quantile, values in quantile_predictions.items()
+            }
+            derived_national_quantiles = {
+                quantile: GeoHierarchyHelper._aggregate_states(
+                    np.asarray(values, dtype=float),
+                    state_order=[str(value) for value in panel["bundesland"].tolist()],
+                    cluster_assignments=hierarchy_cluster_assignments,
+                    cluster_order=GeoHierarchyHelper._cluster_order(
+                        [str(value) for value in panel["bundesland"].tolist()],
+                        hierarchy_cluster_assignments,
+                    ),
+                    state_weights=state_weights,
+                )[1]
+                for quantile, values in quantile_predictions.items()
+            }
+            if not cluster_feature_frame.empty:
+                cluster_order = GeoHierarchyHelper._cluster_order(
+                    [str(value) for value in panel["bundesland"].tolist()],
+                    hierarchy_cluster_assignments,
+                )
+                cluster_baseline_map = {
+                    str(cluster_id): {
+                        "hierarchy_state_baseline_q10": float(derived_cluster_quantiles.get(0.1, np.asarray([], dtype=float))[idx]),
+                        "hierarchy_state_baseline_q50": float(derived_cluster_quantiles.get(0.5, np.asarray([], dtype=float))[idx]),
+                        "hierarchy_state_baseline_q90": float(derived_cluster_quantiles.get(0.9, np.asarray([], dtype=float))[idx]),
+                        "hierarchy_state_baseline_width_80": float(
+                            max(
+                                float(derived_cluster_quantiles.get(0.9, np.asarray([], dtype=float))[idx])
+                                - float(derived_cluster_quantiles.get(0.1, np.asarray([], dtype=float))[idx]),
+                                0.0,
+                            )
+                        ),
+                    }
+                    for idx, cluster_id in enumerate(cluster_order)
+                }
+                for column in GeoHierarchyHelper.HIERARCHY_STATE_BASELINE_FEATURE_COLUMNS:
+                    cluster_feature_frame[column] = [
+                        float((cluster_baseline_map.get(str(group)) or {}).get(column, 0.0))
+                        for group in cluster_feature_frame["hierarchy_group"].astype(str)
+                    ]
+            if not national_feature_frame.empty:
+                national_feature_frame = national_feature_frame.copy()
+                national_feature_frame["hierarchy_state_baseline_q10"] = float(np.asarray(derived_national_quantiles.get(0.1), dtype=float)[0])
+                national_feature_frame["hierarchy_state_baseline_q50"] = float(np.asarray(derived_national_quantiles.get(0.5), dtype=float)[0])
+                national_feature_frame["hierarchy_state_baseline_q90"] = float(np.asarray(derived_national_quantiles.get(0.9), dtype=float)[0])
+                national_feature_frame["hierarchy_state_baseline_width_80"] = float(
+                    max(
+                        float(np.asarray(derived_national_quantiles.get(0.9), dtype=float)[0])
+                        - float(np.asarray(derived_national_quantiles.get(0.1), dtype=float)[0]),
+                        0.0,
+                    )
+                )
+            cluster_model_bundle = (hierarchy_models.get("cluster") or {})
+            national_model_bundle = (hierarchy_models.get("national") or {})
+            if not cluster_feature_frame.empty and cluster_model_bundle:
+                cluster_X = cluster_feature_frame[hierarchy_feature_columns].to_numpy(dtype=float)
+                if str(hierarchy_model_modes.get("cluster") or "direct_log") == "residual_log":
+                    model_cluster_quantiles = {
+                        0.1: np.expm1(
+                            np.log1p(cluster_feature_frame["hierarchy_state_baseline_q10"].to_numpy(dtype=float))
+                            + cluster_model_bundle["lower"].predict(cluster_X)
+                        ),
+                        0.5: np.expm1(
+                            np.log1p(cluster_feature_frame["hierarchy_state_baseline_q50"].to_numpy(dtype=float))
+                            + cluster_model_bundle["median"].predict(cluster_X)
+                        ),
+                        0.9: np.expm1(
+                            np.log1p(cluster_feature_frame["hierarchy_state_baseline_q90"].to_numpy(dtype=float))
+                            + cluster_model_bundle["upper"].predict(cluster_X)
+                        ),
+                    }
+                else:
+                    model_cluster_quantiles = {
+                        0.1: np.expm1(cluster_model_bundle["lower"].predict(cluster_X)),
+                        0.5: np.expm1(cluster_model_bundle["median"].predict(cluster_X)),
+                        0.9: np.expm1(cluster_model_bundle["upper"].predict(cluster_X)),
+                    }
+                cluster_quantiles = GeoHierarchyHelper.blend_quantiles(
+                    model_quantiles=model_cluster_quantiles,
+                    baseline_quantiles=derived_cluster_quantiles,
+                    blend_weight=float(aggregate_blend_weights.get("cluster") or 0.0),
+                )
+            if not national_feature_frame.empty and national_model_bundle:
+                national_X = national_feature_frame[hierarchy_feature_columns].to_numpy(dtype=float)
+                model_national_quantiles = {
+                    0.1: np.asarray(np.expm1(national_model_bundle["lower"].predict(national_X)), dtype=float),
+                    0.5: np.asarray(np.expm1(national_model_bundle["median"].predict(national_X)), dtype=float),
+                    0.9: np.asarray(np.expm1(national_model_bundle["upper"].predict(national_X)), dtype=float),
+                }
+                national_quantiles = GeoHierarchyHelper.blend_quantiles(
+                    model_quantiles=model_national_quantiles,
+                    baseline_quantiles=derived_national_quantiles,
+                    blend_weight=float(aggregate_blend_weights.get("national") or 0.0),
+                )
+            cluster_weight = float(aggregate_blend_weights.get("cluster") or 0.0)
+            national_weight = float(aggregate_blend_weights.get("national") or 0.0)
+            if aggregate_blend_weights and cluster_weight <= 0.0 and national_weight <= 0.0:
+                reconciled_quantiles = quantile_predictions
+                reconciled_meta = {
+                    "reconciliation_method": "state_sum_passthrough",
+                    "hierarchy_consistency_status": "coherent",
+                    "cluster_order": hierarchy_meta.get("cluster_order") or [],
+                    "national_quantiles": national_quantiles or {},
+                    "cluster_quantiles": cluster_quantiles or {},
+                }
+            else:
+                reconciled_quantiles, reconciled_meta = GeoHierarchyHelper.reconcile_quantiles(
+                    quantile_predictions,
+                    cluster_assignments=hierarchy_cluster_assignments,
+                    state_order=[str(value) for value in panel["bundesland"].tolist()],
+                    cluster_quantiles=cluster_quantiles,
+                    national_quantiles=national_quantiles,
+                    residual_history=(
+                        np.asarray(hierarchy_meta.get("state_residual_history") or [], dtype=float)
+                        if hierarchy_meta.get("state_residual_history")
+                        else None
+                    ),
+                    state_weights=state_weights,
+                )
+            if reconciled_quantiles:
+                reconciled_attribution = {
+                    "state": float(reconciled_meta.get("state", 1.0)),
+                    "cluster": float(reconciled_meta.get("cluster", 0.0)),
+                    "national": float(reconciled_meta.get("national", 0.0)),
+                }
+                quantile_predictions = reconciled_quantiles
+                metadata = {
+                    **metadata,
+                    "hierarchy_driver_attribution": reconciled_attribution,
+                    "reconciliation_method": reconciled_meta.get("reconciliation_method") or metadata.get("reconciliation_method"),
+                    "hierarchy_consistency_status": reconciled_meta.get("hierarchy_consistency_status") or metadata.get("hierarchy_consistency_status"),
+                }
+                hierarchy_meta = {
+                    **hierarchy_meta,
+                    "aggregate_input_strategy": (
+                        "dedicated_aggregate_models"
+                        if cluster_model_bundle or national_model_bundle
+                        else hierarchy_meta.get("aggregate_input_strategy") or "state_only"
+                    ),
+                    "cluster_assignments": hierarchy_cluster_assignments,
+                    "cluster_order": reconciled_meta.get("cluster_order") or hierarchy_meta.get("cluster_order") or [],
+                    "national_quantiles": {
+                        str(key): np.asarray(value, dtype=float).reshape(-1).tolist()
+                        for key, value in (reconciled_meta.get("national_quantiles") or {}).items()
+                    },
+                    "cluster_quantiles": {
+                        str(key): np.asarray(value, dtype=float).reshape(-1).tolist()
+                        for key, value in (reconciled_meta.get("cluster_quantiles") or {}).items()
+                    },
+                }
+
+        pred_next = np.maximum(np.asarray(quantile_predictions.get(0.5), dtype=float), 0.0)
+        pred_low = np.maximum(np.asarray(quantile_predictions.get(0.1, pred_next), dtype=float), 0.0)
+        pred_high = np.maximum(np.asarray(quantile_predictions.get(0.9, pred_next), dtype=float), 0.0)
 
         action_threshold = float(metadata.get("action_threshold") or 0.6)
         quality_gate = metadata.get("quality_gate") or {"overall_passed": False, "forecast_readiness": "WATCH"}
@@ -265,16 +472,29 @@ class RegionalForecastService:
         model_version = metadata.get("model_version") or self._model_version(metadata)
         calibration_version = metadata.get("calibration_version") or self._calibration_version(metadata)
         champion_model_family = str(metadata.get("model_family") or "regional_pooled_panel")
+        component_model_family = str(metadata.get("component_model_family") or champion_model_family)
         ensemble_component_weights = metadata.get("ensemble_component_weights") or {champion_model_family: 1.0}
         hierarchy_driver_attribution = metadata.get("hierarchy_driver_attribution") or {"state": 1.0, "cluster": 0.0, "national": 0.0}
+        reconciliation_method = str(metadata.get("reconciliation_method") or "not_reconciled")
+        hierarchy_consistency_status = str(metadata.get("hierarchy_consistency_status") or "not_checked")
         benchmark_evidence_reference = (
             ((metadata.get("registry_scope") or {}).get("champion") or {}).get("created_at")
             or ((metadata.get("benchmark_summary") or {}).get("primary_metric"))
+        )
+        benchmark_metrics = dict((metadata.get("benchmark_summary") or {}).get("metrics") or {})
+        tsfm_metadata = dict(
+            metadata.get("tsfm_metadata")
+            or TSFMAdapter.from_settings(
+                enabled=bool(self.orchestrator.settings.FORECAST_ENABLE_TSFM_CHALLENGERS),
+                provider=str(self.orchestrator.settings.FORECAST_TSFM_PROVIDER),
+            ).metadata()
         )
         dataset_manifest = artifacts.get("dataset_manifest") or metadata.get("dataset_manifest") or {}
         point_in_time_snapshot = artifacts.get("point_in_time_snapshot") or metadata.get("point_in_time_snapshot") or {}
         source_coverage = dataset_manifest.get("source_coverage") or {}
         business_gate = self._business_gate(quality_gate=quality_gate)
+        cluster_forecast_quantiles = hierarchy_meta.get("cluster_quantiles") or {}
+        national_forecast_quantiles = hierarchy_meta.get("national_quantiles") or {}
         predictions = []
         for idx, row in panel.reset_index(drop=True).iterrows():
             current_incidence = float(row["current_known_incidence"] or 0.0)
@@ -317,10 +537,16 @@ class RegionalForecastService:
                 "activation_policy": activation_policy,
                 "signal_bundle_version": signal_bundle_version,
                 "champion_model_family": champion_model_family,
+                "component_model_family": component_model_family,
                 "ensemble_component_weights": ensemble_component_weights,
                 "hierarchy_driver_attribution": hierarchy_driver_attribution,
+                "cluster_id": hierarchy_cluster_assignments.get(str(row["bundesland"])),
+                "reconciliation_method": reconciliation_method,
+                "hierarchy_consistency_status": hierarchy_consistency_status,
                 "revision_policy_used": revision_policy,
                 "benchmark_evidence_reference": benchmark_evidence_reference,
+                "benchmark_metrics": benchmark_metrics,
+                "tsfm_metadata": tsfm_metadata,
                 "model_version": model_version,
                 "calibration_version": calibration_version,
                 "point_in_time_snapshot": point_in_time_snapshot,
@@ -375,10 +601,18 @@ class RegionalForecastService:
             "activation_policy": activation_policy,
             "signal_bundle_version": signal_bundle_version,
             "champion_model_family": champion_model_family,
+            "component_model_family": component_model_family,
             "ensemble_component_weights": ensemble_component_weights,
             "hierarchy_driver_attribution": hierarchy_driver_attribution,
+            "hierarchy_cluster_assignments": hierarchy_cluster_assignments,
+            "hierarchy_cluster_forecast_quantiles": cluster_forecast_quantiles,
+            "national_forecast_quantiles": national_forecast_quantiles,
+            "reconciliation_method": reconciliation_method,
+            "hierarchy_consistency_status": hierarchy_consistency_status,
             "revision_policy_used": revision_policy,
             "benchmark_evidence_reference": benchmark_evidence_reference,
+            "benchmark_metrics": benchmark_metrics,
+            "tsfm_metadata": tsfm_metadata,
             "model_version": model_version,
             "calibration_version": calibration_version,
             "artifact_transition_mode": artifact_transition_mode,
@@ -1165,9 +1399,39 @@ class RegionalForecastService:
         regressor_lower.load_model(str(required_paths["regressor_lower"]))
         regressor_upper = XGBRegressor()
         regressor_upper.load_model(str(required_paths["regressor_upper"]))
+        metadata = json.loads(required_paths["metadata"].read_text())
+        hierarchy_models: dict[str, dict[str, XGBRegressor]] = {}
+        optional_hierarchy_paths = {
+            "cluster": {
+                "median": model_dir / "cluster_regressor_median.json",
+                "lower": model_dir / "cluster_regressor_lower.json",
+                "upper": model_dir / "cluster_regressor_upper.json",
+            },
+            "national": {
+                "median": model_dir / "national_regressor_median.json",
+                "lower": model_dir / "national_regressor_lower.json",
+                "upper": model_dir / "national_regressor_upper.json",
+            },
+        }
+        for level, level_paths in optional_hierarchy_paths.items():
+            if not all(path.exists() for path in level_paths.values()):
+                continue
+            bundle: dict[str, XGBRegressor] = {}
+            for name, path in level_paths.items():
+                model = XGBRegressor()
+                model.load_model(str(path))
+                bundle[name] = model
+            hierarchy_models[level] = bundle
+        quantile_regressors: dict[float, XGBRegressor] = {}
+        for quantile in metadata.get("forecast_quantiles") or []:
+            quantile_path = model_dir / f"q{int(round(float(quantile) * 1000)):04d}.json"
+            if not quantile_path.exists():
+                continue
+            model = XGBRegressor()
+            model.load_model(str(quantile_path))
+            quantile_regressors[float(quantile)] = model
         with open(required_paths["calibration"], "rb") as handle:
             calibration = pickle.load(handle)
-        metadata = json.loads(required_paths["metadata"].read_text())
         dataset_manifest_path = model_dir / "dataset_manifest.json"
         point_in_time_path = model_dir / "point_in_time_snapshot.json"
         return {
@@ -1175,6 +1439,8 @@ class RegionalForecastService:
             "regressor_median": regressor_median,
             "regressor_lower": regressor_lower,
             "regressor_upper": regressor_upper,
+            "quantile_regressors": quantile_regressors,
+            "hierarchy_models": hierarchy_models,
             "calibration": calibration,
             "metadata": metadata,
             "dataset_manifest": json.loads(dataset_manifest_path.read_text()) if dataset_manifest_path.exists() else None,

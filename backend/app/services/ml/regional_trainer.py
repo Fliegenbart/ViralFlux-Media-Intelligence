@@ -26,6 +26,7 @@ from app.services.ml.forecast_horizon_utils import (
     regional_model_artifact_dir,
 )
 from app.services.ml.models.event_classifier import LearnedEventModel
+from app.services.ml.models.geo_hierarchy import GeoHierarchyHelper
 from app.services.ml.regional_features import RegionalFeatureBuilder
 from app.services.ml.regional_panel_utils import (
     ALL_BUNDESLAENDER,
@@ -170,6 +171,14 @@ def _quantile_regressor_config(quantile: float) -> dict[str, Any]:
     return config
 
 
+def _state_order_from_codes(values: list[str]) -> list[str]:
+    present = {str(value) for value in values if str(value)}
+    ordered = [state for state in ALL_BUNDESLAENDER if state in present]
+    if ordered:
+        return ordered
+    return sorted(present)
+
+
 class RegionalModelTrainer:
     """Train pooled per-virus panel models across all Bundesländer."""
 
@@ -295,6 +304,7 @@ class RegionalModelTrainer:
         panel = panel.copy()
         panel["y_next_log"] = np.log1p(panel["next_week_incidence"].astype(float).clip(lower=0.0))
         feature_columns = self._feature_columns(panel)
+        hierarchy_feature_columns = GeoHierarchyHelper.hierarchy_feature_columns(feature_columns)
         ww_only_columns = self._ww_only_feature_columns(feature_columns)
         event_config = event_definition_config_for_virus(virus_typ)
 
@@ -319,6 +329,7 @@ class RegionalModelTrainer:
             virus_typ=virus_typ,
             panel=panel,
             feature_columns=feature_columns,
+            hierarchy_feature_columns=hierarchy_feature_columns,
             ww_only_columns=ww_only_columns,
             tau=tau,
             kappa=kappa,
@@ -338,6 +349,7 @@ class RegionalModelTrainer:
         final_artifacts = self._fit_final_models(
             panel=panel,
             feature_columns=feature_columns,
+            hierarchy_feature_columns=hierarchy_feature_columns,
             oof_frame=backtest_bundle["oof_frame"],
             action_threshold=action_threshold,
         )
@@ -356,6 +368,23 @@ class RegionalModelTrainer:
             "horizon_days": horizon,
             "target_window_days": _target_window_for_horizon(horizon),
         }
+        hierarchy_metadata = self._build_hierarchy_metadata(
+            panel=panel,
+            oof_frame=backtest_bundle["oof_frame"],
+        )
+        hierarchy_benchmark = (backtest_bundle.get("benchmark_summary") or {}).get("hierarchy_benchmark") or {}
+        hierarchy_diagnostics = (backtest_bundle.get("benchmark_summary") or {}).get("hierarchy_diagnostics") or {}
+        cluster_homogeneity = (backtest_bundle.get("benchmark_summary") or {}).get("cluster_homogeneity") or {}
+        hierarchy_metadata["enabled"] = bool(hierarchy_benchmark.get("promote_reconciliation"))
+        hierarchy_metadata["selection_basis"] = hierarchy_benchmark.get("selection_basis") or "benchmark_pending"
+        hierarchy_metadata["benchmark_metrics"] = hierarchy_benchmark.get("comparison") or {}
+        hierarchy_metadata["component_diagnostics"] = hierarchy_diagnostics
+        hierarchy_metadata["cluster_homogeneity"] = cluster_homogeneity
+        hierarchy_metadata["model_modes"] = final_artifacts.get("hierarchy_model_modes") or {}
+        hierarchy_metadata["aggregate_blend_weights"] = {
+            "cluster": float(((hierarchy_diagnostics.get("cluster") or {}).get("recommended_blend_weight") or 0.0)),
+            "national": float(((hierarchy_diagnostics.get("national") or {}).get("recommended_blend_weight") or 0.0)),
+        }
         model_dir = regional_model_artifact_dir(
             self.models_dir,
             virus_typ=virus_typ,
@@ -372,6 +401,7 @@ class RegionalModelTrainer:
             "supported_horizon_days": list(SUPPORTED_FORECAST_HORIZONS),
             "forecast_target_semantics": "current_known_incidence_at_as_of_plus_horizon_days",
             "feature_columns": feature_columns,
+            "hierarchy_feature_columns": hierarchy_feature_columns,
             "ww_only_feature_columns": ww_only_columns,
             "selected_tau": tau,
             "selected_kappa": kappa,
@@ -407,7 +437,10 @@ class RegionalModelTrainer:
                 }
             ),
             "ensemble_component_weights": {"regional_pooled_panel": 1.0},
-            "hierarchy_driver_attribution": {"state": 1.0, "cluster": 0.0, "national": 0.0},
+            "hierarchy_driver_attribution": hierarchy_metadata["hierarchy_driver_attribution"],
+            "reconciliation_method": hierarchy_metadata["reconciliation_method"],
+            "hierarchy_consistency_status": hierarchy_metadata["hierarchy_consistency_status"],
+            "hierarchy_reconciliation": hierarchy_metadata,
             "point_in_time_snapshot": {
                 "snapshot_type": point_in_time_manifest.get("snapshot_type"),
                 "captured_at": point_in_time_manifest.get("captured_at"),
@@ -440,6 +473,7 @@ class RegionalModelTrainer:
         )
         metadata["registry_status"] = "champion" if promote else "challenger"
         metadata["registry_scope"] = registry_payload
+        backtest_bundle["backtest_payload"]["hierarchy_reconciliation"] = _json_safe(hierarchy_metadata)
 
         if persist:
             self._persist_artifacts(
@@ -466,6 +500,8 @@ class RegionalModelTrainer:
             "calibration_version": metadata["calibration_version"],
             "selected_calibration_mode": calibration_mode,
             "model_dir": str(model_dir),
+            "benchmark_summary": backtest_bundle.get("benchmark_summary") or {},
+            "hierarchy_reconciliation": hierarchy_metadata,
             "backtest": backtest_bundle["backtest_payload"],
             "selection": selection,
         }
@@ -556,6 +592,119 @@ class RegionalModelTrainer:
         merged["truth_source"] = merged["target_truth_source"].fillna(merged["truth_source"])
         merged = merged.loc[merged["target_incidence"].notna()].copy()
         return merged.reset_index(drop=True)
+
+    @staticmethod
+    def _state_order_from_panel(panel: pd.DataFrame) -> list[str]:
+        present = {str(value) for value in panel.get("bundesland", pd.Series(dtype=str)).dropna().astype(str).tolist()}
+        ordered = [state for state in ALL_BUNDESLAENDER if state in present]
+        if ordered:
+            return ordered
+        return sorted(present)
+
+    def _build_hierarchy_metadata(
+        self,
+        *,
+        panel: pd.DataFrame,
+        oof_frame: pd.DataFrame,
+    ) -> dict[str, Any]:
+        state_order = self._state_order_from_panel(panel)
+        if not state_order:
+            return {
+                "enabled": False,
+                "reconciliation_method": "not_available",
+                "hierarchy_consistency_status": "empty",
+                "max_coherence_gap": 0.0,
+                "hierarchy_driver_attribution": {"state": 1.0, "cluster": 0.0, "national": 0.0},
+                "cluster_assignments": {},
+                "cluster_order": [],
+                "state_order": [],
+                "state_residual_history": [],
+            }
+
+        cluster_assignments = GeoHierarchyHelper.build_dynamic_clusters(
+            panel,
+            state_col="bundesland",
+            value_col="current_known_incidence",
+            date_col="as_of_date",
+        )
+        state_weight_map: dict[str, float] = {}
+        if {"bundesland", "state_population_millions"}.issubset(panel.columns):
+            weights = (
+                panel.dropna(subset=["bundesland"])
+                .groupby("bundesland")["state_population_millions"]
+                .median()
+                .to_dict()
+            )
+            state_weight_map = {str(key): float(value) for key, value in weights.items() if pd.notna(value)}
+
+        residual_history: list[list[float]] = []
+        if not oof_frame.empty and {"as_of_date", "bundesland", "residual"}.issubset(oof_frame.columns):
+            residual_matrix = (
+                oof_frame.assign(as_of_date=pd.to_datetime(oof_frame["as_of_date"]).dt.normalize())
+                .pivot_table(
+                    index="as_of_date",
+                    columns="bundesland",
+                    values="residual",
+                    aggfunc="mean",
+                )
+                .reindex(columns=state_order)
+                .fillna(0.0)
+                .tail(180)
+            )
+            residual_history = residual_matrix.to_numpy(dtype=float).tolist()
+
+        reconciliation_summary: dict[str, Any] = {
+            "reconciliation_method": "not_available",
+            "hierarchy_consistency_status": "not_checked",
+            "max_coherence_gap": 0.0,
+            "hierarchy_driver_attribution": {"state": 1.0, "cluster": 0.0, "national": 0.0},
+            "cluster_order": sorted({value for value in cluster_assignments.values()}),
+        }
+        if not oof_frame.empty and {"bundesland", "prediction_interval_lower", "expected_target_incidence", "prediction_interval_upper"}.issubset(oof_frame.columns):
+            latest_state_rows = (
+                oof_frame.assign(as_of_date=pd.to_datetime(oof_frame["as_of_date"]).dt.normalize())
+                .sort_values("as_of_date")
+                .groupby("bundesland", as_index=False)
+                .tail(1)
+            )
+            latest_by_state = latest_state_rows.set_index("bundesland")
+            available_states = [state for state in state_order if state in latest_by_state.index]
+            if available_states:
+                state_quantiles = {
+                    0.1: np.asarray([float(latest_by_state.at[state, "prediction_interval_lower"]) for state in available_states], dtype=float),
+                    0.5: np.asarray([float(latest_by_state.at[state, "expected_target_incidence"]) for state in available_states], dtype=float),
+                    0.9: np.asarray([float(latest_by_state.at[state, "prediction_interval_upper"]) for state in available_states], dtype=float),
+                }
+                _, reconciliation_summary = GeoHierarchyHelper.reconcile_quantiles(
+                    state_quantiles,
+                    cluster_assignments={state: cluster_assignments[state] for state in available_states if state in cluster_assignments},
+                    state_order=available_states,
+                    residual_history=np.asarray(residual_history, dtype=float) if residual_history else None,
+                    state_weights={state: state_weight_map.get(state, 1.0) for state in available_states},
+                )
+
+        return {
+            "enabled": True,
+            "aggregate_input_strategy": "weighted_feature_pool_same_model",
+            "model_sources": {
+                "state": "regional_pooled_panel",
+                "cluster": "regional_cluster_aggregate",
+                "national": "regional_national_aggregate",
+            },
+            "reconciliation_method": reconciliation_summary["reconciliation_method"],
+            "hierarchy_consistency_status": reconciliation_summary["hierarchy_consistency_status"],
+            "max_coherence_gap": reconciliation_summary["max_coherence_gap"],
+            "hierarchy_driver_attribution": {
+                "state": float(reconciliation_summary.get("state", 1.0)),
+                "cluster": float(reconciliation_summary.get("cluster", 0.0)),
+                "national": float(reconciliation_summary.get("national", 0.0)),
+            },
+            "cluster_assignments": cluster_assignments,
+            "cluster_order": reconciliation_summary.get("cluster_order") or sorted({value for value in cluster_assignments.values()}),
+            "state_order": state_order,
+            "state_weights": state_weight_map,
+            "state_residual_history": residual_history,
+        }
 
     def get_regional_accuracy_summary(
         self,
@@ -928,6 +1077,7 @@ class RegionalModelTrainer:
         virus_typ: str,
         panel: pd.DataFrame,
         feature_columns: list[str],
+        hierarchy_feature_columns: list[str],
         ww_only_columns: list[str],
         tau: float,
         kappa: float,
@@ -1039,6 +1189,14 @@ class RegionalModelTrainer:
                 feature_columns,
                 REGIONAL_REGRESSOR_CONFIG["upper"],
             )
+            hierarchy_models, hierarchy_model_modes = self._fit_hierarchy_models(
+                panel=train_df,
+                feature_columns=hierarchy_feature_columns,
+                state_feature_columns=feature_columns,
+                reg_lower=reg_lower,
+                reg_median=reg_median,
+                reg_upper=reg_upper,
+            )
 
             pred_log = reg_median.predict(test_df[feature_columns].to_numpy())
             pred_lo = reg_lower.predict(test_df[feature_columns].to_numpy())
@@ -1046,6 +1204,17 @@ class RegionalModelTrainer:
             pred_next = np.expm1(pred_log)
             pred_next_lo = np.expm1(pred_lo)
             pred_next_hi = np.expm1(pred_hi)
+            hierarchy_inputs = self._predict_hierarchy_aggregate_quantiles(
+                frame=test_df,
+                source_panel=working,
+                feature_columns=hierarchy_feature_columns,
+                reg_lower=reg_lower,
+                reg_median=reg_median,
+                reg_upper=reg_upper,
+                hierarchy_models=hierarchy_models,
+                state_feature_columns=feature_columns,
+                hierarchy_model_modes=hierarchy_model_modes,
+            )
 
             persistence_prob = self._event_probability_from_prediction(
                 predicted_next=test_df["current_known_incidence"].to_numpy(),
@@ -1105,6 +1274,18 @@ class RegionalModelTrainer:
                         "expected_target_incidence": pred_next,
                         "prediction_interval_lower": pred_next_lo,
                         "prediction_interval_upper": pred_next_hi,
+                        "state_population_millions": (
+                            test_df["state_population_millions"].values.astype(float)
+                            if "state_population_millions" in test_df.columns
+                            else np.full(len(test_df), 1.0, dtype=float)
+                        ),
+                        "cluster_id": hierarchy_inputs["cluster_ids"],
+                        "cluster_prediction_interval_lower": hierarchy_inputs["cluster_lower"],
+                        "cluster_expected_target_incidence": hierarchy_inputs["cluster_median"],
+                        "cluster_prediction_interval_upper": hierarchy_inputs["cluster_upper"],
+                        "national_prediction_interval_lower": hierarchy_inputs["national_lower"],
+                        "national_expected_target_incidence": hierarchy_inputs["national_median"],
+                        "national_prediction_interval_upper": hierarchy_inputs["national_upper"],
                         "residual": test_df["next_week_incidence"].values.astype(float) - pred_next,
                         "absolute_error": np.abs(test_df["next_week_incidence"].values.astype(float) - pred_next),
                         "selected_tau": fold_tau,
@@ -1134,6 +1315,14 @@ class RegionalModelTrainer:
         benchmark_frame["q_0.5"] = benchmark_frame["expected_target_incidence"].astype(float)
         benchmark_frame["q_0.9"] = benchmark_frame["prediction_interval_upper"].astype(float)
         benchmark_frame["event_probability"] = benchmark_frame["event_probability_calibrated"].astype(float)
+        hierarchy_benchmark_frame = self._hierarchy_reconciled_benchmark_frame(
+            oof_frame=oof_frame,
+            source_panel=working,
+        )
+        combined_benchmark_frame = pd.concat(
+            [benchmark_frame, hierarchy_benchmark_frame],
+            ignore_index=True,
+        ) if not hierarchy_benchmark_frame.empty else benchmark_frame.copy()
         benchmark_metrics = summarize_probabilistic_metrics(
             y_true=benchmark_frame["y_true"].to_numpy(dtype=float),
             quantile_predictions={
@@ -1146,9 +1335,65 @@ class RegionalModelTrainer:
             action_threshold=action_threshold,
         )
         benchmark_leaderboard = build_leaderboard(
-            benchmark_frame,
+            combined_benchmark_frame,
             group_by=("virus_typ", "horizon_days", "bundesland"),
             action_threshold=action_threshold,
+        )
+        candidate_summaries = []
+        for candidate_name, candidate_frame in combined_benchmark_frame.groupby("candidate", dropna=False):
+            candidate_metrics = summarize_probabilistic_metrics(
+                y_true=candidate_frame["y_true"].to_numpy(dtype=float),
+                quantile_predictions={
+                    0.1: candidate_frame["q_0.1"].to_numpy(dtype=float),
+                    0.5: candidate_frame["q_0.5"].to_numpy(dtype=float),
+                    0.9: candidate_frame["q_0.9"].to_numpy(dtype=float),
+                },
+                event_labels=candidate_frame["event_label"].to_numpy(dtype=int),
+                event_probabilities=candidate_frame["event_probability"].to_numpy(dtype=float),
+                action_threshold=action_threshold,
+            )
+            candidate_summaries.append(
+                {
+                    "candidate": str(candidate_name),
+                    "metrics": candidate_metrics,
+                    "samples": int(len(candidate_frame)),
+                }
+            )
+        candidate_metrics_map = {
+            str(item.get("candidate")): item.get("metrics") or {}
+            for item in candidate_summaries
+        }
+        hierarchy_diagnostics = self._hierarchy_component_diagnostics(oof_frame=oof_frame)
+        cluster_homogeneity = GeoHierarchyHelper.cluster_homogeneity_diagnostics(
+            working,
+            state_col="bundesland",
+            value_col="current_known_incidence",
+            date_col="as_of_date",
+        )
+        raw_candidate_metrics = candidate_metrics_map.get("regional_pooled_panel") or {}
+        hierarchy_candidate_metrics = candidate_metrics_map.get("regional_pooled_panel_mint") or {}
+        hierarchy_comparison = {
+            "wis_delta": round(
+                float(hierarchy_candidate_metrics.get("wis", 0.0) or 0.0)
+                - float(raw_candidate_metrics.get("wis", 0.0) or 0.0),
+                6,
+            ),
+            "crps_delta": round(
+                float(hierarchy_candidate_metrics.get("crps", 0.0) or 0.0)
+                - float(raw_candidate_metrics.get("crps", 0.0) or 0.0),
+                6,
+            ),
+            "coverage_80_delta": round(
+                float(hierarchy_candidate_metrics.get("coverage_80", 0.0) or 0.0)
+                - float(raw_candidate_metrics.get("coverage_80", 0.0) or 0.0),
+                6,
+            ),
+        }
+        hierarchy_promote = (
+            not hierarchy_benchmark_frame.empty
+            and hierarchy_comparison["wis_delta"] <= -0.001
+            and hierarchy_comparison["crps_delta"] <= 0.0
+            and hierarchy_comparison["coverage_80_delta"] >= -0.02
         )
         quality_gate = quality_gate_from_metrics(
             metrics=aggregate_metrics,
@@ -1173,16 +1418,724 @@ class RegionalModelTrainer:
                 "primary_metric": "relative_wis",
                 "leaderboard": benchmark_leaderboard,
                 "metrics": benchmark_metrics,
+                "candidate_summaries": candidate_summaries,
+                "hierarchy_diagnostics": hierarchy_diagnostics,
+                "cluster_homogeneity": cluster_homogeneity,
+                "hierarchy_benchmark": {
+                    "enabled": not hierarchy_benchmark_frame.empty,
+                    "candidate_name": "regional_pooled_panel_mint",
+                    "promote_reconciliation": hierarchy_promote,
+                    "selection_basis": (
+                        "benchmark_passed"
+                        if hierarchy_promote
+                        else "benchmark_rejected_inferior_wis_or_crps"
+                    ),
+                    "comparison": hierarchy_comparison,
+                    "leaderboard": [item for item in benchmark_leaderboard if str(item.get("candidate") or "").startswith("regional_pooled_panel")],
+                },
             },
             "quality_gate": quality_gate,
             "backtest_payload": backtest_payload,
         }
+
+    def _hierarchy_reconciled_benchmark_frame(
+        self,
+        *,
+        oof_frame: pd.DataFrame,
+        source_panel: pd.DataFrame,
+    ) -> pd.DataFrame:
+        required = {
+            "as_of_date",
+            "bundesland",
+            "bundesland_name",
+            "virus_typ",
+            "horizon_days",
+            "event_label",
+            "event_probability_calibrated",
+            "next_week_incidence",
+            "expected_target_incidence",
+            "prediction_interval_lower",
+            "prediction_interval_upper",
+        }
+        if oof_frame.empty or not required.issubset(oof_frame.columns):
+            return pd.DataFrame()
+
+        working_panel = source_panel.copy()
+        working_panel["as_of_date"] = pd.to_datetime(working_panel["as_of_date"]).dt.normalize()
+        working_oof = oof_frame.copy()
+        working_oof["as_of_date"] = pd.to_datetime(working_oof["as_of_date"]).dt.normalize()
+        records: list[dict[str, Any]] = []
+        historical_residual_rows: list[dict[str, float]] = []
+        historical_cluster_rows: list[dict[str, float]] = []
+        historical_national_rows: list[dict[str, float]] = []
+
+        for as_of_date in sorted(working_oof["as_of_date"].dropna().unique()):
+            date_value = pd.Timestamp(as_of_date).normalize()
+            date_frame = working_oof.loc[working_oof["as_of_date"] == date_value].copy()
+            state_order = _state_order_from_codes(date_frame["bundesland"].astype(str).tolist())
+            if not state_order:
+                continue
+            date_frame = date_frame.drop_duplicates(subset=["bundesland"], keep="last").set_index("bundesland")
+            available_states = [state for state in state_order if state in date_frame.index]
+            if not available_states:
+                continue
+            state_quantiles = {
+                0.1: np.asarray([float(date_frame.at[state, "prediction_interval_lower"]) for state in available_states], dtype=float),
+                0.5: np.asarray([float(date_frame.at[state, "expected_target_incidence"]) for state in available_states], dtype=float),
+                0.9: np.asarray([float(date_frame.at[state, "prediction_interval_upper"]) for state in available_states], dtype=float),
+            }
+            panel_until_date = working_panel.loc[working_panel["as_of_date"] <= date_value].copy()
+            cluster_assignments = GeoHierarchyHelper.build_dynamic_clusters(
+                panel_until_date,
+                state_col="bundesland",
+                value_col="current_known_incidence",
+                date_col="as_of_date",
+            )
+            cluster_order = []
+            seen_clusters: set[str] = set()
+            for state in available_states:
+                cluster_id = str(cluster_assignments.get(state) or "")
+                if not cluster_id or cluster_id in seen_clusters:
+                    continue
+                seen_clusters.add(cluster_id)
+                cluster_order.append(cluster_id)
+            state_weights = {}
+            date_panel = panel_until_date.loc[panel_until_date["bundesland"].isin(available_states)].copy()
+            if {"bundesland", "state_population_millions"}.issubset(date_panel.columns):
+                latest_weights = (
+                    date_panel.sort_values("as_of_date")
+                    .groupby("bundesland", as_index=False)
+                    .tail(1)
+                    .set_index("bundesland")["state_population_millions"]
+                    .to_dict()
+                )
+                state_weights = {str(key): float(value) for key, value in latest_weights.items() if pd.notna(value)}
+            residual_history = None
+            if historical_residual_rows:
+                residual_history = np.asarray(
+                    [
+                        [float(row.get(state, 0.0)) for state in available_states]
+                        for row in historical_residual_rows
+                    ],
+                    dtype=float,
+                )
+            derived_cluster_quantiles = {
+                quantile: GeoHierarchyHelper._aggregate_states(
+                    np.asarray(values, dtype=float),
+                    state_order=available_states,
+                    cluster_assignments={state: cluster_assignments[state] for state in available_states if state in cluster_assignments},
+                    cluster_order=cluster_order,
+                    state_weights=state_weights,
+                )[0]
+                for quantile, values in state_quantiles.items()
+            }
+            derived_national_quantiles = {
+                quantile: GeoHierarchyHelper._aggregate_states(
+                    np.asarray(values, dtype=float),
+                    state_order=available_states,
+                    cluster_assignments={state: cluster_assignments[state] for state in available_states if state in cluster_assignments},
+                    cluster_order=cluster_order,
+                    state_weights=state_weights,
+                )[1]
+                for quantile, values in state_quantiles.items()
+            }
+            model_cluster_quantiles = None
+            if cluster_order and "cluster_id" in date_frame.columns and date_frame["cluster_id"].notna().any():
+                model_cluster_quantiles = {
+                    0.1: np.asarray(
+                        [float(date_frame.loc[date_frame["cluster_id"] == cluster_id, "cluster_prediction_interval_lower"].iloc[-1]) for cluster_id in cluster_order],
+                        dtype=float,
+                    ),
+                    0.5: np.asarray(
+                        [float(date_frame.loc[date_frame["cluster_id"] == cluster_id, "cluster_expected_target_incidence"].iloc[-1]) for cluster_id in cluster_order],
+                        dtype=float,
+                    ),
+                    0.9: np.asarray(
+                        [float(date_frame.loc[date_frame["cluster_id"] == cluster_id, "cluster_prediction_interval_upper"].iloc[-1]) for cluster_id in cluster_order],
+                        dtype=float,
+                    ),
+                }
+            model_national_quantiles = None
+            if "national_expected_target_incidence" in date_frame.columns and date_frame["national_expected_target_incidence"].notna().any():
+                model_national_quantiles = {
+                    0.1: np.asarray([float(date_frame["national_prediction_interval_lower"].dropna().iloc[-1])], dtype=float),
+                    0.5: np.asarray([float(date_frame["national_expected_target_incidence"].dropna().iloc[-1])], dtype=float),
+                    0.9: np.asarray([float(date_frame["national_prediction_interval_upper"].dropna().iloc[-1])], dtype=float),
+                }
+            cluster_blend_weight = self._estimate_hierarchy_blend_weight(historical_cluster_rows)
+            national_blend_weight = self._estimate_hierarchy_blend_weight(historical_national_rows)
+            cluster_quantiles = self._blend_hierarchy_quantiles(
+                model_quantiles=model_cluster_quantiles,
+                baseline_quantiles=derived_cluster_quantiles,
+                blend_weight=cluster_blend_weight,
+            )
+            national_quantiles = self._blend_hierarchy_quantiles(
+                model_quantiles=model_national_quantiles,
+                baseline_quantiles=derived_national_quantiles,
+                blend_weight=national_blend_weight,
+            )
+            if cluster_blend_weight <= 0.0 and national_blend_weight <= 0.0:
+                reconciled_quantiles = {
+                    float(quantile): np.asarray(values, dtype=float)
+                    for quantile, values in state_quantiles.items()
+                }
+                reconciled_meta = {
+                    "reconciliation_method": "state_sum_passthrough",
+                    "hierarchy_consistency_status": "coherent",
+                }
+            else:
+                reconciled_quantiles, reconciled_meta = GeoHierarchyHelper.reconcile_quantiles(
+                    state_quantiles,
+                    cluster_assignments={state: cluster_assignments[state] for state in available_states if state in cluster_assignments},
+                    state_order=available_states,
+                    cluster_quantiles=cluster_quantiles,
+                    national_quantiles=national_quantiles,
+                    residual_history=residual_history,
+                    state_weights=state_weights,
+                )
+            for idx, state in enumerate(available_states):
+                row = date_frame.loc[state]
+                expected_target = float(reconciled_quantiles[0.5][idx])
+                lower = float(reconciled_quantiles[0.1][idx])
+                upper = float(reconciled_quantiles[0.9][idx])
+                y_true = float(row["next_week_incidence"])
+                records.append(
+                    {
+                        "fold": row.get("fold"),
+                        "candidate": "regional_pooled_panel_mint",
+                        "virus_typ": row["virus_typ"],
+                        "bundesland": state,
+                        "bundesland_name": row["bundesland_name"],
+                        "as_of_date": date_value,
+                        "target_date": row.get("target_date"),
+                        "target_week_start": row.get("target_week_start"),
+                        "horizon_days": int(row["horizon_days"]),
+                        "event_label": int(row["event_label"]),
+                        "event_probability": float(row["event_probability_calibrated"]),
+                        "y_true": y_true,
+                        "q_0.1": lower,
+                        "q_0.5": expected_target,
+                        "q_0.9": upper,
+                        "expected_target_incidence": expected_target,
+                        "prediction_interval_lower": lower,
+                        "prediction_interval_upper": upper,
+                        "residual": y_true - expected_target,
+                        "absolute_error": abs(y_true - expected_target),
+                        "reconciliation_method": reconciled_meta.get("reconciliation_method"),
+                        "hierarchy_consistency_status": reconciled_meta.get("hierarchy_consistency_status"),
+                        "cluster_blend_weight": cluster_blend_weight,
+                        "national_blend_weight": national_blend_weight,
+                    }
+                )
+            residual_row: dict[str, float] = {}
+            for idx, state in enumerate(available_states):
+                y_true = float(date_frame.at[state, "next_week_incidence"])
+                pred = float(reconciled_quantiles[0.5][idx])
+                residual_row[state] = y_true - pred
+            historical_residual_rows.append(residual_row)
+            if cluster_order:
+                cluster_truth = []
+                for cluster_id in cluster_order:
+                    members = [state for state in available_states if cluster_assignments.get(state) == cluster_id]
+                    member_weights = np.asarray([float(state_weights.get(state, 1.0)) for state in members], dtype=float)
+                    member_truth = np.asarray([float(date_frame.at[state, "next_week_incidence"]) for state in members], dtype=float)
+                    cluster_truth.append(float(np.average(member_truth, weights=member_weights)) if len(member_truth) else 0.0)
+                for idx, truth_value in enumerate(cluster_truth):
+                    historical_cluster_rows.append(
+                        {
+                            "model": float(model_cluster_quantiles[0.5][idx]) if model_cluster_quantiles is not None else np.nan,
+                            "baseline": float(derived_cluster_quantiles[0.5][idx]),
+                            "truth": float(truth_value),
+                        }
+                    )
+            historical_national_rows.append(
+                {
+                    "model": float(model_national_quantiles[0.5][0]) if model_national_quantiles is not None else np.nan,
+                    "baseline": float(derived_national_quantiles[0.5][0]),
+                    "truth": float(
+                        np.average(
+                            np.asarray([float(date_frame.at[state, "next_week_incidence"]) for state in available_states], dtype=float),
+                            weights=np.asarray([float(state_weights.get(state, 1.0)) for state in available_states], dtype=float),
+                        )
+                    ),
+                }
+            )
+
+        if not records:
+            return pd.DataFrame()
+        return pd.DataFrame(records)
+
+    @staticmethod
+    def _estimate_hierarchy_blend_weight(
+        history_rows: list[dict[str, float]],
+        *,
+        min_samples: int = 12,
+    ) -> float:
+        if len(history_rows) < min_samples:
+            return 0.0
+        history = pd.DataFrame(history_rows)
+        if history.empty or not {"model", "baseline", "truth"}.issubset(history.columns):
+            return 0.0
+        history = history.replace([np.inf, -np.inf], np.nan).dropna(subset=["baseline", "truth"])
+        if history.empty:
+            return 0.0
+        history["model_abs_error"] = (history["model"] - history["truth"]).abs()
+        history["baseline_abs_error"] = (history["baseline"] - history["truth"]).abs()
+        baseline_mae = float(history["baseline_abs_error"].mean())
+        model_history = history.dropna(subset=["model_abs_error"])
+        if model_history.empty:
+            return 0.0
+        model_mae = float(model_history["model_abs_error"].mean())
+        if not np.isfinite(model_mae) or not np.isfinite(baseline_mae):
+            return 0.0
+        if model_mae >= baseline_mae:
+            return 0.0
+        model_score = 1.0 / max(model_mae, 1e-6)
+        baseline_score = 1.0 / max(baseline_mae, 1e-6)
+        return round(float(model_score / (model_score + baseline_score)), 6)
+
+    @staticmethod
+    def _blend_hierarchy_quantiles(
+        *,
+        model_quantiles: dict[float, np.ndarray] | None,
+        baseline_quantiles: dict[float, np.ndarray],
+        blend_weight: float,
+    ) -> dict[float, np.ndarray]:
+        return GeoHierarchyHelper.blend_quantiles(
+            model_quantiles=model_quantiles,
+            baseline_quantiles=baseline_quantiles,
+            blend_weight=blend_weight,
+        )
+
+    def _hierarchy_component_diagnostics(
+        self,
+        *,
+        oof_frame: pd.DataFrame,
+    ) -> dict[str, Any]:
+        if oof_frame.empty:
+            return {}
+
+        cluster_rows: list[dict[str, float]] = []
+        national_rows: list[dict[str, float]] = []
+        working = oof_frame.copy()
+        working["as_of_date"] = pd.to_datetime(working["as_of_date"]).dt.normalize()
+        for as_of_date, date_frame in working.groupby("as_of_date", dropna=False):
+            date_frame = date_frame.copy().drop_duplicates(subset=["bundesland"], keep="last")
+            if date_frame.empty:
+                continue
+            if "state_population_millions" in date_frame.columns:
+                weights = pd.to_numeric(date_frame["state_population_millions"], errors="coerce").fillna(1.0).clip(lower=1e-6)
+            else:
+                weights = pd.Series(1.0, index=date_frame.index, dtype=float)
+            if "cluster_id" in date_frame.columns and date_frame["cluster_id"].notna().any():
+                for cluster_id, cluster_frame in date_frame.dropna(subset=["cluster_id"]).groupby("cluster_id", dropna=False):
+                    cluster_weights = weights.loc[cluster_frame.index]
+                    cluster_rows.append(
+                        {
+                            "truth": float(np.average(cluster_frame["next_week_incidence"].astype(float), weights=cluster_weights)),
+                            "baseline": float(np.average(cluster_frame["expected_target_incidence"].astype(float), weights=cluster_weights)),
+                            "model": float(cluster_frame["cluster_expected_target_incidence"].iloc[-1]),
+                        }
+                    )
+            if "national_expected_target_incidence" in date_frame.columns and date_frame["national_expected_target_incidence"].notna().any():
+                national_rows.append(
+                    {
+                        "truth": float(np.average(date_frame["next_week_incidence"].astype(float), weights=weights)),
+                        "baseline": float(np.average(date_frame["expected_target_incidence"].astype(float), weights=weights)),
+                        "model": float(date_frame["national_expected_target_incidence"].iloc[-1]),
+                    }
+                )
+
+        def _summarize(rows: list[dict[str, float]]) -> dict[str, Any]:
+            if not rows:
+                return {"samples": 0}
+            frame = pd.DataFrame(rows).dropna(subset=["truth", "baseline"])
+            if frame.empty:
+                return {"samples": 0}
+            frame["baseline_abs_error"] = (frame["baseline"] - frame["truth"]).abs()
+            model_frame = frame.dropna(subset=["model"]).copy()
+            model_mae = float(model_frame["model"].sub(model_frame["truth"]).abs().mean()) if not model_frame.empty else None
+            baseline_mae = float(frame["baseline_abs_error"].mean())
+            recommended_weight = self._estimate_hierarchy_blend_weight(rows)
+            return {
+                "samples": int(len(frame)),
+                "baseline_mae": round(float(baseline_mae), 6),
+                "model_mae": round(float(model_mae), 6) if model_mae is not None else None,
+                "mae_delta_model_minus_baseline": (
+                    round(float(model_mae - baseline_mae), 6)
+                    if model_mae is not None
+                    else None
+                ),
+                "recommended_blend_weight": recommended_weight,
+            }
+
+        return {
+            "cluster": _summarize(cluster_rows),
+            "national": _summarize(national_rows),
+        }
+
+    def _predict_hierarchy_aggregate_quantiles(
+        self,
+        *,
+        frame: pd.DataFrame,
+        source_panel: pd.DataFrame,
+        feature_columns: list[str],
+        reg_lower: XGBRegressor,
+        reg_median: XGBRegressor,
+        reg_upper: XGBRegressor,
+        hierarchy_models: dict[str, dict[str, XGBRegressor] | None] | None = None,
+        state_feature_columns: list[str] | None = None,
+        hierarchy_model_modes: dict[str, str] | None = None,
+    ) -> dict[str, list[Any]]:
+        cluster_ids = pd.Series(index=frame.index, dtype=object)
+        cluster_lower = pd.Series(np.nan, index=frame.index, dtype=float)
+        cluster_median = pd.Series(np.nan, index=frame.index, dtype=float)
+        cluster_upper = pd.Series(np.nan, index=frame.index, dtype=float)
+        national_lower = pd.Series(np.nan, index=frame.index, dtype=float)
+        national_median = pd.Series(np.nan, index=frame.index, dtype=float)
+        national_upper = pd.Series(np.nan, index=frame.index, dtype=float)
+
+        working_panel = source_panel.copy()
+        working_panel["as_of_date"] = pd.to_datetime(working_panel["as_of_date"]).dt.normalize()
+        frame_dates = frame.assign(as_of_date=pd.to_datetime(frame["as_of_date"]).dt.normalize())
+        for as_of_date, idx in frame_dates.groupby("as_of_date").groups.items():
+            date_slice = frame_dates.loc[idx].copy()
+            panel_until_date = working_panel.loc[working_panel["as_of_date"] <= pd.Timestamp(as_of_date)].copy()
+            cluster_assignments = GeoHierarchyHelper.build_dynamic_clusters(
+                panel_until_date,
+                state_col="bundesland",
+                value_col="current_known_incidence",
+                date_col="as_of_date",
+            )
+            cluster_frame = GeoHierarchyHelper.aggregate_feature_frame(
+                date_slice,
+                feature_columns=feature_columns,
+                cluster_assignments=cluster_assignments,
+                level="cluster",
+            )
+            national_frame = GeoHierarchyHelper.aggregate_feature_frame(
+                date_slice,
+                feature_columns=feature_columns,
+                level="national",
+            )
+            cluster_baseline_map, national_baseline_values = self._hierarchy_state_baseline_features(
+                date_slice=date_slice,
+                cluster_assignments=cluster_assignments,
+                state_feature_columns=state_feature_columns or feature_columns,
+                reg_lower=reg_lower,
+                reg_median=reg_median,
+                reg_upper=reg_upper,
+            )
+            if not cluster_frame.empty:
+                cluster_frame = self._apply_hierarchy_baseline_map(
+                    cluster_frame,
+                    baseline_map=cluster_baseline_map,
+                )
+            if not national_frame.empty and national_baseline_values:
+                national_frame = national_frame.copy()
+                for column, value in national_baseline_values.items():
+                    national_frame[column] = float(value)
+
+            cluster_maps: dict[str, dict[str, float]] = {}
+            cluster_model_bundle = (hierarchy_models or {}).get("cluster") or {}
+            national_model_bundle = (hierarchy_models or {}).get("national") or {}
+            if not cluster_frame.empty and cluster_model_bundle:
+                cluster_X = cluster_frame[feature_columns].to_numpy(dtype=float)
+                cluster_frame = cluster_frame.copy()
+                cluster_target_mode = str((hierarchy_model_modes or {}).get("cluster") or "direct_log")
+                if cluster_target_mode == "residual_log":
+                    cluster_frame["q_0.1"] = self._hierarchy_apply_residual_prediction(
+                        baseline=cluster_frame["hierarchy_state_baseline_q10"].to_numpy(dtype=float),
+                        residual_log=cluster_model_bundle["lower"].predict(cluster_X),
+                    )
+                    cluster_frame["q_0.5"] = self._hierarchy_apply_residual_prediction(
+                        baseline=cluster_frame["hierarchy_state_baseline_q50"].to_numpy(dtype=float),
+                        residual_log=cluster_model_bundle["median"].predict(cluster_X),
+                    )
+                    cluster_frame["q_0.9"] = self._hierarchy_apply_residual_prediction(
+                        baseline=cluster_frame["hierarchy_state_baseline_q90"].to_numpy(dtype=float),
+                        residual_log=cluster_model_bundle["upper"].predict(cluster_X),
+                    )
+                else:
+                    cluster_frame["q_0.1"] = np.expm1(cluster_model_bundle["lower"].predict(cluster_X))
+                    cluster_frame["q_0.5"] = np.expm1(cluster_model_bundle["median"].predict(cluster_X))
+                    cluster_frame["q_0.9"] = np.expm1(cluster_model_bundle["upper"].predict(cluster_X))
+                cluster_maps = {
+                    str(row["hierarchy_group"]): {
+                        "q_0.1": float(row["q_0.1"]),
+                        "q_0.5": float(row["q_0.5"]),
+                        "q_0.9": float(row["q_0.9"]),
+                    }
+                    for _, row in cluster_frame.iterrows()
+                }
+
+            national_values = {"q_0.1": np.nan, "q_0.5": np.nan, "q_0.9": np.nan}
+            if not national_frame.empty and national_model_bundle:
+                national_X = national_frame[feature_columns].to_numpy(dtype=float)
+                national_values = {
+                    "q_0.1": float(np.expm1(national_model_bundle["lower"].predict(national_X))[0]),
+                    "q_0.5": float(np.expm1(national_model_bundle["median"].predict(national_X))[0]),
+                    "q_0.9": float(np.expm1(national_model_bundle["upper"].predict(national_X))[0]),
+                }
+
+            for row_idx, row in date_slice.iterrows():
+                state = str(row["bundesland"])
+                cluster_id = cluster_assignments.get(state)
+                cluster_ids.at[row_idx] = cluster_id
+                cluster_values = cluster_maps.get(str(cluster_id), {})
+                cluster_lower.at[row_idx] = float(cluster_values.get("q_0.1", np.nan))
+                cluster_median.at[row_idx] = float(cluster_values.get("q_0.5", np.nan))
+                cluster_upper.at[row_idx] = float(cluster_values.get("q_0.9", np.nan))
+                national_lower.at[row_idx] = float(national_values["q_0.1"])
+                national_median.at[row_idx] = float(national_values["q_0.5"])
+                national_upper.at[row_idx] = float(national_values["q_0.9"])
+
+        return {
+            "cluster_ids": cluster_ids.tolist(),
+            "cluster_lower": cluster_lower.tolist(),
+            "cluster_median": cluster_median.tolist(),
+            "cluster_upper": cluster_upper.tolist(),
+            "national_lower": national_lower.tolist(),
+            "national_median": national_median.tolist(),
+            "national_upper": national_upper.tolist(),
+        }
+
+    @staticmethod
+    def _hierarchy_apply_residual_prediction(
+        *,
+        baseline: np.ndarray,
+        residual_log: np.ndarray,
+    ) -> np.ndarray:
+        baseline_arr = np.asarray(baseline, dtype=float)
+        residual_arr = np.asarray(residual_log, dtype=float)
+        return np.expm1(np.log1p(np.clip(baseline_arr, 0.0, None)) + residual_arr)
+
+    def _hierarchy_state_baseline_features(
+        self,
+        *,
+        date_slice: pd.DataFrame,
+        cluster_assignments: dict[str, str],
+        state_feature_columns: list[str],
+        reg_lower: XGBRegressor,
+        reg_median: XGBRegressor,
+        reg_upper: XGBRegressor,
+    ) -> tuple[dict[str, dict[str, float]], dict[str, float]]:
+        if date_slice.empty:
+            return {}, {}
+        state_order = [str(value) for value in date_slice["bundesland"].tolist()]
+        state_weights = {
+            str(row["bundesland"]): float(row.get("state_population_millions") or 1.0)
+            for _, row in date_slice.iterrows()
+        } if "state_population_millions" in date_slice.columns else {}
+        X = date_slice[state_feature_columns].to_numpy(dtype=float)
+        state_quantiles = {
+            0.1: np.expm1(reg_lower.predict(X)),
+            0.5: np.expm1(reg_median.predict(X)),
+            0.9: np.expm1(reg_upper.predict(X)),
+        }
+        cluster_quantiles, national_quantiles, cluster_order = GeoHierarchyHelper.derived_aggregate_quantiles(
+            state_quantiles,
+            state_order=state_order,
+            cluster_assignments=cluster_assignments,
+            state_weights=state_weights,
+        )
+        cluster_map: dict[str, dict[str, float]] = {}
+        for idx, cluster_id in enumerate(cluster_order):
+            lower = float(cluster_quantiles.get(0.1, np.asarray([], dtype=float))[idx])
+            median = float(cluster_quantiles.get(0.5, np.asarray([], dtype=float))[idx])
+            upper = float(cluster_quantiles.get(0.9, np.asarray([], dtype=float))[idx])
+            cluster_map[str(cluster_id)] = {
+                "hierarchy_state_baseline_q10": lower,
+                "hierarchy_state_baseline_q50": median,
+                "hierarchy_state_baseline_q90": upper,
+                "hierarchy_state_baseline_width_80": float(max(upper - lower, 0.0)),
+            }
+        national_values = {
+            "hierarchy_state_baseline_q10": float(np.asarray(national_quantiles.get(0.1), dtype=float)[0]),
+            "hierarchy_state_baseline_q50": float(np.asarray(national_quantiles.get(0.5), dtype=float)[0]),
+            "hierarchy_state_baseline_q90": float(np.asarray(national_quantiles.get(0.9), dtype=float)[0]),
+        } if national_quantiles else {}
+        if national_values:
+            national_values["hierarchy_state_baseline_width_80"] = float(
+                max(
+                    float(national_values["hierarchy_state_baseline_q90"])
+                    - float(national_values["hierarchy_state_baseline_q10"]),
+                    0.0,
+                )
+            )
+        return cluster_map, national_values
+
+    @staticmethod
+    def _apply_hierarchy_baseline_map(
+        frame: pd.DataFrame,
+        *,
+        baseline_map: dict[str, dict[str, float]],
+    ) -> pd.DataFrame:
+        if frame.empty:
+            return frame
+        working = frame.copy()
+        for column in GeoHierarchyHelper.HIERARCHY_STATE_BASELINE_FEATURE_COLUMNS:
+            working[column] = [
+                float((baseline_map.get(str(group)) or {}).get(column, 0.0))
+                for group in working["hierarchy_group"].astype(str)
+            ]
+        return working
+
+    def _build_hierarchy_training_frame(
+        self,
+        *,
+        panel: pd.DataFrame,
+        feature_columns: list[str],
+        state_feature_columns: list[str],
+        reg_lower: XGBRegressor,
+        reg_median: XGBRegressor,
+        reg_upper: XGBRegressor,
+        level: str,
+        target_mode: str = "direct_log",
+    ) -> pd.DataFrame:
+        if panel.empty:
+            return pd.DataFrame()
+
+        working = panel.copy()
+        working["as_of_date"] = pd.to_datetime(working["as_of_date"]).dt.normalize()
+        aggregate_frames: list[pd.DataFrame] = []
+        for as_of_date in sorted(working["as_of_date"].dropna().unique()):
+            date_value = pd.Timestamp(as_of_date).normalize()
+            date_slice = working.loc[working["as_of_date"] == date_value].copy()
+            if date_slice.empty:
+                continue
+            panel_until_date = working.loc[working["as_of_date"] <= date_value].copy()
+            cluster_assignments = GeoHierarchyHelper.build_dynamic_clusters(
+                panel_until_date,
+                state_col="bundesland",
+                value_col="current_known_incidence",
+                date_col="as_of_date",
+            )
+            aggregate_frame = GeoHierarchyHelper.aggregate_feature_frame(
+                date_slice,
+                feature_columns=feature_columns,
+                cluster_assignments=cluster_assignments,
+                level=level,
+            )
+            if aggregate_frame.empty or "next_week_incidence" not in aggregate_frame.columns:
+                continue
+            cluster_baseline_map, national_baseline_values = self._hierarchy_state_baseline_features(
+                date_slice=date_slice,
+                cluster_assignments=cluster_assignments,
+                state_feature_columns=state_feature_columns,
+                reg_lower=reg_lower,
+                reg_median=reg_median,
+                reg_upper=reg_upper,
+            )
+            if level == "cluster":
+                aggregate_frame = self._apply_hierarchy_baseline_map(
+                    aggregate_frame,
+                    baseline_map=cluster_baseline_map,
+                )
+            elif level == "national" and national_baseline_values:
+                aggregate_frame = aggregate_frame.copy()
+                for column, value in national_baseline_values.items():
+                    aggregate_frame[column] = float(value)
+            aggregate_frames.append(aggregate_frame)
+
+        if not aggregate_frames:
+            return pd.DataFrame()
+        combined = pd.concat(aggregate_frames, ignore_index=True)
+        combined["y_next_log"] = np.log1p(combined["next_week_incidence"].astype(float).clip(lower=0.0))
+        if target_mode == "residual_log":
+            combined["y_residual_log_lower"] = combined["y_next_log"] - np.log1p(
+                combined["hierarchy_state_baseline_q10"].astype(float).clip(lower=0.0)
+            )
+            combined["y_residual_log_median"] = combined["y_next_log"] - np.log1p(
+                combined["hierarchy_state_baseline_q50"].astype(float).clip(lower=0.0)
+            )
+            combined["y_residual_log_upper"] = combined["y_next_log"] - np.log1p(
+                combined["hierarchy_state_baseline_q90"].astype(float).clip(lower=0.0)
+            )
+        return combined
+
+    def _fit_hierarchy_models(
+        self,
+        *,
+        panel: pd.DataFrame,
+        feature_columns: list[str],
+        state_feature_columns: list[str],
+        reg_lower: XGBRegressor,
+        reg_median: XGBRegressor,
+        reg_upper: XGBRegressor,
+    ) -> tuple[dict[str, dict[str, XGBRegressor] | None], dict[str, str]]:
+        cluster_training = self._build_hierarchy_training_frame(
+            panel=panel,
+            feature_columns=feature_columns,
+            state_feature_columns=state_feature_columns,
+            reg_lower=reg_lower,
+            reg_median=reg_median,
+            reg_upper=reg_upper,
+            level="cluster",
+            target_mode="residual_log",
+        )
+        national_training = self._build_hierarchy_training_frame(
+            panel=panel,
+            feature_columns=feature_columns,
+            state_feature_columns=state_feature_columns,
+            reg_lower=reg_lower,
+            reg_median=reg_median,
+            reg_upper=reg_upper,
+            level="national",
+        )
+
+        def _fit_bundle(frame: pd.DataFrame, *, target_mode: str) -> dict[str, XGBRegressor] | None:
+            if frame.empty or len(frame) < 40:
+                return None
+            target_columns = {
+                "lower": "y_next_log",
+                "median": "y_next_log",
+                "upper": "y_next_log",
+            }
+            if target_mode == "residual_log":
+                target_columns = {
+                    "lower": "y_residual_log_lower",
+                    "median": "y_residual_log_median",
+                    "upper": "y_residual_log_upper",
+                }
+            return {
+                "lower": self._fit_regressor_from_frame(
+                    frame,
+                    feature_columns,
+                    REGIONAL_REGRESSOR_CONFIG["lower"],
+                    target_col=target_columns["lower"],
+                ),
+                "median": self._fit_regressor_from_frame(
+                    frame,
+                    feature_columns,
+                    REGIONAL_REGRESSOR_CONFIG["median"],
+                    target_col=target_columns["median"],
+                ),
+                "upper": self._fit_regressor_from_frame(
+                    frame,
+                    feature_columns,
+                    REGIONAL_REGRESSOR_CONFIG["upper"],
+                    target_col=target_columns["upper"],
+                ),
+            }
+
+        return (
+            {
+                "cluster": _fit_bundle(cluster_training, target_mode="residual_log"),
+                "national": _fit_bundle(national_training, target_mode="direct_log"),
+            },
+            {
+                "cluster": "residual_log",
+                "national": "direct_log",
+            },
+        )
 
     def _fit_final_models(
         self,
         *,
         panel: pd.DataFrame,
         feature_columns: list[str],
+        hierarchy_feature_columns: list[str],
         oof_frame: pd.DataFrame,
         action_threshold: float = 0.5,
     ) -> dict[str, Any]:
@@ -1216,6 +2169,14 @@ class RegionalModelTrainer:
             panel,
             feature_columns,
             REGIONAL_REGRESSOR_CONFIG["upper"],
+        )
+        hierarchy_models, hierarchy_model_modes = self._fit_hierarchy_models(
+            panel=panel,
+            feature_columns=hierarchy_feature_columns,
+            state_feature_columns=feature_columns,
+            reg_lower=reg_lower,
+            reg_median=reg_median,
+            reg_upper=reg_upper,
         )
         quantile_regressors: dict[float, XGBRegressor] = {
             0.1: reg_lower,
@@ -1260,6 +2221,8 @@ class RegionalModelTrainer:
             "regressor_upper": reg_upper,
             "quantile_regressors": quantile_regressors,
             "learned_event_model": learned_event_model,
+            "hierarchy_models": hierarchy_models,
+            "hierarchy_model_modes": hierarchy_model_modes,
         }
 
     def _persist_artifacts(
@@ -1278,6 +2241,17 @@ class RegionalModelTrainer:
         final_artifacts["regressor_median"].save_model(str(model_dir / "regressor_median.json"))
         final_artifacts["regressor_lower"].save_model(str(model_dir / "regressor_lower.json"))
         final_artifacts["regressor_upper"].save_model(str(model_dir / "regressor_upper.json"))
+        hierarchy_models = final_artifacts.get("hierarchy_models") or {}
+        cluster_models = hierarchy_models.get("cluster") or {}
+        national_models = hierarchy_models.get("national") or {}
+        if cluster_models:
+            cluster_models["median"].save_model(str(model_dir / "cluster_regressor_median.json"))
+            cluster_models["lower"].save_model(str(model_dir / "cluster_regressor_lower.json"))
+            cluster_models["upper"].save_model(str(model_dir / "cluster_regressor_upper.json"))
+        if national_models:
+            national_models["median"].save_model(str(model_dir / "national_regressor_median.json"))
+            national_models["lower"].save_model(str(model_dir / "national_regressor_lower.json"))
+            national_models["upper"].save_model(str(model_dir / "national_regressor_upper.json"))
         for quantile, model in sorted((final_artifacts.get("quantile_regressors") or {}).items()):
             model.save_model(str(model_dir / f"{quantile_key(float(quantile))}.json"))
 
@@ -1386,10 +2360,11 @@ class RegionalModelTrainer:
         frame: pd.DataFrame,
         feature_columns: list[str],
         config: dict[str, Any],
+        target_col: str = "y_next_log",
     ) -> XGBRegressor:
         return self._fit_regressor(
             frame[feature_columns].to_numpy(),
-            frame["y_next_log"].to_numpy(),
+            frame[target_col].to_numpy(),
             config=config,
             sample_weight=self._sample_weights(frame),
         )

@@ -390,6 +390,8 @@ class XGBoostTrainer:
             valid,
             key=lambda item: (
                 float(item["backtest_metrics"].get("relative_wis", item["backtest_metrics"].get("wis", float("inf")))),
+                float(item["backtest_metrics"].get("crps", float("inf"))),
+                -float(item["backtest_metrics"].get("coverage_95", float("-inf"))),
                 float(item["backtest_metrics"].get("pinball_loss", float("inf"))),
                 float(item["backtest_metrics"].get("ece", float("inf"))),
                 -float(item["backtest_metrics"].get("decision_utility", float("-inf"))),

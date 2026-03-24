@@ -3,7 +3,7 @@
 ## Bausteine
 
 - `benchmarking/`: Bewertungslogik, Leaderboards, Artefakte, Registry
-- `models/`: wiederverwendbare Challenger-Komponenten
+- `models/`: wiederverwendbare Challenger-Komponenten inklusive MinT-artiger Hierarchiehilfe und optionalem TSFM-Adapter
 - `forecast_orchestrator.py`: dünne Koordinationsschicht für Registry und Live-Entscheidungen
 - `regional_trainer.py`: erster Champion-Kandidat mit probabilistischen Artefakten
 - `regional_forecast.py`: stabile API-Ausgabe plus additive Metadaten
@@ -19,9 +19,14 @@
 ## Additive Live-Metadaten
 
 - `champion_model_family`
+- `component_model_family`
 - `ensemble_component_weights`
 - `hierarchy_driver_attribution`
+- `reconciliation_method`
+- `hierarchy_consistency_status`
 - `revision_policy_used`
 - `benchmark_evidence_reference`
+- `benchmark_metrics`
+- `tsfm_metadata`
 
 Diese Felder erweitern die Antwort, ersetzen aber keine bestehenden Felder.

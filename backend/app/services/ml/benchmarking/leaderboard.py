@@ -38,8 +38,10 @@ def build_leaderboard(
     rows.sort(
         key=lambda item: (
             float(item.get("relative_wis") or 9999.0),
+            float(item.get("crps") or 9999.0),
             -float(item.get("coverage_95") or 0.0),
             float(item.get("brier_score") or 9999.0),
+            -float(item.get("decision_utility") or float("-inf")),
         )
     )
     return rows

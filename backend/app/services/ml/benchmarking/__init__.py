@@ -5,7 +5,11 @@ from app.services.ml.benchmarking.contracts import (
     CANONICAL_FORECAST_QUANTILES,
     DEFAULT_EVENT_RECALL_CONSTRAINT,
 )
-from app.services.ml.benchmarking.metrics import summarize_probabilistic_metrics
+from app.services.ml.benchmarking.metrics import (
+    quantile_crps,
+    summarize_probabilistic_metrics,
+    winkler_score,
+)
 from app.services.ml.benchmarking.registry import ForecastRegistry
 
 __all__ = [
@@ -13,5 +17,7 @@ __all__ = [
     "CANONICAL_FORECAST_QUANTILES",
     "DEFAULT_EVENT_RECALL_CONSTRAINT",
     "ForecastRegistry",
+    "quantile_crps",
     "summarize_probabilistic_metrics",
+    "winkler_score",
 ]

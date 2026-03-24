@@ -46,16 +46,26 @@ def render_markdown_report(summary: dict[str, Any]) -> str:
         f"- Champion: `{summary.get('champion_name')}`",
         f"- Generated at: `{summary.get('generated_at')}`",
         "",
+        "## Champion Metrics",
+        "",
+        f"- Relative WIS: `{(summary.get('metrics') or {}).get('relative_wis')}`",
+        f"- CRPS: `{(summary.get('metrics') or {}).get('crps')}`",
+        f"- Coverage 95: `{(summary.get('metrics') or {}).get('coverage_95')}`",
+        f"- Brier: `{(summary.get('metrics') or {}).get('brier_score')}`",
+        f"- Utility: `{(summary.get('metrics') or {}).get('decision_utility')}`",
+        "",
         "## Leaderboard",
         "",
-        "| Candidate | Relative WIS | Coverage 95 | Brier | Utility | Samples |",
-        "| --- | ---: | ---: | ---: | ---: | ---: |",
+        "| Candidate | Relative WIS | CRPS | Winkler 95 | Coverage 95 | Brier | Utility | Samples |",
+        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
     ]
     for row in leaderboard:
         lines.append(
-            "| {candidate} | {relative_wis} | {coverage_95} | {brier_score} | {decision_utility} | {samples} |".format(
+            "| {candidate} | {relative_wis} | {crps} | {winkler_95} | {coverage_95} | {brier_score} | {decision_utility} | {samples} |".format(
                 candidate=row.get("candidate"),
                 relative_wis=row.get("relative_wis"),
+                crps=row.get("crps"),
+                winkler_95=row.get("winkler_95"),
                 coverage_95=row.get("coverage_95"),
                 brier_score=row.get("brier_score"),
                 decision_utility=row.get("decision_utility"),

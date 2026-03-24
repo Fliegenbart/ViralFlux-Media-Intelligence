@@ -81,6 +81,48 @@ def weighted_interval_score(
     return float(np.mean(total_score / max(total_weight, 1e-9)))
 
 
+def quantile_crps(
+    y_true: Sequence[float],
+    quantile_predictions: dict[float, Sequence[float]],
+) -> float:
+    """Approximate CRPS from a discrete quantile grid.
+
+    For a forecast represented by quantiles only, we approximate CRPS as
+    ``2 * mean(pinball_loss_q)`` across the available quantile grid. This keeps
+    the score strictly proper for the represented quantiles and is stable across
+    the benchmark stack without requiring full distribution objects.
+    """
+    if not quantile_predictions:
+        return 0.0
+    monotone = monotone_quantiles(quantile_predictions)
+    losses = [
+        pinball_loss(y_true, predictions, quantile)
+        for quantile, predictions in monotone.items()
+    ]
+    if not losses:
+        return 0.0
+    return float(2.0 * np.mean(losses))
+
+
+def winkler_score(
+    y_true: Sequence[float],
+    *,
+    lower: Sequence[float],
+    upper: Sequence[float],
+    alpha: float,
+) -> float:
+    y_true_arr = np.asarray(y_true, dtype=float)
+    lower_arr = np.asarray(lower, dtype=float)
+    upper_arr = np.asarray(upper, dtype=float)
+    alpha_value = max(float(alpha), 1e-9)
+    if len(y_true_arr) == 0:
+        return 0.0
+    interval = upper_arr - lower_arr
+    below_penalty = (2.0 / alpha_value) * (lower_arr - y_true_arr) * (y_true_arr < lower_arr)
+    above_penalty = (2.0 / alpha_value) * (y_true_arr - upper_arr) * (y_true_arr > upper_arr)
+    return float(np.mean(interval + below_penalty + above_penalty))
+
+
 def monotone_quantiles(quantile_predictions: dict[float, Sequence[float]]) -> dict[float, np.ndarray]:
     if not quantile_predictions:
         return {}
@@ -103,6 +145,8 @@ def summarize_probabilistic_metrics(
     monotone = monotone_quantiles(quantile_predictions)
     metrics: dict[str, Any] = {
         "wis": round(weighted_interval_score(y_true_arr, monotone), 6),
+        "crps": round(quantile_crps(y_true_arr, monotone), 6),
+        "crps_method": "quantile_pinball_grid",
     }
 
     if baseline_quantiles:
@@ -117,6 +161,27 @@ def summarize_probabilistic_metrics(
     ):
         if lower_q in monotone and upper_q in monotone:
             metrics[name] = round(coverage(y_true_arr, monotone[lower_q], monotone[upper_q]), 6)
+
+    if 0.1 in monotone and 0.9 in monotone:
+        metrics["winkler_80"] = round(
+            winkler_score(
+                y_true_arr,
+                lower=monotone[0.1],
+                upper=monotone[0.9],
+                alpha=0.2,
+            ),
+            6,
+        )
+    if 0.025 in monotone and 0.975 in monotone:
+        metrics["winkler_95"] = round(
+            winkler_score(
+                y_true_arr,
+                lower=monotone[0.025],
+                upper=monotone[0.975],
+                alpha=0.05,
+            ),
+            6,
+        )
 
     pinball_summary: dict[str, float] = {}
     for quantile, predictions in monotone.items():

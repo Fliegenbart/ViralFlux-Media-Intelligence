@@ -70,6 +70,7 @@ class RegionalForecastServiceTests(unittest.TestCase):
         lower_values: list[float] | None = None,
         upper_values: list[float] | None = None,
         aggregate_metrics: dict | None = None,
+        hierarchy_reconciliation: dict | None = None,
     ) -> RegionalForecastService:
         if inference_panel is None:
             inference_panel = pd.DataFrame(
@@ -101,6 +102,8 @@ class RegionalForecastServiceTests(unittest.TestCase):
             "signal_bundle_version": signal_bundle_version,
             "aggregate_metrics": aggregate_metrics or {},
         }
+        if hierarchy_reconciliation is not None:
+            metadata["hierarchy_reconciliation"] = hierarchy_reconciliation
         probabilities = probabilities or [0.82, 0.41]
         median_values = median_values or [28.0, 12.0]
         lower_values = lower_values or [24.0, 10.0]
@@ -207,6 +210,11 @@ class RegionalForecastServiceTests(unittest.TestCase):
         self.assertEqual(result["horizon_days"], 7)
         self.assertEqual(result["target_window_days"], [7, 7])
         self.assertEqual(result["quality_gate"]["forecast_readiness"], "GO")
+        self.assertEqual(result["component_model_family"], "regional_pooled_panel")
+        self.assertEqual(result["reconciliation_method"], "not_reconciled")
+        self.assertEqual(result["hierarchy_consistency_status"], "not_checked")
+        self.assertEqual(result["benchmark_metrics"], {})
+        self.assertIn("tsfm_metadata", result)
         self.assertEqual(result["total_regions"], 2)
         self.assertEqual(result["top_5"][0]["bundesland"], "BY")
         self.assertEqual(service.feature_builder.last_horizon_days, 7)
@@ -226,8 +234,13 @@ class RegionalForecastServiceTests(unittest.TestCase):
         self.assertEqual(top["activation_policy"], "quality_gate")
         self.assertEqual(top["signal_bundle_version"], "core_panel_v1")
         self.assertEqual(top["champion_model_family"], "regional_pooled_panel")
+        self.assertEqual(top["component_model_family"], "regional_pooled_panel")
         self.assertEqual(top["ensemble_component_weights"], {"regional_pooled_panel": 1.0})
+        self.assertEqual(top["reconciliation_method"], "not_reconciled")
+        self.assertEqual(top["hierarchy_consistency_status"], "not_checked")
+        self.assertEqual(top["benchmark_metrics"], {})
         self.assertEqual(top["revision_policy_used"], "raw")
+        self.assertIn("tsfm_metadata", top)
         self.assertTrue(top["business_gate"]["validated_for_budget_activation"])
         self.assertIn("model_version", top)
         self.assertIn("calibration_version", top)
@@ -252,6 +265,28 @@ class RegionalForecastServiceTests(unittest.TestCase):
         self.assertEqual(top["horizon_days"], 5)
         self.assertEqual(top["target_window_days"], [5, 5])
         self.assertEqual(top["expected_target_incidence"], top["expected_next_week_incidence"])
+
+    def test_predict_all_regions_applies_hierarchy_reconciliation_when_enabled(self) -> None:
+        service = self._make_service(
+            quality_gate_passed=True,
+            hierarchy_reconciliation={
+                "enabled": True,
+                "state_order": ["BY", "BE"],
+                "state_residual_history": [
+                    [0.5, -0.2],
+                    [0.4, -0.1],
+                    [0.6, 0.1],
+                ],
+            },
+        )
+
+        result = service.predict_all_regions(virus_typ="Influenza A", horizon_days=7)
+
+        self.assertEqual(result["reconciliation_method"], "mint_projection_residual_covariance")
+        self.assertEqual(result["hierarchy_consistency_status"], "coherent")
+        self.assertIn("national_forecast_quantiles", result)
+        self.assertIn("hierarchy_cluster_assignments", result)
+        self.assertEqual(result["predictions"][0]["cluster_id"], None)
 
     def test_predict_all_regions_rejects_unsupported_horizon(self) -> None:
         service = self._make_service(quality_gate_passed=True)

@@ -57,6 +57,10 @@ class ForecastRegistry:
         if candidate_wis > champion_wis * 0.99:
             return False
 
+        if "crps" in candidate_metrics and "crps" in champion_metrics:
+            if float(candidate_metrics["crps"]) > float(champion_metrics["crps"]) * 1.01:
+                return False
+
         for metric_name in ("coverage_95",):
             if metric_name in candidate_metrics and metric_name in champion_metrics:
                 if float(candidate_metrics[metric_name]) + 1e-9 < float(champion_metrics[metric_name]) - 0.02:
@@ -68,7 +72,7 @@ class ForecastRegistry:
                     return False
 
         if "decision_utility" in candidate_metrics and "decision_utility" in champion_metrics:
-            if float(candidate_metrics["decision_utility"]) + 1e-9 < float(champion_metrics["decision_utility"]):
+            if float(candidate_metrics["decision_utility"]) + 1e-9 < float(champion_metrics["decision_utility"]) - 0.01:
                 return False
 
         return True

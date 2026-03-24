@@ -16,6 +16,8 @@ const DecisionPage: React.FC = () => {
     decisionLoading,
     waveOutlook,
     waveOutlookLoading,
+    waveRadar,
+    waveRadarLoading,
     regionalBenchmark,
     regionalPortfolio,
     regionalPortfolioLoading,
@@ -30,6 +32,8 @@ const DecisionPage: React.FC = () => {
       loading={decisionLoading}
       waveOutlook={waveOutlook}
       waveOutlookLoading={waveOutlookLoading}
+      waveRadar={waveRadar}
+      waveRadarLoading={waveRadarLoading}
       regionalBenchmark={regionalBenchmark}
       regionalPortfolio={regionalPortfolio}
       regionalPortfolioLoading={regionalPortfolioLoading}

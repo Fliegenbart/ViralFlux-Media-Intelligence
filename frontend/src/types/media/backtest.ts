@@ -105,6 +105,48 @@ export interface BacktestChartPoint {
   amelag_viruslast?: number | null;
 }
 
+export interface WaveRadarRegion {
+  bundesland: string;
+  wave_start?: string | null;
+  wave_week?: string | null;
+  peak_week?: string | null;
+  peak_incidence?: number | null;
+  baseline_avg?: number | null;
+  threshold?: number | null;
+  total_incidence?: number | null;
+  data_points?: number | null;
+  wave_rank?: number | null;
+}
+
+export interface WaveRadarSummaryPoint {
+  bundesland?: string | null;
+  date?: string | null;
+}
+
+export interface WaveRadarSummary {
+  first_onset?: WaveRadarSummaryPoint | null;
+  last_onset?: WaveRadarSummaryPoint | null;
+  spread_days?: number | null;
+  regions_affected?: number | null;
+  regions_total?: number | null;
+}
+
+export interface WaveRadarHeatmapRow {
+  week_label: string;
+  [bundesland: string]: string | number;
+}
+
+export interface WaveRadarResponse {
+  disease?: string;
+  season?: string;
+  threshold_pct?: number;
+  summary?: WaveRadarSummary | null;
+  regions?: WaveRadarRegion[];
+  heatmap?: WaveRadarHeatmapRow[];
+  error?: string;
+  available?: string[];
+}
+
 export interface BacktestResponse {
   run_id?: string;
   mode?: string;

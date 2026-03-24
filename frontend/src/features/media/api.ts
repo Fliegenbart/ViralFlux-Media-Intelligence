@@ -18,6 +18,7 @@ import {
   RecommendationDetail,
   TruthImportBatchDetailResponse,
   TruthImportResponse,
+  WaveRadarResponse,
 } from '../../types/media';
 
 export interface GenerateRecommendationsPayload {
@@ -69,6 +70,21 @@ export interface PilotReadoutPayload {
 
 const DEFAULT_FETCH_TIMEOUT_MS = 20000;
 const HEAVY_FETCH_TIMEOUT_MS = 45000;
+
+function mapVirusToWaveRadarDisease(virus: string): string {
+  const normalized = String(virus || '').trim().toLowerCase();
+
+  if (normalized === 'influenza a' || normalized === 'influenza b') {
+    return 'influenza';
+  }
+  if (normalized === 'sars-cov-2') {
+    return 'covid';
+  }
+  if (normalized === 'rsv a') {
+    return 'rsv';
+  }
+  return 'influenza';
+}
 
 export async function fetchJson<T>(
   url: string,
@@ -176,6 +192,13 @@ export const mediaApi = {
 
   async getBacktestRun(runId: string): Promise<BacktestResponse> {
     return fetchJson<BacktestResponse>(`/api/v1/backtest/runs/${encodeURIComponent(runId)}`);
+  },
+
+  async getWaveRadar(virus: string): Promise<WaveRadarResponse> {
+    const qs = new URLSearchParams({
+      disease: mapVirusToWaveRadarDisease(virus),
+    });
+    return fetchJson<WaveRadarResponse>(`/api/v1/backtest/wave-radar?${qs.toString()}`, undefined, HEAVY_FETCH_TIMEOUT_MS);
   },
 
   async getRegionalBenchmark(referenceVirus = 'Influenza A'): Promise<RegionalBenchmarkResponse> {

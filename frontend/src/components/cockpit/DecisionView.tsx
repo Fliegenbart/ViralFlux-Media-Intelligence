@@ -9,8 +9,9 @@ import {
   MediaEvidenceResponse,
   RegionalBenchmarkResponse,
   RegionalPortfolioResponse,
+  WaveRadarResponse,
 } from '../../types/media';
-import { WaveOutlookPanel } from './BacktestVisuals';
+import { WaveOutlookPanel, WaveSpreadPanel } from './BacktestVisuals';
 import RegionalPortfolioPanel from './RegionalPortfolioPanel';
 import {
   VIRUS_OPTIONS,
@@ -37,6 +38,8 @@ interface Props {
   loading: boolean;
   waveOutlook: BacktestResponse | null;
   waveOutlookLoading: boolean;
+  waveRadar: WaveRadarResponse | null;
+  waveRadarLoading: boolean;
   regionalBenchmark: RegionalBenchmarkResponse | null;
   regionalPortfolio: RegionalPortfolioResponse | null;
   regionalPortfolioLoading: boolean;
@@ -54,6 +57,8 @@ const DecisionView: React.FC<Props> = ({
   loading,
   waveOutlook,
   waveOutlookLoading,
+  waveRadar,
+  waveRadarLoading,
   regionalBenchmark,
   regionalPortfolio,
   regionalPortfolioLoading,
@@ -237,12 +242,21 @@ const DecisionView: React.FC<Props> = ({
       />
 
       <section className="cockpit-grid">
-        <WaveOutlookPanel
-          virus={virus}
-          onVirusChange={onVirusChange}
-          result={waveOutlook}
-          loading={waveOutlookLoading}
-        />
+        <div style={{ display: 'grid', gap: 20 }}>
+          <WaveOutlookPanel
+            virus={virus}
+            onVirusChange={onVirusChange}
+            result={waveOutlook}
+            loading={waveOutlookLoading}
+          />
+
+          <WaveSpreadPanel
+            virus={virus}
+            result={waveRadar}
+            loading={waveRadarLoading}
+            subtitle={`Hier siehst du den historischen Ausbreitungsweg für ${virus} in der zuletzt verfügbaren Saison. Das hilft bei der Einordnung, ersetzt aber nicht die aktuelle Wochenentscheidung.`}
+          />
+        </div>
 
         <div style={{ display: 'grid', gap: 20 }}>
           <CollapsibleSection title="Datenstand & Quellen" subtitle="Eingangswerte und deren Aktualität">

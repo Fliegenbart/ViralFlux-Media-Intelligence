@@ -1,5 +1,5 @@
-import React, { useMemo } from 'react';
-import { isBefore, parseISO } from 'date-fns';
+import React, { useEffect, useMemo, useState } from 'react';
+import { differenceInCalendarDays, isBefore, parseISO } from 'date-fns';
 import {
   Area,
   CartesianGrid,
@@ -19,6 +19,7 @@ import {
   BacktestResponse,
   RegionalBacktestResponse,
   RegionalForecastPrediction,
+  WaveRadarResponse,
 } from '../../types/media';
 import {
   VIRUS_OPTIONS,
@@ -26,6 +27,8 @@ import {
   formatDateTime,
   formatPercent,
 } from './cockpitUtils';
+import { OperatorStat } from './operator/OperatorPrimitives';
+import HistoricalWaveMap from './HistoricalWaveMap';
 import { sanitizeEvidenceCopy } from './evidence/evidenceUtils';
 
 interface ValidationRow extends BacktestChartPoint {
@@ -222,6 +225,14 @@ interface WaveOutlookPanelProps {
   subtitle?: string;
 }
 
+interface WaveSpreadPanelProps {
+  virus: string;
+  result: WaveRadarResponse | null;
+  loading: boolean;
+  title?: string;
+  subtitle?: string;
+}
+
 interface FocusRegionChartRow {
   date: string;
   dateLabel: string;
@@ -237,6 +248,13 @@ interface FocusRegionOutlookPanelProps {
   backtest: RegionalBacktestResponse | null;
   loading: boolean;
   horizonDays: number;
+}
+
+interface WaveSpreadRow {
+  rank: number;
+  bundesland: string;
+  dateLabel: string;
+  offsetDays: number;
 }
 
 function formatVirusLevel(value?: number | null, digits = 1): string {
@@ -325,6 +343,26 @@ function buildFocusRegionChartRows(
   return Array.from(rows.values())
     .sort((left, right) => String(left.date).localeCompare(String(right.date)))
     .slice(-14);
+}
+
+function buildWaveSpreadRows(result: WaveRadarResponse | null, limit = 6): WaveSpreadRow[] {
+  const firstOnsetDate = parseDate(result?.summary?.first_onset?.date);
+
+  return [...(result?.regions || [])]
+    .filter((region) => region?.wave_start && region?.wave_rank != null)
+    .sort((left, right) => Number(left.wave_rank ?? Number.MAX_SAFE_INTEGER) - Number(right.wave_rank ?? Number.MAX_SAFE_INTEGER))
+    .slice(0, limit)
+    .map((region) => {
+      const waveDate = parseDate(region.wave_start);
+      return {
+        rank: Number(region.wave_rank ?? 0),
+        bundesland: String(region.bundesland || '-'),
+        dateLabel: formatDateShort(region.wave_start),
+        offsetDays: waveDate && firstOnsetDate
+          ? Math.max(differenceInCalendarDays(waveDate, firstOnsetDate), 0)
+          : 0,
+      };
+    });
 }
 
 function describeForecastDelta(prediction: RegionalForecastPrediction | null): string {
@@ -647,6 +685,219 @@ export const WaveOutlookPanel: React.FC<WaveOutlookPanelProps> = ({
       <p style={{ margin: '8px 0 0', fontSize: 12, lineHeight: 1.6, color: 'var(--text-muted)' }}>
         Diese Kurve bleibt bewusst rückblick-orientiert. Für den aktuellen Arbeitsstand solltest du immer zusätzlich auf den frischen Planungsausblick schauen.
       </p>
+    </div>
+  );
+};
+
+export const WaveSpreadPanel: React.FC<WaveSpreadPanelProps> = ({
+  virus,
+  result,
+  loading,
+  title = 'Hier beginnt die Welle',
+  subtitle,
+}) => {
+  const rows = useMemo(() => buildWaveSpreadRows(result), [result]);
+  const [selectedBundesland, setSelectedBundesland] = useState<string | null>(null);
+  const summary = result?.summary;
+  const firstOnset = summary?.first_onset;
+  const lastOnset = summary?.last_onset;
+  const firstDateLabel = formatDateShort(firstOnset?.date);
+  const lastDateLabel = formatDateShort(lastOnset?.date);
+  const affectedRegions = Number(summary?.regions_affected ?? rows.length);
+  const totalRegions = Number(summary?.regions_total ?? 16);
+  const spreadDays = Number(summary?.spread_days ?? 0);
+  const maxOffset = Math.max(spreadDays, ...rows.map((row) => row.offsetDays), 1);
+  const effectiveSubtitle = subtitle || `So sah die Ausbreitung von ${virus} in der zuletzt verfügbaren Saison aus. Diese Ansicht ist ein historischer Rückblick und kein Live-Forecast für heute.`;
+  const defaultBundesland = firstOnset?.bundesland || rows[0]?.bundesland || null;
+  const selectedRegion = useMemo(
+    () => (result?.regions || []).find((region) => region.bundesland === selectedBundesland) || null,
+    [result, selectedBundesland],
+  );
+  const selectedRank = Number(selectedRegion?.wave_rank || 0);
+  const selectedThreshold = selectedRegion?.threshold != null ? formatVirusLevel(selectedRegion.threshold, 1) : '-';
+  const selectedPeak = selectedRegion?.peak_incidence != null ? formatVirusLevel(selectedRegion.peak_incidence, 1) : '-';
+
+  useEffect(() => {
+    setSelectedBundesland(defaultBundesland);
+  }, [defaultBundesland]);
+
+  if (loading) {
+    return (
+      <div className="card" style={{ padding: 20, color: 'var(--text-muted)' }}>
+        Historische Ausbreitung wird geladen...
+      </div>
+    );
+  }
+
+  if (!rows.length || result?.error) {
+    return (
+      <div className="card" style={{ padding: 20 }}>
+        <h2 style={{ margin: 0, fontSize: 20, color: 'var(--text-primary)' }}>{title}</h2>
+        <div className="soft-panel" style={{ padding: 20, marginTop: 14, color: 'var(--text-muted)' }}>
+          Für diese historische Ausbreitung liegen gerade nicht genug regionale Daten vor.
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="card" style={{ padding: 20 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start', marginBottom: 16 }}>
+        <div>
+          <h2 style={{ margin: 0, fontSize: 20, color: 'var(--text-primary)' }}>{title}</h2>
+          <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--text-muted)' }}>
+            {effectiveSubtitle}
+          </p>
+        </div>
+        <div style={{ textAlign: 'right', fontSize: 12, color: 'var(--text-muted)' }}>
+          Saison {result?.season || '-'}
+        </div>
+      </div>
+
+      <div className="soft-panel" style={{ padding: 18, marginBottom: 16 }}>
+        <p style={{ margin: 0, fontSize: 18, lineHeight: 1.5, color: 'var(--text-primary)', fontWeight: 800 }}>
+          {firstOnset?.bundesland
+            ? `${firstOnset.bundesland} war in der letzten verfügbaren Saison der erste sichtbare Startpunkt. Von dort breitete sich die Welle innerhalb von ${spreadDays} Tagen bis zur letzten erfassten Region aus.`
+            : 'Der erste regionale Startpunkt ist für diese Saison noch nicht eindeutig sichtbar.'}
+        </p>
+        <p style={{ margin: '10px 0 0', fontSize: 14, lineHeight: 1.6, color: 'var(--text-secondary)' }}>
+          {lastOnset?.bundesland
+            ? `Erster Start am ${firstDateLabel}, letzter späterer Start in ${lastOnset.bundesland} am ${lastDateLabel}.`
+            : `Erster sichtbarer Start am ${firstDateLabel}.`}
+        </p>
+        <p style={{ margin: '8px 0 0', fontSize: 13, lineHeight: 1.6, color: 'var(--text-muted)' }}>
+          Diese Karte zeigt die zuletzt verfügbare historische Saison und hilft dir, die typische Reihenfolge besser einzuordnen. Sie ersetzt nicht den aktuellen Forecast.
+        </p>
+      </div>
+
+      <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', marginBottom: 16 }}>
+        <div className="soft-panel" style={{ padding: 16 }}>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+            Erster Start
+          </div>
+          <div style={{ marginTop: 6, fontSize: 18, fontWeight: 800, color: '#2aa198' }}>
+            {firstOnset?.bundesland || '-'}
+          </div>
+          <div style={{ marginTop: 4, fontSize: 12, color: 'var(--text-muted)' }}>
+            {firstDateLabel}
+          </div>
+        </div>
+        <div className="soft-panel" style={{ padding: 16 }}>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+            Letzter Start
+          </div>
+          <div style={{ marginTop: 6, fontSize: 18, fontWeight: 800, color: '#ff9f0a' }}>
+            {lastOnset?.bundesland || '-'}
+          </div>
+          <div style={{ marginTop: 4, fontSize: 12, color: 'var(--text-muted)' }}>
+            {lastDateLabel}
+          </div>
+        </div>
+        <div className="soft-panel" style={{ padding: 16 }}>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+            Ausbreitungsdauer
+          </div>
+          <div style={{ marginTop: 6, fontSize: 18, fontWeight: 800, color: '#5e5ce6' }}>
+            {`${spreadDays} Tage`}
+          </div>
+        </div>
+        <div className="soft-panel" style={{ padding: 16 }}>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+            Betroffene Regionen
+          </div>
+          <div style={{ marginTop: 6, fontSize: 18, fontWeight: 800, color: 'var(--text-primary)' }}>
+            {`${affectedRegions}/${totalRegions}`}
+          </div>
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gap: 16, gridTemplateColumns: 'minmax(0, 1.25fr) minmax(260px, 0.95fr)', marginBottom: 16 }}>
+        <div className="soft-panel" style={{ padding: 16 }}>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>
+            Deutschlandkarte der historischen Startreihenfolge. Je frueher ein Bundesland gestartet ist, desto staerker ist es eingefaerbt.
+          </div>
+          <HistoricalWaveMap
+            result={result}
+            selectedBundesland={selectedBundesland}
+            onSelectBundesland={setSelectedBundesland}
+          />
+        </div>
+
+        <div className="soft-panel" style={{ padding: 18 }}>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+            Ausgewählte Region
+          </div>
+          <div style={{ marginTop: 8, fontSize: 22, fontWeight: 800, color: 'var(--text-primary)' }}>
+            {selectedBundesland || firstOnset?.bundesland || '-'}
+          </div>
+          <p style={{ margin: '10px 0 16px', fontSize: 14, lineHeight: 1.6, color: 'var(--text-secondary)' }}>
+            {selectedRegion?.wave_rank
+              ? `${selectedBundesland} lag in dieser Saison auf Rang ${selectedRank} der sichtbaren Ausbreitung.`
+              : `${selectedBundesland || 'Diese Region'} hat in dieser Saison keinen klaren Wellenstart ueber der gewaehlten Schwelle gezeigt.`}
+          </p>
+
+          <div className="operator-stat-grid">
+            <OperatorStat
+              label="Historischer Rang"
+              value={selectedRegion?.wave_rank ? `#${selectedRank}` : '-'}
+              meta={selectedRegion?.wave_start ? formatDateShort(selectedRegion.wave_start) : 'kein klarer Start'}
+              tone="accent"
+            />
+            <OperatorStat
+              label="Peak-Woche"
+              value={selectedRegion?.peak_week || '-'}
+              meta={selectedPeak !== '-' ? `Peak ${selectedPeak}` : 'keine Peak-Angabe'}
+            />
+            <OperatorStat
+              label="Schwelle"
+              value={selectedThreshold}
+              meta="historischer Startwert"
+            />
+            <OperatorStat
+              label="Datenpunkte"
+              value={selectedRegion?.data_points != null ? String(selectedRegion.data_points) : '-'}
+              meta="Wochen in der Saison"
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className="workspace-note-list">
+        {rows.map((row) => (
+          <div key={`${row.rank}-${row.bundesland}`} className="soft-panel" style={{ padding: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'baseline' }}>
+              <div style={{ display: 'flex', gap: 10, alignItems: 'baseline' }}>
+                <span style={{ fontSize: 12, color: '#5e5ce6', fontWeight: 800, minWidth: 20 }}>
+                  #{row.rank}
+                </span>
+                <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>
+                  {row.bundesland}
+                </span>
+              </div>
+              <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+                {row.dateLabel}
+              </span>
+            </div>
+            <div style={{ marginTop: 10, height: 8, borderRadius: 999, background: 'rgba(148, 163, 184, 0.16)', overflow: 'hidden' }}>
+              <div
+                style={{
+                  height: '100%',
+                  width: `${Math.max((row.offsetDays / maxOffset) * 100, 10)}%`,
+                  borderRadius: 999,
+                  background: row.offsetDays === 0
+                    ? 'linear-gradient(90deg, #2aa198 0%, #4fd1c5 100%)'
+                    : 'linear-gradient(90deg, #5e5ce6 0%, #0a84ff 100%)',
+                }}
+              />
+            </div>
+            <div style={{ marginTop: 8, fontSize: 12, color: 'var(--text-muted)' }}>
+              {row.offsetDays === 0
+                ? 'Hier begann die Welle in dieser Saison zuerst.'
+                : `${row.offsetDays} Tage nach dem ersten Start sichtbar geworden.`}
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 };

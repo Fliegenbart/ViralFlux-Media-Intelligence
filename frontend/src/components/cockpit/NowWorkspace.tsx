@@ -4,11 +4,12 @@ import {
   BacktestResponse,
   RegionalBacktestResponse,
   RegionalForecastResponse,
+  WaveRadarResponse,
   WorkspaceStatusSummary,
 } from '../../types/media';
 import CollapsibleSection from '../CollapsibleSection';
 import { NowPageViewModel } from '../../features/media/useMediaData';
-import { FocusRegionOutlookPanel, WaveOutlookPanel } from './BacktestVisuals';
+import { FocusRegionOutlookPanel, WaveOutlookPanel, WaveSpreadPanel } from './BacktestVisuals';
 import { formatDateTime, VIRUS_OPTIONS } from './cockpitUtils';
 import WorkspaceStatusPanel from './WorkspaceStatusPanel';
 import {
@@ -31,6 +32,8 @@ interface Props {
   focusRegionBacktestLoading: boolean;
   waveOutlook: BacktestResponse | null;
   waveOutlookLoading: boolean;
+  waveRadar: WaveRadarResponse | null;
+  waveRadarLoading: boolean;
   onOpenRecommendation: (id: string) => void;
   onOpenRegions: (regionCode?: string) => void;
   onOpenCampaigns: () => void;
@@ -50,6 +53,8 @@ const NowWorkspace: React.FC<Props> = ({
   focusRegionBacktestLoading,
   waveOutlook,
   waveOutlookLoading,
+  waveRadar,
+  waveRadarLoading,
   onOpenRecommendation,
   onOpenRegions,
   onOpenCampaigns,
@@ -304,6 +309,14 @@ const NowWorkspace: React.FC<Props> = ({
               showVirusSelector={false}
               title="Bundesweiter Rückblick"
               subtitle={`Hier bleibt die bisherige bundesweite Validierung sichtbar. Sie ist nicht mehr die erste Kundenansicht, hilft aber weiter bei der fachlichen Einordnung von ${virus}.`}
+            />
+
+            <WaveSpreadPanel
+              virus={virus}
+              result={waveRadar}
+              loading={waveRadarLoading}
+              title="Hier beginnt die Welle"
+              subtitle={`So hat sich ${virus} in der zuletzt verfügbaren Saison über Deutschland verteilt. Damit siehst du schneller, welche Regionen damals zuerst gefolgt sind.`}
             />
 
             <div className="workspace-two-column">

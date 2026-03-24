@@ -27,6 +27,8 @@ const NowPage: React.FC = () => {
     focusRegionBacktestLoading,
     waveOutlook,
     waveOutlookLoading,
+    waveRadar,
+    waveRadarLoading,
   } = useNowPageData(virus, brand, horizonDays, weeklyBudget, dataVersion, toast);
 
   return (
@@ -43,6 +45,8 @@ const NowPage: React.FC = () => {
       focusRegionBacktestLoading={focusRegionBacktestLoading}
       waveOutlook={waveOutlook}
       waveOutlookLoading={waveOutlookLoading}
+      waveRadar={waveRadar}
+      waveRadarLoading={waveRadarLoading}
       onOpenRecommendation={(id) => openRecommendation(id, 'overlay')}
       onOpenRegions={(regionCode) => navigate('/regionen', { state: regionCode ? { regionCode } : undefined })}
       onOpenCampaigns={() => navigate('/kampagnen')}

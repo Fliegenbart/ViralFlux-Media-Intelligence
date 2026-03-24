@@ -1,9 +1,10 @@
 import '@testing-library/jest-dom';
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 
 import {
   FocusRegionOutlookPanel,
+  WaveSpreadPanel,
   WaveOutlookPanel,
   buildValidationRows,
   detectWaveMarkers,
@@ -31,6 +32,20 @@ jest.mock('recharts', () => {
     Area: empty,
   };
 });
+
+jest.mock('./HistoricalWaveMap', () => ({
+  __esModule: true,
+  default: ({ onSelectBundesland }: { onSelectBundesland: (bundesland: string) => void }) => (
+    <div>
+      <button type="button" data-testid="historical-wave-map-BE" onClick={() => onSelectBundesland('Berlin')}>
+        HistoricalWaveMap Berlin
+      </button>
+      <button type="button" data-testid="historical-wave-map-BB" onClick={() => onSelectBundesland('Brandenburg')}>
+        HistoricalWaveMap Brandenburg
+      </button>
+    </div>
+  ),
+}));
 
 function buildResult(chartData: BacktestResponse['chart_data']): BacktestResponse {
   return {
@@ -137,6 +152,44 @@ describe('WaveOutlookPanel', () => {
     expect(screen.getByText('Letzter Ist-Wert')).toBeInTheDocument();
     expect(screen.getByText(/Letzte Beobachtung: 23.02.2026/)).toBeInTheDocument();
     expect(screen.queryByText('Wir stehen hier')).not.toBeInTheDocument();
+  });
+});
+
+describe('WaveSpreadPanel', () => {
+  it('renders the historical start region and spread order', () => {
+    render(
+      <WaveSpreadPanel
+        virus="Influenza A"
+        loading={false}
+        result={{
+          disease: 'Influenza, saisonal',
+          season: '2025/2026',
+          summary: {
+            first_onset: { bundesland: 'Berlin', date: '2025-11-10' },
+            last_onset: { bundesland: 'Bayern', date: '2025-12-15' },
+            spread_days: 35,
+            regions_affected: 12,
+            regions_total: 16,
+          },
+          regions: [
+            { bundesland: 'Berlin', wave_start: '2025-11-10', wave_rank: 1 },
+            { bundesland: 'Brandenburg', wave_start: '2025-11-17', wave_rank: 2 },
+            { bundesland: 'Sachsen', wave_start: '2025-11-24', wave_rank: 3 },
+          ],
+        }}
+      />,
+    );
+
+    expect(screen.getByText('Hier beginnt die Welle')).toBeInTheDocument();
+    expect(screen.getByText(/Berlin war in der letzten verfügbaren Saison der erste sichtbare Startpunkt/)).toBeInTheDocument();
+    expect(screen.getByText('Saison 2025/2026')).toBeInTheDocument();
+    expect(screen.getByText('Brandenburg')).toBeInTheDocument();
+    expect(screen.getByText('7 Tage nach dem ersten Start sichtbar geworden.')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('historical-wave-map-BB'));
+
+    expect(screen.getByText('Ausgewählte Region')).toBeInTheDocument();
+    expect(screen.getByText(/Brandenburg lag in dieser Saison auf Rang 2 der sichtbaren Ausbreitung/)).toBeInTheDocument();
   });
 });
 

@@ -16,6 +16,7 @@ import {
   RegionalPortfolioResponse,
   TruthImportBatchDetailResponse,
   TruthImportResponse,
+  WaveRadarResponse,
   PredictionNarrative,
 } from '../../types/media';
 import {
@@ -806,6 +807,8 @@ export function useNowPageData(
   const [focusRegionBacktestLoading, setFocusRegionBacktestLoading] = useState(false);
   const [waveOutlook, setWaveOutlook] = useState<BacktestResponse | null>(null);
   const [waveOutlookLoading, setWaveOutlookLoading] = useState(false);
+  const [waveRadar, setWaveRadar] = useState<WaveRadarResponse | null>(null);
+  const [waveRadarLoading, setWaveRadarLoading] = useState(false);
   const [loading, setLoading] = useState(false);
   const loadVersionRef = useRef(0);
 
@@ -822,6 +825,8 @@ export function useNowPageData(
     setFocusRegionBacktestLoading(false);
     setWaveOutlook(null);
     setWaveOutlookLoading(false);
+    setWaveRadar(null);
+    setWaveRadarLoading(false);
 
     const [decisionResult, evidenceResult] = await Promise.allSettled([
       mediaApi.getDecision(virus, brand),
@@ -872,9 +877,13 @@ export function useNowPageData(
       setWaveOutlookLoading(false);
     }
 
-    const forecastResult = await mediaApi.getRegionalForecast(virus, horizonDays)
-      .then((value) => ({ status: 'fulfilled' as const, value }))
-      .catch((reason) => ({ status: 'rejected' as const, reason }));
+    setWaveRadarLoading(true);
+    const [forecastResult, allocationResult, recommendationResult, waveRadarResult] = await Promise.allSettled([
+      mediaApi.getRegionalForecast(virus, horizonDays),
+      mediaApi.getRegionalAllocation(virus, weeklyBudget, horizonDays),
+      mediaApi.getRegionalCampaignRecommendations(virus, weeklyBudget, horizonDays),
+      mediaApi.getWaveRadar(virus),
+    ]);
 
     if (!isCurrentLoad()) return;
 
@@ -886,12 +895,6 @@ export function useNowPageData(
       backgroundLoadFailed = true;
     }
 
-    const allocationResult = await mediaApi.getRegionalAllocation(virus, weeklyBudget, horizonDays)
-      .then((value) => ({ status: 'fulfilled' as const, value }))
-      .catch((reason) => ({ status: 'rejected' as const, reason }));
-
-    if (!isCurrentLoad()) return;
-
     if (allocationResult.status === 'fulfilled') {
       setAllocation(allocationResult.value);
     } else {
@@ -900,12 +903,6 @@ export function useNowPageData(
       backgroundLoadFailed = true;
     }
 
-    const recommendationResult = await mediaApi.getRegionalCampaignRecommendations(virus, weeklyBudget, horizonDays)
-      .then((value) => ({ status: 'fulfilled' as const, value }))
-      .catch((reason) => ({ status: 'rejected' as const, reason }));
-
-    if (!isCurrentLoad()) return;
-
     if (recommendationResult.status === 'fulfilled') {
       setCampaignRecommendations(recommendationResult.value);
     } else {
@@ -913,6 +910,16 @@ export function useNowPageData(
       setCampaignRecommendations(null);
       backgroundLoadFailed = true;
     }
+
+    if (waveRadarResult.status === 'fulfilled' && !waveRadarResult.value?.error) {
+      setWaveRadar(waveRadarResult.value);
+    } else {
+      if (waveRadarResult.status === 'rejected') {
+        console.error('Now page wave radar fetch failed', waveRadarResult.reason);
+      }
+      setWaveRadar(null);
+    }
+    setWaveRadarLoading(false);
 
     const focusRegionCode = deriveNowFocusRegionCode(
       decisionResult.status === 'fulfilled' ? decisionResult.value : null,
@@ -966,6 +973,8 @@ export function useNowPageData(
     focusRegionBacktestLoading,
     waveOutlook,
     waveOutlookLoading,
+    waveRadar,
+    waveRadarLoading,
     loading,
     loadNowPage,
     workspaceStatus: buildWorkspaceStatus(decision, evidence),
@@ -984,6 +993,8 @@ export function useDecisionPageData(
   const [decisionLoading, setDecisionLoading] = useState(false);
   const [waveOutlook, setWaveOutlook] = useState<BacktestResponse | null>(null);
   const [waveOutlookLoading, setWaveOutlookLoading] = useState(false);
+  const [waveRadar, setWaveRadar] = useState<WaveRadarResponse | null>(null);
+  const [waveRadarLoading, setWaveRadarLoading] = useState(false);
   const [regionalBenchmark, setRegionalBenchmark] = useState<RegionalBenchmarkResponse | null>(null);
   const [regionalPortfolio, setRegionalPortfolio] = useState<RegionalPortfolioResponse | null>(null);
   const [regionalPortfolioLoading, setRegionalPortfolioLoading] = useState(false);
@@ -991,6 +1002,8 @@ export function useDecisionPageData(
   const loadDecision = useCallback(async () => {
     setDecisionLoading(true);
     setRegionalPortfolioLoading(true);
+    setWaveRadar(null);
+    setWaveRadarLoading(false);
     let decisionLoaded = false;
     try {
       const decisionResult = await mediaApi.getDecision(virus, brand);
@@ -1004,15 +1017,18 @@ export function useDecisionPageData(
     }
 
     if (!decisionLoaded) {
+      setWaveRadarLoading(false);
       setRegionalPortfolioLoading(false);
       return;
     }
 
+    setWaveRadarLoading(true);
     Promise.allSettled([
       mediaApi.getEvidence(virus, brand),
       mediaApi.getRegionalBenchmark(),
       mediaApi.getRegionalPortfolio(),
-    ]).then(([evidenceResult, benchmarkResult, portfolioResult]) => {
+      mediaApi.getWaveRadar(virus),
+    ]).then(([evidenceResult, benchmarkResult, portfolioResult, waveRadarResult]) => {
       if (evidenceResult.status === 'fulfilled') {
         setDecisionEvidence(evidenceResult.value);
       } else {
@@ -1033,7 +1049,17 @@ export function useDecisionPageData(
         console.error('Regional portfolio fetch failed', portfolioResult.reason);
         setRegionalPortfolio(null);
       }
+
+      if (waveRadarResult.status === 'fulfilled' && !waveRadarResult.value?.error) {
+        setWaveRadar(waveRadarResult.value);
+      } else {
+        if (waveRadarResult.status === 'rejected') {
+          console.error('Wave radar fetch failed', waveRadarResult.reason);
+        }
+        setWaveRadar(null);
+      }
     }).finally(() => {
+      setWaveRadarLoading(false);
       setRegionalPortfolioLoading(false);
     });
   }, [brand, toast, virus]);
@@ -1076,6 +1102,8 @@ export function useDecisionPageData(
     loadDecision,
     waveOutlook,
     waveOutlookLoading,
+    waveRadar,
+    waveRadarLoading,
     regionalBenchmark,
     regionalPortfolio,
     regionalPortfolioLoading,

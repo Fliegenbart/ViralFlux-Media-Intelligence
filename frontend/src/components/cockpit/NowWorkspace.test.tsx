@@ -4,7 +4,12 @@ import { fireEvent, render, screen } from '@testing-library/react';
 
 import NowWorkspace from './NowWorkspace';
 import { NowPageViewModel } from '../../features/media/useMediaData';
-import { RegionalBacktestResponse, RegionalForecastResponse, WorkspaceStatusSummary } from '../../types/media';
+import {
+  RegionalBacktestResponse,
+  RegionalForecastResponse,
+  WaveRadarResponse,
+  WorkspaceStatusSummary,
+} from '../../types/media';
 
 jest.mock('recharts', () => {
   const ReactLib = require('react');
@@ -26,6 +31,20 @@ jest.mock('recharts', () => {
     Area: empty,
   };
 });
+
+jest.mock('./HistoricalWaveMap', () => ({
+  __esModule: true,
+  default: ({ onSelectBundesland }: { onSelectBundesland: (bundesland: string) => void }) => (
+    <div>
+      <button type="button" data-testid="historical-wave-map-BE" onClick={() => onSelectBundesland('Berlin')}>
+        HistoricalWaveMap Berlin
+      </button>
+      <button type="button" data-testid="historical-wave-map-BB" onClick={() => onSelectBundesland('Brandenburg')}>
+        HistoricalWaveMap Brandenburg
+      </button>
+    </div>
+  ),
+}));
 
 const noop = () => {};
 
@@ -220,6 +239,38 @@ function buildFocusRegionBacktest(): RegionalBacktestResponse {
   };
 }
 
+function buildWaveRadar(): WaveRadarResponse {
+  return {
+    disease: 'Influenza, saisonal',
+    season: '2025/2026',
+    summary: {
+      first_onset: {
+        bundesland: 'Berlin',
+        date: '2025-11-10',
+      },
+      last_onset: {
+        bundesland: 'Bayern',
+        date: '2025-12-15',
+      },
+      spread_days: 35,
+      regions_affected: 12,
+      regions_total: 16,
+    },
+    regions: [
+      {
+        bundesland: 'Berlin',
+        wave_start: '2025-11-10',
+        wave_rank: 1,
+      },
+      {
+        bundesland: 'Brandenburg',
+        wave_start: '2025-11-17',
+        wave_rank: 2,
+      },
+    ],
+  };
+}
+
 describe('NowWorkspace', () => {
   it('shows one main decision, the trust block and the next region flow', () => {
     render(
@@ -236,6 +287,8 @@ describe('NowWorkspace', () => {
         focusRegionBacktestLoading={false}
         waveOutlook={null}
         waveOutlookLoading={false}
+        waveRadar={buildWaveRadar()}
+        waveRadarLoading={false}
         onOpenRecommendation={noop}
         onOpenRegions={noop}
         onOpenCampaigns={noop}
@@ -271,6 +324,8 @@ describe('NowWorkspace', () => {
         focusRegionBacktestLoading={false}
         waveOutlook={null}
         waveOutlookLoading={false}
+        waveRadar={buildWaveRadar()}
+        waveRadarLoading={false}
         onOpenRecommendation={onOpenRecommendation}
         onOpenRegions={noop}
         onOpenCampaigns={noop}

@@ -3,6 +3,7 @@ import React from 'react';
 import { render, screen } from '@testing-library/react';
 
 import {
+  FocusRegionOutlookPanel,
   WaveOutlookPanel,
   buildValidationRows,
   detectWaveMarkers,
@@ -136,5 +137,53 @@ describe('WaveOutlookPanel', () => {
     expect(screen.getByText('Letzter Ist-Wert')).toBeInTheDocument();
     expect(screen.getByText(/Letzte Beobachtung: 23.02.2026/)).toBeInTheDocument();
     expect(screen.queryByText('Wir stehen hier')).not.toBeInTheDocument();
+  });
+});
+
+describe('FocusRegionOutlookPanel', () => {
+  it('renders the focus-region headline with viruslage wording and target sentence', () => {
+    render(
+      <FocusRegionOutlookPanel
+        horizonDays={7}
+        loading={false}
+        prediction={{
+          bundesland: 'BE',
+          bundesland_name: 'Berlin',
+          virus_typ: 'Influenza A',
+          as_of_date: '2026-03-18 00:00:00',
+          target_date: '2026-03-25',
+          target_week_start: '2026-03-23',
+          target_window_days: [7],
+          horizon_days: 7,
+          event_probability_calibrated: 0.81,
+          expected_target_incidence: 165,
+          current_known_incidence: 110,
+          prediction_interval: { lower: 150, upper: 185 },
+          change_pct: 18,
+          trend: 'up',
+          last_data_date: '2026-03-17 00:00:00',
+        }}
+        backtest={{
+          bundesland: 'BE',
+          bundesland_name: 'Berlin',
+          timeline: [
+            {
+              bundesland: 'BE',
+              bundesland_name: 'Berlin',
+              as_of_date: '2026-03-10T00:00:00',
+              target_date: '2026-03-17T00:00:00',
+              horizon_days: 7,
+              current_known_incidence: 110,
+              expected_target_incidence: 121,
+            },
+          ],
+        }}
+      />,
+    );
+
+    expect(screen.getByText('Fokusregion in 7 Tagen')).toBeInTheDocument();
+    expect(screen.getByText(/In 7 Tagen erwarten wir für Berlin einen Viruslage-Wert von ca. 165,0/)).toBeInTheDocument();
+    expect(screen.getByText(/Letzter bestätigter Ist-Wert vom 17.03.2026/)).toBeInTheDocument();
+    expect(screen.getByText(/Die Richtung ist/)).toBeInTheDocument();
   });
 });

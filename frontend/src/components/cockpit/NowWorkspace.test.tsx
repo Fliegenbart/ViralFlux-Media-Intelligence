@@ -4,7 +4,28 @@ import { fireEvent, render, screen } from '@testing-library/react';
 
 import NowWorkspace from './NowWorkspace';
 import { NowPageViewModel } from '../../features/media/useMediaData';
-import { RegionalForecastResponse, WorkspaceStatusSummary } from '../../types/media';
+import { RegionalBacktestResponse, RegionalForecastResponse, WorkspaceStatusSummary } from '../../types/media';
+
+jest.mock('recharts', () => {
+  const ReactLib = require('react');
+
+  const passthrough = ({ children }: { children?: React.ReactNode }) => ReactLib.createElement(ReactLib.Fragment, null, children);
+  const empty = () => null;
+
+  return {
+    ResponsiveContainer: passthrough,
+    ComposedChart: passthrough,
+    CartesianGrid: empty,
+    Legend: empty,
+    Line: empty,
+    ReferenceArea: empty,
+    ReferenceLine: empty,
+    Tooltip: empty,
+    XAxis: empty,
+    YAxis: empty,
+    Area: empty,
+  };
+});
 
 const noop = () => {};
 
@@ -131,24 +152,71 @@ function buildForecast(): RegionalForecastResponse {
         bundesland: 'BE',
         bundesland_name: 'Berlin',
         virus_typ: 'Influenza A',
-        as_of_date: '2026-03-18',
+        as_of_date: '2026-03-18 00:00:00',
         target_date: '2026-03-25',
         target_week_start: '2026-03-23',
         target_window_days: [7],
         horizon_days: 7,
         event_probability_calibrated: 0.81,
+        expected_target_incidence: 165,
         current_known_incidence: 110,
         change_pct: 18,
         trend: 'up',
         decision_label: 'Prepare',
         decision_rank: 1,
-        last_data_date: '2026-03-17',
+        prediction_interval: {
+          lower: 150,
+          upper: 185,
+        },
+        last_data_date: '2026-03-17 00:00:00',
       },
     ],
     top_5: [],
     top_decisions: [],
     generated_at: '2026-03-18T08:00:00Z',
     as_of_date: '2026-03-18',
+  };
+}
+
+function buildFocusRegionBacktest(): RegionalBacktestResponse {
+  return {
+    bundesland: 'BE',
+    bundesland_name: 'Berlin',
+    timeline: [
+      {
+        bundesland: 'BE',
+        bundesland_name: 'Berlin',
+        as_of_date: '2026-02-24T00:00:00',
+        target_date: '2026-03-03T00:00:00',
+        horizon_days: 7,
+        current_known_incidence: 92,
+        expected_target_incidence: 96,
+        prediction_interval_lower: 88,
+        prediction_interval_upper: 102,
+      },
+      {
+        bundesland: 'BE',
+        bundesland_name: 'Berlin',
+        as_of_date: '2026-03-03T00:00:00',
+        target_date: '2026-03-10T00:00:00',
+        horizon_days: 7,
+        current_known_incidence: 101,
+        expected_target_incidence: 108,
+        prediction_interval_lower: 96,
+        prediction_interval_upper: 116,
+      },
+      {
+        bundesland: 'BE',
+        bundesland_name: 'Berlin',
+        as_of_date: '2026-03-10T00:00:00',
+        target_date: '2026-03-17T00:00:00',
+        horizon_days: 7,
+        current_known_incidence: 110,
+        expected_target_incidence: 121,
+        prediction_interval_lower: 104,
+        prediction_interval_upper: 132,
+      },
+    ],
   };
 }
 
@@ -164,6 +232,8 @@ describe('NowWorkspace', () => {
         workspaceStatus={buildWorkspaceStatus()}
         loading={false}
         forecast={buildForecast()}
+        focusRegionBacktest={buildFocusRegionBacktest()}
+        focusRegionBacktestLoading={false}
         waveOutlook={null}
         waveOutlookLoading={false}
         onOpenRecommendation={noop}
@@ -174,8 +244,9 @@ describe('NowWorkspace', () => {
     );
 
     expect(screen.getByText('Was sich gerade entwickelt')).toBeInTheDocument();
-    expect(screen.getByText('Letzte validierte Marktansicht')).toBeInTheDocument();
-    expect(screen.getByText('Aktueller Planungsblick')).toBeInTheDocument();
+    expect(screen.getByText('Fokusregion in 7 Tagen')).toBeInTheDocument();
+    expect(screen.getByText(/In 7 Tagen erwarten wir für Berlin einen Viruslage-Wert von ca. 165,0/)).toBeInTheDocument();
+    expect(screen.getByText(/Letzter bestätigter Ist-Wert vom 17.03.2026/)).toBeInTheDocument();
     expect(screen.getByText('Unsere Prognose zeigt im 7-Tage-Fenster die größte Dynamik aktuell in Berlin.')).toBeInTheDocument();
     expect(screen.getByText('Was vor dem nächsten Schritt geklärt sein sollte')).toBeInTheDocument();
     expect(screen.getByText('Danach anschauen')).toBeInTheDocument();
@@ -196,6 +267,8 @@ describe('NowWorkspace', () => {
         workspaceStatus={buildWorkspaceStatus()}
         loading={false}
         forecast={buildForecast()}
+        focusRegionBacktest={buildFocusRegionBacktest()}
+        focusRegionBacktestLoading={false}
         waveOutlook={null}
         waveOutlookLoading={false}
         onOpenRecommendation={onOpenRecommendation}

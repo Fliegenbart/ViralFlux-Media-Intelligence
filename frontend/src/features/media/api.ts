@@ -8,6 +8,7 @@ import {
   PilotReadoutResponse,
   RegionalAllocationResponse,
   RegionalCampaignRecommendationsResponse,
+  RegionalBacktestResponse,
   RegionalForecastResponse,
   RegionalBenchmarkResponse,
   RegionalPortfolioResponse,
@@ -196,6 +197,22 @@ export const mediaApi = {
       horizon_days: String(horizonDays),
     });
     return fetchJson<RegionalForecastResponse>(`/api/v1/forecast/regional/decisions?${qs.toString()}`, undefined, HEAVY_FETCH_TIMEOUT_MS);
+  },
+
+  async getRegionalBacktest(
+    virus: string,
+    regionCode: string,
+    horizonDays: number,
+  ): Promise<RegionalBacktestResponse> {
+    const qs = new URLSearchParams({
+      virus_typ: virus,
+      horizon_days: String(horizonDays),
+    });
+    return fetchJson<RegionalBacktestResponse>(
+      `/api/v1/forecast/regional/backtest/${encodeURIComponent(regionCode)}?${qs.toString()}`,
+      undefined,
+      HEAVY_FETCH_TIMEOUT_MS,
+    );
   },
 
   async getRegionalAllocation(

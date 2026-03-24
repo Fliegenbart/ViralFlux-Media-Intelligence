@@ -10,6 +10,7 @@ jest.mock('./api', () => ({
     getDecision: jest.fn(),
     getEvidence: jest.fn(),
     getBacktestRun: jest.fn(),
+    getRegionalBacktest: jest.fn(),
     getRegionalForecast: jest.fn(),
     getRegionalAllocation: jest.fn(),
     getRegionalCampaignRecommendations: jest.fn(),
@@ -59,6 +60,7 @@ describe('useNowPageData', () => {
     const forecastDeferred = createDeferred<any>();
     const allocationDeferred = createDeferred<any>();
     const recommendationDeferred = createDeferred<any>();
+    const regionalBacktestDeferred = createDeferred<any>();
 
     mockedMediaApi.getDecision.mockImplementation(() => {
       callOrder.push('decision');
@@ -75,6 +77,10 @@ describe('useNowPageData', () => {
     mockedMediaApi.getRegionalForecast.mockImplementation(() => {
       callOrder.push('forecast');
       return forecastDeferred.promise;
+    });
+    mockedMediaApi.getRegionalBacktest.mockImplementation(() => {
+      callOrder.push('regionalBacktest');
+      return regionalBacktestDeferred.promise;
     });
     mockedMediaApi.getRegionalAllocation.mockImplementation(() => {
       callOrder.push('allocation');
@@ -178,6 +184,19 @@ describe('useNowPageData', () => {
 
     await waitFor(() => {
       expect(mockedMediaApi.getRegionalCampaignRecommendations).toHaveBeenCalledTimes(1);
+    });
+
+    await waitFor(() => {
+      expect(callOrder).toEqual(['decision', 'evidence', 'backtest', 'forecast', 'allocation', 'recommendation', 'regionalBacktest']);
+    });
+
+    await act(async () => {
+      regionalBacktestDeferred.resolve({
+        bundesland: 'BE',
+        bundesland_name: 'Berlin',
+        timeline: [],
+      });
+      await Promise.resolve();
     });
   });
 });

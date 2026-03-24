@@ -14,7 +14,12 @@ import {
   YAxis,
 } from 'recharts';
 
-import { BacktestChartPoint, BacktestResponse } from '../../types/media';
+import {
+  BacktestChartPoint,
+  BacktestResponse,
+  RegionalBacktestResponse,
+  RegionalForecastPrediction,
+} from '../../types/media';
 import {
   VIRUS_OPTIONS,
   formatDateShort,
@@ -216,6 +221,297 @@ interface WaveOutlookPanelProps {
   title?: string;
   subtitle?: string;
 }
+
+interface FocusRegionChartRow {
+  date: string;
+  dateLabel: string;
+  actual?: number | null;
+  validated?: number | null;
+  forecast?: number | null;
+  bandBase?: number | null;
+  bandRange?: number | null;
+}
+
+interface FocusRegionOutlookPanelProps {
+  prediction: RegionalForecastPrediction | null;
+  backtest: RegionalBacktestResponse | null;
+  loading: boolean;
+  horizonDays: number;
+}
+
+function formatVirusLevel(value?: number | null, digits = 1): string {
+  if (!isNumber(value)) return '-';
+  return new Intl.NumberFormat('de-DE', {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  }).format(value);
+}
+
+function normalizeIsoDate(value?: string | null): string | null {
+  if (!value) return null;
+  try {
+    return parseISO(value).toISOString().slice(0, 10);
+  } catch {
+    return null;
+  }
+}
+
+function addRegionPoint(
+  store: Map<string, FocusRegionChartRow>,
+  date: string,
+  patch: Partial<FocusRegionChartRow>,
+) {
+  const existing = store.get(date) || {
+    date,
+    dateLabel: formatDateShort(date),
+  };
+  store.set(date, {
+    ...existing,
+    ...patch,
+  });
+}
+
+function buildFocusRegionChartRows(
+  prediction: RegionalForecastPrediction | null,
+  backtest: RegionalBacktestResponse | null,
+): FocusRegionChartRow[] {
+  const rows = new Map<string, FocusRegionChartRow>();
+  const timeline = [...(backtest?.timeline || [])].sort((left, right) => (
+    String(left.as_of_date).localeCompare(String(right.as_of_date))
+  ));
+
+  timeline.slice(-12).forEach((entry) => {
+    const actualDate = normalizeIsoDate(entry.as_of_date);
+    if (actualDate) {
+      addRegionPoint(rows, actualDate, {
+        actual: entry.current_known_incidence,
+      });
+    }
+
+    const targetDate = normalizeIsoDate(entry.target_date);
+    if (targetDate) {
+      addRegionPoint(rows, targetDate, {
+        validated: entry.expected_target_incidence,
+      });
+    }
+  });
+
+  const currentDate = normalizeIsoDate(prediction?.last_data_date || prediction?.as_of_date);
+  const targetDate = normalizeIsoDate(prediction?.target_date);
+  const currentValue = prediction?.current_known_incidence;
+  const forecastValue = prediction?.expected_target_incidence;
+  const intervalLower = prediction?.prediction_interval?.lower;
+  const intervalUpper = prediction?.prediction_interval?.upper;
+
+  if (currentDate && isNumber(currentValue)) {
+    addRegionPoint(rows, currentDate, {
+      actual: currentValue,
+      forecast: currentValue,
+      bandBase: currentValue,
+      bandRange: 0,
+    });
+  }
+
+  if (targetDate && isNumber(forecastValue)) {
+    addRegionPoint(rows, targetDate, {
+      forecast: forecastValue,
+      bandBase: isNumber(intervalLower) ? intervalLower : forecastValue,
+      bandRange: isNumber(intervalLower) && isNumber(intervalUpper)
+        ? Math.max(intervalUpper - intervalLower, 0)
+        : 0,
+    });
+  }
+
+  return Array.from(rows.values())
+    .sort((left, right) => String(left.date).localeCompare(String(right.date)))
+    .slice(-14);
+}
+
+function describeForecastDelta(prediction: RegionalForecastPrediction | null): string {
+  if (!prediction || !isNumber(prediction.current_known_incidence) || !isNumber(prediction.expected_target_incidence)) {
+    return 'nahe am letzten bestätigten Stand';
+  }
+  const current = Math.max(prediction.current_known_incidence, 0.0001);
+  const changePct = ((prediction.expected_target_incidence - prediction.current_known_incidence) / current) * 100;
+  const intensity = Math.abs(changePct) >= 25 ? 'deutlich' : Math.abs(changePct) >= 8 ? 'leicht' : 'nahe';
+
+  if (Math.abs(changePct) < 5) {
+    return 'nahe am letzten bestätigten Stand';
+  }
+  if (changePct > 0) {
+    return `${intensity} über dem letzten bestätigten Stand`;
+  }
+  return `${intensity} unter dem letzten bestätigten Stand`;
+}
+
+function buildUncertaintyText(prediction: RegionalForecastPrediction | null): string {
+  if (!prediction) {
+    return 'Die Richtung bleibt erkennbar, die genaue Höhe können wir gerade noch nicht sauber einordnen.';
+  }
+  const lower = prediction.prediction_interval?.lower;
+  const upper = prediction.prediction_interval?.upper;
+  const mid = prediction.expected_target_incidence;
+  const gatePassed = Boolean((prediction.quality_gate as { overall_passed?: boolean } | undefined)?.overall_passed);
+
+  if (isNumber(lower) && isNumber(upper) && isNumber(mid) && mid > 0) {
+    const widthRatio = Math.max(upper - lower, 0) / mid;
+    if (gatePassed || widthRatio <= 0.35) {
+      return 'Die Richtung ist belastbar, die genaue Höhe bleibt ein Forecast.';
+    }
+    if (widthRatio <= 0.7) {
+      return 'Die Richtung ist erkennbar, die genaue Höhe bleibt ein Forecast.';
+    }
+  }
+  return 'Die Richtung ist sichtbar, die genaue Höhe bleibt noch unsicher.';
+}
+
+export const FocusRegionOutlookPanel: React.FC<FocusRegionOutlookPanelProps> = ({
+  prediction,
+  backtest,
+  loading,
+  horizonDays,
+}) => {
+  const rows = useMemo(() => buildFocusRegionChartRows(prediction, backtest), [prediction, backtest]);
+  const regionName = prediction?.bundesland_name || backtest?.bundesland_name || 'deine Fokusregion';
+  const currentDate = formatDateShort(prediction?.last_data_date || prediction?.as_of_date);
+  const targetDate = formatDateShort(prediction?.target_date);
+  const deltaText = describeForecastDelta(prediction);
+  const uncertaintyText = buildUncertaintyText(prediction);
+  const hasHistorical = rows.some((row) => isNumber(row.actual));
+  const hasForecast = rows.some((row) => isNumber(row.forecast));
+  const chartReady = rows.length >= 2 && (hasHistorical || hasForecast);
+
+  if (loading) {
+    return (
+      <div className="card" style={{ padding: 20, color: 'var(--text-muted)' }}>
+        Fokusregion-Ausblick wird geladen...
+      </div>
+    );
+  }
+
+  return (
+    <div className="card" style={{ padding: 20 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start', marginBottom: 16 }}>
+        <div>
+          <h2 style={{ margin: 0, fontSize: 20, color: 'var(--text-primary)' }}>Fokusregion in {horizonDays} Tagen</h2>
+          <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--text-muted)' }}>
+            Hier sieht der Kunde die wichtigste Region zuerst. Der Satz oben sagt sofort, wo der Viruslage-Wert in {horizonDays} Tagen ungefähr stehen soll.
+          </p>
+        </div>
+        <div style={{ textAlign: 'right', fontSize: 12, color: 'var(--text-muted)' }}>
+          {regionName}
+        </div>
+      </div>
+
+      <div className="soft-panel" style={{ padding: 18, marginBottom: 16 }}>
+        <p style={{ margin: 0, fontSize: 18, lineHeight: 1.5, color: 'var(--text-primary)', fontWeight: 800 }}>
+          {prediction
+            ? `In ${horizonDays} Tagen erwarten wir für ${regionName} einen Viruslage-Wert von ca. ${formatVirusLevel(prediction.expected_target_incidence)}, also ${deltaText}.`
+            : `Für ${regionName} können wir gerade noch keine klare ${horizonDays}-Tage-Aussage formulieren.`}
+        </p>
+        <p style={{ margin: '10px 0 0', fontSize: 14, lineHeight: 1.6, color: 'var(--text-secondary)' }}>
+          {prediction
+            ? `Letzter bestätigter Ist-Wert vom ${currentDate}. Forecast-Ziel für ${targetDate}.`
+            : 'Sobald ein frischer Forecast vorliegt, zeigen wir hier den Zieltag und den letzten bestätigten Stand.'}
+        </p>
+        <p style={{ margin: '8px 0 0', fontSize: 13, lineHeight: 1.6, color: 'var(--text-muted)' }}>
+          {uncertaintyText}
+        </p>
+      </div>
+
+      <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', marginBottom: 16 }}>
+        <div className="soft-panel" style={{ padding: 16 }}>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+            Fokusregion
+          </div>
+          <div style={{ marginTop: 6, fontSize: 18, fontWeight: 800, color: 'var(--text-primary)' }}>
+            {regionName}
+          </div>
+        </div>
+        <div className="soft-panel" style={{ padding: 16 }}>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+            Letzter bestätigter Wert
+          </div>
+          <div style={{ marginTop: 6, fontSize: 18, fontWeight: 800, color: '#0a84ff' }}>
+            {formatVirusLevel(prediction?.current_known_incidence)}
+          </div>
+        </div>
+        <div className="soft-panel" style={{ padding: 16 }}>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+            Ziel in {horizonDays} Tagen
+          </div>
+          <div style={{ marginTop: 6, fontSize: 18, fontWeight: 800, color: '#5e5ce6' }}>
+            {formatVirusLevel(prediction?.expected_target_incidence)}
+          </div>
+        </div>
+        <div className="soft-panel" style={{ padding: 16 }}>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+            Bandbreite
+          </div>
+          <div style={{ marginTop: 6, fontSize: 18, fontWeight: 800, color: 'var(--text-primary)' }}>
+            {isNumber(prediction?.prediction_interval?.lower) && isNumber(prediction?.prediction_interval?.upper)
+              ? `${formatVirusLevel(prediction?.prediction_interval?.lower)} bis ${formatVirusLevel(prediction?.prediction_interval?.upper)}`
+              : '-'}
+          </div>
+        </div>
+      </div>
+
+      {chartReady ? (
+        <div style={{ height: 320 }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <ComposedChart data={rows}>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(148, 163, 184, 0.22)" />
+              <XAxis dataKey="dateLabel" tick={{ fill: '#64748b', fontSize: 11 }} />
+              <YAxis tick={{ fill: '#64748b', fontSize: 11 }} />
+              <Tooltip />
+              <Legend />
+
+              <ReferenceArea
+                x1={formatDateShort(prediction?.last_data_date || prediction?.as_of_date)}
+                x2={formatDateShort(prediction?.target_date)}
+                fill="rgba(94, 92, 230, 0.05)"
+              />
+              <ReferenceLine
+                x={formatDateShort(prediction?.last_data_date || prediction?.as_of_date)}
+                stroke="#0a84ff"
+                strokeDasharray="4 4"
+                label={{ value: 'Bestätigt bis hier', position: 'top', fill: '#0a84ff', fontSize: 10 }}
+              />
+              <ReferenceLine
+                x={formatDateShort(prediction?.target_date)}
+                stroke="#5e5ce6"
+                strokeDasharray="4 4"
+                label={{ value: `+${horizonDays} Tage`, position: 'top', fill: '#5e5ce6', fontSize: 10 }}
+              />
+
+              <Area type="monotone" dataKey="bandBase" stackId="forecastBand" stroke="none" fill="transparent" activeDot={false} legendType="none" />
+              <Area type="monotone" dataKey="bandRange" stackId="forecastBand" stroke="none" fill="rgba(94,92,230,0.16)" activeDot={false} name="Bandbreite" />
+
+              <Line type="monotone" dataKey="actual" name="Ist-Wert" stroke="#0a84ff" strokeWidth={2.6} dot={false} />
+              <Line type="monotone" dataKey="validated" name={`Validierter ${horizonDays}-Tage-Blick`} stroke="#475569" strokeWidth={1.7} dot={false} strokeDasharray="5 4" />
+              <Line type="monotone" dataKey="forecast" name={`${horizonDays}-Tage-Ausblick`} stroke="#5e5ce6" strokeWidth={3} dot={false} />
+            </ComposedChart>
+          </ResponsiveContainer>
+        </div>
+      ) : (
+        <div className="soft-panel" style={{ padding: 20, color: 'var(--text-muted)' }}>
+          {`Für die Fokusregion fehlen gerade ausreichende Verlaufsdaten. Die ${horizonDays}-Tage-Aussage oben bleibt trotzdem sichtbar.`}
+        </div>
+      )}
+
+      <div className="workspace-note-list" style={{ marginTop: 16 }}>
+        <div className="workspace-note-card">
+          {`Bestätigte Daten links, aktueller Forecast rechts: So sieht der Kunde sofort, was schon beobachtet ist und was unser ${horizonDays}-Tage-Ausblick ist.`}
+        </div>
+        {!backtest?.timeline?.length ? (
+          <div className="workspace-note-card">
+            Für den sauberen regionalen Rückblick fehlen gerade ausreichend historische Punkte. Deshalb zeigen wir den Fokus hier stärker über den aktuellen Forecast.
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+};
 
 export const WaveOutlookPanel: React.FC<WaveOutlookPanelProps> = ({
   virus,

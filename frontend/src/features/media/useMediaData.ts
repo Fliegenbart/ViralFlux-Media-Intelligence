@@ -9,6 +9,7 @@ import {
   MediaEvidenceResponse,
   MediaRegionsResponse,
   RegionalAllocationResponse,
+  RegionalBacktestResponse,
   RegionalBenchmarkResponse,
   RegionalCampaignRecommendationsResponse,
   RegionalForecastResponse,
@@ -89,6 +90,28 @@ export interface NowPageViewModel {
     title: string;
     body: string;
   } | null;
+}
+
+function deriveNowFocusRegionCode(
+  decision: MediaDecisionResponse | null,
+  forecast: RegionalForecastResponse | null,
+  allocation: RegionalAllocationResponse | null,
+  campaignRecommendations: RegionalCampaignRecommendationsResponse | null,
+): string | null {
+  const weeklyDecision = decision?.weekly_decision;
+  const topCard = decision?.top_recommendations?.[0] || null;
+  const sortedPredictions = [...(forecast?.predictions || [])].sort((left, right) => {
+    const leftRank = Number(left.decision_rank ?? left.rank ?? Number.MAX_SAFE_INTEGER);
+    const rightRank = Number(right.decision_rank ?? right.rank ?? Number.MAX_SAFE_INTEGER);
+    return leftRank - rightRank;
+  });
+  return weeklyDecision?.top_regions?.[0]?.code
+    || campaignRecommendations?.recommendations?.[0]?.bundesland
+    || campaignRecommendations?.recommendations?.[0]?.region
+    || topCard?.region_codes?.[0]
+    || allocation?.recommendations?.[0]?.bundesland
+    || sortedPredictions[0]?.bundesland
+    || null;
 }
 
 function uniqueText(values: Array<string | null | undefined>, limit = 4): string[] {
@@ -779,6 +802,8 @@ export function useNowPageData(
   const [forecast, setForecast] = useState<RegionalForecastResponse | null>(null);
   const [allocation, setAllocation] = useState<RegionalAllocationResponse | null>(null);
   const [campaignRecommendations, setCampaignRecommendations] = useState<RegionalCampaignRecommendationsResponse | null>(null);
+  const [focusRegionBacktest, setFocusRegionBacktest] = useState<RegionalBacktestResponse | null>(null);
+  const [focusRegionBacktestLoading, setFocusRegionBacktestLoading] = useState(false);
   const [waveOutlook, setWaveOutlook] = useState<BacktestResponse | null>(null);
   const [waveOutlookLoading, setWaveOutlookLoading] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -793,6 +818,8 @@ export function useNowPageData(
     setForecast(null);
     setAllocation(null);
     setCampaignRecommendations(null);
+    setFocusRegionBacktest(null);
+    setFocusRegionBacktestLoading(false);
     setWaveOutlook(null);
     setWaveOutlookLoading(false);
 
@@ -887,6 +914,32 @@ export function useNowPageData(
       backgroundLoadFailed = true;
     }
 
+    const focusRegionCode = deriveNowFocusRegionCode(
+      decisionResult.status === 'fulfilled' ? decisionResult.value : null,
+      forecastResult.status === 'fulfilled' ? forecastResult.value : null,
+      allocationResult.status === 'fulfilled' ? allocationResult.value : null,
+      recommendationResult.status === 'fulfilled' ? recommendationResult.value : null,
+    );
+
+    if (focusRegionCode) {
+      setFocusRegionBacktestLoading(true);
+      const regionalBacktestResult = await mediaApi.getRegionalBacktest(virus, focusRegionCode, horizonDays)
+        .then((value) => ({ status: 'fulfilled' as const, value }))
+        .catch((reason) => ({ status: 'rejected' as const, reason }));
+
+      if (!isCurrentLoad()) return;
+
+      if (regionalBacktestResult.status === 'fulfilled' && !regionalBacktestResult.value?.error) {
+        setFocusRegionBacktest(regionalBacktestResult.value);
+      } else {
+        if (regionalBacktestResult.status === 'rejected') {
+          console.error('Now page focus region backtest fetch failed', regionalBacktestResult.reason);
+        }
+        setFocusRegionBacktest(null);
+      }
+      setFocusRegionBacktestLoading(false);
+    }
+
     if (proofGraphFailed) {
       toast('Der Verlaufsgraph konnte nicht geladen werden. Die Wochenlage bleibt trotzdem sichtbar.', 'info');
     }
@@ -909,6 +962,8 @@ export function useNowPageData(
     forecast,
     allocation,
     campaignRecommendations,
+    focusRegionBacktest,
+    focusRegionBacktestLoading,
     waveOutlook,
     waveOutlookLoading,
     loading,

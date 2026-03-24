@@ -23,6 +23,8 @@ const NowPage: React.FC = () => {
     workspaceStatus,
     view,
     forecast,
+    focusRegionBacktest,
+    focusRegionBacktestLoading,
     waveOutlook,
     waveOutlookLoading,
   } = useNowPageData(virus, brand, horizonDays, weeklyBudget, dataVersion, toast);
@@ -37,6 +39,8 @@ const NowPage: React.FC = () => {
       workspaceStatus={workspaceStatus}
       loading={loading}
       forecast={forecast}
+      focusRegionBacktest={focusRegionBacktest}
+      focusRegionBacktestLoading={focusRegionBacktestLoading}
       waveOutlook={waveOutlook}
       waveOutlookLoading={waveOutlookLoading}
       onOpenRecommendation={(id) => openRecommendation(id, 'overlay')}

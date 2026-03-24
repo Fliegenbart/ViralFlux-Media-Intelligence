@@ -100,6 +100,36 @@ export interface RegionalDecisionSummary {
   top_region_decision: string | null;
 }
 
+export interface RegionalBacktestTimelinePoint {
+  fold?: number;
+  virus_typ?: string;
+  bundesland: string;
+  bundesland_name?: string;
+  as_of_date: string;
+  target_date: string;
+  target_week_start?: string;
+  horizon_days: number;
+  event_label?: number;
+  event_probability_calibrated?: number;
+  current_known_incidence: number;
+  next_week_incidence?: number;
+  expected_next_week_incidence?: number;
+  expected_target_incidence: number;
+  prediction_interval_lower?: number;
+  prediction_interval_upper?: number;
+  activated?: boolean;
+}
+
+export interface RegionalBacktestResponse {
+  bundesland: string;
+  bundesland_name: string;
+  horizon_days?: number;
+  total_windows?: number;
+  metrics?: Record<string, number>;
+  timeline?: RegionalBacktestTimelinePoint[];
+  error?: string;
+}
+
 export interface RegionalForecastResponse {
   virus_typ: string;
   status?: string;

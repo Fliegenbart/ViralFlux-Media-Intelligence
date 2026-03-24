@@ -213,6 +213,8 @@ interface WaveOutlookPanelProps {
   result: BacktestResponse | null;
   loading: boolean;
   showVirusSelector?: boolean;
+  title?: string;
+  subtitle?: string;
 }
 
 export const WaveOutlookPanel: React.FC<WaveOutlookPanelProps> = ({
@@ -221,17 +223,20 @@ export const WaveOutlookPanel: React.FC<WaveOutlookPanelProps> = ({
   result,
   loading,
   showVirusSelector = true,
+  title = 'Letzte validierte Marktansicht',
+  subtitle,
 }) => {
   const rows = useMemo(() => buildValidationRows(result, 36), [result]);
   const markers = useMemo(() => detectWaveMarkers(rows), [rows]);
   const freshnessHint = useMemo(() => getWaveFreshnessHint(rows, markers), [rows, markers]);
   const targetLabel = result?.target_label || result?.target_source || 'Market Check';
   const selectedVirus = result?.virus_typ || virus;
+  const effectiveSubtitle = subtitle || `Hier siehst du den zuletzt validierten Verlauf für ${selectedVirus}. Die Karte ist ein ehrlicher Rückblick bis zum letzten bestätigten Ist-Wert und kein Live-Ticker von heute.`;
 
   if (loading) {
     return (
       <div className="card" style={{ padding: 20, color: 'var(--text-muted)' }}>
-        Verlauf der Welle wird geladen...
+        Validierte Marktansicht wird geladen...
       </div>
     );
   }
@@ -239,9 +244,9 @@ export const WaveOutlookPanel: React.FC<WaveOutlookPanelProps> = ({
   if (rows.length < 4) {
     return (
       <div className="card" style={{ padding: 20 }}>
-        <h2 style={{ margin: 0, fontSize: 20, color: 'var(--text-primary)' }}>Verlauf der Welle</h2>
+        <h2 style={{ margin: 0, fontSize: 20, color: 'var(--text-primary)' }}>{title}</h2>
         <div className="soft-panel" style={{ padding: 20, marginTop: 14, color: 'var(--text-muted)' }}>
-          Noch keine ausreichend detaillierten Forecast-Daten für die Wellenkurve verfügbar.
+          Noch keine ausreichend detaillierten Validierungsdaten für diese Rückblick-Kurve verfügbar.
         </div>
       </div>
     );
@@ -256,9 +261,9 @@ export const WaveOutlookPanel: React.FC<WaveOutlookPanelProps> = ({
     <div className="card" style={{ padding: 20 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start', marginBottom: 16 }}>
         <div>
-          <h2 style={{ margin: 0, fontSize: 20, color: 'var(--text-primary)' }}>Verlauf der Welle</h2>
+          <h2 style={{ margin: 0, fontSize: 20, color: 'var(--text-primary)' }}>{title}</h2>
           <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--text-muted)' }}>
-            Hier siehst du, wie sich {selectedVirus} entwickelt hat und wie es in den nächsten Tagen voraussichtlich weitergeht.
+            {effectiveSubtitle}
           </p>
         </div>
         <div style={{ textAlign: 'right', fontSize: 12, color: 'var(--text-muted)' }}>
@@ -282,7 +287,7 @@ export const WaveOutlookPanel: React.FC<WaveOutlookPanelProps> = ({
       ) : null}
 
       <div className="soft-panel" style={{ padding: 16, marginBottom: 16, fontSize: 13, color: 'var(--text-secondary)' }}>
-        Die markierten Punkte helfen dir, den Start, den letzten bekannten Stand und den wahrscheinlichen Höhepunkt schnell zu erkennen.
+        Die markierten Punkte helfen dir, den Start, den letzten bestätigten Stand und den im validierten Lauf sichtbar gewordenen Höhepunkt schnell zu erkennen.
       </div>
 
       {freshnessHint && (
@@ -344,7 +349,7 @@ export const WaveOutlookPanel: React.FC<WaveOutlookPanelProps> = ({
         {markers.narrative}
       </p>
       <p style={{ margin: '8px 0 0', fontSize: 12, lineHeight: 1.6, color: 'var(--text-muted)' }}>
-        Wenn du das Virus wechselst, passt sich die Kurve automatisch an.
+        Diese Kurve bleibt bewusst rückblick-orientiert. Für den aktuellen Arbeitsstand solltest du immer zusätzlich auf den frischen Planungsausblick schauen.
       </p>
     </div>
   );

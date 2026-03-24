@@ -1,10 +1,10 @@
 import React from 'react';
 
-import { BacktestResponse, WorkspaceStatusSummary } from '../../types/media';
+import { BacktestResponse, RegionalForecastResponse, WorkspaceStatusSummary } from '../../types/media';
 import CollapsibleSection from '../CollapsibleSection';
 import { NowPageViewModel } from '../../features/media/useMediaData';
-import { WaveOutlookPanel } from './BacktestVisuals';
-import { formatDateTime, VIRUS_OPTIONS } from './cockpitUtils';
+import { buildValidationRows, WaveOutlookPanel } from './BacktestVisuals';
+import { formatDateShort, formatDateTime, formatPercent, VIRUS_OPTIONS } from './cockpitUtils';
 import WorkspaceStatusPanel from './WorkspaceStatusPanel';
 import {
   OperatorChipRail,
@@ -21,6 +21,7 @@ interface Props {
   view: NowPageViewModel;
   workspaceStatus: WorkspaceStatusSummary | null;
   loading: boolean;
+  forecast: RegionalForecastResponse | null;
   waveOutlook: BacktestResponse | null;
   waveOutlookLoading: boolean;
   onOpenRecommendation: (id: string) => void;
@@ -39,6 +40,7 @@ const NowWorkspace: React.FC<Props> = ({
   view,
   workspaceStatus,
   loading,
+  forecast,
   waveOutlook,
   waveOutlookLoading,
   onOpenRecommendation,
@@ -51,6 +53,42 @@ const NowWorkspace: React.FC<Props> = ({
   const leadReasons = view.reasons.slice(0, 3);
   const relatedRegions = view.relatedRegions.slice(0, 3);
   const mainActionLabel = view.primaryActionLabel || 'Kampagnen prüfen';
+  const validationRows = buildValidationRows(waveOutlook, 36);
+  const lastObservedRow = [...validationRows].reverse().find((row) => typeof row.actual === 'number');
+  const sortedPredictions = [...(forecast?.predictions || [])].sort((left, right) => {
+    const leftRank = Number(left.decision_rank ?? left.rank ?? Number.MAX_SAFE_INTEGER);
+    const rightRank = Number(right.decision_rank ?? right.rank ?? Number.MAX_SAFE_INTEGER);
+    return leftRank - rightRank;
+  });
+  const leadPrediction = sortedPredictions[0] || null;
+  const planningCards = [
+    {
+      label: 'Letzter bestätigter Ist-Wert',
+      value: lastObservedRow?.date ? formatDateShort(lastObservedRow.date) : '-',
+      meta: 'aus dem validierten Marktvergleich',
+      tone: 'muted' as const,
+    },
+    {
+      label: 'Forecast-Stand',
+      value: forecast?.as_of_date ? formatDateShort(forecast.as_of_date) : (waveOutlook?.created_at ? formatDateShort(waveOutlook.created_at) : '-'),
+      meta: 'für den aktuellen Arbeitsausblick',
+      tone: 'accent' as const,
+    },
+    {
+      label: 'Planungshorizont',
+      value: `${horizonDays} Tage`,
+      meta: leadPrediction?.target_date ? `Ziel bis ${formatDateShort(leadPrediction.target_date)}` : 'nächster Arbeitshorizont',
+      tone: 'muted' as const,
+    },
+    {
+      label: 'Fokus für Planung',
+      value: leadPrediction?.bundesland_name || focusRegion?.name || '-',
+      meta: leadPrediction?.decision_label
+        ? `${leadPrediction.decision_label} · ${formatPercent(leadPrediction.event_probability_calibrated || 0, 1)}`
+        : 'noch keine belastbare Fokusregion',
+      tone: 'muted' as const,
+    },
+  ];
 
   if (loading && !view.hasData) {
     return (
@@ -112,8 +150,52 @@ const NowWorkspace: React.FC<Props> = ({
             result={waveOutlook}
             loading={waveOutlookLoading}
             showVirusSelector={false}
+            title="Letzte validierte Marktansicht"
+            subtitle={`Hier siehst du den ehrlichen Rückblick bis zum letzten bestätigten Ist-Wert für ${virus}. Diese Grafik erklärt den Verlauf, ist aber nicht die frischeste Planungsquelle.`}
           />
         </div>
+
+        <OperatorPanel
+          title="Aktueller Planungsblick"
+          description="Hier trennen wir den frischen Arbeitsausblick bewusst vom validierten Rückblick. So erkennst du sofort, bis wohin echte Beobachtung reicht und ab wann wir in den Forecast wechseln."
+          tone="muted"
+        >
+          <div className="soft-panel" style={{ padding: 16, marginBottom: 16, color: 'var(--text-secondary)', fontSize: 14, lineHeight: 1.6 }}>
+            {lastObservedRow?.date ? (
+              <>
+                Bis <strong>{formatDateShort(lastObservedRow.date)}</strong> liegen bestätigte Ist-Werte vor.
+                {' '}Für die nächsten Schritte planen wir mit dem Forecast-Stand vom <strong>{forecast?.as_of_date ? formatDateShort(forecast.as_of_date) : (waveOutlook?.created_at ? formatDateShort(waveOutlook.created_at) : '-')}</strong>.
+              </>
+            ) : (
+              <>
+                Der Planungsausblick kommt aus dem aktuellen Regional-Forecast. Ein bestätigter letzter Ist-Wert ist in dieser Ansicht gerade nicht sauber ableitbar.
+              </>
+            )}
+          </div>
+
+          <div className="operator-stat-grid">
+            {planningCards.map((item) => (
+              <OperatorStat
+                key={item.label}
+                label={item.label}
+                value={item.value}
+                meta={item.meta}
+                tone={item.tone}
+              />
+            ))}
+          </div>
+
+          <div className="workspace-note-list" style={{ marginTop: 16 }}>
+            <div className="workspace-note-card">
+              Diese Karte ist jetzt die schnellere Hilfe für deine Planung. Sie beantwortet: Welcher Stand ist bestätigt, welcher Stand ist Forecast, und auf wen schauen wir als Nächstes?
+            </div>
+            <div className="workspace-note-card">
+              {leadPrediction
+                ? `${leadPrediction.bundesland_name} ist im ${horizonDays}-Tage-Blick aktuell die wichtigste Region. Der letzte regionale Datenstand liegt bei ${leadPrediction.last_data_date ? formatDateShort(leadPrediction.last_data_date) : 'unbekannt'}.`
+                : 'Sobald ein frischer Regional-Forecast vorliegt, zeigen wir hier automatisch die wichtigste Region und den nächsten Planungshorizont.'}
+            </div>
+          </div>
+        </OperatorPanel>
       </OperatorSection>
 
       {view.emptyState ? (

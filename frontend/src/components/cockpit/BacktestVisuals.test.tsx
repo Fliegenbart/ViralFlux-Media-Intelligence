@@ -132,6 +132,7 @@ describe('WaveOutlookPanel', () => {
       />,
     );
 
+    expect(screen.getByText('Letzte validierte Marktansicht')).toBeInTheDocument();
     expect(screen.getByText('Letzter Ist-Wert')).toBeInTheDocument();
     expect(screen.getByText(/Letzte Beobachtung: 23.02.2026/)).toBeInTheDocument();
     expect(screen.queryByText('Wir stehen hier')).not.toBeInTheDocument();

@@ -4,7 +4,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 
 import NowWorkspace from './NowWorkspace';
 import { NowPageViewModel } from '../../features/media/useMediaData';
-import { WorkspaceStatusSummary } from '../../types/media';
+import { RegionalForecastResponse, WorkspaceStatusSummary } from '../../types/media';
 
 const noop = () => {};
 
@@ -112,6 +112,46 @@ function buildWorkspaceStatus(): WorkspaceStatusSummary {
   };
 }
 
+function buildForecast(): RegionalForecastResponse {
+  return {
+    virus_typ: 'Influenza A',
+    horizon_days: 7,
+    target_window_days: [7],
+    decision_summary: {
+      watch_regions: 10,
+      prepare_regions: 4,
+      activate_regions: 2,
+      avg_priority_score: 61,
+      top_region: 'BE',
+      top_region_decision: 'Prepare',
+    },
+    total_regions: 16,
+    predictions: [
+      {
+        bundesland: 'BE',
+        bundesland_name: 'Berlin',
+        virus_typ: 'Influenza A',
+        as_of_date: '2026-03-18',
+        target_date: '2026-03-25',
+        target_week_start: '2026-03-23',
+        target_window_days: [7],
+        horizon_days: 7,
+        event_probability_calibrated: 0.81,
+        current_known_incidence: 110,
+        change_pct: 18,
+        trend: 'up',
+        decision_label: 'Prepare',
+        decision_rank: 1,
+        last_data_date: '2026-03-17',
+      },
+    ],
+    top_5: [],
+    top_decisions: [],
+    generated_at: '2026-03-18T08:00:00Z',
+    as_of_date: '2026-03-18',
+  };
+}
+
 describe('NowWorkspace', () => {
   it('shows one main decision, the trust block and the next region flow', () => {
     render(
@@ -123,6 +163,7 @@ describe('NowWorkspace', () => {
         view={buildView()}
         workspaceStatus={buildWorkspaceStatus()}
         loading={false}
+        forecast={buildForecast()}
         waveOutlook={null}
         waveOutlookLoading={false}
         onOpenRecommendation={noop}
@@ -133,7 +174,8 @@ describe('NowWorkspace', () => {
     );
 
     expect(screen.getByText('Was sich gerade entwickelt')).toBeInTheDocument();
-    expect(screen.getByText('Verlauf der Welle')).toBeInTheDocument();
+    expect(screen.getByText('Letzte validierte Marktansicht')).toBeInTheDocument();
+    expect(screen.getByText('Aktueller Planungsblick')).toBeInTheDocument();
     expect(screen.getByText('Unsere Prognose zeigt im 7-Tage-Fenster die größte Dynamik aktuell in Berlin.')).toBeInTheDocument();
     expect(screen.getByText('Was vor dem nächsten Schritt geklärt sein sollte')).toBeInTheDocument();
     expect(screen.getByText('Danach anschauen')).toBeInTheDocument();
@@ -153,6 +195,7 @@ describe('NowWorkspace', () => {
         view={buildView()}
         workspaceStatus={buildWorkspaceStatus()}
         loading={false}
+        forecast={buildForecast()}
         waveOutlook={null}
         waveOutlookLoading={false}
         onOpenRecommendation={onOpenRecommendation}

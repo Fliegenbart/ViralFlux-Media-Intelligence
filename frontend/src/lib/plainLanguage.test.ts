@@ -1,5 +1,6 @@
 import {
   buildPredictionNarrative,
+  explainInPlainGerman,
   normalizeGermanText,
 } from './plainLanguage';
 
@@ -27,6 +28,43 @@ describe('plain language helpers', () => {
     expect(narrative.headline).toContain('7-Tage-Fenster');
     expect(narrative.headline).toContain('Berlin');
     expect(narrative.proofPoints).toEqual(['7 Tage Vorhersage', 'Berlin liegt im Ranking vorn']);
+  });
+
+  it('translates raw backend explanations into plain German', () => {
+    expect(explainInPlainGerman('Event probability 0.81 clears the Activate threshold 0.70.'))
+      .toBe('Die Vorhersage liegt mit 81 % über der Schwelle für eine Aktivierung.');
+    expect(explainInPlainGerman('Berlin: Activate because event probability is 0.81, forecast confidence is 0.78, trend acceleration is 0.76, and cross-source direction is up.'))
+      .toContain('Berlin sollte jetzt aktiviert werden');
+    expect(explainInPlainGerman('Forecast confidence is only 0.41.'))
+      .toBe('Die Vorhersage ist mit 41 % Sicherheit noch recht unsicher.');
+    expect(explainInPlainGerman('Spend guardrails are currently satisfied.'))
+      .toBe('Die Budget- und Freigabegrenzen sind aktuell erfüllt.');
+    expect(explainInPlainGerman('Remaining uncertainty: revision risk 0.33, no positive cross-source agreement, quality gate not passed.'))
+      .toBe('Es bleibt Unsicherheit wegen Revisionsrisiko von 33 %, kein klar positiver Quellenabgleich und noch nicht bestandene Qualitätsprüfung.');
+  });
+
+  it('prefers structured reason codes over free-text guessing', () => {
+    expect(explainInPlainGerman({
+      code: 'decision_summary',
+      message: 'raw summary',
+      params: {
+        bundesland_name: 'Berlin',
+        stage: 'activate',
+        event_probability: 0.81,
+        forecast_confidence: 0.78,
+        agreement_direction: 'up',
+      },
+    })).toContain('Berlin sollte jetzt aktiviert werden');
+
+    expect(explainInPlainGerman({
+      code: 'campaign_stage_budget_share',
+      message: 'raw rationale',
+      params: {
+        region_name: 'Berlin',
+        stage: 'activate',
+        budget_share: 0.46,
+      },
+    })).toBe('Berlin bleibt aktuell auf Aktivieren mit 46 % Budgetanteil.');
   });
 
   it('builds a careful prediction narrative for warning states', () => {

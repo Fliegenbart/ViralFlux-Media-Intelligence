@@ -1,3 +1,5 @@
+import { StructuredReasonItem } from './shared';
+
 export type RegionalDecisionStage = 'Activate' | 'Prepare' | 'Watch' | string;
 
 export interface RegionalDecisionComponentScore {
@@ -12,9 +14,16 @@ export interface RegionalDecisionComponentScore {
 
 export interface RegionalDecisionReasonTrace {
   why: string[];
+  why_details?: StructuredReasonItem[];
   contributing_signals: RegionalDecisionComponentScore[];
   uncertainty: string[];
+  uncertainty_details?: StructuredReasonItem[];
   policy_overrides: string[];
+  policy_override_details?: StructuredReasonItem[];
+  budget_drivers?: string[];
+  budget_driver_details?: StructuredReasonItem[];
+  blockers?: string[];
+  blocker_details?: StructuredReasonItem[];
 }
 
 export interface RegionalDecisionPayload {
@@ -36,7 +45,9 @@ export interface RegionalDecisionPayload {
   usable_source_share: number;
   source_coverage_score: number;
   explanation_summary: string;
+  explanation_summary_detail?: StructuredReasonItem | null;
   uncertainty_summary: string;
+  uncertainty_summary_detail?: StructuredReasonItem | null;
   components?: Record<string, number>;
   thresholds?: Record<string, number>;
   reason_trace?: RegionalDecisionReasonTrace;
@@ -316,11 +327,17 @@ export interface CampaignClusterSelection {
 
 export interface CampaignRecommendationRationale {
   why: string[];
+  why_details?: StructuredReasonItem[];
   product_fit: string[];
+  product_fit_details?: StructuredReasonItem[];
   keyword_fit: string[];
+  keyword_fit_details?: StructuredReasonItem[];
   budget_notes: string[];
+  budget_note_details?: StructuredReasonItem[];
   evidence_notes: string[];
+  evidence_note_details?: StructuredReasonItem[];
   guardrails: string[];
+  guardrail_details?: StructuredReasonItem[];
 }
 
 export interface RegionalCampaignRecommendation {

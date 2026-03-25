@@ -2,7 +2,7 @@ import { format, parseISO } from 'date-fns';
 import { de } from 'date-fns/locale';
 
 import { UI_COPY } from '../../lib/copy';
-import { BacktestResponse, RecommendationCard, TruthCoverage } from '../../types/media';
+import { BacktestResponse, MetricContract, RecommendationCard, TruthCoverage } from '../../types/media';
 import { CampaignLaneId } from './types';
 
 export const VIRUS_OPTIONS = ['Influenza A', 'Influenza B', 'SARS-CoV-2', 'RSV A'];
@@ -26,6 +26,42 @@ const KPI_LABELS: Record<string, string> = {
   'Qualified Visits': 'Qualifizierte Besuche',
   'Completed Views': 'Vollständige Videoaufrufe',
   Awareness: 'Bekanntheit',
+};
+
+const METRIC_SEMANTIC_LABELS: Record<string, string> = {
+  ranking_signal: 'Signal-Score',
+  activation_priority: 'Prioritäts-Score',
+  signal_confidence: 'Signal-Sicherheit',
+  forecast_event_probability: 'Event-Wahrscheinlichkeit',
+  observed_outcome_signal: 'Outcome-Score',
+  outcome_learning_confidence: 'Lern-Sicherheit',
+  truth_readiness: 'Kundendatenbasis',
+  business_validation_gate: 'Business-Freigabe',
+  business_evidence_tier: 'Belegstufe',
+};
+
+const METRIC_SEMANTIC_BADGES: Record<string, string> = {
+  ranking_signal: 'Ranking-Signal',
+  activation_priority: 'Aktivierungs-Priorität',
+  signal_confidence: 'Signal-Sicherheit',
+  forecast_event_probability: 'Kalibrierte Wahrscheinlichkeit',
+  observed_outcome_signal: 'Outcome-Lernsignal',
+  outcome_learning_confidence: 'Lern-Sicherheit',
+  truth_readiness: 'Readiness-Zustand',
+  business_validation_gate: 'Business-Gate',
+  business_evidence_tier: 'Evidenz-Zustand',
+};
+
+const METRIC_SEMANTIC_NOTES: Record<string, string> = {
+  ranking_signal: 'Hilft beim Vergleichen und Priorisieren, ist aber keine Eintrittswahrscheinlichkeit.',
+  activation_priority: 'Hilft bei der Reihenfolge der Aktivierung, nicht bei der Schätzung eines Eintritts.',
+  signal_confidence: 'Beschreibt Signalsicherheit oder Agreement, nicht die Modellwahrscheinlichkeit.',
+  forecast_event_probability: 'Beschreibt die kalibrierte Wahrscheinlichkeit für das definierte Forecast-Ereignis.',
+  observed_outcome_signal: 'Beschreibt ein beobachtetes Lernsignal aus Kundendaten, keine Forecast-Wahrscheinlichkeit.',
+  outcome_learning_confidence: 'Beschreibt die Sicherheit des Outcome-Lernsignals, nicht die Modellkalibrierung.',
+  truth_readiness: 'Beschreibt, wie belastbar der Kundendaten-Layer bereits angeschlossen ist.',
+  business_validation_gate: 'Beschreibt, ob aus einem Signal schon eine kommerzielle Freigabe werden darf.',
+  business_evidence_tier: 'Beschreibt den Reifegrad der Business- und Outcome-Evidenz.',
 };
 
 export function formatDateTime(value?: string | null): string {
@@ -78,13 +114,68 @@ export function signalConfidencePercent(
   return Math.round(confidence <= 1 ? confidence * 100 : confidence);
 }
 
+function metricContract(
+  contracts: Record<string, MetricContract> | undefined,
+  key: string,
+): MetricContract | undefined {
+  return contracts?.[key];
+}
+
 export function metricContractLabel(
-  contracts: Record<string, any> | undefined,
+  contracts: Record<string, MetricContract> | undefined,
   key: string,
   fallback: string,
 ): string {
-  const label = contracts?.[key]?.label;
+  const label = metricContract(contracts, key)?.label;
   return typeof label === 'string' && label.trim().length > 0 ? label : fallback;
+}
+
+export function metricContractSemantics(
+  contracts: Record<string, MetricContract> | undefined,
+  key: string,
+): string | null {
+  const semantics = metricContract(contracts, key)?.semantics;
+  return typeof semantics === 'string' && semantics.trim().length > 0 ? semantics : null;
+}
+
+export function metricContractDisplayLabel(
+  contracts: Record<string, MetricContract> | undefined,
+  key: string,
+  fallback: string,
+): string {
+  const semantics = metricContractSemantics(contracts, key);
+  if (semantics && METRIC_SEMANTIC_LABELS[semantics]) {
+    return METRIC_SEMANTIC_LABELS[semantics];
+  }
+  return metricContractLabel(contracts, key, fallback);
+}
+
+export function metricContractBadge(
+  contracts: Record<string, MetricContract> | undefined,
+  key: string,
+  fallback = 'Kennzahl',
+): string {
+  const semantics = metricContractSemantics(contracts, key);
+  if (semantics && METRIC_SEMANTIC_BADGES[semantics]) {
+    return METRIC_SEMANTIC_BADGES[semantics];
+  }
+  return fallback;
+}
+
+export function metricContractNote(
+  contracts: Record<string, MetricContract> | undefined,
+  key: string,
+  fallback = 'Die Bedeutung dieser Kennzahl ist noch nicht dokumentiert.',
+): string {
+  const semantics = metricContractSemantics(contracts, key);
+  if (semantics && METRIC_SEMANTIC_NOTES[semantics]) {
+    return METRIC_SEMANTIC_NOTES[semantics];
+  }
+  const note = metricContract(contracts, key)?.note;
+  if (typeof note === 'string' && note.trim().length > 0) {
+    return note;
+  }
+  return fallback;
 }
 
 export function statusTone(status?: string | null): { background: string; color: string; border: string } {

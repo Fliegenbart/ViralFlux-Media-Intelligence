@@ -1,3 +1,4 @@
+from app.core.time import utc_now
 import unittest
 from datetime import datetime, timedelta
 from decimal import Decimal
@@ -40,7 +41,7 @@ class PeixScoreServiceTests(unittest.TestCase):
         Base.metadata.create_all(bind=engine)
         db = TestingSessionLocal()
         try:
-            now = datetime.utcnow().replace(microsecond=0)
+            now = utc_now().replace(microsecond=0)
             db.add_all([
                 MLForecast(
                     forecast_date=now + timedelta(days=1),

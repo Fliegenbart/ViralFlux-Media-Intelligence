@@ -1,6 +1,7 @@
 """Operational readiness snapshot for release and pilot gating."""
 
 from __future__ import annotations
+from app.core.time import utc_now
 
 from contextlib import AbstractContextManager
 from datetime import datetime
@@ -100,7 +101,7 @@ class ProductionReadinessService:
         session_factory: Callable[[], AbstractContextManager[Session]] = get_db_context,
         settings: Settings | None = None,
         models_dir: Path | None = None,
-        now_provider: Callable[[], datetime] = datetime.utcnow,
+        now_provider: Callable[[], datetime] = utc_now,
     ) -> None:
         self.session_factory = session_factory
         base_settings = settings or get_settings()

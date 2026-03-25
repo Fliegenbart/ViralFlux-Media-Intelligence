@@ -1,3 +1,4 @@
+from app.core.time import utc_now
 import unittest
 from datetime import datetime, timedelta
 
@@ -26,7 +27,7 @@ class BusinessValidationServiceTests(unittest.TestCase):
         self.engine.dispose()
 
     def _seed_brand_products(self) -> None:
-        now = datetime.utcnow()
+        now = utc_now()
         self.db.add_all([
             BrandProduct(
                 brand="gelo",

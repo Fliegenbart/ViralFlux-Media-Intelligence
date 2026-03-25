@@ -1,9 +1,14 @@
+from datetime import UTC, datetime
+
 from sqlalchemy import Column, Integer, LargeBinary, String, Float, DateTime, Boolean, JSON, ForeignKey, Index, UniqueConstraint
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import relationship
-from datetime import datetime
+from sqlalchemy.orm import declarative_base, relationship
 
 Base = declarative_base()
+
+
+def _utc_now() -> datetime:
+    # Keep existing naive-UTC storage semantics, but avoid the deprecated utcnow() API.
+    return datetime.now(UTC).replace(tzinfo=None)
 
 
 class WastewaterData(Base):
@@ -25,7 +30,7 @@ class WastewaterData(Base):
     latitude = Column(Float, nullable=True)
     longitude = Column(Float, nullable=True)
     unter_bg = Column(Boolean)  # Unter Bestimmungsgrenze
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=_utc_now)
 
     __table_args__ = (
         Index('idx_wastewater_date_virus', 'datum', 'virus_typ'),
@@ -48,7 +53,7 @@ class WastewaterAggregated(Base):
     vorhersage = Column(Float)
     obere_schranke = Column(Float)
     untere_schranke = Column(Float)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=_utc_now)
     
     __table_args__ = (
         Index('idx_agg_date_virus', 'datum', 'virus_typ'),
@@ -67,7 +72,7 @@ class GrippeWebData(Base):
     bundesland = Column(String)
     inzidenz = Column(Float)  # Pro 100.000 Einwohner
     anzahl_meldungen = Column(Integer)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=_utc_now)
     
     __table_args__ = (
         Index('idx_grippeweb_date_type', 'datum', 'erkrankung_typ'),
@@ -87,7 +92,7 @@ class AREKonsultation(Base):
     bundesland = Column(String, nullable=False)
     bundesland_id = Column(Integer)
     konsultationsinzidenz = Column(Integer, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=_utc_now)
 
     __table_args__ = (
         Index('idx_are_konsult_date_age', 'datum', 'altersgruppe'),
@@ -110,7 +115,7 @@ class NotaufnahmeSyndromData(Base):
     expected_lowerbound = Column(Float)
     expected_upperbound = Column(Float)
     ed_count = Column(Integer)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=_utc_now)
 
     __table_args__ = (
         Index('idx_notaufnahme_date_syndrome', 'datum', 'syndrome'),
@@ -131,7 +136,7 @@ class NotaufnahmeStandort(Base):
     state_id = Column(String)
     latitude = Column(Float)
     longitude = Column(Float)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=_utc_now)
 
     __table_args__ = (
         Index('idx_notaufnahme_state_type', 'state', 'ed_type'),
@@ -151,7 +156,7 @@ class InfluenzaData(Base):
     altersgruppe = Column(String, nullable=False)
     fallzahl = Column(Integer, nullable=True)
     inzidenz = Column(Float, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=_utc_now)
 
     __table_args__ = (
         Index('idx_influenza_date_region_age', 'datum', 'region', 'altersgruppe'),
@@ -171,7 +176,7 @@ class RSVData(Base):
     altersgruppe = Column(String, nullable=False)
     fallzahl = Column(Integer, nullable=True)
     inzidenz = Column(Float, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=_utc_now)
 
     __table_args__ = (
         Index('idx_rsv_date_region_age', 'datum', 'region', 'altersgruppe'),
@@ -194,7 +199,7 @@ class SurvstatWeeklyData(Base):
     age_group = Column(String, nullable=True)  # "00-04", "05-14", "15+", "Gesamt", etc.
     incidence = Column(Float)
     source_file = Column(String)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=_utc_now)
 
     __table_args__ = (
         Index('idx_survstat_week_state', 'week_label', 'bundesland'),
@@ -217,7 +222,7 @@ class SurvstatKreisData(Base):
     disease_cluster = Column(String, nullable=True, index=True)
     fallzahl = Column(Integer, nullable=False, default=0)
     inzidenz = Column(Float, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=_utc_now)
 
     __table_args__ = (
         UniqueConstraint("week_label", "kreis", "disease", name="uq_survstat_kreis"),
@@ -235,7 +240,7 @@ class KreisEinwohner(Base):
     ags = Column(String(5), nullable=True)
     bundesland = Column(String, nullable=False, index=True)
     einwohner = Column(Integer, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=_utc_now)
 
 
 class GoogleTrendsData(Base):
@@ -249,7 +254,7 @@ class GoogleTrendsData(Base):
     region = Column(String, default="DE")  # Deutschland
     interest_score = Column(Integer)  # 0-100
     is_partial = Column(Boolean, default=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=_utc_now)
     
     __table_args__ = (
         Index('idx_trends_date_keyword', 'datum', 'keyword'),
@@ -277,7 +282,7 @@ class WeatherData(Base):
     schnee_mm = Column(Float)  # Snow volume mm
     taupunkt = Column(Float)  # Dew point °C
     data_type = Column(String, default="CURRENT")  # CURRENT, DAILY_FORECAST, HOURLY_FORECAST
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=_utc_now)
 
     __table_args__ = (
         Index('idx_weather_date_city', 'datum', 'city'),
@@ -296,7 +301,7 @@ class PollenData(Base):
     pollen_type = Column(String, nullable=False, index=True)  # Birke, Graeser, ...
     pollen_index = Column(Float, nullable=False)  # 0.0 - 3.0 (DWD-Skala)
     source = Column(String, nullable=False, default="DWD")
-    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    created_at = Column(DateTime, default=_utc_now, index=True)
 
     __table_args__ = (
         Index('idx_pollen_region_date', 'region_code', 'datum'),
@@ -315,7 +320,7 @@ class SchoolHolidays(Base):
     start_datum = Column(DateTime, nullable=False)
     end_datum = Column(DateTime, nullable=False)
     jahr = Column(Integer, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=_utc_now)
     
     __table_args__ = (
         Index('idx_holidays_dates', 'start_datum', 'end_datum'),
@@ -334,7 +339,7 @@ class GanzimmunData(Base):
     positive_ergebnisse = Column(Integer)
     region = Column(String)
     extra_data = Column(JSON)  # Flexibel für zusätzliche Daten
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=_utc_now)
 
 
 class MLForecast(Base):
@@ -342,7 +347,7 @@ class MLForecast(Base):
     __tablename__ = "ml_forecasts"
     
     id = Column(Integer, primary_key=True, index=True)
-    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    created_at = Column(DateTime, default=_utc_now, index=True)
     forecast_date = Column(DateTime, nullable=False, index=True)
     virus_typ = Column(String, nullable=False)
     region = Column(String, nullable=False, default="DE", index=True)
@@ -367,7 +372,7 @@ class LLMRecommendation(Base):
     __tablename__ = "llm_recommendations"
     
     id = Column(Integer, primary_key=True, index=True)
-    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    created_at = Column(DateTime, default=_utc_now, index=True)
     recommendation_text = Column(String, nullable=False)
     context_data = Column(JSON)  # Input-Daten für LLM
     confidence_score = Column(Float)
@@ -386,7 +391,7 @@ class AuditLog(Base):
     __tablename__ = "audit_logs"
     
     id = Column(Integer, primary_key=True, index=True)
-    timestamp = Column(DateTime, default=datetime.utcnow, index=True)
+    timestamp = Column(DateTime, default=_utc_now, index=True)
     user = Column(String)
     action = Column(String, nullable=False)  # view, approve, modify, reject
     entity_type = Column(String)  # recommendation, forecast, etc.
@@ -414,8 +419,8 @@ class InventoryLevel(Base):
     max_bestand = Column(Integer)
     empfohlener_bestand = Column(Integer)
     lieferzeit_tage = Column(Integer)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=_utc_now)
+    updated_at = Column(DateTime, default=_utc_now, onupdate=_utc_now)
 
 
 class OutbreakScore(Base):
@@ -433,7 +438,7 @@ class OutbreakScore(Base):
     component_scores = Column(JSON)      # Aufschlüsselung aller Signale
     data_source_mode = Column(String)    # FULL, ESTIMATED_FROM_ORDERS
     phase = Column(String)               # A (heuristisch) oder B (KI-gesteuert)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=_utc_now)
 
     __table_args__ = (
         Index('idx_outbreak_date_virus', 'datum', 'virus_typ'),
@@ -446,7 +451,7 @@ class MarketingOpportunity(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     opportunity_id = Column(String, unique=True, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    created_at = Column(DateTime, default=_utc_now, index=True)
     opportunity_type = Column(String, nullable=False)
     status = Column(String, default="NEW")
     urgency_score = Column(Float, nullable=False)
@@ -468,7 +473,7 @@ class MarketingOpportunity(Base):
     campaign_payload = Column(JSON)
     playbook_key = Column(String, index=True)
     strategy_mode = Column(String, default="PLAYBOOK_AI", index=True)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, index=True)
+    updated_at = Column(DateTime, default=_utc_now, onupdate=_utc_now, index=True)
     expires_at = Column(DateTime)
     exported_at = Column(DateTime)
 
@@ -491,9 +496,9 @@ class BrandProduct(Base):
     source_hash = Column(String, nullable=False)
     active = Column(Boolean, default=True, index=True)
     extra_data = Column(JSON)
-    last_seen_at = Column(DateTime, default=datetime.utcnow, index=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, index=True)
+    last_seen_at = Column(DateTime, default=_utc_now, index=True)
+    created_at = Column(DateTime, default=_utc_now)
+    updated_at = Column(DateTime, default=_utc_now, onupdate=_utc_now, index=True)
 
     __table_args__ = (
         Index('idx_brand_products_brand_active', 'brand', 'active'),
@@ -515,8 +520,8 @@ class ProductConditionMapping(Base):
     is_approved = Column(Boolean, default=False, index=True)
     priority = Column(Integer, default=0)
     notes = Column(String)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, index=True)
+    created_at = Column(DateTime, default=_utc_now)
+    updated_at = Column(DateTime, default=_utc_now, onupdate=_utc_now, index=True)
 
     product = relationship("BrandProduct")
 
@@ -538,7 +543,7 @@ class ProductCatalog(Base):
     applicable_types = Column(JSON)
     applicable_conditions = Column(JSON)
     is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=_utc_now)
 
 
 class UploadHistory(Base):
@@ -555,7 +560,7 @@ class UploadHistory(Base):
     status = Column(String, default="success")  # success, error, partial
     error_message = Column(String)
     summary = Column(JSON)
-    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    created_at = Column(DateTime, default=_utc_now, index=True)
 
 
 class MediaOutcomeRecord(Base):
@@ -578,8 +583,8 @@ class MediaOutcomeRecord(Base):
     source_label = Column(String, nullable=False, default="manual", index=True)
     import_batch_id = Column(String, nullable=True, index=True)
     extra_data = Column(JSON)
-    created_at = Column(DateTime, default=datetime.utcnow, index=True)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, index=True)
+    created_at = Column(DateTime, default=_utc_now, index=True)
+    updated_at = Column(DateTime, default=_utc_now, onupdate=_utc_now, index=True)
 
     __table_args__ = (
         UniqueConstraint("week_start", "brand", "product", "region_code", "source_label", name="uq_media_outcome_record"),
@@ -607,8 +612,8 @@ class OutcomeObservation(Base):
     holdout_group = Column(String, nullable=True, index=True)
     confidence_hint = Column(Float, nullable=True)
     metadata_json = Column("metadata", JSON)
-    created_at = Column(DateTime, default=datetime.utcnow, index=True)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, index=True)
+    created_at = Column(DateTime, default=_utc_now, index=True)
+    updated_at = Column(DateTime, default=_utc_now, onupdate=_utc_now, index=True)
 
     __table_args__ = (
         UniqueConstraint(
@@ -648,9 +653,9 @@ class MediaOutcomeImportBatch(Base):
     week_min = Column(DateTime, index=True)
     week_max = Column(DateTime, index=True)
     coverage_after_import = Column(JSON)
-    uploaded_at = Column(DateTime, default=datetime.utcnow, index=True)
-    created_at = Column(DateTime, default=datetime.utcnow, index=True)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, index=True)
+    uploaded_at = Column(DateTime, default=_utc_now, index=True)
+    created_at = Column(DateTime, default=_utc_now, index=True)
+    updated_at = Column(DateTime, default=_utc_now, onupdate=_utc_now, index=True)
 
     __table_args__ = (
         Index("idx_media_outcome_batch_brand_uploaded", "brand", "uploaded_at"),
@@ -670,7 +675,7 @@ class MediaOutcomeImportIssue(Base):
     issue_code = Column(String, nullable=False, index=True)
     message = Column(String, nullable=False)
     raw_row = Column(JSON)
-    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    created_at = Column(DateTime, default=_utc_now, index=True)
 
     __table_args__ = (
         Index("idx_media_outcome_issue_batch_row", "batch_id", "row_number"),
@@ -688,7 +693,7 @@ class LabConfiguration(Base):
     weight_market = Column(Float, default=0.35)
     weight_psycho = Column(Float, default=0.10)
     weight_context = Column(Float, default=0.20)
-    last_calibration_date = Column(DateTime, default=datetime.utcnow)
+    last_calibration_date = Column(DateTime, default=_utc_now)
     calibration_source = Column(String)
     correlation_score = Column(Float)
     analyzed_days = Column(Integer)
@@ -718,7 +723,7 @@ class BacktestRun(Base):
     llm_insight = Column(String)
     lead_lag = Column(JSON)
     chart_points = Column(Integer, default=0)
-    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    created_at = Column(DateTime, default=_utc_now, index=True)
 
     __table_args__ = (
         Index('idx_backtest_mode_created', 'mode', 'created_at'),
@@ -742,7 +747,7 @@ class BacktestPoint(Base):
     psycho = Column(Float)
     context = Column(Float)
     extra = Column(JSON)
-    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    created_at = Column(DateTime, default=_utc_now, index=True)
 
     backtest_run = relationship("BacktestRun")
 
@@ -756,7 +761,7 @@ class ForecastAccuracyLog(Base):
     __tablename__ = "forecast_accuracy_log"
 
     id = Column(Integer, primary_key=True, index=True)
-    computed_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    computed_at = Column(DateTime, default=_utc_now, nullable=False, index=True)
     virus_typ = Column(String, nullable=False, index=True)
     window_days = Column(Integer, nullable=False, default=14)
     samples = Column(Integer, nullable=False)
@@ -783,10 +788,10 @@ class SourceNowcastSnapshot(Base):
     reference_date = Column(DateTime, nullable=False, index=True)
     effective_available_time = Column(DateTime, nullable=False, index=True)
     raw_value = Column(Float, nullable=False)
-    snapshot_captured_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
+    snapshot_captured_at = Column(DateTime, nullable=False, default=_utc_now, index=True)
     timing_provenance = Column(String, nullable=False)
     metadata_json = Column("metadata", JSON)
-    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    created_at = Column(DateTime, default=_utc_now, index=True)
 
     __table_args__ = (
         Index("idx_nowcast_snapshot_source_ref", "source_id", "reference_date"),
@@ -801,7 +806,7 @@ class WeeklyBrief(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     calendar_week = Column(String(10), nullable=False, index=True)
-    generated_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    generated_at = Column(DateTime, default=_utc_now, nullable=False)
     pdf_bytes = Column(LargeBinary)
     summary_json = Column(JSON)
     virus_typ = Column(String(50))

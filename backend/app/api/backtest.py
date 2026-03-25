@@ -1,6 +1,7 @@
 """Backtest API: Twin-Mode (Market + Customer) + Wellen-Radar."""
 
 from __future__ import annotations
+from app.core.time import utc_now
 
 import logging
 from datetime import datetime, timedelta
@@ -279,7 +280,7 @@ async def peix_validation(
     if virus_typ not in VALID_VIRUS_TYPES:
         virus_typ = "Influenza A"
 
-    now = datetime.utcnow()
+    now = utc_now()
     cutoff = now - timedelta(weeks=weeks_back)
     disease = _SURVSTAT_DISEASE_MAP.get(virus_typ, "influenza, saisonal")
     ww_virus = _VIRUS_TO_WW.get(virus_typ, virus_typ)

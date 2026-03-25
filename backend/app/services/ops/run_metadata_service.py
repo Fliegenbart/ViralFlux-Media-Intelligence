@@ -1,6 +1,7 @@
 """Operational run metadata and audit trail helpers."""
 
 from __future__ import annotations
+from app.core.time import utc_now
 
 from datetime import datetime
 from typing import Any
@@ -36,14 +37,14 @@ class OperationalRunRecorder:
             "action": str(action or "").strip().upper(),
             "status": str(status or "").strip().lower(),
             "summary": str(summary or "").strip(),
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": utc_now().isoformat(),
             "environment": self.settings.ENVIRONMENT,
             "app_version": self.settings.APP_VERSION,
             "metadata": dict(metadata or {}),
         }
         self.db.add(
             AuditLog(
-                timestamp=datetime.utcnow(),
+                timestamp=utc_now(),
                 user=user,
                 action=run_metadata["action"],
                 entity_type=entity_type,

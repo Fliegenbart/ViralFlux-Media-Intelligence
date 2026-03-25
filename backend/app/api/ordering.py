@@ -1,3 +1,4 @@
+from app.core.time import utc_now
 from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
@@ -164,7 +165,7 @@ async def get_stockout_analysis(db: Session = Depends(get_db)):
         "total_items": len(analyses),
         "items_needing_reorder": sum(1 for a in analyses if a["needs_reorder"]),
         "critical_items": sum(1 for a in analyses if a["risk_level"] == "critical"),
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": utc_now().isoformat(),
     }
 
 
@@ -209,7 +210,7 @@ async def generate_order_proposals(db: Session = Depends(get_db)):
 
         if analysis["needs_reorder"]:
             orders.append({
-                "order_id": f"ORD-{datetime.utcnow().strftime('%Y%m%d')}-{inv.test_typ[:3].upper()}",
+                "order_id": f"ORD-{utc_now().strftime('%Y%m%d')}-{inv.test_typ[:3].upper()}",
                 "test_typ": inv.test_typ,
                 "quantity": analysis["optimal_order_quantity"],
                 "priority": "URGENT" if analysis["risk_level"] in ("critical", "high") else "NORMAL",
@@ -218,14 +219,14 @@ async def generate_order_proposals(db: Session = Depends(get_db)):
                 "forecast_multiplier": analysis["forecast_multiplier"],
                 "estimated_cost": round(analysis["optimal_order_quantity"] * _get_unit_price(inv.test_typ), 2),
                 "supplier": _get_supplier(inv.test_typ),
-                "created_at": datetime.utcnow().isoformat(),
+                "created_at": utc_now().isoformat(),
             })
 
     return {
         "orders": orders,
         "total_orders": len(orders),
         "total_estimated_cost": round(sum(o["estimated_cost"] for o in orders), 2),
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": utc_now().isoformat(),
     }
 
 
@@ -274,10 +275,10 @@ async def export_sap_orders(db: Session = Depends(get_db)):
             qty = analysis["optimal_order_quantity"]
             price = round(qty * _get_unit_price(inv.test_typ), 2)
             supplier = _get_supplier(inv.test_typ)
-            delivery_date = (datetime.utcnow() + timedelta(days=inv.lieferzeit_tage or 5)).strftime('%Y-%m-%d')
+            delivery_date = (utc_now() + timedelta(days=inv.lieferzeit_tage or 5)).strftime('%Y-%m-%d')
 
             writer.writerow([
-                f'LP-{datetime.utcnow().strftime("%Y%m%d")}-{order_num:03d}',
+                f'LP-{utc_now().strftime("%Y%m%d")}-{order_num:03d}',
                 inv.test_typ,
                 _get_material_number(inv.test_typ),
                 qty,
@@ -288,7 +289,7 @@ async def export_sap_orders(db: Session = Depends(get_db)):
                 f'{price:.2f}',
                 '1000',  # Werk
                 'L001',  # Lagerort
-                datetime.utcnow().strftime('%Y-%m-%d'),
+                utc_now().strftime('%Y-%m-%d'),
                 delivery_date,
                 f'ML-Prognose: {analysis["forecast_multiplier"]:.1f}x Bedarf | Stockout in {analysis["days_until_stockout"]:.0f} Tagen',
             ])
@@ -298,7 +299,7 @@ async def export_sap_orders(db: Session = Depends(get_db)):
     return StreamingResponse(
         io.BytesIO(output.getvalue().encode('utf-8-sig')),
         media_type='text/csv',
-        headers={'Content-Disposition': f'attachment; filename=ViralFlux_MediaPlan_{datetime.utcnow().strftime("%Y%m%d_%H%M")}.csv'}
+        headers={'Content-Disposition': f'attachment; filename=ViralFlux_MediaPlan_{utc_now().strftime("%Y%m%d_%H%M")}.csv'}
     )
 
 

@@ -1,3 +1,4 @@
+from app.core.time import utc_now
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from datetime import datetime
@@ -53,7 +54,7 @@ async def get_all_inventory(db: Session = Depends(get_db)):
             }
             for inv in latest
         ],
-        "timestamp": datetime.utcnow()
+        "timestamp": utc_now()
     }
 
 
@@ -64,7 +65,7 @@ async def update_inventory(
 ):
     """Create or update inventory for a test type."""
     inv = InventoryLevel(
-        datum=datetime.utcnow(),
+        datum=utc_now(),
         test_typ=item.test_typ,
         aktueller_bestand=item.aktueller_bestand,
         min_bestand=item.min_bestand,
@@ -79,7 +80,7 @@ async def update_inventory(
         "status": "updated",
         "test_typ": item.test_typ,
         "aktueller_bestand": item.aktueller_bestand,
-        "timestamp": datetime.utcnow()
+        "timestamp": utc_now()
     }
 
 
@@ -95,11 +96,11 @@ async def seed_inventory(db: Session = Depends(get_db)):
     ]
 
     for item in demo_data:
-        inv = InventoryLevel(datum=datetime.utcnow(), **item)
+        inv = InventoryLevel(datum=utc_now(), **item)
         db.add(inv)
 
     db.commit()
-    return {"status": "seeded", "items": len(demo_data), "timestamp": datetime.utcnow()}
+    return {"status": "seeded", "items": len(demo_data), "timestamp": utc_now()}
 
 
 @router.get("/history/{test_typ}")

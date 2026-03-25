@@ -4,6 +4,7 @@ Black-Box-Endpunkte: Input = Parameter, Output = qualitative Bewertung.
 Keine Gewichtungen, Schwellenwerte oder Rohdaten-Koeffizienten.
 """
 
+from app.core.time import utc_now
 from fastapi import APIRouter, Depends, Request, Query
 from sqlalchemy.orm import Session
 from datetime import datetime
@@ -141,7 +142,7 @@ def obfuscate_result(internal: dict) -> PublicRiskResponse:
     confidence_str = internal.get("confidence_level", "Mittel")
 
     meta = ResponseMeta(
-        timestamp=datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
+        timestamp=utc_now().strftime("%Y-%m-%dT%H:%M:%SZ"),
     )
 
     prediction = Prediction(
@@ -228,7 +229,7 @@ async def get_public_risk_all(request: Request, db: Session = Depends(get_db)):
     )
 
     meta = ResponseMeta(
-        timestamp=datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
+        timestamp=utc_now().strftime("%Y-%m-%dT%H:%M:%SZ"),
     )
 
     viruses = {}

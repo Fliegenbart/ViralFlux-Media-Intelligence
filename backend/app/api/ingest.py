@@ -1,3 +1,4 @@
+from app.core.time import utc_now
 from fastapi import (
     APIRouter,
     BackgroundTasks,
@@ -206,7 +207,7 @@ async def run_survstat_upload_import(
         "snapshot_rows": snapshot_rows,
         "latest_week": latest_week,
         "errors": errors,
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": utc_now().isoformat(),
     }
 
 

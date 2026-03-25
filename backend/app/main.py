@@ -1,3 +1,4 @@
+from app.core.time import utc_now
 import asyncio
 import logging
 import time
@@ -213,7 +214,7 @@ async def startup_event():
 
     readiness_snapshot = ProductionReadinessService().build_snapshot(deep_checks=False)
     app.state.startup_readiness = readiness_snapshot
-    app.state.startup_completed_at = datetime.utcnow().isoformat()
+    app.state.startup_completed_at = utc_now().isoformat()
     app.state.startup_run_metadata = None
 
     with get_db_context() as db:
@@ -308,7 +309,7 @@ async def health_live():
     """Liveness probe: process is running and can answer requests."""
     return {
         "status": "alive",
-        "checked_at": datetime.utcnow().isoformat(),
+        "checked_at": utc_now().isoformat(),
         "app_version": settings.APP_VERSION,
         "environment": settings.ENVIRONMENT,
     }
@@ -396,7 +397,7 @@ async def get_status(db: Session = Depends(get_db)):
             "survstat": latest_survstat.created_at if latest_survstat else None,
             "survstat_kreis": latest_survstat_kreis.created_at if latest_survstat_kreis else None,
         },
-        "timestamp": datetime.utcnow()
+        "timestamp": utc_now()
     }
 
 

@@ -850,7 +850,7 @@ class ProductionReadinessServiceTests(unittest.TestCase):
         self.assertEqual(influenza_h7["quality_gate_profile"], "pilot_v1")
         self.assertEqual(influenza_h7["quality_gate_failed_checks"], [])
         self.assertFalse(influenza_h5["pilot_contract_supported"])
-        self.assertIn("day-one pilot", influenza_h5["pilot_contract_reason"])
+        self.assertIn("h7-first product focus", influenza_h5["pilot_contract_reason"])
 
     def test_build_snapshot_tracks_sars_h7_promotion_eligibility_without_auto_promotion(self) -> None:
         now = datetime(2026, 3, 17, 10, 0, 0)

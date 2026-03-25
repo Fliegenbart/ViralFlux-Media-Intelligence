@@ -99,6 +99,62 @@ class ForecastApiTests(unittest.TestCase):
         self.assertEqual(first_prediction["decision"]["stage"], "prepare")
         self.assertIn("expected_target_incidence", first_prediction)
 
+    def test_experimental_geo_predict_response_stays_shadow_and_cluster_only(self) -> None:
+        payload = {
+            "status": "success",
+            "virus_typ": "Influenza A",
+            "as_of_date": "2026-03-16",
+            "horizon_days": 7,
+            "geo_level": "kreis_cluster",
+            "truth_resolution": "landkreis",
+            "feature_resolution": "landkreis_truth_only",
+            "reconciliation_target_level": "bundesland",
+            "experimental": True,
+            "production_ready": False,
+            "rollout_mode": "shadow",
+            "activation_policy": "watch_only",
+            "promotion_allowed": False,
+            "claim_scope": "experimental_cluster_level_only",
+            "claim_guardrail_message": (
+                "Experimenteller Geo-Pfad auf Cluster-Ebene. Keine Stadt- oder Landkreis-Freigabe fuer Produktion. "
+                "Keine automatische Ableitung aus Bundesland-Forecasts."
+            ),
+            "clusters": [
+                {
+                    "cluster_id": "cluster_0",
+                    "ranking_signal": 0.74,
+                    "signal_score": 0.74,
+                    "signal_confidence": 0.81,
+                    "rollout_mode": "shadow",
+                    "activation_policy": "watch_only",
+                }
+            ],
+            "top_clusters": [],
+            "state_reconciliation": [],
+            "generated_at": "2026-03-14T12:00:00",
+        }
+
+        with patch(
+            "app.services.ml.experimental_geo_forecast.ExperimentalGeoForecastService.predict_clusters",
+            return_value=payload,
+        ):
+            response = self.client.get(
+                "/api/v1/forecast/regional/experimental-geo/predict?virus_typ=Influenza%20A&horizon_days=7"
+            )
+
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertTrue(body["experimental"])
+        self.assertFalse(body["production_ready"])
+        self.assertEqual(body["geo_level"], "kreis_cluster")
+        self.assertEqual(body["rollout_mode"], "shadow")
+        self.assertEqual(body["activation_policy"], "watch_only")
+        self.assertFalse(body["promotion_allowed"])
+        self.assertEqual(body["claim_scope"], "experimental_cluster_level_only")
+        self.assertIn("claim_guardrail_message", body)
+        self.assertIn("ranking_signal", body["clusters"][0])
+        self.assertNotIn("event_probability", body["clusters"][0])
+
     def test_media_allocation_response_contains_budget_fields(self) -> None:
         payload = {
             "virus_typ": "Influenza A",

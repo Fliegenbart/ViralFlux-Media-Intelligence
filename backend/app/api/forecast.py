@@ -358,6 +358,44 @@ async def get_regional_decisions(
     return service.predict_all_regions(virus_typ=virus_typ, horizon_days=horizon_days)
 
 
+@router.get("/regional/experimental-geo/predict")
+async def get_experimental_geo_predictions(
+    virus_typ: str = "Influenza A",
+    horizon_days: int = Depends(_validated_regional_horizon),
+    geo_level: str = Query(
+        default="kreis_cluster",
+        description="Oeffentlich freigegebener Geo-Level fuer den experimentellen Shadow-Pfad.",
+    ),
+    cluster_count: int = Query(
+        default=6,
+        ge=2,
+        le=12,
+        description="Maximale Zahl experimenteller Cluster fuer den Shadow-Run.",
+    ),
+    as_of_date: datetime | None = Query(
+        default=None,
+        description="Optionaler Datenstand fuer Reproduzierbarkeit im experimentellen Geo-Pfad.",
+    ),
+    db: Session = Depends(get_db),
+):
+    """Experimental cluster-level shadow path based on visible Landkreis truth only.
+
+    This endpoint is intentionally separate from the production regional forecast.
+    It does not expose city forecasts, does not allocate budget, and does not
+    promote itself into the operational Bundesland stack.
+    """
+    from app.services.ml.experimental_geo_forecast import ExperimentalGeoForecastService
+
+    service = ExperimentalGeoForecastService(db)
+    return service.predict_clusters(
+        virus_typ=virus_typ,
+        horizon_days=horizon_days,
+        geo_level=geo_level,
+        as_of_date=as_of_date,
+        cluster_count=cluster_count,
+    )
+
+
 @router.get("/regional/media-activation")
 async def get_media_activation(
     virus_typ: str = "Influenza A",

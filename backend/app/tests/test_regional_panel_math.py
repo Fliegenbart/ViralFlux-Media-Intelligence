@@ -2,7 +2,11 @@ import unittest
 from datetime import datetime
 
 import pandas as pd
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 
+from app.core.time import utc_now
+from app.models.database import Base, KreisEinwohner, SurvstatKreisData
 from app.services.ml.regional_features import RegionalFeatureBuilder
 from app.services.ml.regional_panel_utils import (
     activation_false_positive_rate,
@@ -668,6 +672,80 @@ class RegionalFeatureBuilderInferenceTests(unittest.TestCase):
         self.assertAlmostEqual(by_row["grippeweb_ili_level"], 6.0, places=6)
         self.assertEqual(by_row["grippeweb_are_available"], 1.0)
         self.assertEqual(by_row["ifsg_influenza_available"], 1.0)
+
+
+class RegionalLandkreisTruthTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.engine = create_engine("sqlite:///:memory:")
+        TestingSessionLocal = sessionmaker(bind=self.engine)
+        Base.metadata.create_all(bind=self.engine)
+        self.db = TestingSessionLocal()
+
+    def tearDown(self) -> None:
+        self.db.close()
+        Base.metadata.drop_all(bind=self.engine)
+        self.engine.dispose()
+
+    def test_load_landkreis_truth_series_exposes_available_date_and_skips_missing_population(self) -> None:
+        self.db.add_all(
+            [
+                KreisEinwohner(
+                    kreis_name="LK Ahrweiler",
+                    ags="07131",
+                    bundesland="Rheinland-Pfalz",
+                    einwohner=132170,
+                ),
+                KreisEinwohner(
+                    kreis_name="SK Berlin Mitte",
+                    ags="11001",
+                    bundesland="Berlin",
+                    einwohner=0,
+                ),
+                SurvstatKreisData(
+                    year=2026,
+                    week=10,
+                    week_label="2026_10",
+                    kreis="LK Ahrweiler",
+                    disease="influenza, saisonal",
+                    fallzahl=132,
+                    inzidenz=None,
+                    created_at=utc_now(),
+                ),
+                SurvstatKreisData(
+                    year=2026,
+                    week=10,
+                    week_label="2026_10",
+                    kreis="SK Berlin Mitte",
+                    disease="influenza, saisonal",
+                    fallzahl=75,
+                    inzidenz=None,
+                    created_at=utc_now(),
+                ),
+                SurvstatKreisData(
+                    year=2026,
+                    week=11,
+                    week_label="2026_11",
+                    kreis="LK Ahrweiler",
+                    disease="influenza, saisonal",
+                    fallzahl=165,
+                    inzidenz=None,
+                    created_at=utc_now(),
+                ),
+            ]
+        )
+        self.db.commit()
+
+        builder = RegionalFeatureBuilder(self.db)
+        truth = builder.load_landkreis_truth_series("Influenza A", pd.Timestamp("2026-01-01"))
+
+        self.assertEqual(sorted(truth["geo_unit_id"].unique().tolist()), ["07131"])
+        self.assertTrue((truth["population"] > 0).all())
+        self.assertEqual(truth["parent_bundesland"].iloc[0], "RP")
+        self.assertEqual(str(truth["available_date"].iloc[0].date()), "2026-03-09")
+
+        visible = truth.loc[truth["available_date"] <= pd.Timestamp("2026-03-10")].copy()
+        self.assertEqual(len(visible), 1)
+        self.assertEqual(str(visible["week_start"].iloc[0].date()), "2026-03-02")
 
 
 if __name__ == "__main__":

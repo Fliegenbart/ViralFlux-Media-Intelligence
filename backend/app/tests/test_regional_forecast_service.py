@@ -9,6 +9,7 @@ from sqlalchemy.orm import sessionmaker
 from app.models.database import Base
 from app.services.media.truth_layer_contracts import OutcomeObservationInput
 from app.services.media.truth_layer_service import TruthLayerService
+from app.services.ml.experimental_geo_forecast import ExperimentalGeoForecastService
 from app.services.ml.regional_forecast import RegionalForecastService
 from app.services.ml.regional_trainer import RegionalModelTrainer
 from app.services.ml.training_contract import SUPPORTED_VIRUS_TYPES
@@ -1231,6 +1232,117 @@ class RegionalCampaignRecommendationIntegrationTests(unittest.TestCase):
         self.assertEqual(first["recommended_product_cluster"]["cluster_key"], "gelo_core_respiratory")
         self.assertIn("recommended_keyword_cluster", first)
         self.assertIn("recommendation_rationale", first)
+
+
+class ExperimentalGeoForecastServiceTests(unittest.TestCase):
+    @staticmethod
+    def _experimental_truth_frame() -> pd.DataFrame:
+        weeks = pd.date_range("2026-01-05", periods=10, freq="7D")
+        rows: list[dict[str, object]] = []
+        definitions = {
+            "01001": ("Flensburg, Stadt", "SH", [8, 9, 10, 10, 11, 12, 13, 15, 17, 19], 90_000),
+            "01051": ("Dithmarschen", "SH", [6, 6, 7, 8, 8, 9, 10, 11, 12, 13], 130_000),
+            "09162": ("Muenchen, Stadt", "BY", [10, 11, 11, 12, 13, 15, 17, 20, 22, 24], 1_450_000),
+            "09184": ("Muenchen", "BY", [7, 7, 8, 8, 9, 10, 11, 13, 15, 16], 350_000),
+        }
+        for geo_unit_id, (name, state_code, incidences, population) in definitions.items():
+            for week_start, incidence in zip(weeks, incidences, strict=False):
+                rows.append(
+                    {
+                        "geo_unit_level": "landkreis",
+                        "geo_unit_id": geo_unit_id,
+                        "geo_unit_name": name,
+                        "parent_bundesland": state_code,
+                        "parent_bundesland_name": state_code,
+                        "population": float(population),
+                        "week_start": pd.Timestamp(week_start).normalize(),
+                        "available_date": pd.Timestamp(week_start).normalize() + pd.Timedelta(days=7),
+                        "incidence": float(incidence),
+                        "truth_source": "survstat_kreis",
+                    }
+                )
+        return pd.DataFrame(rows)
+
+    def test_predict_clusters_returns_explicit_shadow_payload_without_city_claims(self) -> None:
+        service = ExperimentalGeoForecastService(db=None)
+        truth = self._experimental_truth_frame()
+
+        service.feature_builder = type(
+            "_Builder",
+            (),
+            {
+                "load_landkreis_truth_series": staticmethod(lambda virus_typ, start_date: truth.copy()),
+                "_target_week_start": staticmethod(
+                    lambda as_of_date, horizon_days: pd.Timestamp(as_of_date).normalize() + pd.Timedelta(days=horizon_days)
+                ),
+            },
+        )()
+
+        result = service.predict_clusters(
+            virus_typ="Influenza A",
+            horizon_days=7,
+            as_of_date=datetime(2026, 3, 20),
+            cluster_count=2,
+        )
+
+        self.assertEqual(result["status"], "success")
+        self.assertTrue(result["experimental"])
+        self.assertFalse(result["production_ready"])
+        self.assertEqual(result["rollout_mode"], "shadow")
+        self.assertEqual(result["activation_policy"], "watch_only")
+        self.assertFalse(result["promotion_allowed"])
+        self.assertEqual(result["geo_level"], "kreis_cluster")
+        self.assertEqual(result["truth_resolution"], "landkreis")
+        self.assertEqual(result["feature_resolution"], "landkreis_truth_only")
+        self.assertEqual(result["claim_scope"], "experimental_cluster_level_only")
+        self.assertTrue(result["clusters"])
+        top = result["clusters"][0]
+        self.assertIn("ranking_signal", top)
+        self.assertIn("signal_score", top)
+        self.assertIn("signal_confidence", top)
+        self.assertNotIn("event_probability", top)
+        self.assertIn("Keine Stadt-", top["claim_guardrail_message"])
+        self.assertEqual(top["rollout_mode"], "shadow")
+        self.assertEqual(top["activation_policy"], "watch_only")
+
+    def test_predict_clusters_never_falls_back_to_bundesland_forecast_when_truth_is_missing(self) -> None:
+        service = ExperimentalGeoForecastService(db=None)
+        empty_truth = pd.DataFrame(
+            columns=[
+                "geo_unit_id",
+                "geo_unit_name",
+                "parent_bundesland",
+                "population",
+                "week_start",
+                "available_date",
+                "incidence",
+                "truth_source",
+            ]
+        )
+        service.feature_builder = type(
+            "_Builder",
+            (),
+            {
+                "load_landkreis_truth_series": staticmethod(lambda virus_typ, start_date: empty_truth.copy()),
+                "_target_week_start": staticmethod(
+                    lambda as_of_date, horizon_days: pd.Timestamp(as_of_date).normalize() + pd.Timedelta(days=horizon_days)
+                ),
+            },
+        )()
+
+        result = service.predict_clusters(
+            virus_typ="Influenza A",
+            horizon_days=7,
+            as_of_date=datetime(2026, 3, 20),
+            cluster_count=2,
+        )
+
+        self.assertEqual(result["status"], "insufficient_geo_truth")
+        self.assertEqual(result["clusters"], [])
+        self.assertEqual(result["top_clusters"], [])
+        self.assertEqual(result["rollout_mode"], "shadow")
+        self.assertEqual(result["activation_policy"], "watch_only")
+        self.assertFalse(result["promotion_allowed"])
 
 
 if __name__ == "__main__":

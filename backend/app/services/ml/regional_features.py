@@ -55,6 +55,18 @@ def _feature_virus_slug(value: str) -> str:
     return value.lower().replace("-", "_").replace(" ", "_")
 
 
+def _geo_unit_fallback_id(value: str) -> str:
+    return (
+        str(value or "")
+        .strip()
+        .lower()
+        .replace(" ", "_")
+        .replace(",", "")
+        .replace("/", "_")
+        .replace("-", "_")
+    )
+
+
 class RegionalFeatureBuilder:
     """Build leakage-safe panel datasets for regional outbreak forecasting."""
 
@@ -432,6 +444,82 @@ class RegionalFeatureBuilder:
         if truth.empty:
             truth = self._load_truth_from_weekly(virus_typ=virus_typ, start_date=start_date)
         return truth
+
+    def load_landkreis_truth_series(self, virus_typ: str, start_date: pd.Timestamp) -> pd.DataFrame:
+        if self.db is None:
+            return pd.DataFrame()
+        diseases = SURVSTAT_VIRUS_MAP.get(virus_typ, [])
+        if not diseases:
+            return pd.DataFrame()
+
+        rows = (
+            self.db.query(
+                SurvstatKreisData.year,
+                SurvstatKreisData.week,
+                SurvstatKreisData.week_label,
+                SurvstatKreisData.kreis,
+                KreisEinwohner.ags,
+                KreisEinwohner.bundesland,
+                KreisEinwohner.einwohner,
+                func.sum(SurvstatKreisData.fallzahl).label("total_cases"),
+            )
+            .join(KreisEinwohner, KreisEinwohner.kreis_name == SurvstatKreisData.kreis)
+            .filter(
+                func.lower(SurvstatKreisData.disease).in_(diseases),
+                SurvstatKreisData.year >= start_date.year,
+            )
+            .group_by(
+                SurvstatKreisData.year,
+                SurvstatKreisData.week,
+                SurvstatKreisData.week_label,
+                SurvstatKreisData.kreis,
+                KreisEinwohner.ags,
+                KreisEinwohner.bundesland,
+                KreisEinwohner.einwohner,
+            )
+            .order_by(
+                SurvstatKreisData.year.asc(),
+                SurvstatKreisData.week.asc(),
+                SurvstatKreisData.kreis.asc(),
+            )
+            .all()
+        )
+
+        frame = pd.DataFrame(
+            [
+                {
+                    "geo_unit_level": "landkreis",
+                    "geo_unit_id": str(row.ags or _geo_unit_fallback_id(row.kreis)),
+                    "geo_unit_name": str(row.kreis),
+                    "parent_bundesland": normalize_state_code(row.bundesland),
+                    "parent_bundesland_name": str(row.bundesland or ""),
+                    "population": float(row.einwohner or 0.0),
+                    "week_start": self._week_start_from_label(row.week_label),
+                    "available_date": effective_available_time(
+                        self._week_start_from_label(row.week_label),
+                        None,
+                        SOURCE_LAG_DAYS["survstat_kreis"],
+                    ),
+                    "incidence": (
+                        (float(row.total_cases or 0.0) / float(row.einwohner or 0.0)) * 100_000.0
+                        if float(row.einwohner or 0.0) > 0.0
+                        else np.nan
+                    ),
+                    "truth_source": "survstat_kreis",
+                }
+                for row in rows
+                if normalize_state_code(row.bundesland)
+            ]
+        )
+        if frame.empty:
+            return frame
+
+        return (
+            frame.dropna(subset=["incidence"])
+            .loc[lambda df: df["population"] > 0.0]
+            .sort_values(["geo_unit_id", "week_start"])
+            .reset_index(drop=True)
+        )
 
     def _load_truth_from_kreis(self, virus_typ: str, start_date: pd.Timestamp) -> pd.DataFrame:
         diseases = SURVSTAT_VIRUS_MAP.get(virus_typ, [])

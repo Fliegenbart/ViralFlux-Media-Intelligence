@@ -299,7 +299,7 @@ function buildWaveRadar(): WaveRadarResponse {
 }
 
 describe('NowWorkspace', () => {
-  it('shows one main decision, the trust block and the next region flow', () => {
+  it('shows one main decision and keeps secondary content in details', () => {
     render(
       <NowWorkspace
         virus="Influenza A"
@@ -331,10 +331,6 @@ describe('NowWorkspace', () => {
     expect(screen.getByText('Kann ich der Entscheidung trauen?')).toBeInTheDocument();
     expect(screen.getByText('Der schnelle Sicherheitscheck')).toBeInTheDocument();
     expect(screen.getByText('Ist eine Business-Freigabe schon drin?')).toBeInTheDocument();
-    expect(screen.getByText('Was kommt danach?')).toBeInTheDocument();
-    expect(screen.getAllByText('Respiratory Core Demand').length).toBeGreaterThan(0);
-    expect(screen.getByText('Danach anschauen')).toBeInTheDocument();
-    expect(screen.getByText('Was vorher noch offen ist')).toBeInTheDocument();
     expect(screen.getByText('Weitere Details')).toBeInTheDocument();
   });
 

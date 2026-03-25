@@ -82,11 +82,6 @@ const CampaignStudio: React.FC<Props> = ({
     'Hilft beim Vergleichen und Priorisieren, ist aber keine Eintrittswahrscheinlichkeit.',
   );
   const hiddenBacklog = campaignsView?.summary?.hidden_backlog_cards ?? 0;
-  const visibleCards = campaignsView?.summary?.visible_cards ?? cards.length;
-  const aiTouchedCount = cards.filter((card) => {
-    const aiStatus = String(card.ai_generation_status || card.campaign_preview?.ai_generation_status || '').trim();
-    return aiStatus.length > 0;
-  }).length;
   const focusNotes = [
     focusCard ? `${focusSignalLabel}: ${focusSignalBadge}. ${focusSignalNote}` : null,
     hiddenBacklog > 0 ? additionalSuggestionsText(hiddenBacklog) : null,
@@ -127,11 +122,6 @@ const CampaignStudio: React.FC<Props> = ({
       >
         <div className="campaign-command-grid">
           <div className="campaign-focus-panel" style={{ marginTop: 0 }}>
-            <div className="review-chip-row">
-              <span className="step-chip">Fokusfall</span>
-              <span className="step-chip">{focusContext}</span>
-              <span className="step-chip">{focusCard ? workflowLabel(focusCard.lifecycle_state || focusCard.status) : 'noch offen'}</span>
-            </div>
             <div className="campaign-focus-title">{focusTitle}</div>
             <div className="campaign-focus-context">{focusContext}</div>
             <p className="campaign-focus-copy">{focusCopy}</p>
@@ -147,16 +137,6 @@ const CampaignStudio: React.FC<Props> = ({
                 label={focusSignalLabel}
                 value={focusCard ? formatPercent(primarySignalScore(focusCard)) : '-'}
                 meta="hilft beim Priorisieren"
-              />
-              <OperatorStat
-                label="Budget"
-                value={formatCurrency(focusCard?.campaign_preview?.budget?.weekly_budget_eur)}
-                meta="aktueller Vorschlag"
-              />
-              <OperatorStat
-                label="Region"
-                value={focusCard?.region_codes_display?.join(', ') || focusCard?.region || 'National'}
-                meta="für den nächsten Schritt"
               />
             </div>
 
@@ -182,26 +162,15 @@ const CampaignStudio: React.FC<Props> = ({
 
           <OperatorPanel
             eyebrow="Pipeline"
-            title="Wie die Arbeit gerade verteilt ist"
-            description="So ist die Arbeit gerade verteilt."
+            title="Kurzüberblick"
+            description="Nur die wichtigsten Zahlen."
             tone="muted"
             className="campaign-command-rail"
           >
-            <div className="operator-stat-grid">
-              <OperatorStat label="Vorbereitung" value={prepareCount} meta="offene Fälle" />
-              <OperatorStat label="Freigabe" value={approvalCount} meta="entscheidungsreif" tone="accent" />
-              <OperatorStat label="Aktiv" value={activeCount} meta="laufende Fälle" />
-              <OperatorStat label="Sichtbar" value={visibleCards} meta="in der Übersicht" />
-            </div>
-
             <div className="workspace-note-list">
-              <div className="workspace-note-card">{campaignsView?.summary?.deduped_cards ?? cards.length} priorisierte Fälle</div>
-              <div className="workspace-note-card">{aiTouchedCount} automatisch erstellt oder ergänzt</div>
-              <div className="workspace-note-card">
-                {focusCard
-                  ? `Als Nächstes: ${phaseTitle(phaseForCard(focusCard))}.`
-                  : 'Neue Fälle erscheinen hier automatisch.'}
-              </div>
+              <div className="workspace-note-card">Vorbereitung: {prepareCount}</div>
+              <div className="workspace-note-card">Freigabe: {approvalCount}</div>
+              <div className="workspace-note-card">Aktiv: {activeCount}</div>
             </div>
           </OperatorPanel>
         </div>
@@ -445,11 +414,4 @@ function phaseTitle(id: 'prepare' | 'approval' | 'active'): string {
   if (id === 'prepare') return 'Entwürfe';
   if (id === 'approval') return 'Freigaben';
   return 'Aktive Fälle';
-}
-
-function phaseForCard(card: RecommendationCard): 'prepare' | 'approval' | 'active' {
-  const lane = recommendationLane(card);
-  if (lane === 'prepare' || lane === 'review') return 'prepare';
-  if (lane === 'approve' || lane === 'sync') return 'approval';
-  return 'active';
 }

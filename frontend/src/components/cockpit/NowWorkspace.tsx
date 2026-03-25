@@ -62,10 +62,10 @@ const NowWorkspace: React.FC<Props> = ({
   const focusRegion = view.focusRegion;
   const proof = view.proof;
   const leadReasons = view.reasons.slice(0, 3);
-  const relatedRegions = view.relatedRegions.slice(0, 3);
+  const relatedRegions = view.relatedRegions.slice(0, 2);
   const trustChecks = view.trustChecks.slice(0, 3);
   const mainActionLabel = view.primaryActionLabel || 'Kampagnen prüfen';
-  const blockers = (workspaceStatus?.blockers?.length ? workspaceStatus.blockers : view.risks).slice(0, 4);
+  const blockers = (workspaceStatus?.blockers?.length ? workspaceStatus.blockers : view.risks).slice(0, 3);
   const sortedPredictions = [...(forecast?.predictions || [])].sort((left, right) => {
     const leftRank = Number(left.decision_rank ?? left.rank ?? Number.MAX_SAFE_INTEGER);
     const rightRank = Number(right.decision_rank ?? right.rank ?? Number.MAX_SAFE_INTEGER);
@@ -165,13 +165,6 @@ const NowWorkspace: React.FC<Props> = ({
               ) : null}
             </div>
 
-            <OperatorChipRail className="review-chip-row">
-              <span className="step-chip">Fokus {focusRegion?.name || '-'}</span>
-              <span className="step-chip">{focusRegion?.stage || '-'}</span>
-              <span className="step-chip">{focusRegion?.probabilityLabel || '-'}</span>
-              <span className="step-chip">{focusRegion?.budgetLabel || '-'}</span>
-            </OperatorChipRail>
-
             <div className="operator-stat-grid">
               <OperatorStat
                 label="Fokusregion"
@@ -180,19 +173,9 @@ const NowWorkspace: React.FC<Props> = ({
                 tone="accent"
               />
               <OperatorStat
-                label="Produktfokus"
-                value={focusRegion?.product || '-'}
-                meta="für die nächste Aktion"
-              />
-              <OperatorStat
                 label="Vorhersagesignal"
                 value={focusRegion?.probabilityLabel || '-'}
                 meta="wichtigste Entwicklung"
-              />
-              <OperatorStat
-                label="Budgethinweis"
-                value={focusRegion?.budgetLabel || '-'}
-                meta="für den nächsten Schritt"
               />
             </div>
 
@@ -275,18 +258,17 @@ const NowWorkspace: React.FC<Props> = ({
             </div>
           </OperatorSection>
 
-          <OperatorSection
-            kicker="Was kommt danach?"
-            title={nextStepTitle}
-            description="Hier siehst du den nächsten Schritt und was ihn noch bremst."
-            tone="muted"
+          <CollapsibleSection
+            title="Weitere Details"
+            subtitle="Nur wenn du tiefer einsteigen möchtest."
           >
             <div className="workspace-two-column">
               <OperatorPanel
-                title="Danach anschauen"
-                description="Das sind die nächsten Kandidaten."
+                title={nextStepTitle}
+                description={nextStepDescription}
               >
                 <div className="workspace-note-list">
+                  <div className="workspace-note-card">{nextStepContext}</div>
                   {relatedRegions.length > 0 ? relatedRegions.map((region) => (
                     <button
                       type="button"
@@ -302,36 +284,27 @@ const NowWorkspace: React.FC<Props> = ({
                           </div>
                         </div>
                       </div>
-                      <p className="campaign-focus-copy" style={{ marginTop: 10 }}>{region.reason}</p>
                     </button>
-                  )) : (
-                    <div className="workspace-note-card">Aktuell gibt es keine weiteren priorisierten Regionen.</div>
-                  )}
+                  )) : null}
                 </div>
               </OperatorPanel>
 
               <OperatorPanel
-                title="Was vorher noch offen ist"
-                description="Das solltest du vorher klären."
+                title="Offene Punkte"
+                description="Nur wenn noch etwas blockiert."
               >
                 <div className="workspace-note-list">
-                  {blockers.map((risk) => (
+                  {blockers.length > 0 ? blockers.map((risk) => (
                     <div key={risk} className="workspace-note-card">
                       {risk}
                     </div>
-                  ))}
-                  {blockers.length === 0 ? (
-                    <div className="workspace-note-card">Aktuell gibt es keine offenen Punkte, die dich bremsen.</div>
-                  ) : null}
+                  )) : (
+                    <div className="workspace-note-card">Aktuell blockiert nichts.</div>
+                  )}
                 </div>
               </OperatorPanel>
             </div>
-          </OperatorSection>
 
-          <CollapsibleSection
-            title="Weitere Details"
-            subtitle="Nur wenn du tiefer einsteigen möchtest."
-          >
             <WaveOutlookPanel
               virus={virus}
               onVirusChange={onVirusChange}

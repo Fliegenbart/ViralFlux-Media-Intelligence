@@ -12,7 +12,6 @@ import {
   primarySignalScore,
   VIRUS_OPTIONS,
 } from './cockpitUtils';
-import WorkspaceStatusPanel from './WorkspaceStatusPanel';
 import {
   OperatorChipRail,
   OperatorPanel,
@@ -85,7 +84,6 @@ const RegionWorkbench: React.FC<Props> = ({
       || region?.tooltip?.recommendation_text
       || 'Diese Region zeigt aktuell die stärkste Dynamik aus Vorhersage, Versorgung und Nachfrage.',
   );
-  const decisionModeLabel = normalizeGermanText(region?.decision_mode_label || suggestion?.priority || 'Regionalsignal');
   const primaryActionLabel = region?.recommendation_ref?.card_id
     ? 'Kampagnenvorschlag öffnen'
     : 'Vorschlag für Region erstellen';
@@ -152,15 +150,6 @@ const RegionWorkbench: React.FC<Props> = ({
             tone="accent"
             className="regions-command-rail"
           >
-            <OperatorChipRail className="review-chip-row">
-              <span className="step-chip">{decisionModeLabel}</span>
-              <span className="step-chip">{region?.tooltip?.recommended_product || 'GELO Portfolio'}</span>
-              <span className="step-chip">{region?.forecast_direction || 'seitwärts'}</span>
-              <span className="step-chip">
-                {suggestion?.budget_shift_pct ? `Budget ${formatPercent(suggestion.budget_shift_pct)}` : 'Budget zuerst prüfen'}
-              </span>
-            </OperatorChipRail>
-
             <div className="operator-stat-grid">
               <OperatorStat
                 label={signalLabel}
@@ -169,19 +158,9 @@ const RegionWorkbench: React.FC<Props> = ({
                 tone="accent"
               />
               <OperatorStat
-                label="Handlungsreife"
-                value={formatPercent(Number(region?.actionability_score || primaryRegion?.actionability_score || 0))}
-                meta="Prüfwert für die nächste Aktion"
-              />
-              <OperatorStat
                 label="Tendenz"
                 value={region?.forecast_direction || 'seitwärts'}
                 meta="Richtung der Entwicklung"
-              />
-              <OperatorStat
-                label="Budgethinweis"
-                value={suggestion?.budget_shift_pct ? formatPercent(suggestion.budget_shift_pct) : 'zuerst prüfen'}
-                meta="ohne voreilige Freigabe"
               />
             </div>
 
@@ -205,12 +184,6 @@ const RegionWorkbench: React.FC<Props> = ({
           </OperatorPanel>
         </div>
       </OperatorSection>
-
-      <WorkspaceStatusPanel
-        status={workspaceStatus}
-        title="Was vor dem Start noch geklärt sein sollte"
-        intro="Hier siehst du, ob du für diese Region direkt weitermachen kannst."
-      />
 
       <OperatorSection
         kicker="Was kommt danach?"
@@ -253,7 +226,6 @@ const RegionWorkbench: React.FC<Props> = ({
       <CollapsibleSection
         title={region ? `Mehr Details zu ${region.name}` : 'Mehr Details zur Region'}
         subtitle="Hier findest du die wichtigsten Gründe und Treiber noch einmal gesammelt."
-        defaultOpen
       >
         <div className="workspace-two-column">
           <OperatorPanel

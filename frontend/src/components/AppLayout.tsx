@@ -42,19 +42,6 @@ const SECTION_META = [
   },
 ] as const;
 
-const TOP_CONTEXT_ITEMS = [
-  {
-    label: 'Früherkennung',
-    path: '/jetzt',
-    matches: ['/jetzt', '/regionen'],
-  },
-  {
-    label: 'Aktivierung',
-    path: '/kampagnen',
-    matches: ['/kampagnen', '/evidenz'],
-  },
-] as const;
-
 const AppLayout: React.FC<Props> = ({ children }) => {
   const { theme, toggle } = useTheme();
   const { handleLogout } = useAuth();
@@ -204,24 +191,6 @@ const AppLayout: React.FC<Props> = ({ children }) => {
 
                   <span className="operator-header__suite">ViralFlux</span>
                 </div>
-
-                <div className="operator-top-tabs" role="tablist" aria-label="Hauptkontext">
-                  {TOP_CONTEXT_ITEMS.map(({ label, path, matches }) => {
-                    const active = matches.some((prefix) => location.pathname.startsWith(prefix));
-                    return (
-                      <button
-                        key={path}
-                        type="button"
-                        className={`operator-top-tabs__item ${active ? 'active' : ''}`}
-                        onClick={() => handleNavClick(path)}
-                        aria-selected={active}
-                        role="tab"
-                      >
-                        {label}
-                      </button>
-                    );
-                  })}
-                </div>
               </div>
 
               <div className="operator-header__actions">
@@ -232,13 +201,6 @@ const AppLayout: React.FC<Props> = ({ children }) => {
                   aria-busy={pdfLoading}
                 >
                   {pdfLoading ? 'Wird erstellt...' : UI_COPY.weeklyReport}
-                </button>
-                <button
-                  type="button"
-                  className="operator-icon-button"
-                  aria-label="Benachrichtigungen"
-                >
-                  <span className="material-symbols-outlined" aria-hidden="true">notifications</span>
                 </button>
                 <button
                   onClick={toggle}

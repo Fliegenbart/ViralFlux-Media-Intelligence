@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { decisionStateLabel } from '../../lib/copy';
-import { buildPredictionNarrative, normalizeGermanText } from '../../lib/plainLanguage';
+import { buildPredictionNarrative, explainInPlainGerman } from '../../lib/plainLanguage';
 import {
   BacktestResponse,
   MediaCampaignsResponse,
@@ -14,6 +14,7 @@ import {
   RegionalCampaignRecommendationsResponse,
   RegionalForecastResponse,
   RegionalPortfolioResponse,
+  StructuredReasonItem,
   TruthImportBatchDetailResponse,
   TruthImportResponse,
   WaveRadarResponse,
@@ -50,6 +51,14 @@ export interface NowPageMetric {
   tone: 'success' | 'warning' | 'neutral';
 }
 
+export interface NowPageTrustCheck {
+  key: 'forecast' | 'data' | 'business';
+  question: string;
+  value: string;
+  detail: string;
+  tone: 'success' | 'warning' | 'neutral';
+}
+
 export interface NowPageFocusRegion {
   code: string | null;
   name: string;
@@ -83,6 +92,7 @@ export interface NowPageViewModel {
   primaryCampaignCopy: string;
   focusRegion: NowPageFocusRegion | null;
   metrics: NowPageMetric[];
+  trustChecks: NowPageTrustCheck[];
   reasons: string[];
   risks: string[];
   quality: Array<{ label: string; value: string }>;
@@ -128,159 +138,44 @@ function uniqueText(values: Array<string | null | undefined>, limit = 4): string
     .slice(0, limit);
 }
 
-function localizedNumber(value: number, digits = 1): string {
-  return new Intl.NumberFormat('de-DE', {
-    minimumFractionDigits: digits,
-    maximumFractionDigits: digits,
-  }).format(value);
+function explainedEntries(
+  values: Array<string | StructuredReasonItem | null | undefined>,
+  limit = 4,
+): string[] {
+  const seen = new Set<string>();
+  return values
+    .map((value) => explainInPlainGerman(value))
+    .filter((value) => {
+      if (!value || seen.has(value)) return false;
+      seen.add(value);
+      return true;
+    })
+    .slice(0, limit);
 }
 
-function percentFromModelValue(raw: string): string {
-  const parsed = Number(raw);
-  if (!Number.isFinite(parsed)) return raw;
-  const percentage = parsed <= 1 ? parsed * 100 : parsed;
-  const digits = percentage >= 10 ? 0 : 1;
-  return `${localizedNumber(percentage, digits)} %`;
+function preferredReasonEntries(
+  details?: StructuredReasonItem[] | null,
+  fallback?: string[] | null,
+): Array<string | StructuredReasonItem> {
+  if (details && details.length > 0) return details;
+  return fallback || [];
 }
 
-function cleanCopy(value?: string | null): string {
-  const raw = normalizeGermanText(String(value || '').trim());
-  if (!raw) return '';
-
-  const normalized = raw.replace(/\s+/g, ' ').trim();
-
-  const stageWatchMatch = normalized.match(/^(.+?) stays on Watch with budget share ([\d.]+)%\.$/i);
-  if (stageWatchMatch) {
-    return `${stageWatchMatch[1]} bleibt vorerst im Beobachtungsmodus.`;
-  }
-
-  const activationThresholdMatch = normalized.match(
-    /^Event probability ([\d.]+) clears the Activate threshold ([\d.]+)\.$/i,
-  );
-  if (activationThresholdMatch) {
-    return `Die Vorhersage liegt mit ${percentFromModelValue(activationThresholdMatch[1])} über der Schwelle für eine Aktivierung.`;
-  }
-
-  const prepareThresholdMatch = normalized.match(
-    /^Event probability ([\d.]+) clears the Prepare threshold ([\d.]+), but not all Activate conditions are met\.$/i,
-  );
-  if (prepareThresholdMatch) {
-    return `Die Vorhersage spricht mit ${percentFromModelValue(prepareThresholdMatch[1])} für Vorbereitung, aber noch nicht für eine volle Aktivierung.`;
-  }
-
-  const belowThresholdMatch = normalized.match(
-    /^Event probability ([\d.]+) stays below the rule set needed for Prepare\/Activate\.$/i,
-  );
-  if (belowThresholdMatch) {
-    return `Die Vorhersage reicht mit ${percentFromModelValue(belowThresholdMatch[1])} aktuell nicht für Vorbereitung oder Aktivierung.`;
-  }
-
-  const confidenceMatch = normalized.match(/^Forecast confidence is usable at ([\d.]+)\.$/i);
-  if (confidenceMatch) {
-    return `Die Vorhersage ist mit ${percentFromModelValue(confidenceMatch[1])} Sicherheit nutzbar.`;
-  }
-
-  const sourceFreshnessMatch = normalized.match(/^Primary sources are fresh on average \(([\d.]+) days old\)\.$/i);
-  if (sourceFreshnessMatch) {
-    return `Die wichtigsten Quellen sind im Schnitt ${localizedNumber(Number(sourceFreshnessMatch[1]), 1)} Tage alt und damit aktuell.`;
-  }
-
-  const trendSupportMatch = normalized.match(/^Recent trend acceleration is supportive \(([-\d.]+)\)\.$/i);
-  if (trendSupportMatch) {
-    return `Die jüngste Dynamik stützt die Einschätzung zusätzlich.`;
-  }
-
-  const trendWeakMatch = normalized.match(/^Trend acceleration is not yet convincing \(([-\d.]+)\)\.$/i);
-  if (trendWeakMatch) {
-    return 'Die aktuelle Dynamik ist noch nicht stark genug für einen klaren nächsten Schritt.';
-  }
-
-  if (/^Cross-source agreement does not clearly confirm an upward move\.$/i.test(normalized)) {
-    return 'Die Quellen bestätigen einen Aufwärtstrend noch nicht eindeutig.';
-  }
-
-  if (/^Regional forecast quality gate is currently not passed\.$/i.test(normalized)) {
-    return 'Die regionale Vorhersage ist aktuell noch nicht stark genug für eine Freigabe.';
-  }
-
-  if (/^Remaining uncertainty: no positive cross-source agreement, quality gate not passed\.$/i.test(normalized)) {
-    return 'Es bleibt Unsicherheit, weil die Quellen noch kein klares gemeinsames Bild zeigen und die Vorhersage noch nicht freigegeben ist.';
-  }
-
-  if (/^Watch from the decision engine sets the base activation level\.$/i.test(normalized)) {
-    return 'Die Region bleibt vorerst im Beobachtungsmodus.';
-  }
-
-  const rankDriverMatch = normalized.match(/^Priority score ([\d.]+) and event probability ([\d.]+) drive the ranking\.$/i);
-  if (rankDriverMatch) {
-    return 'Die Rangfolge entsteht vor allem aus Prioritätssignal und Vorhersage.';
-  }
-
-  if (/^Watch regions are observation-first and usually receive no spend\.$/i.test(normalized)) {
-    return 'Beobachtungsregionen erhalten vorerst kein zusätzliches Budget.';
-  }
-
-  const allocationConfidenceMatch = normalized.match(
-    /^Allocation confidence ([\d.]+) and priority rank (\d+) keep the region in the current wave plan\.$/i,
-  );
-  if (allocationConfidenceMatch) {
-    return 'Die Region bleibt damit als Beobachtung im aktuellen Wochenplan.';
-  }
-
-  const lowPenaltyMatch = normalized.match(/^Confidence ([\d.]+) keeps the allocation penalty low\.$/i);
-  if (lowPenaltyMatch) {
-    return 'Die Konfidenz bleibt solide, reicht aber noch nicht für eine Freigabe.';
-  }
-
-  const populationWeightMatch = normalized.match(/^Population weighting contributes ([\d.]+) to addressable reach\.$/i);
-  if (populationWeightMatch) {
-    return 'Die Reichweitenlogik spricht für die Region, ändert aber noch nichts an der Freigabe.';
-  }
-
-  const watchBecauseMatch = normalized.match(
-    /^(.+?): Watch because event probability is ([\d.]+), forecast confidence is ([\d.]+), trend acceleration is ([-\d.]+), and cross-source direction is (up|down|flat)\.$/i,
-  );
-  if (watchBecauseMatch) {
-    const directionLabel = watchBecauseMatch[5].toLowerCase() === 'up'
-      ? 'aufwärts'
-      : watchBecauseMatch[5].toLowerCase() === 'down'
-        ? 'abwärts'
-        : 'seitwärts';
-    return `${watchBecauseMatch[1]} bleibt vorerst im Beobachtungsmodus. Event-Wahrscheinlichkeit und Quellenlage reichen noch nicht für einen sicheren nächsten Schritt, die Richtung zeigt aktuell eher ${directionLabel}.`;
-  }
-
-  if (/^Recommendation stays discussion-only for now\.$/i.test(normalized)) {
-    return 'Die Empfehlung bleibt vorerst ein Diskussionsvorschlag.';
-  }
-
-  if (/^Evidence class is no_truth\.$/i.test(normalized)) {
-    return 'Es liegen noch keine Kundendaten vor.';
-  }
-
-  if (/^Signal\/outcome agreement is no_signal\.$/i.test(normalized)) {
-    return 'Ein belastbarer Abgleich mit Kundendaten fehlt noch.';
-  }
-
-  if (
-    /^Der Forecast-Promotion-Gate steht aktuell auf WATCH\.$/i.test(normalized)
-    || /^Der Freigabestatus der Vorhersage steht aktuell auf WATCH\.$/i.test(normalized)
-  ) {
-    return 'Die Vorhersage ist aktuell noch nicht freigegeben.';
-  }
-
-  const decisionBriefMatch = normalized.match(
-    /^Die Signale sprechen in den nächsten \d+ bis \d+ Tagen für (.+?) in (.+?)\..*Deshalb priorisieren wir (.+?) als nächsten Kampagnenvorschlag für Prüfung und Freigabe\.$/i,
-  );
-  if (decisionBriefMatch) {
-    return `${decisionBriefMatch[2]} bleibt als prüfbarer Kampagnenvorschlag im Blick. ${decisionBriefMatch[3]} ist dafür aktuell die passendste Produktoption.`;
-  }
-
-  return normalized
-    .replace(/\s+—\s+/g, ' — ')
-    .replace(/\s+\./g, '.');
+function findReasonMentioningRegion(
+  values: Array<string | StructuredReasonItem | null | undefined>,
+  regionName?: string | null,
+): string {
+  const normalizedRegion = explainInPlainGerman(regionName).toLowerCase();
+  return explainedEntries(values, values.length || 4).find((item) => (
+    normalizedRegion ? item.toLowerCase().includes(normalizedRegion) : false
+  )) || '';
 }
 
-function firstCleanText(...values: Array<string | null | undefined>): string {
+function cleanCopy(value?: string | StructuredReasonItem | null): string {
+  return explainInPlainGerman(value);
+}
+
+function firstCleanText(...values: Array<string | StructuredReasonItem | null | undefined>): string {
   return values.map((value) => cleanCopy(value)).find(Boolean) || '-';
 }
 
@@ -356,6 +251,13 @@ function customerStatusTone(value: string): 'success' | 'warning' | 'neutral' {
   const normalized = value.trim().toLowerCase();
   if (normalized === 'belastbar') return 'success';
   if (normalized === 'im aufbau' || normalized === 'erste signale') return 'warning';
+  return 'neutral';
+}
+
+function businessTrustTone(value: string): 'success' | 'warning' | 'neutral' {
+  const normalized = value.trim().toLowerCase();
+  if (normalized === 'bereit') return 'success';
+  if (normalized === 'im aufbau') return 'warning';
   return 'neutral';
 }
 
@@ -530,9 +432,16 @@ function buildNowPageViewModel(
   const focusReason = firstCleanText(
     (weeklyDecision?.why_now || []).find((item) => String(item || '').includes(focusRegionName)),
     regionSignalSentence(focusRegionName, topRegion?.signal_score, topRegion?.trend),
-    focusCampaign?.recommendation_rationale?.why?.find((item) => String(item || '').includes(focusRegionName)),
+    findReasonMentioningRegion([
+      ...preferredReasonEntries(
+        focusCampaign?.recommendation_rationale?.why_details,
+        focusCampaign?.recommendation_rationale?.why,
+      ),
+    ], focusRegionName),
     topCard?.decision_brief?.summary_sentence,
+    focusPrediction?.decision?.explanation_summary_detail,
     focusPrediction?.decision?.explanation_summary,
+    focusPrediction?.reason_trace?.why_details?.[0],
     focusPrediction?.reason_trace?.why?.[0],
     focusAllocation?.uncertainty_summary,
     'Hier sehen wir aktuell die größte Dynamik.',
@@ -559,6 +468,30 @@ function buildNowPageViewModel(
     || evidence?.business_validation?.evidence_tier,
   );
   const sourceSummary = evidence?.source_status;
+  const sourceItems = sourceSummary?.items || [];
+  const sourceAttentionCount = sourceItems.filter((item) => String(item.status_color || '').toLowerCase() !== 'green').length;
+  const dataFreshnessValue = sourceSummary ? (sourceAttentionCount > 0 ? 'Beobachten' : 'Aktuell') : 'Unklar';
+  const dataFreshnessDetail = sourceSummary
+    ? `${sourceSummary.live_count || 0}/${sourceSummary.total || 0} Quellen aktuell${sourceAttentionCount > 0 ? `, ${sourceAttentionCount} mit Prüfbedarf` : ''}`
+    : 'Noch kein Quellenstatus verfügbar.';
+  const businessValidation = weeklyDecision?.business_gate || decision?.business_validation || evidence?.business_validation || null;
+  const businessTrustValue = businessValidation?.validated_for_budget_activation
+    ? 'Bereit'
+    : (
+      businessValidation?.truth_ready
+      || (businessValidation?.coverage_weeks || 0) > 0
+      || (businessValidation?.activation_cycles || 0) > 0
+      || Boolean(businessValidation?.holdout_ready)
+      || Boolean(businessValidation?.lift_metrics_available)
+    )
+      ? 'Im Aufbau'
+      : 'Noch nicht';
+  const businessTrustDetail = firstCleanText(
+    cleanCopy(businessValidation?.guidance),
+    cleanCopy(businessValidation?.message),
+    businessValue !== '-' && evidenceValue !== '-' ? `${businessValue} · ${evidenceValue}` : businessValue,
+    'Für eine echte Budgetfreigabe fehlt noch die kommerzielle Absicherung.',
+  );
   const primaryCampaignRegionName = firstCleanText(
     topCard?.decision_brief?.recommendation?.primary_region,
     leadCampaign?.region_name,
@@ -587,10 +520,19 @@ function buildNowPageViewModel(
     `${primaryCampaignRegionName} · ${stageLabel(leadCampaign?.activation_level || focusStageValue)}`,
   );
   const leadCampaignNarrative = uniqueText([
-    ...(leadCampaign?.recommendation_rationale?.why || []),
-    ...(leadCampaign?.recommendation_rationale?.guardrails || []),
+    ...explainedEntries(preferredReasonEntries(
+      leadCampaign?.recommendation_rationale?.why_details,
+      leadCampaign?.recommendation_rationale?.why,
+    )),
+    ...explainedEntries(preferredReasonEntries(
+      leadCampaign?.recommendation_rationale?.guardrail_details,
+      leadCampaign?.recommendation_rationale?.guardrails,
+    )),
     leadCampaign?.timeline,
-    ...(leadCampaign?.recommendation_rationale?.evidence_notes || []),
+    ...explainedEntries(preferredReasonEntries(
+      leadCampaign?.recommendation_rationale?.evidence_note_details,
+      leadCampaign?.recommendation_rationale?.evidence_notes,
+    )),
   ].map((item) => cleanCopy(item)), 2).join(' ');
   const primaryCampaignCopy = topCard?.id
     ? firstCleanText(
@@ -616,20 +558,41 @@ function buildNowPageViewModel(
   const leadDays = numberFromUnknown(
     evidence?.forecast_monitoring?.latest_backtest?.lead_lag?.effective_lead_days,
   );
+  const forecastTrustDetail = firstCleanText(
+    leadDays && leadDays > 0 ? `Der letzte Marktvergleich zeigt rund ${leadDays} Tage Vorlauf.` : '',
+    evidence?.forecast_monitoring
+      ? `Prüfung ${monitoringStatusLabel(evidence.forecast_monitoring.monitoring_status)} · Vorhersage ${truthFreshnessLabel(evidence.forecast_monitoring.freshness_status)}`
+      : '',
+    cleanCopy(weeklyDecision?.decision_mode_reason),
+    'Noch kein detaillierter Forecast-Status verfügbar.',
+  );
 
   const reasons = uniqueText([
     ...(weeklyDecision?.why_now || []),
+    focusCampaign?.recommendation_rationale?.why_details?.[0],
     focusCampaign?.recommendation_rationale?.why?.[0],
+    focusPrediction?.decision?.explanation_summary_detail,
     focusPrediction?.decision?.explanation_summary,
+    focusPrediction?.reason_trace?.why_details?.[0],
     focusPrediction?.reason_trace?.why?.[0],
     regionSignalSentence(focusRegionName, topRegion?.signal_score, topRegion?.trend),
   ].map((item) => cleanCopy(item)), 4);
 
   const risks = uniqueText([
     ...(weeklyDecision?.risk_flags || []),
+    focusPrediction?.decision?.uncertainty_summary_detail,
     focusPrediction?.uncertainty_summary,
+    ...(focusPrediction?.reason_trace?.uncertainty_details || []),
     ...(focusPrediction?.reason_trace?.uncertainty || []),
     focusAllocation?.uncertainty_summary,
+    ...explainedEntries(
+      Array.isArray(focusAllocation?.reason_trace)
+        ? []
+        : preferredReasonEntries(
+          (focusAllocation?.reason_trace as { uncertainty_details?: StructuredReasonItem[] } | undefined)?.uncertainty_details,
+          ((focusAllocation?.reason_trace as { uncertainty?: string[] } | undefined)?.uncertainty || []),
+        ),
+    ),
     ...(Array.isArray(focusAllocation?.reason_trace)
       ? []
       : ((focusAllocation?.reason_trace as { uncertainty?: string[] } | undefined)?.uncertainty || [])),
@@ -653,7 +616,9 @@ function buildNowPageViewModel(
             : '-',
         reason: firstCleanText(
           regionSignalSentence(item.name, item.signal_score, item.trend),
+          relatedPrediction?.reason_trace?.why_details?.[0],
           relatedPrediction?.reason_trace?.why?.[0],
+          relatedPrediction?.decision?.explanation_summary_detail,
           relatedPrediction?.decision?.explanation_summary,
           relatedPrediction?.uncertainty_summary,
           'Weitere regionale Priorität für diese Woche.',
@@ -670,7 +635,9 @@ function buildNowPageViewModel(
       stage: stageLabel(item.decision_label),
       probabilityLabel: formatPercent(probabilityPercent(item.event_probability_calibrated), 1),
       reason: firstCleanText(
+        item.reason_trace?.why_details?.[0],
         item.reason_trace?.why?.[0],
+        item.decision?.explanation_summary_detail,
         item.decision?.explanation_summary,
         item.uncertainty_summary,
         'Weitere regionale Priorität für diese Woche.',
@@ -763,6 +730,29 @@ function buildNowPageViewModel(
         label: 'Kundendatenbasis',
         value: trustValue,
         tone: trustValue === 'belastbar' ? 'success' : trustValue === 'im Aufbau' ? 'warning' : 'neutral',
+      },
+    ],
+    trustChecks: [
+      {
+        key: 'forecast',
+        question: 'Kann ich der Vorhersage trauen?',
+        value: forecastProofStatus,
+        detail: forecastTrustDetail,
+        tone: forecastStatusTone(forecastProofStatus),
+      },
+      {
+        key: 'data',
+        question: 'Sind die Daten frisch genug?',
+        value: dataFreshnessValue,
+        detail: dataFreshnessDetail,
+        tone: sourceSummary ? (sourceAttentionCount > 0 ? 'warning' : 'success') : 'neutral',
+      },
+      {
+        key: 'business',
+        question: 'Ist eine Business-Freigabe schon drin?',
+        value: businessTrustValue,
+        detail: businessTrustDetail,
+        tone: businessTrustTone(businessTrustValue),
       },
     ],
     reasons: reasons.length > 0 ? reasons : ['Noch keine kurze Begründung verfügbar.'],

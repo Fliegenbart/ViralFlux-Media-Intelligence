@@ -32,9 +32,11 @@ describe('plain language helpers', () => {
 
   it('translates raw backend explanations into plain German', () => {
     expect(explainInPlainGerman('Event probability 0.81 clears the Activate threshold 0.70.'))
-      .toBe('Die Vorhersage liegt mit 81 % über der Schwelle für eine Aktivierung.');
+      .toBe('Die Event-Wahrscheinlichkeit liegt mit 81 % über der Schwelle für eine Aktivierung.');
     expect(explainInPlainGerman('Berlin: Activate because event probability is 0.81, forecast confidence is 0.78, trend acceleration is 0.76, and cross-source direction is up.'))
       .toContain('Berlin sollte jetzt aktiviert werden');
+    expect(explainInPlainGerman('Priority score and event probability drive the ranking.'))
+      .toBe('Entscheidungs-Priorität und Event-Wahrscheinlichkeit treiben hier das Ranking.');
     expect(explainInPlainGerman('Forecast confidence is only 0.41.'))
       .toBe('Die Vorhersage ist mit 41 % Sicherheit noch recht unsicher.');
     expect(explainInPlainGerman('Spend guardrails are currently satisfied.'))

@@ -1,27 +1,25 @@
 import {
+  COCKPIT_SEMANTICS,
   UI_COPY,
-  additionalSuggestionsText,
-  decisionStateLabel,
-  marketComparisonStateLabel,
+  evidenceStatusHelper,
+  evidenceStatusLabel,
 } from './copy';
 
-describe('shared copy helpers', () => {
-  it('exposes the new default campaign goal', () => {
-    expect(UI_COPY.defaultCampaignGoal).toBe('Sichtbarkeit aufbauen, bevor die Nachfrage steigt');
+describe('cockpit copy semantics', () => {
+  it('defines the core operator semantics in one consistent vocabulary', () => {
+    expect(UI_COPY.signalScore).toBe('Ranking-Signal');
+    expect(UI_COPY.eventProbability).toBe('Event-Wahrscheinlichkeit');
+    expect(UI_COPY.decisionPriority).toBe('Entscheidungs-Priorität');
+    expect(UI_COPY.stateLevelScope).toBe('Bundesland-Level');
+    expect(UI_COPY.noCityForecast).toBe('Kein City-Forecast');
+    expect(COCKPIT_SEMANTICS.eventProbability.badge).toBe('Kalibrierte Wahrscheinlichkeit');
   });
 
-  it('translates decision states into clear German labels', () => {
-    expect(decisionStateLabel('GO')).toBe('Freigeben');
-    expect(decisionStateLabel('WATCH')).toBe('Beobachten');
-  });
-
-  it('summarizes hidden suggestions without backlog wording', () => {
-    expect(additionalSuggestionsText(9)).toBe('9 weitere Kampagnenvorschläge verfügbar.');
-    expect(additionalSuggestionsText(0)).toBe('');
-  });
-
-  it('describes the market comparison state in plain language', () => {
-    expect(marketComparisonStateLabel('passed')).toBe('belastbar');
-    expect(marketComparisonStateLabel('watch')).toBe('noch prüfen');
+  it('maps evidence and release states to readable operator labels', () => {
+    expect(evidenceStatusLabel('truth_backed')).toBe('Mit Kundendaten gestützt');
+    expect(evidenceStatusLabel('epidemiological_only')).toBe('Noch ohne Kundendaten');
+    expect(evidenceStatusLabel('no_truth')).toBe('Zu wenig Kundendaten-Evidenz');
+    expect(evidenceStatusLabel('observe_only')).toBe('Nur beobachten');
+    expect(evidenceStatusHelper('epidemiological_only')).toContain('Forecast- und Marktdaten');
   });
 });

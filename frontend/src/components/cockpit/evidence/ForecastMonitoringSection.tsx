@@ -1,5 +1,6 @@
 import React from 'react';
 
+import { COCKPIT_SEMANTICS, UI_COPY } from '../../../lib/copy';
 import { ValidationSection } from '../BacktestVisuals';
 import { BacktestResponse, ForecastMonitoring, ModelLineage, TruthCoverage } from '../../../types/media';
 import { formatDateTime, formatPercent } from '../cockpitUtils';
@@ -47,12 +48,18 @@ const ForecastMonitoringSection: React.FC<Props> = ({
   truthStatus,
 }) => {
   const eventForecast = forecastMonitoring?.event_forecast;
-  const eventProbabilityLabel = eventForecast?.fallback_used ? 'Fallback-Wahrscheinlichkeit' : 'Event-Wahrscheinlichkeit';
-  const eventProbabilityBadge = eventForecast?.fallback_used ? 'Fallback-Schätzung' : 'Kalibrierte Wahrscheinlichkeit';
+  const eventProbabilityLabel = eventForecast?.fallback_used ? 'Fallback-Wahrscheinlichkeit' : UI_COPY.eventProbability;
+  const eventProbabilityBadge = eventForecast?.fallback_used ? 'Fallback-Schätzung' : COCKPIT_SEMANTICS.eventProbability.badge;
   const eventProbabilityNote = eventForecast?.fallback_used
     ? 'Dieser Wert stammt aktuell aus einer Ersatzschätzung und sollte vorsichtiger gelesen werden als ein voll gelerntes Modell.'
     : 'Dieser Wert beschreibt die kalibrierte Wahrscheinlichkeit für das definierte Forecast-Ereignis.';
   const probabilitySource = readableProbabilitySource(eventForecast?.probability_source);
+  const calibrationLabel = forecastMonitoring?.event_forecast?.calibration_passed == null
+    ? '-'
+    : forecastMonitoring.event_forecast.calibration_passed ? 'stabil' : 'Beobachten';
+  const qualityGateLabel = latestBacktest?.quality_gate && typeof latestBacktest.quality_gate === 'object'
+    ? ((latestBacktest.quality_gate as { overall_passed?: boolean }).overall_passed ? 'erfüllt' : 'Beobachten')
+    : '-';
 
   return (
     <>
@@ -109,9 +116,8 @@ const ForecastMonitoringSection: React.FC<Props> = ({
           </p>
           <div className="review-chip-row">
             <span className="step-chip">Rückblicktest: {monitoringFreshnessLabel(forecastMonitoring?.backtest_freshness_status)}</span>
-            <span className="step-chip">
-              Kalibrierung: {forecastMonitoring?.event_forecast?.calibration_passed == null ? '-' : forecastMonitoring.event_forecast.calibration_passed ? 'stabil' : 'Beobachten'}
-            </span>
+            <span className="step-chip">Kalibrierung: {calibrationLabel}</span>
+            <span className="step-chip">Quality Gate: {qualityGateLabel}</span>
             <span className="step-chip">
               Semantik: {eventProbabilityBadge}
             </span>
@@ -124,6 +130,21 @@ const ForecastMonitoringSection: React.FC<Props> = ({
           </div>
           <div className="review-muted-copy" style={{ marginTop: 12 }}>
             {eventProbabilityNote}
+          </div>
+          <div className="soft-panel" style={{ padding: 16, marginTop: 16, display: 'grid', gap: 8 }}>
+            <div className="campaign-focus-label">Wichtig für Operatoren</div>
+            <div className="review-body-copy">
+              {COCKPIT_SEMANTICS.eventProbability.label} ist hier eine eigene Vorhersage-Metrik. Sie ist nicht dasselbe wie {COCKPIT_SEMANTICS.rankingSignal.label} oder {COCKPIT_SEMANTICS.decisionPriority.label}.
+            </div>
+            <div className="review-body-copy">
+              Die Charts darunter zeigen Truth, Forecast und Unsicherheit getrennt. {COCKPIT_SEMANTICS.rankingSignal.label}e werden dort nicht mit hineingemischt.
+            </div>
+            <div className="review-body-copy">
+              Wenn Kalibrierung, Quality Gate oder Sample Coverage schwach sind, solltest du die Richtung eher als Hinweis als als sichere Höhe lesen.
+            </div>
+            <div className="review-body-copy">
+              {UI_COPY.stateLevelScope}: {COCKPIT_SEMANTICS.stateLevelScope.helper} {COCKPIT_SEMANTICS.noCityForecast.helper}
+            </div>
           </div>
         </div>
       </section>

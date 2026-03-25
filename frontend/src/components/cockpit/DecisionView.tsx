@@ -2,7 +2,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 
 import CollapsibleSection from '../CollapsibleSection';
-import { UI_COPY, additionalSuggestionsText, decisionStateLabel, marketComparisonStateLabel } from '../../lib/copy';
+import { COCKPIT_SEMANTICS, UI_COPY, additionalSuggestionsText, decisionStateLabel, marketComparisonStateLabel } from '../../lib/copy';
 import {
   BacktestResponse,
   MediaDecisionResponse,
@@ -93,7 +93,7 @@ const DecisionView: React.FC<Props> = ({
     : (eventProbabilityRaw <= 1 ? eventProbabilityRaw * 100 : eventProbabilityRaw);
   const topRegionSignal = primarySignalScore(topRegions[0]);
   const eventProbabilityLabel = metricContractDisplayLabel(weeklyDecision?.field_contracts, 'event_probability', 'Event-Wahrscheinlichkeit');
-  const signalScoreLabel = metricContractDisplayLabel(weeklyDecision?.field_contracts, 'signal_score', 'Signal-Score');
+  const signalScoreLabel = metricContractDisplayLabel(weeklyDecision?.field_contracts, 'signal_score', UI_COPY.signalScore);
   const eventProbabilityNote = metricContractNote(
     weeklyDecision?.field_contracts,
     'event_probability',
@@ -150,7 +150,7 @@ const DecisionView: React.FC<Props> = ({
 
   return (
     <div className="page-stack">
-      <section className="context-filter-rail">
+      <section className="context-filter-rail decision-context-rail">
         <div className="section-heading">
           <span className="section-kicker">ViralFlux for GELO</span>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
@@ -176,7 +176,7 @@ const DecisionView: React.FC<Props> = ({
         </div>
       </section>
 
-      <section className="card decision-header hero-card" style={{ padding: 32 }}>
+      <section className="card decision-header hero-card decision-hero-shell" style={{ padding: 32 }}>
         <div className="hero-grid">
           <div className="hero-main">
             <div className="hero-status-row">
@@ -221,7 +221,7 @@ const DecisionView: React.FC<Props> = ({
                 {weeklyDecision?.top_products?.[0] || topCard?.recommended_product || 'GELO Portfolio'}
               </div>
               <div className="summary-note">
-                Top-Regionen: {topRegions.map((region) => region.name || region.code).join(', ') || 'National'}
+                Top-Regionen: {topRegions.map((region) => region.name || region.code).join(', ') || 'National'} · {UI_COPY.stateLevelScope}
               </div>
             </div>
             <div className="decision-rail summary-grid">
@@ -252,8 +252,8 @@ const DecisionView: React.FC<Props> = ({
         onFocusOpportunity={onFocusPortfolioOpportunity}
       />
 
-      <section className="cockpit-grid">
-        <div style={{ display: 'grid', gap: 20 }}>
+      <section className="cockpit-grid decision-workspace-grid">
+        <div className="decision-primary-stack" style={{ display: 'grid', gap: 20 }}>
           <WaveOutlookPanel
             virus={virus}
             onVirusChange={onVirusChange}
@@ -269,7 +269,7 @@ const DecisionView: React.FC<Props> = ({
           />
         </div>
 
-        <div style={{ display: 'grid', gap: 20 }}>
+        <div className="decision-secondary-stack" style={{ display: 'grid', gap: 20 }}>
           <CollapsibleSection title="Datenstand & Quellen" subtitle="Eingangswerte und deren Aktualität">
             <div className="review-chip-row" style={{ marginTop: 8 }}>
               <span className="step-chip">
@@ -309,6 +309,7 @@ const DecisionView: React.FC<Props> = ({
               <span className="step-chip">Operator: {(operatorContext?.operator || 'peix').toUpperCase()}</span>
               <span className="step-chip">Truth-Partner: {(operatorContext?.truth_partner || 'gelo').toUpperCase()}</span>
               <span className="step-chip">{decisionScope}</span>
+              <span className="step-chip">{UI_COPY.noCityForecast}</span>
             </div>
             <div className="metric-strip" style={{ marginTop: 16 }}>
               <div className="metric-box">
@@ -353,9 +354,9 @@ const DecisionView: React.FC<Props> = ({
               <span>System-Readiness</span>
               <strong>{readiness != null ? `${Math.round(readiness)}/100` : '-'}</strong>
             </div>
-            <div className="metric-box">
-              <span>{eventProbabilityLabel}</span>
-              <strong>{formatPercent(eventProbabilityPct)}</strong>
+              <div className="metric-box">
+                <span>{eventProbabilityLabel}</span>
+                <strong>{formatPercent(eventProbabilityPct)}</strong>
             </div>
             <div className="metric-box">
               <span>{signalScoreLabel}</span>
@@ -384,6 +385,7 @@ const DecisionView: React.FC<Props> = ({
             </div>
             <div className="soft-panel" style={{ padding: 16, marginTop: 14, fontSize: 13, color: 'var(--text-secondary)' }}>
               <strong style={{ color: 'var(--text-primary)' }}>{eventProbabilityLabel}:</strong> {eventProbabilityNote} <strong style={{ color: 'var(--text-primary)' }}>{signalScoreLabel}:</strong> {signalScoreNote}
+              <div style={{ marginTop: 8 }}>{COCKPIT_SEMANTICS.stateLevelScope.helper} {COCKPIT_SEMANTICS.noCityForecast.helper}</div>
             </div>
             <div style={{ display: 'grid', gap: 10, marginTop: 14 }}>
               {(weeklyDecision?.why_now || []).map((reason) => (
@@ -455,7 +457,7 @@ const DecisionView: React.FC<Props> = ({
       </section>
 
       {(weeklyDecision?.risk_flags || []).length > 0 && (
-        <section className="card subsection-card" style={{ padding: 24 }}>
+        <section className="card subsection-card decision-risk-shell" style={{ padding: 24 }}>
           <div className="section-heading" style={{ gap: 6 }}>
             <h2 className="subsection-title">Was gegen eine Freigabe spricht</h2>
             <p className="subsection-copy">

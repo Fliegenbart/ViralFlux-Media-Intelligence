@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useId, useRef } from 'react';
 
 interface Props {
   open: boolean;
@@ -25,11 +25,15 @@ const ConfirmDialog: React.FC<Props> = ({
 }) => {
   const dialogRef = useRef<HTMLDivElement>(null);
   const confirmRef = useRef<HTMLButtonElement>(null);
+  const lastFocusedRef = useRef<HTMLElement | null>(null);
+  const titleId = useId();
+  const messageId = useId();
 
   // Focus trap + Escape key
   useEffect(() => {
     if (!open) return;
 
+    lastFocusedRef.current = document.activeElement as HTMLElement | null;
     confirmRef.current?.focus();
 
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -53,7 +57,10 @@ const ConfirmDialog: React.FC<Props> = ({
     };
 
     document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      lastFocusedRef.current?.focus();
+    };
   }, [open, onCancel]);
 
   if (!open) return null;
@@ -77,10 +84,11 @@ const ConfirmDialog: React.FC<Props> = ({
     >
       <div
         ref={dialogRef}
-        role="alertdialog"
+        role={variant === 'danger' ? 'alertdialog' : 'dialog'}
         aria-modal="true"
-        aria-labelledby="confirm-title"
-        aria-describedby="confirm-message"
+        aria-labelledby={titleId}
+        aria-describedby={messageId}
+        aria-busy={loading}
         onClick={(e) => e.stopPropagation()}
         style={{
           background: 'var(--bg-secondary, #fff)',
@@ -93,7 +101,7 @@ const ConfirmDialog: React.FC<Props> = ({
         }}
       >
         <h3
-          id="confirm-title"
+          id={titleId}
           style={{
             fontSize: 16,
             fontWeight: 600,
@@ -104,7 +112,7 @@ const ConfirmDialog: React.FC<Props> = ({
           {title}
         </h3>
         <p
-          id="confirm-message"
+          id={messageId}
           style={{
             fontSize: 14,
             color: 'var(--text-secondary)',
@@ -116,6 +124,7 @@ const ConfirmDialog: React.FC<Props> = ({
         </p>
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
           <button
+            type="button"
             onClick={onCancel}
             disabled={loading}
             style={{
@@ -132,6 +141,7 @@ const ConfirmDialog: React.FC<Props> = ({
           </button>
           <button
             ref={confirmRef}
+            type="button"
             onClick={onConfirm}
             disabled={loading}
             style={{

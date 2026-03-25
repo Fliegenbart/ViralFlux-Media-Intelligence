@@ -45,6 +45,7 @@ const RegionalPortfolioPanel: React.FC<Props> = ({
         <span className="step-chip">Validierte GO-Linien: {portfolio?.summary?.go_viruses ?? benchmark?.go_viruses ?? '-'}</span>
         <span className="step-chip">Business-Evidenz: {evidenceTierLabel(portfolio?.evidence_tier || benchmark?.evidence_tier)}</span>
         <span className="step-chip">Stand {formatDateShort(portfolio?.latest_as_of_date || benchmark?.generated_at)}</span>
+        <span className="step-chip">Bundesland-Level</span>
       </div>
 
       <div style={{ display: 'grid', gap: 20, marginTop: 18 }}>
@@ -133,7 +134,7 @@ const RegionalPortfolioPanel: React.FC<Props> = ({
                             : 'Weiter beobachten'}
                     </div>
                     <div style={{ marginTop: 6, fontSize: 12, color: 'var(--text-muted)' }}>
-                      {businessValidationLabel(item.business_gate?.validation_status)} · {evidenceTierLabel(item.evidence_tier)}
+                      Bundesland-Level · {businessValidationLabel(item.business_gate?.validation_status)} · {evidenceTierLabel(item.evidence_tier)}
                     </div>
                   </div>
                   <div style={{ textAlign: 'right' }}>
@@ -163,7 +164,7 @@ const RegionalPortfolioPanel: React.FC<Props> = ({
                 <span>
                   {region.bundesland_name}
                   <div style={{ marginTop: 4, fontSize: 12, color: 'var(--text-muted)' }}>
-                    {region.top_signals.map((signal) => signal.virus_typ).join(' · ')}
+                    Bundesland-Level · {region.top_signals.map((signal) => signal.virus_typ).join(' · ')}
                   </div>
                 </span>
                 <strong>

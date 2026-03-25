@@ -6,7 +6,8 @@ interface Props {
 }
 
 const LoadingSkeleton: React.FC<Props> = ({ lines = 3, style }) => (
-  <div style={style} role="status" aria-label="Laden...">
+  <div style={style} role="status" aria-live="polite" aria-busy="true" aria-label="Lade Inhalte">
+    <span className="sr-only">Inhalte werden geladen.</span>
     {Array.from({ length: lines }).map((_, i) => (
       <div
         key={i}

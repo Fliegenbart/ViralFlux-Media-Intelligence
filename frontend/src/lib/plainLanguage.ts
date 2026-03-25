@@ -1,4 +1,5 @@
 import { PredictionNarrative, StructuredReasonItem } from '../types/media';
+import { COCKPIT_SEMANTICS, UI_COPY, evidenceStatusLabel } from './copy';
 
 const ASCII_REPLACEMENTS: Array<[RegExp, string]> = [
   [/\bFuehrt\b/g, 'Führt'],
@@ -53,7 +54,7 @@ const UI_REPLACEMENTS: Array<[RegExp, string]> = [
   [/\bLearning-State\b/g, 'Lernstand'],
   [/\bOutcome-Learnings\b/g, 'Erkenntnisse aus Kundendaten'],
   [/\bOutcome-Learning\b/g, 'Erkenntnis aus Kundendaten'],
-  [/\bOutcome-Score\b/g, 'Wirkungssignal'],
+  [/\bOutcome-Score\b/g, 'Wirkungssignal aus Kundendaten'],
   [/\bOutcome-Metrik\b/g, 'Wirkungszahl'],
   [/\bOutcome-Daten\b/g, 'Kundendaten'],
   [/\bOutcome\b/g, 'Wirkungsdaten'],
@@ -79,9 +80,9 @@ const UI_REPLACEMENTS: Array<[RegExp, string]> = [
   [/\bRun\b/g, 'Lauf'],
   [/\bDecision Support\b/g, 'Entscheidungshilfe'],
   [/\bMedia Spend\b/g, 'Mediabudget'],
-  [/\bSignal-Score\b/g, 'Signalwert'],
-  [/\bSignalscore\b/g, 'Signalwert'],
-  [/\bPriority-Score\b/g, 'Priorität'],
+  [/\bSignal-Score\b/g, 'Ranking-Signal'],
+  [/\bSignalscore\b/g, 'Ranking-Signal'],
+  [/\bPriority-Score\b/g, 'Entscheidungs-Priorität'],
   [/\bLearning-Konfidenz\b/g, 'Sicherheit aus Kundendaten'],
   [/\bSearch Lift\b/g, 'Suchanstieg'],
   [/\bSales\b/g, 'Verkäufe'],
@@ -153,9 +154,9 @@ function directionLabel(value?: string | null): string {
 
 function evidenceClassLabel(value?: string | null): string {
   const normalized = String(value || '').trim().toLowerCase();
-  if (normalized === 'truth_backed') return 'mit Kundendaten gestützt';
-  if (normalized === 'epidemiological_only') return 'nur durch Forecast- und Marktdaten gestützt';
-  if (normalized === 'no_truth') return 'ohne Kundendaten';
+  if (normalized === 'truth_backed') return evidenceStatusLabel('truth_backed');
+  if (normalized === 'epidemiological_only') return evidenceStatusLabel('epidemiological_only');
+  if (normalized === 'no_truth') return UI_COPY.insufficientTruth;
   return normalizeGermanText(String(value || '').replace(/_/g, ' '));
 }
 
@@ -244,7 +245,7 @@ function translateStructuredReason(item: StructuredReasonItem): string | null {
       const eventProbability = reasonNumber(item, 'event_probability');
       const forecastConfidence = reasonNumber(item, 'forecast_confidence');
       const agreementDirection = reasonString(item, 'agreement_direction');
-      return `${stageSentence(region, stage)}, weil die Event-Wahrscheinlichkeit bei ${percentFromModelValue(String(eventProbability ?? 0))} liegt, die Forecast-Sicherheit bei ${percentFromModelValue(String(forecastConfidence ?? 0))} liegt und der Quellenabgleich aktuell eher ${directionLabel(agreementDirection)} zeigt.`;
+      return `${stageSentence(region, stage)}, weil die ${COCKPIT_SEMANTICS.eventProbability.label} bei ${percentFromModelValue(String(eventProbability ?? 0))} liegt, die Forecast-Sicherheit bei ${percentFromModelValue(String(forecastConfidence ?? 0))} liegt und der Quellenabgleich aktuell eher ${directionLabel(agreementDirection)} zeigt.`;
     }
     case 'uncertainty_summary': {
       const parts = reasonStringList(item, 'parts');
@@ -252,11 +253,11 @@ function translateStructuredReason(item: StructuredReasonItem): string | null {
       return `Es bleibt Unsicherheit wegen ${joinList(parts.map((part) => uncertaintyPartLabel(part, item)))}.`;
     }
     case 'event_probability_activate_threshold':
-      return `Die Vorhersage liegt mit ${percentFromModelValue(String(reasonNumber(item, 'event_probability') ?? 0))} über der Schwelle für eine Aktivierung.`;
+      return `Die ${COCKPIT_SEMANTICS.eventProbability.label} liegt mit ${percentFromModelValue(String(reasonNumber(item, 'event_probability') ?? 0))} über der Schwelle für eine Aktivierung.`;
     case 'event_probability_prepare_threshold':
-      return `Die Vorhersage spricht mit ${percentFromModelValue(String(reasonNumber(item, 'event_probability') ?? 0))} für Vorbereitung, aber noch nicht für eine volle Aktivierung.`;
+      return `Die ${COCKPIT_SEMANTICS.eventProbability.label} spricht mit ${percentFromModelValue(String(reasonNumber(item, 'event_probability') ?? 0))} für Vorbereitung, aber noch nicht für eine volle Aktivierung.`;
     case 'event_probability_below_prepare_threshold':
-      return `Die Vorhersage reicht mit ${percentFromModelValue(String(reasonNumber(item, 'event_probability') ?? 0))} aktuell nicht für Vorbereitung oder Aktivierung.`;
+      return `Die ${COCKPIT_SEMANTICS.eventProbability.label} reicht mit ${percentFromModelValue(String(reasonNumber(item, 'event_probability') ?? 0))} aktuell nicht für Vorbereitung oder Aktivierung.`;
     case 'forecast_confidence_strong':
       return `Die Vorhersage ist mit ${percentFromModelValue(String(reasonNumber(item, 'forecast_confidence') ?? 0))} Sicherheit stabil.`;
     case 'forecast_confidence_usable':
@@ -303,7 +304,7 @@ function translateStructuredReason(item: StructuredReasonItem): string | null {
     case 'decision_stage_base':
       return `${stageLabel(reasonString(item, 'stage'))} ist hier die grundlegende Aktivierungsstufe.`;
     case 'ranking_priority_and_probability':
-      return 'Prioritäts-Score und Event-Wahrscheinlichkeit treiben hier das Ranking.';
+      return `${COCKPIT_SEMANTICS.decisionPriority.label} und ${COCKPIT_SEMANTICS.eventProbability.label} treiben hier das Ranking.`;
     case 'budget_driver_activate_multiplier':
       return 'Aktivierungsregionen erhalten in der Budgetlogik den stärksten Zuschlag.';
     case 'budget_driver_prepare_weighting':
@@ -452,21 +453,21 @@ export function explainInPlainGerman(value?: string | StructuredReasonItem | nul
     /^Event probability ([\d.]+) clears the Activate threshold ([\d.]+)\.$/i,
   );
   if (activationThresholdMatch) {
-    return `Die Vorhersage liegt mit ${percentFromModelValue(activationThresholdMatch[1])} über der Schwelle für eine Aktivierung.`;
+    return `Die ${COCKPIT_SEMANTICS.eventProbability.label} liegt mit ${percentFromModelValue(activationThresholdMatch[1])} über der Schwelle für eine Aktivierung.`;
   }
 
   const prepareThresholdMatch = compactRaw.match(
     /^Event probability ([\d.]+) clears the Prepare threshold ([\d.]+), but not all Activate conditions are met\.$/i,
   );
   if (prepareThresholdMatch) {
-    return `Die Vorhersage spricht mit ${percentFromModelValue(prepareThresholdMatch[1])} für Vorbereitung, aber noch nicht für eine volle Aktivierung.`;
+    return `Die ${COCKPIT_SEMANTICS.eventProbability.label} spricht mit ${percentFromModelValue(prepareThresholdMatch[1])} für Vorbereitung, aber noch nicht für eine volle Aktivierung.`;
   }
 
   const belowThresholdMatch = compactRaw.match(
     /^Event probability ([\d.]+) stays below the rule set needed for Prepare\/Activate\.$/i,
   );
   if (belowThresholdMatch) {
-    return `Die Vorhersage reicht mit ${percentFromModelValue(belowThresholdMatch[1])} aktuell nicht für Vorbereitung oder Aktivierung.`;
+    return `Die ${COCKPIT_SEMANTICS.eventProbability.label} reicht mit ${percentFromModelValue(belowThresholdMatch[1])} aktuell nicht für Vorbereitung oder Aktivierung.`;
   }
 
   const explanationMatch = compactRaw.match(
@@ -563,7 +564,11 @@ export function explainInPlainGerman(value?: string | StructuredReasonItem | nul
 
   const rankDriverMatch = compactRaw.match(/^Priority score ([\d.]+) and event probability ([\d.]+) drive the ranking\.$/i);
   if (rankDriverMatch) {
-    return `Prioritäts-Score und Event-Wahrscheinlichkeit treiben hier das Ranking.`;
+    return `${COCKPIT_SEMANTICS.decisionPriority.label} und ${COCKPIT_SEMANTICS.eventProbability.label} treiben hier das Ranking.`;
+  }
+
+  if (/^Priority score and event probability drive the ranking\.$/i.test(compactRaw)) {
+    return `${COCKPIT_SEMANTICS.decisionPriority.label} und ${COCKPIT_SEMANTICS.eventProbability.label} treiben hier das Ranking.`;
   }
 
   if (/^Activate regions receive the strongest label multiplier\.$/i.test(compactRaw)) {

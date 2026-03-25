@@ -29,11 +29,11 @@ const KPI_LABELS: Record<string, string> = {
 };
 
 const METRIC_SEMANTIC_LABELS: Record<string, string> = {
-  ranking_signal: 'Signal-Score',
-  activation_priority: 'Prioritäts-Score',
+  ranking_signal: 'Ranking-Signal',
+  activation_priority: 'Entscheidungs-Priorität',
   signal_confidence: 'Signal-Sicherheit',
   forecast_event_probability: 'Event-Wahrscheinlichkeit',
-  observed_outcome_signal: 'Outcome-Score',
+  observed_outcome_signal: 'Wirkungssignal aus Kundendaten',
   outcome_learning_confidence: 'Lern-Sicherheit',
   truth_readiness: 'Kundendatenbasis',
   business_validation_gate: 'Business-Freigabe',
@@ -42,10 +42,10 @@ const METRIC_SEMANTIC_LABELS: Record<string, string> = {
 
 const METRIC_SEMANTIC_BADGES: Record<string, string> = {
   ranking_signal: 'Ranking-Signal',
-  activation_priority: 'Aktivierungs-Priorität',
+  activation_priority: 'Entscheidungs-Priorität',
   signal_confidence: 'Signal-Sicherheit',
   forecast_event_probability: 'Kalibrierte Wahrscheinlichkeit',
-  observed_outcome_signal: 'Outcome-Lernsignal',
+  observed_outcome_signal: 'Wirkungssignal aus Kundendaten',
   outcome_learning_confidence: 'Lern-Sicherheit',
   truth_readiness: 'Readiness-Zustand',
   business_validation_gate: 'Business-Gate',
@@ -54,10 +54,10 @@ const METRIC_SEMANTIC_BADGES: Record<string, string> = {
 
 const METRIC_SEMANTIC_NOTES: Record<string, string> = {
   ranking_signal: 'Hilft beim Vergleichen und Priorisieren, ist aber keine Eintrittswahrscheinlichkeit.',
-  activation_priority: 'Hilft bei der Reihenfolge der Aktivierung, nicht bei der Schätzung eines Eintritts.',
+  activation_priority: 'Ordnet, welcher Arbeitsfall zuerst geprüft werden sollte. Das ist keine Wahrscheinlichkeitszahl.',
   signal_confidence: 'Beschreibt Signalsicherheit oder Agreement, nicht die Modellwahrscheinlichkeit.',
   forecast_event_probability: 'Beschreibt die kalibrierte Wahrscheinlichkeit für das definierte Forecast-Ereignis.',
-  observed_outcome_signal: 'Beschreibt ein beobachtetes Lernsignal aus Kundendaten, keine Forecast-Wahrscheinlichkeit.',
+  observed_outcome_signal: 'Beschreibt ein beobachtetes Wirkungssignal aus Kundendaten, keine Forecast-Wahrscheinlichkeit.',
   outcome_learning_confidence: 'Beschreibt die Sicherheit des Outcome-Lernsignals, nicht die Modellkalibrierung.',
   truth_readiness: 'Beschreibt, wie belastbar der Kundendaten-Layer bereits angeschlossen ist.',
   business_validation_gate: 'Beschreibt, ob aus einem Signal schon eine kommerzielle Freigabe werden darf.',

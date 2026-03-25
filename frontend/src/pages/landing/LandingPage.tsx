@@ -245,11 +245,11 @@ const LandingPage: React.FC = () => {
 
   return (
     <div className="app-shell landing-page">
-      <header className="shell-header media-header" style={{ zIndex: 10 }}>
+      <header className="shell-header media-header surface-header" style={{ zIndex: 10 }}>
         <div className="shell-header-inner">
-          <Link to="/welcome" className="shell-brand">
-            <span className="shell-logo-mark">VF</span>
-            <span className="shell-logo-copy">ViralFlux</span>
+          <Link to="/welcome" className="shell-brand product-brand-lockup">
+            <span className="shell-logo-mark product-brand-mark">VF</span>
+            <span className="shell-logo-copy product-brand-copy">ViralFlux</span>
           </Link>
 
           <nav className="shell-nav" aria-label="Hauptnavigation">
@@ -296,6 +296,7 @@ const LandingPage: React.FC = () => {
                       <span className="landing-hero-chip__dot" aria-hidden="true" />
                       PEIX x GELO Frühwarnung
                     </span>
+                    <span className="landing-hero-chip">Vom Signal bis zur Wochenlage</span>
                   </OperatorChipRail>
 
                   <h1 className="landing-hero-title">

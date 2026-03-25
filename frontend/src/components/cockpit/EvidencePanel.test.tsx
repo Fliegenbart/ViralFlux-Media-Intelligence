@@ -100,5 +100,29 @@ describe('EvidencePanel', () => {
     expect(screen.getByText('3. Quellen prüfen')).toBeInTheDocument();
     expect(screen.getByText('4. Import prüfen')).toBeInTheDocument();
     expect(screen.getByText('Technische Hinweise')).toBeInTheDocument();
+    expect(screen.getByText(/Event-Wahrscheinlichkeit:/)).toBeInTheDocument();
+    expect(screen.getByText(/Bundesland-Level:/)).toBeInTheDocument();
+  });
+
+  it('announces the loading state for quality data', () => {
+    render(
+      <EvidencePanel
+        evidence={null}
+        workspaceStatus={null}
+        loading
+        marketValidation={null}
+        marketValidationLoading={false}
+        customerValidation={null}
+        customerValidationLoading={false}
+        truthPreview={null}
+        truthBatchDetail={null}
+        truthActionLoading={false}
+        truthBatchDetailLoading={false}
+        onSubmitTruthCsv={async () => {}}
+        onLoadTruthBatchDetail={async () => {}}
+      />,
+    );
+
+    expect(screen.getByRole('status')).toHaveTextContent('Lade Qualität...');
   });
 });

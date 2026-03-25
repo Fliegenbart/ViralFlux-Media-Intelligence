@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useId, useState } from 'react';
 
 interface Props {
   title: string;
@@ -14,6 +14,8 @@ const CollapsibleSection: React.FC<Props> = ({
   children,
 }) => {
   const [open, setOpen] = useState(defaultOpen);
+  const contentId = useId();
+  const titleId = useId();
 
   return (
     <section className="collapsible-section">
@@ -22,9 +24,11 @@ const CollapsibleSection: React.FC<Props> = ({
         className="collapsible-trigger"
         onClick={() => setOpen(!open)}
         aria-expanded={open}
+        aria-controls={contentId}
+        aria-labelledby={titleId}
       >
         <div>
-          <h2 className="subsection-title">{title}</h2>
+          <h2 id={titleId} className="subsection-title">{title}</h2>
           {subtitle && <p className="subsection-copy">{subtitle}</p>}
         </div>
         <span
@@ -35,7 +39,7 @@ const CollapsibleSection: React.FC<Props> = ({
           &#9662;
         </span>
       </button>
-      {open && <div className="collapsible-content">{children}</div>}
+      {open && <div id={contentId} className="collapsible-content">{children}</div>}
     </section>
   );
 };

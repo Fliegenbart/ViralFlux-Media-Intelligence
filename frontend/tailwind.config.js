@@ -1,5 +1,6 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
+  darkMode: ['class', '[data-theme="dark"]'],
   content: [
     "./src/**/*.{js,jsx,ts,tsx}",
   ],
@@ -11,37 +12,37 @@ module.exports = {
         mono: ['JetBrains Mono', 'Menlo', 'monospace'],
       },
       colors: {
-        background: '#f8f9ff',
+        background: 'var(--bg-primary)',
         primary: {
-          DEFAULT: '#5148d8',
-          dim: '#453acc',
-          fixed: '#6f68f7',
-          container: '#6f68f7',
+          DEFAULT: 'var(--color-primary)',
+          dim: 'var(--color-primary-hover)',
+          fixed: 'var(--accent-blue)',
+          container: 'var(--accent-blue)',
         },
         surface: {
-          DEFAULT: '#f8f9ff',
-          low: '#eff4ff',
-          container: '#e5eeff',
-          high: '#dce9ff',
-          highest: '#d2e4ff',
-          card: '#ffffff',
+          DEFAULT: 'var(--bg-primary)',
+          low: 'var(--bg-secondary)',
+          container: 'var(--bg-secondary)',
+          high: 'var(--bg-card)',
+          highest: 'var(--bg-card-hover)',
+          card: 'var(--bg-card)',
         },
         ink: {
-          DEFAULT: '#05345c',
-          soft: '#3d618c',
-          mute: '#5a7da9',
+          DEFAULT: 'var(--text-primary)',
+          soft: 'var(--text-secondary)',
+          mute: 'var(--text-muted)',
         },
         secondary: {
-          DEFAULT: '#5e5d72',
-          container: '#e3e0f9',
+          DEFAULT: 'var(--accent-pink)',
+          container: 'var(--bg-secondary)',
         },
         tertiary: {
-          DEFAULT: '#765377',
-          container: '#fed2fd',
+          DEFAULT: 'var(--accent-pink)',
+          container: 'var(--bg-secondary)',
         },
         outline: {
-          DEFAULT: '#5a7da9',
-          soft: '#91b4e4',
+          DEFAULT: 'var(--border-color)',
+          soft: 'var(--border-light)',
         },
       },
       boxShadow: {

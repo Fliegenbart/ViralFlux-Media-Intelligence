@@ -13,6 +13,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
+import type { NameType, ValueType } from 'recharts/types/component/DefaultTooltipContent';
 
 import {
   BacktestChartPoint,
@@ -63,6 +64,129 @@ function median(values: number[]): number {
   const sorted = [...values].sort((a, b) => a - b);
   const mid = Math.floor(sorted.length / 2);
   return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
+}
+
+function readBooleanFlag(record: Record<string, unknown> | null | undefined, keys: string[]): boolean | null {
+  if (!record) return null;
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === 'boolean') return value;
+  }
+  return null;
+}
+
+function readNumberValue(record: Record<string, unknown> | null | undefined, keys: string[]): number | null {
+  if (!record) return null;
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === 'number' && Number.isFinite(value)) return value;
+  }
+  return null;
+}
+
+function passStateLabel(passed: boolean | null): string {
+  if (passed == null) return '-';
+  return passed ? 'erfüllt' : 'beobachten';
+}
+
+function formatSampleCoverage(value: number | null): string {
+  if (!isNumber(value)) return '-';
+  const normalized = value <= 1 ? value * 100 : value;
+  return formatPercent(normalized, 0);
+}
+
+function chartLegendItem(label: string, swatch: React.CSSProperties, detail: string): JSX.Element {
+  return (
+    <div key={label} className="workspace-note-card" style={{ padding: 14 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <span aria-hidden="true" style={{ display: 'inline-block', width: 18, height: 10, borderRadius: 999, ...swatch }} />
+        <strong style={{ color: 'var(--text-primary)' }}>{label}</strong>
+      </div>
+      <div style={{ marginTop: 8, fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.55 }}>
+        {detail}
+      </div>
+    </div>
+  );
+}
+
+function ChartSemanticsPanel({
+  title = 'So liest du die Grafik',
+  items,
+  note,
+}: {
+  title?: string;
+  items: Array<{ label: string; swatch: React.CSSProperties; detail: string }>;
+  note?: string;
+}) {
+  return (
+    <div className="workspace-note-list" aria-label={title} style={{ marginBottom: 16 }}>
+      <div className="workspace-note-card" style={{ padding: 16 }}>
+        <strong style={{ color: 'var(--text-primary)' }}>{title}</strong>
+        <div style={{ marginTop: 10, display: 'grid', gap: 10, gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
+          {items.map((item) => chartLegendItem(item.label, item.swatch, item.detail))}
+        </div>
+        {note ? (
+          <div style={{ marginTop: 12, fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+            {note}
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function ChartAxisHint({
+  xLabel,
+  yLabel,
+}: {
+  xLabel: string;
+  yLabel: string;
+}) {
+  return (
+    <div className="soft-panel" style={{ padding: 14, marginTop: 14, fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+      <strong style={{ color: 'var(--text-primary)' }}>Achsen-Hinweis:</strong> X-Achse = {xLabel}. Y-Achse = {yLabel}.
+    </div>
+  );
+}
+
+function renderChartTooltip({
+  active,
+  payload,
+  label,
+  title,
+}: {
+  active?: boolean;
+  payload?: Array<{ name?: NameType; value?: ValueType | null; color?: string }>;
+  label?: string;
+  title?: string;
+}) {
+  if (!active || !payload?.length) return null;
+  const visibleItems = payload.filter((entry) => entry.value != null && entry.value !== '');
+  if (!visibleItems.length) return null;
+
+  return (
+    <div
+      style={{
+        borderRadius: 14,
+        background: 'rgba(15, 23, 42, 0.94)',
+        color: '#f8fafc',
+        padding: '12px 14px',
+        boxShadow: '0 18px 48px rgba(15, 23, 42, 0.24)',
+        maxWidth: 260,
+      }}
+    >
+      <div style={{ fontSize: 12, fontWeight: 800 }}>{title || 'Kurvenpunkt'}</div>
+      <div style={{ marginTop: 4, fontSize: 12, color: 'rgba(226, 232, 240, 0.9)' }}>{label}</div>
+        <div style={{ marginTop: 10, display: 'grid', gap: 6 }}>
+          {visibleItems.map((entry) => (
+            <div key={`${String(entry.name)}-${String(entry.value)}`} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 12 }}>
+              <span style={{ color: entry.color || '#bfdbfe' }}>{String(entry.name ?? '-')}</span>
+              <strong>{typeof entry.value === 'number' ? formatVirusLevel(entry.value, 1) : String(entry.value)}</strong>
+            </div>
+          ))}
+        </div>
+      </div>
+  );
 }
 
 export function buildValidationRows(result: BacktestResponse | null, maxPoints = 84): ValidationRow[] {
@@ -418,6 +542,9 @@ export const FocusRegionOutlookPanel: React.FC<FocusRegionOutlookPanelProps> = (
   const hasHistorical = rows.some((row) => isNumber(row.actual));
   const hasForecast = rows.some((row) => isNumber(row.forecast));
   const chartReady = rows.length >= 2 && (hasHistorical || hasForecast);
+  const qualityGatePassed = readBooleanFlag(prediction?.quality_gate || null, ['overall_passed', 'passed']);
+  const calibrationPassed = readBooleanFlag(prediction?.quality_gate || null, ['calibration_passed']);
+  const sampleCoverage = readNumberValue(prediction?.source_coverage || null, ['sample_coverage_pct', 'coverage_pct', 'usable_source_share']);
 
   if (loading) {
     return (
@@ -427,13 +554,29 @@ export const FocusRegionOutlookPanel: React.FC<FocusRegionOutlookPanelProps> = (
     );
   }
 
+  if (!prediction && !backtest?.timeline?.length) {
+    return (
+      <div className="card" style={{ padding: 20, display: 'grid', gap: 14 }}>
+        <div>
+          <h2 style={{ margin: 0, fontSize: 20, color: 'var(--text-primary)' }}>Forecast für Fokus-Bundesland</h2>
+          <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--text-muted)' }}>
+            Hier würden wir den bestätigten Stand, den Forecast und den Unsicherheitskorridor getrennt zeigen.
+          </p>
+        </div>
+        <div className="soft-panel" style={{ padding: 20, color: 'var(--text-muted)' }}>
+          Noch kein aktiver Forecast oder regionaler Rückblick für dieses Bundesland verfügbar.
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="card" style={{ padding: 20 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start', marginBottom: 16 }}>
         <div>
-          <h2 style={{ margin: 0, fontSize: 20, color: 'var(--text-primary)' }}>Fokusregion in {horizonDays} Tagen</h2>
+          <h2 style={{ margin: 0, fontSize: 20, color: 'var(--text-primary)' }}>Forecast für Fokus-Bundesland</h2>
           <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--text-muted)' }}>
-            Hier sieht der Kunde die wichtigste Region zuerst. Der Satz oben sagt sofort, wo der Viruslage-Wert in {horizonDays} Tagen ungefähr stehen soll.
+            Das ist ein Forecast auf Bundesland-Level. Wir trennen hier bewusst bestätigte Ist-Werte, Forecast und Unsicherheitsintervall.
           </p>
         </div>
         <div style={{ textAlign: 'right', fontSize: 12, color: 'var(--text-muted)' }}>
@@ -457,6 +600,12 @@ export const FocusRegionOutlookPanel: React.FC<FocusRegionOutlookPanelProps> = (
         </p>
       </div>
 
+      <div className="review-chip-row" style={{ marginBottom: 16 }}>
+        <span className="step-chip">Bundesland-Level</span>
+        <span className="step-chip">Kein Ranking-Signal</span>
+        <span className="step-chip">Kein City-Forecast</span>
+      </div>
+
       <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', marginBottom: 16 }}>
         <div className="soft-panel" style={{ padding: 16 }}>
           <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
@@ -476,7 +625,7 @@ export const FocusRegionOutlookPanel: React.FC<FocusRegionOutlookPanelProps> = (
         </div>
         <div className="soft-panel" style={{ padding: 16 }}>
           <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-            Ziel in {horizonDays} Tagen
+            Forecast-Ziel in {horizonDays} Tagen
           </div>
           <div style={{ marginTop: 6, fontSize: 18, fontWeight: 800, color: '#5e5ce6' }}>
             {formatVirusLevel(prediction?.expected_target_incidence)}
@@ -494,6 +643,65 @@ export const FocusRegionOutlookPanel: React.FC<FocusRegionOutlookPanelProps> = (
         </div>
       </div>
 
+      <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', marginBottom: 16 }}>
+        <div className="soft-panel" style={{ padding: 16 }}>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+            Quality Gate
+          </div>
+          <div style={{ marginTop: 6, fontSize: 18, fontWeight: 800, color: 'var(--text-primary)' }}>
+            {passStateLabel(qualityGatePassed)}
+          </div>
+        </div>
+        <div className="soft-panel" style={{ padding: 16 }}>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+            Kalibrierung
+          </div>
+          <div style={{ marginTop: 6, fontSize: 18, fontWeight: 800, color: 'var(--text-primary)' }}>
+            {passStateLabel(calibrationPassed)}
+          </div>
+        </div>
+        <div className="soft-panel" style={{ padding: 16 }}>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+            Sample Coverage
+          </div>
+          <div style={{ marginTop: 6, fontSize: 18, fontWeight: 800, color: 'var(--text-primary)' }}>
+            {formatSampleCoverage(sampleCoverage)}
+          </div>
+        </div>
+      </div>
+
+      <ChartSemanticsPanel
+        title="Chart-Konventionen Forecast"
+        items={[
+          {
+            label: 'Truth / Ist-Wert',
+            swatch: { background: '#0a84ff' },
+            detail: 'Bestätigte Beobachtung. Das ist die sichtbare Wahrheit bis zum letzten bekannten Stand.',
+          },
+          {
+            label: 'Forecast',
+            swatch: { background: '#5e5ce6' },
+            detail: 'Modellierter Zielwert. Das ist eine Erwartung, kein gemessener Ist-Wert.',
+          },
+          {
+            label: 'Unsicherheitsintervall',
+            swatch: { background: 'rgba(94,92,230,0.22)' },
+            detail: 'Zeigt den möglichen Bereich um den Forecast. Breiteres Band bedeutet mehr Unsicherheit.',
+          },
+          {
+            label: 'Forecast-Fenster',
+            swatch: { background: 'rgba(94,92,230,0.08)', border: '1px dashed rgba(94,92,230,0.5)' },
+            detail: 'Markiert den Abschnitt zwischen letztem bestätigtem Stand und Forecast-Ziel.',
+          },
+          {
+            label: 'Fehlende Werte',
+            swatch: { background: 'repeating-linear-gradient(45deg, rgba(148,163,184,0.2), rgba(148,163,184,0.2) 4px, rgba(255,255,255,0.8) 4px, rgba(255,255,255,0.8) 8px)' },
+            detail: 'Wenn Punkte fehlen, bedeutet das fehlende Beobachtung oder fehlenden Modellwert, nicht Stabilität.',
+          },
+        ]}
+        note="Event-Wahrscheinlichkeit und Ranking-Signale bleiben bewusst außerhalb dieses Diagramms. Hier geht es nur um bestätigte Werte, Forecast und Unsicherheit."
+      />
+
       {chartReady ? (
         <div style={{ height: 320 }}>
           <ResponsiveContainer width="100%" height="100%">
@@ -501,7 +709,7 @@ export const FocusRegionOutlookPanel: React.FC<FocusRegionOutlookPanelProps> = (
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(148, 163, 184, 0.22)" />
               <XAxis dataKey="dateLabel" tick={{ fill: '#64748b', fontSize: 11 }} />
               <YAxis tick={{ fill: '#64748b', fontSize: 11 }} />
-              <Tooltip />
+              <Tooltip content={(props) => renderChartTooltip({ ...props, title: 'Fokusregion-Forecast' })} />
               <Legend />
 
               <ReferenceArea
@@ -522,24 +730,29 @@ export const FocusRegionOutlookPanel: React.FC<FocusRegionOutlookPanelProps> = (
                 label={{ value: `+${horizonDays} Tage`, position: 'top', fill: '#5e5ce6', fontSize: 10 }}
               />
 
-              <Area type="monotone" dataKey="bandBase" stackId="forecastBand" stroke="none" fill="transparent" activeDot={false} legendType="none" />
-              <Area type="monotone" dataKey="bandRange" stackId="forecastBand" stroke="none" fill="rgba(94,92,230,0.16)" activeDot={false} name="Bandbreite" />
+              <Area type="linear" dataKey="bandBase" stackId="forecastBand" stroke="none" fill="transparent" activeDot={false} legendType="none" />
+              <Area type="linear" dataKey="bandRange" stackId="forecastBand" stroke="none" fill="rgba(94,92,230,0.16)" activeDot={false} name="Unsicherheitsintervall" />
 
-              <Line type="monotone" dataKey="actual" name="Ist-Wert" stroke="#0a84ff" strokeWidth={2.6} dot={false} />
-              <Line type="monotone" dataKey="validated" name={`Validierter ${horizonDays}-Tage-Blick`} stroke="#475569" strokeWidth={1.7} dot={false} strokeDasharray="5 4" />
-              <Line type="monotone" dataKey="forecast" name={`${horizonDays}-Tage-Ausblick`} stroke="#5e5ce6" strokeWidth={3} dot={false} />
+              <Line type="linear" dataKey="actual" name="Truth / Ist-Wert" stroke="#0a84ff" strokeWidth={2.6} dot={false} />
+              <Line type="linear" dataKey="validated" name={`Validierter ${horizonDays}-Tage-Rückblick`} stroke="#475569" strokeWidth={1.7} dot={false} strokeDasharray="5 4" />
+              <Line type="linear" dataKey="forecast" name={`${horizonDays}-Tage-Forecast`} stroke="#5e5ce6" strokeWidth={3} dot={false} />
             </ComposedChart>
           </ResponsiveContainer>
         </div>
       ) : (
         <div className="soft-panel" style={{ padding: 20, color: 'var(--text-muted)' }}>
-          {`Für die Fokusregion fehlen gerade ausreichende Verlaufsdaten. Die ${horizonDays}-Tage-Aussage oben bleibt trotzdem sichtbar.`}
+          {`Für die Fokusregion fehlen gerade ausreichende Verlaufsdaten. Die ${horizonDays}-Tage-Aussage oben bleibt sichtbar, die Grafik selbst bleibt absichtlich zurückhaltend.`}
         </div>
       )}
 
+      <ChartAxisHint
+        xLabel="Zeitpunkte vom letzten bestätigten Stand bis zum Forecast-Ziel"
+        yLabel="Viruslage-Wert für das ausgewählte Bundesland"
+      />
+
       <div className="workspace-note-list" style={{ marginTop: 16 }}>
         <div className="workspace-note-card">
-          {`Bestätigte Daten links, aktueller Forecast rechts: So sieht der Kunde sofort, was schon beobachtet ist und was unser ${horizonDays}-Tage-Ausblick ist.`}
+          {`Bestätigte Daten links, Forecast rechts: So siehst du sofort, was schon beobachtet ist und was nur die ${horizonDays}-Tage-Erwartung des Modells ist.`}
         </div>
         {!backtest?.timeline?.length ? (
           <div className="workspace-note-card">
@@ -620,6 +833,38 @@ export const WaveOutlookPanel: React.FC<WaveOutlookPanelProps> = ({
         </div>
       ) : null}
 
+      <ChartSemanticsPanel
+        title="Chart-Konventionen Markt-Rückblick"
+        items={[
+          {
+            label: 'Truth / Ist-Wert',
+            swatch: { background: '#0a84ff' },
+            detail: 'Tatsächlich beobachteter Verlauf bis zum letzten bestätigten Stand.',
+          },
+          {
+            label: 'Validierte Prognose',
+            swatch: { background: '#475569', border: '1px dashed rgba(71,85,105,0.7)' },
+            detail: 'Historisch gegen echte Werte geprüfter Modellverlauf, nicht der aktuelle Live-Forecast.',
+          },
+          {
+            label: 'Forecast / Ausblick',
+            swatch: { background: '#5e5ce6' },
+            detail: 'Nur falls im validierten Lauf bereits vorausgerechnete Punkte vorliegen.',
+          },
+          {
+            label: 'Unsicherheitsintervall',
+            swatch: { background: 'rgba(59,130,246,0.18)' },
+            detail: 'Zeigt die Bandbreite des Modells. Ein breites Band bedeutet: Richtung okay, Höhe unsicherer.',
+          },
+          {
+            label: 'Fehlende Werte',
+            swatch: { background: 'repeating-linear-gradient(45deg, rgba(148,163,184,0.2), rgba(148,163,184,0.2) 4px, rgba(255,255,255,0.8) 4px, rgba(255,255,255,0.8) 8px)' },
+            detail: 'Leerstellen bedeuten fehlende Beobachtung oder unbelegte Slots, nicht automatisch Ruhe.',
+          },
+        ]}
+        note="Ranking-Signale und Event-Wahrscheinlichkeit werden hier nicht gemischt. Diese Grafik zeigt nur den validierten Verlauf und seine Unsicherheit."
+      />
+
       <div className="soft-panel" style={{ padding: 16, marginBottom: 16, fontSize: 13, color: 'var(--text-secondary)' }}>
         Die markierten Punkte helfen dir, den Start, den letzten bestätigten Stand und den im validierten Lauf sichtbar gewordenen Höhepunkt schnell zu erkennen.
       </div>
@@ -649,13 +894,13 @@ export const WaveOutlookPanel: React.FC<WaveOutlookPanelProps> = ({
       </div>
 
       <div style={{ height: 320 }}>
-        <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart data={rows}>
-            <CartesianGrid strokeDasharray="3 3" stroke="rgba(148, 163, 184, 0.22)" />
-            <XAxis dataKey="dateLabel" tick={{ fill: '#64748b', fontSize: 11 }} />
-            <YAxis tick={{ fill: '#64748b', fontSize: 11 }} />
-            <Tooltip />
-            <Legend />
+          <ResponsiveContainer width="100%" height="100%">
+            <ComposedChart data={rows}>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(148, 163, 184, 0.22)" />
+              <XAxis dataKey="dateLabel" tick={{ fill: '#64748b', fontSize: 11 }} />
+              <YAxis tick={{ fill: '#64748b', fontSize: 11 }} />
+              <Tooltip content={(props) => renderChartTooltip({ ...props, title: 'Markt-Rückblick' })} />
+              <Legend />
 
             <ReferenceArea
               x1={rows[markers.lastObservedIndex]?.dateLabel}
@@ -666,18 +911,23 @@ export const WaveOutlookPanel: React.FC<WaveOutlookPanelProps> = ({
             <ReferenceLine x={rows[markers.lastObservedIndex]?.dateLabel} stroke="#0a84ff" strokeDasharray="4 4" label={{ value: 'Ist-Wert', position: 'top', fill: '#0a84ff', fontSize: 10 }} />
             <ReferenceLine x={rows[markers.peakIndex]?.dateLabel} stroke="#ff453a" strokeDasharray="4 4" label={{ value: 'Peak', position: 'top', fill: '#ff453a', fontSize: 10 }} />
 
-            <Area type="monotone" dataKey="ci95Base" stackId="ci95" stroke="none" fill="transparent" activeDot={false} legendType="none" />
-            <Area type="monotone" dataKey="ci95Range" stackId="ci95" stroke="none" fill="rgba(59,130,246,0.08)" activeDot={false} legendType="none" />
-            <Area type="monotone" dataKey="ci80Base" stackId="ci80" stroke="none" fill="transparent" activeDot={false} legendType="none" />
-            <Area type="monotone" dataKey="ci80Range" stackId="ci80" stroke="none" fill="rgba(59,130,246,0.18)" activeDot={false} legendType="none" />
+            <Area type="linear" dataKey="ci95Base" stackId="ci95" stroke="none" fill="transparent" activeDot={false} legendType="none" />
+            <Area type="linear" dataKey="ci95Range" stackId="ci95" stroke="none" fill="rgba(59,130,246,0.08)" activeDot={false} legendType="none" />
+            <Area type="linear" dataKey="ci80Base" stackId="ci80" stroke="none" fill="transparent" activeDot={false} legendType="none" />
+            <Area type="linear" dataKey="ci80Range" stackId="ci80" stroke="none" fill="rgba(59,130,246,0.18)" activeDot={false} legendType="none" />
 
-            <Line type="monotone" dataKey="actual" name="Ist-Wert" stroke="#0a84ff" strokeWidth={2.5} dot={false} />
-            <Line type="monotone" dataKey="model" name="Validierte Prognose" stroke="#475569" strokeWidth={1.8} dot={false} strokeDasharray="5 4" />
-            <Line type="monotone" dataKey="forecast" name="Ausblick" stroke="#5e5ce6" strokeWidth={2.8} dot={false} />
-            <Line type="monotone" dataKey="seasonal" name="Saison-Baseline" stroke="#ff9f0a" strokeWidth={1.6} dot={false} strokeDasharray="3 3" />
+            <Line type="linear" dataKey="actual" name="Truth / Ist-Wert" stroke="#0a84ff" strokeWidth={2.5} dot={false} />
+            <Line type="linear" dataKey="model" name="Validierte Prognose" stroke="#475569" strokeWidth={1.8} dot={false} strokeDasharray="5 4" />
+            <Line type="linear" dataKey="forecast" name="Forecast / Ausblick" stroke="#5e5ce6" strokeWidth={2.8} dot={false} />
+            <Line type="linear" dataKey="seasonal" name="Saison-Baseline" stroke="#ff9f0a" strokeWidth={1.6} dot={false} strokeDasharray="3 3" />
           </ComposedChart>
         </ResponsiveContainer>
       </div>
+
+      <ChartAxisHint
+        xLabel="kalibrierte Beobachtungs- und Forecast-Zeitpunkte"
+        yLabel="Markt- oder Signalhöhe im validierten Verlauf"
+      />
 
       <p style={{ margin: '14px 0 0', fontSize: 14, lineHeight: 1.6, color: 'var(--text-secondary)' }}>
         {markers.narrative}
@@ -922,6 +1172,11 @@ export const ValidationSection: React.FC<ValidationSectionProps> = ({
   const chartReady = rows.some((row) => isNumber(row.actual) || isNumber(row.model));
   const decisionMetrics = result?.decision_metrics;
   const metrics = result?.metrics;
+  const qualityGatePassed = Boolean(result?.quality_gate?.overall_passed);
+  const thresholdLabel = result?.decision_metrics?.event_threshold_pct != null
+    ? formatPercent(result.decision_metrics.event_threshold_pct, 0)
+    : '-';
+  const missingRows = rows.filter((row) => !isNumber(row.actual) && !isNumber(row.model) && !isNumber(row.forecast)).length;
 
   return (
     <div className="card" style={{ padding: 20, display: 'grid', gap: 14 }}>
@@ -961,6 +1216,44 @@ export const ValidationSection: React.FC<ValidationSectionProps> = ({
         )}
       </div>
 
+      <div className="review-chip-row">
+        <span className="step-chip">Quality Gate: {qualityGatePassed ? 'erfüllt' : 'beobachten'}</span>
+        <span className="step-chip">Action Line: {thresholdLabel}</span>
+        <span className="step-chip">Fehlende Punkte: {missingRows}</span>
+      </div>
+
+      <ChartSemanticsPanel
+        title="Chart-Konventionen Validierung"
+        items={[
+          {
+            label: 'Truth / Ist',
+            swatch: { background: '#0a84ff' },
+            detail: 'Gemessener Verlauf. Daran prüfen wir das Modell.',
+          },
+          {
+            label: 'Forecast / Modell',
+            swatch: { background: '#5e5ce6' },
+            detail: 'Modellierter Verlauf. Er wird gegen Truth verglichen und nicht als Tatsache gelesen.',
+          },
+          {
+            label: 'Unsicherheitsband',
+            swatch: { background: 'rgba(59,130,246,0.18)' },
+            detail: 'Zeigt die Bandbreite des Modells. Breiter bedeutet unsicherer.',
+          },
+          {
+            label: 'Action Line / Schwelle',
+            swatch: { background: '#ef4444' },
+            detail: 'Operative Schwelle aus dem Quality Gate, falls vorhanden. Sie ist keine Forecast-Linie.',
+          },
+          {
+            label: 'Missing Data',
+            swatch: { background: 'repeating-linear-gradient(45deg, rgba(148,163,184,0.2), rgba(148,163,184,0.2) 4px, rgba(255,255,255,0.8) 4px, rgba(255,255,255,0.8) 8px)' },
+            detail: 'Fehlende Daten bedeuten Lücke, nicht automatisch Null oder Stabilität.',
+          },
+        ]}
+        note="Event-Wahrscheinlichkeit und Ranking-Signal sind absichtlich nicht Teil dieser Validierungskurve."
+      />
+
       {loading ? (
         <div className="soft-panel" style={{ padding: 24, color: 'var(--text-muted)' }}>
           Validierungsdaten werden geladen...
@@ -973,14 +1266,29 @@ export const ValidationSection: React.FC<ValidationSectionProps> = ({
               <XAxis dataKey="dateLabel" tick={{ fill: '#64748b', fontSize: 11 }} />
               <YAxis yAxisId="left" tick={{ fill: '#64748b', fontSize: 11 }} />
               {hasBio && <YAxis yAxisId="right" orientation="right" tick={{ fill: '#64748b', fontSize: 11 }} />}
-              <Tooltip />
+              <Tooltip content={(props) => renderChartTooltip({ ...props, title })} />
               <Legend />
 
-              <Line yAxisId="left" type="monotone" dataKey="actual" name="Ist" stroke="#0a84ff" strokeWidth={2.5} dot={false} />
-              <Line yAxisId="left" type="monotone" dataKey="model" name="Modell" stroke="#5e5ce6" strokeWidth={2.2} dot={false} />
-              <Line yAxisId="left" type="monotone" dataKey="seasonal" name="Saison-Baseline" stroke="#ff9f0a" strokeWidth={1.6} dot={false} strokeDasharray="3 3" />
-              <Line yAxisId="left" type="monotone" dataKey="persistence" name="Persistenz-Basis" stroke="#64748b" strokeWidth={1.4} dot={false} strokeDasharray="3 3" />
-              {hasBio && <Line yAxisId="right" type="monotone" dataKey="bio" name="Bio-Signal" stroke="#7c3aed" strokeWidth={1.8} dot={false} />}
+              {result?.decision_metrics?.event_threshold_pct != null ? (
+                <ReferenceLine
+                  yAxisId="left"
+                  y={result.decision_metrics.event_threshold_pct}
+                  stroke="#ef4444"
+                  strokeDasharray="4 4"
+                  label={{ value: 'Action Line', position: 'insideTopRight', fill: '#ef4444', fontSize: 10 }}
+                />
+              ) : null}
+
+              <Area yAxisId="left" type="linear" dataKey="ci95Base" stackId="ci95" stroke="none" fill="transparent" activeDot={false} legendType="none" />
+              <Area yAxisId="left" type="linear" dataKey="ci95Range" stackId="ci95" stroke="none" fill="rgba(59,130,246,0.08)" activeDot={false} legendType="none" />
+              <Area yAxisId="left" type="linear" dataKey="ci80Base" stackId="ci80" stroke="none" fill="transparent" activeDot={false} legendType="none" />
+              <Area yAxisId="left" type="linear" dataKey="ci80Range" stackId="ci80" stroke="none" fill="rgba(59,130,246,0.18)" activeDot={false} name="Unsicherheitsband" />
+
+              <Line yAxisId="left" type="linear" dataKey="actual" name="Truth / Ist" stroke="#0a84ff" strokeWidth={2.5} dot={false} />
+              <Line yAxisId="left" type="linear" dataKey="model" name="Forecast / Modell" stroke="#5e5ce6" strokeWidth={2.2} dot={false} />
+              <Line yAxisId="left" type="linear" dataKey="seasonal" name="Saison-Baseline" stroke="#ff9f0a" strokeWidth={1.6} dot={false} strokeDasharray="3 3" />
+              <Line yAxisId="left" type="linear" dataKey="persistence" name="Persistenz-Basis" stroke="#64748b" strokeWidth={1.4} dot={false} strokeDasharray="3 3" />
+              {hasBio && <Line yAxisId="right" type="linear" dataKey="bio" name="Ranking-Signal (getrennte Achse)" stroke="#7c3aed" strokeWidth={1.8} dot={false} />}
             </ComposedChart>
           </ResponsiveContainer>
         </div>
@@ -989,6 +1297,11 @@ export const ValidationSection: React.FC<ValidationSectionProps> = ({
           {emptyMessage}
         </div>
       )}
+
+      <ChartAxisHint
+        xLabel="validierte Zeitpunkte im Rückblicktest"
+        yLabel={hasBio ? 'Truth und Forecast links, Ranking-Signal rechts' : 'Truth und Forecast'}
+      />
 
       {(result?.proof_text || result?.llm_insight) && (
         <div className="soft-panel" style={{ padding: 16 }}>

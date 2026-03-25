@@ -299,6 +299,35 @@ function buildWaveRadar(): WaveRadarResponse {
 }
 
 describe('NowWorkspace', () => {
+  it('keeps the laptop-first layout hooks for toolbar, top grid and trust grid', () => {
+    const { container } = render(
+      <NowWorkspace
+        virus="Influenza A"
+        onVirusChange={noop}
+        horizonDays={7}
+        onHorizonChange={noop}
+        view={buildView()}
+        workspaceStatus={buildWorkspaceStatus()}
+        loading={false}
+        forecast={buildForecast()}
+        focusRegionBacktest={buildFocusRegionBacktest()}
+        focusRegionBacktestLoading={false}
+        waveOutlook={null}
+        waveOutlookLoading={false}
+        waveRadar={buildWaveRadar()}
+        waveRadarLoading={false}
+        onOpenRecommendation={noop}
+        onOpenRegions={noop}
+        onOpenCampaigns={noop}
+        onOpenEvidence={noop}
+      />,
+    );
+
+    expect(container.querySelector('.now-toolbar')).toBeTruthy();
+    expect(container.querySelector('.now-command-grid')).toBeTruthy();
+    expect(container.querySelector('.now-trust-grid')).toBeTruthy();
+  });
+
   it('shows one main decision and keeps secondary content in details', () => {
     render(
       <NowWorkspace
@@ -324,7 +353,7 @@ describe('NowWorkspace', () => {
     );
 
     expect(screen.getByText('Was passiert gerade?')).toBeInTheDocument();
-    expect(screen.getByText('Fokusregion in 7 Tagen')).toBeInTheDocument();
+    expect(screen.getByText('Forecast für Fokus-Bundesland')).toBeInTheDocument();
     expect(screen.getByText(/In 7 Tagen erwarten wir für Berlin einen Viruslage-Wert von ca. 165,0/)).toBeInTheDocument();
     expect(screen.getByText(/Letzter bestätigter Ist-Wert vom 17.03.2026/)).toBeInTheDocument();
     expect(screen.getByText('Unsere Prognose zeigt im 7-Tage-Fenster die größte Dynamik aktuell in Berlin.')).toBeInTheDocument();

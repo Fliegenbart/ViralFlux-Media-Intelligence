@@ -17,31 +17,31 @@ export interface ThemePalette {
 }
 
 const LIGHT: ThemePalette = {
-  bg: '#faf9f7',
-  bgCard: '#ffffff',
-  text: '#1e293b',
-  textSec: '#64748b',
-  textMuted: '#94a3b8',
-  indigo: '#4338ca',
-  indigoLight: '#e0e7ff',
-  indigoSoft: '#eef2ff',
-  border: '#e2e8f0',
-  borderLight: '#f1f5f9',
-  rule: '#cbd5e1',
+  bg: 'var(--bg-primary)',
+  bgCard: 'var(--surface-panel-bg)',
+  text: 'var(--text-primary)',
+  textSec: 'var(--text-secondary)',
+  textMuted: 'var(--text-muted)',
+  indigo: 'var(--color-primary)',
+  indigoLight: 'var(--badge-info-bg)',
+  indigoSoft: 'var(--surface-accent-bg)',
+  border: 'var(--surface-panel-border)',
+  borderLight: 'var(--border-light)',
+  rule: 'var(--chart-grid)',
 };
 
 const DARK: ThemePalette = {
-  bg: '#0c1222',
-  bgCard: '#1e293b',
-  text: '#f1f5f9',
-  textSec: '#94a3b8',
-  textMuted: '#64748b',
-  indigo: '#6366f1',
-  indigoLight: 'rgba(99,102,241,0.18)',
-  indigoSoft: 'rgba(99,102,241,0.1)',
-  border: '#334155',
-  borderLight: '#1e293b',
-  rule: '#475569',
+  bg: 'var(--bg-primary)',
+  bgCard: 'var(--surface-panel-bg)',
+  text: 'var(--text-primary)',
+  textSec: 'var(--text-secondary)',
+  textMuted: 'var(--text-muted)',
+  indigo: 'var(--color-primary)',
+  indigoLight: 'var(--badge-info-bg)',
+  indigoSoft: 'var(--surface-accent-bg)',
+  border: 'var(--surface-panel-border)',
+  borderLight: 'var(--border-light)',
+  rule: 'var(--chart-grid)',
 };
 
 export const createThemePalette = (theme: ThemeName): ThemePalette =>
@@ -168,9 +168,10 @@ export const ScoreGauge: React.FC<ScoreGaugeProps> = ({ score, label, palette })
           y="68"
           textAnchor="middle"
           style={{
-            fontFamily: "'DM Serif Display', Georgia, 'Times New Roman', serif",
+            fontFamily: "'Manrope', 'Inter', system-ui, sans-serif",
             fontSize: 30,
             fill: palette.text,
+            fontWeight: 800,
           }}
         >
           {val.toFixed(2)}
@@ -180,7 +181,7 @@ export const ScoreGauge: React.FC<ScoreGaugeProps> = ({ score, label, palette })
           y="90"
           textAnchor="middle"
           style={{
-            fontFamily: "'DM Sans', 'Inter', system-ui, sans-serif",
+            fontFamily: "'Inter', system-ui, sans-serif",
             fontSize: 10,
             fill: palette.textMuted,
             textTransform: 'uppercase',

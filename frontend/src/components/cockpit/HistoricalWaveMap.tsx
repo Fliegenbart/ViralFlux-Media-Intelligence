@@ -136,7 +136,18 @@ const HistoricalWaveMap: React.FC<Props> = ({
               onClick={() => onSelectBundesland(shape.name)}
               onMouseEnter={() => setHoveredBundesland(shape.name)}
               onMouseLeave={() => setHoveredBundesland(null)}
+              onFocus={() => setHoveredBundesland(shape.name)}
+              onBlur={() => setHoveredBundesland(null)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault();
+                  onSelectBundesland(shape.name);
+                }
+              }}
               style={{ cursor: 'pointer' }}
+              role="button"
+              tabIndex={0}
+              aria-label={`${shape.name}, historische Bundesland-Ansicht, kein City-Forecast`}
             >
               <path
                 d={shape.d}
@@ -203,6 +214,9 @@ const HistoricalWaveMap: React.FC<Props> = ({
           }}
         >
           <div style={{ fontSize: 13, fontWeight: 700 }}>{hoveredBundesland}</div>
+          <div style={{ marginTop: 6, fontSize: 11, color: 'rgba(191, 219, 254, 0.86)' }}>
+            Bundesland-Level · Kein City-Forecast
+          </div>
           {hoveredRegion?.wave_rank ? (
             <>
               <div style={{ marginTop: 6, fontSize: 12, color: 'rgba(226, 232, 240, 0.92)' }}>

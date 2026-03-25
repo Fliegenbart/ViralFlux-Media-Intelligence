@@ -1,5 +1,6 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
 
+import { COCKPIT_SEMANTICS, UI_COPY, evidenceStatusHelper, evidenceStatusLabel } from '../../lib/copy';
 import { explainInPlainGerman, normalizeGermanText } from '../../lib/plainLanguage';
 import {
   ConnectorCatalogItem,
@@ -54,6 +55,11 @@ const RecommendationDrawer: React.FC<Props> = ({
   onPrepareSync,
 }) => {
   const [connectorKey, setConnectorKey] = useState<string>('meta_ads');
+  const drawerRef = useRef<HTMLDivElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const lastFocusedRef = useRef<HTMLElement | null>(null);
+  const titleId = useId();
+  const summaryId = useId();
   const nextStatus = nextWorkflowStatus(detail?.status);
   const tone = statusTone(detail?.lifecycle_state || detail?.status);
 
@@ -66,6 +72,42 @@ const RecommendationDrawer: React.FC<Props> = ({
       setConnectorKey(connectorCatalog[0].key);
     }
   }, [connectorCatalog, syncPreview?.connector_key]);
+
+  useEffect(() => {
+    if (!detail && !loading) return undefined;
+
+    lastFocusedRef.current = document.activeElement as HTMLElement | null;
+    closeButtonRef.current?.focus();
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onClose();
+      }
+
+      if (event.key === 'Tab' && drawerRef.current) {
+        const focusable = drawerRef.current.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        );
+        if (!focusable.length) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      lastFocusedRef.current?.focus();
+    };
+  }, [detail, loading, onClose]);
 
   const channelRows = detail?.campaign_pack?.channel_plan || [];
   const creativeAngles = detail?.campaign_pack?.ai_plan?.creative_angles || [];
@@ -88,19 +130,20 @@ const RecommendationDrawer: React.FC<Props> = ({
   const normalizedStatus = String(detail?.lifecycle_state || detail?.status || '').toUpperCase();
   const currentWorkflowIndex = Math.max(workflowSteps.findIndex((step) => step.key === normalizedStatus), 0);
   const confidenceValue = signalConfidencePercent(detail?.signal_confidence_pct, detail?.confidence);
+  const detailEvidenceClass = (detail as RecommendationDetail & { evidence_class?: string }).evidence_class;
   const heroSummary = explainInPlainGerman(
     detail?.decision_brief?.summary_sentence
     || detail?.reason
     || 'Kampagnenvorschlag aus aktueller Vorhersage und Fokusregion zur Prüfung und Freigabe.',
   );
-  const signalScoreLabel = normalizeGermanText(metricContractDisplayLabel(detail?.field_contracts, 'signal_score', 'Signal-Score'));
+  const signalScoreLabel = normalizeGermanText(metricContractDisplayLabel(detail?.field_contracts, 'signal_score', UI_COPY.signalScore));
   const signalScoreBadge = metricContractBadge(detail?.field_contracts, 'signal_score', 'Ranking-Signal');
   const signalScoreNote = metricContractNote(
     detail?.field_contracts,
     'signal_score',
     'Hilft beim Vergleichen und Priorisieren, ist aber keine Eintrittswahrscheinlichkeit.',
   );
-  const priorityScoreLabel = normalizeGermanText(metricContractDisplayLabel(detail?.field_contracts, 'priority_score', 'Prioritäts-Score'));
+  const priorityScoreLabel = normalizeGermanText(metricContractDisplayLabel(detail?.field_contracts, 'priority_score', UI_COPY.decisionPriority));
   const priorityScoreBadge = metricContractBadge(detail?.field_contracts, 'priority_score', 'Aktivierungs-Priorität');
   const priorityScoreNote = metricContractNote(
     detail?.field_contracts,
@@ -114,7 +157,7 @@ const RecommendationDrawer: React.FC<Props> = ({
     'signal_confidence_pct',
     'Beschreibt Signalsicherheit oder Agreement, nicht die Modellwahrscheinlichkeit.',
   );
-  const outcomeSignalLabel = normalizeGermanText(metricContractDisplayLabel(detail?.field_contracts, 'outcome_signal_score', 'Outcome-Score'));
+  const outcomeSignalLabel = normalizeGermanText(metricContractDisplayLabel(detail?.field_contracts, 'outcome_signal_score', 'Wirkungssignal aus Kundendaten'));
   const outcomeSignalBadge = metricContractBadge(detail?.field_contracts, 'outcome_signal_score', 'Outcome-Lernsignal');
   const outcomeSignalNote = metricContractNote(
     detail?.field_contracts,
@@ -148,15 +191,24 @@ const RecommendationDrawer: React.FC<Props> = ({
   if (!detail && !loading) return null;
 
   return (
-    <div className="drawer-overlay" role="dialog" aria-modal="true">
-      <div className="drawer-panel review-sheet">
+    <div className="drawer-overlay" role="presentation" onClick={onClose}>
+      <div
+        ref={drawerRef}
+        className="drawer-panel review-sheet"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        aria-describedby={summaryId}
+        aria-busy={loading}
+        onClick={(event) => event.stopPropagation()}
+      >
         <div className="drawer-header review-sheet-header">
           <div className="review-sheet-topline">
             <span className="campaign-status-badge" style={tone}>
               {detail?.status_label || workflowLabel(detail?.status) || 'Lädt'}
             </span>
             <span className="campaign-confidence-chip">
-              {detail?.region_codes_display?.join(', ') || detail?.region || 'National'}
+              {(detail?.region_codes_display?.join(', ') || detail?.region || 'National')} · {UI_COPY.stateLevelScope}
             </span>
             {detail?.updated_at && (
               <span className="campaign-confidence-chip">
@@ -164,20 +216,20 @@ const RecommendationDrawer: React.FC<Props> = ({
               </span>
             )}
           </div>
-          <button className="media-button secondary" type="button" onClick={onClose}>Schließen</button>
+          <button ref={closeButtonRef} className="media-button secondary" type="button" onClick={onClose} aria-label="Kampagnen-Detail schließen">Schließen</button>
         </div>
 
         {loading ? (
-          <div className="campaign-empty-board" style={{ color: 'var(--text-muted)' }}>Lade Kampagnenvorschlag…</div>
+          <div className="campaign-empty-board" role="status" aria-live="polite" style={{ color: 'var(--text-muted)' }}>Lade Kampagnenvorschlag…</div>
         ) : detail ? (
           <div className="review-sheet-stack">
             <section className="review-sheet-hero">
               <div className="review-sheet-main">
                 <span className="section-kicker">Kampagnendetail</span>
-                <h2 className="review-sheet-title">
+                <h2 id={titleId} className="review-sheet-title">
                   {normalizeGermanText(detail.display_title || detail.campaign_name || 'Kampagnenvorschlag')}
                 </h2>
-                <p className="review-sheet-copy">{heroSummary}</p>
+                <p id={summaryId} className="review-sheet-copy">{heroSummary}</p>
 
                 <div className="review-chip-row">
                   <span className="campaign-confidence-chip">
@@ -192,6 +244,11 @@ const RecommendationDrawer: React.FC<Props> = ({
                   <span className="campaign-confidence-chip">
                     {priorityScoreLabel} {formatPercent(detail.priority_score || detail.urgency_score || 0)}
                   </span>
+                  {detailEvidenceClass && (
+                    <span className="campaign-confidence-chip">
+                      {evidenceStatusLabel(detailEvidenceClass)}
+                    </span>
+                  )}
                   <span className="campaign-confidence-chip">
                     Lernstand {learningStateLabel(detail.learning_state)}
                   </span>
@@ -257,7 +314,7 @@ const RecommendationDrawer: React.FC<Props> = ({
               </aside>
             </section>
 
-            <section className="workflow-rail">
+            <section className="workflow-rail" aria-label="Workflow-Fortschritt">
               {workflowSteps.map((step, index) => {
                 const isCurrent = index === currentWorkflowIndex;
                 const isComplete = index < currentWorkflowIndex;
@@ -265,6 +322,7 @@ const RecommendationDrawer: React.FC<Props> = ({
                   <div
                     key={step.key}
                     className={`workflow-step${isCurrent ? ' is-current' : ''}${isComplete ? ' is-complete' : ''}`}
+                    aria-current={isCurrent ? 'step' : undefined}
                   >
                     <div className="workflow-step-index">0{index + 1}</div>
                     <div className="workflow-step-copy">
@@ -276,7 +334,7 @@ const RecommendationDrawer: React.FC<Props> = ({
               })}
             </section>
 
-            <section className="drawer-grid">
+            <section className="drawer-grid review-sheet-grid review-sheet-grid--primary">
               <div className="card review-card">
                 <h3 className="subsection-title">Überblick</h3>
                 <div className="review-stat-grid">
@@ -315,6 +373,14 @@ const RecommendationDrawer: React.FC<Props> = ({
                     <div className="review-body-copy">
                       <strong>{signalConfidenceLabel}</strong>: {signalConfidenceBadge}. {signalConfidenceNote}
                     </div>
+                    <div className="review-body-copy">
+                      <strong>{UI_COPY.stateLevelScope}</strong>: {COCKPIT_SEMANTICS.stateLevelScope.helper} {COCKPIT_SEMANTICS.noCityForecast.helper}
+                    </div>
+                    {detailEvidenceClass && (
+                      <div className="review-body-copy">
+                        <strong>Evidenzstatus</strong>: {evidenceStatusLabel(detailEvidenceClass)}. {evidenceStatusHelper(detailEvidenceClass)}
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -393,7 +459,7 @@ const RecommendationDrawer: React.FC<Props> = ({
               </div>
             </section>
 
-            <section className="drawer-grid">
+            <section className="drawer-grid review-sheet-grid review-sheet-grid--secondary">
               <div className="card review-card">
                 <h3 className="subsection-title">Kanalmix</h3>
                 <div style={{ display: 'grid', gap: 10, marginTop: 14 }}>
@@ -469,7 +535,7 @@ const RecommendationDrawer: React.FC<Props> = ({
                   </p>
                 </div>
                 <div className="review-sync-actions">
-                  <select className="media-input" value={connectorKey} onChange={(event) => setConnectorKey(event.target.value)} style={{ minWidth: 160 }}>
+                  <select aria-label="Zielsystem für Übergabe" className="media-input" value={connectorKey} onChange={(event) => setConnectorKey(event.target.value)} style={{ minWidth: 160 }}>
                     {connectorCatalog.map((connector) => (
                       <option key={connector.key} value={connector.key}>
                         {connector.label}
@@ -489,7 +555,7 @@ const RecommendationDrawer: React.FC<Props> = ({
 
               {syncPreview ? (
                 <div className="review-sync-stack">
-                  <div className="drawer-grid">
+                  <div className="drawer-grid review-sheet-grid review-sheet-grid--sync">
                     <div className="soft-panel review-panel-soft">
                       <div className="campaign-focus-label">Status</div>
                       <div className="review-sync-state" style={syncStateTone}>

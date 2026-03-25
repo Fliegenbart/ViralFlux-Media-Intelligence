@@ -1,5 +1,6 @@
 import React from 'react';
 
+import { COCKPIT_SEMANTICS, UI_COPY } from '../../lib/copy';
 import {
   BacktestResponse,
   MediaEvidenceResponse,
@@ -87,7 +88,7 @@ const EvidencePanel: React.FC<Props> = ({
         description="Wir laden gerade die Qualitätsdaten. Gleich siehst du wieder, was noch offen ist."
         tone="muted"
       >
-        <div className="workspace-note-card">Lade Qualität...</div>
+        <div className="workspace-note-card" role="status" aria-live="polite">Lade Qualität...</div>
       </OperatorSection>
     );
   }
@@ -111,6 +112,12 @@ const EvidencePanel: React.FC<Props> = ({
             <div className="workspace-note-list">
               <div className="workspace-note-card">
                 {workspaceStatus?.summary || 'Sobald Qualitätsdaten vorliegen, fassen wir hier den schnellsten Prüfpfad zusammen.'}
+              </div>
+              <div className="workspace-note-card">
+                <strong>{COCKPIT_SEMANTICS.eventProbability.label}:</strong> {COCKPIT_SEMANTICS.eventProbability.helper}
+              </div>
+              <div className="workspace-note-card">
+                <strong>{UI_COPY.stateLevelScope}:</strong> {COCKPIT_SEMANTICS.stateLevelScope.helper} {COCKPIT_SEMANTICS.noCityForecast.helper}
               </div>
             </div>
           </OperatorPanel>

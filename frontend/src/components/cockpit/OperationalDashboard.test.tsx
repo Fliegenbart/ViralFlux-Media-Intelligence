@@ -412,7 +412,7 @@ function buildRecommendations(): RegionalCampaignRecommendationsResponse {
 const noop = () => {};
 
 describe('OperationalDashboard', () => {
-  it('renders the executive summary and connected recommendation layers', () => {
+  it('renders the first-look operator summary with action, location and certainty', () => {
     render(
       <OperationalDashboard
         virus="Influenza A"
@@ -430,17 +430,24 @@ describe('OperationalDashboard', () => {
       />,
     );
 
-    expect(screen.getByText('Was solltest du jetzt tun?')).toBeInTheDocument();
-    expect(screen.getByText('Activate Berlin für Respiratory Core Demand.')).toBeInTheDocument();
-    expect(screen.getAllByText('Berlin bleibt aktuell auf Aktivieren mit 46 % Budgetanteil.').length).toBeGreaterThan(0);
-    expect(screen.getByText('Stufen nach Entscheidung')).toBeInTheDocument();
-    expect(screen.getByText('Empfehlungsansicht')).toBeInTheDocument();
-    expect(screen.getByText(/Event-Wahrscheinlichkeit ist die Forecast-Chance/i)).toBeInTheDocument();
-    expect(screen.getAllByText('Die Vorhersage liegt mit 81 % über der Schwelle für eine Aktivierung.').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Die Budget- und Freigabegrenzen sind aktuell erfüllt.').length).toBeGreaterThan(0);
+    expect(screen.getByText('Operative Entscheidung')).toBeInTheDocument();
+    expect(screen.getByText('Was passiert, wo musst du handeln und wie sicher ist das?')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Activate Berlin auf Bundesland-Level.' })).toBeInTheDocument();
+    expect(screen.getByText('Was passiert?')).toBeInTheDocument();
+    expect(screen.getByText('Wo musst du handeln?')).toBeInTheDocument();
+    expect(screen.getByText('Wie sicher ist das?')).toBeInTheDocument();
+    expect(screen.getByText('Top-Risiko-Regionen')).toBeInTheDocument();
+    expect(screen.getByText('Forecast / Ereigniswahrscheinlichkeit')).toBeInTheDocument();
+    expect(screen.getByText('Budget- / Portfolio-Allokation')).toBeInTheDocument();
+    expect(screen.getByText('Unsicherheit / Evidenz')).toBeInTheDocument();
+    expect(screen.getAllByText('Bundesland-Level').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Ranking-Signal').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Entscheidungs-Priorität').length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Kein City-Forecast/).length).toBeGreaterThan(0);
+    expect(screen.getByText('Mit Kundendaten gestützt')).toBeInTheDocument();
   });
 
-  it('updates the executive focus when the decision-stage filter changes', () => {
+  it('updates the first-look action card when the decision-stage filter changes', () => {
     render(
       <OperationalDashboard
         virus="Influenza A"
@@ -462,8 +469,57 @@ describe('OperationalDashboard', () => {
       target: { value: 'watch' },
     });
 
-    expect(screen.getByText('Watch Sachsen für Bronchial Recovery Support.')).toBeInTheDocument();
-    expect(screen.getByText('Empfehlungsansicht')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Watch Sachsen auf Bundesland-Level.' })).toBeInTheDocument();
+    expect(screen.getByText('Wo zuerst hinschauen?')).toBeInTheDocument();
+  });
+
+  it('supports keyboard navigation in the horizon tablist', () => {
+    const onHorizonChange = jest.fn();
+
+    render(
+      <OperationalDashboard
+        virus="Influenza A"
+        onVirusChange={noop}
+        horizonDays={7}
+        onHorizonChange={onHorizonChange}
+        weeklyBudget={120000}
+        forecast={buildForecast()}
+        allocation={buildAllocation()}
+        campaignRecommendations={buildRecommendations()}
+        loading={false}
+        onOpenRegions={noop}
+        onOpenCampaigns={noop}
+        onOpenEvidence={noop}
+      />,
+    );
+
+    const horizonTablist = screen.getByRole('tablist', { name: 'Zeitraum wählen' });
+    fireEvent.keyDown(horizonTablist, { key: 'ArrowLeft' });
+
+    expect(onHorizonChange).toHaveBeenCalledWith(5);
+  });
+
+  it('keeps the responsive operator layout hooks for top zone, filter row and supporting grid', () => {
+    const { container } = render(
+      <OperationalDashboard
+        virus="Influenza A"
+        onVirusChange={noop}
+        horizonDays={7}
+        onHorizonChange={noop}
+        weeklyBudget={120000}
+        forecast={buildForecast()}
+        allocation={buildAllocation()}
+        campaignRecommendations={buildRecommendations()}
+        loading={false}
+        onOpenRegions={noop}
+        onOpenCampaigns={noop}
+        onOpenEvidence={noop}
+      />,
+    );
+
+    expect(container.querySelector('.ops-top-zone')).toBeTruthy();
+    expect(container.querySelector('.ops-dashboard-grid--three-up')).toBeTruthy();
+    expect(container.querySelector('.operator-toolbar-selects')).toBeTruthy();
   });
 
   it('shows a stable empty state for no-model responses', () => {

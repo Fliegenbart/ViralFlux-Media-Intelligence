@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
 import { useTheme, useAuth } from '../App';
 import { apiFetch } from '../lib/api';
@@ -49,6 +49,8 @@ const AppLayout: React.FC<Props> = ({ children }) => {
   const navigate = useNavigate();
   const [pdfLoading, setPdfLoading] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const mobileToggleRef = useRef<HTMLButtonElement>(null);
+  const firstNavItemRef = useRef<HTMLButtonElement>(null);
 
   const isActive = (path: string) => location.pathname.startsWith(path);
   const currentSection = SECTION_META.find(({ path }) => location.pathname.startsWith(path)) || {
@@ -86,12 +88,33 @@ const AppLayout: React.FC<Props> = ({ children }) => {
     setMobileMenuOpen(false);
   };
 
+  useEffect(() => {
+    if (!mobileMenuOpen) {
+      mobileToggleRef.current?.focus();
+      return undefined;
+    }
+
+    firstNavItemRef.current?.focus();
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setMobileMenuOpen(false);
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [mobileMenuOpen]);
+
   return (
     <div className="app-shell app-shell--operator">
+      <a href="#main-content" className="skip-link">Direkt zum Inhalt springen</a>
       <div className="operator-shell">
         <button
+          type="button"
           className={`operator-backdrop ${mobileMenuOpen ? 'operator-backdrop--visible' : ''}`}
           onClick={() => setMobileMenuOpen(false)}
+          aria-label="Navigationshintergrund schließen"
           aria-hidden={!mobileMenuOpen}
           tabIndex={mobileMenuOpen ? 0 : -1}
         />
@@ -102,9 +125,9 @@ const AppLayout: React.FC<Props> = ({ children }) => {
           aria-label="Navigation Arbeitsansicht"
         >
           <div className="operator-sidebar__brand-row">
-            <Link to="/welcome" className="operator-brand-lockup" aria-label="ViralFlux Startseite">
-              <span className="operator-brand-lockup__mark" aria-hidden="true">VF</span>
-              <span className="operator-brand-lockup__copy">
+            <Link to="/welcome" className="operator-brand-lockup product-brand-lockup" aria-label="ViralFlux Startseite">
+              <span className="operator-brand-lockup__mark product-brand-mark" aria-hidden="true">VF</span>
+              <span className="operator-brand-lockup__copy product-brand-copy">
                 <span className="operator-brand-lockup__wordmark">ViralFlux</span>
                 <span className="operator-brand-lockup__subline">Media Intelligence</span>
               </span>
@@ -124,6 +147,8 @@ const AppLayout: React.FC<Props> = ({ children }) => {
               return (
                 <button
                   key={path}
+                  ref={path === PRIMARY_NAV_ITEMS[0].path ? firstNavItemRef : undefined}
+                  type="button"
                   onClick={() => handleNavClick(path)}
                   className={`operator-nav-item ${active ? 'active' : ''}`}
                   aria-current={active ? 'page' : undefined}
@@ -173,11 +198,13 @@ const AppLayout: React.FC<Props> = ({ children }) => {
         </aside>
 
         <div className="operator-stage">
-          <header className="operator-header">
+          <header className="operator-header surface-header">
             <div className="operator-header__topbar">
               <div className="operator-header__context">
                 <div className="operator-header__search-row">
                   <button
+                    ref={mobileToggleRef}
+                    type="button"
                     className="shell-mobile-toggle operator-mobile-toggle"
                     onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
                     aria-label={mobileMenuOpen ? 'Navigation schließen' : 'Navigation öffnen'}
@@ -230,14 +257,14 @@ const AppLayout: React.FC<Props> = ({ children }) => {
                 <div className="operator-header__kicker">{currentSection.kicker}</div>
                 <div className="operator-header__title-row">
                   <span className="operator-header__status-dot" aria-hidden="true" />
-                  <h1 className="operator-header__title">{currentSection.title}</h1>
+                  <h1 id="operator-page-title" className="operator-header__title">{currentSection.title}</h1>
                 </div>
                 <p className="operator-header__copy">{currentSection.description}</p>
               </div>
             </div>
           </header>
 
-          <main className="shell-main operator-main" id="main-content">
+          <main className="shell-main operator-main" id="main-content" tabIndex={-1} aria-labelledby="operator-page-title">
             <div className="shell-main-inner operator-main-inner">
               {children}
             </div>

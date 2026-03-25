@@ -1,6 +1,6 @@
 import React from 'react';
 
-import { UI_COPY } from '../../../lib/copy';
+import { COCKPIT_SEMANTICS, UI_COPY, evidenceStatusHelper } from '../../../lib/copy';
 import { normalizeGermanText } from '../../../lib/plainLanguage';
 import { BacktestResponse, BusinessValidationSummary, OutcomeLearningSummary, TruthCoverage } from '../../../types/media';
 import {
@@ -42,7 +42,7 @@ const TruthOutcomeSection: React.FC<Props> = ({
   const outcomeSignalLabel = metricContractDisplayLabel(
     outcomeLearning?.field_contracts,
     'outcome_signal_score',
-    'Outcome-Score',
+    'Wirkungssignal aus Kundendaten',
   );
   const outcomeSignalBadge = metricContractBadge(
     outcomeLearning?.field_contracts,
@@ -108,6 +108,9 @@ const TruthOutcomeSection: React.FC<Props> = ({
             <strong>{formatPercent(outcomeLearning?.outcome_signal_score)}</strong>
           </div>
         </div>
+        <div className="review-muted-copy" style={{ marginTop: 12 }}>
+          {truthStatus?.coverage_weeks ? evidenceStatusHelper('truth_backed') : COCKPIT_SEMANTICS.insufficientTruth.helper}
+        </div>
         <div className="review-chip-row">
           {(sourceStatusLabels.length ? sourceStatusLabels : ['Noch keine Pflichtfelder vollständig vorhanden']).map((item) => (
             <span key={item} className="step-chip">{normalizeGermanText(item)}</span>
@@ -158,6 +161,9 @@ const TruthOutcomeSection: React.FC<Props> = ({
           <p className="subsection-copy">
             Dieser Block zeigt, was aus importierten Kundendaten bereits gelernt wurde. Die Werte helfen bei der Priorisierung, sind aber keine Aussage über eine sichere Welle.
           </p>
+        </div>
+        <div className="review-muted-copy" style={{ marginTop: 12 }}>
+          {COCKPIT_SEMANTICS.insufficientTruth.helper}
         </div>
         <div className="metric-strip" style={{ marginTop: 16 }}>
           <div className="metric-box">

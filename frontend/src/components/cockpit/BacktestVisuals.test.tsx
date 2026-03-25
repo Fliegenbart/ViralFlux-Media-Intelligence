@@ -126,7 +126,7 @@ describe('wave outlook markers', () => {
 });
 
 describe('WaveOutlookPanel', () => {
-  it('renders the last observed label and freshness hint instead of claiming this is today', () => {
+  it('renders the last observed label, chart semantics and freshness hint instead of claiming this is today', () => {
     const result = buildResult([
       { date: '2026-01-12', real_qty: 1561, predicted_qty: 1089 },
       { date: '2026-01-19', real_qty: 1613, predicted_qty: 1566 },
@@ -150,6 +150,10 @@ describe('WaveOutlookPanel', () => {
 
     expect(screen.getByText('Letzte validierte Marktansicht')).toBeInTheDocument();
     expect(screen.getByText('Letzter Ist-Wert')).toBeInTheDocument();
+    expect(screen.getByText('Chart-Konventionen Markt-Rückblick')).toBeInTheDocument();
+    expect(screen.getByText('Truth / Ist-Wert')).toBeInTheDocument();
+    expect(screen.getByText('Forecast / Ausblick')).toBeInTheDocument();
+    expect(screen.getByText('Achsen-Hinweis:')).toBeInTheDocument();
     expect(screen.getByText(/Letzte Beobachtung: 23.02.2026/)).toBeInTheDocument();
     expect(screen.queryByText('Wir stehen hier')).not.toBeInTheDocument();
   });
@@ -194,7 +198,7 @@ describe('WaveSpreadPanel', () => {
 });
 
 describe('FocusRegionOutlookPanel', () => {
-  it('renders the focus-region headline with viruslage wording and target sentence', () => {
+  it('renders the focus-region headline with forecast semantics, labels and target sentence', () => {
     render(
       <FocusRegionOutlookPanel
         horizonDays={7}
@@ -215,6 +219,8 @@ describe('FocusRegionOutlookPanel', () => {
           change_pct: 18,
           trend: 'up',
           last_data_date: '2026-03-17 00:00:00',
+          quality_gate: { overall_passed: true, calibration_passed: false },
+          source_coverage: { sample_coverage_pct: 0.72 },
         }}
         backtest={{
           bundesland: 'BE',
@@ -234,9 +240,30 @@ describe('FocusRegionOutlookPanel', () => {
       />,
     );
 
-    expect(screen.getByText('Fokusregion in 7 Tagen')).toBeInTheDocument();
+    expect(screen.getByText('Forecast für Fokus-Bundesland')).toBeInTheDocument();
+    expect(screen.getByText('Chart-Konventionen Forecast')).toBeInTheDocument();
+    expect(screen.getByText('Truth / Ist-Wert')).toBeInTheDocument();
+    expect(screen.getByText('Unsicherheitsintervall')).toBeInTheDocument();
+    expect(screen.getByText('Quality Gate')).toBeInTheDocument();
+    expect(screen.getByText('Kalibrierung')).toBeInTheDocument();
+    expect(screen.getByText('Sample Coverage')).toBeInTheDocument();
+    expect(screen.getByText('Bundesland-Level')).toBeInTheDocument();
+    expect(screen.getByText('Kein Ranking-Signal')).toBeInTheDocument();
     expect(screen.getByText(/In 7 Tagen erwarten wir für Berlin einen Viruslage-Wert von ca. 165,0/)).toBeInTheDocument();
     expect(screen.getByText(/Letzter bestätigter Ist-Wert vom 17.03.2026/)).toBeInTheDocument();
     expect(screen.getByText(/Die Richtung ist/)).toBeInTheDocument();
+  });
+
+  it('renders a restrained empty state when no forecast data is available', () => {
+    render(
+      <FocusRegionOutlookPanel
+        horizonDays={7}
+        loading={false}
+        prediction={null}
+        backtest={null}
+      />,
+    );
+
+    expect(screen.getByText('Noch kein aktiver Forecast oder regionaler Rückblick für dieses Bundesland verfügbar.')).toBeInTheDocument();
   });
 });

@@ -1,5 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
 
+import CollapsibleSection from '../CollapsibleSection';
+import { COCKPIT_SEMANTICS, UI_COPY, evidenceStatusHelper, evidenceStatusLabel } from '../../lib/copy';
 import { explainInPlainGerman } from '../../lib/plainLanguage';
 import {
   RegionalAllocationRecommendation,
@@ -8,12 +10,15 @@ import {
   RegionalDecisionReasonTrace,
   RegionalForecastPrediction,
   RegionalForecastResponse,
+  MetricContract,
   StructuredReasonItem,
 } from '../../types/media';
 import {
   formatCurrency,
   formatDateTime,
   formatPercent,
+  metricContractDisplayLabel,
+  metricContractNote,
   VIRUS_OPTIONS,
 } from './cockpitUtils';
 import {
@@ -42,6 +47,10 @@ const HORIZON_OPTIONS = [3, 5, 7];
 const REGION_FILTER_ALL = 'ALL';
 const STAGE_FILTER_ALL = 'ALL';
 
+function classNames(...values: Array<string | false | null | undefined>) {
+  return values.filter(Boolean).join(' ');
+}
+
 function normalizeStage(value?: string | null): string {
   return String(value || '').trim().toLowerCase();
 }
@@ -54,57 +63,19 @@ function displayStage(value?: string | null): string {
   return value ? String(value) : 'Watch';
 }
 
-function stageTone(value?: string | null): React.CSSProperties {
+function stageBadgeTone(value?: string | null): string {
   const normalized = normalizeStage(value);
-  if (normalized === 'activate') {
-    return {
-      background: 'rgba(5, 150, 105, 0.12)',
-      color: 'var(--status-success)',
-      border: '1px solid rgba(5, 150, 105, 0.22)',
-    };
-  }
-  if (normalized === 'prepare') {
-    return {
-      background: 'rgba(245, 158, 11, 0.12)',
-      color: 'var(--status-warning)',
-      border: '1px solid rgba(245, 158, 11, 0.24)',
-    };
-  }
-  return {
-    background: 'rgba(10, 132, 255, 0.10)',
-    color: 'var(--status-info)',
-    border: '1px solid rgba(10, 132, 255, 0.2)',
-  };
+  if (normalized === 'activate') return 'badge-pill--success';
+  if (normalized === 'prepare') return 'badge-pill--warning';
+  return 'badge-pill--info';
 }
 
-function statusTone(value?: string | null): React.CSSProperties {
+function statusBadgeTone(value?: string | null): string {
   const normalized = String(value || '').trim().toLowerCase();
-  if (normalized.includes('release') || normalized === 'ready') {
-    return {
-      background: 'rgba(5, 150, 105, 0.12)',
-      color: 'var(--status-success)',
-      border: '1px solid rgba(5, 150, 105, 0.22)',
-    };
-  }
-  if (normalized.includes('review') || normalized.includes('guarded')) {
-    return {
-      background: 'rgba(245, 158, 11, 0.12)',
-      color: 'var(--status-warning)',
-      border: '1px solid rgba(245, 158, 11, 0.24)',
-    };
-  }
-  if (normalized.includes('block')) {
-    return {
-      background: 'rgba(239, 68, 68, 0.12)',
-      color: 'var(--status-danger)',
-      border: '1px solid rgba(239, 68, 68, 0.24)',
-    };
-  }
-  return {
-    background: 'rgba(148, 163, 184, 0.12)',
-    color: 'var(--text-secondary)',
-    border: '1px solid rgba(148, 163, 184, 0.2)',
-  };
+  if (normalized.includes('release') || normalized === 'ready') return 'badge-pill--success';
+  if (normalized.includes('review') || normalized.includes('guarded')) return 'badge-pill--warning';
+  if (normalized.includes('block')) return 'badge-pill--danger';
+  return '';
 }
 
 function formatFractionPercent(value?: number | null, digits = 0): string {
@@ -211,17 +182,7 @@ function focusedReasonText(
 
 function StageBadge({ value }: { value?: string | null }) {
   return (
-    <span
-      style={{
-        ...stageTone(value),
-        padding: '6px 10px',
-        borderRadius: 999,
-        fontSize: 12,
-        fontWeight: 800,
-        letterSpacing: '0.06em',
-        textTransform: 'uppercase',
-      }}
-    >
+    <span className={classNames('badge-pill', stageBadgeTone(value), 'ops-stage-badge')}>
       {displayStage(value)}
     </span>
   );
@@ -229,17 +190,81 @@ function StageBadge({ value }: { value?: string | null }) {
 
 function StatusBadge({ value }: { value?: string | null }) {
   return (
-    <span
-      style={{
-        ...statusTone(value),
-        padding: '6px 10px',
-        borderRadius: 999,
-        fontSize: 12,
-        fontWeight: 700,
-      }}
-    >
-      {value || '-'}
+    <span className={classNames('badge-pill', statusBadgeTone(value), 'ops-status-badge')}>
+      {evidenceStatusLabel(value)}
     </span>
+  );
+}
+
+function ScopeBadge({ children }: { children: React.ReactNode }) {
+  return <span className="step-chip ops-scope-badge">{children}</span>;
+}
+
+interface ChipTabOption<T extends string | number> {
+  value: T;
+  label: string;
+}
+
+function ChipTabGroup<T extends string | number>({
+  label,
+  selectedValue,
+  options,
+  onChange,
+}: {
+  label: string;
+  selectedValue: T;
+  options: ChipTabOption<T>[];
+  onChange: (value: T) => void;
+}) {
+  const tabListId = useId();
+  const buttonRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const activeIndex = Math.max(options.findIndex((option) => option.value === selectedValue), 0);
+
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (!['ArrowRight', 'ArrowLeft', 'Home', 'End'].includes(event.key)) return;
+    event.preventDefault();
+
+    let nextIndex = activeIndex;
+    if (event.key === 'ArrowRight') nextIndex = (activeIndex + 1) % options.length;
+    if (event.key === 'ArrowLeft') nextIndex = (activeIndex - 1 + options.length) % options.length;
+    if (event.key === 'Home') nextIndex = 0;
+    if (event.key === 'End') nextIndex = options.length - 1;
+
+    const nextOption = options[nextIndex];
+    if (!nextOption) return;
+    onChange(nextOption.value);
+    buttonRefs.current[nextIndex]?.focus();
+  };
+
+  return (
+    <div
+      id={tabListId}
+      role="tablist"
+      aria-label={label}
+      className="operator-chip-rail"
+      onKeyDown={handleKeyDown}
+    >
+      {options.map((option, index) => {
+        const selected = option.value === selectedValue;
+        return (
+          <button
+            key={String(option.value)}
+            ref={(node) => {
+              buttonRefs.current[index] = node;
+            }}
+            type="button"
+            role="tab"
+            aria-selected={selected}
+            aria-controls={undefined}
+            tabIndex={selected ? 0 : -1}
+            onClick={() => onChange(option.value)}
+            className={`tab-chip ${selected ? 'active' : ''}`}
+          >
+            {option.label}
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
@@ -259,6 +284,9 @@ const OperationalDashboard: React.FC<Props> = ({
 }) => {
   const [selectedRegion, setSelectedRegion] = useState<string>(REGION_FILTER_ALL);
   const [selectedStage, setSelectedStage] = useState<string>(STAGE_FILTER_ALL);
+  const regionTableId = useId();
+  const allocationTableId = useId();
+  const detailSectionId = useId();
 
   const regionOptions = (forecast?.predictions || []).map((item) => ({
     code: item.bundesland,
@@ -329,6 +357,58 @@ const OperationalDashboard: React.FC<Props> = ({
     leadCampaign?.recommendation_rationale?.why?.[0],
   ]);
   const topBudgetShare = leadAllocation?.suggested_budget_share || leadCampaign?.suggested_budget_share || 0;
+  const topRiskRegions = (filteredPredictions.length > 0 ? filteredPredictions : decisionRanked).slice(0, 3);
+  const forecastFieldContracts = (focusedPrediction as ({ field_contracts?: Record<string, MetricContract> } & RegionalForecastPrediction) | null)?.field_contracts;
+  const eventProbabilityLabel = metricContractDisplayLabel(
+    forecastFieldContracts,
+    'event_probability',
+    'Event-Wahrscheinlichkeit',
+  );
+  const eventProbabilityNote = metricContractNote(
+    forecastFieldContracts,
+    'event_probability',
+    'Beschreibt die kalibrierte Wahrscheinlichkeit für das definierte Forecast-Ereignis.',
+  );
+  const rankingSignalLabel = metricContractDisplayLabel(
+    forecastFieldContracts,
+    'signal_score',
+    'Ranking-Signal',
+  );
+  const rankingSignalNote = metricContractNote(
+    forecastFieldContracts,
+    'signal_score',
+    'Hilft beim Vergleichen und Priorisieren, ist aber keine Eintrittswahrscheinlichkeit.',
+  );
+  const priorityScoreLabel = metricContractDisplayLabel(
+    forecastFieldContracts,
+    'priority_score',
+    UI_COPY.decisionPriority,
+  );
+  const rankingSignalValue = leadPrediction?.decision?.decision_score ?? leadPrediction?.priority_score ?? leadAllocation?.allocation_score ?? null;
+  const leadEvidenceLabel = evidenceStatusLabel(leadEvidence);
+  const leadEvidenceHelper = evidenceStatusHelper(leadEvidence);
+  const leadSpendGateLabel = evidenceStatusLabel(leadSpendGate);
+  const leadSpendGateHelper = evidenceStatusHelper(leadSpendGate);
+  const leadActionTitle = `${displayStage(leadStage)} ${leadRegionName} auf ${UI_COPY.stateLevelScope}.`;
+  const leadActionMeta = (() => {
+    if (normalizeStage(leadStage) === 'activate') {
+      return 'Jetzt zuerst den Aktivierungsfall und die Budgetfreigabe für dieses Bundesland prüfen.';
+    }
+    if (normalizeStage(leadStage) === 'prepare') {
+      return 'Jetzt zuerst den Vorbereitungsfall schärfen und Guardrails prüfen.';
+    }
+    return 'Aktuell zuerst beobachten, Evidenz prüfen und keinen zu präzisen Aktivierungsanschein erzeugen.';
+  })();
+  const uncertaintySummary = focusedReasonText(focusedPrediction, focusedAllocation);
+  const forecastSummary = firstReasonLine([
+    focusedPrediction?.decision?.explanation_summary_detail,
+    focusedPrediction?.decision?.explanation_summary,
+    focusedPrediction?.reason_trace?.why_details?.[0],
+    focusedPrediction?.reason_trace?.why?.[0],
+  ]) || 'Für die Fokusregion liegt aktuell noch keine kurze Forecast-Zusammenfassung vor.';
+  const riskSummary = topRiskRegions.length > 0
+    ? topRiskRegions.map((item) => item.bundesland_name).join(', ')
+    : 'Aktuell keine priorisierten Bundesländer im Filter.';
 
   const stageGroups = [
     {
@@ -350,56 +430,49 @@ const OperationalDashboard: React.FC<Props> = ({
       items: stageContextPredictions.filter((item) => normalizeStage(item.decision_label) === 'watch').slice(0, 3),
     },
   ];
+  const virusOptions = useMemo(
+    () => VIRUS_OPTIONS.map((option) => ({ value: option, label: option })),
+    [],
+  );
+  const horizonOptions = useMemo(
+    () => supportedHorizons.map((option) => ({ value: option, label: `${option} Tage` })),
+    [supportedHorizons],
+  );
+
+  const handleInteractiveRowKeyDown = (event: React.KeyboardEvent<HTMLElement>, nextRegion: string) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      setSelectedRegion(nextRegion);
+    }
+  };
 
   if (loading && !forecast && !allocation && !campaignRecommendations) {
-    return <div className="card" style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>Lade operatives Dashboard...</div>;
+    return <div className="card" role="status" aria-live="polite" style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>Lade operatives Dashboard...</div>;
   }
 
   return (
     <div className="page-stack operator-page">
       <OperatorSection
         kicker="Operational Dashboard"
-        title="Operative Lageführung"
-        description="Forecast, Budgetlogik und Kampagnenimpulse bleiben hier in einem kompakten Arbeitsraum gebündelt."
+        title="Operative Entscheidung"
+        description="Hier ordnen wir die Lage auf Bundesland-Level so, dass du sofort siehst, was passiert, wo du handeln musst und wie sicher das Signal ist."
         tone="muted"
         className="operator-toolbar-shell"
       >
         <div className="operator-toolbar-grid">
-          <div className="operator-toolbar-controls">
-            <div className="ops-filter-group">
-              <span className="ops-filter-label">Virus</span>
-              <OperatorChipRail>
-                {VIRUS_OPTIONS.map((option) => (
-                  <button
-                    key={option}
-                    type="button"
-                    onClick={() => onVirusChange(option)}
-                    className={`tab-chip ${option === virus ? 'active' : ''}`}
-                  >
-                    {option}
-                  </button>
-                ))}
-              </OperatorChipRail>
-            </div>
-
-            <div className="operator-toolbar-selects">
+            <div className="operator-toolbar-controls">
               <div className="ops-filter-group">
-                <span className="ops-filter-label">Zeitraum</span>
-                <OperatorChipRail>
-                  {supportedHorizons.map((option) => (
-                    <button
-                      key={option}
-                      type="button"
-                      onClick={() => onHorizonChange(option)}
-                      className={`tab-chip ${option === horizonDays ? 'active' : ''}`}
-                    >
-                      {option} Tage
-                    </button>
-                  ))}
-                </OperatorChipRail>
+                <span className="ops-filter-label" id="ops-virus-filter-label">Virus</span>
+                <ChipTabGroup label="Virus wählen" selectedValue={virus} options={virusOptions} onChange={onVirusChange} />
               </div>
 
-              <label className="ops-filter-group">
+              <div className="operator-toolbar-selects">
+                <div className="ops-filter-group">
+                  <span className="ops-filter-label" id="ops-horizon-filter-label">Zeitraum</span>
+                  <ChipTabGroup label="Zeitraum wählen" selectedValue={horizonDays} options={horizonOptions} onChange={onHorizonChange} />
+                </div>
+
+                <label className="ops-filter-group">
                 <span className="ops-filter-label">Region</span>
                 <select
                   value={selectedRegion}
@@ -461,40 +534,63 @@ const OperationalDashboard: React.FC<Props> = ({
       ) : (
         <>
           <OperatorSection
-            kicker="Operative Empfehlung"
-            title="Was solltest du jetzt tun?"
-            description={`${leadRegionName} führt die aktuelle Lage an. Der Bereich bleibt in dieser Ansicht bewusst auf Entscheidung, Timing und nächste Arbeitsaktion verdichtet.`}
+            kicker="Erster Blick"
+            title="Was passiert, wo musst du handeln und wie sicher ist das?"
+            description="Die Top-Zone verdichtet den aktuellen Scope zu einer klaren Operator-Entscheidung. Alles darunter dient nur noch zum Einordnen und Prüfen."
             tone="accent"
-            className="decision-header hero-card"
+            className="decision-header hero-card ops-top-section"
           >
-            <div className="ops-exec-grid">
-              <div className="hero-main">
-                <div className="hero-status-row">
+            <OperatorChipRail className="operator-toolbar-meta">
+              <ScopeBadge>Scope {virus}</ScopeBadge>
+              <ScopeBadge>Horizont {horizonDays} Tage</ScopeBadge>
+              <ScopeBadge>{UI_COPY.stateLevelScope}</ScopeBadge>
+              <ScopeBadge>Forecast {formatDateTime(forecast?.generated_at)}</ScopeBadge>
+            </OperatorChipRail>
+
+            <div className="ops-top-zone">
+              <section className="ops-primary-action-card" aria-labelledby="ops-primary-action-title">
+                <div className="ops-primary-action-card__header">
+                  <div>
+                    <div className="ops-panel-title">Empfohlene Aktion</div>
+                    <h2 id="ops-primary-action-title" className="ops-primary-action-card__title">
+                      {leadActionTitle}
+                    </h2>
+                  </div>
                   <StageBadge value={leadStage} />
-                  <span className="campaign-confidence-chip">Zeitraum {horizonDays} Tage</span>
-                  <span className="campaign-confidence-chip">Fokusregion {leadRegionName}</span>
                 </div>
-                <div className="section-heading" style={{ gap: 10 }}>
-                  <h1 className="hero-title" style={{ margin: 0 }}>
-                    {displayStage(leadStage)} {leadRegionName} für {leadProductCluster}.
-                  </h1>
-                  <p className="hero-context" style={{ margin: 0 }}>
-                    {leadCampaignWhy || `${leadRegionName} führt das operative Regionenranking an und erhält im aktuellen Budget- und Evidenzrahmen die stärkste Aktivierungsempfehlung.`}
-                  </p>
-                  <p className="hero-copy" style={{ margin: 0 }}>
-                    Keyword-Fokus: {leadKeywordCluster}. Signal-Sicherheit {formatFractionPercent(leadConfidence, 0)}. Empfohlene Budgetspitze {formatCurrency(leadBudget)}.
-                  </p>
+                <div className="ops-primary-action-card__body">
+                  <div className="ops-question-block">
+                    <span className="ops-question-block__label">Was passiert?</span>
+                    <p className="ops-question-block__value">
+                      {forecastSummary}
+                    </p>
+                  </div>
+                  <div className="ops-question-block">
+                    <span className="ops-question-block__label">Wo musst du handeln?</span>
+                    <p className="ops-question-block__value">
+                      {leadRegionName} ist im gewählten Scope das vorderste Bundesland und trägt aktuell den ersten Arbeitsfall für {leadProductCluster}.
+                    </p>
+                  </div>
+                  <div className="ops-question-block">
+                    <span className="ops-question-block__label">Wie sicher ist das?</span>
+                    <p className="ops-question-block__value">
+                      {uncertaintySummary}
+                    </p>
+                  </div>
+                  <div className="ops-primary-action-card__meta">
+                    <span>Keyword-Fokus: {leadKeywordCluster}</span>
+                    <span>Empfohlene Budgetspitze: {formatCurrency(leadBudget)}</span>
+                    <span>{leadActionMeta}</span>
+                  </div>
                 </div>
-                <OperatorChipRail className="review-chip-row">
-                  <span className="step-chip">Aktivieren {activateCount}</span>
-                  <span className="step-chip">Vorbereiten {prepareCount}</span>
-                  <span className="step-chip">Beobachten {watchCount}</span>
-                  <span className="step-chip">Top-Budgetanteil {formatFractionPercent(topBudgetShare, 1)}</span>
-                  <span className="step-chip">Evidenzstatus {leadEvidence}</span>
+                <OperatorChipRail>
+                  <ScopeBadge>Top-Budgetanteil {formatFractionPercent(topBudgetShare, 1)}</ScopeBadge>
+                  <ScopeBadge>Evidenz {leadEvidenceLabel}</ScopeBadge>
+                  <ScopeBadge>Spend-Status {leadSpendGateLabel}</ScopeBadge>
                 </OperatorChipRail>
                 <div className="action-row">
                   <button className="media-button" type="button" onClick={() => onOpenRegions(focusedRegionCode || undefined)}>
-                    Fokusregion öffnen
+                    Fokus-Bundesland öffnen
                   </button>
                   <button className="media-button secondary" type="button" onClick={onOpenCampaigns}>
                     Kampagnen prüfen
@@ -503,25 +599,60 @@ const OperationalDashboard: React.FC<Props> = ({
                     Evidenz prüfen
                   </button>
                 </div>
-              </div>
+              </section>
 
-              <OperatorPanel eyebrow="Kurzüberblick" tone="muted">
-                <div className="operator-stat-grid ops-summary-grid">
-                  <OperatorStat label="Budget allokiert" value={formatCurrency(allocation?.summary?.total_budget_allocated)} tone="accent" />
-                  <OperatorStat label="Signal-Sicherheit" value={formatFractionPercent(leadConfidence, 0)} />
-                  <OperatorStat label="Event-Wahrscheinlichkeit" value={formatFractionPercent(leadPrediction?.event_probability_calibrated, 0)} />
-                  <OperatorStat label="Spend-Status" value={leadSpendGate || '-'} />
-                </div>
-                <div className="soft-panel" style={{ padding: 14, display: 'grid', gap: 8 }}>
-                  <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Warum diese Lage jetzt wichtig ist</div>
-                  <div style={{ fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-                    {firstReasonLine([
-                      focusedPrediction?.decision?.explanation_summary_detail,
-                      focusedPrediction?.decision?.explanation_summary,
-                    ]) || 'Die operative Einordnung kombiniert Vorhersage, Datenfrische, Quellenabgleich und Freigabe-Regeln.'}
+              <div className="ops-top-stack">
+                <OperatorPanel eyebrow="Aktueller Scope" title="Operator Summary" tone="muted">
+                  <div className="operator-stat-grid ops-summary-grid">
+                    <OperatorStat label="Hauptsignal" value={displayStage(leadStage)} meta={`${leadRegionName} · ${UI_COPY.stateLevelScope}`} tone="accent" />
+                    <OperatorStat label={eventProbabilityLabel} value={formatFractionPercent(leadPrediction?.event_probability_calibrated, 0)} meta="Forecast-Ereignis" />
+                    <OperatorStat label="Signal-Sicherheit" value={formatFractionPercent(leadConfidence, 0)} meta="Belastbarkeit des Signals" />
+                    <OperatorStat label="Budget allokiert" value={formatCurrency(allocation?.summary?.total_budget_allocated)} meta="Aktueller Scope" />
                   </div>
-                  <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-                    <strong style={{ color: 'var(--text-primary)' }}>So sind die Zahlen gemeint:</strong> Event-Wahrscheinlichkeit ist die Forecast-Chance für das definierte Ereignis. Prioritäts-Score ordnet Regionen. Signal-Sicherheit zeigt, wie belastbar das Signal ist.
+                </OperatorPanel>
+
+                <OperatorPanel eyebrow="Top-Risiko-Regionen" title="Wo zuerst hinschauen?" tone="muted">
+                  <div className="ops-region-list" aria-label="Top-Risiko-Regionen">
+                    {topRiskRegions.map((item) => (
+                      <button
+                        key={item.bundesland}
+                  type="button"
+                  className="campaign-list-card"
+                  onClick={() => setSelectedRegion(item.bundesland)}
+                  aria-pressed={selectedRegion === item.bundesland}
+                >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+                          <div style={{ textAlign: 'left' }}>
+                            <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-primary)' }}>
+                              {item.bundesland_name}
+                            </div>
+                            <div className="ops-row-meta">
+                              {UI_COPY.stateLevelScope} · Rang #{item.decision_rank ?? item.rank ?? '-'}
+                            </div>
+                          </div>
+                          <div style={{ textAlign: 'right' }}>
+                            <div className="ops-number-emphasis">{formatFractionPercent(item.event_probability_calibrated, 0)}</div>
+                            <div className="ops-row-meta">{displayStage(item.decision_label)}</div>
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                  <div className="workspace-note-card">
+                    {riskSummary}
+                  </div>
+                </OperatorPanel>
+
+                <OperatorPanel eyebrow="Unsicherheit" title="Wie sicher ist das Signal?" tone="muted">
+                  <div className="ops-confidence-card">
+                    <div className="ops-confidence-card__row">
+                      <span className="ops-confidence-card__label">{eventProbabilityLabel}</span>
+                      <strong className="ops-number-emphasis">{formatFractionPercent(leadPrediction?.event_probability_calibrated, 0)}</strong>
+                    </div>
+                    <p>{eventProbabilityNote}</p>
+                  </div>
+                  <div className="workspace-note-card">
+                    <strong>{COCKPIT_SEMANTICS.uncertainty.badge}:</strong> {uncertaintySummary}
                   </div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                     <StatusBadge value={leadSpendGate || 'observe_only'} />
@@ -530,376 +661,381 @@ const OperationalDashboard: React.FC<Props> = ({
                       <StatusBadge value={focusedAllocation.budget_release_recommendation} />
                     )}
                   </div>
-                </div>
-              </OperatorPanel>
+                </OperatorPanel>
+              </div>
             </div>
           </OperatorSection>
 
-          <section className="ops-dashboard-grid">
+          <section className="ops-dashboard-grid ops-dashboard-grid--three-up">
             <OperatorPanel
-              title="Stufen nach Entscheidung"
-              description="Verteilung der Regionen nach Entscheidungsrang. Die Reihenfolge folgt nicht nur der Event-Wahrscheinlichkeit, sondern dem gesamten Entscheidungsmodell."
+              title="Forecast / Ereigniswahrscheinlichkeit"
+              description={`Hier trennen wir klar zwischen Forecast-Ereignis, ${COCKPIT_SEMANTICS.rankingSignal.label} und ${COCKPIT_SEMANTICS.decisionPriority.label}. ${COCKPIT_SEMANTICS.eventProbability.label} beschreibt das Forecast-Ereignis, nicht den Rang.`}
             >
-              <div className="ops-stage-grid">
-                {stageGroups.map((group) => (
-                  <div key={group.key} className="soft-panel" style={{ padding: 16, display: 'grid', gap: 12 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                      <StageBadge value={group.label} />
-                      <strong style={{ fontSize: 24, color: 'var(--text-primary)' }}>{group.count}</strong>
+              <div className="ops-supporting-metrics">
+                <div className="ops-signal-card ops-signal-card--probability">
+                  <span className="ops-signal-card__label">{eventProbabilityLabel}</span>
+                  <strong>{formatFractionPercent(leadPrediction?.event_probability_calibrated, 0)}</strong>
+                  <p>{eventProbabilityNote}</p>
+                </div>
+                <div className="ops-signal-card">
+                  <span className="ops-signal-card__label">{rankingSignalLabel}</span>
+                  <strong>{formatScore(rankingSignalValue, 2)}</strong>
+                  <p>{rankingSignalNote}</p>
+                </div>
+                <div className="ops-signal-card">
+                  <span className="ops-signal-card__label">{priorityScoreLabel}</span>
+                  <strong>{formatScore(leadPrediction?.priority_score, 2)}</strong>
+                  <p>{COCKPIT_SEMANTICS.decisionPriority.helper}</p>
+                </div>
+              </div>
+
+              <div className="workspace-note-card">
+                <strong>{UI_COPY.stateLevelScope}:</strong> {COCKPIT_SEMANTICS.stateLevelScope.helper} <strong>{UI_COPY.noCityForecast}:</strong> {COCKPIT_SEMANTICS.noCityForecast.helper}
+              </div>
+
+              <div className="ops-region-list">
+                {topRiskRegions.map((item) => (
+                  <button
+                    key={`forecast-${item.bundesland}`}
+                    type="button"
+                    className="campaign-list-card"
+                    onClick={() => setSelectedRegion(item.bundesland)}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+                      <div style={{ textAlign: 'left' }}>
+                        <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-primary)' }}>{item.bundesland_name}</div>
+                        <div className="ops-row-meta">
+                          {displayStage(item.decision_label)} · {item.trend} · {formatPercent(item.change_pct, 0)}
+                        </div>
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        <div className="ops-number-emphasis">{formatFractionPercent(item.event_probability_calibrated, 0)}</div>
+                        <div className="ops-row-meta">{COCKPIT_SEMANTICS.eventProbability.badge}</div>
+                      </div>
                     </div>
-                    <div className="ops-progress-track">
-                      <div
-                        className={`ops-progress-fill ops-progress-${group.key}`}
-                        style={{ width: `${Math.max((group.count / totalContextRegions) * 100, group.count > 0 ? 8 : 0)}%` }}
-                      />
-                    </div>
-                    <div style={{ display: 'grid', gap: 8 }}>
-                      {group.items.length > 0 ? group.items.map((item) => (
-                        <button
-                          key={`${group.key}-${item.bundesland}`}
-                          type="button"
-                          className="campaign-list-card"
-                          onClick={() => setSelectedRegion(item.bundesland)}
-                          style={{ textAlign: 'left' }}
-                        >
-                          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
-                            <div>
-                              <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>{item.bundesland_name}</div>
-                              <div style={{ marginTop: 4, fontSize: 12, color: 'var(--text-muted)' }}>
-                                Entscheidungsrang #{item.decision_rank ?? item.rank ?? '-'}
-                              </div>
-                            </div>
-                            <div style={{ textAlign: 'right' }}>
-                              <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--accent-violet)' }}>
-                                {formatFractionPercent(item.event_probability_calibrated, 0)}
-                              </div>
-                              <div style={{ marginTop: 4, fontSize: 12, color: 'var(--text-muted)' }}>
-                                {formatPercent(item.change_pct, 0)}
-                              </div>
-                            </div>
-                          </div>
-                        </button>
-                      )) : (
-                        <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Keine Regionen in diesem Bucket.</div>
-                      )}
-                    </div>
-                  </div>
+                  </button>
                 ))}
               </div>
             </OperatorPanel>
 
             <OperatorPanel
-              title="Sicherheit & Unsicherheit"
-              description="Hier siehst du, warum eine Region oben liegt und wo wir noch Unsicherheit sehen."
+              title="Budget- / Portfolio-Allokation"
+              description="Hier siehst du die Budgetentscheidung getrennt vom Forecast. Das Budget folgt der Priorisierung, ist aber nicht identisch mit der Event-Wahrscheinlichkeit."
             >
-              {focusedPrediction ? (
-                <div style={{ display: 'grid', gap: 16 }}>
-                  <div className="operator-stat-grid metric-strip">
-                    <OperatorStat label="Forecast-Sicherheit" value={formatFractionPercent(focusedPrediction.decision?.forecast_confidence, 0)} />
-                    <OperatorStat label="Datenfrische" value={formatFractionPercent(focusedPrediction.decision?.source_freshness_score, 0)} />
-                    <OperatorStat label="Revisionsrisiko" value={formatFractionPercent(focusedPrediction.decision?.source_revision_risk, 0)} />
-                    <OperatorStat label="Quellenabgleich" value={formatFractionPercent(focusedPrediction.decision?.cross_source_agreement_score, 0)} />
-                  </div>
-                  <div className="soft-panel" style={{ padding: 16, display: 'grid', gap: 10 }}>
-                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Fokusregion</div>
-                    <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary)' }}>
-                      {focusedPrediction.bundesland_name}
+              <div className="operator-stat-grid metric-strip">
+                <OperatorStat label="Budget allokiert" value={formatCurrency(allocation?.summary?.total_budget_allocated)} tone="accent" />
+                <OperatorStat label="Top-Budgetanteil" value={formatFractionPercent(topBudgetShare, 1)} />
+                <OperatorStat label="Empfohlene Spitze" value={formatCurrency(leadBudget)} />
+                <OperatorStat label="Spend-Status" value={leadSpendGate || '-'} />
+              </div>
+
+              <div className="workspace-note-card">
+                {focusedAllocation
+                  ? `${focusedAllocation.bundesland_name} erhält im aktuellen Scope ${formatCurrency(focusedAllocation.suggested_budget_amount)} bei ${formatFractionPercent(focusedAllocation.suggested_budget_share, 1)} Budgetanteil.`
+                  : 'Für den aktuellen Fokus liegt noch keine Budgetempfehlung vor.'}
+              </div>
+
+              <div className="ops-region-list">
+                {filteredAllocation.slice(0, 3).map((item) => (
+                  <button
+                    key={`allocation-${item.bundesland}`}
+                    type="button"
+                    className="campaign-list-card"
+                    onClick={() => setSelectedRegion(item.bundesland)}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+                      <div style={{ textAlign: 'left' }}>
+                        <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-primary)' }}>{item.bundesland_name}</div>
+                        <div className="ops-row-meta">
+                          {item.products?.join(', ') || 'GELO Portfolio'} · {displayStage(item.recommended_activation_level)}
+                        </div>
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        <div className="ops-number-emphasis">{formatCurrency(item.suggested_budget_amount)}</div>
+                        <div className="ops-row-meta">{formatFractionPercent(item.suggested_budget_share, 1)} Anteil</div>
+                      </div>
                     </div>
-                    <div style={{ fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-                      {firstReasonLine([
-                        focusedPrediction.decision?.explanation_summary_detail,
-                        focusedPrediction.decision?.explanation_summary,
-                      ])}
-                    </div>
-                    <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-                      Unsicherheitskompakt: <strong style={{ color: 'var(--text-primary)' }}>{focusedReasonText(focusedPrediction, focusedAllocation)}</strong>
-                    </div>
-                  </div>
-                  <div className="ops-rationale-grid">
-                    <div className="soft-panel" style={{ padding: 16 }}>
-                      <div className="ops-panel-title">Begründungslinie</div>
-                      <ul className="ops-rationale-list">
-                        {traceSectionLines(
-                          focusedPrediction.reason_trace?.why_details,
-                          focusedPrediction.reason_trace?.why,
-                        ).map((item) => (
-                          <li key={item}>{explainInPlainGerman(item)}</li>
-                        ))}
-                      </ul>
-                    </div>
-                    <div className="soft-panel" style={{ padding: 16 }}>
-                      <div className="ops-panel-title">Unsicherheiten</div>
-                      <ul className="ops-rationale-list">
-                        {traceSectionLines(
-                          focusedPrediction.reason_trace?.uncertainty_details,
-                          focusedPrediction.reason_trace?.uncertainty,
-                        ).length > 0 ? (
-                          traceSectionLines(
-                            focusedPrediction.reason_trace?.uncertainty_details,
-                            focusedPrediction.reason_trace?.uncertainty,
-                          ).map((item) => <li key={item}>{explainInPlainGerman(item)}</li>)
-                        ) : (
-                          <li>Keine zusätzlichen Unsicherheiten markiert.</li>
-                        )}
-                      </ul>
-                    </div>
-                  </div>
+                  </button>
+                ))}
+              </div>
+            </OperatorPanel>
+
+            <OperatorPanel
+              title="Unsicherheit / Evidenz"
+              description="Unsicherheit wird nie nur farblich gezeigt. Hier steht immer auch der kurze Text, warum das Signal belastbar ist oder wo es noch kippen kann."
+            >
+              <div className="operator-stat-grid metric-strip">
+                <OperatorStat label="Forecast-Sicherheit" value={formatFractionPercent(focusedPrediction?.decision?.forecast_confidence, 0)} />
+                <OperatorStat label="Datenfrische" value={formatFractionPercent(focusedPrediction?.decision?.source_freshness_score, 0)} />
+                <OperatorStat label="Revisionsrisiko" value={formatFractionPercent(focusedPrediction?.decision?.source_revision_risk, 0)} />
+                <OperatorStat label="Quellenabgleich" value={formatFractionPercent(focusedPrediction?.decision?.cross_source_agreement_score, 0)} />
+              </div>
+
+              <div className="workspace-note-list">
+                <div className="workspace-note-card">
+                  <strong>Warum liegt {leadRegionName} vorne?</strong> {forecastSummary}
                 </div>
-              ) : (
-                <div style={{ color: 'var(--text-muted)' }}>Wähle eine Region oder passe die Filter an, um die Sicherheits-Erklärung zu sehen.</div>
-              )}
+                <div className="workspace-note-card">
+                  <strong>{COCKPIT_SEMANTICS.uncertainty.label}:</strong> {uncertaintySummary}
+                </div>
+                <div className="workspace-note-card">
+                  <strong>Evidenzstatus:</strong> {leadEvidenceLabel}. <strong>Spend-Status:</strong> {leadSpendGateLabel}.
+                  {leadEvidenceHelper ? ` ${leadEvidenceHelper}` : ''}{leadSpendGateHelper ? ` ${leadSpendGateHelper}` : ''}
+                </div>
+              </div>
             </OperatorPanel>
           </section>
 
-          <section className="ops-panel-grid">
-            <OperatorPanel
-              title="Regionen-Ranking"
-              description="Operative Priorisierung nach Entscheidungsrang mit Event-Wahrscheinlichkeit, Trend und erster Begründung."
-            >
-              <div className="ops-table-wrap">
-                <table className="ops-table">
-                  <thead>
-                    <tr>
-                      <th>#</th>
-                      <th>Region</th>
-                      <th>Stufe</th>
-                      <th>Event-Wahrscheinlichkeit</th>
-                      <th>Trend</th>
-                      <th>Prioritäts-Score</th>
-                      <th>Forecast-Sicherheit</th>
-                      <th>Warum jetzt</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredPredictions.length > 0 ? filteredPredictions.map((item) => (
-                      <tr key={item.bundesland} onClick={() => setSelectedRegion(item.bundesland)}>
-                        <td>{item.decision_rank ?? item.rank ?? '-'}</td>
-                        <td>
-                          <strong>{item.bundesland_name}</strong>
-                          <div className="ops-row-meta">{item.bundesland}</div>
-                        </td>
-                        <td>
-                          <StageBadge value={item.decision_label} />
-                        </td>
-                        <td>{formatFractionPercent(item.event_probability_calibrated, 0)}</td>
-                        <td>
-                          <div>{item.trend}</div>
-                          <div className="ops-row-meta">{formatPercent(item.change_pct, 0)}</div>
-                        </td>
-                        <td>{formatScore(item.priority_score)}</td>
-                        <td>{formatFractionPercent(item.decision?.forecast_confidence, 0)}</td>
-                        <td>{firstReasonLine([
-                          item.reason_trace?.why_details?.[0],
-                          item.reason_trace?.why?.[0],
-                          item.decision?.explanation_summary_detail,
-                          item.decision?.explanation_summary,
-                          '-',
-                        ])}</td>
-                      </tr>
-                    )) : (
-                      <tr>
-                        <td colSpan={8} className="ops-table-empty">Keine Regionen im aktuellen Filter.</td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </OperatorPanel>
+          <CollapsibleSection
+            title="Weitere operative Details"
+            subtitle="Nur für den zweiten Blick: Verteilung, Tabellen und Klartext-Begründungen."
+          >
+            <div className="ops-panel-grid" id={detailSectionId}>
+              <OperatorPanel
+                title="Stufen nach Entscheidung"
+                description="Verteilung der Regionen nach Entscheidungsrang."
+              >
+                <div className="ops-stage-grid">
+                  {stageGroups.map((group) => (
+                    <div key={group.key} className="soft-panel" style={{ padding: 16, display: 'grid', gap: 12 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                        <StageBadge value={group.label} />
+                        <strong style={{ fontSize: 24, color: 'var(--text-primary)' }}>{group.count}</strong>
+                      </div>
+                      <div className="ops-progress-track">
+                        <div
+                          className={`ops-progress-fill ops-progress-${group.key}`}
+                          style={{ width: `${Math.max((group.count / totalContextRegions) * 100, group.count > 0 ? 8 : 0)}%` }}
+                        />
+                      </div>
+                      <div style={{ display: 'grid', gap: 8 }}>
+                        {group.items.length > 0 ? group.items.map((item) => (
+                          <button
+                            key={`${group.key}-${item.bundesland}`}
+                            type="button"
+                            className="campaign-list-card"
+                            onClick={() => setSelectedRegion(item.bundesland)}
+                            style={{ textAlign: 'left' }}
+                          >
+                            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+                              <div>
+                                <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>{item.bundesland_name}</div>
+                                <div className="ops-row-meta">Entscheidungsrang #{item.decision_rank ?? item.rank ?? '-'}</div>
+                              </div>
+                              <div style={{ textAlign: 'right' }}>
+                                <div className="ops-number-emphasis">{formatFractionPercent(item.event_probability_calibrated, 0)}</div>
+                                <div className="ops-row-meta">{formatPercent(item.change_pct, 0)}</div>
+                              </div>
+                            </div>
+                          </button>
+                        )) : (
+                          <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Keine Regionen in diesem Bucket.</div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </OperatorPanel>
 
-            <OperatorPanel
-              title="Budgetlogik"
-              description="Budgetempfehlung pro Region mit Spend-Status und transparenter Allokationslogik."
-            >
-              <div className="ops-table-wrap">
-                <table className="ops-table">
-                  <thead>
-                    <tr>
-                      <th>#</th>
-                      <th>Region</th>
-                      <th>Aktivierungsstufe</th>
-                      <th>Budget</th>
-                      <th>Budgetanteil</th>
-                      <th>Allokations-Sicherheit</th>
-                      <th>Spend-Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredAllocation.length > 0 ? filteredAllocation.map((item) => (
-                      <tr key={item.bundesland} onClick={() => setSelectedRegion(item.bundesland)}>
-                        <td>{item.priority_rank ?? '-'}</td>
-                        <td>
-                          <strong>{item.bundesland_name}</strong>
-                          <div className="ops-row-meta">{item.products?.join(', ') || 'GELO Portfolio'}</div>
-                        </td>
-                        <td>
-                          <StageBadge value={item.recommended_activation_level} />
-                        </td>
-                        <td>{formatCurrency(item.suggested_budget_amount)}</td>
-                        <td>{formatFractionPercent(item.suggested_budget_share, 1)}</td>
-                        <td>{formatFractionPercent(item.confidence, 0)}</td>
-                        <td>
-                          <StatusBadge value={item.spend_gate_status || 'observe_only'} />
-                        </td>
-                      </tr>
-                    )) : (
+              <OperatorPanel
+                title="Regionen-Ranking"
+                description="Volle Tabelle für Forecast, Rang und erste Begründung."
+              >
+                <div className="ops-table-wrap">
+                  <table className="ops-table" id={regionTableId}>
+                    <thead>
                       <tr>
-                        <td colSpan={7} className="ops-table-empty">Keine Budgetempfehlungen im aktuellen Filter.</td>
+                        <th>#</th>
+                        <th>Bundesland</th>
+                        <th>Stufe</th>
+                        <th>{eventProbabilityLabel}</th>
+                        <th>Trend</th>
+                        <th>{priorityScoreLabel}</th>
+                        <th>Forecast-Sicherheit</th>
+                        <th>Warum jetzt</th>
                       </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-              <div className="soft-panel" style={{ padding: 16, marginTop: 14 }}>
-                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Budgetüberblick</div>
+                    </thead>
+                    <tbody>
+                      {filteredPredictions.length > 0 ? filteredPredictions.map((item) => (
+                        <tr
+                          key={item.bundesland}
+                          onClick={() => setSelectedRegion(item.bundesland)}
+                          onKeyDown={(event) => handleInteractiveRowKeyDown(event, item.bundesland)}
+                          tabIndex={0}
+                          role="button"
+                          aria-label={`${item.bundesland_name} auswählen`}
+                          aria-pressed={selectedRegion === item.bundesland}
+                        >
+                          <td>{item.decision_rank ?? item.rank ?? '-'}</td>
+                          <td>
+                            <strong>{item.bundesland_name}</strong>
+                            <div className="ops-row-meta">{UI_COPY.stateLevelScope} · {item.bundesland}</div>
+                          </td>
+                          <td><StageBadge value={item.decision_label} /></td>
+                          <td>{formatFractionPercent(item.event_probability_calibrated, 0)}</td>
+                          <td>
+                            <div>{item.trend}</div>
+                            <div className="ops-row-meta">{formatPercent(item.change_pct, 0)}</div>
+                          </td>
+                          <td>{formatScore(item.priority_score)}</td>
+                          <td>{formatFractionPercent(item.decision?.forecast_confidence, 0)}</td>
+                          <td>{firstReasonLine([
+                            item.reason_trace?.why_details?.[0],
+                            item.reason_trace?.why?.[0],
+                            item.decision?.explanation_summary_detail,
+                            item.decision?.explanation_summary,
+                            '-',
+                          ])}</td>
+                        </tr>
+                      )) : (
+                        <tr>
+                          <td colSpan={8} className="ops-table-empty">Keine Regionen im aktuellen Filter.</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </OperatorPanel>
+            </div>
+
+            <div className="ops-panel-grid">
+              <OperatorPanel
+                title="Budgetlogik"
+                description="Volle Allokationstabelle mit Spend-Status."
+              >
+                <div className="ops-table-wrap">
+                  <table className="ops-table" id={allocationTableId}>
+                    <thead>
+                      <tr>
+                        <th>#</th>
+                        <th>Bundesland</th>
+                        <th>Aktivierungsstufe</th>
+                        <th>Budget</th>
+                        <th>Budgetanteil</th>
+                        <th>Allokations-Sicherheit</th>
+                        <th>Spend-Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredAllocation.length > 0 ? filteredAllocation.map((item) => (
+                        <tr
+                          key={item.bundesland}
+                          onClick={() => setSelectedRegion(item.bundesland)}
+                          onKeyDown={(event) => handleInteractiveRowKeyDown(event, item.bundesland)}
+                          tabIndex={0}
+                          role="button"
+                          aria-label={`${item.bundesland_name} in Budgettabelle auswählen`}
+                          aria-pressed={selectedRegion === item.bundesland}
+                        >
+                          <td>{item.priority_rank ?? '-'}</td>
+                          <td>
+                            <strong>{item.bundesland_name}</strong>
+                            <div className="ops-row-meta">{item.products?.join(', ') || 'GELO Portfolio'}</div>
+                          </td>
+                          <td><StageBadge value={item.recommended_activation_level} /></td>
+                          <td>{formatCurrency(item.suggested_budget_amount)}</td>
+                          <td>{formatFractionPercent(item.suggested_budget_share, 1)}</td>
+                          <td>{formatFractionPercent(item.confidence, 0)}</td>
+                          <td><StatusBadge value={item.spend_gate_status || 'observe_only'} /></td>
+                        </tr>
+                      )) : (
+                        <tr>
+                          <td colSpan={7} className="ops-table-empty">Keine Budgetempfehlungen im aktuellen Filter.</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
                 <OperatorChipRail className="review-chip-row">
                   <span className="step-chip">Budget gesamt {formatCurrency(allocation?.summary?.total_budget_allocated)}</span>
                   <span className="step-chip">Anteil gesamt {formatFractionPercent(allocation?.summary?.budget_share_total, 1)}</span>
                   <span className="step-chip">Spend offen {allocation?.summary?.spend_enabled ? 'ja' : 'nein'}</span>
                 </OperatorChipRail>
-              </div>
-            </OperatorPanel>
-          </section>
-
-          <OperatorSection
-            title="Empfehlungsansicht"
-            description="Konkrete Aktivierungsvorschläge für PEIX / GELO mit Produktcluster, Keywordcluster und klarer Freigabe-Begründung."
-          >
-            {filteredCampaigns.length > 0 ? (
-              <div className="ops-recommendation-grid">
-                {filteredCampaigns.map((item) => (
-                  <OperatorPanel
-                    key={`${item.region}-${item.recommended_product_cluster.cluster_key}`}
-                    eyebrow={`Priorität #${item.priority_rank}`}
-                    title={item.region_name}
-                    description={`${item.recommended_product_cluster.label} · ${item.recommended_keyword_cluster.label}`}
-                    actions={<StageBadge value={item.activation_level} />}
-                    className="operator-recommendation-card"
-                  >
-                    <div className="operator-stat-grid metric-strip">
-                      <OperatorStat label="Budget" value={formatCurrency(item.suggested_budget_amount)} tone="accent" />
-                      <OperatorStat label="Budgetanteil" value={formatFractionPercent(item.suggested_budget_share, 1)} />
-                      <OperatorStat label="Signal-Sicherheit" value={formatFractionPercent(item.confidence, 0)} />
-                      <OperatorStat label="Evidenzstatus" value={item.evidence_class} />
-                    </div>
-
-                    <OperatorChipRail>
-                      <StatusBadge value={item.spend_guardrail_status} />
-                      {(item.keywords || []).slice(0, 4).map((keyword) => (
-                        <span key={keyword} className="step-chip">{keyword}</span>
-                      ))}
-                    </OperatorChipRail>
-
-                    <div className="ops-rationale-grid">
-                      <div className="soft-panel" style={{ padding: 16 }}>
-                        <div className="ops-panel-title">Rationale</div>
-                        <ul className="ops-rationale-list">
-                          {traceSectionLines(
-                            item.recommendation_rationale?.why_details,
-                            item.recommendation_rationale?.why,
-                          ).map((entry) => (
-                            <li key={entry}>{explainInPlainGerman(entry)}</li>
-                          ))}
-                        </ul>
-                      </div>
-                      <div className="soft-panel" style={{ padding: 16 }}>
-                        <div className="ops-panel-title">Produkt- & Keyword-Fit</div>
-                        <ul className="ops-rationale-list">
-                          {[
-                            ...traceSectionLines(
-                              item.recommendation_rationale?.product_fit_details,
-                              item.recommendation_rationale?.product_fit,
-                            ),
-                            ...traceSectionLines(
-                              item.recommendation_rationale?.keyword_fit_details,
-                              item.recommendation_rationale?.keyword_fit,
-                            ),
-                          ].map((entry) => (
-                            <li key={entry}>{explainInPlainGerman(entry)}</li>
-                          ))}
-                        </ul>
-                      </div>
-                      <div className="soft-panel" style={{ padding: 16 }}>
-                        <div className="ops-panel-title">Guardrails</div>
-                        <ul className="ops-rationale-list">
-                          {[
-                            ...traceSectionLines(
-                              item.recommendation_rationale?.budget_note_details,
-                              item.recommendation_rationale?.budget_notes,
-                            ),
-                            ...traceSectionLines(
-                              item.recommendation_rationale?.guardrail_details,
-                              item.recommendation_rationale?.guardrails,
-                            ),
-                            ...traceSectionLines(
-                              item.recommendation_rationale?.evidence_note_details,
-                              item.recommendation_rationale?.evidence_notes,
-                            ),
-                          ].map((entry) => (
-                            <li key={entry}>{explainInPlainGerman(entry)}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    </div>
-                  </OperatorPanel>
-                ))}
-              </div>
-            ) : (
-              <div className="soft-panel" style={{ padding: 18, color: 'var(--text-secondary)' }}>
-                Für den aktuellen Filter gibt es noch keinen konkreten Kampagnenvorschlag. Das ist bei `Watch`-Regionen oder blockiertem Spend-Status ein erwartetes Verhalten.
-              </div>
-            )}
-          </OperatorSection>
-
-          <OperatorSection
-            title="Begründungen im Klartext"
-            description="Alle drei Layer bleiben sichtbar: Forecast-/Decision-Gründe, Allocation-Hebel und Campaign-Rationale."
-          >
-            <div className="ops-rationale-grid">
-              <OperatorPanel title="Entscheidung" tone="muted">
-                <ul className="ops-rationale-list">
-                  {traceSectionLines(
-                    focusedPrediction?.reason_trace?.why_details,
-                    focusedPrediction?.reason_trace?.why,
-                  ).map((entry) => (
-                    <li key={entry}>{explainInPlainGerman(entry)}</li>
-                  ))}
-                </ul>
               </OperatorPanel>
-              <OperatorPanel title="Budgetlogik" tone="muted">
-                <ul className="ops-rationale-list">
-                  {reasonTraceLines(focusedAllocation?.allocation_reason_trace || focusedAllocation?.reason_trace).length > 0 ? (
-                    reasonTraceLines(focusedAllocation?.allocation_reason_trace || focusedAllocation?.reason_trace).map((entry) => (
-                      <li key={entry}>{entry}</li>
-                    ))
-                  ) : (
-                    <li>Noch keine Begründung aus der Budgetlogik verfügbar.</li>
-                  )}
-                </ul>
-              </OperatorPanel>
-              <OperatorPanel title="Kampagnenvorschlag" tone="muted">
-                <ul className="ops-rationale-list">
-                  {focusedCampaign ? (
-                    [
-                      ...traceSectionLines(
-                        focusedCampaign.recommendation_rationale?.why_details,
-                        focusedCampaign.recommendation_rationale?.why,
-                      ),
-                      ...traceSectionLines(
-                        focusedCampaign.recommendation_rationale?.product_fit_details,
-                        focusedCampaign.recommendation_rationale?.product_fit,
-                      ),
-                      ...traceSectionLines(
-                        focusedCampaign.recommendation_rationale?.guardrail_details,
-                        focusedCampaign.recommendation_rationale?.guardrails,
-                      ),
-                    ].map((entry) => <li key={entry}>{explainInPlainGerman(entry)}</li>)
-                  ) : (
-                    <li>Für die Fokusregion liegt aktuell noch kein konkreter Kampagnenvorschlag vor.</li>
-                  )}
-                </ul>
+
+              <OperatorPanel
+                title="Empfehlungsansicht"
+                description="Konkrete Aktivierungsvorschläge mit Produktcluster, Keywordcluster und Guardrails."
+              >
+                {filteredCampaigns.length > 0 ? (
+                  <div className="ops-recommendation-grid">
+                    {filteredCampaigns.slice(0, 2).map((item) => (
+                      <div key={`${item.region}-${item.recommended_product_cluster.cluster_key}`} className="campaign-list-card">
+                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start' }}>
+                          <div>
+                            <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-primary)' }}>{item.region_name}</div>
+                            <div className="ops-row-meta">{item.recommended_product_cluster.label} · {item.recommended_keyword_cluster.label}</div>
+                          </div>
+                          <StageBadge value={item.activation_level} />
+                        </div>
+                        <div className="operator-stat-grid metric-strip" style={{ marginTop: 12 }}>
+                          <OperatorStat label="Budget" value={formatCurrency(item.suggested_budget_amount)} tone="accent" />
+                          <OperatorStat label="Budgetanteil" value={formatFractionPercent(item.suggested_budget_share, 1)} />
+                          <OperatorStat label="Signal-Sicherheit" value={formatFractionPercent(item.confidence, 0)} />
+                          <OperatorStat label="Evidenz" value={evidenceStatusLabel(item.evidence_class)} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="soft-panel" style={{ padding: 18, color: 'var(--text-secondary)' }}>
+                    Für den aktuellen Filter gibt es noch keinen konkreten Kampagnenvorschlag.
+                  </div>
+                )}
               </OperatorPanel>
             </div>
-          </OperatorSection>
+
+            <OperatorSection
+              title="Begründungen im Klartext"
+              description="Forecast-/Decision-Gründe, Allocation-Hebel und Campaign-Rationale bleiben gesammelt in der zweiten Ebene."
+            >
+              <div className="ops-rationale-grid">
+                <OperatorPanel title="Entscheidung" tone="muted">
+                  <ul className="ops-rationale-list">
+                    {traceSectionLines(
+                      focusedPrediction?.reason_trace?.why_details,
+                      focusedPrediction?.reason_trace?.why,
+                    ).map((entry) => (
+                      <li key={entry}>{explainInPlainGerman(entry)}</li>
+                    ))}
+                  </ul>
+                </OperatorPanel>
+                <OperatorPanel title="Budgetlogik" tone="muted">
+                  <ul className="ops-rationale-list">
+                    {reasonTraceLines(focusedAllocation?.allocation_reason_trace || focusedAllocation?.reason_trace).length > 0 ? (
+                      reasonTraceLines(focusedAllocation?.allocation_reason_trace || focusedAllocation?.reason_trace).map((entry) => (
+                        <li key={entry}>{entry}</li>
+                      ))
+                    ) : (
+                      <li>Noch keine Begründung aus der Budgetlogik verfügbar.</li>
+                    )}
+                  </ul>
+                </OperatorPanel>
+                <OperatorPanel title="Kampagnenvorschlag" tone="muted">
+                  <ul className="ops-rationale-list">
+                    {focusedCampaign ? (
+                      [
+                        ...traceSectionLines(
+                          focusedCampaign.recommendation_rationale?.why_details,
+                          focusedCampaign.recommendation_rationale?.why,
+                        ),
+                        ...traceSectionLines(
+                          focusedCampaign.recommendation_rationale?.product_fit_details,
+                          focusedCampaign.recommendation_rationale?.product_fit,
+                        ),
+                        ...traceSectionLines(
+                          focusedCampaign.recommendation_rationale?.guardrail_details,
+                          focusedCampaign.recommendation_rationale?.guardrails,
+                        ),
+                      ].map((entry) => <li key={entry}>{explainInPlainGerman(entry)}</li>)
+                    ) : (
+                      <li>Für die Fokusregion liegt aktuell noch kein konkreter Kampagnenvorschlag vor.</li>
+                    )}
+                  </ul>
+                </OperatorPanel>
+              </div>
+            </OperatorSection>
+          </CollapsibleSection>
         </>
       )}
     </div>

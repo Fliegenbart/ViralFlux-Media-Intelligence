@@ -97,7 +97,7 @@ const EvidencePanel: React.FC<Props> = ({
       <OperatorSection
         kicker="Qualität"
         title="Was vor dem Handeln noch geprüft wird"
-        description="Hier siehst du, ob Vorhersage, Daten und Kundensignale für den nächsten Schritt ausreichen."
+        description="Hier siehst du sofort, ob du handeln kannst."
         tone="accent"
         className="operator-toolbar-shell"
       >
@@ -105,30 +105,24 @@ const EvidencePanel: React.FC<Props> = ({
           <OperatorPanel
             eyebrow="Freigabe-Lage"
             title="Kannst du weitermachen?"
-            description={workspaceStatus?.summary || 'Sobald Qualitätsdaten vorliegen, fassen wir hier den schnellsten Prüfpfad zusammen.'}
+            description={workspaceStatus?.summary || 'Hier steht gleich die kurze Freigabe-Lage.'}
             tone="accent"
           >
             <div className="workspace-note-list">
               <div className="workspace-note-card">
                 {workspaceStatus?.summary || 'Sobald Qualitätsdaten vorliegen, fassen wir hier den schnellsten Prüfpfad zusammen.'}
               </div>
-              <div className="workspace-note-card">
-                Geprüft werden Vorhersage, Kundendaten, Quellen und Importe, bevor du wirklich freigibst.
-              </div>
-              <div className="workspace-note-card">
-                Wenn hier etwas offen bleibt, findest du darunter direkt den passenden Prüfblock.
-              </div>
             </div>
           </OperatorPanel>
 
           <OperatorPanel
             eyebrow="Schnellcheck"
-            title="Die vier wichtigsten Prüfpunkte"
-            description="So erkennst du sofort, welcher Bereich dich gerade noch bremst."
+            title="Die drei wichtigsten Prüfpunkte"
+            description="So erkennst du sofort, was dich noch bremst."
             tone="muted"
           >
             <div className="now-trust-grid evidence-status-grid">
-              {quickStatusItems.length > 0 ? quickStatusItems.map((item) => (
+              {quickStatusItems.slice(0, 3).length > 0 ? quickStatusItems.slice(0, 3).map((item) => (
                 <article
                   key={item.key}
                   className={`workspace-status-card workspace-status-card--${item.tone}`}
@@ -155,13 +149,13 @@ const EvidencePanel: React.FC<Props> = ({
         <OperatorSection
           kicker="Zuerst klären"
           title="Das bremst die Freigabe gerade"
-          description="Hier stehen die wichtigsten offenen Punkte und die letzten Prüfungen dazu."
+          description="Hier stehen die wichtigsten offenen Punkte."
           tone="muted"
         >
           <div className="workspace-two-column">
             <OperatorPanel
               title="Offene Punkte"
-              description="Das solltest du zuerst klären."
+              description="Das zuerst klären."
             >
               <div className="workspace-note-list">
                 {blockerPreview.map((blocker) => (
@@ -174,7 +168,7 @@ const EvidencePanel: React.FC<Props> = ({
 
             <OperatorPanel
               title="Letzte Prüfungen"
-              description="Hier siehst du, was zuletzt schon gelaufen ist."
+              description="Das lief zuletzt."
             >
               <div className="workspace-note-list">
                 {recentRunPreview.length > 0 ? recentRunPreview.map((run, index) => (

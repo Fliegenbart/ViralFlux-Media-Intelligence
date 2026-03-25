@@ -8,9 +8,7 @@ import GermanyMap from './GermanyMap';
 import {
   formatDateShort,
   formatPercent,
-  metricContractBadge,
   metricContractDisplayLabel,
-  metricContractNote,
   primarySignalScore,
   VIRUS_OPTIONS,
 } from './cockpitUtils';
@@ -54,12 +52,6 @@ const RegionWorkbench: React.FC<Props> = ({
   const suggestion = activeMap?.activation_suggestions?.find((item) => item.region === fallbackRegionCode);
   const primaryRegion = region || topRegions[0] || null;
   const signalLabel = metricContractDisplayLabel(primaryRegion?.field_contracts, 'signal_score', UI_COPY.signalScore);
-  const signalBadge = metricContractBadge(primaryRegion?.field_contracts, 'signal_score', 'Kennzahl');
-  const signalNote = metricContractNote(
-    primaryRegion?.field_contracts,
-    'signal_score',
-    'Hilft beim Vergleichen und Priorisieren, ist aber keine Eintrittswahrscheinlichkeit.',
-  );
 
   if (loading && !regionsView) {
     return (
@@ -93,14 +85,7 @@ const RegionWorkbench: React.FC<Props> = ({
       || region?.tooltip?.recommendation_text
       || 'Diese Region zeigt aktuell die stärkste Dynamik aus Vorhersage, Versorgung und Nachfrage.',
   );
-  const driverSummary = normalizeGermanText(
-    region?.signal_drivers?.slice(0, 3).map((driver) => driver.label).join(' · ')
-      || 'Die wichtigsten Treiber erscheinen nach Auswahl der Region.',
-  );
   const decisionModeLabel = normalizeGermanText(region?.decision_mode_label || suggestion?.priority || 'Regionalsignal');
-  const sourceTraceLabel = normalizeGermanText(
-    (region?.source_trace || []).join(', ') || 'AMELAG, SurvStat, Vorhersage',
-  );
   const primaryActionLabel = region?.recommendation_ref?.card_id
     ? 'Kampagnenvorschlag öffnen'
     : 'Vorschlag für Region erstellen';
@@ -118,7 +103,7 @@ const RegionWorkbench: React.FC<Props> = ({
       <OperatorSection
         kicker="Regionen"
         title="Hier sehen wir den wahrscheinlichen frühen Start"
-        description="Hier findest du die Region, die du als Nächstes prüfen solltest."
+        description="Hier findest du sofort die nächste Region."
         tone="muted"
         className="operator-toolbar-shell"
       >
@@ -143,14 +128,14 @@ const RegionWorkbench: React.FC<Props> = ({
       <OperatorSection
         kicker="Ausgewählte Region"
         title={region?.name ? `${region.name} zieht gerade zuerst an` : 'Wähle ein Bundesland auf der Karte'}
-        description={primaryReason}
+        description="Hier siehst du, warum diese Region vorne liegt und was du als Nächstes tun solltest."
         tone="accent"
         className="regions-hero-shell"
       >
         <div className="regions-command-grid">
           <OperatorPanel
             title="Deutschlandkarte"
-            description="Klick auf ein Bundesland. Rechts springt der Fokus dann sofort auf die gewählte Region."
+            description="Klick auf ein Bundesland."
             className="regions-map-panel"
           >
             <GermanyMap
@@ -161,9 +146,9 @@ const RegionWorkbench: React.FC<Props> = ({
           </OperatorPanel>
 
           <OperatorPanel
-            eyebrow="Aktuell vorne"
-            title={region ? `${region.name} ist die erste Prüfregion` : 'Wähle eine Region'}
-            description={driverSummary}
+            eyebrow="Nächste Region"
+            title={region ? `${region.name} zuerst prüfen` : 'Wähle eine Region'}
+            description={primaryReason}
             tone="accent"
             className="regions-command-rail"
           >
@@ -180,7 +165,7 @@ const RegionWorkbench: React.FC<Props> = ({
               <OperatorStat
                 label={signalLabel}
                 value={formatPercent(primarySignalScore(region || primaryRegion))}
-                meta="Aktuelle Dynamik"
+                meta="wichtigster Wert"
                 tone="accent"
               />
               <OperatorStat
@@ -201,12 +186,9 @@ const RegionWorkbench: React.FC<Props> = ({
             </div>
 
             <div className="workspace-note-list">
-              <div className="workspace-note-card">{primaryReason}</div>
+              <div className="workspace-note-card">Warum: {primaryReason}</div>
               <div className="workspace-note-card">
-                Wichtige Quellen: {sourceTraceLabel}
-              </div>
-              <div className="workspace-note-card">
-                {signalLabel}: {signalBadge}. {signalNote}
+                Nächster Schritt: {region?.recommendation_ref?.card_id ? 'Bestehenden Vorschlag öffnen.' : 'Für diese Region einen Vorschlag anlegen.'}
               </div>
             </div>
 
@@ -233,7 +215,7 @@ const RegionWorkbench: React.FC<Props> = ({
       <OperatorSection
         kicker="Was kommt danach?"
         title="Weitere Regionen mit hoher Dynamik"
-        description="Wenn die erste Region erledigt ist, findest du hier die nächsten sinnvollen Kandidaten."
+        description="Das sind die nächsten Kandidaten."
         tone="muted"
       >
         <div className="workspace-note-list">
@@ -260,6 +242,9 @@ const RegionWorkbench: React.FC<Props> = ({
                   </div>
                 </div>
               </div>
+              <p className="campaign-focus-copy" style={{ marginTop: 10 }}>
+                {item.tooltip?.recommendation_text || 'Diese Region bleibt als nächster Kandidat im Blick.'}
+              </p>
             </button>
           ))}
         </div>
@@ -302,9 +287,6 @@ const RegionWorkbench: React.FC<Props> = ({
               </div>
               <div className="workspace-note-card">
                 Tendenz: {region?.forecast_direction || 'seitwärts'}
-              </div>
-              <div className="workspace-note-card">
-                Quellen: {sourceTraceLabel}
               </div>
             </div>
           </OperatorPanel>

@@ -9,10 +9,10 @@ interface Props {
 }
 
 const PRIMARY_NAV_ITEMS = [
-  { label: 'Jetzt', path: '/jetzt', helper: 'Hier beginnt dein Wochenfokus', icon: 'bolt' },
-  { label: 'Regionen', path: '/regionen', helper: 'Hier wählst du die passende Region aus', icon: 'location_on' },
-  { label: 'Kampagnen', path: '/kampagnen', helper: 'Hier prüfst und bearbeitest du konkrete Fälle', icon: 'auto_awesome' },
-  { label: 'Qualität', path: '/evidenz', helper: 'Hier siehst du, was noch geklärt werden muss', icon: 'verified' },
+  { label: 'Jetzt', path: '/jetzt', helper: 'Wo du zuerst hinschaust', icon: 'bolt' },
+  { label: 'Regionen', path: '/regionen', helper: 'Welche Region zuerst wichtig ist', icon: 'location_on' },
+  { label: 'Kampagnen', path: '/kampagnen', helper: 'Welcher Fall als Nächstes dran ist', icon: 'auto_awesome' },
+  { label: 'Qualität', path: '/evidenz', helper: 'Was noch geprüft werden muss', icon: 'verified' },
 ] as const;
 
 const SECTION_META = [
@@ -20,25 +20,25 @@ const SECTION_META = [
     path: '/jetzt',
     kicker: 'Wochenfokus',
     title: 'Jetzt',
-    description: 'Hier siehst du zuerst, was gerade passiert und was du als Nächstes tun solltest.',
+    description: 'Hier siehst du zuerst, was gerade zählt.',
   },
   {
     path: '/regionen',
     kicker: 'Regionen',
     title: 'Regionen',
-    description: 'Hier findest du die Region, die du als Nächstes prüfen solltest.',
+    description: 'Hier findest du die nächste Region.',
   },
   {
     path: '/kampagnen',
     kicker: 'Kampagnen',
     title: 'Kampagnen',
-    description: 'Hier bearbeitest du zuerst den wichtigsten Fall und danach die nächsten.',
+    description: 'Hier bearbeitest du zuerst den wichtigsten Fall.',
   },
   {
     path: '/evidenz',
     kicker: 'Qualität',
     title: 'Qualität',
-    description: 'Hier siehst du, ob du handeln kannst oder ob noch etwas fehlt.',
+    description: 'Hier siehst du, ob du handeln kannst.',
   },
 ] as const;
 
@@ -69,7 +69,6 @@ const AppLayout: React.FC<Props> = ({ children }) => {
     title: 'Arbeitsansicht',
     description: 'Hier bleibt dein aktueller Arbeitsstand an einem Ort.',
   };
-  const activeTopContext = TOP_CONTEXT_ITEMS.find(({ matches }) => matches.some((path) => location.pathname.startsWith(path)));
   const operatorStatusLabel = location.pathname.startsWith('/jetzt')
     ? 'Wochenlage aktiv'
     : location.pathname.startsWith('/evidenz')
@@ -128,7 +127,7 @@ const AppLayout: React.FC<Props> = ({ children }) => {
           <div className="operator-sidebar__brand-block">
             <p className="operator-sidebar__brand-copy">PharmaPredict Arbeitsraum</p>
             <p className="operator-sidebar__brand-note">
-              Frühe Signale, Regionen und Kampagnen liegen hier in einer klaren Arbeitsansicht zusammen.
+              Signale, Regionen und Fälle an einem Ort.
             </p>
           </div>
 
@@ -203,7 +202,7 @@ const AppLayout: React.FC<Props> = ({ children }) => {
                     </span>
                   </button>
 
-                  <span className="operator-header__suite">ViralFlux Intelligence</span>
+                  <span className="operator-header__suite">ViralFlux</span>
                 </div>
 
                 <div className="operator-top-tabs" role="tablist" aria-label="Hauptkontext">
@@ -226,10 +225,6 @@ const AppLayout: React.FC<Props> = ({ children }) => {
               </div>
 
               <div className="operator-header__actions">
-                <div className="operator-search-shell" aria-label="Globale Suche">
-                  <span className="material-symbols-outlined operator-search-shell__icon" aria-hidden="true">search</span>
-                  <span className="operator-search-shell__text">Globale Suche und Filter folgen</span>
-                </div>
                 <button
                   onClick={handlePdfDownload}
                   disabled={pdfLoading}
@@ -268,7 +263,7 @@ const AppLayout: React.FC<Props> = ({ children }) => {
             </div>
 
             <div className="operator-header__meta">
-              <span className="operator-header__status-pill">{activeTopContext?.label || 'Arbeitsbereich'}</span>
+              <span className="operator-header__status-pill">{currentSection.kicker}</span>
               <div className="operator-header__copy-block">
                 <div className="operator-header__kicker">{currentSection.kicker}</div>
                 <div className="operator-header__title-row">

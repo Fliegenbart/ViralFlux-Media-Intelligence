@@ -13,7 +13,7 @@ interface Props {
 const WorkspaceStatusPanel: React.FC<Props> = ({
   status,
   title = 'Was noch offen ist',
-  intro = 'Hier siehst du schnell, ob du direkt weitergehen kannst oder vorher noch etwas prüfen musst.',
+  intro = 'Hier siehst du schnell, ob du weitergehen kannst.',
 }) => {
   if (!status) return null;
 
@@ -26,7 +26,7 @@ const WorkspaceStatusPanel: React.FC<Props> = ({
       className="workspace-status-panel"
     >
       <div className="workspace-status-grid">
-        {status.items.map((item) => (
+        {status.items.slice(0, 3).map((item) => (
           <article
             key={item.key}
             className={`workspace-status-card workspace-status-card--${item.tone}`}

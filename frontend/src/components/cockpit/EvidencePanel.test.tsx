@@ -92,7 +92,7 @@ describe('EvidencePanel', () => {
     );
 
     expect(screen.getByText('Kannst du weitermachen?')).toBeInTheDocument();
-    expect(screen.getByText('Die vier wichtigsten Prüfpunkte')).toBeInTheDocument();
+    expect(screen.getByText('Die drei wichtigsten Prüfpunkte')).toBeInTheDocument();
     expect(screen.getByText('Das bremst die Freigabe gerade')).toBeInTheDocument();
     expect(screen.getAllByText('Ein Importfeld ist noch nicht sauber zugeordnet.').length).toBeGreaterThan(0);
     expect(screen.getByText('1. Vorhersage prüfen')).toBeInTheDocument();

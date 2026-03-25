@@ -121,7 +121,7 @@ const CampaignStudio: React.FC<Props> = ({
       <OperatorSection
         kicker="Kampagnen"
         title="Jetzt zuerst prüfen"
-        description="Hier steht immer zuerst der Fall, um den du dich jetzt kümmern solltest."
+        description="Hier steht sofort der wichtigste Fall."
         tone="accent"
         className="campaign-hero-shell"
       >
@@ -183,7 +183,7 @@ const CampaignStudio: React.FC<Props> = ({
           <OperatorPanel
             eyebrow="Pipeline"
             title="Wie die Arbeit gerade verteilt ist"
-            description="Hier siehst du zuerst, wie viele Fälle vorbereitet, freigegeben oder schon aktiv sind."
+            description="So ist die Arbeit gerade verteilt."
             tone="muted"
             className="campaign-command-rail"
           >
@@ -199,8 +199,8 @@ const CampaignStudio: React.FC<Props> = ({
               <div className="workspace-note-card">{aiTouchedCount} automatisch erstellt oder ergänzt</div>
               <div className="workspace-note-card">
                 {focusCard
-                  ? `Als Nächstes geht es zuerst in ${phaseTitle(phaseForCard(focusCard))}.`
-                  : 'Sobald ein Fall vorliegt, landet er hier automatisch im passenden Schritt.'}
+                  ? `Als Nächstes: ${phaseTitle(phaseForCard(focusCard))}.`
+                  : 'Neue Fälle erscheinen hier automatisch.'}
               </div>
             </div>
           </OperatorPanel>
@@ -239,7 +239,7 @@ const CampaignStudio: React.FC<Props> = ({
         <OperatorSection
           kicker="Arbeitsphasen"
           title="So ist die Pipeline gerade sortiert"
-          description="Der wichtigste Fall steht oben. Darunter siehst du, welche Vorschläge noch in Vorbereitung, Freigabe oder bereits aktiv sind."
+          description="Nach dem Fokusfall siehst du hier die übrigen Phasen."
           tone="muted"
         >
           <section className="workspace-phase-grid">
@@ -323,12 +323,12 @@ const CampaignStudio: React.FC<Props> = ({
 
       <CollapsibleSection
         title="Weitere Vorschläge erstellen"
-        subtitle="Wenn der wichtigste Fall geklärt ist, kannst du hier weitere Vorschläge anlegen."
+        subtitle="Nur wenn du danach weitere Vorschläge brauchst."
       >
         <div className="workspace-two-column">
           <OperatorPanel
             title="Erstellung"
-            description="Hier legst du neue Vorschläge mit wenigen Angaben an."
+            description="Hier legst du neue Vorschläge an."
           >
             <div className="campaign-form-grid">
               <label className="campaign-field">
@@ -361,7 +361,7 @@ const CampaignStudio: React.FC<Props> = ({
 
           <OperatorPanel
             title="Arbeitskontext"
-            description="Diese Angaben helfen dir, neue Vorschläge schneller einzuordnen."
+            description="Diese Werte helfen beim Einordnen."
           >
             <div className="workspace-note-list">
               <div className="workspace-note-card">

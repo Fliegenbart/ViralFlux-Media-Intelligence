@@ -97,6 +97,8 @@ const NowWorkspace: React.FC<Props> = ({
     ...(proof?.proofPoints || []),
     ...leadReasons,
   ].slice(0, 4);
+  const mainWhy = priorityNotes[0] || 'Hier steht gleich der wichtigste Grund.';
+  const trustSummary = workspaceStatus?.summary || 'Hier siehst du den schnellen Vertrauenscheck.';
 
   if (loading && !view.hasData) {
     return (
@@ -117,7 +119,7 @@ const NowWorkspace: React.FC<Props> = ({
       <OperatorSection
         kicker="Was passiert gerade?"
         title="Wo die nächste Welle zuerst anzieht"
-        description="Hier siehst du zuerst den Verlauf. So erkennst du schnell, welche Region gerade als erste anzieht."
+        description="Hier siehst du sofort, welche Region gerade zuerst zählt."
         tone="accent"
         className="operator-toolbar-shell"
       >
@@ -150,16 +152,12 @@ const NowWorkspace: React.FC<Props> = ({
           <OperatorPanel
             eyebrow="Warum zuerst?"
             title={proof?.headline || (focusRegion?.name ? `${focusRegion.name} steht gerade vorne` : 'Das ist der aktuelle Fokus')}
-            description={proof?.supportingText || view.note}
+            description={proof?.supportingText || 'Hier steht der wichtigste Grund für den Fokus.'}
             tone="muted"
             className="now-command-rail"
           >
             <div className="workspace-note-list">
-              {(priorityNotes.length ? priorityNotes : ['Sobald Daten da sind, fassen wir hier die wichtigsten Gründe kurz zusammen.']).map((item) => (
-                <div key={item} className="workspace-note-card">
-                  {item}
-                </div>
-              ))}
+              <div className="workspace-note-card">{mainWhy}</div>
               {proof?.cautionText ? (
                 <div className="workspace-note-card">
                   {proof.cautionText}
@@ -252,7 +250,7 @@ const NowWorkspace: React.FC<Props> = ({
           <OperatorSection
             kicker="Kann ich der Entscheidung trauen?"
             title="Der schnelle Sicherheitscheck"
-            description="Hier trennen wir sauber zwischen Forecast, Datenlage und Business-Freigabe. So siehst du sofort, ob du nur beobachten oder schon wirklich freigeben solltest."
+            description="Hier siehst du sofort, ob Forecast, Daten und Freigabe schon tragen."
             tone="muted"
             className="workspace-status-panel"
           >
@@ -270,7 +268,7 @@ const NowWorkspace: React.FC<Props> = ({
             </div>
 
             <div className="workspace-status-panel__footer">
-              <span>{workspaceStatus?.summary || 'Hier siehst du den schnellsten Vertrauenscheck für diese Woche.'}</span>
+              <span>{trustSummary}</span>
               <button className="media-button secondary" type="button" onClick={onOpenEvidence}>
                 Evidenz öffnen
               </button>
@@ -280,13 +278,13 @@ const NowWorkspace: React.FC<Props> = ({
           <OperatorSection
             kicker="Was kommt danach?"
             title={nextStepTitle}
-            description={nextStepDescription}
+            description="Hier siehst du den nächsten Schritt und was ihn noch bremst."
             tone="muted"
           >
             <div className="workspace-two-column">
               <OperatorPanel
                 title="Danach anschauen"
-                description="Wenn die erste Region erledigt ist, findest du hier die nächsten sinnvollen Kandidaten."
+                description="Das sind die nächsten Kandidaten."
               >
                 <div className="workspace-note-list">
                   {relatedRegions.length > 0 ? relatedRegions.map((region) => (
@@ -314,7 +312,7 @@ const NowWorkspace: React.FC<Props> = ({
 
               <OperatorPanel
                 title="Was vorher noch offen ist"
-                description="Diese Punkte solltest du klären, bevor du weitergehst."
+                description="Das solltest du vorher klären."
               >
                 <div className="workspace-note-list">
                   {blockers.map((risk) => (
@@ -332,7 +330,7 @@ const NowWorkspace: React.FC<Props> = ({
 
           <CollapsibleSection
             title="Weitere Details"
-            subtitle="Hier findest du zusätzliche Hinweise, falls du tiefer einsteigen möchtest."
+            subtitle="Nur wenn du tiefer einsteigen möchtest."
           >
             <WaveOutlookPanel
               virus={virus}

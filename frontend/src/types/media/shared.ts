@@ -25,6 +25,17 @@ export interface MetricContract {
   note?: string;
 }
 
+export type StructuredReasonParamPrimitive = string | number | boolean | null;
+export type StructuredReasonParamValue =
+  | StructuredReasonParamPrimitive
+  | StructuredReasonParamPrimitive[];
+
+export interface StructuredReasonItem {
+  code: string;
+  message: string;
+  params?: Record<string, StructuredReasonParamValue>;
+}
+
 export interface SourceStatusItem {
   source_key: string;
   label: string;

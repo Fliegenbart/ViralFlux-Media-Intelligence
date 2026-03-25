@@ -9,6 +9,7 @@ Erzeugt regionalspezifische Playbook-Kandidaten aus:
 """
 
 from __future__ import annotations
+from app.core.time import utc_now
 
 from datetime import datetime, timedelta
 from statistics import quantiles
@@ -773,7 +774,7 @@ class PlaybookEngine:
         return growth
 
     def _weather_burden_by_region(self) -> dict[str, float]:
-        now = datetime.utcnow()
+        now = utc_now()
         until = now + timedelta(days=8)
         rows = self.db.query(WeatherData).filter(
             WeatherData.data_type == "DAILY_FORECAST",
@@ -812,7 +813,7 @@ class PlaybookEngine:
         if not latest:
             return {}
         # Frische-Check: Keine Pollen-Daten älter als 3 Tage verwenden
-        if (datetime.utcnow() - latest) > timedelta(days=3):
+        if (utc_now() - latest) > timedelta(days=3):
             return {}
         rows = self.db.query(
             PollenData.region_code,
@@ -826,7 +827,7 @@ class PlaybookEngine:
         }
 
     def _google_signal_score(self, keywords: list[str]) -> dict[str, float]:
-        now = datetime.utcnow()
+        now = utc_now()
         recent_start = now - timedelta(days=14)
         prev_start = now - timedelta(days=28)
         prev_end = recent_start

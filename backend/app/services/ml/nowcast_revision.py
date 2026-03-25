@@ -1,6 +1,7 @@
 """Transparent nowcast and revision-risk scoring for regional source signals."""
 
 from __future__ import annotations
+from app.core.time import utc_now
 
 import logging
 import math
@@ -456,7 +457,7 @@ class NowcastSnapshotService:
         *,
         snapshot_captured_at: datetime | None = None,
     ) -> dict[str, int]:
-        captured_at = snapshot_captured_at or datetime.utcnow()
+        captured_at = snapshot_captured_at or utc_now()
         summary: dict[str, int] = {}
         for source_id in source_ids:
             records = self._build_source_records(source_id=source_id, captured_at=captured_at)
@@ -508,7 +509,7 @@ class NowcastSnapshotService:
 
     def _snapshot_wastewater(self, *, captured_at: datetime) -> list[NowcastSnapshotRecord]:
         config = self.source_configs["wastewater"]
-        cutoff = datetime.utcnow() - timedelta(days=config.snapshot_lookback_days)
+        cutoff = utc_now() - timedelta(days=config.snapshot_lookback_days)
         rows = (
             self.db.query(
                 WastewaterData.virus_typ,
@@ -543,7 +544,7 @@ class NowcastSnapshotService:
 
     def _snapshot_survstat_weekly(self, *, captured_at: datetime) -> list[NowcastSnapshotRecord]:
         config = self.source_configs["survstat_weekly"]
-        cutoff = datetime.utcnow() - timedelta(days=config.snapshot_lookback_days)
+        cutoff = utc_now() - timedelta(days=config.snapshot_lookback_days)
         rows = (
             self.db.query(
                 SurvstatWeeklyData.disease,
@@ -584,7 +585,7 @@ class NowcastSnapshotService:
 
     def _snapshot_survstat_kreis(self, *, captured_at: datetime) -> list[NowcastSnapshotRecord]:
         config = self.source_configs["survstat_kreis"]
-        cutoff_year = max(datetime.utcnow().year - 1, 2000)
+        cutoff_year = max(utc_now().year - 1, 2000)
         population_rows = (
             self.db.query(
                 KreisEinwohner.bundesland,
@@ -639,7 +640,7 @@ class NowcastSnapshotService:
 
     def _snapshot_grippeweb(self, *, captured_at: datetime) -> list[NowcastSnapshotRecord]:
         config = self.source_configs["grippeweb"]
-        cutoff = datetime.utcnow() - timedelta(days=config.snapshot_lookback_days)
+        cutoff = utc_now() - timedelta(days=config.snapshot_lookback_days)
         rows = (
             self.db.query(
                 GrippeWebData.erkrankung_typ,
@@ -680,7 +681,7 @@ class NowcastSnapshotService:
 
     def _snapshot_are_konsultation(self, *, captured_at: datetime) -> list[NowcastSnapshotRecord]:
         config = self.source_configs["are_konsultation"]
-        cutoff = datetime.utcnow() - timedelta(days=config.snapshot_lookback_days)
+        cutoff = utc_now() - timedelta(days=config.snapshot_lookback_days)
         rows = (
             self.db.query(
                 AREKonsultation.bundesland,
@@ -739,7 +740,7 @@ class NowcastSnapshotService:
         signal_id: str,
     ) -> list[NowcastSnapshotRecord]:
         config = self.source_configs[source_id]
-        cutoff = datetime.utcnow() - timedelta(days=config.snapshot_lookback_days)
+        cutoff = utc_now() - timedelta(days=config.snapshot_lookback_days)
         lag_key = "influenza_ifsg" if source_id == "ifsg_influenza" else "rsv_ifsg"
         rows = (
             self.db.query(
@@ -776,7 +777,7 @@ class NowcastSnapshotService:
 
     def _snapshot_notaufnahme(self, *, captured_at: datetime) -> list[NowcastSnapshotRecord]:
         config = self.source_configs["notaufnahme"]
-        cutoff = datetime.utcnow() - timedelta(days=config.snapshot_lookback_days)
+        cutoff = utc_now() - timedelta(days=config.snapshot_lookback_days)
         rows = (
             self.db.query(NotaufnahmeSyndromData)
             .filter(
@@ -812,7 +813,7 @@ class NowcastSnapshotService:
 
     def _snapshot_google_trends(self, *, captured_at: datetime) -> list[NowcastSnapshotRecord]:
         config = self.source_configs["google_trends"]
-        cutoff = datetime.utcnow() - timedelta(days=config.snapshot_lookback_days)
+        cutoff = utc_now() - timedelta(days=config.snapshot_lookback_days)
         rows = (
             self.db.query(
                 GoogleTrendsData.keyword,
@@ -845,7 +846,7 @@ class NowcastSnapshotService:
 
     def _snapshot_weather(self, *, captured_at: datetime) -> list[NowcastSnapshotRecord]:
         config = self.source_configs["weather"]
-        cutoff = datetime.utcnow() - timedelta(days=config.snapshot_lookback_days)
+        cutoff = utc_now() - timedelta(days=config.snapshot_lookback_days)
         rows = (
             self.db.query(
                 WeatherData.city,
@@ -888,7 +889,7 @@ class NowcastSnapshotService:
 
     def _snapshot_pollen(self, *, captured_at: datetime) -> list[NowcastSnapshotRecord]:
         config = self.source_configs["pollen"]
-        cutoff = datetime.utcnow() - timedelta(days=config.snapshot_lookback_days)
+        cutoff = utc_now() - timedelta(days=config.snapshot_lookback_days)
         rows = (
             self.db.query(
                 PollenData.region_code,

@@ -1,4 +1,5 @@
 from __future__ import annotations
+from app.core.time import utc_now
 
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
@@ -21,7 +22,7 @@ class BenchmarkArtifactSummary:
     issue_dates: list[str]
     primary_metric: str
     champion_name: str | None
-    generated_at: str = field(default_factory=lambda: datetime.utcnow().isoformat())
+    generated_at: str = field(default_factory=lambda: utc_now().isoformat())
     metrics: dict[str, Any] = field(default_factory=dict)
     leaderboard: list[dict[str, Any]] = field(default_factory=list)
     diagnostics_path: str | None = None
@@ -36,7 +37,7 @@ class RegistryEntry:
     status: str
     metrics: dict[str, Any]
     metadata: dict[str, Any] = field(default_factory=dict)
-    created_at: str = field(default_factory=lambda: datetime.utcnow().isoformat())
+    created_at: str = field(default_factory=lambda: utc_now().isoformat())
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

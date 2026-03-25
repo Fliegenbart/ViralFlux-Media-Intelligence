@@ -18,6 +18,7 @@ Serialisation layout per virus type (e.g. ``influenza_a/``)::
 """
 
 from __future__ import annotations
+from app.core.time import utc_now
 
 import json
 import logging
@@ -343,7 +344,7 @@ class XGBoostTrainer:
             },
             "registry_scope": registry_payload,
             "promoted": promoted,
-            "promoted_at": datetime.utcnow().isoformat() if promoted else None,
+            "promoted_at": utc_now().isoformat() if promoted else None,
             "rejected_reason": None if promoted else "candidate_did_not_beat_live_model",
             "prophet_mode": prophet_mode,
             "model_dir": str(model_dir),
@@ -493,7 +494,7 @@ class XGBoostTrainer:
         _atomic_save_model(model_upper, model_dir / "model_upper.json")
 
         # Metadata sidecar
-        now = datetime.utcnow()
+        now = utc_now()
         metadata: dict[str, Any] = {
             "virus_typ": virus_typ,
             "region": region_code,

@@ -1,6 +1,7 @@
 """Stage-1 leakage-safe wave prediction service."""
 
 from __future__ import annotations
+from app.core.time import utc_now
 
 import json
 import logging
@@ -226,7 +227,7 @@ class WavePredictionService:
         classification_columns = get_classification_feature_columns(training_frame)
         regressor_bundle = self.train_regression_model(training_frame, feature_columns=regression_columns)
         classifier_bundle = self.train_wave_classifier(training_frame, feature_columns=classification_columns)
-        trained_at = datetime.utcnow().isoformat()
+        trained_at = utc_now().isoformat()
         top_features = top_feature_importance(
             classifier=classifier_bundle["classifier"],
             regressor=regressor_bundle["regressor"],
@@ -554,7 +555,7 @@ class WavePredictionService:
             return {
                 "pathogen": normalized_pathogen,
                 "region": region_code,
-                "generated_at": datetime.utcnow().isoformat(),
+                "generated_at": utc_now().isoformat(),
                 "horizon_days": int(horizon_days),
                 "model_version": None,
                 "top_features": {},
@@ -571,7 +572,7 @@ class WavePredictionService:
             return {
                 "pathogen": normalized_pathogen,
                 "region": region_code,
-                "generated_at": datetime.utcnow().isoformat(),
+                "generated_at": utc_now().isoformat(),
                 "horizon_days": int(horizon_days),
                 "model_version": metadata.get("model_version"),
                 "top_features": metadata.get("top_features") or {},
@@ -591,7 +592,7 @@ class WavePredictionService:
         payload = {
             "pathogen": normalized_pathogen,
             "region": region_code,
-            "generated_at": datetime.utcnow().isoformat(),
+            "generated_at": utc_now().isoformat(),
             "horizon_days": int(horizon_days),
             "regression_forecast": round(max(regression_forecast, 0.0), 4),
             "model_version": metadata.get("model_version"),
@@ -1163,4 +1164,4 @@ class WavePredictionService:
 
     @staticmethod
     def _panel_end_date() -> pd.Timestamp:
-        return pd.Timestamp(datetime.utcnow()).normalize()
+        return pd.Timestamp(utc_now()).normalize()

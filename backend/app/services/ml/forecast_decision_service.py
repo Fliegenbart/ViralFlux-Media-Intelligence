@@ -1,4 +1,5 @@
 from __future__ import annotations
+from app.core.time import utc_now
 
 from datetime import datetime, timedelta
 import math
@@ -106,7 +107,7 @@ class ForecastDecisionService:
     def _freshness_state(self, latest_created_at: datetime | None) -> str:
         if latest_created_at is None:
             return "missing"
-        age_days = (datetime.utcnow() - latest_created_at).total_seconds() / 86400.0
+        age_days = (utc_now() - latest_created_at).total_seconds() / 86400.0
         if age_days <= 10:
             return "fresh"
         if age_days <= 21:
@@ -122,7 +123,7 @@ class ForecastDecisionService:
     ) -> str:
         if latest_created_at is None:
             return "missing"
-        age_days = (datetime.utcnow() - latest_created_at).total_seconds() / 86400.0
+        age_days = (utc_now() - latest_created_at).total_seconds() / 86400.0
         if age_days <= fresh_days:
             return "fresh"
         if age_days <= stale_days:
@@ -141,7 +142,7 @@ class ForecastDecisionService:
         return value
 
     def _baseline_value(self, *, virus_typ: str) -> float:
-        cutoff = datetime.utcnow() - timedelta(days=DEFAULT_DECISION_BASELINE_WINDOW_DAYS)
+        cutoff = utc_now() - timedelta(days=DEFAULT_DECISION_BASELINE_WINDOW_DAYS)
         rows = (
             self.db.query(WastewaterAggregated.viruslast)
             .filter(
@@ -506,6 +507,8 @@ class ForecastDecisionService:
                 "confidence": event_forecast.get("confidence"),
                 "confidence_label": event_forecast.get("confidence_label"),
                 "calibration_passed": event_forecast.get("calibration_passed"),
+                "probability_source": event_forecast.get("probability_source"),
+                "fallback_used": event_forecast.get("fallback_used"),
             },
             latest_accuracy=latest_accuracy_payload,
             latest_backtest=latest_backtest_payload,
@@ -653,7 +656,7 @@ class ForecastDecisionService:
         days: int = 90,
     ) -> dict[str, Any]:
         baseline = self._baseline_value(virus_typ=virus_typ)
-        cutoff = datetime.utcnow() - timedelta(days=max(1, int(days)))
+        cutoff = utc_now() - timedelta(days=max(1, int(days)))
         rows = (
             self.db.query(MLForecast)
             .filter(

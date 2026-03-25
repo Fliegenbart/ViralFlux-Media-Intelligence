@@ -1,3 +1,4 @@
+from app.core.time import utc_now
 import unittest
 from datetime import datetime, timedelta
 
@@ -38,7 +39,7 @@ class ForecastDecisionServiceTests(unittest.TestCase):
         accuracy_created_at: datetime | None = None,
         quality_gate_passed: bool = True,
     ) -> None:
-        now = datetime.utcnow().replace(microsecond=0)
+        now = utc_now().replace(microsecond=0)
         for offset in range(16):
             day = now - timedelta(days=offset * 7)
             self.db.add(
@@ -173,7 +174,7 @@ class ForecastDecisionServiceTests(unittest.TestCase):
         self.assertTrue(any("Drift" in alert for alert in snapshot["alerts"]))
 
     def test_latest_forecasts_are_scoped_to_national_default_horizon(self) -> None:
-        now = datetime.utcnow().replace(microsecond=0)
+        now = utc_now().replace(microsecond=0)
         self.db.add_all([
             MLForecast(
                 forecast_date=now + timedelta(days=1),
@@ -235,7 +236,7 @@ class ForecastDecisionServiceTests(unittest.TestCase):
         self.assertIsNone(snapshot["latest_accuracy"]["correlation"])
 
     def test_truth_readiness_requires_coverage_and_conversion_fields(self) -> None:
-        now = datetime.utcnow().replace(microsecond=0)
+        now = utc_now().replace(microsecond=0)
         for index in range(26):
             week = now - timedelta(days=7 * index)
             self.db.add(
@@ -273,7 +274,7 @@ class ForecastFirstOpportunityTests(unittest.TestCase):
         self.engine.dispose()
 
     def _seed_brand_products(self) -> None:
-        now = datetime.utcnow()
+        now = utc_now()
         self.db.add(
             BrandProduct(
                 brand="gelo",

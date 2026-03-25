@@ -1,6 +1,7 @@
 """Produktkatalog + Auto/Review Mapping für Media-Empfehlungen."""
 
 from __future__ import annotations
+from app.core.time import utc_now
 
 from datetime import datetime
 from html import unescape
@@ -172,7 +173,7 @@ class ProductCatalogService:
         if not parsed_products:
             return {"error": "Keine Produktkarten in der Quelle erkannt."}
 
-        now = datetime.utcnow()
+        now = utc_now()
         existing_rows = (
             self.db.query(BrandProduct)
             .filter(BrandProduct.brand == brand_key)
@@ -310,7 +311,7 @@ class ProductCatalogService:
         attributes: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         brand_key = self._normalize_brand(brand)
-        now = datetime.utcnow()
+        now = utc_now()
         normalized_name = self._normalize_name(product_name)
         existing = (
             self.db.query(BrandProduct)
@@ -378,7 +379,7 @@ class ProductCatalogService:
         if not row:
             return None
 
-        now = datetime.utcnow()
+        now = utc_now()
         if product_name is not None:
             normalized_name = self._normalize_name(product_name)
             existing = (
@@ -429,7 +430,7 @@ class ProductCatalogService:
             return None
 
         row.active = False
-        row.updated_at = datetime.utcnow()
+        row.updated_at = utc_now()
         self.db.commit()
         self.db.refresh(row)
         return self._serialize_product(row)
@@ -489,7 +490,7 @@ class ProductCatalogService:
             .first()
         )
 
-        now = datetime.utcnow()
+        now = utc_now()
         if row is None:
             row = ProductConditionMapping(
                 brand=product.brand,
@@ -651,7 +652,7 @@ class ProductCatalogService:
             cleaned = notes.strip()
             mapping.notes = cleaned or None
 
-        mapping.updated_at = datetime.utcnow()
+        mapping.updated_at = utc_now()
         self.db.commit()
         self.db.refresh(mapping)
 
@@ -682,7 +683,7 @@ class ProductCatalogService:
         from app.services.marketing_engine.product_matcher import SEED_PRODUCTS
 
         brand_key = self._normalize_brand(brand)
-        now = datetime.utcnow()
+        now = utc_now()
 
         existing_names = {
             row.product_name.strip().lower()
@@ -954,7 +955,7 @@ class ProductCatalogService:
         text_blob: str,
         reset_approval: bool,
     ) -> list[dict[str, Any]]:
-        now = datetime.utcnow()
+        now = utc_now()
         candidates = self._derive_condition_candidates(
             product_name=product.product_name,
             text_blob=text_blob,
@@ -1032,7 +1033,7 @@ class ProductCatalogService:
         if not hard_conditions:
             return []
 
-        now = datetime.utcnow()
+        now = utc_now()
         existing_rows = (
             self.db.query(ProductConditionMapping)
             .filter(ProductConditionMapping.product_id == product.id)

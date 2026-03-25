@@ -1,6 +1,7 @@
 """Offline experiment runner for regional pooled panel forecasting."""
 
 from __future__ import annotations
+from app.core.time import utc_now
 
 import argparse
 import json
@@ -474,7 +475,7 @@ class RegionalExperimentRunner:
             "baseline_metrics": baseline_metrics,
             "experiment_count": len(ranking),
             "best_experiment": ranking[0]["name"] if ranking else None,
-            "generated_at": datetime.utcnow().isoformat(),
+            "generated_at": utc_now().isoformat(),
             "runs": ranking,
         }
         summary_path = self.experiments_dir / _virus_slug(virus_typ) / "summary.json"

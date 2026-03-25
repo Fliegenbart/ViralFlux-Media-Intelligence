@@ -5,6 +5,7 @@ persistiert Opportunities und liefert CRM-faehiges JSON.
 """
 
 from __future__ import annotations
+from app.core.time import utc_now
 
 from datetime import datetime, timedelta
 import time
@@ -376,7 +377,7 @@ class MarketingOpportunityEngine:
         clean_opps = [self._clean_for_output(o) for o in all_opportunities]
         return {
             "meta": {
-                "generated_at": datetime.utcnow().isoformat() + "Z",
+                "generated_at": utc_now().isoformat() + "Z",
                 "system_version": SYSTEM_VERSION,
                 "total_opportunities": len(clean_opps),
                 "new_saved": saved,
@@ -524,7 +525,7 @@ class MarketingOpportunityEngine:
         if not needed_clusters:
             return opportunities
 
-        now = datetime.utcnow()
+        now = utc_now()
         current_week = now.isocalendar()[1]
         current_year = now.year
 
@@ -749,7 +750,7 @@ class MarketingOpportunityEngine:
             max_cards=max_cards,
         )
         cards: list[dict[str, Any]] = []
-        now = datetime.utcnow()
+        now = utc_now()
         # Bulk generation must stay fast/reliable for dashboards. We therefore
         # default to deterministic fallback plans and reserve LLM usage for
         # per-card regeneration flows.
@@ -1132,7 +1133,7 @@ class MarketingOpportunityEngine:
         cards.sort(key=lambda x: (x["urgency_score"], x["confidence"]), reverse=True)
         top_card_id = cards[0]["id"] if cards else None
         return {
-            "meta": {"generated_at": datetime.utcnow().isoformat() + "Z"},
+            "meta": {"generated_at": utc_now().isoformat() + "Z"},
             "cards": cards,
             "total_cards": len(cards),
             "top_card_id": top_card_id,
@@ -1221,7 +1222,7 @@ class MarketingOpportunityEngine:
 
             payload["peix_context"] = peix_context
             row.campaign_payload = payload
-            row.updated_at = datetime.utcnow()
+            row.updated_at = utc_now()
             updated += 1
 
         if updated > 0:
@@ -1234,7 +1235,7 @@ class MarketingOpportunityEngine:
             "skipped_existing": skipped_existing,
             "skipped_no_region": skipped_no_region,
             "force": force,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": utc_now().isoformat(),
         }
 
     def backfill_product_mapping(self, *, force: bool = False, limit: int = 1000) -> dict[str, Any]:
@@ -1303,7 +1304,7 @@ class MarketingOpportunityEngine:
                         products_set.add(name)
             row.suggested_products = [{"product_name": p} for p in sorted(products_set) if p]
 
-            row.updated_at = datetime.utcnow()
+            row.updated_at = utc_now()
             updated += 1
 
         if updated > 0:
@@ -1315,7 +1316,7 @@ class MarketingOpportunityEngine:
             "updated": updated,
             "skipped_approved": skipped,
             "force": force,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": utc_now().isoformat(),
         }
 
     def update_campaign(
@@ -1338,7 +1339,7 @@ class MarketingOpportunityEngine:
         payload = (row.campaign_payload or {}).copy()
         payload.setdefault("meta", {
             "version": "1.0",
-            "generated_at": datetime.utcnow().isoformat() + "Z",
+            "generated_at": utc_now().isoformat() + "Z",
             "generator": "ViralFlux-Media-v3",
         })
 
@@ -1421,7 +1422,7 @@ class MarketingOpportunityEngine:
             payload["measurement_plan"] = measurement
 
         row.campaign_payload = payload
-        row.updated_at = datetime.utcnow()
+        row.updated_at = utc_now()
         self.db.commit()
         return self._model_to_dict(row, normalize_status=True)
 
@@ -1556,7 +1557,7 @@ class MarketingOpportunityEngine:
         payload["ai_meta"] = {
             **(generated.get("ai_meta") or {}),
             "status": generated.get("ai_generation_status"),
-            "regenerated_at": datetime.utcnow().isoformat() + "Z",
+            "regenerated_at": utc_now().isoformat() + "Z",
         }
 
         # Enforce deterministic OTC message framework (avoid LLM drift/hallucinations).
@@ -1567,7 +1568,7 @@ class MarketingOpportunityEngine:
         row.campaign_payload = payload
         row.strategy_mode = row.strategy_mode or "PLAYBOOK_AI"
         row.playbook_key = row.playbook_key or playbook_key
-        row.updated_at = datetime.utcnow()
+        row.updated_at = utc_now()
         self.db.commit()
 
         result = self._model_to_dict(row, normalize_status=True)
@@ -1602,7 +1603,7 @@ class MarketingOpportunityEngine:
 
         old_status = current
         opp.status = target
-        opp.updated_at = datetime.utcnow()
+        opp.updated_at = utc_now()
 
         payload = (opp.campaign_payload or {}).copy()
         campaign = (payload.get("campaign") or {}).copy()
@@ -1614,7 +1615,7 @@ class MarketingOpportunityEngine:
             payload["dismiss_info"] = {
                 "reason": dismiss_reason or "",
                 "comment": (dismiss_comment or "").strip()[:500],
-                "dismissed_at": datetime.utcnow().isoformat() + "Z",
+                "dismissed_at": utc_now().isoformat() + "Z",
             }
 
         opp.campaign_payload = payload
@@ -1651,7 +1652,7 @@ class MarketingOpportunityEngine:
 
         results = query.order_by(MarketingOpportunity.urgency_score.desc()).all()
 
-        now = datetime.utcnow()
+        now = utc_now()
         for opp in results:
             opp.exported_at = now
 
@@ -1699,13 +1700,13 @@ class MarketingOpportunityEngine:
 
         recent = (
             self.db.query(MarketingOpportunity)
-            .filter(MarketingOpportunity.created_at >= datetime.utcnow() - timedelta(days=7))
+            .filter(MarketingOpportunity.created_at >= utc_now() - timedelta(days=7))
             .count()
         )
 
         # Daily breakdown for sparkline (last 7 days)
         daily_counts: list[int] = []
-        now = datetime.utcnow()
+        now = utc_now()
         for days_ago in range(6, -1, -1):
             day_start = (now - timedelta(days=days_ago)).replace(hour=0, minute=0, second=0, microsecond=0)
             day_end = day_start + timedelta(days=1)
@@ -1901,7 +1902,7 @@ class MarketingOpportunityEngine:
                 payload = (existing.campaign_payload or {}).copy()
                 payload["conquesting"] = conquesting_data
                 existing.campaign_payload = payload
-            existing.updated_at = datetime.utcnow()
+            existing.updated_at = utc_now()
             self.db.commit()
             return False
 
@@ -1910,7 +1911,7 @@ class MarketingOpportunityEngine:
         try:
             detected_at = datetime.fromisoformat(detected_at_str.replace("Z", "+00:00"))
         except (ValueError, AttributeError):
-            detected_at = datetime.utcnow()
+            detected_at = utc_now()
 
         campaign_payload = {}
         if conquesting_data:
@@ -1930,7 +1931,7 @@ class MarketingOpportunityEngine:
             sales_pitch=opp.get("sales_pitch"),
             suggested_products=opp.get("suggested_products"),
             campaign_payload=campaign_payload if campaign_payload else None,
-            expires_at=datetime.utcnow() + timedelta(days=14),
+            expires_at=utc_now() + timedelta(days=14),
         )
         self.db.add(entry)
         self.db.commit()
@@ -1966,7 +1967,7 @@ class MarketingOpportunityEngine:
         return f"{brand} | {product} | {region} | {type_label}"
 
     def _derive_activation_window(self, urgency: float) -> dict:
-        start = datetime.utcnow()
+        start = utc_now()
         days = 14 if urgency >= 70 else 10 if urgency >= 50 else 7
         end = start + timedelta(days=days)
         return {
@@ -2032,7 +2033,7 @@ class MarketingOpportunityEngine:
 
     @staticmethod
     def _derive_activation_window_from_days(days: int) -> dict[str, Any]:
-        start = datetime.utcnow()
+        start = utc_now()
         duration = max(1, min(28, int(days or 10)))
         end = start + timedelta(days=duration)
         return {
@@ -2087,7 +2088,7 @@ class MarketingOpportunityEngine:
     ) -> str:
         trigger_ctx = synthetic_opportunity.get("trigger_context") or {}
         detected_at_raw = trigger_ctx.get("detected_at")
-        detected_at = self._parse_iso_datetime(detected_at_raw) or datetime.utcnow()
+        detected_at = self._parse_iso_datetime(detected_at_raw) or utc_now()
 
         entry = MarketingOpportunity(
             opportunity_id=synthetic_opportunity["id"],
@@ -2104,7 +2105,7 @@ class MarketingOpportunityEngine:
             suggested_products=synthetic_opportunity.get("suggested_products"),
             strategy_mode=strategy_mode,
             playbook_key=playbook_key,
-            expires_at=datetime.utcnow() + timedelta(days=14),
+            expires_at=utc_now() + timedelta(days=14),
         )
         self.db.add(entry)
         self.db.flush()
@@ -2215,7 +2216,7 @@ class MarketingOpportunityEngine:
         return {
             "meta": {
                 "version": "1.0",
-                "generated_at": datetime.utcnow().isoformat() + "Z",
+                "generated_at": utc_now().isoformat() + "Z",
                 "generator": "ViralFlux-Media-v3",
             },
             "campaign": {
@@ -2335,7 +2336,7 @@ class MarketingOpportunityEngine:
         if not row:
             return
 
-        now = datetime.utcnow()
+        now = utc_now()
         row.brand = self._canonical_brand(brand) or "gelo"
         row.product = product
         row.status = status

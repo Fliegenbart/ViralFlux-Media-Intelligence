@@ -1,6 +1,7 @@
 """Calibrated regional forecast inference and media activation service."""
 
 from __future__ import annotations
+from app.core.time import utc_now
 
 import json
 import logging
@@ -668,7 +669,7 @@ class RegionalForecastService:
             "top_5": predictions[:5],
             "top_decisions": ranked_decisions[:5],
             "sars_h7_promotion": sars_h7_promotion,
-            "generated_at": datetime.utcnow().isoformat(),
+            "generated_at": utc_now().isoformat(),
         }
 
     def generate_media_allocation(
@@ -859,7 +860,7 @@ class RegionalForecastService:
             "allocation_config": allocation.get("config") or {},
             "horizon_days": horizon_days,
             "truth_layer": truth_layer,
-            "generated_at": datetime.utcnow().isoformat(),
+            "generated_at": utc_now().isoformat(),
             "recommendations": recommendations,
         }
 
@@ -930,7 +931,7 @@ class RegionalForecastService:
             "top_decisions": [],
             "decision_summary": self._decision_summary([]),
             "total_regions": 0,
-            "generated_at": datetime.utcnow().isoformat(),
+            "generated_at": utc_now().isoformat(),
         }
 
     def _empty_media_allocation_response(
@@ -976,7 +977,7 @@ class RegionalForecastService:
             "supported_horizon_days": list(SUPPORTED_FORECAST_HORIZONS),
             "target_window_days": self._target_window_for_horizon(horizon_days),
             "truth_layer": self._truth_layer_rollup([]),
-            "generated_at": datetime.utcnow().isoformat(),
+            "generated_at": utc_now().isoformat(),
             "recommendations": [],
         }
 
@@ -1092,7 +1093,7 @@ class RegionalForecastService:
             "reference_virus": reference_virus,
             "horizon_days": horizon,
             "target_window_days": self._target_window_for_horizon(horizon),
-            "generated_at": datetime.utcnow().isoformat(),
+            "generated_at": utc_now().isoformat(),
             "trained_viruses": sum(1 for item in ranked if item["status"] == "trained"),
             "go_viruses": sum(
                 1
@@ -1229,7 +1230,7 @@ class RegionalForecastService:
 
         region_rollup = self._region_rollup(opportunities)
         return {
-            "generated_at": datetime.utcnow().isoformat(),
+            "generated_at": utc_now().isoformat(),
             "reference_virus": reference_virus,
             "horizon_days": horizon,
             "target_window_days": self._target_window_for_horizon(horizon),
@@ -1272,7 +1273,7 @@ class RegionalForecastService:
                 "target_window_days": self._target_window_for_horizon(horizon),
                 "status": "unsupported",
                 "message": support["reason"] or f"{virus_typ} unterstützt h{horizon} operativ nicht.",
-                "generated_at": datetime.utcnow().isoformat(),
+                "generated_at": utc_now().isoformat(),
                 "quality_gate": {"overall_passed": False, "forecast_readiness": "UNSUPPORTED"},
                 "business_gate": business_gate,
                 "operator_context": business_gate.get("operator_context"),
@@ -1302,7 +1303,7 @@ class RegionalForecastService:
             "target_window_days": metadata.get("target_window_days") or self._target_window_for_horizon(horizon),
             "status": "trained" if not load_error and metadata.get("aggregate_metrics") else "no_model",
             "message": load_error or metadata.get("message"),
-            "generated_at": datetime.utcnow().isoformat(),
+            "generated_at": utc_now().isoformat(),
             "quality_gate": quality_gate,
             "business_gate": business_gate,
             "operator_context": business_gate.get("operator_context"),

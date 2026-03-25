@@ -1,6 +1,7 @@
 """Pilot reporting and audit layer for regional recommendation outcomes."""
 
 from __future__ import annotations
+from app.core.time import utc_now
 
 from collections import Counter, defaultdict
 from datetime import datetime, timedelta
@@ -74,7 +75,7 @@ class PilotReportingService:
         product: str | None = None,
         include_draft: bool = False,
     ) -> dict[str, Any]:
-        effective_end = _parse_datetime(window_end) or datetime.utcnow()
+        effective_end = _parse_datetime(window_end) or utc_now()
         effective_start = _parse_datetime(window_start) or (effective_end - timedelta(weeks=max(int(lookback_weeks), 1)))
         if effective_end < effective_start:
             raise ValueError("window_end must be on or after window_start")
@@ -155,7 +156,7 @@ class PilotReportingService:
 
         return {
             "brand": normalized_brand,
-            "generated_at": datetime.utcnow().isoformat(),
+            "generated_at": utc_now().isoformat(),
             "reporting_window": {
                 "start": effective_start.isoformat(),
                 "end": effective_end.isoformat(),

@@ -5,6 +5,7 @@ meta-learner models. Follows the same patterns as
 ``app.services.data_ingest.tasks``.
 """
 
+from app.core.time import utc_now
 import logging
 from datetime import date, datetime
 from decimal import Decimal
@@ -166,7 +167,7 @@ def train_xgboost_model_task(
         "selection_mode": selection.mode,
         "include_internal_history": include_internal_history,
         "research_mode": research_mode,
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": utc_now().isoformat(),
     })
 
 
@@ -191,7 +192,7 @@ def compute_forecast_accuracy_task(self) -> Dict[str, Any]:
 
         for virus in virus_types:
             # Forecasts der letzten 14 Tage, die jetzt in der Vergangenheit liegen
-            cutoff = datetime.utcnow()
+            cutoff = utc_now()
             window_start = cutoff - timedelta(days=14)
             forecasts = (
                 db.query(MLForecast)
@@ -296,7 +297,7 @@ def compute_forecast_accuracy_task(self) -> Dict[str, Any]:
     return _json_safe({
         "status": "success",
         "results": results,
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": utc_now().isoformat(),
     })
 
 
@@ -380,5 +381,5 @@ def train_regional_models_task(
         "quality_gate": quality_gate,
         "aggregate_metrics": aggregate_metrics,
         "result": result,
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": utc_now().isoformat(),
     })

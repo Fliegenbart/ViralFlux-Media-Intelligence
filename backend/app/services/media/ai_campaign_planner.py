@@ -1,6 +1,7 @@
 """AI Campaign Planner via strictly local vLLM (OpenAI-compatible API)."""
 
 from __future__ import annotations
+from app.core.time import utc_now
 
 from datetime import datetime
 import json
@@ -101,7 +102,7 @@ class AiCampaignPlanner:
                 "ai_generation_status": "fallback_template",
                 "ai_plan": fallback,
                 "ai_meta": {
-                    "generated_at": datetime.utcnow().isoformat() + "Z",
+                    "generated_at": utc_now().isoformat() + "Z",
                     "model": self.model,
                     "provider": "vllm_local",
                     "fallback_used": True,
@@ -141,7 +142,7 @@ class AiCampaignPlanner:
                 "ai_generation_status": "success",
                 "ai_plan": normalized,
                 "ai_meta": {
-                    "generated_at": datetime.utcnow().isoformat() + "Z",
+                    "generated_at": utc_now().isoformat() + "Z",
                     "model": self.model,
                     "provider": "vllm_local",
                     "fallback_used": False,
@@ -162,7 +163,7 @@ class AiCampaignPlanner:
                 "ai_generation_status": "fallback_template",
                 "ai_plan": fallback,
                 "ai_meta": {
-                    "generated_at": datetime.utcnow().isoformat() + "Z",
+                    "generated_at": utc_now().isoformat() + "Z",
                     "model": self.model,
                     "provider": "vllm_local",
                     "fallback_used": True,

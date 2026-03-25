@@ -5,6 +5,7 @@ optimiert Gewichte via Ridge Regression und generiert LLM-Insights.
 """
 
 from __future__ import annotations
+from app.core.time import utc_now
 
 import pandas as pd
 import numpy as np
@@ -1932,7 +1933,7 @@ class BacktestService:
     ) -> Optional[str]:
         """Persistiert einen Backtest-Lauf inkl. Chart-Punkten."""
         try:
-            run_id = f"bt_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}_{uuid4().hex[:8]}"
+            run_id = f"bt_{utc_now().strftime('%Y%m%d%H%M%S')}_{uuid4().hex[:8]}"
             chart_data = result.get("chart_data", []) or []
             metrics_payload = dict(result.get("metrics", {}) or {})
             if result.get("decision_metrics") is not None:
@@ -3309,7 +3310,7 @@ Verwende einen sachlichen, vertrauenswürdigen Ton."""
         config.weight_context = weights.get('context', 0.20)
         config.correlation_score = score
         config.analyzed_days = days_count
-        config.last_calibration_date = datetime.utcnow()
+        config.last_calibration_date = utc_now()
         config.calibration_source = "GLOBAL_AUTO_3Y"
 
         self.db.commit()

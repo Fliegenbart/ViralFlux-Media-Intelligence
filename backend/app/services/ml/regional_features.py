@@ -1,6 +1,7 @@
 """Regional as-of panel dataset builder for pooled outbreak forecasting."""
 
 from __future__ import annotations
+from app.core.time import utc_now
 
 import logging
 from datetime import datetime, timedelta
@@ -82,7 +83,7 @@ class RegionalFeatureBuilder:
     ) -> pd.DataFrame:
         """Build pooled training rows across all Bundesländer."""
         horizon = ensure_supported_horizon(horizon_days)
-        end_date = pd.Timestamp(datetime.utcnow()).normalize()
+        end_date = pd.Timestamp(utc_now()).normalize()
         start_date = end_date - pd.Timedelta(days=lookback_days)
         truth_start = start_date - pd.Timedelta(days=730)
 
@@ -143,7 +144,7 @@ class RegionalFeatureBuilder:
     ) -> pd.DataFrame:
         """Build one inference row per Bundesland for a shared as-of date."""
         horizon = ensure_supported_horizon(horizon_days)
-        effective_as_of = pd.Timestamp(as_of_date or datetime.utcnow()).normalize()
+        effective_as_of = pd.Timestamp(as_of_date or utc_now()).normalize()
         history_start = effective_as_of - pd.Timedelta(days=lookback_days)
         row_start = effective_as_of - pd.Timedelta(days=horizon + 7)
         truth_start = history_start - pd.Timedelta(days=730)
@@ -216,9 +217,9 @@ class RegionalFeatureBuilder:
             .first()
         )
         if row is None:
-            return pd.Timestamp(datetime.utcnow()).normalize()
+            return pd.Timestamp(utc_now()).normalize()
         return effective_available_time(
-            row.datum or datetime.utcnow(),
+            row.datum or utc_now(),
             row.available_time,
             0,
         ).normalize()
@@ -327,7 +328,7 @@ class RegionalFeatureBuilder:
             return {
                 "virus_typ": virus_typ,
                 "snapshot_type": "regional_panel_as_of_training",
-                "captured_at": datetime.utcnow().isoformat(),
+                "captured_at": utc_now().isoformat(),
                 "rows": 0,
                 "source_lag_days": SOURCE_LAG_DAYS,
                 "dataset_manifest": dataset_manifest,
@@ -341,7 +342,7 @@ class RegionalFeatureBuilder:
             "virus_typ": virus_typ,
             "horizon_days": dataset_manifest.get("horizon_days"),
             "snapshot_type": "regional_panel_as_of_training",
-            "captured_at": datetime.utcnow().isoformat(),
+            "captured_at": utc_now().isoformat(),
             "rows": int(len(panel)),
             "states": int(panel["bundesland"].nunique()),
             "unique_as_of_dates": int(panel["as_of_date"].nunique()),

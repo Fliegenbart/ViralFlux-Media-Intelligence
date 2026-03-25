@@ -1,6 +1,7 @@
 """Targeted h7-only pilot training and calibration experiment helpers."""
 
 from __future__ import annotations
+from app.core.time import utc_now
 
 import json
 import logging
@@ -756,7 +757,7 @@ class H7PilotExperimentRunner:
             "status": "success",
             "horizon_days": H7_PILOT_ONLY_HORIZON,
             "pilot_viruses": list(selected_viruses),
-            "generated_at": datetime.utcnow().isoformat(),
+            "generated_at": utc_now().isoformat(),
             "baseline_models_dir": str(self.baseline_models_dir),
             "experiment_models_dir": str(self.experiment_models_dir),
             "viruses": {

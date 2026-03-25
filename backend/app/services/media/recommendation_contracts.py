@@ -1,4 +1,5 @@
 from __future__ import annotations
+from app.core.time import utc_now
 
 from datetime import datetime
 from typing import Any
@@ -222,7 +223,7 @@ def _has_placeholder_title(card: dict[str, Any]) -> bool:
 
 
 def _derive_content_blockers(card: dict[str, Any], now: datetime | None = None) -> list[str]:
-    effective_now = now or datetime.utcnow()
+    effective_now = now or utc_now()
     campaign_pack = card.get("campaign_payload") or {}
     budget = (card.get("campaign_preview") or {}).get("budget") or campaign_pack.get("budget_plan") or {}
     message_framework = campaign_pack.get("message_framework") or {}
@@ -319,7 +320,7 @@ def derive_publish_blockers(card: dict[str, Any], now: datetime | None = None) -
 
 
 def derive_freshness_state(card: dict[str, Any], now: datetime | None = None) -> str:
-    effective_now = now or datetime.utcnow()
+    effective_now = now or utc_now()
     campaign_pack = card.get("campaign_payload") or {}
     start_at, end_at = _activation_window(card, campaign_pack)
 
@@ -392,7 +393,7 @@ def dedupe_group_id(card: dict[str, Any]) -> str:
 
 
 def enrich_card_v2(card: dict[str, Any], now: datetime | None = None) -> dict[str, Any]:
-    effective_now = now or datetime.utcnow()
+    effective_now = now or utc_now()
     enriched = dict(card)
     blockers = derive_publish_blockers(enriched, now=effective_now)
     lifecycle_state = derive_lifecycle_state(enriched, now=effective_now)

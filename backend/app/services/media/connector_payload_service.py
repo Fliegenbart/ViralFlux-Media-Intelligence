@@ -1,6 +1,7 @@
 """Prepare connector-ready campaign payload previews for future media syncs."""
 
 from __future__ import annotations
+from app.core.time import utc_now
 
 from datetime import datetime
 from typing import Any
@@ -93,7 +94,7 @@ class ConnectorPayloadService:
             "opportunity_id": opportunity.get("id") or opportunity.get("opportunity_id"),
             "connector_key": connector["key"],
             "connector_label": connector["label"],
-            "generated_at": datetime.utcnow().isoformat() + "Z",
+            "generated_at": utc_now().isoformat() + "Z",
             "available_connectors": [dict(item) for item in CONNECTOR_CATALOG],
             "readiness": readiness,
             "normalized_package": normalized_package,

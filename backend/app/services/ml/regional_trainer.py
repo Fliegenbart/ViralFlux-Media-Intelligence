@@ -1,6 +1,7 @@
 """Pooled regional panel trainer for leakage-safe outbreak forecasting."""
 
 from __future__ import annotations
+from app.core.time import utc_now
 
 import json
 import logging
@@ -394,13 +395,13 @@ class RegionalModelTrainer:
             policy_reference_date = pd.to_datetime(panel["as_of_date"], errors="coerce").max() if "as_of_date" in panel.columns else None
             cluster_blend_resolution = GeoHierarchyHelper.resolve_blend_weight_policy(
                 hierarchy_metadata["aggregate_blend_policy"].get("cluster"),
-                as_of_date=policy_reference_date or datetime.utcnow(),
+                as_of_date=policy_reference_date or utc_now(),
                 horizon_days=horizon,
                 fallback=float(((hierarchy_diagnostics.get("cluster") or {}).get("recommended_blend_weight") or 0.0)),
             )
             national_blend_resolution = GeoHierarchyHelper.resolve_blend_weight_policy(
                 hierarchy_metadata["aggregate_blend_policy"].get("national"),
-                as_of_date=policy_reference_date or datetime.utcnow(),
+                as_of_date=policy_reference_date or utc_now(),
                 horizon_days=horizon,
                 fallback=float(((hierarchy_diagnostics.get("national") or {}).get("recommended_blend_weight") or 0.0)),
             )
@@ -421,7 +422,7 @@ class RegionalModelTrainer:
             metadata = {
                 "virus_typ": virus_typ,
                 "model_family": "regional_pooled_panel",
-                "trained_at": datetime.utcnow().isoformat(),
+                "trained_at": utc_now().isoformat(),
                 "model_version": None,
                 "calibration_version": None,
                 "horizon_days": horizon,
@@ -3057,7 +3058,7 @@ class RegionalModelTrainer:
             "ranking": _json_safe(ranking),
             "fold_diagnostics": _json_safe(fold_diagnostics),
             "details": _json_safe(details),
-            "generated_at": datetime.utcnow().isoformat(),
+            "generated_at": utc_now().isoformat(),
         }
 
     @staticmethod

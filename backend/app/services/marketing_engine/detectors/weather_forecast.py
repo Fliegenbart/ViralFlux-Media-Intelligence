@@ -6,6 +6,7 @@ Analysiert die nächsten 8 Tage Wettervorhersage um:
 3. EXTREME_COLD_FORECAST: Temperatur < -5°C → Akut-Trigger (Erkältung im Anflug)
 """
 
+from app.core.time import utc_now
 from collections import Counter, defaultdict
 from datetime import datetime, timedelta
 import logging
@@ -61,7 +62,7 @@ class WeatherForecastDetector(OpportunityDetector):
 
     def _load_forecast_data(self) -> list:
         """Lade Daily-Forecast-Wetterdaten für die nächsten 8 Tage."""
-        now = datetime.utcnow()
+        now = utc_now()
         eight_days_out = now + timedelta(days=8)
 
         rows = (

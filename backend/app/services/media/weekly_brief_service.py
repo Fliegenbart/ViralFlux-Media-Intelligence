@@ -7,6 +7,7 @@ Generiert jeden Montag ein 3-seitiges PDF:
 """
 
 from __future__ import annotations
+from app.core.time import utc_now
 
 import io
 import logging
@@ -189,7 +190,7 @@ class WeeklyBriefService:
         """Generate the weekly brief PDF. Returns dict with pdf_bytes + metadata."""
         from app.services.media.cockpit_service import MediaCockpitService
 
-        now = datetime.utcnow()
+        now = utc_now()
         iso_cal = now.isocalendar()
         calendar_week = f"{iso_cal.year}-W{iso_cal.week:02d}"
 
@@ -618,12 +619,12 @@ class WeeklyBriefService:
         if existing:
             existing.pdf_bytes = pdf_bytes
             existing.summary_json = summary
-            existing.generated_at = datetime.utcnow()
+            existing.generated_at = utc_now()
             existing.virus_typ = virus_typ
         else:
             brief = WeeklyBrief(
                 calendar_week=calendar_week,
-                generated_at=datetime.utcnow(),
+                generated_at=utc_now(),
                 pdf_bytes=pdf_bytes,
                 summary_json=summary,
                 virus_typ=virus_typ,

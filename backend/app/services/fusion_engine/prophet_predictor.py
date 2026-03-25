@@ -4,6 +4,7 @@ Wraps Facebook Prophet mit domänenspezifischen Regressoren
 (Schulferien, Temperatur, Luftfeuchtigkeit) für 28-Tage-Vorhersage.
 """
 
+from app.core.time import utc_now
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
@@ -217,7 +218,7 @@ class ProphetPredictor:
                 else 'fallend' if trend_pct < -0.01
                 else 'stabil'
             ),
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': utc_now().isoformat(),
         }
 
     def _fallback_from_stored(self, virus_typ: str) -> dict | None:
@@ -263,5 +264,5 @@ class ProphetPredictor:
                 else 'fallend' if trend_pct < -0.01
                 else 'stabil'
             ),
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': utc_now().isoformat(),
         }

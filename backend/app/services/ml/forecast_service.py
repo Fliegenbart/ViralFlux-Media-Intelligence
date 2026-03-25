@@ -15,6 +15,7 @@ and asymmetric loss (quantile regression at 80th percentile).
 """
 
 from __future__ import annotations
+from app.core.time import utc_now
 
 import json
 import logging
@@ -1413,7 +1414,7 @@ class ForecastService:
     ) -> dict[str, Any]:
         region_code = normalize_forecast_region(region)
         horizon = ensure_supported_horizon(horizon_days)
-        issue_ts = issue_date or datetime.utcnow()
+        issue_ts = issue_date or utc_now()
         burden = BurdenForecast(
             target=virus_typ,
             region=region_code,
@@ -1670,7 +1671,7 @@ class ForecastService:
             "training_window": metadata.get("training_window"),
             "backtest_metrics": backtest_metrics,
             "contracts": contracts,
-            "timestamp": datetime.utcnow(),
+            "timestamp": utc_now(),
         }
 
         logger.info(
@@ -1812,7 +1813,7 @@ class ForecastService:
             },
             "backtest_metrics": backtest_metrics,
             "contracts": contracts,
-            "timestamp": datetime.utcnow(),
+            "timestamp": utc_now(),
         }
 
         logger.info(

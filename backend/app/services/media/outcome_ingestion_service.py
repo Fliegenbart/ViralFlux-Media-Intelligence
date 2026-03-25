@@ -1,4 +1,5 @@
 from __future__ import annotations
+from app.core.time import utc_now
 
 import uuid
 from datetime import datetime
@@ -86,7 +87,7 @@ class OutcomeIngestionService:
             ingestion_mode="api_ingest",
             status="failed",
             rows_total=len(observations),
-            uploaded_at=datetime.utcnow(),
+            uploaded_at=utc_now(),
         )
         self.db.add(batch)
         self.db.flush()
@@ -459,7 +460,7 @@ class OutcomeIngestionService:
             merged_extra["ingestion_mode"] = "api_ingest"
             target.extra_data = merged_extra
             target.import_batch_id = batch_id
-            target.updated_at = datetime.utcnow()
+            target.updated_at = utc_now()
 
     def _issue(
         self,

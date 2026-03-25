@@ -99,6 +99,7 @@ describe('CampaignStudio', () => {
 
     expect(screen.getByText('Jetzt zuerst prüfen')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Diesen Fall öffnen' })).toBeInTheDocument();
+    expect(screen.getByText(/Signal-Score: Ranking-Signal\./)).toBeInTheDocument();
     expect(screen.getByText('Vorbereitung')).toBeInTheDocument();
     expect(screen.getByText('Freigabe')).toBeInTheDocument();
     expect(screen.getByText('Weitere Vorschläge erstellen')).toBeInTheDocument();

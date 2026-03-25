@@ -1,14 +1,16 @@
 import React from 'react';
 
 import { MediaRegionsResponse, WorkspaceStatusSummary } from '../../types/media';
-import { normalizeGermanText } from '../../lib/plainLanguage';
+import { explainInPlainGerman, normalizeGermanText } from '../../lib/plainLanguage';
 import CollapsibleSection from '../CollapsibleSection';
 import { UI_COPY } from '../../lib/copy';
 import GermanyMap from './GermanyMap';
 import {
   formatDateShort,
   formatPercent,
-  metricContractLabel,
+  metricContractBadge,
+  metricContractDisplayLabel,
+  metricContractNote,
   primarySignalScore,
   VIRUS_OPTIONS,
 } from './cockpitUtils';
@@ -46,11 +48,18 @@ const RegionWorkbench: React.FC<Props> = ({
   regionActionLoading,
 }) => {
   const activeMap = regionsView?.map;
-  const region = selectedRegion ? activeMap?.regions?.[selectedRegion] : null;
-  const suggestion = activeMap?.activation_suggestions?.find((item) => item.region === selectedRegion);
   const topRegions = (activeMap?.top_regions || []).slice(0, 5);
+  const fallbackRegionCode = selectedRegion || topRegions[0]?.code || null;
+  const region = fallbackRegionCode ? activeMap?.regions?.[fallbackRegionCode] || null : null;
+  const suggestion = activeMap?.activation_suggestions?.find((item) => item.region === fallbackRegionCode);
   const primaryRegion = region || topRegions[0] || null;
-  const signalLabel = metricContractLabel(primaryRegion?.field_contracts, 'signal_score', UI_COPY.signalScore);
+  const signalLabel = metricContractDisplayLabel(primaryRegion?.field_contracts, 'signal_score', UI_COPY.signalScore);
+  const signalBadge = metricContractBadge(primaryRegion?.field_contracts, 'signal_score', 'Kennzahl');
+  const signalNote = metricContractNote(
+    primaryRegion?.field_contracts,
+    'signal_score',
+    'Hilft beim Vergleichen und Priorisieren, ist aber keine Eintrittswahrscheinlichkeit.',
+  );
 
   if (loading && !regionsView) {
     return (
@@ -78,7 +87,7 @@ const RegionWorkbench: React.FC<Props> = ({
     );
   }
 
-  const primaryReason = normalizeGermanText(
+  const primaryReason = explainInPlainGerman(
     region?.priority_explanation
       || suggestion?.reason
       || region?.tooltip?.recommendation_text
@@ -96,12 +105,12 @@ const RegionWorkbench: React.FC<Props> = ({
     ? 'Kampagnenvorschlag öffnen'
     : 'Vorschlag für Region erstellen';
   const primaryAction = () => {
-    if (!selectedRegion) return;
+    if (!fallbackRegionCode) return;
     if (region?.recommendation_ref?.card_id) {
       onOpenRecommendation(region.recommendation_ref.card_id);
       return;
     }
-    onGenerateRegionCampaign(selectedRegion);
+    onGenerateRegionCampaign(fallbackRegionCode);
   };
 
   return (
@@ -133,13 +142,40 @@ const RegionWorkbench: React.FC<Props> = ({
 
       <OperatorSection
         kicker="Ausgewählte Region"
-        title={region?.name || 'Wähle ein Bundesland auf der Karte'}
+        title={region?.name ? `${region.name} zieht gerade zuerst an` : 'Wähle ein Bundesland auf der Karte'}
         description={primaryReason}
         tone="accent"
-        className="now-hero-shell"
+        className="regions-hero-shell"
       >
-        <div className="workspace-priority-grid now-hero-grid">
-          <div className="now-focus-card">
+        <div className="regions-command-grid">
+          <OperatorPanel
+            title="Deutschlandkarte"
+            description="Klick auf ein Bundesland. Rechts springt der Fokus dann sofort auf die gewählte Region."
+            className="regions-map-panel"
+          >
+            <GermanyMap
+              regions={activeMap.regions}
+              selectedRegion={fallbackRegionCode}
+              onSelectRegion={onSelectRegion}
+            />
+          </OperatorPanel>
+
+          <OperatorPanel
+            eyebrow="Aktuell vorne"
+            title={region ? `${region.name} ist die erste Prüfregion` : 'Wähle eine Region'}
+            description={driverSummary}
+            tone="accent"
+            className="regions-command-rail"
+          >
+            <OperatorChipRail className="review-chip-row">
+              <span className="step-chip">{decisionModeLabel}</span>
+              <span className="step-chip">{region?.tooltip?.recommended_product || 'GELO Portfolio'}</span>
+              <span className="step-chip">{region?.forecast_direction || 'seitwärts'}</span>
+              <span className="step-chip">
+                {suggestion?.budget_shift_pct ? `Budget ${formatPercent(suggestion.budget_shift_pct)}` : 'Budget zuerst prüfen'}
+              </span>
+            </OperatorChipRail>
+
             <div className="operator-stat-grid">
               <OperatorStat
                 label={signalLabel}
@@ -164,37 +200,25 @@ const RegionWorkbench: React.FC<Props> = ({
               />
             </div>
 
+            <div className="workspace-note-list">
+              <div className="workspace-note-card">{primaryReason}</div>
+              <div className="workspace-note-card">
+                Wichtige Quellen: {sourceTraceLabel}
+              </div>
+              <div className="workspace-note-card">
+                {signalLabel}: {signalBadge}. {signalNote}
+              </div>
+            </div>
+
             <div className="action-row">
               <button
                 className="media-button"
                 type="button"
                 onClick={primaryAction}
-                disabled={!selectedRegion || regionActionLoading}
+                disabled={!fallbackRegionCode || regionActionLoading}
               >
                 {regionActionLoading ? 'Wird vorbereitet…' : primaryActionLabel}
               </button>
-            </div>
-          </div>
-
-          <OperatorPanel
-            eyebrow="Warum diese Region"
-            title={region ? `Die größte Dynamik sehen wir aktuell in ${region.name}.` : 'Wichtigste Region'}
-            description={driverSummary}
-            tone="muted"
-          >
-            <div className="workspace-note-list">
-              <div className="workspace-note-card">
-                Einordnung: {decisionModeLabel}
-              </div>
-              <div className="workspace-note-card">
-                Produktfokus: {region?.tooltip?.recommended_product || 'GELO Portfolio'}
-              </div>
-              <div className="workspace-note-card">
-                Veränderung: {formatPercent(region?.change_pct || 0, 1)}
-              </div>
-              <div className="workspace-note-card">
-                Wichtige Quellen: {sourceTraceLabel}
-              </div>
             </div>
           </OperatorPanel>
         </div>
@@ -206,55 +230,44 @@ const RegionWorkbench: React.FC<Props> = ({
         intro="Hier siehst du, ob du für diese Region direkt weitermachen kannst."
       />
 
-      <section className="workspace-two-column">
-        <OperatorPanel
-          title="Region auswählen"
-          description="Klick auf ein Bundesland. Oben wechselt dann sofort der Fokus."
-        >
-          <GermanyMap
-            regions={activeMap.regions}
-            selectedRegion={selectedRegion}
-            onSelectRegion={onSelectRegion}
-          />
-        </OperatorPanel>
-
-        <OperatorPanel
-          title="Weitere Regionen mit hoher Dynamik"
-          description="Wenn die erste Region erledigt ist, findest du hier die nächsten sinnvollen Kandidaten."
-        >
-          <div className="workspace-note-list">
-            {topRegions.map((item) => (
-              <button
-                type="button"
-                key={item.code}
-                onClick={() => onSelectRegion(item.code)}
-                className="campaign-list-card"
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
-                  <div style={{ textAlign: 'left' }}>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>{item.name}</div>
-                    <div style={{ marginTop: 4, fontSize: 12, color: 'var(--text-muted)' }}>
-                      {item.tooltip?.recommended_product || 'GELO'} · {normalizeGermanText(item.decision_mode_label || item.trend || '-')}
-                    </div>
-                  </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--accent-violet)' }}>
-                      {formatPercent(Number(item.actionability_score || primarySignalScore(item) || 0))}
-                    </div>
-                    <div style={{ marginTop: 4, fontSize: 12, color: 'var(--text-muted)' }}>
-                      Priorität #{Math.round(Number(item.priority_rank || 0))}
-                    </div>
+      <OperatorSection
+        kicker="Was kommt danach?"
+        title="Weitere Regionen mit hoher Dynamik"
+        description="Wenn die erste Region erledigt ist, findest du hier die nächsten sinnvollen Kandidaten."
+        tone="muted"
+      >
+        <div className="workspace-note-list">
+          {topRegions.map((item) => (
+            <button
+              type="button"
+              key={item.code}
+              onClick={() => onSelectRegion(item.code)}
+              className="campaign-list-card"
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+                <div style={{ textAlign: 'left' }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>{item.name}</div>
+                  <div style={{ marginTop: 4, fontSize: 12, color: 'var(--text-muted)' }}>
+                    {item.tooltip?.recommended_product || 'GELO'} · {normalizeGermanText(item.decision_mode_label || item.trend || '-')}
                   </div>
                 </div>
-              </button>
-            ))}
-          </div>
-        </OperatorPanel>
-      </section>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--accent-violet)' }}>
+                    {formatPercent(Number(item.actionability_score || primarySignalScore(item) || 0))}
+                  </div>
+                  <div style={{ marginTop: 4, fontSize: 12, color: 'var(--text-muted)' }}>
+                    Priorität #{Math.round(Number(item.priority_rank || 0))}
+                  </div>
+                </div>
+              </div>
+            </button>
+          ))}
+        </div>
+      </OperatorSection>
 
       <CollapsibleSection
-        title={region ? `Warum ${region.name}?` : 'Warum diese Region?'}
-        subtitle="Hier findest du die wichtigsten Gründe für die Auswahl dieser Region."
+        title={region ? `Mehr Details zu ${region.name}` : 'Mehr Details zur Region'}
+        subtitle="Hier findest du die wichtigsten Gründe und Treiber noch einmal gesammelt."
         defaultOpen
       >
         <div className="workspace-two-column">

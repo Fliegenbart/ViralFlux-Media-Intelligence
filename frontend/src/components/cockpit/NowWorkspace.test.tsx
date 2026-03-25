@@ -3,7 +3,7 @@ import React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 
 import NowWorkspace from './NowWorkspace';
-import { NowPageViewModel } from '../../features/media/useMediaData';
+import { NowPageTrustCheck, NowPageViewModel } from '../../features/media/useMediaData';
 import {
   RegionalBacktestResponse,
   RegionalForecastResponse,
@@ -48,6 +48,32 @@ jest.mock('./HistoricalWaveMap', () => ({
 
 const noop = () => {};
 
+function buildTrustChecks(): NowPageTrustCheck[] {
+  return [
+    {
+      key: 'forecast',
+      question: 'Kann ich der Vorhersage trauen?',
+      value: 'Freigabe bereit',
+      detail: 'Monitoring Stabil · Forecast aktuell',
+      tone: 'success',
+    },
+    {
+      key: 'data',
+      question: 'Sind die Daten frisch genug?',
+      value: 'Aktuell',
+      detail: '6/7 Quellen aktuell',
+      tone: 'success',
+    },
+    {
+      key: 'business',
+      question: 'Ist eine Business-Freigabe schon drin?',
+      value: 'Im Aufbau',
+      detail: 'Vergleichsgruppe bereit · beobachtend',
+      tone: 'warning',
+    },
+  ];
+}
+
 function buildView(): NowPageViewModel {
   return {
     hasData: true,
@@ -83,6 +109,7 @@ function buildView(): NowPageViewModel {
       { label: 'Empfohlenes Budget', value: '55.200 €', tone: 'neutral' },
       { label: 'Vertrauen', value: 'im Aufbau', tone: 'warning' },
     ],
+    trustChecks: buildTrustChecks(),
     reasons: [
       'Die Entwicklung liegt klar über der Aktivierungsschwelle.',
       'Die Fokusregion zeigt die stärkste Dynamik.',
@@ -296,14 +323,18 @@ describe('NowWorkspace', () => {
       />,
     );
 
-    expect(screen.getByText('Was sich gerade entwickelt')).toBeInTheDocument();
+    expect(screen.getByText('Was passiert gerade?')).toBeInTheDocument();
     expect(screen.getByText('Fokusregion in 7 Tagen')).toBeInTheDocument();
     expect(screen.getByText(/In 7 Tagen erwarten wir für Berlin einen Viruslage-Wert von ca. 165,0/)).toBeInTheDocument();
     expect(screen.getByText(/Letzter bestätigter Ist-Wert vom 17.03.2026/)).toBeInTheDocument();
     expect(screen.getByText('Unsere Prognose zeigt im 7-Tage-Fenster die größte Dynamik aktuell in Berlin.')).toBeInTheDocument();
-    expect(screen.getByText('Was vor dem nächsten Schritt geklärt sein sollte')).toBeInTheDocument();
+    expect(screen.getByText('Kann ich der Entscheidung trauen?')).toBeInTheDocument();
+    expect(screen.getByText('Der schnelle Sicherheitscheck')).toBeInTheDocument();
+    expect(screen.getByText('Ist eine Business-Freigabe schon drin?')).toBeInTheDocument();
+    expect(screen.getByText('Was kommt danach?')).toBeInTheDocument();
+    expect(screen.getAllByText('Respiratory Core Demand').length).toBeGreaterThan(0);
     expect(screen.getByText('Danach anschauen')).toBeInTheDocument();
-    expect(screen.getByText('Noch offen')).toBeInTheDocument();
+    expect(screen.getByText('Was vorher noch offen ist')).toBeInTheDocument();
     expect(screen.getByText('Weitere Details')).toBeInTheDocument();
   });
 

@@ -130,6 +130,7 @@ describe('RegionWorkbench', () => {
 
     expect(screen.getByText('Hier sehen wir den wahrscheinlichen frühen Start')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Kampagnenvorschlag öffnen' })).toBeInTheDocument();
+    expect(screen.getByText(/Signalwert: Kennzahl\./)).toBeInTheDocument();
     expect(screen.queryByText('Empfehlung neu berechnen')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Kampagnenvorschlag öffnen' }));

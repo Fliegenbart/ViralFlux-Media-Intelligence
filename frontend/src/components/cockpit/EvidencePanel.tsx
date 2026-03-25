@@ -75,6 +75,9 @@ const EvidencePanel: React.FC<Props> = ({
   const leadLag = (latestBacktest?.lead_lag || {}) as Record<string, unknown>;
   const improvementVsBaselines = (latestBacktest?.improvement_vs_baselines || {}) as Record<string, unknown>;
   const driverGroups = signalStack?.summary?.driver_groups || {};
+  const quickStatusItems = (workspaceStatus?.items || []).slice(0, 4);
+  const blockerPreview = (workspaceStatus?.blockers || []).slice(0, 4);
+  const recentRunPreview = recentRuns.slice(0, 3);
 
   if (loading && !evidence) {
     return (
@@ -95,39 +98,48 @@ const EvidencePanel: React.FC<Props> = ({
         kicker="Qualität"
         title="Was vor dem Handeln noch geprüft wird"
         description="Hier siehst du, ob Vorhersage, Daten und Kundensignale für den nächsten Schritt ausreichen."
-        tone="muted"
+        tone="accent"
         className="operator-toolbar-shell"
       >
-        <div className="workspace-priority-grid">
+        <div className="evidence-command-grid">
           <OperatorPanel
-            eyebrow="Schneller Überblick"
-            title="Was du zuerst wissen solltest"
-            description="Hier steht kurz, was gerade wichtig ist."
-            tone="muted"
+            eyebrow="Freigabe-Lage"
+            title="Kannst du weitermachen?"
+            description={workspaceStatus?.summary || 'Sobald Qualitätsdaten vorliegen, fassen wir hier den schnellsten Prüfpfad zusammen.'}
+            tone="accent"
           >
             <div className="workspace-note-list">
               <div className="workspace-note-card">
                 {workspaceStatus?.summary || 'Sobald Qualitätsdaten vorliegen, fassen wir hier den schnellsten Prüfpfad zusammen.'}
               </div>
               <div className="workspace-note-card">
-                Geprüft werden Vorhersage, Kundendaten, Quellen und Importe.
+                Geprüft werden Vorhersage, Kundendaten, Quellen und Importe, bevor du wirklich freigibst.
+              </div>
+              <div className="workspace-note-card">
+                Wenn hier etwas offen bleibt, findest du darunter direkt den passenden Prüfblock.
               </div>
             </div>
           </OperatorPanel>
 
           <OperatorPanel
-            eyebrow="Nächster Schritt"
-            title="Worauf du jetzt achten solltest"
-            description="Wenn hier etwas offen ist, findest du darunter die passende Detailstelle."
+            eyebrow="Schnellcheck"
+            title="Die vier wichtigsten Prüfpunkte"
+            description="So erkennst du sofort, welcher Bereich dich gerade noch bremst."
             tone="muted"
           >
-            <div className="workspace-note-list">
-              <div className="workspace-note-card">
-                {workspaceStatus?.summary || 'Noch kein zusammengefasster Qualitätsstatus vorhanden.'}
-              </div>
-              <div className="workspace-note-card">
-                Offene Punkte kannst du direkt in den vier Bereichen darunter nachverfolgen.
-              </div>
+            <div className="now-trust-grid evidence-status-grid">
+              {quickStatusItems.length > 0 ? quickStatusItems.map((item) => (
+                <article
+                  key={item.key}
+                  className={`workspace-status-card workspace-status-card--${item.tone}`}
+                >
+                  <span className="workspace-status-card__question">{item.question}</span>
+                  <strong>{item.value}</strong>
+                  <p>{item.detail}</p>
+                </article>
+              )) : (
+                <div className="workspace-note-card">Noch kein zusammengefasster Qualitätsstatus vorhanden.</div>
+              )}
             </div>
           </OperatorPanel>
         </div>
@@ -141,17 +153,39 @@ const EvidencePanel: React.FC<Props> = ({
 
       {workspaceStatus?.blockers?.length ? (
         <OperatorSection
-          kicker="Offene Punkte"
-          title="Offene Punkte zuerst"
-          description="Das sind die wichtigsten offenen Punkte, bevor wir weitergehen."
+          kicker="Zuerst klären"
+          title="Das bremst die Freigabe gerade"
+          description="Hier stehen die wichtigsten offenen Punkte und die letzten Prüfungen dazu."
           tone="muted"
         >
-          <div className="workspace-note-list">
-            {workspaceStatus.blockers.map((blocker) => (
-              <div key={blocker} className="workspace-note-card">
-                {blocker}
+          <div className="workspace-two-column">
+            <OperatorPanel
+              title="Offene Punkte"
+              description="Das solltest du zuerst klären."
+            >
+              <div className="workspace-note-list">
+                {blockerPreview.map((blocker) => (
+                  <div key={blocker} className="workspace-note-card">
+                    {blocker}
+                  </div>
+                ))}
               </div>
-            ))}
+            </OperatorPanel>
+
+            <OperatorPanel
+              title="Letzte Prüfungen"
+              description="Hier siehst du, was zuletzt schon gelaufen ist."
+            >
+              <div className="workspace-note-list">
+                {recentRunPreview.length > 0 ? recentRunPreview.map((run, index) => (
+                  <div key={`${String(run.mode)}-${index}`} className="workspace-note-card">
+                    {runModeLabel(String(run.mode || 'Lauf'))} · {monitoringStatusLabel(String(run.status || '-'))}
+                  </div>
+                )) : (
+                  <div className="workspace-note-card">Noch keine Laufhistorie vorhanden.</div>
+                )}
+              </div>
+            </OperatorPanel>
           </div>
         </OperatorSection>
       ) : null}
@@ -225,8 +259,8 @@ const EvidencePanel: React.FC<Props> = ({
 
       <OperatorSection
         kicker="Mehr Details"
-        title="Zusätzliche Hinweise"
-        description="Wenn du tiefer prüfen musst, findest du hier weitere technische Details."
+        title="Technische Hinweise"
+        description="Wenn du tiefer prüfen musst, findest du hier zusätzliche technische Einordnung."
         tone="muted"
       >
         <div className="workspace-two-column">
@@ -242,17 +276,19 @@ const EvidencePanel: React.FC<Props> = ({
           </OperatorPanel>
 
           <OperatorPanel
-            title="Letzte Läufe"
-            description="Hier siehst du, wann zuletzt geprüft wurde."
+            title="Import- und Prüfmarker"
+            description="Diese Hinweise helfen beim Nachvollziehen der aktuellen Datenlage."
           >
             <div className="workspace-note-list">
-              {recentRuns.length > 0 ? recentRuns.slice(0, 3).map((run, index) => (
-                <div key={`${String(run.mode)}-${index}`} className="workspace-note-card">
-                  {runModeLabel(String(run.mode || 'Lauf'))} · {monitoringStatusLabel(String(run.status || '-'))}
-                </div>
-              )) : (
-                <div className="workspace-note-card">Noch keine Laufhistorie vorhanden.</div>
-              )}
+              <div className="workspace-note-card">
+                Letzter Import: {workspaceStatus?.last_import_at || 'noch nicht vorhanden'}
+              </div>
+              <div className="workspace-note-card">
+                Blocker aktuell: {workspaceStatus?.open_blockers || 'keine'}
+              </div>
+              <div className="workspace-note-card">
+                Truth-Felder sichtbar: {sourceStatusLabels.length > 0 ? sourceStatusLabels.length : 0}
+              </div>
             </div>
           </OperatorPanel>
         </div>

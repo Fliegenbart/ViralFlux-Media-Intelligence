@@ -42,6 +42,19 @@ const SECTION_META = [
   },
 ] as const;
 
+const TOP_CONTEXT_ITEMS = [
+  {
+    label: 'Früherkennung',
+    path: '/jetzt',
+    matches: ['/jetzt', '/regionen'],
+  },
+  {
+    label: 'Aktivierung',
+    path: '/kampagnen',
+    matches: ['/kampagnen', '/evidenz'],
+  },
+] as const;
+
 const AppLayout: React.FC<Props> = ({ children }) => {
   const { theme, toggle } = useTheme();
   const { handleLogout } = useAuth();
@@ -56,6 +69,7 @@ const AppLayout: React.FC<Props> = ({ children }) => {
     title: 'Arbeitsansicht',
     description: 'Hier bleibt dein aktueller Arbeitsstand an einem Ort.',
   };
+  const activeTopContext = TOP_CONTEXT_ITEMS.find(({ matches }) => matches.some((path) => location.pathname.startsWith(path)));
   const operatorStatusLabel = location.pathname.startsWith('/jetzt')
     ? 'Wochenlage aktiv'
     : location.pathname.startsWith('/evidenz')
@@ -102,15 +116,19 @@ const AppLayout: React.FC<Props> = ({ children }) => {
           aria-label="Navigation Arbeitsansicht"
         >
           <div className="operator-sidebar__brand-row">
-            <Link to="/welcome" className="operator-wordmark" aria-label="ViralFlux Startseite">
-              ViralFlux
+            <Link to="/welcome" className="operator-brand-lockup" aria-label="ViralFlux Startseite">
+              <span className="operator-brand-lockup__mark" aria-hidden="true">VF</span>
+              <span className="operator-brand-lockup__copy">
+                <span className="operator-brand-lockup__wordmark">ViralFlux</span>
+                <span className="operator-brand-lockup__subline">Media Intelligence</span>
+              </span>
             </Link>
           </div>
 
           <div className="operator-sidebar__brand-block">
-            <p className="operator-sidebar__brand-copy">PEIX x GELO</p>
+            <p className="operator-sidebar__brand-copy">PharmaPredict Arbeitsraum</p>
             <p className="operator-sidebar__brand-note">
-              Zeigt dir früh, wo du zuerst hinschauen und handeln solltest.
+              Frühe Signale, Regionen und Kampagnen liegen hier in einer klaren Arbeitsansicht zusammen.
             </p>
           </div>
 
@@ -171,23 +189,47 @@ const AppLayout: React.FC<Props> = ({ children }) => {
         <div className="operator-stage">
           <header className="operator-header">
             <div className="operator-header__topbar">
-              <div className="operator-header__search-row">
-                <button
-                  className="shell-mobile-toggle operator-mobile-toggle"
-                  onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                  aria-label={mobileMenuOpen ? 'Navigation schließen' : 'Navigation öffnen'}
-                  aria-expanded={mobileMenuOpen}
-                  aria-controls="operator-sidebar"
-                >
-                  <span style={{ fontSize: 20, lineHeight: 1 }}>
-                    {mobileMenuOpen ? '\u2715' : '\u2630'}
-                  </span>
-                </button>
+              <div className="operator-header__context">
+                <div className="operator-header__search-row">
+                  <button
+                    className="shell-mobile-toggle operator-mobile-toggle"
+                    onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                    aria-label={mobileMenuOpen ? 'Navigation schließen' : 'Navigation öffnen'}
+                    aria-expanded={mobileMenuOpen}
+                    aria-controls="operator-sidebar"
+                  >
+                    <span style={{ fontSize: 20, lineHeight: 1 }}>
+                      {mobileMenuOpen ? '\u2715' : '\u2630'}
+                    </span>
+                  </button>
 
-                <span className="operator-header__status-pill">PEIX x GELO</span>
+                  <span className="operator-header__suite">ViralFlux Intelligence</span>
+                </div>
+
+                <div className="operator-top-tabs" role="tablist" aria-label="Hauptkontext">
+                  {TOP_CONTEXT_ITEMS.map(({ label, path, matches }) => {
+                    const active = matches.some((prefix) => location.pathname.startsWith(prefix));
+                    return (
+                      <button
+                        key={path}
+                        type="button"
+                        className={`operator-top-tabs__item ${active ? 'active' : ''}`}
+                        onClick={() => handleNavClick(path)}
+                        aria-selected={active}
+                        role="tab"
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
 
               <div className="operator-header__actions">
+                <div className="operator-search-shell" aria-label="Globale Suche">
+                  <span className="material-symbols-outlined operator-search-shell__icon" aria-hidden="true">search</span>
+                  <span className="operator-search-shell__text">Globale Suche und Filter folgen</span>
+                </div>
                 <button
                   onClick={handlePdfDownload}
                   disabled={pdfLoading}
@@ -226,6 +268,7 @@ const AppLayout: React.FC<Props> = ({ children }) => {
             </div>
 
             <div className="operator-header__meta">
+              <span className="operator-header__status-pill">{activeTopContext?.label || 'Arbeitsbereich'}</span>
               <div className="operator-header__copy-block">
                 <div className="operator-header__kicker">{currentSection.kicker}</div>
                 <div className="operator-header__title-row">

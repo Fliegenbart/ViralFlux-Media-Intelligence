@@ -11,7 +11,6 @@ import CollapsibleSection from '../CollapsibleSection';
 import { NowPageViewModel } from '../../features/media/useMediaData';
 import { FocusRegionOutlookPanel, WaveOutlookPanel, WaveSpreadPanel } from './BacktestVisuals';
 import { formatDateTime, VIRUS_OPTIONS } from './cockpitUtils';
-import WorkspaceStatusPanel from './WorkspaceStatusPanel';
 import {
   OperatorChipRail,
   OperatorPanel,
@@ -64,7 +63,9 @@ const NowWorkspace: React.FC<Props> = ({
   const proof = view.proof;
   const leadReasons = view.reasons.slice(0, 3);
   const relatedRegions = view.relatedRegions.slice(0, 3);
+  const trustChecks = view.trustChecks.slice(0, 3);
   const mainActionLabel = view.primaryActionLabel || 'Kampagnen prüfen';
+  const blockers = (workspaceStatus?.blockers?.length ? workspaceStatus.blockers : view.risks).slice(0, 4);
   const sortedPredictions = [...(forecast?.predictions || [])].sort((left, right) => {
     const leftRank = Number(left.decision_rank ?? left.rank ?? Number.MAX_SAFE_INTEGER);
     const rightRank = Number(right.decision_rank ?? right.rank ?? Number.MAX_SAFE_INTEGER);
@@ -77,11 +78,30 @@ const NowWorkspace: React.FC<Props> = ({
     || sortedPredictions[0]
     || null
   );
+  const nextStepTitle = view.primaryCampaignTitle && view.primaryCampaignTitle !== '-'
+    ? view.primaryCampaignTitle
+    : focusRegion?.name
+      ? `${focusRegion.name} als nächster Schritt`
+      : 'Nächsten Schritt prüfen';
+  const nextStepDescription = view.primaryCampaignCopy && view.primaryCampaignCopy !== '-'
+    ? view.primaryCampaignCopy
+    : focusRegion?.reason
+      ? focusRegion.reason
+      : 'Hier starten wir mit dem nächsten sinnvollen Arbeitsschritt.';
+  const nextStepContext = view.primaryCampaignContext && view.primaryCampaignContext !== '-'
+    ? view.primaryCampaignContext
+    : focusRegion?.name
+      ? `${focusRegion.name} · ${focusRegion.stage || 'prüfen'}`
+      : 'Nächster Arbeitsfall';
+  const priorityNotes = [
+    ...(proof?.proofPoints || []),
+    ...leadReasons,
+  ].slice(0, 4);
 
   if (loading && !view.hasData) {
     return (
       <OperatorSection
-        kicker="Diese Woche im Blick"
+        kicker="Was passiert gerade?"
         title="Wo die nächste virale Welle zuerst anzieht"
         description="Wir holen gerade die aktuelle Wochenlage. Gleich siehst du wieder, was jetzt wichtig ist."
         tone="muted"
@@ -95,9 +115,9 @@ const NowWorkspace: React.FC<Props> = ({
   return (
     <div className="page-stack now-template-page">
       <OperatorSection
-        kicker="Verlauf"
-        title="Was sich gerade entwickelt"
-        description="Hier siehst du zuerst den Verlauf der Welle. So erkennst du schneller, warum diese Woche wichtig ist."
+        kicker="Was passiert gerade?"
+        title="Wo die nächste Welle zuerst anzieht"
+        description="Hier siehst du zuerst den Verlauf. So erkennst du schnell, welche Region gerade als erste anzieht."
         tone="accent"
         className="operator-toolbar-shell"
       >
@@ -117,19 +137,103 @@ const NowWorkspace: React.FC<Props> = ({
           <span className="step-chip">Stand {formatDateTime(view.generatedAt)}</span>
         </div>
 
-        <div className="now-proof-stage">
-          <FocusRegionOutlookPanel
-            prediction={focusPrediction}
-            backtest={focusRegionBacktest}
-            loading={focusRegionBacktestLoading}
-            horizonDays={horizonDays}
-          />
+        <div className="now-command-grid">
+          <div className="now-proof-stage">
+            <FocusRegionOutlookPanel
+              prediction={focusPrediction}
+              backtest={focusRegionBacktest}
+              loading={focusRegionBacktestLoading}
+              horizonDays={horizonDays}
+            />
+          </div>
+
+          <OperatorPanel
+            eyebrow="Warum zuerst?"
+            title={proof?.headline || (focusRegion?.name ? `${focusRegion.name} steht gerade vorne` : 'Das ist der aktuelle Fokus')}
+            description={proof?.supportingText || view.note}
+            tone="muted"
+            className="now-command-rail"
+          >
+            <div className="workspace-note-list">
+              {(priorityNotes.length ? priorityNotes : ['Sobald Daten da sind, fassen wir hier die wichtigsten Gründe kurz zusammen.']).map((item) => (
+                <div key={item} className="workspace-note-card">
+                  {item}
+                </div>
+              ))}
+              {proof?.cautionText ? (
+                <div className="workspace-note-card">
+                  {proof.cautionText}
+                </div>
+              ) : null}
+            </div>
+
+            <OperatorChipRail className="review-chip-row">
+              <span className="step-chip">Fokus {focusRegion?.name || '-'}</span>
+              <span className="step-chip">{focusRegion?.stage || '-'}</span>
+              <span className="step-chip">{focusRegion?.probabilityLabel || '-'}</span>
+              <span className="step-chip">{focusRegion?.budgetLabel || '-'}</span>
+            </OperatorChipRail>
+
+            <div className="operator-stat-grid">
+              <OperatorStat
+                label="Fokusregion"
+                value={focusRegion?.name || '-'}
+                meta={focusRegion?.stage || 'noch nicht ausgewählt'}
+                tone="accent"
+              />
+              <OperatorStat
+                label="Produktfokus"
+                value={focusRegion?.product || '-'}
+                meta="für die nächste Aktion"
+              />
+              <OperatorStat
+                label="Vorhersagesignal"
+                value={focusRegion?.probabilityLabel || '-'}
+                meta="wichtigste Entwicklung"
+              />
+              <OperatorStat
+                label="Budgethinweis"
+                value={focusRegion?.budgetLabel || '-'}
+                meta="für den nächsten Schritt"
+              />
+            </div>
+
+            <div className="workspace-note-card now-action-brief">
+              <strong>{nextStepTitle}</strong>
+              <span>{nextStepContext}</span>
+              <p>{nextStepDescription}</p>
+            </div>
+
+            <div className="action-row">
+              <button
+                className="media-button"
+                type="button"
+                onClick={() => (
+                  view.primaryRecommendationId
+                    ? onOpenRecommendation(view.primaryRecommendationId)
+                    : onOpenCampaigns()
+                )}
+              >
+                {mainActionLabel}
+              </button>
+              <button
+                className="media-button secondary"
+                type="button"
+                onClick={() => onOpenRegions(focusRegion?.code || undefined)}
+              >
+                Region öffnen
+              </button>
+              <button className="media-button secondary" type="button" onClick={onOpenEvidence}>
+                Offene Punkte prüfen
+              </button>
+            </div>
+          </OperatorPanel>
         </div>
       </OperatorSection>
 
       {view.emptyState ? (
         <OperatorSection
-          kicker="Keine Wochenlage"
+          kicker="Was passiert gerade?"
           title={view.emptyState.title}
           description={view.emptyState.body}
           tone="muted"
@@ -146,156 +250,85 @@ const NowWorkspace: React.FC<Props> = ({
       ) : (
         <>
           <OperatorSection
-            kicker="Hauptentscheidung"
-            title={proof?.headline || view.summary}
-            description={proof?.supportingText || view.note}
-            tone="accent"
-            className="now-hero-shell"
+            kicker="Kann ich der Entscheidung trauen?"
+            title="Der schnelle Sicherheitscheck"
+            description="Hier trennen wir sauber zwischen Forecast, Datenlage und Business-Freigabe. So siehst du sofort, ob du nur beobachten oder schon wirklich freigeben solltest."
+            tone="muted"
+            className="workspace-status-panel"
           >
-            <div className="workspace-priority-grid now-hero-grid">
-              <div className="now-focus-card">
-                {proof?.proofPoints?.length ? (
-                  <div className="workspace-note-list">
-                    {proof.proofPoints.map((point) => (
-                      <div key={point} className="workspace-note-card">
-                        {point}
+            <div className="now-trust-grid">
+              {trustChecks.map((item) => (
+                <article
+                  key={item.key}
+                  className={`workspace-status-card workspace-status-card--${item.tone}`}
+                >
+                  <span className="workspace-status-card__question">{item.question}</span>
+                  <strong>{item.value}</strong>
+                  <p>{item.detail}</p>
+                </article>
+              ))}
+            </div>
+
+            <div className="workspace-status-panel__footer">
+              <span>{workspaceStatus?.summary || 'Hier siehst du den schnellsten Vertrauenscheck für diese Woche.'}</span>
+              <button className="media-button secondary" type="button" onClick={onOpenEvidence}>
+                Evidenz öffnen
+              </button>
+            </div>
+          </OperatorSection>
+
+          <OperatorSection
+            kicker="Was kommt danach?"
+            title={nextStepTitle}
+            description={nextStepDescription}
+            tone="muted"
+          >
+            <div className="workspace-two-column">
+              <OperatorPanel
+                title="Danach anschauen"
+                description="Wenn die erste Region erledigt ist, findest du hier die nächsten sinnvollen Kandidaten."
+              >
+                <div className="workspace-note-list">
+                  {relatedRegions.length > 0 ? relatedRegions.map((region) => (
+                    <button
+                      type="button"
+                      key={region.code}
+                      onClick={() => onOpenRegions(region.code)}
+                      className="campaign-list-card"
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+                        <div style={{ textAlign: 'left' }}>
+                          <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>{region.name}</div>
+                          <div style={{ marginTop: 4, fontSize: 12, color: 'var(--text-muted)' }}>
+                            {region.stage} · {region.probabilityLabel}
+                          </div>
+                        </div>
                       </div>
-                    ))}
-                  </div>
-                ) : null}
-
-                {proof?.cautionText ? (
-                  <p className="subsection-copy" style={{ margin: 0 }}>
-                    {proof.cautionText}
-                  </p>
-                ) : null}
-
-                <OperatorChipRail className="review-chip-row">
-                  <span className="step-chip">Fokus {focusRegion?.name || '-'}</span>
-                  <span className="step-chip">{focusRegion?.stage || '-'}</span>
-                  <span className="step-chip">{focusRegion?.probabilityLabel || '-'}</span>
-                  <span className="step-chip">{focusRegion?.budgetLabel || '-'}</span>
-                </OperatorChipRail>
-
-                <div className="action-row">
-                  <button
-                    className="media-button"
-                    type="button"
-                    onClick={() => (
-                      view.primaryRecommendationId
-                        ? onOpenRecommendation(view.primaryRecommendationId)
-                        : onOpenCampaigns()
-                    )}
-                  >
-                    {mainActionLabel}
-                  </button>
-                  <button
-                    className="media-button secondary"
-                    type="button"
-                    onClick={() => onOpenRegions(focusRegion?.code || undefined)}
-                  >
-                    Region öffnen
-                  </button>
-                  <button className="media-button secondary" type="button" onClick={onOpenEvidence}>
-                    Offene Punkte prüfen
-                  </button>
+                      <p className="campaign-focus-copy" style={{ marginTop: 10 }}>{region.reason}</p>
+                    </button>
+                  )) : (
+                    <div className="workspace-note-card">Aktuell gibt es keine weiteren priorisierten Regionen.</div>
+                  )}
                 </div>
-              </div>
+              </OperatorPanel>
 
               <OperatorPanel
-                eyebrow="Darum ist sie wichtig"
-                title={focusRegion?.name ? `${focusRegion.name} im Fokus` : 'Wichtigste Region'}
-                description={
-                  focusRegion
-                    ? `Aktueller Stand: ${focusRegion.stage || 'noch offen'}`
-                    : 'Sobald die wichtigste Region feststeht, fassen wir hier die wichtigsten Punkte zusammen.'
-                }
-                tone="muted"
-                className="workspace-priority-card__aside"
+                title="Was vorher noch offen ist"
+                description="Diese Punkte solltest du klären, bevor du weitergehst."
               >
-                <div className="workspace-priority-card__reasons">
-                  {(leadReasons.length ? leadReasons : ['Noch keine kurze Begründung verfügbar.']).map((reason) => (
-                    <div key={reason} className="workspace-note-card">
-                      {reason}
+                <div className="workspace-note-list">
+                  {blockers.map((risk) => (
+                    <div key={risk} className="workspace-note-card">
+                      {risk}
                     </div>
                   ))}
-                </div>
-
-                <div className="operator-stat-grid">
-                  <OperatorStat
-                    label="Fokusregion"
-                    value={focusRegion?.name || '-'}
-                    meta={focusRegion?.stage || 'noch nicht ausgewählt'}
-                    tone="accent"
-                  />
-                  <OperatorStat
-                    label="Produktfokus"
-                    value={focusRegion?.product || '-'}
-                    meta="für die nächste Aktion"
-                  />
-                  <OperatorStat
-                    label="Vorhersagesignal"
-                    value={focusRegion?.probabilityLabel || '-'}
-                    meta="Wichtigste Entwicklung"
-                  />
-                  <OperatorStat
-                    label="Budgethinweis"
-                    value={focusRegion?.budgetLabel || '-'}
-                    meta="für den nächsten Arbeitsschritt"
-                  />
+                  {blockers.length === 0 ? (
+                    <div className="workspace-note-card">Aktuell gibt es keine offenen Punkte, die dich bremsen.</div>
+                  ) : null}
                 </div>
               </OperatorPanel>
             </div>
           </OperatorSection>
-
-          <WorkspaceStatusPanel
-            status={workspaceStatus}
-            title="Was vor dem nächsten Schritt geklärt sein sollte"
-            intro="Hier siehst du auf einen Blick, ob du direkt weitergehen kannst oder ob noch etwas fehlt."
-          />
-
-          <section className="workspace-two-column">
-            <OperatorPanel
-              title="Danach anschauen"
-              description="Wenn die erste Region erledigt ist, findest du hier die nächsten sinnvollen Kandidaten."
-            >
-              <div className="workspace-note-list">
-                {relatedRegions.length > 0 ? relatedRegions.map((region) => (
-                  <button
-                    type="button"
-                    key={region.code}
-                    onClick={() => onOpenRegions(region.code)}
-                    className="campaign-list-card"
-                  >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
-                      <div style={{ textAlign: 'left' }}>
-                        <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>{region.name}</div>
-                        <div style={{ marginTop: 4, fontSize: 12, color: 'var(--text-muted)' }}>
-                          {region.stage} · {region.probabilityLabel}
-                        </div>
-                      </div>
-                    </div>
-                    <p className="campaign-focus-copy" style={{ marginTop: 10 }}>{region.reason}</p>
-                  </button>
-                )) : (
-                  <div className="workspace-note-card">Aktuell gibt es keine weiteren priorisierten Regionen.</div>
-                )}
-              </div>
-            </OperatorPanel>
-
-            <OperatorPanel
-              title="Noch offen"
-              description="Diese Punkte solltest du klären, bevor du weitergehst."
-            >
-              <div className="workspace-note-list">
-                {((workspaceStatus?.blockers?.length ? workspaceStatus.blockers : view.risks).slice(0, 4)).map((risk) => (
-                  <div key={risk} className="workspace-note-card">
-                    {risk}
-                  </div>
-                ))}
-              </div>
-            </OperatorPanel>
-          </section>
 
           <CollapsibleSection
             title="Weitere Details"

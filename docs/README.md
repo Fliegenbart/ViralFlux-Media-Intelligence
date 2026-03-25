@@ -10,6 +10,12 @@ This repo keeps long-lived truth in a few small anchors instead of one giant pro
   [DEPLOY.md](/Users/davidwegener/Desktop/viralflux/DEPLOY.md)
 - Latest technical audit:
   [fluxengine_technical_audit_2026-03-10.md](/Users/davidwegener/Desktop/viralflux/docs/fluxengine_technical_audit_2026-03-10.md)
+- World-class roadmap and ticket backlog:
+  [world_class_ticket_backlog.md](/Users/davidwegener/Desktop/viralflux/docs/world_class_ticket_backlog.md)
+- Metric semantics contract:
+  [metric_semantics_contract.md](/Users/davidwegener/Desktop/viralflux/docs/metric_semantics_contract.md)
+- Reason code catalog:
+  [reason_code_catalog.md](/Users/davidwegener/Desktop/viralflux/docs/reason_code_catalog.md)
 - PEIX / GELO product positioning:
   [product_positioning_peix_gelo.md](/Users/davidwegener/Desktop/viralflux/docs/product_positioning_peix_gelo.md)
 - PEIX / GELO pilot runbook:

@@ -12,6 +12,7 @@ OTC-Filtering: Nur Krankheiten aus der Whitelist werden importiert.
 """
 
 from __future__ import annotations
+from app.core.time import utc_now
 
 import csv
 import logging
@@ -411,5 +412,5 @@ def import_survstat_exports(
         "total_inserted": total_inserted,
         "total_updated": total_updated,
         "formats": results,
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": utc_now().isoformat(),
     }

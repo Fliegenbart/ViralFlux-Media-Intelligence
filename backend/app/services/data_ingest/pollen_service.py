@@ -1,6 +1,7 @@
 """PollenService - DWD Pollen OpenData Ingest."""
 
 from __future__ import annotations
+from app.core.time import utc_now
 
 from datetime import datetime, timedelta
 import logging
@@ -54,7 +55,7 @@ class PollenService:
             return {"success": False, "error": "Pollenquelle nicht erreichbar", "source_url": url}
 
         last_update = self._parse_dwd_timestamp(payload.get("last_update"))
-        base_date = (last_update or datetime.utcnow()).replace(hour=0, minute=0, second=0, microsecond=0)
+        base_date = (last_update or utc_now()).replace(hour=0, minute=0, second=0, microsecond=0)
         content = payload.get("content") or []
 
         parsed_records: list[dict[str, Any]] = []
@@ -77,7 +78,7 @@ class PollenService:
                         parsed_records.append(
                             {
                                 "datum": datum,
-                                "available_time": last_update or datetime.utcnow(),
+                                "available_time": last_update or utc_now(),
                                 "region_code": region_code,
                                 "pollen_type": str(pollen_type).strip(),
                                 "pollen_index": float(index_value),
@@ -99,7 +100,7 @@ class PollenService:
             "pollen_types": sorted({row["pollen_type"] for row in parsed_records}),
             "last_update": last_update.isoformat() if last_update else None,
             "latest_date": latest_date.isoformat() if latest_date else None,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": utc_now().isoformat(),
         }
 
     @staticmethod

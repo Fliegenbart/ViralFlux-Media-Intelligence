@@ -1,3 +1,4 @@
+from app.core.time import utc_now
 import unittest
 from datetime import datetime
 
@@ -154,7 +155,7 @@ class RegionalKreisTruthAggregationTests(unittest.TestCase):
                 disease="influenza, saisonal",
                 fallzahl=100,
                 inzidenz=None,
-                created_at=datetime.utcnow(),
+                created_at=utc_now(),
             ),
             SurvstatKreisData(
                 year=2026,
@@ -164,7 +165,7 @@ class RegionalKreisTruthAggregationTests(unittest.TestCase):
                 disease="influenza, saisonal",
                 fallzahl=200,
                 inzidenz=None,
-                created_at=datetime.utcnow(),
+                created_at=utc_now(),
             ),
             SurvstatKreisData(
                 year=2026,
@@ -174,7 +175,7 @@ class RegionalKreisTruthAggregationTests(unittest.TestCase):
                 disease="influenza, saisonal",
                 fallzahl=132,
                 inzidenz=None,
-                created_at=datetime.utcnow(),
+                created_at=utc_now(),
             ),
         ])
         self.db.commit()

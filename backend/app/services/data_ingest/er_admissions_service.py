@@ -3,6 +3,7 @@
 Source: https://github.com/robert-koch-institut/Daten_der_Notaufnahmesurveillance
 """
 
+from app.core.time import utc_now
 from datetime import datetime
 from io import StringIO
 import logging
@@ -266,5 +267,5 @@ class ERAdmissionsIngestionService:
             "success": results.get('syndromes', {}).get("success", False),
             "results": results,
             "snapshot_rows": snapshot_rows,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": utc_now().isoformat(),
         }

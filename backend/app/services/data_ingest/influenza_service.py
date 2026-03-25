@@ -1,5 +1,6 @@
 """Influenza IfSG Ingestion Service — RKI Influenzafälle in Deutschland."""
 
+from app.core.time import utc_now
 import pandas as pd
 import requests
 from io import StringIO
@@ -125,7 +126,7 @@ class InfluenzaIngestionService:
                 "snapshot_rows": snapshot_rows,
                 "regionen": int(df['Region'].nunique()),
                 "altersgruppen": df['Altersgruppe'].unique().tolist(),
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": utc_now().isoformat(),
             }
         except Exception as e:
             logger.error(f"Influenza import failed: {e}")

@@ -1,3 +1,4 @@
+from app.core.time import utc_now
 from pytrends.request import TrendReq
 import pandas as pd
 from datetime import datetime, timedelta
@@ -129,7 +130,7 @@ class GoogleTrendsService:
                 "keywords_processed": len(self.KEYWORDS),
                 "records_imported": total_imported,
                 "snapshot_rows": snapshot_rows,
-                "timestamp": datetime.utcnow().isoformat()
+                "timestamp": utc_now().isoformat()
             }
 
         except Exception as e:
@@ -137,5 +138,5 @@ class GoogleTrendsService:
             return {
                 "success": False,
                 "error": str(e),
-                "timestamp": datetime.utcnow().isoformat()
+                "timestamp": utc_now().isoformat()
             }

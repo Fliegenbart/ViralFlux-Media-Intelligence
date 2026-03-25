@@ -1,5 +1,6 @@
 """GrippeWeb Ingestion Service — RKI ARE/ILI Surveillance-Daten."""
 
+from app.core.time import utc_now
 import pandas as pd
 import requests
 from io import StringIO
@@ -155,7 +156,7 @@ class GrippeWebIngestionService:
                 "snapshot_rows": snapshot_rows,
                 "saisons": saisons,
                 "erkrankungen": erkrankungen,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": utc_now().isoformat(),
             }
         except Exception as e:
             logger.error(f"GrippeWeb import failed: {e}")

@@ -1,3 +1,4 @@
+from app.core.time import utc_now
 import pandas as pd
 import numpy as np
 import requests
@@ -214,5 +215,5 @@ class AmelagIngestionService:
             "success": results.get("aggregiert", {}).get("success", False),
             "results": results,
             "snapshot_rows": snapshot_rows,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": utc_now().isoformat()
         }

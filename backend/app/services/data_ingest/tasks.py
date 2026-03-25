@@ -1,3 +1,4 @@
+from app.core.time import utc_now
 import logging
 from datetime import date, datetime
 from decimal import Decimal
@@ -151,7 +152,7 @@ def run_full_ingestion_pipeline(self, region_code: str = "ALL") -> Dict[str, Any
                 "region": region_code,
                 "message": "Alle Datenquellen synchronisiert und berechnet.",
                 "results": results,
-                "timestamp": datetime.utcnow(),
+                "timestamp": utc_now(),
             }
         )
 
@@ -199,7 +200,7 @@ def process_erp_sales_sync(self, payload: Dict[str, Any]) -> Dict[str, Any]:
             "units_sold": units_sold,
             "revenue": revenue,
             "region_code": region_code,
-            "received_at": datetime.utcnow().isoformat(),
+            "received_at": utc_now().isoformat(),
         }
 
         with get_db_context() as db:

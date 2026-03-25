@@ -16,6 +16,7 @@ zu triggern.
 """
 
 from __future__ import annotations
+from app.core.time import utc_now
 
 from io import BytesIO
 import logging
@@ -330,7 +331,7 @@ class SurvstatApiService:
                         ags=ags,
                         bundesland=record["bundesland"],
                         einwohner=int(record["einwohner"]),
-                        updated_at=datetime.utcnow(),
+                        updated_at=utc_now(),
                     )
                 )
                 inserted += 1
@@ -344,7 +345,7 @@ class SurvstatApiService:
                 existing.bundesland = record["bundesland"]
                 changed = True
             if changed:
-                existing.updated_at = datetime.utcnow()
+                existing.updated_at = utc_now()
                 updated += 1
 
         self.db.commit()
@@ -928,7 +929,7 @@ class SurvstatApiService:
             "snapshot_rows": snapshot_rows,
             "errors": errors,
             "elapsed_seconds": elapsed,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": utc_now().isoformat(),
         }
         logger.info(
             f"SurvStat Pipeline fertig: {total_records} Datenpunkte "

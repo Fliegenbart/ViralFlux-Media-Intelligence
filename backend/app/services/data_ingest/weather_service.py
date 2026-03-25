@@ -5,6 +5,7 @@ Liefert stündliche Beobachtungen + MOSMIX-Prognosen für ganz Deutschland.
 Historische Daten ab ~2015 verfügbar.
 """
 
+from app.core.time import utc_now
 import requests
 from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
@@ -304,7 +305,7 @@ class WeatherService:
                     setattr(existing, key, val)
         else:
             if record.get("available_time") is None:
-                record["available_time"] = datetime.utcnow()
+                record["available_time"] = utc_now()
             self.db.add(WeatherData(**record))
 
     def import_day(self, city: dict, day: datetime) -> bool:
@@ -334,8 +335,8 @@ class WeatherService:
 
             record = {
                 "city": city["name"],
-                "datum": datetime.utcnow().replace(minute=0, second=0, microsecond=0),
-                "available_time": datetime.utcnow(),
+                "datum": utc_now().replace(minute=0, second=0, microsecond=0),
+                "available_time": utc_now(),
                 "temperatur": current.get("temperature"),
                 "gefuehlte_temperatur": None,
                 "luftfeuchtigkeit": humidity,
@@ -364,7 +365,7 @@ class WeatherService:
         Wir holen morgen bis +8 Tage, aggregieren pro Tag und speichern als DAILY_FORECAST.
         """
         count = 0
-        tomorrow = (datetime.utcnow() + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+        tomorrow = (utc_now() + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
         end = tomorrow + timedelta(days=8)
 
         for city in CITIES:
@@ -390,7 +391,7 @@ class WeatherService:
                 day = datetime.strptime(day_str, "%Y-%m-%d")
                 daily = self._aggregate_day(hourly, city["name"], day)
                 daily["data_type"] = "DAILY_FORECAST"
-                daily["available_time"] = datetime.utcnow()
+                daily["available_time"] = utc_now()
 
                 # Precipitation probability aus MOSMIX (falls verfügbar)
                 pop_vals = [r.get("precipitation_probability") for r in hourly
@@ -450,7 +451,7 @@ class WeatherService:
             "errors": errors[:10] if errors else None,
             "cities": len(CITIES),
             "date_range": f"{start_date.date()} bis {end_date.date()}",
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": utc_now().isoformat(),
         }
 
         total_in_db = self.db.query(WeatherData).count()
@@ -502,5 +503,5 @@ class WeatherService:
             "total_in_db": total_in_db,
             "snapshot_rows": snapshot_rows,
             "details": results,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": utc_now().isoformat(),
         }

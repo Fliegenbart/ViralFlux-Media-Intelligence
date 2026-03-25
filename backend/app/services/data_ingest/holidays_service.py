@@ -5,6 +5,7 @@ API: https://schulferien-api.de/api/v2/{year}
 Docs: https://github.com/maxleistner/deutsche-schulferien-api
 """
 
+from app.core.time import utc_now
 import requests
 from datetime import datetime, date, timedelta
 from sqlalchemy.orm import Session
@@ -133,7 +134,7 @@ class SchoolHolidaysService:
             "states_covered": len(per_state),
             "per_state": per_state,
             "errors": errors if errors else None,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": utc_now().isoformat(),
         }
 
         logger.info(

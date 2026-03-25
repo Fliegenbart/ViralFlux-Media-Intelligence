@@ -4,6 +4,7 @@ Wöchentliche Arztbesuche wegen akuter Atemwegserkrankungen pro 100.000 Einwohne
 Datenquelle: https://github.com/robert-koch-institut/ARE-Konsultationsinzidenz
 """
 
+from app.core.time import utc_now
 import pandas as pd
 import requests
 from io import StringIO
@@ -153,7 +154,7 @@ class AREKonsultationIngestionService:
                 "snapshot_rows": snapshot_rows,
                 "saisons": saisons,
                 "bundeslaender": bundeslaender,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": utc_now().isoformat(),
             }
         except Exception as e:
             logger.error(f"ARE-Konsultation import failed: {e}")

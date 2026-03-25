@@ -9,6 +9,7 @@ Datenquelle: https://anwendungen.pharmnet-bund.de/lieferengpassmeldungen/public/
 - CSV: Semikolon-getrennt, Latin-1 Encoding
 """
 
+from app.core.time import utc_now
 import json
 import os
 import logging
@@ -116,7 +117,7 @@ class BfarmIngestionService:
                 "wave_type": signals.get('wave_type', 'None'),
                 "high_demand_shortages": signals.get('high_demand_shortages', 0),
                 "pediatric_alert": signals.get('pediatric_alert', False),
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": utc_now().isoformat(),
             }
         except Exception as e:
             logger.error(f"BfArM Import fehlgeschlagen: {e}")
@@ -144,7 +145,7 @@ def get_cached_signals() -> dict | None:
         return redis_signals
 
     # 3. Auto-refresh (rate-limited)
-    now = datetime.utcnow()
+    now = utc_now()
     if _last_refresh_attempt is not None:
         age_minutes = (now - _last_refresh_attempt).total_seconds() / 60.0
         if age_minutes < _AUTO_REFRESH_RETRY_MINUTES:

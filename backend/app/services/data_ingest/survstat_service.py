@@ -19,6 +19,7 @@ PEDIATRIC_SKIN, PARASITES_VECTORS).
 """
 
 from __future__ import annotations
+from app.core.time import utc_now
 
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
@@ -307,7 +308,7 @@ class SurvstatIngestionService:
                 "success": False,
                 "folder": str(base),
                 "message": "Keine CSV-Dateien gefunden.",
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": utc_now().isoformat(),
             }
 
         all_records: list[_SurvstatRecord] = []
@@ -344,5 +345,5 @@ class SurvstatIngestionService:
             "latest_week": self._latest_week_label(all_records),
             "cluster_distribution": cluster_counts,
             "errors": errors,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": utc_now().isoformat(),
         }

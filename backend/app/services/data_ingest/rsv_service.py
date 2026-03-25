@@ -1,5 +1,6 @@
 """RSV IfSG Ingestion Service — RKI Respiratorische Synzytialvirusfälle in Deutschland."""
 
+from app.core.time import utc_now
 import pandas as pd
 import requests
 from io import StringIO
@@ -125,7 +126,7 @@ class RSVIngestionService:
                 "snapshot_rows": snapshot_rows,
                 "regionen": int(df['Region'].nunique()),
                 "altersgruppen": df['Altersgruppe'].unique().tolist(),
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": utc_now().isoformat(),
             }
         except Exception as e:
             logger.error(f"RSV import failed: {e}")

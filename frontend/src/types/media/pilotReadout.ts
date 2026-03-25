@@ -1,3 +1,5 @@
+import { StructuredReasonItem } from './shared';
+
 export type PilotSurfaceScope = 'forecast' | 'allocation' | 'recommendation' | 'evidence';
 export type PilotSurfaceStageFilter = 'ALL' | 'Activate' | 'Prepare' | 'Watch';
 export type PilotReadoutStatus = 'GO' | 'WATCH' | 'NO_GO';
@@ -19,7 +21,9 @@ export interface PilotReadoutRegion {
   campaign_recommendation?: string | null;
   channels?: string[];
   uncertainty_summary?: string | null;
+  uncertainty_summary_detail?: StructuredReasonItem | null;
   reason_trace?: string[];
+  reason_trace_details?: StructuredReasonItem[];
   quality_gate?: Record<string, unknown>;
   business_gate?: Record<string, unknown>;
   spend_gate_status?: string | null;
@@ -109,7 +113,9 @@ export interface PilotReadoutResponse {
       evaluation_gate_outcome?: string | null;
     };
     uncertainty_summary?: string | null;
+    uncertainty_summary_detail?: StructuredReasonItem | null;
     reason_trace?: string[];
+    reason_trace_details?: StructuredReasonItem[];
   };
   operational_recommendations?: {
     scope_readiness?: PilotReadoutStatus;

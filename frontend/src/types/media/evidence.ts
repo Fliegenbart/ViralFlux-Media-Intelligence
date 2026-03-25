@@ -223,6 +223,8 @@ export interface ForecastMonitoring {
     confidence?: number | null;
     confidence_label?: string | null;
     calibration_passed?: boolean | null;
+    probability_source?: string | null;
+    fallback_used?: boolean | null;
   };
   latest_accuracy?: {
     computed_at?: string | null;

@@ -87,11 +87,17 @@ class CampaignClusterSelection:
 @dataclass(frozen=True)
 class CampaignRecommendationRationale:
     why: list[str] = field(default_factory=list)
+    why_details: list[dict[str, Any]] = field(default_factory=list)
     product_fit: list[str] = field(default_factory=list)
+    product_fit_details: list[dict[str, Any]] = field(default_factory=list)
     keyword_fit: list[str] = field(default_factory=list)
+    keyword_fit_details: list[dict[str, Any]] = field(default_factory=list)
     budget_notes: list[str] = field(default_factory=list)
+    budget_note_details: list[dict[str, Any]] = field(default_factory=list)
     evidence_notes: list[str] = field(default_factory=list)
+    evidence_note_details: list[dict[str, Any]] = field(default_factory=list)
     guardrails: list[str] = field(default_factory=list)
+    guardrail_details: list[dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

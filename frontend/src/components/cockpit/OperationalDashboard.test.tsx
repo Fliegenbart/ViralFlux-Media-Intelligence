@@ -53,8 +53,27 @@ function buildForecast(): RegionalForecastResponse {
             'Event probability 0.81 clears the Activate threshold 0.70.',
             'Forecast confidence is strong at 0.78.',
           ],
+          why_details: [
+            {
+              code: 'event_probability_activate_threshold',
+              message: 'raw',
+              params: { event_probability: 0.81, threshold: 0.7 },
+            },
+            {
+              code: 'forecast_confidence_strong',
+              message: 'raw',
+              params: { forecast_confidence: 0.78 },
+            },
+          ],
           contributing_signals: [],
           uncertainty: ['Revision risk is still material at 0.33.'],
+          uncertainty_details: [
+            {
+              code: 'revision_risk_material',
+              message: 'raw',
+              params: { revision_risk: 0.33 },
+            },
+          ],
           policy_overrides: [],
         },
         decision: {
@@ -76,13 +95,46 @@ function buildForecast(): RegionalForecastResponse {
           usable_source_share: 0.92,
           source_coverage_score: 0.86,
           explanation_summary: 'Berlin: Activate because event probability is 0.81 and source alignment stays supportive.',
+          explanation_summary_detail: {
+            code: 'decision_summary',
+            message: 'raw',
+            params: {
+              bundesland_name: 'Berlin',
+              stage: 'activate',
+              event_probability: 0.81,
+              forecast_confidence: 0.78,
+              agreement_direction: 'up',
+            },
+          },
           uncertainty_summary: 'Revision risk is still material at 0.33.',
+          uncertainty_summary_detail: {
+            code: 'uncertainty_summary',
+            message: 'raw',
+            params: {
+              parts: ['revision_risk'],
+              revision_risk: 0.33,
+            },
+          },
           reason_trace: {
             why: [
               'Event probability 0.81 clears the Activate threshold 0.70.',
             ],
+            why_details: [
+              {
+                code: 'event_probability_activate_threshold',
+                message: 'raw',
+                params: { event_probability: 0.81, threshold: 0.7 },
+              },
+            ],
             contributing_signals: [],
             uncertainty: ['Revision risk is still material at 0.33.'],
+            uncertainty_details: [
+              {
+                code: 'revision_risk_material',
+                message: 'raw',
+                params: { revision_risk: 0.33 },
+              },
+            ],
             policy_overrides: [],
           },
         },
@@ -190,8 +242,21 @@ function buildAllocation(): RegionalAllocationResponse {
         decision_label: 'Activate',
         reason_trace: {
           why: ['Activate regions receive the highest base label weight.'],
+          budget_driver_details: [
+            {
+              code: 'budget_driver_activate_multiplier',
+              message: 'raw',
+            },
+          ],
           contributing_signals: [],
           uncertainty: ['Revision risk slightly reduces share.'],
+          uncertainty_details: [
+            {
+              code: 'uncertainty_revision_risk_material',
+              message: 'raw',
+              params: { revision_risk: 0.33 },
+            },
+          ],
           policy_overrides: [],
         },
       },
@@ -262,11 +327,42 @@ function buildRecommendations(): RegionalCampaignRecommendationsResponse {
         },
         recommendation_rationale: {
           why: ['Berlin stays on activate with budget share 46.00%.'],
+          why_details: [
+            {
+              code: 'campaign_stage_budget_share',
+              message: 'raw',
+              params: { region_name: 'Berlin', stage: 'activate', budget_share: 0.46 },
+            },
+          ],
           product_fit: ['Respiratory Core Demand scores 0.94 for the available product set.'],
+          product_fit_details: [
+            {
+              code: 'campaign_product_cluster_fit',
+              message: 'raw',
+              params: {
+                cluster_label: 'Respiratory Core Demand',
+                fit_score: 0.94,
+                products: ['GeloMyrtol forte'],
+              },
+            },
+          ],
           keyword_fit: ['Respiratory Relief Search translates the product cluster into concrete search intent.'],
           budget_notes: ['Suggested campaign budget is 55200.00 EUR.'],
           evidence_notes: ['Evidence class is truth_backed.'],
+          evidence_note_details: [
+            {
+              code: 'campaign_evidence_class',
+              message: 'raw',
+              params: { evidence_class: 'truth_backed' },
+            },
+          ],
           guardrails: ['Spend guardrails are currently satisfied.'],
+          guardrail_details: [
+            {
+              code: 'campaign_guardrail_ready',
+              message: 'raw',
+            },
+          ],
         },
         channels: ['search', 'social'],
         timeline: 'sofort',
@@ -334,12 +430,14 @@ describe('OperationalDashboard', () => {
       />,
     );
 
-    expect(screen.getByText('What should we do now?')).toBeInTheDocument();
+    expect(screen.getByText('Was solltest du jetzt tun?')).toBeInTheDocument();
     expect(screen.getByText('Activate Berlin für Respiratory Core Demand.')).toBeInTheDocument();
-    expect(screen.getByText('Decision Stage Visualisierung')).toBeInTheDocument();
-    expect(screen.getByText('Recommendation-Ansicht')).toBeInTheDocument();
-    expect(screen.getAllByText('Event probability 0.81 clears the Activate threshold 0.70.').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Spend guardrails are currently satisfied.').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Berlin bleibt aktuell auf Aktivieren mit 46 % Budgetanteil.').length).toBeGreaterThan(0);
+    expect(screen.getByText('Stufen nach Entscheidung')).toBeInTheDocument();
+    expect(screen.getByText('Empfehlungsansicht')).toBeInTheDocument();
+    expect(screen.getByText(/Event-Wahrscheinlichkeit ist die Forecast-Chance/i)).toBeInTheDocument();
+    expect(screen.getAllByText('Die Vorhersage liegt mit 81 % über der Schwelle für eine Aktivierung.').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Die Budget- und Freigabegrenzen sind aktuell erfüllt.').length).toBeGreaterThan(0);
   });
 
   it('updates the executive focus when the decision-stage filter changes', () => {
@@ -360,12 +458,12 @@ describe('OperationalDashboard', () => {
       />,
     );
 
-    fireEvent.change(screen.getByRole('combobox', { name: 'Decision Stage' }), {
+    fireEvent.change(screen.getByRole('combobox', { name: 'Entscheidungsstufe' }), {
       target: { value: 'watch' },
     });
 
     expect(screen.getByText('Watch Sachsen für Bronchial Recovery Support.')).toBeInTheDocument();
-    expect(screen.getByText('Recommendation-Ansicht')).toBeInTheDocument();
+    expect(screen.getByText('Empfehlungsansicht')).toBeInTheDocument();
   });
 
   it('shows a stable empty state for no-model responses', () => {

@@ -9,9 +9,13 @@ from typing import Any
 @dataclass(frozen=True)
 class AllocationReasonTrace:
     why: list[str] = field(default_factory=list)
+    why_details: list[dict[str, Any]] = field(default_factory=list)
     budget_drivers: list[str] = field(default_factory=list)
+    budget_driver_details: list[dict[str, Any]] = field(default_factory=list)
     uncertainty: list[str] = field(default_factory=list)
+    uncertainty_details: list[dict[str, Any]] = field(default_factory=list)
     blockers: list[str] = field(default_factory=list)
+    blocker_details: list[dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

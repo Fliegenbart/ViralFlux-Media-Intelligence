@@ -272,12 +272,29 @@ class RegionalDecisionEngine:
             trend_bundle=trend_bundle,
             agreement_bundle=agreement_bundle,
         )
+        explanation_summary_detail = self._explanation_summary_detail(
+            bundesland_name=str(prediction.get("bundesland_name") or prediction.get("bundesland") or ""),
+            stage=stage,
+            event_probability=event_probability,
+            forecast_confidence=forecast_confidence,
+            trend_bundle=trend_bundle,
+            agreement_bundle=agreement_bundle,
+            message=explanation_summary,
+        )
         uncertainty_summary = self._uncertainty_summary(
             revision_risk=revision_risk,
             freshness_score=freshness_score,
             agreement_bundle=agreement_bundle,
             quality_gate=quality_gate,
             config=config,
+        )
+        uncertainty_summary_detail = self._uncertainty_summary_detail(
+            revision_risk=revision_risk,
+            freshness_score=freshness_score,
+            agreement_bundle=agreement_bundle,
+            quality_gate=quality_gate,
+            config=config,
+            message=uncertainty_summary,
         )
 
         return RegionalDecision(
@@ -299,7 +316,9 @@ class RegionalDecisionEngine:
             usable_source_share=round(usable_share, 4),
             source_coverage_score=round(coverage_score, 4),
             explanation_summary=explanation_summary,
+            explanation_summary_detail=explanation_summary_detail,
             uncertainty_summary=uncertainty_summary,
+            uncertainty_summary_detail=uncertainty_summary_detail,
             components={key: round(float(value), 4) for key, value in components.items()},
             thresholds={key: round(float(value), 4) for key, value in thresholds.items()},
             reason_trace=reason_trace,
@@ -623,6 +642,30 @@ class RegionalDecisionEngine:
         return signal_stage, overrides
 
     @staticmethod
+    def _reason_detail(code: str, message: str, **params: Any) -> dict[str, Any]:
+        payload: dict[str, Any] = {"code": code, "message": message}
+        if params:
+            payload["params"] = params
+        return payload
+
+    @classmethod
+    def _policy_override_detail(cls, message: str) -> dict[str, Any]:
+        normalized = message.strip().lower()
+        if "watch_only" in normalized:
+            return cls._reason_detail(
+                "policy_override_watch_only",
+                message,
+                final_stage="watch",
+            )
+        if "quality gate" in normalized:
+            return cls._reason_detail(
+                "policy_override_quality_gate",
+                message,
+                final_stage="watch",
+            )
+        return cls._reason_detail("policy_override", message)
+
+    @staticmethod
     def _component_trace(
         *,
         components: Mapping[str, float],
@@ -677,65 +720,219 @@ class RegionalDecisionEngine:
         config: RegionalDecisionRuleConfig,
     ) -> DecisionReasonTrace:
         why: list[str] = []
+        why_details: list[dict[str, Any]] = []
         uncertainty: list[str] = []
+        uncertainty_details: list[dict[str, Any]] = []
 
         if signal_stage == "activate":
-            why.append(
+            message = (
                 f"Event probability {event_probability:.2f} clears the Activate threshold {float(thresholds['activate_probability']):.2f}."
             )
+            why.append(message)
+            why_details.append(
+                RegionalDecisionEngine._reason_detail(
+                    "event_probability_activate_threshold",
+                    message,
+                    event_probability=round(event_probability, 4),
+                    threshold=round(float(thresholds["activate_probability"]), 4),
+                )
+            )
         elif signal_stage == "prepare":
-            why.append(
+            message = (
                 f"Event probability {event_probability:.2f} clears the Prepare threshold {float(thresholds['prepare_probability']):.2f}, but not all Activate conditions are met."
             )
+            why.append(message)
+            why_details.append(
+                RegionalDecisionEngine._reason_detail(
+                    "event_probability_prepare_threshold",
+                    message,
+                    event_probability=round(event_probability, 4),
+                    threshold=round(float(thresholds["prepare_probability"]), 4),
+                )
+            )
         else:
-            why.append(
+            message = (
                 f"Event probability {event_probability:.2f} stays below the rule set needed for Prepare/Activate."
+            )
+            why.append(message)
+            why_details.append(
+                RegionalDecisionEngine._reason_detail(
+                    "event_probability_below_prepare_threshold",
+                    message,
+                    event_probability=round(event_probability, 4),
+                )
             )
 
         if forecast_confidence >= float(thresholds["activate_forecast_confidence"]):
-            why.append(f"Forecast confidence is strong at {forecast_confidence:.2f}.")
+            message = f"Forecast confidence is strong at {forecast_confidence:.2f}."
+            why.append(message)
+            why_details.append(
+                RegionalDecisionEngine._reason_detail(
+                    "forecast_confidence_strong",
+                    message,
+                    forecast_confidence=round(forecast_confidence, 4),
+                )
+            )
         elif forecast_confidence >= float(thresholds["prepare_forecast_confidence"]):
-            why.append(f"Forecast confidence is usable at {forecast_confidence:.2f}.")
+            message = f"Forecast confidence is usable at {forecast_confidence:.2f}."
+            why.append(message)
+            why_details.append(
+                RegionalDecisionEngine._reason_detail(
+                    "forecast_confidence_usable",
+                    message,
+                    forecast_confidence=round(forecast_confidence, 4),
+                )
+            )
         else:
-            uncertainty.append(f"Forecast confidence is only {forecast_confidence:.2f}.")
+            message = f"Forecast confidence is only {forecast_confidence:.2f}."
+            uncertainty.append(message)
+            uncertainty_details.append(
+                RegionalDecisionEngine._reason_detail(
+                    "forecast_confidence_low",
+                    message,
+                    forecast_confidence=round(forecast_confidence, 4),
+                )
+            )
 
         if freshness_score >= float(thresholds["activate_freshness"]):
-            why.append(f"Primary sources are fresh on average ({freshness_days:.1f} days old).")
+            message = f"Primary sources are fresh on average ({freshness_days:.1f} days old)."
+            why.append(message)
+            why_details.append(
+                RegionalDecisionEngine._reason_detail(
+                    "primary_sources_fresh",
+                    message,
+                    freshness_days=round(freshness_days, 2),
+                    freshness_score=round(freshness_score, 4),
+                )
+            )
         elif freshness_score < float(thresholds["prepare_freshness"]):
-            uncertainty.append(f"Primary-source freshness is weak ({freshness_days:.1f} days average age).")
+            message = f"Primary-source freshness is weak ({freshness_days:.1f} days average age)."
+            uncertainty.append(message)
+            uncertainty_details.append(
+                RegionalDecisionEngine._reason_detail(
+                    "primary_sources_stale",
+                    message,
+                    freshness_days=round(freshness_days, 2),
+                    freshness_score=round(freshness_score, 4),
+                )
+            )
 
         if revision_risk > float(thresholds["prepare_revision_risk_max"]):
-            uncertainty.append(f"Revision risk is high at {revision_risk:.2f}.")
+            message = f"Revision risk is high at {revision_risk:.2f}."
+            uncertainty.append(message)
+            uncertainty_details.append(
+                RegionalDecisionEngine._reason_detail(
+                    "revision_risk_high",
+                    message,
+                    revision_risk=round(revision_risk, 4),
+                )
+            )
         elif revision_risk > float(thresholds["activate_revision_risk_max"]):
-            uncertainty.append(f"Revision risk is still material at {revision_risk:.2f}.")
+            message = f"Revision risk is still material at {revision_risk:.2f}."
+            uncertainty.append(message)
+            uncertainty_details.append(
+                RegionalDecisionEngine._reason_detail(
+                    "revision_risk_material",
+                    message,
+                    revision_risk=round(revision_risk, 4),
+                )
+            )
 
         trend_score = float(trend_bundle.get("score") or 0.0)
         trend_raw = float(trend_bundle.get("raw") or 0.0)
         if trend_score >= float(thresholds["activate_trend"]):
-            why.append(f"Recent trend acceleration is supportive ({trend_raw:.2f}).")
+            message = f"Recent trend acceleration is supportive ({trend_raw:.2f})."
+            why.append(message)
+            why_details.append(
+                RegionalDecisionEngine._reason_detail(
+                    "trend_acceleration_supportive",
+                    message,
+                    trend_raw=round(trend_raw, 4),
+                    trend_score=round(trend_score, 4),
+                )
+            )
         elif trend_score < float(thresholds["prepare_trend"]):
-            uncertainty.append(f"Trend acceleration is not yet convincing ({trend_raw:.2f}).")
+            message = f"Trend acceleration is not yet convincing ({trend_raw:.2f})."
+            uncertainty.append(message)
+            uncertainty_details.append(
+                RegionalDecisionEngine._reason_detail(
+                    "trend_acceleration_not_convincing",
+                    message,
+                    trend_raw=round(trend_raw, 4),
+                    trend_score=round(trend_score, 4),
+                )
+            )
 
         agreement_signal_count = int(agreement_bundle.get("signal_count") or 0)
         agreement_score = float(agreement_bundle.get("support_score") or 0.0)
         agreement_direction = str(agreement_bundle.get("direction") or "flat")
         if agreement_signal_count < int(config.min_agreement_signal_count):
-            uncertainty.append("Cross-source agreement is low-evidence because fewer than two directional source signals are available.")
+            message = "Cross-source agreement is low-evidence because fewer than two directional source signals are available."
+            uncertainty.append(message)
+            uncertainty_details.append(
+                RegionalDecisionEngine._reason_detail(
+                    "cross_source_agreement_low_evidence",
+                    message,
+                    signal_count=agreement_signal_count,
+                )
+            )
         elif agreement_direction == "up" and agreement_score >= float(thresholds["prepare_agreement"]):
-            why.append(f"{agreement_signal_count} source trends align upward.")
+            message = f"{agreement_signal_count} source trends align upward."
+            why.append(message)
+            why_details.append(
+                RegionalDecisionEngine._reason_detail(
+                    "cross_source_agreement_upward",
+                    message,
+                    signal_count=agreement_signal_count,
+                    agreement_score=round(agreement_score, 4),
+                    direction=agreement_direction,
+                )
+            )
         else:
-            uncertainty.append("Cross-source agreement does not clearly confirm an upward move.")
+            message = "Cross-source agreement does not clearly confirm an upward move."
+            uncertainty.append(message)
+            uncertainty_details.append(
+                RegionalDecisionEngine._reason_detail(
+                    "cross_source_agreement_not_upward",
+                    message,
+                    signal_count=agreement_signal_count,
+                    agreement_score=round(agreement_score, 4),
+                    direction=agreement_direction,
+                )
+            )
 
         if not quality_gate.get("overall_passed"):
-            uncertainty.append("Regional forecast quality gate is currently not passed.")
+            message = "Regional forecast quality gate is currently not passed."
+            uncertainty.append(message)
+            uncertainty_details.append(
+                RegionalDecisionEngine._reason_detail(
+                    "quality_gate_not_passed",
+                    message,
+                )
+            )
         if stage != signal_stage and not policy_overrides:
-            uncertainty.append("Final stage differs from the raw signal stage because of a policy overlay.")
+            message = "Final stage differs from the raw signal stage because of a policy overlay."
+            uncertainty.append(message)
+            uncertainty_details.append(
+                RegionalDecisionEngine._reason_detail(
+                    "final_stage_policy_overlay",
+                    message,
+                    signal_stage=signal_stage,
+                    final_stage=stage,
+                )
+            )
 
         return DecisionReasonTrace(
             why=why,
+            why_details=why_details,
             contributing_signals=component_trace[:4],
             uncertainty=uncertainty,
+            uncertainty_details=uncertainty_details,
             policy_overrides=policy_overrides,
+            policy_override_details=[
+                RegionalDecisionEngine._policy_override_detail(item)
+                for item in policy_overrides
+            ],
         )
 
     @staticmethod
@@ -754,6 +951,29 @@ class RegionalDecisionEngine:
             f"{bundesland_name}: {stage.title()} because event probability is {event_probability:.2f}, "
             f"forecast confidence is {forecast_confidence:.2f}, trend acceleration is {trend_raw:.2f}, "
             f"and cross-source direction is {agreement_direction}."
+        )
+
+    @classmethod
+    def _explanation_summary_detail(
+        cls,
+        *,
+        bundesland_name: str,
+        stage: str,
+        event_probability: float,
+        forecast_confidence: float,
+        trend_bundle: Mapping[str, Any],
+        agreement_bundle: Mapping[str, Any],
+        message: str,
+    ) -> dict[str, Any]:
+        return cls._reason_detail(
+            "decision_summary",
+            message,
+            bundesland_name=bundesland_name,
+            stage=stage,
+            event_probability=round(event_probability, 4),
+            forecast_confidence=round(forecast_confidence, 4),
+            trend_raw=round(float(trend_bundle.get("raw") or 0.0), 4),
+            agreement_direction=str(agreement_bundle.get("direction") or "flat"),
         )
 
     @staticmethod
@@ -779,3 +999,35 @@ class RegionalDecisionEngine:
         if not parts:
             return "Residual uncertainty is currently limited."
         return "Remaining uncertainty: " + ", ".join(parts) + "."
+
+    @classmethod
+    def _uncertainty_summary_detail(
+        cls,
+        *,
+        revision_risk: float,
+        freshness_score: float,
+        agreement_bundle: Mapping[str, Any],
+        quality_gate: Mapping[str, Any],
+        config: RegionalDecisionRuleConfig,
+        message: str,
+    ) -> dict[str, Any]:
+        parts: list[str] = []
+        if revision_risk >= float(config.uncertainty_revision_risk_threshold):
+            parts.append("revision_risk")
+        if freshness_score < float(config.uncertainty_freshness_threshold):
+            parts.append("freshness_score")
+        if int(agreement_bundle.get("signal_count") or 0) < int(config.min_agreement_signal_count):
+            parts.append("thin_agreement_evidence")
+        elif str(agreement_bundle.get("direction") or "flat") != "up":
+            parts.append("no_positive_cross_source_agreement")
+        if not quality_gate.get("overall_passed"):
+            parts.append("quality_gate_not_passed")
+        return cls._reason_detail(
+            "uncertainty_summary",
+            message,
+            parts=parts,
+            revision_risk=round(revision_risk, 4),
+            freshness_score=round(freshness_score, 4),
+            agreement_signal_count=int(agreement_bundle.get("signal_count") or 0),
+            agreement_direction=str(agreement_bundle.get("direction") or "flat"),
+        )

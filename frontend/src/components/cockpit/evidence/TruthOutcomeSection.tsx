@@ -10,6 +10,9 @@ import {
   formatDateTime,
   formatPercent,
   learningStateLabel,
+  metricContractBadge,
+  metricContractDisplayLabel,
+  metricContractNote,
   truthFreshnessLabel,
   truthLayerLabel,
 } from '../cockpitUtils';
@@ -36,6 +39,37 @@ const TruthOutcomeSection: React.FC<Props> = ({
   legacyCustomer,
   sourceStatusLabels,
 }) => {
+  const outcomeSignalLabel = metricContractDisplayLabel(
+    outcomeLearning?.field_contracts,
+    'outcome_signal_score',
+    'Outcome-Score',
+  );
+  const outcomeSignalBadge = metricContractBadge(
+    outcomeLearning?.field_contracts,
+    'outcome_signal_score',
+    'Lernsignal',
+  );
+  const outcomeSignalNote = metricContractNote(
+    outcomeLearning?.field_contracts,
+    'outcome_signal_score',
+    'Beschreibt ein beobachtetes Lernsignal aus Kundendaten.',
+  );
+  const outcomeConfidenceLabel = metricContractDisplayLabel(
+    outcomeLearning?.field_contracts,
+    'outcome_confidence_pct',
+    'Lern-Sicherheit',
+  );
+  const outcomeConfidenceBadge = metricContractBadge(
+    outcomeLearning?.field_contracts,
+    'outcome_confidence_pct',
+    'Lern-Sicherheit',
+  );
+  const outcomeConfidenceNote = metricContractNote(
+    outcomeLearning?.field_contracts,
+    'outcome_confidence_pct',
+    'Beschreibt die Sicherheit des Outcome-Lernsignals.',
+  );
+
   return (
     <>
       <section className="card subsection-card" style={{ padding: 24 }}>
@@ -70,7 +104,7 @@ const TruthOutcomeSection: React.FC<Props> = ({
             <strong>{learningStateLabel(outcomeLearning?.learning_state || truthGate?.learning_state)}</strong>
           </div>
           <div className="evidence-row">
-            <span>Wirkungssignal</span>
+            <span>{outcomeSignalLabel}</span>
             <strong>{formatPercent(outcomeLearning?.outcome_signal_score)}</strong>
           </div>
         </div>
@@ -131,12 +165,28 @@ const TruthOutcomeSection: React.FC<Props> = ({
             <strong>{learningStateLabel(outcomeLearning?.learning_state)}</strong>
           </div>
           <div className="metric-box">
-            <span>Wirkungssignal</span>
+            <span>{outcomeSignalLabel}</span>
             <strong>{formatPercent(outcomeLearning?.outcome_signal_score)}</strong>
           </div>
           <div className="metric-box">
-            <span>Sicherheit aus Kundendaten</span>
+            <span>{outcomeConfidenceLabel}</span>
             <strong>{formatPercent(outcomeLearning?.outcome_confidence_pct)}</strong>
+          </div>
+        </div>
+        <div className="soft-panel review-panel-soft" style={{ marginTop: 14 }}>
+          <div className="evidence-row">
+            <span>{outcomeSignalLabel}</span>
+            <strong>{outcomeSignalBadge}</strong>
+          </div>
+          <div className="review-body-copy" style={{ marginTop: 8 }}>
+            {outcomeSignalNote}
+          </div>
+          <div className="evidence-row" style={{ marginTop: 14 }}>
+            <span>{outcomeConfidenceLabel}</span>
+            <strong>{outcomeConfidenceBadge}</strong>
+          </div>
+          <div className="review-body-copy" style={{ marginTop: 8 }}>
+            {outcomeConfidenceNote}
           </div>
         </div>
         <div className="soft-panel" style={{ padding: 18, marginTop: 18, display: 'grid', gap: 10 }}>

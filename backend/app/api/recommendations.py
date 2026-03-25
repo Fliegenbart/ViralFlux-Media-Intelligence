@@ -1,3 +1,4 @@
+from app.core.time import utc_now
 from fastapi import APIRouter, Depends, BackgroundTasks
 from sqlalchemy.orm import Session
 from datetime import datetime
@@ -242,7 +243,7 @@ async def generate_recommendations(
             logger.error(f"Recommendation failed for {virus}: {e}")
             results[virus] = {"success": False, "error": str(e)}
 
-    return {"results": results, "timestamp": datetime.utcnow()}
+    return {"results": results, "timestamp": utc_now()}
 
 
 @router.get("/latest")
@@ -268,7 +269,7 @@ async def get_latest_recommendations(db: Session = Depends(get_db)):
             }
             for r in recs
         ],
-        "timestamp": datetime.utcnow()
+        "timestamp": utc_now()
     }
 
 
@@ -288,7 +289,7 @@ async def approve_recommendation(
 
     rec.approved = True
     rec.approved_by = "dashboard_user"
-    rec.approved_at = datetime.utcnow()
+    rec.approved_at = utc_now()
     db.commit()
 
     return {"status": "approved", "id": recommendation_id}

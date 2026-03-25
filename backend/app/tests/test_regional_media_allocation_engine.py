@@ -271,6 +271,8 @@ class RegionalMediaAllocationEngineTests(unittest.TestCase):
             recommendation["suggested_budget_amount"],
             recommendation["suggested_budget_eur"],
         )
+        self.assertTrue(recommendation["reason_trace"]["why_details"])
+        self.assertTrue(recommendation["reason_trace"]["budget_driver_details"])
 
     def test_blocked_spend_keeps_reason_trace_and_zero_budget(self) -> None:
         payload = self.engine.allocate(
@@ -298,6 +300,7 @@ class RegionalMediaAllocationEngineTests(unittest.TestCase):
         self.assertEqual(recommendation["suggested_budget_share"], 0.0)
         self.assertEqual(recommendation["suggested_budget_eur"], 0.0)
         self.assertTrue(recommendation["reason_trace"]["blockers"])
+        self.assertTrue(recommendation["reason_trace"]["blocker_details"])
         self.assertEqual(recommendation["spend_readiness"], "blocked")
 
     def test_empty_predictions_return_stable_summary(self) -> None:

@@ -3,7 +3,13 @@ import { geoMercator, geoPath } from 'd3-geo';
 
 import deBundeslaenderGeo from '../../assets/maps/de-bundeslaender.geo.json';
 import { MapRegion } from './types';
-import { formatPercent, metricContractLabel, primarySignalScore } from './cockpitUtils';
+import {
+  formatPercent,
+  metricContractBadge,
+  metricContractDisplayLabel,
+  metricContractNote,
+  primarySignalScore,
+} from './cockpitUtils';
 
 interface GeoBundeslandFeature {
   type: 'Feature';
@@ -88,7 +94,13 @@ const GermanyMap: React.FC<Props> = ({ regions, selectedRegion, onSelectRegion }
   }, [projection]);
 
   const hovered = hoveredRegion ? regions[hoveredRegion] : null;
-  const hoveredSignalLabel = metricContractLabel(hovered?.field_contracts, 'signal_score', 'Signal-Score');
+  const hoveredSignalLabel = metricContractDisplayLabel(hovered?.field_contracts, 'signal_score', 'Signal-Score');
+  const hoveredSignalBadge = metricContractBadge(hovered?.field_contracts, 'signal_score', 'Kennzahl');
+  const hoveredSignalNote = metricContractNote(
+    hovered?.field_contracts,
+    'signal_score',
+    'Hilft beim Vergleichen und Priorisieren, ist aber keine Eintrittswahrscheinlichkeit.',
+  );
 
   return (
     <div style={{ position: 'relative' }}>
@@ -171,6 +183,9 @@ const GermanyMap: React.FC<Props> = ({ regions, selectedRegion, onSelectRegion }
           </div>
           <div style={{ marginTop: 4, fontSize: 12, color: 'rgba(203, 213, 225, 0.88)' }}>
             Trend {hovered.trend} · Veränderung {formatPercent(hovered.change_pct || 0, 1)}
+          </div>
+          <div style={{ marginTop: 6, fontSize: 11, color: 'rgba(191, 219, 254, 0.86)' }}>
+            {hoveredSignalBadge}: {hoveredSignalNote}
           </div>
         </div>
       )}

@@ -1,4 +1,5 @@
 from __future__ import annotations
+from app.core.time import utc_now
 
 import csv
 import io
@@ -238,7 +239,7 @@ class MediaV2Service:
         return {
             "virus_typ": virus_typ,
             "target_source": target_source,
-            "generated_at": datetime.utcnow().isoformat(),
+            "generated_at": utc_now().isoformat(),
             "weekly_decision": {
                 "decision_state": decision_state,
                 "action_stage": "activate" if decision_state == "GO" else "prepare",
@@ -399,7 +400,7 @@ class MediaV2Service:
         return {
             "virus_typ": virus_typ,
             "target_source": target_source,
-            "generated_at": datetime.utcnow().isoformat(),
+            "generated_at": utc_now().isoformat(),
             "map": {
                 **map_section,
                 "regions": enriched_regions,
@@ -429,7 +430,7 @@ class MediaV2Service:
         )["summary"]
 
         return {
-            "generated_at": datetime.utcnow().isoformat(),
+            "generated_at": utc_now().isoformat(),
             "cards": visible_cards,
             "archived_cards": archived_cards[:20],
             "summary": queue["summary"] | {
@@ -475,7 +476,7 @@ class MediaV2Service:
         return {
             "virus_typ": virus_typ,
             "target_source": target_source,
-            "generated_at": datetime.utcnow().isoformat(),
+            "generated_at": utc_now().isoformat(),
             "proxy_validation": backtest_summary.get("latest_market"),
             "business_validation": business_validation,
             "operator_context": business_validation.get("operator_context"),
@@ -555,7 +556,7 @@ class MediaV2Service:
         }
         return {
             "virus_typ": virus_typ,
-            "generated_at": datetime.utcnow().isoformat(),
+            "generated_at": utc_now().isoformat(),
             "items": items,
             "summary": summary,
         }
@@ -786,7 +787,7 @@ class MediaV2Service:
             file_name=(file_name or "").strip() or None,
             status="validated" if validate_only else "failed",
             rows_total=len(parsed_rows),
-            uploaded_at=datetime.utcnow(),
+            uploaded_at=utc_now(),
         )
         self.db.add(batch)
         self.db.flush()
@@ -872,7 +873,7 @@ class MediaV2Service:
                 target.revenue_eur = row["metrics"].get("revenue_eur")
                 target.import_batch_id = batch_id
                 target.extra_data = row.get("extra_data") or {}
-                target.updated_at = datetime.utcnow()
+                target.updated_at = utc_now()
                 imported += 1
 
         coverage_after_import = self._project_truth_coverage(

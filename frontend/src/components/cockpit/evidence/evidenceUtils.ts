@@ -1,4 +1,4 @@
-import { normalizeGermanText } from '../../../lib/plainLanguage';
+import { explainInPlainGerman, normalizeGermanText } from '../../../lib/plainLanguage';
 
 export function issueFieldLabel(fieldName?: string | null): string {
   const normalized = String(fieldName || '').trim().toLowerCase();
@@ -10,7 +10,7 @@ export function issueFieldLabel(fieldName?: string | null): string {
   if (normalized === 'conversion') return 'Wirkungsdaten';
   if (normalized === 'row') return 'Zeile';
   if (normalized === 'header') return 'CSV-Header';
-  return normalizeGermanText(normalized);
+  return explainInPlainGerman(normalized);
 }
 
 function fallbackLabel(value?: string | null): string {

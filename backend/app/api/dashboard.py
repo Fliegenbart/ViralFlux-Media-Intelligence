@@ -1,3 +1,4 @@
+from app.core.time import utc_now
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import func
@@ -302,7 +303,7 @@ async def get_dashboard_overview(
         ],
         "has_forecasts": len(forecast_summary) > 0,
         "has_inventory": len(inventory) > 0,
-        "timestamp": datetime.utcnow()
+        "timestamp": utc_now()
     }
 
 

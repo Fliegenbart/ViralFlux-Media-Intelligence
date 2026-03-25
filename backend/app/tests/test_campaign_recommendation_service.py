@@ -92,8 +92,12 @@ class CampaignRecommendationServiceTests(unittest.TestCase):
         self.assertEqual(first["recommended_keyword_cluster"]["cluster_key"], "respiratory_relief_search")
         self.assertEqual(first["spend_guardrail_status"], "ready")
         self.assertTrue(first["recommendation_rationale"]["why"])
+        self.assertTrue(first["recommendation_rationale"]["why_details"])
         self.assertTrue(first["recommendation_rationale"]["product_fit"])
+        self.assertTrue(first["recommendation_rationale"]["product_fit_details"])
         self.assertTrue(first["recommendation_rationale"]["keyword_fit"])
+        self.assertTrue(first["recommendation_rationale"]["keyword_fit_details"])
+        self.assertTrue(first["recommendation_rationale"]["guardrail_details"])
 
     def test_region_product_fit_can_boost_voice_cluster_for_berlin(self) -> None:
         payload = self.service.recommend_from_allocation(

@@ -1,6 +1,7 @@
 """Media Cockpit Service: bündelt Bento, Karte, Empfehlungen, Backtest und Datenfrische."""
 
 from __future__ import annotations
+from app.core.time import utc_now
 
 from datetime import datetime, timedelta
 from typing import Any
@@ -127,7 +128,7 @@ class MediaCockpitService:
                 target_source=target_source,
             ),
             "data_freshness": data_freshness,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": utc_now().isoformat(),
         }
 
     @staticmethod
@@ -140,7 +141,7 @@ class MediaCockpitService:
         if value is None:
             return None
 
-        effective_now = now or datetime.utcnow()
+        effective_now = now or utc_now()
         normalized = value
         if normalized.tzinfo is not None:
             normalized = normalized.replace(tzinfo=None)
@@ -544,14 +545,14 @@ class MediaCockpitService:
             surv_week_label = _surv_lbl[0] if _surv_lbl else "RKI SURVSTAT"
 
         trends_avg = self.db.query(func.avg(GoogleTrendsData.interest_score)).filter(
-            GoogleTrendsData.datum >= datetime.utcnow() - timedelta(days=14),
+            GoogleTrendsData.datum >= utc_now() - timedelta(days=14),
         ).scalar()
 
         bfarm = get_cached_signals() or {}
         bfarm_score = float(bfarm.get("current_risk_score", 0.0) or 0.0)
 
         weather_rows = self.db.query(WeatherData).filter(
-            WeatherData.datum >= datetime.utcnow() - timedelta(days=2),
+            WeatherData.datum >= utc_now() - timedelta(days=2),
         ).all()
         weather_risk = 0.0
         if weather_rows:
@@ -570,7 +571,7 @@ class MediaCockpitService:
         pollen_signal = 0.0
         pollen_type = "Pollen"
         pollen_is_stale = True
-        if latest_pollen_date and (datetime.utcnow() - latest_pollen_date) <= timedelta(days=3):
+        if latest_pollen_date and (utc_now() - latest_pollen_date) <= timedelta(days=3):
             pollen_is_stale = False
             pollen_row = self.db.query(
                 PollenData.pollen_type,
@@ -1026,7 +1027,7 @@ class MediaCockpitService:
         }
 
     def _data_freshness(self) -> dict:
-        now = datetime.utcnow()
+        now = utc_now()
 
         def _max_date_for(model_cls, *col_names: str):
             for col_name in col_names:
@@ -1064,7 +1065,7 @@ class MediaCockpitService:
         }
 
     def _source_status(self, data_freshness: dict[str, Any]) -> dict[str, Any]:
-        now = datetime.utcnow()
+        now = utc_now()
         labels = {
             "wastewater": "AMELAG Abwasser",
             "are_konsultation": "RKI ARE",

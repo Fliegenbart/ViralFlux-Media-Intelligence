@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -20,6 +20,10 @@ _LIVE_EVALUATION_ARCHIVES = {
 _DEFAULT_LIVE_EVALUATION_ROOT = (
     Path(__file__).resolve().parents[2] / "ml_models" / "regional_panel_h7_live_evaluation"
 )
+
+
+def _utc_now_iso() -> str:
+    return datetime.now(UTC).isoformat()
 
 
 class PilotReadoutService:
@@ -155,7 +159,7 @@ class PilotReadoutService:
             "virus_typ": virus_typ,
             "horizon_days": int(horizon_days),
             "weekly_budget_eur": round(float(weekly_budget_eur), 2),
-            "generated_at": datetime.utcnow().isoformat(),
+            "generated_at": _utc_now_iso(),
             "run_context": {
                 "brand": brand_value,
                 "virus_typ": virus_typ,
@@ -248,6 +252,7 @@ class PilotReadoutService:
                 or prediction.get("decision_label")
                 or "Beobachten"
             )
+            decision_payload = allocation_item.get("decision") or prediction.get("decision") or {}
             reason_trace = self._unique_non_empty(
                 [
                     *self._reason_trace_lines(prediction.get("reason_trace")),
@@ -255,8 +260,18 @@ class PilotReadoutService:
                     *self._reason_trace_lines(
                         recommendation_item.get("recommendation_rationale"),
                     ),
-                    str(prediction.get("decision", {}).get("explanation_summary") or "").strip(),
+                    str(decision_payload.get("explanation_summary") or "").strip(),
                     str(allocation_item.get("uncertainty_summary") or "").strip(),
+                ]
+            )
+            reason_trace_details = self._unique_reason_details(
+                [
+                    *self._reason_trace_detail_items(prediction.get("reason_trace")),
+                    *self._reason_trace_detail_items(allocation_item.get("reason_trace")),
+                    *self._reason_trace_detail_items(
+                        recommendation_item.get("recommendation_rationale"),
+                    ),
+                    decision_payload.get("explanation_summary_detail"),
                 ]
             )
             rows.append(
@@ -287,7 +302,9 @@ class PilotReadoutService:
                     "channels": recommendation_item.get("channels") or allocation_item.get("channels") or [],
                     "uncertainty_summary": allocation_item.get("uncertainty_summary")
                     or prediction.get("uncertainty_summary"),
+                    "uncertainty_summary_detail": decision_payload.get("uncertainty_summary_detail"),
                     "reason_trace": reason_trace[:4],
+                    "reason_trace_details": reason_trace_details[:6],
                     "quality_gate": allocation_item.get("quality_gate") or forecast.get("quality_gate"),
                     "business_gate": allocation_item.get("business_gate") or forecast.get("business_gate"),
                     "spend_gate_status": allocation_item.get("spend_gate_status"),
@@ -323,6 +340,7 @@ class PilotReadoutService:
         lead_region = region_rows[0] if region_rows else {}
         lead_stage = str(lead_region.get("decision_stage") or "Beobachten")
         reason_trace = list(lead_region.get("reason_trace") or [])[:3]
+        reason_trace_details = list(lead_region.get("reason_trace_details") or [])[:3]
         blocked_reasons = list(allocation.get("summary", {}).get("spend_blockers") or [])
         if gate_snapshot["missing_requirements"]:
             blocked_reasons = self._unique_non_empty(
@@ -370,7 +388,9 @@ class PilotReadoutService:
                 "evaluation_gate_outcome": (gate_snapshot.get("latest_evaluation") or {}).get("gate_outcome"),
             },
             "uncertainty_summary": lead_region.get("uncertainty_summary"),
+            "uncertainty_summary_detail": lead_region.get("uncertainty_summary_detail"),
             "reason_trace": reason_trace,
+            "reason_trace_details": reason_trace_details,
         }
 
     def _gate_snapshot(
@@ -673,7 +693,17 @@ class PilotReadoutService:
             stripped = trace.strip()
             return [stripped] if stripped else []
         if isinstance(trace, list):
-            return [str(item).strip() for item in trace if str(item).strip()]
+            lines: list[str] = []
+            for item in trace:
+                if PilotReadoutService._is_reason_detail_item(item):
+                    message = str(item.get("message") or "").strip()
+                    if message:
+                        lines.append(message)
+                    continue
+                stripped = str(item).strip()
+                if stripped:
+                    lines.append(stripped)
+            return lines
         if isinstance(trace, dict):
             lines: list[str] = []
             for key in (
@@ -688,10 +718,79 @@ class PilotReadoutService:
                 value = trace.get(key)
                 if isinstance(value, list):
                     lines.extend(str(item).strip() for item in value if str(item).strip())
+            for key in (
+                "why_details",
+                "uncertainty_details",
+                "policy_override_details",
+                "budget_driver_details",
+                "blocker_details",
+                "guardrail_details",
+                "budget_note_details",
+                "evidence_note_details",
+                "product_fit_details",
+                "keyword_fit_details",
+            ):
+                value = trace.get(key)
+                if isinstance(value, list):
+                    for item in value:
+                        if PilotReadoutService._is_reason_detail_item(item):
+                            message = str(item.get("message") or "").strip()
+                            if message:
+                                lines.append(message)
             if trace.get("summary"):
                 lines.append(str(trace.get("summary")).strip())
             return [item for item in lines if item]
         return [str(trace).strip()]
+
+    @staticmethod
+    def _is_reason_detail_item(value: Any) -> bool:
+        return (
+            isinstance(value, dict)
+            and isinstance(value.get("code"), str)
+            and isinstance(value.get("message"), str)
+        )
+
+    @classmethod
+    def _reason_trace_detail_items(cls, trace: Any) -> list[dict[str, Any]]:
+        if not trace:
+            return []
+        if cls._is_reason_detail_item(trace):
+            return [dict(trace)]
+        if isinstance(trace, list):
+            return [dict(item) for item in trace if cls._is_reason_detail_item(item)]
+        if isinstance(trace, dict):
+            details: list[dict[str, Any]] = []
+            for key in (
+                "why_details",
+                "uncertainty_details",
+                "policy_override_details",
+                "budget_driver_details",
+                "blocker_details",
+                "guardrail_details",
+                "budget_note_details",
+                "evidence_note_details",
+                "product_fit_details",
+                "keyword_fit_details",
+            ):
+                value = trace.get(key)
+                if isinstance(value, list):
+                    details.extend(dict(item) for item in value if cls._is_reason_detail_item(item))
+            return details
+        return []
+
+    @staticmethod
+    def _unique_reason_details(values: list[Any]) -> list[dict[str, Any]]:
+        result: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        for value in values:
+            if not PilotReadoutService._is_reason_detail_item(value):
+                continue
+            key = json.dumps(value, sort_keys=True, default=str)
+            if key in seen:
+                continue
+            seen.add(key)
+            result.append(dict(value))
+        return result
 
     @staticmethod
     def _unique_non_empty(values: list[str]) -> list[str]:

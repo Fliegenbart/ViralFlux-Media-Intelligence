@@ -97,6 +97,13 @@ function buildReadout({
             event_probability: 0.81,
             budget_amount_eur: 64000,
             confidence: 0.72,
+            reason_trace_details: [
+              {
+                code: 'event_probability_activate_threshold',
+                message: 'raw',
+                params: { event_probability: 0.81, threshold: 0.7 },
+              },
+            ],
             reason_trace: [`${leadRegion} is the current lead region.`],
           },
         ],
@@ -116,7 +123,19 @@ function buildReadout({
           evaluation_retained: scopeReadiness === 'GO',
           evaluation_gate_outcome: scopeReadiness,
         },
+        uncertainty_summary_detail: {
+          code: 'uncertainty_summary',
+          message: 'raw',
+          params: { parts: ['revision_risk'], revision_risk: 0.33 },
+        },
         uncertainty_summary: 'Revision risk remains visible.',
+        reason_trace_details: [
+          {
+            code: 'event_probability_activate_threshold',
+            message: 'raw',
+            params: { event_probability: 0.81, threshold: 0.7 },
+          },
+        ],
         reason_trace: [`${leadRegion} is the current lead region.`],
       },
       operational_recommendations: {
@@ -144,6 +163,18 @@ function buildReadout({
             recommended_product: 'Bronchial Recovery Support',
             recommended_keywords: 'Respiratory Relief Search',
             campaign_recommendation: 'Berlin recommendation',
+            reason_trace_details: [
+              {
+                code: 'campaign_stage_budget_share',
+                message: 'raw',
+                params: { region_name: 'Berlin', stage: 'activate', budget_share: 0.58 },
+              },
+            ],
+            uncertainty_summary_detail: {
+              code: 'uncertainty_summary',
+              message: 'raw',
+              params: { parts: ['revision_risk'], revision_risk: 0.33 },
+            },
             reason_trace: ['Berlin is the current lead region.'],
             uncertainty_summary: 'Revision risk remains visible.',
             budget_release_recommendation: 'Hold spend until lift metrics are validated.',
@@ -261,12 +292,14 @@ describe('PilotPage', () => {
     expect(screen.getByText('Forecast bereit')).toBeInTheDocument();
     expect(screen.getAllByText('Kommerzielle Validierung').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Szenario-Split').length).toBeGreaterThan(0);
+    expect(screen.getByText(/Event-Wahrscheinlichkeit ist die Forecast-Chance/i)).toBeInTheDocument();
+    expect(screen.getAllByText('Die Vorhersage liegt mit 81 % über der Schwelle für eine Aktivierung.').length).toBeGreaterThan(0);
     expect(screen.getByRole('heading', { name: 'Was PEIX GELO heute schon zeigen kann' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Operative Empfehlungen' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Pilot-Evidenz und Freigabestatus' })).toBeInTheDocument();
     expect(screen.getByText('Aktueller Freigabestatus')).toBeInTheDocument();
     expect(screen.getByText(/Fokussiere Berlin jetzt für RSV A und nutze die Verteilung unten als forecast-basierten Szenario-Split/i)).toBeInTheDocument();
-    expect(screen.getAllByText('Berlin is the current lead region.')).toHaveLength(2);
+    expect(screen.getAllByText('Die Vorhersage liegt mit 81 % über der Schwelle für eine Aktivierung.').length).toBeGreaterThan(0);
   });
 
   it('renders GO readiness directly from backend data without client-side reinterpretation', () => {
@@ -297,7 +330,7 @@ describe('PilotPage', () => {
     fireEvent.change(screen.getByLabelText('Virus'), { target: { value: 'Influenza B' } });
     expect(screen.getByText(/Fokussiere Bayern jetzt für Influenza B und nutze die Verteilung unten als forecast-basierten Szenario-Split/i)).toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText('Horizon'), { target: { value: '5' } });
+    fireEvent.change(screen.getByLabelText('Zeitraum'), { target: { value: '5' } });
     expect(mockedUsePilotSurfaceData).toHaveBeenLastCalledWith(expect.objectContaining({
       virus: 'Influenza B',
       horizonDays: 5,

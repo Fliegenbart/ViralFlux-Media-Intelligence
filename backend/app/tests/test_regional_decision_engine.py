@@ -95,8 +95,12 @@ class RegionalDecisionEngineTests(unittest.TestCase):
         self.assertEqual(decision.stage, "activate")
         self.assertGreaterEqual(decision.decision_score, DEFAULT_RULE_CONFIG.activate_score_threshold)
         self.assertTrue(decision.reason_trace.why)
+        self.assertTrue(decision.reason_trace.why_details)
+        self.assertEqual(decision.reason_trace.why_details[0]["code"], "event_probability_activate_threshold")
         self.assertEqual(decision.reason_trace.policy_overrides, [])
         self.assertEqual(decision.uncertainty_summary, "Residual uncertainty is currently limited.")
+        self.assertEqual(decision.explanation_summary_detail["code"], "decision_summary")
+        self.assertEqual(decision.uncertainty_summary_detail["code"], "uncertainty_summary")
 
     def test_evaluate_assigns_prepare_for_mid_strength_signal_bundle(self) -> None:
         decision = self.engine.evaluate(
@@ -202,6 +206,8 @@ class RegionalDecisionEngineTests(unittest.TestCase):
 
         self.assertTrue(decision.reason_trace.why)
         self.assertTrue(decision.reason_trace.uncertainty)
+        self.assertTrue(decision.reason_trace.why_details)
+        self.assertTrue(decision.reason_trace.uncertainty_details)
         self.assertGreaterEqual(len(decision.reason_trace.contributing_signals), 1)
         self.assertTrue(decision.uncertainty_summary.startswith("Remaining uncertainty:"))
 

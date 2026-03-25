@@ -46,6 +46,14 @@ const ForecastMonitoringSection: React.FC<Props> = ({
   legacyCustomer,
   truthStatus,
 }) => {
+  const eventForecast = forecastMonitoring?.event_forecast;
+  const eventProbabilityLabel = eventForecast?.fallback_used ? 'Fallback-Wahrscheinlichkeit' : 'Event-Wahrscheinlichkeit';
+  const eventProbabilityBadge = eventForecast?.fallback_used ? 'Fallback-Schätzung' : 'Kalibrierte Wahrscheinlichkeit';
+  const eventProbabilityNote = eventForecast?.fallback_used
+    ? 'Dieser Wert stammt aktuell aus einer Ersatzschätzung und sollte vorsichtiger gelesen werden als ein voll gelerntes Modell.'
+    : 'Dieser Wert beschreibt die kalibrierte Wahrscheinlichkeit für das definierte Forecast-Ereignis.';
+  const probabilitySource = readableProbabilitySource(eventForecast?.probability_source);
+
   return (
     <>
       <section className="evidence-grid">
@@ -105,8 +113,17 @@ const ForecastMonitoringSection: React.FC<Props> = ({
               Kalibrierung: {forecastMonitoring?.event_forecast?.calibration_passed == null ? '-' : forecastMonitoring.event_forecast.calibration_passed ? 'stabil' : 'Beobachten'}
             </span>
             <span className="step-chip">
+              Semantik: {eventProbabilityBadge}
+            </span>
+            <span className="step-chip">
+              Quelle: {probabilitySource}
+            </span>
+            <span className="step-chip">
               Samples: {latestAccuracy?.samples != null ? latestAccuracy.samples : '-'}
             </span>
+          </div>
+          <div className="review-muted-copy" style={{ marginTop: 12 }}>
+            {eventProbabilityNote}
           </div>
         </div>
       </section>
@@ -170,7 +187,7 @@ const ForecastMonitoringSection: React.FC<Props> = ({
 
         <div className="metric-strip" style={{ marginTop: 18 }}>
           <div className="metric-box">
-            <span>7-Tage-Fenster</span>
+            <span>{eventProbabilityLabel}</span>
             <strong>{formatPercent((forecastMonitoring?.event_forecast?.event_probability || 0) * 100, 1)}</strong>
           </div>
           <div className="metric-box">
@@ -246,3 +263,11 @@ const ForecastMonitoringSection: React.FC<Props> = ({
 };
 
 export default ForecastMonitoringSection;
+
+function readableProbabilitySource(value?: string | null): string {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (!normalized) return 'noch unklar';
+  if (normalized === 'learned') return 'gelerntes Modell';
+  if (normalized === 'heuristic_sigmoid_proxy') return 'heuristischer Proxy';
+  return value ? String(value) : 'noch unklar';
+}

@@ -1,3 +1,4 @@
+from app.core.time import utc_now
 import os
 import unittest
 from datetime import datetime, timedelta
@@ -51,7 +52,7 @@ class MediaV2ApiTests(unittest.TestCase):
         self.engine.dispose()
 
     def _seed_products_and_truth_reference(self) -> None:
-        now = datetime.utcnow()
+        now = utc_now()
         self.db.add_all([
             BrandProduct(
                 brand="gelo",
@@ -132,7 +133,7 @@ class MediaV2ApiTests(unittest.TestCase):
         self.assertEqual(coverage_response.status_code, 200)
         coverage_body = coverage_response.json()
         self.assertEqual(coverage_body["coverage_weeks"], 1)
-        self.assertIn("Media Spend", coverage_body["required_fields_present"])
+        self.assertIn("Mediabudget", coverage_body["required_fields_present"])
         self.assertEqual(coverage_body["truth_freshness_state"], "fresh")
 
         truth_response = self.client.get("/api/v1/media/evidence/truth?brand=gelo&virus_typ=Influenza%20A")

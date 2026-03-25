@@ -1,3 +1,4 @@
+from app.core.time import utc_now
 from fastapi import APIRouter, Depends, BackgroundTasks, HTTPException, Query
 from sqlalchemy.orm import Session
 from datetime import datetime
@@ -40,7 +41,7 @@ async def run_forecasts(background_tasks: BackgroundTasks):
     return {
         "status": "forecast_started",
         "message": "XGBoost stacking forecasts running in background for all virus types.",
-        "timestamp": datetime.utcnow()
+        "timestamp": utc_now()
     }
 
 
@@ -67,7 +68,7 @@ async def run_forecasts_sync(db: Session = Depends(get_db)):
 
     return {
         "results": results,
-        "timestamp": datetime.utcnow()
+        "timestamp": utc_now()
     }
 
 
@@ -131,7 +132,7 @@ async def get_forecast_status(db: Session = Depends(get_db)):
             "model_version": latest.model_version if latest else None
         }
 
-    return {"forecasts": status, "timestamp": datetime.utcnow()}
+    return {"forecasts": status, "timestamp": utc_now()}
 
 
 @router.get("/monitoring/{virus_typ}")
@@ -174,7 +175,7 @@ async def get_all_forecast_monitoring(
     return {
         "monitoring": monitoring,
         "any_warning": any_warning,
-        "timestamp": datetime.utcnow(),
+        "timestamp": utc_now(),
     }
 
 
@@ -261,7 +262,7 @@ async def get_all_forecast_accuracy(db: Session = Depends(get_db)):
     return {
         "accuracy": result,
         "any_drift": any_drift,
-        "timestamp": datetime.utcnow(),
+        "timestamp": utc_now(),
     }
 
 
@@ -299,7 +300,7 @@ async def get_regional_feature_status(
         "with_wastewater_data": len(available),
         "sufficient_for_training": sufficient_count,
         "details": details,
-        "timestamp": datetime.utcnow(),
+        "timestamp": utc_now(),
     }
 
 

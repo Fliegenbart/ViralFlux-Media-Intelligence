@@ -52,8 +52,38 @@ class PilotReadoutServiceTests(unittest.TestCase):
                     "decision_rank": 1,
                     "priority_score": 0.88,
                     "event_probability_calibrated": 0.81,
-                    "reason_trace": {"why": ["Berlin leads the current viral wave."]},
-                    "decision": {"explanation_summary": "Berlin leads the current viral wave."},
+                    "reason_trace": {
+                        "why": ["Berlin leads the current viral wave."],
+                        "why_details": [
+                            {
+                                "code": "event_probability_activate_threshold",
+                                "message": "Event probability 0.81 clears the Activate threshold 0.70.",
+                                "params": {"event_probability": 0.81, "threshold": 0.70},
+                            }
+                        ],
+                    },
+                    "decision": {
+                        "explanation_summary": "Berlin leads the current viral wave.",
+                        "explanation_summary_detail": {
+                            "code": "decision_summary",
+                            "message": "Berlin: Activate because event probability is 0.81, forecast confidence is 0.72, trend acceleration is 0.30, and cross-source direction is up.",
+                            "params": {
+                                "bundesland_name": "Berlin",
+                                "stage": "activate",
+                                "event_probability": 0.81,
+                                "forecast_confidence": 0.72,
+                                "agreement_direction": "up",
+                            },
+                        },
+                        "uncertainty_summary_detail": {
+                            "code": "uncertainty_summary",
+                            "message": "Remaining uncertainty: revision risk 0.33.",
+                            "params": {
+                                "parts": ["revision_risk"],
+                                "revision_risk": 0.33,
+                            },
+                        },
+                    },
                     "uncertainty_summary": "Revision risk remains visible.",
                     "target_week_start": "2026-03-23",
                 },
@@ -100,7 +130,16 @@ class PilotReadoutServiceTests(unittest.TestCase):
                     "suggested_budget_share": 0.58,
                     "suggested_budget_amount": 64000,
                     "products": ["GeloBronchial"],
-                    "reason_trace": {"why": ["Berlin receives the largest share."]},
+                    "reason_trace": {
+                        "why": ["Berlin receives the largest share."],
+                        "budget_driver_details": [
+                            {
+                                "code": "budget_driver_suggested_share",
+                                "message": "Suggested budget share is 58.00%.",
+                                "params": {"suggested_budget_share": 0.58},
+                            }
+                        ],
+                    },
                     "uncertainty_summary": "Revision risk remains visible.",
                     "business_gate": {"evidence_tier": "truth_backed"},
                 },
@@ -134,7 +173,20 @@ class PilotReadoutServiceTests(unittest.TestCase):
                     "confidence": 0.71,
                     "recommended_product_cluster": {"label": "Bronchial Recovery Support"},
                     "recommended_keyword_cluster": {"label": "Respiratory Relief Search"},
-                    "recommendation_rationale": {"why": ["Bronchial support is the best product fit for Berlin."]},
+                    "recommendation_rationale": {
+                        "why": ["Bronchial support is the best product fit for Berlin."],
+                        "why_details": [
+                            {
+                                "code": "campaign_stage_budget_share",
+                                "message": "Berlin stays on Activate with budget share 58.00%.",
+                                "params": {
+                                    "region_name": "Berlin",
+                                    "stage": "activate",
+                                    "budget_share": 0.58,
+                                },
+                            }
+                        ],
+                    },
                 },
                 {
                     "region": "BY",
@@ -150,8 +202,8 @@ class PilotReadoutServiceTests(unittest.TestCase):
         }
         service.media_service.get_truth_coverage = lambda **_: {
             "coverage_weeks": 12,
-            "required_fields_present": ["Media Spend"],
-            "conversion_fields_present": ["Sales"],
+            "required_fields_present": ["Mediabudget"],
+            "conversion_fields_present": ["Verkäufe"],
             "truth_freshness_state": "fresh",
             "latest_batch_id": "batch-1",
         }
@@ -202,6 +254,10 @@ class PilotReadoutServiceTests(unittest.TestCase):
         self.assertEqual(payload["executive_summary"]["budget_mode"], "scenario_split")
         self.assertEqual(payload["executive_summary"]["budget_recommendation"]["budget_mode"], "scenario_split")
         self.assertEqual(payload["empty_state"]["code"], "ready")
+        self.assertTrue(payload["executive_summary"]["reason_trace_details"])
+        self.assertEqual(payload["executive_summary"]["reason_trace_details"][0]["code"], "event_probability_activate_threshold")
+        self.assertEqual(payload["executive_summary"]["uncertainty_summary_detail"]["code"], "uncertainty_summary")
+        self.assertTrue(payload["operational_recommendations"]["regions"][0]["reason_trace_details"])
         self.assertIn(
             "forecast-basierten Szenario-Split",
             payload["executive_summary"]["what_should_we_do_now"],

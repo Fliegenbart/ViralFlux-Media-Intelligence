@@ -1,3 +1,4 @@
+from app.core.time import utc_now
 import unittest
 from datetime import datetime, timedelta
 from unittest.mock import patch
@@ -24,7 +25,7 @@ class MediaV2ServiceTruthCoverageTests(unittest.TestCase):
         self.engine.dispose()
 
     def _seed_brand_products(self) -> None:
-        now = datetime.utcnow()
+        now = utc_now()
         self.db.add_all([
             BrandProduct(
                 brand="gelo",
@@ -137,8 +138,9 @@ class MediaV2ServiceTruthCoverageTests(unittest.TestCase):
         self.assertEqual(result["coverage_after_import"]["coverage_weeks"], 2)
         self.assertEqual(result["coverage_after_import"]["regions_covered"], 2)
         self.assertEqual(result["coverage_after_import"]["products_covered"], 2)
-        self.assertIn("Media Spend", result["coverage_after_import"]["required_fields_present"])
-        self.assertIn("Sales", result["coverage_after_import"]["conversion_fields_present"])
+        self.assertIn("Mediabudget", result["coverage_after_import"]["required_fields_present"])
+        self.assertIn("Verkäufe", result["coverage_after_import"]["conversion_fields_present"])
+        self.assertIn("Bestellungen", result["coverage_after_import"]["conversion_fields_present"])
         self.assertEqual(result["coverage_after_import"]["trust_readiness"], "erste_signale")
         self.assertEqual(result["coverage_after_import"]["truth_freshness_state"], "fresh")
         self.assertEqual(result["coverage_after_import"]["latest_batch_id"], result["batch_id"])
@@ -300,8 +302,8 @@ class MediaV2ServiceTruthCoverageTests(unittest.TestCase):
                 "coverage_weeks": 10,
                 "trust_readiness": "erste_signale",
                 "truth_freshness_state": "fresh",
-                "required_fields_present": ["Media Spend"],
-                "conversion_fields_present": ["Sales"],
+                "required_fields_present": ["Mediabudget"],
+                "conversion_fields_present": ["Verkäufe"],
                 "last_imported_at": "2026-03-01T00:00:00",
                 "latest_batch_id": "batch-1",
             }),

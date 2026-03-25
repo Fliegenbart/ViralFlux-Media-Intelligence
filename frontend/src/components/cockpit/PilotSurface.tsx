@@ -1,12 +1,14 @@
 import React from 'react';
 
 import LoadingSkeleton from '../LoadingSkeleton';
+import { explainInPlainGerman } from '../../lib/plainLanguage';
 import {
   PilotReadoutRegion,
   PilotReadoutResponse,
   PilotReadoutStatus,
   PilotSurfaceScope,
   PilotSurfaceStageFilter,
+  StructuredReasonItem,
 } from '../../types/media';
 import { VIRUS_OPTIONS, formatCurrency, formatDateShort, formatDateTime } from './cockpitUtils';
 
@@ -78,6 +80,10 @@ function formatTableMetric(value: unknown, digits = 3): string {
   return value.toFixed(digits);
 }
 
+const PRIORITY_SCORE_LABEL = 'Prioritäts-Score';
+const EVENT_PROBABILITY_LABEL = 'Event-Wahrscheinlichkeit';
+const SIGNAL_CONFIDENCE_LABEL = 'Signal-Sicherheit';
+
 function scopeCopy(scope: PilotSurfaceScope): string {
   return SCOPE_OPTIONS.find((item) => item.key === scope)?.copy || '';
 }
@@ -126,6 +132,24 @@ function nonEmpty(values: Array<string | null | undefined>): string[] {
 
 function uniqueValues(values: Array<string | null | undefined>): string[] {
   return Array.from(new Set(nonEmpty(values)));
+}
+
+function explainedValues(
+  values: Array<string | StructuredReasonItem | null | undefined>,
+): string[] {
+  return Array.from(new Set(
+    values
+      .map((item) => explainInPlainGerman(item))
+      .filter(Boolean),
+  ));
+}
+
+function preferredReasonEntries(
+  details?: StructuredReasonItem[] | null,
+  fallback?: string[] | null,
+): Array<string | StructuredReasonItem> {
+  if (details && details.length > 0) return details;
+  return fallback || [];
 }
 
 function badgeClassName(
@@ -179,7 +203,7 @@ function FeaturedRegionCard({
   row: PilotReadoutRegion;
   lead?: boolean;
 }) {
-  const reasonTrace = nonEmpty(row.reason_trace || []);
+  const reasonTrace = explainedValues(preferredReasonEntries(row.reason_trace_details, row.reason_trace));
   const focusCopy = nonEmpty([
     row.recommended_product,
     row.recommended_keywords,
@@ -202,11 +226,11 @@ function FeaturedRegionCard({
 
       <div className="pilot-feature-card__metrics">
         <div className="pilot-inline-metric">
-          <span>Priorität</span>
+          <span>{PRIORITY_SCORE_LABEL}</span>
           <strong>{formatFractionPercent(row.priority_score, 0)}</strong>
         </div>
         <div className="pilot-inline-metric">
-          <span>Wellenwahrscheinlichkeit</span>
+          <span>{EVENT_PROBABILITY_LABEL}</span>
           <strong>{formatFractionPercent(row.event_probability, 0)}</strong>
         </div>
         <div className="pilot-inline-metric">
@@ -214,7 +238,7 @@ function FeaturedRegionCard({
           <strong>{formatCurrency(row.budget_amount_eur)}</strong>
         </div>
         <div className="pilot-inline-metric">
-          <span>Vertrauensniveau</span>
+          <span>{SIGNAL_CONFIDENCE_LABEL}</span>
           <strong>{formatFractionPercent(row.confidence, 0)}</strong>
         </div>
       </div>
@@ -230,16 +254,16 @@ function FeaturedRegionCard({
 
       {(row.uncertainty_summary || row.budget_release_recommendation) && (
         <div className="pilot-feature-card__footer">
-          {row.uncertainty_summary && (
+          {(row.uncertainty_summary_detail || row.uncertainty_summary) && (
             <div>
               <span>Unsicherheit</span>
-              <p>{row.uncertainty_summary}</p>
+              <p>{explainInPlainGerman(row.uncertainty_summary_detail || row.uncertainty_summary)}</p>
             </div>
           )}
           {row.budget_release_recommendation && (
             <div>
               <span>Freigabehinweis</span>
-              <p>{row.budget_release_recommendation}</p>
+              <p>{explainInPlainGerman(row.budget_release_recommendation)}</p>
             </div>
           )}
         </div>
@@ -249,7 +273,11 @@ function FeaturedRegionCard({
 }
 
 function RankedRegionRow({ row }: { row: PilotReadoutRegion }) {
-  const reason = nonEmpty(row.reason_trace || [row.uncertainty_summary || ''])[0] || 'Keine zusätzliche Klartext-Begründung vorhanden.';
+  const reason = explainedValues([
+    ...preferredReasonEntries(row.reason_trace_details, row.reason_trace),
+    row.uncertainty_summary_detail,
+    row.uncertainty_summary,
+  ])[0] || 'Keine zusätzliche Klartext-Begründung vorhanden.';
 
   return (
     <article className="pilot-ranked-row">
@@ -274,11 +302,11 @@ function RankedRegionRow({ row }: { row: PilotReadoutRegion }) {
           <strong>{formatCurrency(row.budget_amount_eur)}</strong>
         </div>
         <div className="pilot-ranked-stat">
-          <span>Wellenwahrscheinlichkeit</span>
+          <span>{EVENT_PROBABILITY_LABEL}</span>
           <strong>{formatFractionPercent(row.event_probability, 0)}</strong>
         </div>
         <div className="pilot-ranked-stat">
-          <span>Vertrauensniveau</span>
+          <span>{SIGNAL_CONFIDENCE_LABEL}</span>
           <strong>{formatFractionPercent(row.confidence, 0)}</strong>
         </div>
       </div>
@@ -310,9 +338,9 @@ const PilotSurface: React.FC<Props> = ({
   const evaluationRows = (evidence?.evaluation?.comparison_table || []) as Array<Record<string, unknown>>;
   const heroRegion = executive?.top_regions?.[0] || allRegions[0] || null;
   const leadOperationalRegion = allRegions[0] || null;
-  const heroReasonTrace = uniqueValues([
-    ...(executive?.reason_trace || []),
-    ...(heroRegion?.reason_trace || []),
+  const heroReasonTrace = explainedValues([
+    ...preferredReasonEntries(executive?.reason_trace_details, executive?.reason_trace),
+    ...preferredReasonEntries(heroRegion?.reason_trace_details, heroRegion?.reason_trace),
   ]);
   const heroBlockers = uniqueValues([
     ...(executive?.budget_recommendation?.blocked_reasons || []),
@@ -441,6 +469,15 @@ const PilotSurface: React.FC<Props> = ({
                   {validationDisclaimer || 'Die aktuelle Budgetsicht bleibt lesbar, aber ohne implizite ROI-Garantie.'}
                 </p>
               </article>
+
+              <article className="pilot-track-card">
+                <div className="pilot-track-card__head">
+                  <span className="pilot-section-label">So sind die Zahlen gemeint</span>
+                </div>
+                <p className="pilot-track-card__copy">
+                  {EVENT_PROBABILITY_LABEL} ist die Forecast-Chance. {PRIORITY_SCORE_LABEL} ordnet Regionen. {SIGNAL_CONFIDENCE_LABEL} zeigt, wie belastbar das Signal ist.
+                </p>
+              </article>
             </div>
 
             <div className="pilot-hero__meta">
@@ -465,7 +502,7 @@ const PilotSurface: React.FC<Props> = ({
               </label>
 
               <label className="pilot-filter-group" htmlFor="pilot-horizon">
-                <span className="pilot-filter-label">Horizon</span>
+                <span className="pilot-filter-label">Zeitraum</span>
                 <select
                   id="pilot-horizon"
                   className="pilot-select"
@@ -479,7 +516,7 @@ const PilotSurface: React.FC<Props> = ({
               </label>
 
               <div className="pilot-filter-group">
-                <span className="pilot-filter-label">Scope</span>
+                <span className="pilot-filter-label">Bereich</span>
                 <div className="pilot-pill-row">
                   {SCOPE_OPTIONS.map((item) => (
                     <button
@@ -495,7 +532,7 @@ const PilotSurface: React.FC<Props> = ({
               </div>
 
               <div className="pilot-filter-group">
-                <span className="pilot-filter-label">Stage</span>
+                <span className="pilot-filter-label">Stufe</span>
                 <div className="pilot-pill-row">
                   {STAGE_OPTIONS.map((item) => (
                     <button
@@ -548,11 +585,11 @@ const PilotSurface: React.FC<Props> = ({
                 <strong>{formatCurrency(executive?.budget_recommendation?.scenario_budget_eur || executive?.budget_recommendation?.recommended_active_budget_eur)}</strong>
               </div>
               <div className="pilot-spotlight__metric">
-                <span>Wellenwahrscheinlichkeit</span>
+                <span>{EVENT_PROBABILITY_LABEL}</span>
                 <strong>{formatFractionPercent(executive?.confidence_summary?.lead_region_event_probability, 0)}</strong>
               </div>
               <div className="pilot-spotlight__metric">
-                <span>Vertrauensniveau</span>
+                <span>{SIGNAL_CONFIDENCE_LABEL}</span>
                 <strong>{formatFractionPercent(executive?.confidence_summary?.lead_region_confidence, 0)}</strong>
               </div>
             </div>
@@ -566,10 +603,10 @@ const PilotSurface: React.FC<Props> = ({
               </ul>
             </div>
 
-            {executive?.uncertainty_summary && (
+            {(executive?.uncertainty_summary_detail || executive?.uncertainty_summary) && (
               <div className="pilot-spotlight__note">
                 <span>Unsicherheit</span>
-                <p>{executive.uncertainty_summary}</p>
+                <p>{explainInPlainGerman(executive?.uncertainty_summary_detail || executive?.uncertainty_summary)}</p>
               </div>
             )}
 
@@ -588,9 +625,9 @@ const PilotSurface: React.FC<Props> = ({
           <span className="pilot-section-label">Schon heute sichtbar</span>
           <h2>Was PEIX GELO heute schon zeigen kann</h2>
           <ul className="pilot-blocker-list">
-            <li>Regionale virale Wellen werden frueh erkannt und mit sichtbarem Vertrauensniveau eingeordnet.</li>
+            <li>Regionale virale Wellen werden früh erkannt und mit sichtbarer Signal-Sicherheit eingeordnet.</li>
             <li>Top-Regionen werden klar priorisiert und mit einer verständlichen Stufenempfehlung versehen.</li>
-            <li>Die Budgetsicht zeigt bereits einen forecast-basierten Szenario-Split fuer die aktuelle Woche.</li>
+            <li>Die Budgetsicht zeigt bereits einen forecast-basierten Szenario-Split für die aktuelle Woche.</li>
           </ul>
         </article>
 
@@ -598,9 +635,9 @@ const PilotSurface: React.FC<Props> = ({
           <span className="pilot-section-label">Was GELO-Daten freischalten</span>
           <h2>Was mit Outcome-Daten noch stärker wird</h2>
           <ul className="pilot-blocker-list">
-            <li>Spend- und Sales-Daten koennen gegen genau dasselbe regionale Signal gespiegelt werden.</li>
-            <li>Test-/Kontrolllogik und Lift-Evidenz koennen den Scope von Szenarioplanung zu validierter Budgetfreigabe entwickeln.</li>
-            <li>Der kommerzielle Layer kann dann zeigen, wo der Forecast wirklich in Business-Wirkung uebergegangen ist.</li>
+            <li>Spend- und Sales-Daten können gegen genau dasselbe regionale Signal gespiegelt werden.</li>
+            <li>Test-/Kontrolllogik und Lift-Evidenz können den Scope von Szenarioplanung zu validierter Budgetfreigabe entwickeln.</li>
+            <li>Der kommerzielle Layer kann dann zeigen, wo der Forecast wirklich in Business-Wirkung übergegangen ist.</li>
           </ul>
         </article>
       </section>
@@ -621,13 +658,22 @@ const PilotSurface: React.FC<Props> = ({
             <h2>Operative Empfehlungen</h2>
             <p>
               {budgetMode === 'validated_allocation'
-                ? 'Validierte regionale Empfehlungskette fuer den aktuellen Scope.'
-                : 'Forecast-basierte Regionen- und Budgetsicht fuer den aktuellen Scope.'}
+                ? 'Validierte regionale Empfehlungskette für den aktuellen Scope.'
+                : 'Forecast-basierte Regionen- und Budgetsicht für den aktuellen Scope.'}
             </p>
           </div>
           <span className={badgeClassName('readiness', currentScopeStatus)}>
             {currentScopeStatus}
           </span>
+        </div>
+
+        <div className="pilot-track-card" style={{ marginBottom: 20 }}>
+          <div className="pilot-track-card__head">
+            <span className="pilot-section-label">Kennzahl-Hinweis</span>
+          </div>
+          <p className="pilot-track-card__copy">
+            {EVENT_PROBABILITY_LABEL} beschreibt die Forecast-Chance. {SIGNAL_CONFIDENCE_LABEL} ist keine zweite Wahrscheinlichkeit, sondern sagt, wie stabil das Signal wirkt.
+          </p>
         </div>
 
         <div className="pilot-summary-strip">
@@ -670,7 +716,7 @@ const PilotSurface: React.FC<Props> = ({
 
         {visibleRegions.length === 0 && (
           <div className="pilot-ranked-empty">
-            Kein Regions-Output passt aktuell zum gewählten Stage-Filter.
+            Kein Regions-Output passt aktuell zum gewählten Stufen-Filter.
           </div>
         )}
       </section>
@@ -715,7 +761,7 @@ const PilotSurface: React.FC<Props> = ({
                 ))}
               </ul>
             ) : (
-              <p className="pilot-muted-copy">Fuer diesen Scope sind aktuell keine weiteren kommerziellen Blocker ausgewiesen.</p>
+              <p className="pilot-muted-copy">Für diesen Scope sind aktuell keine weiteren kommerziellen Blocker ausgewiesen.</p>
             )}
             <div className="pilot-evidence-card__footer">
               <span>{budgetMode === 'validated_allocation' ? 'Kommerzieller Modus' : 'Aktueller Budgetmodus'}</span>

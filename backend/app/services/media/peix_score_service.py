@@ -14,6 +14,7 @@ Kein Supply-Shock Override. BfArM max 10 Punkte Einfluss.
 """
 
 from __future__ import annotations
+from app.core.time import utc_now
 
 import logging
 import math
@@ -375,7 +376,7 @@ class PeixEpiScoreService:
             "weights_source": "calibrated" if self._weights != DEFAULT_WEIGHTS else "default",
             "top_drivers": national_drivers,
             "regions": regions,
-            "generated_at": datetime.utcnow().isoformat(),
+            "generated_at": utc_now().isoformat(),
         }
 
     # ─── Epi-Score Berechnung (per Virus, adaptiv) ────────────────────────
@@ -561,7 +562,7 @@ class PeixEpiScoreService:
 
     def _weather_by_region(self) -> dict[str, float]:
         """Wetter-Risiko per Region (temp×0.4 + uv×0.35 + humidity×0.25)."""
-        cutoff = datetime.utcnow() - timedelta(days=2)
+        cutoff = utc_now() - timedelta(days=2)
         rows = self.db.query(WeatherData).filter(
             WeatherData.datum >= cutoff,
         ).all()
@@ -611,7 +612,7 @@ class PeixEpiScoreService:
         if current_value is None:
             return 0.0
 
-        three_years_ago = datetime.utcnow() - timedelta(days=365 * 3)
+        three_years_ago = utc_now() - timedelta(days=365 * 3)
         historical = self.db.query(
             NotaufnahmeSyndromData.relative_cases_7day_ma,
             NotaufnahmeSyndromData.relative_cases,
@@ -637,7 +638,7 @@ class PeixEpiScoreService:
 
     def _search_signal(self) -> float:
         """Google Trends Steigung (2W vs 4W), nicht nur Mittelwert."""
-        now = datetime.utcnow()
+        now = utc_now()
         two_weeks_ago = now - timedelta(days=14)
         four_weeks_ago = now - timedelta(days=28)
 
@@ -709,7 +710,7 @@ class PeixEpiScoreService:
 
     def _baseline_adjustment(self, virus_typ: str) -> float:
         """Saisonale Baseline-Korrektur als 0-1 Signal (z-Score → Sigmoid)."""
-        current_week = datetime.utcnow().isocalendar()[1]
+        current_week = utc_now().isocalendar()[1]
 
         historical = self.db.query(GanzimmunData).filter(
             GanzimmunData.anzahl_tests > 0,
@@ -738,7 +739,7 @@ class PeixEpiScoreService:
 
     def _get_positivity_rate(self, virus_typ: str) -> float:
         """Aktuelle Positivrate (14d-Fenster)."""
-        two_weeks_ago = datetime.utcnow() - timedelta(days=14)
+        two_weeks_ago = utc_now() - timedelta(days=14)
 
         test_typ_map = {
             "Influenza A": "Influenza A",
@@ -765,7 +766,7 @@ class PeixEpiScoreService:
 
     def _is_school_start(self) -> bool:
         """True wenn Ferienende innerhalb der letzten 7 Tage."""
-        now = datetime.utcnow()
+        now = utc_now()
         week_ago = now - timedelta(days=7)
         count = self.db.query(SchoolHolidays).filter(
             SchoolHolidays.end_datum >= week_ago,

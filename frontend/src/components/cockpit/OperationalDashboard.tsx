@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 
+import { explainInPlainGerman } from '../../lib/plainLanguage';
 import {
   RegionalAllocationRecommendation,
   RegionalAllocationResponse,
@@ -7,6 +8,7 @@ import {
   RegionalDecisionReasonTrace,
   RegionalForecastPrediction,
   RegionalForecastResponse,
+  StructuredReasonItem,
 } from '../../types/media';
 import {
   formatCurrency,
@@ -116,20 +118,57 @@ function formatScore(value?: number | null, digits = 2): string {
   return value.toFixed(digits);
 }
 
+function explainedLines(items: Array<string | StructuredReasonItem | null | undefined>): string[] {
+  const seen = new Set<string>();
+  return items
+    .map((item) => explainInPlainGerman(item))
+    .filter((item) => {
+      if (!item || seen.has(item)) return false;
+      seen.add(item);
+      return true;
+    });
+}
+
+function traceSectionLines(
+  detailItems?: StructuredReasonItem[] | null,
+  fallbackItems?: string[] | null,
+): string[] {
+  if (detailItems && detailItems.length > 0) {
+    return explainedLines(detailItems);
+  }
+  return explainedLines(fallbackItems || []);
+}
+
+function firstReasonLine(items: Array<string | StructuredReasonItem | null | undefined>): string {
+  return explainedLines(items)[0] || '';
+}
+
 function reasonTraceLines(trace?: RegionalDecisionReasonTrace | Record<string, unknown> | string[] | string | null): string[] {
   if (!trace) return [];
-  if (typeof trace === 'string') return trace.trim() ? [trace] : [];
+  if (typeof trace === 'string') return trace.trim() ? explainedLines([trace]) : [];
   if (Array.isArray(trace)) {
-    return trace
-      .map((item) => String(item || '').trim())
-      .filter(Boolean);
+    return explainedLines(trace.map((item) => String(item || '').trim()));
   }
   const maybeTrace = trace as Partial<RegionalDecisionReasonTrace> & Record<string, unknown>;
   return [
-    ...(Array.isArray(maybeTrace.why) ? maybeTrace.why : []),
-    ...(Array.isArray(maybeTrace.uncertainty) ? maybeTrace.uncertainty : []),
-    ...(Array.isArray(maybeTrace.policy_overrides) ? maybeTrace.policy_overrides : []),
-  ].map((item) => String(item || '').trim()).filter(Boolean);
+    ...traceSectionLines(maybeTrace.why_details, Array.isArray(maybeTrace.why) ? maybeTrace.why : []),
+    ...traceSectionLines(
+      maybeTrace.budget_driver_details,
+      Array.isArray(maybeTrace.budget_drivers) ? maybeTrace.budget_drivers : [],
+    ),
+    ...traceSectionLines(
+      maybeTrace.uncertainty_details,
+      Array.isArray(maybeTrace.uncertainty) ? maybeTrace.uncertainty : [],
+    ),
+    ...traceSectionLines(
+      maybeTrace.policy_override_details,
+      Array.isArray(maybeTrace.policy_overrides) ? maybeTrace.policy_overrides : [],
+    ),
+    ...traceSectionLines(
+      maybeTrace.blocker_details,
+      Array.isArray(maybeTrace.blockers) ? maybeTrace.blockers : [],
+    ),
+  ];
 }
 
 function stageMatchesFilter(value: string | undefined, filter: string): boolean {
@@ -158,12 +197,16 @@ function focusedReasonText(
   prediction?: RegionalForecastPrediction | null,
   allocationItem?: RegionalAllocationRecommendation | null,
 ): string {
-  return String(
-    prediction?.uncertainty_summary
-    || allocationItem?.uncertainty_summary
-    || prediction?.decision?.uncertainty_summary
-    || 'Noch keine Unsicherheitserklärung verfügbar.',
-  );
+  return firstReasonLine([
+    prediction?.decision?.uncertainty_summary_detail,
+    prediction?.decision?.uncertainty_summary,
+    prediction?.uncertainty_summary,
+    ...(prediction?.reason_trace?.uncertainty_details || []),
+    ...(prediction?.reason_trace?.uncertainty || []),
+    allocationItem?.uncertainty_summary,
+    ...reasonTraceLines(allocationItem?.allocation_reason_trace || allocationItem?.reason_trace),
+    'Noch keine Unsicherheitserklärung verfügbar.',
+  ]);
 }
 
 function StageBadge({ value }: { value?: string | null }) {
@@ -281,7 +324,10 @@ const OperationalDashboard: React.FC<Props> = ({
   const leadConfidence = leadCampaign?.confidence ?? leadAllocation?.confidence ?? leadPrediction?.decision?.forecast_confidence ?? null;
   const leadEvidence = leadCampaign?.evidence_class || leadAllocation?.evidence_status || 'epidemiological_only';
   const leadSpendGate = leadCampaign?.spend_guardrail_status || leadAllocation?.spend_gate_status || 'observe_only';
-  const leadCampaignWhy = leadCampaign?.recommendation_rationale?.why?.[0];
+  const leadCampaignWhy = firstReasonLine([
+    leadCampaign?.recommendation_rationale?.why_details?.[0],
+    leadCampaign?.recommendation_rationale?.why?.[0],
+  ]);
   const topBudgetShare = leadAllocation?.suggested_budget_share || leadCampaign?.suggested_budget_share || 0;
 
   const stageGroups = [
@@ -338,7 +384,7 @@ const OperationalDashboard: React.FC<Props> = ({
 
             <div className="operator-toolbar-selects">
               <div className="ops-filter-group">
-                <span className="ops-filter-label">Horizon</span>
+                <span className="ops-filter-label">Zeitraum</span>
                 <OperatorChipRail>
                   {supportedHorizons.map((option) => (
                     <button
@@ -368,16 +414,16 @@ const OperationalDashboard: React.FC<Props> = ({
               </label>
 
               <label className="ops-filter-group">
-                <span className="ops-filter-label">Decision Stage</span>
+                <span className="ops-filter-label">Entscheidungsstufe</span>
                 <select
                   value={selectedStage}
                   onChange={(event) => setSelectedStage(event.target.value)}
                   className="media-input ops-filter-select"
                 >
-                  <option value={STAGE_FILTER_ALL}>Alle Stages</option>
-                  <option value="activate">Activate</option>
-                  <option value="prepare">Prepare</option>
-                  <option value="watch">Watch</option>
+                  <option value={STAGE_FILTER_ALL}>Alle Stufen</option>
+                  <option value="activate">Aktivieren</option>
+                  <option value="prepare">Vorbereiten</option>
+                  <option value="watch">Beobachten</option>
                 </select>
               </label>
             </div>
@@ -387,7 +433,7 @@ const OperationalDashboard: React.FC<Props> = ({
             <span className="step-chip">Budgetbasis {formatCurrency(weeklyBudget)}</span>
             <span className="step-chip">Forecast {formatDateTime(forecast?.generated_at)}</span>
             <span className="step-chip">Allocation {formatDateTime(allocation?.generated_at)}</span>
-            <span className="step-chip">Recommendations {formatDateTime(campaignRecommendations?.generated_at)}</span>
+            <span className="step-chip">Empfehlungen {formatDateTime(campaignRecommendations?.generated_at)}</span>
           </OperatorChipRail>
         </div>
       </OperatorSection>
@@ -396,11 +442,11 @@ const OperationalDashboard: React.FC<Props> = ({
         <OperatorSection
           kicker="Kein operativer Output"
           title={emptyStatus === 'no_model' ? 'Für diesen Scope ist noch kein regionales Modell verfügbar.' : 'Für diesen Scope liegen aktuell keine verwertbaren Regionensignale vor.'}
-          description={emptyMessage || 'Bitte Virus oder Horizon wechseln und die Datenlage erneut prüfen.'}
+          description={emptyMessage || 'Bitte Virus oder Zeitraum wechseln und die Datenlage erneut prüfen.'}
         >
           <OperatorChipRail className="review-chip-row">
             <span className="step-chip">Virus {virus}</span>
-            <span className="step-chip">Horizon {horizonDays} Tage</span>
+            <span className="step-chip">Zeitraum {horizonDays} Tage</span>
             <span className="step-chip">Unterstützte Horizonte {supportedHorizons.join(' / ')}</span>
           </OperatorChipRail>
           <div className="action-row">
@@ -416,8 +462,8 @@ const OperationalDashboard: React.FC<Props> = ({
         <>
           <OperatorSection
             kicker="Operative Empfehlung"
-            title="What should we do now?"
-            description={`${leadRegionName} führt die aktuelle Lage an. Der Scope bleibt in der neuen Operator-Ansicht bewusst auf Entscheidung, Timing und nächste Arbeitsaktion verdichtet.`}
+            title="Was solltest du jetzt tun?"
+            description={`${leadRegionName} führt die aktuelle Lage an. Der Bereich bleibt in dieser Ansicht bewusst auf Entscheidung, Timing und nächste Arbeitsaktion verdichtet.`}
             tone="accent"
             className="decision-header hero-card"
           >
@@ -425,8 +471,8 @@ const OperationalDashboard: React.FC<Props> = ({
               <div className="hero-main">
                 <div className="hero-status-row">
                   <StageBadge value={leadStage} />
-                  <span className="campaign-confidence-chip">Horizon {horizonDays} Tage</span>
-                  <span className="campaign-confidence-chip">Top Region {leadRegionName}</span>
+                  <span className="campaign-confidence-chip">Zeitraum {horizonDays} Tage</span>
+                  <span className="campaign-confidence-chip">Fokusregion {leadRegionName}</span>
                 </div>
                 <div className="section-heading" style={{ gap: 10 }}>
                   <h1 className="hero-title" style={{ margin: 0 }}>
@@ -436,15 +482,15 @@ const OperationalDashboard: React.FC<Props> = ({
                     {leadCampaignWhy || `${leadRegionName} führt das operative Regionenranking an und erhält im aktuellen Budget- und Evidenzrahmen die stärkste Aktivierungsempfehlung.`}
                   </p>
                   <p className="hero-copy" style={{ margin: 0 }}>
-                    Keywords: {leadKeywordCluster}. Sicherheit {formatFractionPercent(leadConfidence, 0)}. Empfohlene Budgetspitze {formatCurrency(leadBudget)}.
+                    Keyword-Fokus: {leadKeywordCluster}. Signal-Sicherheit {formatFractionPercent(leadConfidence, 0)}. Empfohlene Budgetspitze {formatCurrency(leadBudget)}.
                   </p>
                 </div>
                 <OperatorChipRail className="review-chip-row">
-                  <span className="step-chip">Activate {activateCount}</span>
-                  <span className="step-chip">Prepare {prepareCount}</span>
-                  <span className="step-chip">Watch {watchCount}</span>
-                  <span className="step-chip">Lead Budget Share {formatFractionPercent(topBudgetShare, 1)}</span>
-                  <span className="step-chip">Evidence {leadEvidence}</span>
+                  <span className="step-chip">Aktivieren {activateCount}</span>
+                  <span className="step-chip">Vorbereiten {prepareCount}</span>
+                  <span className="step-chip">Beobachten {watchCount}</span>
+                  <span className="step-chip">Top-Budgetanteil {formatFractionPercent(topBudgetShare, 1)}</span>
+                  <span className="step-chip">Evidenzstatus {leadEvidence}</span>
                 </OperatorChipRail>
                 <div className="action-row">
                   <button className="media-button" type="button" onClick={() => onOpenRegions(focusedRegionCode || undefined)}>
@@ -459,17 +505,23 @@ const OperationalDashboard: React.FC<Props> = ({
                 </div>
               </div>
 
-              <OperatorPanel eyebrow="Executive Summary" tone="muted">
+              <OperatorPanel eyebrow="Kurzüberblick" tone="muted">
                 <div className="operator-stat-grid ops-summary-grid">
                   <OperatorStat label="Budget allokiert" value={formatCurrency(allocation?.summary?.total_budget_allocated)} tone="accent" />
-                  <OperatorStat label="Top Confidence" value={formatFractionPercent(leadConfidence, 0)} />
-                  <OperatorStat label="Top Wave Chance" value={formatFractionPercent(leadPrediction?.event_probability_calibrated, 0)} />
-                  <OperatorStat label="Spend Gate" value={leadSpendGate || '-'} />
+                  <OperatorStat label="Signal-Sicherheit" value={formatFractionPercent(leadConfidence, 0)} />
+                  <OperatorStat label="Event-Wahrscheinlichkeit" value={formatFractionPercent(leadPrediction?.event_probability_calibrated, 0)} />
+                  <OperatorStat label="Spend-Status" value={leadSpendGate || '-'} />
                 </div>
                 <div className="soft-panel" style={{ padding: 14, display: 'grid', gap: 8 }}>
                   <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Warum diese Lage jetzt wichtig ist</div>
                   <div style={{ fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-                    {focusedPrediction?.decision?.explanation_summary || 'Der operative Score kombiniert Forecast, Datenfrische, Quelleneinigung und den Commercial Gate Layer.'}
+                    {firstReasonLine([
+                      focusedPrediction?.decision?.explanation_summary_detail,
+                      focusedPrediction?.decision?.explanation_summary,
+                    ]) || 'Die operative Einordnung kombiniert Vorhersage, Datenfrische, Quellenabgleich und Freigabe-Regeln.'}
+                  </div>
+                  <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+                    <strong style={{ color: 'var(--text-primary)' }}>So sind die Zahlen gemeint:</strong> Event-Wahrscheinlichkeit ist die Forecast-Chance für das definierte Ereignis. Prioritäts-Score ordnet Regionen. Signal-Sicherheit zeigt, wie belastbar das Signal ist.
                   </div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                     <StatusBadge value={leadSpendGate || 'observe_only'} />
@@ -485,8 +537,8 @@ const OperationalDashboard: React.FC<Props> = ({
 
           <section className="ops-dashboard-grid">
             <OperatorPanel
-              title="Decision Stage Visualisierung"
-              description="Verteilung der Regionen nach kanonischem Decision Rank. Die Sortierung folgt nicht nur Forecast-Wahrscheinlichkeit, sondern dem Decision Layer."
+              title="Stufen nach Entscheidung"
+              description="Verteilung der Regionen nach Entscheidungsrang. Die Reihenfolge folgt nicht nur der Event-Wahrscheinlichkeit, sondern dem gesamten Entscheidungsmodell."
             >
               <div className="ops-stage-grid">
                 {stageGroups.map((group) => (
@@ -514,7 +566,7 @@ const OperationalDashboard: React.FC<Props> = ({
                             <div>
                               <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>{item.bundesland_name}</div>
                               <div style={{ marginTop: 4, fontSize: 12, color: 'var(--text-muted)' }}>
-                                Decision Rank #{item.decision_rank ?? item.rank ?? '-'}
+                                Entscheidungsrang #{item.decision_rank ?? item.rank ?? '-'}
                               </div>
                             </div>
                             <div style={{ textAlign: 'right' }}>
@@ -537,16 +589,16 @@ const OperationalDashboard: React.FC<Props> = ({
             </OperatorPanel>
 
             <OperatorPanel
-              title="Confidence & Unsicherheit"
-              description="Für Management und Operative: warum diese Region oben liegt und welche Unsicherheit wir explizit sehen."
+              title="Sicherheit & Unsicherheit"
+              description="Hier siehst du, warum eine Region oben liegt und wo wir noch Unsicherheit sehen."
             >
               {focusedPrediction ? (
                 <div style={{ display: 'grid', gap: 16 }}>
                   <div className="operator-stat-grid metric-strip">
-                    <OperatorStat label="Forecast Confidence" value={formatFractionPercent(focusedPrediction.decision?.forecast_confidence, 0)} />
-                    <OperatorStat label="Source Freshness" value={formatFractionPercent(focusedPrediction.decision?.source_freshness_score, 0)} />
-                    <OperatorStat label="Revision Risk" value={formatFractionPercent(focusedPrediction.decision?.source_revision_risk, 0)} />
-                    <OperatorStat label="Agreement" value={formatFractionPercent(focusedPrediction.decision?.cross_source_agreement_score, 0)} />
+                    <OperatorStat label="Forecast-Sicherheit" value={formatFractionPercent(focusedPrediction.decision?.forecast_confidence, 0)} />
+                    <OperatorStat label="Datenfrische" value={formatFractionPercent(focusedPrediction.decision?.source_freshness_score, 0)} />
+                    <OperatorStat label="Revisionsrisiko" value={formatFractionPercent(focusedPrediction.decision?.source_revision_risk, 0)} />
+                    <OperatorStat label="Quellenabgleich" value={formatFractionPercent(focusedPrediction.decision?.cross_source_agreement_score, 0)} />
                   </div>
                   <div className="soft-panel" style={{ padding: 16, display: 'grid', gap: 10 }}>
                     <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Fokusregion</div>
@@ -554,7 +606,10 @@ const OperationalDashboard: React.FC<Props> = ({
                       {focusedPrediction.bundesland_name}
                     </div>
                     <div style={{ fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-                      {focusedPrediction.decision?.explanation_summary}
+                      {firstReasonLine([
+                        focusedPrediction.decision?.explanation_summary_detail,
+                        focusedPrediction.decision?.explanation_summary,
+                      ])}
                     </div>
                     <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
                       Unsicherheitskompakt: <strong style={{ color: 'var(--text-primary)' }}>{focusedReasonText(focusedPrediction, focusedAllocation)}</strong>
@@ -562,18 +617,27 @@ const OperationalDashboard: React.FC<Props> = ({
                   </div>
                   <div className="ops-rationale-grid">
                     <div className="soft-panel" style={{ padding: 16 }}>
-                      <div className="ops-panel-title">Reason Trace</div>
+                      <div className="ops-panel-title">Begründungslinie</div>
                       <ul className="ops-rationale-list">
-                        {(focusedPrediction.reason_trace?.why || []).map((item) => (
-                          <li key={item}>{item}</li>
+                        {traceSectionLines(
+                          focusedPrediction.reason_trace?.why_details,
+                          focusedPrediction.reason_trace?.why,
+                        ).map((item) => (
+                          <li key={item}>{explainInPlainGerman(item)}</li>
                         ))}
                       </ul>
                     </div>
                     <div className="soft-panel" style={{ padding: 16 }}>
                       <div className="ops-panel-title">Unsicherheiten</div>
                       <ul className="ops-rationale-list">
-                        {(focusedPrediction.reason_trace?.uncertainty || []).length > 0 ? (
-                          focusedPrediction.reason_trace?.uncertainty?.map((item) => <li key={item}>{item}</li>)
+                        {traceSectionLines(
+                          focusedPrediction.reason_trace?.uncertainty_details,
+                          focusedPrediction.reason_trace?.uncertainty,
+                        ).length > 0 ? (
+                          traceSectionLines(
+                            focusedPrediction.reason_trace?.uncertainty_details,
+                            focusedPrediction.reason_trace?.uncertainty,
+                          ).map((item) => <li key={item}>{explainInPlainGerman(item)}</li>)
                         ) : (
                           <li>Keine zusätzlichen Unsicherheiten markiert.</li>
                         )}
@@ -582,7 +646,7 @@ const OperationalDashboard: React.FC<Props> = ({
                   </div>
                 </div>
               ) : (
-                <div style={{ color: 'var(--text-muted)' }}>Wähle eine Region oder passe die Filter an, um die Confidence-Erklärung zu sehen.</div>
+                <div style={{ color: 'var(--text-muted)' }}>Wähle eine Region oder passe die Filter an, um die Sicherheits-Erklärung zu sehen.</div>
               )}
             </OperatorPanel>
           </section>
@@ -590,7 +654,7 @@ const OperationalDashboard: React.FC<Props> = ({
           <section className="ops-panel-grid">
             <OperatorPanel
               title="Regionen-Ranking"
-              description="Operative Priorisierung nach Decision Rank mit Wave-Chance, Trend und erster Begründung."
+              description="Operative Priorisierung nach Entscheidungsrang mit Event-Wahrscheinlichkeit, Trend und erster Begründung."
             >
               <div className="ops-table-wrap">
                 <table className="ops-table">
@@ -598,11 +662,11 @@ const OperationalDashboard: React.FC<Props> = ({
                     <tr>
                       <th>#</th>
                       <th>Region</th>
-                      <th>Stage</th>
-                      <th>Wave Chance</th>
+                      <th>Stufe</th>
+                      <th>Event-Wahrscheinlichkeit</th>
                       <th>Trend</th>
-                      <th>Priority</th>
-                      <th>Confidence</th>
+                      <th>Prioritäts-Score</th>
+                      <th>Forecast-Sicherheit</th>
                       <th>Warum jetzt</th>
                     </tr>
                   </thead>
@@ -624,7 +688,13 @@ const OperationalDashboard: React.FC<Props> = ({
                         </td>
                         <td>{formatScore(item.priority_score)}</td>
                         <td>{formatFractionPercent(item.decision?.forecast_confidence, 0)}</td>
-                        <td>{item.reason_trace?.why?.[0] || item.decision?.explanation_summary || '-'}</td>
+                        <td>{firstReasonLine([
+                          item.reason_trace?.why_details?.[0],
+                          item.reason_trace?.why?.[0],
+                          item.decision?.explanation_summary_detail,
+                          item.decision?.explanation_summary,
+                          '-',
+                        ])}</td>
                       </tr>
                     )) : (
                       <tr>
@@ -637,8 +707,8 @@ const OperationalDashboard: React.FC<Props> = ({
             </OperatorPanel>
 
             <OperatorPanel
-              title="Allocation & Budget"
-              description="Budgetempfehlung pro Region mit Spend-Gate und transparenter Allocation-Logik."
+              title="Budgetlogik"
+              description="Budgetempfehlung pro Region mit Spend-Status und transparenter Allokationslogik."
             >
               <div className="ops-table-wrap">
                 <table className="ops-table">
@@ -646,11 +716,11 @@ const OperationalDashboard: React.FC<Props> = ({
                     <tr>
                       <th>#</th>
                       <th>Region</th>
-                      <th>Activation</th>
+                      <th>Aktivierungsstufe</th>
                       <th>Budget</th>
-                      <th>Share</th>
-                      <th>Confidence</th>
-                      <th>Spend Gate</th>
+                      <th>Budgetanteil</th>
+                      <th>Allokations-Sicherheit</th>
+                      <th>Spend-Status</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -680,26 +750,26 @@ const OperationalDashboard: React.FC<Props> = ({
                 </table>
               </div>
               <div className="soft-panel" style={{ padding: 16, marginTop: 14 }}>
-                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Allocation Summary</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Budgetüberblick</div>
                 <OperatorChipRail className="review-chip-row">
-                  <span className="step-chip">Budget allokiert {formatCurrency(allocation?.summary?.total_budget_allocated)}</span>
-                  <span className="step-chip">Share Total {formatFractionPercent(allocation?.summary?.budget_share_total, 1)}</span>
-                  <span className="step-chip">Spend Enabled {allocation?.summary?.spend_enabled ? 'ja' : 'nein'}</span>
+                  <span className="step-chip">Budget gesamt {formatCurrency(allocation?.summary?.total_budget_allocated)}</span>
+                  <span className="step-chip">Anteil gesamt {formatFractionPercent(allocation?.summary?.budget_share_total, 1)}</span>
+                  <span className="step-chip">Spend offen {allocation?.summary?.spend_enabled ? 'ja' : 'nein'}</span>
                 </OperatorChipRail>
               </div>
             </OperatorPanel>
           </section>
 
           <OperatorSection
-            title="Recommendation-Ansicht"
-            description="Konkrete Aktivierungsvorschläge für PEIX / GELO mit Produktcluster, Keywordcluster und guardrail-fähiger Begründung."
+            title="Empfehlungsansicht"
+            description="Konkrete Aktivierungsvorschläge für PEIX / GELO mit Produktcluster, Keywordcluster und klarer Freigabe-Begründung."
           >
             {filteredCampaigns.length > 0 ? (
               <div className="ops-recommendation-grid">
                 {filteredCampaigns.map((item) => (
                   <OperatorPanel
                     key={`${item.region}-${item.recommended_product_cluster.cluster_key}`}
-                    eyebrow={`Priority #${item.priority_rank}`}
+                    eyebrow={`Priorität #${item.priority_rank}`}
                     title={item.region_name}
                     description={`${item.recommended_product_cluster.label} · ${item.recommended_keyword_cluster.label}`}
                     actions={<StageBadge value={item.activation_level} />}
@@ -707,9 +777,9 @@ const OperationalDashboard: React.FC<Props> = ({
                   >
                     <div className="operator-stat-grid metric-strip">
                       <OperatorStat label="Budget" value={formatCurrency(item.suggested_budget_amount)} tone="accent" />
-                      <OperatorStat label="Budget Share" value={formatFractionPercent(item.suggested_budget_share, 1)} />
-                      <OperatorStat label="Confidence" value={formatFractionPercent(item.confidence, 0)} />
-                      <OperatorStat label="Evidence" value={item.evidence_class} />
+                      <OperatorStat label="Budgetanteil" value={formatFractionPercent(item.suggested_budget_share, 1)} />
+                      <OperatorStat label="Signal-Sicherheit" value={formatFractionPercent(item.confidence, 0)} />
+                      <OperatorStat label="Evidenzstatus" value={item.evidence_class} />
                     </div>
 
                     <OperatorChipRail>
@@ -723,24 +793,49 @@ const OperationalDashboard: React.FC<Props> = ({
                       <div className="soft-panel" style={{ padding: 16 }}>
                         <div className="ops-panel-title">Rationale</div>
                         <ul className="ops-rationale-list">
-                          {(item.recommendation_rationale?.why || []).map((entry) => (
-                            <li key={entry}>{entry}</li>
+                          {traceSectionLines(
+                            item.recommendation_rationale?.why_details,
+                            item.recommendation_rationale?.why,
+                          ).map((entry) => (
+                            <li key={entry}>{explainInPlainGerman(entry)}</li>
                           ))}
                         </ul>
                       </div>
                       <div className="soft-panel" style={{ padding: 16 }}>
                         <div className="ops-panel-title">Produkt- & Keyword-Fit</div>
                         <ul className="ops-rationale-list">
-                          {[...(item.recommendation_rationale?.product_fit || []), ...(item.recommendation_rationale?.keyword_fit || [])].map((entry) => (
-                            <li key={entry}>{entry}</li>
+                          {[
+                            ...traceSectionLines(
+                              item.recommendation_rationale?.product_fit_details,
+                              item.recommendation_rationale?.product_fit,
+                            ),
+                            ...traceSectionLines(
+                              item.recommendation_rationale?.keyword_fit_details,
+                              item.recommendation_rationale?.keyword_fit,
+                            ),
+                          ].map((entry) => (
+                            <li key={entry}>{explainInPlainGerman(entry)}</li>
                           ))}
                         </ul>
                       </div>
                       <div className="soft-panel" style={{ padding: 16 }}>
                         <div className="ops-panel-title">Guardrails</div>
                         <ul className="ops-rationale-list">
-                          {[...(item.recommendation_rationale?.budget_notes || []), ...(item.recommendation_rationale?.guardrails || []), ...(item.recommendation_rationale?.evidence_notes || [])].map((entry) => (
-                            <li key={entry}>{entry}</li>
+                          {[
+                            ...traceSectionLines(
+                              item.recommendation_rationale?.budget_note_details,
+                              item.recommendation_rationale?.budget_notes,
+                            ),
+                            ...traceSectionLines(
+                              item.recommendation_rationale?.guardrail_details,
+                              item.recommendation_rationale?.guardrails,
+                            ),
+                            ...traceSectionLines(
+                              item.recommendation_rationale?.evidence_note_details,
+                              item.recommendation_rationale?.evidence_notes,
+                            ),
+                          ].map((entry) => (
+                            <li key={entry}>{explainInPlainGerman(entry)}</li>
                           ))}
                         </ul>
                       </div>
@@ -750,44 +845,56 @@ const OperationalDashboard: React.FC<Props> = ({
               </div>
             ) : (
               <div className="soft-panel" style={{ padding: 18, color: 'var(--text-secondary)' }}>
-                Für den aktuellen Filter gibt es noch keine konkrete Campaign Recommendation. Das ist bei `Watch`-Regionen oder blockiertem Spend Gate ein erwartetes Verhalten.
+                Für den aktuellen Filter gibt es noch keinen konkreten Kampagnenvorschlag. Das ist bei `Watch`-Regionen oder blockiertem Spend-Status ein erwartetes Verhalten.
               </div>
             )}
           </OperatorSection>
 
           <OperatorSection
-            title="Reason Traces verständlich"
+            title="Begründungen im Klartext"
             description="Alle drei Layer bleiben sichtbar: Forecast-/Decision-Gründe, Allocation-Hebel und Campaign-Rationale."
           >
             <div className="ops-rationale-grid">
-              <OperatorPanel title="Decision" tone="muted">
+              <OperatorPanel title="Entscheidung" tone="muted">
                 <ul className="ops-rationale-list">
-                  {(focusedPrediction?.reason_trace?.why || []).map((entry) => (
-                    <li key={entry}>{entry}</li>
+                  {traceSectionLines(
+                    focusedPrediction?.reason_trace?.why_details,
+                    focusedPrediction?.reason_trace?.why,
+                  ).map((entry) => (
+                    <li key={entry}>{explainInPlainGerman(entry)}</li>
                   ))}
                 </ul>
               </OperatorPanel>
-              <OperatorPanel title="Allocation" tone="muted">
+              <OperatorPanel title="Budgetlogik" tone="muted">
                 <ul className="ops-rationale-list">
                   {reasonTraceLines(focusedAllocation?.allocation_reason_trace || focusedAllocation?.reason_trace).length > 0 ? (
                     reasonTraceLines(focusedAllocation?.allocation_reason_trace || focusedAllocation?.reason_trace).map((entry) => (
                       <li key={entry}>{entry}</li>
                     ))
                   ) : (
-                    <li>Noch keine Allocation-Trace verfügbar.</li>
+                    <li>Noch keine Begründung aus der Budgetlogik verfügbar.</li>
                   )}
                 </ul>
               </OperatorPanel>
-              <OperatorPanel title="Recommendation" tone="muted">
+              <OperatorPanel title="Kampagnenvorschlag" tone="muted">
                 <ul className="ops-rationale-list">
                   {focusedCampaign ? (
                     [
-                      ...(focusedCampaign.recommendation_rationale?.why || []),
-                      ...(focusedCampaign.recommendation_rationale?.product_fit || []),
-                      ...(focusedCampaign.recommendation_rationale?.guardrails || []),
-                    ].map((entry) => <li key={entry}>{entry}</li>)
+                      ...traceSectionLines(
+                        focusedCampaign.recommendation_rationale?.why_details,
+                        focusedCampaign.recommendation_rationale?.why,
+                      ),
+                      ...traceSectionLines(
+                        focusedCampaign.recommendation_rationale?.product_fit_details,
+                        focusedCampaign.recommendation_rationale?.product_fit,
+                      ),
+                      ...traceSectionLines(
+                        focusedCampaign.recommendation_rationale?.guardrail_details,
+                        focusedCampaign.recommendation_rationale?.guardrails,
+                      ),
+                    ].map((entry) => <li key={entry}>{explainInPlainGerman(entry)}</li>)
                   ) : (
-                    <li>Für die Fokusregion liegt aktuell keine konkrete Campaign Recommendation vor.</li>
+                    <li>Für die Fokusregion liegt aktuell noch kein konkreter Kampagnenvorschlag vor.</li>
                   )}
                 </ul>
               </OperatorPanel>

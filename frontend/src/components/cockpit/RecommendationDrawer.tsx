@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 
-import { normalizeGermanText } from '../../lib/plainLanguage';
+import { explainInPlainGerman, normalizeGermanText } from '../../lib/plainLanguage';
 import {
   ConnectorCatalogItem,
   PreparedSyncPayload,
@@ -15,7 +15,9 @@ import {
   formatPercent,
   kpiLabel,
   learningStateLabel,
-  metricContractLabel,
+  metricContractBadge,
+  metricContractDisplayLabel,
+  metricContractNote,
   nextWorkflowStatus,
   primarySignalScore,
   readinessStateLabel,
@@ -86,15 +88,46 @@ const RecommendationDrawer: React.FC<Props> = ({
   const normalizedStatus = String(detail?.lifecycle_state || detail?.status || '').toUpperCase();
   const currentWorkflowIndex = Math.max(workflowSteps.findIndex((step) => step.key === normalizedStatus), 0);
   const confidenceValue = signalConfidencePercent(detail?.signal_confidence_pct, detail?.confidence);
-  const heroSummary = normalizeGermanText(
+  const heroSummary = explainInPlainGerman(
     detail?.decision_brief?.summary_sentence
     || detail?.reason
     || 'Kampagnenvorschlag aus aktueller Vorhersage und Fokusregion zur Prüfung und Freigabe.',
   );
-  const signalScoreLabel = normalizeGermanText(metricContractLabel(detail?.field_contracts, 'signal_score', 'Signalwert'));
-  const priorityScoreLabel = normalizeGermanText(metricContractLabel(detail?.field_contracts, 'priority_score', 'Priorität'));
-  const signalConfidenceLabel = normalizeGermanText(metricContractLabel(detail?.field_contracts, 'signal_confidence_pct', 'Signalsicherheit'));
-  const outcomeConfidenceLabel = normalizeGermanText(metricContractLabel(detail?.field_contracts, 'outcome_confidence_pct', 'Sicherheit aus Kundendaten'));
+  const signalScoreLabel = normalizeGermanText(metricContractDisplayLabel(detail?.field_contracts, 'signal_score', 'Signal-Score'));
+  const signalScoreBadge = metricContractBadge(detail?.field_contracts, 'signal_score', 'Ranking-Signal');
+  const signalScoreNote = metricContractNote(
+    detail?.field_contracts,
+    'signal_score',
+    'Hilft beim Vergleichen und Priorisieren, ist aber keine Eintrittswahrscheinlichkeit.',
+  );
+  const priorityScoreLabel = normalizeGermanText(metricContractDisplayLabel(detail?.field_contracts, 'priority_score', 'Prioritäts-Score'));
+  const priorityScoreBadge = metricContractBadge(detail?.field_contracts, 'priority_score', 'Aktivierungs-Priorität');
+  const priorityScoreNote = metricContractNote(
+    detail?.field_contracts,
+    'priority_score',
+    'Hilft bei der Reihenfolge der Aktivierung, nicht bei der Schätzung eines Eintritts.',
+  );
+  const signalConfidenceLabel = normalizeGermanText(metricContractDisplayLabel(detail?.field_contracts, 'signal_confidence_pct', 'Signal-Sicherheit'));
+  const signalConfidenceBadge = metricContractBadge(detail?.field_contracts, 'signal_confidence_pct', 'Signal-Sicherheit');
+  const signalConfidenceNote = metricContractNote(
+    detail?.field_contracts,
+    'signal_confidence_pct',
+    'Beschreibt Signalsicherheit oder Agreement, nicht die Modellwahrscheinlichkeit.',
+  );
+  const outcomeSignalLabel = normalizeGermanText(metricContractDisplayLabel(detail?.field_contracts, 'outcome_signal_score', 'Outcome-Score'));
+  const outcomeSignalBadge = metricContractBadge(detail?.field_contracts, 'outcome_signal_score', 'Outcome-Lernsignal');
+  const outcomeSignalNote = metricContractNote(
+    detail?.field_contracts,
+    'outcome_signal_score',
+    'Beschreibt ein beobachtetes Lernsignal aus Kundendaten, keine Forecast-Wahrscheinlichkeit.',
+  );
+  const outcomeConfidenceLabel = normalizeGermanText(metricContractDisplayLabel(detail?.field_contracts, 'outcome_confidence_pct', 'Lern-Sicherheit'));
+  const outcomeConfidenceBadge = metricContractBadge(detail?.field_contracts, 'outcome_confidence_pct', 'Lern-Sicherheit');
+  const outcomeConfidenceNote = metricContractNote(
+    detail?.field_contracts,
+    'outcome_confidence_pct',
+    'Beschreibt die Sicherheit des Outcome-Lernsignals, nicht die Modellkalibrierung.',
+  );
   const syncStateTone = syncPreview?.readiness.can_sync_now
     ? {
         background: 'rgba(16, 185, 129, 0.10)',
@@ -270,15 +303,30 @@ const RecommendationDrawer: React.FC<Props> = ({
                   <div className="review-body-copy">{heroSummary}</div>
                 </div>
 
+                <div className="soft-panel review-panel-soft">
+                  <div className="campaign-focus-label">Wie diese Kennzahlen gemeint sind</div>
+                  <div className="review-stack">
+                    <div className="review-body-copy">
+                      <strong>{signalScoreLabel}</strong>: {signalScoreBadge}. {signalScoreNote}
+                    </div>
+                    <div className="review-body-copy">
+                      <strong>{priorityScoreLabel}</strong>: {priorityScoreBadge}. {priorityScoreNote}
+                    </div>
+                    <div className="review-body-copy">
+                      <strong>{signalConfidenceLabel}</strong>: {signalConfidenceBadge}. {signalConfidenceNote}
+                    </div>
+                  </div>
+                </div>
+
                 {(detail.outcome_signal_score != null || detail.outcome_learning_explanation) && (
                   <div className="soft-panel review-panel-soft">
                     <div className="campaign-focus-label">Wirkung aus Kundendaten</div>
                     <div className="review-body-copy" style={{ marginTop: 8 }}>
-                      {normalizeGermanText(detail.outcome_learning_explanation) || 'Kundendaten sind für diesen Vorschlag noch nicht stark genug angeschlossen.'}
+                      {explainInPlainGerman(detail.outcome_learning_explanation) || 'Kundendaten sind für diesen Vorschlag noch nicht stark genug angeschlossen.'}
                     </div>
                     <div className="review-chip-row" style={{ marginTop: 10 }}>
                       <span className="step-chip">
-                        Wirkungssignal {formatPercent(detail.outcome_signal_score)}
+                        {outcomeSignalLabel} {formatPercent(detail.outcome_signal_score)}
                       </span>
                       <span className="step-chip">
                         Lernstand {learningStateLabel(detail.learning_state)}
@@ -286,6 +334,14 @@ const RecommendationDrawer: React.FC<Props> = ({
                       <span className="step-chip">
                         {outcomeConfidenceLabel} {detail.outcome_confidence_pct != null ? formatPercent(detail.outcome_confidence_pct) : '-'}
                       </span>
+                    </div>
+                    <div className="review-stack" style={{ marginTop: 12 }}>
+                      <div className="review-body-copy">
+                        <strong>{outcomeSignalLabel}</strong>: {outcomeSignalBadge}. {outcomeSignalNote}
+                      </div>
+                      <div className="review-body-copy">
+                        <strong>{outcomeConfidenceLabel}</strong>: {outcomeConfidenceBadge}. {outcomeConfidenceNote}
+                      </div>
                     </div>
                   </div>
                 )}
@@ -381,7 +437,7 @@ const RecommendationDrawer: React.FC<Props> = ({
                   <div className="review-stack">
                     {guardrailNotes.length > 0 ? (
                       guardrailNotes.map((note) => (
-                        <div key={note} className="review-body-copy">{normalizeGermanText(note)}</div>
+                        <div key={note} className="review-body-copy">{explainInPlainGerman(note)}</div>
                       ))
                     ) : (
                       <div className="review-muted-copy">Keine zusätzlichen Hinweise.</div>
@@ -394,7 +450,7 @@ const RecommendationDrawer: React.FC<Props> = ({
                   <div className="review-stack">
                     {detail.publish_blockers && detail.publish_blockers.length > 0 ? (
                       detail.publish_blockers.map((note) => (
-                        <div key={note} className="review-body-copy">{normalizeGermanText(note)}</div>
+                        <div key={note} className="review-body-copy">{explainInPlainGerman(note)}</div>
                       ))
                     ) : (
                       <div className="review-muted-copy">{publishabilityHint(detail)}</div>

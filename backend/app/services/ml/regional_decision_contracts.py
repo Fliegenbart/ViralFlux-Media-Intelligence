@@ -23,9 +23,12 @@ class DecisionComponentScore:
 @dataclass(frozen=True)
 class DecisionReasonTrace:
     why: list[str] = field(default_factory=list)
+    why_details: list[dict[str, Any]] = field(default_factory=list)
     contributing_signals: list[DecisionComponentScore] = field(default_factory=list)
     uncertainty: list[str] = field(default_factory=list)
+    uncertainty_details: list[dict[str, Any]] = field(default_factory=list)
     policy_overrides: list[str] = field(default_factory=list)
+    policy_override_details: list[dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         payload = asdict(self)
@@ -87,6 +90,8 @@ class RegionalDecision:
     source_coverage_score: float
     explanation_summary: str
     uncertainty_summary: str
+    explanation_summary_detail: dict[str, Any] | None = None
+    uncertainty_summary_detail: dict[str, Any] | None = None
     components: dict[str, float] = field(default_factory=dict)
     thresholds: dict[str, float] = field(default_factory=dict)
     reason_trace: DecisionReasonTrace = field(default_factory=DecisionReasonTrace)

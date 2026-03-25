@@ -59,6 +59,13 @@ class RegionalMediaAllocationEngine:
     def __init__(self, config: RegionalMediaAllocationConfig = DEFAULT_MEDIA_ALLOCATION_CONFIG) -> None:
         self.config = config
 
+    @staticmethod
+    def _reason_detail(code: str, message: str, **params: Any) -> dict[str, Any]:
+        payload: dict[str, Any] = {"code": code, "message": message}
+        if params:
+            payload["params"] = params
+        return payload
+
     def allocate(
         self,
         *,
@@ -466,39 +473,137 @@ class RegionalMediaAllocationEngine:
             f"{stage} from the decision engine sets the base activation level.",
             f"Priority score {float(item['priority_score']):.2f} and event probability {float(item['event_probability']):.2f} drive the ranking.",
         ]
+        why_details = [
+            self._reason_detail(
+                "decision_stage_base",
+                why[0],
+                stage=stage.lower(),
+            ),
+            self._reason_detail(
+                "ranking_priority_and_probability",
+                why[1],
+                priority_score=round(float(item["priority_score"]), 4),
+                event_probability=round(float(item["event_probability"]), 4),
+            ),
+        ]
         budget_drivers: list[str] = []
+        budget_driver_details: list[dict[str, Any]] = []
         if stage.lower() == "activate":
-            budget_drivers.append("Activate regions receive the strongest label multiplier.")
+            message = "Activate regions receive the strongest label multiplier."
+            budget_drivers.append(message)
+            budget_driver_details.append(
+                self._reason_detail("budget_driver_activate_multiplier", message)
+            )
         elif stage.lower() == "prepare":
-            budget_drivers.append("Prepare regions stay eligible, but below Activate in weighting.")
+            message = "Prepare regions stay eligible, but below Activate in weighting."
+            budget_drivers.append(message)
+            budget_driver_details.append(
+                self._reason_detail("budget_driver_prepare_weighting", message)
+            )
         else:
-            budget_drivers.append("Watch regions are observation-first and usually receive no spend.")
+            message = "Watch regions are observation-first and usually receive no spend."
+            budget_drivers.append(message)
+            budget_driver_details.append(
+                self._reason_detail("budget_driver_watch_observe_only", message)
+            )
 
         if float(item["confidence"]) >= float(self.config.confidence_thresholds.get("medium") or 0.60):
-            budget_drivers.append(f"Confidence {float(item['confidence']):.2f} keeps the allocation penalty low.")
+            message = f"Confidence {float(item['confidence']):.2f} keeps the allocation penalty low."
+            budget_drivers.append(message)
+            budget_driver_details.append(
+                self._reason_detail(
+                    "budget_driver_confidence_low_penalty",
+                    message,
+                    confidence=round(float(item["confidence"]), 4),
+                )
+            )
         elif float(item["confidence"]) >= float(self.config.confidence_thresholds.get("low") or 0.45):
-            budget_drivers.append(f"Confidence {float(item['confidence']):.2f} leads to a moderate spend penalty.")
+            message = f"Confidence {float(item['confidence']):.2f} leads to a moderate spend penalty."
+            budget_drivers.append(message)
+            budget_driver_details.append(
+                self._reason_detail(
+                    "budget_driver_confidence_moderate_penalty",
+                    message,
+                    confidence=round(float(item["confidence"]), 4),
+                )
+            )
         else:
-            budget_drivers.append(f"Low confidence {float(item['confidence']):.2f} sharply reduces allocation.")
+            message = f"Low confidence {float(item['confidence']):.2f} sharply reduces allocation."
+            budget_drivers.append(message)
+            budget_driver_details.append(
+                self._reason_detail(
+                    "budget_driver_confidence_high_penalty",
+                    message,
+                    confidence=round(float(item["confidence"]), 4),
+                )
+            )
 
         if float(item["population_weight"]) > 0.0:
-            budget_drivers.append(
+            message = (
                 f"Population weighting contributes {float(item['population_weight']):.2f} to addressable reach."
             )
+            budget_drivers.append(message)
+            budget_driver_details.append(
+                self._reason_detail(
+                    "budget_driver_population_weight",
+                    message,
+                    population_weight=round(float(item["population_weight"]), 4),
+                )
+            )
         if float(item["region_weight"]) > 1.0:
-            budget_drivers.append(
+            message = (
                 f"Configured region weight {float(item['region_weight']):.2f} boosts the allocation score."
             )
+            budget_drivers.append(message)
+            budget_driver_details.append(
+                self._reason_detail(
+                    "budget_driver_region_weight_boost",
+                    message,
+                    region_weight=round(float(item["region_weight"]), 4),
+                )
+            )
         elif float(item["region_weight"]) < 1.0:
-            budget_drivers.append(
+            message = (
                 f"Configured region weight {float(item['region_weight']):.2f} reduces the allocation score."
             )
+            budget_drivers.append(message)
+            budget_driver_details.append(
+                self._reason_detail(
+                    "budget_driver_region_weight_reduce",
+                    message,
+                    region_weight=round(float(item["region_weight"]), 4),
+                )
+            )
         if float(item["source_freshness"]) < 0.50:
-            budget_drivers.append("Low source freshness adds an extra allocation penalty.")
+            message = "Low source freshness adds an extra allocation penalty."
+            budget_drivers.append(message)
+            budget_driver_details.append(
+                self._reason_detail(
+                    "budget_driver_source_freshness_penalty",
+                    message,
+                    source_freshness=round(float(item["source_freshness"]), 4),
+                )
+            )
         if float(item["revision_risk"]) > 0.55:
-            budget_drivers.append("High revision risk adds an extra allocation penalty.")
+            message = "High revision risk adds an extra allocation penalty."
+            budget_drivers.append(message)
+            budget_driver_details.append(
+                self._reason_detail(
+                    "budget_driver_revision_risk_penalty",
+                    message,
+                    revision_risk=round(float(item["revision_risk"]), 4),
+                )
+            )
         if share > 0.0:
-            budget_drivers.append(f"Suggested budget share is {share:.2%}.")
+            message = f"Suggested budget share is {share:.2%}."
+            budget_drivers.append(message)
+            budget_driver_details.append(
+                self._reason_detail(
+                    "budget_driver_suggested_share",
+                    message,
+                    suggested_budget_share=round(float(share), 6),
+                )
+            )
 
         uncertainty = list(
             self._uncertainty_items(
@@ -506,22 +611,54 @@ class RegionalMediaAllocationEngine:
                 decision=dict(item["decision"] or {}),
             )
         )
+        uncertainty_details = [
+            self._reason_detail("upstream_uncertainty", message)
+            for message in uncertainty
+        ]
         if float(item["revision_risk"]) > 0.45:
-            uncertainty.append(f"Revision risk remains material at {float(item['revision_risk']):.2f}.")
+            message = f"Revision risk remains material at {float(item['revision_risk']):.2f}."
+            uncertainty.append(message)
+            uncertainty_details.append(
+                self._reason_detail(
+                    "uncertainty_revision_risk_material",
+                    message,
+                    revision_risk=round(float(item["revision_risk"]), 4),
+                )
+            )
         if float(item["source_freshness"]) < 0.50:
-            uncertainty.append(f"Source freshness is soft at {float(item['source_freshness']):.2f}.")
+            message = f"Source freshness is soft at {float(item['source_freshness']):.2f}."
+            uncertainty.append(message)
+            uncertainty_details.append(
+                self._reason_detail(
+                    "uncertainty_source_freshness_soft",
+                    message,
+                    source_freshness=round(float(item["source_freshness"]), 4),
+                )
+            )
 
         blockers: list[str] = []
+        blocker_details: list[dict[str, Any]] = []
         if not spend_enabled:
-            blockers.extend(str(blocker) for blocker in spend_blockers)
+            for blocker in spend_blockers:
+                message = str(blocker)
+                blockers.append(message)
+                blocker_details.append(self._reason_detail("spend_blocker", message))
         elif not bool(item["eligible_for_budget"]):
-            blockers.append("Region is not currently eligible for spend under the configured label rules.")
+            message = "Region is not currently eligible for spend under the configured label rules."
+            blockers.append(message)
+            blocker_details.append(
+                self._reason_detail("budget_ineligible_region", message)
+            )
 
         return AllocationReasonTrace(
             why=why,
+            why_details=why_details,
             budget_drivers=budget_drivers,
+            budget_driver_details=budget_driver_details,
             uncertainty=uncertainty,
+            uncertainty_details=uncertainty_details,
             blockers=blockers,
+            blocker_details=blocker_details,
         )
 
     @staticmethod

@@ -1,288 +1,350 @@
-# 📡 ViralFlux Media Intelligence
+# ViralFlux Media Intelligence
 
-**Regionales PEIX-Mediatool für Virus-Frühwarnung und validierte Media-Entscheidungen mit GELO als Truth-Partner**
+ViralFlux ist eine Operator-Plattform für regionale Virus-Frühwarnung und daraus abgeleitete Media-Entscheidungen.
 
-## 📋 Überblick
+In einfachen Worten:
+- das System erkennt auf Bundesland-Level, wo sich Viruswellen wahrscheinlich zuerst aufbauen
+- es trennt bewusst zwischen epidemiologischem Forecast und kommerzieller Freigabe
+- es zeigt diese Information in einem operativen Cockpit für Entscheidungen, Review und Freigabe
 
-ViralFlux Media Intelligence ist ein datengetriebenes Frühwarn- und Decision-System für PEIX. Die Plattform kombiniert AMELAG, SurvStat und weitere RKI-Signale mit Kontextdaten, um regionale Viruswellen in den nächsten 3 bis 7 Tagen früher zu erkennen und daraus priorisierte Media-Entscheidungen abzuleiten.
+Die Live-Instanz läuft aktuell unter:
 
-Das System ist zweistufig aufgebaut:
+- [https://fluxengine.labpulse.ai/](https://fluxengine.labpulse.ai/)
 
-- **Epidemiologischer Forecast**: regionale Früherkennung pro Viruslinie
-- **Business-Gate**: separate kommerzielle Freigabe auf Basis echter Outcome-Daten
+## Was das Produkt heute macht
 
-GELO ist der erste Truth-Partner für diese zweite Ebene. Echte Sales-, Order- und Media-Daten werden nicht als Ersatz für die Epidemiologie genutzt, sondern als Validierung dafür, ob aus einem epidemiologischen Signal bereits eine belastbare Budgetentscheidung werden darf.
+ViralFlux ist keine reine Forecast-Demo und auch kein reines Marketing-Dashboard.
+Es ist eine Arbeitsoberfläche für Operatoren.
 
-### Kernfeatures
+Der aktuelle Produktkern besteht aus 3 Schichten:
 
-- 📊 **Signal Fusion**: AMELAG, SurvStat, GrippeWeb, ARE, Notaufnahme, Wetter, Ferien, Pollen, Trends
-- 🎯 **3- bis 7-Tage-Frühwarnung**: regionale Viruswellen vor klassischer Marktreaktion erkennen
-- 🗺️ **Bundesland-Forecasts**: priorisierte Regionen, Virus-Portfolio und Watch-/Prepare-/Activate-Logik
-- 🧪 **Point-in-Time ML**: leakage-sichere as-of Datasets, Walk-forward-Backtests, Quality Gates
-- 🧾 **Business-Gate**: PEIX/GELO-Freigabelogik mit Truth-Readiness, Holdout- und Evidenzstatus
-- 📈 **Decision Cockpit**: operative Entscheidungsansicht, Wave-Verlauf, Quellenfrische und Portfolio-Ranking
+1. Epidemiologischer Forecast
+   Vorhersagen auf Bundesland-Level für relevante Viruslinien und definierte Zeitfenster.
 
-## 🏗️ Architektur
+2. Decision Layer
+   Ableitung von priorisierten Regionen, Handlungsvorschlägen, Portfoliogewichtung und Review-Fällen.
 
+3. Evidence- und Business-Gate
+   Prüfung, ob aus einem Signal schon eine belastbare operative oder budgetwirksame Entscheidung werden darf.
+
+Wichtige fachliche Leitplanken im Frontend:
+- `Event-Wahrscheinlichkeit` ist nicht dasselbe wie `Ranking-Signal`
+- `Entscheidungs-Priorität` ist nicht dasselbe wie Sicherheit
+- `Unsicherheit` wird nie nur über Farbe gezeigt
+- Aussagen gelten auf `Bundesland-Level`
+- die UI soll ausdrücklich keinen `City-Forecast` vortäuschen
+
+## Hauptbereiche im Frontend
+
+Die App ist heute grob in diese Arbeitsflächen aufgeteilt:
+
+- Landing / Welcome
+  Produkt-Einstieg mit derselben Markenlogik wie die App, aber emotionaler als das Cockpit
+
+- Jetzt / Operational Dashboard
+  Die erste Operator-Entscheidungsoberfläche: Was passiert, wo muss gehandelt werden, wie sicher ist das Signal
+
+- Regionen
+  Vergleich von Bundesländern mit Karte und Listenansicht, bewusst ohne falsche lokale Präzision
+
+- Kampagnen
+  Vorschläge, Priorisierung, Detailansicht und Review-/Freigabe-Flow
+
+- Evidenz
+  Forecast, Truth, Unsicherheit, Quality Gates und Backtest-Einordnung
+
+- Bericht
+  Export- und Kommunikationsoberflächen
+
+## Tech-Stack
+
+### Frontend
+- React 18
+- TypeScript
+- React Router
+- Recharts
+- Tailwind als Utility-Basis, aber mit semantischen Tokens und Klassen in `frontend/src/index.css`
+
+### Backend
+- FastAPI
+- SQLAlchemy
+- PostgreSQL / Timescale
+- Celery + Redis
+- Prophet, scikit-learn, statsmodels, xgboost
+
+### Infrastruktur
+- Docker Compose für lokale Entwicklung
+- eigener Live-Deploy auf Hetzner
+- `voxdrop-nginx` als Public Edge vor dem Produktiv-Stack
+
+## Projektstruktur
+
+```text
+viralflux/
+├── backend/                  # API, Business-Logik, Ingestion, ML, Readiness
+├── frontend/                 # React-App, Cockpit, Landing, Tests
+├── data/                     # lokale Datenablage für Entwicklung und Imports
+├── docs/                     # Fach- und Betriebsdokumentation
+├── docker/                   # Dockerfiles und nginx-Konfiguration
+├── scripts/                  # Hilfs- und Deploy-Skripte
+├── docker-compose.yml        # nur lokale Entwicklung
+├── docker-compose.prod.yml   # produktionsnahes Compose-Manifest
+├── DEPLOY.md                 # verbindliche Live-Deploy-Anleitung
+└── QUICKSTART.md             # ergänzende Schnellstart-Hilfe
 ```
-┌─────────────────────────────────────────────────────┐
-│              Datenquellen                            │
-│  RKI AMELAG | GrippeWeb | Notaufnahme | SURVSTAT | BfArM | DWD | Trends │
-└────────────────────┬────────────────────────────────┘
-                     │
-                     v
-┌─────────────────────────────────────────────────────┐
-│        Backend (FastAPI + PostgreSQL)                │
-│  • Data Ingestion Pipeline                           │
-│  • Prophet ML Forecasting                            │
-│  • vLLM (OpenAI-kompatibel) LLM Integration          │
-│  • TimescaleDB für Zeitreihen                        │
-└────────────────────┬────────────────────────────────┘
-                     │
-                     v
-┌─────────────────────────────────────────────────────┐
-│        Frontend (React + TypeScript)                 │
-│  • Real-time Dashboard                               │
-│  • Interactive Forecasts                             │
-│  • Human-Approval Workflow                           │
-└─────────────────────────────────────────────────────┘
-```
 
-## 🚀 Quick Start
+## Lokal starten
 
 ### Voraussetzungen
 
-- Docker & Docker Compose
+Du brauchst lokal:
+
+- Docker und Docker Compose
 - Node.js 18+
 - Python 3.11+
-- vLLM Server (OpenAI-kompatibel, läuft lokal auf Hetzner)
 
-### Installation
+Optional, je nach Anwendungsfall:
+- OpenWeather API Key
+- Zugriff auf einen OpenAI-kompatiblen LLM-Endpunkt
+
+### 1. Repository klonen
 
 ```bash
-# Repository klonen
-git clone <your-repo-url>
-cd viralflux-media
-
-# Umgebungsvariablen konfigurieren
-cp .env.example .env
-# Bearbeite .env mit deinen API-Keys
-
-# Mit Docker starten
-docker-compose up -d
-
-# Frontend Development
-cd frontend
-npm install
-npm run dev
-
-# Backend Development
-cd backend
-pip install -r requirements.txt
-uvicorn app.main:app --reload
+git clone <REPO_URL>
+cd viralflux
 ```
 
-Die App läuft dann auf:
-- **Frontend**: http://localhost:3000
-- **Backend API**: http://localhost:8000
-- **API Docs**: http://localhost:8000/docs
+### 2. Umgebungsvariablen anlegen
 
-## 🎙️ Elevator Pitch
-
-\"ViralFlux ist ein PEIX-Mediatool, das regionale Viruswellen 3 bis 7 Tage früher sichtbar macht und daraus priorisierte Media-Entscheidungen ableitet. Die Epidemiologie kommt aus AMELAG, SurvStat und weiteren RKI-Signalen, die kommerzielle Validierung aus echten GELO-Outcome-Daten. So entsteht nicht nur ein besseres Radar, sondern ein messbar belastbarer Entscheidungsprozess für regionale Aktivierung.\"
-
-## 📊 Datenquellen
-
-### 1. RKI AMELAG (Abwassersurveillance)
-- **Quelle**: `github.com/robert-koch-institut/Abwassersurveillance_AMELAG`
-- **Update**: Wöchentlich
-- **Daten**: SARS-CoV-2, Influenza A/B, RSV
-- **Vorlauf**: ~14 Tage
-
-### 2. RKI GrippeWeb
-- **Quelle**: `github.com/robert-koch-institut/GrippeWeb_Daten_des_Wochenberichts`
-- **Update**: Wöchentlich
-- **Daten**: ARE/ILI Inzidenzen nach Region und Alter
-
-### 3. RKI/AKTIN Notaufnahmesurveillance
-- **Quelle**: `github.com/robert-koch-institut/Daten_der_Notaufnahmesurveillance`
-- **Update**: Täglich (bis Vorvortag)
-- **Daten**: ARI, SARI, ILI, COVID, GI (relativer Anteil + Erwartungswerte)
-
-### 4. RKI SURVSTAT (manueller Weekly Import)
-- **Quelle**: SURVSTAT Exportdateien (CSV/TSV, UTF-16)
-- **Update**: Manuell, Woche für Woche
-- **Daten**: Meldeinzidenzen nach Bundesland + Krankheitsbild (inkl. Gesamt)
-- **Import**: `POST /api/v1/ingest/survstat-local?folder_path=/pfad/zum/ordner`
-
-### 5. Google Trends
-- **Library**: pytrends
-- **Keywords**: Erkältung, Grippe, Schnupfen, Fieber, etc.
-- **Geo**: Deutschland
-
-### 6. OpenWeather API
-- **Daten**: Temperatur, Luftfeuchtigkeit, Wettervorhersage
-- **Relevanz**: Einfluss auf Atemwegserkrankungen
-
-### 7. Schulferien
-- **Quelle**: API oder statische Daten
-- **Relevanz**: Erkrankungsrückgang in Ferienzeiten
-
-### 8. GELO Outcome- und Truth-Daten
-- **Schnittstelle vorbereitet**: CSV/API Import
-- **Daten**: Sales, Orders, Spend, Kampagnenstarts, Kanäle, regionale Holdout-Zuordnung
-- **Rolle**: Business-Validierung, nicht Ersatz für epidemiologische Truth
-
-## 🤖 ML Pipeline
-
-### Prophet Forecasting Model
-- **Features**: 
-  - Viruslast (Abwasser)
-  - Google Trends Score
-  - ARE/ILI Inzidenzen
-  - Temperatur, Luftfeuchtigkeit
-  - Schulferien (Binär)
-  - Lag Features (7, 14 Tage)
-  
-- **Output**: 
-  - 14-Tage-Prognose
-  - Confidence Intervals (95%)
-  - Feature Importance
-
-### vLLM (lokal, OpenAI-kompatibel)
-- **Modell**: Läuft auf deinem Hetzner Server
-- **Funktion**: Agentur- und Kundenbriefings in natürlicher Sprache
-- **Kontext**: Aktuelle Signale + Prognose + Aktivierungsfenster
-
-## 📁 Projektstruktur
-
-```
-viralflux-media/
-├── backend/
-│   ├── app/
-│   │   ├── api/          # API Endpoints
-│   │   ├── core/         # Config, Security
-│   │   ├── models/       # SQLAlchemy Models
-│   │   ├── services/     # Business Logic
-│   │   │   ├── data_ingest/    # RKI (AMELAG/GrippeWeb/Notaufnahme/SURVSTAT), Trends, Weather
-│   │   │   ├── ml/             # Prophet, Training
-│   │   │   └── llm/            # vLLM Integration
-│   │   └── db/           # Database Setup
-│   ├── tests/
-│   └── requirements.txt
-├── frontend/
-│   ├── src/
-│   │   ├── components/   # React Components
-│   │   ├── pages/        # Pages
-│   │   ├── services/     # API Calls
-│   │   └── types/        # TypeScript Types
-│   └── package.json
-├── docker/
-│   ├── Dockerfile.backend
-│   ├── Dockerfile.frontend
-│   └── nginx.conf
-├── data/
-│   ├── raw/              # Rohdaten
-│   └── processed/        # Verarbeitete Daten
-├── docker-compose.yml
-└── .env.example
-```
-
-## 🔐 Umgebungsvariablen
+Falls eine `.env.example` vorhanden ist, nutze sie als Startpunkt. Wichtig für die lokale Entwicklung sind vor allem:
 
 ```env
-# Database
 POSTGRES_USER=virusradar
-POSTGRES_PASSWORD=<strong-password>
+POSTGRES_PASSWORD=changeme
 POSTGRES_DB=virusradar_db
 
-# APIs
-OPENWEATHER_API_KEY=<your-key>
-VLLM_BASE_URL=http://localhost:8000/v1
+OPENWEATHER_API_KEY=
+VLLM_BASE_URL=http://host.docker.internal:8000/v1
 
-# Security
-SECRET_KEY=<generate-secure-key>
+SECRET_KEY=replace-me
+ADMIN_EMAIL=admin@example.com
+ADMIN_PASSWORD=replace-me
 
-# Optional: Kundendaten
-GANZIMMUN_API_URL=<optional>
-GANZIMMUN_API_KEY=<optional>
+ENVIRONMENT=development
+DB_AUTO_CREATE_SCHEMA=true
+DB_ALLOW_RUNTIME_SCHEMA_UPDATES=true
+STARTUP_STRICT_READINESS=false
+READINESS_REQUIRE_BROKER=false
 ```
 
-## 🧪 Testing
+### 3. Lokale Infrastruktur starten
 
 ```bash
-# Backend Tests
-cd backend
-python3 -m pytest
+docker-compose up -d db redis backend
+```
 
-# Frontend Tests
+Wenn du das React-Frontend ebenfalls im Container nutzen willst:
+
+```bash
+docker-compose --profile dev up -d frontend
+```
+
+### 4. Frontend lokal im Entwicklungsmodus starten
+
+Meist ist dieser Weg für die Frontend-Arbeit am angenehmsten:
+
+```bash
 cd frontend
-npm test -- --passWithNoTests
+npm install
+npm start
 ```
 
-## 📦 Deployment auf Hetzner
+Die React-App läuft dann auf:
 
-```bash
-# SSH auf Server
-ssh user@your-hetzner-server
+- `http://localhost:3000`
 
-# Repository klonen
-git clone <repo-url>
-cd viralflux-media
+Das Frontend nutzt lokal einen Proxy auf das Backend:
+- `http://localhost:8000`
 
-# Produktion starten
-docker-compose -f docker-compose.prod.yml up -d
-```
+### 5. Backend lokal starten, wenn du ohne Container arbeiten willst
 
-Vollständige Produktionsanleitung: `DEPLOY.md`
-
-## 📈 ANNEx 22 Compliance
-
-- ✅ **Transparency**: Alle ML-Entscheidungen sind erklärbar
-- ✅ **Human Oversight**: Keine automatischen Bestellungen
-- ✅ **Audit Trail**: Vollständige Protokollierung
-- ✅ **Data Privacy**: DSGVO-konform, lokale Verarbeitung
-
-## 🛠️ Entwicklung
-
-### Backend
 ```bash
 cd backend
-python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
+python3 -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
 uvicorn app.main:app --reload
 ```
 
+API und Swagger Docs:
+
+- `http://localhost:8000`
+- `http://localhost:8000/docs`
+
+## Tests und Qualitätschecks
+
 ### Frontend
+
 ```bash
 cd frontend
-npm install
-npm run dev
+npm test -- --runInBand
+npm run build
 ```
 
-## 📝 API Dokumentation
+### Backend
 
-Siehe: http://localhost:8000/docs (Swagger UI)
+```bash
+cd backend
+python3 -m pytest
+```
 
-Hauptendpoints:
-- `GET /api/v1/dashboard` - Dashboard-Daten
-- `GET /api/v1/forecast` - ML-Prognose
-- `POST /api/v1/recommendations` - LLM-Empfehlung
-- `GET /api/v1/data/wastewater` - Abwasserdaten
-- `GET /api/v1/data/trends` - Google Trends
-- `POST /api/v1/ingest/notaufnahme` - Notaufnahmesurveillance Import
-- `POST /api/v1/ingest/survstat-local` - Lokaler SURVSTAT Wochenimport
-- `POST /api/v1/calibration/simulate-market` - Twin-Mode Markt-Check (RKI ARE/SURVSTAT)
+## Wichtige Betriebsregeln
 
-## 🤝 Support & Contribution
+Es gibt zwei sehr wichtige Unterschiede zwischen lokal und live:
 
-Entwickelt als **PEIX Service-Plattform** für Pharma- und Healthcare-Marken.
+1. `docker-compose.yml` ist nur für lokale Entwicklung gedacht
+   Nicht für Live-Deploys verwenden.
 
-## 📄 Lizenz
+2. Live-Deploys laufen über den clean Server-Checkout und das zentrale Deploy-Script
+   Der aktuelle Standard ist in [DEPLOY.md](/Users/davidwegener/Desktop/viralflux/DEPLOY.md) dokumentiert.
 
-Proprietary - © 2026 PEIX / ViralFlux
+## Live deployen
 
----
+Der produktive Standard-Deploy ist:
 
-**Made with ❤️ for smarter healthcare decisions**
+```bash
+ssh root@5.9.106.75 '/usr/local/bin/viralflux-deploy'
+```
+
+Wichtig:
+- der Server deployt immer den Stand von `origin/main`
+- lokale Änderungen müssen also zuerst committet und gepusht werden
+- das Live-System läuft nicht direkt aus deinem lokalen Arbeitsordner
+
+Mehr Details stehen in:
+
+- [DEPLOY.md](/Users/davidwegener/Desktop/viralflux/DEPLOY.md)
+
+## Readiness und Health
+
+Wichtige Endpunkte:
+
+- `/health/live`
+- `/health/ready`
+
+Unterschied:
+- `live` sagt: der Dienst lebt grundsätzlich
+- `ready` sagt: der Dienst ist auch operativ ausreichend bereit
+
+Ein `degraded` bei `/health/ready` bedeutet nicht automatisch Ausfall.
+Oft heißt das eher:
+- Forecast-Frische nicht im grünen Bereich
+- Monitoring veraltet
+- operative Blocker oder Watch-Zustände vorhanden
+
+## Login
+
+Das Frontend hat keinen festen öffentlichen Demo-Login eingebaut.
+
+Die Login-Prüfung läuft über:
+
+- `POST /api/auth/login`
+
+Die gültigen Zugangsdaten kommen aus den gesetzten Umgebungsvariablen:
+
+- `ADMIN_EMAIL`
+- `ADMIN_PASSWORD`
+
+## Datenquellen und Modellkontext
+
+Je nach Pipeline und Betriebsmodus nutzt ViralFlux unter anderem:
+
+- AMELAG
+- GrippeWeb
+- Notaufnahme-Surveillance
+- SURVSTAT
+- Wetter
+- Ferien
+- Google Trends
+- Outcome- und Truth-Daten aus Partnerkontexten wie GELO
+
+Die genaue fachliche und operative Dokumentation liegt in `docs/`.
+Besonders nützlich sind:
+
+- [docs/frontend_operational_dashboard.md](/Users/davidwegener/Desktop/viralflux/docs/frontend_operational_dashboard.md)
+- [docs/metric_semantics_contract.md](/Users/davidwegener/Desktop/viralflux/docs/metric_semantics_contract.md)
+- [docs/decision_engine_spec.md](/Users/davidwegener/Desktop/viralflux/docs/decision_engine_spec.md)
+- [docs/ops_runbook.md](/Users/davidwegener/Desktop/viralflux/docs/ops_runbook.md)
+- [docs/live_readiness_blockers_current.md](/Users/davidwegener/Desktop/viralflux/docs/live_readiness_blockers_current.md)
+
+## Was zuletzt im Frontend modernisiert wurde
+
+Der aktuelle Frontend-Stand ist nicht mehr nur ein klassisches Dashboard, sondern stärker als Operator-Oberfläche gebaut. Zuletzt wurden unter anderem verbessert:
+
+- klarere Operator-Entscheidungsoberflächen im Cockpit
+- ehrlichere Bundesland-Semantik in Karten und Regionenlisten
+- sauberere Trennung von Forecast, Truth, Unsicherheit und Ranking-Signalen
+- Dark-Mode-Architektur über semantische Tokens statt fragile Überschreibungen
+- Accessibility für Tastatur, Fokusführung und Screenreader
+- Responsive Verhalten für reale Laptop-Fenster
+- konsistentere Sprache für Wahrscheinlichkeiten, Scores und Evidenzlücken
+
+## Für neue Entwickler wichtig
+
+Wenn du neu im Projekt bist, sind diese Punkte am wichtigsten:
+
+1. Nicht von alten README-Annahmen ausgehen
+   Der heutige Live-Deploy läuft über den Clean-Checkout auf dem Server.
+
+2. Nicht `Event-Wahrscheinlichkeit`, `Ranking-Signal` und `Priorität` vermischen
+   Diese Trennung ist fachlich wichtig und inzwischen auch bewusst im UI umgesetzt.
+
+3. Bei Frontend-Änderungen immer Build und die betroffenen Tests laufen lassen
+   Vor allem bei Cockpit-Komponenten.
+
+4. Live nie direkt aus lokalen Sonderständen denken
+   Erst committen, pushen, dann deployen.
+
+## Nützliche Befehle
+
+### Git-Status prüfen
+
+```bash
+git status --short --branch
+```
+
+### Frontend-Build testen
+
+```bash
+cd frontend
+npm run build
+```
+
+### Einzelnen Frontend-Test ausführen
+
+```bash
+cd frontend
+npm test -- --runInBand src/components/cockpit/OperationalDashboard.test.tsx
+```
+
+### Produktive Health-Checks prüfen
+
+```bash
+curl https://fluxengine.labpulse.ai/health/live
+curl https://fluxengine.labpulse.ai/health/ready
+```
+
+## Kurzfazit
+
+ViralFlux ist heute ein arbeitsorientiertes Frühwarn- und Decision-System für regionale Media-Entscheidungen.
+
+Der wichtigste Gedanke des Produkts ist:
+Nicht jede auffällige Zahl ist automatisch eine belastbare Freigabe.
+
+Darum trennt das System bewusst zwischen:
+- Forecast
+- Ranking
+- Priorität
+- Unsicherheit
+- Evidenz
+- tatsächlicher operativer Freigabe

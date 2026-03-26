@@ -1,241 +1,278 @@
-# 🚀 Quick Start Guide - ViralFlux Media Intelligence
+# Quickstart
 
-## 5-Minuten Setup
+Diese Datei ist die kurze, praktische Startanleitung.
 
-### 1. Repository klonen
+Wenn du mehr Kontext willst, lies zusätzlich:
+- [README.md](/Users/davidwegener/Desktop/viralflux/README.md)
+- [DEPLOY.md](/Users/davidwegener/Desktop/viralflux/DEPLOY.md)
+
+## Wofür dieser Quickstart gedacht ist
+
+Dieser Quickstart ist für:
+- lokale Entwicklung
+- schnelles Starten des Frontends
+- schnelles Starten des Backends
+- einfache Health- und Test-Checks
+
+Nicht dafür:
+- Production direkt mit `docker-compose.yml` deployen
+- den Live-Server manuell „irgendwie“ hochziehen
+
+Für Live gilt immer:
+- erst committen
+- dann auf `main` pushen
+- dann den Server-Deploy nutzen
+
+## Voraussetzungen
+
+Du brauchst lokal:
+
+- Docker und Docker Compose
+- Node.js 18+
+- Python 3.11+
+
+Optional:
+- `OPENWEATHER_API_KEY`
+- einen OpenAI-kompatiblen LLM-Endpunkt über `VLLM_BASE_URL`
+
+## 1. Repository klonen
+
 ```bash
-git clone <your-repo-url>
-cd viralflux-media
+git clone <REPO_URL>
+cd viralflux
 ```
 
-### 2. Umgebungsvariablen konfigurieren
+## 2. `.env` anlegen
+
+Falls vorhanden, nutze `.env.example` als Basis.
+
+Wichtige Werte für den lokalen Start:
+
+```env
+POSTGRES_USER=virusradar
+POSTGRES_PASSWORD=changeme
+POSTGRES_DB=virusradar_db
+
+OPENWEATHER_API_KEY=
+VLLM_BASE_URL=http://host.docker.internal:8000/v1
+
+SECRET_KEY=replace-me
+ADMIN_EMAIL=admin@example.com
+ADMIN_PASSWORD=replace-me
+
+ENVIRONMENT=development
+DB_AUTO_CREATE_SCHEMA=true
+DB_ALLOW_RUNTIME_SCHEMA_UPDATES=true
+STARTUP_STRICT_READINESS=false
+READINESS_REQUIRE_BROKER=false
+```
+
+## 3. Datenbank, Redis und Backend starten
+
+Der schnellste Weg für lokal ist:
+
 ```bash
-cp .env.example .env
-nano .env  # oder dein bevorzugter Editor
+docker-compose up -d db redis backend
 ```
 
-**Wichtig: Fülle diese Werte aus:**
-- `OPENWEATHER_API_KEY` - Hole dir einen kostenlosen Key von [openweathermap.org](https://openweathermap.org/api)
-- `VLLM_BASE_URL` - URL zu deinem lokalen vLLM Endpunkt (OpenAI-kompatibel), z.B. `http://localhost:8000/v1`
-- `SECRET_KEY` - Generiere mit: `openssl rand -hex 32`
+Danach solltest du diese Endpunkte erreichen:
 
-### 3. Setup ausführen
-```bash
-./setup.sh
-```
+- [http://localhost:8000/health/live](http://localhost:8000/health/live)
+- [http://localhost:8000/docs](http://localhost:8000/docs)
 
-Das Script:
-- ✅ Prüft alle Dependencies
-- ✅ Erstellt Verzeichnisse
-- ✅ Installiert Python & Node Pakete
-- ✅ Startet Docker Container
+## 4. Frontend starten
 
-### 4. Erste Schritte
+Für Frontend-Arbeit ist dieser Weg meistens am angenehmsten:
 
-**A) Öffne die API Docs:**
-```
-http://localhost:8000/docs
-```
-
-**B) Führe den ersten Datenimport durch:**
-
-1. Gehe zu `/api/v1/ingest/run-all` (POST)
-2. Klicke auf "Try it out" → "Execute"
-3. Warte ~2-3 Minuten
-
-Oder via curl:
-```bash
-curl -X POST http://localhost:8000/api/v1/ingest/run-all
-```
-
-**C) Öffne das Dashboard:**
-```
-http://localhost:3000
-```
-
----
-
-## Manueller Start (ohne setup.sh)
-
-### Backend
-```bash
-cd backend
-python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
-pip install -r requirements.txt
-uvicorn app.main:app --reload
-```
-
-### Frontend
 ```bash
 cd frontend
 npm install
 npm start
 ```
 
-### Datenbank
+Dann läuft die App hier:
+
+- [http://localhost:3000](http://localhost:3000)
+
+Wichtig:
+Das Frontend nutzt lokal einen Proxy auf das Backend unter `http://localhost:8000`.
+
+## 5. Optional: Frontend im Container starten
+
+Wenn du lieber auch das Frontend über Docker starten willst:
+
 ```bash
-docker-compose up -d db
+docker-compose --profile dev up -d frontend
 ```
 
----
+## 6. Optional: Backend ohne Docker starten
 
-## Täglicher Betrieb
+Wenn du am Python-Code arbeiten willst, ist das oft praktischer:
 
-### Container starten
 ```bash
-docker-compose up -d
+cd backend
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+uvicorn app.main:app --reload
 ```
 
-### Container stoppen
-```bash
-docker-compose down
-```
+## Die 3 wichtigsten lokalen URLs
 
-### Logs anzeigen
-```bash
-# Alle Services
-docker-compose logs -f
+- Frontend: [http://localhost:3000](http://localhost:3000)
+- API: [http://localhost:8000](http://localhost:8000)
+- Swagger Docs: [http://localhost:8000/docs](http://localhost:8000/docs)
 
-# Nur Backend
-docker-compose logs -f backend
+## Login lokal
 
-# Nur Frontend
-docker-compose logs -f frontend
-```
+Es gibt keinen festen Demo-Login im Frontend.
 
----
+Lokal funktionieren die Zugangsdaten aus deiner `.env`:
 
-## Datenimport
+- `ADMIN_EMAIL`
+- `ADMIN_PASSWORD`
 
-### Automatischer Import (geplant)
-Der automatische Import läuft täglich um 6:00 Uhr (konfigurierbar in .env)
+## Nützliche Standardbefehle
 
-### Manueller Import via API
-
-**Alle Datenquellen:**
-```bash
-curl -X POST http://localhost:8000/api/v1/ingest/run-all
-```
-
-**Einzelne Quellen:**
-```bash
-# RKI Abwasser
-curl -X POST http://localhost:8000/api/v1/ingest/amelag
-
-# Google Trends
-curl -X POST http://localhost:8000/api/v1/ingest/trends
-
-# Wetter
-curl -X POST http://localhost:8000/api/v1/ingest/weather
-
-# Schulferien
-curl -X POST http://localhost:8000/api/v1/ingest/holidays
-
-# SURVSTAT (lokaler Wochenimport)
-# Optional: Dateien zuerst im Projekt ablegen
-mkdir -p data/raw/survstat
-cp /pfad/zu/deinen_survstat/*.csv data/raw/survstat/
-
-# Danach Import triggern
-curl -X POST "http://localhost:8000/api/v1/ingest/survstat-local?folder_path=/Users/davidwegener/Downloads/survstat-weitere"
-
-# Twin-Mode Demo: Markt-Check ohne Kundendaten (Walk-forward)
-curl -X POST "http://localhost:8000/api/v1/calibration/simulate-market?target=RKI_ARE&virus_typ=Influenza%20A&days_back=730&horizon_days=14&min_train_points=20&strict_vintage_mode=true"
-curl -X POST "http://localhost:8000/api/v1/calibration/simulate-market?target=MYCOPLASMA&virus_typ=Influenza%20A&days_back=730&horizon_days=14&min_train_points=20&strict_vintage_mode=true"
-```
-
----
-
-## ML Prognosen erstellen
+### Alle laufenden Container sehen
 
 ```bash
-curl -X POST http://localhost:8000/api/v1/forecast/run
-```
-
----
-
-## Troubleshooting
-
-### Port bereits belegt
-```bash
-# Ändere Ports in docker-compose.yml
-ports:
-  - "8001:8000"  # Backend
-  - "3001:3000"  # Frontend
-```
-
-### Datenbank-Verbindung fehlgeschlagen
-```bash
-# Prüfe ob Container läuft
 docker ps
-
-# Datenbank neu starten
-docker-compose restart db
-
-# Logs prüfen
-docker-compose logs db
 ```
+
+### Logs vom Backend sehen
+
+```bash
+docker-compose logs -f backend
+```
+
+### Logs von Redis sehen
+
+```bash
+docker-compose logs -f redis
+```
+
+### Datenbank neu starten
+
+```bash
+docker-compose restart db
+```
+
+### Frontend testen
+
+```bash
+cd frontend
+npm test -- --runInBand
+```
+
+### Frontend-Build prüfen
+
+```bash
+cd frontend
+npm run build
+```
+
+### Backend-Tests laufen lassen
+
+```bash
+cd backend
+python3 -m pytest
+```
+
+## Health-Checks
+
+### Lokal
+
+```bash
+curl http://localhost:8000/health/live
+curl http://localhost:8000/health/ready
+```
+
+### Live
+
+```bash
+curl https://fluxengine.labpulse.ai/health/live
+curl https://fluxengine.labpulse.ai/health/ready
+```
+
+Wichtig:
+- `live` heißt: der Dienst lebt
+- `ready` heißt: der Dienst ist auch operativ ausreichend bereit
+
+Ein `degraded` bei `ready` ist nicht automatisch ein Totalausfall.
+
+## Häufige Probleme
 
 ### Frontend startet nicht
+
 ```bash
-# node_modules löschen und neu installieren
 cd frontend
 rm -rf node_modules package-lock.json
 npm install
 ```
 
-### "Permission denied" beim Setup
+### Backend antwortet nicht
+
+Prüfe zuerst:
+
 ```bash
-chmod +x setup.sh
+docker ps
+docker-compose logs -f backend
 ```
 
----
+### Datenbank-Verbindung schlägt fehl
 
-## Nützliche Befehle
-
-### Datenbank-Shell öffnen
 ```bash
-docker-compose exec db psql -U virusradar -d virusradar_db
+docker-compose restart db
+docker-compose logs -f db
 ```
 
-### Backend Shell öffnen
+### Port ist schon belegt
+
+Dann läuft meist schon ein anderer Dienst auf demselben Port.
+Prüfe mit:
+
 ```bash
-docker-compose exec backend /bin/bash
+lsof -i :3000
+lsof -i :8000
+lsof -i :15432
 ```
 
-### Alle Container und Volumes löschen (VORSICHT!)
+## Wichtige Warnung für Production
+
+`docker-compose.yml` ist nur für lokale Entwicklung gedacht.
+
+Nicht der richtige Weg für Live-Deploys.
+
+Der produktive Standard-Deploy ist:
+
 ```bash
-docker-compose down -v
+ssh root@5.9.106.75 '/usr/local/bin/viralflux-deploy'
 ```
 
----
+Aber nur nachdem dein Stand auf GitHub `main` liegt.
 
-## Deployment auf Hetzner
+Details:
+- [DEPLOY.md](/Users/davidwegener/Desktop/viralflux/DEPLOY.md)
 
-Siehe vollständige Anleitung in `DEPLOY.md`
+## Wenn du nur 30 Sekunden hast
 
-**Kurzversion:**
+Das sind die wichtigsten Befehle:
+
 ```bash
-# Auf Server einloggen
-ssh user@your-hetzner-server
-
-# Repository klonen
-git clone <repo-url>
-cd viralflux-media
-
-# Produktions-Setup
-docker-compose -f docker-compose.prod.yml up -d
+docker-compose up -d db redis backend
+cd frontend
+npm install
+npm start
 ```
 
----
+Dann öffnest du:
 
-## Support
+- [http://localhost:3000](http://localhost:3000)
 
-- 📚 Vollständige Dokumentation: `README.md`
-- 🐛 Issues: GitHub Issues
-- 📧 Kontakt: [deine-email]
+Wenn etwas nicht funktioniert, prüfe zuerst:
 
----
-
-**Made with ❤️ for smarter healthcare decisions**
+```bash
+docker-compose logs -f backend
+curl http://localhost:8000/health/live
+```

@@ -70,6 +70,7 @@ export interface RecommendationCard {
   id: string;
   status: WorkflowStatus | string;
   status_label?: string;
+  evidence_class?: string;
   type: string;
   urgency_score: number;
   brand: string;

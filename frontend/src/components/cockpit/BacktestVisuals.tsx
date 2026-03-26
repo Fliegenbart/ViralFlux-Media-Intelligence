@@ -97,12 +97,12 @@ function formatSampleCoverage(value: number | null): string {
 
 function chartLegendItem(label: string, swatch: React.CSSProperties, detail: string): JSX.Element {
   return (
-    <div key={label} className="workspace-note-card" style={{ padding: 14 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <span aria-hidden="true" style={{ display: 'inline-block', width: 18, height: 10, borderRadius: 999, ...swatch }} />
-        <strong style={{ color: 'var(--text-primary)' }}>{label}</strong>
+    <div key={label} className="workspace-note-card backtest-note-card">
+      <div className="backtest-note-card__head">
+        <span aria-hidden="true" className="backtest-note-card__swatch" style={swatch} />
+        <strong className="backtest-note-card__title">{label}</strong>
       </div>
-      <div style={{ marginTop: 8, fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.55 }}>
+      <div className="backtest-note-card__detail">
         {detail}
       </div>
     </div>
@@ -119,14 +119,14 @@ function ChartSemanticsPanel({
   note?: string;
 }) {
   return (
-    <div className="workspace-note-list" aria-label={title} style={{ marginBottom: 16 }}>
-      <div className="workspace-note-card" style={{ padding: 16 }}>
-        <strong style={{ color: 'var(--text-primary)' }}>{title}</strong>
-        <div style={{ marginTop: 10, display: 'grid', gap: 10, gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
+    <div className="workspace-note-list backtest-block-gap" aria-label={title}>
+      <div className="workspace-note-card backtest-note-panel">
+        <strong className="backtest-note-card__title">{title}</strong>
+        <div className="backtest-semantics-grid">
           {items.map((item) => chartLegendItem(item.label, item.swatch, item.detail))}
         </div>
         {note ? (
-          <div style={{ marginTop: 12, fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+          <div className="backtest-note-panel__note">
             {note}
           </div>
         ) : null}
@@ -143,8 +143,8 @@ function ChartAxisHint({
   yLabel: string;
 }) {
   return (
-    <div className="soft-panel" style={{ padding: 14, marginTop: 14, fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-      <strong style={{ color: 'var(--text-primary)' }}>Achsen-Hinweis:</strong> X-Achse = {xLabel}. Y-Achse = {yLabel}.
+    <div className="soft-panel backtest-axis-hint">
+      <strong className="decision-inline-strong">Achsen-Hinweis:</strong> X-Achse = {xLabel}. Y-Achse = {yLabel}.
     </div>
   );
 }
@@ -165,21 +165,12 @@ function renderChartTooltip({
   if (!visibleItems.length) return null;
 
   return (
-    <div
-      style={{
-        borderRadius: 14,
-        background: 'rgba(15, 23, 42, 0.94)',
-        color: '#f8fafc',
-        padding: '12px 14px',
-        boxShadow: '0 18px 48px rgba(15, 23, 42, 0.24)',
-        maxWidth: 260,
-      }}
-    >
-      <div style={{ fontSize: 12, fontWeight: 800 }}>{title || 'Kurvenpunkt'}</div>
-      <div style={{ marginTop: 4, fontSize: 12, color: 'rgba(226, 232, 240, 0.9)' }}>{label}</div>
-        <div style={{ marginTop: 10, display: 'grid', gap: 6 }}>
+    <div className="backtest-tooltip">
+      <div className="backtest-tooltip__title">{title || 'Kurvenpunkt'}</div>
+      <div className="backtest-tooltip__label">{label}</div>
+        <div className="backtest-tooltip__list">
           {visibleItems.map((entry) => (
-            <div key={`${String(entry.name)}-${String(entry.value)}`} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 12 }}>
+            <div key={`${String(entry.name)}-${String(entry.value)}`} className="backtest-tooltip__row">
               <span style={{ color: entry.color || '#bfdbfe' }}>{String(entry.name ?? '-')}</span>
               <strong>{typeof entry.value === 'number' ? formatVirusLevel(entry.value, 1) : String(entry.value)}</strong>
             </div>
@@ -981,9 +972,9 @@ export const WaveSpreadPanel: React.FC<WaveSpreadPanelProps> = ({
 
   if (!rows.length || result?.error) {
     return (
-      <div className="card" style={{ padding: 20 }}>
-        <h2 style={{ margin: 0, fontSize: 20, color: 'var(--text-primary)' }}>{title}</h2>
-        <div className="soft-panel" style={{ padding: 20, marginTop: 14, color: 'var(--text-muted)' }}>
+      <div className="card backtest-card">
+        <h2 className="backtest-card__title">{title}</h2>
+        <div className="soft-panel backtest-empty-panel">
           Für diese historische Ausbreitung liegen gerade nicht genug regionale Daten vor.
         </div>
       </div>
@@ -991,79 +982,79 @@ export const WaveSpreadPanel: React.FC<WaveSpreadPanelProps> = ({
   }
 
   return (
-    <div className="card" style={{ padding: 20 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start', marginBottom: 16 }}>
+    <div className="card backtest-card">
+      <div className="backtest-card__header">
         <div>
-          <h2 style={{ margin: 0, fontSize: 20, color: 'var(--text-primary)' }}>{title}</h2>
-          <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--text-muted)' }}>
+          <h2 className="backtest-card__title">{title}</h2>
+          <p className="backtest-card__subtitle">
             {effectiveSubtitle}
           </p>
         </div>
-        <div style={{ textAlign: 'right', fontSize: 12, color: 'var(--text-muted)' }}>
+        <div className="backtest-card__meta">
           Saison {result?.season || '-'}
         </div>
       </div>
 
-      <div className="soft-panel" style={{ padding: 18, marginBottom: 16 }}>
-        <p style={{ margin: 0, fontSize: 18, lineHeight: 1.5, color: 'var(--text-primary)', fontWeight: 800 }}>
+      <div className="soft-panel backtest-story-panel">
+        <p className="backtest-story-panel__lead">
           {firstOnset?.bundesland
             ? `${firstOnset.bundesland} war in der letzten verfügbaren Saison der erste sichtbare Startpunkt. Von dort breitete sich die Welle innerhalb von ${spreadDays} Tagen bis zur letzten erfassten Region aus.`
             : 'Der erste regionale Startpunkt ist für diese Saison noch nicht eindeutig sichtbar.'}
         </p>
-        <p style={{ margin: '10px 0 0', fontSize: 14, lineHeight: 1.6, color: 'var(--text-secondary)' }}>
+        <p className="backtest-story-panel__body">
           {lastOnset?.bundesland
             ? `Erster Start am ${firstDateLabel}, letzter späterer Start in ${lastOnset.bundesland} am ${lastDateLabel}.`
             : `Erster sichtbarer Start am ${firstDateLabel}.`}
         </p>
-        <p style={{ margin: '8px 0 0', fontSize: 13, lineHeight: 1.6, color: 'var(--text-muted)' }}>
+        <p className="backtest-story-panel__note">
           Diese Karte zeigt die zuletzt verfügbare historische Saison und hilft dir, die typische Reihenfolge besser einzuordnen. Sie ersetzt nicht den aktuellen Forecast.
         </p>
       </div>
 
-      <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', marginBottom: 16 }}>
-        <div className="soft-panel" style={{ padding: 16 }}>
-          <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+      <div className="backtest-stat-grid">
+        <div className="soft-panel backtest-stat-card">
+          <div className="backtest-stat-card__label">
             Erster Start
           </div>
-          <div style={{ marginTop: 6, fontSize: 18, fontWeight: 800, color: '#2aa198' }}>
+          <div className="backtest-stat-card__value backtest-stat-card__value--teal">
             {firstOnset?.bundesland || '-'}
           </div>
-          <div style={{ marginTop: 4, fontSize: 12, color: 'var(--text-muted)' }}>
+          <div className="backtest-stat-card__meta">
             {firstDateLabel}
           </div>
         </div>
-        <div className="soft-panel" style={{ padding: 16 }}>
-          <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+        <div className="soft-panel backtest-stat-card">
+          <div className="backtest-stat-card__label">
             Letzter Start
           </div>
-          <div style={{ marginTop: 6, fontSize: 18, fontWeight: 800, color: '#ff9f0a' }}>
+          <div className="backtest-stat-card__value backtest-stat-card__value--amber">
             {lastOnset?.bundesland || '-'}
           </div>
-          <div style={{ marginTop: 4, fontSize: 12, color: 'var(--text-muted)' }}>
+          <div className="backtest-stat-card__meta">
             {lastDateLabel}
           </div>
         </div>
-        <div className="soft-panel" style={{ padding: 16 }}>
-          <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+        <div className="soft-panel backtest-stat-card">
+          <div className="backtest-stat-card__label">
             Ausbreitungsdauer
           </div>
-          <div style={{ marginTop: 6, fontSize: 18, fontWeight: 800, color: '#5e5ce6' }}>
+          <div className="backtest-stat-card__value backtest-stat-card__value--violet">
             {`${spreadDays} Tage`}
           </div>
         </div>
-        <div className="soft-panel" style={{ padding: 16 }}>
-          <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+        <div className="soft-panel backtest-stat-card">
+          <div className="backtest-stat-card__label">
             Betroffene Regionen
           </div>
-          <div style={{ marginTop: 6, fontSize: 18, fontWeight: 800, color: 'var(--text-primary)' }}>
+          <div className="backtest-stat-card__value">
             {`${affectedRegions}/${totalRegions}`}
           </div>
         </div>
       </div>
 
-      <div style={{ display: 'grid', gap: 16, gridTemplateColumns: 'minmax(0, 1.25fr) minmax(260px, 0.95fr)', marginBottom: 16 }}>
-        <div className="soft-panel" style={{ padding: 16 }}>
-          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>
+      <div className="backtest-map-grid">
+        <div className="soft-panel backtest-map-panel">
+          <div className="backtest-map-panel__hint">
             Deutschlandkarte der historischen Startreihenfolge. Je frueher ein Bundesland gestartet ist, desto staerker ist es eingefaerbt.
           </div>
           <HistoricalWaveMap
@@ -1073,14 +1064,14 @@ export const WaveSpreadPanel: React.FC<WaveSpreadPanelProps> = ({
           />
         </div>
 
-        <div className="soft-panel" style={{ padding: 18 }}>
-          <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+        <div className="soft-panel backtest-region-panel">
+          <div className="backtest-stat-card__label">
             Ausgewählte Region
           </div>
-          <div style={{ marginTop: 8, fontSize: 22, fontWeight: 800, color: 'var(--text-primary)' }}>
+          <div className="backtest-region-panel__title">
             {selectedBundesland || firstOnset?.bundesland || '-'}
           </div>
-          <p style={{ margin: '10px 0 16px', fontSize: 14, lineHeight: 1.6, color: 'var(--text-secondary)' }}>
+          <p className="backtest-region-panel__body">
             {selectedRegion?.wave_rank
               ? `${selectedBundesland} lag in dieser Saison auf Rang ${selectedRank} der sichtbaren Ausbreitung.`
               : `${selectedBundesland || 'Diese Region'} hat in dieser Saison keinen klaren Wellenstart ueber der gewaehlten Schwelle gezeigt.`}
@@ -1114,21 +1105,21 @@ export const WaveSpreadPanel: React.FC<WaveSpreadPanelProps> = ({
 
       <div className="workspace-note-list">
         {rows.map((row) => (
-          <div key={`${row.rank}-${row.bundesland}`} className="soft-panel" style={{ padding: 16 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'baseline' }}>
-              <div style={{ display: 'flex', gap: 10, alignItems: 'baseline' }}>
-                <span style={{ fontSize: 12, color: '#5e5ce6', fontWeight: 800, minWidth: 20 }}>
+          <div key={`${row.rank}-${row.bundesland}`} className="soft-panel backtest-rank-card">
+            <div className="backtest-rank-card__head">
+              <div className="backtest-rank-card__identity">
+                <span className="backtest-rank-card__rank">
                   #{row.rank}
                 </span>
-                <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>
+                <span className="backtest-rank-card__name">
                   {row.bundesland}
                 </span>
               </div>
-              <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+              <span className="backtest-rank-card__date">
                 {row.dateLabel}
               </span>
             </div>
-            <div style={{ marginTop: 10, height: 8, borderRadius: 999, background: 'rgba(148, 163, 184, 0.16)', overflow: 'hidden' }}>
+            <div className="backtest-rank-card__bar">
               <div
                 style={{
                   height: '100%',
@@ -1140,7 +1131,7 @@ export const WaveSpreadPanel: React.FC<WaveSpreadPanelProps> = ({
                 }}
               />
             </div>
-            <div style={{ marginTop: 8, fontSize: 12, color: 'var(--text-muted)' }}>
+            <div className="backtest-rank-card__note">
               {row.offsetDays === 0
                 ? 'Hier begann die Welle in dieser Saison zuerst.'
                 : `${row.offsetDays} Tage nach dem ersten Start sichtbar geworden.`}
@@ -1179,13 +1170,13 @@ export const ValidationSection: React.FC<ValidationSectionProps> = ({
   const missingRows = rows.filter((row) => !isNumber(row.actual) && !isNumber(row.model) && !isNumber(row.forecast)).length;
 
   return (
-    <div className="card" style={{ padding: 20, display: 'grid', gap: 14 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start' }}>
+    <div className="card backtest-card backtest-card--compact">
+      <div className="backtest-card__header">
         <div>
-          <h2 style={{ margin: 0, fontSize: 20, color: 'var(--text-primary)' }}>{title}</h2>
-          <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--text-muted)' }}>{subtitle}</p>
+          <h2 className="backtest-card__title">{title}</h2>
+          <p className="backtest-card__subtitle">{subtitle}</p>
         </div>
-        <div style={{ textAlign: 'right', fontSize: 12, color: 'var(--text-muted)' }}>
+        <div className="backtest-card__meta">
           {result?.created_at ? formatDateTime(result.created_at) : '-'}
         </div>
       </div>
@@ -1255,7 +1246,7 @@ export const ValidationSection: React.FC<ValidationSectionProps> = ({
       />
 
       {loading ? (
-        <div className="soft-panel" style={{ padding: 24, color: 'var(--text-muted)' }}>
+        <div className="soft-panel backtest-empty-panel backtest-empty-panel--lg">
           Validierungsdaten werden geladen...
         </div>
       ) : chartReady ? (
@@ -1293,7 +1284,7 @@ export const ValidationSection: React.FC<ValidationSectionProps> = ({
           </ResponsiveContainer>
         </div>
       ) : (
-        <div className="soft-panel" style={{ padding: 24, color: 'var(--text-muted)' }}>
+        <div className="soft-panel backtest-empty-panel backtest-empty-panel--lg">
           {emptyMessage}
         </div>
       )}
@@ -1304,9 +1295,9 @@ export const ValidationSection: React.FC<ValidationSectionProps> = ({
       />
 
       {(result?.proof_text || result?.llm_insight) && (
-        <div className="soft-panel" style={{ padding: 16 }}>
-          <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Einordnung</div>
-          <div style={{ marginTop: 6, fontSize: 14, lineHeight: 1.6, color: 'var(--text-secondary)' }}>
+        <div className="soft-panel backtest-proof-panel">
+          <div className="backtest-proof-panel__label">Einordnung</div>
+          <div className="backtest-proof-panel__body">
             {sanitizeEvidenceCopy(result?.proof_text || result?.llm_insight)}
           </div>
         </div>

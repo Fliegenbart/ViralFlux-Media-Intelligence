@@ -130,7 +130,7 @@ const RecommendationDrawer: React.FC<Props> = ({
   const normalizedStatus = String(detail?.lifecycle_state || detail?.status || '').toUpperCase();
   const currentWorkflowIndex = Math.max(workflowSteps.findIndex((step) => step.key === normalizedStatus), 0);
   const confidenceValue = signalConfidencePercent(detail?.signal_confidence_pct, detail?.confidence);
-  const detailEvidenceClass = (detail as RecommendationDetail & { evidence_class?: string }).evidence_class;
+  const detailEvidenceClass = detail?.evidence_class;
   const heroSummary = explainInPlainGerman(
     detail?.decision_brief?.summary_sentence
     || detail?.reason

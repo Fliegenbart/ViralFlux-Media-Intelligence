@@ -145,7 +145,7 @@ const DecisionView: React.FC<Props> = ({
   };
 
   if (loading && !decision) {
-    return <div className="card" style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>Lade Entscheidungssystem...</div>;
+    return <div className="card decision-loading-card">Lade Entscheidungssystem...</div>;
   }
 
   return (
@@ -153,7 +153,7 @@ const DecisionView: React.FC<Props> = ({
       <section className="context-filter-rail decision-context-rail">
         <div className="section-heading">
           <span className="section-kicker">ViralFlux for GELO</span>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+          <div className="decision-chip-rail">
             {VIRUS_OPTIONS.map((option) => (
               <button
                 key={option}
@@ -166,7 +166,7 @@ const DecisionView: React.FC<Props> = ({
             ))}
           </div>
         </div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+        <div className="decision-chip-rail">
           <span className="step-chip step-chip-done">Letzte epidemiologische Woche {formatDateTime(weeklyDecision?.decision_window?.start)}</span>
           <span className="step-chip">Generiert {formatDateTime(decision?.generated_at)}</span>
           <span className="step-chip">{UI_COPY.marketComparison}: {marketComparisonStateLabel(weeklyDecision?.proxy_state)}</span>
@@ -176,29 +176,19 @@ const DecisionView: React.FC<Props> = ({
         </div>
       </section>
 
-      <section className="card decision-header hero-card decision-hero-shell" style={{ padding: 32 }}>
+      <section className="card decision-header hero-card decision-hero-shell decision-card-lg">
         <div className="hero-grid">
           <div className="hero-main">
             <div className="hero-status-row">
-              <span
-                style={{
-                  padding: '8px 12px',
-                  borderRadius: 999,
-                  fontSize: 12,
-                  fontWeight: 800,
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.08em',
-                  ...gateTone,
-                }}
-              >
+              <span className="decision-status-pill" style={gateTone}>
                 {decisionStateLabel(weeklyDecision?.decision_state)}
               </span>
-              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+              <span className="decision-meta-text">
                 {topCard?.playbook_title || 'Wochenentscheidung'} · letzte epidemiologische Woche {weeklyDecision?.decision_window?.start ? new Date(weeklyDecision.decision_window.start).toLocaleDateString('de-DE') : '-'}
               </span>
               <span className="campaign-confidence-chip">{decisionModeLabel}</span>
             </div>
-            <div className="section-heading" style={{ gap: 12 }}>
+            <div className="section-heading decision-section-heading">
               <h1 className="hero-title">{heroLead}</h1>
               <p className="hero-context">{heroSentence}</p>
               <p className="hero-copy">
@@ -210,11 +200,11 @@ const DecisionView: React.FC<Props> = ({
             <div className="action-row">
               <button className="media-button" type="button" onClick={onOpenCampaigns}>Kampagnen prüfen</button>
               <button className="media-button secondary" type="button" onClick={onOpenRegions}>Regionen ansehen</button>
-              <Link className="media-button secondary" to="/bericht" style={{ textDecoration: 'none' }}>Bericht exportieren</Link>
+              <Link className="media-button secondary decision-button-link" to="/bericht">Bericht exportieren</Link>
             </div>
           </div>
 
-          <div className="soft-panel aside-summary" style={{ padding: 24 }}>
+          <div className="soft-panel aside-summary decision-card-md">
             <div>
               <div className="section-kicker">Wochenfokus</div>
               <div className="summary-headline">
@@ -225,17 +215,17 @@ const DecisionView: React.FC<Props> = ({
               </div>
             </div>
             <div className="decision-rail summary-grid">
-              <div style={{ minWidth: 120 }}>
-                <div className="section-kicker" style={{ marginBottom: 6 }}>Nationaler Shift</div>
+              <div className="decision-summary-block decision-summary-block--sm">
+                <div className="section-kicker decision-kicker-spaced">Nationaler Shift</div>
                 <div className="summary-metric">{shiftLabel}</div>
-                <div className="summary-note" style={{ marginTop: 6 }}>{shiftNote}</div>
+                <div className="summary-note decision-note-tight">{shiftNote}</div>
               </div>
-              <div style={{ minWidth: 140 }}>
-                <div className="section-kicker" style={{ marginBottom: 6 }}>Wochenbudget</div>
+              <div className="decision-summary-block decision-summary-block--md">
+                <div className="section-kicker decision-kicker-spaced">Wochenbudget</div>
                 <div className="summary-metric">
                   {formatCurrency(topCard?.campaign_preview?.budget?.weekly_budget_eur)}
                 </div>
-                <div className="summary-note" style={{ marginTop: 6 }}>
+                <div className="summary-note decision-note-tight">
                   {hiddenBacklog > 0 ? additionalSuggestionsText(hiddenBacklog) : 'Der Fokus liegt auf den nächsten prüfbaren Vorschlägen.'}
                 </div>
               </div>
@@ -253,7 +243,7 @@ const DecisionView: React.FC<Props> = ({
       />
 
       <section className="cockpit-grid decision-workspace-grid">
-        <div className="decision-primary-stack" style={{ display: 'grid', gap: 20 }}>
+        <div className="decision-primary-stack">
           <WaveOutlookPanel
             virus={virus}
             onVirusChange={onVirusChange}
@@ -269,9 +259,9 @@ const DecisionView: React.FC<Props> = ({
           />
         </div>
 
-        <div className="decision-secondary-stack" style={{ display: 'grid', gap: 20 }}>
+        <div className="decision-secondary-stack">
           <CollapsibleSection title="Datenstand & Quellen" subtitle="Eingangswerte und deren Aktualität">
-            <div className="review-chip-row" style={{ marginTop: 8 }}>
+            <div className="review-chip-row decision-stack-top-sm">
               <span className="step-chip">
                 Quellen aktuell: {sourceSummary ? `${sourceSummary.live_count}/${sourceSummary.total}` : '-'}
               </span>
@@ -282,7 +272,7 @@ const DecisionView: React.FC<Props> = ({
                 Kundendaten: {truthFreshnessLabel(decision?.truth_coverage?.truth_freshness_state || weeklyDecision?.truth_freshness_state)}
               </span>
             </div>
-            <div style={{ display: 'grid', gap: 10, marginTop: 14 }}>
+            <div className="decision-list-grid decision-stack-top-md">
               {sourceItems.length > 0 ? sourceItems.map((item) => (
                 <div key={item.source_key} className="evidence-row">
                   <span>{item.label}</span>
@@ -291,27 +281,27 @@ const DecisionView: React.FC<Props> = ({
                   </strong>
                 </div>
               )) : (
-                <div className="soft-panel" style={{ padding: 16, fontSize: 14, color: 'var(--text-secondary)' }}>
+                <div className="soft-panel decision-panel-line">
                   Der genaue Datenstand der abgefragten Werte wird noch geladen.
                 </div>
               )}
             </div>
           </CollapsibleSection>
 
-          <div className="card subsection-card" style={{ padding: 24 }}>
-            <div className="section-heading" style={{ gap: 6 }}>
+          <div className="card subsection-card decision-card-md">
+            <div className="section-heading decision-section-heading-tight">
               <h2 className="subsection-title">PEIX x GELO Freigabelogik</h2>
               <p className="subsection-copy">
                 Der Forecast zeigt, wo eine Welle wahrscheinlich entsteht. Das Business-Gate entscheidet separat, ob PEIX daraus schon eine budgetwirksame GELO-Freigabe ableiten darf.
               </p>
             </div>
-            <div className="review-chip-row" style={{ marginTop: 12 }}>
+            <div className="review-chip-row decision-stack-top-sm">
               <span className="step-chip">Operator: {(operatorContext?.operator || 'peix').toUpperCase()}</span>
               <span className="step-chip">Truth-Partner: {(operatorContext?.truth_partner || 'gelo').toUpperCase()}</span>
               <span className="step-chip">{decisionScope}</span>
               <span className="step-chip">{UI_COPY.noCityForecast}</span>
             </div>
-            <div className="metric-strip" style={{ marginTop: 16 }}>
+            <div className="metric-strip decision-stack-top-md">
               <div className="metric-box">
                 <span>Business-Gate</span>
                 <strong>{businessValidationStatus}</strong>
@@ -337,12 +327,12 @@ const DecisionView: React.FC<Props> = ({
                 <strong>{businessValidated ? 'ja' : 'nein'}</strong>
               </div>
             </div>
-            <div className="soft-panel" style={{ padding: 16, marginTop: 16 }}>
-              <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
+            <div className="soft-panel decision-panel-message">
+              <div className="decision-panel-message__title">
                 {businessGate?.message || 'Die kommerzielle Validierung befindet sich noch im Aufbau.'}
               </div>
               {businessGate?.guidance && (
-                <div style={{ marginTop: 8, fontSize: 13, color: 'var(--text-secondary)' }}>
+                <div className="decision-panel-message__body">
                   {businessGate.guidance}
                 </div>
               )}
@@ -376,28 +366,28 @@ const DecisionView: React.FC<Props> = ({
             </div>
           </div>
 
-          <div className="card subsection-card" style={{ padding: 24 }}>
-            <div className="section-heading" style={{ gap: 6 }}>
+          <div className="card subsection-card decision-card-md">
+            <div className="section-heading decision-section-heading-tight">
               <h2 className="subsection-title">Warum jetzt?</h2>
               <p className="subsection-copy">
                 Die Entscheidung wird aus sichtbaren Signalen abgeleitet, nicht aus einer Black Box.
               </p>
             </div>
-            <div className="soft-panel" style={{ padding: 16, marginTop: 14, fontSize: 13, color: 'var(--text-secondary)' }}>
-              <strong style={{ color: 'var(--text-primary)' }}>{eventProbabilityLabel}:</strong> {eventProbabilityNote} <strong style={{ color: 'var(--text-primary)' }}>{signalScoreLabel}:</strong> {signalScoreNote}
-              <div style={{ marginTop: 8 }}>{COCKPIT_SEMANTICS.stateLevelScope.helper} {COCKPIT_SEMANTICS.noCityForecast.helper}</div>
+            <div className="soft-panel decision-panel-note">
+              <strong className="decision-inline-strong">{eventProbabilityLabel}:</strong> {eventProbabilityNote} <strong className="decision-inline-strong">{signalScoreLabel}:</strong> {signalScoreNote}
+              <div className="decision-note-tight">{COCKPIT_SEMANTICS.stateLevelScope.helper} {COCKPIT_SEMANTICS.noCityForecast.helper}</div>
             </div>
-            <div style={{ display: 'grid', gap: 10, marginTop: 14 }}>
+            <div className="decision-list-grid decision-stack-top-md">
               {(weeklyDecision?.why_now || []).map((reason) => (
-                <div key={reason} className="soft-panel" style={{ padding: 16, fontSize: 14, color: 'var(--text-secondary)' }}>
+                <div key={reason} className="soft-panel decision-panel-line">
                   {reason}
                 </div>
               ))}
             </div>
           </div>
 
-          <div className="card subsection-card" style={{ padding: 24 }}>
-            <div className="section-heading" style={{ gap: 6 }}>
+          <div className="card subsection-card decision-card-md">
+            <div className="section-heading decision-section-heading-tight">
               <h2 className="subsection-title">Kampagnen, die jetzt zählen</h2>
               <p className="subsection-copy">
                 Direkter Sprung in die nächste sinnvolle Aktion statt in eine lange Liste.
@@ -410,42 +400,42 @@ const DecisionView: React.FC<Props> = ({
                 onClick={() => onOpenRecommendation(card.id)}
                 className="campaign-list-card"
               >
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start' }}>
+                <div className="decision-list-row">
                   <div>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
+                    <div className="decision-list-title">
                       {card.display_title || card.campaign_name || card.product}
                     </div>
-                    <div style={{ marginTop: 4, fontSize: 12, color: 'var(--text-muted)' }}>
+                    <div className="decision-list-meta">
                       {card.region_codes_display?.join(', ') || card.region || 'National'} · {card.recommended_product || card.product}
                     </div>
                   </div>
-                  <strong style={{ fontSize: 14, color: 'var(--accent-violet)' }}>
+                  <strong className="decision-list-value">
                     {isGo && card.is_publishable ? formatPercent(card.budget_shift_pct || 0) : workflowLabel(card.lifecycle_state || card.status)}
                   </strong>
                 </div>
               </button>
             )) : (
-              <div className="soft-panel" style={{ padding: 16, marginTop: 14, fontSize: 14, color: 'var(--text-secondary)' }}>
+              <div className="soft-panel decision-panel-line decision-stack-top-md">
                 Noch keine Kampagnenvorschläge im Fokus. Öffne die Kampagnenansicht, um weitere Vorschläge zu sichten oder neue zu erzeugen.
               </div>
             )}
           </div>
 
           <CollapsibleSection title="Modell & Signaltreiber" subtitle="Epidemiologische Kerndaten und Versorgungskontext">
-            <div className="review-chip-row" style={{ marginTop: 8 }}>
+            <div className="review-chip-row decision-stack-top-sm">
               {Object.entries(driverGroups).map(([key, group]) => (
                 <span key={key} className="step-chip">
                   {group.label} {formatPercent(group.contribution || 0)}
                 </span>
               ))}
             </div>
-            <div className="review-chip-row" style={{ marginTop: 10 }}>
+            <div className="review-chip-row decision-stack-top-sm">
               {(mathStack?.base_models || []).map((label) => (
                 <span key={label} className="step-chip">{label}</span>
               ))}
               {mathStack?.meta_learner && <span className="step-chip">{mathStack.meta_learner}</span>}
             </div>
-            <div className="review-chip-row" style={{ marginTop: 10 }}>
+            <div className="review-chip-row decision-stack-top-sm">
               {topDrivers.map((driver) => (
                 <span key={driver.label} className="step-chip">
                   {driver.label} {formatPercent(driver.strength_pct || 0)}
@@ -457,14 +447,14 @@ const DecisionView: React.FC<Props> = ({
       </section>
 
       {(weeklyDecision?.risk_flags || []).length > 0 && (
-        <section className="card subsection-card decision-risk-shell" style={{ padding: 24 }}>
-          <div className="section-heading" style={{ gap: 6 }}>
+        <section className="card subsection-card decision-risk-shell decision-card-md">
+          <div className="section-heading decision-section-heading-tight">
             <h2 className="subsection-title">Was gegen eine Freigabe spricht</h2>
             <p className="subsection-copy">
               Die Bewertung beruht auf Datenfrische, Marktvergleich, Kundendaten, Modellzustand und Freigabefähigkeit.
             </p>
           </div>
-          <div style={{ display: 'grid', gap: 10, marginTop: 14 }}>
+          <div className="decision-list-grid decision-stack-top-md">
             {(weeklyDecision?.risk_flags || []).map((flag) => (
               <div key={flag} className="evidence-row">
                 <span>{flag}</span>

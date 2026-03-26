@@ -16,7 +16,7 @@ export interface ThemePalette {
   rule: string;
 }
 
-const LIGHT: ThemePalette = {
+const THEME_PALETTE: ThemePalette = {
   bg: 'var(--bg-primary)',
   bgCard: 'var(--surface-panel-bg)',
   text: 'var(--text-primary)',
@@ -30,22 +30,7 @@ const LIGHT: ThemePalette = {
   rule: 'var(--chart-grid)',
 };
 
-const DARK: ThemePalette = {
-  bg: 'var(--bg-primary)',
-  bgCard: 'var(--surface-panel-bg)',
-  text: 'var(--text-primary)',
-  textSec: 'var(--text-secondary)',
-  textMuted: 'var(--text-muted)',
-  indigo: 'var(--color-primary)',
-  indigoLight: 'var(--badge-info-bg)',
-  indigoSoft: 'var(--surface-accent-bg)',
-  border: 'var(--surface-panel-border)',
-  borderLight: 'var(--border-light)',
-  rule: 'var(--chart-grid)',
-};
-
-export const createThemePalette = (theme: ThemeName): ThemePalette =>
-  (theme === 'dark' ? DARK : LIGHT);
+export const createThemePalette = (_theme: ThemeName): ThemePalette => THEME_PALETTE;
 
 const useReveal = () => {
   const ref = useRef<HTMLElement>(null);

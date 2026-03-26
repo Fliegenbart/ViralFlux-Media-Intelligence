@@ -147,6 +147,13 @@ rollback_to_previous_commit() {
 }
 
 run_release_smoke() {
+    local backend_env_dump
+    local smoke_admin_email
+    local smoke_admin_password
+    backend_env_dump=$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' virusradar_backend)
+    smoke_admin_email=$(printf '%s\n' "$backend_env_dump" | sed -n 's/^ADMIN_EMAIL=//p' | head -n1)
+    smoke_admin_password=$(printf '%s\n' "$backend_env_dump" | sed -n 's/^ADMIN_PASSWORD=//p' | head -n1)
+
     local smoke_args=(
         --base-url "$SMOKE_BASE_URL"
         --virus "$SMOKE_VIRUS"
@@ -160,6 +167,8 @@ run_release_smoke() {
     fi
 
     set +e
+    SMOKE_ADMIN_EMAIL="$smoke_admin_email" \
+    SMOKE_ADMIN_PASSWORD="$smoke_admin_password" \
     python3 backend/scripts/smoke_test_release.py "${smoke_args[@]}" > /tmp/viralflux-release-smoke.json
     local smoke_exit=$?
     set -e

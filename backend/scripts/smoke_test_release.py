@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import urllib.error
 import urllib.parse
@@ -36,9 +37,22 @@ def _parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def _request_json(base_url: str, path: str, timeout: float) -> tuple[int, dict[str, Any]]:
+def _request_json(
+    base_url: str,
+    path: str,
+    timeout: float,
+    *,
+    method: str = "GET",
+    headers: dict[str, str] | None = None,
+    data: bytes | None = None,
+) -> tuple[int, dict[str, Any]]:
     url = urllib.parse.urljoin(base_url.rstrip("/") + "/", path.lstrip("/"))
-    request = urllib.request.Request(url=url, method="GET")
+    request = urllib.request.Request(
+        url=url,
+        method=method,
+        headers=headers or {},
+        data=data,
+    )
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:
             return response.getcode(), json.loads(response.read().decode("utf-8"))
@@ -53,6 +67,48 @@ def _request_json(base_url: str, path: str, timeout: float) -> tuple[int, dict[s
 
 def _build_query(params: dict[str, Any]) -> str:
     return urllib.parse.urlencode(params, quote_via=urllib.parse.quote)
+
+
+def _authenticate_headers(base_url: str, timeout: float) -> tuple[dict[str, str], dict[str, Any] | None]:
+    admin_email = str(os.getenv("SMOKE_ADMIN_EMAIL") or os.getenv("ADMIN_EMAIL") or "").strip()
+    admin_password = str(os.getenv("SMOKE_ADMIN_PASSWORD") or os.getenv("ADMIN_PASSWORD") or "").strip()
+    if not admin_email or not admin_password:
+        return {}, None
+
+    payload = urllib.parse.urlencode(
+        {
+            "username": admin_email,
+            "password": admin_password,
+        }
+    ).encode("utf-8")
+    status_code, response = _request_json(
+        base_url,
+        "/api/auth/login",
+        timeout,
+        method="POST",
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+        data=payload,
+    )
+    token = str(response.get("access_token") or "").strip()
+    if status_code != 200 or not token:
+        return {}, {
+            "path": "/api/auth/login",
+            "status_code": status_code,
+            "passed": False,
+            "errors": [f"Admin login for release smoke failed with HTTP {status_code}."],
+            "summary": {
+                "token_type": response.get("token_type"),
+            },
+        }
+    return {"Authorization": f"Bearer {token}"}, {
+        "path": "/api/auth/login",
+        "status_code": status_code,
+        "passed": True,
+        "errors": [],
+        "summary": {
+            "token_type": response.get("token_type"),
+        },
+    }
 
 
 def _response_status(payload: dict[str, Any]) -> str:
@@ -287,16 +343,35 @@ def run_smoke(
     ready_status, ready_payload = _request_json(base_url, ready_path, timeout)
     checks["health_ready"] = _ready_check(ready_status, ready_payload, ready_path)
 
+    auth_headers, auth_check = _authenticate_headers(base_url, timeout)
+    if auth_check is not None:
+        checks["auth_login"] = auth_check
+
     forecast_path = f"/api/v1/forecast/regional/predict?{forecast_query}"
-    forecast_status, forecast_payload = _request_json(base_url, forecast_path, timeout)
+    forecast_status, forecast_payload = _request_json(
+        base_url,
+        forecast_path,
+        timeout,
+        headers=auth_headers,
+    )
     checks["regional_forecast"] = _forecast_check(forecast_status, forecast_payload, forecast_path)
 
     allocation_path = f"/api/v1/forecast/regional/media-allocation?{allocation_query}"
-    allocation_status, allocation_payload = _request_json(base_url, allocation_path, timeout)
+    allocation_status, allocation_payload = _request_json(
+        base_url,
+        allocation_path,
+        timeout,
+        headers=auth_headers,
+    )
     checks["regional_allocation"] = _allocation_check(allocation_status, allocation_payload, allocation_path)
 
     campaign_path = f"/api/v1/forecast/regional/campaign-recommendations?{campaign_query}"
-    campaign_status, campaign_payload = _request_json(base_url, campaign_path, timeout)
+    campaign_status, campaign_payload = _request_json(
+        base_url,
+        campaign_path,
+        timeout,
+        headers=auth_headers,
+    )
     checks["regional_campaign_recommendations"] = _campaign_check(
         campaign_status,
         campaign_payload,
@@ -305,14 +380,20 @@ def run_smoke(
 
     if check_cockpit:
         cockpit_path = f"/api/v1/media/cockpit?{cockpit_query}"
-        cockpit_status, cockpit_payload = _request_json(base_url, cockpit_path, timeout)
+        cockpit_status, cockpit_payload = _request_json(
+            base_url,
+            cockpit_path,
+            timeout,
+            headers=auth_headers,
+        )
         checks["media_cockpit_advisory"] = _cockpit_check(cockpit_status, cockpit_payload, cockpit_path)
 
     live_failed = not checks["health_live"]["passed"]
     ready_blocked = bool(checks["health_ready"]["blocked"])
     business_failures = [
         key
-        for key in ("regional_forecast", "regional_allocation", "regional_campaign_recommendations")
+        for key in ("auth_login", "regional_forecast", "regional_allocation", "regional_campaign_recommendations")
+        if key in checks
         if not checks[key]["passed"]
     ]
 

@@ -3,8 +3,7 @@ import React from 'react';
 import { render, screen, within } from '@testing-library/react';
 
 jest.mock('./lib/api', () => ({
-  isAuthenticated: () => true,
-  logout: jest.fn(),
+  ...jest.requireActual('./lib/api'),
   apiFetch: jest.fn(),
 }));
 
@@ -14,9 +13,33 @@ jest.mock('./pages/media/NowPage', () => ({
 }));
 
 import App from './App';
+import { AUTH_STORAGE_KEY, logout } from './lib/api';
+
+function persistAuth(storage: Storage = window.localStorage) {
+  storage.setItem(AUTH_STORAGE_KEY, JSON.stringify({
+    token: 'stored-token',
+    tokenExpiry: Date.now() + 60_000,
+  }));
+}
 
 describe('App routing', () => {
+  beforeEach(() => {
+    logout();
+    window.localStorage.clear();
+    window.sessionStorage.clear();
+    window.history.pushState({}, '', '/');
+  });
+
+  it('rehydrates auth state on app startup from browser storage', async () => {
+    persistAuth(window.localStorage);
+
+    render(<App />);
+
+    expect(await screen.findByText('Jetzt Mock')).toBeInTheDocument();
+  });
+
   it('redirects legacy dashboard routes to /jetzt and shows the four PEIX work areas', async () => {
+    persistAuth(window.localStorage);
     window.history.pushState({}, '', '/dashboard');
 
     render(<App />);

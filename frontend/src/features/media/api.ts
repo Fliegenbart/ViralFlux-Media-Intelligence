@@ -20,6 +20,7 @@ import {
   TruthImportResponse,
   WaveRadarResponse,
 } from '../../types/media';
+import { apiFetch } from '../../lib/api';
 
 export interface GenerateRecommendationsPayload {
   brand: string;
@@ -95,7 +96,7 @@ export async function fetchJson<T>(
   const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const response = await fetch(url, { ...init, signal: controller.signal });
+    const response = await apiFetch(url, { ...init, signal: controller.signal });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
       throw new Error(

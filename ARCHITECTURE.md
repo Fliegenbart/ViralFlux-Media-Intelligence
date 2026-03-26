@@ -47,7 +47,7 @@ ViralFlux Media Intelligence ist ein dreischichtiges System (Data, ML, Frontend)
 - **LLM:** vLLM (OpenAI-kompatibel, strikt lokal)
 - **Data Processing:** Pandas, NumPy
 - **API Clients:** pytrends, requests, aiohttp
-- **Task Scheduling:** APScheduler
+- **Task Scheduling:** Celery Beat + Celery Worker
 
 ### Frontend
 - **Framework:** React 18 + TypeScript
@@ -68,7 +68,9 @@ ViralFlux Media Intelligence ist ein dreischichtiges System (Data, ML, Frontend)
 ### 1. Data Ingestion (täglich 6:00 Uhr)
 
 ```python
-Scheduler (APScheduler)
+Celery Beat Schedule
+    ↓
+Celery Worker Task
     ↓
 AmelagIngestionService.run_full_import()
     ├─ Fetch TSV from GitHub
@@ -360,7 +362,9 @@ Internet
 
 ┌──────────────────────┐
 │  vLLM (lokal)        │
-│  localhost:8000/v1   │
+│  eigener Endpoint    │
+│  z. B. host.docker.  │
+│  internal:8001/v1    │
 └──────────────────────┘
 ```
 
@@ -378,9 +382,10 @@ Internet
    - Restart: always
 
 3. **frontend** (React)
-   - Build: `Dockerfile.frontend`
+   - Development Build: `Dockerfile.frontend.dev`
+   - Production Build: `Dockerfile.frontend`
    - Depends: backend
-   - Static Build für Produktion
+   - Node-Dev-Server für Entwicklung, statischer Build mit nginx für Produktion
 
 4. **nginx** (Reverse Proxy)
    - Profile: production

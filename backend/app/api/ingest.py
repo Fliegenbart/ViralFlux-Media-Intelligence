@@ -31,7 +31,7 @@ from app.services.data_ingest.pollen_service import PollenService
 from app.services.data_ingest.tasks import run_full_ingestion_pipeline
 
 logger = logging.getLogger(__name__)
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(get_current_admin)])
 settings = get_settings()
 
 class IngestRequest(BaseModel):
@@ -53,7 +53,6 @@ def _enqueue_full_ingestion(region_code: str) -> str:
 @router.post("/run-all", status_code=status.HTTP_202_ACCEPTED)
 async def run_full_import(
     request: IngestRequest = Body(default_factory=IngestRequest),
-    current_user: dict = Depends(get_current_admin),
 ):
     """Starte vollständigen Datenimport asynchron (Celery) und gib ein Ticket zurück."""
     task_id = _enqueue_full_ingestion(request.region_code)
@@ -67,7 +66,6 @@ async def run_full_import(
 @router.post("/trigger", status_code=status.HTTP_202_ACCEPTED)
 async def trigger_ingestion(
     request: IngestRequest = Body(default_factory=IngestRequest),
-    current_user: dict = Depends(get_current_admin),
 ):
     """Alias für /run-all (kompatibel mit Celery Ticketing)."""
     task_id = _enqueue_full_ingestion(request.region_code)

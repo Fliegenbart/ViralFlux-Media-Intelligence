@@ -1,30 +1,38 @@
-import os
 import logging
+from functools import lru_cache
+
 from openai import AsyncOpenAI, OpenAI
+
+from app.core.config import get_settings
 
 logger = logging.getLogger(__name__)
 
 # ENTERPRISE HARD RULES: Strictly local vLLM API - Daten verlassen den Server nie!
-VLLM_BASE_URL = os.getenv("VLLM_BASE_URL", "http://localhost:8000/v1")
-VLLM_API_KEY = os.getenv("VLLM_API_KEY", "local")
 MODEL_NAME = "Qwen/Qwen2.5-VL-7B-Instruct-AWQ"
 
-# Initialisiere den OpenAI Client als Wrapper für den lokalen vLLM
-client = AsyncOpenAI(
-    base_url=VLLM_BASE_URL,
-    api_key=VLLM_API_KEY,
-)
 
-sync_client = OpenAI(
-    base_url=VLLM_BASE_URL,
-    api_key=VLLM_API_KEY,
-)
+@lru_cache()
+def get_async_client() -> AsyncOpenAI:
+    settings = get_settings()
+    return AsyncOpenAI(
+        base_url=settings.REQUIRED_VLLM_BASE_URL,
+        api_key=settings.VLLM_API_KEY,
+    )
+
+
+@lru_cache()
+def get_sync_client() -> OpenAI:
+    settings = get_settings()
+    return OpenAI(
+        base_url=settings.REQUIRED_VLLM_BASE_URL,
+        api_key=settings.VLLM_API_KEY,
+    )
 
 
 async def generate_text(messages: list[dict], temperature: float = 0.2) -> str:
     """Generiert Text über den lokalen vLLM Endpunkt."""
     try:
-        response = await client.chat.completions.create(
+        response = await get_async_client().chat.completions.create(
             model=MODEL_NAME,
             messages=messages,
             temperature=temperature,
@@ -38,7 +46,7 @@ async def generate_text(messages: list[dict], temperature: float = 0.2) -> str:
 def generate_text_sync(messages: list[dict], temperature: float = 0.2) -> str:
     """Generiert Text synchron über den lokalen vLLM Endpunkt."""
     try:
-        response = sync_client.chat.completions.create(
+        response = get_sync_client().chat.completions.create(
             model=MODEL_NAME,
             messages=messages,
             temperature=temperature,
@@ -73,7 +81,7 @@ async def generate_vision(
         },
     ]
     try:
-        response = await client.chat.completions.create(
+        response = await get_async_client().chat.completions.create(
             model=MODEL_NAME,
             messages=messages,
             temperature=temperature,
@@ -108,7 +116,7 @@ def generate_vision_sync(
         },
     ]
     try:
-        response = sync_client.chat.completions.create(
+        response = get_sync_client().chat.completions.create(
             model=MODEL_NAME,
             messages=messages,
             temperature=temperature,

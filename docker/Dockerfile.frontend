@@ -1,4 +1,4 @@
-# Stage 1: Build React app
+# Stage 1: Build the production React bundle
 FROM node:25-alpine AS build
 
 WORKDIR /app

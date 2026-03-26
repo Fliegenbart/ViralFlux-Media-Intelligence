@@ -3,7 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate, useParams } from 'rea
 import LoginPage from './pages/LoginPage';
 import ErrorBoundary from './components/ErrorBoundary';
 import LoadingSkeleton from './components/LoadingSkeleton';
-import { isAuthenticated, logout } from './lib/api';
+import { addAuthChangeListener, logout, rehydrateAuth } from './lib/api';
 import './index.css';
 
 /* ── Lazy-loaded pages (code splitting) ────────────────────────── */
@@ -147,7 +147,9 @@ const PageFallback: React.FC = () => (
 
 /* ── App ────────────────────────────────────────────────────────── */
 const App: React.FC = () => {
-  const [authenticated, setAuthenticated] = useState(isAuthenticated);
+  const [authenticated, setAuthenticated] = useState(rehydrateAuth);
+
+  useEffect(() => addAuthChangeListener(setAuthenticated), []);
 
   const handleLogin = useCallback(() => setAuthenticated(true), []);
   const handleLogout = useCallback(() => {

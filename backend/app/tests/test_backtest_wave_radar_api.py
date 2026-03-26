@@ -1,5 +1,6 @@
 import unittest
-from datetime import datetime
+from datetime import datetime, timedelta
+from unittest.mock import patch
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -8,6 +9,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.api.backtest import router
+from app.core.security import create_access_token
 from app.db.session import get_db
 from app.models.database import Base, SurvstatWeeklyData
 
@@ -35,6 +37,8 @@ class WaveRadarApiTests(unittest.TestCase):
         app.include_router(router, prefix="/api/v1/backtest")
         self.app = app
         self.client = TestClient(app)
+        self.admin_headers = self._auth_headers(role="admin")
+        self.user_headers = self._auth_headers(role="user")
 
     def tearDown(self) -> None:
         self.client.close()
@@ -42,6 +46,13 @@ class WaveRadarApiTests(unittest.TestCase):
         self.db.close()
         Base.metadata.drop_all(bind=self.engine)
         self.engine.dispose()
+
+    def _auth_headers(self, role: str = "admin") -> dict[str, str]:
+        token = create_access_token(
+            data={"sub": f"{role}@example.com", "role": role},
+            expires_delta=timedelta(minutes=15),
+        )
+        return {"Authorization": f"Bearer {token}"}
 
     def _add_survstat_point(
         self,
@@ -67,6 +78,27 @@ class WaveRadarApiTests(unittest.TestCase):
             )
         )
 
+    def test_backtest_read_endpoint_requires_authentication(self) -> None:
+        response = self.client.get("/api/v1/backtest/wave-radar?disease=influenza")
+
+        self.assertEqual(response.status_code, 401)
+
+    def test_backtest_run_requires_admin_role(self) -> None:
+        response = self.client.post("/api/v1/backtest/market", headers=self.user_headers)
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.json()["detail"], "Not enough privileges")
+
+    def test_backtest_run_allows_admin_role(self) -> None:
+        with patch(
+            "app.services.ml.backtester.BacktestService.run_market_simulation",
+            return_value={"status": "ok"},
+        ):
+            response = self.client.post("/api/v1/backtest/market", headers=self.admin_headers)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["status"], "ok")
+
     def test_wave_radar_returns_ranked_onsets_and_spread_summary(self) -> None:
         baseline_points = [
             (datetime(2024, 2, 5), "Berlin", 10.0),
@@ -89,7 +121,10 @@ class WaveRadarApiTests(unittest.TestCase):
             self._add_survstat_point(week_start, bundesland, incidence)
         self.db.commit()
 
-        response = self.client.get("/api/v1/backtest/wave-radar?disease=influenza")
+        response = self.client.get(
+            "/api/v1/backtest/wave-radar?disease=influenza",
+            headers=self.admin_headers,
+        )
 
         self.assertEqual(response.status_code, 200)
         body = response.json()
@@ -118,10 +153,12 @@ class WaveRadarApiTests(unittest.TestCase):
         self.assertEqual(heatmap_row["Hamburg"], 0.0)
 
     def test_wave_radar_returns_available_aliases_when_no_regional_data_exist(self) -> None:
-        response = self.client.get("/api/v1/backtest/wave-radar?disease=influenza")
+        response = self.client.get(
+            "/api/v1/backtest/wave-radar?disease=influenza",
+            headers=self.admin_headers,
+        )
 
         self.assertEqual(response.status_code, 200)
         body = response.json()
         self.assertIn("Keine regionalen Daten", body["error"])
         self.assertIn("influenza", body["available"])
-

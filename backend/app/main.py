@@ -4,6 +4,7 @@ import logging
 import time
 import threading
 from datetime import datetime
+from typing import Any
 
 from fastapi import FastAPI, Depends, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
@@ -26,7 +27,13 @@ from app.core.metrics import (
     http_request_duration_seconds,
 )
 from app.db.schema_contracts import SchemaContractMismatchError
-from app.db.session import get_db, get_db_context, check_db_connection, init_db
+from app.db.session import (
+    get_db,
+    get_db_context,
+    check_db_connection,
+    init_db,
+    try_advisory_lock,
+)
 from app.services.ops.production_readiness_service import ProductionReadinessService
 from app.services.ops.run_metadata_service import OperationalRunRecorder
 
@@ -40,6 +47,9 @@ setup_logging(
     app_version=settings.APP_VERSION,
 )
 logger = logging.getLogger(__name__)
+
+_STARTUP_READINESS_LOCK = "startup:readiness:record"
+_STARTUP_BFARM_IMPORT_LOCK = "startup:bfarm:import"
 
 # FastAPI App
 app = FastAPI(
@@ -215,19 +225,7 @@ async def startup_event():
     readiness_snapshot = ProductionReadinessService().build_snapshot(deep_checks=False)
     app.state.startup_readiness = readiness_snapshot
     app.state.startup_completed_at = utc_now().isoformat()
-    app.state.startup_run_metadata = None
-
-    with get_db_context() as db:
-        app.state.startup_run_metadata = OperationalRunRecorder(db).record_event(
-            action="STARTUP_READINESS",
-            status=readiness_snapshot["status"],
-            summary="Startup readiness snapshot recorded.",
-            metadata={
-                "components": readiness_snapshot.get("components"),
-                "blockers": readiness_snapshot.get("blockers"),
-                "checked_at": readiness_snapshot.get("checked_at"),
-            },
-        )
+    app.state.startup_run_metadata = _record_startup_readiness_once(readiness_snapshot)
 
     log_event(
         logger,
@@ -238,27 +236,129 @@ async def startup_event():
     if settings.EFFECTIVE_STARTUP_STRICT_READINESS and readiness_snapshot.get("status") == "unhealthy":
         raise RuntimeError("Startup readiness is unhealthy. See /health/ready for blockers.")
 
-    # BfArM Lieferengpass-Daten im Hintergrund laden (non-blocking)
-    def _bfarm_startup():
-        try:
+    _launch_bfarm_startup_import_thread()
+
+
+def _startup_skip_metadata(*, action: str, summary: str, lock_name: str) -> dict[str, Any]:
+    return {
+        "run_id": None,
+        "action": action,
+        "status": "skipped",
+        "summary": summary,
+        "timestamp": utc_now().isoformat(),
+        "environment": settings.ENVIRONMENT,
+        "app_version": settings.APP_VERSION,
+        "metadata": {
+            "lock_name": lock_name,
+            "persisted": False,
+            "singleton": True,
+        },
+    }
+
+
+def _record_startup_readiness_once(readiness_snapshot: dict[str, Any]) -> dict[str, Any]:
+    try:
+        with try_advisory_lock(_STARTUP_READINESS_LOCK) as acquired:
+            if not acquired:
+                summary = (
+                    "Startup readiness snapshot skipped on this worker because "
+                    "another worker already owns the singleton startup section."
+                )
+                log_event(
+                    logger,
+                    "startup_singleton_section_skipped",
+                    section="startup_readiness_record",
+                    lock_name=_STARTUP_READINESS_LOCK,
+                )
+                return _startup_skip_metadata(
+                    action="STARTUP_READINESS",
+                    summary=summary,
+                    lock_name=_STARTUP_READINESS_LOCK,
+                )
+
+            log_event(
+                logger,
+                "startup_singleton_section_started",
+                section="startup_readiness_record",
+                lock_name=_STARTUP_READINESS_LOCK,
+            )
+            with get_db_context() as db:
+                run_metadata = OperationalRunRecorder(db).record_event(
+                    action="STARTUP_READINESS",
+                    status=readiness_snapshot["status"],
+                    summary="Startup readiness snapshot recorded.",
+                    metadata={
+                        "components": readiness_snapshot.get("components"),
+                        "blockers": readiness_snapshot.get("blockers"),
+                        "checked_at": readiness_snapshot.get("checked_at"),
+                    },
+                )
+            log_event(
+                logger,
+                "startup_singleton_section_completed",
+                section="startup_readiness_record",
+                lock_name=_STARTUP_READINESS_LOCK,
+                run_id=run_metadata.get("run_id"),
+                readiness_status=run_metadata.get("status"),
+            )
+            return run_metadata
+    except Exception as exc:
+        log_event(
+            logger,
+            "startup_singleton_section_failed",
+            level=logging.ERROR,
+            section="startup_readiness_record",
+            lock_name=_STARTUP_READINESS_LOCK,
+            error_message=str(exc),
+        )
+        raise
+
+
+def _run_bfarm_startup_import_once() -> None:
+    try:
+        with try_advisory_lock(_STARTUP_BFARM_IMPORT_LOCK) as acquired:
+            if not acquired:
+                log_event(
+                    logger,
+                    "startup_singleton_section_skipped",
+                    section="startup_bfarm_import",
+                    lock_name=_STARTUP_BFARM_IMPORT_LOCK,
+                )
+                return
+
+            log_event(
+                logger,
+                "startup_singleton_section_started",
+                section="startup_bfarm_import",
+                lock_name=_STARTUP_BFARM_IMPORT_LOCK,
+            )
             from app.services.data_ingest.bfarm_service import BfarmIngestionService
-            service = BfarmIngestionService()
-            result = service.run_full_import()
+
+            result = BfarmIngestionService().run_full_import()
             log_event(
                 logger,
                 "startup_bfarm_pull_completed",
+                singleton=True,
                 relevant_records=result.get("relevant_records", 0),
                 risk_score=result.get("risk_score", 0),
             )
-        except Exception as e:
-            log_event(
-                logger,
-                "startup_bfarm_pull_failed",
-                level=logging.WARNING,
-                error_message=str(e),
-            )
+    except Exception as exc:
+        log_event(
+            logger,
+            "startup_bfarm_pull_failed",
+            level=logging.WARNING,
+            singleton=True,
+            error_message=str(exc),
+        )
 
-    threading.Thread(target=_bfarm_startup, daemon=True).start()
+
+def _launch_bfarm_startup_import_thread() -> None:
+    thread = threading.Thread(
+        target=_run_bfarm_startup_import_once,
+        daemon=True,
+        name="startup-bfarm-import",
+    )
+    thread.start()
 
 
 @app.on_event("shutdown")

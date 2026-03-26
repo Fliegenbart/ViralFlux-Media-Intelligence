@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     
     @property
     def DATABASE_URL(self) -> str:
+        """Derived from POSTGRES_* settings; no separate DATABASE_URL override is supported."""
         return (
             f"postgresql://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}"
             f"@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
@@ -30,7 +31,8 @@ class Settings(BaseSettings):
     GANZIMMUN_API_KEY: str | None = None
     
     # vLLM (OpenAI-compatible, strictly local)
-    VLLM_BASE_URL: str = "http://localhost:8000/v1"
+    VLLM_BASE_URL: str | None = None
+    VLLM_API_KEY: str = "local"
     
     # Security
     SECRET_KEY: str
@@ -43,6 +45,18 @@ class Settings(BaseSettings):
     @property
     def CORS_ORIGINS(self) -> list[str]:
         return [origin.strip() for origin in self.ALLOWED_ORIGINS.split(",")]
+
+    @property
+    def REQUIRED_VLLM_BASE_URL(self) -> str:
+        value = (self.VLLM_BASE_URL or "").strip().rstrip("/")
+        if value:
+            return value
+        raise RuntimeError(
+            "VLLM_BASE_URL ist nicht gesetzt. Verwende einen separaten vLLM-Endpunkt "
+            "(z. B. http://host.docker.internal:8001/v1 im Docker-Backend oder "
+            "http://127.0.0.1:8001/v1 ausserhalb von Docker). "
+            "Der FastAPI-Backend-Port 8000 darf nicht als vLLM-Endpunkt verwendet werden."
+        )
     
     # Data Sources
     RKI_AMELAG_URL: str = "https://raw.githubusercontent.com/robert-koch-institut/Abwassersurveillance_AMELAG/main"

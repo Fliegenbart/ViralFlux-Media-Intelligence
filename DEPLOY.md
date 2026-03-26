@@ -1,6 +1,7 @@
 # Deployment Guide (Production)
 
-Diese Anleitung beschreibt den produktiven Deploy für `https://fluxengine.labpulse.ai/`.
+Diese Anleitung beschreibt einen produktionsnahen Deploy. Ersetze Platzhalter wie
+`<deploy-host>`, `<deploy-user>`, `<deploy-root>` und `<deploy-script>` passend für deine Umgebung.
 
 ## Zielzustand
 
@@ -15,15 +16,15 @@ Diese Anleitung beschreibt den produktiven Deploy für `https://fluxengine.labpu
 
 ## Server-Pfade
 
-- Clean Checkout: `/opt/viralflux-media-intelligence-clean`
-- Deploy-Script: `/usr/local/bin/viralflux-deploy`
-- Versioniertes Deploy-Script im Repo: `/opt/viralflux-media-intelligence-clean/scripts/deploy-live.sh`
-- Aktuell genutztes Live-Compose-Manifest: `/opt/viralflux-media-intelligence-clean/docker-compose.prod.yml`
+- Clean Checkout: `<deploy-root>`
+- Deploy-Script: `<deploy-script>`
+- Versioniertes Deploy-Script im Repo: `<deploy-root>/scripts/deploy-live.sh`
+- Aktuell genutztes Live-Compose-Manifest: `<deploy-root>/docker-compose.prod.yml`
 
 ## Standard-Deploy
 
 ```bash
-ssh root@5.9.106.75 '/usr/local/bin/viralflux-deploy'
+ssh <deploy-user>@<deploy-host> '<deploy-script>'
 ```
 
 Was der Command macht:
@@ -53,9 +54,9 @@ Der Live-Standard setzt im Backend explizit:
 ## Release-Smoke nach Deploy
 
 ```bash
-cd /Users/davidwegener/Desktop/viralflux/backend
+cd backend
 python scripts/smoke_test_release.py \
-  --base-url https://fluxengine.labpulse.ai \
+  --base-url https://<your-domain> \
   --virus "Influenza A" \
   --horizon 7 \
   --budget-eur 50000 \
@@ -87,9 +88,9 @@ Failure-Levels:
 Direkte Basischecks bleiben trotzdem sinnvoll:
 
 ```bash
-curl -I https://fluxengine.labpulse.ai
-curl https://fluxengine.labpulse.ai/health/live
-curl https://fluxengine.labpulse.ai/health/ready
+curl -I https://<your-domain>
+curl https://<your-domain>/health/live
+curl https://<your-domain>/health/ready
 ```
 
 ## Wichtige Hinweise
@@ -109,12 +110,12 @@ curl https://fluxengine.labpulse.ai/health/ready
 Wenn ein Commit zurückgerollt werden muss:
 
 ```bash
-ssh root@5.9.106.75
-cd /opt/viralflux-media-intelligence-clean
+ssh <deploy-user>@<deploy-host>
+cd <deploy-root>
 git fetch origin
 git checkout main
 git reset --hard <COMMIT_HASH>
-/usr/local/bin/viralflux-deploy
+<deploy-script>
 ```
 
 ## Troubleshooting

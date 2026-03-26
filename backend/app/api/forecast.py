@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from datetime import datetime
 import logging
 
+from app.api.deps import get_current_admin, get_current_user
 from app.db.schema_contracts import MLForecastSchemaMismatchError
 from app.db.session import get_db, get_db_context
 from app.services.ml.forecast_decision_service import ForecastDecisionService
@@ -34,7 +35,7 @@ def _run_forecasts():
     return results
 
 
-@router.post("/run")
+@router.post("/run", dependencies=[Depends(get_current_admin)])
 async def run_forecasts(background_tasks: BackgroundTasks):
     """Run ML stacking forecasts for all virus types (background)."""
     background_tasks.add_task(_run_forecasts)
@@ -45,7 +46,7 @@ async def run_forecasts(background_tasks: BackgroundTasks):
     }
 
 
-@router.post("/run-sync")
+@router.post("/run-sync", dependencies=[Depends(get_current_admin)])
 async def run_forecasts_sync(db: Session = Depends(get_db)):
     """Run ML stacking forecasts synchronously (may take 30-60s)."""
     service = ForecastService(db)
@@ -72,7 +73,7 @@ async def run_forecasts_sync(db: Session = Depends(get_db)):
     }
 
 
-@router.get("/latest/{virus_typ}")
+@router.get("/latest/{virus_typ}", dependencies=[Depends(get_current_user)])
 async def get_latest_forecast(
     virus_typ: str,
     db: Session = Depends(get_db)
@@ -108,7 +109,7 @@ async def get_latest_forecast(
     }
 
 
-@router.get("/status")
+@router.get("/status", dependencies=[Depends(get_current_user)])
 async def get_forecast_status(db: Session = Depends(get_db)):
     """Get the status of all forecasts."""
     from app.models.database import MLForecast
@@ -135,7 +136,7 @@ async def get_forecast_status(db: Session = Depends(get_db)):
     return {"forecasts": status, "timestamp": utc_now()}
 
 
-@router.get("/monitoring/{virus_typ}")
+@router.get("/monitoring/{virus_typ}", dependencies=[Depends(get_current_user)])
 async def get_forecast_monitoring(
     virus_typ: str,
     target_source: str = "RKI_ARE",
@@ -151,7 +152,7 @@ async def get_forecast_monitoring(
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
-@router.get("/monitoring")
+@router.get("/monitoring", dependencies=[Depends(get_current_user)])
 async def get_all_forecast_monitoring(
     target_source: str = "RKI_ARE",
     db: Session = Depends(get_db),
@@ -179,7 +180,7 @@ async def get_all_forecast_monitoring(
     }
 
 
-@router.get("/accuracy/{virus_typ}")
+@router.get("/accuracy/{virus_typ}", dependencies=[Depends(get_current_user)])
 async def get_forecast_accuracy(virus_typ: str, limit: int = 14, db: Session = Depends(get_db)):
     """Rolling forecast accuracy metrics for a virus type.
 
@@ -232,7 +233,7 @@ async def get_forecast_accuracy(virus_typ: str, limit: int = 14, db: Session = D
     }
 
 
-@router.get("/accuracy")
+@router.get("/accuracy", dependencies=[Depends(get_current_user)])
 async def get_all_forecast_accuracy(db: Session = Depends(get_db)):
     """Accuracy overview for all virus types (latest entry each)."""
     from app.models.database import ForecastAccuracyLog
@@ -266,7 +267,7 @@ async def get_all_forecast_accuracy(db: Session = Depends(get_db)):
     }
 
 
-@router.get("/regional/status")
+@router.get("/regional/status", dependencies=[Depends(get_current_user)])
 async def get_regional_feature_status(
     virus_typ: str = "Influenza A",
     db: Session = Depends(get_db),
@@ -304,7 +305,7 @@ async def get_regional_feature_status(
     }
 
 
-@router.get("/regional")
+@router.get("/regional", dependencies=[Depends(get_current_user)])
 async def get_regional_predictions_alias(
     virus_typ: str = "Influenza A",
     horizon_days: int = Depends(_validated_regional_horizon),
@@ -317,7 +318,7 @@ async def get_regional_predictions_alias(
     return service.predict_all_regions(virus_typ=virus_typ, horizon_days=horizon_days)
 
 
-@router.get("/regional/predict")
+@router.get("/regional/predict", dependencies=[Depends(get_current_user)])
 async def get_regional_predictions(
     virus_typ: str = "Influenza A",
     horizon_days: int = Depends(_validated_regional_horizon),
@@ -340,7 +341,7 @@ async def get_regional_predictions(
     return service.predict_all_regions(virus_typ=virus_typ, horizon_days=horizon_days)
 
 
-@router.get("/regional/decisions")
+@router.get("/regional/decisions", dependencies=[Depends(get_current_user)])
 async def get_regional_decisions(
     virus_typ: str = "Influenza A",
     horizon_days: int = Depends(_validated_regional_horizon),
@@ -358,7 +359,7 @@ async def get_regional_decisions(
     return service.predict_all_regions(virus_typ=virus_typ, horizon_days=horizon_days)
 
 
-@router.get("/regional/experimental-geo/predict")
+@router.get("/regional/experimental-geo/predict", dependencies=[Depends(get_current_user)])
 async def get_experimental_geo_predictions(
     virus_typ: str = "Influenza A",
     horizon_days: int = Depends(_validated_regional_horizon),
@@ -396,7 +397,7 @@ async def get_experimental_geo_predictions(
     )
 
 
-@router.get("/regional/media-activation")
+@router.get("/regional/media-activation", dependencies=[Depends(get_current_user)])
 async def get_media_activation(
     virus_typ: str = "Influenza A",
     weekly_budget_eur: float = 50000,
@@ -423,7 +424,7 @@ async def get_media_activation(
     )
 
 
-@router.get("/regional/media-allocation")
+@router.get("/regional/media-allocation", dependencies=[Depends(get_current_user)])
 async def get_media_allocation(
     virus_typ: str = "Influenza A",
     weekly_budget_eur: float = 50000,
@@ -445,7 +446,7 @@ async def get_media_allocation(
     )
 
 
-@router.get("/regional/campaign-recommendations")
+@router.get("/regional/campaign-recommendations", dependencies=[Depends(get_current_user)])
 async def get_campaign_recommendations(
     virus_typ: str = "Influenza A",
     weekly_budget_eur: float = 50000,
@@ -473,7 +474,7 @@ async def get_campaign_recommendations(
     )
 
 
-@router.get("/regional/benchmark")
+@router.get("/regional/benchmark", dependencies=[Depends(get_current_user)])
 async def get_regional_benchmark(
     reference_virus: str = "Influenza A",
     horizon_days: int = Depends(_validated_regional_horizon),
@@ -489,7 +490,7 @@ async def get_regional_benchmark(
     )
 
 
-@router.get("/regional/portfolio")
+@router.get("/regional/portfolio", dependencies=[Depends(get_current_user)])
 async def get_regional_portfolio(
     horizon_days: int = Depends(_validated_regional_horizon),
     top_n: int = 12,
@@ -507,7 +508,7 @@ async def get_regional_portfolio(
     )
 
 
-@router.get("/regional/validation")
+@router.get("/regional/validation", dependencies=[Depends(get_current_user)])
 async def get_regional_business_validation(
     virus_typ: str = "Influenza A",
     brand: str = "gelo",
@@ -532,7 +533,7 @@ async def get_regional_business_validation(
     )
 
 
-@router.get("/regional/backtest")
+@router.get("/regional/backtest", dependencies=[Depends(get_current_user)])
 async def run_regional_backtest(
     virus_typ: str = "Influenza A",
     horizon_days: int = Depends(_validated_regional_horizon),
@@ -557,7 +558,7 @@ async def run_regional_backtest(
     )
 
 
-@router.get("/regional/backtest/{bundesland}")
+@router.get("/regional/backtest/{bundesland}", dependencies=[Depends(get_current_user)])
 async def run_region_backtest(
     bundesland: str,
     virus_typ: str = "Influenza A",

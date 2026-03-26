@@ -124,7 +124,7 @@ POSTGRES_PASSWORD=changeme
 POSTGRES_DB=virusradar_db
 
 OPENWEATHER_API_KEY=
-VLLM_BASE_URL=http://host.docker.internal:8000/v1
+VLLM_BASE_URL=http://host.docker.internal:8001/v1
 
 SECRET_KEY=replace-me
 ADMIN_EMAIL=admin@example.com
@@ -136,6 +136,8 @@ DB_ALLOW_RUNTIME_SCHEMA_UPDATES=true
 STARTUP_STRICT_READINESS=false
 READINESS_REQUIRE_BROKER=false
 ```
+
+Wenn dein vLLM nicht im Host-Docker-Kontext läuft, setze stattdessen einen eigenen Endpunkt wie `http://127.0.0.1:8001/v1`. Wichtig ist nur: vLLM darf nicht denselben Port wie das FastAPI-Backend (`8000`) benutzen.
 
 ### 3. Lokale Infrastruktur starten
 
@@ -206,14 +208,14 @@ Es gibt zwei sehr wichtige Unterschiede zwischen lokal und live:
    Nicht für Live-Deploys verwenden.
 
 2. Live-Deploys laufen über den clean Server-Checkout und das zentrale Deploy-Script
-   Der aktuelle Standard ist in [DEPLOY.md](/Users/davidwegener/Desktop/viralflux/DEPLOY.md) dokumentiert.
+   Der aktuelle Standard ist in [DEPLOY.md](DEPLOY.md) dokumentiert.
 
 ## Live deployen
 
 Der produktive Standard-Deploy ist:
 
 ```bash
-ssh root@5.9.106.75 '/usr/local/bin/viralflux-deploy'
+ssh <deploy-user>@<deploy-host> '<deploy-script>'
 ```
 
 Wichtig:
@@ -223,7 +225,7 @@ Wichtig:
 
 Mehr Details stehen in:
 
-- [DEPLOY.md](/Users/davidwegener/Desktop/viralflux/DEPLOY.md)
+- [DEPLOY.md](DEPLOY.md)
 
 ## Readiness und Health
 
@@ -271,11 +273,11 @@ Je nach Pipeline und Betriebsmodus nutzt ViralFlux unter anderem:
 Die genaue fachliche und operative Dokumentation liegt in `docs/`.
 Besonders nützlich sind:
 
-- [docs/frontend_operational_dashboard.md](/Users/davidwegener/Desktop/viralflux/docs/frontend_operational_dashboard.md)
-- [docs/metric_semantics_contract.md](/Users/davidwegener/Desktop/viralflux/docs/metric_semantics_contract.md)
-- [docs/decision_engine_spec.md](/Users/davidwegener/Desktop/viralflux/docs/decision_engine_spec.md)
-- [docs/ops_runbook.md](/Users/davidwegener/Desktop/viralflux/docs/ops_runbook.md)
-- [docs/live_readiness_blockers_current.md](/Users/davidwegener/Desktop/viralflux/docs/live_readiness_blockers_current.md)
+- [docs/frontend_operational_dashboard.md](docs/frontend_operational_dashboard.md)
+- [docs/metric_semantics_contract.md](docs/metric_semantics_contract.md)
+- [docs/decision_engine_spec.md](docs/decision_engine_spec.md)
+- [docs/ops_runbook.md](docs/ops_runbook.md)
+- [docs/live_readiness_blockers_current.md](docs/live_readiness_blockers_current.md)
 
 ## Was zuletzt im Frontend modernisiert wurde
 

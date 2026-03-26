@@ -11,6 +11,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.api.media import router
+from app.core.security import create_access_token
 from app.db.schema_contracts import MLForecastSchemaMismatchError
 from app.db.session import get_db
 from app.models.database import Base, BrandProduct, MediaOutcomeImportBatch, MediaOutcomeRecord, OutcomeObservation, WastewaterAggregated
@@ -41,6 +42,8 @@ class MediaV2ApiTests(unittest.TestCase):
         app.dependency_overrides[get_db] = override_get_db
         app.include_router(router, prefix="/api/v1/media")
         self.client = TestClient(app)
+        self.admin_headers = self._auth_headers(role="admin")
+        self.user_headers = self._auth_headers(role="user")
 
     def tearDown(self) -> None:
         if self.previous_m2m_secret is None:
@@ -84,6 +87,33 @@ class MediaV2ApiTests(unittest.TestCase):
         ])
         self.db.commit()
 
+    def _auth_headers(self, role: str = "admin") -> dict[str, str]:
+        token = create_access_token(
+            data={"sub": f"{role}@example.com", "role": role},
+            expires_delta=timedelta(minutes=15),
+        )
+        return {"Authorization": f"Bearer {token}"}
+
+    def test_media_read_endpoint_requires_authentication(self) -> None:
+        response = self.client.get("/api/v1/media/cockpit?virus_typ=Influenza%20A")
+
+        self.assertEqual(response.status_code, 401)
+
+    def test_media_admin_action_forbids_non_admin_users(self) -> None:
+        response = self.client.post(
+            "/api/v1/media/outcomes/import",
+            json={
+                "brand": "gelo",
+                "source_label": "manual",
+                "validate_only": True,
+                "records": [],
+            },
+            headers=self.user_headers,
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.json()["detail"], "Not enough privileges")
+
     def test_outcome_import_validate_history_and_template_endpoints(self) -> None:
         validate_response = self.client.post(
             "/api/v1/media/outcomes/import",
@@ -98,6 +128,7 @@ class MediaV2ApiTests(unittest.TestCase):
                     "2026-02-09,GeloRevoice,Hamburg,9000,90\n"
                 ),
             },
+            headers=self.admin_headers,
         )
 
         self.assertEqual(validate_response.status_code, 200)
@@ -106,7 +137,10 @@ class MediaV2ApiTests(unittest.TestCase):
         self.assertEqual(validate_body["batch_summary"]["status"], "validated")
         batch_id = validate_body["batch_id"]
 
-        batch_detail_response = self.client.get(f"/api/v1/media/outcomes/import-batches/{batch_id}")
+        batch_detail_response = self.client.get(
+            f"/api/v1/media/outcomes/import-batches/{batch_id}",
+            headers=self.admin_headers,
+        )
         self.assertEqual(batch_detail_response.status_code, 200)
         self.assertEqual(batch_detail_response.json()["batch"]["batch_id"], batch_id)
 
@@ -125,28 +159,41 @@ class MediaV2ApiTests(unittest.TestCase):
                     }
                 ],
             },
+            headers=self.admin_headers,
         )
         self.assertEqual(import_response.status_code, 200)
         self.assertEqual(import_response.json()["imported"], 1)
 
-        coverage_response = self.client.get("/api/v1/media/outcomes/coverage?brand=gelo&virus_typ=Influenza%20A")
+        coverage_response = self.client.get(
+            "/api/v1/media/outcomes/coverage?brand=gelo&virus_typ=Influenza%20A",
+            headers=self.admin_headers,
+        )
         self.assertEqual(coverage_response.status_code, 200)
         coverage_body = coverage_response.json()
         self.assertEqual(coverage_body["coverage_weeks"], 1)
         self.assertIn("Mediabudget", coverage_body["required_fields_present"])
         self.assertEqual(coverage_body["truth_freshness_state"], "fresh")
 
-        truth_response = self.client.get("/api/v1/media/evidence/truth?brand=gelo&virus_typ=Influenza%20A")
+        truth_response = self.client.get(
+            "/api/v1/media/evidence/truth?brand=gelo&virus_typ=Influenza%20A",
+            headers=self.admin_headers,
+        )
         self.assertEqual(truth_response.status_code, 200)
         truth_body = truth_response.json()
         self.assertIn("recent_batches", truth_body)
         self.assertIn("coverage", truth_body)
 
-        list_response = self.client.get("/api/v1/media/outcomes/import-batches?brand=gelo")
+        list_response = self.client.get(
+            "/api/v1/media/outcomes/import-batches?brand=gelo",
+            headers=self.admin_headers,
+        )
         self.assertEqual(list_response.status_code, 200)
         self.assertGreaterEqual(len(list_response.json()["batches"]), 2)
 
-        template_response = self.client.get("/api/v1/media/outcomes/template")
+        template_response = self.client.get(
+            "/api/v1/media/outcomes/template",
+            headers=self.admin_headers,
+        )
         self.assertEqual(template_response.status_code, 200)
         self.assertIn("week_start,product,region_code,media_spend_eur", template_response.text)
 
@@ -195,7 +242,10 @@ class MediaV2ApiTests(unittest.TestCase):
         }
 
         with patch("app.api.media.MarketingOpportunityEngine.get_opportunities", return_value=[opportunity]):
-            response = self.client.get("/api/v1/media/recommendations/list?brand=gelo")
+            response = self.client.get(
+                "/api/v1/media/recommendations/list?brand=gelo",
+                headers=self.admin_headers,
+            )
 
         self.assertEqual(response.status_code, 200)
         body = response.json()
@@ -224,7 +274,8 @@ class MediaV2ApiTests(unittest.TestCase):
             return_value=expected_payload,
         ) as mocked_build:
             response = self.client.get(
-                "/api/v1/media/pilot-reporting?brand=gelo&lookback_weeks=12&region_code=SH&product=GeloProsed"
+                "/api/v1/media/pilot-reporting?brand=gelo&lookback_weeks=12&region_code=SH&product=GeloProsed",
+                headers=self.admin_headers,
             )
 
         self.assertEqual(response.status_code, 200)
@@ -237,7 +288,8 @@ class MediaV2ApiTests(unittest.TestCase):
             side_effect=ValueError("window_end must be on or after window_start"),
         ):
             response = self.client.get(
-                "/api/v1/media/pilot-reporting?window_start=2026-03-31T00:00:00&window_end=2026-03-01T00:00:00"
+                "/api/v1/media/pilot-reporting?window_start=2026-03-31T00:00:00&window_end=2026-03-01T00:00:00",
+                headers=self.admin_headers,
             )
 
         self.assertEqual(response.status_code, 422)
@@ -279,7 +331,8 @@ class MediaV2ApiTests(unittest.TestCase):
             return_value=expected_payload,
         ) as mocked_build:
             response = self.client.get(
-                "/api/v1/media/pilot-readout?brand=gelo&virus_typ=RSV%20A&horizon_days=7&weekly_budget_eur=120000"
+                "/api/v1/media/pilot-readout?brand=gelo&virus_typ=RSV%20A&horizon_days=7&weekly_budget_eur=120000",
+                headers=self.admin_headers,
             )
 
         self.assertEqual(response.status_code, 200)
@@ -305,6 +358,20 @@ class MediaV2ApiTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 401)
         self.assertEqual(response.json()["detail"], "Invalid API key")
+
+    def test_outcomes_ingest_keeps_m2m_flow_without_bearer_token(self) -> None:
+        response = self.client.post(
+            "/api/v1/media/outcomes/ingest",
+            json={
+                "brand": "gelo",
+                "source_system": "crm",
+                "external_batch_id": "batch-m2m-only",
+                "observations": [],
+            },
+            headers={"X-API-Key": "test-m2m-secret"},
+        )
+
+        self.assertEqual(response.status_code, 200)
 
     def test_outcomes_ingest_requires_api_key_header(self) -> None:
         response = self.client.post(
@@ -415,7 +482,10 @@ class MediaV2ApiTests(unittest.TestCase):
             "app.services.media.cockpit_service.MediaCockpitService.get_cockpit_payload",
             side_effect=MLForecastSchemaMismatchError("MLForecast schema mismatch detected."),
         ):
-            response = self.client.get("/api/v1/media/cockpit?virus_typ=Influenza%20A")
+            response = self.client.get(
+                "/api/v1/media/cockpit?virus_typ=Influenza%20A",
+                headers=self.admin_headers,
+            )
 
         self.assertEqual(response.status_code, 503)
         self.assertEqual(response.json()["detail"], "MLForecast schema mismatch detected.")

@@ -3,8 +3,8 @@
 Diese Datei ist die kurze, praktische Startanleitung.
 
 Wenn du mehr Kontext willst, lies zusätzlich:
-- [README.md](/Users/davidwegener/Desktop/viralflux/README.md)
-- [DEPLOY.md](/Users/davidwegener/Desktop/viralflux/DEPLOY.md)
+- [README.md](README.md)
+- [DEPLOY.md](DEPLOY.md)
 
 ## Wofür dieser Quickstart gedacht ist
 
@@ -54,7 +54,7 @@ POSTGRES_PASSWORD=changeme
 POSTGRES_DB=virusradar_db
 
 OPENWEATHER_API_KEY=
-VLLM_BASE_URL=http://host.docker.internal:8000/v1
+VLLM_BASE_URL=http://host.docker.internal:8001/v1
 
 SECRET_KEY=replace-me
 ADMIN_EMAIL=admin@example.com
@@ -66,6 +66,8 @@ DB_ALLOW_RUNTIME_SCHEMA_UPDATES=true
 STARTUP_STRICT_READINESS=false
 READINESS_REQUIRE_BROKER=false
 ```
+
+Wenn du das Backend nicht in Docker betreibst, nutze stattdessen z. B. `http://127.0.0.1:8001/v1`. Der Backend-Port `8000` ist nur fuer FastAPI und kein sicherer Default fuer vLLM.
 
 ## 3. Datenbank, Redis und Backend starten
 
@@ -247,13 +249,13 @@ Nicht der richtige Weg für Live-Deploys.
 Der produktive Standard-Deploy ist:
 
 ```bash
-ssh root@5.9.106.75 '/usr/local/bin/viralflux-deploy'
+ssh <deploy-user>@<deploy-host> '<deploy-script>'
 ```
 
 Aber nur nachdem dein Stand auf GitHub `main` liegt.
 
 Details:
-- [DEPLOY.md](/Users/davidwegener/Desktop/viralflux/DEPLOY.md)
+- [DEPLOY.md](DEPLOY.md)
 
 ## Wenn du nur 30 Sekunden hast
 

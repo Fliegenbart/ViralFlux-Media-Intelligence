@@ -293,13 +293,12 @@ describe('PilotPage', () => {
     expect(screen.getAllByText('Kommerzielle Validierung').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Szenario-Split').length).toBeGreaterThan(0);
     expect(screen.getByText(/Event-Wahrscheinlichkeit ist die Forecast-Chance/i)).toBeInTheDocument();
-    expect(screen.getAllByText('Die Vorhersage liegt mit 81 % über der Schwelle für eine Aktivierung.').length).toBeGreaterThan(0);
+    expect(screen.getByText('Die regionale virale Dynamik ist belastbar genug, um sie extern zu zeigen, zu priorisieren und zu besprechen.')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Was PEIX GELO heute schon zeigen kann' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Operative Empfehlungen' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Pilot-Evidenz und Freigabestatus' })).toBeInTheDocument();
     expect(screen.getByText('Aktueller Freigabestatus')).toBeInTheDocument();
     expect(screen.getByText(/Fokussiere Berlin jetzt für RSV A und nutze die Verteilung unten als forecast-basierten Szenario-Split/i)).toBeInTheDocument();
-    expect(screen.getAllByText('Die Vorhersage liegt mit 81 % über der Schwelle für eine Aktivierung.').length).toBeGreaterThan(0);
   });
 
   it('renders GO readiness directly from backend data without client-side reinterpretation', () => {

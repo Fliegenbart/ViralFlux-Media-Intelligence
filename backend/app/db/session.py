@@ -1,3 +1,4 @@
+import hashlib
 from sqlalchemy import create_engine, text, inspect
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.pool import QueuePool
@@ -119,6 +120,46 @@ def _set_last_init_summary(summary: dict[str, Any]) -> None:
 
 def get_last_init_summary() -> dict[str, Any]:
     return dict(_LAST_INIT_SUMMARY)
+
+
+def _advisory_lock_key(name: str) -> int:
+    digest = hashlib.blake2b(str(name).encode("utf-8"), digest_size=8).digest()
+    return int.from_bytes(digest, byteorder="big", signed=True)
+
+
+@contextmanager
+def try_advisory_lock(name: str) -> Generator[bool, None, None]:
+    """Acquire a PostgreSQL advisory lock without blocking forever."""
+    lock_name = str(name or "").strip()
+    if not lock_name:
+        raise ValueError("Advisory lock name must not be empty.")
+
+    lock_key = _advisory_lock_key(lock_name)
+    connection = engine.connect()
+    acquired = False
+    try:
+        acquired = bool(
+            connection.execute(
+                text("SELECT pg_try_advisory_lock(:lock_key)"),
+                {"lock_key": lock_key},
+            ).scalar()
+        )
+        yield acquired
+    finally:
+        if acquired:
+            try:
+                connection.execute(
+                    text("SELECT pg_advisory_unlock(:lock_key)"),
+                    {"lock_key": lock_key},
+                )
+            except Exception as exc:
+                logger.warning(
+                    "Advisory unlock failed for %s (%s): %s",
+                    lock_name,
+                    lock_key,
+                    exc,
+                )
+        connection.close()
 
 
 def _runtime_schema_gaps(existing_tables: set[str] | None = None) -> dict[str, list[str]]:

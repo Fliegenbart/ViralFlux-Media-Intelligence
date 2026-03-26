@@ -11,6 +11,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from app.api.deps import get_current_admin, get_current_user
 from app.api.m2m_auth import verify_m2m_api_key
 from app.core.celery_app import celery_app
 from app.core.config import get_settings
@@ -226,7 +227,7 @@ def _json_safe_response(value: Any) -> Any:
     return str(value)
 
 
-@router.get("/cockpit")
+@router.get("/cockpit", dependencies=[Depends(get_current_user)])
 async def get_media_cockpit(
     virus_typ: str = "Influenza A",
     target_source: str = "RKI_ARE",
@@ -240,7 +241,7 @@ async def get_media_cockpit(
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
-@router.get("/decision")
+@router.get("/decision", dependencies=[Depends(get_current_user)])
 async def get_media_decision(
     virus_typ: str = "Influenza A",
     target_source: str = "RKI_ARE",
@@ -257,7 +258,7 @@ async def get_media_decision(
     )
 
 
-@router.get("/regions")
+@router.get("/regions", dependencies=[Depends(get_current_user)])
 async def get_media_regions(
     virus_typ: str = "Influenza A",
     target_source: str = "RKI_ARE",
@@ -274,7 +275,7 @@ async def get_media_regions(
     )
 
 
-@router.get("/campaigns")
+@router.get("/campaigns", dependencies=[Depends(get_current_user)])
 async def get_media_campaigns(
     brand: str = "gelo",
     limit: int = Query(default=120, ge=1, le=500),
@@ -284,7 +285,7 @@ async def get_media_campaigns(
     return _json_safe_response(MediaV2Service(db).get_campaigns_payload(brand=brand, limit=limit))
 
 
-@router.get("/evidence")
+@router.get("/evidence", dependencies=[Depends(get_current_user)])
 async def get_media_evidence(
     virus_typ: str = "Influenza A",
     target_source: str = "RKI_ARE",
@@ -301,7 +302,7 @@ async def get_media_evidence(
     )
 
 
-@router.get("/signal-stack")
+@router.get("/signal-stack", dependencies=[Depends(get_current_user)])
 async def get_media_signal_stack(
     virus_typ: str = "Influenza A",
     db: Session = Depends(get_db),
@@ -310,7 +311,7 @@ async def get_media_signal_stack(
     return _json_safe_response(MediaV2Service(db).get_signal_stack(virus_typ=virus_typ))
 
 
-@router.get("/model-lineage")
+@router.get("/model-lineage", dependencies=[Depends(get_current_user)])
 async def get_media_model_lineage(
     virus_typ: str = "Influenza A",
     db: Session = Depends(get_db),
@@ -319,7 +320,7 @@ async def get_media_model_lineage(
     return _json_safe_response(MediaV2Service(db).get_model_lineage(virus_typ=virus_typ))
 
 
-@router.get("/outcomes/coverage")
+@router.get("/outcomes/coverage", dependencies=[Depends(get_current_user)])
 async def get_media_outcomes_coverage(
     brand: str = "gelo",
     virus_typ: str = "Influenza A",
@@ -329,7 +330,7 @@ async def get_media_outcomes_coverage(
     return _json_safe_response(MediaV2Service(db).get_truth_coverage(brand=brand, virus_typ=virus_typ))
 
 
-@router.get("/pilot-reporting")
+@router.get("/pilot-reporting", dependencies=[Depends(get_current_user)])
 async def get_media_pilot_reporting(
     brand: str = "gelo",
     lookback_weeks: int = Query(default=26, ge=1, le=104),
@@ -359,7 +360,7 @@ async def get_media_pilot_reporting(
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
-@router.get("/pilot-readout")
+@router.get("/pilot-readout", dependencies=[Depends(get_current_user)])
 async def get_media_pilot_readout(
     brand: str = "gelo",
     virus_typ: str = "RSV A",
@@ -382,7 +383,7 @@ async def get_media_pilot_readout(
     )
 
 
-@router.get("/evidence/truth")
+@router.get("/evidence/truth", dependencies=[Depends(get_current_user)])
 async def get_media_truth_evidence(
     brand: str = "gelo",
     virus_typ: str = "Influenza A",
@@ -392,7 +393,7 @@ async def get_media_truth_evidence(
     return _json_safe_response(MediaV2Service(db).get_truth_evidence(brand=brand, virus_typ=virus_typ))
 
 
-@router.get("/outcomes/import-batches")
+@router.get("/outcomes/import-batches", dependencies=[Depends(get_current_user)])
 async def list_media_outcome_import_batches(
     brand: str = "gelo",
     limit: int = Query(default=20, ge=1, le=100),
@@ -405,7 +406,7 @@ async def list_media_outcome_import_batches(
     })
 
 
-@router.get("/outcomes/import-batches/{batch_id}")
+@router.get("/outcomes/import-batches/{batch_id}", dependencies=[Depends(get_current_user)])
 async def get_media_outcome_import_batch_detail(
     batch_id: str,
     db: Session = Depends(get_db),
@@ -417,7 +418,7 @@ async def get_media_outcome_import_batch_detail(
     return _json_safe_response(detail)
 
 
-@router.get("/outcomes/template")
+@router.get("/outcomes/template", dependencies=[Depends(get_current_user)])
 async def download_media_outcome_template(
     db: Session = Depends(get_db),
 ):
@@ -430,7 +431,7 @@ async def download_media_outcome_template(
     )
 
 
-@router.post("/outcomes/import")
+@router.post("/outcomes/import", dependencies=[Depends(get_current_admin)])
 async def import_media_outcomes(
     payload: OutcomeImportRequest,
     db: Session = Depends(get_db),
@@ -470,7 +471,7 @@ async def ingest_media_outcomes(
     )
 
 
-@router.post("/recommendations/generate")
+@router.post("/recommendations/generate", dependencies=[Depends(get_current_admin)])
 @limiter.limit("10/minute")
 async def generate_media_recommendations(
     request: Request,
@@ -532,20 +533,20 @@ async def generate_media_recommendations(
     }
 
 
-@router.get("/playbooks/catalog")
+@router.get("/playbooks/catalog", dependencies=[Depends(get_current_user)])
 async def get_playbook_catalog(db: Session = Depends(get_db)):
     """Liefert aktiven Playbook-Katalog inkl. Triggerrahmen."""
     engine = MarketingOpportunityEngine(db)
     return engine.get_playbook_catalog()
 
 
-@router.get("/connectors/catalog")
+@router.get("/connectors/catalog", dependencies=[Depends(get_current_user)])
 async def get_media_connector_catalog():
     """Liefert verfügbare Media-Connectoren für spätere Tool-Syncs."""
     return ConnectorPayloadService.get_catalog()
 
 
-@router.post("/recommendations/open-region")
+@router.post("/recommendations/open-region", dependencies=[Depends(get_current_admin)])
 async def open_or_create_region_recommendation(
     payload: RecommendationOpenRegionRequest,
     db: Session = Depends(get_db),
@@ -626,7 +627,7 @@ async def open_or_create_region_recommendation(
     }
 
 
-@router.get("/recommendations/list")
+@router.get("/recommendations/list", dependencies=[Depends(get_current_user)])
 async def list_media_recommendations(
     status: Optional[str] = None,
     min_urgency: Optional[float] = None,
@@ -678,7 +679,7 @@ async def list_media_recommendations(
     }
 
 
-@router.get("/recommendations/refinement-task/{task_id}")
+@router.get("/recommendations/refinement-task/{task_id}", dependencies=[Depends(get_current_user)])
 async def get_media_recommendation_refinement_task_status(task_id: str):
     """Polling endpoint for async AI refinement task status."""
     task_result = celery_app.AsyncResult(task_id)
@@ -697,7 +698,7 @@ async def get_media_recommendation_refinement_task_status(task_id: str):
     return response
 
 
-@router.post("/recommendations/backfill-peix")
+@router.post("/recommendations/backfill-peix", dependencies=[Depends(get_current_admin)])
 async def backfill_recommendation_peix_context(
     payload: RecommendationBackfillPeixRequest,
     db: Session = Depends(get_db),
@@ -707,7 +708,7 @@ async def backfill_recommendation_peix_context(
     return engine.backfill_peix_context(force=payload.force, limit=payload.limit)
 
 
-@router.post("/recommendations/backfill-products")
+@router.post("/recommendations/backfill-products", dependencies=[Depends(get_current_admin)])
 async def backfill_recommendation_product_mapping(
     force: bool = Query(default=True),
     limit: int = Query(default=1000, ge=1, le=10000),
@@ -718,7 +719,7 @@ async def backfill_recommendation_product_mapping(
     return engine.backfill_product_mapping(force=force, limit=limit)
 
 
-@router.get("/recommendations/{opportunity_id}")
+@router.get("/recommendations/{opportunity_id}", dependencies=[Depends(get_current_user)])
 async def get_media_recommendation_detail(
     opportunity_id: str,
     db: Session = Depends(get_db),
@@ -742,7 +743,7 @@ async def get_media_recommendation_detail(
     }
 
 
-@router.patch("/recommendations/{opportunity_id}/campaign")
+@router.patch("/recommendations/{opportunity_id}/campaign", dependencies=[Depends(get_current_admin)])
 async def update_media_recommendation_campaign(
     opportunity_id: str,
     payload: CampaignUpdateRequest,
@@ -769,7 +770,7 @@ async def update_media_recommendation_campaign(
     }
 
 
-@router.patch("/recommendations/{opportunity_id}/status")
+@router.patch("/recommendations/{opportunity_id}/status", dependencies=[Depends(get_current_admin)])
 async def update_media_recommendation_status(
     opportunity_id: str,
     payload: RecommendationStatusUpdateRequest,
@@ -787,7 +788,7 @@ async def update_media_recommendation_status(
     }
 
 
-@router.post("/recommendations/{opportunity_id}/regenerate-ai")
+@router.post("/recommendations/{opportunity_id}/regenerate-ai", dependencies=[Depends(get_current_admin)])
 async def regenerate_media_recommendation_ai(
     opportunity_id: str,
     db: Session = Depends(get_db),
@@ -805,7 +806,7 @@ async def regenerate_media_recommendation_ai(
     }
 
 
-@router.post("/recommendations/{opportunity_id}/prepare-sync")
+@router.post("/recommendations/{opportunity_id}/prepare-sync", dependencies=[Depends(get_current_admin)])
 async def prepare_media_recommendation_sync(
     opportunity_id: str,
     payload: PrepareSyncRequest | None = None,
@@ -826,7 +827,7 @@ async def prepare_media_recommendation_sync(
         raise HTTPException(status_code=400, detail=str(exc))
 
 
-@router.post("/products/refresh")
+@router.post("/products/refresh", dependencies=[Depends(get_current_admin)])
 async def refresh_media_products(
     brand: str = Query(default="gelo"),
     source_url: str = Query(default=DEFAULT_GELO_SOURCE_URL),
@@ -845,7 +846,7 @@ async def refresh_media_products(
     return result
 
 
-@router.post("/products")
+@router.post("/products", dependencies=[Depends(get_current_admin)])
 async def create_media_product(
     payload: BrandProductCreateInput,
     db: Session = Depends(get_db),
@@ -879,7 +880,7 @@ async def create_media_product(
     return product
 
 
-@router.patch("/products/{product_id}")
+@router.patch("/products/{product_id}", dependencies=[Depends(get_current_admin)])
 async def update_media_product(
     product_id: int,
     payload: BrandProductUpdate,
@@ -921,7 +922,7 @@ async def update_media_product(
     return updated
 
 
-@router.delete("/products/{product_id}")
+@router.delete("/products/{product_id}", dependencies=[Depends(get_current_admin)])
 async def delete_media_product(
     product_id: int,
     db: Session = Depends(get_db),
@@ -934,7 +935,7 @@ async def delete_media_product(
     return deleted
 
 
-@router.post("/products/{product_id}/match/run")
+@router.post("/products/{product_id}/match/run", dependencies=[Depends(get_current_admin)])
 async def run_media_product_match(
     product_id: int,
     db: Session = Depends(get_db),
@@ -947,7 +948,7 @@ async def run_media_product_match(
     return result
 
 
-@router.post("/products/{product_id}/condition-links")
+@router.post("/products/{product_id}/condition-links", dependencies=[Depends(get_current_admin)])
 async def add_media_product_condition_link(
     product_id: int,
     payload: ProductConditionLinkRequest,
@@ -972,7 +973,7 @@ async def add_media_product_condition_link(
     return row
 
 
-@router.get("/products/match-preview")
+@router.get("/products/match-preview", dependencies=[Depends(get_current_user)])
 async def preview_media_product_match(
     brand: str = Query(default="gelo"),
     opportunity_id: str | None = Query(default=None),
@@ -992,7 +993,7 @@ async def preview_media_product_match(
     return data
 
 
-@router.get("/products")
+@router.get("/products", dependencies=[Depends(get_current_user)])
 async def list_media_products(
     brand: str = Query(default="gelo"),
     db: Session = Depends(get_db),
@@ -1007,7 +1008,7 @@ async def list_media_products(
     }
 
 
-@router.get("/product-mapping")
+@router.get("/product-mapping", dependencies=[Depends(get_current_user)])
 async def list_media_product_mapping(
     brand: str = Query(default="gelo"),
     include_inactive_products: bool = Query(default=False),
@@ -1028,7 +1029,7 @@ async def list_media_product_mapping(
     }
 
 
-@router.post("/seed-products")
+@router.post("/seed-products", dependencies=[Depends(get_current_admin)])
 async def seed_missing_products(
     brand: str = Query(default="gelo"),
     db: Session = Depends(get_db),
@@ -1041,7 +1042,7 @@ async def seed_missing_products(
 # ── Weekly Brief Endpoints ────────────────────────────────────────────────────
 
 
-@router.post("/weekly-brief/generate")
+@router.post("/weekly-brief/generate", dependencies=[Depends(get_current_admin)])
 async def generate_weekly_brief(
     virus_typ: str = Query(default="Influenza A"),
     db: Session = Depends(get_db),
@@ -1059,7 +1060,7 @@ async def generate_weekly_brief(
     }
 
 
-@router.get("/weekly-brief/latest")
+@router.get("/weekly-brief/latest", dependencies=[Depends(get_current_user)])
 async def get_latest_weekly_brief(
     brand: str = Query(default="gelo"),
     db: Session = Depends(get_db),
@@ -1085,7 +1086,7 @@ async def get_latest_weekly_brief(
     )
 
 
-@router.get("/weekly-brief/{calendar_week}")
+@router.get("/weekly-brief/{calendar_week}", dependencies=[Depends(get_current_user)])
 async def get_weekly_brief_by_week(
     calendar_week: str,
     brand: str = Query(default="gelo"),
@@ -1111,7 +1112,7 @@ async def get_weekly_brief_by_week(
     )
 
 
-@router.patch("/product-mapping/{mapping_id}")
+@router.patch("/product-mapping/{mapping_id}", dependencies=[Depends(get_current_admin)])
 async def update_media_product_mapping(
     mapping_id: int,
     payload: ProductMappingUpdateRequest,

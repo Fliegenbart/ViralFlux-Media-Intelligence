@@ -1,10 +1,12 @@
 import unittest
+from datetime import timedelta
 from unittest.mock import patch
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from app.api.forecast import router
+from app.core.security import create_access_token
 from app.db.schema_contracts import MLForecastSchemaMismatchError
 from app.db.session import get_db
 
@@ -23,10 +25,36 @@ class ForecastApiTests(unittest.TestCase):
         app.include_router(router, prefix="/api/v1/forecast")
         self.app = app
         self.client = TestClient(app)
+        self.admin_headers = self._auth_headers(role="admin")
+        self.user_headers = self._auth_headers(role="user")
 
     def tearDown(self) -> None:
         self.client.close()
         self.app.dependency_overrides.clear()
+
+    def _auth_headers(self, role: str = "admin") -> dict[str, str]:
+        token = create_access_token(
+            data={"sub": f"{role}@example.com", "role": role},
+            expires_delta=timedelta(minutes=15),
+        )
+        return {"Authorization": f"Bearer {token}"}
+
+    def test_forecast_read_endpoint_requires_authentication(self) -> None:
+        response = self.client.get("/api/v1/forecast/regional/predict?virus_typ=Influenza%20A&horizon_days=7")
+
+        self.assertEqual(response.status_code, 401)
+
+    def test_forecast_run_requires_admin_role(self) -> None:
+        response = self.client.post("/api/v1/forecast/run", headers=self.user_headers)
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.json()["detail"], "Not enough privileges")
+
+    def test_forecast_run_allows_admin_role(self) -> None:
+        response = self.client.post("/api/v1/forecast/run", headers=self.admin_headers)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["status"], "forecast_started")
 
     def test_regional_predict_response_contains_decision_payload(self) -> None:
         payload = {
@@ -80,7 +108,8 @@ class ForecastApiTests(unittest.TestCase):
             return_value=payload,
         ):
             response = self.client.get(
-                "/api/v1/forecast/regional/predict?virus_typ=Influenza%20A&horizon_days=7"
+                "/api/v1/forecast/regional/predict?virus_typ=Influenza%20A&horizon_days=7",
+                headers=self.admin_headers,
             )
 
         self.assertEqual(response.status_code, 200)
@@ -139,7 +168,8 @@ class ForecastApiTests(unittest.TestCase):
             return_value=payload,
         ):
             response = self.client.get(
-                "/api/v1/forecast/regional/experimental-geo/predict?virus_typ=Influenza%20A&horizon_days=7"
+                "/api/v1/forecast/regional/experimental-geo/predict?virus_typ=Influenza%20A&horizon_days=7",
+                headers=self.admin_headers,
             )
 
         self.assertEqual(response.status_code, 200)
@@ -220,7 +250,8 @@ class ForecastApiTests(unittest.TestCase):
             return_value=payload,
         ):
             response = self.client.get(
-                "/api/v1/forecast/regional/media-allocation?virus_typ=Influenza%20A&weekly_budget_eur=50000&horizon_days=7"
+                "/api/v1/forecast/regional/media-allocation?virus_typ=Influenza%20A&weekly_budget_eur=50000&horizon_days=7",
+                headers=self.admin_headers,
             )
 
         self.assertEqual(response.status_code, 200)
@@ -287,7 +318,8 @@ class ForecastApiTests(unittest.TestCase):
             return_value=payload,
         ):
             response = self.client.get(
-                "/api/v1/forecast/regional/media-activation?virus_typ=Influenza%20A&weekly_budget_eur=50000&horizon_days=7"
+                "/api/v1/forecast/regional/media-activation?virus_typ=Influenza%20A&weekly_budget_eur=50000&horizon_days=7",
+                headers=self.admin_headers,
             )
 
         self.assertEqual(response.status_code, 200)
@@ -339,7 +371,8 @@ class ForecastApiTests(unittest.TestCase):
             return_value=payload,
         ):
             response = self.client.get(
-                "/api/v1/forecast/regional/media-allocation?virus_typ=Influenza%20A&weekly_budget_eur=50000&horizon_days=7"
+                "/api/v1/forecast/regional/media-allocation?virus_typ=Influenza%20A&weekly_budget_eur=50000&horizon_days=7",
+                headers=self.admin_headers,
             )
 
         self.assertEqual(response.status_code, 200)
@@ -411,7 +444,8 @@ class ForecastApiTests(unittest.TestCase):
             return_value=payload,
         ):
             response = self.client.get(
-                "/api/v1/forecast/regional/campaign-recommendations?virus_typ=Influenza%20A&weekly_budget_eur=50000&horizon_days=7"
+                "/api/v1/forecast/regional/campaign-recommendations?virus_typ=Influenza%20A&weekly_budget_eur=50000&horizon_days=7",
+                headers=self.admin_headers,
             )
 
         self.assertEqual(response.status_code, 200)
@@ -426,7 +460,8 @@ class ForecastApiTests(unittest.TestCase):
 
     def test_regional_predict_rejects_invalid_horizon(self) -> None:
         response = self.client.get(
-            "/api/v1/forecast/regional/predict?virus_typ=Influenza%20A&horizon_days=4"
+            "/api/v1/forecast/regional/predict?virus_typ=Influenza%20A&horizon_days=4",
+            headers=self.admin_headers,
         )
 
         self.assertEqual(response.status_code, 422)
@@ -436,7 +471,10 @@ class ForecastApiTests(unittest.TestCase):
             "app.services.ml.forecast_decision_service.ForecastDecisionService.build_monitoring_snapshot",
             side_effect=MLForecastSchemaMismatchError("MLForecast schema mismatch detected."),
         ):
-            response = self.client.get("/api/v1/forecast/monitoring/Influenza%20A")
+            response = self.client.get(
+                "/api/v1/forecast/monitoring/Influenza%20A",
+                headers=self.admin_headers,
+            )
 
         self.assertEqual(response.status_code, 503)
         self.assertEqual(response.json()["detail"], "MLForecast schema mismatch detected.")

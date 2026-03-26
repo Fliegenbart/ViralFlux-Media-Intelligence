@@ -13,6 +13,7 @@ from fastapi import APIRouter, Depends, File, Query, UploadFile
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
+from app.api.deps import get_current_admin, get_current_user
 from app.db.session import get_db
 from app.models.database import SurvstatWeeklyData, WastewaterAggregated
 from app.services.ml.backtester import BacktestService
@@ -46,7 +47,7 @@ def _read_upload(content: bytes, filename: str) -> pd.DataFrame:
     return df
 
 
-@router.post("/market")
+@router.post("/market", dependencies=[Depends(get_current_admin)])
 async def run_market_backtest(
     target_source: str = Query(default="RKI_ARE"),
     virus_typ: str = Query(default="Influenza A"),
@@ -80,7 +81,7 @@ async def run_market_backtest(
     )
 
 
-@router.get("/top-regions")
+@router.get("/top-regions", dependencies=[Depends(get_current_user)])
 async def top_regions(
     target_source: str = Query(default="MYCOPLASMA"),
     n: int = Query(default=5, ge=1, le=16),
@@ -152,7 +153,7 @@ async def top_regions(
         }
 
 
-@router.post("/customer")
+@router.post("/customer", dependencies=[Depends(get_current_admin)])
 async def run_customer_backtest(
     file: UploadFile = File(...),
     virus_typ: str = Query(default="Influenza A"),
@@ -185,7 +186,7 @@ async def run_customer_backtest(
     )
 
 
-@router.post("/business-pitch")
+@router.post("/business-pitch", dependencies=[Depends(get_current_admin)])
 async def run_business_pitch_report(
     disease: str = Query(
         default="GELO_ATEMWEG",
@@ -218,7 +219,7 @@ async def run_business_pitch_report(
     )
 
 
-@router.get("/runs")
+@router.get("/runs", dependencies=[Depends(get_current_user)])
 async def list_backtest_runs(
     mode: str | None = Query(default=None, description="MARKET_CHECK oder CUSTOMER_CHECK"),
     limit: int = Query(default=30, ge=1, le=200),
@@ -230,7 +231,7 @@ async def list_backtest_runs(
     return {"total": len(runs), "runs": runs}
 
 
-@router.get("/runs/{run_id}")
+@router.get("/runs/{run_id}", dependencies=[Depends(get_current_user)])
 async def get_backtest_run_detail(
     run_id: str,
     db: Session = Depends(get_db),
@@ -262,7 +263,7 @@ _VIRUS_TO_WW = {
 }
 
 
-@router.get("/peix-validation")
+@router.get("/peix-validation", dependencies=[Depends(get_current_user)])
 async def peix_validation(
     virus_typ: str = Query(default="Influenza A"),
     weeks_back: int = Query(default=104, ge=26, le=260),
@@ -462,7 +463,7 @@ BUNDESLAENDER = [
 ]
 
 
-@router.get("/wave-radar")
+@router.get("/wave-radar", dependencies=[Depends(get_current_user)])
 async def wave_radar(
     disease: str = Query(default="influenza", description="Krankheit (influenza, mycoplasma, keuchhusten, ...)"),
     season: str = Query(default="", description="Saison im Format YYYY/YYYY (z.B. 2024/2025). Leer = letzte verfügbare."),
@@ -756,7 +757,7 @@ def _compute_lead_lag(
     return -best_lag  # Negate: if nat needs to shift right to match BL, BL leads
 
 
-@router.get("/outbreak-alerts")
+@router.get("/outbreak-alerts", dependencies=[Depends(get_current_user)])
 async def outbreak_alerts(
     db: Session = Depends(get_db),
 ):

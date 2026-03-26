@@ -14,6 +14,7 @@ jest.mock('./api', () => ({
     getRegionalForecast: jest.fn(),
     getRegionalAllocation: jest.fn(),
     getRegionalCampaignRecommendations: jest.fn(),
+    getWaveRadar: jest.fn(),
   },
 }));
 
@@ -61,6 +62,7 @@ describe('useNowPageData', () => {
     const allocationDeferred = createDeferred<any>();
     const recommendationDeferred = createDeferred<any>();
     const regionalBacktestDeferred = createDeferred<any>();
+    const waveRadarDeferred = createDeferred<any>();
 
     mockedMediaApi.getDecision.mockImplementation(() => {
       callOrder.push('decision');
@@ -89,6 +91,10 @@ describe('useNowPageData', () => {
     mockedMediaApi.getRegionalCampaignRecommendations.mockImplementation(() => {
       callOrder.push('recommendation');
       return recommendationDeferred.promise;
+    });
+    mockedMediaApi.getWaveRadar.mockImplementation(() => {
+      callOrder.push('waveRadar');
+      return waveRadarDeferred.promise;
     });
 
     render(<Harness />);
@@ -147,7 +153,7 @@ describe('useNowPageData', () => {
     });
 
     await waitFor(() => {
-      expect(callOrder).toEqual(['decision', 'evidence', 'backtest', 'forecast']);
+      expect(callOrder).toEqual(['decision', 'evidence', 'backtest', 'forecast', 'allocation', 'recommendation', 'waveRadar']);
     });
 
     await act(async () => {
@@ -156,28 +162,18 @@ describe('useNowPageData', () => {
         predictions: [],
       });
       await Promise.resolve();
-    });
-
-    await waitFor(() => {
-      expect(callOrder).toEqual(['decision', 'evidence', 'backtest', 'forecast', 'allocation']);
-    });
-
-    await act(async () => {
       allocationDeferred.resolve({
         generated_at: '2026-03-21T09:00:00Z',
         recommendations: [],
       });
       await Promise.resolve();
-    });
-
-    await waitFor(() => {
-      expect(callOrder).toEqual(['decision', 'evidence', 'backtest', 'forecast', 'allocation', 'recommendation']);
-    });
-
-    await act(async () => {
       recommendationDeferred.resolve({
         generated_at: '2026-03-21T09:00:00Z',
         recommendations: [],
+      });
+      waveRadarDeferred.resolve({
+        generated_at: '2026-03-21T09:00:00Z',
+        waves: [],
       });
       await Promise.resolve();
     });
@@ -187,7 +183,7 @@ describe('useNowPageData', () => {
     });
 
     await waitFor(() => {
-      expect(callOrder).toEqual(['decision', 'evidence', 'backtest', 'forecast', 'allocation', 'recommendation', 'regionalBacktest']);
+      expect(callOrder).toEqual(['decision', 'evidence', 'backtest', 'forecast', 'allocation', 'recommendation', 'waveRadar', 'regionalBacktest']);
     });
 
     await act(async () => {

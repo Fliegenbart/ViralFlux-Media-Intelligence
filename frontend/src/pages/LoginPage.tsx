@@ -18,7 +18,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
     setLoading(true);
 
     try {
-      await login(email, password);
+      await login(email, password, rememberMe);
       onLogin();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Login fehlgeschlagen');

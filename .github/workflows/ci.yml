@@ -92,7 +92,9 @@ jobs:
         run: pip install -r backend/requirements.txt pip-audit
 
       - name: Dependency audit
-        run: pip-audit -r backend/requirements.txt --ignore-vuln PYSEC-2024-* || true
+        run: |
+          # Fail on known vulnerable backend dependencies instead of masking the result.
+          pip-audit -r backend/requirements.txt
 
       - name: Check for hardcoded secrets
         run: |
@@ -123,7 +125,7 @@ jobs:
         run: npm ci --no-audit
 
       - name: TypeScript type check
-        run: npx tsc --noEmit || true
+        run: npx tsc --noEmit
 
       - name: Build production bundle
         run: npm run build

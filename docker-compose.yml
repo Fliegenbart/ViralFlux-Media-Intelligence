@@ -48,7 +48,7 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-changeme}
       - POSTGRES_DB=${POSTGRES_DB:-virusradar_db}
       - OPENWEATHER_API_KEY=${OPENWEATHER_API_KEY}
-      - VLLM_BASE_URL=${VLLM_BASE_URL:-http://localhost:8000/v1}
+      - VLLM_BASE_URL=${VLLM_BASE_URL:-http://host.docker.internal:8001/v1}
       - CELERY_BROKER_URL=redis://viralflux_redis:6379/0
       - CELERY_RESULT_BACKEND=redis://viralflux_redis:6379/0
       - SECRET_KEY=${SECRET_KEY}
@@ -70,6 +70,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/live', timeout=5)"]
@@ -105,7 +107,9 @@ services:
       - DB_ALLOW_RUNTIME_SCHEMA_UPDATES=${DB_ALLOW_RUNTIME_SCHEMA_UPDATES:-true}
       - CELERY_BROKER_URL=redis://viralflux_redis:6379/0
       - CELERY_RESULT_BACKEND=redis://viralflux_redis:6379/0
-      - VLLM_BASE_URL=${VLLM_BASE_URL:-http://host.docker.internal:8000/v1} # Greift auf lokalen vLLM zu
+      - VLLM_BASE_URL=${VLLM_BASE_URL:-http://host.docker.internal:8001/v1} # Greift auf lokalen vLLM zu
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       redis:
         condition: service_healthy
@@ -146,7 +150,9 @@ services:
       - DB_ALLOW_RUNTIME_SCHEMA_UPDATES=${DB_ALLOW_RUNTIME_SCHEMA_UPDATES:-true}
       - CELERY_BROKER_URL=redis://viralflux_redis:6379/0
       - CELERY_RESULT_BACKEND=redis://viralflux_redis:6379/0
-      - VLLM_BASE_URL=${VLLM_BASE_URL:-http://host.docker.internal:8000/v1}
+      - VLLM_BASE_URL=${VLLM_BASE_URL:-http://host.docker.internal:8001/v1}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       redis:
         condition: service_healthy
@@ -160,11 +166,11 @@ services:
     networks:
       - virusradar_network
 
-  # Frontend React (dev mode — disabled in production)
+  # Frontend React development server (Node-based, disabled in production)
   frontend:
     build:
       context: ./frontend
-      dockerfile: ../docker/Dockerfile.frontend
+      dockerfile: ../docker/Dockerfile.frontend.dev
     container_name: virusradar_frontend
     profiles:
       - dev

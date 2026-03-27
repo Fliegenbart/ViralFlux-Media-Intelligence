@@ -42,10 +42,10 @@ const ImportValidationSection: React.FC<Props> = ({
       <section className="truth-analyst-grid">
         <div className="card subsection-card" style={{ padding: 24 }}>
           <div className="section-heading">
-            <span className="section-kicker">CSV-Import</span>
-            <h2 className="subsection-title">Import der Kundendaten vorbereiten</h2>
+            <span className="section-kicker">GELO-Import</span>
+            <h2 className="subsection-title">GELO-Kundendaten vorbereiten</h2>
             <p className="subsection-copy">
-              Wir brauchen `week_start`, `product`, `region_code`, `media_spend_eur` und mindestens eine Wirkungszahl wie `sales_units`, `order_count` oder `revenue_eur`.
+              Für einen belastbaren GELO-Truth-Import brauchen wir `week_start`, `product`, `region_code`, `media_spend_eur` und mindestens eine Wirkungszahl wie `sales_units`, `order_count` oder `revenue_eur`.
             </p>
           </div>
 
@@ -97,7 +97,7 @@ const ImportValidationSection: React.FC<Props> = ({
                 disabled={!file || truthActionLoading}
                 onClick={() => file && onSubmitTruthCsv({ file, sourceLabel, replaceExisting, validateOnly: true })}
               >
-                {truthActionLoading ? 'Prüfung läuft...' : 'Datei prüfen'}
+                {truthActionLoading ? 'Prüfung läuft...' : 'Datenlage prüfen'}
               </button>
               <button
                 className="media-button primary"
@@ -105,7 +105,7 @@ const ImportValidationSection: React.FC<Props> = ({
                 disabled={!file || truthActionLoading}
                 onClick={() => file && onSubmitTruthCsv({ file, sourceLabel, replaceExisting, validateOnly: false })}
               >
-                {truthActionLoading ? 'Import läuft...' : 'Import starten'}
+                {truthActionLoading ? 'Import läuft...' : 'GELO-Daten importieren'}
               </button>
             </div>
           </div>
@@ -114,9 +114,9 @@ const ImportValidationSection: React.FC<Props> = ({
         <div className="card subsection-card" style={{ padding: 24 }}>
           <div className="section-heading">
             <span className="section-kicker">Import-Vorschau</span>
-            <h2 className="subsection-title">Prüfung und Ergebnis</h2>
+            <h2 className="subsection-title">Was der nächste Import ändern würde</h2>
             <p className="subsection-copy">
-              Erst prüfen, dann importieren. Vorschau und importierte Datei zeigen dieselben Kennzahlen und Hinweise.
+              Erst prüfen, dann importieren. So sieht GELO sofort, was ein neuer Datenstand an Abdeckung und Trust verändern würde.
             </p>
           </div>
 
@@ -164,7 +164,7 @@ const ImportValidationSection: React.FC<Props> = ({
         <div className="card subsection-card" style={{ padding: 24 }}>
           <div className="section-heading">
             <span className="section-kicker">Import-Historie</span>
-            <h2 className="subsection-title">Letzte Importe</h2>
+            <h2 className="subsection-title">Bisherige GELO-Importe</h2>
           </div>
           <div className="truth-history-list">
             {(truthSnapshot?.recent_batches || []).length > 0 ? truthSnapshot!.recent_batches.map((batch: TruthImportBatchSummary) => (
@@ -189,7 +189,7 @@ const ImportValidationSection: React.FC<Props> = ({
         <div className="card subsection-card" style={{ padding: 24 }}>
           <div className="section-heading">
             <span className="section-kicker">Import-Details</span>
-            <h2 className="subsection-title">Ausgewählter Import</h2>
+            <h2 className="subsection-title">Ausgewählter GELO-Import</h2>
           </div>
           {truthBatchDetailLoading ? (
             <div className="review-muted-copy">Import-Details laden…</div>
@@ -221,9 +221,9 @@ const ImportValidationSection: React.FC<Props> = ({
       <section className="card subsection-card" style={{ padding: 24 }}>
         <div className="section-heading">
           <span className="section-kicker">Hinweise</span>
-          <h2 className="subsection-title">Probleme und Hinweise zur Zuordnung</h2>
+          <h2 className="subsection-title">Was vor dem Import noch geklärt werden muss</h2>
           <p className="subsection-copy">
-            Jeder ausgeschlossene Datensatz bleibt sichtbar. Es gibt keine stillen Ausfälle.
+            Jeder ausgeschlossene Datensatz bleibt sichtbar. So bleibt die Daten-Onboarding-Konversation ehrlich und nachvollziehbar.
           </p>
         </div>
         <div className="truth-issue-table">

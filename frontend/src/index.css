@@ -3784,6 +3784,151 @@ svg g[tabindex="0"]:focus > path {
   min-height: 100%;
 }
 
+.campaign-approval-stack,
+.campaign-approval-skeleton {
+  display: grid;
+  gap: 18px;
+}
+
+.campaign-command-grid--approval {
+  grid-template-columns: minmax(0, 1.24fr) minmax(320px, 0.82fr);
+}
+
+.campaign-approval-skeleton__hero,
+.campaign-approval-skeleton__trust,
+.campaign-approval-skeleton__block {
+  min-height: 132px;
+}
+
+.campaign-approval-skeleton__hero {
+  min-height: 280px;
+}
+
+.campaign-approval-skeleton__grid,
+.campaign-approval-summary__grid,
+.campaign-approval-queue__list {
+  display: grid;
+  gap: 14px;
+}
+
+.campaign-approval-skeleton__grid,
+.campaign-approval-summary__grid,
+.campaign-trust-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.campaign-approval-queue__list {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.campaign-approval-hero {
+  display: grid;
+  gap: 18px;
+}
+
+.campaign-approval-hero__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.campaign-approval-hero__pills {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.campaign-approval-hero__facts {
+  margin-top: 0;
+}
+
+.campaign-approval-hero__facts .campaign-metric-card strong {
+  font-size: clamp(1.15rem, 2vw, 1.45rem);
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.campaign-approval-hero__callout {
+  margin-top: -2px;
+  border-color: rgba(245, 158, 11, 0.2);
+  background: rgba(245, 158, 11, 0.08);
+}
+
+.campaign-approval-hero__callout strong {
+  color: #9a3412;
+}
+
+.campaign-approval-hero__callout p,
+.campaign-approval-summary__card p {
+  margin: 0;
+}
+
+.campaign-approval-summary {
+  display: grid;
+  gap: 16px;
+}
+
+.campaign-approval-summary__card {
+  display: grid;
+  gap: 6px;
+  align-content: start;
+  min-height: 100%;
+}
+
+.campaign-approval-summary__card strong {
+  font-size: clamp(1.7rem, 2.8vw, 2.2rem);
+  line-height: 1;
+  letter-spacing: -0.04em;
+  color: var(--text-primary);
+}
+
+.campaign-trust-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.campaign-trust-grid {
+  margin-top: 0;
+}
+
+.campaign-approval-queue {
+  display: grid;
+  gap: 16px;
+}
+
+.campaign-approval-next-card {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  text-align: left;
+}
+
+.campaign-empty-board--approval {
+  min-height: 280px;
+  align-content: center;
+}
+
+.campaign-confidence-chip--success {
+  border-color: rgba(16, 185, 129, 0.24);
+  background: rgba(16, 185, 129, 0.1);
+  color: #047857;
+}
+
+.campaign-confidence-chip--warning {
+  border-color: rgba(245, 158, 11, 0.24);
+  background: rgba(245, 158, 11, 0.12);
+  color: #b45309;
+}
+
+.campaign-confidence-chip--neutral {
+  border-color: rgba(148, 163, 184, 0.2);
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--text-secondary);
+}
+
 .campaign-compact-card {
   align-content: start;
 }
@@ -4152,6 +4297,72 @@ svg g[tabindex="0"]:focus > path {
   gap: 20px;
   grid-template-columns: minmax(0, 1fr) minmax(340px, 1fr);
   align-items: start;
+}
+
+.evidence-briefing-grid,
+.evidence-briefing-skeleton {
+  display: grid;
+  gap: 20px;
+}
+
+.evidence-briefing-grid {
+  grid-template-columns: minmax(0, 1.22fr) minmax(320px, 0.86fr);
+  align-items: start;
+}
+
+.evidence-briefing-hero,
+.evidence-trust-panel {
+  min-height: 100%;
+}
+
+.evidence-briefing-hero__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.evidence-briefing-note {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+}
+
+.evidence-briefing-note strong {
+  color: var(--text-primary);
+  font-size: 13px;
+}
+
+.evidence-briefing-note p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.evidence-trust-grid {
+  margin-top: 0;
+  grid-template-columns: 1fr;
+}
+
+.evidence-onboarding-grid {
+  align-items: start;
+}
+
+.evidence-briefing-skeleton__hero,
+.evidence-briefing-skeleton__block {
+  min-height: 132px;
+}
+
+.evidence-briefing-skeleton__hero {
+  min-height: 320px;
+}
+
+.evidence-briefing-skeleton__grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .now-trust-grid {
@@ -5168,7 +5379,12 @@ svg g[tabindex="0"]:focus > path {
   .review-metric-grid,
   .workflow-rail,
   .review-stat-grid,
-  .campaign-work-item-metrics {
+  .campaign-approval-skeleton__grid,
+  .campaign-approval-summary__grid,
+  .campaign-trust-grid,
+  .campaign-approval-queue__list,
+  .campaign-work-item-metrics,
+  .evidence-briefing-skeleton__grid {
     grid-template-columns: 1fr;
   }
 
@@ -5191,6 +5407,11 @@ svg g[tabindex="0"]:focus > path {
   .review-sheet-aside {
     padding: 20px;
   }
+
+  .campaign-approval-hero__header,
+  .campaign-approval-hero__pills {
+    justify-content: flex-start;
+  }
 }
 
 [data-theme="dark"] .campaign-focus-panel,
@@ -5206,6 +5427,33 @@ svg g[tabindex="0"]:focus > path {
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.04),
     0 16px 36px rgba(0, 0, 0, 0.24);
+}
+
+[data-theme="dark"] .campaign-confidence-chip--success {
+  background: rgba(16, 185, 129, 0.16);
+  border-color: rgba(16, 185, 129, 0.28);
+  color: #6ee7b7;
+}
+
+[data-theme="dark"] .campaign-confidence-chip--warning {
+  background: rgba(245, 158, 11, 0.16);
+  border-color: rgba(245, 158, 11, 0.28);
+  color: #fcd34d;
+}
+
+[data-theme="dark"] .campaign-confidence-chip--neutral {
+  background: rgba(17, 24, 39, 0.76);
+  border-color: rgba(125, 211, 252, 0.12);
+  color: var(--text-secondary);
+}
+
+[data-theme="dark"] .campaign-approval-hero__callout {
+  background: rgba(245, 158, 11, 0.12);
+  border-color: rgba(245, 158, 11, 0.24);
+}
+
+[data-theme="dark"] .campaign-approval-hero__callout strong {
+  color: #fcd34d;
 }
 
 /* ─── Mobile Navigation ───────────────────────────────────────── */
@@ -8552,10 +8800,15 @@ svg g[tabindex="0"]:focus > path {
   .regions-loading-skeleton__grid,
   .regions-trust-grid,
   .regions-secondary-grid,
+  .campaign-approval-skeleton__grid,
+  .campaign-approval-summary__grid,
+  .campaign-trust-grid,
+  .campaign-approval-queue__list,
   .now-weekly-plan-grid,
   .now-briefing-skeleton__trust,
   .now-trust-grid,
-  .workspace-status-grid {
+  .workspace-status-grid,
+  .evidence-briefing-skeleton__grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -8616,6 +8869,8 @@ svg g[tabindex="0"]:focus > path {
   .now-briefing-skeleton__trust,
   .now-weekly-plan-grid,
   .now-trust-grid,
+  .evidence-briefing-grid,
+  .evidence-briefing-skeleton__grid,
   .workspace-status-grid,
   .summary-grid {
     grid-template-columns: 1fr;

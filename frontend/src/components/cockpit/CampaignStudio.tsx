@@ -1,28 +1,21 @@
 import React from 'react';
 
-import { additionalSuggestionsText } from '../../lib/copy';
+import { additionalSuggestionsText, evidenceStatusHelper, evidenceStatusLabel } from '../../lib/copy';
 import { normalizeGermanText } from '../../lib/plainLanguage';
 import { MediaCampaignsResponse, RecommendationCard, WorkspaceStatusSummary } from '../../types/media';
 import CollapsibleSection from '../CollapsibleSection';
 import {
-  workflowLabel,
   formatCurrency,
   formatDateShort,
-  formatPercent,
   learningStateLabel,
-  metricContractBadge,
-  metricContractDisplayLabel,
-  metricContractNote,
-  primarySignalScore,
   recommendationLane,
   signalConfidencePercent,
   statusTone,
+  workflowLabel,
 } from './cockpitUtils';
-import WorkspaceStatusPanel from './WorkspaceStatusPanel';
 import {
   OperatorPanel,
   OperatorSection,
-  OperatorStat,
 } from './operator/OperatorPrimitives';
 
 interface Props {
@@ -39,6 +32,15 @@ interface Props {
   onGoalChange: (value: string) => void;
   onGenerate: () => void;
   onOpenRecommendation: (id: string) => void;
+}
+
+type ApprovalTone = 'success' | 'warning' | 'neutral';
+
+interface ApprovalStatusItem {
+  label: string;
+  value: string;
+  detail: string;
+  tone: ApprovalTone;
 }
 
 const CampaignStudio: React.FC<Props> = ({
@@ -61,51 +63,64 @@ const CampaignStudio: React.FC<Props> = ({
   const prepareCards = cards.filter((card) => ['prepare', 'review'].includes(recommendationLane(card)));
   const approvalCards = cards.filter((card) => ['approve', 'sync'].includes(recommendationLane(card)));
   const activeCards = cards.filter((card) => recommendationLane(card) === 'live');
+  const blockedCards = cards.filter((card) => hasPublishBlockers(card));
+  const readyCards = cards.filter((card) => isApprovalReady(card));
   const prepareCount = laneStateCount('prepare', stateCounts) + laneStateCount('review', stateCounts);
   const approvalCount = laneStateCount('approve', stateCounts) + laneStateCount('sync', stateCounts);
   const activeCount = laneStateCount('live', stateCounts);
   const focusCard = cards.find((card) => ['review', 'approve', 'sync'].includes(recommendationLane(card))) || prepareCards[0] || cards[0] || null;
   const focusTitle = focusCard
     ? normalizeGermanText(focusCard.display_title || focusCard.campaign_name || focusCard.recommended_product || focusCard.product)
-    : 'Noch kein Kampagnenvorschlag im Fokus';
+    : 'Noch keine GELO-Empfehlung im Fokus';
   const focusContext = focusCard
-    ? normalizeGermanText(`${focusCard.region_codes_display?.join(', ') || focusCard.region || 'National'} · ${flightWindowLabel(focusCard)}`)
-    : 'Neue Vorschläge lassen sich weiterhin erzeugen, stehen aber bewusst nicht mehr vor der eigentlichen Arbeit.';
+    ? normalizeGermanText(`${focusCard.region_codes_display?.join(', ') || focusCard.region || 'National'} · ${focusCard.recommended_product || focusCard.product}`)
+    : 'Sobald Vorschläge vorliegen, landet der wichtigste GELO-Fall direkt oben.';
   const focusCopy = focusCard
     ? readableCampaignSummary(focusCard)
-    : 'Sobald Vorschläge vorliegen, landet der wichtigste Fall automatisch ganz oben und nicht in einer unübersichtlichen Liste.';
-  const focusSignalLabel = metricContractDisplayLabel(focusCard?.field_contracts, 'signal_score', 'Signal-Score');
-  const focusSignalBadge = metricContractBadge(focusCard?.field_contracts, 'signal_score', 'Ranking-Signal');
-  const focusSignalNote = metricContractNote(
-    focusCard?.field_contracts,
-    'signal_score',
-    'Hilft beim Vergleichen und Priorisieren, ist aber keine Eintrittswahrscheinlichkeit.',
-  );
+    : 'Die Konsole zeigt danach direkt, welcher Vorschlag geprüft, freigegeben oder weiter vorbereitet werden sollte.';
+  const focusReadiness = focusCard ? approvalReadiness(focusCard) : null;
+  const focusBudgetDirection = focusCard ? budgetDirectionLabel(focusCard) : 'Budgetrichtung offen';
+  const focusChannelDirection = focusCard ? channelDirectionLabel(focusCard) : 'Kanalmix wird nach dem ersten Vorschlag sichtbar';
+  const focusActionLabel = focusCard ? recommendationActionLabel(focusCard) : 'Erste Vorschläge erstellen';
   const hiddenBacklog = campaignsView?.summary?.hidden_backlog_cards ?? 0;
-  const focusNotes = [
-    focusCard ? `${focusSignalLabel}: ${focusSignalBadge}. ${focusSignalNote}` : null,
-    hiddenBacklog > 0 ? additionalSuggestionsText(hiddenBacklog) : null,
-    focusCard?.recommended_product ? `Produktfokus: ${focusCard.recommended_product}` : null,
-  ].filter(Boolean) as string[];
+  const queueCards = buildSecondaryApprovalQueue(cards, focusCard?.id || null);
+  const trustItems = buildCampaignTrustItems(focusCard, workspaceStatus);
+  const statusSummary = [
+    {
+      label: 'Zur Prüfung / Freigabe',
+      value: String(readyCards.length),
+      detail: 'Fälle ohne erkennbare Inhaltsblocker.',
+    },
+    {
+      label: 'Blockiert',
+      value: String(blockedCards.length),
+      detail: blockedCards.length > 0 ? 'Mindestens ein Fall braucht vor dem nächsten Schritt noch Klärung.' : 'Aktuell sind keine Fälle blockiert.',
+    },
+    {
+      label: 'Aktiv',
+      value: String(activeCount),
+      detail: prepareCount > 0 ? `${prepareCount} weitere Fälle sind noch in Arbeit.` : 'Keine weiteren Entwürfe offen.',
+    },
+  ];
   const phaseGroups = [
     {
       id: 'prepare',
       label: 'Vorbereitung',
-      description: 'Entwürfe und offene Prüfungen.',
+      description: 'Noch nicht freigabefähige oder frühe Prüfpfade.',
       cards: prepareCards,
       total: prepareCount,
     },
     {
       id: 'approval',
-      label: 'Freigabe',
-      description: 'Entscheidungsreife Fälle und Übergaben.',
+      label: 'Prüfen & Freigeben',
+      description: 'Die nächsten entscheidungsreifen Fälle und Übergaben.',
       cards: approvalCards,
       total: approvalCount,
     },
     {
       id: 'active',
       label: 'Aktiv',
-      description: 'Laufende oder startklare Kampagnen.',
+      description: 'Laufende oder bereits übergebene Fälle.',
       cards: activeCards,
       total: activeCount,
     },
@@ -115,100 +130,207 @@ const CampaignStudio: React.FC<Props> = ({
     <div className="page-stack">
       <OperatorSection
         kicker="Kampagnen"
-        title="Jetzt zuerst prüfen"
-        description="Hier steht sofort der wichtigste Fall."
+        title="Welche GELO-Empfehlung jetzt geprüft oder freigegeben werden sollte"
+        description="Die Seite zeigt zuerst den wichtigsten Freigabefall, danach Blocker, Übergabe und die nächsten Fälle in der GELO-Wochenarbeit."
         tone="accent"
         className="campaign-hero-shell"
       >
-        <div className="campaign-command-grid">
-          <div className="campaign-focus-panel" style={{ marginTop: 0 }}>
-            <div className="campaign-focus-title">{focusTitle}</div>
-            <div className="campaign-focus-context">{focusContext}</div>
-            <p className="campaign-focus-copy">{focusCopy}</p>
-
-            <div className="operator-stat-grid">
-              <OperatorStat
-                label="Phase"
-                value={focusCard ? workflowLabel(focusCard.lifecycle_state || focusCard.status) : 'Offen'}
-                meta="aktueller Arbeitsstand"
-                tone="accent"
-              />
-              <OperatorStat
-                label={focusSignalLabel}
-                value={focusCard ? formatPercent(primarySignalScore(focusCard)) : '-'}
-                meta="hilft beim Priorisieren"
-              />
+        {loading ? (
+          <div className="campaign-approval-skeleton" aria-label="GELO-Freigabekonsole wird geladen">
+            <div className="workspace-note-card campaign-approval-skeleton__hero" />
+            <div className="campaign-approval-skeleton__grid">
+              <div className="workspace-note-card campaign-approval-skeleton__block" />
+              <div className="workspace-note-card campaign-approval-skeleton__block" />
+              <div className="workspace-note-card campaign-approval-skeleton__block" />
             </div>
-
-            <div className="workspace-note-list">
-              {focusNotes.map((item) => (
-                <div key={item} className="workspace-note-card">
-                  {item}
-                </div>
-              ))}
-            </div>
-
-            <div className="action-row" style={{ marginTop: 16 }}>
-              <button
-                className="media-button"
-                type="button"
-                onClick={() => (focusCard ? onOpenRecommendation(focusCard.id) : onGenerate())}
-                disabled={generationLoading && !focusCard}
-              >
-                {focusCard ? 'Diesen Fall öffnen' : (generationLoading ? 'Vorschläge werden erstellt...' : 'Erste Vorschläge erstellen')}
+            <div className="workspace-note-card campaign-approval-skeleton__trust" />
+          </div>
+        ) : cards.length === 0 ? (
+          <div className="campaign-empty-board campaign-empty-board--approval">
+            <span className="campaign-empty-eyebrow">GELO-Freigabe</span>
+            <h3 className="campaign-empty-title">Noch keine Empfehlung zur Prüfung sichtbar</h3>
+            <p className="campaign-empty-copy">
+              Sobald der erste Vorschlag erzeugt ist, erscheint hier direkt der wichtigste Fall für Prüfung, Freigabe oder Übergabe.
+            </p>
+            <div className="action-row">
+              <button className="media-button" type="button" onClick={onGenerate} disabled={generationLoading}>
+                {generationLoading ? 'Vorschläge werden erstellt...' : 'Erste Vorschläge erstellen'}
               </button>
             </div>
           </div>
+        ) : (
+          <div className="campaign-approval-stack">
+            <div className="campaign-command-grid campaign-command-grid--approval">
+              <OperatorPanel tone="accent" className="campaign-focus-panel campaign-approval-hero">
+                <div className="campaign-approval-hero__header">
+                  <div>
+                    <span className="campaign-focus-label">GELO-Freigabefall diese Woche</span>
+                    <h3 className="campaign-focus-title">{focusTitle}</h3>
+                    <div className="campaign-focus-context">{focusContext}</div>
+                  </div>
+                  <div className="campaign-approval-hero__pills">
+                    {focusCard ? (
+                      <span className="campaign-status-badge" style={statusTone(focusCard.lifecycle_state || focusCard.status)}>
+                        {workflowLabel(focusCard.lifecycle_state || focusCard.status)}
+                      </span>
+                    ) : null}
+                    {focusReadiness ? (
+                      <span className={`campaign-confidence-chip campaign-confidence-chip--${focusReadiness.tone}`}>
+                        {focusReadiness.label}
+                      </span>
+                    ) : null}
+                  </div>
+                </div>
 
-          <OperatorPanel
-            eyebrow="Pipeline"
-            title="Kurzüberblick"
-            description="Nur die wichtigsten Zahlen."
-            tone="muted"
-            className="campaign-command-rail"
-          >
-            <div className="workspace-note-list">
-              <div className="workspace-note-card">Vorbereitung: {prepareCount}</div>
-              <div className="workspace-note-card">Freigabe: {approvalCount}</div>
-              <div className="workspace-note-card">Aktiv: {activeCount}</div>
+                <p className="campaign-focus-copy">{focusCopy}</p>
+
+                <div className="campaign-metric-grid campaign-approval-hero__facts">
+                  <div className="campaign-metric-card">
+                    <span>Bundesland & Produkt</span>
+                    <strong>{focusCard?.region_codes_display?.join(', ') || focusCard?.region || 'Bundesland offen'}</strong>
+                    <small>{focusCard?.recommended_product || focusCard?.product || 'Produkt noch offen'}</small>
+                  </div>
+                  <div className="campaign-metric-card">
+                    <span>Kanalfokus</span>
+                    <strong>{focusChannelDirection}</strong>
+                    <small>Die Kanalrichtung bleibt absichtlich grob und freigabeorientiert.</small>
+                  </div>
+                  <div className="campaign-metric-card">
+                    <span>Budgetrichtung</span>
+                    <strong>{focusBudgetDirection}</strong>
+                    <small>{budgetSupportCopy(focusCard)}</small>
+                  </div>
+                  <div className="campaign-metric-card">
+                    <span>Nächster Schritt</span>
+                    <strong>{focusActionLabel}</strong>
+                    <small>{focusReadiness?.detail || 'Der Fokusfall kann jetzt geöffnet und geprüft werden.'}</small>
+                  </div>
+                </div>
+
+                {focusReadiness?.tone === 'warning' ? (
+                  <div className="workspace-note-card campaign-approval-hero__callout">
+                    <strong>{focusReadiness.label}</strong>
+                    <p>{focusReadiness.detail}</p>
+                  </div>
+                ) : null}
+
+                <div className="action-row">
+                  <button
+                    className="media-button"
+                    type="button"
+                    onClick={() => (focusCard ? onOpenRecommendation(focusCard.id) : onGenerate())}
+                    disabled={generationLoading && !focusCard}
+                  >
+                    {focusCard ? focusActionLabel : (generationLoading ? 'Vorschläge werden erstellt...' : 'Erste Vorschläge erstellen')}
+                  </button>
+                </div>
+              </OperatorPanel>
+
+              <OperatorPanel
+                eyebrow="Freigabestatus"
+                title="So sieht die GELO-Woche gerade aus"
+                description="Diese kurze Übersicht zeigt, ob die nächste Arbeit eher Prüfung, Blockerklärung oder aktive Übergabe ist."
+                tone="muted"
+                className="campaign-command-rail campaign-approval-summary"
+              >
+                <div className="campaign-approval-summary__grid">
+                  {statusSummary.map((item) => (
+                    <div key={item.label} className="workspace-note-card campaign-approval-summary__card">
+                      <span>{item.label}</span>
+                      <strong>{item.value}</strong>
+                      <p>{item.detail}</p>
+                    </div>
+                  ))}
+                </div>
+                <div className="workspace-note-list">
+                  {hiddenBacklog > 0 ? (
+                    <div className="workspace-note-card">
+                      {additionalSuggestionsText(hiddenBacklog)}
+                    </div>
+                  ) : null}
+                  <div className="workspace-note-card">
+                    Lernstand: {learningStateLabel(campaignsView?.summary?.learning_state)}
+                  </div>
+                </div>
+              </OperatorPanel>
             </div>
-          </OperatorPanel>
-        </div>
+
+            <OperatorPanel
+              title="Was diese Empfehlung trägt"
+              description="Reliability, Datenlage und Blocker bleiben sichtbar, ohne den Freigabefall zu überlagern."
+              tone="muted"
+              className="campaign-trust-panel"
+            >
+              <div className="workspace-status-grid campaign-trust-grid">
+                {trustItems.map((item) => (
+                  <article
+                    key={item.label}
+                    className={`workspace-status-card workspace-status-card--${item.tone}`}
+                  >
+                    <span className="workspace-status-card__question">{item.label}</span>
+                    <strong>{item.value}</strong>
+                    <p>{item.detail}</p>
+                  </article>
+                ))}
+              </div>
+            </OperatorPanel>
+
+            <OperatorPanel
+              eyebrow="Danach im Blick"
+              title="Weitere Empfehlungen mit nächstem Schritt"
+              description="Hier bleiben die nächsten GELO-Fälle sichtbar, ohne den Fokusfall zu verdrängen."
+              tone="muted"
+              className="campaign-approval-queue"
+            >
+              <div className="campaign-approval-queue__list">
+                {queueCards.length > 0 ? queueCards.map((card) => {
+                  const readiness = approvalReadiness(card);
+                  return (
+                    <button
+                      type="button"
+                      key={card.id}
+                      onClick={() => onOpenRecommendation(card.id)}
+                      className="campaign-list-card campaign-approval-next-card"
+                    >
+                      <div className="campaign-work-item-top">
+                        <span className="campaign-status-badge" style={statusTone(card.lifecycle_state || card.status)}>
+                          {workflowLabel(card.lifecycle_state || card.status)}
+                        </span>
+                        <span className={`campaign-confidence-chip campaign-confidence-chip--${readiness.tone}`}>
+                          {readiness.label}
+                        </span>
+                      </div>
+                      <div className="campaign-work-item-head">
+                        <div className="campaign-work-item-title">
+                          {card.display_title || card.campaign_name || card.product}
+                        </div>
+                        <div className="campaign-work-item-subtitle">
+                          {(card.region_codes_display?.join(', ') || card.region || 'National')} · {card.recommended_product || card.product}
+                        </div>
+                      </div>
+                      <p className="campaign-work-item-copy">{readableCampaignSummary(card)}</p>
+                      <div className="campaign-work-item-footer">
+                        <span>{recommendationActionLabel(card)}</span>
+                        <span>{budgetDirectionLabel(card)}</span>
+                      </div>
+                    </button>
+                  );
+                }) : (
+                  <div className="workspace-note-card">
+                    Aktuell gibt es keine weiteren klar sortierten GELO-Fälle neben dem Fokusfall.
+                  </div>
+                )}
+              </div>
+            </OperatorPanel>
+          </div>
+        )}
       </OperatorSection>
 
-      <WorkspaceStatusPanel
-        status={workspaceStatus}
-        title="Was vor der Freigabe noch geklärt sein sollte"
-        intro="Hier siehst du, ob du einen Fall direkt freigeben kannst oder erst noch etwas prüfen musst."
-      />
-
-      {loading ? (
-        <OperatorSection
-          kicker="Kampagnenübersicht"
-          title="Lade Kampagnenvorschläge..."
-          description="Einen Moment, wir holen die aktuelle Phase und den Fokusfall."
-          tone="muted"
-        >
-          <div className="workspace-note-card">Die Übersicht wird gerade aufgebaut.</div>
-        </OperatorSection>
-      ) : cards.length === 0 ? (
-        <OperatorSection
-          kicker="Kampagnenübersicht"
-          title="Noch keine Kampagnenvorschläge in der Übersicht."
-          description="Sobald ein Vorschlag erstellt wurde, erscheint er hier direkt in der passenden Arbeitsphase."
-          tone="muted"
-        >
-          <div className="action-row">
-            <button className="media-button" type="button" onClick={onGenerate} disabled={generationLoading}>
-              {generationLoading ? 'Vorschläge werden erstellt...' : 'Jetzt erste Vorschläge erstellen'}
-            </button>
-          </div>
-        </OperatorSection>
-      ) : (
+      {!loading && cards.length > 0 ? (
         <OperatorSection
           kicker="Arbeitsphasen"
-          title="So ist die Pipeline gerade sortiert"
-          description="Nach dem Fokusfall siehst du hier die übrigen Phasen."
+          title="So ist die Freigabe-Pipeline gerade sortiert"
+          description="Unter dem Fokusfall bleibt die vollständige Pipeline sichtbar. Hier scannt PEIX, was als Nächstes geprüft, freigegeben oder beobachtet werden sollte."
           tone="muted"
         >
           <section className="workspace-phase-grid">
@@ -224,6 +346,7 @@ const CampaignStudio: React.FC<Props> = ({
                 <div className="campaign-lane-stack">
                   {group.cards.length > 0 ? group.cards.map((card) => {
                     const tone = statusTone(card.lifecycle_state || card.status);
+                    const readiness = approvalReadiness(card);
                     return (
                       <button
                         type="button"
@@ -235,12 +358,8 @@ const CampaignStudio: React.FC<Props> = ({
                           <span className="campaign-status-badge" style={tone}>
                             {workflowLabel(card.lifecycle_state || card.status)}
                           </span>
-                          <span className="campaign-confidence-chip">
-                            {confidenceLabel(
-                              card.signal_confidence_pct,
-                              card.confidence,
-                              metricContractDisplayLabel(card.field_contracts, 'signal_confidence_pct', 'Signal-Sicherheit'),
-                            )}
+                          <span className={`campaign-confidence-chip campaign-confidence-chip--${readiness.tone}`}>
+                            {readiness.label}
                           </span>
                         </div>
 
@@ -249,7 +368,7 @@ const CampaignStudio: React.FC<Props> = ({
                             {card.display_title || card.campaign_name || card.product}
                           </div>
                           <div className="campaign-work-item-subtitle">
-                            {card.region_codes_display?.join(', ') || card.region || 'National'}
+                            {(card.region_codes_display?.join(', ') || card.region || 'National')} · {card.recommended_product || card.product}
                           </div>
                         </div>
 
@@ -257,22 +376,26 @@ const CampaignStudio: React.FC<Props> = ({
 
                         <div className="campaign-work-item-metrics">
                           <div className="campaign-inline-stat">
-                            <span>Produkt</span>
-                            <strong>{card.recommended_product || card.product}</strong>
+                            <span>Kanalfokus</span>
+                            <strong>{channelDirectionLabel(card)}</strong>
                           </div>
                           <div className="campaign-inline-stat">
-                            <span>{metricContractDisplayLabel(card.field_contracts, 'signal_score', 'Signal-Score')}</span>
-                            <strong>{formatPercent(primarySignalScore(card))}</strong>
+                            <span>Budgetrichtung</span>
+                            <strong>{budgetDirectionLabel(card)}</strong>
                           </div>
                           <div className="campaign-inline-stat">
-                            <span>Budget</span>
-                            <strong>{formatCurrency(card.campaign_preview?.budget?.weekly_budget_eur)}</strong>
+                            <span>Evidenz</span>
+                            <strong>{evidenceStatusLabel(card.evidence_class) || 'Noch offen'}</strong>
+                          </div>
+                          <div className="campaign-inline-stat">
+                            <span>Nächster Schritt</span>
+                            <strong>{recommendationActionLabel(card)}</strong>
                           </div>
                         </div>
 
                         <div className="campaign-work-item-footer">
-                          <span>{flightWindowLabel(card)} · {normalizeGermanText(card.evidence_strength || 'Prüfstatus offen')}</span>
-                          <span>Details prüfen</span>
+                          <span>{flightWindowLabel(card)} · {readiness.detail}</span>
+                          <span>{recommendationActionLabel(card)}</span>
                         </div>
                       </button>
                     );
@@ -288,16 +411,16 @@ const CampaignStudio: React.FC<Props> = ({
             ))}
           </section>
         </OperatorSection>
-      )}
+      ) : null}
 
       <CollapsibleSection
         title="Weitere Vorschläge erstellen"
-        subtitle="Nur wenn du danach weitere Vorschläge brauchst."
+        subtitle="Nur wenn du nach dem aktuellen Freigabefall zusätzliche GELO-Vorschläge brauchst."
       >
         <div className="workspace-two-column">
           <OperatorPanel
             title="Erstellung"
-            description="Hier legst du neue Vorschläge an."
+            description="Hier legst du neue Vorschläge an. Bestehende Freigabefälle bleiben davon unberührt."
           >
             <div className="campaign-form-grid">
               <label className="campaign-field">
@@ -320,7 +443,7 @@ const CampaignStudio: React.FC<Props> = ({
             </div>
             <div className="campaign-setup-footer">
               <div className="campaign-setup-note">
-                Neue Vorschläge starten als Entwurf und können danach geprüft werden.
+                Neue Vorschläge starten als Entwurf und wandern danach in die Prüfung oder Freigabe.
               </div>
               <button className="media-button" type="button" onClick={onGenerate} disabled={generationLoading}>
                 {generationLoading ? 'Vorschläge werden erstellt...' : 'Vorschläge erstellen'}
@@ -330,7 +453,7 @@ const CampaignStudio: React.FC<Props> = ({
 
           <OperatorPanel
             title="Arbeitskontext"
-            description="Diese Werte helfen beim Einordnen."
+            description="Diese Werte helfen beim Einordnen, bleiben aber bewusst in der zweiten Ebene."
           >
             <div className="workspace-note-list">
               <div className="workspace-note-card">
@@ -355,10 +478,20 @@ const CampaignStudio: React.FC<Props> = ({
 
 export default CampaignStudio;
 
+function hasPublishBlockers(card?: RecommendationCard | null): boolean {
+  return Boolean(card?.publish_blockers && card.publish_blockers.length > 0);
+}
+
+function isApprovalReady(card?: RecommendationCard | null): boolean {
+  if (!card || hasPublishBlockers(card)) return false;
+  const lane = recommendationLane(card);
+  return lane === 'review' || lane === 'approve' || lane === 'sync';
+}
+
 function confidenceLabel(
   signalConfidencePct?: number | null,
   confidence?: number | null,
-  label = 'Signal-Konfidenz',
+  label = 'Signal-Sicherheit',
 ): string {
   const normalized = signalConfidencePercent(signalConfidencePct, confidence);
   if (normalized == null) return `${label} offen`;
@@ -402,16 +535,173 @@ function laneStateCount(
   laneId: 'prepare' | 'review' | 'approve' | 'sync' | 'live',
   states: Record<string, number>,
 ): number {
-  if (laneId === 'prepare') return Number(states.PREPARE || 0);
-  if (laneId === 'review') return Number(states.REVIEW || 0);
-  if (laneId === 'approve') return Number(states.APPROVE || 0);
-  if (laneId === 'sync') return Number(states.SYNC_READY || 0);
-  if (laneId === 'live') return Number(states.LIVE || 0);
+  if (laneId === 'prepare') return Number(states.PREPARE || states.prepare || 0);
+  if (laneId === 'review') return Number(states.REVIEW || states.review || 0);
+  if (laneId === 'approve') return Number(states.APPROVE || states.approve || 0);
+  if (laneId === 'sync') return Number(states.SYNC_READY || states.sync || 0);
+  if (laneId === 'live') return Number(states.LIVE || states.live || 0);
   return 0;
 }
 
 function phaseTitle(id: 'prepare' | 'approval' | 'active'): string {
-  if (id === 'prepare') return 'Entwürfe';
-  if (id === 'approval') return 'Freigaben';
+  if (id === 'prepare') return 'In Vorbereitung';
+  if (id === 'approval') return 'Prüfen & Freigeben';
   return 'Aktive Fälle';
+}
+
+function recommendationActionLabel(card: RecommendationCard): string {
+  const lane = recommendationLane(card);
+  if (hasPublishBlockers(card)) return 'Blocker prüfen';
+  if (lane === 'sync') return 'Übergabe vorbereiten';
+  if (lane === 'approve') return 'Zur Freigabe öffnen';
+  if (lane === 'live') return 'Aktiven Fall öffnen';
+  return 'Empfehlung prüfen';
+}
+
+function budgetDirectionLabel(card: RecommendationCard): string {
+  const shift = Number(card.budget_shift_pct || 0);
+  if (!Number.isFinite(shift)) return 'Budgetrichtung offen';
+  if (shift > 0) return 'Budget eher erhöhen';
+  if (shift < 0) return 'Budget eher senken';
+  return 'Budget eher halten';
+}
+
+function budgetSupportCopy(card?: RecommendationCard | null): string {
+  if (!card) return 'Der Wochenrahmen wird im Detail sichtbar, sobald ein Vorschlag vorliegt.';
+  const weeklyBudget = card.campaign_preview?.budget?.weekly_budget_eur;
+  if (typeof weeklyBudget === 'number' && Number.isFinite(weeklyBudget)) {
+    return `Wochenrahmen ${formatCurrency(weeklyBudget)}.`;
+  }
+  return 'Die Seite zeigt bewusst zuerst die Richtung, nicht nur einzelne Zahlen.';
+}
+
+function channelDirectionLabel(card: RecommendationCard): string {
+  const entries = Object.entries(card.channel_mix || {})
+    .filter(([, value]) => typeof value === 'number' && value > 0)
+    .sort((left, right) => Number(right[1]) - Number(left[1]))
+    .slice(0, 2);
+
+  if (entries.length === 0) return 'Kanalmix im Detail prüfen';
+
+  const topChannels = entries.map(([key]) => humanizeChannel(key));
+  if (topChannels.length === 1) return `${topChannels[0]} im Fokus`;
+  return `${topChannels[0]} + ${topChannels[1]} im Fokus`;
+}
+
+function humanizeChannel(value: string): string {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'ctv') return 'CTV';
+  if (normalized === 'search') return 'Search';
+  if (normalized === 'social') return 'Social';
+  if (normalized === 'programmatic') return 'Programmatic';
+  return normalizeGermanText(value);
+}
+
+function approvalReadiness(card: RecommendationCard): { label: string; detail: string; tone: ApprovalTone } {
+  const blockers = card.publish_blockers || [];
+  const lane = recommendationLane(card);
+
+  if (blockers.length > 0) {
+    return {
+      label: 'Blockiert',
+      detail: normalizeGermanText(blockers[0]),
+      tone: 'warning',
+    };
+  }
+
+  if (lane === 'sync') {
+    return {
+      label: 'Bereit zur Übergabe',
+      detail: 'Der Vorschlag ist freigegeben und kann für das Zielsystem vorbereitet werden.',
+      tone: 'success',
+    };
+  }
+
+  if (lane === 'approve') {
+    return {
+      label: 'Bereit für Freigabe',
+      detail: 'Die Empfehlung ist entscheidungsreif und wartet auf den nächsten Freigabeschritt.',
+      tone: 'success',
+    };
+  }
+
+  if (lane === 'review') {
+    return {
+      label: 'Bereit zur Prüfung',
+      detail: 'Die Empfehlung sollte jetzt fachlich geprüft und priorisiert werden.',
+      tone: 'neutral',
+    };
+  }
+
+  if (lane === 'live') {
+    return {
+      label: 'Aktiv',
+      detail: 'Der Fall läuft bereits oder ist operativ in Bewegung.',
+      tone: 'neutral',
+    };
+  }
+
+  return {
+    label: 'In Vorbereitung',
+    detail: 'Der Fall braucht noch Nachschärfung, bevor er in die Freigabe geht.',
+    tone: 'neutral',
+  };
+}
+
+function buildSecondaryApprovalQueue(cards: RecommendationCard[], focusId: string | null): RecommendationCard[] {
+  const fallback = cards.filter((card) => card.id !== focusId);
+  const priorityBuckets = [
+    fallback.find((card) => recommendationLane(card) === 'approve' && !hasPublishBlockers(card)),
+    fallback.find((card) => recommendationLane(card) === 'review' && !hasPublishBlockers(card)),
+    fallback.find((card) => hasPublishBlockers(card)),
+    fallback.find((card) => recommendationLane(card) === 'sync'),
+    fallback.find((card) => recommendationLane(card) === 'live'),
+    fallback.find((card) => recommendationLane(card) === 'prepare'),
+  ].filter(Boolean) as RecommendationCard[];
+
+  const unique = priorityBuckets.filter((card, index, all) => (
+    all.findIndex((item) => item.id === card.id) === index
+  ));
+
+  if (unique.length >= 3) return unique.slice(0, 3);
+
+  for (const card of fallback) {
+    if (!unique.find((item) => item.id === card.id)) unique.push(card);
+    if (unique.length === 3) break;
+  }
+
+  return unique;
+}
+
+function buildCampaignTrustItems(
+  focusCard: RecommendationCard | null,
+  workspaceStatus: WorkspaceStatusSummary | null,
+): ApprovalStatusItem[] {
+  const forecastItem = workspaceStatus?.items.find((item) => item.key === 'forecast_status');
+  const freshnessItem = workspaceStatus?.items.find((item) => item.key === 'data_freshness');
+  const blockersItem = workspaceStatus?.items.find((item) => item.key === 'open_blockers');
+  const focusReadiness = focusCard ? approvalReadiness(focusCard) : null;
+
+  return [
+    {
+      label: 'Reliability',
+      value: focusCard?.evidence_class ? evidenceStatusLabel(focusCard.evidence_class) : (forecastItem?.value || 'Manuell prüfen'),
+      detail: focusCard?.evidence_class
+        ? (evidenceStatusHelper(focusCard.evidence_class) || confidenceLabel(focusCard.signal_confidence_pct, focusCard.confidence))
+        : (forecastItem?.detail || 'Der Freigabefall stützt sich aktuell auf Forecast- und Marktsignale.'),
+      tone: focusCard?.evidence_class === 'truth_backed' ? 'success' : 'neutral',
+    },
+    {
+      label: 'Datenlage',
+      value: freshnessItem?.value || 'Noch offen',
+      detail: freshnessItem?.detail || 'Die Datenlage wird sichtbar, sobald Evidence und Kundendaten geladen sind.',
+      tone: freshnessItem?.tone === 'warning' ? 'warning' : freshnessItem?.tone === 'success' ? 'success' : 'neutral',
+    },
+    {
+      label: 'Blocker / Handoff',
+      value: focusReadiness?.label || (blockersItem?.value || 'Noch offen'),
+      detail: focusReadiness?.detail || blockersItem?.detail || 'Der nächste operative Schritt ist noch nicht klar genug markiert.',
+      tone: focusReadiness?.tone || (blockersItem?.tone === 'warning' ? 'warning' : 'neutral'),
+    },
+  ];
 }

@@ -7,9 +7,9 @@ import RecommendationDrawer from './RecommendationDrawer';
 function buildDetail() {
   return {
     id: 'rec-1',
-    status: 'REVIEW',
-    lifecycle_state: 'REVIEW',
-    status_label: 'In Prüfung',
+    status: 'READY',
+    lifecycle_state: 'APPROVE',
+    status_label: 'Zur Freigabe',
     region: 'BE',
     region_name: 'Berlin',
     region_codes_display: ['Berlin'],
@@ -23,17 +23,28 @@ function buildDetail() {
     field_contracts: {},
     campaign_pack: {
       budget_plan: { weekly_budget_eur: 55200 },
+      channel_plan: [
+        { channel: 'search', role: 'Push', share_pct: 58 },
+        { channel: 'social', role: 'Support', share_pct: 22 },
+      ],
       message_framework: {
         hero_message: 'Berlin zuerst bearbeiten.',
-        support_points: ['Hohe Nachfrage'],
+        support_points: ['Hohe Nachfrage', 'Gutes Timing für GELO'],
       },
       ai_plan: {
         creative_angles: ['Schnelle Hilfe bei Schleim'],
         keyword_clusters: ['husten schleim loesen'],
-        next_steps: [{ task: 'Review', owner: 'Ops', eta: 'heute' }],
+        next_steps: [{ task: 'Freigabe prüfen', owner: 'PEIX Ops', eta: 'heute' }],
+        compliance_hinweis: 'Claims vor Freigabe noch einmal gegenlesen.',
+      },
+      targeting: {
+        audience_segments: ['Akute Atemwegsbeschwerden'],
+      },
+      measurement_plan: {
+        primary_kpi: 'sales',
       },
     },
-    activation_window: { start: '2026-03-26' },
+    activation_window: { start: '2026-03-26', end: '2026-04-02' },
     learning_state: 'active',
     primary_kpi: 'sales',
     connector_key: 'meta_ads',
@@ -48,16 +59,31 @@ function buildDetail() {
   } as any;
 }
 
+function buildSyncPreview() {
+  return {
+    connector_key: 'meta_ads',
+    connector_label: 'Meta Ads',
+    generated_at: '2026-03-25T10:15:00Z',
+    connector_payload: { campaign: 'Berlin jetzt priorisieren' },
+    readiness: {
+      state: 'approval_required',
+      can_sync_now: false,
+      blockers: ['Freigabe steht noch aus.'],
+      warnings: ['Channel-Mapping vor Versand kurz prüfen.'],
+    },
+  } as any;
+}
+
 describe('RecommendationDrawer', () => {
-  it('renders a labeled dialog and closes on Escape', () => {
+  it('renders an approval memo, keeps technical detail behind disclosure, and closes on Escape', () => {
     const onClose = jest.fn();
 
-    const { container } = render(
+    render(
       <RecommendationDrawer
         detail={buildDetail()}
         loading={false}
         connectorCatalog={[{ key: 'meta_ads', label: 'Meta Ads' } as any]}
-        syncPreview={null}
+        syncPreview={buildSyncPreview()}
         syncLoading={false}
         statusUpdating={false}
         regenerating={false}
@@ -70,12 +96,19 @@ describe('RecommendationDrawer', () => {
 
     expect(screen.getByRole('dialog', { name: 'Berlin jetzt priorisieren' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Kampagnen-Detail schließen' })).toHaveFocus();
-    expect(container.querySelector('.review-sheet-grid--primary')).toBeTruthy();
-    expect(container.querySelector('.review-sheet-grid--secondary')).toBeTruthy();
+    expect(screen.getByText('GELO-Freigabe-Memo')).toBeInTheDocument();
+    expect(screen.getAllByText('Freigabe auf einen Blick').length).toBeGreaterThan(0);
+    expect(screen.getByText('Was diese Empfehlung trägt')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Freigeben' })).toBeInTheDocument();
+    expect(screen.getAllByText('Übergabe vorbereiten').length).toBeGreaterThan(0);
+    expect(screen.getByRole('button', { name: /Zweiter Blick: Kennzahlen und Lernsignale/i })).toBeInTheDocument();
+    expect(screen.getAllByText(/Bundesland-Level/).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/Ranking-Signal/)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Zweiter Blick: Kennzahlen und Lernsignale/i }));
+
     expect(screen.getAllByText(/Ranking-Signal/).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Entscheidungs-Priorität/).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/Bundesland-Level/).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/Mit Kundendaten gestützt/).length).toBeGreaterThan(0);
 
     fireEvent.keyDown(document, { key: 'Escape' });
 

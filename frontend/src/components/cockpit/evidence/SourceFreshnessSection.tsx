@@ -27,7 +27,7 @@ const SourceFreshnessSection: React.FC<Props> = ({
     <>
       <section className="cockpit-grid">
         <div className="card subsection-card" style={{ padding: 24 }}>
-          <h2 className="subsection-title">Stand der Daten</h2>
+          <h2 className="subsection-title">Welche Daten schon im System ankommen</h2>
           <div style={{ display: 'grid', gap: 10, marginTop: 14 }}>
             {Object.entries(evidence?.data_freshness || {}).map(([key, value]) => (
               <div key={key} className="evidence-row">
@@ -39,7 +39,7 @@ const SourceFreshnessSection: React.FC<Props> = ({
         </div>
 
         <div className="card subsection-card" style={{ padding: 24 }}>
-          <h2 className="subsection-title">Stand der Quellen</h2>
+          <h2 className="subsection-title">Welche Quellen Beobachtung brauchen</h2>
           <div style={{ display: 'grid', gap: 10, marginTop: 14 }}>
             {sourceItems.map((item) => (
               <div key={item.source_key} className="evidence-row">
@@ -55,7 +55,7 @@ const SourceFreshnessSection: React.FC<Props> = ({
 
       <section className="cockpit-grid">
         <div className="card subsection-card" style={{ padding: 24 }}>
-          <h2 className="subsection-title">Signalquellen</h2>
+          <h2 className="subsection-title">Welche Signale die Empfehlungen gerade stützen</h2>
           <div className="review-chip-row" style={{ marginTop: 14 }}>
             {Object.entries(driverGroups).map(([key, group]) => (
               <span key={key} className="step-chip">
@@ -79,7 +79,7 @@ const SourceFreshnessSection: React.FC<Props> = ({
         </div>
 
         <div className="card subsection-card" style={{ padding: 24 }}>
-          <h2 className="subsection-title">Modell und Datenbasis</h2>
+          <h2 className="subsection-title">Modell und Datenbasis im Hintergrund</h2>
           <div style={{ display: 'grid', gap: 10, marginTop: 14 }}>
             <div className="evidence-row">
               <span>Datenbasis</span>
@@ -102,7 +102,7 @@ const SourceFreshnessSection: React.FC<Props> = ({
       </section>
 
       <section className="card subsection-card" style={{ padding: 24 }}>
-        <h2 className="subsection-title">Letzte Läufe</h2>
+        <h2 className="subsection-title">Letzte technische Läufe</h2>
         <div style={{ display: 'grid', gap: 10, marginTop: 14 }}>
           {recentRuns.length > 0 ? recentRuns.slice(0, 6).map((run, index) => (
             <div key={`${String(run.mode)}-${index}`} className="evidence-row">
@@ -117,7 +117,7 @@ const SourceFreshnessSection: React.FC<Props> = ({
 
       {(truthSnapshot?.known_limits || evidence?.known_limits || []).length > 0 && (
         <section className="card subsection-card" style={{ padding: 24 }}>
-          <h2 className="subsection-title">Bekannte Grenzen</h2>
+          <h2 className="subsection-title">Bekannte Grenzen für den Pilot-Einsatz</h2>
           <div style={{ display: 'grid', gap: 10, marginTop: 14 }}>
             {[...(truthSnapshot?.known_limits || []), ...(evidence?.known_limits || [])].map((item) => (
               <div key={item} className="evidence-row">

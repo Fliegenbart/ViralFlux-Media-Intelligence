@@ -1,6 +1,6 @@
 import React from 'react';
 
-import { COCKPIT_SEMANTICS, UI_COPY, evidenceStatusHelper } from '../../../lib/copy';
+import { COCKPIT_SEMANTICS, evidenceStatusHelper } from '../../../lib/copy';
 import { normalizeGermanText } from '../../../lib/plainLanguage';
 import { BacktestResponse, BusinessValidationSummary, OutcomeLearningSummary, TruthCoverage } from '../../../types/media';
 import {
@@ -14,7 +14,6 @@ import {
   metricContractDisplayLabel,
   metricContractNote,
   truthFreshnessLabel,
-  truthLayerLabel,
 } from '../cockpitUtils';
 import { sanitizeEvidenceCopy } from './evidenceUtils';
 
@@ -74,10 +73,10 @@ const TruthOutcomeSection: React.FC<Props> = ({
     <>
       <section className="card subsection-card" style={{ padding: 24 }}>
         <div className="section-heading">
-          <span className="section-kicker">{UI_COPY.customerData}</span>
-          <h2 className="subsection-title">Kundendatenbasis {truthLayerLabel(truthStatus)}</h2>
+          <span className="section-kicker">GELO-Kundendaten</span>
+          <h2 className="subsection-title">Wie weit die GELO-Daten schon tragen</h2>
           <p className="subsection-copy">
-            Dieser Bereich basiert auf validiertem CSV-Import mit Mediabudget und echten Kundendaten. Er zeigt, wie gut die Daten die Empfehlung zusätzlich stützen.
+            Dieser Bereich zeigt, wie weit importierte GELO-Kundendaten die Empfehlungen schon zusätzlich stützen und wo die Datenbasis noch im Aufbau ist.
           </p>
         </div>
         <div className="metric-strip">
@@ -96,7 +95,7 @@ const TruthOutcomeSection: React.FC<Props> = ({
         </div>
         <div className="soft-panel review-panel-soft" style={{ marginTop: 14 }}>
           <div className="evidence-row">
-            <span>Freigabestatus Kundendaten</span>
+            <span>GELO-Datenstatus</span>
             <strong>{truthGate?.passed ? 'freigeschaltet' : learningStateLabel(truthGate?.state)}</strong>
           </div>
           <div className="evidence-row">
@@ -146,7 +145,7 @@ const TruthOutcomeSection: React.FC<Props> = ({
         )}
         {!truthStatus?.coverage_weeks && legacyCustomer && (
           <div className="soft-panel review-panel-soft" style={{ marginTop: 14 }}>
-            <div className="campaign-focus-label">Früherer Kundenlauf</div>
+            <div className="campaign-focus-label">Früherer GELO-Lauf</div>
             <div className="review-body-copy" style={{ marginTop: 8 }}>
               {legacyCustomer.metrics?.data_points || 0} Punkte aus einem älteren Kunden-Backtest. Dieser Run bleibt als historischer Hinweis sichtbar, zählt aber nicht als aktiver Bereich für Kundendaten.
             </div>
@@ -156,10 +155,10 @@ const TruthOutcomeSection: React.FC<Props> = ({
 
       <section className="card subsection-card" style={{ padding: 24 }}>
         <div className="section-heading">
-          <span className="section-kicker">Beobachtete Wirkung</span>
-          <h2 className="subsection-title">Was die Kundendaten zusätzlich stützen</h2>
+          <span className="section-kicker">Outcome-Lernen</span>
+          <h2 className="subsection-title">Was diese GELO-Daten zusätzlich stützen</h2>
           <p className="subsection-copy">
-            Dieser Block zeigt, was aus importierten Kundendaten bereits gelernt wurde. Die Werte helfen bei der Priorisierung, sind aber keine Aussage über eine sichere Welle.
+            Dieser Block zeigt, was aus importierten GELO-Daten bereits gelernt wurde. Die Werte helfen bei der Priorisierung, sind aber keine Aussage über sichere Wirkung.
           </p>
         </div>
         <div className="review-muted-copy" style={{ marginTop: 12 }}>

@@ -7,12 +7,10 @@ import { formatDateTime, formatPercent } from '../cockpitUtils';
 import {
   formatSignedPercent,
   monitoringFreshnessLabel,
-  monitoringStatusLabel,
   numberFromUnknown,
   readinessGateLabel,
   sanitizeEvidenceCopy,
 } from './evidenceUtils';
-import { decisionStateLabel } from '../../../lib/copy';
 
 interface Props {
   forecastMonitoring?: ForecastMonitoring;
@@ -68,7 +66,7 @@ const ForecastMonitoringSection: React.FC<Props> = ({
           <div>
             <div className="section-kicker">Marktabgleich</div>
             <h2 className="subsection-title" style={{ marginTop: 8 }}>
-              {decisionStateLabel(marketValidation?.quality_gate?.overall_passed ? 'GO' : 'WATCH')}
+              Wie belastbar die Modellrichtung gerade ist
             </h2>
           </div>
           <div className="metric-strip">
@@ -86,7 +84,7 @@ const ForecastMonitoringSection: React.FC<Props> = ({
             </div>
           </div>
           <p className="section-copy">
-            Hier sehen wir, wie gut das System frühe Signale gegen echte Marktbewegungen trifft. Das stützt den zeitlichen Vorlauf, ersetzt aber noch keinen Kundennachweis.
+            Hier sehen wir, wie gut frühe Signale tatsächlich zu späteren Marktbewegungen passen. Das stützt den Vorlauf für GELO, ersetzt aber noch keinen Kundendaten-Nachweis.
           </p>
         </div>
 
@@ -94,7 +92,7 @@ const ForecastMonitoringSection: React.FC<Props> = ({
           <div>
             <div className="section-kicker">Vorhersage</div>
             <h2 className="subsection-title" style={{ marginTop: 8 }}>
-              {monitoringStatusLabel(forecastMonitoring?.monitoring_status)}
+              Wann der Forecast mit Vorsicht gelesen werden sollte
             </h2>
           </div>
           <div className="metric-strip">
@@ -112,7 +110,7 @@ const ForecastMonitoringSection: React.FC<Props> = ({
             </div>
           </div>
           <p className="section-copy">
-            Hier prüfen wir, ob die aktuelle Vorhersage trägt. Dafür schauen wir auf Genauigkeit, Rückblicktest, Warnsignale und Kalibrierung.
+            Dieser Block zeigt, ob die aktuelle Modellrichtung schon tragfähig genug ist oder ob PEIX sie GELO nur mit Vorsicht erklären sollte.
           </p>
           <div className="review-chip-row">
             <span className="step-chip">Rückblicktest: {monitoringFreshnessLabel(forecastMonitoring?.backtest_freshness_status)}</span>
@@ -132,15 +130,15 @@ const ForecastMonitoringSection: React.FC<Props> = ({
             {eventProbabilityNote}
           </div>
           <div className="soft-panel" style={{ padding: 16, marginTop: 16, display: 'grid', gap: 8 }}>
-            <div className="campaign-focus-label">Wichtig für Operatoren</div>
+            <div className="campaign-focus-label">Was das für GELO bedeutet</div>
             <div className="review-body-copy">
               {COCKPIT_SEMANTICS.eventProbability.label} ist hier eine eigene Vorhersage-Metrik. Sie ist nicht dasselbe wie {COCKPIT_SEMANTICS.rankingSignal.label} oder {COCKPIT_SEMANTICS.decisionPriority.label}.
             </div>
             <div className="review-body-copy">
-              Die Charts darunter zeigen Truth, Forecast und Unsicherheit getrennt. {COCKPIT_SEMANTICS.rankingSignal.label}e werden dort nicht mit hineingemischt.
+              Die Detail-Charts darunter halten Truth, Forecast und Unsicherheit bewusst getrennt. So bleibt nachvollziehbar, worauf sich die Empfehlung stützt.
             </div>
             <div className="review-body-copy">
-              Wenn Kalibrierung, Quality Gate oder Sample Coverage schwach sind, solltest du die Richtung eher als Hinweis als als sichere Höhe lesen.
+              Wenn Kalibrierung, Quality Gate oder Sample Coverage schwach sind, solltest du die Richtung eher als Hinweis als als belastbare Freigabe lesen.
             </div>
             <div className="review-body-copy">
               {UI_COPY.stateLevelScope}: {COCKPIT_SEMANTICS.stateLevelScope.helper} {COCKPIT_SEMANTICS.noCityForecast.helper}
@@ -152,7 +150,7 @@ const ForecastMonitoringSection: React.FC<Props> = ({
       <section style={{ display: 'grid', gap: 20 }}>
         <ValidationSection
           title="Markt-Validierung im Verlauf"
-          subtitle="Hier sehen wir, ob das Modell eine Welle früh erkennt und nicht nur nachläuft."
+          subtitle="Hier siehst du, ob der Forecast eine Welle früh genug erkennt, um GELO zeitlich sinnvoll zu unterstützen."
           result={marketValidation}
           loading={marketValidationLoading}
           emptyMessage="Noch keine detaillierten Daten für den Marktvergleich verfügbar."
@@ -160,7 +158,7 @@ const ForecastMonitoringSection: React.FC<Props> = ({
         {truthStatus?.coverage_weeks ? (
           <ValidationSection
             title="Kunden-Validierung im Verlauf"
-            subtitle="Marktvergleich und Kundendaten bleiben getrennt. Dieser Bereich zeigt nur, wie gut das Modell an echte Kundendaten anschließt."
+            subtitle="Marktvergleich und GELO-Kundendaten bleiben getrennt. Dieser Bereich zeigt nur, wie gut das Modell an echte Outcome-Daten anschließt."
             result={customerValidation}
             loading={customerValidationLoading}
             emptyMessage="Noch keine ausreichend langen Kundenreihen für eine belastbare Validierung der Kundendaten verfügbar."
@@ -170,7 +168,7 @@ const ForecastMonitoringSection: React.FC<Props> = ({
             <div className="section-heading" style={{ gap: 6 }}>
               <h2 className="subsection-title">Kunden-Validierung im Verlauf</h2>
               <p className="subsection-copy">
-                Dieser Block bleibt leer, bis echte Kundendaten angeschlossen sind. Frühere Läufe erscheinen separat nur als Hinweis.
+                Dieser Block bleibt leer, bis echte GELO-Kundendaten angeschlossen sind. Frühere Läufe erscheinen separat nur als Hinweis.
               </p>
             </div>
             {legacyCustomer ? (
@@ -200,9 +198,9 @@ const ForecastMonitoringSection: React.FC<Props> = ({
       <section className="card subsection-card" style={{ padding: 24 }}>
         <div className="section-heading">
           <span className="section-kicker">Vorhersage-Details</span>
-          <h2 className="subsection-title">Wie stabil die Vorhersage ist</h2>
+          <h2 className="subsection-title">Technische Reliability im Detail</h2>
           <p className="subsection-copy">
-            Hier sehen wir, ob die Vorhersage nicht nur läuft, sondern bei Genauigkeit, Vorlauf und Kalibrierung im Zielkorridor bleibt.
+            Diese Details brauchst du nur, wenn du die Reliability tiefer erklären oder einen Warnhinweis sauber begründen musst.
           </p>
         </div>
 
@@ -266,7 +264,7 @@ const ForecastMonitoringSection: React.FC<Props> = ({
 
         {forecastMonitoring?.alerts?.length ? (
           <div className="soft-panel review-panel-soft" style={{ marginTop: 16, padding: 18 }}>
-            <div className="campaign-focus-label">Hinweise aus der Vorhersage-Prüfung</div>
+            <div className="campaign-focus-label">Wo der Forecast gerade Vorsicht braucht</div>
             <div style={{ display: 'grid', gap: 8, marginTop: 10 }}>
               {forecastMonitoring.alerts.map((alert) => (
                 <div key={alert} className="review-body-copy">{sanitizeEvidenceCopy(alert)}</div>

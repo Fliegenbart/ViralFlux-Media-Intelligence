@@ -69,12 +69,30 @@ function buildWorkspaceStatus(): WorkspaceStatusSummary {
 }
 
 describe('EvidencePanel', () => {
-  it('shows the go-no-go summary first and keeps the technical blocks below', () => {
+  it('shows the GELO trust and onboarding briefing before the technical sections', () => {
     render(
       <EvidencePanel
         evidence={{
           source_status: { items: [], live_count: 0, total: 0, live_ratio: 0 },
           recent_runs: [{ mode: 'forecast_monitoring', status: 'ok' }],
+          truth_coverage: {
+            coverage_weeks: 24,
+            regions_covered: 9,
+            products_covered: 3,
+            truth_freshness_state: 'fresh',
+            last_imported_at: '2026-03-24T10:00:00Z',
+            required_fields_present: ['Produkt vorhanden'],
+            conversion_fields_present: ['Outcome vorhanden'],
+          },
+          truth_snapshot: {
+            latest_batch: {
+              uploaded_at: '2026-03-24T10:00:00Z',
+            },
+            template_url: 'https://example.com/template.csv',
+          },
+          business_validation: {
+            guidance: 'Die Datenlage reicht für vorsichtige Wochenplanung.',
+          },
         } as any}
         workspaceStatus={buildWorkspaceStatus()}
         loading={false}
@@ -91,20 +109,27 @@ describe('EvidencePanel', () => {
       />,
     );
 
-    expect(screen.getByText('Kannst du weitermachen?')).toBeInTheDocument();
-    expect(screen.getByText('Die drei wichtigsten Prüfpunkte')).toBeInTheDocument();
-    expect(screen.getByText('Das bremst die Freigabe gerade')).toBeInTheDocument();
+    expect(screen.getByText('Was für GELO schon belastbar ist und was noch fehlt')).toBeInTheDocument();
+    expect(screen.getByText('Readiness auf einen Blick')).toBeInTheDocument();
+    expect(screen.getByText('Welche GELO-Daten schon im System sind')).toBeInTheDocument();
+    expect(screen.getByText('Schon verbunden')).toBeInTheDocument();
+    expect(screen.getByText('Fehlend oder blockiert')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Fehlende Daten klären' })).toHaveAttribute('href', '#evidence-import');
+    expect(screen.getByRole('link', { name: 'CSV-Vorlage laden' })).toHaveAttribute('href', 'https://example.com/template.csv');
+    expect(screen.getByText('Datenvollständigkeit')).toBeInTheDocument();
+    expect(screen.getByText('Modell-Reliability')).toBeInTheDocument();
+    expect(screen.getByText('Operative Einsatzreife')).toBeInTheDocument();
     expect(screen.getAllByText('Ein Importfeld ist noch nicht sauber zugeordnet.').length).toBeGreaterThan(0);
-    expect(screen.getByText('1. Vorhersage prüfen')).toBeInTheDocument();
-    expect(screen.getByText('2. Kundendaten prüfen')).toBeInTheDocument();
-    expect(screen.getByText('3. Quellen prüfen')).toBeInTheDocument();
-    expect(screen.getByText('4. Import prüfen')).toBeInTheDocument();
-    expect(screen.getByText('Technische Hinweise')).toBeInTheDocument();
-    expect(screen.getByText(/Event-Wahrscheinlichkeit:/)).toBeInTheDocument();
-    expect(screen.getByText(/Bundesland-Level:/)).toBeInTheDocument();
+    expect(screen.getByText('GELO-Daten und Outcome-Lernen')).toBeInTheDocument();
+    expect(screen.getByText('GELO-Daten importieren und prüfen')).toBeInTheDocument();
+    expect(screen.getByText('Forecast und Modell-Reliability')).toBeInTheDocument();
+    expect(screen.getByText('Quellen, Frische und bekannte Grenzen')).toBeInTheDocument();
+    expect(screen.getByText('Technische Einordnung')).toBeInTheDocument();
+    expect(screen.getByText(/Bundesland-Level bleibt Pflicht/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/nicht für einzelne Städte/i).length).toBeGreaterThan(0);
   });
 
-  it('announces the loading state for quality data', () => {
+  it('announces the loading state for GELO trust data', () => {
     render(
       <EvidencePanel
         evidence={null}
@@ -123,6 +148,7 @@ describe('EvidencePanel', () => {
       />,
     );
 
-    expect(screen.getByRole('status')).toHaveTextContent('Lade Qualität...');
+    expect(screen.getByRole('status', { name: 'GELO-Datenlage wird geladen' })).toBeInTheDocument();
+    expect(screen.getByText('Was für GELO schon belastbar ist und was noch fehlt')).toBeInTheDocument();
   });
 });

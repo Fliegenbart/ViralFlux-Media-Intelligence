@@ -25,9 +25,10 @@ from app.services.ml.forecast_contracts import (
     EventForecast,
     ForecastMonitoringSnapshot,
     ForecastQuality,
+    HEURISTIC_EVENT_SCORE_SOURCE,
     OpportunityAssessment,
     confidence_label,
-    event_probability_from_forecast,
+    heuristic_event_score_from_forecast,
     normalized_expected_value_index,
 )
 from app.services.ml.forecast_horizon_utils import DEFAULT_FORECAST_REGION
@@ -183,31 +184,55 @@ class ForecastDecisionService:
         *,
         horizon_forecast: MLForecast | None,
         baseline_value: float,
-    ) -> tuple[float | None, str, str | None, bool]:
+    ) -> dict[str, Any]:
         stored = self._stored_event_forecast(horizon_forecast)
         stored_probability = stored.get("event_probability")
         if stored_probability is not None:
-            return (
-                float(stored_probability),
-                str(stored.get("probability_source") or stored.get("calibration_method") or "learned"),
-                stored.get("learned_model_version"),
-                bool(stored.get("fallback_used")),
-            )
+            return {
+                "event_probability": float(stored_probability),
+                "heuristic_event_score": (
+                    float(stored["heuristic_event_score"])
+                    if stored.get("heuristic_event_score") is not None
+                    else None
+                ),
+                "probability_source": str(
+                    stored.get("probability_source") or stored.get("calibration_method") or "learned"
+                ),
+                "learned_model_version": stored.get("learned_model_version"),
+                "fallback_used": bool(stored.get("fallback_used")),
+            }
+
+        stored_heuristic = stored.get("heuristic_event_score")
+        if stored_heuristic is not None:
+            return {
+                "event_probability": None,
+                "heuristic_event_score": float(stored_heuristic),
+                "probability_source": str(stored.get("probability_source") or HEURISTIC_EVENT_SCORE_SOURCE),
+                "learned_model_version": stored.get("learned_model_version"),
+                "fallback_used": True,
+            }
 
         if horizon_forecast is not None and baseline_value > 0:
-            return (
-                event_probability_from_forecast(
+            return {
+                "event_probability": None,
+                "heuristic_event_score": heuristic_event_score_from_forecast(
                     prediction=float(horizon_forecast.predicted_value or 0.0),
                     baseline=baseline_value,
                     lower_bound=horizon_forecast.lower_bound,
                     upper_bound=horizon_forecast.upper_bound,
                     threshold_pct=DEFAULT_DECISION_EVENT_THRESHOLD_PCT,
                 ),
-                "heuristic_sigmoid_proxy",
-                None,
-                True,
-            )
-        return None, "heuristic_sigmoid_proxy", None, True
+                "probability_source": HEURISTIC_EVENT_SCORE_SOURCE,
+                "learned_model_version": None,
+                "fallback_used": True,
+            }
+        return {
+            "event_probability": None,
+            "heuristic_event_score": None,
+            "probability_source": HEURISTIC_EVENT_SCORE_SOURCE,
+            "learned_model_version": None,
+            "fallback_used": True,
+        }
 
     def build_forecast_bundle(
         self,
@@ -257,10 +282,25 @@ class ForecastDecisionService:
             max(len(forecasts) - 1, 0),
         )
         horizon_forecast = forecasts[horizon_index] if forecasts else None
-        raw_event_probability, probability_source, learned_model_version, fallback_used = self._resolve_live_event_probability(
+        resolved_event_signal = self._resolve_live_event_probability(
             horizon_forecast=horizon_forecast,
             baseline_value=baseline_value,
         )
+        event_probability = resolved_event_signal.get("event_probability")
+        heuristic_event_score = resolved_event_signal.get("heuristic_event_score")
+        probability_source = str(resolved_event_signal.get("probability_source") or HEURISTIC_EVENT_SCORE_SOURCE)
+        learned_model_version = resolved_event_signal.get("learned_model_version")
+        fallback_used = bool(resolved_event_signal.get("fallback_used"))
+        decision_signal = (
+            float(event_probability)
+            if event_probability is not None
+            else (
+                float(heuristic_event_score)
+                if heuristic_event_score is not None
+                else None
+            )
+        )
+        probability_is_learned = event_probability is not None
 
         market_metrics = latest_market.metrics if latest_market and latest_market.metrics else {}
         quality_gate = market_metrics.get("quality_gate") or {}
@@ -303,7 +343,12 @@ class ForecastDecisionService:
         event_forecast = EventForecast(
             event_key=f"{virus_typ.lower().replace(' ', '_')}_growth_7d",
             horizon_days=DEFAULT_DECISION_HORIZON_DAYS,
-            event_probability=raw_event_probability,
+            event_probability=(float(event_probability) if event_probability is not None else None),
+            heuristic_event_score=(
+                float(heuristic_event_score)
+                if heuristic_event_score is not None
+                else None
+            ),
             threshold_pct=DEFAULT_DECISION_EVENT_THRESHOLD_PCT,
             baseline_value=round(float(baseline_value), 3) if baseline_value > 0 else None,
             threshold_value=(
@@ -313,22 +358,22 @@ class ForecastDecisionService:
             ),
             calibration_method=str(
                 event_calibration.get("calibration_method")
-                or probability_source
-                or "growth_sigmoid_with_oos_gate"
+                if probability_is_learned and event_calibration.get("calibration_method")
+                else probability_source
             ),
             brier_score=(
                 round(float(event_calibration["brier_score"]), 4)
-                if event_calibration.get("brier_score") is not None
+                if probability_is_learned and event_calibration.get("brier_score") is not None
                 else None
             ),
             ece=(
                 round(float(event_calibration["ece"]), 4)
-                if event_calibration.get("ece") is not None
+                if probability_is_learned and event_calibration.get("ece") is not None
                 else None
             ),
             calibration_passed=(
                 bool(event_calibration.get("calibration_passed"))
-                if event_calibration
+                if probability_is_learned and event_calibration
                 else None
             ),
             confidence=confidence_value,
@@ -352,11 +397,11 @@ class ForecastDecisionService:
         )
 
         compatibility_score = normalized_expected_value_index(
-            event_probability=raw_event_probability,
+            event_probability=decision_signal,
             modifier=1.0 if forecast_ready else 0.75,
         )
         component_scores = {
-            "wastewater": round(min(1.0, max(0.0, (raw_event_probability or 0.0) * 1.05)), 4),
+            "wastewater": round(min(1.0, max(0.0, (decision_signal or 0.0) * 1.05)), 4),
             "notaufnahme": round(
                 min(1.0, max(0.0, float(timing_metrics.get("corr_at_best_lag", 0.0) or 0.0))),
                 4,
@@ -668,18 +713,41 @@ class ForecastDecisionService:
         )
         history: list[dict[str, Any]] = []
         for row in rows:
-            probability = event_probability_from_forecast(
-                prediction=float(row.predicted_value or 0.0),
-                baseline=baseline,
-                lower_bound=row.lower_bound,
-                upper_bound=row.upper_bound,
-                threshold_pct=DEFAULT_DECISION_EVENT_THRESHOLD_PCT,
-            ) if baseline > 0 else None
+            stored = self._stored_event_forecast(row)
+            stored_probability = stored.get("event_probability")
+            if stored_probability is not None:
+                probability = float(stored_probability)
+                heuristic_score = (
+                    float(stored["heuristic_event_score"])
+                    if stored.get("heuristic_event_score") is not None
+                    else None
+                )
+                probability_source = str(
+                    stored.get("probability_source") or stored.get("calibration_method") or "learned"
+                )
+                score_input = probability
+            else:
+                probability = None
+                heuristic_score = (
+                    heuristic_event_score_from_forecast(
+                        prediction=float(row.predicted_value or 0.0),
+                        baseline=baseline,
+                        lower_bound=row.lower_bound,
+                        upper_bound=row.upper_bound,
+                        threshold_pct=DEFAULT_DECISION_EVENT_THRESHOLD_PCT,
+                    )
+                    if baseline > 0
+                    else None
+                )
+                probability_source = HEURISTIC_EVENT_SCORE_SOURCE
+                score_input = heuristic_score
             history.append(
                 {
                     "date": row.forecast_date.isoformat() if row.forecast_date else None,
-                    "score": normalized_expected_value_index(event_probability=probability),
+                    "score": normalized_expected_value_index(event_probability=score_input),
                     "event_probability": probability,
+                    "heuristic_event_score": heuristic_score,
+                    "probability_source": probability_source,
                     "model_version": row.model_version,
                 }
             )

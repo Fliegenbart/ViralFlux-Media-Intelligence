@@ -40,7 +40,8 @@ from app.services.ml.forecast_contracts import (
     DEFAULT_DECISION_BASELINE_WINDOW_DAYS,
     DEFAULT_DECISION_EVENT_THRESHOLD_PCT,
     DEFAULT_DECISION_HORIZON_DAYS,
-    event_probability_from_forecast,
+    HEURISTIC_EVENT_SCORE_SOURCE,
+    heuristic_event_score_from_forecast,
 )
 
 logger = logging.getLogger(__name__)
@@ -1441,13 +1442,24 @@ class BacktestService:
         bucket_counts = [0] * 5
         bucket_pred = [0.0] * 5
         bucket_obs = [0.0] * 5
+        skipped_heuristic_only = False
 
         valid_rows = []
         for row in forecast_records or []:
             issue = pd.to_datetime(row.get("issue_date"), errors="coerce")
             target = pd.to_datetime(row.get("target_date"), errors="coerce")
+            probability_source = str(row.get("probability_source") or "")
+            raw_probability = row.get("event_probability")
+            if raw_probability is None and (
+                row.get("heuristic_event_score") is not None
+                or probability_source == HEURISTIC_EVENT_SCORE_SOURCE
+            ):
+                skipped_heuristic_only = True
+                continue
+            if raw_probability is None:
+                raw_probability = row.get("p_event")
             try:
-                probability = float(row.get("p_event"))
+                probability = float(raw_probability)
                 y_true = float(row.get("y_true"))
             except (TypeError, ValueError):
                 continue
@@ -1469,8 +1481,18 @@ class BacktestService:
                 "samples": 0,
                 "brier_score": None,
                 "ece": None,
-                "calibration_passed": False,
-                "calibration_method": "growth_sigmoid_with_oos_gate",
+                "calibration_passed": None,
+                "calibration_method": (
+                    "skipped_heuristic_event_score"
+                    if skipped_heuristic_only
+                    else "unavailable"
+                ),
+                "calibration_skipped": bool(skipped_heuristic_only),
+                "skip_reason": (
+                    "heuristic_event_score_only"
+                    if skipped_heuristic_only
+                    else "no_probability_records"
+                ),
                 "buckets": [],
             }
 
@@ -1508,6 +1530,8 @@ class BacktestService:
                 "ece": None,
                 "calibration_passed": False,
                 "calibration_method": "growth_sigmoid_with_oos_gate",
+                "calibration_skipped": False,
+                "skip_reason": "no_baseline_comparable_rows",
                 "buckets": [],
             }
 
@@ -1539,6 +1563,8 @@ class BacktestService:
             "ece": round(float(ece), 4),
             "calibration_passed": bool(calibration_passed),
             "calibration_method": "growth_sigmoid_with_oos_gate",
+            "calibration_skipped": False,
+            "skip_reason": None,
             "buckets": buckets,
         }
 
@@ -2215,7 +2241,7 @@ class BacktestService:
             if decision_window.empty:
                 decision_window = train_target_df
             decision_baseline = float(decision_window["menge"].median()) if not decision_window.empty else seasonal_bl
-            p_event = event_probability_from_forecast(
+            heuristic_event_score = heuristic_event_score_from_forecast(
                 prediction=y_hat,
                 baseline=decision_baseline if decision_baseline > 0 else max(seasonal_bl, 1.0),
                 lower_bound=max(0.0, y_hat - 1.28 * max(float(np.std(y_train)), 1.0)),
@@ -2234,7 +2260,10 @@ class BacktestService:
                 "predicted_qty_level": y_hat,
                 "predicted_qty_lead": y_hat,
                 "predicted_qty_decision": y_hat,
-                "p_event": p_event,
+                "p_event": None,
+                "event_probability": None,
+                "heuristic_event_score": heuristic_event_score,
+                "probability_source": HEURISTIC_EVENT_SCORE_SOURCE,
                 "selected_variant": "xgboost",
                 "baseline_persistence": baseline_persistence,
                 "baseline_seasonal": seasonal_bl,
@@ -2349,7 +2378,22 @@ class BacktestService:
                 "y_hat": round(float(row.get("predicted_qty_decision", row["predicted_qty"])), 3),
                 "y_hat_level": round(float(row.get("predicted_qty_level", row["predicted_qty"])), 3),
                 "y_hat_lead": round(float(row.get("predicted_qty_lead", row["predicted_qty"])), 3),
-                "p_event": round(float(row.get("p_event", 0.0)), 4),
+                "p_event": (
+                    round(float(row["event_probability"]), 4)
+                    if row.get("event_probability") is not None
+                    else None
+                ),
+                "event_probability": (
+                    round(float(row["event_probability"]), 4)
+                    if row.get("event_probability") is not None
+                    else None
+                ),
+                "heuristic_event_score": (
+                    round(float(row["heuristic_event_score"]), 4)
+                    if row.get("heuristic_event_score") is not None
+                    else None
+                ),
+                "probability_source": str(row.get("probability_source") or HEURISTIC_EVENT_SCORE_SOURCE),
                 "selected_variant": str(row.get("selected_variant") or "level"),
                 "y_true": float(row["real_qty"]),
                 "baseline_persistence": float(row["baseline_persistence"]),
@@ -2414,7 +2458,7 @@ class BacktestService:
                 "mae_vs_seasonal_pct": round((seas_mae - model_mae) / seas_mae * 100, 2),
             },
             interval_coverage=interval_coverage,
-            event_calibration=event_calibration,
+            event_calibration=None if event_calibration.get("calibration_skipped") else event_calibration,
         )
 
         return {

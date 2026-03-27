@@ -15,6 +15,7 @@ from app.models.database import (
     WastewaterAggregated,
 )
 from app.services.marketing_engine.opportunity_engine import MarketingOpportunityEngine
+from app.services.ml.forecast_contracts import HEURISTIC_EVENT_SCORE_SOURCE
 from app.services.ml.forecast_decision_service import ForecastDecisionService
 
 
@@ -142,10 +143,46 @@ class ForecastDecisionServiceTests(unittest.TestCase):
         )
 
         self.assertEqual(bundle["forecast_quality"]["forecast_readiness"], "GO")
-        self.assertIsNotNone(bundle["event_forecast"]["event_probability"])
-        self.assertTrue(bundle["event_forecast"]["calibration_passed"])
+        self.assertIsNone(bundle["event_forecast"]["event_probability"])
+        self.assertIsNotNone(bundle["event_forecast"]["heuristic_event_score"])
+        self.assertEqual(bundle["event_forecast"]["probability_source"], HEURISTIC_EVENT_SCORE_SOURCE)
+        self.assertIsNone(bundle["event_forecast"]["calibration_passed"])
         self.assertGreater(bundle["compatibility"]["final_risk_score"], 0.0)
         self.assertEqual(len(bundle["burden_forecast"]["points"]), 14)
+
+    def test_build_forecast_bundle_prefers_stored_learned_event_probability(self) -> None:
+        self._seed_forecast_bundle_inputs()
+        stored_forecast = (
+            self.db.query(MLForecast)
+            .filter(MLForecast.virus_typ == "Influenza A")
+            .order_by(MLForecast.forecast_date.asc())
+            .offset(6)
+            .limit(1)
+            .one()
+        )
+        stored_forecast.features_used = {
+            "event_forecast": {
+                "event_probability": 0.64,
+                "heuristic_event_score": 0.58,
+                "probability_source": "learned_exceedance_logistic_regression",
+                "learned_model_version": "xgb_stack_v1",
+                "fallback_used": False,
+            }
+        }
+        self.db.commit()
+
+        bundle = ForecastDecisionService(self.db).build_forecast_bundle(
+            virus_typ="Influenza A",
+            target_source="RKI_ARE",
+        )
+
+        self.assertEqual(bundle["event_forecast"]["event_probability"], 0.64)
+        self.assertEqual(bundle["event_forecast"]["heuristic_event_score"], 0.58)
+        self.assertEqual(
+            bundle["event_forecast"]["probability_source"],
+            "learned_exceedance_logistic_regression",
+        )
+        self.assertTrue(bundle["event_forecast"]["calibration_passed"])
 
     def test_build_monitoring_snapshot_returns_healthy_state_for_green_stack(self) -> None:
         self._seed_forecast_bundle_inputs()
@@ -305,7 +342,9 @@ class ForecastFirstOpportunityTests(unittest.TestCase):
         self.assertEqual(candidate["action_class"], "market_watch")
         self.assertIn("event_forecast", candidate)
         self.assertIn("opportunity_assessment", candidate)
-        self.assertIsNotNone(candidate["impact_probability"])
+        self.assertIsNone(candidate["impact_probability"])
+        self.assertIsNone(candidate["event_forecast"]["event_probability"])
+        self.assertIsNotNone(candidate["event_forecast"]["heuristic_event_score"])
 
     def test_confidence_pct_requires_explicit_signal_confidence(self) -> None:
         self.assertIsNone(MarketingOpportunityEngine._confidence_pct(None, 92.0))

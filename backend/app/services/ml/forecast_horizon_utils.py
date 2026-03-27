@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 import pandas as pd
+from sklearn.isotonic import IsotonicRegression
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import average_precision_score, log_loss
 
 from app.services.ml.forecast_contracts import DEFAULT_DECISION_EVENT_THRESHOLD_PCT
 
@@ -15,6 +18,18 @@ from app.services.ml.forecast_contracts import DEFAULT_DECISION_EVENT_THRESHOLD_
 SUPPORTED_FORECAST_HORIZONS: tuple[int, int, int] = (3, 5, 7)
 DEFAULT_FORECAST_REGION = "DE"
 MIN_DIRECT_TRAIN_POINTS = 60
+DEFAULT_WALK_FORWARD_STRIDE = 1
+DEFAULT_CALIBRATION_HOLDOUT_FRACTION = 0.20
+DEFAULT_CALIBRATION_GUARD_FRACTION = 0.35
+MIN_CALIBRATION_TRAIN_DATES = 20
+MIN_CALIBRATION_TOTAL_DATES = 35
+MIN_CALIBRATION_HOLDOUT_DATES = 14
+MIN_CALIBRATION_GUARD_DATES = 7
+DEFAULT_ISOTONIC_MIN_SAMPLES = 40
+DEFAULT_ISOTONIC_MIN_CLASS_SUPPORT = 8
+DEFAULT_PLATT_MIN_SAMPLES = 12
+DEFAULT_PLATT_MIN_CLASS_SUPPORT = 2
+CALIBRATION_GUARD_EPSILON = 1e-9
 
 # Product-level support matrix for the operational regional path.
 # Empty means "supported unless explicitly excluded".
@@ -78,6 +93,37 @@ class HorizonSplit:
 
     def to_dict(self) -> dict[str, int]:
         return asdict(self)
+
+
+@dataclass
+class LearnedProbabilityModel:
+    classifier: Any
+    feature_names: list[str]
+    model_family: str
+    calibration: Any | None = None
+    calibration_mode: str = "raw_probability"
+    probability_source: str = "learned_exceedance_model"
+    fallback_reason: str | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    def predict_proba(self, X: np.ndarray | pd.DataFrame) -> np.ndarray:
+        if isinstance(X, pd.DataFrame):
+            values = X[self.feature_names].to_numpy(dtype=float)
+        else:
+            values = np.asarray(X, dtype=float)
+        raw = self.classifier.predict_proba(values)[:, 1]
+        return apply_probability_calibration(self.calibration, raw)
+
+    def to_metadata(self) -> dict[str, Any]:
+        payload = {
+            "model_family": self.model_family,
+            "feature_names": list(self.feature_names),
+            "calibration_mode": self.calibration_mode,
+            "probability_source": self.probability_source,
+            "fallback_reason": self.fallback_reason,
+        }
+        payload.update(self.metadata or {})
+        return payload
 
 
 def normalize_forecast_region(region: str | None) -> str:
@@ -198,22 +244,67 @@ def build_walk_forward_splits(
     n_rows: int,
     *,
     min_train_points: int = MIN_DIRECT_TRAIN_POINTS,
-    n_splits: int = 5,
+    n_splits: int | None = None,
+    stride: int = DEFAULT_WALK_FORWARD_STRIDE,
+    max_splits: int | None = None,
 ) -> list[HorizonSplit]:
     if n_rows <= max(min_train_points, 1):
         return []
 
     start = max(int(min_train_points), 1)
     end = n_rows - 1
-    candidates = np.linspace(start, end, num=min(int(n_splits), max(end - start + 1, 1)), dtype=int)
-    splits: list[HorizonSplit] = []
-    seen: set[int] = set()
-    for idx in candidates.tolist():
-        if idx in seen or idx <= start:
-            continue
-        seen.add(idx)
-        splits.append(HorizonSplit(train_end_idx=int(idx), test_idx=int(idx)))
-    return splits
+    step = max(int(stride), 1)
+    candidates = list(range(start, end + 1, step))
+    if candidates and candidates[-1] != end:
+        candidates.append(end)
+
+    effective_max = (
+        int(max_splits)
+        if max_splits is not None
+        else (int(n_splits) if n_splits is not None else None)
+    )
+    if effective_max is not None and effective_max > 0 and len(candidates) > effective_max:
+        candidates = candidates[-effective_max:]
+
+    return [
+        HorizonSplit(train_end_idx=int(idx), test_idx=int(idx))
+        for idx in candidates
+        if idx >= start
+    ]
+
+
+def build_calibration_split_dates(
+    train_dates: list[pd.Timestamp],
+    *,
+    holdout_fraction: float = DEFAULT_CALIBRATION_HOLDOUT_FRACTION,
+    min_total_dates: int = MIN_CALIBRATION_TOTAL_DATES,
+    min_holdout_dates: int = MIN_CALIBRATION_HOLDOUT_DATES,
+    min_train_dates: int = MIN_CALIBRATION_TRAIN_DATES,
+) -> tuple[list[pd.Timestamp], list[pd.Timestamp]] | None:
+    unique_dates = sorted({pd.Timestamp(value).normalize() for value in train_dates})
+    if len(unique_dates) < int(min_total_dates):
+        return None
+    calibration_size = max(int(min_holdout_dates), int(len(unique_dates) * float(holdout_fraction)))
+    calibration_size = min(calibration_size, len(unique_dates) - int(min_train_dates))
+    if calibration_size <= 0:
+        return None
+    return unique_dates[:-calibration_size], unique_dates[-calibration_size:]
+
+
+def build_calibration_guard_split_dates(
+    calibration_dates: list[pd.Timestamp],
+    *,
+    guard_fraction: float = DEFAULT_CALIBRATION_GUARD_FRACTION,
+    min_guard_dates: int = MIN_CALIBRATION_GUARD_DATES,
+) -> tuple[list[pd.Timestamp], list[pd.Timestamp]] | None:
+    unique_dates = sorted({pd.Timestamp(value).normalize() for value in calibration_dates})
+    if len(unique_dates) < (int(min_guard_dates) * 2):
+        return None
+    guard_size = max(int(min_guard_dates), int(len(unique_dates) * float(guard_fraction)))
+    guard_size = min(guard_size, len(unique_dates) - int(min_guard_dates))
+    if guard_size <= 0:
+        return None
+    return unique_dates[:-guard_size], unique_dates[-guard_size:]
 
 
 def compute_regression_metrics(predicted: list[float], actual: list[float]) -> dict[str, float]:
@@ -268,3 +359,330 @@ def compute_calibration_error(
         "ece": round(float(ece), 4),
         "brier_score": round(brier, 4),
     }
+
+
+def fit_isotonic_calibrator(
+    raw_probabilities: np.ndarray,
+    labels: np.ndarray,
+    *,
+    min_samples: int = DEFAULT_ISOTONIC_MIN_SAMPLES,
+    min_class_support: int = DEFAULT_ISOTONIC_MIN_CLASS_SUPPORT,
+) -> IsotonicRegression | None:
+    probs = np.asarray(raw_probabilities, dtype=float)
+    obs = np.asarray(labels, dtype=int)
+    positives = int(np.sum(obs == 1))
+    negatives = int(np.sum(obs == 0))
+    if len(probs) < int(min_samples) or min(positives, negatives) < int(min_class_support):
+        return None
+    calibrator = IsotonicRegression(out_of_bounds="clip")
+    calibrator.fit(probs, obs.astype(float))
+    return calibrator
+
+
+def fit_platt_calibrator(
+    raw_probabilities: np.ndarray,
+    labels: np.ndarray,
+    *,
+    min_samples: int = DEFAULT_PLATT_MIN_SAMPLES,
+    min_class_support: int = DEFAULT_PLATT_MIN_CLASS_SUPPORT,
+) -> LogisticRegression | None:
+    probs = np.asarray(raw_probabilities, dtype=float)
+    obs = np.asarray(labels, dtype=int)
+    positives = int(np.sum(obs == 1))
+    negatives = int(np.sum(obs == 0))
+    if len(probs) < int(min_samples) or min(positives, negatives) < int(min_class_support):
+        return None
+    calibrator = LogisticRegression(max_iter=1000, solver="lbfgs")
+    calibrator.fit(probs.reshape(-1, 1), obs)
+    return calibrator
+
+
+def apply_probability_calibration(
+    calibration: Any | None,
+    raw_probabilities: np.ndarray,
+) -> np.ndarray:
+    probs = np.asarray(raw_probabilities, dtype=float)
+    if calibration is None:
+        calibrated = probs
+    elif isinstance(calibration, IsotonicRegression):
+        calibrated = calibration.predict(probs.astype(float))
+    elif hasattr(calibration, "predict_proba"):
+        calibrated = calibration.predict_proba(probs.reshape(-1, 1))[:, 1]
+    else:
+        calibrated = probs
+    return np.clip(np.asarray(calibrated, dtype=float), 0.001, 0.999)
+
+
+def _calibration_guard_metrics(
+    probabilities: np.ndarray,
+    labels: np.ndarray,
+) -> dict[str, float]:
+    metrics = compute_classification_metrics(probabilities, labels)
+    metrics["source_rows"] = float(len(np.asarray(labels)))
+    return metrics
+
+
+def _guard_metrics_not_worse(
+    candidate_metrics: dict[str, Any],
+    raw_metrics: dict[str, Any],
+    *,
+    epsilon: float = CALIBRATION_GUARD_EPSILON,
+) -> bool:
+    candidate_brier = float(candidate_metrics.get("brier_score", float("inf")))
+    raw_brier = float(raw_metrics.get("brier_score", float("inf")))
+    candidate_ece = float(candidate_metrics.get("ece", float("inf")))
+    raw_ece = float(raw_metrics.get("ece", float("inf")))
+    return (
+        candidate_brier <= raw_brier + float(epsilon)
+        and candidate_ece <= raw_ece + float(epsilon)
+    )
+
+
+def _evaluate_calibration_candidate(
+    *,
+    calibration: Any | None,
+    calibration_mode: str,
+    guard_probabilities: np.ndarray,
+    guard_labels: np.ndarray,
+    raw_guard_metrics: dict[str, Any],
+) -> dict[str, Any]:
+    if calibration is None:
+        return {
+            "calibration": None,
+            "calibration_mode": calibration_mode,
+            "supported": False,
+            "accepted": False,
+            "guard_metrics": None,
+        }
+
+    calibrated_guard = apply_probability_calibration(calibration, guard_probabilities)
+    guard_metrics = _calibration_guard_metrics(calibrated_guard, guard_labels)
+    return {
+        "calibration": calibration,
+        "calibration_mode": calibration_mode,
+        "supported": True,
+        "accepted": _guard_metrics_not_worse(guard_metrics, raw_guard_metrics),
+        "guard_metrics": guard_metrics,
+    }
+
+
+def _calibration_fallback_reason(candidate_results: list[dict[str, Any]]) -> str | None:
+    unsupported = [
+        str(result.get("calibration_mode") or "unknown")
+        for result in candidate_results
+        if not bool(result.get("supported"))
+    ]
+    rejected = [
+        str(result.get("calibration_mode") or "unknown")
+        for result in candidate_results
+        if bool(result.get("supported")) and not bool(result.get("accepted"))
+    ]
+    if rejected and unsupported:
+        return f"guard_metrics_worsened:{','.join(rejected)};unsupported:{','.join(unsupported)}"
+    if rejected:
+        return f"guard_metrics_worsened:{','.join(rejected)}"
+    if unsupported:
+        if len(unsupported) == len(candidate_results):
+            return "insufficient_class_support_for_calibration"
+        return f"unsupported:{','.join(unsupported)}"
+    return None
+
+
+def compute_classification_metrics(
+    probabilities: list[float] | np.ndarray,
+    labels: list[float] | np.ndarray,
+) -> dict[str, float]:
+    probs = np.clip(np.asarray(probabilities, dtype=float), 0.001, 0.999)
+    obs = np.asarray(labels, dtype=int)
+    if len(probs) == 0 or len(obs) == 0:
+        return {
+            "brier_score": 0.0,
+            "ece": 0.0,
+            "logloss": 0.0,
+            "pr_auc": 0.0,
+            "prevalence": 0.0,
+            "sample_count": 0.0,
+            "positive_count": 0.0,
+            "negative_count": 0.0,
+        }
+
+    brier = float(np.mean((probs - obs) ** 2))
+    ece = float(compute_calibration_error(probs.tolist(), obs.tolist())["ece"])
+    if len(np.unique(obs)) < 2:
+        pr_auc = float(obs[0]) if len(obs) else 0.0
+        logloss_value = 0.0
+    else:
+        pr_auc = float(average_precision_score(obs, probs))
+        logloss_value = float(log_loss(obs, probs, labels=[0, 1]))
+    positive_count = int(np.sum(obs == 1))
+    negative_count = int(np.sum(obs == 0))
+    return {
+        "brier_score": round(brier, 6),
+        "ece": round(ece, 6),
+        "logloss": round(logloss_value, 6),
+        "pr_auc": round(pr_auc, 6),
+        "prevalence": round(float(np.mean(obs)), 6),
+        "sample_count": float(len(obs)),
+        "positive_count": float(positive_count),
+        "negative_count": float(negative_count),
+    }
+
+
+def select_probability_calibration(
+    calibration_frame: pd.DataFrame,
+    *,
+    raw_probability_col: str = "event_probability_raw",
+    label_col: str = "event_label",
+    date_col: str = "as_of_date",
+    isotonic_min_samples: int = DEFAULT_ISOTONIC_MIN_SAMPLES,
+    isotonic_min_class_support: int = DEFAULT_ISOTONIC_MIN_CLASS_SUPPORT,
+    platt_min_samples: int = DEFAULT_PLATT_MIN_SAMPLES,
+    platt_min_class_support: int = DEFAULT_PLATT_MIN_CLASS_SUPPORT,
+) -> dict[str, Any]:
+    if calibration_frame.empty:
+        return {
+            "calibration": None,
+            "calibration_mode": "raw_probability",
+            "fallback_reason": "calibration_frame_empty",
+            "reliability_metrics": {},
+            "reliability_source": "unavailable",
+        }
+
+    working = calibration_frame[[date_col, label_col, raw_probability_col]].copy()
+    working[date_col] = pd.to_datetime(working[date_col]).dt.normalize()
+    working = working.dropna(subset=[label_col, raw_probability_col]).sort_values(date_col).reset_index(drop=True)
+    if working.empty:
+        return {
+            "calibration": None,
+            "calibration_mode": "raw_probability",
+            "fallback_reason": "calibration_frame_empty_after_dropna",
+            "reliability_metrics": {},
+            "reliability_source": "unavailable",
+        }
+
+    raw_full_metrics = _calibration_guard_metrics(
+        apply_probability_calibration(None, working[raw_probability_col].to_numpy(dtype=float)),
+        working[label_col].to_numpy(dtype=int),
+    )
+
+    guard_split = build_calibration_guard_split_dates(working[date_col].tolist())
+    if not guard_split:
+        return {
+            "calibration": None,
+            "calibration_mode": "raw_probability",
+            "fallback_reason": "calibration_guard_unavailable",
+            "reliability_metrics": raw_full_metrics,
+            "reliability_source": "oof_full_sample",
+        }
+
+    fit_dates, guard_dates = guard_split
+    fit_df = working.loc[working[date_col].isin(fit_dates)].copy()
+    score_df = working.loc[working[date_col].isin(guard_dates)].copy()
+    if fit_df.empty or score_df.empty:
+        return {
+            "calibration": None,
+            "calibration_mode": "raw_probability",
+            "fallback_reason": "calibration_guard_split_empty",
+            "reliability_metrics": raw_full_metrics,
+            "reliability_source": "oof_full_sample",
+        }
+
+    fit_probs = fit_df[raw_probability_col].to_numpy(dtype=float)
+    fit_labels = fit_df[label_col].to_numpy(dtype=int)
+    guard_probs = apply_probability_calibration(
+        None,
+        score_df[raw_probability_col].to_numpy(dtype=float),
+    )
+    guard_labels = score_df[label_col].to_numpy(dtype=int)
+    raw_guard_metrics = _calibration_guard_metrics(guard_probs, guard_labels)
+
+    # The guard slice must stay later in time than calibration fitting so we only
+    # accept calibrators that help, or at least do no harm, on unseen future dates.
+    isotonic_result = _evaluate_calibration_candidate(
+        calibration=fit_isotonic_calibrator(
+            fit_probs,
+            fit_labels,
+            min_samples=isotonic_min_samples,
+            min_class_support=isotonic_min_class_support,
+        ),
+        calibration_mode="isotonic",
+        guard_probabilities=guard_probs,
+        guard_labels=guard_labels,
+        raw_guard_metrics=raw_guard_metrics,
+    )
+    if isotonic_result["accepted"]:
+        return {
+            "calibration": isotonic_result["calibration"],
+            "calibration_mode": "isotonic",
+            "fallback_reason": None,
+            "reliability_metrics": isotonic_result["guard_metrics"],
+            "reliability_source": "temporal_guard",
+        }
+
+    platt_result = _evaluate_calibration_candidate(
+        calibration=fit_platt_calibrator(
+            fit_probs,
+            fit_labels,
+            min_samples=platt_min_samples,
+            min_class_support=platt_min_class_support,
+        ),
+        calibration_mode="platt",
+        guard_probabilities=guard_probs,
+        guard_labels=guard_labels,
+        raw_guard_metrics=raw_guard_metrics,
+    )
+    if platt_result["accepted"]:
+        return {
+            "calibration": platt_result["calibration"],
+            "calibration_mode": "platt",
+            "fallback_reason": None,
+            "reliability_metrics": platt_result["guard_metrics"],
+            "reliability_source": "temporal_guard",
+        }
+
+    return {
+        "calibration": None,
+        "calibration_mode": "raw_probability",
+        "fallback_reason": _calibration_fallback_reason([isotonic_result, platt_result]),
+        "reliability_metrics": raw_guard_metrics,
+        "reliability_source": "temporal_guard",
+    }
+
+
+def reliability_score_from_metrics(
+    metrics: dict[str, Any] | None,
+    *,
+    coverage_metrics: dict[str, Any] | None = None,
+) -> float | None:
+    if not metrics:
+        return None
+
+    components: list[float] = []
+    brier = metrics.get("brier_score")
+    if brier is not None:
+        components.append(max(0.0, min(1.0, 1.0 - (float(brier) / 0.25))))
+    ece = metrics.get("ece")
+    if ece is not None:
+        components.append(max(0.0, min(1.0, 1.0 - (float(ece) / 0.20))))
+    logloss_value = metrics.get("logloss")
+    if logloss_value is not None:
+        components.append(max(0.0, min(1.0, 1.0 - (float(logloss_value) / 1.20))))
+
+    coverage_payload = coverage_metrics or {}
+    coverage_80 = coverage_payload.get("coverage_80")
+    if coverage_80 is not None:
+        components.append(max(0.0, min(1.0, 1.0 - (abs(float(coverage_80) - 0.80) / 0.30))))
+    coverage_95 = coverage_payload.get("coverage_95")
+    if coverage_95 is not None:
+        components.append(max(0.0, min(1.0, 1.0 - (abs(float(coverage_95) - 0.95) / 0.20))))
+
+    if not components:
+        return None
+
+    sample_count = float(metrics.get("sample_count") or 0.0)
+    positive_count = float(metrics.get("positive_count") or 0.0)
+    negative_count = float(metrics.get("negative_count") or 0.0)
+    support_factor = min(1.0, sample_count / 40.0) if sample_count > 0 else 0.0
+    class_factor = min(1.0, min(positive_count, negative_count) / 10.0) if positive_count and negative_count else 0.0
+    stability_factor = max(0.25, min(1.0, max(support_factor, class_factor)))
+    return round(float(np.mean(components)) * stability_factor, 4)

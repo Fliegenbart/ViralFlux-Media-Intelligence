@@ -20,6 +20,7 @@ from app.core.time import utc_now
 import json
 import logging
 import math
+import pickle
 import threading
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -27,8 +28,10 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
-from sklearn.linear_model import Ridge
+from sklearn.linear_model import LogisticRegression, Ridge
 from sklearn.model_selection import TimeSeriesSplit
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 from statsmodels.tsa.holtwinters import ExponentialSmoothing
@@ -52,19 +55,23 @@ from app.services.ml.forecast_contracts import (
     EventForecast,
     ForecastQuality,
     confidence_label,
-    event_probability_from_forecast,
 )
 from app.services.ml.forecast_horizon_utils import (
     DEFAULT_FORECAST_REGION,
+    DEFAULT_WALK_FORWARD_STRIDE,
+    LearnedProbabilityModel,
+    apply_probability_calibration,
     MIN_DIRECT_TRAIN_POINTS,
     SUPPORTED_FORECAST_HORIZONS,
     build_direct_target_frame,
     build_walk_forward_splits,
-    compute_calibration_error,
+    compute_classification_metrics,
     compute_regression_metrics,
     ensure_supported_horizon,
     model_artifact_dir,
     normalize_forecast_region,
+    reliability_score_from_metrics,
+    select_probability_calibration,
 )
 from app.services.ml.regional_panel_utils import normalize_state_code
 from app.services.ml.regional_panel_utils import BUNDESLAND_NAMES
@@ -172,14 +179,29 @@ DEFAULT_XGB_QUANTILE_CONFIG: dict[str, dict[str, Any]] = {
     },
 }
 
+DEFAULT_EVENT_CLASSIFIER_CONFIG: dict[str, Any] = {
+    "n_estimators": 120,
+    "max_depth": 3,
+    "learning_rate": 0.05,
+    "subsample": 0.9,
+    "colsample_bytree": 0.9,
+    "objective": "binary:logistic",
+    "eval_metric": "logloss",
+    "random_state": 42,
+    "verbosity": 0,
+    "n_jobs": 1,
+}
+
+EVENT_MODEL_ARTIFACT_NAME = "event_probability_model.pkl"
+
 # ═══════════════════════════════════════════════════════════════════════
 #  MODEL LOADING & CACHING (module-level, shared across requests)
 # ═══════════════════════════════════════════════════════════════════════
 
 _ML_MODELS_DIR = Path(__file__).resolve().parent.parent.parent / "ml_models"
 
-# Thread-safe cache: {virus|region|horizon: (model_med, model_lo, model_hi, metadata)}
-_model_cache: dict[str, tuple[Any, Any, Any, dict[str, Any]]] = {}
+# Thread-safe cache: {virus|region|horizon: (model_med, model_lo, model_hi, metadata, event_model)}
+_model_cache: dict[str, tuple[Any, Any, Any, dict[str, Any], LearnedProbabilityModel | None]] = {}
 _cache_lock = threading.Lock()
 
 
@@ -193,7 +215,7 @@ def _load_cached_models(
     *,
     region: str = DEFAULT_FORECAST_REGION,
     horizon_days: int = DEFAULT_DECISION_HORIZON_DAYS,
-) -> tuple[Any, Any, Any, dict[str, Any]] | None:
+) -> tuple[Any, Any, Any, dict[str, Any], LearnedProbabilityModel | None] | None:
     """Load XGBoost models from disk with in-memory caching.
 
     Returns ``(model_median, model_lower, model_upper, metadata)``
@@ -241,7 +263,15 @@ def _load_cached_models(
         model_hi = XGBRegressor()
         model_hi.load_model(str(model_dir / "model_upper.json"))
 
-        result = (model_med, model_lo, model_hi, metadata)
+        event_model: LearnedProbabilityModel | None = None
+        event_model_path = model_dir / EVENT_MODEL_ARTIFACT_NAME
+        if event_model_path.exists():
+            with open(event_model_path, "rb") as handle:
+                loaded = pickle.load(handle)
+            if isinstance(loaded, LearnedProbabilityModel):
+                event_model = loaded
+
+        result = (model_med, model_lo, model_hi, metadata, event_model)
 
         with _cache_lock:
             _model_cache[cache_key] = result
@@ -279,6 +309,16 @@ def _sigmoid(x: float) -> float:
         return 1.0 / (1.0 + math.exp(-x))
     exp_x = math.exp(x)
     return exp_x / (1.0 + exp_x)
+
+
+class EmpiricalEventClassifier:
+    def __init__(self, probability: float) -> None:
+        self.probability = float(np.clip(probability, 0.001, 0.999))
+
+    def predict_proba(self, X: np.ndarray) -> np.ndarray:
+        n_rows = len(np.asarray(X))
+        probs = np.full(n_rows, self.probability, dtype=float)
+        return np.column_stack([1.0 - probs, probs])
 
 
 class ForecastService:
@@ -920,6 +960,347 @@ class ForecastService:
     def _direct_ridge_feature_columns(frame: pd.DataFrame) -> list[str]:
         return [column for column in RIDGE_DIRECT_FEATURES if column in frame.columns]
 
+    @staticmethod
+    def _event_feature_columns(frame: pd.DataFrame) -> list[str]:
+        columns: list[str] = []
+        if "current_y" in frame.columns:
+            columns.append("current_y")
+        for name in META_FEATURES:
+            if name in frame.columns and name not in columns:
+                columns.append(name)
+        if "horizon_days" in frame.columns and "horizon_days" not in columns:
+            columns.append("horizon_days")
+        return columns
+
+    @staticmethod
+    def _build_live_event_feature_row(
+        *,
+        raw: pd.DataFrame,
+        live_feature_row: dict[str, float],
+        horizon_days: int,
+    ) -> dict[str, float]:
+        feature_row = dict(live_feature_row)
+        feature_row["current_y"] = float(raw["y"].iloc[-1]) if not raw.empty else 0.0
+        feature_row["horizon_days"] = float(horizon_days)
+        return feature_row
+
+    @staticmethod
+    def _event_model_candidates() -> list[str]:
+        candidates = ["logistic_regression"]
+        try:
+            from xgboost import XGBClassifier  # noqa: F401
+
+            candidates.append("xgb_classifier")
+        except Exception:
+            pass
+        return candidates
+
+    @staticmethod
+    def _fit_event_classifier_model(
+        train_df: pd.DataFrame,
+        *,
+        feature_names: list[str],
+        model_family: str,
+    ) -> Any:
+        X_train = train_df[feature_names].to_numpy(dtype=float)
+        y_train = train_df["event_target"].to_numpy(dtype=int)
+        positives = int(np.sum(y_train == 1))
+        negatives = int(np.sum(y_train == 0))
+        if min(positives, negatives) <= 0:
+            return EmpiricalEventClassifier(float(np.mean(y_train) if len(y_train) else 0.0))
+
+        if model_family == "xgb_classifier":
+            from xgboost import XGBClassifier
+
+            config = dict(DEFAULT_EVENT_CLASSIFIER_CONFIG)
+            config["scale_pos_weight"] = float(negatives / max(positives, 1))
+            model = XGBClassifier(**config)
+            model.fit(X_train, y_train)
+            return model
+
+        model = Pipeline(
+            steps=[
+                ("scaler", StandardScaler()),
+                (
+                    "classifier",
+                    LogisticRegression(
+                        max_iter=1000,
+                        class_weight="balanced",
+                        solver="lbfgs",
+                    ),
+                ),
+            ]
+        )
+        model.fit(X_train, y_train)
+        return model
+
+    def _build_event_oof_predictions(
+        self,
+        panel: pd.DataFrame,
+        *,
+        feature_names: list[str],
+        model_family: str,
+        walk_forward_stride: int = DEFAULT_WALK_FORWARD_STRIDE,
+        max_splits: int | None = None,
+        min_train_points: int = max(MIN_DIRECT_TRAIN_POINTS, 24),
+    ) -> pd.DataFrame:
+        splits = build_walk_forward_splits(
+            len(panel),
+            min_train_points=min_train_points,
+            stride=walk_forward_stride,
+            max_splits=max_splits,
+        )
+        if not splits:
+            return pd.DataFrame()
+
+        frames: list[pd.DataFrame] = []
+        for fold_idx, split in enumerate(splits, start=1):
+            train_df = panel.iloc[: split.train_end_idx].copy()
+            test_df = panel.iloc[[split.test_idx]].copy()
+            if len(train_df) < min_train_points or test_df.empty:
+                continue
+            if train_df["event_target"].nunique() < 2:
+                raw_prob = np.full(len(test_df), float(train_df["event_target"].mean() or 0.0), dtype=float)
+            else:
+                model = self._fit_event_classifier_model(
+                    train_df,
+                    feature_names=feature_names,
+                    model_family=model_family,
+                )
+                raw_prob = np.asarray(
+                    model.predict_proba(test_df[feature_names].to_numpy(dtype=float))[:, 1],
+                    dtype=float,
+                )
+            frames.append(
+                pd.DataFrame(
+                    {
+                        "fold": fold_idx,
+                        "issue_date": pd.to_datetime(test_df["issue_date"]).dt.normalize().values,
+                        "target_date": pd.to_datetime(test_df["target_date"]).dt.normalize().values,
+                        "event_target": test_df["event_target"].to_numpy(dtype=int),
+                        "event_probability_raw": np.clip(raw_prob, 0.001, 0.999),
+                    }
+                )
+            )
+
+        if not frames:
+            return pd.DataFrame()
+        return pd.concat(frames, ignore_index=True)
+
+    @staticmethod
+    def _select_best_event_candidate(candidates: list[dict[str, Any]]) -> dict[str, Any] | None:
+        valid = [
+            candidate
+            for candidate in candidates
+            if isinstance(candidate.get("oof_frame"), pd.DataFrame) and not candidate["oof_frame"].empty
+        ]
+        if not valid:
+            return None
+        return min(
+            valid,
+            key=lambda item: (
+                float((item.get("raw_metrics") or {}).get("logloss", float("inf"))),
+                float((item.get("raw_metrics") or {}).get("brier_score", float("inf"))),
+                -float((item.get("raw_metrics") or {}).get("pr_auc", float("-inf"))),
+                -float((item.get("raw_metrics") or {}).get("sample_count", 0.0)),
+                str(item.get("model_family") or ""),
+            ),
+        )
+
+    def _build_event_probability_model_from_panel(
+        self,
+        panel: pd.DataFrame,
+        *,
+        walk_forward_stride: int = DEFAULT_WALK_FORWARD_STRIDE,
+        max_splits: int | None = None,
+    ) -> dict[str, Any]:
+        if panel.empty or "event_target" not in panel.columns:
+            prevalence = float(panel["event_target"].mean()) if "event_target" in panel.columns and not panel.empty else 0.0
+            fallback_model = LearnedProbabilityModel(
+                classifier=EmpiricalEventClassifier(prevalence),
+                feature_names=[],
+                model_family="empirical_prevalence",
+                calibration=None,
+                calibration_mode="raw_probability",
+                probability_source="empirical_event_prevalence",
+                fallback_reason="event_training_panel_empty",
+                metadata={"prevalence": round(prevalence, 6)},
+            )
+            return {
+                "model": fallback_model,
+                "model_family": "empirical_prevalence",
+                "feature_names": [],
+                "calibration_mode": "raw_probability",
+                "probability_source": "empirical_event_prevalence",
+                "fallback_reason": "event_training_panel_empty",
+                "oof_frame": pd.DataFrame(),
+                "raw_metrics": {
+                    "prevalence": round(prevalence, 6),
+                    "sample_count": float(len(panel)),
+                    "positive_count": float(np.sum(panel["event_target"] == 1)) if "event_target" in panel.columns else 0.0,
+                    "negative_count": float(np.sum(panel["event_target"] == 0)) if "event_target" in panel.columns else 0.0,
+                },
+                "calibrated_metrics": {},
+                "reliability_metrics": {},
+                "reliability_source": "unavailable",
+                "reliability_score": None,
+            }
+
+        feature_names = self._event_feature_columns(panel)
+        if not feature_names:
+            prevalence = float(panel["event_target"].mean() or 0.0)
+            fallback_model = LearnedProbabilityModel(
+                classifier=EmpiricalEventClassifier(prevalence),
+                feature_names=[],
+                model_family="empirical_prevalence",
+                calibration=None,
+                calibration_mode="raw_probability",
+                probability_source="empirical_event_prevalence",
+                fallback_reason="event_feature_columns_missing",
+                metadata={"prevalence": round(prevalence, 6)},
+            )
+            return {
+                "model": fallback_model,
+                "model_family": "empirical_prevalence",
+                "feature_names": [],
+                "calibration_mode": "raw_probability",
+                "probability_source": "empirical_event_prevalence",
+                "fallback_reason": "event_feature_columns_missing",
+                "oof_frame": pd.DataFrame(),
+                "raw_metrics": {
+                    "prevalence": round(prevalence, 6),
+                    "sample_count": float(len(panel)),
+                    "positive_count": float(np.sum(panel["event_target"] == 1)),
+                    "negative_count": float(np.sum(panel["event_target"] == 0)),
+                },
+                "calibrated_metrics": {},
+                "reliability_metrics": {},
+                "reliability_source": "unavailable",
+                "reliability_score": None,
+            }
+
+        candidate_payloads: list[dict[str, Any]] = []
+        min_train_points = max(MIN_DIRECT_TRAIN_POINTS, 24)
+        for model_family in self._event_model_candidates():
+            oof_frame = self._build_event_oof_predictions(
+                panel,
+                feature_names=feature_names,
+                model_family=model_family,
+                walk_forward_stride=walk_forward_stride,
+                max_splits=max_splits,
+                min_train_points=min_train_points,
+            )
+            if oof_frame.empty:
+                continue
+            raw_metrics = compute_classification_metrics(
+                oof_frame["event_probability_raw"].to_numpy(dtype=float),
+                oof_frame["event_target"].to_numpy(dtype=int),
+            )
+            candidate_payloads.append(
+                {
+                    "model_family": model_family,
+                    "feature_names": feature_names,
+                    "oof_frame": oof_frame,
+                    "raw_metrics": raw_metrics,
+                }
+            )
+
+        selected = self._select_best_event_candidate(candidate_payloads)
+        if selected is None:
+            prevalence = float(panel["event_target"].mean() or 0.0)
+            fallback_model = LearnedProbabilityModel(
+                classifier=EmpiricalEventClassifier(prevalence),
+                feature_names=feature_names,
+                model_family="empirical_prevalence",
+                calibration=None,
+                calibration_mode="raw_probability",
+                probability_source="empirical_event_prevalence",
+                fallback_reason="insufficient_valid_event_oof_rows",
+                metadata={"prevalence": round(prevalence, 6)},
+            )
+            fallback_metrics = compute_classification_metrics(
+                np.full(len(panel), prevalence, dtype=float),
+                panel["event_target"].to_numpy(dtype=int),
+            )
+            return {
+                "model": fallback_model,
+                "model_family": "empirical_prevalence",
+                "feature_names": feature_names,
+                "calibration_mode": "raw_probability",
+                "probability_source": "empirical_event_prevalence",
+                "fallback_reason": "insufficient_valid_event_oof_rows",
+                "oof_frame": pd.DataFrame(),
+                "raw_metrics": fallback_metrics,
+                "calibrated_metrics": fallback_metrics,
+                "reliability_metrics": fallback_metrics,
+                "reliability_source": "oof_full_sample",
+                "reliability_score": reliability_score_from_metrics(fallback_metrics),
+            }
+
+        calibration_payload = select_probability_calibration(
+            selected["oof_frame"][["issue_date", "event_target", "event_probability_raw"]].rename(
+                columns={"issue_date": "as_of_date", "event_target": "event_label"}
+            ),
+            raw_probability_col="event_probability_raw",
+            label_col="event_label",
+            date_col="as_of_date",
+        )
+        # Guarded selection happens inside select_probability_calibration(). If a
+        # calibrator hurts the later temporal guard slice, we stay on raw_probability.
+        calibration = calibration_payload.get("calibration")
+        calibrated_probs = apply_probability_calibration(
+            calibration,
+            selected["oof_frame"]["event_probability_raw"].to_numpy(dtype=float),
+        )
+        calibrated_metrics = compute_classification_metrics(
+            calibrated_probs,
+            selected["oof_frame"]["event_target"].to_numpy(dtype=int),
+        )
+        oof_frame = selected["oof_frame"].copy()
+        oof_frame["event_probability_calibrated"] = calibrated_probs
+
+        if panel["event_target"].nunique() < 2:
+            final_classifier = EmpiricalEventClassifier(float(panel["event_target"].mean() or 0.0))
+        else:
+            final_classifier = self._fit_event_classifier_model(
+                panel,
+                feature_names=feature_names,
+                model_family=str(selected["model_family"]),
+            )
+
+        probability_source = f"learned_exceedance_{selected['model_family']}"
+        model = LearnedProbabilityModel(
+            classifier=final_classifier,
+            feature_names=list(feature_names),
+            model_family=str(selected["model_family"]),
+            calibration=calibration,
+            calibration_mode=str(calibration_payload.get("calibration_mode") or "raw_probability"),
+            probability_source=probability_source,
+            fallback_reason=calibration_payload.get("fallback_reason"),
+            metadata={
+                "oof_row_count": int(len(oof_frame)),
+                "raw_metrics": selected["raw_metrics"],
+                "calibrated_metrics": calibrated_metrics,
+                "reliability_metrics": calibration_payload.get("reliability_metrics") or calibrated_metrics,
+                "reliability_source": calibration_payload.get("reliability_source"),
+            },
+        )
+        reliability_metrics = calibration_payload.get("reliability_metrics") or calibrated_metrics
+        return {
+            "model": model,
+            "model_family": str(selected["model_family"]),
+            "feature_names": list(feature_names),
+            "calibration_mode": str(calibration_payload.get("calibration_mode") or "raw_probability"),
+            "probability_source": probability_source,
+            "fallback_reason": calibration_payload.get("fallback_reason"),
+            "oof_frame": oof_frame,
+            "raw_metrics": selected["raw_metrics"],
+            "calibrated_metrics": calibrated_metrics,
+            "reliability_metrics": reliability_metrics,
+            "reliability_source": calibration_payload.get("reliability_source"),
+            "reliability_score": reliability_score_from_metrics(reliability_metrics),
+        }
+
     def build_direct_training_panel(
         self,
         *,
@@ -955,15 +1336,15 @@ class ForecastService:
         if direct.empty:
             return direct
 
-        direct["prophet_pred"] = (
+        prophet_proxy = (
             direct["current_y"]
             .rolling(window=7, min_periods=1)
             .mean()
             .shift(1)
-            .ffill()
-            .bfill()
-            .fillna(float(direct["current_y"].iloc[0]))
         )
+        # Keep this fallback causal: the direct panel predicts a future target, so
+        # current_y is known at issue time, but any backward fill from later rows would leak.
+        direct["prophet_pred"] = prophet_proxy.fillna(direct["current_y"]).astype(float)
 
         oof = pd.DataFrame(index=direct.index, columns=["hw_pred", "ridge_pred"], dtype=float)
         feature_cols = self._direct_ridge_feature_columns(direct)
@@ -1004,21 +1385,21 @@ class ForecastService:
                 hw_step = min(horizon - 1, max(len(hw_forecast) - 1, 0))
                 oof.loc[idx, "hw_pred"] = max(0.0, float(hw_forecast[hw_step]))
 
+        # Never backward-fill OOF features: that would copy later fold predictions
+        # into earlier issue dates and create a hidden temporal leak.
+        causal_oof_fallback = direct["current_y"].astype(float)
         direct["hw_pred"] = (
             oof["hw_pred"]
             .ffill()
-            .bfill()
-            .fillna(direct["current_y"])
+            .fillna(causal_oof_fallback)
             .astype(float)
         )
         direct["ridge_pred"] = (
             oof["ridge_pred"]
             .ffill()
-            .bfill()
-            .fillna(direct["current_y"])
+            .fillna(causal_oof_fallback)
             .astype(float)
         )
-        direct["prophet_pred"] = direct["prophet_pred"].astype(float)
         direct = direct.replace([np.inf, -np.inf], np.nan).fillna(0.0)
         return direct.reset_index(drop=True)
 
@@ -1146,9 +1527,13 @@ class ForecastService:
             ridge_preds, _ = self._fit_ridge(df_train, y_train, n_val)
             oof.loc[val_idx, "ridge_pred"] = ridge_preds[:n_val]
 
-        # Fill any remaining NaN with simple persistence (last known value)
-        oof["hw_pred"] = oof["hw_pred"].ffill().bfill().fillna(y[-1])
-        oof["ridge_pred"] = oof["ridge_pred"].ffill().bfill().fillna(y[-1])
+        history_series = pd.Series(y, index=df.index, dtype=float).ffill()
+        causal_history_fallback = history_series.shift(1).fillna(0.0)
+
+        # Keep OOF fallback strictly historical: no backward fill and never use
+        # the final series value, because both would leak future information.
+        oof["hw_pred"] = oof["hw_pred"].ffill().fillna(causal_history_fallback).astype(float)
+        oof["ridge_pred"] = oof["ridge_pred"].ffill().fillna(causal_history_fallback).astype(float)
 
         return oof
 
@@ -1225,13 +1610,18 @@ class ForecastService:
         *,
         include_internal_history: bool = True,
         model_config: dict[str, dict[str, Any]] | None = None,
-        n_windows: int = 4,
+        n_windows: int | None = None,
+        walk_forward_stride: int = DEFAULT_WALK_FORWARD_STRIDE,
+        max_splits: int | None = None,
         region: str = DEFAULT_FORECAST_REGION,
         horizon_days: int = DEFAULT_DECISION_HORIZON_DAYS,
     ) -> dict[str, Any]:
         """Run a deterministic walk-forward backtest for direct horizon promotion."""
         region_code = normalize_forecast_region(region)
         horizon = ensure_supported_horizon(horizon_days)
+        effective_max_splits = int(max_splits) if max_splits is not None else (
+            int(n_windows) if n_windows is not None else None
+        )
         df = self.prepare_training_data(
             virus_typ=virus_typ,
             include_internal_history=include_internal_history,
@@ -1241,7 +1631,7 @@ class ForecastService:
         panel = self._build_direct_training_panel_from_frame(
             df,
             horizon_days=horizon,
-            n_splits=max(int(n_windows), 3),
+            n_splits=max(int(effective_max_splits or 5), 3),
         )
 
         if panel.empty or len(panel) < max(MIN_DIRECT_TRAIN_POINTS, 24):
@@ -1260,13 +1650,26 @@ class ForecastService:
         baseline_predictions_lo: list[float] = []
         baseline_predictions_hi: list[float] = []
         actuals: list[float] = []
-        probabilities: list[float] = []
         labels: list[float] = []
         windows: list[dict[str, Any]] = []
+        event_bundle = self._build_event_probability_model_from_panel(
+            panel,
+            walk_forward_stride=walk_forward_stride,
+            max_splits=effective_max_splits,
+        )
+        event_oof = event_bundle.get("oof_frame")
+        probability_by_issue_date = {}
+        if isinstance(event_oof, pd.DataFrame) and not event_oof.empty:
+            ordered_event_oof = event_oof.sort_values("issue_date").drop_duplicates("issue_date", keep="last")
+            probability_by_issue_date = {
+                pd.Timestamp(row["issue_date"]).normalize(): float(row["event_probability_calibrated"])
+                for _, row in ordered_event_oof.iterrows()
+            }
         splits = build_walk_forward_splits(
             len(panel),
             min_train_points=max(MIN_DIRECT_TRAIN_POINTS, 24),
-            n_splits=max(int(n_windows), 3),
+            stride=walk_forward_stride,
+            max_splits=effective_max_splits,
         )
         for fold, split in enumerate(splits, start=1):
             train_panel = panel.iloc[: split.train_end_idx].copy()
@@ -1287,15 +1690,11 @@ class ForecastService:
             pred_hi = max(0.0, float(model_hi.predict(X_test)[0]))
             actual = float(test_panel.iloc[0]["y_target"])
             current = max(float(test_panel.iloc[0]["current_y"]), 1.0)
-            baseline = float(np.median(train_panel["current_y"].tail(min(len(train_panel), 84)))) if len(train_panel) else current
             persistence_scale = max(float(np.std(train_panel["y_target"].to_numpy(dtype=float))) if len(train_panel) > 1 else 1.0, 1.0)
-            event_probability = event_probability_from_forecast(
-                prediction=pred,
-                baseline=baseline if baseline > 0 else current,
-                lower_bound=pred_lo,
-                upper_bound=pred_hi,
-                threshold_pct=DEFAULT_DECISION_EVENT_THRESHOLD_PCT,
-            )
+            issue_date_value = pd.Timestamp(test_panel.iloc[0]["issue_date"]).normalize()
+            event_probability = probability_by_issue_date.get(issue_date_value)
+            if event_probability is None:
+                event_probability = float(event_bundle.get("calibrated_metrics", {}).get("prevalence") or 0.0)
 
             predictions.append(pred)
             predictions_lo.append(pred_lo)
@@ -1304,16 +1703,15 @@ class ForecastService:
             baseline_predictions_lo.append(max(current - persistence_scale, 0.0))
             baseline_predictions_hi.append(current + persistence_scale)
             actuals.append(actual)
-            probabilities.append(event_probability)
             labels.append(float(test_panel.iloc[0]["event_target"]))
             windows.append(
                 {
                     "fold": fold,
-                    "issue_date": pd.Timestamp(test_panel.iloc[0]["issue_date"]).isoformat(),
+                    "issue_date": issue_date_value.isoformat(),
                     "target_date": pd.Timestamp(test_panel.iloc[0]["target_date"]).isoformat(),
                     "predicted": round(pred, 4),
                     "actual": round(actual, 4),
-                    "event_probability": round(event_probability, 4),
+                    "event_probability": round(float(event_probability), 4),
                 }
             )
 
@@ -1327,7 +1725,8 @@ class ForecastService:
             }
 
         metrics = compute_regression_metrics(predictions, actuals)
-        metrics.update(compute_calibration_error(probabilities, labels))
+        event_probabilities = [float(item["event_probability"]) for item in windows]
+        metrics.update(compute_classification_metrics(event_probabilities, labels))
         metrics.update(
             summarize_probabilistic_metrics(
                 y_true=actuals,
@@ -1342,7 +1741,7 @@ class ForecastService:
                     0.9: baseline_predictions_hi,
                 },
                 event_labels=labels,
-                event_probabilities=probabilities,
+                event_probabilities=event_probabilities,
                 action_threshold=0.5,
             )
         )
@@ -1363,7 +1762,16 @@ class ForecastService:
             "horizon_days": horizon,
             "region": region_code,
             "strategy": "direct",
+            "stride": max(int(walk_forward_stride), 1),
+            "max_splits": effective_max_splits,
         }
+        metrics["probability_source"] = event_bundle.get("probability_source")
+        metrics["event_model_family"] = event_bundle.get("model_family")
+        metrics["calibration_mode"] = event_bundle.get("calibration_mode")
+        metrics["fallback_reason"] = event_bundle.get("fallback_reason")
+        metrics["reliability_metrics"] = event_bundle.get("reliability_metrics") or {}
+        metrics["reliability_source"] = event_bundle.get("reliability_source")
+        metrics["reliability_score"] = event_bundle.get("reliability_score")
         metrics["include_internal_history"] = include_internal_history
         return metrics
 
@@ -1383,6 +1791,79 @@ class ForecastService:
             "mae": round(mae, 4),
             "rmse": round(rmse, 4),
             "mape": round(mape, 2),
+        }
+
+    @staticmethod
+    def _backtest_quality_score(backtest_metrics: dict[str, Any] | None) -> float | None:
+        if not backtest_metrics:
+            return None
+        mape = backtest_metrics.get("mape")
+        if mape is None:
+            return None
+        return round(max(0.0, min(1.0, 1.0 - (float(mape) / 100.0))), 4)
+
+    @staticmethod
+    def _calibration_passed(backtest_metrics: dict[str, Any] | None) -> bool | None:
+        if not backtest_metrics:
+            return None
+        brier = backtest_metrics.get("brier_score")
+        ece = backtest_metrics.get("ece")
+        logloss_value = backtest_metrics.get("logloss")
+        checks: list[bool] = []
+        if brier is not None:
+            checks.append(float(brier) <= 0.25)
+        if ece is not None:
+            checks.append(float(ece) <= 0.10)
+        if logloss_value is not None:
+            checks.append(float(logloss_value) <= 0.70)
+        if not checks:
+            return None
+        return all(checks)
+
+    def _quality_meta_from_backtest(
+        self,
+        *,
+        backtest_metrics: dict[str, Any] | None,
+        event_probability: float | None,
+        probability_source: str,
+        calibration_mode: str,
+        fallback_reason: str | None = None,
+        learned_model_version: str | None = None,
+        forecast_ready: bool,
+        drift_status: str,
+        baseline_deltas: dict[str, Any] | None = None,
+        timing_metrics: dict[str, Any] | None = None,
+        interval_coverage: dict[str, Any] | None = None,
+        promotion_gate: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        metrics = dict(backtest_metrics or {})
+        reliability_score = metrics.get("reliability_score")
+        if reliability_score is None:
+            reliability_score = reliability_score_from_metrics(
+                metrics,
+                coverage_metrics=metrics,
+            )
+        return {
+            "event_probability": event_probability,
+            "forecast_ready": forecast_ready,
+            "drift_status": drift_status,
+            "baseline_deltas": baseline_deltas or {},
+            "timing_metrics": timing_metrics or {},
+            "interval_coverage": interval_coverage or {},
+            "promotion_gate": promotion_gate or {},
+            "confidence": reliability_score,
+            "reliability_score": reliability_score,
+            "backtest_quality_score": self._backtest_quality_score(metrics),
+            "brier_score": metrics.get("brier_score"),
+            "ece": metrics.get("ece"),
+            "calibration_passed": self._calibration_passed(metrics),
+            "probability_source": probability_source,
+            "calibration_mode": calibration_mode,
+            "calibration_method": f"{probability_source}:{calibration_mode}",
+            "uncertainty_source": "backtest_interval_coverage",
+            "fallback_reason": fallback_reason,
+            "learned_model_version": learned_model_version,
+            "fallback_used": fallback_reason is not None,
         }
 
     def _compute_outbreak_risk(
@@ -1441,23 +1922,13 @@ class ForecastService:
         )
 
         baseline = float(np.median(y_history[-min(len(y_history), 84) :])) if len(y_history) > 0 else 0.0
-        event_point = (
-            forecast_records[min(len(forecast_records) - 1, 0)]
-            if forecast_records
-            else {}
-        )
-        event_probability = (
-            event_probability_from_forecast(
-                prediction=float(event_point.get("yhat") or 0.0),
-                baseline=baseline if baseline > 0 else 1.0,
-                lower_bound=event_point.get("yhat_lower"),
-                upper_bound=event_point.get("yhat_upper"),
-                threshold_pct=DEFAULT_DECISION_EVENT_THRESHOLD_PCT,
-            )
-            if forecast_records
-            else None
-        )
-        confidence_value = float(quality_meta.get("confidence", 0.6)) if quality_meta else 0.6
+        event_probability = quality_meta.get("event_probability") if quality_meta else None
+        confidence_value = quality_meta.get("confidence") if quality_meta else None
+        reliability_score = quality_meta.get("reliability_score") if quality_meta else None
+        backtest_quality_score = quality_meta.get("backtest_quality_score") if quality_meta else None
+        calibration_mode = (quality_meta.get("calibration_mode") if quality_meta else None) or "raw_probability"
+        probability_source = (quality_meta.get("probability_source") if quality_meta else None) or "empirical_event_prevalence"
+        fallback_reason = quality_meta.get("fallback_reason") if quality_meta else None
         event = EventForecast(
             event_key=f"{virus_typ.lower().replace(' ', '_')}_growth_h{horizon}",
             horizon_days=horizon,
@@ -1465,15 +1936,25 @@ class ForecastService:
             threshold_pct=DEFAULT_DECISION_EVENT_THRESHOLD_PCT,
             baseline_value=round(baseline, 3) if baseline > 0 else None,
             threshold_value=round(baseline * 1.25, 3) if baseline > 0 else None,
-            calibration_method="live_growth_sigmoid_proxy",
+            calibration_method=(quality_meta.get("calibration_method") if quality_meta else None)
+            or f"{probability_source}:{calibration_mode}",
             brier_score=quality_meta.get("brier_score") if quality_meta else None,
             ece=quality_meta.get("ece") if quality_meta else None,
             calibration_passed=quality_meta.get("calibration_passed") if quality_meta else None,
             confidence=confidence_value,
-            confidence_label=confidence_label(confidence_value),
-            probability_source=(quality_meta.get("probability_source") if quality_meta else None) or "heuristic_sigmoid_proxy",
+            confidence_label=(
+                confidence_label(confidence_value)
+                if confidence_value is not None
+                else None
+            ),
+            reliability_score=reliability_score,
+            backtest_quality_score=backtest_quality_score,
+            probability_source=probability_source,
+            calibration_mode=calibration_mode,
+            uncertainty_source=(quality_meta.get("uncertainty_source") if quality_meta else None) or "backtest_interval_coverage",
+            fallback_reason=fallback_reason,
             learned_model_version=(quality_meta.get("learned_model_version") if quality_meta else None),
-            fallback_used=bool((quality_meta.get("fallback_used") if quality_meta else True)),
+            fallback_used=bool((quality_meta.get("fallback_used") if quality_meta else fallback_reason is not None)),
         )
         forecast_quality = ForecastQuality(
             forecast_readiness="GO" if quality_meta and quality_meta.get("forecast_ready") else "WATCH",
@@ -1527,13 +2008,14 @@ class ForecastService:
                 include_internal_history=include_internal_history,
             )
 
-        model_med, model_lo, model_hi, metadata = cached
+        model_med, model_lo, model_hi, metadata, event_model = cached
         return self._inference_from_loaded_models(
             virus_typ=virus_typ,
             model_med=model_med,
             model_lo=model_lo,
             model_hi=model_hi,
             metadata=metadata,
+            event_model=event_model,
             region=region_code,
             horizon_days=horizon,
             include_internal_history=include_internal_history,
@@ -1546,6 +2028,7 @@ class ForecastService:
         model_lo: Any,
         model_hi: Any,
         metadata: dict[str, Any],
+        event_model: LearnedProbabilityModel | None,
         *,
         region: str = DEFAULT_FORECAST_REGION,
         horizon_days: int = DEFAULT_DECISION_HORIZON_DAYS,
@@ -1633,7 +2116,56 @@ class ForecastService:
         )
 
         model_version = metadata.get("version", "xgb_stack_v1_loaded")
-        backtest_metrics = metadata.get("backtest_metrics") or {}
+        backtest_metrics = dict(metadata.get("backtest_metrics") or {})
+        live_event_feature_row = self._build_live_event_feature_row(
+            raw=df,
+            live_feature_row=live_feature_row,
+            horizon_days=horizon,
+        )
+        event_bundle: dict[str, Any] | None = None
+        if event_model is None:
+            panel = self._build_direct_training_panel_from_frame(
+                df,
+                horizon_days=horizon,
+                n_splits=max(int(metadata.get("event_oof_splits") or 5), 3),
+            )
+            if not panel.empty:
+                event_bundle = self._build_event_probability_model_from_panel(panel)
+                event_model = event_bundle.get("model")
+                backtest_metrics.update(event_bundle.get("calibrated_metrics") or {})
+                backtest_metrics["probability_source"] = event_bundle.get("probability_source")
+                backtest_metrics["calibration_mode"] = event_bundle.get("calibration_mode")
+                backtest_metrics["fallback_reason"] = event_bundle.get("fallback_reason")
+                backtest_metrics["reliability_score"] = event_bundle.get("reliability_score")
+
+        probability_source = str(
+            (event_bundle or {}).get("probability_source")
+            or getattr(event_model, "probability_source", None)
+            or backtest_metrics.get("probability_source")
+            or metadata.get("event_probability_source")
+            or "empirical_event_prevalence"
+        )
+        calibration_mode = str(
+            (event_bundle or {}).get("calibration_mode")
+            or getattr(event_model, "calibration_mode", None)
+            or backtest_metrics.get("calibration_mode")
+            or metadata.get("event_calibration_mode")
+            or "raw_probability"
+        )
+        fallback_reason = (
+            (event_bundle or {}).get("fallback_reason")
+            or getattr(event_model, "fallback_reason", None)
+            or metadata.get("event_fallback_reason")
+        )
+        event_probability: float | None = None
+        if event_model is not None:
+            event_feature_names = list(getattr(event_model, "feature_names", []) or [])
+            X_event = np.array(
+                [[live_event_feature_row.get(name, 0.0) for name in (event_feature_names or ["current_y"])]],
+                dtype=float,
+            )
+            X_event = np.nan_to_num(X_event, nan=0.0, posinf=0.0, neginf=0.0)
+            event_probability = float(event_model.predict_proba(X_event)[0])
         contracts = self._build_contracts(
             virus_typ=virus_typ,
             region=region_code,
@@ -1642,18 +2174,16 @@ class ForecastService:
             model_version=model_version,
             y_history=y,
             issue_date=issue_date,
-            quality_meta={
-                "forecast_ready": "error" not in backtest_metrics,
-                "drift_status": "ok" if "error" not in backtest_metrics else "unknown",
-                "baseline_deltas": {},
-                "timing_metrics": {},
-                "interval_coverage": {},
-                "promotion_gate": {},
-                "confidence": 1.0 - min(float(backtest_metrics.get("mape", 100.0)) / 100.0, 0.8),
-                "brier_score": backtest_metrics.get("brier_score"),
-                "ece": backtest_metrics.get("ece"),
-                "calibration_passed": backtest_metrics.get("ece", 1.0) <= 0.15 if backtest_metrics else None,
-            },
+            quality_meta=self._quality_meta_from_backtest(
+                backtest_metrics=backtest_metrics,
+                event_probability=event_probability,
+                probability_source=probability_source,
+                calibration_mode=calibration_mode,
+                fallback_reason=fallback_reason,
+                learned_model_version=model_version,
+                forecast_ready="error" not in backtest_metrics,
+                drift_status="ok" if "error" not in backtest_metrics else "unknown",
+            ),
         )
 
         result: dict[str, Any] = {
@@ -1755,6 +2285,22 @@ class ForecastService:
                 "outbreak_risk_score": self._compute_outbreak_risk(prediction, y),
             }
         ]
+        event_bundle = self._build_event_probability_model_from_panel(panel)
+        event_model = event_bundle.get("model")
+        live_event_feature_row = self._build_live_event_feature_row(
+            raw=df,
+            live_feature_row=live_feature_row,
+            horizon_days=horizon,
+        )
+        event_probability: float | None = None
+        if event_model is not None:
+            event_feature_names = list(getattr(event_model, "feature_names", []) or [])
+            X_event = np.array(
+                [[live_event_feature_row.get(name, 0.0) for name in (event_feature_names or ["current_y"])]],
+                dtype=float,
+            )
+            X_event = np.nan_to_num(X_event, nan=0.0, posinf=0.0, neginf=0.0)
+            event_probability = float(event_model.predict_proba(X_event)[0])
         try:
             backtest_metrics = self.evaluate_training_candidate(
                 virus_typ=virus_typ,
@@ -1766,6 +2312,16 @@ class ForecastService:
             logger.warning("Backtest evaluation failed for %s/%s/h%s: %s", virus_typ, region_code, horizon, exc)
             backtest_metrics = {"error": str(exc)}
 
+        if "error" not in backtest_metrics:
+            backtest_metrics.update(event_bundle.get("calibrated_metrics") or {})
+            backtest_metrics["probability_source"] = event_bundle.get("probability_source")
+            backtest_metrics["event_model_family"] = event_bundle.get("model_family")
+            backtest_metrics["calibration_mode"] = event_bundle.get("calibration_mode")
+            backtest_metrics["fallback_reason"] = event_bundle.get("fallback_reason")
+            backtest_metrics["reliability_metrics"] = event_bundle.get("reliability_metrics") or {}
+            backtest_metrics["reliability_source"] = event_bundle.get("reliability_source")
+            backtest_metrics["reliability_score"] = event_bundle.get("reliability_score")
+
         model_version = f"xgb_stack_direct_h{horizon}_inline"
         contracts = self._build_contracts(
             virus_typ=virus_typ,
@@ -1775,22 +2331,16 @@ class ForecastService:
             model_version=model_version,
             y_history=y,
             issue_date=issue_date,
-            quality_meta={
-                "forecast_ready": "error" not in backtest_metrics,
-                "drift_status": "unknown",
-                "baseline_deltas": {},
-                "timing_metrics": {},
-                "interval_coverage": {},
-                "promotion_gate": {},
-                "confidence": 1.0 - min(float(backtest_metrics.get("mape", 100.0)) / 100.0, 0.8)
-                if "error" not in backtest_metrics
-                else 0.4,
-                "brier_score": backtest_metrics.get("brier_score"),
-                "ece": backtest_metrics.get("ece"),
-                "calibration_passed": backtest_metrics.get("ece", 1.0) <= 0.15
-                if "error" not in backtest_metrics
-                else None,
-            },
+            quality_meta=self._quality_meta_from_backtest(
+                backtest_metrics=backtest_metrics,
+                event_probability=event_probability,
+                probability_source=str(event_bundle.get("probability_source") or "empirical_event_prevalence"),
+                calibration_mode=str(event_bundle.get("calibration_mode") or "raw_probability"),
+                fallback_reason=event_bundle.get("fallback_reason"),
+                learned_model_version=model_version,
+                forecast_ready="error" not in backtest_metrics,
+                drift_status="unknown",
+            ),
         )
 
         result: dict[str, Any] = {

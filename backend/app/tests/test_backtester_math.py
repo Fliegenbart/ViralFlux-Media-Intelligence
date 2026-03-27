@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 
 from app.services.ml.backtester import BacktestService
+from app.services.ml.forecast_contracts import HEURISTIC_EVENT_SCORE_SOURCE
 
 
 class BacktesterMathTests(unittest.TestCase):
@@ -121,6 +122,28 @@ class BacktesterMathTests(unittest.TestCase):
         self.assertEqual(metrics["false_alarm_rate_pct"], 50.0)
         self.assertEqual(metrics["median_ttd_days"], 7)
         self.assertGreater(metrics["p90_abs_error"], 0.0)
+
+    def test_compute_event_calibration_metrics_skips_heuristic_event_scores(self) -> None:
+        records = [
+            {
+                "issue_date": "2024-01-01",
+                "target_date": "2024-01-08",
+                "y_true": 120.0,
+                "p_event": 0.73,
+                "event_probability": None,
+                "heuristic_event_score": 0.73,
+                "probability_source": HEURISTIC_EVENT_SCORE_SOURCE,
+            }
+        ]
+
+        metrics = BacktestService._compute_event_calibration_metrics(records, threshold_pct=25.0)
+
+        self.assertEqual(metrics["samples"], 0)
+        self.assertIsNone(metrics["brier_score"])
+        self.assertIsNone(metrics["ece"])
+        self.assertIsNone(metrics["calibration_passed"])
+        self.assertTrue(metrics["calibration_skipped"])
+        self.assertEqual(metrics["skip_reason"], "heuristic_event_score_only")
 
     def test_compute_timing_metrics_detects_positive_lead(self) -> None:
         signal = [3.0, 1.0, 4.0, 2.0, 5.0, 0.5, 6.0, 1.5]

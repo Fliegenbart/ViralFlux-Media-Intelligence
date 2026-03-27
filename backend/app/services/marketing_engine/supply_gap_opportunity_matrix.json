@@ -1,12 +1,12 @@
 {
-  "_doc": "Conquesting Matrix: Maps Gelo OTC products to competitor drug shortages (BfArM). Used by CompetitorShortageDetector to generate bid-multiplier opportunities.",
+  "_doc": "Supply-Gap Matrix: Maps Gelo OTC products to BfArM drug shortage notices so the system can boost visibility for suitable alternatives during supply gaps. Used by MarketSupplyMonitor to generate priority-multiplier modifier signals.",
   "products": [
     {
       "sku": "GELO-GMF",
       "name": "GeloMyrtol forte",
       "condition": "bronchitis_husten",
-      "conquesting": {
-        "target_ingredients": [
+      "supply_gap": {
+        "match_active_ingredients": [
           "acetylcystein",
           "ambroxol",
           "bromhexin",
@@ -17,7 +17,7 @@
           "efeu",
           "thymian"
         ],
-        "target_forms": [
+        "match_dosage_forms": [
           "saft",
           "sirup",
           "tablette",
@@ -25,15 +25,15 @@
           "brausetablette",
           "granulat"
         ],
-        "bid_multiplier": 1.5
+        "priority_multiplier": 1.5
       }
     },
     {
       "sku": "GELO-PRO",
       "name": "GeloProsed",
       "condition": "erkaltung_akut",
-      "conquesting": {
-        "target_ingredients": [
+      "supply_gap": {
+        "match_active_ingredients": [
           "ibuprofen",
           "paracetamol",
           "acetylsalicyl",
@@ -42,7 +42,7 @@
           "coffein",
           "doxylamin"
         ],
-        "target_forms": [
+        "match_dosage_forms": [
           "saft",
           "suspension",
           "tablette",
@@ -50,15 +50,15 @@
           "granulat",
           "zaepfchen"
         ],
-        "bid_multiplier": 1.5
+        "priority_multiplier": 1.5
       }
     },
     {
       "sku": "GELO-RVC",
       "name": "Gelorevoice",
       "condition": "halsschmerz",
-      "conquesting": {
-        "target_ingredients": [
+      "supply_gap": {
+        "match_active_ingredients": [
           "benzocain",
           "lidocain",
           "flurbiprofen",
@@ -67,21 +67,21 @@
           "dequalinium",
           "hexetidin"
         ],
-        "target_forms": [
+        "match_dosage_forms": [
           "lutschtablette",
           "loesung",
           "spray",
           "pastille"
         ],
-        "bid_multiplier": 1.4
+        "priority_multiplier": 1.4
       }
     },
     {
       "sku": "GELO-BRO",
       "name": "GeloBronchial",
       "condition": "husten_reizhusten",
-      "conquesting": {
-        "target_ingredients": [
+      "supply_gap": {
+        "match_active_ingredients": [
           "dextromethorphan",
           "codein",
           "dihydrocodein",
@@ -91,22 +91,22 @@
           "spitzwegerich",
           "islaendisch moos"
         ],
-        "target_forms": [
+        "match_dosage_forms": [
           "saft",
           "sirup",
           "tropfen",
           "lutschtablette",
           "pastille"
         ],
-        "bid_multiplier": 1.4
+        "priority_multiplier": 1.4
       }
     },
     {
       "sku": "GELO-SIT",
       "name": "GeloSitin",
       "condition": "sinusitis",
-      "conquesting": {
-        "target_ingredients": [
+      "supply_gap": {
+        "match_active_ingredients": [
           "xylometazolin",
           "oxymetazolin",
           "tramazolin",
@@ -114,63 +114,63 @@
           "cineol",
           "mometason"
         ],
-        "target_forms": [
+        "match_dosage_forms": [
           "nasenspray",
           "nasentropfen",
           "tablette",
           "kapsel",
           "dragee"
         ],
-        "bid_multiplier": 1.5
+        "priority_multiplier": 1.5
       }
     },
     {
       "sku": "GELO-DUR",
       "name": "GeloDurat",
       "condition": "schnupfen",
-      "conquesting": {
-        "target_ingredients": [
+      "supply_gap": {
+        "match_active_ingredients": [
           "xylometazolin",
           "oxymetazolin",
           "tramazolin",
           "phenylephrin",
           "meersalz"
         ],
-        "target_forms": [
+        "match_dosage_forms": [
           "nasenspray",
           "nasentropfen",
           "nasengel"
         ],
-        "bid_multiplier": 1.3
+        "priority_multiplier": 1.3
       }
     },
     {
       "sku": "GELO-VOX",
       "name": "GeloVox",
       "condition": "heiserkeit",
-      "conquesting": {
-        "target_ingredients": [
+      "supply_gap": {
+        "match_active_ingredients": [
           "islaendisch moos",
           "hyaluronsaeure",
           "dexpanthenol",
           "salbei",
           "emser salz"
         ],
-        "target_forms": [
+        "match_dosage_forms": [
           "lutschtablette",
           "pastille",
           "spray",
           "loesung"
         ],
-        "bid_multiplier": 1.3
+        "priority_multiplier": 1.3
       }
     },
     {
       "sku": "GELO-VIT",
       "name": "GeloVital",
       "condition": "immun_support",
-      "conquesting": {
-        "target_ingredients": [
+      "supply_gap": {
+        "match_active_ingredients": [
           "echinacea",
           "pelargonium",
           "vitamin c",
@@ -178,36 +178,36 @@
           "vitamin d",
           "holunder"
         ],
-        "target_forms": [
+        "match_dosage_forms": [
           "tablette",
           "kapsel",
           "saft",
           "brausetablette",
           "tropfen"
         ],
-        "bid_multiplier": 1.3
+        "priority_multiplier": 1.3
       }
     },
     {
       "sku": "GELO-MUC",
       "name": "GeloMuc",
       "condition": "schleimloeser",
-      "conquesting": {
-        "target_ingredients": [
+      "supply_gap": {
+        "match_active_ingredients": [
           "acetylcystein",
           "ambroxol",
           "bromhexin",
           "carbocistein",
           "erdostein"
         ],
-        "target_forms": [
+        "match_dosage_forms": [
           "brausetablette",
           "granulat",
           "saft",
           "sirup",
           "tablette"
         ],
-        "bid_multiplier": 1.4
+        "priority_multiplier": 1.4
       }
     }
   ]

@@ -25,7 +25,6 @@ import logging
 import os
 import pickle
 import tempfile
-from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -33,7 +32,6 @@ from sqlalchemy.orm import Session
 
 from app.services.ml.benchmarking.registry import ForecastRegistry
 from app.services.ml.forecast_horizon_utils import (
-    DEFAULT_FORECAST_REGION,
     DEFAULT_FORECAST_REGION,
     ensure_supported_horizon,
     model_artifact_dir,

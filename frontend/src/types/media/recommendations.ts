@@ -140,10 +140,10 @@ export interface RecommendationCard {
   created_at?: string | null;
   updated_at?: string | null;
   expires_at?: string | null;
-  is_conquesting_active?: boolean;
-  competitor_shortage_ingredient?: string;
-  recommended_bid_modifier?: number;
-  conquesting_product?: string;
+  is_supply_gap_active?: boolean;
+  supply_gap_match_examples?: string;
+  recommended_priority_multiplier?: number;
+  supply_gap_product?: string;
   lifecycle_state?: CampaignLifecycleState | string;
   freshness_state?: 'scheduled' | 'current' | 'missing_window' | 'expired' | 'stale' | string;
   evidence_strength?: 'hoch' | 'mittel' | 'niedrig' | string;

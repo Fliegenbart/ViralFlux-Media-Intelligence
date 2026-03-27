@@ -12,7 +12,7 @@ import CollapsibleSection from '../CollapsibleSection';
 import ForecastMonitoringSection from './evidence/ForecastMonitoringSection';
 import ImportValidationSection from './evidence/ImportValidationSection';
 import SourceFreshnessSection from './evidence/SourceFreshnessSection';
-import TruthOutcomeSection from './evidence/TruthOutcomeSection';
+import WaveValidationSection from './evidence/WaveValidationSection';
 import { sanitizeEvidenceCopy } from './evidence/evidenceUtils';
 import { formatDateTime, truthFreshnessLabel, truthLayerLabel } from './cockpitUtils';
 import { OperatorPanel, OperatorSection } from './operator/OperatorPrimitives';
@@ -376,13 +376,13 @@ const EvidencePanel: React.FC<Props> = ({
         subtitle="Zeigt, wie stark Kundendaten die Empfehlungen zusätzlich stützen."
       >
         <div id="evidence-data">
-          <TruthOutcomeSection
-            truthStatus={truthStatus}
-            truthGate={truthGate}
+          <WaveValidationSection
+            customerDataCoverage={truthStatus}
+            customerDataGate={truthGate}
             businessValidation={businessValidation}
-            outcomeLearning={outcomeLearning}
-            legacyCustomer={legacyCustomer}
-            sourceStatusLabels={sourceStatusLabels}
+            regionalImpact={outcomeLearning}
+            legacyCustomerValidation={legacyCustomer}
+            connectedFieldLabels={sourceStatusLabels}
           />
         </div>
       </CollapsibleSection>

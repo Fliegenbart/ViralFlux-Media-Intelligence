@@ -1,19 +1,19 @@
-"""Statisches Geocoding-Mapping für 169 AMELAG Kläranlagen-Standorte.
+"""Static geocoding mapping for AMELAG wastewater monitoring sites (Germany).
 
-Koordinaten via OpenStreetMap/Nominatim geocodiert (Feb 2026).
-Mapping: AMELAG standort-Name → (latitude, longitude).
+Coordinates were collected via OpenStreetMap / Nominatim (Feb 2026).
+Mapping: AMELAG monitoring site name -> (latitude, longitude).
 
-Bei Standorten mit mehreren Kläranlagen in einer Stadt (z.B. Berlin
-Ruhleben / Schönerlinde / Waßmannsdorf) werden die jeweiligen
-Stadtteile als Koordinate verwendet. Bei identischen Stadt-Namen
-(z.B. Düsseldorf Nord/Süd) wird die Stadt-Mitte verwendet.
+Where multiple monitoring sites exist in the same city (e.g. Berlin Ruhleben /
+Schönerlinde / Waßmannsdorf), district-level coordinates are used. For
+ambiguous city-wide names (e.g. Düsseldorf North/South), the city center is
+used.
 """
 
 from __future__ import annotations
 
 from typing import Final
 
-STANDORT_COORDINATES: Final[dict[str, tuple[float, float]]] = {
+WASTEWATER_MONITORING_SITE_COORDINATES: Final[dict[str, tuple[float, float]]] = {
     # Brandenburg (BB)
     "Brandenburg an der Havel": (52.410826, 12.549793),
     "Cottbus": (51.756745, 14.335731),
@@ -202,9 +202,9 @@ STANDORT_COORDINATES: Final[dict[str, tuple[float, float]]] = {
 }
 
 
-def get_coordinates(standort: str) -> tuple[float, float] | None:
-    """Lookup Koordinaten für einen AMELAG Kläranlagen-Standort.
+def get_monitoring_site_coordinates(site_name: str) -> tuple[float, float] | None:
+    """Look up coordinates for an AMELAG wastewater monitoring site.
 
-    Returns (latitude, longitude) oder None wenn unbekannt.
+    Returns (latitude, longitude) or None if unknown.
     """
-    return STANDORT_COORDINATES.get(standort)
+    return WASTEWATER_MONITORING_SITE_COORDINATES.get(site_name)

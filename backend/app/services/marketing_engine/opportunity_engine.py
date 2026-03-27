@@ -41,7 +41,7 @@ from app.services.media.semantic_contracts import (
 from app.services.ml.forecast_contracts import DEFAULT_DECISION_HORIZON_DAYS
 from app.services.ml.forecast_decision_service import ForecastDecisionService
 
-from .detectors.competitor_shortage_detector import CompetitorShortageDetector
+from .detectors.market_supply_monitor import MarketSupplyMonitor
 from .detectors.predictive_sales_spike import PredictiveSalesSpikeDetector
 from .detectors.resource_scarcity import ResourceScarcityDetector
 from .detectors.weather_forecast import WeatherForecastDetector
@@ -122,7 +122,7 @@ class MarketingOpportunityEngine:
         self.db = db
         self.detectors = [
             ResourceScarcityDetector(db),
-            CompetitorShortageDetector(db),
+            MarketSupplyMonitor(db),
             PredictiveSalesSpikeDetector(db),
             WeatherForecastDetector(db),
         ]
@@ -334,7 +334,7 @@ class MarketingOpportunityEngine:
         return candidates[:max_cards]
 
     def generate_opportunities(self) -> dict:
-        """Alle Detektoren ausführen -> Pitches -> Products -> Fuse Conquesting -> Persist -> JSON."""
+        """Alle Detektoren ausführen -> Pitches -> Products -> Supply-Gap Modifier anwenden -> Persist -> JSON."""
         all_opportunities = []
 
         for detector in self.detectors:
@@ -355,8 +355,8 @@ class MarketingOpportunityEngine:
         # ── Signal-Deduplizierung: gleiche Condition + Region → nur höchste Urgency behalten ──
         all_opportunities = self._deduplicate_signals(all_opportunities)
 
-        # ── Conquesting Fusion: amplify epidemiological opportunities with bid multipliers ──
-        all_opportunities = self._fuse_conquesting_multipliers(all_opportunities)
+        # ── Supply-Gap Fusion: apply priority multipliers from BfArM shortage signals ──
+        all_opportunities = self._apply_supply_gap_priority_multipliers(all_opportunities)
 
         # ── Kreis-Targeting: Top-Kreise nach aktueller Inzidenz anreichern ──
         all_opportunities = self._enrich_kreis_targeting(all_opportunities)
@@ -389,14 +389,14 @@ class MarketingOpportunityEngine:
     def _deduplicate_signals(opportunities: list[dict]) -> list[dict]:
         """Dedupliziere Detektor-Signale: gleiche Condition + Region-Fingerprint
         aus verschiedenen Detektoren → nur die Opportunity mit der höchsten
-        Urgency behalten. COMPETITOR_SHORTAGE wird nicht dedupliziert (ist
+        Urgency behalten. MARKET_SUPPLY_GAP wird nicht dedupliziert (ist
         Modifier, kein eigenständiger Trigger)."""
         seen: dict[str, dict] = {}
         passthrough: list[dict] = []
 
         for opp in opportunities:
             opp_type = opp.get("type", "")
-            if opp_type == "COMPETITOR_SHORTAGE":
+            if opp_type == "MARKET_SUPPLY_GAP":
                 passthrough.append(opp)
                 continue
 
@@ -416,65 +416,65 @@ class MarketingOpportunityEngine:
         return deduped
 
     @staticmethod
-    def _fuse_conquesting_multipliers(opportunities: list[dict]) -> list[dict]:
-        """Fuse COMPETITOR_SHORTAGE bid_multipliers into epidemiological opportunities.
+    def _apply_supply_gap_priority_multipliers(opportunities: list[dict]) -> list[dict]:
+        """Fuse MARKET_SUPPLY_GAP priority multipliers into epidemiological opportunities.
 
-        When a COMPETITOR_SHORTAGE opportunity exists for a condition, its
-        bid_multiplier is applied to all other opportunities sharing that condition.
-        The conquesting opportunity itself is kept for audit/tracking but marked
+        When a MARKET_SUPPLY_GAP opportunity exists for a condition, its
+        priority_multiplier is applied to all other opportunities sharing that condition.
+        The supply-gap opportunity itself is kept for audit/tracking but treated
         as a modifier (not a standalone campaign trigger).
 
         Fusion rules:
         - Match on _condition field (e.g. "bronchitis_husten")
-        - Multiply urgency_score by bid_multiplier (capped at 100)
-        - Annotate the fused opportunity with conquesting metadata
-        - If multiple conquesting opps match, use the highest multiplier
+        - Multiply urgency_score by priority_multiplier (no hard cap)
+        - Annotate the fused opportunity with supply-gap metadata
+        - If multiple supply-gap signals match, use the highest multiplier
         """
-        # Collect conquesting multipliers by condition
-        conquesting_by_condition: dict[str, dict] = {}
+        # Collect supply-gap multipliers by condition
+        supply_gap_by_condition: dict[str, dict] = {}
         for opp in opportunities:
-            if opp.get("type") != "COMPETITOR_SHORTAGE":
+            if opp.get("type") != "MARKET_SUPPLY_GAP":
                 continue
             condition = opp.get("_condition", "")
             if not condition:
                 continue
-            existing = conquesting_by_condition.get(condition)
-            if not existing or opp.get("_bid_multiplier", 1.0) > existing.get("_bid_multiplier", 1.0):
-                conquesting_by_condition[condition] = opp
+            existing = supply_gap_by_condition.get(condition)
+            if not existing or opp.get("_priority_multiplier", 1.0) > existing.get("_priority_multiplier", 1.0):
+                supply_gap_by_condition[condition] = opp
 
-        if not conquesting_by_condition:
+        if not supply_gap_by_condition:
             return opportunities
 
-        # Apply multipliers to non-conquesting opportunities
+        # Apply multipliers to non-supply-gap opportunities
         for opp in opportunities:
-            if opp.get("type") == "COMPETITOR_SHORTAGE":
+            if opp.get("type") == "MARKET_SUPPLY_GAP":
                 continue
 
             condition = opp.get("_condition", "")
-            conquesting = conquesting_by_condition.get(condition)
-            if not conquesting:
+            supply_gap = supply_gap_by_condition.get(condition)
+            if not supply_gap:
                 continue
 
-            multiplier = float(conquesting.get("_bid_multiplier", 1.0))
+            multiplier = float(supply_gap.get("_priority_multiplier", 1.0))
             original_urgency = float(opp.get("urgency_score", 0))
             # Kein Cap bei 100: erlaubt Ranking unter mehreren urgenten
-            # Opportunities wenn Conquesting-Multiplikator angewendet wird.
+            # Opportunities wenn Supply-Gap Multiplikator angewendet wird.
             fused_urgency = original_urgency * multiplier
 
             opp["urgency_score"] = round(fused_urgency, 1)
-            opp["_conquesting_applied"] = True
-            opp["_conquesting_multiplier"] = multiplier
-            opp["_conquesting_sku"] = conquesting.get("_conquesting_sku")
-            opp["_conquesting_product"] = conquesting.get("_conquesting_product")
-            opp["_conquesting_matched_drugs"] = conquesting.get("_matched_drugs", [])
+            opp["_supply_gap_applied"] = True
+            opp["_supply_gap_priority_multiplier"] = multiplier
+            opp["_supply_gap_sku"] = supply_gap.get("_supply_gap_sku")
+            opp["_supply_gap_product"] = supply_gap.get("_supply_gap_product")
+            opp["_supply_gap_matched_products"] = supply_gap.get("_matched_products", [])
 
             logger.info(
-                "Conquesting fusion: %s urgency %.0f → %.0f (×%.1f from %s)",
+                "Supply-gap fusion: %s urgency %.0f → %.0f (×%.2f from %s)",
                 opp.get("id", "?"),
                 original_urgency,
                 fused_urgency,
                 multiplier,
-                conquesting.get("_conquesting_sku"),
+                supply_gap.get("_supply_gap_sku"),
             )
 
         return opportunities
@@ -1883,24 +1883,24 @@ class MarketingOpportunityEngine:
             .first()
         )
 
-        # Build conquesting payload for persistence
-        conquesting_data = None
-        if opp.get("_conquesting_applied"):
-            conquesting_data = {
+        # Build supply-gap payload for persistence (modifier metadata)
+        supply_gap_data = None
+        if opp.get("_supply_gap_applied"):
+            supply_gap_data = {
                 "is_active": True,
-                "multiplier": opp.get("_conquesting_multiplier", 1.0),
-                "sku": opp.get("_conquesting_sku", ""),
-                "product": opp.get("_conquesting_product", ""),
-                "matched_drugs": opp.get("_conquesting_matched_drugs", []),
+                "priority_multiplier": opp.get("_supply_gap_priority_multiplier", 1.0),
+                "sku": opp.get("_supply_gap_sku", ""),
+                "product": opp.get("_supply_gap_product", ""),
+                "matched_products": opp.get("_supply_gap_matched_products", []),
             }
 
         if existing:
             existing.urgency_score = opp.get("urgency_score", existing.urgency_score)
             existing.sales_pitch = opp.get("sales_pitch", existing.sales_pitch)
             existing.suggested_products = opp.get("suggested_products", existing.suggested_products)
-            if conquesting_data:
+            if supply_gap_data:
                 payload = (existing.campaign_payload or {}).copy()
-                payload["conquesting"] = conquesting_data
+                payload["supply_gap"] = supply_gap_data
                 existing.campaign_payload = payload
             existing.updated_at = utc_now()
             self.db.commit()
@@ -1914,8 +1914,8 @@ class MarketingOpportunityEngine:
             detected_at = utc_now()
 
         campaign_payload = {}
-        if conquesting_data:
-            campaign_payload["conquesting"] = conquesting_data
+        if supply_gap_data:
+            campaign_payload["supply_gap"] = supply_gap_data
 
         entry = MarketingOpportunity(
             opportunity_id=opp_id,
@@ -2818,20 +2818,24 @@ class MarketingOpportunityEngine:
         }
 
     def _clean_for_output(self, opp: dict) -> dict:
-        """Entfernt interne _-Felder und promotiert Conquesting-Felder für den API-Output."""
+        """Entfernt interne _-Felder und promotiert Supply-Gap Felder für den API-Output."""
         clean = {k: v for k, v in opp.items() if not k.startswith("_")}
 
-        # Promote conquesting metadata to public API fields
-        clean["is_conquesting_active"] = bool(opp.get("_conquesting_applied", False))
-        if clean["is_conquesting_active"]:
-            matched_drugs = opp.get("_conquesting_matched_drugs", [])
-            clean["competitor_shortage_ingredient"] = ", ".join(matched_drugs[:3]) if matched_drugs else ""
-            clean["recommended_bid_modifier"] = float(opp.get("_conquesting_multiplier", 1.0))
-            clean["conquesting_product"] = opp.get("_conquesting_product", "")
+        # Promote supply-gap modifier metadata to public API fields
+        clean["is_supply_gap_active"] = bool(opp.get("_supply_gap_applied", False))
+        if clean["is_supply_gap_active"]:
+            matched_products = opp.get("_supply_gap_matched_products", [])
+            clean["supply_gap_match_examples"] = (
+                ", ".join(matched_products[:3]) if matched_products else ""
+            )
+            clean["recommended_priority_multiplier"] = float(
+                opp.get("_supply_gap_priority_multiplier", 1.0)
+            )
+            clean["supply_gap_product"] = opp.get("_supply_gap_product", "")
         else:
-            clean["competitor_shortage_ingredient"] = ""
-            clean["recommended_bid_modifier"] = 1.0
-            clean["conquesting_product"] = ""
+            clean["supply_gap_match_examples"] = ""
+            clean["recommended_priority_multiplier"] = 1.0
+            clean["supply_gap_product"] = ""
 
         return clean
 
@@ -2958,13 +2962,24 @@ class MarketingOpportunityEngine:
             "updated_at": m.updated_at.isoformat() if m.updated_at else None,
             "expires_at": m.expires_at.isoformat() if m.expires_at else None,
             "exported_at": m.exported_at.isoformat() if m.exported_at else None,
-            # Conquesting fields (from persisted campaign_payload)
-            "is_conquesting_active": bool((campaign_payload.get("conquesting") or {}).get("is_active", False)),
-            "competitor_shortage_ingredient": ", ".join(
-                (campaign_payload.get("conquesting") or {}).get("matched_drugs", [])[:3]
+            # Supply-gap fields (from persisted campaign_payload)
+            # Note: legacy DB records may still carry "conquesting" payloads; we read them as fallback.
+            "is_supply_gap_active": bool(
+                ((campaign_payload.get("supply_gap") or campaign_payload.get("conquesting") or {}).get("is_active", False))
             ),
-            "recommended_bid_modifier": float(
-                (campaign_payload.get("conquesting") or {}).get("multiplier", 1.0)
+            "supply_gap_match_examples": ", ".join(
+                (
+                    (campaign_payload.get("supply_gap") or {}).get("matched_products")
+                    or (campaign_payload.get("conquesting") or {}).get("matched_drugs", [])
+                )[:3]
             ),
-            "conquesting_product": (campaign_payload.get("conquesting") or {}).get("product", ""),
+            "recommended_priority_multiplier": float(
+                (
+                    (campaign_payload.get("supply_gap") or {}).get("priority_multiplier")
+                    or (campaign_payload.get("conquesting") or {}).get("multiplier", 1.0)
+                )
+            ),
+            "supply_gap_product": (
+                (campaign_payload.get("supply_gap") or campaign_payload.get("conquesting") or {}).get("product", "")
+            ),
         }

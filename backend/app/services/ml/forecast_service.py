@@ -65,7 +65,6 @@ from app.services.ml.forecast_horizon_utils import (
     LearnedProbabilityModel,
     apply_probability_calibration,
     MIN_DIRECT_TRAIN_POINTS,
-    SUPPORTED_FORECAST_HORIZONS,
     build_direct_target_frame,
     build_walk_forward_splits,
     compute_classification_metrics,
@@ -76,7 +75,6 @@ from app.services.ml.forecast_horizon_utils import (
     reliability_score_from_metrics,
     select_probability_calibration,
 )
-from app.services.ml.regional_panel_utils import normalize_state_code
 from app.services.ml.regional_panel_utils import BUNDESLAND_NAMES
 from app.services.ml.training_contract import INTERNAL_HISTORY_TEST_MAP
 

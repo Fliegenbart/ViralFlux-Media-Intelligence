@@ -5,11 +5,11 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class ConquestingTargets(BaseModel):
-    """Defines which competitor drugs a product can conquest against.
+    """Defines which BfArM shortage patterns can trigger a supply-gap modifier.
 
-    Used by CompetitorShortageDetector to match BfArM shortage data
-    against our product portfolio. When a competitor drug in a shortage
-    matches these targets, a conquesting opportunity is generated.
+    Used by MarketSupplyMonitor to match BfArM shortage data against our
+    product portfolio. When a shortage notice matches these targets, a
+    supply-gap priority modifier can be applied.
     """
 
     target_ingredients: list[str] = Field(
@@ -24,7 +24,7 @@ class ConquestingTargets(BaseModel):
         default=1.5,
         ge=1.0,
         le=5.0,
-        description="Programmatic bid multiplier when conquesting opportunity is active.",
+        description="Priority multiplier when a supply-gap modifier is active.",
     )
 
     model_config = ConfigDict(extra="forbid")
@@ -63,4 +63,3 @@ class ProductCatalogResponse(ProductCatalogBase):
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
-

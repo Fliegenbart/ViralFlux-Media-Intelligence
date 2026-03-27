@@ -9,7 +9,7 @@ import logging
 
 from app.core.config import get_settings
 from app.models.database import WastewaterAggregated, WastewaterData
-from app.services.data_ingest.klaeranlage_coordinates import get_coordinates
+from app.services.data_ingest.wastewater_monitoring_sites import get_monitoring_site_coordinates
 from app.services.ml.nowcast_revision import capture_nowcast_snapshots
 
 logger = logging.getLogger(__name__)
@@ -143,7 +143,7 @@ class AmelagIngestionService:
                 WastewaterData.standort == standort
             ).first()
 
-            coords = get_coordinates(standort)
+            coords = get_monitoring_site_coordinates(standort)
             vals = {
                 'bundesland': row.get('bundesland', ''),
                 'viruslast': float(viruslast),

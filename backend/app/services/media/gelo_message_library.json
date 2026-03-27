@@ -1,23 +1,23 @@
 {
-  "version": "2026-02-18",
+  "version": "2026-03-27",
   "brand": "gelo",
   "defaults": {
     "conditions": {
       "bronchitis_husten": {
-        "message_direction": "Hartnäckiger Husten und festsitzender Schleim: wieder frei durchatmen (konservativ formuliert).",
+        "message_direction": "Hartnäckiger Husten mit festsitzendem Schleim: symptomnah, ruhig und ohne Heilversprechen kommunizieren.",
         "hero_messages": [
-          "Wenn Husten fest sitzt: wieder frei durchatmen.",
-          "Hartnäckiger Husten? Schleim lösen und durchatmen."
+          "Hartnäckiger Husten mit Schleim: den Atemwegen wohltuend helfen.",
+          "Wenn Husten fest sitzt: Schleim lösen und den Alltag erleichtern."
         ],
         "support_points": [
-          "Symptomnah, alltagstauglich, konservativ formuliert",
-          "Regionale Aktivierung bei messbarem Bedarfssignal",
-          "Keine Heilversprechen, keine Garantien"
+          "Symptomnah und vorsichtig formuliert",
+          "Sichtbarkeit dort, wo Bedarfssignale sichtbar werden",
+          "Keine Heilversprechen, keine Garantien, keine Angstbotschaften"
         ],
         "creative_angles": [
-          "Tagsüber aktiv trotz Husten",
-          "Durchatmen im Alltag",
-          "Schleim lösen: sanftes Narrativ"
+          "Alltag trotz Husten",
+          "Atemwege entlasten, ruhig erklärt",
+          "Schleim lösen: wohltuender Support"
         ],
         "keyword_clusters": [
           "husten schleim lösen",
@@ -30,22 +30,22 @@
           "Mehr erfahren",
           "Jetzt informieren"
         ],
-        "compliance_note": "Hinweis: Aussagen konservativ, symptomorientiert und ohne Heilversprechen formulieren."
+        "compliance_note": "Hinweis: Aussagen symptomorientiert, vorsichtig und ohne Heilversprechen formulieren."
       },
       "sinusitis_nebenhoehlen": {
-        "message_direction": "Nebenhöhlen-Druck, verstopfte Nase: wieder leichter durch den Tag (konservativ).",
+        "message_direction": "Nebenhöhlen-Druck und verstopfte Nase: symptomnah entlasten und den Alltag unterstützen (vorsichtig).",
         "hero_messages": [
-          "Wenn die Nebenhöhlen drücken: wieder leichter durch den Tag.",
-          "Verstopfte Nase und Druck? Sanft entlasten."
+          "Nebenhöhlen-Druck: sanft entlasten und durch den Tag.",
+          "Verstopfte Nase und Druck: wohltuend begleiten."
         ],
         "support_points": [
-          "Symptome lindern, Wohlbefinden unterstützen",
-          "Regionale Aktivierung bei Wetterumschwung/Kälte",
-          "Keine Garantieversprechen"
+          "Symptomnah, ohne Übertreibung",
+          "Passend bei Kälte, Wetterwechsel oder trockener Luft",
+          "Keine Garantien, keine Heilversprechen"
         ],
         "creative_angles": [
-          "Kopf frei bekommen",
-          "Wetterumschwung: Nebenhöhlen entlasten",
+          "Kopf frei bekommen, ruhig erzählt",
+          "Wetterwechsel: Nebenhöhlen entlasten",
           "Alltagstaugliche Erleichterung"
         ],
         "keyword_clusters": [
@@ -62,20 +62,20 @@
         "compliance_note": "Hinweis: Keine Aussagen zu 'heilt'/'schnell weg' etc.; nur lindernd/unterstützend."
       },
       "halsschmerz_heiserkeit": {
-        "message_direction": "Halskratzen und Heiserkeit: Stimme beruhigen, gut durch den Tag (konservativ).",
+        "message_direction": "Halskratzen und Heiserkeit: Stimme und Hals wohltuend beruhigen (vorsichtig).",
         "hero_messages": [
-          "Wenn der Hals kratzt: Stimme beruhigen und durch den Tag.",
-          "Heiser? Den Hals wohltuend beruhigen."
+          "Wenn der Hals kratzt: wohltuend beruhigen.",
+          "Heiserkeit: Stimme sanft begleiten."
         ],
         "support_points": [
           "Wohltuend und schützend positionieren",
-          "Konservativ, ohne Heilversprechen",
-          "Ziel: Symptom-Relief und Alltag"
+          "Ohne Heilversprechen, ohne Garantie",
+          "Fokus auf Alltag und Symptom-Relief"
         ],
         "creative_angles": [
-          "Stimme im Meeting",
+          "Stimme im Alltag",
           "Hals beruhigen unterwegs",
-          "Wohltuender Schutzfilm-Narrativ (konservativ)"
+          "Wohltuender Schutzfilm, vorsichtig erzählt"
         ],
         "keyword_clusters": [
           "halsschmerzen was tun",
@@ -88,23 +88,23 @@
           "In der Apotheke beraten lassen",
           "Mehr erfahren"
         ],
-        "compliance_note": "Hinweis: Keine Nebenwirkungsfreiheit versprechen; claims vorsichtig und symptomnah."
+        "compliance_note": "Hinweis: Keine Nebenwirkungsfreiheit versprechen; Claims vorsichtig und symptomnah formulieren."
       },
       "rhinitis_trockene_nase": {
-        "message_direction": "Trockene/irritierte Nasenschleimhaut: pflegen und befeuchten (konservativ).",
+        "message_direction": "Trockene oder gereizte Nasenschleimhaut: pflegen, befeuchten und schützen (vorsichtig).",
         "hero_messages": [
-          "Trockene Nase? Sanft pflegen und befeuchten.",
-          "Wenn die Nase gereizt ist: Nasenschleimhaut schützen."
+          "Trockene Nase: sanft pflegen und befeuchten.",
+          "Gereizte Nasenschleimhaut: Schutz und Pflege im Alltag."
         ],
         "support_points": [
-          "Pflege- und Schutz-Narrativ",
-          "Passend bei trockener Luft/Heizungsluft",
-          "Keine Heilversprechen"
+          "Pflege und Schutz, ohne Heilversprechen",
+          "Passend bei Heizungsluft oder trockener Luft",
+          "Konservativ und symptomnah formulieren"
         ],
         "creative_angles": [
           "Heizungsluft: Nase pflegen",
           "Unterwegs in trockener Luft",
-          "Sanftes Pflegeversprechen"
+          "Sanfte Pflege, ruhig erklärt"
         ],
         "keyword_clusters": [
           "trockene nase",
@@ -120,20 +120,20 @@
         "compliance_note": "Hinweis: Aussagen auf Pflege/Befeuchtung begrenzen, keine medizinischen Garantien."
       },
       "immun_support": {
-        "message_direction": "Immunsystem im Alltag unterstützen: gut vorbereitet durch die Saison (konservativ).",
+        "message_direction": "Abwehrkräfte im Alltag unterstützen: ruhig, alltagstauglich und ohne Therapie-Anweisungen kommunizieren.",
         "hero_messages": [
-          "Gut vorbereitet durch die Saison: Immunsystem im Alltag unterstützen.",
-          "Wenn draußen alles läuft: Immunsupport im Alltag."
+          "Alltagstaugliche Unterstützung für die Abwehrkräfte.",
+          "Gut vorbereitet durch die Saison: Immunsystem im Alltag unterstützen."
         ],
         "support_points": [
-          "Präventiv, ohne Therapie-Anweisungen",
-          "Alltag und Resilienz, nicht 'Behandlung'",
-          "Konservativ formulieren"
+          "Präventiv und unterstützend, nicht therapeutisch",
+          "Alltag und Routine, keine Angstbotschaften",
+          "Konservativ formulieren, keine Garantien"
         ],
         "creative_angles": [
           "Saisonwechsel: vorbereitet sein",
           "Alltagsroutine",
-          "Resilienz-Story"
+          "Resilienz, ruhig erzählt"
         ],
         "keyword_clusters": [
           "immunsystem stärken",
@@ -149,20 +149,20 @@
         "compliance_note": "Hinweis: Keine Supplement-/Therapieanweisung; nur unterstützend/präventiv formulieren."
       },
       "erkaltung_akut": {
-        "message_direction": "Erkältung im Anflug: Symptome frühzeitig lindern und Alltag stabil halten (konservativ).",
+        "message_direction": "Erste Erkältungsanzeichen: symptomorientiert, ruhig und ohne Heilversprechen kommunizieren.",
         "hero_messages": [
-          "Erkältung im Anflug? Symptome frühzeitig lindern.",
-          "Wenn's dich erwischt: alltagstauglich und konservativ gegen Symptome."
+          "Erkältung im Anflug: Symptome frühzeitig lindern.",
+          "Bei ersten Anzeichen: den Alltag stabil halten."
         ],
         "support_points": [
-          "Timing: früh aktivieren, bevor Peak",
+          "Früher Hinweis statt Alarm",
           "Symptomorientiert, ohne Heilversprechen",
-          "Regionaler Trigger statt Streuverlust"
+          "Sichtbarkeit nach Bedarfssignal statt breit zu streuen"
         ],
         "creative_angles": [
           "Früh dran statt spät reagieren",
           "Alltag trotz Infekt",
-          "Schnupfen/Husten/Heiserkeit (symptomnah)"
+          "Schnupfen, Husten, Heiserkeit (symptomnah)"
         ],
         "keyword_clusters": [
           "erkältung erste anzeichen",
@@ -183,10 +183,10 @@
     "gelomyrtol forte": {
       "conditions": {
         "bronchitis_husten": {
-          "message_direction": "Bei Husten mit festsitzendem Schleim: wieder frei durchatmen (konservativ).",
+          "message_direction": "Husten mit festsitzendem Schleim: Schleim lösen und Atemwege entlasten (vorsichtig).",
           "hero_messages": [
-            "Wenn Husten fest sitzt: wieder frei durchatmen.",
-            "Schleim lösen, durchatmen, weitergehen."
+            "Wenn Husten fest sitzt: Schleim lösen und durch den Tag.",
+            "Festsitzender Schleim: Atemwege entlasten, ruhig erklärt."
           ],
           "creative_angles": [
             "Durchatmen im Alltag",
@@ -201,9 +201,9 @@
           ]
         },
         "sinusitis_nebenhoehlen": {
-          "message_direction": "Wenn die Nebenhöhlen drücken: leichter durch den Tag (konservativ).",
+          "message_direction": "Nebenhöhlen-Druck: entlasten und den Tag erleichtern (vorsichtig).",
           "hero_messages": [
-            "Nebenhöhlen-Druck? Wieder leichter durch den Tag.",
+            "Nebenhöhlen-Druck: leichter durch den Tag.",
             "Wenn die Nase dicht ist: entlasten und durchatmen."
           ],
           "keyword_clusters": [
@@ -218,10 +218,10 @@
     "gelorevoice": {
       "conditions": {
         "halsschmerz_heiserkeit": {
-          "message_direction": "Heiserkeit und Halskratzen: Stimme wohltuend beruhigen (konservativ).",
+          "message_direction": "Heiserkeit und Halskratzen: Stimme wohltuend beruhigen (vorsichtig).",
           "hero_messages": [
-            "Wenn die Stimme streikt: den Hals wohltuend beruhigen.",
-            "Halskratzen? Stimme sanft begleiten."
+            "Wenn die Stimme rau ist: den Hals wohltuend beruhigen.",
+            "Halskratzen: Stimme sanft begleiten."
           ],
           "keyword_clusters": [
             "heiserkeit",
@@ -235,10 +235,10 @@
     "gelositin": {
       "conditions": {
         "rhinitis_trockene_nase": {
-          "message_direction": "Trockene Nase: pflegen, befeuchten, schützen (konservativ).",
+          "message_direction": "Trockene Nase: pflegen, befeuchten, schützen (vorsichtig).",
           "hero_messages": [
-            "Trockene Nase? Sanft pflegen und befeuchten.",
-            "Wenn Heizungsluft nervt: Nasenschleimhaut schützen."
+            "Trockene Nase: sanft pflegen und befeuchten.",
+            "Heizungsluft: Nasenschleimhaut schützen."
           ],
           "keyword_clusters": [
             "trockene nase pflege",
@@ -252,9 +252,9 @@
     "gelovital": {
       "conditions": {
         "immun_support": {
-          "message_direction": "Immunsystem im Alltag unterstützen: gut vorbereitet durch die Saison (konservativ).",
+          "message_direction": "Immunsystem im Alltag unterstützen: ruhig, alltagstauglich und ohne Therapie-Anweisungen kommunizieren.",
           "hero_messages": [
-            "Alltag im Griff: Immunsystem unterstützen.",
+            "Immunsystem im Alltag unterstützen.",
             "Gut vorbereitet durch die Saison."
           ],
           "keyword_clusters": [
@@ -269,10 +269,10 @@
     "geloprosed": {
       "conditions": {
         "erkaltung_akut": {
-          "message_direction": "Erkältung im Anflug: symptomorientiert und konservativ kommunizieren.",
+          "message_direction": "Erkältung im Anflug: symptomorientiert und vorsichtig kommunizieren.",
           "hero_messages": [
-            "Erkältung im Anflug? Frühzeitig gegen Symptome.",
-            "Wenn's dich erwischt: symptomnah durch den Tag."
+            "Erkältung im Anflug: frühzeitig gegen Symptome.",
+            "Bei ersten Anzeichen: symptomnah durch den Tag."
           ],
           "keyword_clusters": [
             "erkältung erste anzeichen",
@@ -282,10 +282,10 @@
           ]
         },
         "rhinitis_trockene_nase": {
-          "message_direction": "Schnupfen und verstopfte Nase: konservativ und symptomnah kommunizieren.",
+          "message_direction": "Schnupfen und verstopfte Nase: symptomnah und vorsichtig kommunizieren.",
           "hero_messages": [
-            "Schnupfen? Symptome lindern und durchatmen.",
-            "Nase dicht? Sanft und symptomnah entlasten."
+            "Schnupfen: Symptome lindern und durchatmen.",
+            "Nase dicht: sanft und symptomnah entlasten."
           ],
           "keyword_clusters": [
             "schnupfen lindern",
@@ -295,10 +295,10 @@
           ]
         },
         "halsschmerz_heiserkeit": {
-          "message_direction": "Erkältung mit Halsschmerz: Symptome ganzheitlich lindern (konservativ).",
+          "message_direction": "Erkältung mit Halsschmerz: Symptome im Alltag lindern (vorsichtig).",
           "hero_messages": [
-            "Hals kratzt und Nase läuft? Ganzheitlich gegen Erkältungs-Symptome.",
-            "Erkältung mit Halsschmerz: symptomnah und konservativ."
+            "Hals kratzt und Nase läuft: gut durch den Alltag.",
+            "Erkältung mit Halsschmerz: symptomnah und vorsichtig."
           ],
           "keyword_clusters": [
             "halsschmerzen erkältung",
@@ -312,10 +312,10 @@
     "gelobronchial": {
       "conditions": {
         "bronchitis_husten": {
-          "message_direction": "Husten und Bronchien: wohltuend beruhigen und Schleim lösen (konservativ).",
+          "message_direction": "Husten und Bronchien: wohltuend beruhigen und Schleim lösen (vorsichtig).",
           "hero_messages": [
-            "Husten, der nicht aufhört? Bronchien wohltuend beruhigen.",
-            "Bronchitis-Symptome: Husten lindern und durchatmen."
+            "Husten, der nicht aufhört: Bronchien wohltuend beruhigen.",
+            "Bronchitis-Symptome: Husten lindern und den Alltag erleichtern."
           ],
           "keyword_clusters": [
             "husten bronchien",
@@ -325,10 +325,10 @@
           ]
         },
         "erkaltung_akut": {
-          "message_direction": "Erkältungshusten: konservativ und symptomnah kommunizieren.",
+          "message_direction": "Erkältungshusten: symptomnah und vorsichtig kommunizieren.",
           "hero_messages": [
-            "Erkältungshusten? Sanft beruhigen und durchatmen.",
-            "Husten bei Erkältung: wohltuend und konservativ lindern."
+            "Erkältungshusten: sanft beruhigen und durch den Tag.",
+            "Husten bei Erkältung: wohltuend und vorsichtig lindern."
           ],
           "keyword_clusters": [
             "erkältung husten",
@@ -342,10 +342,10 @@
     "gelodurat": {
       "conditions": {
         "rhinitis_trockene_nase": {
-          "message_direction": "Schnupfen und verstopfte Nase: sanft abschwellen und durchatmen (konservativ).",
+          "message_direction": "Verstopfte Nase: sanft entlasten und besser durch den Tag (vorsichtig).",
           "hero_messages": [
-            "Nase dicht? Sanft abschwellen und durchatmen.",
-            "Verstopfte Nase: wieder frei atmen."
+            "Nase dicht: sanft entlasten und durchatmen.",
+            "Verstopfte Nase: besser durchatmen."
           ],
           "keyword_clusters": [
             "nase verstopft",
@@ -355,9 +355,9 @@
           ]
         },
         "erkaltung_akut": {
-          "message_direction": "Erkältungsschnupfen: konservativ und symptomnah kommunizieren.",
+          "message_direction": "Erkältungsschnupfen: symptomnah und vorsichtig kommunizieren.",
           "hero_messages": [
-            "Erkältung mit Schnupfen? Nase sanft befreien.",
+            "Erkältung mit Schnupfen: Nase sanft befreien.",
             "Schnupfen bei Erkältung: symptomnah entlasten."
           ],
           "keyword_clusters": [
@@ -372,10 +372,10 @@
     "gelovox": {
       "conditions": {
         "halsschmerz_heiserkeit": {
-          "message_direction": "Heiserkeit und Stimme: wohltuend befeuchten und beruhigen (konservativ).",
+          "message_direction": "Heiserkeit: Stimme wohltuend befeuchten und beruhigen (vorsichtig).",
           "hero_messages": [
-            "Heiser? Stimme wohltuend befeuchten und beruhigen.",
-            "Wenn die Stimme versagt: sanft und schonend pflegen."
+            "Heiserkeit: Stimme wohltuend befeuchten und beruhigen.",
+            "Rauher Hals: sanft und schonend pflegen."
           ],
           "keyword_clusters": [
             "heiserkeit stimme",
@@ -388,4 +388,3 @@
     }
   }
 }
-

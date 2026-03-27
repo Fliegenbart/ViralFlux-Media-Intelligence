@@ -145,9 +145,7 @@ const AppLayout: React.FC<Props> = ({ children }) => {
 
           <div className="operator-sidebar__brand-block">
             <p className="operator-sidebar__brand-copy">PEIX x GELO Pilot</p>
-            <p className="operator-sidebar__brand-note">
-              Wöchentliche Media-Entscheidungen auf Bundesland-Level.
-            </p>
+            <p className="operator-sidebar__brand-note">Wöchentliche Entscheidungen auf Bundesland-Level.</p>
           </div>
 
           <nav className="operator-nav" role="navigation" aria-label="Arbeitsbereiche">
@@ -171,63 +169,6 @@ const AppLayout: React.FC<Props> = ({ children }) => {
           </nav>
 
           <div className="operator-sidebar__rail">
-            <section className="operator-status-card">
-              <span className="operator-status-card__kicker">GELO Weekly Readout</span>
-              <div className="operator-readout-card__header">
-                <strong>{readoutSummary.title}</strong>
-                <span className={`operator-readout-chip operator-readout-chip--${readoutSummary.tone}`}>
-                  {readoutSummary.status}
-                </span>
-              </div>
-              <p>{readoutSummary.summary}</p>
-              <div className="operator-readout-card__meta">
-                <span>Stand {readoutSummary.updatedAt}</span>
-              </div>
-              <div className="operator-readout-card__stats" aria-label="Weekly Readout Zusammenfassung">
-                <div className="operator-readout-card__stat">
-                  <span>Fokusregionen</span>
-                  <strong>{readoutSummary.focusRegions}</strong>
-                </div>
-                <div className="operator-readout-card__stat">
-                  <span>Zuerst prüfen</span>
-                  <strong>{readoutSummary.nextReview}</strong>
-                </div>
-              </div>
-              <div className="operator-readout-card__trust">
-                <div className="operator-readout-card__trust-item">
-                  <span>Belastbarkeit</span>
-                  <strong>{readoutSummary.reliability}</strong>
-                </div>
-                <div className="operator-readout-card__trust-item">
-                  <span>Datenlage</span>
-                  <strong>{readoutSummary.dataReadiness}</strong>
-                </div>
-                <div className="operator-readout-card__trust-item">
-                  <span>Offen</span>
-                  <strong>{readoutSummary.openGap}</strong>
-                </div>
-              </div>
-              <div className="operator-readout-card__actions">
-                <button
-                  onClick={handlePdfDownload}
-                  disabled={pdfLoading}
-                  className="operator-status-card__button"
-                  aria-busy={pdfLoading}
-                >
-                  {pdfLoading ? 'Wird erstellt...' : exportLabel}
-                </button>
-                {!location.pathname.startsWith('/jetzt') ? (
-                  <button
-                    type="button"
-                    className="operator-status-card__button operator-status-card__button--secondary"
-                    onClick={() => handleNavClick('/jetzt')}
-                  >
-                    Zum Weekly Briefing
-                  </button>
-                ) : null}
-              </div>
-            </section>
-
             <div className="operator-sidebar__footer-links">
               <button
                 type="button"
@@ -304,26 +245,22 @@ const AppLayout: React.FC<Props> = ({ children }) => {
             </div>
 
             <div className="operator-header__meta">
-              <span className="operator-header__status-pill">{currentSection.kicker}</span>
+              <div className="operator-header__hero-meta">
+                <span className="operator-header__status-pill">{currentSection.kicker}</span>
+                <span className={`operator-header__signal operator-header__signal--${readoutSummary.tone}`}>
+                  {readoutSummary.status}
+                </span>
+              </div>
               <div className="operator-header__copy-block">
                 <div className="operator-header__title-row">
                   <span className="operator-header__status-dot" aria-hidden="true" />
                   <h1 id="operator-page-title" className="operator-header__title">{currentSection.title}</h1>
                 </div>
                 <p className="operator-header__copy">{currentSection.description}</p>
-                <div className="operator-readout-strip" aria-label="Weekly Readout Überblick">
-                  <div className="operator-readout-strip__item">
-                    <span>Fokus</span>
-                    <strong>{readoutSummary.stripHeadline}</strong>
-                  </div>
-                  <div className="operator-readout-strip__item">
-                    <span>Review zuerst</span>
-                    <strong>{readoutSummary.nextReview}</strong>
-                  </div>
-                  <div className="operator-readout-strip__item">
-                    <span>Noch offen</span>
-                    <strong>{readoutSummary.stripGap}</strong>
-                  </div>
+                <div className="operator-header__summary-line">
+                  <span>{readoutSummary.status}</span>
+                  <span>{readoutSummary.focusRegions}</span>
+                  <span>{readoutSummary.nextReview}</span>
                 </div>
               </div>
             </div>

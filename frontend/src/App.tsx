@@ -85,17 +85,18 @@ const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ children }) =>
     <ToastContext.Provider value={{ toast: addToast }}>
       {children}
       <div
+        className="toast-stack"
         aria-live="polite"
         style={{
           position: 'fixed',
-          bottom: 24,
+          top: 136,
           right: 24,
           zIndex: 9999,
           display: 'flex',
           flexDirection: 'column',
-          gap: 8,
+          gap: 10,
           pointerEvents: 'none',
-          maxWidth: 380,
+          maxWidth: 360,
         }}
       >
         {toasts.map((t) => (

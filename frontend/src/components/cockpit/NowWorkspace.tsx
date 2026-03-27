@@ -83,19 +83,41 @@ const NowWorkspace: React.FC<Props> = ({
     || null
   );
   const trustSummary = view.briefingTrust.summary || workspaceStatus?.summary || 'Hier siehst du den schnellen Vertrauenscheck.';
+  const heroMetrics = [
+    { label: 'Entscheidung', value: heroRecommendation?.direction || 'Noch offen' },
+    { label: 'Bundesland', value: heroRecommendation?.region || focusRegion?.name || 'Noch offen' },
+    { label: 'Kontext', value: heroRecommendation?.context || view.primaryCampaignContext || 'Noch ohne Einordnung' },
+  ];
+  const qualityStats = (view.quality.length ? view.quality : [{ label: 'Qualität', value: 'Noch offen' }]).slice(0, 4);
+  const inlineNotes = [
+    ...(view.supportState.detail ? [view.supportState.detail] : []),
+    ...blockers.slice(0, 2),
+  ].filter(Boolean);
+  const confidenceItems = [
+    normalizedTrustChecks[0] || { key: 'forecast', label: 'Belastbarkeit', value: 'Noch offen', detail: 'Forecast wird aufgebaut', tone: 'muted' },
+    normalizedTrustChecks[1] || { key: 'evidence', label: 'Evidenz', value: 'Noch offen', detail: 'Datenlage wird aktualisiert', tone: 'muted' },
+    normalizedTrustChecks[2] || { key: 'readiness', label: 'Einsatzreife', value: 'Noch offen', detail: 'Freigabe steht noch aus', tone: 'muted' },
+  ].slice(0, 3);
+  const emptyStateSignals = [
+    heroRecommendation?.stateLabel || 'Noch kein freigegebener Fokus',
+    view.supportState.detail || 'Die Wochenlage bleibt sichtbar, aber noch ohne belastbare Entscheidung.',
+    blockers[0] || 'Der nächste Schritt ist zuerst Evidenz oder Regionen zu prüfen.',
+  ].filter(Boolean).slice(0, 3);
 
   if (loading && !view.hasData) {
     return (
       <OperatorSection
         kicker="PEIX x GELO Weekly Briefing"
-        title="Was diese Woche zuerst geprüft werden sollte"
-        description="Wir bauen gerade das Wochenbriefing auf. Gleich siehst du wieder den Fokus, die Alternativen und die Vertrauenslage."
+        title="Wochenplan wird aufgebaut"
+        description="Der Fokusfall, die Einordnung und die Prüfpfade werden gerade zusammengestellt."
         tone="muted"
-        className="now-template-page operator-toolbar-shell"
+        className="now-template-page now-workspace-shell"
       >
         <div className="now-briefing-skeleton" aria-label="Weekly Briefing wird geladen">
-          <div className="workspace-note-card now-briefing-skeleton__block now-briefing-skeleton__block--hero" />
-          <div className="workspace-note-card now-briefing-skeleton__block now-briefing-skeleton__block--secondary" />
+          <div className="now-briefing-skeleton__hero-row">
+            <div className="workspace-note-card now-briefing-skeleton__block now-briefing-skeleton__block--hero" />
+            <div className="workspace-note-card now-briefing-skeleton__block now-briefing-skeleton__block--aside" />
+          </div>
           <div className="now-briefing-skeleton__trust">
             <div className="workspace-note-card now-briefing-skeleton__block" />
             <div className="workspace-note-card now-briefing-skeleton__block" />
@@ -110,19 +132,27 @@ const NowWorkspace: React.FC<Props> = ({
     <div className="page-stack now-template-page">
       <OperatorSection
         kicker="PEIX x GELO Weekly Briefing"
-        title="Was diese Woche zuerst geprüft werden sollte"
-        description="Die Ansicht beantwortet zuerst: welche Maßnahme, in welchem Bundesland und mit welcher Vertrauenslage."
+        title="Wochenplan: nächster klarer Schritt"
+        description="Eine Hauptentscheidung, kurze Vertrauenslage und zwei Folgepfade."
         tone="accent"
-        className="operator-toolbar-shell"
+        className="now-workspace-shell"
       >
         <div className="now-toolbar">
-          <OperatorChipRail className="review-chip-row">
+          <div className="now-toolbar__intro">
+            <span className="now-toolbar__eyebrow">Arbeitsfilter</span>
+            <div className="now-toolbar__heading">
+              <strong>Virus-Kontext</strong>
+              <span>Wählt den Arbeitskontext für diese Woche.</span>
+            </div>
+          </div>
+          <OperatorChipRail className="review-chip-row now-toolbar__rail">
             {VIRUS_OPTIONS.map((option) => (
               <button
                 key={option}
                 type="button"
                 onClick={() => onVirusChange(option)}
                 className={`tab-chip ${option === virus ? 'active' : ''}`}
+                aria-pressed={option === virus}
               >
                 {option}
               </button>
@@ -131,128 +161,192 @@ const NowWorkspace: React.FC<Props> = ({
           <div className="workspace-note-card now-toolbar-note">
             <strong>Stand {formatDateTime(view.generatedAt)}</strong>
             <span>
-              Wochenbriefing auf Bundesland-Level. {view.supportState.label || 'Ohne künstliche City-Präzision.'}
+              Bundesland-Level, {heroRecommendation?.stateLabel || 'ohne belastbare Freigabe'}.
+              {' '}
+              {view.supportState.label || 'Keine künstliche City-Präzision.'}
             </span>
           </div>
         </div>
         {view.emptyState ? (
           <OperatorPanel
-            eyebrow="Empfohlener Fokus diese Woche"
+            eyebrow="Status"
             title={view.emptyState.title}
             description={view.emptyState.body}
             tone="muted"
-            className="now-briefing-hero now-briefing-hero--weak"
+            className="now-briefing-hero now-briefing-hero--weak now-briefing-hero--empty"
           >
+            <div className="now-briefing-empty__meta">
+              <span>Fokusfall noch offen</span>
+              <span>{virus} · h{horizonDays}</span>
+            </div>
+            <div className="now-briefing-empty__body">
+              <div className="now-briefing-empty__summary">
+                <span className="now-weekly-plan-card__label">Was fehlt gerade?</span>
+                <strong>Noch keine belastbare Kombination aus Regionalsignal, Qualität und Freigabe.</strong>
+                <p>Du siehst den Status klar und kannst direkt mit Evidenz oder Regionen weitermachen.</p>
+              </div>
+              <div className="now-briefing-empty__signals">
+                {emptyStateSignals.map((item) => (
+                  <div key={item} className="workspace-note-card now-briefing-empty__signal">
+                    {item}
+                  </div>
+                ))}
+              </div>
+            </div>
             <div className="action-row">
-              <button className="media-button secondary" type="button" onClick={onOpenEvidence}>
+              <button className="media-button" type="button" onClick={onOpenEvidence}>
                 Evidenz prüfen
               </button>
               <button className="media-button secondary" type="button" onClick={() => onOpenRegions()}>
                 Regionen öffnen
               </button>
             </div>
+            {inlineNotes.length > 0 ? (
+              <div className="now-inline-notes" aria-live="polite">
+                {inlineNotes.map((note) => (
+                  <div key={note} className="now-inline-note">
+                    <span className="material-symbols-outlined" aria-hidden="true">info</span>
+                    <p>{note}</p>
+                  </div>
+                ))}
+              </div>
+            ) : null}
           </OperatorPanel>
         ) : heroRecommendation ? (
           <div className="now-briefing-stack">
-            <OperatorPanel
-              tone={heroRecommendation.state === 'strong' ? 'accent' : 'default'}
-              className={`now-briefing-hero now-briefing-hero--${heroRecommendation.state}`}
-            >
-              <div className="now-briefing-hero__header">
-                <div>
-                  <span className="now-weekly-plan-card__label">Empfohlener Fokus diese Woche</span>
-                  <h3 className="now-briefing-hero__title">{heroRecommendation.headline}</h3>
-                  <div className="now-briefing-hero__meta">
-                    {heroRecommendation.direction} · {heroRecommendation.region}
-                  </div>
-                </div>
-                <div className="now-briefing-hero__pills">
-                  <span className={`now-state-pill now-state-pill--${heroRecommendation.state}`}>
-                    {heroRecommendation.stateLabel}
-                  </span>
-                </div>
-              </div>
-
-              <p className="now-briefing-hero__copy">{heroRecommendation.whyNow}</p>
-
-              <div className="now-briefing-hero__facts">
-                <article className="workspace-note-card now-briefing-fact">
-                  <span className="now-weekly-plan-card__label">Bundesland</span>
-                  <strong>{heroRecommendation.region}</strong>
-                  <p>Bewusst ohne City-Präzision.</p>
-                </article>
-                <article className="workspace-note-card now-briefing-fact">
-                  <span className="now-weekly-plan-card__label">Kontext</span>
-                  <strong>{heroRecommendation.context}</strong>
-                  <p>{focusRegion?.budgetLabel && focusRegion.budgetLabel !== '-' ? `Budgetrahmen ${focusRegion.budgetLabel}` : 'Nur vorhandener Kontext, keine Scheingenauigkeit.'}</p>
-                </article>
-              </div>
-
-              {heroRecommendation.actionHint ? (
-                <div className="workspace-note-card now-briefing-callout">
-                  <strong>{heroRecommendation.stateLabel}</strong>
-                  <p>{heroRecommendation.actionHint}</p>
-                </div>
-              ) : null}
-
-              <div className="action-row">
-                <button
-                  className="media-button"
-                  type="button"
-                  disabled={heroRecommendation.ctaDisabled}
-                  onClick={() => (
-                    view.primaryRecommendationId
-                      ? onOpenRecommendation(view.primaryRecommendationId)
-                      : onOpenCampaigns()
-                  )}
-                >
-                  {heroRecommendation.actionLabel}
-                </button>
-                <button
-                  className="media-button secondary"
-                  type="button"
-                  onClick={() => onOpenRegions(heroRecommendation.regionCode || focusRegion?.code || undefined)}
-                >
-                  Bundesland öffnen
-                </button>
-                <button className="media-button secondary" type="button" onClick={onOpenEvidence}>
-                  Evidenz prüfen
-                </button>
-              </div>
-
-              {heroSupportText ? (
-                <p className="now-briefing-hero__help">{heroSupportText}</p>
-              ) : null}
-            </OperatorPanel>
-
-            <OperatorPanel
-              eyebrow="Danach im Blick"
-              title="Die zwei nächsten Prüfpfade"
-              description="Damit du Alternativen siehst, ohne wieder in ein gleichwertiges Dashboard zu rutschen."
-              tone="muted"
-              className="now-briefing-secondary"
-            >
-              <div className="now-briefing-secondary__list">
-                {secondaryMoves.length > 0 ? secondaryMoves.map((region) => (
-                  <button
-                    type="button"
-                    key={region.code}
-                    onClick={() => onOpenRegions(region.code)}
-                    className="campaign-list-card now-briefing-secondary__item"
-                  >
-                    <div className="now-briefing-secondary__item-copy">
-                      <div className="now-briefing-secondary__item-title">{region.name}</div>
-                      <div className="now-briefing-secondary__item-meta">
-                        {region.stage} · {region.probabilityLabel}
-                      </div>
+            <div className="now-command-stage">
+              <OperatorPanel
+                tone={heroRecommendation.state === 'strong' ? 'accent' : 'default'}
+                className={`now-briefing-hero now-briefing-hero--${heroRecommendation.state}`}
+              >
+                <div className="now-briefing-hero__header">
+                  <div>
+                    <span className="now-weekly-plan-card__label">Hero Decision Stage</span>
+                    <h3 className="now-briefing-hero__title">{heroRecommendation.headline}</h3>
+                    <div className="now-briefing-hero__meta">
+                      {heroRecommendation.direction} · {heroRecommendation.region}
                     </div>
-                    <p>{region.reason}</p>
-                  </button>
-                )) : (
-                  <div className="workspace-note-card now-briefing-secondary__empty">
-                    Aktuell gibt es keine weiteren belastbaren Bundesländer für diese Woche.
                   </div>
-                )}
+                  <div className="now-briefing-hero__pills">
+                    <span className={`now-state-pill now-state-pill--${heroRecommendation.state}`}>
+                      {heroRecommendation.stateLabel}
+                    </span>
+                  </div>
+                </div>
+
+                <p className="now-briefing-hero__copy">{heroRecommendation.whyNow}</p>
+
+                <div className="now-briefing-hero__metrics">
+                  {heroMetrics.map((item) => (
+                    <div key={item.label} className="now-briefing-hero__metric">
+                      <span>{item.label}</span>
+                      <strong>{item.value}</strong>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="now-briefing-hero__facts">
+                  <article className="workspace-note-card now-briefing-fact">
+                    <span className="now-weekly-plan-card__label">Budgetrahmen</span>
+                    <strong>{focusRegion?.budgetLabel && focusRegion.budgetLabel !== '-' ? focusRegion.budgetLabel : 'Noch offen'}</strong>
+                    <p>Nur als Bundesland-Kontext, nicht als Scheingenauigkeit.</p>
+                  </article>
+                  <article className="workspace-note-card now-briefing-fact">
+                    <span className="now-weekly-plan-card__label">Warum jetzt</span>
+                    <strong>{heroRecommendation.stateLabel}</strong>
+                    <p>{heroRecommendation.actionHint || heroSupportText || 'Die Einordnung bleibt sichtbar, aber mit kontrollierter Vorsicht.'}</p>
+                  </article>
+                </div>
+
+                <div className="action-row">
+                  <button
+                    className="media-button"
+                    type="button"
+                    disabled={heroRecommendation.ctaDisabled}
+                    onClick={() => (
+                      view.primaryRecommendationId
+                        ? onOpenRecommendation(view.primaryRecommendationId)
+                        : onOpenCampaigns()
+                    )}
+                  >
+                    {heroRecommendation.actionLabel}
+                  </button>
+                  <button
+                    className="media-button secondary"
+                    type="button"
+                    onClick={() => onOpenRegions(heroRecommendation.regionCode || focusRegion?.code || undefined)}
+                  >
+                    Bundesland öffnen
+                  </button>
+                  <button className="media-button secondary" type="button" onClick={onOpenEvidence}>
+                    Evidenz prüfen
+                  </button>
+                </div>
+
+                {heroSupportText ? (
+                  <p className="now-briefing-hero__help">{heroSupportText}</p>
+                ) : null}
+
+                {inlineNotes.length > 0 ? (
+                  <div className="now-inline-notes" aria-live="polite">
+                    {inlineNotes.map((note) => (
+                      <div key={note} className="now-inline-note">
+                        <span className="material-symbols-outlined" aria-hidden="true">info</span>
+                        <p>{note}</p>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+              </OperatorPanel>
+
+              <OperatorPanel
+                eyebrow="Secondary Paths"
+                title="Danach prüfen"
+                description="Zwei nachrangige Pfade nach dem Fokusfall."
+                tone="muted"
+                className="now-briefing-secondary"
+              >
+                <div className="now-briefing-secondary__list">
+                  {secondaryMoves.length > 0 ? secondaryMoves.map((region, index) => (
+                    <button
+                      type="button"
+                      key={region.code}
+                      onClick={() => onOpenRegions(region.code)}
+                      className="campaign-list-card now-briefing-secondary__item"
+                    >
+                      <div className="now-briefing-secondary__index">0{index + 1}</div>
+                      <div className="now-briefing-secondary__item-copy">
+                        <div className="now-briefing-secondary__item-title">{region.name}</div>
+                        <div className="now-briefing-secondary__item-meta">
+                          {region.stage} · {region.probabilityLabel}
+                        </div>
+                        <p>{region.reason}</p>
+                      </div>
+                    </button>
+                  )) : (
+                    <div className="workspace-note-card now-briefing-secondary__empty">
+                      Aktuell gibt es keine weiteren belastbaren Bundesländer für diese Woche.
+                    </div>
+                  )}
+                </div>
+              </OperatorPanel>
+            </div>
+
+            <OperatorPanel
+              eyebrow="Confidence Strip"
+              title="Vertrauenslage auf einen Blick"
+              description={trustSummary}
+              tone="muted"
+              className="now-confidence-strip"
+            >
+              <div className="now-trust-grid">
+                {confidenceItems.map((item) => (
+                  <article key={item.key} className={`workspace-status-card workspace-status-card--${item.tone}`}>
+                    <span className="workspace-status-card__question">{item.label}</span>
+                    <strong>{item.value}</strong>
+                    <p>{item.detail}</p>
+                  </article>
+                ))}
               </div>
             </OperatorPanel>
           </div>
@@ -261,66 +355,39 @@ const NowWorkspace: React.FC<Props> = ({
 
       {!view.emptyState ? (
         <>
-          <OperatorSection
-            title="Was die Empfehlung trägt"
-            description={trustSummary}
-            tone="muted"
-            className="workspace-status-panel now-briefing-trust"
-          >
-            <div className="now-trust-grid">
-              {normalizedTrustChecks.map((item) => (
-                <article
-                  key={item.key}
-                  className={`workspace-status-card workspace-status-card--${item.tone}`}
-                >
-                  <span className="workspace-status-card__question">{item.label}</span>
-                  <strong>{item.value}</strong>
-                  <p>{item.detail}</p>
-                </article>
-              ))}
-            </div>
-
-            <div className="workspace-status-panel__footer">
-              <span>{heroRecommendation?.actionHint || view.supportState.detail || trustSummary}</span>
-              <button className="media-button secondary" type="button" onClick={onOpenEvidence}>
-                Evidenz prüfen
-              </button>
-            </div>
-          </OperatorSection>
-
-          <div className="now-proof-stage now-briefing-support">
-            <FocusRegionOutlookPanel
-              prediction={focusPrediction}
-              backtest={focusRegionBacktest}
-              loading={focusRegionBacktestLoading}
-              horizonDays={horizonDays}
-            />
-          </div>
-
           <CollapsibleSection
-            title="Zweiter Blick"
-            subtitle="Historie, offene Punkte und Hintergrund nur wenn du tiefer einsteigen möchtest."
+            title="Details bei Bedarf"
+            subtitle="Historie und zusätzliche Signale nur dann öffnen, wenn du den Fokusfall tiefer prüfen willst."
           >
             <div className="workspace-two-column">
-              <OperatorPanel
-                title="Warum die Fokusregion vorne liegt"
-                description="Hier stehen die zusätzlichen Begründungen hinter der Wochenempfehlung."
-              >
-                <div className="workspace-note-list">
-                  <div className="workspace-note-card">{heroRecommendation?.context || view.primaryCampaignContext || 'Bundesland-Level-Kontext noch offen.'}</div>
-                  {leadReasons.length > 0 ? leadReasons.map((reason) => (
-                    <div key={reason} className="workspace-note-card">
-                      {reason}
-                    </div>
-                  )) : (
-                    <div className="workspace-note-card">Noch keine zusätzliche Kurzbegründung verfügbar.</div>
-                  )}
-                </div>
-              </OperatorPanel>
+              <FocusRegionOutlookPanel
+                prediction={focusPrediction}
+                backtest={focusRegionBacktest}
+                loading={focusRegionBacktestLoading}
+                horizonDays={horizonDays}
+              />
 
               <OperatorPanel
-                title="Offene Punkte"
-                description="Nur wenn noch etwas blockiert."
+                title="Signal und Qualität"
+                description="Kompakter Zustand der wichtigsten Qualitäts- und Kontextsignale."
+              >
+                <div className="operator-stat-grid">
+                  {qualityStats.map((item) => (
+                    <OperatorStat
+                      key={item.label}
+                      label={item.label}
+                      value={item.value}
+                      tone="muted"
+                    />
+                  ))}
+                </div>
+              </OperatorPanel>
+            </div>
+
+            <div className="workspace-two-column">
+              <OperatorPanel
+                title="Was noch bremsen kann"
+                description="Nur die Punkte, die vor dem nächsten Schritt bewusst sichtbar bleiben sollen."
               >
                 <div className="workspace-note-list">
                   {blockers.length > 0 ? blockers.map((risk) => (
@@ -330,6 +397,19 @@ const NowWorkspace: React.FC<Props> = ({
                   )) : (
                     <div className="workspace-note-card">Aktuell blockiert nichts.</div>
                   )}
+                </div>
+              </OperatorPanel>
+
+              <OperatorPanel
+                title="Weitere Hinweise"
+                description="Zusätzliche Hinweise, die hilfreich sind, aber nicht die Hauptentscheidung führen."
+              >
+                <div className="workspace-note-list">
+                  {(view.reasons.length > 3 ? view.reasons.slice(3) : view.risks).map((item) => (
+                    <div key={item} className="workspace-note-card">
+                      {item}
+                    </div>
+                  ))}
                 </div>
               </OperatorPanel>
             </div>
@@ -351,34 +431,6 @@ const NowWorkspace: React.FC<Props> = ({
               title="Historische Ausbreitungsreihenfolge"
               subtitle={`Die letzte verfügbare Saison hilft als Hintergrund, ersetzt aber nicht den aktuellen Forecast auf Bundesland-Level für ${virus}.`}
             />
-
-            <div className="workspace-two-column">
-              <OperatorPanel title="Kennzahlen" description="Die wichtigsten Werte kurz zusammengefasst.">
-                <div className="operator-stat-grid">
-                  {(view.quality.length ? view.quality : [{ label: 'Qualität', value: 'Noch offen' }]).map((item) => (
-                    <OperatorStat
-                      key={item.label}
-                      label={item.label}
-                      value={item.value}
-                      tone="muted"
-                    />
-                  ))}
-                </div>
-              </OperatorPanel>
-
-              <OperatorPanel
-                title="Weitere Hinweise"
-                description="Hier stehen zusätzliche Punkte, die für die Einordnung hilfreich sind."
-              >
-                <div className="workspace-note-list">
-                  {(view.reasons.length > 3 ? view.reasons.slice(3) : view.risks).map((item) => (
-                    <div key={item} className="workspace-note-card">
-                      {item}
-                    </div>
-                  ))}
-                </div>
-              </OperatorPanel>
-            </div>
           </CollapsibleSection>
         </>
       ) : null}

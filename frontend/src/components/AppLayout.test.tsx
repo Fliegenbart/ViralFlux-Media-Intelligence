@@ -115,16 +115,11 @@ describe('AppLayout theme rendering', () => {
     expect(screen.getByLabelText('Dunkles Design aktivieren')).toBeInTheDocument();
     expect(screen.getByRole('banner')).toHaveClass('surface-header');
     expect(screen.getByRole('link', { name: 'Direkt zum Inhalt springen' })).toHaveAttribute('href', '#main-content');
-    expect(screen.getAllByText('Weekly Readout exportieren').length).toBeGreaterThan(0);
+    expect(screen.getByText('Weekly Readout exportieren')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Weekly Briefing' })).toBeInTheDocument();
-    expect(screen.getByText('GELO Weekly Readout')).toBeInTheDocument();
-    expect(screen.getByText('GELO sollte diese Woche zuerst Bayern prüfen.')).toBeInTheDocument();
-    expect(screen.getByLabelText('Weekly Readout Überblick')).toBeInTheDocument();
-    expect(screen.getByLabelText('Weekly Readout Zusammenfassung')).toBeInTheDocument();
-    expect(screen.getByText('Bayern, Nordrhein-Westfalen')).toBeInTheDocument();
-    expect(screen.getByText('Belastbarkeit')).toBeInTheDocument();
-    expect(screen.getByText('24 Wochen GELO-Daten verbunden')).toBeInTheDocument();
-    expect(screen.getAllByText(/GELO-Outcome-Daten für eine Region fehlen noch/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Mit Vorsicht zeigen').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Bayern, Nordrhein-Westfalen').length).toBeGreaterThan(0);
+    expect(screen.getByText('Bayern · Nasenspray')).toBeInTheDocument();
   });
 
   it('shows the light-mode activation label in dark theme', () => {

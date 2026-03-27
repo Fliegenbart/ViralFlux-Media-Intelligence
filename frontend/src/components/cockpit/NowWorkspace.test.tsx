@@ -392,6 +392,7 @@ describe('NowWorkspace', () => {
 
     expect(container.querySelector('.now-toolbar')).toBeTruthy();
     expect(container.querySelector('.now-briefing-stack')).toBeTruthy();
+    expect(container.querySelector('.now-confidence-strip')).toBeTruthy();
     expect(container.querySelector('.now-trust-grid')).toBeTruthy();
   });
 
@@ -420,21 +421,21 @@ describe('NowWorkspace', () => {
     );
 
     expect(screen.getAllByText('PEIX x GELO Weekly Briefing').length).toBeGreaterThan(0);
-    expect(screen.getByText('Was diese Woche zuerst geprüft werden sollte')).toBeInTheDocument();
-    expect(screen.getByText('Empfohlener Fokus diese Woche')).toBeInTheDocument();
+    expect(screen.getByText('Wochenplan: nächster klarer Schritt')).toBeInTheDocument();
+    expect(screen.getByText('Hero Decision Stage')).toBeInTheDocument();
     expect(screen.getByText('Respiratory Core Demand in Berlin')).toBeInTheDocument();
-    expect(screen.getByText('Danach im Blick')).toBeInTheDocument();
-    expect(screen.getByText('Die zwei nächsten Prüfpfade')).toBeInTheDocument();
+    expect(screen.getByText('Secondary Paths')).toBeInTheDocument();
+    expect(screen.getByText('Danach prüfen')).toBeInTheDocument();
     expect(screen.getByText('Bayern')).toBeInTheDocument();
     expect(screen.getByText('Sachsen')).toBeInTheDocument();
     expect(screen.queryByText('Nordrhein-Westfalen')).not.toBeInTheDocument();
-    expect(screen.getByText('Was die Empfehlung trägt')).toBeInTheDocument();
+    expect(screen.getByText('Confidence Strip')).toBeInTheDocument();
+    expect(screen.getByText('Vertrauenslage auf einen Blick')).toBeInTheDocument();
     expect(screen.getByText('Belastbarkeit')).toBeInTheDocument();
     expect(screen.getByText('Daten & Evidenz')).toBeInTheDocument();
     expect(screen.getByText('Einsatzreife & Blocker')).toBeInTheDocument();
-    expect(screen.getByText('Forecast zur Fokusregion')).toBeInTheDocument();
     expect(screen.getByText('Bundesland öffnen')).toBeInTheDocument();
-    expect(screen.getByText('Zweiter Blick')).toBeInTheDocument();
+    expect(screen.getByText('Details bei Bedarf')).toBeInTheDocument();
   });
 
   it('opens the primary recommendation from the hero action', () => {
@@ -576,6 +577,7 @@ describe('NowWorkspace', () => {
     );
 
     expect(screen.getByText('Noch keine belastbare Wochenempfehlung.')).toBeInTheDocument();
+    expect(screen.getByText('Status')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Evidenz prüfen' })).toBeInTheDocument();
   });
 });

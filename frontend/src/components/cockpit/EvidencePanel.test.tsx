@@ -10,9 +10,9 @@ jest.mock('./evidence/ForecastMonitoringSection', () => ({
   default: () => <div>ForecastMonitoringSection Mock</div>,
 }));
 
-jest.mock('./evidence/TruthOutcomeSection', () => ({
+jest.mock('./evidence/WaveValidationSection', () => ({
   __esModule: true,
-  default: () => <div>TruthOutcomeSection Mock</div>,
+  default: () => <div>WaveValidationSection Mock</div>,
 }));
 
 jest.mock('./evidence/SourceFreshnessSection', () => ({

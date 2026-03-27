@@ -18,55 +18,60 @@ import {
 import { sanitizeEvidenceCopy } from './evidenceUtils';
 
 interface Props {
-  truthStatus?: TruthCoverage | null;
-  truthGate?: {
+  customerDataCoverage?: TruthCoverage | null;
+  customerDataGate?: {
     passed: boolean;
     state?: string;
     learning_state?: string;
   } | null;
   businessValidation?: BusinessValidationSummary | null;
-  outcomeLearning?: OutcomeLearningSummary | null;
-  legacyCustomer?: BacktestResponse | null;
-  sourceStatusLabels: string[];
+  regionalImpact?: OutcomeLearningSummary | null;
+  legacyCustomerValidation?: BacktestResponse | null;
+  connectedFieldLabels: string[];
 }
 
-const TruthOutcomeSection: React.FC<Props> = ({
-  truthStatus,
-  truthGate,
+const WaveValidationSection: React.FC<Props> = ({
+  customerDataCoverage,
+  customerDataGate,
   businessValidation,
-  outcomeLearning,
-  legacyCustomer,
-  sourceStatusLabels,
+  regionalImpact,
+  legacyCustomerValidation,
+  connectedFieldLabels,
 }) => {
-  const outcomeSignalLabel = metricContractDisplayLabel(
-    outcomeLearning?.field_contracts,
+  const hasCustomerData = Boolean(customerDataCoverage?.coverage_weeks);
+  const customerDataHelper = hasCustomerData
+    ? evidenceStatusHelper('truth_backed')
+    : COCKPIT_SEMANTICS.insufficientTruth.helper;
+
+  const impactSignalLabel = metricContractDisplayLabel(
+    regionalImpact?.field_contracts,
     'outcome_signal_score',
-    'Wirkungssignal aus Kundendaten',
+    'Tatsächliche Wirkung (Kundendaten)',
   );
-  const outcomeSignalBadge = metricContractBadge(
-    outcomeLearning?.field_contracts,
+  const impactSignalBadge = metricContractBadge(
+    regionalImpact?.field_contracts,
     'outcome_signal_score',
-    'Lernsignal',
+    'Wirkungshinweis',
   );
-  const outcomeSignalNote = metricContractNote(
-    outcomeLearning?.field_contracts,
+  const impactSignalNote = metricContractNote(
+    regionalImpact?.field_contracts,
     'outcome_signal_score',
-    'Beschreibt ein beobachtetes Lernsignal aus Kundendaten.',
+    'Zeigt, ob Kundendaten die Empfehlung in der Region stützen. Kein Wirkungsversprechen.',
   );
-  const outcomeConfidenceLabel = metricContractDisplayLabel(
-    outcomeLearning?.field_contracts,
+  const impactConfidenceLabel = metricContractDisplayLabel(
+    regionalImpact?.field_contracts,
     'outcome_confidence_pct',
-    'Lern-Sicherheit',
+    'Sicherheitsgrad',
   );
-  const outcomeConfidenceBadge = metricContractBadge(
-    outcomeLearning?.field_contracts,
+  const impactConfidenceBadge = metricContractBadge(
+    regionalImpact?.field_contracts,
     'outcome_confidence_pct',
-    'Lern-Sicherheit',
+    'Sicherheitsgrad',
   );
-  const outcomeConfidenceNote = metricContractNote(
-    outcomeLearning?.field_contracts,
+  const impactConfidenceNote = metricContractNote(
+    regionalImpact?.field_contracts,
     'outcome_confidence_pct',
-    'Beschreibt die Sicherheit des Outcome-Lernsignals.',
+    'Schätzt, wie stabil dieser Hinweis ist.',
   );
 
   return (
@@ -74,44 +79,44 @@ const TruthOutcomeSection: React.FC<Props> = ({
       <section className="card subsection-card" style={{ padding: 24 }}>
         <div className="section-heading">
           <span className="section-kicker">GELO-Kundendaten</span>
-          <h2 className="subsection-title">Wie weit die GELO-Daten schon tragen</h2>
+          <h2 className="subsection-title">Tatsächliche regionale Wirkung (Actual Regional Impact)</h2>
           <p className="subsection-copy">
-            Dieser Bereich zeigt, wie weit importierte GELO-Kundendaten die Empfehlungen schon zusätzlich stützen und wo die Datenbasis noch im Aufbau ist.
+            Dieser Bereich zeigt, ob Kundendaten die Empfehlungen in der Region bereits sichtbar stützen. Wenn hier noch wenig steht, ist das kein Fehler, sondern meist ein Import- oder Abdeckungs-Thema.
           </p>
         </div>
         <div className="metric-strip">
           <div className="metric-box">
             <span>Wochen</span>
-            <strong>{truthStatus?.coverage_weeks ?? 0}</strong>
+            <strong>{customerDataCoverage?.coverage_weeks ?? 0}</strong>
           </div>
           <div className="metric-box">
-            <span>Aktualität</span>
-            <strong>{truthFreshnessLabel(truthStatus?.truth_freshness_state)}</strong>
+            <span>Datenstand</span>
+            <strong>{truthFreshnessLabel(customerDataCoverage?.truth_freshness_state)}</strong>
           </div>
           <div className="metric-box">
             <span>Letzter Import</span>
-            <strong>{formatDateTime(truthStatus?.last_imported_at)}</strong>
+            <strong>{formatDateTime(customerDataCoverage?.last_imported_at)}</strong>
           </div>
         </div>
         <div className="soft-panel review-panel-soft" style={{ marginTop: 14 }}>
           <div className="evidence-row">
-            <span>GELO-Datenstatus</span>
-            <strong>{truthGate?.passed ? 'freigeschaltet' : learningStateLabel(truthGate?.state)}</strong>
+            <span>Nutzbar in Empfehlungen</span>
+            <strong>{customerDataGate?.passed ? 'bereit' : learningStateLabel(customerDataGate?.state)}</strong>
           </div>
           <div className="evidence-row">
-            <span>Lernstand</span>
-            <strong>{learningStateLabel(outcomeLearning?.learning_state || truthGate?.learning_state)}</strong>
+            <span>Stand der Auswertung</span>
+            <strong>{learningStateLabel(regionalImpact?.learning_state || customerDataGate?.learning_state)}</strong>
           </div>
           <div className="evidence-row">
-            <span>{outcomeSignalLabel}</span>
-            <strong>{formatPercent(outcomeLearning?.outcome_signal_score)}</strong>
+            <span>{impactSignalLabel}</span>
+            <strong>{formatPercent(regionalImpact?.outcome_signal_score)}</strong>
           </div>
         </div>
         <div className="review-muted-copy" style={{ marginTop: 12 }}>
-          {truthStatus?.coverage_weeks ? evidenceStatusHelper('truth_backed') : COCKPIT_SEMANTICS.insufficientTruth.helper}
+          {customerDataHelper}
         </div>
         <div className="review-chip-row">
-          {(sourceStatusLabels.length ? sourceStatusLabels : ['Noch keine Pflichtfelder vollständig vorhanden']).map((item) => (
+          {(connectedFieldLabels.length ? connectedFieldLabels : ['Noch keine Pflichtfelder vollständig vorhanden']).map((item) => (
             <span key={item} className="step-chip">{normalizeGermanText(item)}</span>
           ))}
         </div>
@@ -143,11 +148,11 @@ const TruthOutcomeSection: React.FC<Props> = ({
             )}
           </div>
         )}
-        {!truthStatus?.coverage_weeks && legacyCustomer && (
+        {!hasCustomerData && legacyCustomerValidation && (
           <div className="soft-panel review-panel-soft" style={{ marginTop: 14 }}>
-            <div className="campaign-focus-label">Früherer GELO-Lauf</div>
+            <div className="campaign-focus-label">Historischer Hinweis (Backtest)</div>
             <div className="review-body-copy" style={{ marginTop: 8 }}>
-              {legacyCustomer.metrics?.data_points || 0} Punkte aus einem älteren Kunden-Backtest. Dieser Run bleibt als historischer Hinweis sichtbar, zählt aber nicht als aktiver Bereich für Kundendaten.
+              {legacyCustomerValidation.metrics?.data_points || 0} Datenpunkte aus einem älteren Vergleichslauf. Dieser Lauf bleibt als historischer Hinweis sichtbar, zählt aber nicht als aktueller Kundendaten-Stand.
             </div>
           </div>
         )}
@@ -155,55 +160,55 @@ const TruthOutcomeSection: React.FC<Props> = ({
 
       <section className="card subsection-card" style={{ padding: 24 }}>
         <div className="section-heading">
-          <span className="section-kicker">Outcome-Lernen</span>
-          <h2 className="subsection-title">Was diese GELO-Daten zusätzlich stützen</h2>
+          <span className="section-kicker">Wirkungs-Hinweise</span>
+          <h2 className="subsection-title">Was Kundendaten bereits zeigen</h2>
           <p className="subsection-copy">
-            Dieser Block zeigt, was aus importierten GELO-Daten bereits gelernt wurde. Die Werte helfen bei der Priorisierung, sind aber keine Aussage über sichere Wirkung.
+            Dieser Block fasst die Hinweise zusammen, die aus Kundendaten abgeleitet werden. Sie helfen beim Einordnen und Priorisieren, sind aber keine Garantie für eine sichere Wirkung.
           </p>
         </div>
         <div className="review-muted-copy" style={{ marginTop: 12 }}>
-          {COCKPIT_SEMANTICS.insufficientTruth.helper}
+          {customerDataHelper}
         </div>
         <div className="metric-strip" style={{ marginTop: 16 }}>
           <div className="metric-box">
-            <span>Lernstand</span>
-            <strong>{learningStateLabel(outcomeLearning?.learning_state)}</strong>
+            <span>Stand</span>
+            <strong>{learningStateLabel(regionalImpact?.learning_state)}</strong>
           </div>
           <div className="metric-box">
-            <span>{outcomeSignalLabel}</span>
-            <strong>{formatPercent(outcomeLearning?.outcome_signal_score)}</strong>
+            <span>{impactSignalLabel}</span>
+            <strong>{formatPercent(regionalImpact?.outcome_signal_score)}</strong>
           </div>
           <div className="metric-box">
-            <span>{outcomeConfidenceLabel}</span>
-            <strong>{formatPercent(outcomeLearning?.outcome_confidence_pct)}</strong>
+            <span>{impactConfidenceLabel}</span>
+            <strong>{formatPercent(regionalImpact?.outcome_confidence_pct)}</strong>
           </div>
         </div>
         <div className="soft-panel review-panel-soft" style={{ marginTop: 14 }}>
           <div className="evidence-row">
-            <span>{outcomeSignalLabel}</span>
-            <strong>{outcomeSignalBadge}</strong>
+            <span>{impactSignalLabel}</span>
+            <strong>{impactSignalBadge}</strong>
           </div>
           <div className="review-body-copy" style={{ marginTop: 8 }}>
-            {outcomeSignalNote}
+            {impactSignalNote}
           </div>
           <div className="evidence-row" style={{ marginTop: 14 }}>
-            <span>{outcomeConfidenceLabel}</span>
-            <strong>{outcomeConfidenceBadge}</strong>
+            <span>{impactConfidenceLabel}</span>
+            <strong>{impactConfidenceBadge}</strong>
           </div>
           <div className="review-body-copy" style={{ marginTop: 8 }}>
-            {outcomeConfidenceNote}
+            {impactConfidenceNote}
           </div>
         </div>
         <div className="soft-panel" style={{ padding: 18, marginTop: 18, display: 'grid', gap: 10 }}>
-          {(outcomeLearning?.top_pair_learnings?.length ? outcomeLearning.top_pair_learnings : []).slice(0, 3).map((item, index) => (
+          {(regionalImpact?.top_pair_learnings?.length ? regionalImpact.top_pair_learnings : []).slice(0, 3).map((item, index) => (
             <div key={`${item.product_key || 'product'}-${item.region_code || index}`} className="evidence-row">
               <span>{item.product_key || item.product || 'Produkt'} · {item.region_code || 'Region'}</span>
-              <strong>{formatPercent(item.outcome_signal_score)} · {learningStateLabel(outcomeLearning?.learning_state)}</strong>
+              <strong>{formatPercent(item.outcome_signal_score)} · {learningStateLabel(regionalImpact?.learning_state)}</strong>
             </div>
           ))}
-          {!outcomeLearning?.top_pair_learnings?.length && (
+          {!regionalImpact?.top_pair_learnings?.length && (
             <div className="review-muted-copy">
-              Noch keine granularen Produkt-Region-Lernmuster vorhanden. Sobald mehr Reihen aus Kundendaten vorliegen, werden sie hier sichtbar.
+              Noch keine sichtbaren Produkt-Region-Hinweise vorhanden. Sobald mehr Kundendaten vorliegen, werden hier erste Muster angezeigt.
             </div>
           )}
         </div>
@@ -212,4 +217,4 @@ const TruthOutcomeSection: React.FC<Props> = ({
   );
 };
 
-export default TruthOutcomeSection;
+export default WaveValidationSection;

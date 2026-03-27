@@ -421,16 +421,16 @@ describe('NowWorkspace', () => {
     );
 
     expect(screen.getAllByText('PEIX x GELO Weekly Briefing').length).toBeGreaterThan(0);
-    expect(screen.getByText('Wochenplan: nächster klarer Schritt')).toBeInTheDocument();
-    expect(screen.getByText('Hero Decision Stage')).toBeInTheDocument();
-    expect(screen.getByText('Respiratory Core Demand in Berlin')).toBeInTheDocument();
-    expect(screen.getByText('Secondary Paths')).toBeInTheDocument();
-    expect(screen.getByText('Danach prüfen')).toBeInTheDocument();
+    expect(screen.getByText('Wochenplan')).toBeInTheDocument();
+    expect(screen.getByText('Aktuelle Entscheidung')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Berlin jetzt priorisieren.' })).toBeInTheDocument();
+    expect(screen.getByText('Woran wir sie festmachen')).toBeInTheDocument();
+    expect(screen.getByText('Warum diese Richtung trägt')).toBeInTheDocument();
+    expect(screen.getByText('Danach')).toBeInTheDocument();
+    expect(screen.getByText('Zwei Folgepfade')).toBeInTheDocument();
     expect(screen.getByText('Bayern')).toBeInTheDocument();
     expect(screen.getByText('Sachsen')).toBeInTheDocument();
     expect(screen.queryByText('Nordrhein-Westfalen')).not.toBeInTheDocument();
-    expect(screen.getByText('Confidence Strip')).toBeInTheDocument();
-    expect(screen.getByText('Vertrauenslage auf einen Blick')).toBeInTheDocument();
     expect(screen.getByText('Belastbarkeit')).toBeInTheDocument();
     expect(screen.getByText('Daten & Evidenz')).toBeInTheDocument();
     expect(screen.getByText('Einsatzreife & Blocker')).toBeInTheDocument();

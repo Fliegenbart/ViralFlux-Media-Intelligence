@@ -24,25 +24,25 @@ const SECTION_META = [
     path: '/jetzt',
     kicker: 'PEIX x GELO',
     title: 'Weekly Briefing',
-    description: 'Was PEIX für GELO diese Woche zuerst prüfen sollte, in welchem Bundesland und warum.',
+    description: 'Die eine Wochenentscheidung, die zuerst sichtbar und prüfbar bleiben soll.',
   },
   {
     path: '/regionen',
     kicker: 'Regionen',
     title: 'Bundesländer',
-    description: 'Hier siehst du, wo GELO als Nächstes Fokus erhöhen, halten oder beobachten sollte.',
+    description: 'Welche Region zuerst trägt und welche zwei danach folgen.',
   },
   {
     path: '/kampagnen',
     kicker: 'Maßnahmen',
     title: 'Kampagnen',
-    description: 'Hier prüfst du, welche GELO-Maßnahme als Nächstes freigegeben oder übergeben werden sollte.',
+    description: 'Welcher Fall jetzt dran ist und was danach kommt.',
   },
   {
     path: '/evidenz',
     kicker: 'Evidenz',
     title: 'Evidenz',
-    description: 'Hier siehst du, was die Wochenentscheidung trägt, was noch fehlt und was noch bremst.',
+    description: 'Was die Richtung trägt, was fehlt und was noch bremst.',
   },
 ] as const;
 
@@ -145,7 +145,7 @@ const AppLayout: React.FC<Props> = ({ children }) => {
 
           <div className="operator-sidebar__brand-block">
             <p className="operator-sidebar__brand-copy">PEIX x GELO Pilot</p>
-            <p className="operator-sidebar__brand-note">Wöchentliche Entscheidungen auf Bundesland-Level.</p>
+            <p className="operator-sidebar__brand-note">Bundesland-Level, eine klare Wochenentscheidung.</p>
           </div>
 
           <nav className="operator-nav" role="navigation" aria-label="Arbeitsbereiche">
@@ -253,12 +253,10 @@ const AppLayout: React.FC<Props> = ({ children }) => {
               </div>
               <div className="operator-header__copy-block">
                 <div className="operator-header__title-row">
-                  <span className="operator-header__status-dot" aria-hidden="true" />
                   <h1 id="operator-page-title" className="operator-header__title">{currentSection.title}</h1>
                 </div>
                 <p className="operator-header__copy">{currentSection.description}</p>
                 <div className="operator-header__summary-line">
-                  <span>{readoutSummary.status}</span>
                   <span>{readoutSummary.focusRegions}</span>
                   <span>{readoutSummary.nextReview}</span>
                 </div>

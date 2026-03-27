@@ -62,7 +62,6 @@ const NowWorkspace: React.FC<Props> = ({
   const focusRegion = view.focusRegion;
   const heroRecommendation = view.heroRecommendation;
   const heroSupportText = [view.supportState.label, view.supportState.detail].filter(Boolean).join(' · ');
-  const leadReasons = view.reasons.slice(0, 3);
   const secondaryMoves = view.secondaryMoves.slice(0, 2);
   const trustChecks = view.briefingTrust.items.slice(0, 3);
   const normalizedTrustChecks = trustChecks.map((item) => ({
@@ -83,21 +82,35 @@ const NowWorkspace: React.FC<Props> = ({
     || null
   );
   const trustSummary = view.briefingTrust.summary || workspaceStatus?.summary || 'Hier siehst du den schnellen Vertrauenscheck.';
-  const heroMetrics = [
-    { label: 'Entscheidung', value: heroRecommendation?.direction || 'Noch offen' },
-    { label: 'Bundesland', value: heroRecommendation?.region || focusRegion?.name || 'Noch offen' },
-    { label: 'Kontext', value: heroRecommendation?.context || view.primaryCampaignContext || 'Noch ohne Einordnung' },
-  ];
   const qualityStats = (view.quality.length ? view.quality : [{ label: 'Qualität', value: 'Noch offen' }]).slice(0, 4);
   const inlineNotes = [
     ...(view.supportState.detail ? [view.supportState.detail] : []),
     ...blockers.slice(0, 2),
   ].filter(Boolean);
+  const heroNotes = inlineNotes.slice(0, 2);
   const confidenceItems = [
     normalizedTrustChecks[0] || { key: 'forecast', label: 'Belastbarkeit', value: 'Noch offen', detail: 'Forecast wird aufgebaut', tone: 'muted' },
     normalizedTrustChecks[1] || { key: 'evidence', label: 'Evidenz', value: 'Noch offen', detail: 'Datenlage wird aktualisiert', tone: 'muted' },
     normalizedTrustChecks[2] || { key: 'readiness', label: 'Einsatzreife', value: 'Noch offen', detail: 'Freigabe steht noch aus', tone: 'muted' },
   ].slice(0, 3);
+  const decisionTitle = buildDecisionTitle(heroRecommendation, focusRegion);
+  const decisionContext = [
+    heroRecommendation?.context || view.primaryCampaignContext || null,
+    heroRecommendation?.region || focusRegion?.name || null,
+    heroRecommendation?.stateLabel || null,
+  ].filter(Boolean).join(' · ');
+  const heroFacts = [
+    {
+      label: 'Nächster Schritt',
+      value: heroRecommendation?.actionLabel || 'Noch offen',
+      detail: heroRecommendation?.actionHint || heroSupportText || 'Die Richtung ist sichtbar, die Freigabe bleibt bewusst im Blick.',
+    },
+    {
+      label: 'Arbeitskontext',
+      value: heroRecommendation?.context || view.primaryCampaignContext || 'Noch ohne Einordnung',
+      detail: `Stand ${formatDateTime(view.generatedAt)}`,
+    },
+  ];
   const emptyStateSignals = [
     heroRecommendation?.stateLabel || 'Noch kein freigegebener Fokus',
     view.supportState.detail || 'Die Wochenlage bleibt sichtbar, aber noch ohne belastbare Entscheidung.',
@@ -132,17 +145,17 @@ const NowWorkspace: React.FC<Props> = ({
     <div className="page-stack now-template-page">
       <OperatorSection
         kicker="PEIX x GELO Weekly Briefing"
-        title="Wochenplan: nächster klarer Schritt"
-        description="Eine Hauptentscheidung, kurze Vertrauenslage und zwei Folgepfade."
+        title="Wochenplan"
+        description="Eine Entscheidung. Ein klarer nächster Schritt."
         tone="accent"
         className="now-workspace-shell"
       >
         <div className="now-toolbar">
           <div className="now-toolbar__intro">
-            <span className="now-toolbar__eyebrow">Arbeitsfilter</span>
+            <span className="now-toolbar__eyebrow">Signalfilter</span>
             <div className="now-toolbar__heading">
-              <strong>Virus-Kontext</strong>
-              <span>Wählt den Arbeitskontext für diese Woche.</span>
+              <strong>Diese Woche</strong>
+              <span>Ein Filter. Ein Fokus. Zwei Folgepfade.</span>
             </div>
           </div>
           <OperatorChipRail className="review-chip-row now-toolbar__rail">
@@ -161,9 +174,8 @@ const NowWorkspace: React.FC<Props> = ({
           <div className="workspace-note-card now-toolbar-note">
             <strong>Stand {formatDateTime(view.generatedAt)}</strong>
             <span>
-              Bundesland-Level, {heroRecommendation?.stateLabel || 'ohne belastbare Freigabe'}.
-              {' '}
-              {view.supportState.label || 'Keine künstliche City-Präzision.'}
+              {heroRecommendation?.stateLabel || 'Noch ohne belastbare Freigabe'}.
+              {' '}Bundesland-Level, bewusst ohne City-Präzision.
             </span>
           </div>
         </div>
@@ -176,21 +188,26 @@ const NowWorkspace: React.FC<Props> = ({
             className="now-briefing-hero now-briefing-hero--weak now-briefing-hero--empty"
           >
             <div className="now-briefing-empty__meta">
-              <span>Fokusfall noch offen</span>
+              <span>Wochenentscheidung noch offen</span>
               <span>{virus} · h{horizonDays}</span>
             </div>
             <div className="now-briefing-empty__body">
               <div className="now-briefing-empty__summary">
-                <span className="now-weekly-plan-card__label">Was fehlt gerade?</span>
-                <strong>Noch keine belastbare Kombination aus Regionalsignal, Qualität und Freigabe.</strong>
-                <p>Du siehst den Status klar und kannst direkt mit Evidenz oder Regionen weitermachen.</p>
+                <span className="now-weekly-plan-card__label">Was gerade fehlt</span>
+                <strong>Die Richtung ist sichtbar, aber noch nicht stark genug für eine klare Wochenentscheidung.</strong>
+                <p>Die Oberfläche bleibt bewusst ruhig: erst klären, dann entscheiden.</p>
               </div>
-              <div className="now-briefing-empty__signals">
-                {emptyStateSignals.map((item) => (
-                  <div key={item} className="workspace-note-card now-briefing-empty__signal">
-                    {item}
-                  </div>
-                ))}
+              <div className="now-briefing-empty__stage">
+                <div className="workspace-note-card now-briefing-empty__signal">
+                  <span className="now-weekly-plan-card__label">Was sichtbar bleibt</span>
+                  <strong>{emptyStateSignals[0] || 'Noch kein freigegebener Fokus'}</strong>
+                  <p>{emptyStateSignals[1] || 'Die Wochenlage bleibt sichtbar, aber noch ohne belastbare Entscheidung.'}</p>
+                </div>
+                <div className="workspace-note-card now-briefing-empty__signal">
+                  <span className="now-weekly-plan-card__label">Nächster sinnvoller Schritt</span>
+                  <strong>Evidenz oder Regionen öffnen</strong>
+                  <p>{emptyStateSignals[2] || 'Der nächste Schritt ist zuerst Evidenz oder Regionen zu prüfen.'}</p>
+                </div>
               </div>
             </div>
             <div className="action-row">
@@ -201,9 +218,9 @@ const NowWorkspace: React.FC<Props> = ({
                 Regionen öffnen
               </button>
             </div>
-            {inlineNotes.length > 0 ? (
+            {heroNotes.length > 0 ? (
               <div className="now-inline-notes" aria-live="polite">
-                {inlineNotes.map((note) => (
+                {heroNotes.map((note) => (
                   <div key={note} className="now-inline-note">
                     <span className="material-symbols-outlined" aria-hidden="true">info</span>
                     <p>{note}</p>
@@ -213,19 +230,16 @@ const NowWorkspace: React.FC<Props> = ({
             ) : null}
           </OperatorPanel>
         ) : heroRecommendation ? (
-          <div className="now-briefing-stack">
-            <div className="now-command-stage">
+          <div className="now-briefing-stack now-editorial-stage">
               <OperatorPanel
                 tone={heroRecommendation.state === 'strong' ? 'accent' : 'default'}
                 className={`now-briefing-hero now-briefing-hero--${heroRecommendation.state}`}
               >
                 <div className="now-briefing-hero__header">
                   <div>
-                    <span className="now-weekly-plan-card__label">Hero Decision Stage</span>
-                    <h3 className="now-briefing-hero__title">{heroRecommendation.headline}</h3>
-                    <div className="now-briefing-hero__meta">
-                      {heroRecommendation.direction} · {heroRecommendation.region}
-                    </div>
+                    <span className="now-weekly-plan-card__label">Aktuelle Entscheidung</span>
+                    <h3 className="now-briefing-hero__title">{decisionTitle}</h3>
+                    <div className="now-briefing-hero__meta">{decisionContext}</div>
                   </div>
                   <div className="now-briefing-hero__pills">
                     <span className={`now-state-pill now-state-pill--${heroRecommendation.state}`}>
@@ -236,26 +250,14 @@ const NowWorkspace: React.FC<Props> = ({
 
                 <p className="now-briefing-hero__copy">{heroRecommendation.whyNow}</p>
 
-                <div className="now-briefing-hero__metrics">
-                  {heroMetrics.map((item) => (
-                    <div key={item.label} className="now-briefing-hero__metric">
-                      <span>{item.label}</span>
-                      <strong>{item.value}</strong>
-                    </div>
-                  ))}
-                </div>
-
                 <div className="now-briefing-hero__facts">
-                  <article className="workspace-note-card now-briefing-fact">
-                    <span className="now-weekly-plan-card__label">Budgetrahmen</span>
-                    <strong>{focusRegion?.budgetLabel && focusRegion.budgetLabel !== '-' ? focusRegion.budgetLabel : 'Noch offen'}</strong>
-                    <p>Nur als Bundesland-Kontext, nicht als Scheingenauigkeit.</p>
-                  </article>
-                  <article className="workspace-note-card now-briefing-fact">
-                    <span className="now-weekly-plan-card__label">Warum jetzt</span>
-                    <strong>{heroRecommendation.stateLabel}</strong>
-                    <p>{heroRecommendation.actionHint || heroSupportText || 'Die Einordnung bleibt sichtbar, aber mit kontrollierter Vorsicht.'}</p>
-                  </article>
+                  {heroFacts.map((item) => (
+                    <article key={item.label} className="workspace-note-card now-briefing-fact">
+                      <span className="now-weekly-plan-card__label">{item.label}</span>
+                      <strong>{item.value}</strong>
+                      <p>{item.detail}</p>
+                    </article>
+                  ))}
                 </div>
 
                 <div className="action-row">
@@ -283,13 +285,13 @@ const NowWorkspace: React.FC<Props> = ({
                   </button>
                 </div>
 
-                {heroSupportText ? (
-                  <p className="now-briefing-hero__help">{heroSupportText}</p>
+                {focusRegion?.budgetLabel && focusRegion.budgetLabel !== '-' ? (
+                  <p className="now-briefing-hero__help">Budgetrahmen {focusRegion.budgetLabel} · nur als Kontext, nicht als Scheingenauigkeit.</p>
                 ) : null}
 
-                {inlineNotes.length > 0 ? (
+                {heroNotes.length > 0 ? (
                   <div className="now-inline-notes" aria-live="polite">
-                    {inlineNotes.map((note) => (
+                    {heroNotes.map((note) => (
                       <div key={note} className="now-inline-note">
                         <span className="material-symbols-outlined" aria-hidden="true">info</span>
                         <p>{note}</p>
@@ -300,45 +302,12 @@ const NowWorkspace: React.FC<Props> = ({
               </OperatorPanel>
 
               <OperatorPanel
-                eyebrow="Secondary Paths"
-                title="Danach prüfen"
-                description="Zwei nachrangige Pfade nach dem Fokusfall."
+                eyebrow="Woran wir sie festmachen"
+                title="Warum diese Richtung trägt"
+                description={trustSummary}
                 tone="muted"
-                className="now-briefing-secondary"
+                className="now-confidence-strip"
               >
-                <div className="now-briefing-secondary__list">
-                  {secondaryMoves.length > 0 ? secondaryMoves.map((region, index) => (
-                    <button
-                      type="button"
-                      key={region.code}
-                      onClick={() => onOpenRegions(region.code)}
-                      className="campaign-list-card now-briefing-secondary__item"
-                    >
-                      <div className="now-briefing-secondary__index">0{index + 1}</div>
-                      <div className="now-briefing-secondary__item-copy">
-                        <div className="now-briefing-secondary__item-title">{region.name}</div>
-                        <div className="now-briefing-secondary__item-meta">
-                          {region.stage} · {region.probabilityLabel}
-                        </div>
-                        <p>{region.reason}</p>
-                      </div>
-                    </button>
-                  )) : (
-                    <div className="workspace-note-card now-briefing-secondary__empty">
-                      Aktuell gibt es keine weiteren belastbaren Bundesländer für diese Woche.
-                    </div>
-                  )}
-                </div>
-              </OperatorPanel>
-            </div>
-
-            <OperatorPanel
-              eyebrow="Confidence Strip"
-              title="Vertrauenslage auf einen Blick"
-              description={trustSummary}
-              tone="muted"
-              className="now-confidence-strip"
-            >
               <div className="now-trust-grid">
                 {confidenceItems.map((item) => (
                   <article key={item.key} className={`workspace-status-card workspace-status-card--${item.tone}`}>
@@ -347,6 +316,38 @@ const NowWorkspace: React.FC<Props> = ({
                     <p>{item.detail}</p>
                   </article>
                 ))}
+              </div>
+            </OperatorPanel>
+
+            <OperatorPanel
+              eyebrow="Danach"
+              title="Zwei Folgepfade"
+              description="Nur die nächsten beiden Wege bleiben sichtbar, damit die Hauptentscheidung klar bleibt."
+              tone="muted"
+              className="now-briefing-secondary"
+            >
+              <div className="now-briefing-secondary__list">
+                {secondaryMoves.length > 0 ? secondaryMoves.map((region, index) => (
+                  <button
+                    type="button"
+                    key={region.code}
+                    onClick={() => onOpenRegions(region.code)}
+                    className="campaign-list-card now-briefing-secondary__item"
+                  >
+                    <div className="now-briefing-secondary__index">0{index + 1}</div>
+                    <div className="now-briefing-secondary__item-copy">
+                      <div className="now-briefing-secondary__item-title">{region.name}</div>
+                      <div className="now-briefing-secondary__item-meta">
+                        {region.stage} · {region.probabilityLabel}
+                      </div>
+                      <p>{region.reason}</p>
+                    </div>
+                  </button>
+                )) : (
+                  <div className="workspace-note-card now-briefing-secondary__empty">
+                    Aktuell gibt es keine weiteren belastbaren Bundesländer für diese Woche.
+                  </div>
+                )}
               </div>
             </OperatorPanel>
           </div>
@@ -445,4 +446,18 @@ function briefingTrustLabel(label?: string | null): string {
   if (normalized === 'reliability') return 'Belastbarkeit';
   if (normalized === 'readiness' || normalized === 'readiness / blocker') return 'Einsatzreife & Blocker';
   return label || 'Einordnung';
+}
+
+function buildDecisionTitle(
+  heroRecommendation?: NowPageViewModel['heroRecommendation'] | null,
+  focusRegion?: NowPageViewModel['focusRegion'] | null,
+): string {
+  const direction = String(heroRecommendation?.direction || focusRegion?.stage || 'Prüfen').trim();
+  const region = String(heroRecommendation?.region || focusRegion?.name || 'dieses Bundesland').trim();
+
+  if (/aktiv/i.test(direction)) return `${region} jetzt priorisieren.`;
+  if (/vorbereit/i.test(direction)) return `${region} jetzt vorbereiten.`;
+  if (/beobacht/i.test(direction)) return `${region} eng beobachten.`;
+  if (/halt/i.test(direction)) return `${region} stabil halten.`;
+  return `${region} jetzt prüfen.`;
 }

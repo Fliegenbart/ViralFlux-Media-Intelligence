@@ -109,9 +109,10 @@ describe('EvidencePanel', () => {
       />,
     );
 
-    expect(screen.getByText('Evidenz: was trägt und was noch fehlt')).toBeInTheDocument();
-    expect(screen.getByText('Hero Decision Stage')).toBeInTheDocument();
-    expect(screen.getByText('Vertrauen auf einen Blick')).toBeInTheDocument();
+    expect(screen.getAllByText('Evidenz').length).toBeGreaterThan(0);
+    expect(screen.getByText('Aktuelle Evidenzlage')).toBeInTheDocument();
+    expect(screen.getByText('Woran es hängt')).toBeInTheDocument();
+    expect(screen.getByText('Was schon trägt')).toBeInTheDocument();
     expect(screen.getByText('Arbeitskontext')).toBeInTheDocument();
     expect(screen.getByText('Schon verbunden')).toBeInTheDocument();
     expect(screen.getByText('Fehlend oder blockiert')).toBeInTheDocument();

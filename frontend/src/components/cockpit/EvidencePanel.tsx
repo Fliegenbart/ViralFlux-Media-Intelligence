@@ -228,12 +228,26 @@ const EvidencePanel: React.FC<Props> = ({
     return (
       <OperatorSection
         kicker="GELO-Datenlage"
-        title="Noch keine belastbare Evidenz sichtbar"
-        description="Sobald Qualitäts- und Importdaten geladen sind, zeigt die Seite wieder klar, was schon tragfähig ist und was noch fehlt."
+        title="Evidenz noch nicht bereit"
+        description="Im Moment fehlt die Datengrundlage. Die Seite bleibt trotzdem klar: was fehlt, was gilt und was als Nächstes sinnvoll ist."
         tone="muted"
       >
-        <div className="workspace-note-card">
-          Im Moment liegen keine Evidence-Daten für die Pilotansicht vor. Prüfe die Verbindung oder lade die Seite erneut.
+        <div className="evidence-empty-stage">
+          <div className="workspace-note-card evidence-empty-stage__panel">
+            <span className="campaign-focus-label">Was fehlt</span>
+            <strong>Für diese Pilotansicht liegen gerade keine belastbaren Evidenzdaten vor.</strong>
+            <p>Ohne Import- und Qualitätsdaten kann die Seite die GELO-Lage nicht sauber belegen.</p>
+          </div>
+          <div className="workspace-note-card evidence-empty-stage__panel">
+            <span className="campaign-focus-label">Was trotzdem gilt</span>
+            <strong>Die Arbeitslogik bleibt gleich: erst Datenlage klären, dann entscheiden.</strong>
+            <p>Die Oberfläche vermeidet bewusst Scheinsicherheit und zeigt deshalb keine künstliche Empfehlung.</p>
+          </div>
+          <div className="workspace-note-card evidence-empty-stage__panel">
+            <span className="campaign-focus-label">Nächster Schritt</span>
+            <strong>Verbindung prüfen oder Import erneut anstoßen</strong>
+            <p>Wenn die Daten wieder erreichbar sind, baut sich die Evidenzansicht automatisch an derselben Stelle wieder auf.</p>
+          </div>
         </div>
       </OperatorSection>
     );
@@ -243,8 +257,8 @@ const EvidencePanel: React.FC<Props> = ({
     <div className="page-stack evidence-template-page">
       <OperatorSection
         kicker="GELO-Datenlage"
-        title="Evidenz: was trägt und was noch fehlt"
-        description="Datenvollständigkeit, Modell-Belastbarkeit und operative Einsatzreife bleiben getrennt und klar lesbar."
+        title="Evidenz"
+        description="Was trägt, was fehlt und was diese Woche noch bremst."
         tone="accent"
         className="evidence-briefing-shell"
       >
@@ -252,7 +266,7 @@ const EvidencePanel: React.FC<Props> = ({
           <OperatorPanel tone="accent" className="evidence-briefing-hero">
             <div id="evidence-trust" className="evidence-briefing-hero__header">
               <div>
-                <span className="campaign-focus-label">Hero Decision Stage</span>
+                <span className="campaign-focus-label">Aktuelle Evidenzlage</span>
                 <h3 className="campaign-focus-title">{heroTitle}</h3>
                 <div className="campaign-focus-context">
                   {latestImportAt ? `Letzter GELO-Import ${formatDateTime(latestImportAt)}` : 'Noch kein GELO-Import'} · {truthLayerLabel(truthStatus)} · {truthFreshnessLabel(truthStatus?.truth_freshness_state)}
@@ -293,8 +307,8 @@ const EvidencePanel: React.FC<Props> = ({
           </OperatorPanel>
 
           <OperatorPanel
-            eyebrow="Confidence Strip"
-            title="Vertrauen auf einen Blick"
+            eyebrow="Woran es hängt"
+            title="Was schon trägt"
             description="Hier bleibt sichtbar, ob die offene GELO-Frage eher Daten, Belastbarkeit oder Einsatzreife betrifft."
             tone="muted"
             className="evidence-trust-panel"
@@ -321,7 +335,7 @@ const EvidencePanel: React.FC<Props> = ({
       <OperatorSection
         kicker="GELO-Onboarding"
         title="Arbeitskontext"
-        description="Was ist schon verbunden, was fehlt noch und welcher Daten-Schritt lohnt sich als Nächstes?"
+        description="Was schon verbunden ist, was noch fehlt und welcher Datenschritt als Nächstes lohnt."
         tone="muted"
       >
         <div id="evidence-onboarding" className="workspace-two-column evidence-onboarding-grid">

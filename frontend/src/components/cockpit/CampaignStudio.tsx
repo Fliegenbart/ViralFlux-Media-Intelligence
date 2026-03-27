@@ -70,14 +70,14 @@ const CampaignStudio: React.FC<Props> = ({
   const activeCount = laneStateCount('live', stateCounts);
   const focusCard = cards.find((card) => ['review', 'approve', 'sync'].includes(recommendationLane(card))) || prepareCards[0] || cards[0] || null;
   const focusTitle = focusCard
-    ? normalizeGermanText(focusCard.display_title || focusCard.campaign_name || focusCard.recommended_product || focusCard.product)
-    : 'Noch keine GELO-Empfehlung im Fokus';
+    ? buildCampaignFocusTitle(focusCard)
+    : 'Noch kein Fall im Fokus';
   const focusContext = focusCard
-    ? normalizeGermanText(`${focusCard.region_codes_display?.join(', ') || focusCard.region || 'National'} · ${focusCard.recommended_product || focusCard.product}`)
-    : 'Sobald Vorschläge vorliegen, landet der wichtigste GELO-Fall direkt oben.';
+    ? `${focusCard.region_codes_display?.join(', ') || focusCard.region || 'National'} · ${focusCard.recommended_product || focusCard.product || 'Produkt offen'}`
+    : 'Sobald Vorschläge vorliegen, landet der wichtigste Fall direkt oben.';
   const focusCopy = focusCard
-    ? readableCampaignSummary(focusCard)
-    : 'Die Konsole zeigt danach direkt, welcher Vorschlag geprüft, freigegeben oder weiter vorbereitet werden sollte.';
+    ? buildCampaignDecisionCopy(focusCard)
+    : 'Die Seite zeigt danach direkt, welcher Fall geprüft, freigegeben oder weiter vorbereitet werden sollte.';
   const focusReadiness = focusCard ? approvalReadiness(focusCard) : null;
   const focusBudgetDirection = focusCard ? budgetDirectionLabel(focusCard) : 'Budgetrichtung offen';
   const focusChannelDirection = focusCard ? channelDirectionLabel(focusCard) : 'Kanalmix wird nach dem ersten Vorschlag sichtbar';
@@ -87,7 +87,7 @@ const CampaignStudio: React.FC<Props> = ({
   const trustItems = buildCampaignTrustItems(focusCard, workspaceStatus);
   const statusSummary = [
     {
-      label: 'Zur Prüfung / Freigabe',
+      label: 'Prüfbar',
       value: String(readyCards.length),
       detail: 'Fälle ohne erkennbare Inhaltsblocker.',
     },
@@ -130,8 +130,8 @@ const CampaignStudio: React.FC<Props> = ({
     <div className="page-stack">
       <OperatorSection
         kicker="Kampagnen"
-        title="Kampagnen: der nächste Freigabefall"
-        description="Eine Hauptempfehlung, kurze Vertrauenslage und zwei Folgepfade für die GELO-Wochenarbeit."
+        title="Kampagnen"
+        description="Ein Fokusfall. Eine kurze Begründung. Danach nur die nächsten Schritte."
         tone="accent"
         className="campaign-hero-shell"
       >
@@ -148,7 +148,7 @@ const CampaignStudio: React.FC<Props> = ({
         ) : cards.length === 0 ? (
           <div className="campaign-empty-board campaign-empty-board--approval">
             <span className="campaign-empty-eyebrow">GELO-Freigabe</span>
-            <h3 className="campaign-empty-title">Noch keine Empfehlung zur Prüfung sichtbar</h3>
+            <h3 className="campaign-empty-title">Noch kein Fall zur Prüfung sichtbar</h3>
             <p className="campaign-empty-copy">
               Sobald der erste Vorschlag erzeugt ist, erscheint hier direkt der wichtigste Fall für Prüfung, Freigabe oder Übergabe.
             </p>
@@ -164,7 +164,7 @@ const CampaignStudio: React.FC<Props> = ({
               <OperatorPanel tone="accent" className="campaign-focus-panel campaign-approval-hero">
                 <div className="campaign-approval-hero__header">
                   <div>
-                    <span className="campaign-focus-label">Hero Decision Stage</span>
+                    <span className="campaign-focus-label">Aktuelle Entscheidung</span>
                     <h3 className="campaign-focus-title">{focusTitle}</h3>
                     <div className="campaign-focus-context">{focusContext}</div>
                   </div>
@@ -222,9 +222,9 @@ const CampaignStudio: React.FC<Props> = ({
               </OperatorPanel>
 
               <OperatorPanel
-                eyebrow="Confidence Strip"
-                title="Vertrauenslage auf einen Blick"
-                description="Diese Übersicht zeigt, ob jetzt eher Prüfung, Blockerklärung oder Übergabe ansteht."
+                eyebrow="Woran es hängt"
+                title="Warum dieser Fall vorne liegt"
+                description="Diese Übersicht zeigt, ob jetzt eher Prüfung, Klärung oder Übergabe ansteht."
                 tone="muted"
                 className="campaign-command-rail campaign-approval-summary"
               >
@@ -250,9 +250,9 @@ const CampaignStudio: React.FC<Props> = ({
             </div>
 
             <OperatorPanel
-              eyebrow="Secondary Paths"
-              title="Weitere Empfehlungen mit nächstem Schritt"
-              description="Belastbarkeit, Datenlage und Blocker bleiben sichtbar, ohne den Freigabefall zu überlagern."
+              eyebrow="Danach"
+              title="Was sichtbar bleibt"
+              description="Belastbarkeit, Datenlage und Blocker bleiben sichtbar, ohne den Fokusfall zu überlagern."
               tone="muted"
               className="campaign-trust-panel"
             >
@@ -507,6 +507,45 @@ function readableCampaignSummary(card: RecommendationCard): string {
   }
 
   return summary;
+}
+
+function buildCampaignFocusTitle(card: RecommendationCard): string {
+  const rawTitle = normalizeGermanText(
+    String(card.display_title || card.campaign_name || '').trim(),
+  );
+  const product = normalizeGermanText(String(card.recommended_product || card.product || '').trim());
+  const region = normalizeGermanText(String(card.region_codes_display?.join(', ') || card.region || '').trim());
+
+  const cleanedTitle = rawTitle
+    .replace(/\s+/g, ' ')
+    .replace(new RegExp(`^(?:${escapeRegExp(product)}[:\\s-]*){2,}`, 'i'), `${product}: `)
+    .replace(new RegExp(`^(?:${escapeRegExp(product)}[:\\s-]*)+`, 'i'), '')
+    .trim();
+
+  if (cleanedTitle && cleanedTitle !== product) {
+    if (region && !cleanedTitle.toLowerCase().includes(region.toLowerCase())) {
+      return `${product}: ${cleanedTitle} in ${region}`;
+    }
+    return `${product}: ${cleanedTitle}`;
+  }
+
+  if (product && region) return `${product} in ${region}`;
+  if (product) return product;
+  if (region) return `Kampagnenfall in ${region}`;
+  return 'Kampagnenfall prüfen';
+}
+
+function buildCampaignDecisionCopy(card: RecommendationCard): string {
+  const summary = readableCampaignSummary(card);
+  const cleaned = summary.replace(/\s+/g, ' ').trim();
+  if (cleaned.length <= 140) return cleaned;
+  const firstSentence = cleaned.match(/^.*?[.!?](\s|$)/)?.[0]?.trim();
+  if (firstSentence) return firstSentence;
+  return `${cleaned.slice(0, 137).trimEnd()}...`;
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 function humanizeTrigger(value: string): string {

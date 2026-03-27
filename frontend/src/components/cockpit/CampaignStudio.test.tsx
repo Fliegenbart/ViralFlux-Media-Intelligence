@@ -163,12 +163,12 @@ describe('CampaignStudio', () => {
       />,
     );
 
-    expect(screen.getByText('Kampagnen: der nächste Freigabefall')).toBeInTheDocument();
-    expect(screen.getByText('Hero Decision Stage')).toBeInTheDocument();
-    expect(screen.getByText('Confidence Strip')).toBeInTheDocument();
-    expect(screen.getByText('Vertrauenslage auf einen Blick')).toBeInTheDocument();
-    expect(screen.getByText('Secondary Paths')).toBeInTheDocument();
-    expect(screen.getByText('Weitere Empfehlungen und Pipeline')).toBeInTheDocument();
+    expect(screen.getAllByText('Kampagnen').length).toBeGreaterThan(0);
+    expect(screen.getByText('Aktuelle Entscheidung')).toBeInTheDocument();
+    expect(screen.getByText('Woran es hängt')).toBeInTheDocument();
+    expect(screen.getByText('Warum dieser Fall vorne liegt')).toBeInTheDocument();
+    expect(screen.getByText('Danach')).toBeInTheDocument();
+    expect(screen.getByText('Was sichtbar bleibt')).toBeInTheDocument();
     expect(screen.getAllByText('Details bei Bedarf').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Blocker prüfen').length).toBeGreaterThan(0);
     expect(screen.getByText('Aktive Fälle')).toBeInTheDocument();
@@ -232,7 +232,7 @@ describe('CampaignStudio', () => {
       />,
     );
 
-    expect(screen.getByText('Noch keine Empfehlung zur Prüfung sichtbar')).toBeInTheDocument();
+    expect(screen.getByText('Noch kein Fall zur Prüfung sichtbar')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Erste Vorschläge erstellen' })).toBeInTheDocument();
   });
 });

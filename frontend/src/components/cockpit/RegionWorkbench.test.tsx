@@ -242,23 +242,23 @@ describe('RegionWorkbench', () => {
       />,
     );
 
-    expect(screen.getByText('Regionen: nächster klarer Schwerpunkt')).toBeInTheDocument();
-    expect(screen.getByText('Hero Decision Stage')).toBeInTheDocument();
+    expect(screen.getAllByText('Regionen').length).toBeGreaterThan(0);
+    expect(screen.getByText('Aktuelle Entscheidung')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Fokus erhöhen in Berlin' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Regionalen Vorschlag öffnen' })).toBeInTheDocument();
-    expect(screen.getByText('Confidence Strip')).toBeInTheDocument();
-    expect(screen.getByText('Vertrauenslage auf einen Blick')).toBeInTheDocument();
+    expect(screen.getByText('Woran sie trägt')).toBeInTheDocument();
+    expect(screen.getByText('Warum die Region vorne liegt')).toBeInTheDocument();
     expect(screen.getByText('Belastbarkeit')).toBeInTheDocument();
     expect(screen.getByText('Datenlage')).toBeInTheDocument();
     expect(screen.getByText('Einsatzreife')).toBeInTheDocument();
-    expect(screen.getByText('Secondary Paths')).toBeInTheDocument();
-    expect(screen.getByText('Danach prüfen')).toBeInTheDocument();
+    expect(screen.getByText('Danach')).toBeInTheDocument();
+    expect(screen.getByText('Zwei nächste Regionen')).toBeInTheDocument();
     expect(screen.getAllByText('Bayern').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Nordrhein-Westfalen').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Details bei Bedarf').length).toBeGreaterThan(0);
     expect(screen.getByText('Orientierungskarte auf Bundesland-Level')).toBeInTheDocument();
     expect(screen.getByText('GermanyMap Mock')).toBeInTheDocument();
-    expect(screen.getAllByText(/City-Forecast/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/City-Präzision/i).length).toBeGreaterThan(0);
 
     fireEvent.click(screen.getByRole('button', { name: 'Regionalen Vorschlag öffnen' }));
 
@@ -352,6 +352,6 @@ describe('RegionWorkbench', () => {
     );
 
     expect(screen.getByText('Noch keine belastbare Priorisierung')).toBeInTheDocument();
-    expect(screen.getByText('Für diese Auswahl liegen aktuell keine belastbaren regionalen Prioritäten vor.')).toBeInTheDocument();
+    expect(screen.getByText('Die Regionen sind da, aber noch ohne klare Rangordnung.')).toBeInTheDocument();
   });
 });

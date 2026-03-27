@@ -31,6 +31,7 @@ export interface RegionalBenchmarkItem {
   model_version?: string;
   calibration_version?: string;
   source_coverage?: Record<string, unknown>;
+  source_coverage_scope?: string | null;
   point_in_time_snapshot?: Record<string, unknown>;
   selection?: Record<string, unknown>;
   delta_vs_reference?: Record<string, number>;

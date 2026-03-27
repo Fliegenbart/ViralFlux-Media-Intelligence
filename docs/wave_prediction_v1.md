@@ -32,6 +32,36 @@ Feature groups in v1:
 
 Weekly sources are aligned by their effective availability date, not by the observation week itself. This prevents the model from learning from values that were not yet published on the as-of date.
 
+Exogenous semantics are now explicit and machine-checkable:
+
+- observed-only signals such as trends and pollen may only contribute up to `as_of`
+- deterministic calendar signals such as school holidays may cover the future target window
+- future weather context is only allowed when the row carries issue-time forecast semantics
+- realized future exogenous values are forbidden
+
+For weather forecasts there is now also a first vintage slice:
+
+- `legacy_issue_time_only` keeps the existing small issue-time path for compatibility
+- `run_timestamp_v1` selects the latest weather forecast run that was already visible at the historical `as_of`
+- if a weather forecast row has no stable run/issue identity, the vintage path degrades safely instead of pretending historical reproducibility
+
+New weather ingest batches now persist their own stable run identity:
+
+- `forecast_run_timestamp`
+- `forecast_run_id`
+- `forecast_run_identity_source`
+- `forecast_run_identity_quality`
+
+This means new weather forecast rows can be grouped by the exact persisted forecast batch that was visible at the time.
+Older rows without these fields stay usable on the legacy path, but should be interpreted as incomplete for vintage benchmarking.
+
+Fuer den Weather-Vintage-Re-Test ist deshalb wichtig:
+
+- aktuelle Re-Ingests verbessern nur die Coverage fuer neue Forecast-Fenster
+- ein historischer 900-Tage-Backtest bleibt trotzdem `inconclusive`, wenn die Forecast-Runs damals nicht wirklich historisch sichtbar gespeichert wurden
+- der Vergleichs-Runner berichtet deshalb jetzt getrennt `coverage_overall`, `coverage_train`, `coverage_test`, `coverage_by_fold`, `first_available_run_identity_date` und `last_available_run_identity_date`
+- wenn diese Coverage im echten Backtest-Fenster zu niedrig bleibt, ist das ein Datenverfuegbarkeitsproblem und kein Urteil gegen `run_timestamp_v1`
+
 ## Validation Approach
 
 Validation uses rolling-origin / walk-forward splits only.

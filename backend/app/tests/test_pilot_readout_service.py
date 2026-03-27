@@ -211,8 +211,27 @@ class PilotReadoutServiceTests(unittest.TestCase):
             "passed": True,
             "learning_state": "im_aufbau",
         }
-        service.snapshot_store.latest_scope_snapshot = lambda **_: {"run_id": "snapshot-1", "forecast_status": "ok"}
-        service.snapshot_store.recent_scope_snapshots = lambda **_: [{"run_id": "snapshot-1"}]
+        service.snapshot_store.latest_scope_snapshot = lambda **_: {
+            "run_id": "snapshot-1",
+            "forecast_status": "ok",
+            "forecast_recency_status": "ok",
+            "source_coverage_required_status": "ok",
+            "source_freshness_status": "ok",
+            "live_source_coverage_status": "ok",
+            "live_source_freshness_status": "ok",
+            "source_coverage": {"grippeweb_are_available": 0.95},
+        }
+        service.snapshot_store.recent_scope_snapshots = lambda **_: [
+            {
+                "run_id": "snapshot-1",
+                "forecast_recency_status": "ok",
+                "source_coverage_required_status": "ok",
+                "source_freshness_status": "ok",
+                "live_source_coverage_status": "ok",
+                "live_source_freshness_status": "ok",
+                "source_coverage": {"grippeweb_are_available": 0.95},
+            }
+        ]
         return service
 
     def test_build_readout_returns_watch_when_commercial_data_is_missing(self) -> None:
@@ -251,6 +270,9 @@ class PilotReadoutServiceTests(unittest.TestCase):
         self.assertEqual(payload["run_context"]["gate_snapshot"]["epidemiology_status"], "GO")
         self.assertEqual(payload["run_context"]["gate_snapshot"]["budget_release_status"], "WATCH")
         self.assertEqual(payload["run_context"]["gate_snapshot"]["commercial_validation_status"], "WATCH")
+        self.assertEqual(payload["run_context"]["gate_snapshot"]["operational_readiness"]["live_source_coverage_readiness"], "GO")
+        self.assertEqual(payload["run_context"]["gate_snapshot"]["operational_readiness"]["live_source_freshness_readiness"], "GO")
+        self.assertEqual(payload["run_context"]["gate_snapshot"]["operational_readiness"]["source_coverage_scope"], "artifact")
         self.assertEqual(payload["executive_summary"]["budget_mode"], "scenario_split")
         self.assertEqual(payload["executive_summary"]["budget_recommendation"]["budget_mode"], "scenario_split")
         self.assertEqual(payload["empty_state"]["code"], "ready")
@@ -300,6 +322,69 @@ class PilotReadoutServiceTests(unittest.TestCase):
         self.assertEqual(payload["pilot_evidence"]["evaluation"]["selected_experiment_name"], "rsv_signal_core")
         self.assertEqual(payload["pilot_evidence"]["legacy_context"]["status"], "frozen")
         self.assertEqual(payload["pilot_evidence"]["legacy_context"]["sunset_date"], "2026-04-30")
+
+    def test_build_readout_degrades_forecast_status_when_live_sources_are_stale(self) -> None:
+        service = self._service()
+        service.snapshot_store.latest_scope_snapshot = lambda **_: {
+            "run_id": "snapshot-1",
+            "forecast_status": "ok",
+            "forecast_recency_status": "ok",
+            "source_coverage_required_status": "ok",
+            "source_freshness_status": "warning",
+            "live_source_coverage_status": "ok",
+            "live_source_freshness_status": "warning",
+            "source_coverage": {"grippeweb_are_available": 0.95},
+        }
+
+        payload = service.build_readout(brand="gelo", virus_typ="RSV A", horizon_days=7)
+
+        self.assertEqual(payload["run_context"]["forecast_readiness"], "WATCH")
+        self.assertEqual(payload["run_context"]["scope_readiness"], "WATCH")
+        self.assertEqual(payload["run_context"]["gate_snapshot"]["epidemiology_status"], "WATCH")
+        self.assertEqual(payload["run_context"]["gate_snapshot"]["operational_readiness"]["live_source_freshness_readiness"], "WATCH")
+
+    def test_build_readout_blocks_scope_when_critical_live_source_is_missing(self) -> None:
+        service = self._service()
+        service.snapshot_store.latest_scope_snapshot = lambda **_: {
+            "run_id": "snapshot-1",
+            "forecast_status": "ok",
+            "forecast_recency_status": "ok",
+            "source_coverage_required_status": "critical",
+            "source_freshness_status": "ok",
+            "live_source_coverage_status": "critical",
+            "live_source_freshness_status": "ok",
+            "source_coverage": {"grippeweb_are_available": 0.95},
+        }
+
+        payload = service.build_readout(brand="gelo", virus_typ="RSV A", horizon_days=7)
+
+        self.assertEqual(payload["run_context"]["forecast_readiness"], "NO_GO")
+        self.assertEqual(payload["run_context"]["scope_readiness"], "NO_GO")
+        self.assertEqual(payload["run_context"]["gate_snapshot"]["epidemiology_status"], "NO_GO")
+        self.assertEqual(payload["run_context"]["gate_snapshot"]["operational_readiness"]["live_source_coverage_readiness"], "NO_GO")
+
+    def test_build_readout_does_not_treat_artifact_source_coverage_as_live_go(self) -> None:
+        service = self._service()
+        service.snapshot_store.latest_scope_snapshot = lambda **_: {
+            "run_id": "snapshot-1",
+            "forecast_status": "ok",
+            "forecast_recency_status": "ok",
+            "source_coverage": {"grippeweb_are_available": 0.95},
+            "source_coverage_scope": "artifact",
+        }
+
+        payload = service.build_readout(brand="gelo", virus_typ="RSV A", horizon_days=7)
+
+        self.assertEqual(payload["run_context"]["forecast_readiness"], "WATCH")
+        self.assertEqual(payload["run_context"]["scope_readiness"], "WATCH")
+        self.assertEqual(
+            payload["run_context"]["gate_snapshot"]["operational_readiness"]["source_coverage_scope"],
+            "artifact",
+        )
+        self.assertEqual(
+            payload["run_context"]["gate_snapshot"]["operational_readiness"]["live_source_coverage_readiness"],
+            "WATCH",
+        )
 
 
 if __name__ == "__main__":

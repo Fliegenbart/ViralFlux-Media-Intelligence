@@ -9,7 +9,17 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.models.database import AuditLog, Base, WastewaterData
+from app.models.database import (
+    AREKonsultation,
+    AuditLog,
+    Base,
+    GoogleTrendsData,
+    GrippeWebData,
+    InfluenzaData,
+    NotaufnahmeSyndromData,
+    RSVData,
+    WastewaterData,
+)
 from app.services.ml.forecast_horizon_utils import (
     SUPPORTED_FORECAST_HORIZONS,
     supported_regional_horizons_for_virus,
@@ -44,17 +54,142 @@ class ProductionReadinessServiceTests(unittest.TestCase):
             pass
 
     def _seed_wastewater(self, *, available_time: datetime) -> None:
+        self._seed_live_sources(available_time=available_time)
+
+    def _seed_live_sources(
+        self,
+        *,
+        available_time: datetime,
+        source_times: dict[str, datetime] | None = None,
+        skip_sources: set[str] | None = None,
+    ) -> None:
+        source_times = source_times or {}
+        skip_sources = set(skip_sources or set())
+
+        def source_time(source_id: str) -> datetime:
+            return source_times.get(source_id, available_time)
+
         for virus_typ in SUPPORTED_VIRUS_TYPES:
+            wastewater_time = source_time("wastewater")
             self.db.add(
                 WastewaterData(
                     standort=f"site-{virus_typ}",
                     bundesland="BY",
-                    datum=available_time,
-                    available_time=available_time,
+                    datum=wastewater_time,
+                    available_time=wastewater_time,
                     virus_typ=virus_typ,
                     viruslast=1.0,
                 )
             )
+        if "grippeweb_are" not in skip_sources:
+            grippeweb_are_time = source_time("grippeweb_are")
+            for offset in (21, 14, 7, 0):
+                datum = grippeweb_are_time - timedelta(days=offset)
+                self.db.add(
+                    GrippeWebData(
+                        datum=datum,
+                        kalenderwoche=datum.isocalendar()[1],
+                        erkrankung_typ="ARE",
+                        altersgruppe="Gesamt",
+                        bundesland="BY",
+                        inzidenz=12.0,
+                        anzahl_meldungen=100,
+                        created_at=datum,
+                    )
+                )
+        if "grippeweb_ili" not in skip_sources:
+            grippeweb_ili_time = source_time("grippeweb_ili")
+            for offset in (21, 14, 7, 0):
+                datum = grippeweb_ili_time - timedelta(days=offset)
+                self.db.add(
+                    GrippeWebData(
+                        datum=datum,
+                        kalenderwoche=datum.isocalendar()[1],
+                        erkrankung_typ="ILI",
+                        altersgruppe="Gesamt",
+                        bundesland="BY",
+                        inzidenz=8.0,
+                        anzahl_meldungen=80,
+                        created_at=datum,
+                    )
+                )
+        if "ifsg_influenza" not in skip_sources:
+            influenza_time = source_time("ifsg_influenza")
+            for offset in (21, 14, 7, 0):
+                datum = influenza_time - timedelta(days=offset)
+                self.db.add(
+                    InfluenzaData(
+                        datum=datum,
+                        available_time=datum,
+                        meldewoche=f"{datum.isocalendar().year}-W{datum.isocalendar().week:02d}",
+                        region="BY",
+                        altersgruppe="Gesamt",
+                        fallzahl=10,
+                        inzidenz=15.0,
+                    )
+                )
+        if "ifsg_rsv" not in skip_sources:
+            rsv_time = source_time("ifsg_rsv")
+            for offset in (21, 14, 7, 0):
+                datum = rsv_time - timedelta(days=offset)
+                self.db.add(
+                    RSVData(
+                        datum=datum,
+                        available_time=datum,
+                        meldewoche=f"{datum.isocalendar().year}-W{datum.isocalendar().week:02d}",
+                        region="BY",
+                        altersgruppe="Gesamt",
+                        fallzahl=8,
+                        inzidenz=12.0,
+                    )
+                )
+        if "sars_are" not in skip_sources:
+            are_time = source_time("sars_are")
+            for offset in (21, 14, 7, 0):
+                datum = are_time - timedelta(days=offset)
+                self.db.add(
+                    AREKonsultation(
+                        datum=datum,
+                        available_time=datum,
+                        kalenderwoche=datum.isocalendar()[1],
+                        saison=f"{datum.year}/{datum.year + 1}",
+                        altersgruppe="00+",
+                        bundesland="BY",
+                        konsultationsinzidenz=18,
+                    )
+                )
+        if "sars_notaufnahme" not in skip_sources:
+            notaufnahme_time = source_time("sars_notaufnahme")
+            for offset in range(6, -1, -1):
+                datum = notaufnahme_time - timedelta(days=offset)
+                self.db.add(
+                    NotaufnahmeSyndromData(
+                        datum=datum,
+                        ed_type="all",
+                        age_group="00+",
+                        syndrome="COVID",
+                        relative_cases=0.12,
+                        relative_cases_7day_ma=0.11,
+                        expected_value=0.09,
+                        expected_lowerbound=0.07,
+                        expected_upperbound=0.13,
+                        ed_count=20,
+                        created_at=datum,
+                    )
+                )
+        if "sars_trends" not in skip_sources:
+            trends_time = source_time("sars_trends")
+            for offset in range(6, -1, -1):
+                datum = trends_time - timedelta(days=offset)
+                self.db.add(
+                    GoogleTrendsData(
+                        datum=datum,
+                        available_time=datum,
+                        keyword="corona test",
+                        region="DE",
+                        interest_score=35,
+                    )
+                )
         self.db.commit()
 
     def _supported_scope_count(self) -> int:
@@ -143,6 +278,17 @@ class ProductionReadinessServiceTests(unittest.TestCase):
         self.assertEqual(regional["status"], "warning")
         self.assertEqual(regional["summary"]["unsupported"], self._unsupported_scope_count())
         self.assertEqual(regional["summary"]["critical"], 0)
+        influenza_item = next(
+            item
+            for item in regional["matrix"]
+            if item["virus_typ"] == "Influenza A" and item["horizon_days"] == 7
+        )
+        self.assertEqual(influenza_item["source_coverage_scope"], "artifact")
+        self.assertEqual(influenza_item["source_coverage"], influenza_item["artifact_source_coverage"])
+        self.assertEqual(influenza_item["artifact_source_coverage"], influenza_item["training_source_coverage"])
+        self.assertIn("live_source_coverage", influenza_item)
+        self.assertIn("live_source_freshness", influenza_item)
+        self.assertIn("source_criticality", influenza_item)
         self.assertEqual(snapshot["blockers"], [])
 
     def test_build_core_snapshot_reports_healthy_for_allowlisted_scope_even_if_global_snapshot_stays_degraded(self) -> None:
@@ -312,6 +458,90 @@ class ProductionReadinessServiceTests(unittest.TestCase):
         self.assertEqual(core_item["forecast_recency_status"], "ok")
         self.assertEqual(core_item["blockers"], [])
         self.assertTrue(core_item["core_scope_advisories"])
+
+    def test_build_snapshot_warns_when_live_critical_source_is_stale(self) -> None:
+        now = datetime(2026, 3, 23, 10, 0, 0)
+        self._seed_live_sources(
+            available_time=now - timedelta(days=1),
+            source_times={"ifsg_rsv": now - timedelta(days=10)},
+        )
+
+        def fake_artifacts(_self, virus_typ: str, horizon_days: int = 7):
+            coverage = {
+                "grippeweb_are_available": 0.95,
+                "grippeweb_ili_available": 0.94,
+            }
+            if virus_typ in {"Influenza A", "Influenza B"}:
+                coverage["ifsg_influenza_available"] = 0.96
+            elif virus_typ == "RSV A":
+                coverage["ifsg_rsv_available"] = 0.95
+            else:
+                coverage.update(
+                    {
+                        "sars_are_available": 0.91,
+                        "sars_notaufnahme_available": 0.93,
+                        "sars_trends_available": 0.30,
+                    }
+                )
+            return {
+                "metadata": {
+                    "feature_columns": ["feature_a"],
+                    "trained_at": (now - timedelta(days=2)).isoformat(),
+                    "model_version": f"regional:{virus_typ}:h{horizon_days}",
+                    "calibration_version": f"isotonic:{virus_typ}:h{horizon_days}",
+                    "quality_gate": {"overall_passed": True, "forecast_readiness": "GO"},
+                    "dataset_manifest": {
+                        "rows": 120,
+                        "states": 16,
+                        "source_coverage": coverage,
+                        "as_of_range": {"end": (now - timedelta(days=1)).date().isoformat()},
+                    },
+                    "point_in_time_snapshot": {
+                        "as_of_range": {"end": (now - timedelta(days=1)).date().isoformat()},
+                    },
+                },
+                "dataset_manifest": {
+                    "rows": 120,
+                    "states": 16,
+                    "source_coverage": coverage,
+                    "as_of_range": {"end": (now - timedelta(days=1)).date().isoformat()},
+                },
+                "point_in_time_snapshot": {
+                    "as_of_range": {"end": (now - timedelta(days=1)).date().isoformat()},
+                },
+            }
+
+        with patch(
+            "app.services.ml.regional_forecast.RegionalForecastService._load_artifacts",
+            new=fake_artifacts,
+        ), patch(
+            "app.services.ml.forecast_decision_service.ForecastDecisionService.build_monitoring_snapshot",
+            return_value={
+                "monitoring_status": "healthy",
+                "forecast_readiness": "GO",
+                "freshness_status": "fresh",
+                "accuracy_freshness_status": "fresh",
+                "backtest_freshness_status": "fresh",
+                "model_version": "national:v1",
+            },
+        ):
+            service = ProductionReadinessService(
+                session_factory=self._session_factory,
+                now_provider=lambda: now,
+            )
+            service._broker_component = lambda: {"status": "ok", "message": "mocked"}  # type: ignore[method-assign]
+            service._schema_bootstrap_component = lambda: {"status": "ok", "message": "mocked"}  # type: ignore[method-assign]
+            snapshot = service.build_snapshot()
+
+        rsv_item = next(
+            item
+            for item in snapshot["components"]["regional_operational"]["matrix"]
+            if item["virus_typ"] == "RSV A" and item["horizon_days"] == 7
+        )
+        self.assertEqual(rsv_item["status"], "warning")
+        self.assertEqual(rsv_item["source_freshness_status"], "warning")
+        self.assertEqual(rsv_item["live_source_freshness"]["ifsg_rsv"]["status"], "warning")
+        self.assertEqual(rsv_item["source_coverage_required_status"], "ok")
 
     def test_build_core_snapshot_turns_unhealthy_when_allowlisted_scope_is_unsupported(self) -> None:
         now = datetime(2026, 3, 17, 10, 0, 0)
@@ -590,7 +820,7 @@ class ProductionReadinessServiceTests(unittest.TestCase):
         self.assertEqual(regional["summary"]["unsupported"], unsupported_count)
         self.assertLess(regional["summary"]["missing_models"], len(SUPPORTED_VIRUS_TYPES) * len(SUPPORTED_FORECAST_HORIZONS))
 
-    def test_build_snapshot_treats_sars_trends_coverage_as_advisory_not_hard_blocker(self) -> None:
+    def test_build_snapshot_keeps_artifact_coverage_separate_from_live_source_status(self) -> None:
         now = datetime(2026, 3, 17, 10, 0, 0)
         self._seed_wastewater(available_time=now - timedelta(days=1))
 
@@ -668,16 +898,19 @@ class ProductionReadinessServiceTests(unittest.TestCase):
             for item in regional["matrix"]
             if item["virus_typ"] == "SARS-CoV-2" and item["horizon_days"] == 7
         )
-        self.assertEqual(sars_item["status"], "warning")
         self.assertEqual(sars_item["source_coverage_required_status"], "ok")
-        self.assertEqual(sars_item["source_coverage_optional_status"], "critical")
-        self.assertIn("sars_trends_available", sars_item["source_coverage_optional_keys"])
-        self.assertTrue(sars_item["source_coverage_advisories"])
-        self.assertNotIn("Source coverage is below the minimum operational threshold.", sars_item["blockers"])
+        self.assertEqual(sars_item["source_coverage_optional_status"], "ok")
+        self.assertEqual(sars_item["artifact_source_coverage_status"], "warning")
+        self.assertEqual(sars_item["artifact_source_coverage"]["sars_trends_available"], 0.06)
+        self.assertEqual(sars_item["live_source_coverage"]["sars_trends"]["status"], "ok")
+        self.assertNotIn("Critical live source coverage is missing or too low: sars_trends.", sars_item["blockers"])
 
-    def test_build_snapshot_keeps_required_sars_coverage_as_hard_blocker(self) -> None:
+    def test_build_snapshot_keeps_required_live_sars_coverage_as_hard_blocker(self) -> None:
         now = datetime(2026, 3, 17, 10, 0, 0)
-        self._seed_wastewater(available_time=now - timedelta(days=1))
+        self._seed_live_sources(
+            available_time=now - timedelta(days=1),
+            skip_sources={"sars_are"},
+        )
 
         def fake_artifacts(_self, virus_typ: str, horizon_days: int = 7):
             coverage = {
@@ -755,7 +988,93 @@ class ProductionReadinessServiceTests(unittest.TestCase):
         )
         self.assertEqual(sars_item["status"], "critical")
         self.assertEqual(sars_item["source_coverage_required_status"], "critical")
-        self.assertIn("Source coverage is below the minimum operational threshold.", sars_item["blockers"])
+        self.assertIn("Critical live source coverage is missing or too low: sars_are.", sars_item["blockers"])
+
+    def test_build_snapshot_treats_missing_live_advisory_source_as_warning_not_blocker(self) -> None:
+        now = datetime(2026, 3, 17, 10, 0, 0)
+        self._seed_live_sources(
+            available_time=now - timedelta(days=1),
+            skip_sources={"sars_trends"},
+        )
+
+        def fake_artifacts(_self, virus_typ: str, horizon_days: int = 7):
+            coverage = {
+                "grippeweb_are_available": 0.95,
+                "grippeweb_ili_available": 0.94,
+            }
+            if virus_typ in {"Influenza A", "Influenza B"}:
+                coverage["ifsg_influenza_available"] = 0.96
+            elif virus_typ == "RSV A":
+                coverage["ifsg_rsv_available"] = 0.95
+            elif virus_typ == "SARS-CoV-2":
+                coverage.update(
+                    {
+                        "sars_are_available": 0.88,
+                        "sars_notaufnahme_available": 0.99,
+                        "sars_trends_available": 0.90,
+                    }
+                )
+
+            return {
+                "metadata": {
+                    "feature_columns": ["feature_a"],
+                    "trained_at": (now - timedelta(days=2)).isoformat(),
+                    "model_version": f"regional:{virus_typ}:h{horizon_days}",
+                    "calibration_version": f"isotonic:{virus_typ}:h{horizon_days}",
+                    "quality_gate": {"overall_passed": True, "forecast_readiness": "GO"},
+                    "dataset_manifest": {
+                        "rows": 120,
+                        "states": 16,
+                        "source_coverage": coverage,
+                        "as_of_range": {"end": (now - timedelta(days=1)).date().isoformat()},
+                    },
+                    "point_in_time_snapshot": {
+                        "as_of_range": {"end": (now - timedelta(days=1)).date().isoformat()},
+                    },
+                },
+                "dataset_manifest": {
+                    "rows": 120,
+                    "states": 16,
+                    "source_coverage": coverage,
+                    "as_of_range": {"end": (now - timedelta(days=1)).date().isoformat()},
+                },
+                "point_in_time_snapshot": {
+                    "as_of_range": {"end": (now - timedelta(days=1)).date().isoformat()},
+                },
+            }
+
+        with patch(
+            "app.services.ml.regional_forecast.RegionalForecastService._load_artifacts",
+            new=fake_artifacts,
+        ), patch(
+            "app.services.ml.forecast_decision_service.ForecastDecisionService.build_monitoring_snapshot",
+            return_value={
+                "monitoring_status": "healthy",
+                "forecast_readiness": "GO",
+                "freshness_status": "fresh",
+                "accuracy_freshness_status": "fresh",
+                "backtest_freshness_status": "fresh",
+                "model_version": "national:v1",
+            },
+        ):
+            service = ProductionReadinessService(
+                session_factory=self._session_factory,
+                now_provider=lambda: now,
+            )
+            service._broker_component = lambda: {"status": "ok", "message": "mocked"}  # type: ignore[method-assign]
+            service._schema_bootstrap_component = lambda: {"status": "ok", "message": "mocked"}  # type: ignore[method-assign]
+            snapshot = service.build_snapshot()
+
+        sars_item = next(
+            item
+            for item in snapshot["components"]["regional_operational"]["matrix"]
+            if item["virus_typ"] == "SARS-CoV-2" and item["horizon_days"] == 7
+        )
+        self.assertEqual(sars_item["source_coverage_required_status"], "ok")
+        self.assertEqual(sars_item["source_coverage_optional_status"], "warning")
+        self.assertEqual(sars_item["live_source_coverage"]["sars_trends"]["status"], "critical")
+        self.assertNotIn("Critical live source coverage is missing or too low: sars_trends.", sars_item["blockers"])
+        self.assertTrue(sars_item["live_source_advisories"])
 
     def test_build_snapshot_surfaces_pilot_contract_and_quality_gate_details(self) -> None:
         now = datetime(2026, 3, 17, 10, 0, 0)
@@ -863,6 +1182,13 @@ class ProductionReadinessServiceTests(unittest.TestCase):
                 horizon_days=7,
                 forecast={
                     "as_of_date": forecast_date,
+                    "model_version": "regional_pooled_panel:h7:2026-03-17T08:00:00",
+                    "metric_semantics_version": "regional_probabilistic_metrics_v1",
+                    "registry_status": "champion",
+                    "promotion_evidence": {
+                        "promotion_allowed": True,
+                        "promotion_blockers": [],
+                    },
                     "quality_gate": {
                         "overall_passed": True,
                         "forecast_readiness": "GO",
@@ -909,6 +1235,12 @@ class ProductionReadinessServiceTests(unittest.TestCase):
                         "profile": "strict_v1",
                         "failed_checks": [],
                     },
+                    "metric_semantics_version": "regional_probabilistic_metrics_v1",
+                    "promotion_evidence": {
+                        "promotion_allowed": True,
+                        "promotion_blockers": [],
+                    },
+                    "registry_status": "champion",
                     "dataset_manifest": {
                         "rows": 120,
                         "states": 16,

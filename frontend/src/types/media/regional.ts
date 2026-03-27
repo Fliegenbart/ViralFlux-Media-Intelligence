@@ -84,6 +84,7 @@ export interface RegionalForecastPrediction {
   calibration_version?: string;
   point_in_time_snapshot?: Record<string, unknown>;
   source_coverage?: Record<string, unknown>;
+  source_coverage_scope?: string | null;
   action_threshold?: number;
   activation_candidate?: boolean;
   current_load?: number;
@@ -160,6 +161,7 @@ export interface RegionalForecastResponse {
   artifact_transition_mode?: string | null;
   point_in_time_snapshot?: Record<string, unknown>;
   source_coverage?: Record<string, unknown>;
+  source_coverage_scope?: string | null;
   action_threshold?: number;
   decision_policy_version?: string;
   decision_summary: RegionalDecisionSummary;

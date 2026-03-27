@@ -7,6 +7,11 @@ from typing import Any, Iterable
 from sqlalchemy.orm import Session
 
 from app.models.database import AuditLog
+from app.services.source_coverage_semantics import (
+    ARTIFACT_SOURCE_COVERAGE_SCOPE,
+    artifact_source_coverage,
+    source_coverage_scope,
+)
 from app.services.ops.run_metadata_service import OperationalRunRecorder
 
 
@@ -53,6 +58,9 @@ class RegionalOperationalSnapshotStore:
             "artifact_transition_mode": forecast.get("artifact_transition_mode"),
             "model_version": forecast.get("model_version"),
             "calibration_version": forecast.get("calibration_version"),
+            "metric_semantics_version": forecast.get("metric_semantics_version"),
+            "promotion_evidence": forecast.get("promotion_evidence") or {},
+            "registry_status": forecast.get("registry_status"),
             "quality_gate": quality_gate,
             "quality_gate_profile": quality_gate.get("profile"),
             "quality_gate_failed_checks": list(quality_gate.get("failed_checks") or []),
@@ -61,6 +69,7 @@ class RegionalOperationalSnapshotStore:
             "activation_policy": forecast.get("activation_policy"),
             "point_in_time_snapshot": forecast.get("point_in_time_snapshot") or {},
             "source_coverage": forecast.get("source_coverage") or {},
+            "source_coverage_scope": forecast.get("source_coverage_scope") or ARTIFACT_SOURCE_COVERAGE_SCOPE,
             "allocation_status": allocation_status,
             "allocation_generated_at": allocation.get("generated_at"),
             "allocation_regions": len(allocation.get("recommendations") or []),
@@ -74,11 +83,37 @@ class RegionalOperationalSnapshotStore:
                     "status": readiness.get("status"),
                     "forecast_recency_status": readiness.get("forecast_recency_status"),
                     "source_coverage_required_status": readiness.get("source_coverage_required_status"),
+                    "source_freshness_status": readiness.get("source_freshness_status"),
+                    "live_source_coverage_status": readiness.get("live_source_coverage_status"),
+                    "live_source_freshness_status": readiness.get("live_source_freshness_status"),
+                    "artifact_source_coverage": readiness.get("artifact_source_coverage") or {},
+                    "training_source_coverage": readiness.get("training_source_coverage") or {},
+                    "live_source_coverage": readiness.get("live_source_coverage") or {},
+                    "live_source_freshness": readiness.get("live_source_freshness") or {},
+                    "source_criticality": readiness.get("source_criticality") or {},
                     "pilot_contract_supported": readiness.get("pilot_contract_supported"),
                     "pilot_contract_reason": readiness.get("pilot_contract_reason"),
                 }
             )
         return metadata
+
+    @staticmethod
+    def _normalized_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
+        normalized = dict(metadata or {})
+        if normalized.get("source_coverage_scope") is None and (
+            normalized.get("source_coverage") is not None
+            or normalized.get("artifact_source_coverage") is not None
+        ):
+            normalized["source_coverage_scope"] = source_coverage_scope(normalized)
+        if not normalized.get("artifact_source_coverage") and normalized.get("source_coverage"):
+            normalized["artifact_source_coverage"] = artifact_source_coverage(normalized)
+        if not normalized.get("training_source_coverage") and normalized.get("artifact_source_coverage"):
+            normalized["training_source_coverage"] = normalized.get("artifact_source_coverage") or {}
+        if not normalized.get("live_source_coverage_status") and normalized.get("source_coverage_required_status"):
+            normalized["live_source_coverage_status"] = normalized.get("source_coverage_required_status")
+        if not normalized.get("live_source_freshness_status") and normalized.get("source_freshness_status"):
+            normalized["live_source_freshness_status"] = normalized.get("source_freshness_status")
+        return normalized
 
     @classmethod
     def _scope_run_status(cls, metadata: dict[str, Any]) -> str:
@@ -155,7 +190,7 @@ class RegionalOperationalSnapshotStore:
             metadata["run_id"] = payload.get("run_id")
             metadata["run_status"] = payload.get("status")
             metadata["recorded_at"] = payload.get("timestamp")
-            snapshots[key] = metadata
+            snapshots[key] = self._normalized_metadata(metadata)
         return snapshots
 
     def latest_scope_snapshot(self, *, virus_typ: str, horizon_days: int) -> dict[str, Any] | None:
@@ -192,7 +227,7 @@ class RegionalOperationalSnapshotStore:
             metadata["run_id"] = payload.get("run_id")
             metadata["run_status"] = payload.get("status")
             metadata["recorded_at"] = payload.get("timestamp")
-            items.append(metadata)
+            items.append(self._normalized_metadata(metadata))
             if len(items) >= max(int(limit), 1):
                 break
         return items

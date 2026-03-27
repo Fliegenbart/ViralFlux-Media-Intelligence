@@ -172,8 +172,16 @@ Ein `REGIONAL_OPERATIONAL_SNAPSHOT` schreibt pro `virus_typ x horizon_days` jetz
 - `quality_gate_failed_checks`
 - `point_in_time_snapshot`
 - `source_coverage`
+- `source_coverage_scope`
+- `artifact_source_coverage`
+- `training_source_coverage`
+- `live_source_coverage`
+- `live_source_freshness`
+- `source_criticality`
 - `forecast_recency_status`
 - `source_coverage_required_status`
+- `live_source_coverage_status`
+- `live_source_freshness_status`
 - `pilot_contract_supported`
 - `pilot_contract_reason`
 - `rollout_mode`
@@ -181,9 +189,23 @@ Ein `REGIONAL_OPERATIONAL_SNAPSHOT` schreibt pro `virus_typ x horizon_days` jetz
 
 Diese Metadaten werden fuer Release-Smoke, Readiness und spaetere Policy-Promotion wiederverwendet.
 
+Wichtig:
+
+- `source_coverage` bleibt aus Kompatibilitaetsgruenden im Snapshot, spiegelt aber weiter die Artefakt-/Trainingssicht.
+- `source_coverage_scope = artifact` markiert diese Altkompatibilitaet jetzt explizit.
+- Die operative Live-Sicht liegt jetzt explizit in `live_source_coverage` und `live_source_freshness`.
+- Gute Trainingsartefakte machen einen Scope nicht mehr implizit gruen, wenn eine kritische Live-Quelle fehlt oder stale ist.
+- wichtige Snapshot-Consumer wie der `pilot-readout` und der `SARS h7`-Promotionspfad sollen den operativen Zustand ueber `live_source_coverage_status` und `live_source_freshness_status` lesen, nicht ueber `source_coverage`
+- neuer Code soll `source_coverage` nur noch als Artefakt-/Trainingssignal behandeln, nicht als Live-Gesundheit
+
 ## Required vs Advisory Source Coverage
 
 Readiness behandelt Coverage nicht mehr als blindes Minimum ueber alle Rohsignale.
+Sie trennt jetzt explizit:
+
+- Artefakt-/Trainings-Coverage
+- aktuelle Live-Coverage
+- aktuelle Live-Freshness
 
 ### Required
 
@@ -205,6 +227,24 @@ Readiness behandelt Coverage nicht mehr als blindes Minimum ueber alle Rohsignal
 
 - `SARS-CoV-2`
   - `sars_trends_available`
+
+## Live-Coverage Semantik
+
+Die operative Readiness bewertet pro Quelle jetzt fuer das aktuelle `as_of`:
+
+- ob ueberhaupt sichtbare Live-Daten vorhanden sind
+- ob diese Quelle kritisch oder nur advisory ist
+- wie frisch die letzte sichtbare Lieferung ist
+
+Fuer taegliche Quellen wie `wastewater`, `sars_notaufnahme` und `sars_trends` gilt bewusst:
+
+- ein sichtbarer aktueller Datenpunkt im kleinen Live-Fenster reicht fuer `live_source_coverage = ok`
+- ob dieser Punkt operativ noch brauchbar ist, entscheidet dann `live_source_freshness`
+
+Damit gilt:
+
+- `coverage` beantwortet: "Ist die Quelle da?"
+- `freshness` beantwortet: "Ist die Quelle noch aktuell genug?"
 
 ## SARS-CoV-2 Policy
 

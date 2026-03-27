@@ -44,6 +44,7 @@ from app.services.ml.regional_panel_utils import (
 from app.services.ml.regional_trainer import TRAINING_ONLY_PANEL_COLUMNS, _virus_slug
 from app.services.ml.training_contract import SUPPORTED_VIRUS_TYPES
 from app.services.ops.regional_operational_snapshot_store import RegionalOperationalSnapshotStore
+from app.services.source_coverage_semantics import ARTIFACT_SOURCE_COVERAGE_SCOPE
 
 logger = logging.getLogger(__name__)
 
@@ -591,6 +592,7 @@ class RegionalForecastService:
                 "calibration_version": calibration_version,
                 "point_in_time_snapshot": point_in_time_snapshot,
                 "source_coverage": source_coverage,
+                "source_coverage_scope": ARTIFACT_SOURCE_COVERAGE_SCOPE,
                 "action_threshold": round(action_threshold, 4),
                 "activation_candidate": activation_candidate,
                 "current_load": round(current_incidence, 2),
@@ -658,9 +660,13 @@ class RegionalForecastService:
             "tsfm_metadata": tsfm_metadata,
             "model_version": model_version,
             "calibration_version": calibration_version,
+            "metric_semantics_version": metadata.get("metric_semantics_version"),
+            "promotion_evidence": metadata.get("promotion_evidence") or {},
+            "registry_status": metadata.get("registry_status"),
             "artifact_transition_mode": artifact_transition_mode,
             "point_in_time_snapshot": point_in_time_snapshot,
             "source_coverage": source_coverage,
+            "source_coverage_scope": ARTIFACT_SOURCE_COVERAGE_SCOPE,
             "action_threshold": round(action_threshold, 4),
             "decision_policy_version": self.decision_engine.get_config(virus_typ).version,
             "decision_summary": self._decision_summary(predictions),
@@ -1011,6 +1017,7 @@ class RegionalForecastService:
                         "rows": 0,
                         "truth_source": None,
                         "source_coverage": {},
+                        "source_coverage_scope": ARTIFACT_SOURCE_COVERAGE_SCOPE,
                         "point_in_time_snapshot": {},
                         "aggregate_metrics": {},
                         "quality_gate": {"overall_passed": False, "forecast_readiness": "UNSUPPORTED"},
@@ -1046,6 +1053,7 @@ class RegionalForecastService:
                 "rows": int(dataset_manifest.get("rows") or 0),
                 "truth_source": dataset_manifest.get("truth_source"),
                 "source_coverage": dataset_manifest.get("source_coverage") or {},
+                "source_coverage_scope": ARTIFACT_SOURCE_COVERAGE_SCOPE,
                 "point_in_time_snapshot": artifacts.get("point_in_time_snapshot") or metadata.get("point_in_time_snapshot") or {},
                 "aggregate_metrics": aggregate_metrics,
                 "quality_gate": quality_gate,
@@ -1282,6 +1290,7 @@ class RegionalForecastService:
                 "calibration_version": None,
                 "point_in_time_snapshot": {},
                 "source_coverage": {},
+                "source_coverage_scope": ARTIFACT_SOURCE_COVERAGE_SCOPE,
                 "signal_bundle_version": signal_bundle_version_for_virus(virus_typ),
                 "rollout_mode": rollout_mode_for_virus(virus_typ),
                 "activation_policy": activation_policy_for_virus(virus_typ),
@@ -1312,6 +1321,7 @@ class RegionalForecastService:
             "calibration_version": metadata.get("calibration_version") or self._calibration_version(metadata),
             "point_in_time_snapshot": artifacts.get("point_in_time_snapshot") or metadata.get("point_in_time_snapshot") or {},
             "source_coverage": dataset_manifest.get("source_coverage") or {},
+            "source_coverage_scope": ARTIFACT_SOURCE_COVERAGE_SCOPE,
             "signal_bundle_version": metadata.get("signal_bundle_version") or signal_bundle_version_for_virus(virus_typ),
             "rollout_mode": metadata.get("rollout_mode") or rollout_mode_for_virus(virus_typ),
             "activation_policy": metadata.get("activation_policy") or activation_policy_for_virus(virus_typ),

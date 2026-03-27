@@ -162,6 +162,8 @@ Interpretation:
 - `SARS-CoV-2 / h7` kann nur dann promotet werden, wenn:
   - `REGIONAL_SARS_H7_PROMOTION_ENABLED=true`
   - die letzten zwei operativen Snapshots `quality_gate=GO`, `forecast_recency_status=ok`, `source_coverage_required_status=ok` und keinen `artifact_transition_mode` zeigen
+  - beide Snapshots dieselbe `model_version`, dieselbe `quality_gate.profile` und dieselbe `metric_semantics_version` tragen
+  - beide Snapshots `registry_status=champion` und `promotion_evidence.promotion_allowed=true` ausweisen
 
 ## Known Limitations heute
 

@@ -9,6 +9,10 @@ import numpy as np
 import pandas as pd
 
 from app.services.ml.forecast_horizon_utils import regional_horizon_pilot_status
+from app.services.source_coverage_semantics import (
+    live_source_coverage_status,
+    live_source_freshness_status,
+)
 
 TARGET_WINDOW_DAYS: tuple[int, int] = (3, 7)
 EVENT_DEFINITION_VERSION = "regional_survstat_v2"
@@ -160,31 +164,99 @@ def sars_h7_promotion_status(
             "promotion_flag_enabled": bool(promotion_flag_enabled),
             "required_snapshots": SARS_H7_PROMOTION_REQUIRED_SNAPSHOTS,
             "evaluated_snapshots": len(relevant),
+            "promotion_blockers": ["insufficient_consecutive_snapshots"],
+            "consistency": {
+                "model_version_consistent": False,
+                "quality_gate_profile_consistent": False,
+                "metric_semantics_version_consistent": False,
+            },
             "reason": "Waiting for two consecutive operational snapshots before SARS h7 promotion is allowed.",
         }
 
     def _snapshot_passes(snapshot: Mapping[str, Any]) -> bool:
         quality_gate = dict(snapshot.get("quality_gate") or {})
+        live_coverage_status = live_source_coverage_status(snapshot)
+        live_freshness = live_source_freshness_status(snapshot)
         return bool(
             quality_gate.get("overall_passed")
-            and str(snapshot.get("source_coverage_required_status") or "").strip().lower() == "ok"
+            and live_coverage_status == "ok"
+            and live_freshness == "ok"
             and str(snapshot.get("forecast_recency_status") or "").strip().lower() == "ok"
             and not str(snapshot.get("artifact_transition_mode") or "").strip()
         )
 
-    eligible = all(_snapshot_passes(snapshot) for snapshot in relevant)
+    blockers: list[str] = []
+    if not all(_snapshot_passes(snapshot) for snapshot in relevant):
+        blockers.append("snapshot_operational_gate_failed")
+
+    model_version_values = [str(snapshot.get("model_version") or "").strip() for snapshot in relevant]
+    model_versions = {value for value in model_version_values if value}
+    if any(not value for value in model_version_values):
+        blockers.append("snapshot_model_version_missing")
+
+    gate_profile_values = [str((snapshot.get("quality_gate") or {}).get("profile") or "").strip() for snapshot in relevant]
+    gate_profiles = {value for value in gate_profile_values if value}
+    if any(not value for value in gate_profile_values):
+        blockers.append("snapshot_quality_gate_profile_missing")
+
+    metric_semantics_values = [str(snapshot.get("metric_semantics_version") or "").strip() for snapshot in relevant]
+    metric_semantics_versions = {value for value in metric_semantics_values if value}
+    if any(not value for value in metric_semantics_values):
+        blockers.append("snapshot_metric_semantics_missing")
+
+    promotion_evidences = [dict(snapshot.get("promotion_evidence") or {}) for snapshot in relevant]
+    if not all(evidence for evidence in promotion_evidences):
+        blockers.append("snapshot_promotion_evidence_missing")
+    if not all(bool(evidence.get("promotion_allowed")) for evidence in promotion_evidences if evidence):
+        blockers.append("snapshot_promotion_not_allowed")
+    if not all(not list(evidence.get("promotion_blockers") or []) for evidence in promotion_evidences if evidence):
+        blockers.append("snapshot_promotion_blockers_present")
+
+    registry_status_values = [str(snapshot.get("registry_status") or "").strip().lower() for snapshot in relevant]
+    registry_statuses = {value for value in registry_status_values if value}
+    if any(not value for value in registry_status_values):
+        blockers.append("snapshot_registry_status_missing")
+    elif registry_statuses != {"champion"}:
+        blockers.append("snapshot_registry_status_not_champion")
+
+    if len(model_versions) > 1:
+        blockers.append("model_version_inconsistent")
+    if len(gate_profiles) > 1:
+        blockers.append("quality_gate_profile_inconsistent")
+    if len(metric_semantics_versions) > 1:
+        blockers.append("metric_semantics_inconsistent")
+
+    blockers = list(dict.fromkeys(blockers))
+    consistency = {
+        "model_version_consistent": len(model_versions) == 1 and not any(not value for value in model_version_values),
+        "quality_gate_profile_consistent": len(gate_profiles) == 1 and not any(not value for value in gate_profile_values),
+        "metric_semantics_version_consistent": (
+            len(metric_semantics_versions) == 1 and not any(not value for value in metric_semantics_values)
+        ),
+    }
+    eligible = not blockers
     if eligible and promotion_flag_enabled:
-        reason = "SARS h7 promotion flag is enabled and the last two operational snapshots passed all promotion gates."
+        reason = (
+            "SARS h7 promotion flag is enabled and the last two operational snapshots passed all "
+            "promotion, gate, and semantics consistency checks."
+        )
     elif eligible:
-        reason = "SARS h7 is eligible for promotion, but the explicit promotion flag is still disabled."
+        reason = (
+            "SARS h7 is eligible for promotion, but the explicit promotion flag is still disabled."
+        )
     else:
-        reason = "SARS h7 has not yet produced two consecutive operational snapshots that pass quality, coverage, recency, and non-legacy checks."
+        reason = (
+            "SARS h7 has not yet produced two consecutive operational snapshots with consistent "
+            "model, gate, semantics, and promotion evidence."
+        )
     return {
         "eligible": eligible,
         "promoted": bool(eligible and promotion_flag_enabled),
         "promotion_flag_enabled": bool(promotion_flag_enabled),
         "required_snapshots": SARS_H7_PROMOTION_REQUIRED_SNAPSHOTS,
         "evaluated_snapshots": len(relevant),
+        "promotion_blockers": blockers,
+        "consistency": consistency,
         "reason": reason,
     }
 

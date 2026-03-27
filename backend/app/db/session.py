@@ -37,7 +37,13 @@ _RUNTIME_SCHEMA_UPDATES = {
         "age_group": "VARCHAR",
     },
     "google_trends_data": {"available_time": "TIMESTAMP"},
-    "weather_data": {"available_time": "TIMESTAMP"},
+    "weather_data": {
+        "available_time": "TIMESTAMP",
+        "forecast_run_timestamp": "TIMESTAMP",
+        "forecast_run_id": "VARCHAR",
+        "forecast_run_identity_source": "VARCHAR",
+        "forecast_run_identity_quality": "VARCHAR",
+    },
     "ganzimmun_data": {"available_time": "TIMESTAMP"},
     "marketing_opportunities": {
         "brand": "VARCHAR",
@@ -84,7 +90,11 @@ _RUNTIME_INDEX_UPDATES = {
         ("idx_survstat_disease_cluster", "disease_cluster"),
     ],
     "google_trends_data": [("idx_trends_available_time", "available_time")],
-    "weather_data": [("idx_weather_available_time", "available_time")],
+    "weather_data": [
+        ("idx_weather_available_time", "available_time"),
+        ("ix_weather_data_forecast_run_timestamp", "forecast_run_timestamp"),
+        ("ix_weather_data_forecast_run_id", "forecast_run_id"),
+    ],
     "ganzimmun_data": [("idx_ganzimmun_available_time", "available_time")],
     "marketing_opportunities": [
         ("idx_marketing_opportunities_brand", "brand"),

@@ -9,7 +9,10 @@ import pandas as pd
 from app.services.ml.benchmarking.artifacts import write_benchmark_artifacts
 from app.services.ml.benchmarking.contracts import BenchmarkArtifactSummary
 from app.services.ml.benchmarking.metrics import summarize_probabilistic_metrics
-from app.services.ml.benchmarking.registry import ForecastRegistry
+from app.services.ml.benchmarking.registry import (
+    DEFAULT_METRIC_SEMANTICS_VERSION,
+    ForecastRegistry,
+)
 from app.services.ml.forecast_orchestrator import ForecastOrchestrator
 
 
@@ -104,6 +107,86 @@ class ForecastBenchmarkingTests(unittest.TestCase):
         )
 
         self.assertFalse(promoted)
+
+    def test_registry_blocks_strict_promotion_when_quality_gate_fails(self) -> None:
+        registry = ForecastRegistry()
+
+        evidence = registry.evaluate_promotion(
+            candidate_metrics={"relative_wis": 0.94, "crps": 1.2, "coverage_95": 0.95, "brier_score": 0.08, "ece": 0.04},
+            champion_metrics={"relative_wis": 0.98, "crps": 1.4, "coverage_95": 0.95, "brier_score": 0.09, "ece": 0.05},
+            candidate_metadata={
+                "quality_gate_overall_passed": False,
+                "metric_semantics_version": DEFAULT_METRIC_SEMANTICS_VERSION,
+                "sample_count": 24,
+            },
+            champion_metadata={
+                "metric_semantics_version": DEFAULT_METRIC_SEMANTICS_VERSION,
+                "sample_count": 24,
+            },
+        )
+
+        self.assertFalse(evidence["promotion_allowed"])
+        self.assertIn("quality_gate_not_passed", evidence["promotion_blockers"])
+
+    def test_registry_blocks_strict_promotion_when_metric_semantics_are_incompatible(self) -> None:
+        registry = ForecastRegistry()
+
+        evidence = registry.evaluate_promotion(
+            candidate_metrics={"relative_wis": 0.94, "crps": 1.2, "coverage_95": 0.95, "brier_score": 0.08, "ece": 0.04},
+            champion_metrics={"relative_wis": 0.98, "crps": 1.4, "coverage_95": 0.95, "brier_score": 0.09, "ece": 0.05},
+            candidate_metadata={
+                "quality_gate_overall_passed": True,
+                "metric_semantics_version": DEFAULT_METRIC_SEMANTICS_VERSION,
+                "sample_count": 24,
+            },
+            champion_metadata={
+                "metric_semantics_version": "regional_probabilistic_metrics_v0",
+                "sample_count": 24,
+            },
+        )
+
+        self.assertFalse(evidence["promotion_allowed"])
+        self.assertIn("metric_semantics_incompatible", evidence["promotion_blockers"])
+
+    def test_registry_blocks_strict_promotion_when_sample_count_is_below_minimum(self) -> None:
+        registry = ForecastRegistry()
+
+        evidence = registry.evaluate_promotion(
+            candidate_metrics={"relative_wis": 0.94, "crps": 1.2, "coverage_95": 0.95, "brier_score": 0.08, "ece": 0.04},
+            champion_metrics={"relative_wis": 0.98, "crps": 1.4, "coverage_95": 0.95, "brier_score": 0.09, "ece": 0.05},
+            candidate_metadata={
+                "quality_gate_overall_passed": True,
+                "metric_semantics_version": DEFAULT_METRIC_SEMANTICS_VERSION,
+                "sample_count": 6,
+            },
+            champion_metadata={
+                "metric_semantics_version": DEFAULT_METRIC_SEMANTICS_VERSION,
+                "sample_count": 24,
+            },
+        )
+
+        self.assertFalse(evidence["promotion_allowed"])
+        self.assertIn("minimum_sample_count_not_met", evidence["promotion_blockers"])
+
+    def test_registry_allows_strict_promotion_when_evidence_is_complete(self) -> None:
+        registry = ForecastRegistry()
+
+        evidence = registry.evaluate_promotion(
+            candidate_metrics={"relative_wis": 0.94, "crps": 1.2, "coverage_95": 0.95, "brier_score": 0.08, "ece": 0.04},
+            champion_metrics={"relative_wis": 0.98, "crps": 1.4, "coverage_95": 0.94, "brier_score": 0.09, "ece": 0.05},
+            candidate_metadata={
+                "quality_gate_overall_passed": True,
+                "metric_semantics_version": DEFAULT_METRIC_SEMANTICS_VERSION,
+                "sample_count": 24,
+            },
+            champion_metadata={
+                "metric_semantics_version": DEFAULT_METRIC_SEMANTICS_VERSION,
+                "sample_count": 24,
+            },
+        )
+
+        self.assertTrue(evidence["promotion_allowed"])
+        self.assertEqual(evidence["promotion_blockers"], [])
 
     def test_orchestrator_resolves_revision_policy_from_metadata(self) -> None:
         orchestrator = ForecastOrchestrator()

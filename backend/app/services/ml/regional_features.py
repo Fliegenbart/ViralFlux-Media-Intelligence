@@ -29,6 +29,13 @@ from app.models.database import (
 )
 from app.services.ml.forecast_horizon_utils import ensure_supported_horizon
 from app.services.ml.forecast_service import SURVSTAT_VIRUS_MAP
+from app.services.ml.exogenous_feature_contracts import (
+    EXOGENOUS_FEATURE_CONTRACTS,
+    EXOGENOUS_FEATURE_SEMANTICS_VERSION,
+    exogenous_feature_semantics_manifest,
+    issue_time_forecast_rows,
+    observed_as_of_only_rows,
+)
 from app.services.ml.nowcast_contracts import NowcastObservation, NowcastResult
 from app.services.ml.nowcast_revision import NowcastRevisionService
 from app.services.ml.regional_panel_utils import (
@@ -45,6 +52,18 @@ from app.services.ml.regional_panel_utils import (
     event_definition_config_for_virus,
     normalize_state_code,
     seasonal_baseline_and_mad,
+)
+from app.services.ml.weather_forecast_vintage import (
+    WEATHER_FORECAST_ISSUE_TIME_SEMANTICS,
+    WEATHER_FORECAST_RUN_IDENTITY_QUALITY_LEGACY,
+    WEATHER_FORECAST_RUN_IDENTITY_QUALITY_MISSING,
+    WEATHER_FORECAST_RUN_IDENTITY_SOURCE_LEGACY,
+    WEATHER_FORECAST_RUN_IDENTITY_SOURCE_MISSING,
+    WEATHER_FORECAST_VINTAGE_DISABLED,
+    WEATHER_FORECAST_VINTAGE_RUN_TIMESTAMP_V1,
+    empty_weather_forecast_vintage_metadata,
+    normalize_weather_forecast_vintage_mode,
+    select_weather_forecast_vintage_rows,
 )
 from app.services.ml.training_contract import SUPPORTED_VIRUS_TYPES
 
@@ -73,6 +92,9 @@ class RegionalFeatureBuilder:
     def __init__(self, db: Session):
         self.db = db
         self._nowcast_service = NowcastRevisionService()
+        self._last_weather_forecast_metadata = empty_weather_forecast_vintage_metadata(
+            WEATHER_FORECAST_VINTAGE_DISABLED
+        )
 
     @property
     def nowcast_service(self) -> NowcastRevisionService:
@@ -92,6 +114,7 @@ class RegionalFeatureBuilder:
         use_revision_adjusted: bool = False,
         revision_policy: str | None = None,
         source_revision_policy: dict[str, str] | None = None,
+        weather_forecast_vintage_mode: str | None = None,
     ) -> pd.DataFrame:
         """Build pooled training rows across all Bundesländer."""
         horizon = ensure_supported_horizon(horizon_days)
@@ -112,6 +135,8 @@ class RegionalFeatureBuilder:
         pollen = self._load_pollen(truth_start, end_date + pd.Timedelta(days=horizon))
         holidays = self._load_holidays()
         state_populations = self._load_state_population_map()
+        weather_metadata = empty_weather_forecast_vintage_metadata(weather_forecast_vintage_mode)
+        self._last_weather_forecast_metadata = dict(weather_metadata)
 
         rows = self._build_rows(
             virus_typ=virus_typ,
@@ -139,8 +164,15 @@ class RegionalFeatureBuilder:
                 use_revision_adjusted=use_revision_adjusted,
             ),
             source_revision_policy=source_revision_policy,
+            weather_forecast_vintage_mode=normalize_weather_forecast_vintage_mode(
+                weather_forecast_vintage_mode
+            ),
+            weather_forecast_metadata=weather_metadata,
         )
-        return self._finalize_panel(rows)
+        panel = self._finalize_panel(rows)
+        panel.attrs["weather_forecast_metadata"] = dict(weather_metadata)
+        self._last_weather_forecast_metadata = dict(weather_metadata)
+        return panel
 
     def build_inference_panel(
         self,
@@ -153,6 +185,7 @@ class RegionalFeatureBuilder:
         use_revision_adjusted: bool = False,
         revision_policy: str | None = None,
         source_revision_policy: dict[str, str] | None = None,
+        weather_forecast_vintage_mode: str | None = None,
     ) -> pd.DataFrame:
         """Build one inference row per Bundesland for a shared as-of date."""
         horizon = ensure_supported_horizon(horizon_days)
@@ -178,6 +211,8 @@ class RegionalFeatureBuilder:
         pollen = self._load_pollen(truth_start, effective_as_of + pd.Timedelta(days=horizon))
         holidays = self._load_holidays()
         state_populations = self._load_state_population_map()
+        weather_metadata = empty_weather_forecast_vintage_metadata(weather_forecast_vintage_mode)
+        self._last_weather_forecast_metadata = dict(weather_metadata)
 
         rows = self._build_rows(
             virus_typ=virus_typ,
@@ -205,10 +240,18 @@ class RegionalFeatureBuilder:
                 use_revision_adjusted=use_revision_adjusted,
             ),
             source_revision_policy=source_revision_policy,
+            weather_forecast_vintage_mode=normalize_weather_forecast_vintage_mode(
+                weather_forecast_vintage_mode
+            ),
+            weather_forecast_metadata=weather_metadata,
         )
         panel = self._finalize_panel(rows)
         if panel.empty:
+            panel.attrs["weather_forecast_metadata"] = dict(weather_metadata)
+            self._last_weather_forecast_metadata = dict(weather_metadata)
             return panel
+        panel.attrs["weather_forecast_metadata"] = dict(weather_metadata)
+        self._last_weather_forecast_metadata = dict(weather_metadata)
 
         latest_rows = (
             panel.sort_values(["bundesland", "as_of_date"])
@@ -280,6 +323,11 @@ class RegionalFeatureBuilder:
 
     def dataset_manifest(self, virus_typ: str, panel: pd.DataFrame) -> dict[str, Any]:
         event_config = event_definition_config_for_virus(virus_typ)
+        weather_metadata = dict(
+            panel.attrs.get("weather_forecast_metadata")
+            or getattr(self, "_last_weather_forecast_metadata", {})
+            or empty_weather_forecast_vintage_metadata(WEATHER_FORECAST_VINTAGE_DISABLED)
+        )
         if panel.empty:
             return {
                 "virus_typ": virus_typ,
@@ -287,9 +335,23 @@ class RegionalFeatureBuilder:
                 "event_definition_config": event_config.to_manifest(),
                 "target_window_days": list(TARGET_WINDOW_DAYS),
                 "source_lag_days": SOURCE_LAG_DAYS,
+                "exogenous_feature_semantics_version": EXOGENOUS_FEATURE_SEMANTICS_VERSION,
+                "exogenous_feature_semantics": exogenous_feature_semantics_manifest(),
+                "weather_forecast_vintage_mode": weather_metadata.get("weather_forecast_vintage_mode"),
+                "weather_forecast_issue_time_semantics": weather_metadata.get("weather_forecast_issue_time_semantics"),
+                "weather_forecast_run_identity_present": bool(
+                    weather_metadata.get("weather_forecast_run_identity_present")
+                ),
+                "weather_forecast_run_identity_source": weather_metadata.get(
+                    "weather_forecast_run_identity_source"
+                ),
+                "weather_forecast_run_identity_quality": weather_metadata.get(
+                    "weather_forecast_run_identity_quality"
+                ),
                 "rows": 0,
                 "truth_source": "unavailable",
                 "source_coverage": {},
+                "training_source_coverage": {},
             }
 
         target_window_days = (
@@ -323,6 +385,19 @@ class RegionalFeatureBuilder:
             "event_definition_config": event_config.to_manifest(),
             "target_window_days": target_window_days,
             "source_lag_days": SOURCE_LAG_DAYS,
+            "exogenous_feature_semantics_version": EXOGENOUS_FEATURE_SEMANTICS_VERSION,
+            "exogenous_feature_semantics": exogenous_feature_semantics_manifest(),
+            "weather_forecast_vintage_mode": weather_metadata.get("weather_forecast_vintage_mode"),
+            "weather_forecast_issue_time_semantics": weather_metadata.get("weather_forecast_issue_time_semantics"),
+            "weather_forecast_run_identity_present": bool(
+                weather_metadata.get("weather_forecast_run_identity_present")
+            ),
+            "weather_forecast_run_identity_source": weather_metadata.get(
+                "weather_forecast_run_identity_source"
+            ),
+            "weather_forecast_run_identity_quality": weather_metadata.get(
+                "weather_forecast_run_identity_quality"
+            ),
             "rows": int(len(panel)),
             "states": int(panel["bundesland"].nunique()),
             "unique_as_of_dates": int(panel["as_of_date"].nunique()),
@@ -332,6 +407,7 @@ class RegionalFeatureBuilder:
             },
             "truth_source": truth_sources[0] if len(truth_sources) == 1 else truth_sources,
             "source_coverage": source_coverage,
+            "training_source_coverage": dict(source_coverage),
         }
 
     def point_in_time_snapshot_manifest(self, virus_typ: str, panel: pd.DataFrame) -> dict[str, Any]:
@@ -343,6 +419,16 @@ class RegionalFeatureBuilder:
                 "captured_at": utc_now().isoformat(),
                 "rows": 0,
                 "source_lag_days": SOURCE_LAG_DAYS,
+                "exogenous_feature_semantics_version": EXOGENOUS_FEATURE_SEMANTICS_VERSION,
+                "weather_forecast_vintage_mode": dataset_manifest.get("weather_forecast_vintage_mode"),
+                "weather_forecast_issue_time_semantics": dataset_manifest.get("weather_forecast_issue_time_semantics"),
+                "weather_forecast_run_identity_present": dataset_manifest.get("weather_forecast_run_identity_present"),
+                "weather_forecast_run_identity_source": dataset_manifest.get(
+                    "weather_forecast_run_identity_source"
+                ),
+                "weather_forecast_run_identity_quality": dataset_manifest.get(
+                    "weather_forecast_run_identity_quality"
+                ),
                 "dataset_manifest": dataset_manifest,
             }
 
@@ -377,8 +463,50 @@ class RegionalFeatureBuilder:
                 }
             ),
             "source_lag_days": SOURCE_LAG_DAYS,
+            "exogenous_feature_semantics_version": EXOGENOUS_FEATURE_SEMANTICS_VERSION,
+            "weather_forecast_vintage_mode": dataset_manifest.get("weather_forecast_vintage_mode"),
+            "weather_forecast_issue_time_semantics": dataset_manifest.get("weather_forecast_issue_time_semantics"),
+            "weather_forecast_run_identity_present": dataset_manifest.get("weather_forecast_run_identity_present"),
+            "weather_forecast_run_identity_source": dataset_manifest.get(
+                "weather_forecast_run_identity_source"
+            ),
+            "weather_forecast_run_identity_quality": dataset_manifest.get(
+                "weather_forecast_run_identity_quality"
+            ),
             "target_window_days": dataset_manifest.get("target_window_days") or list(TARGET_WINDOW_DAYS),
             "dataset_manifest": dataset_manifest,
+        }
+
+    def live_source_readiness_frames(
+        self,
+        *,
+        virus_typ: str,
+        as_of_date: datetime | pd.Timestamp,
+        lookback_days: int = 28,
+    ) -> dict[str, pd.DataFrame]:
+        effective_as_of = pd.Timestamp(as_of_date).normalize()
+        start_date = effective_as_of - pd.Timedelta(days=max(int(lookback_days), 28))
+        grippeweb = self._load_grippeweb_signals(start_date, effective_as_of)
+        frames: dict[str, pd.DataFrame] = {
+            "wastewater": self._load_wastewater_daily(virus_typ, start_date),
+            "grippeweb_are": grippeweb.loc[grippeweb["signal_type"] == "ARE"].copy()
+            if not grippeweb.empty
+            else pd.DataFrame(),
+            "grippeweb_ili": grippeweb.loc[grippeweb["signal_type"] == "ILI"].copy()
+            if not grippeweb.empty
+            else pd.DataFrame(),
+        }
+        if virus_typ in {"Influenza A", "Influenza B"}:
+            frames["ifsg_influenza"] = self._load_influenza_ifsg(start_date, effective_as_of)
+        elif virus_typ == "RSV A":
+            frames["ifsg_rsv"] = self._load_rsv_ifsg(start_date, effective_as_of)
+        elif virus_typ == "SARS-CoV-2":
+            frames["sars_are"] = self._load_are_konsultation(start_date, effective_as_of)
+            frames["sars_notaufnahme"] = self._load_notaufnahme_covid(start_date, effective_as_of)
+            frames["sars_trends"] = self._load_corona_test_trends(start_date, effective_as_of)
+        return {
+            source_id: frame.reset_index(drop=True) if not frame.empty else pd.DataFrame()
+            for source_id, frame in frames.items()
         }
 
     def _load_wastewater_daily(self, virus_typ: str, start_date: pd.Timestamp) -> pd.DataFrame:
@@ -764,7 +892,10 @@ class RegionalFeatureBuilder:
         )
         if frame.empty:
             return frame
-        return frame.sort_values(["bundesland", "datum"]).reset_index(drop=True)
+        sort_columns = ["bundesland", "datum"]
+        if "forecast_run_timestamp" in frame.columns:
+            sort_columns.append("forecast_run_timestamp")
+        return frame.sort_values(sort_columns).reset_index(drop=True)
 
     def _load_are_konsultation(self, start_date: pd.Timestamp, end_date: pd.Timestamp) -> pd.DataFrame:
         if self.db is None:
@@ -891,7 +1022,12 @@ class RegionalFeatureBuilder:
                 WeatherData.city,
                 WeatherData.datum,
                 WeatherData.data_type,
+                WeatherData.forecast_run_timestamp,
+                WeatherData.forecast_run_id,
+                WeatherData.forecast_run_identity_source,
+                WeatherData.forecast_run_identity_quality,
                 func.max(WeatherData.available_time).label("available_time"),
+                func.max(WeatherData.created_at).label("created_at"),
                 func.avg(WeatherData.temperatur).label("temp"),
                 func.avg(WeatherData.luftfeuchtigkeit).label("humidity"),
             )
@@ -904,6 +1040,10 @@ class RegionalFeatureBuilder:
                 WeatherData.city,
                 WeatherData.datum,
                 WeatherData.data_type,
+                WeatherData.forecast_run_timestamp,
+                WeatherData.forecast_run_id,
+                WeatherData.forecast_run_identity_source,
+                WeatherData.forecast_run_identity_quality,
             )
             .all()
         )
@@ -914,6 +1054,39 @@ class RegionalFeatureBuilder:
                     "bundesland": CITY_TO_BUNDESLAND.get(row.city),
                     "datum": pd.Timestamp(row.datum).normalize(),
                     "available_time": effective_available_time(row.datum, row.available_time, 0),
+                    "issue_time": (
+                        pd.Timestamp(row.forecast_run_timestamp)
+                        if row.forecast_run_timestamp is not None
+                        else (
+                            pd.Timestamp(row.created_at)
+                            if row.created_at is not None
+                            else pd.NaT
+                        )
+                    ),
+                    "forecast_run_timestamp": (
+                        pd.Timestamp(row.forecast_run_timestamp)
+                        if row.forecast_run_timestamp is not None
+                        else pd.NaT
+                    ),
+                    "forecast_run_id": str(row.forecast_run_id) if row.forecast_run_id is not None else None,
+                    "forecast_run_identity_source": (
+                        str(row.forecast_run_identity_source)
+                        if row.forecast_run_identity_source
+                        else (
+                            WEATHER_FORECAST_RUN_IDENTITY_SOURCE_MISSING
+                            if str(row.data_type or "") == "DAILY_FORECAST"
+                            else "not_applicable"
+                        )
+                    ),
+                    "forecast_run_identity_quality": (
+                        str(row.forecast_run_identity_quality)
+                        if row.forecast_run_identity_quality
+                        else (
+                            WEATHER_FORECAST_RUN_IDENTITY_QUALITY_MISSING
+                            if str(row.data_type or "") == "DAILY_FORECAST"
+                            else "not_applicable"
+                        )
+                    ),
                     "data_type": str(row.data_type or "CURRENT"),
                     "temp": float(row.temp or 0.0),
                     "humidity": float(row.humidity or 0.0),
@@ -996,6 +1169,8 @@ class RegionalFeatureBuilder:
         use_revision_adjusted: bool,
         revision_policy: str,
         source_revision_policy: dict[str, str] | None,
+        weather_forecast_vintage_mode: str,
+        weather_forecast_metadata: dict[str, Any],
     ) -> list[dict[str, Any]]:
         if wastewater.empty or truth.empty:
             return []
@@ -1115,10 +1290,10 @@ class RegionalFeatureBuilder:
 
                 visible_trends = None
                 if virus_typ == "SARS-CoV-2" and national_trends is not None:
-                    visible_trends = national_trends.loc[
-                        (national_trends["datum"] <= as_of)
-                        & (national_trends["available_time"] <= as_of)
-                    ].copy()
+                    visible_trends = observed_as_of_only_rows(
+                        national_trends,
+                        as_of=as_of,
+                    )
 
                 target_date = self._target_date(as_of, horizon)
                 target_week_start = self._target_week_start(as_of, horizon)
@@ -1190,6 +1365,8 @@ class RegionalFeatureBuilder:
                     use_revision_adjusted=use_revision_adjusted,
                     revision_policy=revision_policy,
                     source_revision_policy=source_revision_policy,
+                    weather_forecast_vintage_mode=weather_forecast_vintage_mode,
+                    weather_forecast_metadata=weather_forecast_metadata,
                     truth_nowcast=truth_nowcast,
                 )
                 if feature_row is None:
@@ -1255,6 +1432,8 @@ class RegionalFeatureBuilder:
         use_revision_adjusted: bool,
         revision_policy: str,
         source_revision_policy: dict[str, str] | None,
+        weather_forecast_vintage_mode: str,
+        weather_forecast_metadata: dict[str, Any],
         truth_nowcast: NowcastResult,
     ) -> dict[str, Any] | None:
         nowcast_features: dict[str, float] = {}
@@ -1330,6 +1509,8 @@ class RegionalFeatureBuilder:
             weather_frame,
             as_of,
             horizon_days=horizon_days,
+            vintage_mode=weather_forecast_vintage_mode,
+            vintage_metadata=weather_forecast_metadata,
         )
         pollen_context = self._pollen_context(pollen_frame, as_of)
         holiday_share = self._holiday_share_in_target_window(
@@ -2062,7 +2243,28 @@ class RegionalFeatureBuilder:
         as_of: pd.Timestamp,
         *,
         horizon_days: int,
+        vintage_mode: str = WEATHER_FORECAST_VINTAGE_DISABLED,
+        vintage_metadata: dict[str, Any] | None = None,
     ) -> dict[str, float]:
+        metadata = vintage_metadata if vintage_metadata is not None else {}
+        metadata.setdefault(
+            "weather_forecast_vintage_mode",
+            normalize_weather_forecast_vintage_mode(vintage_mode),
+        )
+        metadata.setdefault(
+            "weather_forecast_issue_time_semantics",
+            WEATHER_FORECAST_ISSUE_TIME_SEMANTICS,
+        )
+        metadata.setdefault("weather_forecast_run_identity_present", False)
+        metadata.setdefault(
+            "weather_forecast_run_identity_source",
+            WEATHER_FORECAST_RUN_IDENTITY_SOURCE_MISSING,
+        )
+        metadata.setdefault(
+            "weather_forecast_run_identity_quality",
+            WEATHER_FORECAST_RUN_IDENTITY_QUALITY_MISSING,
+        )
+        metadata.setdefault("weather_forecast_vintage_degraded", False)
         if weather_frame is None or weather_frame.empty:
             return {
                 "weather_forecast_temp_3_7": 0.0,
@@ -2071,26 +2273,110 @@ class RegionalFeatureBuilder:
                 "weather_humidity_anomaly_3_7": 0.0,
             }
 
-        visible = weather_frame.loc[weather_frame["available_time"] <= as_of]
-        observed = visible.loc[
-            (visible["data_type"].isin(["CURRENT", "DAILY_OBSERVATION"])) & (visible["datum"] <= as_of)
-        ]
+        visible = weather_frame.loc[weather_frame["available_time"] <= as_of].copy()
+        observed = observed_as_of_only_rows(
+            visible.loc[
+                visible["data_type"].isin(["CURRENT", "DAILY_OBSERVATION"])
+            ].copy(),
+            as_of=as_of,
+        )
         target_date = RegionalFeatureBuilder._target_date(as_of, horizon_days)
-        forecast_candidates = visible.loc[
+        raw_forecast_candidates = visible.loc[
             (visible["data_type"] == "DAILY_FORECAST")
             & (visible["datum"] > as_of)
         ].copy()
+        if not raw_forecast_candidates.empty:
+            if "forecast_run_identity_source" in raw_forecast_candidates.columns:
+                sources = sorted(
+                    {
+                        str(value)
+                        for value in raw_forecast_candidates["forecast_run_identity_source"].dropna().unique()
+                    }
+                )
+                if len(sources) == 1:
+                    metadata["weather_forecast_run_identity_source"] = sources[0]
+                elif len(sources) > 1:
+                    metadata["weather_forecast_run_identity_source"] = "mixed"
+            if "forecast_run_identity_quality" in raw_forecast_candidates.columns:
+                qualities = sorted(
+                    {
+                        str(value)
+                        for value in raw_forecast_candidates["forecast_run_identity_quality"].dropna().unique()
+                    }
+                )
+                if len(qualities) == 1:
+                    metadata["weather_forecast_run_identity_quality"] = qualities[0]
+                elif len(qualities) > 1:
+                    metadata["weather_forecast_run_identity_quality"] = "mixed"
+        normalized_vintage_mode = normalize_weather_forecast_vintage_mode(vintage_mode)
+        if normalized_vintage_mode == WEATHER_FORECAST_VINTAGE_RUN_TIMESTAMP_V1:
+            forecast_candidates, selected_vintage = select_weather_forecast_vintage_rows(
+                raw_forecast_candidates,
+                as_of=as_of,
+            )
+            for key, value in selected_vintage.items():
+                if key in {
+                    "weather_forecast_selected_run_timestamp",
+                    "weather_forecast_selected_run_id",
+                } and value is not None:
+                    metadata[key] = value
+            metadata["weather_forecast_run_identity_present"] = bool(
+                metadata.get("weather_forecast_run_identity_present")
+                or selected_vintage.get("weather_forecast_run_identity_present")
+            )
+            metadata["weather_forecast_vintage_degraded"] = bool(
+                metadata.get("weather_forecast_vintage_degraded")
+                or selected_vintage.get("weather_forecast_vintage_degraded")
+            )
+            if selected_vintage.get("weather_forecast_run_identity_source"):
+                metadata["weather_forecast_run_identity_source"] = selected_vintage.get(
+                    "weather_forecast_run_identity_source"
+                )
+            if selected_vintage.get("weather_forecast_run_identity_quality"):
+                metadata["weather_forecast_run_identity_quality"] = selected_vintage.get(
+                    "weather_forecast_run_identity_quality"
+                )
+        else:
+            forecast_candidates = issue_time_forecast_rows(
+                raw_forecast_candidates,
+                as_of=as_of,
+                contract=EXOGENOUS_FEATURE_CONTRACTS["weather_daily_forecast"],
+            )
+            has_persisted_run_identity = (
+                "forecast_run_timestamp" in raw_forecast_candidates.columns
+                and raw_forecast_candidates["forecast_run_timestamp"].notna().any()
+            )
+            metadata["weather_forecast_run_identity_present"] = bool(
+                metadata.get("weather_forecast_run_identity_present")
+                or has_persisted_run_identity
+            )
+            if not has_persisted_run_identity and (
+                "issue_time" in raw_forecast_candidates.columns
+                and raw_forecast_candidates["issue_time"].notna().any()
+            ):
+                metadata["weather_forecast_run_identity_source"] = WEATHER_FORECAST_RUN_IDENTITY_SOURCE_LEGACY
+                metadata["weather_forecast_run_identity_quality"] = WEATHER_FORECAST_RUN_IDENTITY_QUALITY_LEGACY
+        if not raw_forecast_candidates.empty and forecast_candidates.empty:
+            logger.warning(
+                "Dropping future weather forecast rows without issue-time semantics for as_of=%s.",
+                as_of.date(),
+            )
 
         obs_temp = float(observed.tail(7)["temp"].mean() or 0.0) if not observed.empty else 0.0
         obs_humidity = float(observed.tail(7)["humidity"].mean() or 0.0) if not observed.empty else 0.0
-        forecast = forecast_candidates.loc[forecast_candidates["datum"] == target_date].copy()
+        if forecast_candidates.empty:
+            forecast = forecast_candidates.copy()
+        else:
+            forecast = forecast_candidates.loc[forecast_candidates["datum"] == target_date].copy()
         if forecast.empty and not forecast_candidates.empty:
             forecast_candidates["target_distance_days"] = (
                 forecast_candidates["datum"] - target_date
             ).abs() / pd.Timedelta(days=1)
             forecast = forecast_candidates.sort_values(["target_distance_days", "datum"]).head(3)
-        fc_temp = float(forecast["temp"].mean() or obs_temp)
-        fc_humidity = float(forecast["humidity"].mean() or obs_humidity)
+        fc_temp_mean = float(forecast["temp"].mean()) if not forecast.empty else float("nan")
+        fc_humidity_mean = float(forecast["humidity"].mean()) if not forecast.empty else float("nan")
+        fc_temp = obs_temp if np.isnan(fc_temp_mean) else fc_temp_mean
+        fc_humidity = obs_humidity if np.isnan(fc_humidity_mean) else fc_humidity_mean
         return {
             "weather_forecast_temp_3_7": fc_temp,
             "weather_forecast_humidity_3_7": fc_humidity,
@@ -2102,10 +2388,10 @@ class RegionalFeatureBuilder:
     def _pollen_context(pollen_frame: pd.DataFrame | None, as_of: pd.Timestamp) -> float:
         if pollen_frame is None or pollen_frame.empty:
             return 0.0
-        visible = pollen_frame.loc[
-            (pollen_frame["datum"] <= as_of)
-            & (pollen_frame["available_time"] <= as_of)
-        ]
+        visible = observed_as_of_only_rows(
+            pollen_frame,
+            as_of=as_of,
+        )
         if visible.empty:
             return 0.0
         return float(visible.tail(3)["pollen_index"].mean() or 0.0)

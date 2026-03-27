@@ -11,6 +11,10 @@ from app.services.media.business_validation_service import BusinessValidationSer
 from app.services.media.v2_service import MediaV2Service
 from app.services.ml.regional_forecast import RegionalForecastService
 from app.services.ops.regional_operational_snapshot_store import RegionalOperationalSnapshotStore
+from app.services.source_coverage_semantics import (
+    ARTIFACT_SOURCE_COVERAGE_SCOPE,
+    live_source_readiness,
+)
 
 
 _LEGACY_RISK_ENGINE_CUTOFF_DATE = "2026-04-30"
@@ -90,11 +94,20 @@ class PilotReadoutService:
             virus_typ=virus_typ,
             horizon_days=horizon_days,
         )
+        if operational_snapshot:
+            operational_snapshot = RegionalOperationalSnapshotStore._normalized_metadata(
+                dict(operational_snapshot)
+            )
         recent_snapshots = self.snapshot_store.recent_scope_snapshots(
             virus_typ=virus_typ,
             horizon_days=horizon_days,
             limit=3,
         )
+        recent_snapshots = [
+            RegionalOperationalSnapshotStore._normalized_metadata(dict(item))
+            for item in recent_snapshots
+            if item
+        ]
 
         region_rows = self._region_rows(
             forecast=forecast,
@@ -104,6 +117,7 @@ class PilotReadoutService:
         forecast_readiness = self._forecast_first_scope_readiness(
             forecast=forecast,
             evaluation=evaluation,
+            operational_snapshot=operational_snapshot,
         )
         commercial_validation_status = self._commercial_validation_status(
             truth_coverage=truth_coverage,
@@ -115,7 +129,10 @@ class PilotReadoutService:
             budget_mode=budget_mode,
         )
         scope_readiness_by_section = {
-            "forecast": self._forecast_scope_readiness(forecast),
+            "forecast": self._forecast_scope_readiness(
+                forecast,
+                operational_snapshot=operational_snapshot,
+            ),
             "allocation": self._allocation_scope_readiness(allocation),
             "recommendation": self._recommendation_scope_readiness(recommendations),
             "evidence": self._evidence_scope_readiness(
@@ -133,6 +150,7 @@ class PilotReadoutService:
             truth_coverage=truth_coverage,
             business_validation=business_validation,
             evaluation=evaluation,
+            operational_snapshot=operational_snapshot,
             forecast_readiness=forecast_readiness,
             commercial_validation_status=commercial_validation_status,
             overall_scope_readiness=overall_scope_readiness,
@@ -184,6 +202,7 @@ class PilotReadoutService:
                 "promotion_status": self._promotion_status(
                     evaluation=evaluation,
                     forecast=forecast,
+                    operational_snapshot=operational_snapshot,
                 ),
                 "gate_snapshot": gate_snapshot,
             },
@@ -400,6 +419,7 @@ class PilotReadoutService:
         truth_coverage: dict[str, Any],
         business_validation: dict[str, Any],
         evaluation: dict[str, Any] | None,
+        operational_snapshot: dict[str, Any] | None,
         forecast_readiness: str,
         commercial_validation_status: str,
         overall_scope_readiness: str,
@@ -411,7 +431,10 @@ class PilotReadoutService:
         return {
             "scope_readiness": overall_scope_readiness,
             "forecast_readiness": forecast_readiness,
-            "epidemiology_status": self._epidemiology_status(forecast),
+            "epidemiology_status": self._epidemiology_status(
+                forecast,
+                operational_snapshot=operational_snapshot,
+            ),
             "commercial_data_status": self._commercial_data_status(
                 truth_coverage=truth_coverage,
                 business_validation=business_validation,
@@ -433,6 +456,7 @@ class PilotReadoutService:
             "validation_status": business_validation.get("validation_status"),
             "quality_gate_failed_checks": list(quality_gate.get("failed_checks") or []),
             "forecast_gate_outcome": quality_gate.get("forecast_readiness"),
+            "operational_readiness": self._operational_readiness_snapshot(operational_snapshot),
             "latest_evaluation": {
                 "available": bool(evaluation),
                 "run_id": latest_evaluation.get("run_id"),
@@ -469,12 +493,25 @@ class PilotReadoutService:
             requirements.append("Validierte inkrementelle Lift-Metriken fehlen noch.")
         return requirements
 
-    def _forecast_scope_readiness(self, forecast: dict[str, Any]) -> str:
+    def _forecast_scope_readiness(
+        self,
+        forecast: dict[str, Any],
+        *,
+        operational_snapshot: dict[str, Any] | None = None,
+    ) -> str:
         status = str(forecast.get("status") or "").strip().lower()
         if status in {"no_model", "unsupported"}:
             return "NO_GO"
         if status == "no_data" or not (forecast.get("predictions") or []):
             return "NO_GO"
+        if not bool((forecast.get("quality_gate") or {}).get("overall_passed")):
+            return "WATCH"
+        if operational_snapshot:
+            operational_status = self._operational_scope_status(operational_snapshot)
+            if operational_status == "NO_GO":
+                return "NO_GO"
+            if operational_status == "WATCH":
+                return "WATCH"
         if bool((forecast.get("quality_gate") or {}).get("overall_passed")):
             return "GO"
         return "WATCH"
@@ -521,8 +558,12 @@ class PilotReadoutService:
         *,
         forecast: dict[str, Any],
         evaluation: dict[str, Any] | None,
+        operational_snapshot: dict[str, Any] | None = None,
     ) -> str:
-        forecast_readiness = self._forecast_scope_readiness(forecast)
+        forecast_readiness = self._forecast_scope_readiness(
+            forecast,
+            operational_snapshot=operational_snapshot,
+        )
         if forecast_readiness == "NO_GO":
             return "NO_GO"
         if (
@@ -534,12 +575,80 @@ class PilotReadoutService:
             return "GO"
         return "WATCH"
 
-    def _epidemiology_status(self, forecast: dict[str, Any]) -> str:
-        if self._forecast_scope_readiness(forecast) == "GO":
+    def _epidemiology_status(
+        self,
+        forecast: dict[str, Any],
+        *,
+        operational_snapshot: dict[str, Any] | None = None,
+    ) -> str:
+        forecast_status = self._forecast_scope_readiness(
+            forecast,
+            operational_snapshot=operational_snapshot,
+        )
+        if forecast_status == "GO":
             return "GO"
+        if forecast_status == "NO_GO":
+            return "NO_GO"
         if str(forecast.get("status") or "").strip().lower() in {"no_model", "no_data", "unsupported"}:
             return "NO_GO"
         return "WATCH"
+
+    @staticmethod
+    def _status_to_readiness(value: Any) -> str:
+        normalized = str(value or "").strip().lower()
+        if normalized == "ok":
+            return "GO"
+        if normalized == "critical":
+            return "NO_GO"
+        return "WATCH"
+
+    def _operational_scope_status(self, operational_snapshot: dict[str, Any] | None) -> str:
+        if not operational_snapshot:
+            return "GO"
+        live_readiness = live_source_readiness(operational_snapshot)
+        coverage_status = str(live_readiness.get("coverage_status") or "").strip().lower()
+        freshness_status = str(live_readiness.get("freshness_status") or "").strip().lower()
+        recency_status = str(operational_snapshot.get("forecast_recency_status") or "").strip().lower()
+        candidates = [status for status in (coverage_status, freshness_status, recency_status) if status]
+        if "critical" in candidates:
+            return "NO_GO"
+        if "warning" in candidates or "unknown" in candidates:
+            return "WATCH"
+        return "GO"
+
+    def _operational_readiness_snapshot(
+        self,
+        operational_snapshot: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        if not operational_snapshot:
+            return {
+                "available": False,
+                "scope_status": "WATCH",
+                "forecast_recency_status": None,
+                "live_source_coverage_status": None,
+                "live_source_freshness_status": None,
+                "forecast_recency_readiness": "WATCH",
+                "live_source_coverage_readiness": "WATCH",
+                "live_source_freshness_readiness": "WATCH",
+                "source_coverage_scope": ARTIFACT_SOURCE_COVERAGE_SCOPE,
+            }
+        live_readiness = live_source_readiness(operational_snapshot)
+        forecast_recency_status = str(operational_snapshot.get("forecast_recency_status") or "").strip().lower() or None
+        live_source_coverage_status = str(live_readiness.get("coverage_status") or "").strip().lower() or None
+        live_source_freshness_status = str(live_readiness.get("freshness_status") or "").strip().lower() or None
+        return {
+            "available": True,
+            "scope_status": self._operational_scope_status(operational_snapshot),
+            "forecast_recency_status": forecast_recency_status,
+            "live_source_coverage_status": live_source_coverage_status,
+            "live_source_freshness_status": live_source_freshness_status,
+            "forecast_recency_readiness": self._status_to_readiness(forecast_recency_status),
+            "live_source_coverage_readiness": self._status_to_readiness(live_source_coverage_status),
+            "live_source_freshness_readiness": self._status_to_readiness(live_source_freshness_status),
+            "source_coverage_scope": str(
+                live_readiness.get("source_coverage_scope") or ARTIFACT_SOURCE_COVERAGE_SCOPE
+            ),
+        }
 
     def _commercial_data_status(
         self,
@@ -591,10 +700,14 @@ class PilotReadoutService:
         *,
         evaluation: dict[str, Any] | None,
         forecast: dict[str, Any],
+        operational_snapshot: dict[str, Any] | None = None,
     ) -> str:
         if evaluation and evaluation.get("gate_outcome") == "GO" and evaluation.get("retained") is True:
             return "promoted_or_ready"
-        if self._forecast_scope_readiness(forecast) == "GO":
+        if self._forecast_scope_readiness(
+            forecast,
+            operational_snapshot=operational_snapshot,
+        ) == "GO":
             return "operational_go_without_budget_release"
         return "not_promoted"
 

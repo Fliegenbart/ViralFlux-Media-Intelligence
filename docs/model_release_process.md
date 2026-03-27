@@ -58,6 +58,10 @@ Before promotion:
 - artifacts exist for the required virus/horizon combinations
 - `metadata.horizon_days` matches the requested horizon
 - `quality_gate` is present
+- `quality_gate.overall_passed = true`
+- `metric_semantics_version` is present and compatible with the live champion semantics
+- `promotion_evidence.minimum_sample_count` is met
+- `promotion_evidence.promotion_allowed = true`
 - `dataset_manifest` is present
 - `point_in_time_snapshot` is present
 - no silent `load_error` exists
@@ -84,6 +88,152 @@ python scripts/backfill_regional_model_artifacts.py --horizon 3 --horizon 5 --ho
 This records an operational audit entry:
 
 - `BACKFILL_REGIONAL_MODEL_ARTIFACTS`
+
+Optional pre-release shadow check for the weather vintage slice:
+
+- call the trainer with `weather_vintage_comparison=True`
+- keep `weather_forecast_vintage_mode` unset if you want the current legacy mode to stay the primary training path
+- review `weather_vintage_comparison` and `legacy_vs_vintage_metric_delta` before considering a broader rollout
+- this is a benchmark-only comparison and not a global mode switch
+
+Small end-to-end comparison runner:
+
+```bash
+cd backend
+python scripts/run_weather_vintage_comparison.py --virus "Influenza A" --virus "SARS-CoV-2" --horizon 3 --horizon 7
+```
+
+This writes a compact JSON and Markdown report under `app/ml_models/weather_vintage_comparison/`.
+
+Prospektiver Shadow-Betrieb fuer die operativ relevanten h7-Scopes:
+
+```bash
+cd backend
+python scripts/run_weather_vintage_pilot_h7_shadow.py
+```
+
+Kombinierter Ops-Standardlauf fuer Shadow plus Health-Check:
+
+```bash
+cd backend
+python scripts/run_weather_vintage_pilot_h7_ops.py
+```
+
+Dieser Lauf bleibt additiv und schreibt unter `app/ml_models/weather_vintage_prospective_shadow/`:
+
+- `runs/<run_id>/summary.json`
+- `runs/<run_id>/report.json`
+- `runs/<run_id>/report.md`
+- `runs/<run_id>/run_manifest.json`
+- `aggregate_report.json`
+- `aggregate_report.md`
+
+Interpretation:
+
+- der Pilot-Wrapper ist der produktionsnahe Standard-Startpunkt fuer regelmaessige Shadow-Laeufe
+- er markiert echte Regelbetriebslaeufe standardmaessig als `run_purpose = scheduled_shadow`
+- Smoke- oder manuelle Testlaeufe koennen explizit anders markiert werden, zum Beispiel mit `--run-purpose smoke`
+- `run_timestamp_v1` bleibt experimentell; der Legacy-Standard aendert sich dadurch nicht
+- `insufficient_identity`-Laeufe werden archiviert, aber nicht als belastbare Vergleichslaeufe gezaehlt
+- fuer den operativen Takt sollte der Shadow-Lauf regelmaessig mit denselben Standard-Scopes laufen, zum Beispiel einmal pro Tag oder pro relevanten Trainingszyklus
+- ein Review ist erst sinnvoll, wenn mehrere vergleichbare Shadow-Laeufe vorliegen; intern nutzen wir dafuer mindestens grob `6` vergleichbare Laeufe pro Scope
+- `review_ready` bedeutet nur: genug saubere Evidenz fuer eine manuelle Pruefung; es ist immer noch kein automatischer Rollout
+- der echte Review-Report zaehlt standardmaessig nur `scheduled_shadow`-Laeufe; Smoke- und manuelle Evaluationslaeufe bleiben archiviert, verzerren die Review-Statistik aber nicht
+
+Ops-taugliche Startbeispiele:
+
+Manueller Ad-hoc-Start:
+
+```bash
+cd backend
+python scripts/run_weather_vintage_pilot_h7_ops.py --run-purpose manual_eval
+```
+
+Cron-Beispiel:
+
+```cron
+15 3 * * * cd /path/to/viralflux/backend && ./.venv-backend311/bin/python scripts/run_weather_vintage_pilot_h7_ops.py >> /var/log/viralflux_weather_vintage_shadow.log 2>&1
+```
+
+Systemd-Timer-Beispiel:
+
+Service `viralflux-weather-vintage-shadow.service`:
+
+```ini
+[Unit]
+Description=ViralFlux Weather Vintage Pilot h7 Shadow
+
+[Service]
+Type=oneshot
+WorkingDirectory=/path/to/viralflux/backend
+ExecStart=/path/to/viralflux/.venv-backend311/bin/python scripts/run_weather_vintage_pilot_h7_ops.py
+```
+
+Timer `viralflux-weather-vintage-shadow.timer`:
+
+```ini
+[Unit]
+Description=Run ViralFlux Weather Vintage Pilot h7 Shadow daily
+
+[Timer]
+OnCalendar=*-*-* 03:15:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+```
+
+Hinweise fuer den Betrieb:
+
+- der taegliche Standardbefehl ist `python scripts/run_weather_vintage_pilot_h7_ops.py`
+- der reine Shadow-Lauf bleibt `python scripts/run_weather_vintage_pilot_h7_shadow.py`
+- der reine Health-Check bleibt `python scripts/check_weather_vintage_shadow_health.py`
+- der Wrapper setzt standardmaessig `run_purpose = scheduled_shadow`
+- ein Lockfile verhindert versehentliche Parallelstarts auf demselben Host
+- bei Lock-Konflikt endet der Wrapper mit Exit-Code `2`
+- bei sonstigen Laufzeitfehlern endet er mit Exit-Code `1`
+- der kombinierte Ops-Wrapper gibt bei erfolgreichem Shadow-Lauf direkt den Exit-Code des Health-Checks weiter
+- stdout und stderr sollten im Scheduler in ein Logfile oder Job-Artefakt umgeleitet werden
+
+Monitoring-Check fuer den Shadow-Betrieb:
+
+```bash
+cd backend
+python scripts/check_weather_vintage_shadow_health.py
+```
+
+Der Check liest die vorhandenen Archivlaeufe und meldet:
+
+- `ok`: der Shadow-Betrieb laeuft regelmaessig und liefert weiterhin brauchbare Vergleichslaeufe
+- `warning`: es gibt erste Betriebsprobleme, zum Beispiel zu viele `insufficient_identity`-Laeufe oder zu lange keine brauchbaren Vergleichslaeufe
+- `critical`: der Shadow-Betrieb ist akut unzuverlaessig, zum Beispiel weil gar keine aktuellen `scheduled_shadow`-Laeufe mehr vorliegen oder der letzte Lauf komplett fehlgeschlagen ist
+
+Fuer Scheduler oder Monitoring ist der Exit-Code gedacht:
+
+- `0` = `ok`
+- `1` = `warning`
+- `2` = `critical`
+
+Standardmaessig ueberwacht der Check nur echte `scheduled_shadow`-Laeufe. Smoke- und manuelle Laeufe bleiben archiviert, zaehlen aber nicht in die Betriebsbewertung hinein.
+
+Warm-up-Regel:
+
+- vor dem ersten echten `scheduled_shadow`-Lauf meldet der Health-Check bewusst `critical`
+- das ist in der Bootstrap-Phase erwartbar und kein Modellproblem
+- fuer den Alltag sollte deshalb der kombinierte Ops-Wrapper genutzt werden: erst Shadow-Lauf, dann Health-Check
+
+CI-Schedule-Beispiel:
+
+```bash
+cd backend
+./.venv-backend311/bin/python scripts/run_weather_vintage_pilot_h7_ops.py >> weather_vintage_shadow.log 2>&1
+```
+
+Alarm-Regel in einfachen Worten:
+
+- bei Exit-Code `0` kein Alarm
+- bei Exit-Code `1` beobachten und zeitnah pruefen
+- bei Exit-Code `2` Alarm ausloesen
 
 ### Step 2. Validate artifact inventory
 

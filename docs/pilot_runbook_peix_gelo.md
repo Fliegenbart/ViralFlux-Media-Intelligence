@@ -108,11 +108,18 @@ Erwartung fuer den Forecast-First-Pilot:
 - `scope_readiness = GO`
 - `pilot_mode = forecast_first`
 - `budget_mode = scenario_split` oder `validated_allocation`
+- `gate_snapshot.operational_readiness.live_source_coverage_readiness = GO`
+- `gate_snapshot.operational_readiness.live_source_freshness_readiness = GO`
 
 Commercial-Layer darf dabei noch sein:
 
 - `commercial_validation_status = WATCH` oder `NO_GO`
 - `budget_release_status = WATCH`
+
+Wichtig:
+
+- `source_coverage` im Snapshot bleibt Artefakt-/Trainingssicht
+- der aktuelle operative Zustand fuer den Pilot-Readout kommt aus den Live-Feldern im `operational_readiness`-Block
 
 ## Offizieller Forecast-First-Pilot-Scope
 

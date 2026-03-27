@@ -16,6 +16,8 @@ function buildReadout({
   emptyState = 'ready',
   scopeReadiness = 'GO',
   budgetReleaseStatus = 'WATCH',
+  liveCoverageReadiness = 'GO',
+  liveFreshnessReadiness = 'GO',
 }: {
   virus: string;
   horizonDays: number;
@@ -23,12 +25,33 @@ function buildReadout({
   emptyState?: 'ready' | 'no_model' | 'no_data' | 'watch_only' | 'no_go';
   scopeReadiness?: 'GO' | 'WATCH' | 'NO_GO';
   budgetReleaseStatus?: 'GO' | 'WATCH' | 'NO_GO';
+  liveCoverageReadiness?: 'GO' | 'WATCH' | 'NO_GO';
+  liveFreshnessReadiness?: 'GO' | 'WATCH' | 'NO_GO';
 }) {
   const allocationScopeStatus: 'GO' | 'WATCH' = scopeReadiness === 'NO_GO' ? 'WATCH' : 'GO';
   const epidemiologyStatus: 'GO' | 'NO_GO' = scopeReadiness === 'NO_GO' ? 'NO_GO' : 'GO';
   const commercialStatus: 'GO' | 'WATCH' | 'NO_GO' = budgetReleaseStatus;
   const holdoutStatus: 'GO' | 'WATCH' = budgetReleaseStatus === 'GO' ? 'GO' : 'WATCH';
   const budgetMode = budgetReleaseStatus === 'GO' ? 'validated_allocation' : 'scenario_split';
+  const operationalScopeStatus: 'GO' | 'WATCH' | 'NO_GO' = (
+    liveCoverageReadiness === 'NO_GO' || liveFreshnessReadiness === 'NO_GO'
+      ? 'NO_GO'
+      : liveCoverageReadiness === 'WATCH' || liveFreshnessReadiness === 'WATCH'
+        ? 'WATCH'
+        : 'GO'
+  );
+  const liveCoverageStatus: 'ok' | 'warning' | 'critical' = liveCoverageReadiness === 'GO'
+    ? 'ok'
+    : liveCoverageReadiness === 'WATCH'
+      ? 'warning'
+      : 'critical';
+  const liveFreshnessStatus: 'ok' | 'warning' | 'critical' = liveFreshnessReadiness === 'GO'
+    ? 'ok'
+    : liveFreshnessReadiness === 'WATCH'
+      ? 'warning'
+      : 'critical';
+  const forecastRecencyStatus: 'ok' = 'ok';
+  const forecastRecencyReadiness: 'GO' = 'GO';
   const validationDisclaimer = budgetReleaseStatus === 'GO'
     ? 'Forecast und kommerzielle Validierung greifen für diesen Scope bereits sauber zusammen.'
     : 'Diese Budgetsicht ist ein forecast-basierter Szenario-Split. Die kommerzielle Validierung für die Budgetfreigabe von GELO steht noch aus.';
@@ -68,6 +91,17 @@ function buildReadout({
           validation_status: budgetReleaseStatus === 'GO'
             ? 'passed_holdout_validation'
             : 'pending_holdout_validation',
+          operational_readiness: {
+            available: true,
+            scope_status: operationalScopeStatus,
+            live_source_coverage_status: liveCoverageStatus,
+            live_source_freshness_status: liveFreshnessStatus,
+            forecast_recency_status: forecastRecencyStatus,
+            live_source_coverage_readiness: liveCoverageReadiness,
+            live_source_freshness_readiness: liveFreshnessReadiness,
+            forecast_recency_readiness: forecastRecencyReadiness,
+            source_coverage_scope: 'artifact',
+          },
           latest_evaluation: {
             available: true,
             run_id: 'run-123',
@@ -291,6 +325,8 @@ describe('PilotPage', () => {
     expect(screen.getByText('Fokusbereich')).toBeInTheDocument();
     expect(screen.getByText('Forecast bereit')).toBeInTheDocument();
     expect(screen.getAllByText('Kommerzielle Validierung').length).toBeGreaterThan(0);
+    expect(screen.getByText('Live-Quellabdeckung')).toBeInTheDocument();
+    expect(screen.getByText('Live-Quellfrische')).toBeInTheDocument();
     expect(screen.getAllByText('Szenario-Split').length).toBeGreaterThan(0);
     expect(screen.getByText(/Event-Wahrscheinlichkeit ist die Forecast-Chance/i)).toBeInTheDocument();
     expect(screen.getByText('Die regionale virale Dynamik ist belastbar genug, um sie extern zu zeigen, zu priorisieren und zu besprechen.')).toBeInTheDocument();
@@ -315,6 +351,30 @@ describe('PilotPage', () => {
     expect(screen.getAllByText('GO').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Validierte Allokation').length).toBeGreaterThan(0);
     expect(screen.getAllByText('rsv_signal_core').length).toBeGreaterThan(0);
+  });
+
+  it('shows live source readiness separately from artifact coverage on the pilot surface', () => {
+    mockedUsePilotSurfaceData.mockReturnValue(buildReadout({
+      virus: 'RSV A',
+      horizonDays: 7,
+      leadRegion: 'Berlin',
+      scopeReadiness: 'WATCH',
+      liveCoverageReadiness: 'GO',
+      liveFreshnessReadiness: 'WATCH',
+    }));
+
+    render(<PilotPage />);
+
+    expect(screen.getByText('Live-Quellabdeckung')).toBeInTheDocument();
+    expect(screen.getByText('Live-Quellfrische')).toBeInTheDocument();
+    expect(screen.getByText(/Artefakt-Coverage bleibt getrennt/i)).toBeInTheDocument();
+    const evidenceSection = screen.getByText('Aktueller Freigabestatus').closest('.pilot-evidence-card') as HTMLElement | null;
+    expect(evidenceSection).not.toBeNull();
+    if (evidenceSection) {
+      expect(within(evidenceSection).getByText('Live-Quellabdeckung')).toBeInTheDocument();
+      expect(within(evidenceSection).getByText('Live-Quellfrische')).toBeInTheDocument();
+      expect(within(evidenceSection).getAllByText('WATCH').length).toBeGreaterThan(0);
+    }
   });
 
   it('supports virus, horizon, scope, and stage filters without inventing new client logic', () => {

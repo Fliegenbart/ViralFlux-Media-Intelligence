@@ -11,6 +11,7 @@ from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 import logging
+from typing import Any
 
 from app.models.database import WeatherData
 from app.services.ml.nowcast_revision import capture_nowcast_snapshots
@@ -18,6 +19,8 @@ from app.services.ml.nowcast_revision import capture_nowcast_snapshots
 logger = logging.getLogger(__name__)
 
 BRIGHTSKY_BASE = "https://api.brightsky.dev"
+WEATHER_FORECAST_RUN_IDENTITY_SOURCE = "persisted_weather_ingest_run_v1"
+WEATHER_FORECAST_RUN_IDENTITY_QUALITY = "stable_persisted_batch"
 
 # 16 Landeshauptstädte — flächendeckende Abdeckung für ganz Deutschland
 CITIES = [
@@ -289,11 +292,26 @@ class WeatherService:
 
     def _upsert_weather(self, record: dict):
         """Wetterdatensatz einfügen oder aktualisieren."""
-        existing = self.db.query(WeatherData).filter(
+        query = self.db.query(WeatherData).filter(
             WeatherData.city == record["city"],
             WeatherData.datum == record["datum"],
             WeatherData.data_type == record["data_type"],
-        ).first()
+        )
+
+        forecast_run_id = record.get("forecast_run_id")
+        forecast_run_timestamp = record.get("forecast_run_timestamp")
+        is_forecast_record = str(record.get("data_type") or "").upper().endswith("FORECAST")
+        if is_forecast_record and forecast_run_id:
+            query = query.filter(WeatherData.forecast_run_id == forecast_run_id)
+        elif is_forecast_record and forecast_run_timestamp is not None:
+            query = query.filter(WeatherData.forecast_run_timestamp == forecast_run_timestamp)
+        elif is_forecast_record:
+            query = query.filter(
+                WeatherData.forecast_run_id.is_(None),
+                WeatherData.forecast_run_timestamp.is_(None),
+            )
+
+        existing = query.first()
 
         if existing:
             incoming_available = record.get("available_time")
@@ -307,6 +325,18 @@ class WeatherService:
             if record.get("available_time") is None:
                 record["available_time"] = utc_now()
             self.db.add(WeatherData(**record))
+
+    @staticmethod
+    def _build_forecast_run_identity(run_started_at: datetime | None = None) -> dict[str, Any]:
+        """Erzeuge eine stabile Persistenz-Identitaet fuer genau einen Forecast-Importlauf."""
+        timestamp = (run_started_at or utc_now()).replace(second=0, microsecond=0)
+        return {
+            "forecast_run_timestamp": timestamp,
+            "forecast_run_id": f"weather_forecast_run:{timestamp.isoformat()}",
+            "forecast_run_identity_source": WEATHER_FORECAST_RUN_IDENTITY_SOURCE,
+            "forecast_run_identity_quality": WEATHER_FORECAST_RUN_IDENTITY_QUALITY,
+            "available_time": timestamp,
+        }
 
     def import_day(self, city: dict, day: datetime) -> bool:
         """Einen Tag für eine Stadt importieren (24h Aggregat)."""
@@ -367,6 +397,7 @@ class WeatherService:
         count = 0
         tomorrow = (utc_now() + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
         end = tomorrow + timedelta(days=8)
+        forecast_run_identity = self._build_forecast_run_identity()
 
         for city in CITIES:
             date_str = tomorrow.strftime("%Y-%m-%d")
@@ -391,7 +422,7 @@ class WeatherService:
                 day = datetime.strptime(day_str, "%Y-%m-%d")
                 daily = self._aggregate_day(hourly, city["name"], day)
                 daily["data_type"] = "DAILY_FORECAST"
-                daily["available_time"] = utc_now()
+                daily.update(forecast_run_identity)
 
                 # Precipitation probability aus MOSMIX (falls verfügbar)
                 pop_vals = [r.get("precipitation_probability") for r in hourly

@@ -220,6 +220,7 @@ class RegionalForecastServiceTests(unittest.TestCase):
         self.assertEqual(result["benchmark_metrics"], {})
         self.assertIn("tsfm_metadata", result)
         self.assertEqual(result["total_regions"], 2)
+        self.assertEqual(result["source_coverage_scope"], "artifact")
         self.assertEqual(result["top_5"][0]["bundesland"], "BY")
         self.assertEqual(service.feature_builder.last_horizon_days, 7)
 
@@ -253,6 +254,7 @@ class RegionalForecastServiceTests(unittest.TestCase):
         self.assertIn("calibration_version", top)
         self.assertIn("point_in_time_snapshot", top)
         self.assertIn("source_coverage", top)
+        self.assertEqual(top["source_coverage_scope"], "artifact")
         self.assertIn("decision", top)
         self.assertIn("decision_label", top)
         self.assertIn("priority_score", top)
@@ -573,13 +575,27 @@ class RegionalForecastServiceTests(unittest.TestCase):
                 "recent_scope_snapshots": staticmethod(
                     lambda virus_typ, horizon_days, limit=2: [
                         {
-                            "quality_gate": {"overall_passed": True},
+                            "model_version": "regional_pooled_panel:h7:2026-03-17T08:00:00",
+                            "metric_semantics_version": "regional_probabilistic_metrics_v1",
+                            "registry_status": "champion",
+                            "promotion_evidence": {
+                                "promotion_allowed": True,
+                                "promotion_blockers": [],
+                            },
+                            "quality_gate": {"overall_passed": True, "profile": "strict_v1"},
                             "source_coverage_required_status": "ok",
                             "forecast_recency_status": "ok",
                             "artifact_transition_mode": None,
                         },
                         {
-                            "quality_gate": {"overall_passed": True},
+                            "model_version": "regional_pooled_panel:h7:2026-03-17T08:00:00",
+                            "metric_semantics_version": "regional_probabilistic_metrics_v1",
+                            "registry_status": "champion",
+                            "promotion_evidence": {
+                                "promotion_allowed": True,
+                                "promotion_blockers": [],
+                            },
+                            "quality_gate": {"overall_passed": True, "profile": "strict_v1"},
                             "source_coverage_required_status": "ok",
                             "forecast_recency_status": "ok",
                             "artifact_transition_mode": None,
@@ -619,13 +635,27 @@ class RegionalForecastServiceTests(unittest.TestCase):
                 "recent_scope_snapshots": staticmethod(
                     lambda virus_typ, horizon_days, limit=2: [
                         {
-                            "quality_gate": {"overall_passed": True},
+                            "model_version": "regional_pooled_panel:h7:2026-03-17T08:00:00",
+                            "metric_semantics_version": "regional_probabilistic_metrics_v1",
+                            "registry_status": "champion",
+                            "promotion_evidence": {
+                                "promotion_allowed": True,
+                                "promotion_blockers": [],
+                            },
+                            "quality_gate": {"overall_passed": True, "profile": "strict_v1"},
                             "source_coverage_required_status": "ok",
                             "forecast_recency_status": "ok",
                             "artifact_transition_mode": None,
                         },
                         {
-                            "quality_gate": {"overall_passed": True},
+                            "model_version": "regional_pooled_panel:h7:2026-03-17T08:00:00",
+                            "metric_semantics_version": "regional_probabilistic_metrics_v1",
+                            "registry_status": "champion",
+                            "promotion_evidence": {
+                                "promotion_allowed": True,
+                                "promotion_blockers": [],
+                            },
+                            "quality_gate": {"overall_passed": True, "profile": "strict_v1"},
                             "source_coverage_required_status": "ok",
                             "forecast_recency_status": "ok",
                             "artifact_transition_mode": None,
@@ -644,6 +674,126 @@ class RegionalForecastServiceTests(unittest.TestCase):
         self.assertTrue(top["activation_candidate"])
         self.assertTrue(forecast["sars_h7_promotion"]["eligible"])
         self.assertTrue(forecast["sars_h7_promotion"]["promoted"])
+
+    def test_sars_h7_stays_ineligible_when_snapshot_semantics_are_inconsistent(self) -> None:
+        service = self._make_service(
+            quality_gate_passed=True,
+            virus_typ="SARS-CoV-2",
+            rollout_mode="shadow",
+            activation_policy="watch_only",
+            signal_bundle_version="sars_hybrid_v1",
+            inference_panel=self._decision_ready_panel(),
+            probabilities=[0.82],
+            median_values=[28.0],
+            lower_values=[24.0],
+            upper_values=[32.0],
+        )
+        service.snapshot_store = type(
+            "_SnapshotStore",
+            (),
+            {
+                "recent_scope_snapshots": staticmethod(
+                    lambda virus_typ, horizon_days, limit=2: [
+                        {
+                            "model_version": "regional_pooled_panel:h7:2026-03-17T08:00:00",
+                            "metric_semantics_version": "regional_probabilistic_metrics_v1",
+                            "registry_status": "champion",
+                            "promotion_evidence": {
+                                "promotion_allowed": True,
+                                "promotion_blockers": [],
+                            },
+                            "quality_gate": {"overall_passed": True, "profile": "strict_v1"},
+                            "source_coverage_required_status": "ok",
+                            "forecast_recency_status": "ok",
+                            "artifact_transition_mode": None,
+                        },
+                        {
+                            "model_version": "regional_pooled_panel:h7:2026-03-17T08:00:00",
+                            "metric_semantics_version": "regional_probabilistic_metrics_v2",
+                            "registry_status": "champion",
+                            "promotion_evidence": {
+                                "promotion_allowed": True,
+                                "promotion_blockers": [],
+                            },
+                            "quality_gate": {"overall_passed": True, "profile": "strict_v1"},
+                            "source_coverage_required_status": "ok",
+                            "forecast_recency_status": "ok",
+                            "artifact_transition_mode": None,
+                        },
+                    ]
+                )
+            },
+        )()
+        service._sars_h7_promotion_enabled = lambda: True
+
+        forecast = service.predict_all_regions(virus_typ="SARS-CoV-2", horizon_days=7)
+
+        top = forecast["predictions"][0]
+        self.assertEqual(top["rollout_mode"], "shadow")
+        self.assertEqual(top["activation_policy"], "watch_only")
+        self.assertFalse(top["activation_candidate"])
+        self.assertFalse(forecast["sars_h7_promotion"]["eligible"])
+        self.assertIn("metric_semantics_inconsistent", forecast["sars_h7_promotion"]["promotion_blockers"])
+
+    def test_sars_h7_stays_ineligible_when_snapshot_live_freshness_is_not_ok(self) -> None:
+        service = self._make_service(
+            quality_gate_passed=True,
+            virus_typ="SARS-CoV-2",
+            rollout_mode="shadow",
+            activation_policy="watch_only",
+            signal_bundle_version="sars_hybrid_v1",
+            inference_panel=self._decision_ready_panel(),
+            probabilities=[0.82],
+            median_values=[28.0],
+            lower_values=[24.0],
+            upper_values=[32.0],
+        )
+        service.snapshot_store = type(
+            "_SnapshotStore",
+            (),
+            {
+                "recent_scope_snapshots": staticmethod(
+                    lambda virus_typ, horizon_days, limit=2: [
+                        {
+                            "model_version": "regional_pooled_panel:h7:2026-03-17T08:00:00",
+                            "metric_semantics_version": "regional_probabilistic_metrics_v1",
+                            "registry_status": "champion",
+                            "promotion_evidence": {
+                                "promotion_allowed": True,
+                                "promotion_blockers": [],
+                            },
+                            "quality_gate": {"overall_passed": True, "profile": "strict_v1"},
+                            "source_coverage_required_status": "ok",
+                            "live_source_coverage_status": "ok",
+                            "live_source_freshness_status": "warning",
+                            "forecast_recency_status": "ok",
+                            "artifact_transition_mode": None,
+                        },
+                        {
+                            "model_version": "regional_pooled_panel:h7:2026-03-17T08:00:00",
+                            "metric_semantics_version": "regional_probabilistic_metrics_v1",
+                            "registry_status": "champion",
+                            "promotion_evidence": {
+                                "promotion_allowed": True,
+                                "promotion_blockers": [],
+                            },
+                            "quality_gate": {"overall_passed": True, "profile": "strict_v1"},
+                            "source_coverage_required_status": "ok",
+                            "live_source_coverage_status": "ok",
+                            "live_source_freshness_status": "warning",
+                            "forecast_recency_status": "ok",
+                            "artifact_transition_mode": None,
+                        },
+                    ]
+                )
+            },
+        )()
+        service._sars_h7_promotion_enabled = lambda: True
+
+        forecast = service.predict_all_regions(virus_typ="SARS-CoV-2", horizon_days=7)
+
+        self.assertFalse(forecast["sars_h7_promotion"]["eligible"])
+        self.assertIn("snapshot_operational_gate_failed", forecast["sars_h7_promotion"]["promotion_blockers"])
 
     def test_benchmark_supported_viruses_ranks_by_quality_and_metrics(self) -> None:
         service = RegionalForecastService(db=None)
@@ -754,6 +904,7 @@ class RegionalForecastServiceTests(unittest.TestCase):
         self.assertEqual(result["business_gate"]["operator_context"]["operator"], "peix")
         self.assertEqual(result["evidence_tier"], "holdout_ready")
         self.assertEqual(result["source_coverage"]["wastewater"]["coverage_ratio"], 0.92)
+        self.assertEqual(result["source_coverage_scope"], "artifact")
         self.assertEqual(result["point_in_time_snapshot"]["snapshot_type"], "regional_panel_as_of_training")
 
     def test_build_portfolio_view_prioritizes_cross_virus_opportunities(self) -> None:

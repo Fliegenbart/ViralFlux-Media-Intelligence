@@ -282,6 +282,10 @@ class WeatherData(Base):
     schnee_mm = Column(Float)  # Snow volume mm
     taupunkt = Column(Float)  # Dew point °C
     data_type = Column(String, default="CURRENT")  # CURRENT, DAILY_FORECAST, HOURLY_FORECAST
+    forecast_run_timestamp = Column(DateTime, nullable=True, index=True)
+    forecast_run_id = Column(String, nullable=True, index=True)
+    forecast_run_identity_source = Column(String, nullable=True)
+    forecast_run_identity_quality = Column(String, nullable=True)
     created_at = Column(DateTime, default=_utc_now)
 
     __table_args__ = (

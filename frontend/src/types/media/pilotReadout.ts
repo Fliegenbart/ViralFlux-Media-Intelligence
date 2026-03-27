@@ -47,6 +47,17 @@ export interface PilotReadoutGateSnapshot {
   validation_status?: string | null;
   quality_gate_failed_checks?: string[];
   forecast_gate_outcome?: string | null;
+  operational_readiness?: {
+    available?: boolean;
+    scope_status?: PilotReadoutStatus;
+    forecast_recency_status?: string | null;
+    live_source_coverage_status?: string | null;
+    live_source_freshness_status?: string | null;
+    forecast_recency_readiness?: PilotReadoutStatus;
+    live_source_coverage_readiness?: PilotReadoutStatus;
+    live_source_freshness_readiness?: PilotReadoutStatus;
+    source_coverage_scope?: string | null;
+  };
   latest_evaluation?: {
     available?: boolean;
     run_id?: string | null;

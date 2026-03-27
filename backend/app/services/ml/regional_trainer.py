@@ -19,7 +19,11 @@ from xgboost import XGBClassifier, XGBRegressor
 from app.services.ml.benchmarking.contracts import CANONICAL_FORECAST_QUANTILES, quantile_key
 from app.services.ml.benchmarking.leaderboard import build_leaderboard
 from app.services.ml.benchmarking.metrics import summarize_probabilistic_metrics
-from app.services.ml.benchmarking.registry import ForecastRegistry
+from app.services.ml.benchmarking.registry import (
+    DEFAULT_METRIC_SEMANTICS_VERSION,
+    DEFAULT_PROMOTION_MIN_SAMPLE_COUNT,
+    ForecastRegistry,
+)
 from app.services.ml.forecast_orchestrator import ForecastOrchestrator
 from app.services.ml.forecast_horizon_utils import (
     SUPPORTED_FORECAST_HORIZONS,
@@ -52,6 +56,11 @@ from app.services.ml.regional_panel_utils import (
     time_based_panel_splits,
 )
 from app.services.ml.training_contract import SUPPORTED_VIRUS_TYPES
+from app.services.ml.weather_forecast_vintage import (
+    WEATHER_FORECAST_VINTAGE_DISABLED,
+    WEATHER_FORECAST_VINTAGE_RUN_TIMESTAMP_V1,
+    normalize_weather_forecast_vintage_mode,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -217,6 +226,8 @@ class RegionalModelTrainer:
         persist: bool = True,
         horizon_days: int = 7,
         horizon_days_list: list[int] | None = None,
+        weather_forecast_vintage_mode: str | None = None,
+        weather_vintage_comparison: bool = False,
     ) -> dict[str, Any]:
         horizons = self._selected_horizons(
             horizon_days=horizon_days,
@@ -229,6 +240,8 @@ class RegionalModelTrainer:
                     lookback_days=lookback_days,
                     persist=persist,
                     horizon_days=horizon,
+                    weather_forecast_vintage_mode=weather_forecast_vintage_mode,
+                    weather_vintage_comparison=weather_vintage_comparison,
                 )
                 for horizon in horizons
             }
@@ -264,6 +277,8 @@ class RegionalModelTrainer:
             lookback_days=lookback_days,
             persist=persist,
             horizon_days=horizons[0],
+            weather_forecast_vintage_mode=weather_forecast_vintage_mode,
+            weather_vintage_comparison=weather_vintage_comparison,
         )
 
     def _train_single_horizon(
@@ -273,6 +288,8 @@ class RegionalModelTrainer:
         lookback_days: int,
         persist: bool,
         horizon_days: int,
+        weather_forecast_vintage_mode: str | None = None,
+        weather_vintage_comparison: bool = False,
     ) -> dict[str, Any]:
         horizon = ensure_supported_horizon(horizon_days)
         support = regional_horizon_support_status(virus_typ, horizon)
@@ -290,13 +307,11 @@ class RegionalModelTrainer:
         try:
             logger.info("Training pooled regional panel model for %s (horizon=%s)", virus_typ, horizon)
             previous_artifact = self.load_artifacts(virus_typ=virus_typ, horizon_days=horizon)
-            panel = self.feature_builder.build_panel_training_data(
+            panel = self._build_training_panel(
                 virus_typ=virus_typ,
                 lookback_days=lookback_days,
                 horizon_days=horizon,
-                include_nowcast=True,
-                use_revision_adjusted=False,
-                revision_policy="raw",
+                weather_forecast_vintage_mode=weather_forecast_vintage_mode,
             )
             panel = self._prepare_horizon_panel(panel, horizon_days=horizon)
             if panel.empty or len(panel) < 200:
@@ -375,6 +390,30 @@ class RegionalModelTrainer:
                 "horizon_days": horizon,
                 "target_window_days": _target_window_for_horizon(horizon),
             }
+            primary_weather_vintage_summary = self._weather_vintage_mode_summary(
+                weather_forecast_vintage_mode=normalize_weather_forecast_vintage_mode(
+                    dataset_manifest.get("weather_forecast_vintage_mode")
+                ),
+                dataset_manifest=dataset_manifest,
+                backtest_bundle=backtest_bundle,
+                selection=selection,
+                calibration_mode=calibration_mode,
+            )
+            weather_vintage_comparison_payload = (
+                self._build_weather_vintage_comparison(
+                    virus_typ=virus_typ,
+                    lookback_days=lookback_days,
+                    horizon_days=horizon,
+                    primary_summary=primary_weather_vintage_summary,
+                    event_config=event_config,
+                )
+                if weather_vintage_comparison
+                else None
+            )
+            if weather_vintage_comparison_payload is not None:
+                backtest_bundle.setdefault("benchmark_summary", {})[
+                    "weather_vintage_comparison"
+                ] = _json_safe(weather_vintage_comparison_payload)
             hierarchy_metadata = self._build_hierarchy_metadata(
                 panel=panel,
                 oof_frame=backtest_bundle["oof_frame"],
@@ -429,6 +468,9 @@ class RegionalModelTrainer:
                 "target_window_days": _target_window_for_horizon(horizon),
                 "supported_horizon_days": list(SUPPORTED_FORECAST_HORIZONS),
                 "forecast_target_semantics": "current_known_incidence_at_as_of_plus_horizon_days",
+                "metric_semantics_version": DEFAULT_METRIC_SEMANTICS_VERSION,
+                "weather_forecast_vintage_mode": dataset_manifest.get("weather_forecast_vintage_mode"),
+                "exogenous_feature_semantics_version": dataset_manifest.get("exogenous_feature_semantics_version"),
                 "feature_columns": feature_columns,
                 "hierarchy_feature_columns": hierarchy_feature_columns,
                 "ww_only_feature_columns": ww_only_columns,
@@ -475,19 +517,39 @@ class RegionalModelTrainer:
                     "captured_at": point_in_time_manifest.get("captured_at"),
                     "unique_as_of_dates": point_in_time_manifest.get("unique_as_of_dates"),
                 },
+                "weather_vintage_comparison": weather_vintage_comparison_payload,
             }
             metadata["model_version"] = f"{metadata['model_family']}:h{horizon}:{metadata['trained_at']}"
             metadata["calibration_version"] = f"{calibration_mode}:h{horizon}:{metadata['trained_at']}"
             registry_scope = self.registry.load_scope(virus_typ=virus_typ, horizon_days=horizon)
-            current_champion_metrics = ((registry_scope.get("champion") or {}).get("metrics") or {})
+            current_champion = registry_scope.get("champion") or {}
+            current_champion_metrics = (current_champion.get("metrics") or {})
+            current_champion_metadata = (current_champion.get("metadata") or {})
             promotion_candidate_metrics = {
                 **(backtest_bundle.get("benchmark_summary") or {}).get("metrics", {}),
                 **backtest_bundle["aggregate_metrics"],
             }
-            promote = self.registry.should_promote(
+            oof_frame = backtest_bundle.get("oof_frame")
+            candidate_sample_count = next(
+                (
+                    int(item.get("samples") or 0)
+                    for item in ((backtest_bundle.get("benchmark_summary") or {}).get("candidate_summaries") or [])
+                    if str(item.get("candidate") or "") == "regional_pooled_panel"
+                ),
+                int(len(oof_frame)) if oof_frame is not None else 0,
+            )
+            promotion_evidence = self.registry.evaluate_promotion(
                 candidate_metrics=promotion_candidate_metrics,
                 champion_metrics=current_champion_metrics,
+                candidate_metadata={
+                    "quality_gate_overall_passed": bool(backtest_bundle["quality_gate"].get("overall_passed")),
+                    "metric_semantics_version": metadata["metric_semantics_version"],
+                    "sample_count": candidate_sample_count,
+                },
+                champion_metadata=current_champion_metadata,
+                minimum_sample_count=DEFAULT_PROMOTION_MIN_SAMPLE_COUNT,
             )
+            promote = bool(promotion_evidence.get("promotion_allowed"))
             registry_payload = self.registry.record_evaluation(
                 virus_typ=virus_typ,
                 horizon_days=horizon,
@@ -497,12 +559,22 @@ class RegionalModelTrainer:
                     "model_version": metadata["model_version"],
                     "calibration_version": metadata["calibration_version"],
                     "rollout_mode": metadata["rollout_mode"],
+                    "metric_semantics_version": metadata["metric_semantics_version"],
+                    "sample_count": candidate_sample_count,
+                    "quality_gate_overall_passed": bool(backtest_bundle["quality_gate"].get("overall_passed")),
+                    "promotion_evidence": promotion_evidence,
                 },
                 promote=promote,
             )
+            metadata["promotion_evidence"] = promotion_evidence
             metadata["registry_status"] = "champion" if promote else "challenger"
             metadata["registry_scope"] = registry_payload
             backtest_bundle["backtest_payload"]["hierarchy_reconciliation"] = _json_safe(hierarchy_metadata)
+            backtest_bundle["backtest_payload"]["promotion_evidence"] = _json_safe(promotion_evidence)
+            if weather_vintage_comparison_payload is not None:
+                backtest_bundle["backtest_payload"]["weather_vintage_comparison"] = _json_safe(
+                    weather_vintage_comparison_payload
+                )
 
             if persist:
                 self._persist_artifacts(
@@ -527,12 +599,17 @@ class RegionalModelTrainer:
                 "rollout_mode": rollout_info["rollout_mode"],
                 "activation_policy": rollout_info["activation_policy"],
                 "calibration_version": metadata["calibration_version"],
+                "weather_forecast_vintage_mode": metadata["weather_forecast_vintage_mode"],
+                "exogenous_feature_semantics_version": metadata["exogenous_feature_semantics_version"],
                 "selected_calibration_mode": calibration_mode,
                 "model_dir": str(model_dir),
                 "benchmark_summary": backtest_bundle.get("benchmark_summary") or {},
                 "hierarchy_reconciliation": hierarchy_metadata,
                 "backtest": backtest_bundle["backtest_payload"],
+                "weather_vintage_comparison": weather_vintage_comparison_payload,
                 "selection": selection,
+                "promotion_evidence": promotion_evidence,
+                "registry_status": metadata["registry_status"],
             }
         except Exception as exc:
             logger.exception(
@@ -581,11 +658,15 @@ class RegionalModelTrainer:
         self,
         lookback_days: int = 900,
         horizon_days: int = 7,
+        weather_forecast_vintage_mode: str | None = None,
+        weather_vintage_comparison: bool = False,
     ) -> dict[str, Any]:
         return self.train_selected_viruses_all_regions(
             virus_types=SUPPORTED_VIRUS_TYPES,
             lookback_days=lookback_days,
             horizon_days=horizon_days,
+            weather_forecast_vintage_mode=weather_forecast_vintage_mode,
+            weather_vintage_comparison=weather_vintage_comparison,
         )
 
     def train_selected_viruses_all_regions(
@@ -595,6 +676,8 @@ class RegionalModelTrainer:
         lookback_days: int = 900,
         horizon_days: int = 7,
         horizon_days_list: list[int] | None = None,
+        weather_forecast_vintage_mode: str | None = None,
+        weather_vintage_comparison: bool = False,
     ) -> dict[str, Any]:
         return {
             virus_typ: self.train_all_regions(
@@ -602,6 +685,8 @@ class RegionalModelTrainer:
                 lookback_days=lookback_days,
                 horizon_days=horizon_days,
                 horizon_days_list=horizon_days_list,
+                weather_forecast_vintage_mode=weather_forecast_vintage_mode,
+                weather_vintage_comparison=weather_vintage_comparison,
             )
             for virus_typ in virus_types
         }
@@ -626,6 +711,245 @@ class RegionalModelTrainer:
         if not normalized:
             raise ValueError("horizon_days_list must not be empty")
         return tuple(normalized)
+
+    def _build_training_panel(
+        self,
+        *,
+        virus_typ: str,
+        lookback_days: int,
+        horizon_days: int,
+        weather_forecast_vintage_mode: str | None = None,
+    ) -> pd.DataFrame:
+        builder_kwargs: dict[str, Any] = {
+            "virus_typ": virus_typ,
+            "lookback_days": lookback_days,
+            "horizon_days": horizon_days,
+            "include_nowcast": True,
+            "use_revision_adjusted": False,
+            "revision_policy": "raw",
+        }
+        if weather_forecast_vintage_mode is not None:
+            builder_kwargs["weather_forecast_vintage_mode"] = weather_forecast_vintage_mode
+        return self.feature_builder.build_panel_training_data(**builder_kwargs)
+
+    @staticmethod
+    def _weather_vintage_metrics_delta(
+        legacy_metrics: dict[str, Any],
+        vintage_metrics: dict[str, Any],
+    ) -> dict[str, float]:
+        deltas: dict[str, float] = {}
+        for key in (
+            "relative_wis",
+            "wis",
+            "crps",
+            "coverage_80",
+            "coverage_95",
+            "brier_score",
+            "ece",
+            "pr_auc",
+            "decision_utility",
+        ):
+            if key not in legacy_metrics or key not in vintage_metrics:
+                continue
+            deltas[key] = round(
+                float(vintage_metrics.get(key) or 0.0)
+                - float(legacy_metrics.get(key) or 0.0),
+                6,
+            )
+        return deltas
+
+    @staticmethod
+    def _weather_vintage_mode_summary(
+        *,
+        weather_forecast_vintage_mode: str,
+        dataset_manifest: dict[str, Any],
+        backtest_bundle: dict[str, Any],
+        selection: dict[str, Any],
+        calibration_mode: str,
+    ) -> dict[str, Any]:
+        return {
+            "weather_forecast_vintage_mode": weather_forecast_vintage_mode,
+            "exogenous_feature_semantics_version": dataset_manifest.get(
+                "exogenous_feature_semantics_version"
+            ),
+            "aggregate_metrics": _json_safe(backtest_bundle.get("aggregate_metrics") or {}),
+            "benchmark_metrics": _json_safe(
+                (backtest_bundle.get("benchmark_summary") or {}).get("metrics") or {}
+            ),
+            "quality_gate": _json_safe(backtest_bundle.get("quality_gate") or {}),
+            "selected_tau": float(selection.get("tau") or 0.0),
+            "selected_kappa": float(selection.get("kappa") or 0.0),
+            "action_threshold": float(selection.get("action_threshold") or 0.0),
+            "calibration_mode": str(calibration_mode or "raw_passthrough"),
+            "weather_forecast_run_identity_present": bool(
+                dataset_manifest.get("weather_forecast_run_identity_present")
+            ),
+            "weather_forecast_run_identity_source": dataset_manifest.get(
+                "weather_forecast_run_identity_source"
+            ),
+            "weather_forecast_run_identity_quality": dataset_manifest.get(
+                "weather_forecast_run_identity_quality"
+            ),
+        }
+
+    def _build_weather_vintage_comparison(
+        self,
+        *,
+        virus_typ: str,
+        lookback_days: int,
+        horizon_days: int,
+        primary_summary: dict[str, Any],
+        event_config,
+    ) -> dict[str, Any]:
+        primary_mode = normalize_weather_forecast_vintage_mode(
+            primary_summary.get("weather_forecast_vintage_mode")
+        )
+        alternate_mode = (
+            WEATHER_FORECAST_VINTAGE_RUN_TIMESTAMP_V1
+            if primary_mode != WEATHER_FORECAST_VINTAGE_RUN_TIMESTAMP_V1
+            else WEATHER_FORECAST_VINTAGE_DISABLED
+        )
+
+        comparison: dict[str, Any] = {
+            "enabled": True,
+            "comparison_status": "ok",
+            "comparison_basis": "regional_training_shadow_benchmark_v1",
+            "active_training_mode": primary_mode,
+            "shadow_mode": alternate_mode,
+            "modes": {
+                primary_mode: _json_safe(primary_summary)
+            },
+        }
+
+        try:
+            shadow_panel = self._build_training_panel(
+                virus_typ=virus_typ,
+                lookback_days=lookback_days,
+                horizon_days=horizon_days,
+                weather_forecast_vintage_mode=alternate_mode,
+            )
+            shadow_panel = self._prepare_horizon_panel(shadow_panel, horizon_days=horizon_days)
+            if shadow_panel.empty or len(shadow_panel) < 200:
+                comparison["comparison_status"] = "degraded"
+                comparison["comparison_blockers"] = ["insufficient_shadow_panel_rows"]
+                return comparison
+
+            shadow_panel = shadow_panel.copy()
+            shadow_panel["y_next_log"] = np.log1p(
+                shadow_panel["next_week_incidence"].astype(float).clip(lower=0.0)
+            )
+            shadow_feature_columns = self._feature_columns(shadow_panel)
+            shadow_hierarchy_feature_columns = GeoHierarchyHelper.hierarchy_feature_columns(
+                shadow_feature_columns
+            )
+            shadow_ww_only_columns = self._ww_only_feature_columns(shadow_feature_columns)
+            shadow_selection = self._select_event_definition(
+                virus_typ=virus_typ,
+                panel=shadow_panel,
+                feature_columns=shadow_feature_columns,
+                event_config=event_config,
+            )
+            shadow_tau = float(shadow_selection["tau"])
+            shadow_kappa = float(shadow_selection["kappa"])
+            shadow_action_threshold = float(shadow_selection["action_threshold"])
+            shadow_panel["event_label"] = self._event_labels(
+                shadow_panel,
+                virus_typ=virus_typ,
+                tau=shadow_tau,
+                kappa=shadow_kappa,
+                event_config=event_config,
+            )
+            shadow_backtest_bundle = self._build_backtest_bundle(
+                virus_typ=virus_typ,
+                panel=shadow_panel,
+                feature_columns=shadow_feature_columns,
+                hierarchy_feature_columns=shadow_hierarchy_feature_columns,
+                ww_only_columns=shadow_ww_only_columns,
+                tau=shadow_tau,
+                kappa=shadow_kappa,
+                action_threshold=shadow_action_threshold,
+                horizon_days=horizon_days,
+                event_config=event_config,
+            )
+            shadow_final_artifacts = self._fit_final_models(
+                panel=shadow_panel,
+                feature_columns=shadow_feature_columns,
+                hierarchy_feature_columns=shadow_hierarchy_feature_columns,
+                oof_frame=shadow_backtest_bundle["oof_frame"],
+                action_threshold=shadow_action_threshold,
+            )
+            shadow_dataset_manifest = {
+                **self.feature_builder.dataset_manifest(virus_typ=virus_typ, panel=shadow_panel),
+                "horizon_days": int(horizon_days),
+                "target_window_days": _target_window_for_horizon(horizon_days),
+            }
+            shadow_mode = normalize_weather_forecast_vintage_mode(
+                shadow_dataset_manifest.get("weather_forecast_vintage_mode")
+            )
+            shadow_calibration_mode = str(
+                shadow_final_artifacts.get("calibration_mode")
+                or (
+                    "isotonic"
+                    if shadow_final_artifacts.get("calibration") is not None
+                    else "raw_passthrough"
+                )
+            )
+            comparison["modes"][shadow_mode] = self._weather_vintage_mode_summary(
+                weather_forecast_vintage_mode=shadow_mode,
+                dataset_manifest=shadow_dataset_manifest,
+                backtest_bundle=shadow_backtest_bundle,
+                selection=shadow_selection,
+                calibration_mode=shadow_calibration_mode,
+            )
+            legacy_metrics = (
+                (comparison["modes"].get(WEATHER_FORECAST_VINTAGE_DISABLED) or {}).get("benchmark_metrics")
+                or {}
+            )
+            vintage_metrics = (
+                (comparison["modes"].get(WEATHER_FORECAST_VINTAGE_RUN_TIMESTAMP_V1) or {}).get("benchmark_metrics")
+                or {}
+            )
+            comparison["legacy_vs_vintage_metric_delta"] = self._weather_vintage_metrics_delta(
+                legacy_metrics,
+                vintage_metrics,
+            )
+            legacy_mode_payload = comparison["modes"].get(WEATHER_FORECAST_VINTAGE_DISABLED) or {}
+            vintage_mode_payload = comparison["modes"].get(WEATHER_FORECAST_VINTAGE_RUN_TIMESTAMP_V1) or {}
+            comparison["quality_gate_change"] = {
+                "legacy_forecast_readiness": ((legacy_mode_payload.get("quality_gate") or {}).get("forecast_readiness")),
+                "vintage_forecast_readiness": ((vintage_mode_payload.get("quality_gate") or {}).get("forecast_readiness")),
+                "overall_passed_changed": bool(
+                    ((legacy_mode_payload.get("quality_gate") or {}).get("overall_passed"))
+                    != ((vintage_mode_payload.get("quality_gate") or {}).get("overall_passed"))
+                ),
+            }
+            comparison["threshold_change"] = round(
+                float(vintage_mode_payload.get("action_threshold") or 0.0)
+                - float(legacy_mode_payload.get("action_threshold") or 0.0),
+                6,
+            )
+            comparison["calibration_change"] = {
+                "legacy": legacy_mode_payload.get("calibration_mode"),
+                "vintage": vintage_mode_payload.get("calibration_mode"),
+                "changed": str(legacy_mode_payload.get("calibration_mode") or "")
+                != str(vintage_mode_payload.get("calibration_mode") or ""),
+            }
+            comparison["weather_vintage_run_identity_coverage"] = {
+                mode: {
+                    "run_identity_present": bool(
+                        (payload or {}).get("weather_forecast_run_identity_present")
+                    ),
+                    "coverage_ratio": (
+                        1.0 if bool((payload or {}).get("weather_forecast_run_identity_present")) else 0.0
+                    ),
+                }
+                for mode, payload in comparison["modes"].items()
+            }
+            return comparison
+        except Exception as exc:
+            comparison["comparison_status"] = "error"
+            comparison["comparison_error"] = str(exc) or exc.__class__.__name__
+            return comparison
 
     @staticmethod
     def _prepare_horizon_panel(

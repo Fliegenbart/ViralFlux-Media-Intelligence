@@ -49,6 +49,12 @@ Ein Core-Scope gilt nur dann als `ok`, wenn alles hiervon gilt:
 6. `source_coverage_required_status = ok`
 7. kein `artifact_transition_mode`
 
+Dabei ist wichtig:
+
+- `source_coverage_required_status` kommt jetzt aus der echten Live-Sicht pro Quelle, nicht mehr primaer aus Trainingsmetadaten.
+- `source_freshness_status` bewertet die letzte sichtbare Live-Lieferung pro kritischer Quelle.
+- gute Artefakt-Coverage allein reicht nicht fuer `core-ready`.
+
 Wenn einer dieser Punkte nicht passt:
 
 - `warning`, wenn der Scope fachlich sichtbar, aber noch nicht sauber genug ist
@@ -72,6 +78,23 @@ Das bedeutet:
 
 - das Portfolio hat noch Warning-Zonen
 - aber der produktive Kernscope ist grün
+
+## Artefakt vs Live
+
+Readiness trennt jetzt bewusst zwei Ebenen:
+
+- `artifact_source_coverage` / `training_source_coverage`
+  - Was das Modell historisch im Training gesehen hat.
+- `live_source_coverage` / `live_source_freshness`
+  - Was zum aktuellen `as_of` operativ wirklich sichtbar und frisch ist.
+
+Die alte Kompatibilitaetsvariable `source_coverage` bleibt erhalten, zeigt aber weiter auf die Artefaktseite.
+Neue operative Consumer sollen deshalb nicht `source_coverage` lesen, sondern die Live-Felder:
+
+- `live_source_coverage`
+- `live_source_freshness`
+- `live_source_coverage_status`
+- `live_source_freshness_status`
 
 ## Zielbild fuer PEIX / GELO
 

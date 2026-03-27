@@ -6,7 +6,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.core.time import utc_now
-from app.models.database import Base, KreisEinwohner, SurvstatKreisData
+from app.models.database import Base, KreisEinwohner, SurvstatKreisData, WeatherData
 from app.services.ml.regional_features import RegionalFeatureBuilder
 from app.services.ml.regional_panel_utils import (
     activation_false_positive_rate,
@@ -21,6 +21,10 @@ from app.services.ml.regional_panel_utils import (
     quality_gate_from_metrics,
     seasonal_baseline_and_mad,
     time_based_panel_splits,
+)
+from app.services.ml.weather_forecast_vintage import (
+    WEATHER_FORECAST_ISSUE_TIME_SEMANTICS,
+    WEATHER_FORECAST_VINTAGE_RUN_TIMESTAMP_V1,
 )
 
 
@@ -240,9 +244,315 @@ class RegionalFeatureBuilderInferenceTests(unittest.TestCase):
         snapshot = builder.point_in_time_snapshot_manifest("Influenza A", panel)
 
         self.assertEqual(snapshot["snapshot_type"], "regional_panel_as_of_training")
+        self.assertEqual(
+            snapshot["dataset_manifest"]["exogenous_feature_semantics_version"],
+            "regional_exogenous_semantics_v1",
+        )
         self.assertEqual(snapshot["unique_as_of_dates"], 2)
         self.assertEqual(snapshot["dataset_manifest"]["source_coverage"]["grippeweb_are_available"], 0.6667)
+        self.assertEqual(snapshot["dataset_manifest"]["training_source_coverage"]["grippeweb_are_available"], 0.6667)
         self.assertIn("ifsg_influenza_available", snapshot["dataset_manifest"]["source_coverage"])
+        self.assertEqual(
+            snapshot["dataset_manifest"]["exogenous_feature_semantics"]["feature_categories"]["weather_daily_forecast"]["category"],
+            "issue_time_forecast_allowed",
+        )
+
+    def test_weather_forecast_feature_requires_issue_time_semantics(self) -> None:
+        as_of = pd.Timestamp("2026-03-12")
+        weather_frame = pd.DataFrame(
+            {
+                "bundesland": ["BY", "BY"],
+                "datum": [pd.Timestamp("2026-03-11"), pd.Timestamp("2026-03-15")],
+                "available_time": [pd.Timestamp("2026-03-11"), pd.Timestamp("2026-03-12")],
+                "data_type": ["CURRENT", "DAILY_FORECAST"],
+                "temp": [7.0, 20.0],
+                "humidity": [70.0, 40.0],
+            }
+        )
+
+        features = RegionalFeatureBuilder._weather_features(
+            weather_frame,
+            as_of,
+            horizon_days=3,
+        )
+
+        self.assertEqual(features["weather_forecast_temp_3_7"], 7.0)
+        self.assertEqual(features["weather_forecast_humidity_3_7"], 70.0)
+        self.assertEqual(features["weather_temp_anomaly_3_7"], 0.0)
+
+    def test_weather_forecast_feature_allows_future_signal_with_issue_time(self) -> None:
+        as_of = pd.Timestamp("2026-03-12")
+        weather_frame = pd.DataFrame(
+            {
+                "bundesland": ["BY", "BY"],
+                "datum": [pd.Timestamp("2026-03-11"), pd.Timestamp("2026-03-15")],
+                "available_time": [pd.Timestamp("2026-03-11"), pd.Timestamp("2026-03-12")],
+                "issue_time": [pd.Timestamp("2026-03-11"), pd.Timestamp("2026-03-12")],
+                "data_type": ["CURRENT", "DAILY_FORECAST"],
+                "temp": [7.0, 20.0],
+                "humidity": [70.0, 40.0],
+            }
+        )
+
+        features = RegionalFeatureBuilder._weather_features(
+            weather_frame,
+            as_of,
+            horizon_days=3,
+        )
+
+        self.assertEqual(features["weather_forecast_temp_3_7"], 20.0)
+        self.assertEqual(features["weather_forecast_humidity_3_7"], 40.0)
+        self.assertEqual(features["weather_temp_anomaly_3_7"], 13.0)
+
+    def test_weather_forecast_vintage_mode_picks_reproducible_run_for_same_as_of(self) -> None:
+        as_of = pd.Timestamp("2026-03-12 09:00:00")
+        baseline_frame = pd.DataFrame(
+            {
+                "bundesland": ["BY", "BY", "BY"],
+                "datum": [
+                    pd.Timestamp("2026-03-11"),
+                    pd.Timestamp("2026-03-15"),
+                    pd.Timestamp("2026-03-15"),
+                ],
+                "available_time": [
+                    pd.Timestamp("2026-03-11 00:00:00"),
+                    pd.Timestamp("2026-03-12 08:00:00"),
+                    pd.Timestamp("2026-03-12 10:00:00"),
+                ],
+                "data_type": ["CURRENT", "DAILY_FORECAST", "DAILY_FORECAST"],
+                "temp": [7.0, 14.0, 23.0],
+                "humidity": [70.0, 52.0, 35.0],
+                "forecast_run_timestamp": [
+                    pd.NaT,
+                    pd.Timestamp("2026-03-12 08:00:00"),
+                    pd.Timestamp("2026-03-12 10:00:00"),
+                ],
+                "forecast_run_id": [
+                    None,
+                    "weather_run:2026-03-12T08:00:00",
+                    "weather_run:2026-03-12T10:00:00",
+                ],
+            }
+        )
+        future_run_frame = pd.concat(
+            [
+                baseline_frame,
+                pd.DataFrame(
+                    {
+                        "bundesland": ["BY"],
+                        "datum": [pd.Timestamp("2026-03-15")],
+                        "available_time": [pd.Timestamp("2026-03-13 07:00:00")],
+                        "data_type": ["DAILY_FORECAST"],
+                        "temp": [30.0],
+                        "humidity": [20.0],
+                        "forecast_run_timestamp": [pd.Timestamp("2026-03-13 07:00:00")],
+                        "forecast_run_id": ["weather_run:2026-03-13T07:00:00"],
+                    }
+                ),
+            ],
+            ignore_index=True,
+        )
+
+        first_metadata: dict[str, object] = {}
+        second_metadata: dict[str, object] = {}
+
+        first_features = RegionalFeatureBuilder._weather_features(
+            baseline_frame,
+            as_of,
+            horizon_days=3,
+            vintage_mode=WEATHER_FORECAST_VINTAGE_RUN_TIMESTAMP_V1,
+            vintage_metadata=first_metadata,
+        )
+        second_features = RegionalFeatureBuilder._weather_features(
+            future_run_frame,
+            as_of,
+            horizon_days=3,
+            vintage_mode=WEATHER_FORECAST_VINTAGE_RUN_TIMESTAMP_V1,
+            vintage_metadata=second_metadata,
+        )
+
+        self.assertEqual(first_features, second_features)
+        self.assertEqual(first_features["weather_forecast_temp_3_7"], 14.0)
+        self.assertEqual(
+            first_metadata["weather_forecast_selected_run_timestamp"],
+            "2026-03-12T08:00:00",
+        )
+        self.assertEqual(
+            second_metadata["weather_forecast_selected_run_timestamp"],
+            "2026-03-12T08:00:00",
+        )
+        self.assertTrue(first_metadata["weather_forecast_run_identity_present"])
+        self.assertFalse(first_metadata["weather_forecast_vintage_degraded"])
+
+    def test_weather_forecast_vintage_mode_degrades_without_run_identity(self) -> None:
+        as_of = pd.Timestamp("2026-03-12")
+        weather_frame = pd.DataFrame(
+            {
+                "bundesland": ["BY", "BY"],
+                "datum": [pd.Timestamp("2026-03-11"), pd.Timestamp("2026-03-15")],
+                "available_time": [pd.Timestamp("2026-03-11"), pd.Timestamp("2026-03-12")],
+                "data_type": ["CURRENT", "DAILY_FORECAST"],
+                "temp": [7.0, 20.0],
+                "humidity": [70.0, 40.0],
+            }
+        )
+
+        metadata: dict[str, object] = {}
+        features = RegionalFeatureBuilder._weather_features(
+            weather_frame,
+            as_of,
+            horizon_days=3,
+            vintage_mode=WEATHER_FORECAST_VINTAGE_RUN_TIMESTAMP_V1,
+            vintage_metadata=metadata,
+        )
+
+        self.assertEqual(features["weather_forecast_temp_3_7"], 7.0)
+        self.assertEqual(features["weather_forecast_humidity_3_7"], 70.0)
+        self.assertTrue(metadata["weather_forecast_vintage_degraded"])
+        self.assertFalse(metadata["weather_forecast_run_identity_present"])
+
+    def test_pollen_context_ignores_future_values_even_when_available_early(self) -> None:
+        as_of = pd.Timestamp("2026-03-12")
+        pollen_frame = pd.DataFrame(
+            {
+                "bundesland": ["BY", "BY"],
+                "datum": [pd.Timestamp("2026-03-11"), pd.Timestamp("2026-03-15")],
+                "available_time": [pd.Timestamp("2026-03-11"), pd.Timestamp("2026-03-12")],
+                "pollen_index": [1.0, 3.0],
+            }
+        )
+
+        pollen_context = RegionalFeatureBuilder._pollen_context(pollen_frame, as_of)
+
+        self.assertEqual(pollen_context, 1.0)
+
+    def test_inference_panel_manifest_tracks_weather_vintage_metadata(self) -> None:
+        class _FakeBuilder(RegionalFeatureBuilder):
+            def __init__(self):
+                self.db = None
+
+            def _load_wastewater_daily(self, virus_typ: str, start_date: pd.Timestamp) -> pd.DataFrame:
+                del virus_typ, start_date
+                rows = []
+                for state in ("BY", "BE"):
+                    for offset, value_date in enumerate(pd.date_range("2026-03-03", periods=10, freq="D"), start=1):
+                        rows.append(
+                            {
+                                "bundesland": state,
+                                "datum": pd.Timestamp(value_date),
+                                "available_time": pd.Timestamp(value_date),
+                                "viral_load": float(5 + offset),
+                                "site_count": 5,
+                                "under_bg_share": 0.2,
+                                "viral_std": 1.0,
+                            }
+                        )
+                return pd.DataFrame(rows)
+
+            def _load_truth_series(self, virus_typ: str, start_date: pd.Timestamp) -> pd.DataFrame:
+                del virus_typ, start_date
+                rows = []
+                weeks = pd.date_range("2025-12-29", periods=12, freq="7D")
+                for state in ("BY", "BE"):
+                    for idx, week_start in enumerate(weeks, start=1):
+                        rows.append(
+                            {
+                                "bundesland": state,
+                                "week_start": pd.Timestamp(week_start),
+                                "available_date": pd.Timestamp(week_start),
+                                "incidence": float(idx * 5),
+                                "truth_source": "survstat_weekly",
+                            }
+                        )
+                return pd.DataFrame(rows)
+
+            def _load_weather(self, start_date: pd.Timestamp, end_date: pd.Timestamp) -> pd.DataFrame:
+                del start_date, end_date
+                rows = []
+                for state in ("BY", "BE"):
+                    rows.extend(
+                        [
+                            {
+                                "bundesland": state,
+                                "datum": pd.Timestamp("2026-03-11"),
+                                "available_time": pd.Timestamp("2026-03-11"),
+                                "data_type": "CURRENT",
+                                "temp": 7.0,
+                                "humidity": 70.0,
+                                "issue_time": pd.Timestamp("2026-03-11 06:00:00"),
+                                "forecast_run_timestamp": pd.Timestamp("2026-03-11 06:00:00"),
+                                "forecast_run_id": "weather_run:2026-03-11T06:00:00",
+                                "forecast_run_identity_source": "persisted_weather_ingest_run_v1",
+                                "forecast_run_identity_quality": "stable_persisted_batch",
+                            },
+                            {
+                                "bundesland": state,
+                                "datum": pd.Timestamp("2026-03-15"),
+                                "available_time": pd.Timestamp("2026-03-12 00:00:00"),
+                                "data_type": "DAILY_FORECAST",
+                                "temp": 14.0,
+                                "humidity": 52.0,
+                                "issue_time": pd.Timestamp("2026-03-12 00:00:00"),
+                                "forecast_run_timestamp": pd.Timestamp("2026-03-12 00:00:00"),
+                                "forecast_run_id": "weather_run:2026-03-12T00:00:00",
+                                "forecast_run_identity_source": "persisted_weather_ingest_run_v1",
+                                "forecast_run_identity_quality": "stable_persisted_batch",
+                            },
+                        ]
+                    )
+                return pd.DataFrame(rows)
+
+            def _load_supported_wastewater_context(self, virus_typ: str, start_date: pd.Timestamp) -> pd.DataFrame:
+                del virus_typ, start_date
+                return pd.DataFrame()
+
+            def _load_grippeweb_signals(self, start_date: pd.Timestamp, end_date: pd.Timestamp) -> pd.DataFrame:
+                del start_date, end_date
+                return pd.DataFrame()
+
+            def _load_influenza_ifsg(self, start_date: pd.Timestamp, end_date: pd.Timestamp) -> pd.DataFrame:
+                del start_date, end_date
+                return pd.DataFrame()
+
+            def _load_rsv_ifsg(self, start_date: pd.Timestamp, end_date: pd.Timestamp) -> pd.DataFrame:
+                del start_date, end_date
+                return pd.DataFrame()
+
+            def _load_holidays(self) -> pd.DataFrame:
+                return pd.DataFrame()
+
+            def _load_state_population_map(self) -> dict[str, int]:
+                return {"BY": 1000000, "BE": 500000}
+
+            def _load_pollen(self, start_date: pd.Timestamp, end_date: pd.Timestamp) -> pd.DataFrame:
+                del start_date, end_date
+                return pd.DataFrame()
+
+        builder = _FakeBuilder()
+        panel = builder.build_inference_panel(
+            virus_typ="Influenza A",
+            as_of_date=pd.Timestamp("2026-03-12 09:00:00"),
+            lookback_days=10,
+            horizon_days=3,
+            weather_forecast_vintage_mode=WEATHER_FORECAST_VINTAGE_RUN_TIMESTAMP_V1,
+        )
+
+        manifest = builder.dataset_manifest("Influenza A", panel)
+
+        self.assertEqual(manifest["weather_forecast_vintage_mode"], WEATHER_FORECAST_VINTAGE_RUN_TIMESTAMP_V1)
+        self.assertEqual(
+            manifest["weather_forecast_issue_time_semantics"],
+            WEATHER_FORECAST_ISSUE_TIME_SEMANTICS,
+        )
+        self.assertTrue(manifest["weather_forecast_run_identity_present"])
+        self.assertEqual(
+            manifest["weather_forecast_run_identity_source"],
+            "persisted_weather_ingest_run_v1",
+        )
+        self.assertEqual(
+            manifest["weather_forecast_run_identity_quality"],
+            "stable_persisted_batch",
+        )
 
     def test_inference_panel_uses_latest_available_row_when_as_of_has_no_exact_wastewater_date(self) -> None:
         class _FakeBuilder(RegionalFeatureBuilder):
@@ -746,6 +1056,137 @@ class RegionalLandkreisTruthTests(unittest.TestCase):
         visible = truth.loc[truth["available_date"] <= pd.Timestamp("2026-03-10")].copy()
         self.assertEqual(len(visible), 1)
         self.assertEqual(str(visible["week_start"].iloc[0].date()), "2026-03-02")
+
+    def test_load_weather_keeps_multiple_forecast_runs_separate_and_marks_identity_quality(self) -> None:
+        self.db.add_all(
+            [
+                WeatherData(
+                    city="München",
+                    datum=datetime(2026, 3, 15, 12, 0),
+                    available_time=datetime(2026, 3, 12, 8, 0),
+                    temperatur=14.0,
+                    luftfeuchtigkeit=52.0,
+                    data_type="DAILY_FORECAST",
+                    forecast_run_timestamp=datetime(2026, 3, 12, 8, 0),
+                    forecast_run_id="weather_forecast_run:2026-03-12T08:00:00",
+                    forecast_run_identity_source="persisted_weather_ingest_run_v1",
+                    forecast_run_identity_quality="stable_persisted_batch",
+                    created_at=datetime(2026, 3, 12, 8, 0),
+                ),
+                WeatherData(
+                    city="München",
+                    datum=datetime(2026, 3, 15, 12, 0),
+                    available_time=datetime(2026, 3, 12, 10, 0),
+                    temperatur=23.0,
+                    luftfeuchtigkeit=35.0,
+                    data_type="DAILY_FORECAST",
+                    forecast_run_timestamp=datetime(2026, 3, 12, 10, 0),
+                    forecast_run_id="weather_forecast_run:2026-03-12T10:00:00",
+                    forecast_run_identity_source="persisted_weather_ingest_run_v1",
+                    forecast_run_identity_quality="stable_persisted_batch",
+                    created_at=datetime(2026, 3, 12, 10, 0),
+                ),
+            ]
+        )
+        self.db.commit()
+
+        builder = RegionalFeatureBuilder(self.db)
+        frame = builder._load_weather(pd.Timestamp("2026-03-10"), pd.Timestamp("2026-03-20"))
+
+        forecast_rows = frame.loc[frame["data_type"] == "DAILY_FORECAST"].sort_values(
+            "forecast_run_timestamp"
+        )
+        self.assertEqual(len(forecast_rows), 2)
+        self.assertEqual(
+            forecast_rows["forecast_run_id"].tolist(),
+            [
+                "weather_forecast_run:2026-03-12T08:00:00",
+                "weather_forecast_run:2026-03-12T10:00:00",
+            ],
+        )
+        self.assertEqual(
+            forecast_rows["forecast_run_identity_source"].tolist(),
+            ["persisted_weather_ingest_run_v1", "persisted_weather_ingest_run_v1"],
+        )
+        self.assertEqual(
+            forecast_rows["forecast_run_identity_quality"].tolist(),
+            ["stable_persisted_batch", "stable_persisted_batch"],
+        )
+
+        metadata: dict[str, object] = {}
+        features = RegionalFeatureBuilder._weather_features(
+            forecast_rows,
+            pd.Timestamp("2026-03-12 09:00:00"),
+            horizon_days=3,
+            vintage_mode=WEATHER_FORECAST_VINTAGE_RUN_TIMESTAMP_V1,
+            vintage_metadata=metadata,
+        )
+        self.assertEqual(features["weather_forecast_temp_3_7"], 14.0)
+        self.assertEqual(
+            metadata["weather_forecast_selected_run_timestamp"],
+            "2026-03-12T08:00:00",
+        )
+        self.assertEqual(
+            metadata["weather_forecast_run_identity_source"],
+            "persisted_weather_ingest_run_v1",
+        )
+        self.assertEqual(
+            metadata["weather_forecast_run_identity_quality"],
+            "stable_persisted_batch",
+        )
+
+    def test_load_weather_marks_legacy_forecast_rows_as_missing_identity_but_keeps_legacy_issue_time(self) -> None:
+        self.db.add(
+            WeatherData(
+                city="München",
+                datum=datetime(2026, 3, 15, 12, 0),
+                available_time=datetime(2026, 3, 12, 8, 0),
+                temperatur=16.0,
+                luftfeuchtigkeit=60.0,
+                data_type="DAILY_FORECAST",
+                created_at=datetime(2026, 3, 12, 8, 0),
+            )
+        )
+        self.db.commit()
+
+        builder = RegionalFeatureBuilder(self.db)
+        frame = builder._load_weather(pd.Timestamp("2026-03-10"), pd.Timestamp("2026-03-20"))
+
+        self.assertEqual(len(frame), 1)
+        self.assertTrue(pd.isna(frame.iloc[0]["forecast_run_timestamp"]))
+        self.assertEqual(frame.iloc[0]["forecast_run_identity_source"], "missing")
+        self.assertEqual(frame.iloc[0]["forecast_run_identity_quality"], "missing")
+        self.assertEqual(frame.iloc[0]["issue_time"], pd.Timestamp("2026-03-12 08:00:00"))
+
+        legacy_metadata: dict[str, object] = {}
+        legacy_features = RegionalFeatureBuilder._weather_features(
+            frame,
+            pd.Timestamp("2026-03-12 09:00:00"),
+            horizon_days=3,
+            vintage_metadata=legacy_metadata,
+        )
+        self.assertEqual(legacy_features["weather_forecast_temp_3_7"], 16.0)
+        self.assertEqual(
+            legacy_metadata["weather_forecast_run_identity_source"],
+            "legacy_created_at_fallback",
+        )
+        self.assertEqual(
+            legacy_metadata["weather_forecast_run_identity_quality"],
+            "legacy_unstable",
+        )
+
+        vintage_metadata: dict[str, object] = {}
+        vintage_features = RegionalFeatureBuilder._weather_features(
+            frame,
+            pd.Timestamp("2026-03-12 09:00:00"),
+            horizon_days=3,
+            vintage_mode=WEATHER_FORECAST_VINTAGE_RUN_TIMESTAMP_V1,
+            vintage_metadata=vintage_metadata,
+        )
+        self.assertEqual(vintage_features["weather_forecast_temp_3_7"], 0.0)
+        self.assertFalse(vintage_metadata["weather_forecast_run_identity_present"])
+        self.assertEqual(vintage_metadata["weather_forecast_run_identity_source"], "missing")
+        self.assertEqual(vintage_metadata["weather_forecast_run_identity_quality"], "missing")
 
 
 if __name__ == "__main__":

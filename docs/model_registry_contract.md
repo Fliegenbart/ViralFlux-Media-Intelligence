@@ -62,6 +62,7 @@ Empfohlen bzw. heute ebenfalls geschrieben:
 
 - `supported_horizon_days`
 - `forecast_target_semantics`
+- `metric_semantics_version`
 - `model_version`
 - `calibration_version`
 - `label_selection`
@@ -70,6 +71,23 @@ Empfohlen bzw. heute ebenfalls geschrieben:
 - `activation_policy`
 - `dataset_manifest`
 - `point_in_time_snapshot`
+- `promotion_evidence`
+
+## Promotion Evidence
+
+Fuer den regionalen Champion-Pfad wird zusaetzlich ein expliziter `promotion_evidence`-Block persistiert.
+
+Mindestens enthalten:
+
+- `quality_gate_overall_passed`
+- `metric_semantics_version`
+- `minimum_sample_count`
+- `candidate_metrics_present`
+- `champion_metrics_present`
+- `promotion_allowed`
+- `promotion_blockers`
+
+Promotion ist nur erlaubt, wenn dieser Block `promotion_allowed = true` ausweist. Fehlende Gate-, Semantik- oder Sample-Count-Nachweise blockieren die Promotion bewusst fail-closed.
 
 ## Horizon-Integrität
 

@@ -334,6 +334,7 @@ const PilotSurface: React.FC<Props> = ({
   const executive = pilotReadout?.executive_summary;
   const evidence = pilotReadout?.pilot_evidence;
   const gateSnapshot = pilotReadout?.run_context?.gate_snapshot;
+  const operationalReadiness = gateSnapshot?.operational_readiness;
   const currentScopeStatus = sectionReadiness(pilotReadout, scope);
   const evaluationRows = (evidence?.evaluation?.comparison_table || []) as Array<Record<string, unknown>>;
   const heroRegion = executive?.top_regions?.[0] || allRegions[0] || null;
@@ -383,6 +384,8 @@ const PilotSurface: React.FC<Props> = ({
   ];
   const readinessRows = [
     { label: 'Forecast-Readiness', value: forecastReadiness },
+    { label: 'Live-Quellabdeckung', value: operationalReadiness?.live_source_coverage_readiness || 'WATCH' },
+    { label: 'Live-Quellfrische', value: operationalReadiness?.live_source_freshness_readiness || 'WATCH' },
     { label: 'Kommerzielle Validierung', value: commercialValidationStatus },
     { label: 'Test-/Kontrolllogik', value: gateSnapshot?.holdout_status || 'WATCH' },
     { label: 'Budgetfreigabe', value: gateSnapshot?.budget_release_status || 'WATCH' },
@@ -750,6 +753,11 @@ const PilotSurface: React.FC<Props> = ({
               <span>Validierungsstatus</span>
               <strong>{gateSnapshot?.validation_status || '-'}</strong>
             </div>
+            {operationalReadiness?.source_coverage_scope === 'artifact' && (
+              <p className="pilot-muted-copy">
+                Artefakt-Coverage bleibt getrennt. Diese Ampeln zeigen den aktuellen Live-Zustand der Quellen.
+              </p>
+            )}
           </article>
 
           <article className="pilot-evidence-card">

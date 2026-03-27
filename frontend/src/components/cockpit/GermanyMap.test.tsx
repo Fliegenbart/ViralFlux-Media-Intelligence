@@ -37,7 +37,8 @@ describe('GermanyMap', () => {
     );
 
     expect(screen.getByLabelText('Legende Bundeslandkarte')).toBeInTheDocument();
-    expect(screen.getByText('Bundesland-Level. Kein City-Forecast. Die Flächenfarbe zeigt nur Orientierung im Ranking, nicht punktgenaue Sicherheit.')).toBeInTheDocument();
+    expect(screen.getByText('Orientierungskarte Bundesland-Level')).toBeInTheDocument();
+    expect(screen.getByText('Bundesland-Level. Kein City-Forecast. Die Flächenfarbe hilft bei Auswahl und Orientierung, ersetzt aber nicht die eigentliche Regionsentscheidung.')).toBeInTheDocument();
 
     const berlinButton = screen.getByRole('button', { name: /Berlin, Bundesland-Level/i });
     fireEvent.keyDown(berlinButton, { key: 'Enter' });

@@ -129,7 +129,7 @@ const GermanyMap: React.FC<Props> = ({ regions, selectedRegion, onSelectRegion }
   return (
     <div className="vf-map-panel">
       <div className="vf-map-legend" aria-label="Legende Bundeslandkarte">
-        <div className="vf-map-legend__title">Legende Bundeslandkarte</div>
+        <div className="vf-map-legend__title">Orientierungskarte Bundesland-Level</div>
         <div className="vf-map-legend__items">
           <span className="vf-map-legend__item">
             <span className="vf-map-legend__swatch vf-map-legend__swatch--signal" aria-hidden="true" />
@@ -145,7 +145,7 @@ const GermanyMap: React.FC<Props> = ({ regions, selectedRegion, onSelectRegion }
           </span>
         </div>
         <p className="vf-map-legend__note">
-          Bundesland-Level. Kein City-Forecast. Die Flächenfarbe zeigt nur Orientierung im Ranking, nicht punktgenaue Sicherheit.
+          Bundesland-Level. Kein City-Forecast. Die Flächenfarbe hilft bei Auswahl und Orientierung, ersetzt aber nicht die eigentliche Regionsentscheidung.
         </p>
       </div>
 

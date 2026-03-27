@@ -8,6 +8,7 @@ from typing import Any
 DEFAULT_DECISION_HORIZON_DAYS = 7
 DEFAULT_DECISION_BASELINE_WINDOW_DAYS = 84
 DEFAULT_DECISION_EVENT_THRESHOLD_PCT = 25.0
+HEURISTIC_EVENT_SCORE_SOURCE = "heuristic_sigmoid_fallback_score"
 
 
 def clamp(value: float, lower: float, upper: float) -> float:
@@ -36,7 +37,7 @@ def threshold_value(baseline: float, threshold_pct: float = DEFAULT_DECISION_EVE
     return float(baseline) * (1.0 + float(threshold_pct) / 100.0)
 
 
-def event_probability_from_forecast(
+def heuristic_event_score_from_forecast(
     *,
     prediction: float,
     baseline: float,
@@ -54,6 +55,24 @@ def event_probability_from_forecast(
     spread = max(value for value in spread_candidates if math.isfinite(value))
     z_score = (float(prediction) - threshold) / max(spread, 1e-6)
     return round(clamp(sigmoid(z_score), 0.001, 0.999), 4)
+
+
+def event_probability_from_forecast(
+    *,
+    prediction: float,
+    baseline: float,
+    lower_bound: float | None = None,
+    upper_bound: float | None = None,
+    threshold_pct: float = DEFAULT_DECISION_EVENT_THRESHOLD_PCT,
+) -> float:
+    """Deprecated compatibility wrapper for the heuristic event score."""
+    return heuristic_event_score_from_forecast(
+        prediction=prediction,
+        baseline=baseline,
+        lower_bound=lower_bound,
+        upper_bound=upper_bound,
+        threshold_pct=threshold_pct,
+    )
 
 
 def normalized_expected_value_index(
@@ -101,19 +120,31 @@ class EventForecast:
     baseline_value: float | None
     threshold_value: float | None
     calibration_method: str
+    heuristic_event_score: float | None = None
     brier_score: float | None = None
     ece: float | None = None
     calibration_passed: bool | None = None
     confidence: float | None = None
     confidence_label: str | None = None
+    reliability_score: float | None = None
+    backtest_quality_score: float | None = None
     probability_source: str | None = None
+    calibration_mode: str | None = None
+    uncertainty_source: str | None = None
+    fallback_reason: str | None = None
     learned_model_version: str | None = None
     fallback_used: bool | None = None
 
     def to_dict(self) -> dict[str, Any]:
         payload = asdict(self)
+        if payload.get("reliability_score") is None and payload.get("confidence") is not None:
+            payload["reliability_score"] = payload["confidence"]
+        if payload.get("fallback_used") is None and payload.get("event_probability") is None:
+            payload["fallback_used"] = payload.get("heuristic_event_score") is not None
         if payload.get("confidence_label") is None:
-            payload["confidence_label"] = confidence_label(self.confidence)
+            payload["confidence_label"] = confidence_label(
+                self.confidence if self.confidence is not None else self.reliability_score
+            )
         return payload
 
 

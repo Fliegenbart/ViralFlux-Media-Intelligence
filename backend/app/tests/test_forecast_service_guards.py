@@ -101,6 +101,50 @@ class ForecastServiceGuardTests(unittest.TestCase):
 
         self.assertTrue((features == 0.0).all().all())
 
+    def test_build_direct_training_panel_does_not_backfill_future_oof_predictions(self) -> None:
+        raw = pd.DataFrame(
+            {
+                "ds": pd.date_range("2026-01-01", periods=100, freq="D"),
+                "y": np.linspace(10.0, 109.0, 100),
+            }
+        )
+
+        def _build_with_hw_value(hw_value: float) -> pd.DataFrame:
+            service = ForecastService(db=None)
+            service._fit_holt_winters = lambda history, horizon: np.full(horizon, hw_value, dtype=float)  # type: ignore[method-assign]
+            return service._build_direct_training_panel_from_frame(
+                raw,
+                horizon_days=7,
+                n_splits=2,
+            )
+
+        panel_a = _build_with_hw_value(111.0)
+        panel_b = _build_with_hw_value(777.0)
+
+        early_slice_a = panel_a.loc[:61, ["hw_pred", "ridge_pred", "prophet_pred"]].copy()
+        early_slice_b = panel_b.loc[:61, ["hw_pred", "ridge_pred", "prophet_pred"]].copy()
+        self.assertTrue(early_slice_a.equals(early_slice_b))
+        self.assertNotEqual(panel_a.iloc[-1]["hw_pred"], panel_b.iloc[-1]["hw_pred"])
+
+    def test_generate_oof_predictions_uses_causal_history_fallback_instead_of_series_end(self) -> None:
+        service = ForecastService(db=None)
+        frame = pd.DataFrame(
+            {
+                "y": np.arange(10.0, 30.0, dtype=float),
+            }
+        )
+        service._fit_holt_winters = lambda history, n_val: np.full(n_val, 91.0, dtype=float)  # type: ignore[method-assign]
+        service._fit_ridge = lambda df_train, y_train, n_val: (np.full(n_val, 82.0, dtype=float), {})  # type: ignore[method-assign]
+
+        oof = service._generate_oof_predictions(frame, n_splits=2)
+
+        self.assertEqual(oof.iloc[0]["hw_pred"], 0.0)
+        self.assertEqual(oof.iloc[0]["ridge_pred"], 0.0)
+        self.assertEqual(oof.iloc[1]["hw_pred"], frame.iloc[0]["y"])
+        self.assertEqual(oof.iloc[1]["ridge_pred"], frame.iloc[0]["y"])
+        self.assertNotEqual(oof.iloc[0]["hw_pred"], frame.iloc[-1]["y"])
+        self.assertNotEqual(oof.iloc[0]["ridge_pred"], frame.iloc[-1]["y"])
+
 
 if __name__ == "__main__":
     unittest.main()

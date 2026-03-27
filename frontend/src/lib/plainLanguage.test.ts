@@ -32,17 +32,17 @@ describe('plain language helpers', () => {
 
   it('translates raw backend explanations into plain German', () => {
     expect(explainInPlainGerman('Event probability 0.81 clears the Activate threshold 0.70.'))
-      .toBe('Die Ereignis-Chance liegt bei 81 % und spricht für Aktivieren.');
+      .toBe('Ereignis-Chance: 81 %. Das passt zu Aktivieren.');
     expect(explainInPlainGerman('Berlin: Activate because event probability is 0.81, forecast confidence is 0.78, trend acceleration is 0.76, and cross-source direction is up.'))
-      .toContain('Berlin sollte jetzt aktiviert werden');
+      .toContain('Empfehlung für Berlin: Aktivieren');
     expect(explainInPlainGerman('Priority score and event probability drive the ranking.'))
       .toBe('Prüf-Reihenfolge (Entscheidungs-Priorität) und Ereignis-Chance (Event-Wahrscheinlichkeit) bestimmen hier die Reihenfolge.');
     expect(explainInPlainGerman('Forecast confidence is only 0.41.'))
       .toBe('Die Vorhersage ist noch unsicher (41 %).');
     expect(explainInPlainGerman('Spend guardrails are currently satisfied.'))
-      .toBe('Die Budget-Regeln passen; der nächste Schritt ist möglich.');
+      .toBe('Budget-Regeln: ok. Nächster Schritt möglich.');
     expect(explainInPlainGerman('Remaining uncertainty: revision risk 0.33, no positive cross-source agreement, quality gate not passed.'))
-      .toBe('Es bleibt Unsicherheit wegen Revisionsrisiko von 33 %, kein klar positiver Quellenabgleich und noch nicht bestandene Qualitätsprüfung.');
+      .toBe('Noch offen: Zahlen können sich noch ändern (33 %), kein klarer Abgleich über mehrere Quellen und Qualitätscheck noch nicht bestanden.');
   });
 
   it('prefers structured reason codes over free-text guessing', () => {
@@ -56,7 +56,7 @@ describe('plain language helpers', () => {
         forecast_confidence: 0.78,
         agreement_direction: 'up',
       },
-    })).toContain('Berlin sollte jetzt aktiviert werden');
+    })).toContain('Empfehlung für Berlin: Aktivieren');
 
     expect(explainInPlainGerman({
       code: 'campaign_stage_budget_share',
@@ -66,7 +66,7 @@ describe('plain language helpers', () => {
         stage: 'activate',
         budget_share: 0.46,
       },
-    })).toBe('Berlin bleibt aktuell auf Aktivieren mit 46 % Budgetanteil.');
+    })).toBe('Berlin: Aktivieren (Budgetanteil 46 %).');
   });
 
   it('builds a careful prediction narrative for warning states', () => {

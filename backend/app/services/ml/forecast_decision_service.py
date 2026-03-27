@@ -17,6 +17,8 @@ from app.models.database import (
     WastewaterAggregated,
 )
 from app.services.ml.forecast_contracts import (
+    BACKTEST_RELIABILITY_PROXY_SOURCE,
+    CONFIDENCE_SEMANTICS_ALIAS,
     DEFAULT_DECISION_BASELINE_WINDOW_DAYS,
     DEFAULT_DECISION_EVENT_THRESHOLD_PCT,
     DEFAULT_DECISION_HORIZON_DAYS,
@@ -29,9 +31,10 @@ from app.services.ml.forecast_contracts import (
     OpportunityAssessment,
     confidence_label,
     heuristic_event_score_from_forecast,
+    normalize_event_forecast_payload,
     normalized_expected_value_index,
 )
-from app.services.ml.forecast_horizon_utils import DEFAULT_FORECAST_REGION
+from app.services.ml.forecast_horizon_utils import DEFAULT_FORECAST_REGION, reliability_score_from_metrics
 
 
 REQUIRED_OUTCOME_FIELD_NAMES = ("media_spend_eur",)
@@ -177,7 +180,45 @@ class ForecastDecisionService:
         if forecast is None:
             return {}
         payload = (forecast.features_used or {}).get("event_forecast") or {}
-        return payload if isinstance(payload, dict) else {}
+        if not isinstance(payload, dict):
+            return {}
+        return normalize_event_forecast_payload(payload)
+
+    @staticmethod
+    def _resolved_reliability_score(
+        *,
+        stored_event_forecast: dict[str, Any],
+        event_calibration: dict[str, Any],
+        horizon_forecast: MLForecast | None,
+    ) -> float | None:
+        if stored_event_forecast.get("reliability_score") is not None:
+            return float(stored_event_forecast["reliability_score"])
+        if stored_event_forecast.get("confidence") is not None:
+            return float(stored_event_forecast["confidence"])
+        if event_calibration.get("reliability_score") is not None:
+            return float(event_calibration["reliability_score"])
+        derived_reliability = reliability_score_from_metrics(event_calibration or {})
+        if derived_reliability is not None:
+            return float(derived_reliability)
+        if horizon_forecast is not None and horizon_forecast.confidence is not None:
+            # Legacy compatibility only: older rows may only have top-level confidence.
+            return float(horizon_forecast.confidence)
+        return None
+
+    @staticmethod
+    def _resolved_backtest_quality_score(
+        *,
+        stored_event_forecast: dict[str, Any],
+        market_metrics: dict[str, Any],
+    ) -> float | None:
+        if stored_event_forecast.get("backtest_quality_score") is not None:
+            return float(stored_event_forecast["backtest_quality_score"])
+        if market_metrics.get("backtest_quality_score") is not None:
+            return float(market_metrics["backtest_quality_score"])
+        mape = market_metrics.get("mape")
+        if mape is None:
+            return None
+        return round(max(0.0, min(1.0, 1.0 - (float(mape) / 100.0))), 4)
 
     def _resolve_live_event_probability(
         self,
@@ -198,6 +239,13 @@ class ForecastDecisionService:
                 "probability_source": str(
                     stored.get("probability_source") or stored.get("calibration_method") or "learned"
                 ),
+                "reliability_score": stored.get("reliability_score"),
+                "confidence": stored.get("confidence"),
+                "backtest_quality_score": stored.get("backtest_quality_score"),
+                "calibration_mode": stored.get("calibration_mode"),
+                "uncertainty_source": stored.get("uncertainty_source"),
+                "confidence_semantics": stored.get("confidence_semantics"),
+                "fallback_reason": stored.get("fallback_reason"),
                 "learned_model_version": stored.get("learned_model_version"),
                 "fallback_used": bool(stored.get("fallback_used")),
             }
@@ -208,6 +256,13 @@ class ForecastDecisionService:
                 "event_probability": None,
                 "heuristic_event_score": float(stored_heuristic),
                 "probability_source": str(stored.get("probability_source") or HEURISTIC_EVENT_SCORE_SOURCE),
+                "reliability_score": stored.get("reliability_score"),
+                "confidence": stored.get("confidence"),
+                "backtest_quality_score": stored.get("backtest_quality_score"),
+                "calibration_mode": stored.get("calibration_mode"),
+                "uncertainty_source": stored.get("uncertainty_source"),
+                "confidence_semantics": stored.get("confidence_semantics"),
+                "fallback_reason": stored.get("fallback_reason"),
                 "learned_model_version": stored.get("learned_model_version"),
                 "fallback_used": True,
             }
@@ -223,6 +278,13 @@ class ForecastDecisionService:
                     threshold_pct=DEFAULT_DECISION_EVENT_THRESHOLD_PCT,
                 ),
                 "probability_source": HEURISTIC_EVENT_SCORE_SOURCE,
+                "reliability_score": None,
+                "confidence": None,
+                "backtest_quality_score": None,
+                "calibration_mode": None,
+                "uncertainty_source": BACKTEST_RELIABILITY_PROXY_SOURCE,
+                "confidence_semantics": CONFIDENCE_SEMANTICS_ALIAS,
+                "fallback_reason": "stored_event_probability_missing",
                 "learned_model_version": None,
                 "fallback_used": True,
             }
@@ -230,6 +292,13 @@ class ForecastDecisionService:
             "event_probability": None,
             "heuristic_event_score": None,
             "probability_source": HEURISTIC_EVENT_SCORE_SOURCE,
+            "reliability_score": None,
+            "confidence": None,
+            "backtest_quality_score": None,
+            "calibration_mode": None,
+            "uncertainty_source": BACKTEST_RELIABILITY_PROXY_SOURCE,
+            "confidence_semantics": CONFIDENCE_SEMANTICS_ALIAS,
+            "fallback_reason": "stored_event_probability_missing",
             "learned_model_version": None,
             "fallback_used": True,
         }
@@ -286,9 +355,19 @@ class ForecastDecisionService:
             horizon_forecast=horizon_forecast,
             baseline_value=baseline_value,
         )
+        stored_event_forecast = self._stored_event_forecast(horizon_forecast)
         event_probability = resolved_event_signal.get("event_probability")
         heuristic_event_score = resolved_event_signal.get("heuristic_event_score")
         probability_source = str(resolved_event_signal.get("probability_source") or HEURISTIC_EVENT_SCORE_SOURCE)
+        uncertainty_source = (
+            resolved_event_signal.get("uncertainty_source")
+            or BACKTEST_RELIABILITY_PROXY_SOURCE
+        )
+        confidence_semantics = (
+            resolved_event_signal.get("confidence_semantics")
+            or CONFIDENCE_SEMANTICS_ALIAS
+        )
+        fallback_reason = resolved_event_signal.get("fallback_reason")
         learned_model_version = resolved_event_signal.get("learned_model_version")
         fallback_used = bool(resolved_event_signal.get("fallback_used"))
         decision_signal = (
@@ -305,6 +384,7 @@ class ForecastDecisionService:
         market_metrics = latest_market.metrics if latest_market and latest_market.metrics else {}
         quality_gate = market_metrics.get("quality_gate") or {}
         event_calibration = market_metrics.get("event_calibration") or {}
+        calibration_mode = resolved_event_signal.get("calibration_mode") or event_calibration.get("calibration_mode")
         interval_coverage = market_metrics.get("interval_coverage") or {}
         timing_metrics = market_metrics.get("timing_metrics") or {}
         improvement = latest_market.improvement_vs_baselines if latest_market and latest_market.improvement_vs_baselines else {}
@@ -322,22 +402,15 @@ class ForecastDecisionService:
             and drift_status != "warning"
             and freshness_status == "fresh"
         )
-
-        confidence_parts: list[float] = []
-        if quality_gate:
-            confidence_parts.append(0.85 if quality_gate.get("overall_passed") else 0.45)
-        if event_calibration.get("brier_score") is not None:
-            confidence_parts.append(
-                max(0.0, min(1.0, 1.0 - (float(event_calibration["brier_score"]) / 0.25)))
-            )
-        if event_calibration.get("ece") is not None:
-            confidence_parts.append(
-                max(0.0, min(1.0, 1.0 - (float(event_calibration["ece"]) / 0.20)))
-            )
-        confidence_value = (
-            round(sum(confidence_parts) / len(confidence_parts), 3)
-            if confidence_parts
-            else None
+        reliability_score = self._resolved_reliability_score(
+            stored_event_forecast=stored_event_forecast,
+            event_calibration=event_calibration,
+            horizon_forecast=horizon_forecast,
+        )
+        confidence_value = reliability_score
+        backtest_quality_score = self._resolved_backtest_quality_score(
+            stored_event_forecast=stored_event_forecast,
+            market_metrics=market_metrics,
         )
 
         event_forecast = EventForecast(
@@ -377,8 +450,14 @@ class ForecastDecisionService:
                 else None
             ),
             confidence=confidence_value,
-            confidence_label=confidence_label(confidence_value),
+            confidence_label=confidence_label(confidence_value) if confidence_value is not None else None,
+            reliability_score=reliability_score,
+            backtest_quality_score=backtest_quality_score,
             probability_source=probability_source,
+            calibration_mode=(str(calibration_mode) if calibration_mode is not None else None),
+            uncertainty_source=str(uncertainty_source),
+            confidence_semantics=str(confidence_semantics),
+            fallback_reason=(str(fallback_reason) if fallback_reason is not None else None),
             learned_model_version=learned_model_version,
             fallback_used=fallback_used,
         )
@@ -549,10 +628,17 @@ class ForecastDecisionService:
             model_version=burden_forecast.get("model_version"),
             event_forecast={
                 "event_probability": event_forecast.get("event_probability"),
+                "heuristic_event_score": event_forecast.get("heuristic_event_score"),
                 "confidence": event_forecast.get("confidence"),
+                "reliability_score": event_forecast.get("reliability_score"),
+                "backtest_quality_score": event_forecast.get("backtest_quality_score"),
                 "confidence_label": event_forecast.get("confidence_label"),
+                "confidence_semantics": event_forecast.get("confidence_semantics"),
                 "calibration_passed": event_forecast.get("calibration_passed"),
                 "probability_source": event_forecast.get("probability_source"),
+                "calibration_mode": event_forecast.get("calibration_mode"),
+                "uncertainty_source": event_forecast.get("uncertainty_source"),
+                "fallback_reason": event_forecast.get("fallback_reason"),
                 "fallback_used": event_forecast.get("fallback_used"),
             },
             latest_accuracy=latest_accuracy_payload,

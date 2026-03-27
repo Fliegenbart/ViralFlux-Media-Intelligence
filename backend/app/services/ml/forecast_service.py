@@ -48,6 +48,8 @@ from app.models.database import (
     WastewaterData,
 )
 from app.services.ml.forecast_contracts import (
+    BACKTEST_RELIABILITY_PROXY_SOURCE,
+    CONFIDENCE_SEMANTICS_ALIAS,
     DEFAULT_DECISION_EVENT_THRESHOLD_PCT,
     DEFAULT_DECISION_HORIZON_DAYS,
     BurdenForecast,
@@ -55,6 +57,7 @@ from app.services.ml.forecast_contracts import (
     EventForecast,
     ForecastQuality,
     confidence_label,
+    normalize_event_forecast_payload,
 )
 from app.services.ml.forecast_horizon_utils import (
     DEFAULT_FORECAST_REGION,
@@ -1853,6 +1856,7 @@ class ForecastService:
             "promotion_gate": promotion_gate or {},
             "confidence": reliability_score,
             "reliability_score": reliability_score,
+            "confidence_semantics": CONFIDENCE_SEMANTICS_ALIAS,
             "backtest_quality_score": self._backtest_quality_score(metrics),
             "brier_score": metrics.get("brier_score"),
             "ece": metrics.get("ece"),
@@ -1860,7 +1864,9 @@ class ForecastService:
             "probability_source": probability_source,
             "calibration_mode": calibration_mode,
             "calibration_method": f"{probability_source}:{calibration_mode}",
-            "uncertainty_source": "backtest_interval_coverage",
+            # This is not per-forecast predictive uncertainty. It only tells the
+            # consumer that the score comes from backtest reliability evidence.
+            "uncertainty_source": BACKTEST_RELIABILITY_PROXY_SOURCE,
             "fallback_reason": fallback_reason,
             "learned_model_version": learned_model_version,
             "fallback_used": fallback_reason is not None,
@@ -1923,8 +1929,12 @@ class ForecastService:
 
         baseline = float(np.median(y_history[-min(len(y_history), 84) :])) if len(y_history) > 0 else 0.0
         event_probability = quality_meta.get("event_probability") if quality_meta else None
-        confidence_value = quality_meta.get("confidence") if quality_meta else None
-        reliability_score = quality_meta.get("reliability_score") if quality_meta else None
+        reliability_score = (
+            quality_meta.get("reliability_score")
+            if quality_meta and quality_meta.get("reliability_score") is not None
+            else (quality_meta.get("confidence") if quality_meta else None)
+        )
+        confidence_value = reliability_score
         backtest_quality_score = quality_meta.get("backtest_quality_score") if quality_meta else None
         calibration_mode = (quality_meta.get("calibration_mode") if quality_meta else None) or "raw_probability"
         probability_source = (quality_meta.get("probability_source") if quality_meta else None) or "empirical_event_prevalence"
@@ -1951,7 +1961,14 @@ class ForecastService:
             backtest_quality_score=backtest_quality_score,
             probability_source=probability_source,
             calibration_mode=calibration_mode,
-            uncertainty_source=(quality_meta.get("uncertainty_source") if quality_meta else None) or "backtest_interval_coverage",
+            uncertainty_source=(
+                (quality_meta.get("uncertainty_source") if quality_meta else None)
+                or BACKTEST_RELIABILITY_PROXY_SOURCE
+            ),
+            confidence_semantics=(
+                (quality_meta.get("confidence_semantics") if quality_meta else None)
+                or CONFIDENCE_SEMANTICS_ALIAS
+            ),
             fallback_reason=fallback_reason,
             learned_model_version=(quality_meta.get("learned_model_version") if quality_meta else None),
             fallback_used=bool((quality_meta.get("fallback_used") if quality_meta else fallback_reason is not None)),
@@ -2386,6 +2403,16 @@ class ForecastService:
         count = 0
         region_code = normalize_forecast_region(forecast_data.get("region"))
         horizon = ensure_supported_horizon(forecast_data.get("horizon_days", DEFAULT_DECISION_HORIZON_DAYS))
+        contracts_payload = forecast_data.get("contracts") or {}
+        raw_event_forecast = (contracts_payload.get("event_forecast") or {})
+        normalized_event_forecast = normalize_event_forecast_payload(raw_event_forecast)
+        stored_confidence = normalized_event_forecast.get("confidence")
+        if stored_confidence is None and forecast_data.get("confidence") is not None:
+            normalized_event_forecast["confidence"] = float(forecast_data["confidence"])
+            normalized_event_forecast = normalize_event_forecast_payload(normalized_event_forecast)
+            stored_confidence = normalized_event_forecast.get("confidence")
+        if stored_confidence is None:
+            stored_confidence = forecast_data.get("confidence", 0.95)
 
         for item in forecast_data["forecast"]:
             existing = (
@@ -2403,14 +2430,14 @@ class ForecastService:
                 "predicted_value": item["yhat"],
                 "lower_bound": item["yhat_lower"],
                 "upper_bound": item["yhat_upper"],
-                "confidence": forecast_data.get("confidence", 0.95),
+                "confidence": stored_confidence,
                 "model_version": forecast_data["model_version"],
                 "features_used": {
                     "feature_names": forecast_data.get("feature_names", []),
                     "feature_importance": forecast_data.get("feature_importance", {}),
                     "training_window": forecast_data.get("training_window"),
                     "backtest_metrics": forecast_data.get("backtest_metrics"),
-                    "event_forecast": ((forecast_data.get("contracts") or {}).get("event_forecast") or {}),
+                    "event_forecast": normalized_event_forecast,
                     "forecast_quality": ((forecast_data.get("contracts") or {}).get("forecast_quality") or {}),
                 },
                 "trend_momentum_7d": item.get("trend_momentum_7d"),

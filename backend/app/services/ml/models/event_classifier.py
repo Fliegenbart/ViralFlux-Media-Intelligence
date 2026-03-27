@@ -4,9 +4,12 @@ from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
-from sklearn.isotonic import IsotonicRegression
 from xgboost import XGBClassifier
 
+from app.services.ml.forecast_horizon_utils import (
+    apply_probability_calibration,
+    select_probability_calibration_from_raw,
+)
 from app.services.ml.regional_panel_utils import choose_action_threshold
 
 
@@ -27,7 +30,7 @@ DEFAULT_EVENT_CLASSIFIER_CONFIG: dict[str, Any] = {
 @dataclass
 class LearnedEventModel:
     classifier: XGBClassifier
-    calibration: IsotonicRegression | None
+    calibration: Any | None
     action_threshold: float
     calibration_mode: str
 
@@ -39,6 +42,7 @@ class LearnedEventModel:
         y_train: np.ndarray,
         X_calibration: np.ndarray | None = None,
         y_calibration: np.ndarray | None = None,
+        calibration_dates: Any | None = None,
         min_recall: float = 0.35,
         config: dict[str, Any] | None = None,
     ) -> "LearnedEventModel":
@@ -59,14 +63,25 @@ class LearnedEventModel:
         if X_calibration is not None and y_calibration is not None and len(np.unique(y_calibration)) >= 2:
             calib_probs = classifier.predict_proba(X_calibration)[:, 1]
             calib_labels = np.asarray(y_calibration, dtype=int)
-            if len(calib_labels) >= 20:
-                calibration = IsotonicRegression(out_of_bounds="clip")
-                calibration.fit(calib_probs, calib_labels.astype(float))
-                calibration_mode = "isotonic"
-        effective_probs = np.clip(
-            calibration.predict(calib_probs.astype(float)) if calibration is not None else calib_probs.astype(float),
-            0.001,
-            0.999,
+            # Reuse the canonical shared helper path, but keep this model conservative:
+            # it still exposes only isotonic or raw_passthrough, not a new product mode.
+            calibration_payload = select_probability_calibration_from_raw(
+                calib_probs,
+                calib_labels,
+                as_of_dates=calibration_dates,
+                allowed_modes=("isotonic", "raw_probability"),
+                isotonic_min_samples=20,
+                isotonic_min_class_support=1,
+            )
+            calibration = calibration_payload.get("calibration")
+            calibration_mode = (
+                "isotonic"
+                if str(calibration_payload.get("calibration_mode") or "raw_probability") == "isotonic"
+                else "raw_passthrough"
+            )
+        effective_probs = apply_probability_calibration(
+            calibration,
+            np.asarray(calib_probs, dtype=float),
         )
         threshold, _, _ = choose_action_threshold(
             effective_probs,
@@ -82,9 +97,7 @@ class LearnedEventModel:
 
     def predict_proba(self, X: np.ndarray) -> np.ndarray:
         raw = self.classifier.predict_proba(X)[:, 1]
-        if self.calibration is None:
-            return np.clip(raw.astype(float), 0.001, 0.999)
-        return np.clip(self.calibration.predict(raw.astype(float)), 0.001, 0.999)
+        return apply_probability_calibration(self.calibration, raw)
 
     def metadata(self) -> dict[str, Any]:
         return {

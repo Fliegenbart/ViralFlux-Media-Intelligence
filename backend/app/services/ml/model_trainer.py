@@ -23,6 +23,7 @@ from app.core.time import utc_now
 import json
 import logging
 import os
+import pickle
 import tempfile
 from datetime import datetime
 from pathlib import Path
@@ -280,6 +281,8 @@ class XGBoostTrainer:
                 model_config=best_candidate.get("model_config"),
             )
         )
+        event_bundle = self._forecast_svc._build_event_probability_model_from_panel(panel)
+        event_model = event_bundle.get("model")
 
         current_metadata = self._read_existing_metadata(
             virus_typ,
@@ -348,6 +351,12 @@ class XGBoostTrainer:
             "rejected_reason": None if promoted else "candidate_did_not_beat_live_model",
             "prophet_mode": prophet_mode,
             "model_dir": str(model_dir),
+            "event_probability_source": event_bundle.get("probability_source"),
+            "event_model_family": event_bundle.get("model_family"),
+            "event_calibration_mode": event_bundle.get("calibration_mode"),
+            "event_fallback_reason": event_bundle.get("fallback_reason"),
+            "event_feature_names": event_bundle.get("feature_names"),
+            "event_oof_splits": (backtest_metrics.get("walk_forward") or {}).get("folds"),
         }
 
         if promoted:
@@ -358,6 +367,7 @@ class XGBoostTrainer:
                 model_median=model_med,
                 model_lower=model_lo,
                 model_upper=model_hi,
+                event_model=event_model,
                 feature_names=list(feature_names),
                 feature_importance=feature_importance,
                 training_samples=len(df),
@@ -455,6 +465,7 @@ class XGBoostTrainer:
         model_median: Any,
         model_lower: Any,
         model_upper: Any,
+        event_model: Any | None,
         feature_names: list[str],
         feature_importance: dict[str, float],
         training_samples: int,
@@ -492,6 +503,19 @@ class XGBoostTrainer:
         _atomic_save_model(model_median, model_dir / "model_median.json")
         _atomic_save_model(model_lower, model_dir / "model_lower.json")
         _atomic_save_model(model_upper, model_dir / "model_upper.json")
+        if event_model is not None:
+            fd, tmp_pickle_path = tempfile.mkstemp(
+                dir=str(model_dir), suffix=".event.tmp",
+            )
+            os.close(fd)
+            try:
+                with open(tmp_pickle_path, "wb") as handle:
+                    pickle.dump(event_model, handle)
+                os.replace(tmp_pickle_path, str(model_dir / "event_probability_model.pkl"))
+            except Exception:
+                if os.path.exists(tmp_pickle_path):
+                    os.unlink(tmp_pickle_path)
+                raise
 
         # Metadata sidecar
         now = utc_now()
@@ -507,6 +531,11 @@ class XGBoostTrainer:
                 k: float(v) for k, v in feature_importance.items()
             },
             "model_dir": str(model_dir),
+            "event_model_metadata": (
+                event_model.to_metadata()
+                if event_model is not None and hasattr(event_model, "to_metadata")
+                else None
+            ),
         }
         if metadata_overrides:
             metadata.update(metadata_overrides)

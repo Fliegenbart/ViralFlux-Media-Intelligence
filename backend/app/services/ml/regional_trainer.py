@@ -26,6 +26,10 @@ from app.services.ml.benchmarking.registry import (
 )
 from app.services.ml.forecast_orchestrator import ForecastOrchestrator
 from app.services.ml.forecast_horizon_utils import (
+    apply_probability_calibration,
+    build_calibration_guard_split_dates,
+    build_calibration_split_dates,
+    fit_isotonic_calibrator,
     SUPPORTED_FORECAST_HORIZONS,
     ensure_supported_horizon,
     regional_horizon_support_status,
@@ -2889,6 +2893,13 @@ class RegionalModelTrainer:
             calibration_frame_full = panel.tail(calibration_rows).copy() if calibration_rows > 0 else pd.DataFrame()
             train_frame_full = panel.iloc[:-calibration_rows].copy() if calibration_rows > 0 else panel.copy()
             if train_frame_full["event_label"].nunique() >= 2:
+                # LearnedEventModel now reuses the shared helper path and needs the
+                # true tail dates so its calibration guard stays time-respecting.
+                calibration_dates = (
+                    calibration_frame_full["as_of_date"].to_numpy()
+                    if not calibration_frame_full.empty and "as_of_date" in calibration_frame_full.columns
+                    else None
+                )
                 learned_event_model = LearnedEventModel.fit(
                     X_train=train_frame_full[feature_columns].to_numpy(),
                     y_train=train_frame_full["event_label"].to_numpy(),
@@ -2902,6 +2913,7 @@ class RegionalModelTrainer:
                         if not calibration_frame_full.empty and calibration_frame_full["event_label"].nunique() >= 2
                         else None
                     ),
+                    calibration_dates=calibration_dates,
                 )
         return {
             "classifier": classifier,
@@ -2983,26 +2995,23 @@ class RegionalModelTrainer:
 
     @staticmethod
     def _calibration_split_dates(train_dates: list[pd.Timestamp]) -> tuple[list[pd.Timestamp], list[pd.Timestamp]] | None:
-        if len(train_dates) < 35:
-            return None
-        calibration_size = max(14, int(len(train_dates) * CALIBRATION_HOLDOUT_FRACTION))
-        calibration_size = min(calibration_size, len(train_dates) - 20)
-        if calibration_size <= 0:
-            return None
-        return train_dates[:-calibration_size], train_dates[-calibration_size:]
+        return build_calibration_split_dates(
+            train_dates,
+            holdout_fraction=CALIBRATION_HOLDOUT_FRACTION,
+            min_total_dates=35,
+            min_holdout_dates=14,
+            min_train_dates=20,
+        )
 
     @staticmethod
     def _calibration_guard_split_dates(
         calibration_dates: list[pd.Timestamp],
     ) -> tuple[list[pd.Timestamp], list[pd.Timestamp]] | None:
-        unique_dates = sorted({pd.Timestamp(value).normalize() for value in calibration_dates})
-        if len(unique_dates) < (MIN_CALIBRATION_GUARD_DATES * 2):
-            return None
-        guard_size = max(MIN_CALIBRATION_GUARD_DATES, int(len(unique_dates) * CALIBRATION_GUARD_FRACTION))
-        guard_size = min(guard_size, len(unique_dates) - MIN_CALIBRATION_GUARD_DATES)
-        if guard_size <= 0:
-            return None
-        return unique_dates[:-guard_size], unique_dates[-guard_size:]
+        return build_calibration_guard_split_dates(
+            calibration_dates,
+            guard_fraction=CALIBRATION_GUARD_FRACTION,
+            min_guard_dates=MIN_CALIBRATION_GUARD_DATES,
+        )
 
     @staticmethod
     def _fit_classifier(
@@ -3062,17 +3071,16 @@ class RegionalModelTrainer:
 
     @staticmethod
     def _fit_isotonic(raw_probabilities: np.ndarray, labels: np.ndarray) -> IsotonicRegression | None:
-        if len(raw_probabilities) < 20 or len(np.unique(labels)) < 2:
-            return None
-        calibration = IsotonicRegression(out_of_bounds="clip")
-        calibration.fit(raw_probabilities, labels.astype(float))
-        return calibration
+        return fit_isotonic_calibrator(
+            raw_probabilities,
+            labels,
+            min_samples=20,
+            min_class_support=1,
+        )
 
     @staticmethod
     def _apply_calibration(calibration: IsotonicRegression | None, raw_probabilities: np.ndarray) -> np.ndarray:
-        if calibration is None:
-            return np.clip(raw_probabilities.astype(float), 0.001, 0.999)
-        return np.clip(calibration.predict(raw_probabilities.astype(float)), 0.001, 0.999)
+        return apply_probability_calibration(calibration, raw_probabilities)
 
     @staticmethod
     def _calibration_guard_metrics(

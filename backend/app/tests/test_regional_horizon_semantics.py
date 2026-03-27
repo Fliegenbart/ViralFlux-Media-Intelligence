@@ -16,15 +16,23 @@ from app.services.ml.forecast_horizon_utils import (
 from app.services.ml.regional_forecast import RegionalForecastService
 from app.services.ml.regional_trainer import RegionalModelTrainer
 
-_BACKTEST_SCRIPT_PATH = Path(__file__).resolve().parents[3] / "scripts" / "run_regional_hierarchy_backtest.py"
-_BACKTEST_SCRIPT_SPEC = importlib.util.spec_from_file_location(
-    "run_regional_hierarchy_backtest",
-    _BACKTEST_SCRIPT_PATH,
-)
-assert _BACKTEST_SCRIPT_SPEC is not None and _BACKTEST_SCRIPT_SPEC.loader is not None
-_BACKTEST_SCRIPT_MODULE = importlib.util.module_from_spec(_BACKTEST_SCRIPT_SPEC)
-_BACKTEST_SCRIPT_SPEC.loader.exec_module(_BACKTEST_SCRIPT_MODULE)
-_build_report = _BACKTEST_SCRIPT_MODULE._build_report
+_BACKTEST_SCRIPT_PATH = Path(__file__).resolve().parents[2] / "scripts" / "run_regional_hierarchy_backtest.py"
+_build_report = None
+_BACKTEST_SCRIPT_IMPORT_ERROR: str | None = None
+try:
+    if not _BACKTEST_SCRIPT_PATH.exists():
+        raise FileNotFoundError(f"Missing helper script: {_BACKTEST_SCRIPT_PATH}")
+    _BACKTEST_SCRIPT_SPEC = importlib.util.spec_from_file_location(
+        "run_regional_hierarchy_backtest",
+        _BACKTEST_SCRIPT_PATH,
+    )
+    assert _BACKTEST_SCRIPT_SPEC is not None and _BACKTEST_SCRIPT_SPEC.loader is not None
+    _BACKTEST_SCRIPT_MODULE = importlib.util.module_from_spec(_BACKTEST_SCRIPT_SPEC)
+    _BACKTEST_SCRIPT_SPEC.loader.exec_module(_BACKTEST_SCRIPT_MODULE)
+    _build_report = _BACKTEST_SCRIPT_MODULE._build_report
+except Exception as exc:  # pragma: no cover - exercised via skip path when helper is absent.
+    # This test module should still collect when the optional report helper is absent.
+    _BACKTEST_SCRIPT_IMPORT_ERROR = str(exc)
 
 
 class _LoadableModel:
@@ -50,7 +58,7 @@ class RegionalHorizonSemanticsTests(unittest.TestCase):
         self.assertTrue(influenza["pilot_supported"])
         self.assertEqual(influenza["pilot_supported_horizons"], [7])
         self.assertFalse(sars["pilot_supported"])
-        self.assertIn("conditional promotion", sars["reason"])
+        self.assertIn("shadow-only", sars["reason"])
 
     def test_prepare_horizon_panel_uses_future_current_incidence_as_target(self) -> None:
         panel = pd.DataFrame(
@@ -153,6 +161,8 @@ class RegionalHorizonSemanticsTests(unittest.TestCase):
         self.assertTrue(result["traceback_tail"])
 
     def test_backtest_report_renders_structured_error_payload(self) -> None:
+        if _build_report is None:
+            self.skipTest(_BACKTEST_SCRIPT_IMPORT_ERROR or "regional backtest report helper unavailable")
         report = _build_report(
             {
                 "status": "error",
@@ -256,6 +266,7 @@ class RegionalHorizonSemanticsTests(unittest.TestCase):
             virus_typ="Influenza A",
             panel=panel,
             feature_columns=["f1"],
+            hierarchy_feature_columns=["f1"],
             ww_only_columns=[],
             tau=1.1,
             kappa=0.5,

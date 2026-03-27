@@ -5,7 +5,12 @@ import numpy as np
 import pandas as pd
 from sklearn.isotonic import IsotonicRegression
 
-from app.services.ml.forecast_contracts import EventForecast, HEURISTIC_EVENT_SCORE_SOURCE
+from app.services.ml.forecast_contracts import (
+    BACKTEST_RELIABILITY_PROXY_SOURCE,
+    CONFIDENCE_SEMANTICS_ALIAS,
+    EventForecast,
+    HEURISTIC_EVENT_SCORE_SOURCE,
+)
 from app.services.ml.forecast_horizon_utils import (
     build_direct_target_frame,
     build_walk_forward_splits,
@@ -240,7 +245,7 @@ class LegacyForecastProbabilityStackTests(unittest.TestCase):
                 "event_probability": 0.63,
                 "forecast_ready": True,
                 "drift_status": "ok",
-                "confidence": 0.74,
+                "confidence": 0.12,
                 "reliability_score": 0.74,
                 "backtest_quality_score": 0.81,
                 "brier_score": 0.11,
@@ -263,6 +268,7 @@ class LegacyForecastProbabilityStackTests(unittest.TestCase):
         self.assertIn("probability_source", event)
         self.assertIn("calibration_mode", event)
         self.assertIn("uncertainty_source", event)
+        self.assertIn("confidence_semantics", event)
         self.assertIn("fallback_reason", event)
         self.assertEqual(event["event_probability"], 0.63)
         self.assertEqual(event["confidence"], 0.74)
@@ -270,6 +276,8 @@ class LegacyForecastProbabilityStackTests(unittest.TestCase):
         self.assertEqual(event["backtest_quality_score"], 0.81)
         self.assertEqual(event["probability_source"], "learned_exceedance_logistic_regression")
         self.assertEqual(event["calibration_mode"], "platt")
+        self.assertEqual(event["uncertainty_source"], BACKTEST_RELIABILITY_PROXY_SOURCE)
+        self.assertEqual(event["confidence_semantics"], CONFIDENCE_SEMANTICS_ALIAS)
 
     def test_event_forecast_contract_keeps_existing_fields_and_adds_heuristic_score(self) -> None:
         event = EventForecast(
@@ -292,6 +300,25 @@ class LegacyForecastProbabilityStackTests(unittest.TestCase):
         self.assertEqual(event["heuristic_event_score"], 0.68)
         self.assertEqual(event["probability_source"], HEURISTIC_EVENT_SCORE_SOURCE)
         self.assertTrue(event["fallback_used"])
+
+    def test_event_forecast_contract_uses_confidence_as_reliability_alias(self) -> None:
+        event = EventForecast(
+            event_key="influenza_a_growth_h7",
+            horizon_days=7,
+            event_probability=0.61,
+            threshold_pct=25.0,
+            baseline_value=100.0,
+            threshold_value=125.0,
+            calibration_method="learned_exceedance_logistic_regression:platt",
+            confidence=0.12,
+            reliability_score=0.73,
+            uncertainty_source="backtest_interval_coverage",
+        ).to_dict()
+
+        self.assertEqual(event["confidence"], 0.73)
+        self.assertEqual(event["reliability_score"], 0.73)
+        self.assertEqual(event["confidence_semantics"], CONFIDENCE_SEMANTICS_ALIAS)
+        self.assertEqual(event["uncertainty_source"], BACKTEST_RELIABILITY_PROXY_SOURCE)
 
 
 if __name__ == "__main__":

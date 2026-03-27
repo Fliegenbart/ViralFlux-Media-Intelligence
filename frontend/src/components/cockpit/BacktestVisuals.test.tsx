@@ -148,7 +148,7 @@ describe('WaveOutlookPanel', () => {
       />,
     );
 
-    expect(screen.getByText('Letzte validierte Marktansicht')).toBeInTheDocument();
+    expect(screen.getByText('Historischer Markt-Rückblick')).toBeInTheDocument();
     expect(screen.getByText('Letzter Ist-Wert')).toBeInTheDocument();
     expect(screen.getByText('Chart-Konventionen Markt-Rückblick')).toBeInTheDocument();
     expect(screen.getByText('Truth / Ist-Wert')).toBeInTheDocument();
@@ -184,7 +184,7 @@ describe('WaveSpreadPanel', () => {
       />,
     );
 
-    expect(screen.getByText('Hier beginnt die Welle')).toBeInTheDocument();
+    expect(screen.getByText('Historische Ausbreitungsreihenfolge')).toBeInTheDocument();
     expect(screen.getByText(/Berlin war in der letzten verfügbaren Saison der erste sichtbare Startpunkt/)).toBeInTheDocument();
     expect(screen.getByText('Saison 2025/2026')).toBeInTheDocument();
     expect(screen.getByText('Brandenburg')).toBeInTheDocument();
@@ -240,7 +240,7 @@ describe('FocusRegionOutlookPanel', () => {
       />,
     );
 
-    expect(screen.getByText('Forecast für Fokus-Bundesland')).toBeInTheDocument();
+    expect(screen.getByText('Forecast zur Fokusregion')).toBeInTheDocument();
     expect(screen.getByText('Chart-Konventionen Forecast')).toBeInTheDocument();
     expect(screen.getByText('Truth / Ist-Wert')).toBeInTheDocument();
     expect(screen.getByText('Unsicherheitsintervall')).toBeInTheDocument();

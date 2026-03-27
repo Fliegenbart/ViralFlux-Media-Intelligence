@@ -4026,6 +4026,203 @@ svg g[tabindex="0"]:focus > path {
   line-height: 1.65;
 }
 
+.now-briefing-stack,
+.now-briefing-trust,
+.now-briefing-support {
+  display: grid;
+  gap: 18px;
+  max-width: 980px;
+}
+
+.now-briefing-hero {
+  display: grid;
+  gap: 18px;
+  border: 1px solid rgba(125, 158, 189, 0.18);
+}
+
+.now-briefing-hero--strong {
+  border-color: rgba(16, 185, 129, 0.2);
+}
+
+.now-briefing-hero--guarded,
+.now-briefing-hero--weak,
+.now-briefing-hero--blocked {
+  border-color: rgba(245, 158, 11, 0.2);
+}
+
+.now-briefing-hero__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.now-briefing-hero__title {
+  margin: 6px 0 0;
+  color: var(--text-primary);
+  font-size: clamp(26px, 3.1vw, 34px);
+  line-height: 1.18;
+  letter-spacing: -0.03em;
+}
+
+.now-briefing-hero__pills {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.now-state-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(125, 158, 189, 0.2);
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.now-state-pill--strong {
+  border-color: rgba(16, 185, 129, 0.24);
+  background: rgba(16, 185, 129, 0.12);
+  color: #047857;
+}
+
+.now-state-pill--guarded,
+.now-state-pill--weak,
+.now-state-pill--blocked {
+  border-color: rgba(245, 158, 11, 0.28);
+  background: rgba(245, 158, 11, 0.1);
+  color: #b45309;
+}
+
+.now-briefing-hero__copy {
+  margin: 0;
+  max-width: 72ch;
+  color: var(--text-secondary);
+  font-size: 15px;
+  line-height: 1.75;
+}
+
+.now-briefing-hero__facts {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.now-briefing-fact {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+}
+
+.now-briefing-fact p,
+.now-briefing-callout p,
+.now-briefing-secondary__item p,
+.now-briefing-hero__help {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.now-briefing-callout {
+  display: grid;
+  gap: 6px;
+  border-color: rgba(245, 158, 11, 0.22);
+}
+
+.now-briefing-callout strong {
+  color: var(--text-primary);
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.now-briefing-hero__help {
+  color: var(--text-muted);
+}
+
+.now-briefing-secondary {
+  display: grid;
+  gap: 14px;
+}
+
+.now-briefing-secondary__list {
+  display: grid;
+  gap: 10px;
+}
+
+.now-briefing-secondary__item {
+  display: grid;
+  gap: 10px;
+  text-align: left;
+}
+
+.now-briefing-secondary__item-copy {
+  display: grid;
+  gap: 4px;
+}
+
+.now-briefing-secondary__item-title {
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.now-briefing-secondary__item-meta {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.now-briefing-secondary__empty {
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.now-briefing-skeleton {
+  display: grid;
+  gap: 14px;
+  max-width: 980px;
+}
+
+.now-briefing-skeleton__trust {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.now-briefing-skeleton__block {
+  min-height: 92px;
+  border-radius: 20px;
+  background: linear-gradient(90deg, rgba(226, 232, 240, 0.72), rgba(255, 255, 255, 0.9), rgba(226, 232, 240, 0.72));
+  background-size: 200% 100%;
+  animation: now-briefing-shimmer 1.8s linear infinite;
+}
+
+.now-briefing-skeleton__block--hero {
+  min-height: 320px;
+}
+
+.now-briefing-skeleton__block--secondary {
+  min-height: 140px;
+}
+
+@keyframes now-briefing-shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
 .now-toolbar__controls {
   display: grid;
   gap: 18px;
@@ -8150,6 +8347,7 @@ svg g[tabindex="0"]:focus > path {
   .ops-supporting-metrics,
   .summary-grid,
   .now-weekly-plan-grid,
+  .now-briefing-skeleton__trust,
   .now-trust-grid,
   .workspace-status-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -8204,6 +8402,8 @@ svg g[tabindex="0"]:focus > path {
   .ops-summary-grid,
   .ops-supporting-metrics,
   .ops-dashboard-grid--three-up,
+  .now-briefing-hero__facts,
+  .now-briefing-skeleton__trust,
   .now-weekly-plan-grid,
   .now-trust-grid,
   .workspace-status-grid,
@@ -8280,6 +8480,11 @@ svg g[tabindex="0"]:focus > path {
 
   .now-toolbar {
     gap: 14px;
+  }
+
+  .now-briefing-hero__header,
+  .now-briefing-hero__pills {
+    justify-content: flex-start;
   }
 
   .operator-header__actions {

@@ -2,7 +2,7 @@ import '@testing-library/jest-dom';
 import React, { act } from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 
-import { useNowPageData } from './useMediaData';
+import { buildNowPageViewModel, buildWorkspaceStatus, useNowPageData } from './useMediaData';
 import { mediaApi } from './api';
 
 jest.mock('./api', () => ({
@@ -43,6 +43,138 @@ function Harness() {
       <div data-testid="has-data">{view.hasData ? 'yes' : 'no'}</div>
       <div data-testid="summary">{view.summary}</div>
     </div>
+  );
+}
+
+function buildDecision(overrides: Record<string, unknown> = {}) {
+  const topRegions = (overrides.top_regions as Array<Record<string, unknown>> | undefined) || [
+    { code: 'BE', name: 'Berlin', signal_score: 72.4, trend: 'rising' },
+    { code: 'BY', name: 'Bayern', signal_score: 58.1, trend: 'rising' },
+    { code: 'SN', name: 'Sachsen', signal_score: 46.2, trend: 'flat' },
+  ];
+
+  return {
+    generated_at: '2026-03-21T09:00:00Z',
+    weekly_decision: {
+      decision_state: 'GO',
+      action_stage: 'activate',
+      recommended_action: 'Berlin priorisieren.',
+      why_now: ['Berlin zeigt die stärkste Dynamik.'],
+      risk_flags: [],
+      top_regions: topRegions,
+      forecast_state: 'ok',
+      ...((overrides.weekly_decision as Record<string, unknown> | undefined) || {}),
+    },
+    top_recommendations: overrides.top_recommendations ?? [
+      {
+        id: 'rec-1',
+        recommended_product: 'GeloMyrtol forte',
+        region_codes: ['BE'],
+        region_codes_display: ['BE'],
+        decision_brief: {
+          recommendation: { primary_region: 'Berlin' },
+          summary_sentence: 'Berlin priorisieren.',
+        },
+      },
+    ],
+    business_validation: overrides.business_validation ?? {
+      coverage_weeks: 26,
+    },
+    wave_run_id: 'wave-1',
+  } as any;
+}
+
+function buildEvidence(overrides: Record<string, unknown> = {}) {
+  return {
+    generated_at: '2026-03-21T09:00:00Z',
+    source_status: overrides.source_status ?? {
+      live_count: 2,
+      total: 2,
+      items: [{ status_color: 'green' }, { status_color: 'green' }],
+    },
+    forecast_monitoring: overrides.forecast_monitoring ?? {
+      forecast_readiness: 'ready',
+      monitoring_status: 'ok',
+      freshness_status: 'fresh',
+      alerts: [],
+    },
+    business_validation: overrides.business_validation ?? {
+      coverage_weeks: 26,
+    },
+    truth_coverage: overrides.truth_coverage ?? {
+      coverage_weeks: 30,
+      trust_readiness: 'im_aufbau',
+    },
+  } as any;
+}
+
+function buildForecast(predictions?: Array<Record<string, unknown>>) {
+  return {
+    generated_at: '2026-03-21T09:00:00Z',
+    predictions: predictions ?? [
+      {
+        bundesland: 'BE',
+        bundesland_name: 'Berlin',
+        event_probability_calibrated: 0.81,
+        decision_label: 'Prepare',
+        decision_rank: 1,
+        expected_target_incidence: 160,
+        current_known_incidence: 110,
+        reason_trace: { why: ['Berlin vorne'] },
+      },
+      {
+        bundesland: 'BY',
+        bundesland_name: 'Bayern',
+        event_probability_calibrated: 0.56,
+        decision_label: 'Prepare',
+        decision_rank: 2,
+        expected_target_incidence: 130,
+        current_known_incidence: 101,
+        reason_trace: { why: ['Bayern folgt'] },
+      },
+      {
+        bundesland: 'SN',
+        bundesland_name: 'Sachsen',
+        event_probability_calibrated: 0.43,
+        decision_label: 'Watch',
+        decision_rank: 3,
+        expected_target_incidence: 115,
+        current_known_incidence: 99,
+        reason_trace: { why: ['Sachsen beobachten'] },
+      },
+      {
+        bundesland: 'NW',
+        bundesland_name: 'Nordrhein-Westfalen',
+        event_probability_calibrated: 0.31,
+        decision_label: 'Watch',
+        decision_rank: 4,
+        expected_target_incidence: 108,
+        current_known_incidence: 97,
+        reason_trace: { why: ['Nur Reserve'] },
+      },
+    ],
+  } as any;
+}
+
+function buildBriefingView(input: {
+  decision?: any;
+  evidence?: any;
+  forecast?: any;
+}) {
+  const decision = input.decision ?? buildDecision();
+  const evidence = input.evidence ?? buildEvidence();
+  const forecast = input.forecast ?? buildForecast();
+  const workspaceStatus = buildWorkspaceStatus(decision, evidence);
+
+  return buildNowPageViewModel(
+    decision,
+    evidence,
+    forecast,
+    null,
+    null,
+    workspaceStatus,
+    120000,
+    7,
   );
 }
 
@@ -194,5 +326,105 @@ describe('useNowPageData', () => {
       });
       await Promise.resolve();
     });
+  });
+});
+
+describe('buildNowPageViewModel', () => {
+  it('limits secondary moves to two alternatives', () => {
+    const view = buildBriefingView({});
+
+    expect(view.secondaryMoves).toHaveLength(2);
+    expect(view.secondaryMoves.map((item) => item.name)).toEqual(['Bayern', 'Sachsen']);
+  });
+
+  it.each([
+    [
+      'strong',
+      buildDecision({
+        business_validation: {
+          validated_for_budget_activation: true,
+        },
+      }),
+      buildEvidence({
+        business_validation: {
+          validated_for_budget_activation: true,
+        },
+      }),
+      buildForecast(),
+      'Bereit für Review',
+    ],
+    [
+      'guarded',
+      buildDecision(),
+      buildEvidence(),
+      buildForecast(),
+      'Mit Vorsicht prüfen',
+    ],
+    [
+      'weak',
+      buildDecision({
+        top_regions: [],
+        top_recommendations: [],
+        weekly_decision: {
+          recommended_action: '',
+          why_now: [],
+          top_regions: [],
+        },
+      }),
+      buildEvidence({
+        source_status: null,
+        forecast_monitoring: {
+          monitoring_status: 'watch',
+          freshness_status: 'stale',
+          alerts: [],
+        },
+        business_validation: null,
+        truth_coverage: null,
+      }),
+      { generated_at: '2026-03-21T09:00:00Z', predictions: [] } as any,
+      'Noch keine belastbare Empfehlung',
+    ],
+    [
+      'blocked',
+      buildDecision({
+        weekly_decision: {
+          risk_flags: ['Die Revision der Quelldaten bleibt sichtbar.'],
+        },
+      }),
+      buildEvidence(),
+      buildForecast(),
+      'Vor Review blockiert',
+    ],
+  ])('derives the %s briefing state from existing signals', (_label, decision, evidence, forecast, expectedStateLabel) => {
+    const view = buildBriefingView({ decision, evidence, forecast });
+
+    expect(view.heroRecommendation?.stateLabel).toBe(expectedStateLabel);
+    expect(view.heroRecommendation?.state).toBe(_label);
+  });
+
+  it('creates an honest weak empty state when no reliable weekly recommendation exists', () => {
+    const view = buildBriefingView({
+      decision: buildDecision({
+        top_regions: [],
+        top_recommendations: [],
+        weekly_decision: {
+          recommended_action: '',
+          why_now: [],
+          top_regions: [],
+        },
+      }),
+      evidence: buildEvidence({
+        source_status: null,
+        forecast_monitoring: {
+          monitoring_status: 'watch',
+          freshness_status: 'stale',
+          alerts: [],
+        },
+      }),
+      forecast: { generated_at: '2026-03-21T09:00:00Z', predictions: [] } as any,
+    });
+
+    expect(view.emptyState?.title).toBe('Noch keine belastbare Wochenempfehlung.');
+    expect(view.primaryActionLabel).toBe('Top-Empfehlung prüfen');
   });
 });

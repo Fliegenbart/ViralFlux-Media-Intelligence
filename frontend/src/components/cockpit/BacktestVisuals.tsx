@@ -540,7 +540,7 @@ export const FocusRegionOutlookPanel: React.FC<FocusRegionOutlookPanelProps> = (
   if (loading) {
     return (
       <div className="card" style={{ padding: 20, color: 'var(--text-muted)' }}>
-        Fokusregion-Ausblick wird geladen...
+        Forecast zur Fokusregion wird geladen...
       </div>
     );
   }
@@ -549,9 +549,9 @@ export const FocusRegionOutlookPanel: React.FC<FocusRegionOutlookPanelProps> = (
     return (
       <div className="card" style={{ padding: 20, display: 'grid', gap: 14 }}>
         <div>
-          <h2 style={{ margin: 0, fontSize: 20, color: 'var(--text-primary)' }}>Forecast für Fokus-Bundesland</h2>
+          <h2 style={{ margin: 0, fontSize: 20, color: 'var(--text-primary)' }}>Forecast zur Fokusregion</h2>
           <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--text-muted)' }}>
-            Hier würden wir den bestätigten Stand, den Forecast und den Unsicherheitskorridor getrennt zeigen.
+            Hier würden wir den bestätigten Stand, den Forecast und den Unsicherheitskorridor als Support für die Wochenempfehlung getrennt zeigen.
           </p>
         </div>
         <div className="soft-panel" style={{ padding: 20, color: 'var(--text-muted)' }}>
@@ -565,9 +565,9 @@ export const FocusRegionOutlookPanel: React.FC<FocusRegionOutlookPanelProps> = (
     <div className="card" style={{ padding: 20 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start', marginBottom: 16 }}>
         <div>
-          <h2 style={{ margin: 0, fontSize: 20, color: 'var(--text-primary)' }}>Forecast für Fokus-Bundesland</h2>
+          <h2 style={{ margin: 0, fontSize: 20, color: 'var(--text-primary)' }}>Forecast zur Fokusregion</h2>
           <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--text-muted)' }}>
-            Das ist ein Forecast auf Bundesland-Level. Wir trennen hier bewusst bestätigte Ist-Werte, Forecast und Unsicherheitsintervall.
+            Das ist Support-Inhalt für die Wochenempfehlung auf Bundesland-Level. Wir trennen hier bewusst bestätigte Ist-Werte, Forecast und Unsicherheitsintervall.
           </p>
         </div>
         <div style={{ textAlign: 'right', fontSize: 12, color: 'var(--text-muted)' }}>
@@ -761,7 +761,7 @@ export const WaveOutlookPanel: React.FC<WaveOutlookPanelProps> = ({
   result,
   loading,
   showVirusSelector = true,
-  title = 'Letzte validierte Marktansicht',
+  title = 'Historischer Markt-Rückblick',
   subtitle,
 }) => {
   const rows = useMemo(() => buildValidationRows(result, 36), [result]);
@@ -769,7 +769,7 @@ export const WaveOutlookPanel: React.FC<WaveOutlookPanelProps> = ({
   const freshnessHint = useMemo(() => getWaveFreshnessHint(rows, markers), [rows, markers]);
   const targetLabel = result?.target_label || result?.target_source || 'Market Check';
   const selectedVirus = result?.virus_typ || virus;
-  const effectiveSubtitle = subtitle || `Hier siehst du den zuletzt validierten Verlauf für ${selectedVirus}. Die Karte ist ein ehrlicher Rückblick bis zum letzten bestätigten Ist-Wert und kein Live-Ticker von heute.`;
+  const effectiveSubtitle = subtitle || `Hier siehst du den zuletzt validierten Verlauf für ${selectedVirus}. Diese Karte ist bewusst der zweite Blick: ein ehrlicher Rückblick bis zum letzten bestätigten Ist-Wert und kein Live-Ticker von heute.`;
 
   if (loading) {
     return (
@@ -934,7 +934,7 @@ export const WaveSpreadPanel: React.FC<WaveSpreadPanelProps> = ({
   virus,
   result,
   loading,
-  title = 'Hier beginnt die Welle',
+  title = 'Historische Ausbreitungsreihenfolge',
   subtitle,
 }) => {
   const rows = useMemo(() => buildWaveSpreadRows(result), [result]);
@@ -948,7 +948,7 @@ export const WaveSpreadPanel: React.FC<WaveSpreadPanelProps> = ({
   const totalRegions = Number(summary?.regions_total ?? 16);
   const spreadDays = Number(summary?.spread_days ?? 0);
   const maxOffset = Math.max(spreadDays, ...rows.map((row) => row.offsetDays), 1);
-  const effectiveSubtitle = subtitle || `So sah die Ausbreitung von ${virus} in der zuletzt verfügbaren Saison aus. Diese Ansicht ist ein historischer Rückblick und kein Live-Forecast für heute.`;
+  const effectiveSubtitle = subtitle || `So sah die Ausbreitung von ${virus} in der zuletzt verfügbaren Saison aus. Diese Ansicht ist bewusst Hintergrund für den zweiten Blick und kein Live-Forecast für heute.`;
   const defaultBundesland = firstOnset?.bundesland || rows[0]?.bundesland || null;
   const selectedRegion = useMemo(
     () => (result?.regions || []).find((region) => region.bundesland === selectedBundesland) || null,

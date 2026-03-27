@@ -88,8 +88,75 @@ function buildView(): NowPageViewModel {
       cautionText: 'Die Lage bleibt nachvollziehbar, aber keine Vorhersage ist eine Garantie.',
       assertive: true,
     },
-    primaryActionLabel: 'Nächste Kampagne öffnen',
+    primaryActionLabel: 'Top-Empfehlung prüfen',
     primaryRecommendationId: 'rec-1',
+    heroRecommendation: {
+      headline: 'Respiratory Core Demand in Berlin',
+      actionLabel: 'Top-Empfehlung prüfen',
+      direction: 'Aktivieren',
+      region: 'Berlin',
+      regionCode: 'BE',
+      context: 'Berlin · GeloMyrtol forte',
+      whyNow: 'Berlin bündelt aktuell die stärkste Dynamik aus Vorhersage und Kontext.',
+      state: 'guarded',
+      stateLabel: 'Mit Vorsicht prüfen',
+      actionHint: 'Die Empfehlung ist prüfbar, sollte aber noch mit Evidenz und Freigabe gespiegelt werden.',
+      ctaDisabled: false,
+    },
+    secondaryMoves: [
+      {
+        code: 'BY',
+        name: 'Bayern',
+        stage: 'Vorbereiten',
+        probabilityLabel: '54.0%',
+        reason: 'Bayern ist der nächste sinnvolle Prüfpfad.',
+      },
+      {
+        code: 'SN',
+        name: 'Sachsen',
+        stage: 'Beobachten',
+        probabilityLabel: '41.0%',
+        reason: 'Sachsen bleibt als dritte Option sichtbar.',
+      },
+      {
+        code: 'NW',
+        name: 'Nordrhein-Westfalen',
+        stage: 'Beobachten',
+        probabilityLabel: '38.0%',
+        reason: 'Sollte wegen der Max-2-Regel nicht sichtbar sein.',
+      },
+    ],
+    briefingTrust: {
+      summary: 'Die Empfehlung ist vorhanden, braucht aber noch einen vorsichtigen Blick auf Evidenz und Freigabe.',
+      items: [
+        {
+          key: 'reliability',
+          label: 'Reliability',
+          value: 'Freigabe bereit',
+          detail: 'Monitoring Stabil · Forecast aktuell',
+          tone: 'success',
+        },
+        {
+          key: 'evidence',
+          label: 'Daten & Evidenz',
+          value: 'Aktuell',
+          detail: '6/7 Quellen aktuell · Kundendaten im Aufbau',
+          tone: 'success',
+        },
+        {
+          key: 'readiness',
+          label: 'Readiness / Blocker',
+          value: 'Im Aufbau',
+          detail: 'Vergleichsgruppe bereit · beobachtend',
+          tone: 'warning',
+        },
+      ],
+    },
+    supportState: {
+      stale: false,
+      label: null,
+      detail: null,
+    },
     primaryCampaignTitle: 'Respiratory Core Demand',
     primaryCampaignContext: 'Berlin · Zu prüfen',
     primaryCampaignCopy: 'Die Kampagne ist der direkteste prüfbare nächste Schritt.',
@@ -141,11 +208,11 @@ function buildWorkspaceStatus(): WorkspaceStatusSummary {
     forecast_status: 'Freigabe bereit',
     data_freshness: 'Aktuell',
     customer_data_status: 'im Aufbau',
-    open_blockers: '1 offen',
+    open_blockers: 'Keine',
     last_import_at: '2026-03-17T08:00:00Z',
-    blocker_count: 1,
-    blockers: ['Die Revision der Quelldaten bleibt sichtbar.'],
-    summary: 'Vor dem nächsten Schritt sollten wir zuerst die offenen Punkte prüfen.',
+    blocker_count: 0,
+    blockers: [],
+    summary: 'Die Empfehlung ist vorhanden, braucht aber noch einen vorsichtigen Blick auf Evidenz und Freigabe.',
     items: [
       {
         key: 'forecast_status',
@@ -171,9 +238,9 @@ function buildWorkspaceStatus(): WorkspaceStatusSummary {
       {
         key: 'open_blockers',
         question: 'Gibt es offene Blocker?',
-        value: '1 offen',
-        detail: 'Die Revision der Quelldaten bleibt sichtbar.',
-        tone: 'warning',
+        value: 'Keine',
+        detail: 'Aktuell gibt es keine offenen Blocker.',
+        tone: 'success',
       },
     ],
   };
@@ -299,7 +366,7 @@ function buildWaveRadar(): WaveRadarResponse {
 }
 
 describe('NowWorkspace', () => {
-  it('keeps the laptop-first layout hooks for toolbar, top grid and trust grid', () => {
+  it('keeps the laptop-first layout hooks for toolbar, hero stack and trust grid', () => {
     const { container } = render(
       <NowWorkspace
         virus="Influenza A"
@@ -324,11 +391,11 @@ describe('NowWorkspace', () => {
     );
 
     expect(container.querySelector('.now-toolbar')).toBeTruthy();
-    expect(container.querySelector('.now-command-grid')).toBeTruthy();
+    expect(container.querySelector('.now-briefing-stack')).toBeTruthy();
     expect(container.querySelector('.now-trust-grid')).toBeTruthy();
   });
 
-  it('shows one main decision and keeps secondary content in details', () => {
+  it('shows one dominant briefing hero, the next two moves and support content below trust', () => {
     render(
       <NowWorkspace
         virus="Influenza A"
@@ -352,21 +419,22 @@ describe('NowWorkspace', () => {
       />,
     );
 
-    expect(screen.getAllByText('PEIX x GELO Wochenplan').length).toBeGreaterThan(0);
-    expect(screen.getByText('Was PEIX und GELO diese Woche tun sollten')).toBeInTheDocument();
-    expect(screen.getByText('Forecast für Fokus-Bundesland')).toBeInTheDocument();
-    expect(screen.getByText(/In 7 Tagen erwarten wir für Berlin einen Viruslage-Wert von ca. 165,0/)).toBeInTheDocument();
-    expect(screen.getByText(/Letzter bestätigter Ist-Wert vom 17.03.2026/)).toBeInTheDocument();
-    expect(screen.getByText('Berlin ist diese Woche der klarste nächste Schritt.')).toBeInTheDocument();
-    expect(screen.getByText('Was tun?')).toBeInTheDocument();
-    expect(screen.getByText('Wo zuerst?')).toBeInTheDocument();
-    expect(screen.getByText('Warum jetzt?')).toBeInTheDocument();
-    expect(screen.getByText('Budgetrahmen')).toBeInTheDocument();
+    expect(screen.getAllByText('PEIX x GELO Weekly Briefing').length).toBeGreaterThan(0);
+    expect(screen.getByText('Was diese Woche zuerst geprüft werden sollte')).toBeInTheDocument();
+    expect(screen.getByText('Empfohlener Fokus diese Woche')).toBeInTheDocument();
+    expect(screen.getByText('Respiratory Core Demand in Berlin')).toBeInTheDocument();
+    expect(screen.getByText('Danach im Blick')).toBeInTheDocument();
+    expect(screen.getByText('Die zwei nächsten Prüfpfade')).toBeInTheDocument();
+    expect(screen.getByText('Bayern')).toBeInTheDocument();
+    expect(screen.getByText('Sachsen')).toBeInTheDocument();
+    expect(screen.queryByText('Nordrhein-Westfalen')).not.toBeInTheDocument();
+    expect(screen.getByText('Was die Empfehlung trägt')).toBeInTheDocument();
+    expect(screen.getByText('Reliability')).toBeInTheDocument();
+    expect(screen.getByText('Daten & Evidenz')).toBeInTheDocument();
+    expect(screen.getByText('Readiness / Blocker')).toBeInTheDocument();
+    expect(screen.getByText('Forecast zur Fokusregion')).toBeInTheDocument();
     expect(screen.getByText('Bundesland öffnen')).toBeInTheDocument();
-    expect(screen.getByText('Kann ich der Entscheidung trauen?')).toBeInTheDocument();
-    expect(screen.getByText('Der schnelle Sicherheitscheck')).toBeInTheDocument();
-    expect(screen.getByText('Ist eine Business-Freigabe schon drin?')).toBeInTheDocument();
-    expect(screen.getByText('Weitere Details')).toBeInTheDocument();
+    expect(screen.getByText('Zweiter Blick')).toBeInTheDocument();
   });
 
   it('opens the primary recommendation from the hero action', () => {
@@ -395,8 +463,119 @@ describe('NowWorkspace', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Nächste Kampagne öffnen' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Top-Empfehlung prüfen' }));
 
     expect(onOpenRecommendation).toHaveBeenCalledWith('rec-1');
+  });
+
+  it('shows an honest blocked state and disables the primary action when review is blocked', () => {
+    const blockedView = {
+      ...buildView(),
+      heroRecommendation: {
+        ...buildView().heroRecommendation!,
+        state: 'blocked' as const,
+        stateLabel: 'Vor Review blockiert',
+        actionHint: 'Die Revision der Quelldaten bleibt sichtbar.',
+        ctaDisabled: true,
+      },
+      briefingTrust: {
+        ...buildView().briefingTrust,
+        summary: 'Die Empfehlung ist sichtbar, aber vor dem Review liegen noch offene Punkte auf dem Tisch.',
+      },
+    };
+
+    render(
+      <NowWorkspace
+        virus="Influenza A"
+        onVirusChange={noop}
+        horizonDays={7}
+        onHorizonChange={noop}
+        view={blockedView}
+        workspaceStatus={{
+          ...buildWorkspaceStatus(),
+          open_blockers: '1 offen',
+          blocker_count: 1,
+          blockers: ['Die Revision der Quelldaten bleibt sichtbar.'],
+        }}
+        loading={false}
+        forecast={buildForecast()}
+        focusRegionBacktest={buildFocusRegionBacktest()}
+        focusRegionBacktestLoading={false}
+        waveOutlook={null}
+        waveOutlookLoading={false}
+        waveRadar={buildWaveRadar()}
+        waveRadarLoading={false}
+        onOpenRecommendation={noop}
+        onOpenRegions={noop}
+        onOpenCampaigns={noop}
+        onOpenEvidence={noop}
+      />,
+    );
+
+    expect(screen.getAllByText('Vor Review blockiert').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Die Revision der Quelldaten bleibt sichtbar.').length).toBeGreaterThan(0);
+    expect(screen.getByRole('button', { name: 'Top-Empfehlung prüfen' })).toBeDisabled();
+  });
+
+  it('shows a briefing-style loading skeleton before data is available', () => {
+    render(
+      <NowWorkspace
+        virus="Influenza A"
+        onVirusChange={noop}
+        horizonDays={7}
+        onHorizonChange={noop}
+        view={{ ...buildView(), hasData: false }}
+        workspaceStatus={null}
+        loading
+        forecast={null}
+        focusRegionBacktest={null}
+        focusRegionBacktestLoading={false}
+        waveOutlook={null}
+        waveOutlookLoading={false}
+        waveRadar={null}
+        waveRadarLoading={false}
+        onOpenRecommendation={noop}
+        onOpenRegions={noop}
+        onOpenCampaigns={noop}
+        onOpenEvidence={noop}
+      />,
+    );
+
+    expect(screen.getByLabelText('Weekly Briefing wird geladen')).toBeInTheDocument();
+  });
+
+  it('shows honest weak and empty wording when no weekly recommendation is available', () => {
+    render(
+      <NowWorkspace
+        virus="Influenza A"
+        onVirusChange={noop}
+        horizonDays={7}
+        onHorizonChange={noop}
+        view={{
+          ...buildView(),
+          heroRecommendation: null,
+          emptyState: {
+            title: 'Noch keine belastbare Wochenempfehlung.',
+            body: 'Es fehlen noch belastbare Regional- und Qualitätsdaten für einen klaren Wochenfokus.',
+          },
+        }}
+        workspaceStatus={buildWorkspaceStatus()}
+        loading={false}
+        forecast={null}
+        focusRegionBacktest={null}
+        focusRegionBacktestLoading={false}
+        waveOutlook={null}
+        waveOutlookLoading={false}
+        waveRadar={null}
+        waveRadarLoading={false}
+        onOpenRecommendation={noop}
+        onOpenRegions={noop}
+        onOpenCampaigns={noop}
+        onOpenEvidence={noop}
+      />,
+    );
+
+    expect(screen.getByText('Noch keine belastbare Wochenempfehlung.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Evidenz prüfen' })).toBeInTheDocument();
   });
 });

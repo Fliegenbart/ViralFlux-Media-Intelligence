@@ -9,7 +9,7 @@ interface Props {
 }
 
 const PRIMARY_NAV_ITEMS = [
-  { label: 'Wochenplan', path: '/jetzt', helper: 'Was PEIX und GELO diese Woche tun sollten', icon: 'bolt' },
+  { label: 'Wochenplan', path: '/jetzt', helper: 'Was PEIX für GELO diese Woche zuerst prüfen sollte', icon: 'bolt' },
   { label: 'Regionen', path: '/regionen', helper: 'Welche Region zuerst wichtig ist', icon: 'location_on' },
   { label: 'Kampagnen', path: '/kampagnen', helper: 'Welcher Fall als Nächstes dran ist', icon: 'auto_awesome' },
   { label: 'Evidenz', path: '/evidenz', helper: 'Was noch geprüft werden muss', icon: 'verified' },
@@ -19,8 +19,8 @@ const SECTION_META = [
   {
     path: '/jetzt',
     kicker: 'PEIX x GELO',
-    title: 'Wochenplan',
-    description: 'Was PEIX und GELO diese Woche tun sollten, wo zuerst, und warum.',
+    title: 'Weekly Briefing',
+    description: 'Was PEIX für GELO diese Woche zuerst prüfen sollte, in welchem Bundesland und warum.',
   },
   {
     path: '/regionen',
@@ -59,10 +59,13 @@ const AppLayout: React.FC<Props> = ({ children }) => {
     description: 'Hier bleibt dein aktueller Arbeitsstand an einem Ort.',
   };
   const operatorStatusLabel = location.pathname.startsWith('/jetzt')
-    ? 'GELO Wochenplan aktiv'
+    ? 'GELO Weekly Briefing aktiv'
     : location.pathname.startsWith('/evidenz')
       ? 'Evidenz im Blick'
       : 'Pilotbereich aktiv';
+  const exportLabel = location.pathname.startsWith('/jetzt')
+    ? 'Weekly Readout exportieren'
+    : UI_COPY.weeklyReport;
 
   const handlePdfDownload = async () => {
     setPdfLoading(true);
@@ -172,7 +175,7 @@ const AppLayout: React.FC<Props> = ({ children }) => {
                 className="operator-status-card__button"
                 aria-busy={pdfLoading}
               >
-                {pdfLoading ? 'Wird erstellt...' : 'Bericht exportieren'}
+                {pdfLoading ? 'Wird erstellt...' : exportLabel}
               </button>
             </section>
 
@@ -227,7 +230,7 @@ const AppLayout: React.FC<Props> = ({ children }) => {
                   className="operator-header__primary"
                   aria-busy={pdfLoading}
                 >
-                  {pdfLoading ? 'Wird erstellt...' : UI_COPY.weeklyReport}
+                  {pdfLoading ? 'Wird erstellt...' : exportLabel}
                 </button>
                 <button
                   onClick={toggle}

@@ -78,6 +78,49 @@ export interface NowPageRelatedRegion {
   reason: string;
 }
 
+export type NowPageRecommendationState = 'strong' | 'guarded' | 'weak' | 'blocked';
+
+export interface NowPageHeroRecommendation {
+  headline: string;
+  actionLabel: string;
+  direction: string;
+  region: string;
+  regionCode: string | null;
+  context: string;
+  whyNow: string;
+  state: NowPageRecommendationState;
+  stateLabel: string;
+  actionHint: string | null;
+  ctaDisabled: boolean;
+}
+
+export interface NowPageSecondaryMove {
+  code: string;
+  name: string;
+  stage: string;
+  probabilityLabel: string;
+  reason: string;
+}
+
+export interface NowPageBriefingTrustItem {
+  key: 'reliability' | 'evidence' | 'readiness';
+  label: string;
+  value: string;
+  detail: string;
+  tone: 'success' | 'warning' | 'neutral';
+}
+
+export interface NowPageBriefingTrust {
+  summary: string;
+  items: NowPageBriefingTrustItem[];
+}
+
+export interface NowPageSupportState {
+  stale: boolean;
+  label: string | null;
+  detail: string | null;
+}
+
 export interface NowPageViewModel {
   hasData: boolean;
   generatedAt: string | null;
@@ -87,6 +130,10 @@ export interface NowPageViewModel {
   proof: PredictionNarrative | null;
   primaryActionLabel: string;
   primaryRecommendationId: string | null;
+  heroRecommendation: NowPageHeroRecommendation | null;
+  secondaryMoves: NowPageSecondaryMove[];
+  briefingTrust: NowPageBriefingTrust;
+  supportState: NowPageSupportState;
   primaryCampaignTitle: string;
   primaryCampaignContext: string;
   primaryCampaignCopy: string;
@@ -261,7 +308,84 @@ function businessTrustTone(value: string): 'success' | 'warning' | 'neutral' {
   return 'neutral';
 }
 
-function buildWorkspaceStatus(
+function recommendationStateLabel(state: NowPageRecommendationState): string {
+  if (state === 'strong') return 'Bereit für Review';
+  if (state === 'guarded') return 'Mit Vorsicht prüfen';
+  if (state === 'weak') return 'Noch keine belastbare Empfehlung';
+  return 'Vor Review blockiert';
+}
+
+function deriveBriefingState({
+  hasRegionalModel,
+  hasActionableRecommendation,
+  forecastTone,
+  dataTone,
+  businessTone,
+  workspaceStatus,
+  dataFreshnessValue,
+}: {
+  hasRegionalModel: boolean;
+  hasActionableRecommendation: boolean;
+  forecastTone: 'success' | 'warning' | 'neutral';
+  dataTone: 'success' | 'warning' | 'neutral';
+  businessTone: 'success' | 'warning' | 'neutral';
+  workspaceStatus: WorkspaceStatusSummary | null;
+  dataFreshnessValue: string;
+}): {
+  state: NowPageRecommendationState;
+  stateLabel: string;
+  actionHint: string | null;
+  summary: string;
+  stale: boolean;
+  staleLabel: string | null;
+  staleDetail: string | null;
+} {
+  const blockers = workspaceStatus?.blockers || [];
+  const hasBlockers = (workspaceStatus?.blocker_count || 0) > 0 || blockers.length > 0;
+  const stale = workspaceStatus?.data_freshness === 'Beobachten' || dataFreshnessValue === 'Beobachten';
+  const strongSignals = forecastTone === 'success' && dataTone === 'success' && businessTone === 'success';
+  const weakSignals = !hasRegionalModel
+    || !hasActionableRecommendation
+    || (forecastTone === 'neutral' && dataTone !== 'success' && businessTone === 'neutral');
+
+  const state: NowPageRecommendationState = hasBlockers
+    ? 'blocked'
+    : strongSignals
+      ? 'strong'
+      : weakSignals
+        ? 'weak'
+        : 'guarded';
+
+  const stateLabel = recommendationStateLabel(state);
+  const actionHint = state === 'blocked'
+    ? blockers[0] || 'Vor dem Review liegt noch mindestens ein offener Blocker vor.'
+    : state === 'weak'
+      ? 'Die Richtung ist sichtbar, aber die Datenlage reicht noch nicht für eine belastbare Wochenempfehlung.'
+      : state === 'guarded'
+        ? 'Die Empfehlung ist prüfbar, sollte aber noch mit Evidenz und Freigabe gespiegelt werden.'
+        : null;
+  const summary = state === 'blocked'
+    ? 'Die Empfehlung ist sichtbar, aber vor dem Review liegen noch offene Punkte auf dem Tisch.'
+    : state === 'strong'
+      ? 'Forecast, Datenlage und Freigabe tragen die Empfehlung aktuell klar genug für den nächsten Review.'
+      : state === 'weak'
+        ? 'Es gibt erste Richtungen, aber noch keine wirklich belastbare Wochenempfehlung.'
+        : 'Die Empfehlung ist vorhanden, braucht aber noch einen vorsichtigen Blick auf Evidenz und Freigabe.';
+
+  return {
+    state,
+    stateLabel,
+    actionHint,
+    summary,
+    stale,
+    staleLabel: stale ? 'Daten nicht ganz frisch' : null,
+    staleDetail: stale
+      ? workspaceStatus?.items.find((item) => item.key === 'data_freshness')?.detail || 'Die Datenbasis braucht noch einen kurzen Frische-Check.'
+      : null,
+  };
+}
+
+export function buildWorkspaceStatus(
   decision: MediaDecisionResponse | null,
   evidence: MediaEvidenceResponse | null,
 ): WorkspaceStatusSummary | null {
@@ -356,12 +480,13 @@ function buildWorkspaceStatus(
   };
 }
 
-function buildNowPageViewModel(
+export function buildNowPageViewModel(
   decision: MediaDecisionResponse | null,
   evidence: MediaEvidenceResponse | null,
   forecast: RegionalForecastResponse | null,
   allocation: RegionalAllocationResponse | null,
   campaignRecommendations: RegionalCampaignRecommendationsResponse | null,
+  workspaceStatus: WorkspaceStatusSummary | null,
   weeklyBudget: number,
   horizonDays: number,
 ): NowPageViewModel {
@@ -407,7 +532,6 @@ function buildNowPageViewModel(
     leadCampaign?.region_name,
     leadAllocation?.bundesland_name,
     leadPrediction?.bundesland_name,
-    'Deutschland',
   );
   const focusPrediction = findPredictionForRegion(focusRegionCode, focusRegionName) || leadPrediction;
   const focusCampaign = findCampaignForRegion(focusRegionCode, focusRegionName) || leadCampaign;
@@ -471,6 +595,7 @@ function buildNowPageViewModel(
   const sourceItems = sourceSummary?.items || [];
   const sourceAttentionCount = sourceItems.filter((item) => String(item.status_color || '').toLowerCase() !== 'green').length;
   const dataFreshnessValue = sourceSummary ? (sourceAttentionCount > 0 ? 'Beobachten' : 'Aktuell') : 'Unklar';
+  const dataFreshnessTone = sourceSummary ? (sourceAttentionCount > 0 ? 'warning' : 'success') : 'neutral';
   const dataFreshnessDetail = sourceSummary
     ? `${sourceSummary.live_count || 0}/${sourceSummary.total || 0} Quellen aktuell${sourceAttentionCount > 0 ? `, ${sourceAttentionCount} mit Prüfbedarf` : ''}`
     : 'Noch kein Quellenstatus verfügbar.';
@@ -645,6 +770,24 @@ function buildNowPageViewModel(
     }));
 
   const relatedRegions = decisionRelatedRegions.length > 0 ? decisionRelatedRegions : forecastRelatedRegions;
+  const hasFocusRegion = Boolean(focusRegionCode || (focusRegionName && focusRegionName !== '-'));
+  const hasActionableRecommendation = Boolean(
+    topCard?.id
+    || focusCampaign
+    || focusAllocation
+    || focusPrediction
+    || weeklyDecision?.recommended_action
+    || hasFocusRegion,
+  );
+  const stateSnapshot = deriveBriefingState({
+    hasRegionalModel: hasFocusRegion || Boolean(sortedPredictions.length),
+    hasActionableRecommendation,
+    forecastTone: forecastStatusTone(forecastProofStatus),
+    dataTone: dataFreshnessTone,
+    businessTone: businessTrustTone(businessTrustValue),
+    workspaceStatus,
+    dataFreshnessValue,
+  });
 
   const hasData = Boolean(
     decision
@@ -655,12 +798,20 @@ function buildNowPageViewModel(
   );
 
   const emptyMessage = cleanCopy(forecast?.message || allocation?.message || campaignRecommendations?.message);
-  const emptyState = hasData ? null : {
+  const emptyState = !hasData ? {
     title: forecast?.status === 'no_model'
       ? 'Für diesen Scope ist noch kein regionales Modell verfügbar.'
       : 'Für diesen Scope liegen gerade keine belastbaren Arbeitsdaten vor.',
     body: emptyMessage || 'Wechsle Virus oder Zeitraum oder prüfe die Qualität.',
-  };
+  } : (!hasFocusRegion && forecast?.status === 'no_model') ? {
+    title: 'Für dieses Wochenbriefing liegt noch kein regionales Modell vor.',
+    body: emptyMessage || 'Sobald der Forecast wieder Bundesland-Signale liefert, erscheint hier auch die nächste regionale Empfehlung.',
+  } : (!hasActionableRecommendation) ? {
+    title: 'Noch keine belastbare Wochenempfehlung.',
+    body: sourceSummary
+      ? 'Die Datenlage zeigt erste Signale, reicht aber noch nicht für einen klaren Fokus auf Bundesland-Level.'
+      : 'Es fehlen noch belastbare Regional- und Qualitätsdaten für einen klaren Wochenfokus.',
+  } : null;
 
   const cleanedDecisionSummary = cleanCopy(weeklyDecision?.recommended_action);
   const proof = focusRegionName
@@ -687,16 +838,102 @@ function buildNowPageViewModel(
         `Die stärkste nächste Aktion liegt aktuell in ${focusRegionName}.`,
       )
   );
+  const heroHeadline = firstCleanText(
+    textMentionsRegion(primaryCampaignTitle, focusRegionName)
+      ? primaryCampaignTitle
+      : primaryCampaignTitle !== '-' && focusRegionName !== '-'
+        ? `${primaryCampaignTitle} in ${focusRegionName}`
+        : '',
+    cleanedDecisionSummary,
+    focusRegionName !== '-' ? `${focusRegionName} zuerst priorisieren` : '',
+    'Wochenfokus vorbereiten',
+  );
+  const heroContext = firstCleanText(
+    focusRegionName !== '-' && focusProduct !== '-'
+      ? `${focusRegionName} · ${focusProduct}`
+      : '',
+    focusRegionName !== '-' ? `${focusRegionName} · ${focusStage}` : '',
+    primaryCampaignContext,
+    'Bundesland-Level',
+  );
+  const heroWhyNow = firstCleanText(
+    reasons[0],
+    focusReason,
+    proof?.supportingText,
+    primaryCampaignCopy,
+    'Hier zeigt sich aktuell der stärkste nächste Schritt für diese Woche.',
+  );
+  const secondaryMoves = relatedRegions.slice(0, 2).map((region) => ({
+    code: region.code,
+    name: region.name,
+    stage: region.stage,
+    probabilityLabel: region.probabilityLabel,
+    reason: region.reason,
+  }));
+  const briefingTrustItems: NowPageBriefingTrustItem[] = [
+    {
+      key: 'reliability',
+      label: 'Reliability',
+      value: forecastProofStatus,
+      detail: forecastTrustDetail,
+      tone: forecastStatusTone(forecastProofStatus),
+    },
+    {
+      key: 'evidence',
+      label: 'Daten & Evidenz',
+      value: dataFreshnessValue,
+      detail: firstCleanText(
+        dataFreshnessDetail,
+        trustValue !== '-' ? `Kundendaten ${trustValue}` : '',
+        evidenceValue !== '-' ? `Belegstufe ${evidenceValue}` : '',
+      ),
+      tone: dataFreshnessTone,
+    },
+    {
+      key: 'readiness',
+      label: 'Readiness / Blocker',
+      value: workspaceStatus?.open_blockers && workspaceStatus.open_blockers !== 'Keine'
+        ? workspaceStatus.open_blockers
+        : businessTrustValue,
+      detail: workspaceStatus?.blocker_count
+        ? workspaceStatus.blockers[0]
+        : businessTrustDetail,
+      tone: workspaceStatus?.blocker_count ? 'warning' : businessTrustTone(businessTrustValue),
+    },
+  ];
 
   return {
     hasData,
     generatedAt: decision?.generated_at || forecast?.generated_at || allocation?.generated_at || campaignRecommendations?.generated_at || evidence?.generated_at || null,
-    title: `${focusStage}: ${focusRegionName}`,
+    title: focusRegionName !== '-' ? `${focusStage}: ${focusRegionName}` : 'Wochenbriefing',
     summary: focusAlignedSummary,
     note: proof?.supportingText || buildNowPageNote(focusStage),
     proof,
-    primaryActionLabel: topCard?.id ? 'Nächste Kampagne öffnen' : 'Kampagnen prüfen',
+    primaryActionLabel: 'Top-Empfehlung prüfen',
     primaryRecommendationId: topCard?.id || null,
+    heroRecommendation: hasData ? {
+      headline: heroHeadline,
+      actionLabel: 'Top-Empfehlung prüfen',
+      direction: focusStage,
+      region: focusRegionName !== '-' ? focusRegionName : 'Bundesland noch offen',
+      regionCode: focusRegionCode,
+      context: heroContext,
+      whyNow: heroWhyNow,
+      state: stateSnapshot.state,
+      stateLabel: stateSnapshot.stateLabel,
+      actionHint: stateSnapshot.actionHint,
+      ctaDisabled: stateSnapshot.state === 'blocked',
+    } : null,
+    secondaryMoves,
+    briefingTrust: {
+      summary: stateSnapshot.summary,
+      items: briefingTrustItems,
+    },
+    supportState: {
+      stale: stateSnapshot.stale,
+      label: stateSnapshot.staleLabel,
+      detail: stateSnapshot.staleDetail,
+    },
     primaryCampaignTitle,
     primaryCampaignContext,
     primaryCampaignCopy,
@@ -745,7 +982,7 @@ function buildNowPageViewModel(
         question: 'Sind die Daten frisch genug?',
         value: dataFreshnessValue,
         detail: dataFreshnessDetail,
-        tone: sourceSummary ? (sourceAttentionCount > 0 ? 'warning' : 'success') : 'neutral',
+        tone: dataFreshnessTone,
       },
       {
         key: 'business',
@@ -953,6 +1190,8 @@ export function useNowPageData(
     };
   }, [dataVersion, loadNowPage]);
 
+  const workspaceStatus = buildWorkspaceStatus(decision, evidence);
+
   return {
     decision,
     evidence,
@@ -967,8 +1206,17 @@ export function useNowPageData(
     waveRadarLoading,
     loading,
     loadNowPage,
-    workspaceStatus: buildWorkspaceStatus(decision, evidence),
-    view: buildNowPageViewModel(decision, evidence, forecast, allocation, campaignRecommendations, weeklyBudget, horizonDays),
+    workspaceStatus,
+    view: buildNowPageViewModel(
+      decision,
+      evidence,
+      forecast,
+      allocation,
+      campaignRecommendations,
+      workspaceStatus,
+      weeklyBudget,
+      horizonDays,
+    ),
   };
 }
 

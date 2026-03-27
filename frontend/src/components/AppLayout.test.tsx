@@ -44,6 +44,8 @@ describe('AppLayout theme rendering', () => {
     expect(screen.getByLabelText('Dunkles Design aktivieren')).toBeInTheDocument();
     expect(screen.getByRole('banner')).toHaveClass('surface-header');
     expect(screen.getByRole('link', { name: 'Direkt zum Inhalt springen' })).toHaveAttribute('href', '#main-content');
+    expect(screen.getAllByText('Weekly Readout exportieren').length).toBeGreaterThan(0);
+    expect(screen.getByRole('heading', { name: 'Weekly Briefing' })).toBeInTheDocument();
   });
 
   it('shows the light-mode activation label in dark theme', () => {

@@ -256,7 +256,7 @@ describe('RegionWorkbench', () => {
     expect(screen.getAllByText('Bundesländer im Vergleich').length).toBeGreaterThan(0);
     expect(screen.getByText('Orientierungskarte auf Bundesland-Level')).toBeInTheDocument();
     expect(screen.getByText('GermanyMap Mock')).toBeInTheDocument();
-    expect(screen.getAllByText('Kein City-Forecast').length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/City-Forecast/i).length).toBeGreaterThan(0);
 
     fireEvent.click(screen.getByRole('button', { name: 'Regionalen Vorschlag öffnen' }));
 

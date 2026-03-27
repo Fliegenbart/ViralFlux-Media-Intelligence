@@ -1,7 +1,7 @@
 import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
 
 import CollapsibleSection from '../CollapsibleSection';
-import { COCKPIT_SEMANTICS, UI_COPY, evidenceStatusHelper, evidenceStatusLabel } from '../../lib/copy';
+import { UI_COPY, evidenceStatusHelper, evidenceStatusLabel } from '../../lib/copy';
 import { explainInPlainGerman, normalizeGermanText } from '../../lib/plainLanguage';
 import {
   ConnectorCatalogItem,
@@ -209,29 +209,6 @@ const RecommendationDrawer: React.FC<Props> = ({
         onClick={(event) => event.stopPropagation()}
       >
         <div className="drawer-header review-sheet-header">
-          <div className="review-sheet-topline">
-            <span className="campaign-status-badge" style={tone}>
-              {detail?.status_label || workflowLabel(detail?.status) || 'Lädt'}
-            </span>
-            {drawerReadiness ? (
-              <span className={`campaign-confidence-chip campaign-confidence-chip--${drawerReadiness.tone}`}>
-                {drawerReadiness.label}
-              </span>
-            ) : null}
-            <span className="campaign-confidence-chip">
-              {(detail?.region_codes_display?.join(', ') || detail?.region || 'National')} · {UI_COPY.stateLevelScope}
-            </span>
-            {detailEvidenceClass && (
-              <span className="campaign-confidence-chip">
-                {evidenceStatusLabel(detailEvidenceClass)}
-              </span>
-            )}
-            {detail?.updated_at && (
-              <span className="campaign-confidence-chip">
-                Aktualisiert {formatDateTime(detail.updated_at)}
-              </span>
-            )}
-          </div>
           <button ref={closeButtonRef} className="media-button secondary" type="button" onClick={onClose} aria-label="Kampagnen-Detail schließen">Schließen</button>
         </div>
 
@@ -241,10 +218,30 @@ const RecommendationDrawer: React.FC<Props> = ({
           <div className="review-sheet-stack">
             <section className="review-sheet-hero">
               <div className="review-sheet-main">
+                <div className="review-sheet-topline">
+                  <span className="campaign-status-badge" style={tone}>
+                    {detail?.status_label || workflowLabel(detail?.status) || 'Lädt'}
+                  </span>
+                  {drawerReadiness ? (
+                    <span className={`campaign-confidence-chip campaign-confidence-chip--${drawerReadiness.tone}`}>
+                      {drawerReadiness.label}
+                    </span>
+                  ) : null}
+                </div>
                 <span className="section-kicker">GELO-Freigabe-Memo</span>
                 <h2 id={titleId} className="review-sheet-title">
                   {normalizeGermanText(detail.display_title || detail.campaign_name || 'Kampagnenvorschlag')}
                 </h2>
+                <div className="review-sheet-meta">
+                  <span className="review-sheet-meta__item">
+                    {(detail.region_codes_display?.join(', ') || detail.region || 'National')} · Bundesland-Level
+                  </span>
+                  {detail?.updated_at ? (
+                    <span className="review-sheet-meta__item">
+                      Stand {formatDateTime(detail.updated_at)}
+                    </span>
+                  ) : null}
+                </div>
                 <p id={summaryId} className="review-sheet-copy">{heroSummary}</p>
 
                 <div className="review-action-row">
@@ -287,15 +284,16 @@ const RecommendationDrawer: React.FC<Props> = ({
                     <strong>{channelDirection}</strong>
                     <small>Die erste Ebene zeigt bewusst nur die Richtung.</small>
                   </div>
-                  <div className="campaign-metric-card">
-                    <span>Startfenster</span>
-                    <strong>{formatDateShort(detail.activation_window?.start)}</strong>
-                    <small>{flightWindowLabel(detail)}</small>
+                </div>
+
+                <div className="workspace-note-list review-sheet-aside-notes">
+                  <div className="workspace-note-card">
+                    <strong>Startfenster</strong>
+                    <div>{flightWindowLabel(detail)}</div>
                   </div>
-                  <div className="campaign-metric-card">
-                    <span>Übergabe</span>
-                    <strong>{readinessStateLabel(syncPreview?.readiness.state, syncPreview?.readiness.can_sync_now)}</strong>
-                    <small>{syncPreview?.connector_label || 'noch keine Übergabevorschau'}</small>
+                  <div className="workspace-note-card">
+                    <strong>Übergabe</strong>
+                    <div>{readinessStateLabel(syncPreview?.readiness.state, syncPreview?.readiness.can_sync_now)} · {syncPreview?.connector_label || 'noch keine Übergabevorschau'}</div>
                   </div>
                 </div>
               </aside>
@@ -326,14 +324,6 @@ const RecommendationDrawer: React.FC<Props> = ({
                 <h3 className="subsection-title">Freigabe auf einen Blick</h3>
                 <div className="review-stat-grid">
                   <div className="metric-box">
-                    <span>Produkt</span>
-                    <strong style={{ fontSize: 18 }}>{normalizeGermanText(detail.recommended_product || detail.product)}</strong>
-                  </div>
-                  <div className="metric-box">
-                    <span>Bundesland</span>
-                    <strong style={{ fontSize: 18 }}>{normalizeGermanText(detail.region_codes_display?.join(', ') || detail.region || 'National')}</strong>
-                  </div>
-                  <div className="metric-box">
                     <span>Budgetrichtung</span>
                     <strong style={{ fontSize: 18 }}>{budgetDirection}</strong>
                   </div>
@@ -358,7 +348,7 @@ const RecommendationDrawer: React.FC<Props> = ({
                       <strong>Signal-Sicherheit</strong>: {confidenceValue != null ? `${confidenceValue}% ${signalConfidenceLabel}` : `${signalConfidenceLabel} offen`}.
                     </div>
                     <div className="review-body-copy">
-                      <strong>{UI_COPY.stateLevelScope}</strong>: {COCKPIT_SEMANTICS.stateLevelScope.helper} {COCKPIT_SEMANTICS.noCityForecast.helper}
+                      <strong>{UI_COPY.stateLevelScope}</strong>: Bundesland-Level, kein City-Forecast.
                     </div>
                   </div>
                 </div>

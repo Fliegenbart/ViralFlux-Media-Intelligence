@@ -61,6 +61,7 @@ const NowWorkspace: React.FC<Props> = ({
 }) => {
   const focusRegion = view.focusRegion;
   const heroRecommendation = view.heroRecommendation;
+  const heroSupportText = [view.supportState.label, view.supportState.detail].filter(Boolean).join(' · ');
   const leadReasons = view.reasons.slice(0, 3);
   const secondaryMoves = view.secondaryMoves.slice(0, 2);
   const trustChecks = view.briefingTrust.items.slice(0, 3);
@@ -126,9 +127,13 @@ const NowWorkspace: React.FC<Props> = ({
                 {option}
               </button>
             ))}
-            <span className="step-chip">Bundesland-Level</span>
           </OperatorChipRail>
-          <span className="step-chip">Stand {formatDateTime(view.generatedAt)}</span>
+          <div className="workspace-note-card now-toolbar-note">
+            <strong>Stand {formatDateTime(view.generatedAt)}</strong>
+            <span>
+              Wochenbriefing auf Bundesland-Level. {view.supportState.label || 'Ohne künstliche City-Präzision.'}
+            </span>
+          </div>
         </div>
         {view.emptyState ? (
           <OperatorPanel
@@ -157,14 +162,14 @@ const NowWorkspace: React.FC<Props> = ({
                 <div>
                   <span className="now-weekly-plan-card__label">Empfohlener Fokus diese Woche</span>
                   <h3 className="now-briefing-hero__title">{heroRecommendation.headline}</h3>
+                  <div className="now-briefing-hero__meta">
+                    {heroRecommendation.direction} · {heroRecommendation.region}
+                  </div>
                 </div>
                 <div className="now-briefing-hero__pills">
                   <span className={`now-state-pill now-state-pill--${heroRecommendation.state}`}>
                     {heroRecommendation.stateLabel}
                   </span>
-                  <span className="step-chip">{heroRecommendation.direction}</span>
-                  <span className="step-chip">Bundesland-Level</span>
-                  {view.supportState.label ? <span className="step-chip">{view.supportState.label}</span> : null}
                 </div>
               </div>
 
@@ -174,12 +179,12 @@ const NowWorkspace: React.FC<Props> = ({
                 <article className="workspace-note-card now-briefing-fact">
                   <span className="now-weekly-plan-card__label">Bundesland</span>
                   <strong>{heroRecommendation.region}</strong>
-                  <p>Die Empfehlung bleibt bewusst auf Bundesland-Level.</p>
+                  <p>Bewusst ohne City-Präzision.</p>
                 </article>
                 <article className="workspace-note-card now-briefing-fact">
                   <span className="now-weekly-plan-card__label">Kontext</span>
                   <strong>{heroRecommendation.context}</strong>
-                  <p>{focusRegion?.budgetLabel && focusRegion.budgetLabel !== '-' ? `Budgetrahmen ${focusRegion.budgetLabel}` : 'Kein erfundener Budgetwert, nur vorhandener Kontext.'}</p>
+                  <p>{focusRegion?.budgetLabel && focusRegion.budgetLabel !== '-' ? `Budgetrahmen ${focusRegion.budgetLabel}` : 'Nur vorhandener Kontext, keine Scheingenauigkeit.'}</p>
                 </article>
               </div>
 
@@ -215,8 +220,8 @@ const NowWorkspace: React.FC<Props> = ({
                 </button>
               </div>
 
-              {view.supportState.detail && !heroRecommendation.ctaDisabled ? (
-                <p className="now-briefing-hero__help">{view.supportState.detail}</p>
+              {heroSupportText ? (
+                <p className="now-briefing-hero__help">{heroSupportText}</p>
               ) : null}
             </OperatorPanel>
 

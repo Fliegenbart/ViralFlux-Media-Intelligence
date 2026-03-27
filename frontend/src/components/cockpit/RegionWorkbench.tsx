@@ -408,14 +408,12 @@ const RegionWorkbench: React.FC<Props> = ({
             ))}
           </OperatorChipRail>
 
-          <OperatorChipRail className="review-chip-row">
-            <span className="step-chip">Datenstand {formatDateShort(activeMap.date)}</span>
-            <span className="step-chip">Bundesland-Level</span>
-            <span className="step-chip">Kein City-Forecast</span>
-            {workspaceStatus?.data_freshness === 'Beobachten' ? (
-              <span className="step-chip">Daten nicht ganz frisch</span>
-            ) : null}
-          </OperatorChipRail>
+          <div className="workspace-note-card regions-toolbar-note">
+            <strong>Datenstand {formatDateShort(activeMap.date)}</strong>
+            <span>
+              Bundesland-Level, kein City-Forecast. {workspaceStatus?.data_freshness === 'Beobachten' ? 'Ein Teil der Daten ist nicht ganz frisch.' : 'Die Karte bleibt bewusst Orientierung statt Hauptentscheidung.'}
+            </span>
+          </div>
         </div>
 
         <div className="regions-briefing-stack">
@@ -434,9 +432,6 @@ const RegionWorkbench: React.FC<Props> = ({
                 <span className={`regions-direction-pill regions-direction-pill--${selectedDirection}`}>
                   {selectedDirectionLabel}
                 </span>
-                <span className={`regions-status-chip ${selectedEvidence === 'Zu wenig Evidenz' ? 'regions-status-chip--warning' : ''}`}>
-                  {selectedEvidence}
-                </span>
               </div>
             </div>
 
@@ -446,17 +441,17 @@ const RegionWorkbench: React.FC<Props> = ({
               <article className="workspace-note-card regions-action-fact">
                 <span className="now-weekly-plan-card__label">Bundesland</span>
                 <strong>{primaryRegion?.name || 'Noch offen'}</strong>
-                <p>Die Empfehlung bleibt bewusst auf Bundesland-Level.</p>
+                <p>Bewusst ohne City-Präzision.</p>
               </article>
               <article className="workspace-note-card regions-action-fact">
                 <span className="now-weekly-plan-card__label">Richtungsbild</span>
                 <strong>{budgetDirection}</strong>
-                <p>{region?.forecast_direction || 'Seitwärts'} · {selectedDirectionLabel}</p>
+                <p>{region?.forecast_direction || 'Seitwärts'} · {selectedEvidence}</p>
               </article>
               <article className="workspace-note-card regions-action-fact">
                 <span className="now-weekly-plan-card__label">Nächster Schritt</span>
                 <strong>{hasRecommendation ? 'Bestehenden Vorschlag prüfen' : 'Regionale Maßnahme vorbereiten'}</strong>
-                <p>{hasRecommendation ? 'Der regionale Vorschlag kann direkt geöffnet werden.' : 'Es wird nur dann ein neuer Vorschlag erzeugt, wenn die Datenlage dafür reicht.'}</p>
+                <p>{hasRecommendation ? 'Der Vorschlag kann direkt geöffnet werden.' : 'Nur wenn die Datenlage dafür reicht.'}</p>
               </article>
             </div>
 
@@ -531,18 +526,13 @@ const RegionWorkbench: React.FC<Props> = ({
                   <div className="regions-secondary-card__top">
                     <div>
                       <div className="regions-secondary-card__title">{item.name}</div>
-                      <div className="ops-row-meta">{item.nextStep}</div>
+                      <div className="regions-secondary-card__meta">{item.nextStep} · {item.evidence}</div>
                     </div>
                     <span className={`regions-direction-pill regions-direction-pill--${item.direction}`}>
                       {item.directionLabel}
                     </span>
                   </div>
                   <p>{item.reason}</p>
-                  <div className="regions-compare-list__meta">
-                    <span className={`regions-status-chip ${item.evidence === 'Zu wenig Evidenz' ? 'regions-status-chip--warning' : ''}`}>
-                      {item.evidence}
-                    </span>
-                  </div>
                 </button>
               )) : (
                 <div className="workspace-note-card">
@@ -611,8 +601,8 @@ const RegionWorkbench: React.FC<Props> = ({
                       <div className="regions-compare-list__row-head">
                         <div style={{ textAlign: 'left' }}>
                           <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-primary)' }}>{row.name}</div>
-                          <div className="ops-row-meta">
-                            Bundesland-Level · Rang #{row.priority_rank ?? '-'}
+                          <div className="regions-compare-list__row-meta">
+                            Rang #{row.priority_rank ?? '-'} · {rowNextStep}
                           </div>
                         </div>
                         <div style={{ textAlign: 'right' }}>
@@ -629,9 +619,6 @@ const RegionWorkbench: React.FC<Props> = ({
                         </span>
                         <span className={`regions-status-chip ${rowEvidence === 'Zu wenig Evidenz' ? 'regions-status-chip--warning' : ''}`}>
                           {rowEvidence}
-                        </span>
-                        <span className="regions-status-chip">
-                          {rowNextStep}
                         </span>
                       </div>
                     </button>
@@ -658,10 +645,7 @@ const RegionWorkbench: React.FC<Props> = ({
 
               <div className="workspace-note-list">
                 <div className="workspace-note-card">
-                  <strong>Orientierung statt Hauptentscheidung:</strong> Die Karte zeigt nur das regionale Signalbild auf Bundesland-Level.
-                </div>
-                <div className="workspace-note-card">
-                  <strong>Kein City-Forecast:</strong> Die Karte vermeidet bewusst scheinbare lokale Präzision.
+                  <strong>Orientierung statt Hauptentscheidung:</strong> Die Karte zeigt das regionale Signalbild auf Bundesland-Level und vermeidet bewusst City-Präzision.
                 </div>
                 <div className="workspace-note-card">
                   <strong>{signalLabel}:</strong> {signalNote}

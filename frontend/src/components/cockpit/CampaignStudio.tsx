@@ -191,14 +191,9 @@ const CampaignStudio: React.FC<Props> = ({
                     <small>{focusCard?.recommended_product || focusCard?.product || 'Produkt noch offen'}</small>
                   </div>
                   <div className="campaign-metric-card">
-                    <span>Kanalfokus</span>
+                    <span>Steuerung</span>
                     <strong>{focusChannelDirection}</strong>
-                    <small>Die Kanalrichtung bleibt absichtlich grob und freigabeorientiert.</small>
-                  </div>
-                  <div className="campaign-metric-card">
-                    <span>Budgetrichtung</span>
-                    <strong>{focusBudgetDirection}</strong>
-                    <small>{budgetSupportCopy(focusCard)}</small>
+                    <small>{focusBudgetDirection}. {budgetSupportCopy(focusCard)}</small>
                   </div>
                   <div className="campaign-metric-card">
                     <span>Nächster Schritt</span>
@@ -229,15 +224,17 @@ const CampaignStudio: React.FC<Props> = ({
               <OperatorPanel
                 eyebrow="Freigabestatus"
                 title="So sieht die GELO-Woche gerade aus"
-                description="Diese kurze Übersicht zeigt, ob die nächste Arbeit eher Prüfung, Blockerklärung oder aktive Übergabe ist."
+                description="Diese Übersicht zeigt, ob jetzt eher Prüfung, Blockerklärung oder Übergabe ansteht."
                 tone="muted"
                 className="campaign-command-rail campaign-approval-summary"
               >
                 <div className="campaign-approval-summary__grid">
                   {statusSummary.map((item) => (
-                    <div key={item.label} className="workspace-note-card campaign-approval-summary__card">
-                      <span>{item.label}</span>
-                      <strong>{item.value}</strong>
+                    <div key={item.label} className="workspace-note-card campaign-approval-summary__line">
+                      <div className="campaign-approval-summary__line-head">
+                        <span>{item.label}</span>
+                        <strong>{item.value}</strong>
+                      </div>
                       <p>{item.detail}</p>
                     </div>
                   ))}
@@ -248,9 +245,6 @@ const CampaignStudio: React.FC<Props> = ({
                       {additionalSuggestionsText(hiddenBacklog)}
                     </div>
                   ) : null}
-                  <div className="workspace-note-card">
-                    Lernstand: {learningStateLabel(campaignsView?.summary?.learning_state)}
-                  </div>
                 </div>
               </OperatorPanel>
             </div>
@@ -290,12 +284,9 @@ const CampaignStudio: React.FC<Props> = ({
                       type="button"
                       key={card.id}
                       onClick={() => onOpenRecommendation(card.id)}
-                      className="campaign-list-card campaign-approval-next-card"
-                    >
+                    className="campaign-list-card campaign-approval-next-card"
+                  >
                       <div className="campaign-work-item-top">
-                        <span className="campaign-status-badge" style={statusTone(card.lifecycle_state || card.status)}>
-                          {workflowLabel(card.lifecycle_state || card.status)}
-                        </span>
                         <span className={`campaign-confidence-chip campaign-confidence-chip--${readiness.tone}`}>
                           {readiness.label}
                         </span>
@@ -310,8 +301,7 @@ const CampaignStudio: React.FC<Props> = ({
                       </div>
                       <p className="campaign-work-item-copy">{readableCampaignSummary(card)}</p>
                       <div className="campaign-work-item-footer">
-                        <span>{recommendationActionLabel(card)}</span>
-                        <span>{budgetDirectionLabel(card)}</span>
+                        <span>{recommendationActionLabel(card)} · {budgetDirectionLabel(card)}</span>
                       </div>
                     </button>
                   );
@@ -376,12 +366,8 @@ const CampaignStudio: React.FC<Props> = ({
 
                         <div className="campaign-work-item-metrics">
                           <div className="campaign-inline-stat">
-                            <span>Kanalfokus</span>
-                            <strong>{channelDirectionLabel(card)}</strong>
-                          </div>
-                          <div className="campaign-inline-stat">
-                            <span>Budgetrichtung</span>
-                            <strong>{budgetDirectionLabel(card)}</strong>
+                            <span>Steuerung</span>
+                            <strong>{channelDirectionLabel(card)} · {budgetDirectionLabel(card)}</strong>
                           </div>
                           <div className="campaign-inline-stat">
                             <span>Evidenz</span>
@@ -395,7 +381,6 @@ const CampaignStudio: React.FC<Props> = ({
 
                         <div className="campaign-work-item-footer">
                           <span>{flightWindowLabel(card)} · {readiness.detail}</span>
-                          <span>{recommendationActionLabel(card)}</span>
                         </div>
                       </button>
                     );

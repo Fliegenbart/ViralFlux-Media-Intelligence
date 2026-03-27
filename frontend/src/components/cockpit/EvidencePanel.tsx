@@ -165,6 +165,9 @@ const EvidencePanel: React.FC<Props> = ({
   const primaryCtaHref = (!hasTruthData || hasBlockers || sourceAttentionCount > 0)
     ? '#evidence-import'
     : '#evidence-support';
+  const cautionAndBlocker = hasBlockers
+    ? `${blockedNow} ${cautionNow}`
+    : cautionNow;
   const trustCards: EvidenceSummaryCard[] = [
     {
       label: 'Datenvollständigkeit',
@@ -262,7 +265,7 @@ const EvidencePanel: React.FC<Props> = ({
 
             <p className="campaign-focus-copy">{heroSummary}</p>
 
-            <div className="now-weekly-plan-grid evidence-briefing-notes">
+            <div className="evidence-briefing-note-grid">
               <div className="workspace-note-card evidence-briefing-note">
                 <strong>Schon belastbar</strong>
                 <p>{trustedNow}</p>
@@ -272,12 +275,8 @@ const EvidencePanel: React.FC<Props> = ({
                 <p>{missingNow}</p>
               </div>
               <div className="workspace-note-card evidence-briefing-note">
-                <strong>Blockiert gerade</strong>
-                <p>{blockedNow}</p>
-              </div>
-              <div className="workspace-note-card evidence-briefing-note">
-                <strong>Mit Vorsicht lesen</strong>
-                <p>{cautionNow}</p>
+                <strong>Noch offen oder vorsichtig lesen</strong>
+                <p>{cautionAndBlocker}</p>
               </div>
             </div>
 
@@ -296,7 +295,7 @@ const EvidencePanel: React.FC<Props> = ({
           <OperatorPanel
             eyebrow="Trust-Layer"
             title="Vertrauen auf einen Blick"
-            description="Hier bleibt sichtbar, welche GELO-Frage gerade eher Datenvollständigkeit, Belastbarkeit oder Einsatzreife betrifft."
+            description="Hier bleibt sichtbar, ob die offene GELO-Frage eher Daten, Belastbarkeit oder Einsatzreife betrifft."
             tone="muted"
             className="evidence-trust-panel"
           >
@@ -313,7 +312,7 @@ const EvidencePanel: React.FC<Props> = ({
               ))}
             </div>
             <div className="workspace-note-card">
-              <strong>Bundesland-Level bleibt Pflicht.</strong> {COCKPIT_SEMANTICS.stateLevelScope.helper} {COCKPIT_SEMANTICS.noCityForecast.helper}
+              <strong>Bundesland-Level, kein City-Forecast.</strong> {COCKPIT_SEMANTICS.stateLevelScope.helper}
             </div>
           </OperatorPanel>
         </div>
@@ -342,7 +341,6 @@ const EvidencePanel: React.FC<Props> = ({
           <OperatorPanel
             title="Fehlend oder blockiert"
             description="Hier liegt der nächste sinnvolle Klärungs- oder Import-Schritt."
-            actions={<span className={`step-chip${importNeedsAttention ? '' : ''}`}>{importNeedsAttention ? 'Klärung nötig' : 'Kein akuter Datenblocker'}</span>}
           >
             <div className="workspace-note-list">
               {missingItems.length > 0 ? missingItems.map((item) => (
@@ -362,7 +360,6 @@ const EvidencePanel: React.FC<Props> = ({
       <CollapsibleSection
         title="GELO-Daten und Outcome-Lernen"
         subtitle="Hier siehst du, wie weit die GELO-Kundendaten die Empfehlungen schon zusätzlich stützen."
-        defaultOpen
       >
         <div id="evidence-data">
           <TruthOutcomeSection

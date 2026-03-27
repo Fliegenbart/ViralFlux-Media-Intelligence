@@ -125,7 +125,7 @@ describe('EvidencePanel', () => {
     expect(screen.getByText('Forecast und Modell-Belastbarkeit')).toBeInTheDocument();
     expect(screen.getByText('Quellen, Frische und bekannte Grenzen')).toBeInTheDocument();
     expect(screen.getByText('Technische Einordnung')).toBeInTheDocument();
-    expect(screen.getByText(/Bundesland-Level bleibt Pflicht/i)).toBeInTheDocument();
+    expect(screen.getByText(/Bundesland-Level, kein City-Forecast/i)).toBeInTheDocument();
     expect(screen.getAllByText(/nicht für einzelne Städte/i).length).toBeGreaterThan(0);
   });
 

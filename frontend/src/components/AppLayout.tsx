@@ -70,15 +70,6 @@ const AppLayout: React.FC<Props> = ({ children }) => {
     title: 'Arbeitsansicht',
     description: 'Hier bleibt dein aktueller Arbeitsstand an einem Ort.',
   };
-  const operatorStatusLabel = location.pathname.startsWith('/jetzt')
-    ? 'GELO Weekly Readout aktiv'
-    : location.pathname.startsWith('/evidenz')
-      ? 'Datenlücken im Readout'
-      : location.pathname.startsWith('/kampagnen')
-        ? 'Freigabefälle im Readout'
-        : location.pathname.startsWith('/regionen')
-          ? 'Fokusregionen im Readout'
-          : 'Pilotbereich aktiv';
   const exportLabel = 'Weekly Readout exportieren';
   const readoutSummary = buildWeeklyReadoutSummary(pilotReadout, readoutLoading);
 
@@ -191,7 +182,6 @@ const AppLayout: React.FC<Props> = ({ children }) => {
               <p>{readoutSummary.summary}</p>
               <div className="operator-readout-card__meta">
                 <span>Stand {readoutSummary.updatedAt}</span>
-                <span>{operatorStatusLabel}</span>
               </div>
               <div className="operator-readout-card__stats" aria-label="Weekly Readout Zusammenfassung">
                 <div className="operator-readout-card__stat">
@@ -213,7 +203,7 @@ const AppLayout: React.FC<Props> = ({ children }) => {
                   <strong>{readoutSummary.dataReadiness}</strong>
                 </div>
                 <div className="operator-readout-card__trust-item">
-                  <span>Offene Lücke</span>
+                  <span>Offen</span>
                   <strong>{readoutSummary.openGap}</strong>
                 </div>
               </div>
@@ -316,7 +306,6 @@ const AppLayout: React.FC<Props> = ({ children }) => {
             <div className="operator-header__meta">
               <span className="operator-header__status-pill">{currentSection.kicker}</span>
               <div className="operator-header__copy-block">
-                <div className="operator-header__kicker">{currentSection.kicker}</div>
                 <div className="operator-header__title-row">
                   <span className="operator-header__status-dot" aria-hidden="true" />
                   <h1 id="operator-page-title" className="operator-header__title">{currentSection.title}</h1>
@@ -324,7 +313,7 @@ const AppLayout: React.FC<Props> = ({ children }) => {
                 <p className="operator-header__copy">{currentSection.description}</p>
                 <div className="operator-readout-strip" aria-label="Weekly Readout Überblick">
                   <div className="operator-readout-strip__item">
-                    <span>Diese Woche im Fokus</span>
+                    <span>Fokus</span>
                     <strong>{readoutSummary.stripHeadline}</strong>
                   </div>
                   <div className="operator-readout-strip__item">

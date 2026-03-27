@@ -1,4 +1,4 @@
-"""Shared utilities for direct multi-horizon stacking forecasts."""
+"""Canonical shared utilities for learned probability calibration helpers."""
 
 from __future__ import annotations
 
@@ -534,6 +534,7 @@ def select_probability_calibration(
     raw_probability_col: str = "event_probability_raw",
     label_col: str = "event_label",
     date_col: str = "as_of_date",
+    allowed_modes: tuple[str, ...] = ("isotonic", "platt", "raw_probability"),
     isotonic_min_samples: int = DEFAULT_ISOTONIC_MIN_SAMPLES,
     isotonic_min_class_support: int = DEFAULT_ISOTONIC_MIN_CLASS_SUPPORT,
     platt_min_samples: int = DEFAULT_PLATT_MIN_SAMPLES,
@@ -598,55 +599,106 @@ def select_probability_calibration(
 
     # The guard slice must stay later in time than calibration fitting so we only
     # accept calibrators that help, or at least do no harm, on unseen future dates.
-    isotonic_result = _evaluate_calibration_candidate(
-        calibration=fit_isotonic_calibrator(
-            fit_probs,
-            fit_labels,
-            min_samples=isotonic_min_samples,
-            min_class_support=isotonic_min_class_support,
-        ),
-        calibration_mode="isotonic",
-        guard_probabilities=guard_probs,
-        guard_labels=guard_labels,
-        raw_guard_metrics=raw_guard_metrics,
-    )
-    if isotonic_result["accepted"]:
-        return {
-            "calibration": isotonic_result["calibration"],
-            "calibration_mode": "isotonic",
-            "fallback_reason": None,
-            "reliability_metrics": isotonic_result["guard_metrics"],
-            "reliability_source": "temporal_guard",
-        }
+    candidate_results: list[dict[str, Any]] = []
+    if "isotonic" in allowed_modes:
+        isotonic_result = _evaluate_calibration_candidate(
+            calibration=fit_isotonic_calibrator(
+                fit_probs,
+                fit_labels,
+                min_samples=isotonic_min_samples,
+                min_class_support=isotonic_min_class_support,
+            ),
+            calibration_mode="isotonic",
+            guard_probabilities=guard_probs,
+            guard_labels=guard_labels,
+            raw_guard_metrics=raw_guard_metrics,
+        )
+        candidate_results.append(isotonic_result)
+        if isotonic_result["accepted"]:
+            return {
+                "calibration": isotonic_result["calibration"],
+                "calibration_mode": "isotonic",
+                "fallback_reason": None,
+                "reliability_metrics": isotonic_result["guard_metrics"],
+                "reliability_source": "temporal_guard",
+            }
 
-    platt_result = _evaluate_calibration_candidate(
-        calibration=fit_platt_calibrator(
-            fit_probs,
-            fit_labels,
-            min_samples=platt_min_samples,
-            min_class_support=platt_min_class_support,
-        ),
-        calibration_mode="platt",
-        guard_probabilities=guard_probs,
-        guard_labels=guard_labels,
-        raw_guard_metrics=raw_guard_metrics,
-    )
-    if platt_result["accepted"]:
+    if "platt" in allowed_modes:
+        platt_result = _evaluate_calibration_candidate(
+            calibration=fit_platt_calibrator(
+                fit_probs,
+                fit_labels,
+                min_samples=platt_min_samples,
+                min_class_support=platt_min_class_support,
+            ),
+            calibration_mode="platt",
+            guard_probabilities=guard_probs,
+            guard_labels=guard_labels,
+            raw_guard_metrics=raw_guard_metrics,
+        )
+        candidate_results.append(platt_result)
+        if platt_result["accepted"]:
+            return {
+                "calibration": platt_result["calibration"],
+                "calibration_mode": "platt",
+                "fallback_reason": None,
+                "reliability_metrics": platt_result["guard_metrics"],
+                "reliability_source": "temporal_guard",
+            }
+
+    if "raw_probability" not in allowed_modes:
         return {
-            "calibration": platt_result["calibration"],
-            "calibration_mode": "platt",
-            "fallback_reason": None,
-            "reliability_metrics": platt_result["guard_metrics"],
+            "calibration": None,
+            "calibration_mode": "raw_probability",
+            "fallback_reason": "raw_probability_mode_disabled",
+            "reliability_metrics": raw_guard_metrics,
             "reliability_source": "temporal_guard",
         }
 
     return {
         "calibration": None,
         "calibration_mode": "raw_probability",
-        "fallback_reason": _calibration_fallback_reason([isotonic_result, platt_result]),
+        "fallback_reason": _calibration_fallback_reason(candidate_results),
         "reliability_metrics": raw_guard_metrics,
         "reliability_source": "temporal_guard",
     }
+
+
+def select_probability_calibration_from_raw(
+    raw_probabilities: np.ndarray,
+    labels: np.ndarray,
+    *,
+    as_of_dates: Any | None = None,
+    allowed_modes: tuple[str, ...] = ("isotonic", "platt", "raw_probability"),
+    isotonic_min_samples: int = DEFAULT_ISOTONIC_MIN_SAMPLES,
+    isotonic_min_class_support: int = DEFAULT_ISOTONIC_MIN_CLASS_SUPPORT,
+    platt_min_samples: int = DEFAULT_PLATT_MIN_SAMPLES,
+    platt_min_class_support: int = DEFAULT_PLATT_MIN_CLASS_SUPPORT,
+) -> dict[str, Any]:
+    probs = np.asarray(raw_probabilities, dtype=float)
+    obs = np.asarray(labels, dtype=int)
+    if as_of_dates is None:
+        dates = pd.date_range("2000-01-01", periods=len(obs), freq="D")
+    else:
+        dates = pd.to_datetime(as_of_dates).normalize()
+    calibration_frame = pd.DataFrame(
+        {
+            "as_of_date": dates,
+            "event_label": obs,
+            "event_probability_raw": probs,
+        }
+    )
+    return select_probability_calibration(
+        calibration_frame,
+        raw_probability_col="event_probability_raw",
+        label_col="event_label",
+        date_col="as_of_date",
+        allowed_modes=allowed_modes,
+        isotonic_min_samples=isotonic_min_samples,
+        isotonic_min_class_support=isotonic_min_class_support,
+        platt_min_samples=platt_min_samples,
+        platt_min_class_support=platt_min_class_support,
+    )
 
 
 def reliability_score_from_metrics(

@@ -51,6 +51,11 @@ function stageLabel(value?: string | null): string {
   return value ? String(value) : 'Beobachten';
 }
 
+function activeStageLabel(filter: PilotSurfaceStageFilter): string {
+  if (filter === 'ALL') return 'Alle Stufen';
+  return stageLabel(filter);
+}
+
 function matchesStage(value: string | undefined, filter: PilotSurfaceStageFilter): boolean {
   if (filter === 'ALL') return true;
   return normalizeStage(value) === normalizeStage(filter);
@@ -348,6 +353,7 @@ const PilotSurface: React.FC<Props> = ({
     ...(gateSnapshot?.missing_requirements || []),
   ]);
   const currentScopeCopy = scopeCopy(scope);
+  const currentStageLabel = activeStageLabel(stage);
   const generatedAtLabel = formatDateTime(
     pilotReadout?.run_context?.generated_at
     || pilotReadout?.generated_at
@@ -473,7 +479,7 @@ const PilotSurface: React.FC<Props> = ({
                 </p>
               </article>
 
-              <article className="pilot-track-card">
+              <article className="pilot-track-card pilot-track-card--supporting">
                 <div className="pilot-track-card__head">
                   <span className="pilot-section-label">So sind die Zahlen gemeint</span>
                 </div>
@@ -520,12 +526,13 @@ const PilotSurface: React.FC<Props> = ({
 
               <div className="pilot-filter-group">
                 <span className="pilot-filter-label">Bereich</span>
-                <div className="pilot-pill-row">
+                <div className="pilot-pill-row" role="group" aria-label="Bereich auswählen">
                   {SCOPE_OPTIONS.map((item) => (
                     <button
                       key={item.key}
                       type="button"
                       className={`pilot-pill${scope === item.key ? ' active' : ''}`}
+                      aria-pressed={scope === item.key}
                       onClick={() => onScopeChange(item.key)}
                     >
                       {item.label}
@@ -536,12 +543,13 @@ const PilotSurface: React.FC<Props> = ({
 
               <div className="pilot-filter-group">
                 <span className="pilot-filter-label">Stufe</span>
-                <div className="pilot-pill-row">
+                <div className="pilot-pill-row" role="group" aria-label="Stufe auswählen">
                   {STAGE_OPTIONS.map((item) => (
                     <button
                       key={item.key}
                       type="button"
                       className={`pilot-pill${stage === item.key ? ' active' : ''}`}
+                      aria-pressed={stage === item.key}
                       onClick={() => onStageChange(item.key)}
                     >
                       {item.label}
@@ -549,13 +557,20 @@ const PilotSurface: React.FC<Props> = ({
                   ))}
                 </div>
               </div>
+
+              <div className="pilot-filter-summary" aria-live="polite">
+                <span className="pilot-filter-summary__label">Aktiver Blick</span>
+                <strong>{SCOPE_OPTIONS.find((item) => item.key === scope)?.label || scope}</strong>
+                <span>{currentStageLabel} · {visibleRegions.length} von {allRegions.length} Regionen sichtbar</span>
+              </div>
             </div>
 
             <div className="pilot-readiness-grid">
               {scopeCards.map((item) => (
                 <article
                   key={item.key}
-                  className={`pilot-readiness-card${scope === item.key ? ' pilot-readiness-card--active' : ''}`}
+                  className={`pilot-readiness-card pilot-readiness-card--${readinessModifier(item.value)}${scope === item.key ? ' pilot-readiness-card--active' : ''}`}
+                  aria-current={scope === item.key ? 'true' : undefined}
                 >
                   <span>{item.label}</span>
                   <strong>{item.value}</strong>
@@ -679,6 +694,16 @@ const PilotSurface: React.FC<Props> = ({
           </p>
         </div>
 
+        <div className="pilot-section-summary" aria-live="polite">
+          <span className="pilot-section-summary__eyebrow">Gerade im Fokus</span>
+          <strong>{currentStageLabel}</strong>
+          <p>
+            {visibleRegions.length === allRegions.length
+              ? `Alle ${allRegions.length} Regionen bleiben im Blick.`
+              : `${visibleRegions.length} von ${allRegions.length} Regionen passen aktuell zum Filter.`}
+          </p>
+        </div>
+
         <div className="pilot-summary-strip">
           <div className="pilot-summary-stat">
             <span>Aktivieren-Regionen</span>
@@ -719,7 +744,7 @@ const PilotSurface: React.FC<Props> = ({
 
         {visibleRegions.length === 0 && (
           <div className="pilot-ranked-empty">
-            Kein Regions-Output passt aktuell zum gewählten Stufen-Filter.
+            Kein Regions-Output passt aktuell zur Stufe "{currentStageLabel}". Wechsle die Stufe, um wieder Empfehlungen zu sehen.
           </div>
         )}
       </section>

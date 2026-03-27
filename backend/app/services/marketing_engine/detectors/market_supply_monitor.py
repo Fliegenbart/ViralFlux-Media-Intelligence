@@ -1,13 +1,12 @@
-"""CompetitorShortageDetector — BfArM-Engpässe × Conquesting Matrix → Bid-Multiplier Opportunities.
+"""MarketSupplyMonitor — BfArM supply gaps × Supply-Gap Matrix → priority multipliers.
 
-Matches active drug shortages (BfArM Lieferengpass-Meldungen) against the
-Conquesting Matrix to identify when competitor products are unavailable.
-Outputs a bid_multiplier (e.g. 1.5x) that the Opportunity Fusion Engine
-uses to amplify programmatic bids for our own OTC products.
+Watches official BfArM drug shortage notices ("Lieferengpass-Meldungen") and
+matches them against a curated mapping of which Gelo OTC products can be
+highlighted as *available alternatives* during a supply gap.
 
-Unlike the legacy ResourceScarcityDetector (which emits blocking/scarcity
-signals), this detector is *offensive*: it finds specific competitor SKUs
-that are in shortage and maps them to our products that can conquest.
+The output is a modifier signal (priority_multiplier). Downstream, the
+opportunity engine can use it to increase visibility for suitable products
+when availability is constrained, without "attack" or "conquest" framing.
 """
 
 from __future__ import annotations
@@ -29,41 +28,42 @@ def _normalize(text: str) -> str:
     """Lowercase + flatten German umlauts for matching."""
     return text.lower().translate(_UMLAUT_MAP)
 
-# Load conquesting matrix at module level (immutable config)
-_MATRIX_PATH = Path(__file__).resolve().parent.parent / "conquesting_matrix.json"
+# Load supply-gap mapping at module level (immutable config)
+_MATRIX_PATH = Path(__file__).resolve().parent.parent / "supply_gap_opportunity_matrix.json"
 
 
 def _load_matrix() -> list[dict[str, Any]]:
-    """Load and validate conquesting_matrix.json."""
+    """Load and validate supply_gap_opportunity_matrix.json."""
     try:
         with open(_MATRIX_PATH, encoding="utf-8") as f:
             data = json.load(f)
         products = data.get("products", [])
-        logger.info("Conquesting matrix loaded: %d products", len(products))
+        logger.info("Supply-gap matrix loaded: %d products", len(products))
         return products
     except FileNotFoundError:
-        logger.warning("conquesting_matrix.json not found at %s", _MATRIX_PATH)
+        logger.warning("supply_gap_opportunity_matrix.json not found at %s", _MATRIX_PATH)
         return []
     except (json.JSONDecodeError, KeyError) as exc:
-        logger.error("Failed to parse conquesting_matrix.json: %s", exc)
+        logger.error("Failed to parse supply_gap_opportunity_matrix.json: %s", exc)
         return []
 
 
-CONQUESTING_PRODUCTS = _load_matrix()
+SUPPLY_GAP_PRODUCTS = _load_matrix()
 
 
-class CompetitorShortageDetector(OpportunityDetector):
-    """Detects conquesting opportunities from BfArM drug shortages.
+class MarketSupplyMonitor(OpportunityDetector):
+    """Detects supply-gap modifier signals from BfArM drug shortages.
 
-    For each product in the Conquesting Matrix, checks if any active BfArM
-    shortage matches its target_ingredients or target_forms. If so, generates
-    an opportunity with the product's bid_multiplier.
+    For each product in the supply-gap matrix, checks if any active BfArM
+    shortage matches its configured active ingredients or dosage forms.
+    If so, generates a modifier opportunity with the product's
+    priority_multiplier.
     """
 
-    OPPORTUNITY_TYPE = "COMPETITOR_SHORTAGE"
+    OPPORTUNITY_TYPE = "MARKET_SUPPLY_GAP"
 
     def detect(self) -> list[dict]:
-        """Match BfArM shortages against Conquesting Matrix."""
+        """Match BfArM shortages against the supply-gap matrix."""
         try:
             from app.api.drug_shortage import _ensure_analyzer
             _analyzer = _ensure_analyzer()
@@ -72,11 +72,11 @@ class CompetitorShortageDetector(OpportunityDetector):
             _analyzer = None
 
         if _analyzer is None or _analyzer.df_filtered is None or _analyzer.df_filtered.empty:
-            logger.info("No BfArM data loaded — CompetitorShortageDetector skipped")
+            logger.info("No BfArM data loaded — MarketSupplyMonitor skipped")
             return []
 
-        if not CONQUESTING_PRODUCTS:
-            logger.info("Conquesting matrix empty — CompetitorShortageDetector skipped")
+        if not SUPPLY_GAP_PRODUCTS:
+            logger.info("Supply-gap matrix empty — MarketSupplyMonitor skipped")
             return []
 
         df = _analyzer.df_filtered
@@ -87,33 +87,35 @@ class CompetitorShortageDetector(OpportunityDetector):
 
         opportunities: list[dict] = []
 
-        for product_cfg in CONQUESTING_PRODUCTS:
-            conquesting = product_cfg.get("conquesting", {})
-            target_ingredients = [_normalize(i) for i in conquesting.get("target_ingredients", [])]
-            target_forms = [_normalize(f) for f in conquesting.get("target_forms", [])]
-            bid_multiplier = float(conquesting.get("bid_multiplier", 1.5))
+        for product_cfg in SUPPLY_GAP_PRODUCTS:
+            supply_gap = product_cfg.get("supply_gap", {})
+            match_active_ingredients = [
+                _normalize(i) for i in supply_gap.get("match_active_ingredients", [])
+            ]
+            match_dosage_forms = [_normalize(f) for f in supply_gap.get("match_dosage_forms", [])]
+            priority_multiplier = float(supply_gap.get("priority_multiplier", 1.0))
 
-            if not target_ingredients and not target_forms:
+            if not match_active_ingredients and not match_dosage_forms:
                 continue
 
             # Find matching shortages: ingredient OR form match on high-demand entries
-            matched_drugs: list[str] = []
+            matched_products: list[str] = []
             matched_count = 0
 
             for _, row in df.iterrows():
-                wirkstoffe = _normalize(str(row.get("Wirkstoffe", "")))
-                darreichung = _normalize(str(row.get("Darreichungsform", "")))
+                active_ingredients = _normalize(str(row.get("Wirkstoffe", "")))
+                dosage_form = _normalize(str(row.get("Darreichungsform", "")))
                 drug_name = str(row.get("Arzneimittlbezeichnung", ""))
                 signal_type = str(row.get("signal_type", ""))
 
                 # Only match demand-driven shortages (not pure supply shocks)
-                ingredient_hit = any(ing in wirkstoffe for ing in target_ingredients)
-                form_hit = any(frm in darreichung for frm in target_forms)
+                ingredient_hit = any(ing in active_ingredients for ing in match_active_ingredients)
+                form_hit = any(frm in dosage_form for frm in match_dosage_forms)
 
-                if ingredient_hit and (form_hit or not target_forms):
+                if ingredient_hit and (form_hit or not match_dosage_forms):
                     matched_count += 1
-                    if len(matched_drugs) < 5:
-                        matched_drugs.append(drug_name)
+                    if len(matched_products) < 5:
+                        matched_products.append(drug_name)
 
             if matched_count == 0:
                 continue
@@ -140,23 +142,23 @@ class CompetitorShortageDetector(OpportunityDetector):
                     "plz_cluster": "ALL",
                 },
                 "trigger_context": {
-                    "source": "BfArM_Conquesting",
-                    "event": f"COMPETITOR_SHORTAGE_{sku}",
+                    "source": "BFARM_SUPPLY_GAP",
+                    "event": f"MARKET_SUPPLY_GAP_{sku}",
                     "details": (
-                        f"{matched_count} competitor shortages match {product_cfg.get('name', sku)}. "
+                        f"{matched_count} BfArM shortage notices match {product_cfg.get('name', sku)}. "
                         f"Wave: {wave_type}. "
-                        f"Affected: {', '.join(matched_drugs[:3])}"
+                        f"Affected: {', '.join(matched_products[:3])}"
                     ),
                     "detected_at": datetime.now().strftime("%Y-%m-%d"),
                 },
                 "target_audience": ["Erwachsene", "Apotheken-nahe Zielgruppen"],
                 # Internal fields for downstream fusion
                 "_condition": condition,
-                "_conquesting_sku": sku,
-                "_conquesting_product": product_cfg.get("name", sku),
-                "_bid_multiplier": bid_multiplier,
+                "_supply_gap_sku": sku,
+                "_supply_gap_product": product_cfg.get("name", sku),
+                "_priority_multiplier": priority_multiplier,
                 "_matched_count": matched_count,
-                "_matched_drugs": matched_drugs,
+                "_matched_products": matched_products,
                 "_wave_type": wave_type,
                 "_pediatric_alert": pediatric_alert,
             }
@@ -166,8 +168,8 @@ class CompetitorShortageDetector(OpportunityDetector):
 
             opportunities.append(opp)
             logger.info(
-                "Conquesting opportunity: %s → %d matches, bid_multiplier=%.1fx, urgency=%.0f",
-                sku, matched_count, bid_multiplier, urgency,
+                "Supply-gap signal: %s → %d matches, priority_multiplier=%.2fx, urgency=%.0f",
+                sku, matched_count, priority_multiplier, urgency,
             )
 
         return opportunities

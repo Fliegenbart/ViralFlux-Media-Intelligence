@@ -52,7 +52,7 @@ class MediaCopyServiceTests(unittest.TestCase):
 
         self.assertEqual(
             basis,
-            "Signalen aus BfArM Engpassmonitor + RKI, dem Muster Verfügbarkeitsfenster im Wettbewerb und einem Signalscore von 86.9",
+            "Signalen aus BfArM Engpassmonitor + RKI, dem Muster Verfügbarkeitsfenster im Wettbewerb und einem Signalwert von 86.9",
         )
 
     def test_public_source_label_humanizes_internal_source_key(self) -> None:
@@ -80,9 +80,9 @@ class MediaCopyServiceTests(unittest.TestCase):
 
         self.assertEqual(
             outlook,
-            "aktuell rückläufige Influenza A-Aktivität (-12% WoW), der Forecast zeigt jedoch wieder nach oben",
+            "aktuell rückläufige Influenza A-Aktivität (-12% WoW), die Vorhersage zeigt jedoch wieder nach oben",
         )
-        self.assertIn("In Hamburg sehen wir für die nächsten 7 bis 14 Tage", recommendation)
+        self.assertIn("In Hamburg sehen wir für die nächsten 3 bis 7 Tage", recommendation)
         self.assertIn("Deshalb priorisieren wir zunächst GeloRevoice", recommendation)
 
     def test_build_decision_summary_mentions_freigabe_if_product_needs_confirmation(self) -> None:
@@ -107,7 +107,7 @@ class MediaCopyServiceTests(unittest.TestCase):
         )
 
         self.assertIn("Kampagnenvorschlag", summary)
-        self.assertIn("Pruefung und Freigabe", summary)
+        self.assertIn("Prüfung und Freigabe", summary)
 
     def test_card_response_exposes_public_titles_and_reason(self) -> None:
         card = _to_card_response(

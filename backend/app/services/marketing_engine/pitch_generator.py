@@ -29,11 +29,11 @@ TEMPLATES: dict[str, dict[str, Any]] = {
         "high": {
             "headline_email": "Akuter Engpass in {region}: Verfügbarkeit jetzt kommunizieren",
             "script_phone": (
-                "In {region} melden BfArM-Daten einen akuten Engpass bei Wettbewerbsprodukten "
+                "In {region} melden BfArM-Daten einen akuten Engpass bei vergleichbaren Produkten "
                 "({competitor}). Empfehlung: Verfügbarkeit von {product} betonen und "
                 "symptomnahe Kommunikation regional priorisieren (HWG-konform)."
             ),
-            "call_to_action": "Conquesting-Kampagne starten",
+            "call_to_action": "Sichtbarkeit bei Engpass erhöhen",
         },
         "default": {
             "headline_email": "Engpass-Signal im Markt: Verfügbarkeit als Vorteil nutzen",

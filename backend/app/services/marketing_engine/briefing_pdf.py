@@ -5,7 +5,7 @@ Generiert ein professionelles 1-2 Seiten PDF mit:
 - Zielgruppe + Region
 - Produktempfehlung + Sales Pitch
 - Budget-Empfehlung + Zeitfenster
-- Conquesting-Info (wenn aktiv)
+- Lieferengpass-Hinweis (BfArM, wenn aktiv)
 """
 
 import io
@@ -183,19 +183,20 @@ def generate_briefing_pdf(opp: dict) -> bytes:
         pdf.cell(0, 7, f"Call-to-Action: {_safe(cta)}", new_x="LMARGIN", new_y="NEXT")
         pdf.ln(4)
 
-    # ── Conquesting ──
-    if opp.get("is_conquesting_active"):
-        _section_header(pdf, "Conquesting-Strategie")
+    # ── Supply Gap (BfArM) ──
+    if opp.get("is_supply_gap_active"):
+        _section_header(pdf, "Lieferengpass-Hinweis (BfArM)")
         pdf.set_font("Helvetica", "", 10)
         pdf.set_text_color(*_SLATE_700)
-        ingredient = _safe(opp.get("competitor_shortage_ingredient", ""))
-        multiplier = opp.get("recommended_bid_modifier", 1.0)
-        product = _safe(opp.get("conquesting_product", ""))
+        examples = _safe(opp.get("supply_gap_match_examples", ""))
+        multiplier = opp.get("recommended_priority_multiplier", 1.0)
+        product = _safe(opp.get("supply_gap_product", ""))
 
-        pdf.cell(0, 7, f"Engpass-Wirkstoff: {ingredient}", new_x="LMARGIN", new_y="NEXT")
-        pdf.cell(0, 7, f"Bid-Multiplikator: {multiplier:.1f}x", new_x="LMARGIN", new_y="NEXT")
+        if examples:
+            pdf.cell(0, 7, f"Beispiele aus Engpass-Meldungen: {examples}", new_x="LMARGIN", new_y="NEXT")
+        pdf.cell(0, 7, f"Empfohlener Prioritaets-Faktor: {multiplier:.1f}x", new_x="LMARGIN", new_y="NEXT")
         if product:
-            pdf.cell(0, 7, f"Conquesting-Produkt: {product}", new_x="LMARGIN", new_y="NEXT")
+            pdf.cell(0, 7, f"Produkt im Fokus: {product}", new_x="LMARGIN", new_y="NEXT")
         pdf.ln(4)
 
     # ── Quelle ──

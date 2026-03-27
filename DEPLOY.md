@@ -71,6 +71,8 @@ Der moderne Release-Smoke prueft:
 - `/api/v1/forecast/regional/media-allocation`
 - `/api/v1/forecast/regional/campaign-recommendations`
 
+Der Deploy nutzt fuer diese Smoke-Requests standardmaessig ein etwas groesseres Request-Timeout (`SMOKE_TIMEOUT=15`), damit frisch gestartete Services nicht zu frueh als Fehler gewertet werden.
+
 Optional kann zusaetzlich `--check-cockpit` gesetzt werden. Der Cockpit-Pfad ist aber nur advisory und nicht mehr der alleinige Go/No-Go-Indikator.
 
 Failure-Levels:

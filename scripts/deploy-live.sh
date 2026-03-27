@@ -10,6 +10,7 @@ COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.prod.yml}"
 HEALTH_URL="${HEALTH_URL:-http://localhost:8000/health/live}"
 READY_URL="${READY_URL:-http://localhost:8000/health/ready}"
 SMOKE_BASE_URL="${SMOKE_BASE_URL:-http://localhost:8000}"
+SMOKE_TIMEOUT="${SMOKE_TIMEOUT:-15}"
 SMOKE_VIRUS="${SMOKE_VIRUS:-Influenza A}"
 SMOKE_HORIZON="${SMOKE_HORIZON:-7}"
 SMOKE_WEEKLY_BUDGET_EUR="${SMOKE_WEEKLY_BUDGET_EUR:-50000}"
@@ -156,6 +157,7 @@ run_release_smoke() {
 
     local smoke_args=(
         --base-url "$SMOKE_BASE_URL"
+        --timeout "$SMOKE_TIMEOUT"
         --virus "$SMOKE_VIRUS"
         --horizon "$SMOKE_HORIZON"
         --budget-eur "$SMOKE_WEEKLY_BUDGET_EUR"

@@ -80,9 +80,9 @@ const UI_REPLACEMENTS: Array<[RegExp, string]> = [
   [/\bRun\b/g, 'Lauf'],
   [/\bDecision Support\b/g, 'Entscheidungshilfe'],
   [/\bMedia Spend\b/g, 'Mediabudget'],
-  [/\bSignal-Score\b/g, 'Ranking-Signal'],
-  [/\bSignalscore\b/g, 'Ranking-Signal'],
-  [/\bPriority-Score\b/g, 'Entscheidungs-Priorität'],
+  [/\bSignal-Score\b/g, UI_COPY.signalScore],
+  [/\bSignalscore\b/g, UI_COPY.signalScore],
+  [/\bPriority-Score\b/g, UI_COPY.decisionPriority],
   [/\bLearning-Konfidenz\b/g, 'Sicherheit aus Kundendaten'],
   [/\bSearch Lift\b/g, 'Suchanstieg'],
   [/\bSales\b/g, 'Verkäufe'],
@@ -245,7 +245,7 @@ function translateStructuredReason(item: StructuredReasonItem): string | null {
       const eventProbability = reasonNumber(item, 'event_probability');
       const forecastConfidence = reasonNumber(item, 'forecast_confidence');
       const agreementDirection = reasonString(item, 'agreement_direction');
-      return `${stageSentence(region, stage)}, weil die ${COCKPIT_SEMANTICS.eventProbability.label} bei ${percentFromModelValue(String(eventProbability ?? 0))} liegt, die Forecast-Sicherheit bei ${percentFromModelValue(String(forecastConfidence ?? 0))} liegt und der Quellenabgleich aktuell eher ${directionLabel(agreementDirection)} zeigt.`;
+      return `${stageSentence(region, stage)}, weil die ${UI_COPY.eventProbability} bei ${percentFromModelValue(String(eventProbability ?? 0))} liegt, die Vorhersage mit ${percentFromModelValue(String(forecastConfidence ?? 0))} eher stabil wirkt und der Quellenabgleich aktuell eher ${directionLabel(agreementDirection)} zeigt.`;
     }
     case 'uncertainty_summary': {
       const parts = reasonStringList(item, 'parts');
@@ -253,17 +253,17 @@ function translateStructuredReason(item: StructuredReasonItem): string | null {
       return `Es bleibt Unsicherheit wegen ${joinList(parts.map((part) => uncertaintyPartLabel(part, item)))}.`;
     }
     case 'event_probability_activate_threshold':
-      return `Die ${COCKPIT_SEMANTICS.eventProbability.label} liegt mit ${percentFromModelValue(String(reasonNumber(item, 'event_probability') ?? 0))} über der Schwelle für eine Aktivierung.`;
+      return `Die ${UI_COPY.eventProbability} liegt bei ${percentFromModelValue(String(reasonNumber(item, 'event_probability') ?? 0))} und spricht für Aktivieren.`;
     case 'event_probability_prepare_threshold':
-      return `Die ${COCKPIT_SEMANTICS.eventProbability.label} spricht mit ${percentFromModelValue(String(reasonNumber(item, 'event_probability') ?? 0))} für Vorbereitung, aber noch nicht für eine volle Aktivierung.`;
+      return `Die ${UI_COPY.eventProbability} liegt bei ${percentFromModelValue(String(reasonNumber(item, 'event_probability') ?? 0))}. Das reicht für Vorbereiten, aber noch nicht für Aktivieren.`;
     case 'event_probability_below_prepare_threshold':
-      return `Die ${COCKPIT_SEMANTICS.eventProbability.label} reicht mit ${percentFromModelValue(String(reasonNumber(item, 'event_probability') ?? 0))} aktuell nicht für Vorbereitung oder Aktivierung.`;
+      return `Die ${UI_COPY.eventProbability} liegt bei ${percentFromModelValue(String(reasonNumber(item, 'event_probability') ?? 0))}. Das reicht noch nicht für Vorbereiten oder Aktivieren.`;
     case 'forecast_confidence_strong':
-      return `Die Vorhersage ist mit ${percentFromModelValue(String(reasonNumber(item, 'forecast_confidence') ?? 0))} Sicherheit stabil.`;
+      return `Die Vorhersage wirkt stabil (${percentFromModelValue(String(reasonNumber(item, 'forecast_confidence') ?? 0))}).`;
     case 'forecast_confidence_usable':
-      return `Die Vorhersage ist mit ${percentFromModelValue(String(reasonNumber(item, 'forecast_confidence') ?? 0))} Sicherheit nutzbar.`;
+      return `Die Vorhersage wirkt nutzbar (${percentFromModelValue(String(reasonNumber(item, 'forecast_confidence') ?? 0))}).`;
     case 'forecast_confidence_low':
-      return `Die Vorhersage ist mit ${percentFromModelValue(String(reasonNumber(item, 'forecast_confidence') ?? 0))} Sicherheit noch recht unsicher.`;
+      return `Die Vorhersage ist noch unsicher (${percentFromModelValue(String(reasonNumber(item, 'forecast_confidence') ?? 0))}).`;
     case 'primary_sources_fresh':
       return `Die wichtigsten Quellen sind im Schnitt ${localizedNumber(reasonNumber(item, 'freshness_days') ?? 0, 1)} Tage alt und damit aktuell.`;
     case 'primary_sources_stale':
@@ -294,7 +294,7 @@ function translateStructuredReason(item: StructuredReasonItem): string | null {
     case 'quality_gate_not_passed':
       return 'Die regionale Vorhersage ist aktuell noch nicht stark genug für eine Freigabe.';
     case 'final_stage_policy_overlay':
-      return `Die Rohlogik sieht ${stageLabel(reasonString(item, 'signal_stage'))} vor, aber die Freigaberegeln halten die Region aktuell auf ${stageLabel(reasonString(item, 'final_stage'))}.`;
+      return `Das Signal würde ${stageLabel(reasonString(item, 'signal_stage'))} vorschlagen, aber die Freigaberegeln setzen die Region aktuell auf ${stageLabel(reasonString(item, 'final_stage'))}.`;
     case 'policy_override_watch_only':
       return 'Eine Regel hält die Region bewusst im Beobachtungsmodus, auch wenn das Rohsignal stärker aussieht.';
     case 'policy_override_quality_gate':
@@ -304,7 +304,7 @@ function translateStructuredReason(item: StructuredReasonItem): string | null {
     case 'decision_stage_base':
       return `${stageLabel(reasonString(item, 'stage'))} ist hier die grundlegende Aktivierungsstufe.`;
     case 'ranking_priority_and_probability':
-      return `${COCKPIT_SEMANTICS.decisionPriority.label} und ${COCKPIT_SEMANTICS.eventProbability.label} treiben hier das Ranking.`;
+      return `${UI_COPY.decisionPriority} und ${UI_COPY.eventProbability} bestimmen hier die Reihenfolge.`;
     case 'budget_driver_activate_multiplier':
       return 'Aktivierungsregionen erhalten in der Budgetlogik den stärksten Zuschlag.';
     case 'budget_driver_prepare_weighting':
@@ -336,7 +336,7 @@ function translateStructuredReason(item: StructuredReasonItem): string | null {
     case 'campaign_stage_budget_share':
       return `${normalizeGermanText(reasonString(item, 'region_name') || 'Die Region')} bleibt aktuell auf ${stageLabel(reasonString(item, 'stage'))} mit ${percentFromModelValue(String(reasonNumber(item, 'budget_share') ?? 0))} Budgetanteil.`;
     case 'campaign_wave_plan_support':
-      return `Die Allokations-Sicherheit von ${percentFromModelValue(String(reasonNumber(item, 'confidence') ?? 0))} und Rang ${localizedNumber(reasonNumber(item, 'priority_rank') ?? 0, 0)} halten die Region im aktuellen Wochenplan.`;
+      return `Die Region bleibt im Wochenplan, weil Sicherheit (${percentFromModelValue(String(reasonNumber(item, 'confidence') ?? 0))}) und Rang (${localizedNumber(reasonNumber(item, 'priority_rank') ?? 0, 0)}) im Vergleich gut genug sind.`;
     case 'campaign_product_cluster_fit': {
       const cluster = normalizeGermanText(reasonString(item, 'cluster_label'));
       const fitScore = reasonNumber(item, 'fit_score');
@@ -356,15 +356,15 @@ function translateStructuredReason(item: StructuredReasonItem): string | null {
     case 'campaign_signal_outcome_agreement':
       return `Der Abgleich zwischen Signal und Kundendaten ist ${agreementLabel(reasonString(item, 'status'))}.`;
     case 'campaign_guardrail_ready':
-      return 'Die Budget- und Freigabegrenzen sind aktuell erfüllt.';
+      return 'Die Budget-Regeln passen; der nächste Schritt ist möglich.';
     case 'campaign_guardrail_bundle_neighbor':
-      return 'Das Budget ist für eine Einzelregion noch zu klein und sollte mit einer Nachbarregion gebündelt werden.';
+      return 'Das Budget ist für eine einzelne Region noch zu klein; sinnvoll ist eine Bündelung mit einer Nachbarregion.';
     case 'campaign_guardrail_low_confidence_review':
-      return 'Die Signal-Sicherheit liegt unter der Stufengrenze, deshalb braucht der Vorschlag noch eine manuelle Prüfung.';
+      return 'Das Signal ist noch nicht sicher genug; vor dem nächsten Schritt ist eine manuelle Prüfung sinnvoll.';
     case 'campaign_guardrail_blocked':
-      return 'Operative oder kommerzielle Freigaben blockieren die Ausführung noch.';
+      return 'Ein offener Freigabe-Punkt blockiert den nächsten Schritt noch.';
     case 'campaign_guardrail_discussion_only':
-      return 'Die Empfehlung bleibt vorerst ein Diskussionsvorschlag.';
+      return 'Der Vorschlag ist noch eine Idee und noch nicht freigabefähig.';
     default:
       return null;
   }
@@ -441,7 +441,7 @@ export function explainInPlainGerman(value?: string | StructuredReasonItem | nul
 
   const belowActionMatch = compactRaw.match(/^(.+?) stays below the action threshold\.$/i);
   if (belowActionMatch) {
-    return `${normalizeGermanText(belowActionMatch[1])} bleibt aktuell unter der Handlungsschwelle.`;
+    return `${normalizeGermanText(belowActionMatch[1])} wirkt noch nicht stark genug für einen nächsten Schritt.`;
   }
 
   const stageShareMatch = compactRaw.match(/^(.+?) stays on (Activate|Prepare|Watch) with budget share ([\d.]+)%\.$/i);
@@ -453,21 +453,21 @@ export function explainInPlainGerman(value?: string | StructuredReasonItem | nul
     /^Event probability ([\d.]+) clears the Activate threshold ([\d.]+)\.$/i,
   );
   if (activationThresholdMatch) {
-    return `Die ${COCKPIT_SEMANTICS.eventProbability.label} liegt mit ${percentFromModelValue(activationThresholdMatch[1])} über der Schwelle für eine Aktivierung.`;
+    return `Die ${UI_COPY.eventProbability} liegt bei ${percentFromModelValue(activationThresholdMatch[1])} und spricht für Aktivieren.`;
   }
 
   const prepareThresholdMatch = compactRaw.match(
     /^Event probability ([\d.]+) clears the Prepare threshold ([\d.]+), but not all Activate conditions are met\.$/i,
   );
   if (prepareThresholdMatch) {
-    return `Die ${COCKPIT_SEMANTICS.eventProbability.label} spricht mit ${percentFromModelValue(prepareThresholdMatch[1])} für Vorbereitung, aber noch nicht für eine volle Aktivierung.`;
+    return `Die ${UI_COPY.eventProbability} liegt bei ${percentFromModelValue(prepareThresholdMatch[1])}. Das reicht für Vorbereiten, aber noch nicht für Aktivieren.`;
   }
 
   const belowThresholdMatch = compactRaw.match(
     /^Event probability ([\d.]+) stays below the rule set needed for Prepare\/Activate\.$/i,
   );
   if (belowThresholdMatch) {
-    return `Die ${COCKPIT_SEMANTICS.eventProbability.label} reicht mit ${percentFromModelValue(belowThresholdMatch[1])} aktuell nicht für Vorbereitung oder Aktivierung.`;
+    return `Die ${UI_COPY.eventProbability} liegt bei ${percentFromModelValue(belowThresholdMatch[1])}. Das reicht noch nicht für Vorbereiten oder Aktivieren.`;
   }
 
   const explanationMatch = compactRaw.match(
@@ -475,7 +475,7 @@ export function explainInPlainGerman(value?: string | StructuredReasonItem | nul
   );
   if (explanationMatch) {
     const region = normalizeGermanText(explanationMatch[1]);
-    return `${stageSentence(region, explanationMatch[2])}, weil die Event-Wahrscheinlichkeit bei ${percentFromModelValue(explanationMatch[3])} liegt, die Forecast-Sicherheit bei ${percentFromModelValue(explanationMatch[4])} liegt und der Quellenabgleich aktuell eher ${directionLabel(explanationMatch[6])} zeigt.`;
+    return `${stageSentence(region, explanationMatch[2])}, weil die ${UI_COPY.eventProbability} bei ${percentFromModelValue(explanationMatch[3])} liegt, die Vorhersage-Sicherheit bei ${percentFromModelValue(explanationMatch[4])} liegt und der Quellenabgleich aktuell eher ${directionLabel(explanationMatch[6])} zeigt.`;
   }
 
   const legacyActivateMatch = compactRaw.match(
@@ -483,29 +483,29 @@ export function explainInPlainGerman(value?: string | StructuredReasonItem | nul
   );
   if (legacyActivateMatch) {
     const region = normalizeGermanText(legacyActivateMatch[1]);
-    return `${region} sollte jetzt aktiviert werden, weil die Event-Wahrscheinlichkeit bei ${percentFromModelValue(legacyActivateMatch[2])} liegt und die Quellenlage das Signal stützt.`;
+    return `${region} sollte jetzt aktiviert werden, weil die ${UI_COPY.eventProbability} bei ${percentFromModelValue(legacyActivateMatch[2])} liegt und die Quellenlage das Signal stützt.`;
   }
 
   const legacyWatchMatch = compactRaw.match(
     /^(.+?): Watch because probability and trend stay below the current action thresholds\.$/i,
   );
   if (legacyWatchMatch) {
-    return `${normalizeGermanText(legacyWatchMatch[1])} bleibt vorerst im Beobachtungsmodus, weil Wahrscheinlichkeit und Trend noch unter den aktuellen Handlungsschwellen liegen.`;
+    return `${normalizeGermanText(legacyWatchMatch[1])} bleibt vorerst im Beobachtungsmodus, weil Wahrscheinlichkeit und Trend noch nicht stark genug sind.`;
   }
 
   const strongConfidenceMatch = compactRaw.match(/^Forecast confidence is strong at ([\d.]+)\.$/i);
   if (strongConfidenceMatch) {
-    return `Die Vorhersage ist mit ${percentFromModelValue(strongConfidenceMatch[1])} Sicherheit stabil.`;
+    return `Die Vorhersage wirkt stabil (${percentFromModelValue(strongConfidenceMatch[1])}).`;
   }
 
   const usableConfidenceMatch = compactRaw.match(/^Forecast confidence is usable at ([\d.]+)\.$/i);
   if (usableConfidenceMatch) {
-    return `Die Vorhersage ist mit ${percentFromModelValue(usableConfidenceMatch[1])} Sicherheit nutzbar.`;
+    return `Die Vorhersage wirkt nutzbar (${percentFromModelValue(usableConfidenceMatch[1])}).`;
   }
 
   const weakConfidenceMatch = compactRaw.match(/^Forecast confidence is only ([\d.]+)\.$/i);
   if (weakConfidenceMatch) {
-    return `Die Vorhersage ist mit ${percentFromModelValue(weakConfidenceMatch[1])} Sicherheit noch recht unsicher.`;
+    return `Die Vorhersage ist noch unsicher (${percentFromModelValue(weakConfidenceMatch[1])}).`;
   }
 
   const revisionHighMatch = compactRaw.match(/^Revision risk is high at ([\d.]+)\.$/i);
@@ -564,11 +564,11 @@ export function explainInPlainGerman(value?: string | StructuredReasonItem | nul
 
   const rankDriverMatch = compactRaw.match(/^Priority score ([\d.]+) and event probability ([\d.]+) drive the ranking\.$/i);
   if (rankDriverMatch) {
-    return `${COCKPIT_SEMANTICS.decisionPriority.label} und ${COCKPIT_SEMANTICS.eventProbability.label} treiben hier das Ranking.`;
+    return `${COCKPIT_SEMANTICS.decisionPriority.label} und ${COCKPIT_SEMANTICS.eventProbability.label} bestimmen hier die Reihenfolge.`;
   }
 
   if (/^Priority score and event probability drive the ranking\.$/i.test(compactRaw)) {
-    return `${COCKPIT_SEMANTICS.decisionPriority.label} und ${COCKPIT_SEMANTICS.eventProbability.label} treiben hier das Ranking.`;
+    return `${COCKPIT_SEMANTICS.decisionPriority.label} und ${COCKPIT_SEMANTICS.eventProbability.label} bestimmen hier die Reihenfolge.`;
   }
 
   if (/^Activate regions receive the strongest label multiplier\.$/i.test(compactRaw)) {
@@ -680,23 +680,23 @@ export function explainInPlainGerman(value?: string | StructuredReasonItem | nul
   }
 
   if (/^Spend guardrails are currently satisfied\.$/i.test(compactRaw)) {
-    return 'Die Budget- und Freigabegrenzen sind aktuell erfüllt.';
+    return 'Die Budget-Regeln passen; der nächste Schritt ist möglich.';
   }
 
   if (/^Budget is below the standalone threshold and should be bundled with a neighboring region or shared flight\.$/i.test(compactRaw)) {
-    return 'Das Budget ist für eine Einzelregion noch zu klein und sollte mit einer Nachbarregion gebündelt werden.';
+    return 'Das Budget ist für eine einzelne Region noch zu klein; sinnvoll ist eine Bündelung mit einer Nachbarregion.';
   }
 
   if (/^Confidence is below the stage-specific guardrail, so the recommendation needs manual PEIX review\.$/i.test(compactRaw)) {
-    return 'Die Signal-Sicherheit liegt unter der Stufengrenze, deshalb braucht der Vorschlag noch eine manuelle Prüfung.';
+    return 'Das Signal ist noch nicht sicher genug; vor dem nächsten Schritt ist eine manuelle Prüfung sinnvoll.';
   }
 
   if (/^Operational or commercial spend gate is still blocking execution\.$/i.test(compactRaw)) {
-    return 'Operative oder kommerzielle Freigaben blockieren die Ausführung noch.';
+    return 'Ein offener Freigabe-Punkt blockiert den nächsten Schritt noch.';
   }
 
   if (/^Recommendation stays discussion-only for now\.$/i.test(compactRaw)) {
-    return 'Die Empfehlung bleibt vorerst ein Diskussionsvorschlag.';
+    return 'Der Vorschlag ist noch eine Idee und noch nicht freigabefähig.';
   }
 
   if (/^Demand remains soft\.$/i.test(compactRaw)) {

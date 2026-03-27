@@ -51,13 +51,13 @@ const CampaignsPage: React.FC = () => {
         max_cards: 8,
         virus_typ: virus,
       });
-      toast(`${(data.cards || []).length} Kampagnenpakete erzeugt.`, 'success');
+      toast(`${(data.cards || []).length} Vorschläge erstellt.`, 'success');
       invalidateData();
       await loadCampaigns();
     } catch (error) {
       console.error('Recommendation generation failed', error);
       const message = error instanceof Error ? error.message : 'Unbekannter Fehler';
-      toast(`Generierung fehlgeschlagen: ${message}`, 'error');
+      toast(`Erstellen fehlgeschlagen: ${message}`, 'error');
     } finally {
       setGenerationLoading(false);
     }

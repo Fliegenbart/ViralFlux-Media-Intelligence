@@ -111,7 +111,7 @@ describe('EvidencePanel', () => {
 
     expect(screen.getAllByText('Evidenz').length).toBeGreaterThan(0);
     expect(screen.getByText('Aktuelle Evidenzlage')).toBeInTheDocument();
-    expect(screen.getByText('Woran es hängt')).toBeInTheDocument();
+    expect(screen.getByText('Worauf es sich stützt')).toBeInTheDocument();
     expect(screen.getByText('Was schon trägt')).toBeInTheDocument();
     expect(screen.getByText('Arbeitskontext')).toBeInTheDocument();
     expect(screen.getByText('Schon verbunden')).toBeInTheDocument();
@@ -122,12 +122,12 @@ describe('EvidencePanel', () => {
     expect(screen.getByText('Modell-Belastbarkeit')).toBeInTheDocument();
     expect(screen.getByText('Operative Einsatzreife')).toBeInTheDocument();
     expect(screen.getAllByText('Ein Importfeld ist noch nicht sauber zugeordnet.').length).toBeGreaterThan(0);
-    expect(screen.getByText('Daten & Outcome')).toBeInTheDocument();
+    expect(screen.getByText('Kundendaten (optional)')).toBeInTheDocument();
     expect(screen.getByText('Import prüfen')).toBeInTheDocument();
-    expect(screen.getByText('Modell & Verlauf')).toBeInTheDocument();
+    expect(screen.getByText('Vorhersage (Details)')).toBeInTheDocument();
     expect(screen.getByText('Quellen & Grenzen')).toBeInTheDocument();
     expect(screen.getByText('Technische Tiefe')).toBeInTheDocument();
-    expect(screen.getByText(/Bundesland-Level, kein City-Forecast/i)).toBeInTheDocument();
+    expect(screen.getByText(/Bundesland-Ansicht, ohne Stadt-Prognose/i)).toBeInTheDocument();
     expect(screen.getAllByText(/nicht für einzelne Städte/i).length).toBeGreaterThan(0);
   });
 

@@ -43,7 +43,7 @@ export function usePilotSurfaceData(
     } catch (error) {
       console.error('Pilot readout fetch failed', error);
       setPilotReadout(null);
-      toast('Die Pilot-Readout-Oberfläche konnte nicht geladen werden.', 'error');
+      toast('Die Wochenübersicht konnte gerade nicht geladen werden.', 'error');
     } finally {
       setLoading(false);
     }

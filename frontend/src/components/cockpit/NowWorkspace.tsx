@@ -81,7 +81,7 @@ const NowWorkspace: React.FC<Props> = ({
     || sortedPredictions[0]
     || null
   );
-  const trustSummary = view.briefingTrust.summary || workspaceStatus?.summary || 'Hier siehst du den schnellen Vertrauenscheck.';
+  const trustSummary = view.briefingTrust.summary || workspaceStatus?.summary || 'Kurzer Check, was schon trägt und was noch fehlt.';
   const qualityStats = (view.quality.length ? view.quality : [{ label: 'Qualität', value: 'Noch offen' }]).slice(0, 4);
   const inlineNotes = [
     ...(view.supportState.detail ? [view.supportState.detail] : []),
@@ -89,7 +89,7 @@ const NowWorkspace: React.FC<Props> = ({
   ].filter(Boolean);
   const heroNotes = inlineNotes.slice(0, 2);
   const confidenceItems = [
-    normalizedTrustChecks[0] || { key: 'forecast', label: 'Belastbarkeit', value: 'Noch offen', detail: 'Forecast wird aufgebaut', tone: 'muted' },
+    normalizedTrustChecks[0] || { key: 'forecast', label: 'Belastbarkeit', value: 'Noch offen', detail: 'Vorhersage wird gerade aufgebaut.', tone: 'muted' },
     normalizedTrustChecks[1] || { key: 'evidence', label: 'Evidenz', value: 'Noch offen', detail: 'Datenlage wird aktualisiert', tone: 'muted' },
     normalizedTrustChecks[2] || { key: 'readiness', label: 'Einsatzreife', value: 'Noch offen', detail: 'Freigabe steht noch aus', tone: 'muted' },
   ].slice(0, 3);
@@ -120,13 +120,13 @@ const NowWorkspace: React.FC<Props> = ({
   if (loading && !view.hasData) {
     return (
       <OperatorSection
-        kicker="PEIX x GELO Weekly Briefing"
+        kicker="PEIX x GELO Wochenüberblick"
         title="Wochenplan wird aufgebaut"
         description="Der Fokusfall, die Einordnung und die Prüfpfade werden gerade zusammengestellt."
         tone="muted"
         className="now-template-page now-workspace-shell"
       >
-        <div className="now-briefing-skeleton" aria-label="Weekly Briefing wird geladen">
+        <div className="now-briefing-skeleton" aria-label="Wochenüberblick wird geladen">
           <div className="now-briefing-skeleton__hero-row">
             <div className="workspace-note-card now-briefing-skeleton__block now-briefing-skeleton__block--hero" />
             <div className="workspace-note-card now-briefing-skeleton__block now-briefing-skeleton__block--aside" />
@@ -144,7 +144,7 @@ const NowWorkspace: React.FC<Props> = ({
   return (
     <div className="page-stack now-template-page">
       <OperatorSection
-        kicker="PEIX x GELO Weekly Briefing"
+        kicker="PEIX x GELO Wochenüberblick"
         title="Wochenplan"
         description="Eine Entscheidung. Ein klarer nächster Schritt."
         tone="accent"
@@ -152,10 +152,10 @@ const NowWorkspace: React.FC<Props> = ({
       >
         <div className="now-toolbar">
           <div className="now-toolbar__intro">
-            <span className="now-toolbar__eyebrow">Signalfilter</span>
+            <span className="now-toolbar__eyebrow">Auswahl</span>
             <div className="now-toolbar__heading">
               <strong>Diese Woche</strong>
-              <span>Ein Filter. Ein Fokus. Zwei Folgepfade.</span>
+              <span>Erst auswählen, dann sehen was vorne liegt.</span>
             </div>
           </div>
           <OperatorChipRail className="review-chip-row now-toolbar__rail">
@@ -175,7 +175,7 @@ const NowWorkspace: React.FC<Props> = ({
             <strong>Stand {formatDateTime(view.generatedAt)}</strong>
             <span>
               {heroRecommendation?.stateLabel || 'Noch ohne belastbare Freigabe'}.
-              {' '}Bundesland-Level, bewusst ohne City-Präzision.
+              {' '}Bundesland-Ansicht, ohne Stadt-Prognose.
             </span>
           </div>
         </div>
@@ -189,7 +189,7 @@ const NowWorkspace: React.FC<Props> = ({
           >
             <div className="now-briefing-empty__meta">
               <span>Wochenentscheidung noch offen</span>
-              <span>{virus} · h{horizonDays}</span>
+              <span>{virus} · {horizonDays} Tage</span>
             </div>
             <div className="now-briefing-empty__body">
               <div className="now-briefing-empty__summary">
@@ -357,8 +357,8 @@ const NowWorkspace: React.FC<Props> = ({
       {!view.emptyState ? (
         <>
           <CollapsibleSection
-            title="Details bei Bedarf"
-            subtitle="Historie und zusätzliche Signale nur dann öffnen, wenn du den Fokusfall tiefer prüfen willst."
+            title="Details (optional)"
+            subtitle="Historie und zusätzliche Signale nur öffnen, wenn ein tieferer Blick nötig ist."
           >
             <div className="workspace-two-column">
               <FocusRegionOutlookPanel
@@ -368,10 +368,10 @@ const NowWorkspace: React.FC<Props> = ({
                 horizonDays={horizonDays}
               />
 
-              <OperatorPanel
-                title="Signal und Qualität"
-                description="Kompakter Zustand der wichtigsten Qualitäts- und Kontextsignale."
-              >
+            <OperatorPanel
+              title="Signal und Qualität"
+              description="Kompakter Zustand der wichtigsten Qualitäts- und Kontextsignale."
+            >
                 <div className="operator-stat-grid">
                   {qualityStats.map((item) => (
                     <OperatorStat
@@ -386,10 +386,10 @@ const NowWorkspace: React.FC<Props> = ({
             </div>
 
             <div className="workspace-two-column">
-              <OperatorPanel
-                title="Was noch bremsen kann"
-                description="Nur die Punkte, die vor dem nächsten Schritt bewusst sichtbar bleiben sollen."
-              >
+            <OperatorPanel
+              title="Was noch bremsen kann"
+              description="Nur die Punkte, die vor dem nächsten Schritt bewusst sichtbar bleiben sollen."
+            >
                 <div className="workspace-note-list">
                   {blockers.length > 0 ? blockers.map((risk) => (
                     <div key={risk} className="workspace-note-card">
@@ -401,10 +401,10 @@ const NowWorkspace: React.FC<Props> = ({
                 </div>
               </OperatorPanel>
 
-              <OperatorPanel
-                title="Weitere Hinweise"
-                description="Zusätzliche Hinweise, die hilfreich sind, aber nicht die Hauptentscheidung führen."
-              >
+            <OperatorPanel
+              title="Weitere Hinweise"
+              description="Zusätzliche Hinweise, die hilfreich sind, aber nicht die Hauptentscheidung führen."
+            >
                 <div className="workspace-note-list">
                   {(view.reasons.length > 3 ? view.reasons.slice(3) : view.risks).map((item) => (
                     <div key={item} className="workspace-note-card">
@@ -430,7 +430,7 @@ const NowWorkspace: React.FC<Props> = ({
               result={waveRadar}
               loading={waveRadarLoading}
               title="Historische Ausbreitungsreihenfolge"
-              subtitle={`Die letzte verfügbare Saison hilft als Hintergrund, ersetzt aber nicht den aktuellen Forecast auf Bundesland-Level für ${virus}.`}
+              subtitle={`Die letzte verfügbare Saison hilft als Hintergrund, ersetzt aber nicht die aktuelle Vorhersage auf Bundesland-Ebene für ${virus}.`}
             />
           </CollapsibleSection>
         </>
@@ -443,8 +443,8 @@ export default NowWorkspace;
 
 function briefingTrustLabel(label?: string | null): string {
   const normalized = String(label || '').trim().toLowerCase();
-  if (normalized === 'reliability') return 'Belastbarkeit';
-  if (normalized === 'readiness' || normalized === 'readiness / blocker') return 'Einsatzreife & Blocker';
+  if (normalized === 'reliability') return 'Sicherheit';
+  if (normalized === 'readiness' || normalized === 'readiness / blocker') return 'Handlung & Blocker';
   return label || 'Einordnung';
 }
 

@@ -13,36 +13,36 @@ interface Props {
 }
 
 const PRIMARY_NAV_ITEMS = [
-  { label: 'Wochenplan', path: '/jetzt', helper: 'Was PEIX für GELO diese Woche zuerst prüfen sollte', icon: 'bolt' },
-  { label: 'Regionen', path: '/regionen', helper: 'Welche Region zuerst wichtig ist', icon: 'location_on' },
-  { label: 'Kampagnen', path: '/kampagnen', helper: 'Welcher Fall als Nächstes dran ist', icon: 'auto_awesome' },
-  { label: 'Evidenz', path: '/evidenz', helper: 'Was noch geprüft werden muss', icon: 'verified' },
+  { label: 'Wochenplan', path: '/jetzt', helper: 'Was diese Woche als Nächstes dran ist', icon: 'bolt' },
+  { label: 'Regionen', path: '/regionen', helper: 'Welche Bundesländer gerade vorne liegen', icon: 'location_on' },
+  { label: 'Kampagnen', path: '/kampagnen', helper: 'Welcher Vorschlag als Nächstes geprüft werden sollte', icon: 'auto_awesome' },
+  { label: 'Evidenz', path: '/evidenz', helper: 'Was schon belegt ist und was noch fehlt', icon: 'verified' },
 ] as const;
 
 const SECTION_META = [
   {
     path: '/jetzt',
     kicker: 'PEIX x GELO',
-    title: 'Weekly Briefing',
-    description: 'Die eine Wochenentscheidung, die zuerst sichtbar und prüfbar bleiben soll.',
+    title: 'Wochenüberblick',
+    description: 'Zeigt die wichtigste Entscheidung für diese Woche und den nächsten Schritt.',
   },
   {
     path: '/regionen',
     kicker: 'Regionen',
     title: 'Bundesländer',
-    description: 'Welche Region zuerst trägt und welche zwei danach folgen.',
+    description: 'Zeigt, welches Bundesland gerade vorne liegt und warum.',
   },
   {
     path: '/kampagnen',
     kicker: 'Maßnahmen',
     title: 'Kampagnen',
-    description: 'Welcher Fall jetzt dran ist und was danach kommt.',
+    description: 'Zeigt den wichtigsten Vorschlag und die nächsten Schritte.',
   },
   {
     path: '/evidenz',
     kicker: 'Evidenz',
     title: 'Evidenz',
-    description: 'Was die Richtung trägt, was fehlt und was noch bremst.',
+    description: 'Zeigt, was die Empfehlungen stützt und was noch fehlt.',
   },
 ] as const;
 
@@ -68,9 +68,9 @@ const AppLayout: React.FC<Props> = ({ children }) => {
   const currentSection = SECTION_META.find(({ path }) => location.pathname.startsWith(path)) || {
     kicker: 'Arbeitsbereich',
     title: 'Arbeitsansicht',
-    description: 'Hier bleibt dein aktueller Arbeitsstand an einem Ort.',
+    description: 'Hier bleibt der aktuelle Stand an einem Ort.',
   };
-  const exportLabel = 'Weekly Readout exportieren';
+  const exportLabel = 'Wochenbericht exportieren';
   const readoutSummary = buildWeeklyReadoutSummary(pilotReadout, readoutLoading);
 
   const handlePdfDownload = async () => {
@@ -82,7 +82,7 @@ const AppLayout: React.FC<Props> = ({ children }) => {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'PEIX_GELO_Weekly_Readout.pdf';
+      a.download = 'PEIX_GELO_Wochenbericht.pdf';
       a.click();
       URL.revokeObjectURL(url);
     } catch (e) {
@@ -145,7 +145,7 @@ const AppLayout: React.FC<Props> = ({ children }) => {
 
           <div className="operator-sidebar__brand-block">
             <p className="operator-sidebar__brand-copy">PEIX x GELO Pilot</p>
-            <p className="operator-sidebar__brand-note">Bundesland-Level, eine klare Wochenentscheidung.</p>
+            <p className="operator-sidebar__brand-note">Gilt fürs Bundesland, keine Stadt-Prognose.</p>
           </div>
 
           <nav className="operator-nav" role="navigation" aria-label="Arbeitsbereiche">
@@ -301,15 +301,15 @@ function buildWeeklyReadoutSummary(
   if (loading) {
     return {
       tone: 'watch',
-      status: 'Readout wird vorbereitet',
-      title: 'GELO-Readout wird geladen',
-      summary: 'Wir sammeln gerade die Wochenlage aus Briefing, Regionen, Kampagnen und Evidenz.',
+      status: 'Wochenübersicht wird geladen',
+      title: 'Wochenübersicht wird vorbereitet',
+      summary: 'Die Seite sammelt gerade den Wochenstand aus Regionen, Kampagnen und Evidenz.',
       focusRegions: 'Wird geladen',
       nextReview: 'Wird geladen',
       reliability: 'Wird geladen',
       dataReadiness: 'Wird geladen',
       openGap: 'Noch keine Einschätzung',
-      stripHeadline: 'Readout wird vorbereitet',
+      stripHeadline: 'Wochenübersicht wird vorbereitet',
       stripGap: 'Wird geladen',
       updatedAt: '-',
     };
@@ -318,16 +318,16 @@ function buildWeeklyReadoutSummary(
   if (!pilotReadout) {
     return {
       tone: 'watch',
-      status: 'Readout noch nicht vollständig',
-      title: 'GELO-Readout aktuell nicht vollständig sichtbar',
-      summary: 'Der Exportpfad bleibt verfügbar, aber die Meeting-Zusammenfassung konnte gerade nicht geladen werden.',
+      status: 'Wochenübersicht fehlt gerade',
+      title: 'Wochenübersicht gerade nicht verfügbar',
+      summary: 'Der Export bleibt verfügbar, aber die Wochenzusammenfassung konnte gerade nicht geladen werden.',
       focusRegions: 'Noch offen',
-      nextReview: 'Wochenbriefing erneut öffnen',
-      reliability: 'Noch keine belastbare Einschätzung',
+      nextReview: 'Wochenplan erneut öffnen',
+      reliability: 'Noch keine klare Einschätzung',
       dataReadiness: 'Datenlage noch offen',
-      openGap: 'Readout-Daten fehlen',
-      stripHeadline: 'Readout aktuell nicht vollständig',
-      stripGap: 'Readout-Daten fehlen',
+      openGap: 'Daten zur Wochenübersicht fehlen',
+      stripHeadline: 'Wochenübersicht fehlt',
+      stripGap: 'Daten fehlen',
       updatedAt: '-',
     };
   }
@@ -349,7 +349,7 @@ function buildWeeklyReadoutSummary(
     explainReason(executive?.uncertainty_summary_detail),
     executive?.uncertainty_summary,
     operationalSummary?.headline,
-  ], 'Der Weekly Readout bündelt den aktuellen Stand aus Briefing, Regionen, Kampagnen und Evidenz.');
+  ], 'Die Wochenübersicht bündelt den aktuellen Stand aus Regionen, Kampagnen und Evidenz.');
   const leadFocus = firstMeaningful([
     [regionIdentity(leadRegion), leadRegion?.recommended_product].filter(Boolean).join(' · '),
     [regionIdentity(leadRegion), leadRegion?.campaign_recommendation].filter(Boolean).join(' · '),
@@ -367,15 +367,15 @@ function buildWeeklyReadoutSummary(
   const dataReadiness = coverageWeeks
     ? `${coverageWeeks} Wochen GELO-Daten verbunden`
     : commercialValidation === 'GO'
-      ? 'GELO-Datenlage fürs Weekly belastbar'
+      ? 'GELO-Datenlage: ausreichend'
       : commercialValidation === 'WATCH'
-        ? 'GELO-Datenlage mit Vorsicht nutzbar'
-        : 'GELO-Datenlage noch im Aufbau';
+        ? 'GELO-Datenlage: mit Vorsicht'
+        : 'GELO-Datenlage: im Aufbau';
   const reliability = forecastReadiness === 'GO'
-    ? (commercialValidation === 'GO' ? 'Belastbarkeit fürs Weekly gegeben' : 'Belastbarkeit gegeben, Evidenz noch mit Vorsicht')
+    ? (commercialValidation === 'GO' ? 'Sicherheit: gut genug' : 'Sicherheit: ok, Evidenz noch mit Vorsicht')
     : forecastReadiness === 'WATCH'
-      ? 'Readout nur mit vorsichtiger Belastbarkeit'
-      : 'Noch nicht belastbar fürs Weekly';
+      ? 'Mit Vorsicht: noch nicht überall sicher genug'
+      : 'Noch nicht sicher genug';
   const tone = readinessTone(scopeReadiness);
   const status = statusLabel(scopeReadiness);
   const updatedAt = formatDateTime(runContext?.generated_at || pilotReadout.generated_at || null);
@@ -408,9 +408,9 @@ function readinessTone(value?: PilotReadoutStatus | null): WeeklyReadoutTone {
 }
 
 function statusLabel(value?: PilotReadoutStatus | null): string {
-  if (value === 'GO') return 'Bereit für Weekly';
-  if (value === 'WATCH') return 'Mit Vorsicht zeigen';
-  return 'Noch nicht belastbar';
+  if (value === 'GO') return 'Bereit';
+  if (value === 'WATCH') return 'Mit Vorsicht';
+  return 'Noch unsicher';
 }
 
 function regionIdentity(region?: PilotReadoutRegion | null): string {

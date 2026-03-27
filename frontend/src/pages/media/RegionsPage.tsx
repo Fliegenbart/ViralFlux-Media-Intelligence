@@ -51,13 +51,13 @@ const RegionsPage: React.FC = () => {
       invalidateData();
       await loadRegions();
       if (data.card_id) {
-        toast(data.action === 'reused' ? 'Vorhandenes Kampagnenpaket geöffnet.' : 'Regionale Kampagne erzeugt.', 'success');
+        toast(data.action === 'reused' ? 'Vorhandener Vorschlag geöffnet.' : 'Neuer Vorschlag erstellt.', 'success');
         openRecommendation(data.card_id, 'overlay');
       }
     } catch (error) {
       console.error('Region campaign failed', error);
       const message = error instanceof Error ? error.message : 'Unbekannter Fehler';
-      toast(`Regionenaktion fehlgeschlagen: ${message}`, 'error');
+      toast(`Aktion fehlgeschlagen: ${message}`, 'error');
     } finally {
       setRegionActionLoading(false);
     }

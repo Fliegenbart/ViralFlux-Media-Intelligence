@@ -12,6 +12,14 @@ jest.mock('./pages/media/NowPage', () => ({
   default: () => <div>Jetzt Mock</div>,
 }));
 
+jest.mock('./features/media/usePilotSurfaceData', () => ({
+  usePilotSurfaceData: () => ({
+    pilotReadout: null,
+    loading: false,
+    loadSurface: jest.fn(),
+  }),
+}));
+
 import App from './App';
 import { AUTH_STORAGE_KEY, logout } from './lib/api';
 

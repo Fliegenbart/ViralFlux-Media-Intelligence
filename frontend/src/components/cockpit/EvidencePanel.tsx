@@ -135,29 +135,29 @@ const EvidencePanel: React.FC<Props> = ({
     businessValidation?.message,
     truthGate?.guidance,
     truthSnapshot?.analyst_note,
-    'Hier erklärst du GELO, welche Daten schon tragen, welche noch fehlen und was die nächste sinnvolle Klärung ist.',
+    'Hier steht kurz, welche Daten schon tragen, welche noch fehlen und was als Nächstes sinnvoll ist.',
   );
   const trustedNow = readyForWeeklyPlanning
-    ? 'Forecast, frische Live-Quellen und GELO-Kundendaten stützen die Wochenplanung bereits gemeinsam.'
+    ? 'Vorhersage, frische Quellen und GELO-Kundendaten stützen die Wochenplanung gemeinsam.'
     : reliabilityItem?.tone === 'success'
-      ? 'Forecast und Live-Quellen geben eine belastbare Richtung, auch wenn GELO-Truth noch nicht vollständig ausgebaut ist.'
-      : 'Es gibt erste brauchbare Signale, aber die Datenlage trägt noch nicht jede Empfehlung gleich stark.';
+      ? 'Vorhersage und Quellen geben eine gute Richtung, auch wenn Kundendaten noch nicht überall mitziehen.'
+      : 'Es gibt erste Signale, aber noch nicht genug Belege für jede Empfehlung.';
   const missingNow = !hasTruthData
     ? 'Es fehlen noch GELO-Kundendaten mit Wochen-, Produkt- und Bundesland-Bezug.'
     : !hasOutcomeLearning
-      ? 'Outcome-Lernen aus GELO-Daten ist noch im Aufbau und stützt die Priorisierung nur begrenzt.'
+      ? 'Erkenntnisse aus Kundendaten sind noch im Aufbau und stützen die Priorisierung nur begrenzt.'
       : sourceAttentionCount > 0
         ? `${sourceAttentionCount} Datenquellen brauchen noch Frische- oder Qualitätsprüfung.`
-        : 'Die größten Lücken liegen aktuell nicht mehr bei Pflichtdaten, sondern in der Tiefe der Outcome-Evidenz.';
+        : 'Die größten Lücken liegen aktuell nicht mehr bei Pflichtdaten, sondern in der Tiefe der Kundendaten-Belege.';
   const blockedNow = hasBlockers
     ? sanitizeEvidenceCopy(blockerPreview[0])
-    : 'Aktuell blockiert kein offener Punkt die nächste Qualitätsstufe.';
+    : 'Aktuell blockiert kein offener Punkt den nächsten Schritt.';
   const cautionNow = reliabilityItem?.tone === 'warning'
-    ? 'Die Modellrichtung ist sichtbar, sollte aber noch vorsichtig gelesen werden.'
+    ? 'Die Richtung ist sichtbar, sollte aber noch vorsichtig gelesen werden.'
     : freshnessItem?.tone === 'warning'
-      ? 'Ein Teil der Quellen ist nicht frisch genug für eine harte Aussage.'
+      ? 'Ein Teil der Quellen ist nicht frisch genug für eine klare Aussage.'
       : !hasTruthData
-        ? 'Ohne GELO-Truth bleibt die Planung eher richtungsgebend als vollständig belegt.'
+        ? 'Ohne Kundendaten bleibt die Planung eher richtungsgebend als vollständig belegt.'
         : `${COCKPIT_SEMANTICS.stateLevelScope.helper} ${COCKPIT_SEMANTICS.noCityForecast.helper}`;
   const primaryCtaLabel = (!hasTruthData || hasBlockers || sourceAttentionCount > 0)
     ? 'Fehlende Daten klären'
@@ -178,12 +178,12 @@ const EvidencePanel: React.FC<Props> = ({
     {
       label: 'Modell-Belastbarkeit',
       value: reliabilityItem?.value || 'Noch offen',
-      detail: reliabilityItem?.detail || 'Sobald Forecast-Monitoring geladen ist, siehst du hier die aktuelle Stabilität.',
+      detail: reliabilityItem?.detail || 'Sobald die Modellprüfung geladen ist, steht hier die aktuelle Stabilität.',
       tone: reliabilityItem?.tone || 'neutral',
     },
     {
       label: 'Operative Einsatzreife',
-      value: hasBlockers ? `${workspaceStatus?.blocker_count || blockerPreview.length} Blocker offen` : (readyForWeeklyPlanning ? 'Bereit für Wochenplanung' : 'Mit Vorsicht nutzbar'),
+      value: hasBlockers ? `${workspaceStatus?.blocker_count || blockerPreview.length} Stopper (Blocker) offen` : (readyForWeeklyPlanning ? 'Bereit für Wochenplanung' : 'Mit Vorsicht nutzbar'),
       detail: hasBlockers
         ? sanitizeEvidenceCopy(blockerPreview[0])
         : workspaceStatus?.summary || 'Aktuell blockiert nichts den nächsten sinnvollen Schritt.',
@@ -197,9 +197,9 @@ const EvidencePanel: React.FC<Props> = ({
     `Live-Quellen: ${(evidence?.source_status?.live_count || 0)}/${evidence?.source_status?.total || 0} aktuell`,
   ];
   const missingItems = uniqueNonEmpty([
-    !hasTruthData ? 'Für GELO fehlen noch outcomefähige Kundendaten.' : '',
-    !hasOutcomeLearning ? 'Outcome-Lernen aus GELO-Daten ist noch im Aufbau.' : '',
-    sourceAttentionCount > 0 ? `${sourceAttentionCount} Datenquellen brauchen noch Prüfung oder Frische-Check.` : '',
+    !hasTruthData ? 'Für GELO fehlen noch passende Kundendaten für eine saubere Wochenplanung.' : '',
+    !hasOutcomeLearning ? 'Erkenntnisse aus Kundendaten sind noch im Aufbau.' : '',
+    sourceAttentionCount > 0 ? `${sourceAttentionCount} Datenquellen brauchen noch eine Prüfung (Qualität oder Frische).` : '',
     ...blockerPreview.map((item) => sanitizeEvidenceCopy(item)),
   ]);
   const importNeedsAttention = !hasTruthData || hasBlockers || sourceAttentionCount > 0;
@@ -209,7 +209,7 @@ const EvidencePanel: React.FC<Props> = ({
       <OperatorSection
         kicker="GELO-Datenlage"
         title="Evidenz wird geladen"
-        description="Gleich siehst du wieder, was schon trägt und was noch geklärt werden muss."
+        description="Gleich steht hier wieder, was schon trägt und was noch geklärt werden muss."
         tone="muted"
       >
         <div className="evidence-briefing-skeleton" role="status" aria-live="polite" aria-label="GELO-Datenlage wird geladen">
@@ -307,7 +307,7 @@ const EvidencePanel: React.FC<Props> = ({
           </OperatorPanel>
 
           <OperatorPanel
-            eyebrow="Woran es hängt"
+            eyebrow="Worauf es sich stützt"
             title="Was schon trägt"
             description="Hier bleibt sichtbar, ob die offene GELO-Frage eher Daten, Belastbarkeit oder Einsatzreife betrifft."
             tone="muted"
@@ -326,7 +326,7 @@ const EvidencePanel: React.FC<Props> = ({
               ))}
             </div>
             <div className="workspace-note-card">
-              <strong>Bundesland-Level, kein City-Forecast.</strong> {COCKPIT_SEMANTICS.stateLevelScope.helper}
+              <strong>Bundesland-Ansicht, ohne Stadt-Prognose.</strong> {COCKPIT_SEMANTICS.stateLevelScope.helper} {COCKPIT_SEMANTICS.noCityForecast.helper}
             </div>
           </OperatorPanel>
         </div>
@@ -363,7 +363,7 @@ const EvidencePanel: React.FC<Props> = ({
                 </div>
               )) : (
                 <div className="workspace-note-card">
-                  Aktuell gibt es keinen klaren Datenblocker. Die nächsten Schritte liegen eher in der laufenden Qualitätsbeobachtung.
+                  Aktuell gibt es keinen klaren Stopper (Blocker). Die nächsten Schritte liegen eher in der laufenden Qualitätsbeobachtung.
                 </div>
               )}
             </div>
@@ -372,8 +372,8 @@ const EvidencePanel: React.FC<Props> = ({
       </OperatorSection>
 
       <CollapsibleSection
-        title="Daten & Outcome"
-        subtitle="Hier siehst du, wie weit die GELO-Kundendaten die Empfehlungen schon zusätzlich stützen."
+        title="Kundendaten (optional)"
+        subtitle="Zeigt, wie stark Kundendaten die Empfehlungen zusätzlich stützen."
       >
         <div id="evidence-data">
           <TruthOutcomeSection
@@ -389,7 +389,7 @@ const EvidencePanel: React.FC<Props> = ({
 
       <CollapsibleSection
         title="Import prüfen"
-        subtitle="Hier klärst du fehlende Kundendaten, prüfst eine CSV-Vorschau und verfolgst bestehende Importe nach."
+        subtitle="Hier werden fehlende Kundendaten geklärt, eine CSV geprüft und bestehende Importe nachverfolgt."
         defaultOpen={importNeedsAttention}
       >
         <div id="evidence-import">
@@ -406,8 +406,8 @@ const EvidencePanel: React.FC<Props> = ({
       </CollapsibleSection>
 
       <CollapsibleSection
-        title="Modell & Verlauf"
-        subtitle="Diese Details helfen, die Modellstabilität zu erklären, bleiben aber bewusst eine zweite Ebene hinter der GELO-Datenlage."
+        title="Vorhersage (Details)"
+        subtitle="Diese Details helfen, die Vorhersage einzuordnen und bleiben bewusst eine zweite Ebene hinter der Datenlage."
       >
         <div id="evidence-support">
           <ForecastMonitoringSection
@@ -431,7 +431,7 @@ const EvidencePanel: React.FC<Props> = ({
 
       <CollapsibleSection
         title="Quellen & Grenzen"
-        subtitle="Hier findest du, welche Live-Daten ins System fließen, welche Quellen Beobachtung brauchen und wo die aktuellen Grenzen liegen."
+        subtitle="Hier steht, welche Live-Daten einfließen, welche Quellen Beobachtung brauchen und wo die Grenzen liegen."
       >
         <SourceFreshnessSection
           evidence={evidence}
@@ -446,12 +446,12 @@ const EvidencePanel: React.FC<Props> = ({
 
       <CollapsibleSection
         title="Technische Tiefe"
-        subtitle="Nur wenn du tiefer in Signalsystem, Prüfmarker oder Import-Historie einsteigen musst."
+        subtitle="Nur wenn ein technischer Blick in Signalsystem, Prüfmarker oder Import-Historie nötig ist."
       >
         <div className="workspace-two-column">
           <OperatorPanel
-            title="Signalsystem"
-            description="Hier siehst du, welche Felder und Signale aktuell in die Qualitätsprüfung einfließen."
+            title="Signale (Übersicht)"
+            description="Zeigt, welche Datenfelder und Signale gerade genutzt werden."
           >
             <div className="workspace-note-list">
               {(sourceStatusLabels.length ? sourceStatusLabels : ['Noch keine markierten Pflicht- oder Wirkungsfelder vorhanden.']).slice(0, 6).map((item) => (
@@ -461,18 +461,18 @@ const EvidencePanel: React.FC<Props> = ({
           </OperatorPanel>
 
           <OperatorPanel
-            title="Prüfmarker"
-            description="Diese Hinweise helfen beim technischen Nachvollziehen, stehen aber bewusst nicht im ersten Vertrauensblick."
+            title="Technische Hinweise (optional)"
+            description="Hilft beim Nachvollziehen, ist aber für die Entscheidung nicht nötig."
           >
             <div className="workspace-note-list">
               <div className="workspace-note-card">
                 Letzter Import: {latestImportAt ? formatDateTime(latestImportAt) : 'noch nicht vorhanden'}
               </div>
               <div className="workspace-note-card">
-                Blocker aktuell: {workspaceStatus?.open_blockers || 'keine'}
+                Offene Stopper (Blocker): {workspaceStatus?.open_blockers || 'keine'}
               </div>
               <div className="workspace-note-card">
-                Truth-Felder sichtbar: {sourceStatusLabels.length}
+                Kundendaten-Felder sichtbar: {sourceStatusLabels.length}
               </div>
             </div>
           </OperatorPanel>

@@ -70,10 +70,10 @@ function evidenceLabel(region?: {
   peix_score?: number;
   impact_probability?: number;
 } | null): string {
-  if (!region || hasInsufficientEvidence(region)) return 'Zu wenig Evidenz';
+  if (!region || hasInsufficientEvidence(region)) return 'Zu wenig Belege (Evidenz)';
   const sourceCount = region.source_trace?.length || 0;
   if (sourceCount >= 2) return 'Mehrere Quellen';
-  return 'Erste Evidenz';
+  return 'Erste Belege';
 }
 
 function normalizeRegionText(value?: string | null): string {
@@ -203,7 +203,7 @@ const RegionWorkbench: React.FC<Props> = ({
   const signalNote = metricContractNote(
     primaryRegion?.field_contracts,
     'signal_score',
-    'Hilft beim Vergleichen und Priorisieren, ist aber keine punktgenaue Vorhersage.',
+    'Hilft beim Vergleichen, ist aber keine genaue Vorhersage.',
   );
 
   const regionRows = useMemo(() => {
@@ -231,7 +231,7 @@ const RegionWorkbench: React.FC<Props> = ({
   const regionListTitle = listFilter === 'prioritized'
     ? 'Prüfbare Bundesländer'
     : listFilter === 'low_evidence'
-      ? 'Bundesländer mit zu wenig Evidenz'
+      ? 'Bundesländer mit zu wenig Belegen (Evidenz)'
       : 'Bundesländer im Vergleich';
 
   const selectedEvidence = evidenceLabel(region || primaryRegion);
@@ -289,23 +289,24 @@ const RegionWorkbench: React.FC<Props> = ({
   const blockerItem = workspaceStatus?.items.find((item) => item.key === 'open_blockers');
   const trustSummary = actionDisabledReason
     || workspaceStatus?.summary
-    || 'Die regionale Empfehlung stützt sich auf Forecast, Datenlage und Einsatzreife.';
+    || 'Die regionale Empfehlung stützt sich auf Vorhersage, Datenlage und Einsatzreife.';
+  const evidenceTooThin = selectedEvidence.toLowerCase().includes('zu wenig');
   const trustItems: RegionalTrustItem[] = [
     {
       key: 'reliability',
       label: 'Belastbarkeit',
       value: forecastStatusItem?.value || (selectedDirection === 'increase' ? 'Prüfbar' : 'Beobachten'),
-      detail: forecastStatusItem?.detail || 'Das Forecast-Signal bleibt Unterstützung für die Regionsentscheidung.',
+      detail: forecastStatusItem?.detail || 'Die Vorhersage bleibt eine Unterstützung für die Regionsentscheidung.',
       tone: forecastStatusItem?.tone || regionalDirectionTone(selectedDirection),
     },
     {
       key: 'evidence',
       label: 'Datenlage',
       value: selectedEvidence,
-      detail: selectedEvidence === 'Zu wenig Evidenz'
+      detail: evidenceTooThin
         ? 'Für dieses Bundesland fehlen mehrere stützende Quellen oder Signaltreiber.'
         : dataFreshnessItem?.detail || 'Die Datenlage ist für dieses Bundesland ausreichend sichtbar.',
-      tone: selectedEvidence === 'Zu wenig Evidenz'
+      tone: evidenceTooThin
         ? 'warning'
         : dataFreshnessItem?.tone || 'neutral',
     },
@@ -418,7 +419,7 @@ const RegionWorkbench: React.FC<Props> = ({
       >
         <div className="now-toolbar">
           <div className="now-toolbar__intro">
-            <span className="now-toolbar__eyebrow">Signalfilter</span>
+            <span className="now-toolbar__eyebrow">Auswahl</span>
             <div className="now-toolbar__heading">
               <strong>Diese Woche</strong>
               <span>Eine Region vorne, zwei sichtbar dahinter.</span>
@@ -440,7 +441,7 @@ const RegionWorkbench: React.FC<Props> = ({
           <div className="workspace-note-card regions-toolbar-note">
             <strong>Datenstand {formatDateShort(activeMap.date)}</strong>
             <span>
-              {workspaceStatus?.data_freshness === 'Beobachten' ? 'Ein Teil der Daten ist nicht ganz frisch.' : 'Bundesland-Level, bewusst ohne City-Präzision.'}
+              {workspaceStatus?.data_freshness === 'Beobachten' ? 'Ein Teil der Daten ist nicht ganz frisch.' : 'Bundesland-Ansicht, ohne Stadt-Prognose.'}
             </span>
           </div>
         </div>
@@ -470,7 +471,7 @@ const RegionWorkbench: React.FC<Props> = ({
               <article className="workspace-note-card regions-action-fact">
                 <span className="now-weekly-plan-card__label">Bundesland</span>
                 <strong>{primaryRegion?.name || 'Noch offen'}</strong>
-                <p>Bewusst ohne City-Präzision.</p>
+                <p>Ohne Stadt-Prognose.</p>
               </article>
               <article className="workspace-note-card regions-action-fact">
                 <span className="now-weekly-plan-card__label">Richtungsbild</span>
@@ -518,7 +519,7 @@ const RegionWorkbench: React.FC<Props> = ({
           </OperatorPanel>
 
           <OperatorPanel
-            eyebrow="Woran sie trägt"
+            eyebrow="Warum"
             title="Warum die Region vorne liegt"
             description={trustSummary}
             tone="muted"
@@ -577,7 +578,7 @@ const RegionWorkbench: React.FC<Props> = ({
       <div ref={comparisonRef}>
         <OperatorSection
           kicker="Arbeitsmodus"
-          title="Details bei Bedarf"
+          title="Details (optional)"
           description="Die Liste bleibt das Arbeitswerkzeug für Richtung, Begründung und nächsten Schritt."
           tone="muted"
         >
@@ -608,7 +609,7 @@ const RegionWorkbench: React.FC<Props> = ({
                     onClick={() => setListFilter('low_evidence')}
                     className={`tab-chip ${listFilter === 'low_evidence' ? 'active' : ''}`}
                   >
-                    Zu wenig Evidenz
+                    Zu wenig Belege (Evidenz)
                   </button>
                 </OperatorChipRail>
               </div>
@@ -647,7 +648,7 @@ const RegionWorkbench: React.FC<Props> = ({
                         <span className={`regions-direction-pill regions-direction-pill--${rowDirection}`}>
                           {rowDirectionLabel}
                         </span>
-                        <span className={`regions-status-chip ${rowEvidence === 'Zu wenig Evidenz' ? 'regions-status-chip--warning' : ''}`}>
+                        <span className={`regions-status-chip ${rowEvidence.toLowerCase().includes('zu wenig') ? 'regions-status-chip--warning' : ''}`}>
                           {rowEvidence}
                         </span>
                       </div>
@@ -661,12 +662,12 @@ const RegionWorkbench: React.FC<Props> = ({
               </div>
             </OperatorPanel>
 
-            <OperatorPanel
-              title="Orientierungskarte auf Bundesland-Level"
-              description="Die Karte hilft bei Auswahl und räumlicher Einordnung. Die eigentliche Handlung leitest du aus Karte plus Liste ab, nicht aus der Fläche allein."
-              tone="muted"
-              className="regions-map-panel regions-map-shell"
-            >
+          <OperatorPanel
+            title="Karte zur Orientierung (Bundesland)"
+            description="Die Karte hilft bei Auswahl und räumlicher Einordnung. Die eigentliche Handlung ergibt sich aus Karte plus Liste, nicht aus der Fläche allein."
+            tone="muted"
+            className="regions-map-panel regions-map-shell"
+          >
               <GermanyMap
                 regions={activeMap.regions}
                 selectedRegion={fallbackRegionCode}
@@ -675,7 +676,7 @@ const RegionWorkbench: React.FC<Props> = ({
 
               <div className="workspace-note-list">
                 <div className="workspace-note-card">
-                  <strong>Orientierung statt Hauptentscheidung:</strong> Die Karte zeigt das regionale Signalbild auf Bundesland-Level und vermeidet bewusst City-Präzision.
+                  <strong>Orientierung statt Hauptentscheidung:</strong> Die Karte zeigt das Signalbild pro Bundesland und vermeidet Stadt-Prognosen.
                 </div>
                 <div className="workspace-note-card">
                   <strong>{signalLabel}:</strong> {signalNote}
@@ -688,8 +689,8 @@ const RegionWorkbench: React.FC<Props> = ({
 
       <div ref={detailsRef}>
         <CollapsibleSection
-          title={region ? `Tiefe bei Bedarf: ${region.name}` : 'Tiefe bei Bedarf'}
-          subtitle="Treiber, Rohdetails und längere Begründung nur wenn du tiefer einsteigen möchtest."
+          title={region ? `Details (optional): ${region.name}` : 'Details (optional)'}
+          subtitle="Treiber, Rohdetails und längere Begründung nur öffnen, wenn ein tieferer Blick nötig ist."
         >
           <div className="workspace-two-column">
             <OperatorPanel
@@ -700,7 +701,7 @@ const RegionWorkbench: React.FC<Props> = ({
                 <div className="workspace-note-card">{primaryReason}</div>
                 <div className="workspace-note-card">
                   {region
-                    ? 'Wenn das Bundesland passt, springst du von hier direkt in den regionalen Kampagnenpfad.'
+                    ? 'Wenn das Bundesland passt, führt der nächste Schritt in den regionalen Kampagnenpfad.'
                     : 'Sobald eine Region gewählt ist, steht hier genau ein klarer Arbeitsgrund.'}
                 </div>
               </div>

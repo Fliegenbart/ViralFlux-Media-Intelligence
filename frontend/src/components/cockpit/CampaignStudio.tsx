@@ -257,7 +257,7 @@ const CampaignStudio: React.FC<Props> = ({
 
             <OperatorPanel
               title="Was diese Empfehlung trägt"
-              description="Reliability, Datenlage und Blocker bleiben sichtbar, ohne den Freigabefall zu überlagern."
+              description="Belastbarkeit, Datenlage und Blocker bleiben sichtbar, ohne den Freigabefall zu überlagern."
               tone="muted"
               className="campaign-trust-panel"
             >
@@ -684,7 +684,7 @@ function buildCampaignTrustItems(
 
   return [
     {
-      label: 'Reliability',
+      label: 'Belastbarkeit',
       value: focusCard?.evidence_class ? evidenceStatusLabel(focusCard.evidence_class) : (forecastItem?.value || 'Manuell prüfen'),
       detail: focusCard?.evidence_class
         ? (evidenceStatusHelper(focusCard.evidence_class) || confidenceLabel(focusCard.signal_confidence_pct, focusCard.confidence))
@@ -698,7 +698,7 @@ function buildCampaignTrustItems(
       tone: freshnessItem?.tone === 'warning' ? 'warning' : freshnessItem?.tone === 'success' ? 'success' : 'neutral',
     },
     {
-      label: 'Blocker / Handoff',
+      label: 'Einsatzreife & Übergabe',
       value: focusReadiness?.label || (blockersItem?.value || 'Noch offen'),
       detail: focusReadiness?.detail || blockersItem?.detail || 'Der nächste operative Schritt ist noch nicht klar genug markiert.',
       tone: focusReadiness?.tone || (blockersItem?.tone === 'warning' ? 'warning' : 'neutral'),

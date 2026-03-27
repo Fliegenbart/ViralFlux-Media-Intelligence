@@ -429,9 +429,9 @@ describe('NowWorkspace', () => {
     expect(screen.getByText('Sachsen')).toBeInTheDocument();
     expect(screen.queryByText('Nordrhein-Westfalen')).not.toBeInTheDocument();
     expect(screen.getByText('Was die Empfehlung trägt')).toBeInTheDocument();
-    expect(screen.getByText('Reliability')).toBeInTheDocument();
+    expect(screen.getByText('Belastbarkeit')).toBeInTheDocument();
     expect(screen.getByText('Daten & Evidenz')).toBeInTheDocument();
-    expect(screen.getByText('Readiness / Blocker')).toBeInTheDocument();
+    expect(screen.getByText('Einsatzreife & Blocker')).toBeInTheDocument();
     expect(screen.getByText('Forecast zur Fokusregion')).toBeInTheDocument();
     expect(screen.getByText('Bundesland öffnen')).toBeInTheDocument();
     expect(screen.getByText('Zweiter Blick')).toBeInTheDocument();

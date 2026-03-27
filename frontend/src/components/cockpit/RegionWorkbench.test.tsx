@@ -247,9 +247,9 @@ describe('RegionWorkbench', () => {
     expect(screen.getByRole('heading', { name: 'Fokus erhöhen in Berlin' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Regionalen Vorschlag öffnen' })).toBeInTheDocument();
     expect(screen.getByText('Was die regionale Empfehlung trägt')).toBeInTheDocument();
-    expect(screen.getByText('Reliability')).toBeInTheDocument();
+    expect(screen.getByText('Belastbarkeit')).toBeInTheDocument();
     expect(screen.getByText('Datenlage')).toBeInTheDocument();
-    expect(screen.getByText('Readiness')).toBeInTheDocument();
+    expect(screen.getByText('Einsatzreife')).toBeInTheDocument();
     expect(screen.getByText('Weitere Bundesländer mit nächstem Schritt')).toBeInTheDocument();
     expect(screen.getAllByText('Bayern').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Nordrhein-Westfalen').length).toBeGreaterThan(0);

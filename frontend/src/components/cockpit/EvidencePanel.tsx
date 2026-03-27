@@ -161,7 +161,7 @@ const EvidencePanel: React.FC<Props> = ({
         : `${COCKPIT_SEMANTICS.stateLevelScope.helper} ${COCKPIT_SEMANTICS.noCityForecast.helper}`;
   const primaryCtaLabel = (!hasTruthData || hasBlockers || sourceAttentionCount > 0)
     ? 'Fehlende Daten klären'
-    : 'Readiness bewerten';
+    : 'Datenlage prüfen';
   const primaryCtaHref = (!hasTruthData || hasBlockers || sourceAttentionCount > 0)
     ? '#evidence-import'
     : '#evidence-support';
@@ -173,7 +173,7 @@ const EvidencePanel: React.FC<Props> = ({
       tone: hasTruthData ? (customerItem?.tone || 'success') : 'warning',
     },
     {
-      label: 'Modell-Reliability',
+      label: 'Modell-Belastbarkeit',
       value: reliabilityItem?.value || 'Noch offen',
       detail: reliabilityItem?.detail || 'Sobald Forecast-Monitoring geladen ist, siehst du hier die aktuelle Stabilität.',
       tone: reliabilityItem?.tone || 'neutral',
@@ -206,7 +206,7 @@ const EvidencePanel: React.FC<Props> = ({
       <OperatorSection
         kicker="GELO-Datenlage"
         title="Was für GELO schon belastbar ist und was noch fehlt"
-        description="Wir laden gerade die Pilot-Readiness. Gleich siehst du wieder, was schon trägt und was noch geklärt werden muss."
+        description="Wir laden gerade die GELO-Datenlage. Gleich siehst du wieder, was schon trägt und was noch geklärt werden muss."
         tone="muted"
       >
         <div className="evidence-briefing-skeleton" role="status" aria-live="polite" aria-label="GELO-Datenlage wird geladen">
@@ -241,7 +241,7 @@ const EvidencePanel: React.FC<Props> = ({
       <OperatorSection
         kicker="GELO-Datenlage"
         title="Was für GELO schon belastbar ist und was noch fehlt"
-        description="Die Seite trennt bewusst Datenvollständigkeit, Modell-Reliability und operative Einsatzreife. So kannst du GELO sauber erklären, was schon trägt und was noch nachgezogen werden sollte."
+        description="Die Seite trennt bewusst Datenvollständigkeit, Modell-Belastbarkeit und operative Einsatzreife. So kannst du GELO sauber erklären, was schon trägt und was noch nachgezogen werden sollte."
         tone="accent"
         className="evidence-briefing-shell"
       >
@@ -249,7 +249,7 @@ const EvidencePanel: React.FC<Props> = ({
           <OperatorPanel tone="accent" className="evidence-briefing-hero">
             <div id="evidence-trust" className="evidence-briefing-hero__header">
               <div>
-                <span className="campaign-focus-label">Pilot-Readiness</span>
+                <span className="campaign-focus-label">GELO-Vertrauen</span>
                 <h3 className="campaign-focus-title">{heroTitle}</h3>
                 <div className="campaign-focus-context">
                   {latestImportAt ? `Letzter GELO-Import ${formatDateTime(latestImportAt)}` : 'Noch kein GELO-Import'} · {truthLayerLabel(truthStatus)} · {truthFreshnessLabel(truthStatus?.truth_freshness_state)}
@@ -295,8 +295,8 @@ const EvidencePanel: React.FC<Props> = ({
 
           <OperatorPanel
             eyebrow="Trust-Layer"
-            title="Readiness auf einen Blick"
-            description="Hier bleibt sichtbar, welche GELO-Frage gerade eher Datenvollständigkeit, Reliability oder Einsatzreife betrifft."
+            title="Vertrauen auf einen Blick"
+            description="Hier bleibt sichtbar, welche GELO-Frage gerade eher Datenvollständigkeit, Belastbarkeit oder Einsatzreife betrifft."
             tone="muted"
             className="evidence-trust-panel"
           >
@@ -395,7 +395,7 @@ const EvidencePanel: React.FC<Props> = ({
       </CollapsibleSection>
 
       <CollapsibleSection
-        title="Forecast und Modell-Reliability"
+        title="Forecast und Modell-Belastbarkeit"
         subtitle="Diese Details helfen, die Modellstabilität zu erklären, bleiben aber bewusst eine zweite Ebene hinter der GELO-Datenlage."
       >
         <div id="evidence-support">

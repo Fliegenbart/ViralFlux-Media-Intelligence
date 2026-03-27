@@ -110,19 +110,19 @@ describe('EvidencePanel', () => {
     );
 
     expect(screen.getByText('Was für GELO schon belastbar ist und was noch fehlt')).toBeInTheDocument();
-    expect(screen.getByText('Readiness auf einen Blick')).toBeInTheDocument();
+    expect(screen.getByText('Vertrauen auf einen Blick')).toBeInTheDocument();
     expect(screen.getByText('Welche GELO-Daten schon im System sind')).toBeInTheDocument();
     expect(screen.getByText('Schon verbunden')).toBeInTheDocument();
     expect(screen.getByText('Fehlend oder blockiert')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Fehlende Daten klären' })).toHaveAttribute('href', '#evidence-import');
     expect(screen.getByRole('link', { name: 'CSV-Vorlage laden' })).toHaveAttribute('href', 'https://example.com/template.csv');
     expect(screen.getByText('Datenvollständigkeit')).toBeInTheDocument();
-    expect(screen.getByText('Modell-Reliability')).toBeInTheDocument();
+    expect(screen.getByText('Modell-Belastbarkeit')).toBeInTheDocument();
     expect(screen.getByText('Operative Einsatzreife')).toBeInTheDocument();
     expect(screen.getAllByText('Ein Importfeld ist noch nicht sauber zugeordnet.').length).toBeGreaterThan(0);
     expect(screen.getByText('GELO-Daten und Outcome-Lernen')).toBeInTheDocument();
     expect(screen.getByText('GELO-Daten importieren und prüfen')).toBeInTheDocument();
-    expect(screen.getByText('Forecast und Modell-Reliability')).toBeInTheDocument();
+    expect(screen.getByText('Forecast und Modell-Belastbarkeit')).toBeInTheDocument();
     expect(screen.getByText('Quellen, Frische und bekannte Grenzen')).toBeInTheDocument();
     expect(screen.getByText('Technische Einordnung')).toBeInTheDocument();
     expect(screen.getByText(/Bundesland-Level bleibt Pflicht/i)).toBeInTheDocument();

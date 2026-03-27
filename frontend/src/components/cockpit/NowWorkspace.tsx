@@ -64,6 +64,10 @@ const NowWorkspace: React.FC<Props> = ({
   const leadReasons = view.reasons.slice(0, 3);
   const secondaryMoves = view.secondaryMoves.slice(0, 2);
   const trustChecks = view.briefingTrust.items.slice(0, 3);
+  const normalizedTrustChecks = trustChecks.map((item) => ({
+    ...item,
+    label: briefingTrustLabel(item.label),
+  }));
   const blockers = (workspaceStatus?.blockers?.length ? workspaceStatus.blockers : view.risks).slice(0, 3);
   const sortedPredictions = [...(forecast?.predictions || [])].sort((left, right) => {
     const leftRank = Number(left.decision_rank ?? left.rank ?? Number.MAX_SAFE_INTEGER);
@@ -259,7 +263,7 @@ const NowWorkspace: React.FC<Props> = ({
             className="workspace-status-panel now-briefing-trust"
           >
             <div className="now-trust-grid">
-              {trustChecks.map((item) => (
+              {normalizedTrustChecks.map((item) => (
                 <article
                   key={item.key}
                   className={`workspace-status-card workspace-status-card--${item.tone}`}
@@ -378,3 +382,10 @@ const NowWorkspace: React.FC<Props> = ({
 };
 
 export default NowWorkspace;
+
+function briefingTrustLabel(label?: string | null): string {
+  const normalized = String(label || '').trim().toLowerCase();
+  if (normalized === 'reliability') return 'Belastbarkeit';
+  if (normalized === 'readiness' || normalized === 'readiness / blocker') return 'Einsatzreife & Blocker';
+  return label || 'Einordnung';
+}

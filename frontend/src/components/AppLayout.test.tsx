@@ -5,10 +5,20 @@ import { MemoryRouter } from 'react-router-dom';
 
 import AppLayout from './AppLayout';
 import { useAuth, useTheme } from '../App';
+import { usePilotSurfaceData } from '../features/media/usePilotSurfaceData';
+import { useMediaWorkflow } from '../features/media/workflowContext';
 
 jest.mock('../App', () => ({
   useTheme: jest.fn(),
   useAuth: jest.fn(),
+}));
+
+jest.mock('../features/media/usePilotSurfaceData', () => ({
+  usePilotSurfaceData: jest.fn(),
+}));
+
+jest.mock('../features/media/workflowContext', () => ({
+  useMediaWorkflow: jest.fn(),
 }));
 
 jest.mock('../lib/api', () => ({
@@ -17,6 +27,8 @@ jest.mock('../lib/api', () => ({
 
 const mockedUseTheme = useTheme as jest.MockedFunction<typeof useTheme>;
 const mockedUseAuth = useAuth as jest.MockedFunction<typeof useAuth>;
+const mockedUsePilotSurfaceData = usePilotSurfaceData as jest.MockedFunction<typeof usePilotSurfaceData>;
+const mockedUseMediaWorkflow = useMediaWorkflow as jest.MockedFunction<typeof useMediaWorkflow>;
 
 describe('AppLayout theme rendering', () => {
   beforeEach(() => {
@@ -24,6 +36,65 @@ describe('AppLayout theme rendering', () => {
       authenticated: true,
       handleLogin: jest.fn(),
       handleLogout: jest.fn(),
+    });
+    mockedUseMediaWorkflow.mockReturnValue({
+      virus: 'RSV A',
+      setVirus: jest.fn(),
+      brand: 'gelo',
+      setBrand: jest.fn(),
+      weeklyBudget: 120000,
+      setWeeklyBudget: jest.fn(),
+      campaignGoal: 'Sichtbarkeit aufbauen',
+      setCampaignGoal: jest.fn(),
+      dataVersion: 0,
+      invalidateData: jest.fn(),
+      selectedRecommendationId: null,
+      recommendationOverlayMode: null,
+      openRecommendation: jest.fn(),
+      closeRecommendation: jest.fn(),
+    });
+    mockedUsePilotSurfaceData.mockReturnValue({
+      loading: false,
+      loadSurface: jest.fn(),
+      pilotReadout: {
+        generated_at: '2026-03-27T10:00:00Z',
+        run_context: {
+          generated_at: '2026-03-27T10:00:00Z',
+          scope_readiness: 'WATCH',
+          forecast_readiness: 'GO',
+          commercial_validation_status: 'WATCH',
+          gate_snapshot: {
+            coverage_weeks: 24,
+            missing_requirements: ['GELO-Outcome-Daten für eine Region fehlen noch.'],
+          },
+        },
+        executive_summary: {
+          what_should_we_do_now: 'GELO sollte diese Woche zuerst Bayern prüfen.',
+          headline: 'Bayern und Nordrhein-Westfalen bleiben im Fokus, während die Evidenz noch nachgezogen wird.',
+          top_regions: [
+            {
+              region_name: 'Bayern',
+              recommended_product: 'Nasenspray',
+              campaign_recommendation: 'Apotheken-Review vorbereiten',
+            },
+            {
+              region_name: 'Nordrhein-Westfalen',
+            },
+          ],
+        },
+        operational_recommendations: {
+          summary: {
+            headline: 'Zwei Bundesländer sind sofort reviewwürdig.',
+          },
+          regions: [
+            {
+              region_name: 'Bayern',
+              recommended_product: 'Nasenspray',
+              campaign_recommendation: 'Apotheken-Review vorbereiten',
+            },
+          ],
+        },
+      } as any,
     });
   });
 
@@ -46,6 +117,14 @@ describe('AppLayout theme rendering', () => {
     expect(screen.getByRole('link', { name: 'Direkt zum Inhalt springen' })).toHaveAttribute('href', '#main-content');
     expect(screen.getAllByText('Weekly Readout exportieren').length).toBeGreaterThan(0);
     expect(screen.getByRole('heading', { name: 'Weekly Briefing' })).toBeInTheDocument();
+    expect(screen.getByText('GELO Weekly Readout')).toBeInTheDocument();
+    expect(screen.getByText('GELO sollte diese Woche zuerst Bayern prüfen.')).toBeInTheDocument();
+    expect(screen.getByLabelText('Weekly Readout Überblick')).toBeInTheDocument();
+    expect(screen.getByLabelText('Weekly Readout Zusammenfassung')).toBeInTheDocument();
+    expect(screen.getByText('Bayern, Nordrhein-Westfalen')).toBeInTheDocument();
+    expect(screen.getByText('Belastbarkeit')).toBeInTheDocument();
+    expect(screen.getByText('24 Wochen GELO-Daten verbunden')).toBeInTheDocument();
+    expect(screen.getAllByText(/GELO-Outcome-Daten für eine Region fehlen noch/i).length).toBeGreaterThan(0);
   });
 
   it('shows the light-mode activation label in dark theme', () => {

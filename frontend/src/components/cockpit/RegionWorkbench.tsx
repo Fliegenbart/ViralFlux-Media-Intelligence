@@ -289,11 +289,11 @@ const RegionWorkbench: React.FC<Props> = ({
   const blockerItem = workspaceStatus?.items.find((item) => item.key === 'open_blockers');
   const trustSummary = actionDisabledReason
     || workspaceStatus?.summary
-    || 'Die regionale Empfehlung stützt sich auf Forecast, Datenlage und Readiness.';
+    || 'Die regionale Empfehlung stützt sich auf Forecast, Datenlage und Einsatzreife.';
   const trustItems: RegionalTrustItem[] = [
     {
       key: 'reliability',
-      label: 'Reliability',
+      label: 'Belastbarkeit',
       value: forecastStatusItem?.value || (selectedDirection === 'increase' ? 'Prüfbar' : 'Beobachten'),
       detail: forecastStatusItem?.detail || 'Das Forecast-Signal bleibt Unterstützung für die Regionsentscheidung.',
       tone: forecastStatusItem?.tone || regionalDirectionTone(selectedDirection),
@@ -311,14 +311,14 @@ const RegionWorkbench: React.FC<Props> = ({
     },
     {
       key: 'readiness',
-      label: 'Readiness',
+      label: 'Einsatzreife',
       value: workspaceStatus?.blocker_count
-        ? blockerItem?.value || workspaceStatus.open_blockers
+        ? 'Blockiert'
         : hasRecommendation
-          ? 'Vorschlag bereit'
+          ? 'Bereit zur Prüfung'
           : actionDisabledReason
-            ? 'Noch nicht freigegeben'
-            : 'Prüfbar',
+            ? 'Noch nicht belastbar'
+            : 'Bereit zur Prüfung',
       detail: workspaceStatus?.blocker_count
         ? workspaceStatus.blockers[0] || blockerItem?.detail || 'Vor dem nächsten Schritt gibt es offene Punkte.'
         : hasRecommendation

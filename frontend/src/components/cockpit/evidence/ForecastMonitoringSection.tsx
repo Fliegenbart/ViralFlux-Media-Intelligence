@@ -198,9 +198,9 @@ const ForecastMonitoringSection: React.FC<Props> = ({
       <section className="card subsection-card" style={{ padding: 24 }}>
         <div className="section-heading">
           <span className="section-kicker">Vorhersage-Details</span>
-          <h2 className="subsection-title">Technische Reliability im Detail</h2>
+          <h2 className="subsection-title">Technische Belastbarkeit im Detail</h2>
           <p className="subsection-copy">
-            Diese Details brauchst du nur, wenn du die Reliability tiefer erklären oder einen Warnhinweis sauber begründen musst.
+            Diese Details brauchst du nur, wenn du die Belastbarkeit tiefer erklären oder einen Warnhinweis sauber begründen musst.
           </p>
         </div>
 

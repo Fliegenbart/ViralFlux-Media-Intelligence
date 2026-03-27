@@ -352,7 +352,7 @@ const RecommendationDrawer: React.FC<Props> = ({
                   <div className="campaign-focus-label">Was diese Empfehlung trägt</div>
                   <div className="review-stack">
                     <div className="review-body-copy">
-                      <strong>Reliability</strong>: {detailEvidenceClass ? evidenceStatusLabel(detailEvidenceClass) : 'Noch offen'}. {detailEvidenceClass ? evidenceStatusHelper(detailEvidenceClass) : 'Der Fall braucht noch eine genauere Einordnung.'}
+                      <strong>Belastbarkeit</strong>: {detailEvidenceClass ? evidenceStatusLabel(detailEvidenceClass) : 'Noch offen'}. {detailEvidenceClass ? evidenceStatusHelper(detailEvidenceClass) : 'Der Fall braucht noch eine genauere Einordnung.'}
                     </div>
                     <div className="review-body-copy">
                       <strong>Signal-Sicherheit</strong>: {confidenceValue != null ? `${confidenceValue}% ${signalConfidenceLabel}` : `${signalConfidenceLabel} offen`}.

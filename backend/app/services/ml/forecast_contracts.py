@@ -9,6 +9,8 @@ DEFAULT_DECISION_HORIZON_DAYS = 7
 DEFAULT_DECISION_BASELINE_WINDOW_DAYS = 84
 DEFAULT_DECISION_EVENT_THRESHOLD_PCT = 25.0
 HEURISTIC_EVENT_SCORE_SOURCE = "heuristic_sigmoid_fallback_score"
+BACKTEST_RELIABILITY_PROXY_SOURCE = "backtest_reliability_proxy"
+CONFIDENCE_SEMANTICS_ALIAS = "alias_of_reliability_score"
 
 
 def clamp(value: float, lower: float, upper: float) -> float:
@@ -85,6 +87,31 @@ def normalized_expected_value_index(
     return round(adjusted * 100.0, 1)
 
 
+def normalize_event_forecast_payload(payload: dict[str, Any] | None) -> dict[str, Any]:
+    """Keep event-forecast semantics explicit at the contract boundary.
+
+    `confidence` stays for backward compatibility, but is no longer treated as an
+    independent certainty concept. It is a numeric alias of `reliability_score`.
+    """
+    normalized = dict(payload or {})
+    reliability_value = normalized.get("reliability_score")
+    if reliability_value is None:
+        reliability_value = normalized.get("confidence")
+    if reliability_value is not None:
+        reliability_value = float(reliability_value)
+        normalized["reliability_score"] = reliability_value
+        normalized["confidence"] = reliability_value
+        normalized["confidence_label"] = normalized.get("confidence_label") or confidence_label(reliability_value)
+    normalized["confidence_semantics"] = str(
+        normalized.get("confidence_semantics") or CONFIDENCE_SEMANTICS_ALIAS
+    )
+    if normalized.get("uncertainty_source") in {None, "", "backtest_interval_coverage"}:
+        normalized["uncertainty_source"] = BACKTEST_RELIABILITY_PROXY_SOURCE
+    if normalized.get("fallback_used") is None and normalized.get("event_probability") is None:
+        normalized["fallback_used"] = normalized.get("heuristic_event_score") is not None
+    return normalized
+
+
 @dataclass(frozen=True)
 class BurdenForecastPoint:
     target_date: str
@@ -131,21 +158,13 @@ class EventForecast:
     probability_source: str | None = None
     calibration_mode: str | None = None
     uncertainty_source: str | None = None
+    confidence_semantics: str | None = None
     fallback_reason: str | None = None
     learned_model_version: str | None = None
     fallback_used: bool | None = None
 
     def to_dict(self) -> dict[str, Any]:
-        payload = asdict(self)
-        if payload.get("reliability_score") is None and payload.get("confidence") is not None:
-            payload["reliability_score"] = payload["confidence"]
-        if payload.get("fallback_used") is None and payload.get("event_probability") is None:
-            payload["fallback_used"] = payload.get("heuristic_event_score") is not None
-        if payload.get("confidence_label") is None:
-            payload["confidence_label"] = confidence_label(
-                self.confidence if self.confidence is not None else self.reliability_score
-            )
-        return payload
+        return normalize_event_forecast_payload(asdict(self))
 
 
 @dataclass(frozen=True)

@@ -15,8 +15,13 @@ from app.models.database import (
     WastewaterAggregated,
 )
 from app.services.marketing_engine.opportunity_engine import MarketingOpportunityEngine
-from app.services.ml.forecast_contracts import HEURISTIC_EVENT_SCORE_SOURCE
+from app.services.ml.forecast_contracts import (
+    BACKTEST_RELIABILITY_PROXY_SOURCE,
+    CONFIDENCE_SEMANTICS_ALIAS,
+    HEURISTIC_EVENT_SCORE_SOURCE,
+)
 from app.services.ml.forecast_decision_service import ForecastDecisionService
+from app.services.ml.forecast_service import ForecastService
 
 
 class ForecastDecisionServiceTests(unittest.TestCase):
@@ -183,6 +188,126 @@ class ForecastDecisionServiceTests(unittest.TestCase):
             "learned_exceedance_logistic_regression",
         )
         self.assertTrue(bundle["event_forecast"]["calibration_passed"])
+
+    def test_save_load_bundle_round_trip_preserves_event_semantics_fields(self) -> None:
+        now = utc_now().replace(microsecond=0)
+        self._seed_forecast_bundle_inputs(
+            forecast_created_at=now - timedelta(days=2),
+            backtest_created_at=now,
+            accuracy_created_at=now,
+        )
+        forecast_service = ForecastService(self.db)
+        forecast_dates = [now + timedelta(days=offset + 1) for offset in range(7)]
+
+        forecast_service.save_forecast(
+            {
+                "virus_typ": "Influenza A",
+                "region": "DE",
+                "horizon_days": 7,
+                "model_version": "xgb_stack_direct_h7_inline",
+                "confidence": 0.18,
+                "feature_names": ["hw_pred", "ridge_pred"],
+                "feature_importance": {"hw_pred": 0.6, "ridge_pred": 0.4},
+                "training_window": {"samples": 120},
+                "backtest_metrics": {"mape": 12.0},
+                "forecast": [
+                    {
+                        "ds": forecast_date,
+                        "yhat": 130.0 + offset,
+                        "yhat_lower": 120.0 + offset,
+                        "yhat_upper": 145.0 + offset,
+                    }
+                    for offset, forecast_date in enumerate(forecast_dates)
+                ],
+                "contracts": {
+                    "event_forecast": {
+                        "event_probability": 0.67,
+                        "confidence": 0.18,
+                        "reliability_score": 0.77,
+                        "backtest_quality_score": 0.83,
+                        "probability_source": "learned_exceedance_logistic_regression",
+                        "calibration_mode": "platt",
+                        "uncertainty_source": "backtest_interval_coverage",
+                        "fallback_reason": None,
+                        "confidence_semantics": CONFIDENCE_SEMANTICS_ALIAS,
+                        "learned_model_version": "xgb_stack_direct_h7_inline",
+                        "fallback_used": False,
+                    },
+                    "forecast_quality": {
+                        "forecast_readiness": "GO",
+                        "drift_status": "ok",
+                        "freshness_status": "fresh",
+                    },
+                },
+            }
+        )
+
+        stored_rows = (
+            self.db.query(MLForecast)
+            .filter(MLForecast.model_version == "xgb_stack_direct_h7_inline")
+            .order_by(MLForecast.forecast_date.asc())
+            .all()
+        )
+        self.assertTrue(stored_rows)
+        self.assertEqual(stored_rows[0].confidence, 0.77)
+        stored_event = (stored_rows[0].features_used or {}).get("event_forecast") or {}
+        self.assertEqual(stored_event.get("confidence"), 0.77)
+        self.assertEqual(stored_event.get("reliability_score"), 0.77)
+        self.assertEqual(stored_event.get("confidence_semantics"), CONFIDENCE_SEMANTICS_ALIAS)
+        self.assertEqual(stored_event.get("uncertainty_source"), BACKTEST_RELIABILITY_PROXY_SOURCE)
+
+        bundle = ForecastDecisionService(self.db).build_forecast_bundle(
+            virus_typ="Influenza A",
+            target_source="RKI_ARE",
+        )
+
+        event = bundle["event_forecast"]
+        self.assertEqual(event["event_probability"], 0.67)
+        self.assertEqual(event["confidence"], 0.77)
+        self.assertEqual(event["reliability_score"], 0.77)
+        self.assertEqual(event["backtest_quality_score"], 0.83)
+        self.assertEqual(event["probability_source"], "learned_exceedance_logistic_regression")
+        self.assertEqual(event["calibration_mode"], "platt")
+        self.assertEqual(event["uncertainty_source"], BACKTEST_RELIABILITY_PROXY_SOURCE)
+        self.assertIsNone(event["fallback_reason"])
+        self.assertEqual(event["confidence_semantics"], CONFIDENCE_SEMANTICS_ALIAS)
+
+    def test_build_monitoring_snapshot_carries_semantics_fields(self) -> None:
+        self._seed_forecast_bundle_inputs()
+        stored_forecast = (
+            self.db.query(MLForecast)
+            .filter(MLForecast.virus_typ == "Influenza A")
+            .order_by(MLForecast.forecast_date.asc())
+            .offset(6)
+            .limit(1)
+            .one()
+        )
+        stored_forecast.features_used = {
+            "event_forecast": {
+                "event_probability": 0.64,
+                "confidence": 0.22,
+                "reliability_score": 0.71,
+                "backtest_quality_score": 0.79,
+                "probability_source": "learned_exceedance_logistic_regression",
+                "calibration_mode": "isotonic",
+                "uncertainty_source": "backtest_interval_coverage",
+                "confidence_semantics": CONFIDENCE_SEMANTICS_ALIAS,
+                "fallback_used": False,
+            }
+        }
+        self.db.commit()
+
+        snapshot = ForecastDecisionService(self.db).build_monitoring_snapshot(
+            virus_typ="Influenza A",
+            target_source="RKI_ARE",
+        )
+
+        event = snapshot["event_forecast"]
+        self.assertEqual(event["confidence"], 0.71)
+        self.assertEqual(event["reliability_score"], 0.71)
+        self.assertEqual(event["backtest_quality_score"], 0.79)
+        self.assertEqual(event["confidence_semantics"], CONFIDENCE_SEMANTICS_ALIAS)
+        self.assertEqual(event["uncertainty_source"], BACKTEST_RELIABILITY_PROXY_SOURCE)
 
     def test_build_monitoring_snapshot_returns_healthy_state_for_green_stack(self) -> None:
         self._seed_forecast_bundle_inputs()

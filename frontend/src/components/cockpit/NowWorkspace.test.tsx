@@ -352,11 +352,17 @@ describe('NowWorkspace', () => {
       />,
     );
 
-    expect(screen.getByText('Was passiert gerade?')).toBeInTheDocument();
+    expect(screen.getAllByText('PEIX x GELO Wochenplan').length).toBeGreaterThan(0);
+    expect(screen.getByText('Was PEIX und GELO diese Woche tun sollten')).toBeInTheDocument();
     expect(screen.getByText('Forecast für Fokus-Bundesland')).toBeInTheDocument();
     expect(screen.getByText(/In 7 Tagen erwarten wir für Berlin einen Viruslage-Wert von ca. 165,0/)).toBeInTheDocument();
     expect(screen.getByText(/Letzter bestätigter Ist-Wert vom 17.03.2026/)).toBeInTheDocument();
-    expect(screen.getByText('Unsere Prognose zeigt im 7-Tage-Fenster die größte Dynamik aktuell in Berlin.')).toBeInTheDocument();
+    expect(screen.getByText('Berlin ist diese Woche der klarste nächste Schritt.')).toBeInTheDocument();
+    expect(screen.getByText('Was tun?')).toBeInTheDocument();
+    expect(screen.getByText('Wo zuerst?')).toBeInTheDocument();
+    expect(screen.getByText('Warum jetzt?')).toBeInTheDocument();
+    expect(screen.getByText('Budgetrahmen')).toBeInTheDocument();
+    expect(screen.getByText('Bundesland öffnen')).toBeInTheDocument();
     expect(screen.getByText('Kann ich der Entscheidung trauen?')).toBeInTheDocument();
     expect(screen.getByText('Der schnelle Sicherheitscheck')).toBeInTheDocument();
     expect(screen.getByText('Ist eine Business-Freigabe schon drin?')).toBeInTheDocument();

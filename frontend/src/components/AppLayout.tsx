@@ -9,36 +9,36 @@ interface Props {
 }
 
 const PRIMARY_NAV_ITEMS = [
-  { label: 'Jetzt', path: '/jetzt', helper: 'Wo du zuerst hinschaust', icon: 'bolt' },
+  { label: 'Wochenplan', path: '/jetzt', helper: 'Was PEIX und GELO diese Woche tun sollten', icon: 'bolt' },
   { label: 'Regionen', path: '/regionen', helper: 'Welche Region zuerst wichtig ist', icon: 'location_on' },
   { label: 'Kampagnen', path: '/kampagnen', helper: 'Welcher Fall als Nächstes dran ist', icon: 'auto_awesome' },
-  { label: 'Qualität', path: '/evidenz', helper: 'Was noch geprüft werden muss', icon: 'verified' },
+  { label: 'Evidenz', path: '/evidenz', helper: 'Was noch geprüft werden muss', icon: 'verified' },
 ] as const;
 
 const SECTION_META = [
   {
     path: '/jetzt',
-    kicker: 'Wochenfokus',
-    title: 'Jetzt',
-    description: 'Hier siehst du zuerst, was gerade zählt.',
+    kicker: 'PEIX x GELO',
+    title: 'Wochenplan',
+    description: 'Was PEIX und GELO diese Woche tun sollten, wo zuerst, und warum.',
   },
   {
     path: '/regionen',
     kicker: 'Regionen',
-    title: 'Regionen',
-    description: 'Hier findest du die nächste Region.',
+    title: 'Bundesländer',
+    description: 'Hier siehst du, welches Bundesland als Nächstes wichtig wird.',
   },
   {
     path: '/kampagnen',
-    kicker: 'Kampagnen',
+    kicker: 'Maßnahmen',
     title: 'Kampagnen',
-    description: 'Hier bearbeitest du zuerst den wichtigsten Fall.',
+    description: 'Hier prüfst du die nächste sinnvolle GELO-Maßnahme.',
   },
   {
     path: '/evidenz',
-    kicker: 'Qualität',
-    title: 'Qualität',
-    description: 'Hier siehst du, ob du handeln kannst.',
+    kicker: 'Evidenz',
+    title: 'Evidenz',
+    description: 'Hier siehst du, was die Wochenentscheidung trägt oder noch bremst.',
   },
 ] as const;
 
@@ -59,10 +59,10 @@ const AppLayout: React.FC<Props> = ({ children }) => {
     description: 'Hier bleibt dein aktueller Arbeitsstand an einem Ort.',
   };
   const operatorStatusLabel = location.pathname.startsWith('/jetzt')
-    ? 'Wochenlage aktiv'
+    ? 'GELO Wochenplan aktiv'
     : location.pathname.startsWith('/evidenz')
-      ? 'Qualität im Blick'
-      : 'Arbeitsbereich aktiv';
+      ? 'Evidenz im Blick'
+      : 'Pilotbereich aktiv';
 
   const handlePdfDownload = async () => {
     setPdfLoading(true);
@@ -135,9 +135,9 @@ const AppLayout: React.FC<Props> = ({ children }) => {
           </div>
 
           <div className="operator-sidebar__brand-block">
-            <p className="operator-sidebar__brand-copy">PharmaPredict Arbeitsraum</p>
+            <p className="operator-sidebar__brand-copy">PEIX x GELO Pilot</p>
             <p className="operator-sidebar__brand-note">
-              Signale, Regionen und Fälle an einem Ort.
+              Wöchentliche Media-Entscheidungen auf Bundesland-Level.
             </p>
           </div>
 
@@ -163,7 +163,7 @@ const AppLayout: React.FC<Props> = ({ children }) => {
 
           <div className="operator-sidebar__rail">
             <section className="operator-status-card">
-              <span className="operator-status-card__kicker">Status</span>
+              <span className="operator-status-card__kicker">Pilotstatus</span>
               <strong>{operatorStatusLabel}</strong>
               <p>{currentSection.title}</p>
               <button

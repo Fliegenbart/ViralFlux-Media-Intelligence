@@ -51,10 +51,10 @@ describe('App routing', () => {
     const navButtons = within(operatorNav).getAllByRole('button');
 
     expect(navButtons).toHaveLength(4);
-    expect(within(operatorNav).getByRole('button', { name: /Jetzt/i })).toBeInTheDocument();
+    expect(within(operatorNav).getByRole('button', { name: /Wochenplan/i })).toBeInTheDocument();
     expect(within(operatorNav).getByRole('button', { name: /Regionen/i })).toBeInTheDocument();
     expect(within(operatorNav).getByRole('button', { name: /Kampagnen/i })).toBeInTheDocument();
-    expect(within(operatorNav).getByRole('button', { name: /Qualität/i })).toBeInTheDocument();
+    expect(within(operatorNav).getByRole('button', { name: /Evidenz/i })).toBeInTheDocument();
     expect(within(operatorNav).queryByRole('button', { name: /Dashboard/i })).not.toBeInTheDocument();
   });
 });

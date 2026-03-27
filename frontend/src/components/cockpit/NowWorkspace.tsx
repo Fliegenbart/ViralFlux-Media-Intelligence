@@ -99,17 +99,27 @@ const NowWorkspace: React.FC<Props> = ({
   ].slice(0, 4);
   const mainWhy = priorityNotes[0] || 'Hier steht gleich der wichtigste Grund.';
   const trustSummary = workspaceStatus?.summary || 'Hier siehst du den schnellen Vertrauenscheck.';
+  const weeklyActionDetail = view.primaryCampaignContext && view.primaryCampaignContext !== '-'
+    ? `${view.primaryCampaignContext} · ${nextStepDescription}`
+    : nextStepDescription;
+  const weeklyWhereDetail = focusRegion?.product && focusRegion.product !== '-'
+    ? `Bundesland-Level · ${focusRegion.stage || 'Beobachten'} · ${focusRegion.product}`
+    : `Bundesland-Level · ${focusRegion?.stage || 'Beobachten'}`;
+  const weeklyWhyDetail = proof?.supportingText || focusRegion?.reason || 'Hier steht der wichtigste Grund für die Priorisierung.';
+  const weeklyBudgetDetail = focusRegion?.probabilityLabel && focusRegion.probabilityLabel !== '-'
+    ? `${horizonDays}-Tage-Fenster · Vorhersagesignal ${focusRegion.probabilityLabel}`
+    : `${horizonDays}-Tage-Fenster · Vorhersagesignal noch offen`;
 
   if (loading && !view.hasData) {
     return (
       <OperatorSection
-        kicker="Was passiert gerade?"
-        title="Wo die nächste virale Welle zuerst anzieht"
-        description="Wir holen gerade die aktuelle Wochenlage. Gleich siehst du wieder, was jetzt wichtig ist."
+        kicker="PEIX x GELO Wochenplan"
+        title="Was PEIX und GELO diese Woche tun sollten"
+        description="Wir holen gerade die aktuelle Wochenplanung. Gleich siehst du wieder, welches Bundesland und welche Maßnahme vorne liegen."
         tone="muted"
         className="now-template-page operator-toolbar-shell"
       >
-        <div className="workspace-note-card">Lade Wochenlage...</div>
+        <div className="workspace-note-card">Lade Wochenplanung...</div>
       </OperatorSection>
     );
   }
@@ -117,9 +127,9 @@ const NowWorkspace: React.FC<Props> = ({
   return (
     <div className="page-stack now-template-page">
       <OperatorSection
-        kicker="Was passiert gerade?"
-        title="Wo die nächste Welle zuerst anzieht"
-        description="Hier siehst du sofort, welche Region gerade zuerst zählt."
+        kicker="PEIX x GELO Wochenplan"
+        title="Was PEIX und GELO diese Woche tun sollten"
+        description="Die Ansicht beantwortet zuerst: Welche Maßnahme, in welchem Bundesland, und warum."
         tone="accent"
         className="operator-toolbar-shell"
       >
@@ -135,6 +145,7 @@ const NowWorkspace: React.FC<Props> = ({
                 {option}
               </button>
             ))}
+            <span className="step-chip">Bundesland-Level</span>
           </OperatorChipRail>
           <span className="step-chip">Stand {formatDateTime(view.generatedAt)}</span>
         </div>
@@ -150,40 +161,42 @@ const NowWorkspace: React.FC<Props> = ({
           </div>
 
           <OperatorPanel
-            eyebrow="Warum zuerst?"
-            title={proof?.headline || (focusRegion?.name ? `${focusRegion.name} steht gerade vorne` : 'Das ist der aktuelle Fokus')}
-            description={proof?.supportingText || 'Hier steht der wichtigste Grund für den Fokus.'}
+            eyebrow="Diese Woche zuerst"
+            title={view.summary || proof?.headline || (focusRegion?.name ? `${focusRegion.name} steht gerade vorne` : 'Das ist der aktuelle Fokus')}
+            description={view.note || proof?.supportingText || 'Hier steht der wichtigste Grund für den Fokus.'}
             tone="muted"
             className="now-command-rail"
           >
-            <div className="workspace-note-list">
-              <div className="workspace-note-card">{mainWhy}</div>
-              {proof?.cautionText ? (
-                <div className="workspace-note-card">
-                  {proof.cautionText}
-                </div>
-              ) : null}
+            <div className="now-weekly-plan-grid">
+              <article className="workspace-note-card now-weekly-plan-card">
+                <span className="now-weekly-plan-card__label">Was tun?</span>
+                <strong>{nextStepTitle}</strong>
+                <p>{weeklyActionDetail}</p>
+              </article>
+              <article className="workspace-note-card now-weekly-plan-card">
+                <span className="now-weekly-plan-card__label">Wo zuerst?</span>
+                <strong>{focusRegion?.name || '-'}</strong>
+                <p>{weeklyWhereDetail}</p>
+              </article>
+              <article className="workspace-note-card now-weekly-plan-card">
+                <span className="now-weekly-plan-card__label">Warum jetzt?</span>
+                <strong>{mainWhy}</strong>
+                <p>{weeklyWhyDetail}</p>
+              </article>
+              <article className="workspace-note-card now-weekly-plan-card">
+                <span className="now-weekly-plan-card__label">Budgetrahmen</span>
+                <strong>{focusRegion?.budgetLabel || '-'}</strong>
+                <p>{weeklyBudgetDetail}</p>
+              </article>
             </div>
 
-            <div className="operator-stat-grid">
-              <OperatorStat
-                label="Fokusregion"
-                value={focusRegion?.name || '-'}
-                meta={focusRegion?.stage || 'noch nicht ausgewählt'}
-                tone="accent"
-              />
-              <OperatorStat
-                label="Vorhersagesignal"
-                value={focusRegion?.probabilityLabel || '-'}
-                meta="wichtigste Entwicklung"
-              />
-            </div>
-
-            <div className="workspace-note-card now-action-brief">
-              <strong>{nextStepTitle}</strong>
-              <span>{nextStepContext}</span>
-              <p>{nextStepDescription}</p>
-            </div>
+            {proof?.cautionText ? (
+              <div className="workspace-note-card now-action-brief">
+                <strong>Wichtiger Hinweis zur Einordnung</strong>
+                <span>Evidenz sichtbar halten</span>
+                <p>{proof.cautionText}</p>
+              </div>
+            ) : null}
 
             <div className="action-row">
               <button
@@ -202,10 +215,10 @@ const NowWorkspace: React.FC<Props> = ({
                 type="button"
                 onClick={() => onOpenRegions(focusRegion?.code || undefined)}
               >
-                Region öffnen
+                Bundesland öffnen
               </button>
               <button className="media-button secondary" type="button" onClick={onOpenEvidence}>
-                Offene Punkte prüfen
+                Evidenz prüfen
               </button>
             </div>
           </OperatorPanel>

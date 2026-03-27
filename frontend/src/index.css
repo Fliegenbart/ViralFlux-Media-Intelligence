@@ -3960,6 +3960,39 @@ svg g[tabindex="0"]:focus > path {
   margin-top: 14px;
 }
 
+.now-weekly-plan-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.now-weekly-plan-card {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+}
+
+.now-weekly-plan-card__label {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.now-weekly-plan-card strong {
+  color: var(--text-primary);
+  font-size: 15px;
+  line-height: 1.45;
+}
+
+.now-weekly-plan-card p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.65;
+}
+
 .now-proof-stage .card {
   margin: 0;
 }
@@ -8116,6 +8149,7 @@ svg g[tabindex="0"]:focus > path {
   .ops-dashboard-grid--three-up,
   .ops-supporting-metrics,
   .summary-grid,
+  .now-weekly-plan-grid,
   .now-trust-grid,
   .workspace-status-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -8170,6 +8204,7 @@ svg g[tabindex="0"]:focus > path {
   .ops-summary-grid,
   .ops-supporting-metrics,
   .ops-dashboard-grid--three-up,
+  .now-weekly-plan-grid,
   .now-trust-grid,
   .workspace-status-grid,
   .summary-grid {

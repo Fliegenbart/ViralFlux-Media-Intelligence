@@ -1,6 +1,6 @@
 ---
 name: design-system-guard
-description: Use when editing frontend UI so changes stay visually coherent, high-signal, accessible, and polished. Use for layout, hierarchy, interaction states, card design, badges, spacing, typography, and screen polish. Do not use for backend work or as a substitute for product framing on its own.
+description: Use when editing frontend UI so changes stay visually coherent, high-signal, accessible, polished, and responsive. Use for layout, spacing, typography, visual hierarchy, card design, badges, chips, tables, buttons, interaction states, empty/loading/error states, and overall screen polish. Do not use for backend work or as a substitute for product framing on its own.
 ---
 
 # Purpose

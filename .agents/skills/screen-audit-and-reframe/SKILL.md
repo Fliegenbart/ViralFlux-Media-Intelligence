@@ -1,6 +1,6 @@
 ---
 name: screen-audit-and-reframe
-description: Use when a task asks to redesign, simplify, restructure, or improve a specific frontend screen, page, drawer, or workflow. This skill audits the current screen first, then reframes it around a clearer decision and action hierarchy. Do not use for backend-only tasks or broad design-system work without a concrete screen.
+description: Use when a task asks to redesign, simplify, clean up, restructure, declutter, or improve a specific frontend screen, page, tab, drawer, modal, hero area, dashboard, or workflow. This skill audits the current screen first, then reframes it around one clearer user decision, stronger hierarchy, and a better next action. Do not use for backend-only tasks or broad design-system work without a concrete screen.
 ---
 
 # Purpose

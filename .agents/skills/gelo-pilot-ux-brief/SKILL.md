@@ -1,6 +1,6 @@
 ---
 name: gelo-pilot-ux-brief
-description: Use for frontend/media UX work in this repository when the task involves GELO, PEIX, weekly planning, regions, campaigns, recommendations, evidence, reporting, or pilot-demo framing. Use to keep the product decision-first and GELO-specific. Do not use for backend/model-only tasks or generic multi-tenant SaaS refactors.
+description: Use for PEIX/GELO-facing frontend and media UX work in this repository when the task involves weekly planning, weekly briefings, overview screens, landing pages, regions, campaigns, recommendations, evidence, reporting, exports, pilot-demo framing, or decision-first copy and hierarchy. Keep the product GELO-specific and focused on what PEIX/GELO should do this week. Do not use for backend/model-only tasks or generic multi-tenant SaaS refactors.
 ---
 
 # Purpose

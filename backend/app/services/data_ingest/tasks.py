@@ -278,10 +278,10 @@ def backfill_wastewater_coordinates(self) -> Dict[str, Any]:
     """Einmaliger Task: Bestehende wastewater_data Rows mit Koordinaten befüllen.
 
     Liest alle Rows ohne latitude und setzt die Koordinaten aus dem
-    statischen Kläranlagen-Mapping.
+    statischen Wastewater-Monitoring-Site-Mapping.
     """
     from app.models.database import WastewaterData
-    from app.services.data_ingest.klaeranlage_coordinates import get_coordinates
+    from app.services.data_ingest.wastewater_monitoring_sites import get_monitoring_site_coordinates
 
     logger.info("Wastewater coordinates backfill: Starte...")
 
@@ -295,7 +295,7 @@ def backfill_wastewater_coordinates(self) -> Dict[str, Any]:
         updated = 0
         unmapped: set[str] = set()
         for row in rows:
-            coords = get_coordinates(row.standort)
+            coords = get_monitoring_site_coordinates(row.standort)
             if coords:
                 row.latitude = coords[0]
                 row.longitude = coords[1]

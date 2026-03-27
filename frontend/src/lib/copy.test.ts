@@ -7,12 +7,12 @@ import {
 
 describe('cockpit copy semantics', () => {
   it('defines the core operator semantics in one consistent vocabulary', () => {
-    expect(UI_COPY.signalScore).toBe('Ranking-Signal');
-    expect(UI_COPY.eventProbability).toBe('Event-Wahrscheinlichkeit');
-    expect(UI_COPY.decisionPriority).toBe('Entscheidungs-Priorität');
-    expect(UI_COPY.stateLevelScope).toBe('Bundesland-Level');
-    expect(UI_COPY.noCityForecast).toBe('Kein City-Forecast');
-    expect(COCKPIT_SEMANTICS.eventProbability.badge).toBe('Kalibrierte Wahrscheinlichkeit');
+    expect(UI_COPY.signalScore).toBe('Rang-Hinweis');
+    expect(UI_COPY.eventProbability).toBe('Ereignis-Chance');
+    expect(UI_COPY.decisionPriority).toBe('Prüf-Reihenfolge');
+    expect(UI_COPY.stateLevelScope).toBe('Bundesland-Ansicht');
+    expect(UI_COPY.noCityForecast).toBe('Keine Stadt-Prognose');
+    expect(COCKPIT_SEMANTICS.eventProbability.badge).toBe('Ereignis-Chance');
   });
 
   it('maps evidence and release states to readable operator labels', () => {
@@ -20,6 +20,6 @@ describe('cockpit copy semantics', () => {
     expect(evidenceStatusLabel('epidemiological_only')).toBe('Noch ohne Kundendaten');
     expect(evidenceStatusLabel('no_truth')).toBe('Zu wenig Kundendaten-Evidenz');
     expect(evidenceStatusLabel('observe_only')).toBe('Nur beobachten');
-    expect(evidenceStatusHelper('epidemiological_only')).toContain('Forecast- und Marktdaten');
+    expect(evidenceStatusHelper('epidemiological_only')).toContain('Vorhersage- und Marktdaten');
   });
 });

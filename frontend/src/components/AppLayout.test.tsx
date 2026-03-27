@@ -115,9 +115,9 @@ describe('AppLayout theme rendering', () => {
     expect(screen.getByLabelText('Dunkles Design aktivieren')).toBeInTheDocument();
     expect(screen.getByRole('banner')).toHaveClass('surface-header');
     expect(screen.getByRole('link', { name: 'Direkt zum Inhalt springen' })).toHaveAttribute('href', '#main-content');
-    expect(screen.getByText('Weekly Readout exportieren')).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Weekly Briefing' })).toBeInTheDocument();
-    expect(screen.getAllByText('Mit Vorsicht zeigen').length).toBeGreaterThan(0);
+    expect(screen.getByText('Wochenbericht exportieren')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Wochenüberblick' })).toBeInTheDocument();
+    expect(screen.getAllByText('Mit Vorsicht').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Bayern, Nordrhein-Westfalen').length).toBeGreaterThan(0);
     expect(screen.getByText('Bayern · Nasenspray')).toBeInTheDocument();
   });

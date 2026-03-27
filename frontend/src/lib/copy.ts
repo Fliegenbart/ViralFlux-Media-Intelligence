@@ -1,14 +1,14 @@
 export const UI_COPY = {
   ai: 'KI',
-  signalScore: 'Ranking-Signal',
-  signalScoreWithSource: 'Ranking-Signal (PeixEpiScore)',
-  eventProbability: 'Event-Wahrscheinlichkeit',
-  decisionPriority: 'Entscheidungs-Priorität',
+  signalScore: 'Rang-Hinweis',
+  signalScoreWithSource: 'Rang-Hinweis (PeixEpiScore)',
+  eventProbability: 'Ereignis-Chance',
+  decisionPriority: 'Prüf-Reihenfolge',
   uncertainty: 'Unsicherheit',
   insufficientTruth: 'Zu wenig Kundendaten-Evidenz',
   insufficientEvidence: 'Zu wenig Evidenz',
-  stateLevelScope: 'Bundesland-Level',
-  noCityForecast: 'Kein City-Forecast',
+  stateLevelScope: 'Bundesland-Ansicht',
+  noCityForecast: 'Keine Stadt-Prognose',
   marketComparison: 'Marktvergleich',
   customerData: 'Kundendaten',
   customerDataFreshness: 'Stand Kundendaten',
@@ -20,19 +20,19 @@ export const UI_COPY = {
 
 export const COCKPIT_SEMANTICS = {
   eventProbability: {
-    label: 'Event-Wahrscheinlichkeit',
-    badge: 'Kalibrierte Wahrscheinlichkeit',
-    helper: 'Beschreibt die kalibrierte Wahrscheinlichkeit für das definierte Forecast-Ereignis. Das ist kein Ranking.',
+    label: 'Ereignis-Chance (Event-Wahrscheinlichkeit)',
+    badge: 'Ereignis-Chance',
+    helper: 'Schätzt, wie wahrscheinlich das definierte Ereignis ist und ist kein Rangplatz.',
   },
   rankingSignal: {
-    label: 'Ranking-Signal',
-    badge: 'Ranking-Signal',
-    helper: 'Hilft beim Vergleichen von Bundesländern. Das ist keine Eintrittswahrscheinlichkeit.',
+    label: 'Rang-Hinweis (Ranking-Signal)',
+    badge: 'Rang-Hinweis',
+    helper: 'Hilft beim Vergleichen von Bundesländern und ist keine Ereignis-Chance.',
   },
   decisionPriority: {
-    label: 'Entscheidungs-Priorität',
-    badge: 'Entscheidungs-Priorität',
-    helper: 'Ordnet, welcher Arbeitsfall zuerst geprüft werden sollte. Das ist keine Wahrscheinlichkeitszahl.',
+    label: 'Prüf-Reihenfolge (Entscheidungs-Priorität)',
+    badge: 'Prüf-Reihenfolge',
+    helper: 'Zeigt, was zuerst geprüft werden sollte und ist keine Prozentzahl.',
   },
   uncertainty: {
     label: 'Unsicherheit',
@@ -42,7 +42,7 @@ export const COCKPIT_SEMANTICS = {
   insufficientTruth: {
     label: 'Zu wenig Kundendaten-Evidenz',
     badge: 'Kundendaten noch zu dünn',
-    helper: 'Es gibt noch nicht genug Kundendaten, um das Signal kommerziell belastbar abzustützen.',
+    helper: 'Es gibt noch nicht genug Kundendaten, um das Signal verlässlich abzustützen.',
   },
   insufficientEvidence: {
     label: 'Zu wenig Evidenz',
@@ -50,14 +50,14 @@ export const COCKPIT_SEMANTICS = {
     helper: 'Es gibt noch nicht genug Quellen oder Bestätigung, um das Signal stabil einzuordnen.',
   },
   stateLevelScope: {
-    label: 'Bundesland-Level',
-    badge: 'Bundesland-Level',
-    helper: 'Die Aussage gilt für das Bundesland als Ganzes und nicht für einzelne Städte.',
+    label: 'Bundesland-Ansicht (Bundesland-Level)',
+    badge: 'Bundesland-Ansicht',
+    helper: 'Gilt für das ganze Bundesland, nicht für einzelne Städte.',
   },
   noCityForecast: {
-    label: 'Kein City-Forecast',
-    badge: 'Kein City-Forecast',
-    helper: 'Die Oberfläche zeigt bewusst keine scheinbar punktgenaue Vorhersage für einzelne Städte.',
+    label: 'Keine Stadt-Prognose (City-Forecast)',
+    badge: 'Keine Stadt-Prognose',
+    helper: 'Es gibt bewusst keine Vorhersage für einzelne Städte.',
   },
 } as const;
 
@@ -76,12 +76,12 @@ export function evidenceStatusLabel(value?: string | null): string {
 export function evidenceStatusHelper(value?: string | null): string {
   const normalized = String(value || '').trim().toLowerCase();
   if (normalized === 'truth_backed') return 'Dieses Signal wird zusätzlich durch Kundendaten gestützt.';
-  if (normalized === 'epidemiological_only') return 'Dieses Signal stützt sich bisher nur auf Forecast- und Marktdaten.';
+  if (normalized === 'epidemiological_only') return 'Dieses Signal stützt sich bisher nur auf Vorhersage- und Marktdaten.';
   if (normalized === 'no_truth') return COCKPIT_SEMANTICS.insufficientTruth.helper;
   if (normalized === 'observe_only') return 'Aktuell nur beobachten und noch keine Freigabe daraus ableiten.';
   if (normalized === 'review' || normalized === 'guarded') return 'Vor einer Freigabe ist noch eine manuelle Prüfung nötig.';
   if (normalized === 'ready' || normalized === 'released' || normalized === 'release') return 'Dieser Status erlaubt den nächsten operativen Schritt.';
-  if (normalized === 'blocked' || normalized === 'block') return 'Ein blockernder Punkt verhindert aktuell den nächsten Schritt.';
+  if (normalized === 'blocked' || normalized === 'block') return 'Ein offener Stopper (Blocker) verhindert aktuell den nächsten Schritt.';
   return '';
 }
 

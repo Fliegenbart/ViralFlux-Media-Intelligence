@@ -165,11 +165,11 @@ describe('CampaignStudio', () => {
 
     expect(screen.getAllByText('Kampagnen').length).toBeGreaterThan(0);
     expect(screen.getByText('Aktuelle Entscheidung')).toBeInTheDocument();
-    expect(screen.getByText('Woran es hängt')).toBeInTheDocument();
+    expect(screen.getByText('Warum')).toBeInTheDocument();
     expect(screen.getByText('Warum dieser Fall vorne liegt')).toBeInTheDocument();
     expect(screen.getByText('Danach')).toBeInTheDocument();
     expect(screen.getByText('Was sichtbar bleibt')).toBeInTheDocument();
-    expect(screen.getAllByText('Details bei Bedarf').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Weitere Vorschläge erstellen').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Blocker prüfen').length).toBeGreaterThan(0);
     expect(screen.getByText('Aktive Fälle')).toBeInTheDocument();
 
@@ -197,7 +197,7 @@ describe('CampaignStudio', () => {
       />,
     );
 
-    expect(screen.getByLabelText('GELO-Freigabekonsole wird geladen')).toBeInTheDocument();
+    expect(screen.getByLabelText('Kampagnenansicht wird geladen')).toBeInTheDocument();
 
     rerender(
       <CampaignStudio

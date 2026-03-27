@@ -246,7 +246,7 @@ describe('RegionWorkbench', () => {
     expect(screen.getByText('Aktuelle Entscheidung')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Fokus erhöhen in Berlin' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Regionalen Vorschlag öffnen' })).toBeInTheDocument();
-    expect(screen.getByText('Woran sie trägt')).toBeInTheDocument();
+    expect(screen.getByText('Warum')).toBeInTheDocument();
     expect(screen.getByText('Warum die Region vorne liegt')).toBeInTheDocument();
     expect(screen.getByText('Belastbarkeit')).toBeInTheDocument();
     expect(screen.getByText('Datenlage')).toBeInTheDocument();
@@ -255,10 +255,10 @@ describe('RegionWorkbench', () => {
     expect(screen.getByText('Zwei nächste Regionen')).toBeInTheDocument();
     expect(screen.getAllByText('Bayern').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Nordrhein-Westfalen').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Details bei Bedarf').length).toBeGreaterThan(0);
-    expect(screen.getByText('Orientierungskarte auf Bundesland-Level')).toBeInTheDocument();
+    expect(screen.getAllByText('Details (optional)').length).toBeGreaterThan(0);
+    expect(screen.getByText('Karte zur Orientierung (Bundesland)')).toBeInTheDocument();
     expect(screen.getByText('GermanyMap Mock')).toBeInTheDocument();
-    expect(screen.getAllByText(/City-Präzision/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/vermeid(et|en) Stadt-Prognosen/i).length).toBeGreaterThan(0);
 
     fireEvent.click(screen.getByRole('button', { name: 'Regionalen Vorschlag öffnen' }));
 
@@ -282,7 +282,7 @@ describe('RegionWorkbench', () => {
     );
 
     expect(screen.getByRole('heading', { name: 'In Sachsen vorerst zurückhaltend bleiben' })).toBeInTheDocument();
-    expect(screen.getAllByText('Zu wenig Evidenz').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Zu wenig Belege (Evidenz)').length).toBeGreaterThan(0);
     expect(screen.getByRole('button', { name: 'Regionale Maßnahme prüfen' })).toBeDisabled();
     expect(
       screen.getAllByText('Für dieses Bundesland reicht die aktuelle Evidenz noch nicht für einen neuen regionalen Vorschlag.').length,
@@ -305,9 +305,9 @@ describe('RegionWorkbench', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Zu wenig Evidenz' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Zu wenig Belege (Evidenz)' }));
 
-    expect(screen.getByRole('heading', { name: 'Bundesländer mit zu wenig Evidenz' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Bundesländer mit zu wenig Belegen (Evidenz)' })).toBeInTheDocument();
     expect(screen.getAllByText('Sachsen').length).toBeGreaterThan(0);
   });
 

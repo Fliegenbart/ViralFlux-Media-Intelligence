@@ -420,7 +420,7 @@ describe('NowWorkspace', () => {
       />,
     );
 
-    expect(screen.getAllByText('PEIX x GELO Weekly Briefing').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('PEIX x GELO Wochenüberblick').length).toBeGreaterThan(0);
     expect(screen.getByText('Wochenplan')).toBeInTheDocument();
     expect(screen.getByText('Aktuelle Entscheidung')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Berlin jetzt priorisieren.' })).toBeInTheDocument();
@@ -431,11 +431,11 @@ describe('NowWorkspace', () => {
     expect(screen.getByText('Bayern')).toBeInTheDocument();
     expect(screen.getByText('Sachsen')).toBeInTheDocument();
     expect(screen.queryByText('Nordrhein-Westfalen')).not.toBeInTheDocument();
-    expect(screen.getByText('Belastbarkeit')).toBeInTheDocument();
+    expect(screen.getByText('Sicherheit')).toBeInTheDocument();
     expect(screen.getByText('Daten & Evidenz')).toBeInTheDocument();
-    expect(screen.getByText('Einsatzreife & Blocker')).toBeInTheDocument();
+    expect(screen.getByText('Handlung & Blocker')).toBeInTheDocument();
     expect(screen.getByText('Bundesland öffnen')).toBeInTheDocument();
-    expect(screen.getByText('Details bei Bedarf')).toBeInTheDocument();
+    expect(screen.getByText('Details (optional)')).toBeInTheDocument();
   });
 
   it('opens the primary recommendation from the hero action', () => {
@@ -542,7 +542,7 @@ describe('NowWorkspace', () => {
       />,
     );
 
-    expect(screen.getByLabelText('Weekly Briefing wird geladen')).toBeInTheDocument();
+    expect(screen.getByLabelText('Wochenüberblick wird geladen')).toBeInTheDocument();
   });
 
   it('shows honest weak and empty wording when no weekly recommendation is available', () => {

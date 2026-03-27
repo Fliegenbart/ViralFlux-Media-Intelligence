@@ -89,12 +89,12 @@ const CampaignStudio: React.FC<Props> = ({
     {
       label: 'Prüfbar',
       value: String(readyCards.length),
-      detail: 'Fälle ohne erkennbare Inhaltsblocker.',
+      detail: 'Fälle ohne offene Stopper (Blocker).',
     },
     {
       label: 'Blockiert',
       value: String(blockedCards.length),
-      detail: blockedCards.length > 0 ? 'Mindestens ein Fall braucht vor dem nächsten Schritt noch Klärung.' : 'Aktuell sind keine Fälle blockiert.',
+      detail: blockedCards.length > 0 ? 'Mindestens ein Fall braucht vor dem nächsten Schritt noch Klärung.' : 'Aktuell gibt es keine offenen Stopper.',
     },
     {
       label: 'Aktiv',
@@ -136,7 +136,7 @@ const CampaignStudio: React.FC<Props> = ({
         className="campaign-hero-shell"
       >
         {loading ? (
-          <div className="campaign-approval-skeleton" aria-label="GELO-Freigabekonsole wird geladen">
+          <div className="campaign-approval-skeleton" aria-label="Kampagnenansicht wird geladen">
             <div className="workspace-note-card campaign-approval-skeleton__hero" />
             <div className="campaign-approval-skeleton__grid">
               <div className="workspace-note-card campaign-approval-skeleton__block" />
@@ -147,7 +147,7 @@ const CampaignStudio: React.FC<Props> = ({
           </div>
         ) : cards.length === 0 ? (
           <div className="campaign-empty-board campaign-empty-board--approval">
-            <span className="campaign-empty-eyebrow">GELO-Freigabe</span>
+            <span className="campaign-empty-eyebrow">Prüfen</span>
             <h3 className="campaign-empty-title">Noch kein Fall zur Prüfung sichtbar</h3>
             <p className="campaign-empty-copy">
               Sobald der erste Vorschlag erzeugt ist, erscheint hier direkt der wichtigste Fall für Prüfung, Freigabe oder Übergabe.
@@ -222,7 +222,7 @@ const CampaignStudio: React.FC<Props> = ({
               </OperatorPanel>
 
               <OperatorPanel
-                eyebrow="Woran es hängt"
+                eyebrow="Warum"
                 title="Warum dieser Fall vorne liegt"
                 description="Diese Übersicht zeigt, ob jetzt eher Prüfung, Klärung oder Übergabe ansteht."
                 tone="muted"
@@ -271,7 +271,7 @@ const CampaignStudio: React.FC<Props> = ({
             </OperatorPanel>
 
             <OperatorPanel
-              eyebrow="Details bei Bedarf"
+              eyebrow="Details (optional)"
               title="Weitere Empfehlungen und Pipeline"
               description="Hier bleiben die nächsten GELO-Fälle sichtbar, ohne den Fokusfall zu verdrängen."
               tone="muted"
@@ -320,7 +320,7 @@ const CampaignStudio: React.FC<Props> = ({
       {!loading && cards.length > 0 ? (
         <OperatorSection
           kicker="Arbeitsphasen"
-          title="Details bei Bedarf"
+          title="Details (optional)"
           description="Unter dem Fokusfall bleibt die vollständige Pipeline sichtbar."
           tone="muted"
         >
@@ -401,12 +401,12 @@ const CampaignStudio: React.FC<Props> = ({
 
       <CollapsibleSection
         title="Weitere Vorschläge erstellen"
-        subtitle="Nur wenn du nach dem aktuellen Freigabefall zusätzliche GELO-Vorschläge brauchst."
+        subtitle="Nur wenn nach dem Fokusfall zusätzliche GELO-Vorschläge nötig sind."
       >
         <div className="workspace-two-column">
           <OperatorPanel
             title="Erstellung"
-            description="Hier legst du neue Vorschläge an. Bestehende Freigabefälle bleiben davon unberührt."
+            description="Hier werden neue Vorschläge angelegt. Bestehende Freigabefälle bleiben davon unberührt."
           >
             <div className="campaign-form-grid">
               <label className="campaign-field">
@@ -713,13 +713,13 @@ function buildCampaignTrustItems(
       value: focusCard?.evidence_class ? evidenceStatusLabel(focusCard.evidence_class) : (forecastItem?.value || 'Manuell prüfen'),
       detail: focusCard?.evidence_class
         ? (evidenceStatusHelper(focusCard.evidence_class) || confidenceLabel(focusCard.signal_confidence_pct, focusCard.confidence))
-        : (forecastItem?.detail || 'Der Freigabefall stützt sich aktuell auf Forecast- und Marktsignale.'),
+        : (forecastItem?.detail || 'Der Fall stützt sich aktuell auf Vorhersage- und Marktsignale.'),
       tone: focusCard?.evidence_class === 'truth_backed' ? 'success' : 'neutral',
     },
     {
       label: 'Datenlage',
       value: freshnessItem?.value || 'Noch offen',
-      detail: freshnessItem?.detail || 'Die Datenlage wird sichtbar, sobald Evidence und Kundendaten geladen sind.',
+      detail: freshnessItem?.detail || 'Die Datenlage wird sichtbar, sobald Evidenz (Belege) und Kundendaten geladen sind.',
       tone: freshnessItem?.tone === 'warning' ? 'warning' : freshnessItem?.tone === 'success' ? 'success' : 'neutral',
     },
     {

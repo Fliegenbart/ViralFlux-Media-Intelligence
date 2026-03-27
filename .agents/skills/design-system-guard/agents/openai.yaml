@@ -1,0 +1,4 @@
+interface:
+  display_name: "Design System Guard"
+  short_description: "Keep this UI coherent, polished, and accessible"
+  default_prompt: "Use $design-system-guard to polish this UI while preserving hierarchy, states, and accessibility."

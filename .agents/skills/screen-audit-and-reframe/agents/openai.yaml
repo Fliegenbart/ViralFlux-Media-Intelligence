@@ -1,0 +1,4 @@
+interface:
+  display_name: "Screen Audit and Reframe"
+  short_description: "Audit a screen and reframe its action hierarchy"
+  default_prompt: "Use $screen-audit-and-reframe to audit this screen and implement the smallest high-value restructure."

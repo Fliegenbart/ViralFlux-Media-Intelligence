@@ -208,8 +208,8 @@ const EvidencePanel: React.FC<Props> = ({
     return (
       <OperatorSection
         kicker="GELO-Datenlage"
-        title="Was für GELO schon belastbar ist und was noch fehlt"
-        description="Wir laden gerade die GELO-Datenlage. Gleich siehst du wieder, was schon trägt und was noch geklärt werden muss."
+        title="Evidenz wird geladen"
+        description="Gleich siehst du wieder, was schon trägt und was noch geklärt werden muss."
         tone="muted"
       >
         <div className="evidence-briefing-skeleton" role="status" aria-live="polite" aria-label="GELO-Datenlage wird geladen">
@@ -228,7 +228,7 @@ const EvidencePanel: React.FC<Props> = ({
     return (
       <OperatorSection
         kicker="GELO-Datenlage"
-        title="Noch keine belastbare Datenlage sichtbar"
+        title="Noch keine belastbare Evidenz sichtbar"
         description="Sobald Qualitäts- und Importdaten geladen sind, zeigt die Seite wieder klar, was schon tragfähig ist und was noch fehlt."
         tone="muted"
       >
@@ -243,8 +243,8 @@ const EvidencePanel: React.FC<Props> = ({
     <div className="page-stack evidence-template-page">
       <OperatorSection
         kicker="GELO-Datenlage"
-        title="Was für GELO schon belastbar ist und was noch fehlt"
-        description="Die Seite trennt bewusst Datenvollständigkeit, Modell-Belastbarkeit und operative Einsatzreife. So kannst du GELO sauber erklären, was schon trägt und was noch nachgezogen werden sollte."
+        title="Evidenz: was trägt und was noch fehlt"
+        description="Datenvollständigkeit, Modell-Belastbarkeit und operative Einsatzreife bleiben getrennt und klar lesbar."
         tone="accent"
         className="evidence-briefing-shell"
       >
@@ -252,7 +252,7 @@ const EvidencePanel: React.FC<Props> = ({
           <OperatorPanel tone="accent" className="evidence-briefing-hero">
             <div id="evidence-trust" className="evidence-briefing-hero__header">
               <div>
-                <span className="campaign-focus-label">GELO-Vertrauen</span>
+                <span className="campaign-focus-label">Hero Decision Stage</span>
                 <h3 className="campaign-focus-title">{heroTitle}</h3>
                 <div className="campaign-focus-context">
                   {latestImportAt ? `Letzter GELO-Import ${formatDateTime(latestImportAt)}` : 'Noch kein GELO-Import'} · {truthLayerLabel(truthStatus)} · {truthFreshnessLabel(truthStatus?.truth_freshness_state)}
@@ -293,7 +293,7 @@ const EvidencePanel: React.FC<Props> = ({
           </OperatorPanel>
 
           <OperatorPanel
-            eyebrow="Trust-Layer"
+            eyebrow="Confidence Strip"
             title="Vertrauen auf einen Blick"
             description="Hier bleibt sichtbar, ob die offene GELO-Frage eher Daten, Belastbarkeit oder Einsatzreife betrifft."
             tone="muted"
@@ -320,8 +320,8 @@ const EvidencePanel: React.FC<Props> = ({
 
       <OperatorSection
         kicker="GELO-Onboarding"
-        title="Welche GELO-Daten schon im System sind"
-        description="Dieser Block hilft beim Gespräch mit GELO: Was ist schon verbunden, was fehlt noch und welcher Daten-Schritt lohnt sich als Nächstes?"
+        title="Arbeitskontext"
+        description="Was ist schon verbunden, was fehlt noch und welcher Daten-Schritt lohnt sich als Nächstes?"
         tone="muted"
       >
         <div id="evidence-onboarding" className="workspace-two-column evidence-onboarding-grid">
@@ -358,7 +358,7 @@ const EvidencePanel: React.FC<Props> = ({
       </OperatorSection>
 
       <CollapsibleSection
-        title="GELO-Daten und Outcome-Lernen"
+        title="Daten & Outcome"
         subtitle="Hier siehst du, wie weit die GELO-Kundendaten die Empfehlungen schon zusätzlich stützen."
       >
         <div id="evidence-data">
@@ -374,7 +374,7 @@ const EvidencePanel: React.FC<Props> = ({
       </CollapsibleSection>
 
       <CollapsibleSection
-        title="GELO-Daten importieren und prüfen"
+        title="Import prüfen"
         subtitle="Hier klärst du fehlende Kundendaten, prüfst eine CSV-Vorschau und verfolgst bestehende Importe nach."
         defaultOpen={importNeedsAttention}
       >
@@ -392,7 +392,7 @@ const EvidencePanel: React.FC<Props> = ({
       </CollapsibleSection>
 
       <CollapsibleSection
-        title="Forecast und Modell-Belastbarkeit"
+        title="Modell & Verlauf"
         subtitle="Diese Details helfen, die Modellstabilität zu erklären, bleiben aber bewusst eine zweite Ebene hinter der GELO-Datenlage."
       >
         <div id="evidence-support">
@@ -416,7 +416,7 @@ const EvidencePanel: React.FC<Props> = ({
       </CollapsibleSection>
 
       <CollapsibleSection
-        title="Quellen, Frische und bekannte Grenzen"
+        title="Quellen & Grenzen"
         subtitle="Hier findest du, welche Live-Daten ins System fließen, welche Quellen Beobachtung brauchen und wo die aktuellen Grenzen liegen."
       >
         <SourceFreshnessSection
@@ -431,7 +431,7 @@ const EvidencePanel: React.FC<Props> = ({
       </CollapsibleSection>
 
       <CollapsibleSection
-        title="Technische Einordnung"
+        title="Technische Tiefe"
         subtitle="Nur wenn du tiefer in Signalsystem, Prüfmarker oder Import-Historie einsteigen musst."
       >
         <div className="workspace-two-column">

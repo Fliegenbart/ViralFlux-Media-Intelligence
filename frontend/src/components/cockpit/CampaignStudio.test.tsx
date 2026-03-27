@@ -163,11 +163,13 @@ describe('CampaignStudio', () => {
       />,
     );
 
-    expect(screen.getByText('Welche GELO-Empfehlung jetzt geprüft oder freigegeben werden sollte')).toBeInTheDocument();
-    expect(screen.getByText('GELO-Freigabefall diese Woche')).toBeInTheDocument();
-    expect(screen.getByText('Was diese Empfehlung trägt')).toBeInTheDocument();
-    expect(screen.getByText('Weitere Empfehlungen mit nächstem Schritt')).toBeInTheDocument();
-    expect(screen.getByText('So ist die Freigabe-Pipeline gerade sortiert')).toBeInTheDocument();
+    expect(screen.getByText('Kampagnen: der nächste Freigabefall')).toBeInTheDocument();
+    expect(screen.getByText('Hero Decision Stage')).toBeInTheDocument();
+    expect(screen.getByText('Confidence Strip')).toBeInTheDocument();
+    expect(screen.getByText('Vertrauenslage auf einen Blick')).toBeInTheDocument();
+    expect(screen.getByText('Secondary Paths')).toBeInTheDocument();
+    expect(screen.getByText('Weitere Empfehlungen und Pipeline')).toBeInTheDocument();
+    expect(screen.getAllByText('Details bei Bedarf').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Blocker prüfen').length).toBeGreaterThan(0);
     expect(screen.getByText('Aktive Fälle')).toBeInTheDocument();
 

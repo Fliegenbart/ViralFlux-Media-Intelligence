@@ -149,7 +149,7 @@ const DecisionView: React.FC<Props> = ({
   }
 
   return (
-    <div className="page-stack">
+    <div className="page-stack decision-template-page">
       <section className="context-filter-rail decision-context-rail">
         <div className="section-heading">
           <span className="section-kicker">ViralFlux for GELO</span>
@@ -189,7 +189,8 @@ const DecisionView: React.FC<Props> = ({
               <span className="campaign-confidence-chip">{decisionModeLabel}</span>
             </div>
             <div className="section-heading decision-section-heading">
-              <h1 className="hero-title">{heroLead}</h1>
+              <span className="section-kicker">Hero Decision Stage</span>
+              <h1 className="hero-title">Wochenentscheidung: {heroLead}</h1>
               <p className="hero-context">{heroSentence}</p>
               <p className="hero-copy">
                 {isGo
@@ -206,7 +207,7 @@ const DecisionView: React.FC<Props> = ({
 
           <div className="soft-panel aside-summary decision-card-md">
             <div>
-              <div className="section-kicker">Wochenfokus</div>
+              <div className="section-kicker">Confidence Strip</div>
               <div className="summary-headline">
                 {weeklyDecision?.top_products?.[0] || topCard?.recommended_product || 'GELO Portfolio'}
               </div>
@@ -290,7 +291,7 @@ const DecisionView: React.FC<Props> = ({
 
           <div className="card subsection-card decision-card-md">
             <div className="section-heading decision-section-heading-tight">
-              <h2 className="subsection-title">PEIX x GELO Freigabelogik</h2>
+              <h2 className="subsection-title">Was die Entscheidung trägt</h2>
               <p className="subsection-copy">
                 Der Forecast zeigt, wo eine Welle wahrscheinlich entsteht. Das Business-Gate entscheidet separat, ob PEIX daraus schon eine budgetwirksame GELO-Freigabe ableiten darf.
               </p>
@@ -388,7 +389,7 @@ const DecisionView: React.FC<Props> = ({
 
           <div className="card subsection-card decision-card-md">
             <div className="section-heading decision-section-heading-tight">
-              <h2 className="subsection-title">Kampagnen, die jetzt zählen</h2>
+              <h2 className="subsection-title">Secondary Paths</h2>
               <p className="subsection-copy">
                 Direkter Sprung in die nächste sinnvolle Aktion statt in eine lange Liste.
               </p>
@@ -449,7 +450,7 @@ const DecisionView: React.FC<Props> = ({
       {(weeklyDecision?.risk_flags || []).length > 0 && (
         <section className="card subsection-card decision-risk-shell decision-card-md">
           <div className="section-heading decision-section-heading-tight">
-            <h2 className="subsection-title">Was gegen eine Freigabe spricht</h2>
+            <h2 className="subsection-title">Details bei Bedarf</h2>
             <p className="subsection-copy">
               Die Bewertung beruht auf Datenfrische, Marktvergleich, Kundendaten, Modellzustand und Freigabefähigkeit.
             </p>

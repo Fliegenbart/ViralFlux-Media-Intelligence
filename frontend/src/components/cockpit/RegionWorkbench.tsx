@@ -340,8 +340,8 @@ const RegionWorkbench: React.FC<Props> = ({
     return (
       <OperatorSection
         kicker="Regionen"
-        title="Regionale Wochensteuerung wird geladen"
-        description="Wir bauen gerade den regionalen Arbeitsstand für GELO auf. Gleich siehst du wieder Handlung, Vertrauen und Vergleichsliste."
+        title="Regionale Arbeitsfläche wird aufgebaut"
+        description="Gleich siehst du wieder die Hauptregion, die kurze Vertrauenslage und die nächsten Vergleichspfade."
         tone="muted"
       >
         <div className="regions-loading-skeleton" aria-label="Regionale Arbeitsfläche wird geladen">
@@ -361,8 +361,8 @@ const RegionWorkbench: React.FC<Props> = ({
     return (
       <OperatorSection
         kicker="Regionen"
-        title="Noch keine Kartendaten für die regionale Steuerung"
-        description="Für diese Auswahl liegt aktuell kein Bundesland-Map-Scope vor."
+        title="Noch keine regionale Sicht verfügbar"
+        description="Für diese Auswahl liegt aktuell kein Bundesland-Scope vor."
         tone="muted"
       >
         <div className="workspace-note-card">Keine Kartendaten vorhanden.</div>
@@ -374,8 +374,8 @@ const RegionWorkbench: React.FC<Props> = ({
     return (
       <OperatorSection
         kicker="Regionen"
-        title="Noch keine belastbare regionale Priorisierung"
-        description="Es sind Bundesland-Daten vorhanden, aber noch keine klare Reihenfolge für den nächsten regionalen Schritt."
+        title="Noch keine belastbare Priorisierung"
+        description="Es gibt Bundesland-Daten, aber noch keine klare Reihenfolge für den nächsten Schritt."
         tone="muted"
       >
         <div className="workspace-note-card">
@@ -389,8 +389,8 @@ const RegionWorkbench: React.FC<Props> = ({
     <div className="page-stack regions-template-page">
       <OperatorSection
         kicker="Regionen"
-        title="Wo GELO diese Woche regional Fokus setzen sollte"
-        description="Die Seite beantwortet zuerst: welches Bundesland jetzt wichtig ist, welche Richtung sinnvoll ist und welcher nächste Schritt geöffnet werden sollte."
+        title="Regionen: nächster klarer Schwerpunkt"
+        description="Eine Hauptregion, zwei Folgepfade und die kurze Vertrauenslage für den regionalen Schritt."
         tone="accent"
         className="operator-toolbar-shell"
       >
@@ -423,7 +423,7 @@ const RegionWorkbench: React.FC<Props> = ({
           >
             <div className="regions-action-hero__header">
               <div>
-                <span className="now-weekly-plan-card__label">Empfohlene Regionen-Aktion diese Woche</span>
+                <span className="now-weekly-plan-card__label">Hero Decision Stage</span>
                 <h3 className="regions-action-hero__title">
                   {regionalActionHeadline(selectedDirection, primaryRegion?.name)}
                 </h3>
@@ -489,7 +489,8 @@ const RegionWorkbench: React.FC<Props> = ({
           </OperatorPanel>
 
           <OperatorPanel
-            title="Was die regionale Empfehlung trägt"
+            eyebrow="Confidence Strip"
+            title="Vertrauenslage auf einen Blick"
             description={trustSummary}
             tone="muted"
             className="regions-trust-shell"
@@ -509,8 +510,8 @@ const RegionWorkbench: React.FC<Props> = ({
           </OperatorPanel>
 
           <OperatorPanel
-            eyebrow="Danach im Blick"
-            title="Weitere Bundesländer mit nächstem Schritt"
+            eyebrow="Secondary Paths"
+            title="Danach prüfen"
             description="Hier bleiben die nächsten Bundesländer sichtbar, ohne die Hauptentscheidung zu verwischen."
             tone="muted"
             className="regions-secondary-shell"
@@ -547,8 +548,8 @@ const RegionWorkbench: React.FC<Props> = ({
       <div ref={comparisonRef}>
         <OperatorSection
           kicker="Arbeitsmodus"
-          title="Bundesländer im Vergleich"
-          description="Die Liste ist das eigentliche Arbeitswerkzeug für die Regionensteuerung. Hier scannt PEIX Richtung, Begründung, Vertrauenslage und nächsten Schritt."
+          title="Details bei Bedarf"
+          description="Die Liste bleibt das Arbeitswerkzeug für Richtung, Begründung und nächsten Schritt."
           tone="muted"
         >
           <div className="regions-workbench-grid">
@@ -658,7 +659,7 @@ const RegionWorkbench: React.FC<Props> = ({
 
       <div ref={detailsRef}>
         <CollapsibleSection
-          title={region ? `Zweiter Blick auf ${region.name}` : 'Zweiter Blick auf die Region'}
+          title={region ? `Tiefe bei Bedarf: ${region.name}` : 'Tiefe bei Bedarf'}
           subtitle="Treiber, Rohdetails und längere Begründung nur wenn du tiefer einsteigen möchtest."
         >
           <div className="workspace-two-column">

@@ -130,8 +130,8 @@ const CampaignStudio: React.FC<Props> = ({
     <div className="page-stack">
       <OperatorSection
         kicker="Kampagnen"
-        title="Welche GELO-Empfehlung jetzt geprüft oder freigegeben werden sollte"
-        description="Die Seite zeigt zuerst den wichtigsten Freigabefall, danach Blocker, Übergabe und die nächsten Fälle in der GELO-Wochenarbeit."
+        title="Kampagnen: der nächste Freigabefall"
+        description="Eine Hauptempfehlung, kurze Vertrauenslage und zwei Folgepfade für die GELO-Wochenarbeit."
         tone="accent"
         className="campaign-hero-shell"
       >
@@ -164,7 +164,7 @@ const CampaignStudio: React.FC<Props> = ({
               <OperatorPanel tone="accent" className="campaign-focus-panel campaign-approval-hero">
                 <div className="campaign-approval-hero__header">
                   <div>
-                    <span className="campaign-focus-label">GELO-Freigabefall diese Woche</span>
+                    <span className="campaign-focus-label">Hero Decision Stage</span>
                     <h3 className="campaign-focus-title">{focusTitle}</h3>
                     <div className="campaign-focus-context">{focusContext}</div>
                   </div>
@@ -222,8 +222,8 @@ const CampaignStudio: React.FC<Props> = ({
               </OperatorPanel>
 
               <OperatorPanel
-                eyebrow="Freigabestatus"
-                title="So sieht die GELO-Woche gerade aus"
+                eyebrow="Confidence Strip"
+                title="Vertrauenslage auf einen Blick"
                 description="Diese Übersicht zeigt, ob jetzt eher Prüfung, Blockerklärung oder Übergabe ansteht."
                 tone="muted"
                 className="campaign-command-rail campaign-approval-summary"
@@ -250,7 +250,8 @@ const CampaignStudio: React.FC<Props> = ({
             </div>
 
             <OperatorPanel
-              title="Was diese Empfehlung trägt"
+              eyebrow="Secondary Paths"
+              title="Weitere Empfehlungen mit nächstem Schritt"
               description="Belastbarkeit, Datenlage und Blocker bleiben sichtbar, ohne den Freigabefall zu überlagern."
               tone="muted"
               className="campaign-trust-panel"
@@ -270,8 +271,8 @@ const CampaignStudio: React.FC<Props> = ({
             </OperatorPanel>
 
             <OperatorPanel
-              eyebrow="Danach im Blick"
-              title="Weitere Empfehlungen mit nächstem Schritt"
+              eyebrow="Details bei Bedarf"
+              title="Weitere Empfehlungen und Pipeline"
               description="Hier bleiben die nächsten GELO-Fälle sichtbar, ohne den Fokusfall zu verdrängen."
               tone="muted"
               className="campaign-approval-queue"
@@ -319,8 +320,8 @@ const CampaignStudio: React.FC<Props> = ({
       {!loading && cards.length > 0 ? (
         <OperatorSection
           kicker="Arbeitsphasen"
-          title="So ist die Freigabe-Pipeline gerade sortiert"
-          description="Unter dem Fokusfall bleibt die vollständige Pipeline sichtbar. Hier scannt PEIX, was als Nächstes geprüft, freigegeben oder beobachtet werden sollte."
+          title="Details bei Bedarf"
+          description="Unter dem Fokusfall bleibt die vollständige Pipeline sichtbar."
           tone="muted"
         >
           <section className="workspace-phase-grid">

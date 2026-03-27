@@ -109,9 +109,10 @@ describe('EvidencePanel', () => {
       />,
     );
 
-    expect(screen.getByText('Was für GELO schon belastbar ist und was noch fehlt')).toBeInTheDocument();
+    expect(screen.getByText('Evidenz: was trägt und was noch fehlt')).toBeInTheDocument();
+    expect(screen.getByText('Hero Decision Stage')).toBeInTheDocument();
     expect(screen.getByText('Vertrauen auf einen Blick')).toBeInTheDocument();
-    expect(screen.getByText('Welche GELO-Daten schon im System sind')).toBeInTheDocument();
+    expect(screen.getByText('Arbeitskontext')).toBeInTheDocument();
     expect(screen.getByText('Schon verbunden')).toBeInTheDocument();
     expect(screen.getByText('Fehlend oder blockiert')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Fehlende Daten klären' })).toHaveAttribute('href', '#evidence-import');
@@ -120,11 +121,11 @@ describe('EvidencePanel', () => {
     expect(screen.getByText('Modell-Belastbarkeit')).toBeInTheDocument();
     expect(screen.getByText('Operative Einsatzreife')).toBeInTheDocument();
     expect(screen.getAllByText('Ein Importfeld ist noch nicht sauber zugeordnet.').length).toBeGreaterThan(0);
-    expect(screen.getByText('GELO-Daten und Outcome-Lernen')).toBeInTheDocument();
-    expect(screen.getByText('GELO-Daten importieren und prüfen')).toBeInTheDocument();
-    expect(screen.getByText('Forecast und Modell-Belastbarkeit')).toBeInTheDocument();
-    expect(screen.getByText('Quellen, Frische und bekannte Grenzen')).toBeInTheDocument();
-    expect(screen.getByText('Technische Einordnung')).toBeInTheDocument();
+    expect(screen.getByText('Daten & Outcome')).toBeInTheDocument();
+    expect(screen.getByText('Import prüfen')).toBeInTheDocument();
+    expect(screen.getByText('Modell & Verlauf')).toBeInTheDocument();
+    expect(screen.getByText('Quellen & Grenzen')).toBeInTheDocument();
+    expect(screen.getByText('Technische Tiefe')).toBeInTheDocument();
     expect(screen.getByText(/Bundesland-Level, kein City-Forecast/i)).toBeInTheDocument();
     expect(screen.getAllByText(/nicht für einzelne Städte/i).length).toBeGreaterThan(0);
   });
@@ -149,6 +150,6 @@ describe('EvidencePanel', () => {
     );
 
     expect(screen.getByRole('status', { name: 'GELO-Datenlage wird geladen' })).toBeInTheDocument();
-    expect(screen.getByText('Was für GELO schon belastbar ist und was noch fehlt')).toBeInTheDocument();
+    expect(screen.getByText('Evidenz wird geladen')).toBeInTheDocument();
   });
 });

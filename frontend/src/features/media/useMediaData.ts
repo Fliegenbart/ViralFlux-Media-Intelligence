@@ -409,10 +409,12 @@ export function buildWorkspaceStatus(
     ? (sourceAttentionCount > 0 ? 'Beobachten' : 'Aktuell')
     : 'Unbekannt';
   const customerDataStatus = truthLayerLabel(truthStatus);
-  const lastImportAt = truthStatus?.last_imported_at
+  const hasCustomerTruthData = Boolean((truthStatus?.coverage_weeks || 0) > 0);
+  const rawLastImportAt = truthStatus?.last_imported_at
     || evidence?.truth_snapshot?.latest_batch?.uploaded_at
     || decision?.weekly_decision?.truth_last_imported_at
     || null;
+  const lastImportAt = hasCustomerTruthData ? rawLastImportAt : null;
 
   const blockers = uniqueText([
     ...(decision?.weekly_decision?.risk_flags || []),
@@ -429,7 +431,7 @@ export function buildWorkspaceStatus(
   const sourceDetail = sourceSummary
     ? `${sourceSummary.live_count || 0}/${sourceSummary.total || 0} Quellen aktuell${sourceAttentionCount > 0 ? `, ${sourceAttentionCount} mit Prüfbedarf` : ''}`
     : 'Noch kein Quellenstatus verfügbar.';
-  const customerDetail = truthStatus
+  const customerDetail = hasCustomerTruthData
     ? `${truthStatus.coverage_weeks ?? 0} Wochen verbunden${lastImportAt ? ` · letzter Import ${formatDateTime(lastImportAt)}` : ''}`
     : 'Noch keine Kundendaten verbunden.';
   const forecastDetail = evidence?.forecast_monitoring

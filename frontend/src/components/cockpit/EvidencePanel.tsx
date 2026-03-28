@@ -86,13 +86,14 @@ const EvidencePanel: React.FC<Props> = ({
   const improvementVsBaselines = (latestBacktest?.improvement_vs_baselines || {}) as Record<string, unknown>;
   const driverGroups = signalStack?.summary?.driver_groups || {};
   const blockerPreview = (workspaceStatus?.blockers || []).slice(0, 4);
-  const latestImportAt = workspaceStatus?.last_import_at || truthStatus?.last_imported_at || truthSnapshot?.latest_batch?.uploaded_at || null;
   const sourceAttentionCount = sourceItems.filter((item) => String(item.status_color || '').toLowerCase() !== 'green').length;
-  const completenessDetail = buildCompletenessDetail(truthStatus, latestImportAt, sourceAttentionCount, sourceItems.length);
   const reliabilityItem = workspaceStatus?.items.find((item) => item.key === 'forecast_status') || null;
   const freshnessItem = workspaceStatus?.items.find((item) => item.key === 'data_freshness') || null;
   const customerItem = workspaceStatus?.items.find((item) => item.key === 'customer_data_status') || null;
   const hasTruthData = Boolean((truthStatus?.coverage_weeks || 0) > 0);
+  const rawLatestImportAt = workspaceStatus?.last_import_at || truthStatus?.last_imported_at || truthSnapshot?.latest_batch?.uploaded_at || null;
+  const latestImportAt = hasTruthData ? rawLatestImportAt : null;
+  const completenessDetail = buildCompletenessDetail(truthStatus, latestImportAt, sourceAttentionCount, sourceItems.length);
   const hasOutcomeLearning = Boolean(
     outcomeLearning?.outcome_signal_score != null
     || outcomeLearning?.top_pair_learnings?.length
@@ -190,12 +191,12 @@ const EvidencePanel: React.FC<Props> = ({
       tone: hasBlockers ? 'warning' : (readyForWeeklyPlanning ? 'success' : 'neutral'),
     },
   ];
-  const connectedItems = [
+  const connectedItems = uniqueNonEmpty([
     `Kundendatenstatus: ${truthLayerLabel(truthStatus)}`,
-    `Letzter GELO-Import: ${latestImportAt ? formatDateTime(latestImportAt) : 'noch keiner'}`,
+    hasTruthData && latestImportAt ? `Letzter GELO-Import: ${formatDateTime(latestImportAt)}` : '',
     `Verbunden: ${truthStatus?.coverage_weeks ?? 0} Wochen · ${truthStatus?.regions_covered ?? 0} Bundesländer · ${truthStatus?.products_covered ?? 0} Produkte`,
     `Live-Quellen: ${(evidence?.source_status?.live_count || 0)}/${evidence?.source_status?.total || 0} aktuell`,
-  ];
+  ]);
   const missingItems = uniqueNonEmpty([
     !hasTruthData ? 'Für GELO fehlen noch passende Kundendaten für eine saubere Wochenplanung.' : '',
     !hasOutcomeLearning ? 'Erkenntnisse aus Kundendaten sind noch im Aufbau.' : '',
@@ -269,7 +270,7 @@ const EvidencePanel: React.FC<Props> = ({
                 <span className="campaign-focus-label">Aktueller Evidenzstatus</span>
                 <h3 className="campaign-focus-title">{heroTitle}</h3>
                 <div className="campaign-focus-context">
-                  {latestImportAt ? `Letzter GELO-Import ${formatDateTime(latestImportAt)}` : 'Noch kein GELO-Import'} · {truthLayerLabel(truthStatus)} · {truthFreshnessLabel(truthStatus?.truth_freshness_state)}
+                  {[hasTruthData && latestImportAt ? `Letzter GELO-Import ${formatDateTime(latestImportAt)}` : null, truthLayerLabel(truthStatus), truthFreshnessLabel(truthStatus?.truth_freshness_state)].filter(Boolean).join(' · ')}
                 </div>
               </div>
               <span className={`campaign-confidence-chip campaign-confidence-chip--${heroTone}`}>
@@ -472,9 +473,11 @@ const EvidencePanel: React.FC<Props> = ({
             description="Hilft beim Nachvollziehen, ist für die eigentliche Entscheidung aber nicht zwingend nötig."
           >
             <div className="workspace-note-list">
-              <div className="workspace-note-card">
-                Letzter Import: {latestImportAt ? formatDateTime(latestImportAt) : 'noch nicht vorhanden'}
-              </div>
+              {hasTruthData ? (
+                <div className="workspace-note-card">
+                  Letzter Import: {latestImportAt ? formatDateTime(latestImportAt) : 'noch nicht vorhanden'}
+                </div>
+              ) : null}
               <div className="workspace-note-card">
                 Offene Stopper (Blocker): {workspaceStatus?.open_blockers || 'keine'}
               </div>

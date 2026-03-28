@@ -13,7 +13,7 @@ interface Props {
 }
 
 const PRIMARY_NAV_ITEMS = [
-  { label: 'Wochenplan', path: '/jetzt', helper: 'Was diese Woche als Nächstes dran ist', icon: 'bolt' },
+  { label: 'Wochenplan', path: '/jetzt', helper: 'Die operative Hauptentscheidung für diese Woche', icon: 'bolt' },
   { label: 'Regionen', path: '/regionen', helper: 'Welche Bundesländer gerade vorne liegen', icon: 'location_on' },
   { label: 'Kampagnen', path: '/kampagnen', helper: 'Welcher Vorschlag als Nächstes geprüft werden sollte', icon: 'auto_awesome' },
   { label: 'Evidenz', path: '/evidenz', helper: 'Was schon belegt ist und was noch fehlt', icon: 'verified' },
@@ -22,9 +22,9 @@ const PRIMARY_NAV_ITEMS = [
 const SECTION_META = [
   {
     path: '/jetzt',
-    kicker: 'PEIX x GELO',
-    title: 'Wochenüberblick',
-    description: 'Zeigt die wichtigste Entscheidung für diese Woche und den nächsten Schritt.',
+    kicker: 'Wochenplan',
+    title: 'Regionale Dynamiken früher sehen',
+    description: 'Verdichtet respiratorische Signale, Evidenz und Priorisierung zu einer operativen Wochenlage.',
   },
   {
     path: '/regionen',
@@ -301,15 +301,15 @@ function buildWeeklyReadoutSummary(
   if (loading) {
     return {
       tone: 'watch',
-      status: 'Wochenübersicht wird geladen',
-      title: 'Wochenübersicht wird vorbereitet',
-      summary: 'Die Seite sammelt gerade den Wochenstand aus Regionen, Kampagnen und Evidenz.',
+      status: 'Wochenlage wird geladen',
+      title: 'Wochenlage wird vorbereitet',
+      summary: 'Die Plattform verdichtet gerade Regionen, Kampagnen und Evidenz zu einer operativen Einordnung.',
       focusRegions: 'Wird geladen',
       nextReview: 'Wird geladen',
       reliability: 'Wird geladen',
       dataReadiness: 'Wird geladen',
       openGap: 'Noch keine Einschätzung',
-      stripHeadline: 'Wochenübersicht wird vorbereitet',
+      stripHeadline: 'Wochenlage wird vorbereitet',
       stripGap: 'Wird geladen',
       updatedAt: '-',
     };
@@ -318,15 +318,15 @@ function buildWeeklyReadoutSummary(
   if (!pilotReadout) {
     return {
       tone: 'watch',
-      status: 'Wochenübersicht fehlt gerade',
-      title: 'Wochenübersicht gerade nicht verfügbar',
-      summary: 'Der Export bleibt verfügbar, aber die Wochenzusammenfassung konnte gerade nicht geladen werden.',
+      status: 'Wochenlage fehlt gerade',
+      title: 'Wochenlage gerade nicht verfügbar',
+      summary: 'Die verdichtete Wochenlage konnte gerade nicht geladen werden. Der Export bleibt verfügbar.',
       focusRegions: 'Noch offen',
       nextReview: 'Wochenplan erneut öffnen',
       reliability: 'Noch keine klare Einschätzung',
       dataReadiness: 'Datenlage noch offen',
-      openGap: 'Daten zur Wochenübersicht fehlen',
-      stripHeadline: 'Wochenübersicht fehlt',
+      openGap: 'Daten für die Wochenlage fehlen',
+      stripHeadline: 'Wochenlage fehlt',
       stripGap: 'Daten fehlen',
       updatedAt: '-',
     };

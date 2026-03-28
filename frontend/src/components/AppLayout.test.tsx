@@ -116,7 +116,7 @@ describe('AppLayout theme rendering', () => {
     expect(screen.getByRole('banner')).toHaveClass('surface-header');
     expect(screen.getByRole('link', { name: 'Direkt zum Inhalt springen' })).toHaveAttribute('href', '#main-content');
     expect(screen.getByText('Wochenbericht exportieren')).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Wochenüberblick' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Regionale Dynamiken früher sehen' })).toBeInTheDocument();
     expect(screen.getAllByText('Mit Vorsicht').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Bayern, Nordrhein-Westfalen').length).toBeGreaterThan(0);
     expect(screen.getByText('Bayern · Nasenspray')).toBeInTheDocument();

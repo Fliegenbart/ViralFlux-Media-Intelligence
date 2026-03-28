@@ -432,7 +432,7 @@ export function buildWorkspaceStatus(
     ? `${sourceSummary.live_count || 0}/${sourceSummary.total || 0} Quellen aktuell${sourceAttentionCount > 0 ? `, ${sourceAttentionCount} mit Prüfbedarf` : ''}`
     : 'Noch kein Quellenstatus verfügbar.';
   const customerDetail = hasCustomerTruthData
-    ? `${truthStatus.coverage_weeks ?? 0} Wochen verbunden${lastImportAt ? ` · letzter Import ${formatDateTime(lastImportAt)}` : ''}`
+    ? `${truthStatus?.coverage_weeks ?? 0} Wochen verbunden${lastImportAt ? ` · letzter Import ${formatDateTime(lastImportAt)}` : ''}`
     : 'Noch keine Kundendaten verbunden.';
   const forecastDetail = evidence?.forecast_monitoring
     ? `Prüfung ${monitoringStatusLabel(evidence.forecast_monitoring.monitoring_status)} · Vorhersage ${truthFreshnessLabel(evidence.forecast_monitoring.freshness_status)}`

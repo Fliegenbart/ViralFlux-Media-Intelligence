@@ -249,13 +249,16 @@ async def get_media_decision(
     db: Session = Depends(get_db),
 ):
     """V2 Decision-View Payload mit WeeklyDecision, Gate-Mix und Model/Truth-Kontext."""
-    return _json_safe_response(
-        MediaV2Service(db).get_decision_payload(
-            virus_typ=virus_typ,
-            target_source=target_source,
-            brand=brand,
+    try:
+        return _json_safe_response(
+            MediaV2Service(db).get_decision_payload(
+                virus_typ=virus_typ,
+                target_source=target_source,
+                brand=brand,
+            )
         )
-    )
+    except MLForecastSchemaMismatchError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 @router.get("/regions", dependencies=[Depends(get_current_user)])
@@ -266,13 +269,16 @@ async def get_media_regions(
     db: Session = Depends(get_db),
 ):
     """V2 Regionen-Workbench Payload mit Signal-Treibern und Prioritätslogik."""
-    return _json_safe_response(
-        MediaV2Service(db).get_regions_payload(
-            virus_typ=virus_typ,
-            target_source=target_source,
-            brand=brand,
+    try:
+        return _json_safe_response(
+            MediaV2Service(db).get_regions_payload(
+                virus_typ=virus_typ,
+                target_source=target_source,
+                brand=brand,
+            )
         )
-    )
+    except MLForecastSchemaMismatchError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 @router.get("/campaigns", dependencies=[Depends(get_current_user)])
@@ -293,13 +299,16 @@ async def get_media_evidence(
     db: Session = Depends(get_db),
 ):
     """V2 Evidenz-View mit Proxy, Truth, SignalStack und ModelLineage."""
-    return _json_safe_response(
-        MediaV2Service(db).get_evidence_payload(
-            virus_typ=virus_typ,
-            target_source=target_source,
-            brand=brand,
+    try:
+        return _json_safe_response(
+            MediaV2Service(db).get_evidence_payload(
+                virus_typ=virus_typ,
+                target_source=target_source,
+                brand=brand,
+            )
         )
-    )
+    except MLForecastSchemaMismatchError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 @router.get("/signal-stack", dependencies=[Depends(get_current_user)])
@@ -372,15 +381,18 @@ async def get_media_pilot_readout(
     """Single-source customer readout for the PEIX / GELO pilot surface."""
     from app.services.media.pilot_readout_service import PilotReadoutService
 
-    return _json_safe_response(
-        PilotReadoutService(db).build_readout(
-            brand=brand,
-            virus_typ=virus_typ,
-            horizon_days=horizon_days,
-            weekly_budget_eur=weekly_budget_eur,
-            top_n=top_n,
+    try:
+        return _json_safe_response(
+            PilotReadoutService(db).build_readout(
+                brand=brand,
+                virus_typ=virus_typ,
+                horizon_days=horizon_days,
+                weekly_budget_eur=weekly_budget_eur,
+                top_n=top_n,
+            )
         )
-    )
+    except MLForecastSchemaMismatchError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 @router.get("/evidence/truth", dependencies=[Depends(get_current_user)])

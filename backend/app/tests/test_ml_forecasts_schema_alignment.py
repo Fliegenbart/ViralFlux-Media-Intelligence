@@ -12,7 +12,7 @@ from app.models.database import Base
 
 
 class MLForecastSchemaAlignmentTests(unittest.TestCase):
-    def test_detects_missing_region_and_horizon_columns_on_legacy_schema(self) -> None:
+    def test_detects_missing_required_scope_and_forecast_columns_on_legacy_schema(self) -> None:
         engine = create_engine(
             "sqlite://",
             connect_args={"check_same_thread": False},
@@ -50,7 +50,59 @@ class MLForecastSchemaAlignmentTests(unittest.TestCase):
 
             self.assertIn("ml_forecasts.region", gaps["missing_columns"])
             self.assertIn("ml_forecasts.horizon_days", gaps["missing_columns"])
+            self.assertNotIn("ml_forecasts.trend_momentum_7d", gaps["missing_columns"])
+            self.assertNotIn("ml_forecasts.outbreak_risk_score", gaps["missing_columns"])
             self.assertIn("ml_forecasts.idx_forecast_scope_date", gaps["missing_indexes"])
+            with self.assertRaises(MLForecastSchemaMismatchError):
+                ensure_ml_forecast_schema_aligned(engine)
+        finally:
+            engine.dispose()
+
+    def test_detects_missing_new_forecast_columns_on_partially_migrated_schema(self) -> None:
+        engine = create_engine(
+            "sqlite://",
+            connect_args={"check_same_thread": False},
+            poolclass=StaticPool,
+        )
+        try:
+            with engine.begin() as conn:
+                conn.execute(
+                    text(
+                        """
+                        CREATE TABLE ml_forecasts (
+                            id INTEGER PRIMARY KEY,
+                            created_at DATETIME,
+                            forecast_date DATETIME NOT NULL,
+                            virus_typ VARCHAR NOT NULL,
+                            region VARCHAR NOT NULL,
+                            horizon_days INTEGER NOT NULL,
+                            predicted_value FLOAT NOT NULL,
+                            lower_bound FLOAT,
+                            upper_bound FLOAT,
+                            confidence FLOAT,
+                            model_version VARCHAR,
+                            features_used JSON
+                        )
+                        """
+                    )
+                )
+                conn.execute(text("CREATE INDEX ix_ml_forecasts_region ON ml_forecasts (region)"))
+                conn.execute(text("CREATE INDEX ix_ml_forecasts_horizon_days ON ml_forecasts (horizon_days)"))
+                conn.execute(
+                    text(
+                        "CREATE INDEX idx_forecast_scope_date ON ml_forecasts (virus_typ, region, horizon_days, forecast_date)"
+                    )
+                )
+                conn.execute(
+                    text(
+                        "CREATE INDEX idx_forecast_scope_created ON ml_forecasts (virus_typ, region, horizon_days, created_at)"
+                    )
+                )
+
+            gaps = get_ml_forecast_schema_gaps(engine)
+
+            self.assertIn("ml_forecasts.trend_momentum_7d", gaps["missing_columns"])
+            self.assertIn("ml_forecasts.outbreak_risk_score", gaps["missing_columns"])
             with self.assertRaises(MLForecastSchemaMismatchError):
                 ensure_ml_forecast_schema_aligned(engine)
         finally:

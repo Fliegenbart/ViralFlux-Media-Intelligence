@@ -490,6 +490,58 @@ class MediaV2ApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 503)
         self.assertEqual(response.json()["detail"], "MLForecast schema mismatch detected.")
 
+    def test_decision_endpoint_maps_mlforecast_schema_mismatch_to_503(self) -> None:
+        with patch(
+            "app.services.media.v2_service.MediaV2Service.get_decision_payload",
+            side_effect=MLForecastSchemaMismatchError("MLForecast schema mismatch detected."),
+        ):
+            response = self.client.get(
+                "/api/v1/media/decision?virus_typ=Influenza%20A",
+                headers=self.admin_headers,
+            )
+
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.json()["detail"], "MLForecast schema mismatch detected.")
+
+    def test_regions_endpoint_maps_mlforecast_schema_mismatch_to_503(self) -> None:
+        with patch(
+            "app.services.media.v2_service.MediaV2Service.get_regions_payload",
+            side_effect=MLForecastSchemaMismatchError("MLForecast schema mismatch detected."),
+        ):
+            response = self.client.get(
+                "/api/v1/media/regions?virus_typ=Influenza%20A",
+                headers=self.admin_headers,
+            )
+
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.json()["detail"], "MLForecast schema mismatch detected.")
+
+    def test_evidence_endpoint_maps_mlforecast_schema_mismatch_to_503(self) -> None:
+        with patch(
+            "app.services.media.v2_service.MediaV2Service.get_evidence_payload",
+            side_effect=MLForecastSchemaMismatchError("MLForecast schema mismatch detected."),
+        ):
+            response = self.client.get(
+                "/api/v1/media/evidence?virus_typ=Influenza%20A",
+                headers=self.admin_headers,
+            )
+
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.json()["detail"], "MLForecast schema mismatch detected.")
+
+    def test_pilot_readout_endpoint_maps_mlforecast_schema_mismatch_to_503(self) -> None:
+        with patch(
+            "app.services.media.pilot_readout_service.PilotReadoutService.build_readout",
+            side_effect=MLForecastSchemaMismatchError("MLForecast schema mismatch detected."),
+        ):
+            response = self.client.get(
+                "/api/v1/media/pilot-readout?brand=gelo&virus_typ=RSV%20A&horizon_days=7&weekly_budget_eur=120000",
+                headers=self.admin_headers,
+            )
+
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.json()["detail"], "MLForecast schema mismatch detected.")
+
 
 if __name__ == "__main__":
     unittest.main()

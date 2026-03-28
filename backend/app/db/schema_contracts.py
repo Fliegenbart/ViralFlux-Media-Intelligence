@@ -22,6 +22,11 @@ _REQUIRED_SCHEMA_CONTRACTS: dict[str, dict[str, Any]] = {
     },
 }
 
+_ML_FORECAST_RUNTIME_COLUMNS: tuple[str, ...] = (
+    "trend_momentum_7d",
+    "outbreak_risk_score",
+)
+
 
 class SchemaContractMismatchError(RuntimeError):
     """Raised when the live database schema no longer matches the runtime contract."""
@@ -76,13 +81,21 @@ def get_ml_forecast_schema_gaps(
     bind: Session | Engine | Connection,
 ) -> dict[str, list[str]]:
     gaps = get_required_schema_contract_gaps(bind)
+    inspector = inspect(_resolve_bind(bind))
+    existing_tables = set(inspector.get_table_names())
+    runtime_missing_columns: list[str] = []
+    if "ml_forecasts" in existing_tables:
+        existing_columns = {item["name"] for item in inspector.get_columns("ml_forecasts")}
+        for column_name in _ML_FORECAST_RUNTIME_COLUMNS:
+            if column_name not in existing_columns:
+                runtime_missing_columns.append(f"ml_forecasts.{column_name}")
     return {
         "missing_tables": [
             item for item in gaps["missing_tables"] if item == "ml_forecasts"
         ],
         "missing_columns": [
             item for item in gaps["missing_columns"] if item.startswith("ml_forecasts.")
-        ],
+        ] + sorted(set(runtime_missing_columns)),
         "missing_indexes": [
             item for item in gaps["missing_indexes"] if item.startswith("ml_forecasts.")
         ],

@@ -37,6 +37,7 @@ const ImportValidationSection: React.FC<Props> = ({
     const status = String(batch.status || '').toLowerCase();
     return Number(batch.rows_imported || 0) > 0 || status === 'imported' || status === 'partial_success';
   };
+  const validationOnlyBatches = (truthSnapshot?.recent_batches || []).filter((batch) => !isVisibleImportedBatch(batch));
   const recentImportedBatches = (truthSnapshot?.recent_batches || []).filter(isVisibleImportedBatch);
   const selectedBatch = truthPreview?.batch_summary
     || (isVisibleImportedBatch(truthBatchDetail?.batch) ? truthBatchDetail!.batch : null)
@@ -192,6 +193,26 @@ const ImportValidationSection: React.FC<Props> = ({
             )) : (
               <div className="review-muted-copy">Noch keine echten GELO-Importe vorhanden.</div>
             )}
+
+            {validationOnlyBatches.length > 0 ? (
+              <div className="truth-history-divider">
+                <span className="truth-history-divider__label">Prüf- und Validierungsläufe</span>
+                <p className="review-muted-copy">
+                  Diese Läufe haben Daten geprüft, aber noch nichts produktiv importiert.
+                </p>
+                <div className="truth-history-list">
+                  {validationOnlyBatches.map((batch: TruthImportBatchSummary) => (
+                    <div key={batch.batch_id} className="truth-history-item truth-history-item--muted">
+                      <div>
+                        <strong>{batch.file_name || batch.source_label || batch.batch_id}</strong>
+                        <span>{batchStatusLabel(batch.status)} · {formatDateTime(batch.uploaded_at)}</span>
+                      </div>
+                      <small>{batch.rows_valid}/{batch.rows_total} geprüft</small>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
           </div>
         </div>
 

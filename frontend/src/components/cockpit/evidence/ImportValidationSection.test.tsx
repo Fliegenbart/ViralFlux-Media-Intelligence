@@ -5,7 +5,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import ImportValidationSection from './ImportValidationSection';
 
 describe('ImportValidationSection', () => {
-  it('hides validation-only batches from the visible GELO import history', () => {
+  it('separates validation-only batches from real GELO imports', () => {
     render(
       <ImportValidationSection
         truthSnapshot={{
@@ -56,7 +56,10 @@ describe('ImportValidationSection', () => {
     );
 
     expect(screen.getByText('Noch keine echten GELO-Importe vorhanden.')).toBeInTheDocument();
-    expect(screen.queryByText('gelo_truth_sample_30_weeks.csv')).not.toBeInTheDocument();
+    expect(screen.getByText('Prüf- und Validierungsläufe')).toBeInTheDocument();
+    expect(screen.getByText('Diese Läufe haben Daten geprüft, aber noch nichts produktiv importiert.')).toBeInTheDocument();
+    expect(screen.getByText('gelo_truth_sample_30_weeks.csv')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /gelo_truth_sample_30_weeks\.csv/i })).not.toBeInTheDocument();
     expect(screen.getByText('Wähle einen echten Import aus der Historie oder prüfe eine neue Datei.')).toBeInTheDocument();
     expect(screen.queryByText('1dac0298ec3d')).not.toBeInTheDocument();
   });

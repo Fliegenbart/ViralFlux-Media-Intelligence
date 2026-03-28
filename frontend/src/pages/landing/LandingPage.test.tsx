@@ -51,7 +51,7 @@ describe('LandingPage', () => {
 
   it('shows the simplified landing promise and primary CTA', async () => {
     render(
-      <MemoryRouter>
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <LandingPage />
       </MemoryRouter>,
     );
@@ -61,20 +61,22 @@ describe('LandingPage', () => {
     });
 
     expect(
-      screen.getByRole('heading', { name: 'Regionale Virus-Frühwarnung für Media-Entscheidungen' }),
+      screen.getByRole('heading', { name: 'Die Wochensteuerung für PEIX x GELO' }),
     ).toBeInTheDocument();
     expect(
-      screen.getByText('ViralFlux zeigt, wo sich Viruswellen aufbauen und was das für Kampagnen, Priorisierung und Freigabe bedeutet.'),
+      screen.getByText('ViralFlux zeigt zuerst, welche Bundesländer jetzt Aufmerksamkeit verdienen, welche Maßnahme als Nächstes sinnvoll ist und worauf sich diese Einordnung stützt.'),
     ).toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: /Zum Dashboard/i })[0]).toBeInTheDocument();
-    expect(screen.getByText('Frühwarnung')).toBeInTheDocument();
-    expect(screen.getByText('Entscheidungshilfe')).toBeInTheDocument();
-    expect(screen.getByText('Freigabe-Gate')).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /Zum Wochenplan/i })[0]).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Wochenplan' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Evidenz' })).toBeInTheDocument();
+    expect(screen.getByText('Wo zuerst hinschauen')).toBeInTheDocument();
+    expect(screen.getByText('Was diese Woche tun')).toBeInTheDocument();
+    expect(screen.getByText('Warum wir das vertreten')).toBeInTheDocument();
   });
 
   it('shows footer status, version and docs link', async () => {
     render(
-      <MemoryRouter>
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <LandingPage />
       </MemoryRouter>,
     );

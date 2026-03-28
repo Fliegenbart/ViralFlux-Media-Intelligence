@@ -243,19 +243,19 @@ describe('RegionWorkbench', () => {
     );
 
     expect(screen.getAllByText('Regionen').length).toBeGreaterThan(0);
-    expect(screen.getByText('Bundesländer sauber einordnen')).toBeInTheDocument();
-    expect(screen.getByText('Regionale Dynamiken werden vergleichbar, ohne Präzision vorzutäuschen, die fachlich nicht belastbar ist.')).toBeInTheDocument();
-    expect(screen.getByText('Operative Hauptregion')).toBeInTheDocument();
+    expect(screen.getByText('Wo diese Woche genauer hingesehen werden sollte')).toBeInTheDocument();
+    expect(screen.getByText('Bundesländer werden vergleichbar, damit PEIX schneller sieht, wo Fokus sinnvoll ist und wo noch Zurückhaltung gilt.')).toBeInTheDocument();
+    expect(screen.getAllByText('Empfohlene Aktion').length).toBeGreaterThan(0);
     expect(screen.getByRole('heading', { name: 'Fokus erhöhen in Berlin' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Regionalen Vorschlag öffnen' })).toBeInTheDocument();
-    expect(screen.getAllByText('Einordnung').length).toBeGreaterThan(0);
-    expect(screen.getByText('Warum diese Region Relevanz gewinnt')).toBeInTheDocument();
-    expect(screen.getByText('Die regionale Priorisierung folgt nicht nur dem Signal, sondern der Kombination aus Belastbarkeit, Evidenz und Einsatzreife.')).toBeInTheDocument();
-    expect(screen.getByText('Belastbarkeit')).toBeInTheDocument();
+    expect(screen.getAllByText('Belastbarkeit').length).toBeGreaterThan(0);
+    expect(screen.getByText('Warum dieses Bundesland gerade vorne liegt')).toBeInTheDocument();
+    expect(screen.getByText('Die Entscheidung folgt nicht nur dem Signal, sondern der Kombination aus Belastbarkeit, Evidenz und Einsatzreife.')).toBeInTheDocument();
+    expect(screen.getAllByText('Belastbarkeit').length).toBeGreaterThan(0);
     expect(screen.getByText('Datenlage')).toBeInTheDocument();
     expect(screen.getByText('Einsatzreife')).toBeInTheDocument();
-    expect(screen.getByText('Weitere relevante Regionen')).toBeInTheDocument();
-    expect(screen.getByText('Was als Nächstes Relevanz gewinnen kann')).toBeInTheDocument();
+    expect(screen.getByText('Nächste Schritte')).toBeInTheDocument();
+    expect(screen.getByText('Welche Bundesländer danach folgen können')).toBeInTheDocument();
     expect(screen.getAllByText('Bayern').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Nordrhein-Westfalen').length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Vertiefung \(optional\)/).length).toBeGreaterThan(0);

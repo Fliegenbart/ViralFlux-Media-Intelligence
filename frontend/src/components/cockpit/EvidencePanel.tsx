@@ -258,8 +258,8 @@ const EvidencePanel: React.FC<Props> = ({
     <div className="page-stack evidence-template-page">
       <OperatorSection
         kicker="Evidenz"
-        title="Belastbarkeit sauber einordnen"
-        description="Sichtbar wird, was Empfehlungen bereits trägt, was noch fehlt und wo Vorsicht nötig bleibt."
+        title="Ist die Empfehlung diese Woche belastbar?"
+        description="Zuerst wird sichtbar, was bereits trägt, was noch fehlt und wo die Aussage nur mit Vorsicht gelesen werden sollte."
         tone="accent"
         className="evidence-briefing-shell"
       >
@@ -290,7 +290,7 @@ const EvidencePanel: React.FC<Props> = ({
                 <p>{missingNow}</p>
               </div>
               <div className="workspace-note-card evidence-briefing-note">
-                <strong>Vorsichtig lesen oder noch offen</strong>
+                <strong>Mit Vorsicht lesen</strong>
                 <p>{cautionAndBlocker}</p>
               </div>
             </div>
@@ -308,9 +308,9 @@ const EvidencePanel: React.FC<Props> = ({
           </OperatorPanel>
 
           <OperatorPanel
-            eyebrow="Einordnung"
-            title="Was die Evidenz bereits trägt"
-            description="Sichtbar bleibt, ob die offene Frage derzeit eher Daten, Belastbarkeit oder operative Einsatzreife betrifft."
+            eyebrow="Belastbarkeit"
+            title="Was diese Aussage gerade trägt"
+            description="Sichtbar bleibt, ob die offene Frage derzeit eher Daten, Modell-Belastbarkeit oder operative Einsatzreife betrifft."
             tone="muted"
             className="workspace-zone workspace-zone--trust evidence-trust-panel"
           >
@@ -335,8 +335,8 @@ const EvidencePanel: React.FC<Props> = ({
 
       <OperatorSection
         kicker="Arbeitskontext"
-        title="Verbindung und Lücken"
-        description="Was bereits verbunden ist, was noch fehlt und welcher Daten- oder Klärungsschritt als Nächstes sinnvoll ist."
+        title="Was bereits verbunden ist und was noch fehlt"
+        description="Hier liegt der nächste sinnvolle Klärungs-, Qualitäts- oder Import-Schritt."
         tone="muted"
       >
         <div id="evidence-onboarding" className="workspace-two-column evidence-onboarding-grid">

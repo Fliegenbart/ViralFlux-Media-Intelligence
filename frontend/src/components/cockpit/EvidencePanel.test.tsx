@@ -110,13 +110,13 @@ describe('EvidencePanel', () => {
     );
 
     expect(screen.getAllByText('Evidenz').length).toBeGreaterThan(0);
-    expect(screen.getByText('Belastbarkeit sauber einordnen')).toBeInTheDocument();
+    expect(screen.getByText('Ist die Empfehlung diese Woche belastbar?')).toBeInTheDocument();
     expect(screen.getByText('Aktueller Evidenzstatus')).toBeInTheDocument();
-    expect(screen.getByText('Einordnung')).toBeInTheDocument();
-    expect(screen.getByText('Was die Evidenz bereits trägt')).toBeInTheDocument();
-    expect(screen.getByText('Sichtbar bleibt, ob die offene Frage derzeit eher Daten, Belastbarkeit oder operative Einsatzreife betrifft.')).toBeInTheDocument();
+    expect(screen.getByText('Belastbarkeit')).toBeInTheDocument();
+    expect(screen.getByText('Was diese Aussage gerade trägt')).toBeInTheDocument();
+    expect(screen.getByText('Sichtbar bleibt, ob die offene Frage derzeit eher Daten, Modell-Belastbarkeit oder operative Einsatzreife betrifft.')).toBeInTheDocument();
     expect(screen.getByText('Arbeitskontext')).toBeInTheDocument();
-    expect(screen.getByText('Verbindung und Lücken')).toBeInTheDocument();
+    expect(screen.getByText('Was bereits verbunden ist und was noch fehlt')).toBeInTheDocument();
     expect(screen.getByText('Bereits verbunden')).toBeInTheDocument();
     expect(screen.getByText('Fehlend oder offen')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Fehlende Evidenz klären' })).toHaveAttribute('href', '#evidence-import');
@@ -124,6 +124,7 @@ describe('EvidencePanel', () => {
     expect(screen.getByText('Datenvollständigkeit')).toBeInTheDocument();
     expect(screen.getByText('Modell-Belastbarkeit')).toBeInTheDocument();
     expect(screen.getByText('Operative Einsatzreife')).toBeInTheDocument();
+    expect(screen.getByText('Mit Vorsicht lesen')).toBeInTheDocument();
     expect(screen.getAllByText('Ein Importfeld ist noch nicht sauber zugeordnet.').length).toBeGreaterThan(0);
     expect(screen.getByText('Kundendaten und Wirkung (optional)')).toBeInTheDocument();
     expect(screen.getByText('Import und Validierung')).toBeInTheDocument();

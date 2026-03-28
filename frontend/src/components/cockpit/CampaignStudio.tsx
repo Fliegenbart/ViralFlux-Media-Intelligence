@@ -131,8 +131,8 @@ const CampaignStudio: React.FC<Props> = ({
     <div className="page-stack">
       <OperatorSection
         kicker="Kampagnen"
-        title="Maßnahmen sauber priorisieren"
-        description="Hier wird aus regionaler Relevanz ein konkreter prüfbarer Fall."
+        title="Welcher Fall als Nächstes geprüft werden sollte"
+        description="Ein Fokusfall zuerst, danach die nächsten prüfbaren Fälle und die restliche Pipeline."
         tone="accent"
         className="campaign-hero-shell"
       >
@@ -151,7 +151,7 @@ const CampaignStudio: React.FC<Props> = ({
             <span className="campaign-empty-eyebrow">Maßnahmen</span>
             <h3 className="campaign-empty-title">Noch kein prüfbarer Fall sichtbar</h3>
             <p className="campaign-empty-copy">
-              Sobald der erste Vorschlag vorliegt, erscheint hier der Fall mit der höchsten operativen Relevanz für Prüfung, Freigabe oder Übergabe.
+              Sobald der erste Vorschlag vorliegt, erscheint hier genau der Fall, der als Nächstes geprüft oder freigegeben werden sollte.
             </p>
             <div className="action-row">
               <button className="media-button" type="button" onClick={onGenerate} disabled={generationLoading}>
@@ -165,7 +165,7 @@ const CampaignStudio: React.FC<Props> = ({
               <OperatorPanel tone="accent" className="workspace-zone workspace-zone--hero campaign-focus-panel campaign-approval-hero">
                 <div className="campaign-approval-hero__header">
                   <div>
-                    <span className="campaign-focus-label">Operativer Fokusfall</span>
+                    <span className="campaign-focus-label">Empfohlene Aktion</span>
                     <h3 className="campaign-focus-title">{focusTitle}</h3>
                     <div className="campaign-focus-context">{focusContext}</div>
                   </div>
@@ -223,9 +223,9 @@ const CampaignStudio: React.FC<Props> = ({
               </OperatorPanel>
 
               <OperatorPanel
-                eyebrow="Einordnung"
+                eyebrow="Nächster Schritt"
                 title="Warum dieser Fall jetzt vorne liegt"
-                description="Sichtbar wird, ob jetzt eher Prüfung, Freigabe, Klärung oder Übergabe im Vordergrund steht."
+                description="Hier wird sichtbar, ob gerade eher Prüfung, Freigabe, Klärung oder Übergabe im Vordergrund steht."
                 tone="muted"
                 className="workspace-zone workspace-zone--support campaign-command-rail campaign-approval-summary"
               >
@@ -251,9 +251,9 @@ const CampaignStudio: React.FC<Props> = ({
             </div>
 
             <OperatorPanel
-              eyebrow="Was die Freigabe trägt"
-              title="Belastbarkeit, Evidenz und Einsatzreife"
-              description="Operative Klarheit entsteht nicht aus einem einzelnen Signal, sondern aus Belastbarkeit, Datenlage und nächstem realen Handlungsschritt."
+              eyebrow="Belastbarkeit"
+              title="Was diesen Fokusfall trägt"
+              description="Operative Klarheit entsteht nicht aus einem einzelnen Signal, sondern aus Belastbarkeit, Datenlage und dem nächsten realen Handlungsschritt."
               tone="muted"
               className="workspace-zone workspace-zone--trust campaign-trust-panel"
             >
@@ -272,8 +272,8 @@ const CampaignStudio: React.FC<Props> = ({
             </OperatorPanel>
 
             <OperatorPanel
-              eyebrow="Weitere prüfbare Fälle"
-              title="Weitere Empfehlungen und Pipeline"
+              eyebrow="Danach"
+              title="Welche Fälle als Nächstes folgen"
               description="Die nächsten relevanten Fälle bleiben sichtbar, ohne die Priorität des Fokusfalls zu verwischen."
               tone="muted"
               className="workspace-zone workspace-zone--secondary campaign-approval-queue"
@@ -322,7 +322,7 @@ const CampaignStudio: React.FC<Props> = ({
         <OperatorSection
           kicker="Pipeline"
           title="Arbeitsphasen"
-          description="Unter dem Fokusfall bleibt die vollständige operative Pipeline sichtbar."
+          description="Unter dem Fokusfall bleibt die vollständige operative Pipeline sichtbar, aber bewusst nachgeordnet."
           tone="muted"
         >
           <section className="workspace-phase-grid">

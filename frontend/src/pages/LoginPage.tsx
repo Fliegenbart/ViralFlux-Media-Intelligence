@@ -42,10 +42,10 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
 
           <div className="login-brand-panel__copy">
             <h1 className="login-brand-panel__headline">
-              Klar sehen, <span>wo die nächste virale Welle beginnt.</span>
+              Klar sehen, <span>was diese Woche zuerst zählt.</span>
             </h1>
             <p className="login-brand-panel__text">
-              Nach dem Login siehst du sofort, wo du zuerst hinschauen solltest, welche Region wichtig wird und welcher nächste Schritt sinnvoll ist.
+              Nach dem Login siehst du sofort, welches Bundesland Aufmerksamkeit verdient, welche Maßnahme als Nächstes sinnvoll ist und worauf sich diese Einordnung stützt.
             </p>
           </div>
 
@@ -60,8 +60,8 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
             <div className="login-card__mobile-brand">ViralFlux</div>
 
             <header className="login-card__header">
-              <h2>Willkommen zurück</h2>
-              <p>Bitte gib deine Zugangsdaten ein.</p>
+              <h2>Willkommen in der Wochensteuerung</h2>
+              <p>Melde dich an, um Wochenplan, Regionen, Kampagnen und Evidenz zu öffnen.</p>
             </header>
 
             <form className="login-form" onSubmit={handleSubmit}>
@@ -131,7 +131,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
               </button>
 
               <div className="login-divider">
-                <span>Oder mit Firmenkonto anmelden</span>
+                <span>Oder mit Firmenkonto fortfahren</span>
               </div>
 
               <div className="login-sso-grid" aria-label="Platzhalter für Firmenanmeldung">
@@ -158,7 +158,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
 
             <footer className="login-card__footer">
               <p>
-                Noch kein Konto? <span>Bitte intern freischalten lassen.</span>
+                Noch kein Zugang? <span>Bitte intern freischalten lassen.</span>
               </p>
             </footer>
           </div>

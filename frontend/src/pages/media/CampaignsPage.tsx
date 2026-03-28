@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 
 import CampaignStudio from '../../components/cockpit/CampaignStudio';
 import { useToast } from '../../App';
+import { usePageHeader } from '../../components/AppLayout';
 import { mediaApi } from '../../features/media/api';
 import { useCampaignsPageData } from '../../features/media/useMediaData';
 import { useMediaWorkflow } from '../../features/media/workflowContext';
@@ -11,6 +12,7 @@ const CampaignsPage: React.FC = () => {
   const navigate = useNavigate();
   const { id: routeRecommendationId } = useParams<{ id?: string }>();
   const { toast } = useToast();
+  const { setPageHeader, clearPageHeader } = usePageHeader();
   const {
     brand,
     setBrand,
@@ -38,7 +40,7 @@ const CampaignsPage: React.FC = () => {
     }
   }, [closeRecommendation, openRecommendation, recommendationOverlayMode, routeRecommendationId]);
 
-  const generateRecommendations = async () => {
+  const generateRecommendations = useCallback(async () => {
     setGenerationLoading(true);
     try {
       const data = await mediaApi.generateRecommendations({
@@ -61,7 +63,24 @@ const CampaignsPage: React.FC = () => {
     } finally {
       setGenerationLoading(false);
     }
-  };
+  }, [brand, campaignGoal, invalidateData, loadCampaigns, toast, virus, weeklyBudget]);
+
+  useEffect(() => {
+    setPageHeader({
+      contextNote: 'Ein Fokusfall zuerst, die restliche Pipeline danach.',
+      primaryAction: {
+        label: generationLoading ? 'Vorschläge werden erstellt...' : 'Vorschläge erstellen',
+        onClick: generateRecommendations,
+        disabled: generationLoading,
+      },
+      secondaryAction: {
+        label: 'Zum Wochenplan',
+        onClick: () => navigate('/jetzt'),
+      },
+    });
+
+    return clearPageHeader;
+  }, [clearPageHeader, generateRecommendations, generationLoading, navigate, setPageHeader]);
 
   return (
     <CampaignStudio

@@ -144,17 +144,17 @@ const NowWorkspace: React.FC<Props> = ({
     <div className="page-stack now-template-page">
       <OperatorSection
         kicker="Wochenplan"
-        title="Entscheidungen sauberer treffen"
-        description="ViralFlux übersetzt frühe respiratorische Signale in operative Klarheit."
+        title="Fokus diese Woche"
+        description="Eine klare Richtung zuerst. Vertrauen, Einordnung und weitere Optionen direkt darunter."
         tone="accent"
         className="now-workspace-shell"
       >
         <div className="now-toolbar">
           <div className="now-toolbar__intro">
-            <span className="now-toolbar__eyebrow">Fokus</span>
+            <span className="now-toolbar__eyebrow">Wochenlage</span>
             <div className="now-toolbar__heading">
               <strong>Diese Woche</strong>
-              <span>Viruslinie wählen, Lage lesen, Priorisierung einordnen.</span>
+              <span>Signal lesen, Fokus verstehen, nächsten Schritt sauber einordnen.</span>
             </div>
           </div>
           <OperatorChipRail className="review-chip-row now-toolbar__rail">
@@ -171,7 +171,7 @@ const NowWorkspace: React.FC<Props> = ({
             ))}
           </OperatorChipRail>
           <div className="workspace-note-card now-toolbar-note">
-            <strong>Stand {formatDateTime(view.generatedAt)}</strong>
+            <strong>Datenstand {formatDateTime(view.generatedAt)}</strong>
             <span>
               {heroRecommendation?.stateLabel || 'Noch ohne belastbare Freigabe'}
               {' '}· Gilt auf Bundesland-Ebene, nicht für einzelne Städte.
@@ -187,12 +187,12 @@ const NowWorkspace: React.FC<Props> = ({
             className="workspace-zone workspace-zone--hero now-briefing-hero now-briefing-hero--weak now-briefing-hero--empty"
           >
             <div className="now-briefing-empty__meta">
-              <span>Noch keine belastbare Freigabe</span>
+              <span>Noch keine belastbare Aktion</span>
               <span>{virus} · {horizonDays} Tage</span>
             </div>
             <div className="now-briefing-empty__body">
               <div className="now-briefing-empty__summary">
-                <span className="now-weekly-plan-card__label">Aktueller Stand</span>
+                <span className="now-weekly-plan-card__label">Fokus diese Woche</span>
                 <strong>Es gibt erste Signale, aber noch keine belastbare Priorisierung für diese Woche.</strong>
                 <p>Die Oberfläche bleibt bewusst zurückhaltend, solange Evidenz und Freigabe nicht ausreichen.</p>
               </div>
@@ -236,7 +236,7 @@ const NowWorkspace: React.FC<Props> = ({
               >
                 <div className="now-briefing-hero__header">
                   <div>
-                    <span className="now-weekly-plan-card__label">Operative Hauptentscheidung</span>
+                    <span className="now-weekly-plan-card__label">Empfohlene Aktion</span>
                     <h3 className="now-briefing-hero__title">{decisionTitle}</h3>
                     <div className="now-briefing-hero__meta">{decisionContext}</div>
                   </div>
@@ -301,9 +301,9 @@ const NowWorkspace: React.FC<Props> = ({
               </OperatorPanel>
 
               <OperatorPanel
-                eyebrow="Einordnung"
-                title="Ein Signal ist noch keine Freigabe"
-                description="ViralFlux trennt bewusst zwischen Forecast, Priorisierung, Unsicherheit, Evidenz und operativer Entscheidung."
+                eyebrow="Belastbarkeit"
+                title="Warum wir das diese Woche vertreten können"
+                description="Die Empfehlung bleibt nur dann oben, wenn Forecast, Evidenz und Einsatzreife gemeinsam tragen."
                 tone="muted"
                 className="workspace-zone workspace-zone--trust now-confidence-strip"
               >
@@ -319,9 +319,9 @@ const NowWorkspace: React.FC<Props> = ({
             </OperatorPanel>
 
             <OperatorPanel
-              eyebrow="Weitere relevante Regionen"
-              title="Was als Nächstes Relevanz gewinnen kann"
-              description="Nicht jede Auffälligkeit verdient Eskalation. Nicht jeder Forecast verdient Budget. Nicht jede Region verdient sofortige Priorität."
+              eyebrow="Nächste Schritte"
+              title="Was danach sinnvoll geprüft werden kann"
+              description="Nur die nächsten belastbaren Optionen bleiben sichtbar. Alles andere bleibt bewusst im Hintergrund."
               tone="muted"
               className="workspace-zone workspace-zone--secondary now-briefing-secondary"
             >
@@ -358,7 +358,7 @@ const NowWorkspace: React.FC<Props> = ({
           <CollapsibleSection
             className="workspace-zone workspace-zone--detail"
             title="Vertiefung (optional)"
-            subtitle="Historie, Zusatzsignale und Qualitätsdetails nur öffnen, wenn eine tiefere Einordnung nötig ist."
+            subtitle="Historie, Zusatzsignale und Qualitätsdetails nur öffnen, wenn die Wochenentscheidung tiefer geprüft werden soll."
           >
             <div className="workspace-two-column">
               <FocusRegionOutlookPanel

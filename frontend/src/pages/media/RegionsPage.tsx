@@ -1,15 +1,18 @@
 import React, { useEffect, useState } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 import RegionWorkbench from '../../components/cockpit/RegionWorkbench';
 import { useToast } from '../../App';
+import { usePageHeader } from '../../components/AppLayout';
 import { mediaApi } from '../../features/media/api';
 import { useRegionsPageData } from '../../features/media/useMediaData';
 import { useMediaWorkflow } from '../../features/media/workflowContext';
 
 const RegionsPage: React.FC = () => {
   const location = useLocation();
+  const navigate = useNavigate();
   const { toast } = useToast();
+  const { setPageHeader, clearPageHeader } = usePageHeader();
   const {
     virus,
     setVirus,
@@ -36,6 +39,22 @@ const RegionsPage: React.FC = () => {
       setSelectedRegion(regionCode);
     }
   }, [location.state]);
+
+  useEffect(() => {
+    setPageHeader({
+      contextNote: 'Bundesländer vergleichen, ohne lokale Scheingenauigkeit vorzutäuschen.',
+      primaryAction: {
+        label: 'Zum Wochenplan',
+        onClick: () => navigate('/jetzt'),
+      },
+      secondaryAction: {
+        label: 'Evidenz öffnen',
+        onClick: () => navigate('/evidenz'),
+      },
+    });
+
+    return clearPageHeader;
+  }, [clearPageHeader, navigate, setPageHeader]);
 
   const openOrCreateRegionCampaign = async (regionCode: string) => {
     setRegionActionLoading(true);

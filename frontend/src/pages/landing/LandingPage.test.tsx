@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom';
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 
 import LandingPage from './LandingPage';
@@ -31,23 +31,44 @@ jest.mock('./LandingWidgets', () => ({
 }));
 
 describe('LandingPage', () => {
+  const landingPayload = {
+    generated_at: '2026-03-28T10:30:00Z',
+    regions: {
+      NW: { region_name: 'Nordrhein-Westfalen', score_0_100: 78, trend: 'steigend' },
+      BY: { region_name: 'Bayern', score_0_100: 52, trend: 'steigend' },
+      BE: { region_name: 'Berlin', score_0_100: 31, trend: 'stabil' },
+    },
+  };
+
+  let consoleErrorSpy: jest.SpyInstance;
+  let resolveFetch: ((value: unknown) => void) | null;
+
   beforeEach(() => {
-    global.fetch = jest.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        generated_at: '2026-03-28T10:30:00Z',
-        regions: {
-          NW: { region_name: 'Nordrhein-Westfalen', score_0_100: 78, trend: 'steigend' },
-          BY: { region_name: 'Bayern', score_0_100: 52, trend: 'steigend' },
-          BE: { region_name: 'Berlin', score_0_100: 31, trend: 'stabil' },
-        },
-      }),
-    }) as jest.Mock;
+    consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    resolveFetch = null;
+    global.fetch = jest.fn().mockImplementation(() => (
+      new Promise((resolve) => {
+        resolveFetch = resolve;
+      })
+    )) as jest.Mock;
   });
 
   afterEach(() => {
+    expect(consoleErrorSpy).not.toHaveBeenCalled();
+    consoleErrorSpy.mockRestore();
     jest.resetAllMocks();
   });
+
+  const resolveLandingFetch = async () => {
+    await act(async () => {
+      resolveFetch?.({
+        ok: true,
+        json: async () => landingPayload,
+      });
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+  };
 
   it('shows the simplified landing promise and primary CTA', async () => {
     render(
@@ -55,6 +76,8 @@ describe('LandingPage', () => {
         <LandingPage />
       </MemoryRouter>,
     );
+
+    await resolveLandingFetch();
 
     await waitFor(() => {
       expect(screen.getByText(/Datenstatus:/i)).toBeInTheDocument();
@@ -80,6 +103,8 @@ describe('LandingPage', () => {
         <LandingPage />
       </MemoryRouter>,
     );
+
+    await resolveLandingFetch();
 
     await waitFor(() => {
       expect(screen.getByText(/Datenstatus:/i)).toBeInTheDocument();

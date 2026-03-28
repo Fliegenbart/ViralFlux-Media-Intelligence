@@ -10,7 +10,15 @@ jest.mock('../lib/api', () => ({
 }));
 
 describe('LoginPage', () => {
+  let consoleErrorSpy: jest.SpyInstance;
+
+  beforeEach(() => {
+    consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
   afterEach(() => {
+    expect(consoleErrorSpy).not.toHaveBeenCalled();
+    consoleErrorSpy.mockRestore();
     jest.resetAllMocks();
   });
 

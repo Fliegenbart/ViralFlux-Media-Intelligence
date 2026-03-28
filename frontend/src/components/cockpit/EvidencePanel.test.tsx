@@ -156,4 +156,42 @@ describe('EvidencePanel', () => {
     expect(screen.getByRole('status', { name: 'GELO-Datenlage wird geladen' })).toBeInTheDocument();
     expect(screen.getByText('Evidenz wird aufgebaut')).toBeInTheDocument();
   });
+
+  it('does not show a GELO import date when no customer data is actually connected', () => {
+    render(
+      <EvidencePanel
+        evidence={{
+          source_status: { items: [], live_count: 0, total: 0, live_ratio: 0 },
+          truth_coverage: {
+            coverage_weeks: 0,
+            regions_covered: 0,
+            products_covered: 0,
+            truth_freshness_state: 'missing',
+            last_imported_at: '2026-03-08T07:24:00Z',
+            required_fields_present: [],
+            conversion_fields_present: [],
+          },
+          truth_snapshot: {
+            latest_batch: {
+              uploaded_at: '2026-03-08T07:24:00Z',
+            },
+          },
+        } as any}
+        workspaceStatus={buildWorkspaceStatus()}
+        loading={false}
+        marketValidation={null}
+        marketValidationLoading={false}
+        customerValidation={null}
+        customerValidationLoading={false}
+        truthPreview={null}
+        truthBatchDetail={null}
+        truthActionLoading={false}
+        truthBatchDetailLoading={false}
+        onSubmitTruthCsv={async () => {}}
+        onLoadTruthBatchDetail={async () => {}}
+      />,
+    );
+
+    expect(screen.queryByText(/GELO-Import/i)).not.toBeInTheDocument();
+  });
 });

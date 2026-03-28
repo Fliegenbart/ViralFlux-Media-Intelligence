@@ -8,9 +8,10 @@ import uuid
 from collections import defaultdict
 from datetime import datetime, timedelta
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
-from sqlalchemy import func
+from sqlalchemy import func, inspect, text
 from sqlalchemy.orm import Session
 
 from app.models.database import (
@@ -934,6 +935,8 @@ class MediaV2Service:
         brand: str = "gelo",
         limit: int = 20,
     ) -> list[dict[str, Any]]:
+        if self._uses_legacy_outcome_batch_schema():
+            return [self._batch_to_dict(row) for row in self._legacy_import_batch_rows(brand=brand, limit=limit)]
         rows = (
             self.db.query(MediaOutcomeImportBatch)
             .filter(func.lower(MediaOutcomeImportBatch.brand) == str(brand or "gelo").lower())
@@ -944,6 +947,14 @@ class MediaV2Service:
         return [self._batch_to_dict(row) for row in rows]
 
     def get_outcome_import_batch_detail(self, *, batch_id: str) -> dict[str, Any] | None:
+        if self._uses_legacy_outcome_batch_schema():
+            batch = self._legacy_import_batch_detail(batch_id=batch_id)
+            if not batch:
+                return None
+            return {
+                "batch": self._batch_to_dict(batch),
+                "issues": [],
+            }
         batch = (
             self.db.query(MediaOutcomeImportBatch)
             .filter(MediaOutcomeImportBatch.batch_id == batch_id)
@@ -1561,6 +1572,9 @@ class MediaV2Service:
         return self.truth_gate_service.evaluate(truth_coverage)
 
     def _latest_import_batch(self, *, brand: str) -> MediaOutcomeImportBatch | None:
+        if self._uses_legacy_outcome_batch_schema():
+            rows = self._legacy_import_batch_rows(brand=brand, limit=1)
+            return rows[0] if rows else None
         return (
             self.db.query(MediaOutcomeImportBatch)
             .filter(
@@ -1570,6 +1584,51 @@ class MediaV2Service:
             .order_by(MediaOutcomeImportBatch.uploaded_at.desc(), MediaOutcomeImportBatch.id.desc())
             .first()
         )
+
+    def _uses_legacy_outcome_batch_schema(self) -> bool:
+        # Use the current session connection so runtime schema checks stay inside
+        # the same transaction. This keeps freshly flushed import batches visible
+        # while coverage is computed, especially in sqlite-backed tests.
+        inspector = inspect(self.db.connection())
+        table_names = set(inspector.get_table_names())
+        if "media_outcome_import_batches" not in table_names:
+            return False
+        columns = {item["name"] for item in inspector.get_columns("media_outcome_import_batches")}
+        required_runtime_columns = {"source_system", "external_batch_id", "ingestion_mode"}
+        return not required_runtime_columns.issubset(columns)
+
+    def _legacy_import_batch_rows(self, *, brand: str, limit: int) -> list[SimpleNamespace]:
+        result = self.db.execute(
+            text(
+                """
+                SELECT id, batch_id, brand, source_label, status, uploaded_at, file_name
+                FROM media_outcome_import_batches
+                WHERE lower(brand) = :brand
+                  AND status IN ('imported', 'partial_success', 'validated', 'failed')
+                ORDER BY uploaded_at DESC NULLS LAST, id DESC
+                LIMIT :limit
+                """
+            ),
+            {"brand": str(brand or "gelo").lower(), "limit": int(limit)},
+        )
+        return [SimpleNamespace(**dict(row)) for row in result.mappings().all()]
+
+    def _legacy_import_batch_detail(self, *, batch_id: str) -> SimpleNamespace | None:
+        result = self.db.execute(
+            text(
+                """
+                SELECT id, batch_id, brand, source_label, status, uploaded_at, file_name
+                FROM media_outcome_import_batches
+                WHERE batch_id = :batch_id
+                ORDER BY uploaded_at DESC NULLS LAST, id DESC
+                LIMIT 1
+                """
+            ),
+            {"batch_id": str(batch_id)},
+        ).mappings().first()
+        if not result:
+            return None
+        return SimpleNamespace(**dict(result))
 
     def _latest_epi_reference_week(self, *, virus_typ: str | None = None) -> datetime | None:
         wastewater_query = self.db.query(func.max(WastewaterAggregated.datum))
@@ -1954,23 +2013,23 @@ class MediaV2Service:
             "created_at": issue.created_at.isoformat() if issue.created_at else None,
         }
 
-    def _batch_to_dict(self, batch: MediaOutcomeImportBatch) -> dict[str, Any]:
+    def _batch_to_dict(self, batch: MediaOutcomeImportBatch | SimpleNamespace) -> dict[str, Any]:
         return {
-            "batch_id": batch.batch_id,
-            "brand": batch.brand,
-            "source_label": batch.source_label,
-            "source_system": batch.source_system,
-            "external_batch_id": batch.external_batch_id,
-            "ingestion_mode": batch.ingestion_mode,
-            "file_name": batch.file_name,
-            "status": batch.status,
-            "rows_total": batch.rows_total,
-            "rows_valid": batch.rows_valid,
-            "rows_imported": batch.rows_imported,
-            "rows_rejected": batch.rows_rejected,
-            "rows_duplicate": batch.rows_duplicate,
-            "week_min": batch.week_min.isoformat() if batch.week_min else None,
-            "week_max": batch.week_max.isoformat() if batch.week_max else None,
-            "coverage_after_import": batch.coverage_after_import or {},
-            "uploaded_at": batch.uploaded_at.isoformat() if batch.uploaded_at else None,
+            "batch_id": getattr(batch, "batch_id", None),
+            "brand": getattr(batch, "brand", None),
+            "source_label": getattr(batch, "source_label", None),
+            "source_system": getattr(batch, "source_system", None),
+            "external_batch_id": getattr(batch, "external_batch_id", None),
+            "ingestion_mode": getattr(batch, "ingestion_mode", None),
+            "file_name": getattr(batch, "file_name", None),
+            "status": getattr(batch, "status", None),
+            "rows_total": getattr(batch, "rows_total", None),
+            "rows_valid": getattr(batch, "rows_valid", None),
+            "rows_imported": getattr(batch, "rows_imported", None),
+            "rows_rejected": getattr(batch, "rows_rejected", None),
+            "rows_duplicate": getattr(batch, "rows_duplicate", None),
+            "week_min": batch.week_min.isoformat() if getattr(batch, "week_min", None) else None,
+            "week_max": batch.week_max.isoformat() if getattr(batch, "week_max", None) else None,
+            "coverage_after_import": getattr(batch, "coverage_after_import", None) or {},
+            "uploaded_at": batch.uploaded_at.isoformat() if getattr(batch, "uploaded_at", None) else None,
         }

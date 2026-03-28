@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import subprocess
 import sys
 import urllib.error
 import urllib.parse
@@ -70,8 +71,28 @@ def _build_query(params: dict[str, Any]) -> str:
 
 
 def _authenticate_headers(base_url: str, timeout: float) -> tuple[dict[str, str], dict[str, Any] | None]:
+    bearer_token = str(
+        os.getenv("SMOKE_BEARER_TOKEN")
+        or os.getenv("SMOKE_JWT")
+        or ""
+    ).strip()
+    if bearer_token:
+        return {"Authorization": f"Bearer {bearer_token}"}, {
+            "path": "env:SMOKE_BEARER_TOKEN",
+            "status_code": None,
+            "passed": True,
+            "errors": [],
+            "summary": {
+                "auth_source": "bearer_token_env",
+            },
+        }
+
     admin_email = str(os.getenv("SMOKE_ADMIN_EMAIL") or os.getenv("ADMIN_EMAIL") or "").strip()
     admin_password = str(os.getenv("SMOKE_ADMIN_PASSWORD") or os.getenv("ADMIN_PASSWORD") or "").strip()
+    if not admin_email or not admin_password:
+        container_credentials = _load_backend_container_credentials()
+        admin_email = admin_email or container_credentials.get("ADMIN_EMAIL", "")
+        admin_password = admin_password or container_credentials.get("ADMIN_PASSWORD", "")
     if not admin_email or not admin_password:
         return {}, None
 
@@ -107,8 +128,61 @@ def _authenticate_headers(base_url: str, timeout: float) -> tuple[dict[str, str]
         "errors": [],
         "summary": {
             "token_type": response.get("token_type"),
+            "auth_source": "password_login",
         },
     }
+
+
+def _load_backend_container_credentials() -> dict[str, str]:
+    container_name = str(os.getenv("SMOKE_BACKEND_CONTAINER") or "virusradar_backend").strip()
+    if not container_name:
+        return {}
+
+    try:
+        result = subprocess.run(
+            [
+                "docker",
+                "inspect",
+                "-f",
+                "{{range .Config.Env}}{{println .}}{{end}}",
+                container_name,
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+    except OSError:
+        return {}
+
+    if result.returncode != 0:
+        return {}
+
+    credentials: dict[str, str] = {}
+    for raw_line in result.stdout.splitlines():
+        line = raw_line.strip()
+        if not line or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        if key in {"ADMIN_EMAIL", "ADMIN_PASSWORD"} and value.strip():
+            credentials[key] = value.strip()
+    return credentials
+
+
+def _maybe_append_auth_hint(
+    *,
+    check: dict[str, Any],
+    auth_headers: dict[str, str],
+) -> None:
+    if auth_headers:
+        return
+    if int(check.get("status_code") or 0) != 401:
+        return
+    errors = list(check.get("errors") or [])
+    errors.append(
+        "Protected endpoint returned 401. Set SMOKE_ADMIN_EMAIL/SMOKE_ADMIN_PASSWORD, "
+        "SMOKE_BEARER_TOKEN, or run the smoke test on the deploy host so it can reuse backend container credentials."
+    )
+    check["errors"] = errors
 
 
 def _response_status(payload: dict[str, Any]) -> str:
@@ -355,6 +429,7 @@ def run_smoke(
         headers=auth_headers,
     )
     checks["regional_forecast"] = _forecast_check(forecast_status, forecast_payload, forecast_path)
+    _maybe_append_auth_hint(check=checks["regional_forecast"], auth_headers=auth_headers)
 
     allocation_path = f"/api/v1/forecast/regional/media-allocation?{allocation_query}"
     allocation_status, allocation_payload = _request_json(
@@ -364,6 +439,7 @@ def run_smoke(
         headers=auth_headers,
     )
     checks["regional_allocation"] = _allocation_check(allocation_status, allocation_payload, allocation_path)
+    _maybe_append_auth_hint(check=checks["regional_allocation"], auth_headers=auth_headers)
 
     campaign_path = f"/api/v1/forecast/regional/campaign-recommendations?{campaign_query}"
     campaign_status, campaign_payload = _request_json(
@@ -377,6 +453,7 @@ def run_smoke(
         campaign_payload,
         campaign_path,
     )
+    _maybe_append_auth_hint(check=checks["regional_campaign_recommendations"], auth_headers=auth_headers)
 
     if check_cockpit:
         cockpit_path = f"/api/v1/media/cockpit?{cockpit_query}"

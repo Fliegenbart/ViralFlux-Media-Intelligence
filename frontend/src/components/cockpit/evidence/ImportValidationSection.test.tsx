@@ -58,6 +58,7 @@ describe('ImportValidationSection', () => {
     expect(screen.getByText('Noch keine echten GELO-Importe vorhanden.')).toBeInTheDocument();
     expect(screen.queryByText('gelo_truth_sample_30_weeks.csv')).not.toBeInTheDocument();
     expect(screen.getByText('Wähle einen echten Import aus der Historie oder prüfe eine neue Datei.')).toBeInTheDocument();
+    expect(screen.queryByText('1dac0298ec3d')).not.toBeInTheDocument();
   });
 
   it('shows real imported batches and lets the operator load their details', () => {

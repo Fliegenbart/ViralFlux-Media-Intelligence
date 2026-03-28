@@ -32,11 +32,16 @@ const ImportValidationSection: React.FC<Props> = ({
   const [sourceLabel, setSourceLabel] = useState('manual_csv');
   const [replaceExisting, setReplaceExisting] = useState(false);
 
-  const recentImportedBatches = (truthSnapshot?.recent_batches || []).filter((batch) => {
+  const isVisibleImportedBatch = (batch?: TruthImportBatchSummary | null) => {
+    if (!batch) return false;
     const status = String(batch.status || '').toLowerCase();
     return Number(batch.rows_imported || 0) > 0 || status === 'imported' || status === 'partial_success';
-  });
-  const selectedBatch = truthBatchDetail?.batch || truthPreview?.batch_summary || recentImportedBatches[0] || null;
+  };
+  const recentImportedBatches = (truthSnapshot?.recent_batches || []).filter(isVisibleImportedBatch);
+  const selectedBatch = truthPreview?.batch_summary
+    || (isVisibleImportedBatch(truthBatchDetail?.batch) ? truthBatchDetail!.batch : null)
+    || recentImportedBatches[0]
+    || null;
   const displayIssues: TruthImportIssue[] = truthPreview?.issues?.length
     ? truthPreview.issues
     : (truthBatchDetail?.issues || []);

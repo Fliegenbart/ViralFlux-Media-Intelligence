@@ -243,22 +243,25 @@ describe('RegionWorkbench', () => {
     );
 
     expect(screen.getAllByText('Regionen').length).toBeGreaterThan(0);
-    expect(screen.getByText('Aktuelle Entscheidung')).toBeInTheDocument();
+    expect(screen.getByText('Bundesländer sauber einordnen')).toBeInTheDocument();
+    expect(screen.getByText('Regionale Dynamiken werden vergleichbar, ohne Präzision vorzutäuschen, die fachlich nicht belastbar ist.')).toBeInTheDocument();
+    expect(screen.getByText('Operative Hauptregion')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Fokus erhöhen in Berlin' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Regionalen Vorschlag öffnen' })).toBeInTheDocument();
-    expect(screen.getByText('Warum')).toBeInTheDocument();
-    expect(screen.getByText('Warum die Region vorne liegt')).toBeInTheDocument();
+    expect(screen.getAllByText('Einordnung').length).toBeGreaterThan(0);
+    expect(screen.getByText('Warum diese Region Relevanz gewinnt')).toBeInTheDocument();
+    expect(screen.getByText('Die regionale Priorisierung folgt nicht nur dem Signal, sondern der Kombination aus Belastbarkeit, Evidenz und Einsatzreife.')).toBeInTheDocument();
     expect(screen.getByText('Belastbarkeit')).toBeInTheDocument();
     expect(screen.getByText('Datenlage')).toBeInTheDocument();
     expect(screen.getByText('Einsatzreife')).toBeInTheDocument();
-    expect(screen.getByText('Danach')).toBeInTheDocument();
-    expect(screen.getByText('Zwei nächste Regionen')).toBeInTheDocument();
+    expect(screen.getByText('Weitere relevante Regionen')).toBeInTheDocument();
+    expect(screen.getByText('Was als Nächstes Relevanz gewinnen kann')).toBeInTheDocument();
     expect(screen.getAllByText('Bayern').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Nordrhein-Westfalen').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Details (optional)').length).toBeGreaterThan(0);
-    expect(screen.getByText('Karte zur Orientierung (Bundesland)')).toBeInTheDocument();
+    expect(screen.getAllByText(/Vertiefung \(optional\)/).length).toBeGreaterThan(0);
+    expect(screen.getByText('Karte zur Orientierung')).toBeInTheDocument();
     expect(screen.getByText('GermanyMap Mock')).toBeInTheDocument();
-    expect(screen.getAllByText(/vermeid(et|en) Stadt-Prognosen/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/vermeidet lokale Scheingenauigkeit/i).length).toBeGreaterThan(0);
 
     fireEvent.click(screen.getByRole('button', { name: 'Regionalen Vorschlag öffnen' }));
 
@@ -307,7 +310,7 @@ describe('RegionWorkbench', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Zu wenig Belege (Evidenz)' }));
 
-    expect(screen.getByRole('heading', { name: 'Bundesländer mit zu wenig Belegen (Evidenz)' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Regionen mit zu dünner Evidenz' })).toBeInTheDocument();
     expect(screen.getAllByText('Sachsen').length).toBeGreaterThan(0);
   });
 
@@ -351,7 +354,7 @@ describe('RegionWorkbench', () => {
       />,
     );
 
-    expect(screen.getByText('Noch keine belastbare Priorisierung')).toBeInTheDocument();
-    expect(screen.getByText('Die Regionen sind da, aber noch ohne klare Rangordnung.')).toBeInTheDocument();
+    expect(screen.getByText('Noch keine klare regionale Reihenfolge')).toBeInTheDocument();
+    expect(screen.getByText('Die Regionen sind sichtbar, aber noch ohne belastbare Priorisierung.')).toBeInTheDocument();
   });
 });

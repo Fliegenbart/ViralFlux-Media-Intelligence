@@ -74,10 +74,10 @@ const CampaignStudio: React.FC<Props> = ({
     : 'Noch kein Fall im Fokus';
   const focusContext = focusCard
     ? `${focusCard.region_codes_display?.join(', ') || focusCard.region || 'National'} · ${focusCard.recommended_product || focusCard.product || 'Produkt offen'}`
-    : 'Sobald Vorschläge vorliegen, landet der wichtigste Fall direkt oben.';
+    : 'Sobald Vorschläge vorliegen, steht der wichtigste Fall hier direkt im Fokus.';
   const focusCopy = focusCard
     ? buildCampaignDecisionCopy(focusCard)
-    : 'Die Seite zeigt danach direkt, welcher Fall geprüft, freigegeben oder weiter vorbereitet werden sollte.';
+    : 'Die Seite zeigt danach direkt, welcher Fall zuerst geprüft, freigegeben oder weiter vorbereitet werden sollte.';
   const focusReadiness = focusCard ? approvalReadiness(focusCard) : null;
   const focusBudgetDirection = focusCard ? budgetDirectionLabel(focusCard) : 'Budgetrichtung offen';
   const focusChannelDirection = focusCard ? channelDirectionLabel(focusCard) : 'Kanalmix wird nach dem ersten Vorschlag sichtbar';
@@ -89,38 +89,38 @@ const CampaignStudio: React.FC<Props> = ({
     {
       label: 'Prüfbar',
       value: String(readyCards.length),
-      detail: 'Fälle ohne offene Stopper (Blocker).',
+      detail: 'Fälle ohne offene Blocker vor dem nächsten operativen Schritt.',
     },
     {
       label: 'Blockiert',
       value: String(blockedCards.length),
-      detail: blockedCards.length > 0 ? 'Mindestens ein Fall braucht vor dem nächsten Schritt noch Klärung.' : 'Aktuell gibt es keine offenen Stopper.',
+      detail: blockedCards.length > 0 ? 'Mindestens ein Fall braucht vor dem nächsten operativen Schritt noch Klärung.' : 'Aktuell gibt es keine offenen Blocker.',
     },
     {
       label: 'Aktiv',
       value: String(activeCount),
-      detail: prepareCount > 0 ? `${prepareCount} weitere Fälle sind noch in Arbeit.` : 'Keine weiteren Entwürfe offen.',
+      detail: prepareCount > 0 ? `${prepareCount} weitere Fälle befinden sich noch in Vorbereitung.` : 'Keine weiteren frühen Fälle offen.',
     },
   ];
   const phaseGroups = [
     {
       id: 'prepare',
       label: 'Vorbereitung',
-      description: 'Noch nicht freigabefähige oder frühe Prüfpfade.',
+      description: 'Frühe oder noch nicht freigabereife Fälle.',
       cards: prepareCards,
       total: prepareCount,
     },
     {
       id: 'approval',
       label: 'Prüfen & Freigeben',
-      description: 'Die nächsten entscheidungsreifen Fälle und Übergaben.',
+      description: 'Fälle, die als Nächstes geprüft, freigegeben oder übergeben werden können.',
       cards: approvalCards,
       total: approvalCount,
     },
     {
       id: 'active',
       label: 'Aktiv',
-      description: 'Laufende oder bereits übergebene Fälle.',
+      description: 'Bereits laufende oder operativ übergebene Fälle.',
       cards: activeCards,
       total: activeCount,
     },
@@ -130,8 +130,8 @@ const CampaignStudio: React.FC<Props> = ({
     <div className="page-stack">
       <OperatorSection
         kicker="Kampagnen"
-        title="Kampagnen"
-        description="Ein Fokusfall. Eine kurze Begründung. Danach nur die nächsten Schritte."
+        title="Maßnahmen sauber priorisieren"
+        description="Hier wird aus regionaler Relevanz ein konkreter prüfbarer Fall."
         tone="accent"
         className="campaign-hero-shell"
       >
@@ -147,10 +147,10 @@ const CampaignStudio: React.FC<Props> = ({
           </div>
         ) : cards.length === 0 ? (
           <div className="campaign-empty-board campaign-empty-board--approval">
-            <span className="campaign-empty-eyebrow">Prüfen</span>
-            <h3 className="campaign-empty-title">Noch kein Fall zur Prüfung sichtbar</h3>
+            <span className="campaign-empty-eyebrow">Maßnahmen</span>
+            <h3 className="campaign-empty-title">Noch kein prüfbarer Fall sichtbar</h3>
             <p className="campaign-empty-copy">
-              Sobald der erste Vorschlag erzeugt ist, erscheint hier direkt der wichtigste Fall für Prüfung, Freigabe oder Übergabe.
+              Sobald der erste Vorschlag vorliegt, erscheint hier der Fall mit der höchsten operativen Relevanz für Prüfung, Freigabe oder Übergabe.
             </p>
             <div className="action-row">
               <button className="media-button" type="button" onClick={onGenerate} disabled={generationLoading}>
@@ -164,7 +164,7 @@ const CampaignStudio: React.FC<Props> = ({
               <OperatorPanel tone="accent" className="campaign-focus-panel campaign-approval-hero">
                 <div className="campaign-approval-hero__header">
                   <div>
-                    <span className="campaign-focus-label">Aktuelle Entscheidung</span>
+                    <span className="campaign-focus-label">Operativer Fokusfall</span>
                     <h3 className="campaign-focus-title">{focusTitle}</h3>
                     <div className="campaign-focus-context">{focusContext}</div>
                   </div>
@@ -186,19 +186,19 @@ const CampaignStudio: React.FC<Props> = ({
 
                 <div className="campaign-metric-grid campaign-approval-hero__facts">
                   <div className="campaign-metric-card">
-                    <span>Bundesland & Produkt</span>
-                    <strong>{focusCard?.region_codes_display?.join(', ') || focusCard?.region || 'Bundesland offen'}</strong>
+                    <span>Region & Produkt</span>
+                    <strong>{focusCard?.region_codes_display?.join(', ') || focusCard?.region || 'Region offen'}</strong>
                     <small>{focusCard?.recommended_product || focusCard?.product || 'Produkt noch offen'}</small>
                   </div>
                   <div className="campaign-metric-card">
-                    <span>Steuerung</span>
+                    <span>Mediale Richtung</span>
                     <strong>{focusChannelDirection}</strong>
                     <small>{focusBudgetDirection}. {budgetSupportCopy(focusCard)}</small>
                   </div>
                   <div className="campaign-metric-card">
-                    <span>Nächster Schritt</span>
+                    <span>Empfohlene Aktion</span>
                     <strong>{focusActionLabel}</strong>
-                    <small>{focusReadiness?.detail || 'Der Fokusfall kann jetzt geöffnet und geprüft werden.'}</small>
+                    <small>{focusReadiness?.detail || 'Der Fokusfall kann jetzt geöffnet und operativ eingeordnet werden.'}</small>
                   </div>
                 </div>
 
@@ -222,9 +222,9 @@ const CampaignStudio: React.FC<Props> = ({
               </OperatorPanel>
 
               <OperatorPanel
-                eyebrow="Warum"
-                title="Warum dieser Fall vorne liegt"
-                description="Diese Übersicht zeigt, ob jetzt eher Prüfung, Klärung oder Übergabe ansteht."
+                eyebrow="Einordnung"
+                title="Warum dieser Fall jetzt vorne liegt"
+                description="Sichtbar wird, ob jetzt eher Prüfung, Freigabe, Klärung oder Übergabe im Vordergrund steht."
                 tone="muted"
                 className="campaign-command-rail campaign-approval-summary"
               >
@@ -250,9 +250,9 @@ const CampaignStudio: React.FC<Props> = ({
             </div>
 
             <OperatorPanel
-              eyebrow="Danach"
-              title="Was sichtbar bleibt"
-              description="Belastbarkeit, Datenlage und Blocker bleiben sichtbar, ohne den Fokusfall zu überlagern."
+              eyebrow="Was die Freigabe trägt"
+              title="Belastbarkeit, Evidenz und Einsatzreife"
+              description="Operative Klarheit entsteht nicht aus einem einzelnen Signal, sondern aus Belastbarkeit, Datenlage und nächstem realen Handlungsschritt."
               tone="muted"
               className="campaign-trust-panel"
             >
@@ -271,9 +271,9 @@ const CampaignStudio: React.FC<Props> = ({
             </OperatorPanel>
 
             <OperatorPanel
-              eyebrow="Details (optional)"
+              eyebrow="Weitere prüfbare Fälle"
               title="Weitere Empfehlungen und Pipeline"
-              description="Hier bleiben die nächsten GELO-Fälle sichtbar, ohne den Fokusfall zu verdrängen."
+              description="Die nächsten relevanten Fälle bleiben sichtbar, ohne die Priorität des Fokusfalls zu verwischen."
               tone="muted"
               className="campaign-approval-queue"
             >
@@ -308,7 +308,7 @@ const CampaignStudio: React.FC<Props> = ({
                   );
                 }) : (
                   <div className="workspace-note-card">
-                    Aktuell gibt es keine weiteren klar sortierten GELO-Fälle neben dem Fokusfall.
+                    Aktuell gibt es neben dem Fokusfall keine weiteren belastbar priorisierten Fälle.
                   </div>
                 )}
               </div>
@@ -319,16 +319,16 @@ const CampaignStudio: React.FC<Props> = ({
 
       {!loading && cards.length > 0 ? (
         <OperatorSection
-          kicker="Arbeitsphasen"
-          title="Details (optional)"
-          description="Unter dem Fokusfall bleibt die vollständige Pipeline sichtbar."
+          kicker="Pipeline"
+          title="Arbeitsphasen"
+          description="Unter dem Fokusfall bleibt die vollständige operative Pipeline sichtbar."
           tone="muted"
         >
           <section className="workspace-phase-grid">
             {phaseGroups.map((group) => (
               <OperatorPanel
                 key={group.id}
-                eyebrow="Arbeitsphase"
+                eyebrow="Phase"
                 title={phaseTitle(group.id)}
                 description={group.description}
                 actions={<span className="step-chip">{group.total} Fälle</span>}
@@ -367,7 +367,7 @@ const CampaignStudio: React.FC<Props> = ({
 
                         <div className="campaign-work-item-metrics">
                           <div className="campaign-inline-stat">
-                            <span>Steuerung</span>
+                            <span>Richtung</span>
                             <strong>{channelDirectionLabel(card)} · {budgetDirectionLabel(card)}</strong>
                           </div>
                           <div className="campaign-inline-stat">
@@ -375,7 +375,7 @@ const CampaignStudio: React.FC<Props> = ({
                             <strong>{evidenceStatusLabel(card.evidence_class) || 'Noch offen'}</strong>
                           </div>
                           <div className="campaign-inline-stat">
-                            <span>Nächster Schritt</span>
+                            <span>Empfohlene Aktion</span>
                             <strong>{recommendationActionLabel(card)}</strong>
                           </div>
                         </div>
@@ -389,7 +389,7 @@ const CampaignStudio: React.FC<Props> = ({
                     <div className="campaign-empty-lane">
                       {group.total > 0
                         ? additionalSuggestionsText(group.total, 'Vorschläge in dieser Phase')
-                        : 'Keine Vorschläge in dieser Phase.'}
+                        : 'In dieser Phase liegen aktuell keine Fälle.'}
                     </div>
                   )}
                 </div>
@@ -401,12 +401,12 @@ const CampaignStudio: React.FC<Props> = ({
 
       <CollapsibleSection
         title="Weitere Vorschläge erstellen"
-        subtitle="Nur wenn nach dem Fokusfall zusätzliche GELO-Vorschläge nötig sind."
+        subtitle="Nur dann relevant, wenn nach dem Fokusfall weitere Maßnahmen vorbereitet werden sollen."
       >
         <div className="workspace-two-column">
           <OperatorPanel
-            title="Erstellung"
-            description="Hier werden neue Vorschläge angelegt. Bestehende Freigabefälle bleiben davon unberührt."
+            title="Neue Vorschläge"
+            description="Hier werden neue Vorschläge angelegt. Bereits priorisierte oder freizugebende Fälle bleiben davon unberührt."
           >
             <div className="campaign-form-grid">
               <label className="campaign-field">
@@ -429,7 +429,7 @@ const CampaignStudio: React.FC<Props> = ({
             </div>
             <div className="campaign-setup-footer">
               <div className="campaign-setup-note">
-                Neue Vorschläge starten als Entwurf und wandern danach in die Prüfung oder Freigabe.
+                Neue Vorschläge starten als Entwurf und wandern danach in Prüfung, Freigabe oder operative Übergabe.
               </div>
               <button className="media-button" type="button" onClick={onGenerate} disabled={generationLoading}>
                 {generationLoading ? 'Vorschläge werden erstellt...' : 'Vorschläge erstellen'}
@@ -438,8 +438,8 @@ const CampaignStudio: React.FC<Props> = ({
           </OperatorPanel>
 
           <OperatorPanel
-            title="Arbeitskontext"
-            description="Diese Werte helfen beim Einordnen, bleiben aber bewusst in der zweiten Ebene."
+            title="Kontext"
+            description="Diese Werte helfen bei der Einordnung, bleiben aber bewusst in der zweiten Ebene."
           >
             <div className="workspace-note-list">
               <div className="workspace-note-card">
@@ -592,12 +592,12 @@ function budgetDirectionLabel(card: RecommendationCard): string {
 }
 
 function budgetSupportCopy(card?: RecommendationCard | null): string {
-  if (!card) return 'Der Wochenrahmen wird im Detail sichtbar, sobald ein Vorschlag vorliegt.';
+  if (!card) return 'Der Wochenrahmen wird sichtbar, sobald ein konkreter Vorschlag vorliegt.';
   const weeklyBudget = card.campaign_preview?.budget?.weekly_budget_eur;
   if (typeof weeklyBudget === 'number' && Number.isFinite(weeklyBudget)) {
     return `Wochenrahmen ${formatCurrency(weeklyBudget)}.`;
   }
-  return 'Die Seite zeigt bewusst zuerst die Richtung, nicht nur einzelne Zahlen.';
+  return 'Zuerst sichtbar wird die Richtung, nicht bloß eine einzelne Zahl.';
 }
 
 function channelDirectionLabel(card: RecommendationCard): string {
@@ -637,7 +637,7 @@ function approvalReadiness(card: RecommendationCard): { label: string; detail: s
   if (lane === 'sync') {
     return {
       label: 'Bereit zur Übergabe',
-      detail: 'Der Vorschlag ist freigegeben und kann für das Zielsystem vorbereitet werden.',
+      detail: 'Der Vorschlag ist freigegeben und kann für die operative Übergabe vorbereitet werden.',
       tone: 'success',
     };
   }
@@ -661,14 +661,14 @@ function approvalReadiness(card: RecommendationCard): { label: string; detail: s
   if (lane === 'live') {
     return {
       label: 'Aktiv',
-      detail: 'Der Fall läuft bereits oder ist operativ in Bewegung.',
+      detail: 'Der Fall läuft bereits oder befindet sich operativ in Umsetzung.',
       tone: 'neutral',
     };
   }
 
   return {
     label: 'In Vorbereitung',
-    detail: 'Der Fall braucht noch Nachschärfung, bevor er in die Freigabe geht.',
+    detail: 'Der Fall braucht noch Nachschärfung, bevor er prüf- oder freigabefähig wird.',
     tone: 'neutral',
   };
 }
@@ -713,19 +713,19 @@ function buildCampaignTrustItems(
       value: focusCard?.evidence_class ? evidenceStatusLabel(focusCard.evidence_class) : (forecastItem?.value || 'Manuell prüfen'),
       detail: focusCard?.evidence_class
         ? (evidenceStatusHelper(focusCard.evidence_class) || confidenceLabel(focusCard.signal_confidence_pct, focusCard.confidence))
-        : (forecastItem?.detail || 'Der Fall stützt sich aktuell auf Vorhersage- und Marktsignale.'),
+        : (forecastItem?.detail || 'Der Fall stützt sich aktuell auf Vorhersage-, Evidenz- und Marktsignale.'),
       tone: focusCard?.evidence_class === 'truth_backed' ? 'success' : 'neutral',
     },
     {
       label: 'Datenlage',
       value: freshnessItem?.value || 'Noch offen',
-      detail: freshnessItem?.detail || 'Die Datenlage wird sichtbar, sobald Evidenz (Belege) und Kundendaten geladen sind.',
+      detail: freshnessItem?.detail || 'Die Datenlage wird sichtbar, sobald Evidenz und Kundendaten vollständig vorliegen.',
       tone: freshnessItem?.tone === 'warning' ? 'warning' : freshnessItem?.tone === 'success' ? 'success' : 'neutral',
     },
     {
       label: 'Einsatzreife & Übergabe',
       value: focusReadiness?.label || (blockersItem?.value || 'Noch offen'),
-      detail: focusReadiness?.detail || blockersItem?.detail || 'Der nächste operative Schritt ist noch nicht klar genug markiert.',
+      detail: focusReadiness?.detail || blockersItem?.detail || 'Der nächste operative Schritt ist noch nicht belastbar genug markiert.',
       tone: focusReadiness?.tone || (blockersItem?.tone === 'warning' ? 'warning' : 'neutral'),
     },
   ];

@@ -164,11 +164,16 @@ describe('CampaignStudio', () => {
     );
 
     expect(screen.getAllByText('Kampagnen').length).toBeGreaterThan(0);
-    expect(screen.getByText('Aktuelle Entscheidung')).toBeInTheDocument();
-    expect(screen.getByText('Warum')).toBeInTheDocument();
-    expect(screen.getByText('Warum dieser Fall vorne liegt')).toBeInTheDocument();
-    expect(screen.getByText('Danach')).toBeInTheDocument();
-    expect(screen.getByText('Was sichtbar bleibt')).toBeInTheDocument();
+    expect(screen.getByText('Maßnahmen sauber priorisieren')).toBeInTheDocument();
+    expect(screen.getByText('Hier wird aus regionaler Relevanz ein konkreter prüfbarer Fall.')).toBeInTheDocument();
+    expect(screen.getByText('Operativer Fokusfall')).toBeInTheDocument();
+    expect(screen.getByText('Einordnung')).toBeInTheDocument();
+    expect(screen.getByText('Warum dieser Fall jetzt vorne liegt')).toBeInTheDocument();
+    expect(screen.getByText('Sichtbar wird, ob jetzt eher Prüfung, Freigabe, Klärung oder Übergabe im Vordergrund steht.')).toBeInTheDocument();
+    expect(screen.getByText('Was die Freigabe trägt')).toBeInTheDocument();
+    expect(screen.getByText('Belastbarkeit, Evidenz und Einsatzreife')).toBeInTheDocument();
+    expect(screen.getAllByText('Weitere prüfbare Fälle').length).toBeGreaterThan(0);
+    expect(screen.getByText('Arbeitsphasen')).toBeInTheDocument();
     expect(screen.getAllByText('Weitere Vorschläge erstellen').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Blocker prüfen').length).toBeGreaterThan(0);
     expect(screen.getByText('Aktive Fälle')).toBeInTheDocument();
@@ -232,7 +237,7 @@ describe('CampaignStudio', () => {
       />,
     );
 
-    expect(screen.getByText('Noch kein Fall zur Prüfung sichtbar')).toBeInTheDocument();
+    expect(screen.getByText('Noch kein prüfbarer Fall sichtbar')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Erste Vorschläge erstellen' })).toBeInTheDocument();
   });
 });

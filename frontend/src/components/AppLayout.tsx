@@ -29,20 +29,20 @@ const SECTION_META = [
   {
     path: '/regionen',
     kicker: 'Regionen',
-    title: 'Bundesländer',
-    description: 'Zeigt, welches Bundesland gerade vorne liegt und warum.',
+    title: 'Regionale Priorisierung',
+    description: 'Zeigt, welche Bundesländer aktuell Relevanz gewinnen und wie sich ihre Priorität einordnen lässt.',
   },
   {
     path: '/kampagnen',
-    kicker: 'Maßnahmen',
-    title: 'Kampagnen',
-    description: 'Zeigt den wichtigsten Vorschlag und die nächsten Schritte.',
+    kicker: 'Kampagnen',
+    title: 'Operative Maßnahmen',
+    description: 'Zeigt, welcher Vorschlag aktuell prüfbar ist, was ihn trägt und welche Fälle danach folgen.',
   },
   {
     path: '/evidenz',
     kicker: 'Evidenz',
-    title: 'Evidenz',
-    description: 'Zeigt, was die Empfehlungen stützt und was noch fehlt.',
+    title: 'Belastbarkeit und Belege',
+    description: 'Zeigt, was Empfehlungen bereits trägt, was noch fehlt und wo Daten oder Freigabe noch nicht ausreichen.',
   },
 ] as const;
 

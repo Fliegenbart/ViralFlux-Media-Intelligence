@@ -135,33 +135,33 @@ const EvidencePanel: React.FC<Props> = ({
     businessValidation?.message,
     truthGate?.guidance,
     truthSnapshot?.analyst_note,
-    'Hier steht kurz, welche Daten schon tragen, welche noch fehlen und was als Nächstes sinnvoll ist.',
+    'Hier steht kompakt, was bereits belastbar ist, was noch fehlt und was als Nächstes geklärt werden sollte.',
   );
   const trustedNow = readyForWeeklyPlanning
     ? 'Vorhersage, frische Quellen und GELO-Kundendaten stützen die Wochenplanung gemeinsam.'
     : reliabilityItem?.tone === 'success'
-      ? 'Vorhersage und Quellen geben eine gute Richtung, auch wenn Kundendaten noch nicht überall mitziehen.'
-      : 'Es gibt erste Signale, aber noch nicht genug Belege für jede Empfehlung.';
+      ? 'Vorhersage und Quellen geben eine gute Richtung, auch wenn Kundendaten noch nicht überall gleich stark tragen.'
+      : 'Es gibt erste Signale, aber noch nicht genug belastbare Belege für jede Empfehlung.';
   const missingNow = !hasTruthData
     ? 'Es fehlen noch GELO-Kundendaten mit Wochen-, Produkt- und Bundesland-Bezug.'
     : !hasOutcomeLearning
-      ? 'Erkenntnisse aus Kundendaten sind noch im Aufbau und stützen die Priorisierung nur begrenzt.'
+      ? 'Erkenntnisse aus Kundendaten sind noch im Aufbau und stützen die Priorisierung bisher nur begrenzt.'
       : sourceAttentionCount > 0
         ? `${sourceAttentionCount} Datenquellen brauchen noch Frische- oder Qualitätsprüfung.`
-        : 'Die größten Lücken liegen aktuell nicht mehr bei Pflichtdaten, sondern in der Tiefe der Kundendaten-Belege.';
+        : 'Die größten Lücken liegen aktuell weniger bei Pflichtdaten als in der Tiefe der Kundendaten-Belege.';
   const blockedNow = hasBlockers
     ? sanitizeEvidenceCopy(blockerPreview[0])
-    : 'Aktuell blockiert kein offener Punkt den nächsten Schritt.';
+    : 'Aktuell blockiert kein offener Punkt den nächsten sinnvollen Schritt.';
   const cautionNow = reliabilityItem?.tone === 'warning'
-    ? 'Die Richtung ist sichtbar, sollte aber noch vorsichtig gelesen werden.'
+    ? 'Die Richtung ist sichtbar, sollte aber weiterhin vorsichtig gelesen werden.'
     : freshnessItem?.tone === 'warning'
-      ? 'Ein Teil der Quellen ist nicht frisch genug für eine klare Aussage.'
+      ? 'Ein Teil der Quellen ist noch nicht frisch genug für eine klare Aussage.'
       : !hasTruthData
-        ? 'Ohne Kundendaten bleibt die Planung eher richtungsgebend als vollständig belegt.'
+        ? 'Ohne Kundendaten bleibt die Planung eher richtungsgebend als vollständig belastbar.'
         : `${COCKPIT_SEMANTICS.stateLevelScope.helper} ${COCKPIT_SEMANTICS.noCityForecast.helper}`;
   const primaryCtaLabel = (!hasTruthData || hasBlockers || sourceAttentionCount > 0)
-    ? 'Fehlende Daten klären'
-    : 'Datenlage prüfen';
+    ? 'Fehlende Evidenz klären'
+    : 'Evidenzlage prüfen';
   const primaryCtaHref = (!hasTruthData || hasBlockers || sourceAttentionCount > 0)
     ? '#evidence-import'
     : '#evidence-support';
@@ -178,15 +178,15 @@ const EvidencePanel: React.FC<Props> = ({
     {
       label: 'Modell-Belastbarkeit',
       value: reliabilityItem?.value || 'Noch offen',
-      detail: reliabilityItem?.detail || 'Sobald die Modellprüfung geladen ist, steht hier die aktuelle Stabilität.',
+      detail: reliabilityItem?.detail || 'Sobald die Modellprüfung geladen ist, wird hier die aktuelle Stabilität sichtbar.',
       tone: reliabilityItem?.tone || 'neutral',
     },
     {
       label: 'Operative Einsatzreife',
-      value: hasBlockers ? `${workspaceStatus?.blocker_count || blockerPreview.length} Stopper (Blocker) offen` : (readyForWeeklyPlanning ? 'Bereit für Wochenplanung' : 'Mit Vorsicht nutzbar'),
+      value: hasBlockers ? `${workspaceStatus?.blocker_count || blockerPreview.length} offene Blocker` : (readyForWeeklyPlanning ? 'Bereit für Wochenplanung' : 'Mit Vorsicht nutzbar'),
       detail: hasBlockers
         ? sanitizeEvidenceCopy(blockerPreview[0])
-        : workspaceStatus?.summary || 'Aktuell blockiert nichts den nächsten sinnvollen Schritt.',
+        : workspaceStatus?.summary || 'Aktuell blockiert nichts den nächsten sinnvollen operativen Schritt.',
       tone: hasBlockers ? 'warning' : (readyForWeeklyPlanning ? 'success' : 'neutral'),
     },
   ];
@@ -207,9 +207,9 @@ const EvidencePanel: React.FC<Props> = ({
   if (loading && !evidence) {
     return (
       <OperatorSection
-        kicker="GELO-Datenlage"
-        title="Evidenz wird geladen"
-        description="Gleich steht hier wieder, was schon trägt und was noch geklärt werden muss."
+        kicker="Evidenz"
+        title="Evidenz wird aufgebaut"
+        description="Die Seite ordnet gerade neu, was bereits belastbar ist und was noch geklärt werden muss."
         tone="muted"
       >
         <div className="evidence-briefing-skeleton" role="status" aria-live="polite" aria-label="GELO-Datenlage wird geladen">
@@ -227,26 +227,26 @@ const EvidencePanel: React.FC<Props> = ({
   if (!loading && !evidence) {
     return (
       <OperatorSection
-        kicker="GELO-Datenlage"
-        title="Evidenz noch nicht bereit"
-        description="Im Moment fehlt die Datengrundlage. Die Seite bleibt trotzdem klar: was fehlt, was gilt und was als Nächstes sinnvoll ist."
+        kicker="Evidenz"
+        title="Evidenz noch nicht verfügbar"
+        description="Im Moment fehlt die Datengrundlage. Sichtbar bleibt trotzdem, was fehlt, was bereits gilt und welcher Schritt als Nächstes sinnvoll ist."
         tone="muted"
       >
         <div className="evidence-empty-stage">
           <div className="workspace-note-card evidence-empty-stage__panel">
-            <span className="campaign-focus-label">Was fehlt</span>
-            <strong>Für diese Pilotansicht liegen gerade keine belastbaren Evidenzdaten vor.</strong>
-            <p>Ohne Import- und Qualitätsdaten kann die Seite die GELO-Lage nicht sauber belegen.</p>
+            <span className="campaign-focus-label">Aktueller Stand</span>
+            <strong>Für diese Pilotansicht liegen aktuell keine belastbaren Evidenzdaten vor.</strong>
+            <p>Ohne Import-, Qualitäts- und Statusdaten lässt sich die Lage noch nicht belastbar einordnen.</p>
           </div>
           <div className="workspace-note-card evidence-empty-stage__panel">
-            <span className="campaign-focus-label">Was trotzdem gilt</span>
-            <strong>Die Arbeitslogik bleibt gleich: erst Datenlage klären, dann entscheiden.</strong>
-            <p>Die Oberfläche vermeidet bewusst Scheinsicherheit und zeigt deshalb keine künstliche Empfehlung.</p>
+            <span className="campaign-focus-label">Was weiterhin gilt</span>
+            <strong>Die Arbeitslogik bleibt gleich: erst Belastbarkeit klären, dann entscheiden.</strong>
+            <p>Die Oberfläche vermeidet bewusst Scheinsicherheit und zeigt deshalb keine künstlich belastbar wirkende Empfehlung.</p>
           </div>
           <div className="workspace-note-card evidence-empty-stage__panel">
             <span className="campaign-focus-label">Nächster Schritt</span>
-            <strong>Verbindung prüfen oder Import erneut anstoßen</strong>
-            <p>Wenn die Daten wieder erreichbar sind, baut sich die Evidenzansicht automatisch an derselben Stelle wieder auf.</p>
+            <strong>Verbindung prüfen oder Import erneut auslösen</strong>
+            <p>Wenn die Daten wieder erreichbar sind, baut sich die Evidenzansicht an derselben Stelle erneut auf.</p>
           </div>
         </div>
       </OperatorSection>
@@ -256,9 +256,9 @@ const EvidencePanel: React.FC<Props> = ({
   return (
     <div className="page-stack evidence-template-page">
       <OperatorSection
-        kicker="GELO-Datenlage"
-        title="Evidenz"
-        description="Was trägt, was fehlt und was diese Woche noch bremst."
+        kicker="Evidenz"
+        title="Belastbarkeit sauber einordnen"
+        description="Sichtbar wird, was Empfehlungen bereits trägt, was noch fehlt und wo Vorsicht nötig bleibt."
         tone="accent"
         className="evidence-briefing-shell"
       >
@@ -266,7 +266,7 @@ const EvidencePanel: React.FC<Props> = ({
           <OperatorPanel tone="accent" className="evidence-briefing-hero">
             <div id="evidence-trust" className="evidence-briefing-hero__header">
               <div>
-                <span className="campaign-focus-label">Aktuelle Evidenzlage</span>
+                <span className="campaign-focus-label">Aktueller Evidenzstatus</span>
                 <h3 className="campaign-focus-title">{heroTitle}</h3>
                 <div className="campaign-focus-context">
                   {latestImportAt ? `Letzter GELO-Import ${formatDateTime(latestImportAt)}` : 'Noch kein GELO-Import'} · {truthLayerLabel(truthStatus)} · {truthFreshnessLabel(truthStatus?.truth_freshness_state)}
@@ -281,15 +281,15 @@ const EvidencePanel: React.FC<Props> = ({
 
             <div className="evidence-briefing-note-grid">
               <div className="workspace-note-card evidence-briefing-note">
-                <strong>Schon belastbar</strong>
+                <strong>Bereits belastbar</strong>
                 <p>{trustedNow}</p>
               </div>
               <div className="workspace-note-card evidence-briefing-note">
-                <strong>Fehlt noch</strong>
+                <strong>Noch offen</strong>
                 <p>{missingNow}</p>
               </div>
               <div className="workspace-note-card evidence-briefing-note">
-                <strong>Noch offen oder vorsichtig lesen</strong>
+                <strong>Vorsichtig lesen oder noch offen</strong>
                 <p>{cautionAndBlocker}</p>
               </div>
             </div>
@@ -307,9 +307,9 @@ const EvidencePanel: React.FC<Props> = ({
           </OperatorPanel>
 
           <OperatorPanel
-            eyebrow="Worauf es sich stützt"
-            title="Was schon trägt"
-            description="Hier bleibt sichtbar, ob die offene GELO-Frage eher Daten, Belastbarkeit oder Einsatzreife betrifft."
+            eyebrow="Einordnung"
+            title="Was die Evidenz bereits trägt"
+            description="Sichtbar bleibt, ob die offene Frage derzeit eher Daten, Belastbarkeit oder operative Einsatzreife betrifft."
             tone="muted"
             className="evidence-trust-panel"
           >
@@ -326,22 +326,22 @@ const EvidencePanel: React.FC<Props> = ({
               ))}
             </div>
             <div className="workspace-note-card">
-              <strong>Bundesland-Ansicht, ohne Stadt-Prognose.</strong> {COCKPIT_SEMANTICS.stateLevelScope.helper} {COCKPIT_SEMANTICS.noCityForecast.helper}
+              <strong>Gilt auf Bundesland-Ebene, nicht für einzelne Städte.</strong> {COCKPIT_SEMANTICS.stateLevelScope.helper} {COCKPIT_SEMANTICS.noCityForecast.helper}
             </div>
           </OperatorPanel>
         </div>
       </OperatorSection>
 
       <OperatorSection
-        kicker="GELO-Onboarding"
-        title="Arbeitskontext"
-        description="Was schon verbunden ist, was noch fehlt und welcher Datenschritt als Nächstes lohnt."
+        kicker="Arbeitskontext"
+        title="Verbindung und Lücken"
+        description="Was bereits verbunden ist, was noch fehlt und welcher Daten- oder Klärungsschritt als Nächstes sinnvoll ist."
         tone="muted"
       >
         <div id="evidence-onboarding" className="workspace-two-column evidence-onboarding-grid">
           <OperatorPanel
-            title="Schon verbunden"
-            description="Das kann die Wochenplanung heute schon stützen."
+            title="Bereits verbunden"
+            description="Das kann die Wochenplanung heute bereits stützen."
           >
             <div className="workspace-note-list">
               {connectedItems.map((item) => (
@@ -353,8 +353,8 @@ const EvidencePanel: React.FC<Props> = ({
           </OperatorPanel>
 
           <OperatorPanel
-            title="Fehlend oder blockiert"
-            description="Hier liegt der nächste sinnvolle Klärungs- oder Import-Schritt."
+            title="Fehlend oder offen"
+            description="Hier liegt der nächste sinnvolle Klärungs-, Qualitäts- oder Import-Schritt."
           >
             <div className="workspace-note-list">
               {missingItems.length > 0 ? missingItems.map((item) => (
@@ -363,7 +363,7 @@ const EvidencePanel: React.FC<Props> = ({
                 </div>
               )) : (
                 <div className="workspace-note-card">
-                  Aktuell gibt es keinen klaren Stopper (Blocker). Die nächsten Schritte liegen eher in der laufenden Qualitätsbeobachtung.
+                  Aktuell gibt es keinen klaren offenen Stopper. Die nächsten Schritte liegen eher in der laufenden Qualitätsbeobachtung.
                 </div>
               )}
             </div>
@@ -372,8 +372,8 @@ const EvidencePanel: React.FC<Props> = ({
       </OperatorSection>
 
       <CollapsibleSection
-        title="Kundendaten (optional)"
-        subtitle="Zeigt, wie stark Kundendaten die Empfehlungen zusätzlich stützen."
+        title="Kundendaten und Wirkung (optional)"
+        subtitle="Zeigt, wie stark Kundendaten die Empfehlungen zusätzlich stützen und absichern."
       >
         <div id="evidence-data">
           <WaveValidationSection
@@ -388,8 +388,8 @@ const EvidencePanel: React.FC<Props> = ({
       </CollapsibleSection>
 
       <CollapsibleSection
-        title="Import prüfen"
-        subtitle="Hier werden fehlende Kundendaten geklärt, eine CSV geprüft und bestehende Importe nachverfolgt."
+        title="Import und Validierung"
+        subtitle="Hier werden fehlende Kundendaten geklärt, CSV-Importe geprüft und bestehende Importe nachvollzogen."
         defaultOpen={importNeedsAttention}
       >
         <div id="evidence-import">
@@ -406,8 +406,8 @@ const EvidencePanel: React.FC<Props> = ({
       </CollapsibleSection>
 
       <CollapsibleSection
-        title="Vorhersage (Details)"
-        subtitle="Diese Details helfen, die Vorhersage einzuordnen und bleiben bewusst eine zweite Ebene hinter der Datenlage."
+        title="Vorhersage und Monitoring (Details)"
+        subtitle="Diese Details helfen, die Vorhersage einzuordnen und bleiben bewusst eine zweite Ebene hinter der Evidenzlage."
       >
         <div id="evidence-support">
           <ForecastMonitoringSection
@@ -431,7 +431,7 @@ const EvidencePanel: React.FC<Props> = ({
 
       <CollapsibleSection
         title="Quellen & Grenzen"
-        subtitle="Hier steht, welche Live-Daten einfließen, welche Quellen Beobachtung brauchen und wo die Grenzen liegen."
+        subtitle="Hier wird sichtbar, welche Live-Daten einfließen, welche Quellen Beobachtung brauchen und wo die fachlichen Grenzen liegen."
       >
         <SourceFreshnessSection
           evidence={evidence}
@@ -445,13 +445,13 @@ const EvidencePanel: React.FC<Props> = ({
       </CollapsibleSection>
 
       <CollapsibleSection
-        title="Technische Tiefe"
-        subtitle="Nur wenn ein technischer Blick in Signalsystem, Prüfmarker oder Import-Historie nötig ist."
+        title="Technische Tiefe (optional)"
+        subtitle="Nur relevant, wenn ein technischer Blick in Signalsystem, Prüfmarker oder Import-Historie nötig ist."
       >
         <div className="workspace-two-column">
           <OperatorPanel
-            title="Signale (Übersicht)"
-            description="Zeigt, welche Datenfelder und Signale gerade genutzt werden."
+            title="Signale und Felder"
+            description="Zeigt, welche Datenfelder und Signale aktuell in die Evidenzlage einfließen."
           >
             <div className="workspace-note-list">
               {(sourceStatusLabels.length ? sourceStatusLabels : ['Noch keine markierten Pflicht- oder Wirkungsfelder vorhanden.']).slice(0, 6).map((item) => (
@@ -461,8 +461,8 @@ const EvidencePanel: React.FC<Props> = ({
           </OperatorPanel>
 
           <OperatorPanel
-            title="Technische Hinweise (optional)"
-            description="Hilft beim Nachvollziehen, ist aber für die Entscheidung nicht nötig."
+            title="Technische Hinweise"
+            description="Hilft beim Nachvollziehen, ist für die eigentliche Entscheidung aber nicht zwingend nötig."
           >
             <div className="workspace-note-list">
               <div className="workspace-note-card">
@@ -499,7 +499,7 @@ function buildCompletenessDetail(
   totalSources: number,
 ): string {
   if (!truthStatus) {
-    return 'Noch keine GELO-Kundendaten verbunden. Live-Quellen allein reichen nur für vorsichtige Planung.';
+    return 'Noch keine GELO-Kundendaten verbunden. Live-Quellen allein reichen nur für eine vorsichtige Planung.';
   }
 
   const connected = `${truthStatus.regions_covered ?? 0} Bundesländer · ${truthStatus.products_covered ?? 0} Produkte`;

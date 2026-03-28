@@ -4,6 +4,7 @@ Diese Datei ist die kurze, praktische Startanleitung.
 
 Wenn du mehr Kontext willst, lies zusätzlich:
 - [README.md](README.md)
+- [CONTRIBUTING.md](CONTRIBUTING.md)
 - [DEPLOY.md](DEPLOY.md)
 
 ## Wofür dieser Quickstart gedacht ist
@@ -22,6 +23,9 @@ Für Live gilt immer:
 - erst committen
 - dann auf `main` pushen
 - dann den Server-Deploy nutzen
+
+Wenn du am Projekt mitarbeiten willst, lies zusätzlich:
+- [CONTRIBUTING.md](CONTRIBUTING.md)
 
 ## Voraussetzungen
 
@@ -181,6 +185,42 @@ cd backend
 python3 -m pytest
 ```
 
+## Tests und Qualitätschecks
+
+Diese Checks sind die wichtigsten Mindestprüfungen vor einem Merge.
+
+### Frontend
+
+```bash
+cd frontend
+npx tsc --noEmit
+CI=true npm test -- --watch=false --runInBand
+npm run build
+```
+
+### Backend
+
+Wenn eine virtuelle Umgebung `.venv-backend311` existiert, ist sie der bevorzugte Weg:
+
+```bash
+cd backend
+source .venv-backend311/bin/activate
+pytest
+```
+
+Ohne diese Umgebung:
+
+```bash
+cd backend
+python3 -m pytest
+```
+
+### Bei gezielten Änderungen
+
+- Frontend-Verhalten: nur die betroffenen Tests ausführen
+- Backend-Änderungen: nur die kleinste passende `pytest`-Auswahl laufen lassen
+- Docker-/Compose-Änderungen: `docker compose config` prüfen
+
 ## Health-Checks
 
 ### Lokal
@@ -242,20 +282,8 @@ lsof -i :15432
 
 ## Wichtige Warnung für Production
 
-`docker-compose.yml` ist nur für lokale Entwicklung gedacht.
-
-Nicht der richtige Weg für Live-Deploys.
-
-Der produktive Standard-Deploy ist:
-
-```bash
-ssh <deploy-user>@<deploy-host> '<deploy-script>'
-```
-
-Aber nur nachdem dein Stand auf GitHub `main` liegt.
-
-Details:
-- [DEPLOY.md](DEPLOY.md)
+`docker-compose.yml` ist nur für lokale Entwicklung gedacht.  
+Der richtige Live-Weg steht in [DEPLOY.md](DEPLOY.md).
 
 ## Wenn du nur 30 Sekunden hast
 

@@ -107,6 +107,16 @@ curl https://<your-domain>/health/ready
 - `docker-compose.prod.yml` bildet den produktionsnahen Betriebsmodus ohne internes Proxy-Nebenmodell ab; die öffentliche Edge-Terminierung bleibt bei `voxdrop-nginx`.
 - Die bestehende Public-Edge proxyt aktuell auf `172.17.0.1:18080`; deshalb bleibt diese Frontend-Bindung im Live-Standard bewusst erhalten.
 
+## Wichtige Betriebsregeln
+
+Es gibt zwei besonders wichtige Unterschiede zwischen lokal und live:
+
+1. `docker-compose.yml` ist nur für lokale Entwicklung gedacht.  
+   Dieses Manifest ist kein zulässiger Live-Deploy-Pfad.
+
+2. Live-Deploys laufen über den clean Server-Checkout und das zentrale Deploy-Script.  
+   Der Server deployt immer den Stand von `origin/main`, nicht lokale Sonderstände.
+
 ## Rollback (schnell)
 
 Wenn ein Commit zurückgerollt werden muss:

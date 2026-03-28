@@ -430,7 +430,7 @@ describe('OperationalDashboard', () => {
 
     expect(container.querySelector('.ops-command-toolbar')).toBeTruthy();
     expect(container.querySelector('.ops-command-hero')).toBeTruthy();
-    expect(container.querySelector('.ops-region-ticker__table')).toBeTruthy();
+    expect(container.querySelector('.region-ticker__table')).toBeTruthy();
   });
 
   it('shows a stable empty state for no-model responses', () => {

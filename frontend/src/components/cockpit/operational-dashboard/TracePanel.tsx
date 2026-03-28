@@ -6,7 +6,7 @@ import { OperationalRegionRow } from './types';
 function renderList(items: string[], emptyText: string) {
   return (
     <ul className="ops-command-trace-list">
-      {items.length > 0 ? items.map((item) => <li key={item}>{item}</li>) : <li>{emptyText}</li>}
+      {items.length > 0 ? items.map((item, index) => <li key={`${index}-${item}`}>{item}</li>) : <li>{emptyText}</li>}
     </ul>
   );
 }

@@ -1,8 +1,8 @@
 import React, { useEffect, useId, useMemo, useState } from 'react';
 
-import CollapsibleSection from '../CollapsibleSection';
 import { evidenceStatusHelper, evidenceStatusLabel } from '../../lib/copy';
 import { explainInPlainGerman } from '../../lib/plainLanguage';
+import ExpandablePanel from '../ui/ExpandablePanel';
 import {
   RegionalAllocationRecommendation,
   RegionalAllocationResponse,
@@ -16,10 +16,10 @@ import {
 import { formatDateTime, formatPercent, VIRUS_OPTIONS } from './cockpitUtils';
 import { OperatorChipRail, OperatorPanel, OperatorSection } from './operator/OperatorPrimitives';
 import RegionMap, { RegionMapRegion } from './RegionMap';
+import RegionTicker, { RegionTickerRegion } from './RegionTicker';
 import ActionPanel from './operational-dashboard/ActionPanel';
 import CampaignDetailPanel from './operational-dashboard/CampaignDetailPanel';
 import EvidencePanel from './operational-dashboard/EvidencePanel';
-import RegionTicker from './operational-dashboard/RegionTicker';
 import TracePanel from './operational-dashboard/TracePanel';
 import { OperationalRegionRow } from './operational-dashboard/types';
 
@@ -307,6 +307,26 @@ const OperationalDashboard: React.FC<Props> = ({
     .slice(-1)[0];
 
   const regionTickerRows = rows.slice(0, 16);
+  const regionTickerRegions = useMemo<RegionTickerRegion[]>(
+    () => regionTickerRows.map((row) => ({
+      region_id: toIsoRegionId(row.code),
+      bundesland: row.code,
+      bundesland_name: row.name,
+      virus_typ: virus,
+      as_of_date: forecast?.as_of_date || forecast?.generated_at || lastUpdated || '',
+      target_week_start: forecast?.as_of_date || forecast?.generated_at || lastUpdated || '',
+      target_window_days: forecast?.target_window_days || [horizonDays],
+      horizon_days: horizonDays,
+      event_probability_calibrated: row.eventProbability ?? 0,
+      current_known_incidence: 0,
+      change_pct: row.trendPercent ?? null,
+      trend: row.trendLabel,
+      decision_rank: row.rank,
+      decision_stage: normalizeStage(row.stage),
+      budget_amount: row.budgetAmount,
+    })),
+    [forecast?.as_of_date, forecast?.generated_at, forecast?.target_window_days, horizonDays, lastUpdated, regionTickerRows, virus],
+  );
   const mapRegions = useMemo<RegionMapRegion[]>(
     () => rows.map((row) => ({
       region_id: toIsoRegionId(row.code),
@@ -320,14 +340,6 @@ const OperationalDashboard: React.FC<Props> = ({
     })),
     [rows],
   );
-
-  const handleRowAction = (row: OperationalRegionRow) => {
-    if (normalizeStage(row.stage) === 'watch') {
-      onOpenRegions(row.code);
-      return;
-    }
-    onOpenCampaigns();
-  };
 
   if (loading && !forecast && !allocation && !campaignRecommendations) {
     return (
@@ -443,37 +455,36 @@ const OperationalDashboard: React.FC<Props> = ({
             className="ops-command-ticker-section"
           >
             <RegionTicker
-              rows={regionTickerRows}
-              selectedRegion={focusedRow.code}
-              onSelectRegion={setSelectedRegion}
-              onAction={handleRowAction}
+              regions={regionTickerRegions}
+              selectedRegion={toIsoRegionId(focusedRow.code)}
+              onRegionSelect={(regionId) => setSelectedRegion(fromIsoRegionId(regionId))}
             />
           </OperatorSection>
 
           <div className="ops-command-expandables">
-            <CollapsibleSection
+            <ExpandablePanel
               title="Evidenz"
-              subtitle="Forecast-Qualität, Unsicherheit und Backtest-Scores."
+              badge={focusedRow.evidenceLabel}
               className="ops-command-collapsible"
             >
               <EvidencePanel row={focusedRow} onOpenEvidence={onOpenEvidence} />
-            </CollapsibleSection>
+            </ExpandablePanel>
 
-            <CollapsibleSection
+            <ExpandablePanel
               title="Kampagnen-Detail"
-              subtitle="Produktcluster, Keywords, Spend-Gate und Rationale."
+              badge={focusedRow.productCluster}
               className="ops-command-collapsible"
             >
               <CampaignDetailPanel row={focusedRow} onOpenCampaigns={onOpenCampaigns} />
-            </CollapsibleSection>
+            </ExpandablePanel>
 
-            <CollapsibleSection
+            <ExpandablePanel
               title="Nachvollziehbarkeit"
-              subtitle="Decision, Allocation und Recommendation Traces nebeneinander."
+              badge={`${focusedRow.decisionTrace.length + focusedRow.allocationTrace.length + focusedRow.recommendationTrace.length} Spuren`}
               className="ops-command-collapsible"
             >
               <TracePanel row={focusedRow} />
-            </CollapsibleSection>
+            </ExpandablePanel>
           </div>
         </>
       ) : null}

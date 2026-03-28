@@ -1,10 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import packageJson from '../../../package.json';
 
 import { useTheme } from '../../App';
-import { UI_COPY } from '../../lib/copy';
 import {
-  OperatorChipRail,
   OperatorPanel,
   OperatorSection,
   OperatorStat,
@@ -12,27 +11,8 @@ import {
 import {
   MiniGermanyMap,
   RevealSection,
-  ScoreGauge,
-  VirusBars,
   createThemePalette,
 } from './LandingWidgets';
-
-const MAILTO = (() => {
-  const subject = 'Beratungsgespraech: PEIX x GELO Fruehwarnung';
-  const body = [
-    'Hallo PEIX Team,',
-    '',
-    'wir möchten ein kurzes Beratungsgespräch zu PEIX x GELO vereinbaren.',
-    '',
-    'Marke/Produkt:',
-    'Regionen:',
-    'Gewünschter Termin:',
-    '',
-    'Viele Grüße',
-  ].join('\n');
-
-  return `mailto:sales@peix.de?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-})();
 
 const NAV_ITEMS = [
   { label: 'Jetzt', path: '/jetzt' },
@@ -41,53 +21,26 @@ const NAV_ITEMS = [
   { label: 'Qualität', path: '/evidenz' },
 ] as const;
 
-const HERO_STATS = ['16 Bundesländer', '4 Virustypen', '3 / 5 / 7 Tage Vorlauf'];
+const DOCS_URL = 'https://github.com/Fliegenbart/ViralFlux-Media-Intelligence/blob/main/docs/OPERATORS_GUIDE.md';
 
-const FEATURE_STATS = [
+const FEATURE_CARDS = [
   {
-    label: 'Vorlauf',
-    value: '3 bis 7 Tage',
-    meta: 'Abwasser, ARE, Versorgung und weitere Signale werden verbunden, damit frühe Veränderungen sichtbar werden.',
+    label: 'Frühwarnung',
+    value: '3 bis 7 Tage voraus',
+    meta: 'Forecast auf Bundesland-Ebene, bevor die Lage in der Rückschau klar sichtbar wird.',
     tone: 'accent' as const,
   },
   {
-    label: 'Ort',
-    value: 'Bundeslandgenau',
-    meta: 'Wir zeigen, in welcher Region die Nachfrage als Nächstes anzieht.',
-    tone: 'default' as const,
-  },
-  {
-    label: 'Transparenz',
-    value: 'Mit Begründung',
-    meta: 'Vorhersage, Quellenstand und Prüfstatus bleiben sichtbar und prüfbar.',
+    label: 'Entscheidungshilfe',
+    value: 'Signal vor Bauchgefühl',
+    meta: 'Regionen werden nach Signal, Dynamik und operativer Relevanz geordnet.',
     tone: 'muted' as const,
   },
-] as const;
-
-const FLOW_STEPS = [
   {
-    label: 'Frühe Hinweise',
-    value: '01',
-    meta: 'Frühe Hinweise aus Abwasser, Wetter, Nachfrage und Versorgung erfassen.',
+    label: 'Freigabe-Gate',
+    value: 'Signal ist nicht gleich Freigabe',
+    meta: 'Epidemiologie und Budget-Freigabe bleiben bewusst getrennt sichtbar.',
     tone: 'default' as const,
-  },
-  {
-    label: 'Vorhersage',
-    value: '02',
-    meta: `3-, 5- oder 7-Tage-Vorhersage pro Bundesland in einen klaren ${UI_COPY.signalScore} verdichten.`,
-    tone: 'default' as const,
-  },
-  {
-    label: 'Region',
-    value: '03',
-    meta: 'Die Region mit der größten Dynamik und dem passenden Produktfokus sichtbar machen.',
-    tone: 'default' as const,
-  },
-  {
-    label: 'Nächster Schritt',
-    value: '04',
-    meta: 'Vorschlag prüfen, freigeben und die Kampagne gezielt vorbereiten oder starten.',
-    tone: 'accent' as const,
   },
 ] as const;
 
@@ -118,55 +71,9 @@ interface RegionItem {
   col: string;
 }
 
-interface VirusItem {
-  label: string;
-  pct: number;
-  color: string;
-}
-
-const DEFAULT_VIRUS_DATA: VirusItem[] = [
-  { label: 'Influenza A', pct: 0, color: '#dc2626' },
-  { label: 'SARS-CoV-2', pct: 0, color: '#2563eb' },
-  { label: 'RSV', pct: 0, color: '#d97706' },
-];
-
 const DEFAULT_REGIONS: RegionItem[] = [
   { bl: '—', name: 'Lade Regionaldaten...', score: 0, trend: 'stabil', col: '#94a3b8' },
 ];
-
-const readVirusScore = (virusScores: Record<string, any>, keys: string[]) => {
-  for (const key of keys) {
-    const entry = virusScores[key];
-    if (entry && typeof entry.epi_score === 'number') {
-      return entry.epi_score;
-    }
-  }
-  return 0;
-};
-
-const buildVirusData = (virusScores: Record<string, any> | null | undefined): VirusItem[] => {
-  if (!virusScores || typeof virusScores !== 'object') {
-    return DEFAULT_VIRUS_DATA;
-  }
-
-  return [
-    {
-      label: 'Influenza A',
-      pct: Math.round(readVirusScore(virusScores, ['influenza', 'Influenza']) * 100),
-      color: '#dc2626',
-    },
-    {
-      label: 'SARS-CoV-2',
-      pct: Math.round(readVirusScore(virusScores, ['covid', 'COVID-19', 'sars-cov-2']) * 100),
-      color: '#2563eb',
-    },
-    {
-      label: 'RSV',
-      pct: Math.round(readVirusScore(virusScores, ['rsv', 'RSV']) * 100),
-      color: '#d97706',
-    },
-  ];
-};
 
 const buildTopRegions = (regions: unknown): RegionItem[] => {
   if (!regions || typeof regions !== 'object') {
@@ -194,15 +101,30 @@ const formatTrend = (trend: string) => {
   return '→ stabil';
 };
 
+const formatDataStatus = (value?: string | null) => {
+  if (!value) return 'Datenstatus: letzte Aktualisierung derzeit nicht verfügbar';
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return 'Datenstatus: letzte Aktualisierung derzeit nicht verfügbar';
+  }
+
+  return `Datenstatus: ${new Intl.DateTimeFormat('de-DE', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(parsed)}`;
+};
+
 const LandingPage: React.FC = () => {
   const { theme, toggle: toggleTheme } = useTheme();
   const palette = createThemePalette(theme);
   const navigate = useNavigate();
-  const [peixScore, setPeixScore] = useState(0);
-  const [virusData, setVirusData] = useState<VirusItem[]>(DEFAULT_VIRUS_DATA);
   const [topRegions, setTopRegions] = useState<RegionItem[]>(DEFAULT_REGIONS);
-  const [recText, setRecText] = useState('');
   const [apiLive, setApiLive] = useState(false);
+  const [generatedAt, setGeneratedAt] = useState<string | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -214,18 +136,11 @@ const LandingPage: React.FC = () => {
         if (!active || !data) return;
 
         setApiLive(true);
-
-        const nationalScore = data.national_score ?? data.score;
-        if (typeof nationalScore === 'number') {
-          setPeixScore(nationalScore / 100);
-        }
-
-        setVirusData(buildVirusData(data.virus_scores));
+        setGeneratedAt(typeof data.generated_at === 'string' ? data.generated_at : null);
 
         const regions = buildTopRegions(data.regions);
         if (regions.length > 0) {
           setTopRegions(regions);
-          setRecText(`Die stärkste Dynamik sehen wir aktuell in ${regions.map((region) => region.name).join(', ')}.`);
         }
       })
       .catch((error) => {
@@ -241,7 +156,8 @@ const LandingPage: React.FC = () => {
   }, []);
 
   const openCockpit = () => navigate('/jetzt');
-  const openCampaigns = () => navigate('/kampagnen');
+  const liveStatusLabel = apiLive ? 'Live-Daten verbunden' : 'Wird geladen';
+  const topRegion = topRegions[0];
 
   return (
     <div className="app-shell landing-page">
@@ -263,15 +179,8 @@ const LandingPage: React.FC = () => {
           <div className="shell-header-spacer" />
 
           <div className="lp-nav-actions">
-            <a
-              href={MAILTO}
-              className="media-button secondary"
-              style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}
-            >
-              Kontakt
-            </a>
             <button type="button" onClick={openCockpit} className="media-button">
-              Zum Cockpit
+              Zum Dashboard
             </button>
             <button
               type="button"
@@ -291,68 +200,62 @@ const LandingPage: React.FC = () => {
             <section className="operator-section-shell operator-section-shell--accent landing-hero-shell">
               <div className="landing-hero-grid">
                 <div className="landing-hero-copy">
-                  <OperatorChipRail className="landing-hero-chip-rail">
-                    <span className="landing-hero-chip landing-hero-chip--status">
-                      <span className="landing-hero-chip__dot" aria-hidden="true" />
-                      PEIX x GELO Frühwarnung
-                    </span>
-                    <span className="landing-hero-chip">Vom Signal bis zur Wochenlage</span>
-                  </OperatorChipRail>
+                  <span className="landing-hero-kicker">PEIX x GELO</span>
 
                   <h1 className="landing-hero-title">
-                    Regionale Krankheitswellen früher erkennen und Budgets gezielter einsetzen.
+                    Regionale Virus-Frühwarnung für Media-Entscheidungen
                   </h1>
 
                   <p className="operator-section-shell__copy landing-hero-copytext">
-                    Unsere Frühwarnung zeigt 3 bis 7 Tage im Voraus, wo Atemwegserkrankungen ansteigen.
-                    So kannst du Regionen früher priorisieren, Streuverluste senken und dein Mediabudget gezielter einsetzen.
+                    ViralFlux zeigt, wo sich Viruswellen aufbauen und was das für Kampagnen,
+                    Priorisierung und Freigabe bedeutet.
                   </p>
 
                   <div className="landing-action-row">
                     <button type="button" onClick={openCockpit} className="media-button">
-                      Wochenlage prüfen
-                    </button>
-                    <button type="button" onClick={openCampaigns} className="media-button secondary">
-                      Kampagnen ansehen
+                      Zum Dashboard &#8594;
                     </button>
                   </div>
-
-                  <OperatorChipRail className="landing-hero-metrics">
-                    {HERO_STATS.map((stat) => (
-                      <span key={stat} className="landing-hero-metric">
-                        {stat}
-                      </span>
-                    ))}
-                  </OperatorChipRail>
                 </div>
 
                 <OperatorPanel
-                  eyebrow="Live-Übersicht"
-                  title={UI_COPY.signalScore}
-                  description="Deutschlandweite Einordnung der aktuellen Lage"
+                  eyebrow="Heute sichtbar"
+                  title={topRegion ? `${topRegion.name} zuerst prüfen` : 'Lage im Überblick'}
+                  description="Die Karte zeigt, wo sich Dynamik zuerst aufbaut. Die genaue Einordnung übernimmt danach das Dashboard."
                   tone="accent"
                   className="landing-live-panel"
                 >
                   <div className="landing-live-topline">
                     <span className={`landing-live-badge ${apiLive ? 'landing-live-badge--live' : 'landing-live-badge--idle'}`}>
-                      {apiLive ? 'LIVE' : '...'}
+                      {apiLive ? 'LIVE' : 'OFFEN'}
                     </span>
                     <span className="landing-live-caption">
-                      {apiLive ? 'Aktuelle Werte' : 'Wird geladen'}
+                      {liveStatusLabel}
                     </span>
                   </div>
 
-                  <ScoreGauge score={peixScore} label={UI_COPY.signalScore} palette={palette} />
+                  <div className="landing-preview-grid landing-preview-grid--hero">
+                    <MiniGermanyMap palette={palette} />
 
-                  <div className="landing-live-divider" />
-
-                  <div className="landing-live-rail">
-                    <span className="landing-live-subtitle">Aktuelle Entwicklung</span>
-                    <VirusBars data={virusData} palette={palette} />
-                  </div>
-
-                  <div className="landing-recommendation">
-                    <strong>Empfehlung:</strong> {recText || 'Daten werden geladen...'}
+                    <div className="landing-region-list">
+                      {(topRegions.length ? topRegions : DEFAULT_REGIONS).map((region) => (
+                        <div key={region.bl} className="landing-region-row">
+                          <span
+                            className="landing-region-row__code"
+                            style={{ background: `${region.col}15`, color: region.col }}
+                          >
+                            {region.bl}
+                          </span>
+                          <div className="landing-region-row__body">
+                            <strong className="landing-region-row__name">{region.name}</strong>
+                            <span className="landing-region-row__trend">{formatTrend(region.trend)}</span>
+                          </div>
+                          <span className="landing-region-row__score" style={{ color: region.col }}>
+                            {region.score.toFixed(2)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </OperatorPanel>
               </div>
@@ -361,12 +264,12 @@ const LandingPage: React.FC = () => {
 
           <RevealSection delay={0.04}>
             <OperatorSection
-              kicker="01"
-              title="Was macht ViralFlux anders"
-              description="ViralFlux hilft dir, Nachfrage früher zu erkennen und daraus direkt einen sinnvollen nächsten Schritt abzuleiten."
+              kicker="Im Überblick"
+              title="Was hier sichtbar wird"
+              description="Die Startseite zeigt nur die Grundlogik. Alles Weitere liegt im Dashboard und in der Evidenz."
             >
               <div className="operator-stat-grid">
-                {FEATURE_STATS.map((feature) => (
+                {FEATURE_CARDS.map((feature) => (
                   <OperatorStat
                     key={feature.label}
                     label={feature.label}
@@ -378,109 +281,17 @@ const LandingPage: React.FC = () => {
               </div>
             </OperatorSection>
           </RevealSection>
-
-          <RevealSection delay={0.08}>
-            <OperatorSection
-              kicker="02"
-              title="Von frühen Hinweisen zur klaren Wochenlage"
-              description="Aus vielen Datenquellen wird eine einfache Reihenfolge: Lage verstehen, Region priorisieren, nächsten Schritt festlegen."
-              tone="muted"
-            >
-              <div className="landing-flow-grid">
-                {FLOW_STEPS.map((step) => (
-                  <OperatorStat
-                    key={step.value}
-                    label={step.label}
-                    value={step.value}
-                    meta={step.meta}
-                    tone={step.tone}
-                  />
-                ))}
-              </div>
-            </OperatorSection>
-          </RevealSection>
-
-          <RevealSection delay={0.12}>
-            <OperatorSection
-              kicker="03"
-              title="Wo die Welle zuerst beginnt"
-              description="Die Karte zeigt, wo die größte Dynamik gerade entsteht. Rechts daneben siehst du die drei wichtigsten Regionen im Überblick."
-            >
-              <div className="landing-preview-grid">
-                <MiniGermanyMap palette={palette} />
-
-                <OperatorPanel
-                  eyebrow="Cockpit-Vorschau"
-                  title="So sieht die Wochenlage aus"
-                  description="Die Deutschlandkarte zeigt, wo du jetzt zuerst hinschauen solltest."
-                  tone="muted"
-                >
-                  <div className="landing-region-list">
-                    {topRegions.map((region) => (
-                      <div key={region.bl} className="landing-region-row">
-                        <span
-                          className="landing-region-row__code"
-                          style={{ background: `${region.col}15`, color: region.col }}
-                        >
-                          {region.bl}
-                        </span>
-                        <div className="landing-region-row__body">
-                          <strong className="landing-region-row__name">{region.name}</strong>
-                          <span className="landing-region-row__trend">{formatTrend(region.trend)}</span>
-                        </div>
-                        <span className="landing-region-row__score" style={{ color: region.col }}>
-                          {region.score.toFixed(2)}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </OperatorPanel>
-              </div>
-            </OperatorSection>
-          </RevealSection>
-
-          <RevealSection delay={0.16}>
-            <OperatorSection
-              kicker="Nächster Schritt"
-              title="3 bis 7 Tage früher erkennen, wo Nachfrage anzieht."
-              description="Starte direkt in der Wochenlage und sieh sofort, welche Region wichtig wird und welcher nächste Schritt sinnvoll ist."
-              tone="accent"
-              className="landing-cta-section"
-            >
-              <div className="landing-cta-body">
-                <div className="landing-action-row landing-action-row--center">
-                  <button type="button" onClick={openCockpit} className="media-button">
-                    Wochenlage prüfen
-                  </button>
-                  <a
-                    href={MAILTO}
-                    className="media-button secondary"
-                    style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}
-                  >
-                    Beratung anfragen
-                  </a>
-                </div>
-              </div>
-            </OperatorSection>
-          </RevealSection>
         </div>
       </main>
 
       <footer className="shell-footer">
         <div className="shell-footer-inner landing-footer-inner">
-          <span className="shell-footer-note">PEIX x GELO Frühwarnung für regionale Nachfrage</span>
-
-          <div className="landing-footer-actions">
-            <a
-              href={MAILTO}
-              className="media-button secondary"
-              style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}
-            >
-              Beratung anfragen
+          <span className="shell-footer-note">{formatDataStatus(generatedAt)}</span>
+          <div className="landing-footer-meta">
+            <span className="landing-footer-version">Version {packageJson.version}</span>
+            <a href={DOCS_URL} target="_blank" rel="noreferrer" className="landing-footer-link">
+              Docs
             </a>
-            <button type="button" onClick={openCockpit} className="media-button">
-              Wochenlage öffnen
-            </button>
           </div>
         </div>
       </footer>

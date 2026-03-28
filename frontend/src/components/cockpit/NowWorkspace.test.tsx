@@ -420,14 +420,15 @@ describe('NowWorkspace', () => {
       />,
     );
 
-    expect(screen.getAllByText('PEIX x GELO Wochenüberblick').length).toBeGreaterThan(0);
-    expect(screen.getByText('Wochenplan')).toBeInTheDocument();
-    expect(screen.getByText('Aktuelle Entscheidung')).toBeInTheDocument();
+    expect(screen.getAllByText('Wochenplan').length).toBeGreaterThan(0);
+    expect(screen.getByText('Entscheidungen sauberer treffen')).toBeInTheDocument();
+    expect(screen.getByText('Operative Hauptentscheidung')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Berlin jetzt priorisieren.' })).toBeInTheDocument();
-    expect(screen.getByText('Woran wir sie festmachen')).toBeInTheDocument();
-    expect(screen.getByText('Warum diese Richtung trägt')).toBeInTheDocument();
-    expect(screen.getByText('Danach')).toBeInTheDocument();
-    expect(screen.getByText('Zwei Folgepfade')).toBeInTheDocument();
+    expect(screen.getByText('Einordnung')).toBeInTheDocument();
+    expect(screen.getByText('Ein Signal ist noch keine Freigabe')).toBeInTheDocument();
+    expect(screen.getByText('ViralFlux trennt bewusst zwischen Forecast, Priorisierung, Unsicherheit, Evidenz und operativer Entscheidung.')).toBeInTheDocument();
+    expect(screen.getByText('Weitere relevante Regionen')).toBeInTheDocument();
+    expect(screen.getByText('Was als Nächstes Relevanz gewinnen kann')).toBeInTheDocument();
     expect(screen.getByText('Bayern')).toBeInTheDocument();
     expect(screen.getByText('Sachsen')).toBeInTheDocument();
     expect(screen.queryByText('Nordrhein-Westfalen')).not.toBeInTheDocument();
@@ -435,7 +436,7 @@ describe('NowWorkspace', () => {
     expect(screen.getByText('Daten & Evidenz')).toBeInTheDocument();
     expect(screen.getByText('Handlung & Blocker')).toBeInTheDocument();
     expect(screen.getByText('Bundesland öffnen')).toBeInTheDocument();
-    expect(screen.getByText('Details (optional)')).toBeInTheDocument();
+    expect(screen.getByText('Vertiefung (optional)')).toBeInTheDocument();
   });
 
   it('opens the primary recommendation from the hero action', () => {

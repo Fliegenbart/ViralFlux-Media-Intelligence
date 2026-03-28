@@ -110,24 +110,27 @@ describe('EvidencePanel', () => {
     );
 
     expect(screen.getAllByText('Evidenz').length).toBeGreaterThan(0);
-    expect(screen.getByText('Aktuelle Evidenzlage')).toBeInTheDocument();
-    expect(screen.getByText('Worauf es sich stützt')).toBeInTheDocument();
-    expect(screen.getByText('Was schon trägt')).toBeInTheDocument();
+    expect(screen.getByText('Belastbarkeit sauber einordnen')).toBeInTheDocument();
+    expect(screen.getByText('Aktueller Evidenzstatus')).toBeInTheDocument();
+    expect(screen.getByText('Einordnung')).toBeInTheDocument();
+    expect(screen.getByText('Was die Evidenz bereits trägt')).toBeInTheDocument();
+    expect(screen.getByText('Sichtbar bleibt, ob die offene Frage derzeit eher Daten, Belastbarkeit oder operative Einsatzreife betrifft.')).toBeInTheDocument();
     expect(screen.getByText('Arbeitskontext')).toBeInTheDocument();
-    expect(screen.getByText('Schon verbunden')).toBeInTheDocument();
-    expect(screen.getByText('Fehlend oder blockiert')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Fehlende Daten klären' })).toHaveAttribute('href', '#evidence-import');
+    expect(screen.getByText('Verbindung und Lücken')).toBeInTheDocument();
+    expect(screen.getByText('Bereits verbunden')).toBeInTheDocument();
+    expect(screen.getByText('Fehlend oder offen')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Fehlende Evidenz klären' })).toHaveAttribute('href', '#evidence-import');
     expect(screen.getByRole('link', { name: 'CSV-Vorlage laden' })).toHaveAttribute('href', 'https://example.com/template.csv');
     expect(screen.getByText('Datenvollständigkeit')).toBeInTheDocument();
     expect(screen.getByText('Modell-Belastbarkeit')).toBeInTheDocument();
     expect(screen.getByText('Operative Einsatzreife')).toBeInTheDocument();
     expect(screen.getAllByText('Ein Importfeld ist noch nicht sauber zugeordnet.').length).toBeGreaterThan(0);
-    expect(screen.getByText('Kundendaten (optional)')).toBeInTheDocument();
-    expect(screen.getByText('Import prüfen')).toBeInTheDocument();
-    expect(screen.getByText('Vorhersage (Details)')).toBeInTheDocument();
+    expect(screen.getByText('Kundendaten und Wirkung (optional)')).toBeInTheDocument();
+    expect(screen.getByText('Import und Validierung')).toBeInTheDocument();
+    expect(screen.getByText('Vorhersage und Monitoring (Details)')).toBeInTheDocument();
     expect(screen.getByText('Quellen & Grenzen')).toBeInTheDocument();
-    expect(screen.getByText('Technische Tiefe')).toBeInTheDocument();
-    expect(screen.getByText(/Bundesland-Ansicht, ohne Stadt-Prognose/i)).toBeInTheDocument();
+    expect(screen.getByText('Technische Tiefe (optional)')).toBeInTheDocument();
+    expect(screen.getByText(/Gilt auf Bundesland-Ebene, nicht für einzelne Städte/i)).toBeInTheDocument();
     expect(screen.getAllByText(/nicht für einzelne Städte/i).length).toBeGreaterThan(0);
   });
 
@@ -151,6 +154,6 @@ describe('EvidencePanel', () => {
     );
 
     expect(screen.getByRole('status', { name: 'GELO-Datenlage wird geladen' })).toBeInTheDocument();
-    expect(screen.getByText('Evidenz wird geladen')).toBeInTheDocument();
+    expect(screen.getByText('Evidenz wird aufgebaut')).toBeInTheDocument();
   });
 });

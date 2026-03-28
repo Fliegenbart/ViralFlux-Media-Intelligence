@@ -229,10 +229,10 @@ const RegionWorkbench: React.FC<Props> = ({
   });
 
   const regionListTitle = listFilter === 'prioritized'
-    ? 'Prüfbare Bundesländer'
+    ? 'Belastbar prüfbare Regionen'
     : listFilter === 'low_evidence'
-      ? 'Bundesländer mit zu wenig Belegen (Evidenz)'
-      : 'Bundesländer im Vergleich';
+      ? 'Regionen mit zu dünner Evidenz'
+      : 'Regionen im Vergleich';
 
   const selectedEvidence = evidenceLabel(region || primaryRegion);
   const selectedDirection = deriveRegionalDirection(region || primaryRegion, suggestion);
@@ -287,16 +287,13 @@ const RegionWorkbench: React.FC<Props> = ({
   const forecastStatusItem = workspaceStatus?.items.find((item) => item.key === 'forecast_status');
   const dataFreshnessItem = workspaceStatus?.items.find((item) => item.key === 'data_freshness');
   const blockerItem = workspaceStatus?.items.find((item) => item.key === 'open_blockers');
-  const trustSummary = actionDisabledReason
-    || workspaceStatus?.summary
-    || 'Die regionale Empfehlung stützt sich auf Vorhersage, Datenlage und Einsatzreife.';
   const evidenceTooThin = selectedEvidence.toLowerCase().includes('zu wenig');
   const trustItems: RegionalTrustItem[] = [
     {
       key: 'reliability',
       label: 'Belastbarkeit',
       value: forecastStatusItem?.value || (selectedDirection === 'increase' ? 'Prüfbar' : 'Beobachten'),
-      detail: forecastStatusItem?.detail || 'Die Vorhersage bleibt eine Unterstützung für die Regionsentscheidung.',
+      detail: forecastStatusItem?.detail || 'Die Vorhersage unterstützt die regionale Einordnung, ersetzt sie aber nicht.',
       tone: forecastStatusItem?.tone || regionalDirectionTone(selectedDirection),
     },
     {
@@ -304,8 +301,8 @@ const RegionWorkbench: React.FC<Props> = ({
       label: 'Datenlage',
       value: selectedEvidence,
       detail: evidenceTooThin
-        ? 'Für dieses Bundesland fehlen mehrere stützende Quellen oder Signaltreiber.'
-        : dataFreshnessItem?.detail || 'Die Datenlage ist für dieses Bundesland ausreichend sichtbar.',
+        ? 'Für diese Region fehlen mehrere stützende Quellen oder belastbare Signaltreiber.'
+        : dataFreshnessItem?.detail || 'Die Evidenzlage ist für diese Region ausreichend sichtbar.',
       tone: evidenceTooThin
         ? 'warning'
         : dataFreshnessItem?.tone || 'neutral',
@@ -321,10 +318,10 @@ const RegionWorkbench: React.FC<Props> = ({
             ? 'Noch nicht belastbar'
             : 'Bereit zur Prüfung',
       detail: workspaceStatus?.blocker_count
-        ? workspaceStatus.blockers[0] || blockerItem?.detail || 'Vor dem nächsten Schritt gibt es offene Punkte.'
+        ? workspaceStatus.blockers[0] || blockerItem?.detail || 'Vor dem nächsten Schritt bleiben noch offene Punkte.'
         : hasRecommendation
-          ? 'Für dieses Bundesland liegt bereits ein regionaler Vorschlag vor.'
-          : actionDisabledReason || 'Der nächste regionale Schritt kann direkt aus dieser Seite vorbereitet werden.',
+          ? 'Für diese Region liegt bereits ein prüfbarer Vorschlag vor.'
+          : actionDisabledReason || 'Der nächste regionale Schritt kann aus dieser Einordnung heraus vorbereitet werden.',
       tone: workspaceStatus?.blocker_count || actionDisabledReason
         ? 'warning'
         : hasRecommendation
@@ -341,8 +338,8 @@ const RegionWorkbench: React.FC<Props> = ({
     return (
       <OperatorSection
         kicker="Regionen"
-        title="Regionen werden aufgebaut"
-        description="Die Hauptregion, die Begründung und die Folgepfade werden gerade neu zusammengestellt."
+        title="Regionale Priorisierung wird aufgebaut"
+        description="Die regionale Einordnung, die Priorisierung und die weiteren prüfbaren Regionen werden gerade zusammengestellt."
         tone="muted"
       >
         <div className="regions-loading-skeleton" aria-label="Regionale Arbeitsfläche wird geladen">
@@ -364,20 +361,20 @@ const RegionWorkbench: React.FC<Props> = ({
     return (
       <OperatorSection
         kicker="Regionen"
-        title="Noch keine regionale Sicht verfügbar"
-        description="Für diese Auswahl liegt aktuell kein Bundesland-Scope vor."
+        title="Noch keine regionale Einordnung verfügbar"
+        description="Für diese Auswahl liegt aktuell noch keine belastbare regionale Sicht auf Bundesland-Ebene vor."
         tone="muted"
       >
         <div className="regions-empty-stage">
           <div className="workspace-note-card regions-empty-stage__panel">
-            <span className="now-weekly-plan-card__label">Was fehlt</span>
-            <strong>Es gibt noch keinen belastbaren Bundesland-Scope für diese Auswahl.</strong>
-            <p>Die Seite bleibt ruhig und zeigt erst dann eine Priorisierung, wenn wirklich eine regionale Richtung trägt.</p>
+            <span className="now-weekly-plan-card__label">Aktueller Stand</span>
+            <strong>Für diese Auswahl liegt noch keine belastbare regionale Einordnung vor.</strong>
+            <p>Priorisierung erscheint erst dann, wenn die regionale Richtung fachlich belastbar genug ist.</p>
           </div>
           <div className="workspace-note-card regions-empty-stage__panel">
             <span className="now-weekly-plan-card__label">Nächster Schritt</span>
-            <strong>Zur Wochenentscheidung zurück oder Evidenz prüfen</strong>
-            <p>Solange keine regionale Lage steht, sollte zuerst die Datenlage oder der Wochenfokus geklärt werden.</p>
+            <strong>Wochenlage oder Evidenz zuerst schärfen</strong>
+            <p>Solange keine regionale Sicht trägt, sollte zuerst die Evidenzlage oder die operative Wochenpriorität geklärt werden.</p>
           </div>
         </div>
       </OperatorSection>
@@ -388,20 +385,20 @@ const RegionWorkbench: React.FC<Props> = ({
     return (
       <OperatorSection
         kicker="Regionen"
-        title="Noch keine belastbare Priorisierung"
-        description="Es gibt erste Bundesland-Daten, aber noch keine starke Reihenfolge für den nächsten Schritt."
+        title="Noch keine klare regionale Reihenfolge"
+        description="Es liegen erste regionale Signale vor, aber noch keine belastbare Reihenfolge für operative Priorisierung."
         tone="muted"
       >
         <div className="regions-empty-stage">
           <div className="workspace-note-card regions-empty-stage__panel">
             <span className="now-weekly-plan-card__label">Was sichtbar bleibt</span>
-            <strong>Die Regionen sind da, aber noch ohne klare Rangordnung.</strong>
-            <p>Das ist kein Fehlerzustand, sondern eine bewusst zurückhaltende Darstellung.</p>
+            <strong>Die Regionen sind sichtbar, aber noch ohne belastbare Priorisierung.</strong>
+            <p>Das ist kein Fehlerzustand, sondern eine bewusst zurückhaltende Darstellung bei noch zu dünner Vergleichslage.</p>
           </div>
           <div className="workspace-note-card regions-empty-stage__panel">
             <span className="now-weekly-plan-card__label">Nächster Schritt</span>
-            <strong>Evidenzlage oder Wochenfokus schärfen</strong>
-            <p>Erst wenn Datenlage und Freigabe stärker tragen, lohnt sich eine harte regionale Priorisierung.</p>
+            <strong>Evidenzlage oder Wochenpriorität schärfen</strong>
+            <p>Erst wenn Evidenz und Freigabe tragfähiger werden, lohnt sich eine klare regionale Reihenfolge.</p>
           </div>
         </div>
       </OperatorSection>
@@ -412,17 +409,17 @@ const RegionWorkbench: React.FC<Props> = ({
     <div className="page-stack regions-template-page">
       <OperatorSection
         kicker="Regionen"
-        title="Regionen"
-        description="Eine Hauptregion. Zwei Folgepfade. Eine klare nächste Bewegung."
+        title="Bundesländer sauber einordnen"
+        description="Regionale Dynamiken werden vergleichbar, ohne Präzision vorzutäuschen, die fachlich nicht belastbar ist."
         tone="accent"
         className="operator-toolbar-shell"
       >
         <div className="now-toolbar">
           <div className="now-toolbar__intro">
-            <span className="now-toolbar__eyebrow">Auswahl</span>
+            <span className="now-toolbar__eyebrow">Vergleich</span>
             <div className="now-toolbar__heading">
               <strong>Diese Woche</strong>
-              <span>Eine Region vorne, zwei sichtbar dahinter.</span>
+              <span>Regionale Relevanz lesen, Priorisierung einordnen.</span>
             </div>
           </div>
           <OperatorChipRail className="review-chip-row">
@@ -441,7 +438,7 @@ const RegionWorkbench: React.FC<Props> = ({
           <div className="workspace-note-card regions-toolbar-note">
             <strong>Datenstand {formatDateShort(activeMap.date)}</strong>
             <span>
-              {workspaceStatus?.data_freshness === 'Beobachten' ? 'Ein Teil der Daten ist nicht ganz frisch.' : 'Bundesland-Ansicht, ohne Stadt-Prognose.'}
+              {workspaceStatus?.data_freshness === 'Beobachten' ? 'Ein Teil der Daten ist aktuell nur mit Vorsicht zu lesen.' : 'Gilt auf Bundesland-Ebene, nicht für einzelne Städte.'}
             </span>
           </div>
         </div>
@@ -453,7 +450,7 @@ const RegionWorkbench: React.FC<Props> = ({
           >
             <div className="regions-action-hero__header">
               <div>
-                <span className="now-weekly-plan-card__label">Aktuelle Entscheidung</span>
+                <span className="now-weekly-plan-card__label">Operative Hauptregion</span>
                 <h3 className="regions-action-hero__title">
                   {regionalActionHeadline(selectedDirection, primaryRegion?.name)}
                 </h3>
@@ -469,19 +466,19 @@ const RegionWorkbench: React.FC<Props> = ({
 
             <div className="regions-action-hero__facts">
               <article className="workspace-note-card regions-action-fact">
-                <span className="now-weekly-plan-card__label">Bundesland</span>
+                <span className="now-weekly-plan-card__label">Fokusregion</span>
                 <strong>{primaryRegion?.name || 'Noch offen'}</strong>
-                <p>Ohne Stadt-Prognose.</p>
+                <p>Gilt auf Bundesland-Ebene.</p>
               </article>
               <article className="workspace-note-card regions-action-fact">
-                <span className="now-weekly-plan-card__label">Richtungsbild</span>
+                <span className="now-weekly-plan-card__label">Einordnung</span>
                 <strong>{budgetDirection}</strong>
                 <p>{region?.forecast_direction || 'Seitwärts'} · {selectedEvidence}</p>
               </article>
               <article className="workspace-note-card regions-action-fact">
-                <span className="now-weekly-plan-card__label">Nächster Schritt</span>
+                <span className="now-weekly-plan-card__label">Empfohlene Aktion</span>
                 <strong>{hasRecommendation ? 'Bestehenden Vorschlag prüfen' : 'Regionale Maßnahme vorbereiten'}</strong>
-                <p>{hasRecommendation ? 'Der Vorschlag kann direkt geöffnet werden.' : 'Nur wenn die Datenlage dafür reicht.'}</p>
+                <p>{hasRecommendation ? 'Ein bestehender Vorschlag kann direkt geprüft werden.' : 'Nur sinnvoll, wenn die Evidenz dafür ausreicht.'}</p>
               </article>
             </div>
 
@@ -519,9 +516,9 @@ const RegionWorkbench: React.FC<Props> = ({
           </OperatorPanel>
 
           <OperatorPanel
-            eyebrow="Warum"
-            title="Warum die Region vorne liegt"
-            description={trustSummary}
+            eyebrow="Einordnung"
+            title="Warum diese Region Relevanz gewinnt"
+            description="Die regionale Priorisierung folgt nicht nur dem Signal, sondern der Kombination aus Belastbarkeit, Evidenz und Einsatzreife."
             tone="muted"
             className="regions-trust-shell"
           >
@@ -540,9 +537,9 @@ const RegionWorkbench: React.FC<Props> = ({
           </OperatorPanel>
 
           <OperatorPanel
-            eyebrow="Danach"
-            title="Zwei nächste Regionen"
-            description="Hier bleiben die nächsten Bundesländer sichtbar, ohne die Hauptentscheidung zu verwischen."
+            eyebrow="Weitere relevante Regionen"
+            title="Was als Nächstes Relevanz gewinnen kann"
+            description="Nicht jede Auffälligkeit verdient sofortige Priorität. Sichtbar bleiben nur die nächsten belastbaren Regionen."
             tone="muted"
             className="regions-secondary-shell"
           >
@@ -567,7 +564,7 @@ const RegionWorkbench: React.FC<Props> = ({
                 </button>
               )) : (
                 <div className="workspace-note-card">
-                  Aktuell gibt es keine weiteren belastbaren Bundesländer mit klarer Richtung.
+                  Aktuell gibt es keine weiteren belastbaren Regionen mit vergleichbarer Relevanz.
                 </div>
               )}
             </div>
@@ -577,15 +574,15 @@ const RegionWorkbench: React.FC<Props> = ({
 
       <div ref={comparisonRef}>
         <OperatorSection
-          kicker="Arbeitsmodus"
-          title="Details (optional)"
-          description="Die Liste bleibt das Arbeitswerkzeug für Richtung, Begründung und nächsten Schritt."
+          kicker="Vergleich"
+          title="Regionenvergleich"
+          description="Die Liste bleibt das zentrale Arbeitswerkzeug für Vergleich, Richtung und Priorisierung."
           tone="muted"
         >
           <div className="regions-workbench-grid">
             <OperatorPanel
               title={regionListTitle}
-              description="Nutze die Liste für die eigentliche Priorisierung, nicht die Karte allein."
+              description="Die Priorisierung entsteht aus der Liste. Die Karte dient der räumlichen Orientierung."
               className="regions-list-panel"
             >
               <div className="regions-list-panel__header">
@@ -656,15 +653,15 @@ const RegionWorkbench: React.FC<Props> = ({
                   );
                 }) : (
                   <div className="workspace-note-card">
-                    Für diesen Filter gibt es aktuell keine passenden Bundesländer.
+                    Für diesen Filter gibt es aktuell keine belastbar passenden Regionen.
                   </div>
                 )}
               </div>
             </OperatorPanel>
 
           <OperatorPanel
-            title="Karte zur Orientierung (Bundesland)"
-            description="Die Karte hilft bei Auswahl und räumlicher Einordnung. Die eigentliche Handlung ergibt sich aus Karte plus Liste, nicht aus der Fläche allein."
+            title="Karte zur Orientierung"
+            description="Die Karte hilft bei Auswahl und räumlicher Einordnung. Operative Priorisierung entsteht erst aus Karte und Liste zusammen."
             tone="muted"
             className="regions-map-panel regions-map-shell"
           >
@@ -676,7 +673,7 @@ const RegionWorkbench: React.FC<Props> = ({
 
               <div className="workspace-note-list">
                 <div className="workspace-note-card">
-                  <strong>Orientierung statt Hauptentscheidung:</strong> Die Karte zeigt das Signalbild pro Bundesland und vermeidet Stadt-Prognosen.
+                  <strong>Orientierung statt Entscheidung:</strong> Die Karte zeigt das Signalbild pro Bundesland und vermeidet lokale Scheingenauigkeit.
                 </div>
                 <div className="workspace-note-card">
                   <strong>{signalLabel}:</strong> {signalNote}
@@ -689,27 +686,27 @@ const RegionWorkbench: React.FC<Props> = ({
 
       <div ref={detailsRef}>
         <CollapsibleSection
-          title={region ? `Details (optional): ${region.name}` : 'Details (optional)'}
-          subtitle="Treiber, Rohdetails und längere Begründung nur öffnen, wenn ein tieferer Blick nötig ist."
+          title={region ? `Vertiefung (optional): ${region.name}` : 'Vertiefung (optional)'}
+          subtitle="Treiber, Rohdetails und ausführlichere Begründung nur öffnen, wenn eine tiefere Einordnung nötig ist."
         >
           <div className="workspace-two-column">
             <OperatorPanel
               title="Begründung"
-              description="Die kurze Begründung bleibt zuerst sichtbar, alles Weitere kommt darunter."
+              description="Die kurze operative Begründung bleibt zuerst sichtbar, die Details folgen darunter."
             >
               <div className="workspace-note-list">
                 <div className="workspace-note-card">{primaryReason}</div>
                 <div className="workspace-note-card">
                   {region
-                    ? 'Wenn das Bundesland passt, führt der nächste Schritt in den regionalen Kampagnenpfad.'
-                    : 'Sobald eine Region gewählt ist, steht hier genau ein klarer Arbeitsgrund.'}
+                    ? 'Wenn die Region trägt, führt der nächste Schritt in den regionalen Maßnahmenpfad.'
+                    : 'Sobald eine Region gewählt ist, steht hier eine verdichtete operative Begründung.'}
                 </div>
               </div>
             </OperatorPanel>
 
             <OperatorPanel
-              title="Treiber und Rohdetails"
-              description="Die signalgebenden Details bleiben gesammelt und gut lesbar, aber im zweiten Blick."
+              title="Treiber und Detailsignale"
+              description="Die signalgebenden Details bleiben gebündelt sichtbar, aber bewusst im zweiten Blick."
             >
               <div className="review-chip-row">
                 {(region?.signal_drivers || []).map((driver) => (

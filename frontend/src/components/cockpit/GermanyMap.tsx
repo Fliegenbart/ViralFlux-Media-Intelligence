@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { geoMercator, geoPath } from 'd3-geo';
 
 import deBundeslaenderGeo from '../../assets/maps/de-bundeslaender.geo.json';
+import { OPERATOR_LABELS } from '../../constants/operatorLabels';
 import { MapRegion } from './types';
 import {
   formatPercent,
@@ -133,7 +134,7 @@ const GermanyMap: React.FC<Props> = ({ regions, selectedRegion, onSelectRegion }
         <div className="vf-map-legend__items">
           <span className="vf-map-legend__item">
             <span className="vf-map-legend__swatch vf-map-legend__swatch--signal" aria-hidden="true" />
-            Event-Signal im Bundesland-Ranking
+            {OPERATOR_LABELS.ranking_signal} im Bundesland-Vergleich
           </span>
           <span className="vf-map-legend__item">
             <span className="vf-map-legend__swatch vf-map-legend__swatch--selected" aria-hidden="true" />

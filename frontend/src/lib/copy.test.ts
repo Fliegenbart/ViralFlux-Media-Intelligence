@@ -7,12 +7,12 @@ import {
 
 describe('cockpit copy semantics', () => {
   it('defines the core operator semantics in one consistent vocabulary', () => {
-    expect(UI_COPY.signalScore).toBe('Rang-Hinweis');
-    expect(UI_COPY.eventProbability).toBe('Ereignis-Chance');
-    expect(UI_COPY.decisionPriority).toBe('Prüf-Reihenfolge');
+    expect(UI_COPY.signalScore).toBe('Signal-Score');
+    expect(UI_COPY.eventProbability).toBe('Event-Wahrscheinlichkeit');
+    expect(UI_COPY.decisionPriority).toBe('Prioritäts-Score');
     expect(UI_COPY.stateLevelScope).toBe('Bundesland-Ansicht');
     expect(UI_COPY.noCityForecast).toBe('Keine Stadt-Prognose');
-    expect(COCKPIT_SEMANTICS.eventProbability.badge).toBe('Ereignis-Chance');
+    expect(COCKPIT_SEMANTICS.eventProbability.badge).toBe('Event-Wahrscheinlichkeit');
   });
 
   it('maps evidence and release states to readable operator labels', () => {

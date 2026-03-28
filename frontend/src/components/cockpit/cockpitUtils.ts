@@ -1,6 +1,7 @@
 import { format, parseISO } from 'date-fns';
 import { de } from 'date-fns/locale';
 
+import { OPERATOR_LABELS } from '../../constants/operatorLabels';
 import { UI_COPY } from '../../lib/copy';
 import { BacktestResponse, MetricContract, RecommendationCard, TruthCoverage } from '../../types/media';
 import { CampaignLaneId } from './types';
@@ -29,38 +30,38 @@ const KPI_LABELS: Record<string, string> = {
 };
 
 const METRIC_SEMANTIC_LABELS: Record<string, string> = {
-  ranking_signal: 'Ranking-Signal',
-  activation_priority: 'Entscheidungs-Priorität',
-  signal_confidence: 'Signal-Sicherheit',
-  forecast_event_probability: 'Event-Wahrscheinlichkeit',
-  observed_outcome_signal: 'Wirkungssignal aus Kundendaten',
-  outcome_learning_confidence: 'Lern-Sicherheit',
-  truth_readiness: 'Kundendatenbasis',
-  business_validation_gate: 'Business-Freigabe',
-  business_evidence_tier: 'Belegstufe',
+  ranking_signal: OPERATOR_LABELS.ranking_signal,
+  activation_priority: OPERATOR_LABELS.activation_priority,
+  signal_confidence: OPERATOR_LABELS.signal_confidence,
+  forecast_event_probability: OPERATOR_LABELS.forecast_event_probability,
+  observed_outcome_signal: OPERATOR_LABELS.observed_outcome_signal,
+  outcome_learning_confidence: OPERATOR_LABELS.outcome_learning_confidence,
+  truth_readiness: OPERATOR_LABELS.truth_readiness,
+  business_validation_gate: OPERATOR_LABELS.business_validation_gate,
+  business_evidence_tier: OPERATOR_LABELS.business_evidence_tier,
 };
 
 const METRIC_SEMANTIC_BADGES: Record<string, string> = {
-  ranking_signal: 'Ranking-Signal',
-  activation_priority: 'Entscheidungs-Priorität',
-  signal_confidence: 'Signal-Sicherheit',
-  forecast_event_probability: 'Kalibrierte Wahrscheinlichkeit',
-  observed_outcome_signal: 'Wirkungssignal aus Kundendaten',
-  outcome_learning_confidence: 'Lern-Sicherheit',
-  truth_readiness: 'Readiness-Zustand',
-  business_validation_gate: 'Business-Gate',
-  business_evidence_tier: 'Evidenz-Zustand',
+  ranking_signal: OPERATOR_LABELS.ranking_signal,
+  activation_priority: OPERATOR_LABELS.activation_priority,
+  signal_confidence: OPERATOR_LABELS.signal_confidence,
+  forecast_event_probability: OPERATOR_LABELS.forecast_event_probability,
+  observed_outcome_signal: OPERATOR_LABELS.observed_outcome_signal,
+  outcome_learning_confidence: OPERATOR_LABELS.outcome_learning_confidence,
+  truth_readiness: OPERATOR_LABELS.truth_readiness,
+  business_validation_gate: OPERATOR_LABELS.business_validation_gate,
+  business_evidence_tier: OPERATOR_LABELS.business_evidence_tier,
 };
 
 const METRIC_SEMANTIC_NOTES: Record<string, string> = {
   ranking_signal: 'Hilft beim Vergleichen und Priorisieren, ist aber keine Eintrittswahrscheinlichkeit.',
   activation_priority: 'Ordnet, welcher Arbeitsfall zuerst geprüft werden sollte. Das ist keine Wahrscheinlichkeitszahl.',
-  signal_confidence: 'Beschreibt Signalsicherheit oder Agreement, nicht die Modellwahrscheinlichkeit.',
+  signal_confidence: 'Beschreibt, wie stabil das Signal wirkt, nicht die Modellwahrscheinlichkeit.',
   forecast_event_probability: 'Beschreibt die kalibrierte Wahrscheinlichkeit für das definierte Forecast-Ereignis.',
   observed_outcome_signal: 'Beschreibt ein beobachtetes Wirkungssignal aus Kundendaten, keine Forecast-Wahrscheinlichkeit.',
   outcome_learning_confidence: 'Beschreibt die Sicherheit des Outcome-Lernsignals, nicht die Modellkalibrierung.',
   truth_readiness: 'Beschreibt, wie belastbar der Kundendaten-Layer bereits angeschlossen ist.',
-  business_validation_gate: 'Beschreibt, ob aus einem Signal schon eine kommerzielle Freigabe werden darf.',
+  business_validation_gate: 'Beschreibt, ob aus einem Signal schon eine operative Freigabe werden darf.',
   business_evidence_tier: 'Beschreibt den Reifegrad der Business- und Outcome-Evidenz.',
 };
 

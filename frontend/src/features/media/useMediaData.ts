@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { OPERATOR_LABELS } from '../../constants/operatorLabels';
 import { decisionStateLabel } from '../../lib/copy';
 import { buildPredictionNarrative, explainInPlainGerman } from '../../lib/plainLanguage';
 import {
@@ -951,12 +952,12 @@ export function buildNowPageViewModel(
     } : null,
     metrics: [
       {
-        label: 'Freigabestatus',
+        label: OPERATOR_LABELS.business_validation_gate,
         value: decisionState,
         tone: stageTone(weeklyDecision?.decision_state),
       },
       {
-        label: 'Vorhersagesignal',
+        label: OPERATOR_LABELS.forecast_event_probability,
         value: focusProbabilityLabel,
         tone: stageTone(focusStageValue),
       },
@@ -1006,7 +1007,7 @@ export function buildNowPageViewModel(
         value: trustValue,
       },
       {
-        label: 'Freigabestatus',
+        label: OPERATOR_LABELS.business_validation_gate,
         value: businessValue,
       },
       {

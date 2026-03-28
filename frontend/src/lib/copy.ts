@@ -1,9 +1,11 @@
+import { OPERATOR_LABELS } from '../constants/operatorLabels';
+
 export const UI_COPY = {
   ai: 'KI',
-  signalScore: 'Rang-Hinweis',
-  signalScoreWithSource: 'Rang-Hinweis (PeixEpiScore)',
-  eventProbability: 'Ereignis-Chance',
-  decisionPriority: 'Prüf-Reihenfolge',
+  signalScore: OPERATOR_LABELS.ranking_signal,
+  signalScoreWithSource: `${OPERATOR_LABELS.ranking_signal} (PeixEpiScore)`,
+  eventProbability: OPERATOR_LABELS.forecast_event_probability,
+  decisionPriority: OPERATOR_LABELS.activation_priority,
   uncertainty: 'Unsicherheit',
   insufficientTruth: 'Zu wenig Kundendaten-Evidenz',
   insufficientEvidence: 'Zu wenig Evidenz',
@@ -20,18 +22,18 @@ export const UI_COPY = {
 
 export const COCKPIT_SEMANTICS = {
   eventProbability: {
-    label: 'Ereignis-Chance (Event-Wahrscheinlichkeit)',
-    badge: 'Ereignis-Chance',
+    label: `${OPERATOR_LABELS.forecast_event_probability} (Forecast)`,
+    badge: OPERATOR_LABELS.forecast_event_probability,
     helper: 'Schätzt, wie wahrscheinlich das definierte Ereignis ist und ist kein Rangplatz.',
   },
   rankingSignal: {
-    label: 'Rang-Hinweis (Ranking-Signal)',
-    badge: 'Rang-Hinweis',
-    helper: 'Hilft beim Vergleichen von Bundesländern und ist keine Ereignis-Chance.',
+    label: `${OPERATOR_LABELS.ranking_signal} (Ranking-Signal)`,
+    badge: OPERATOR_LABELS.ranking_signal,
+    helper: 'Hilft beim Vergleichen von Bundesländern und ist keine Event-Wahrscheinlichkeit.',
   },
   decisionPriority: {
-    label: 'Prüf-Reihenfolge (Entscheidungs-Priorität)',
-    badge: 'Prüf-Reihenfolge',
+    label: `${OPERATOR_LABELS.activation_priority} (Entscheidungs-Priorität)`,
+    badge: OPERATOR_LABELS.activation_priority,
     helper: 'Zeigt, was zuerst geprüft werden sollte und ist keine Prozentzahl.',
   },
   uncertainty: {

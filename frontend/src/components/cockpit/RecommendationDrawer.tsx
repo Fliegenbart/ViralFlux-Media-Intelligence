@@ -1,6 +1,7 @@
 import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
 
 import CollapsibleSection from '../CollapsibleSection';
+import { OPERATOR_LABELS } from '../../constants/operatorLabels';
 import { UI_COPY, evidenceStatusHelper, evidenceStatusLabel } from '../../lib/copy';
 import { explainInPlainGerman, normalizeGermanText } from '../../lib/plainLanguage';
 import {
@@ -140,7 +141,7 @@ const RecommendationDrawer: React.FC<Props> = ({
     || 'Kampagnenvorschlag aus aktueller Vorhersage und Fokusregion zur Prüfung und Freigabe.',
   );
   const signalScoreLabel = normalizeGermanText(metricContractDisplayLabel(detail?.field_contracts, 'signal_score', UI_COPY.signalScore));
-  const signalScoreBadge = metricContractBadge(detail?.field_contracts, 'signal_score', 'Ranking-Signal');
+  const signalScoreBadge = metricContractBadge(detail?.field_contracts, 'signal_score', OPERATOR_LABELS.ranking_signal);
   const signalScoreNote = metricContractNote(
     detail?.field_contracts,
     'signal_score',
@@ -153,8 +154,8 @@ const RecommendationDrawer: React.FC<Props> = ({
     'priority_score',
     'Hilft bei der Reihenfolge der Aktivierung, nicht bei der Schätzung eines Eintritts.',
   );
-  const signalConfidenceLabel = normalizeGermanText(metricContractDisplayLabel(detail?.field_contracts, 'signal_confidence_pct', 'Signal-Sicherheit'));
-  const signalConfidenceBadge = metricContractBadge(detail?.field_contracts, 'signal_confidence_pct', 'Signal-Sicherheit');
+  const signalConfidenceLabel = normalizeGermanText(metricContractDisplayLabel(detail?.field_contracts, 'signal_confidence_pct', OPERATOR_LABELS.signal_confidence));
+  const signalConfidenceBadge = metricContractBadge(detail?.field_contracts, 'signal_confidence_pct', OPERATOR_LABELS.signal_confidence);
   const signalConfidenceNote = metricContractNote(
     detail?.field_contracts,
     'signal_confidence_pct',
@@ -345,7 +346,7 @@ const RecommendationDrawer: React.FC<Props> = ({
                       <strong>Belastbarkeit</strong>: {detailEvidenceClass ? evidenceStatusLabel(detailEvidenceClass) : 'Noch offen'}. {detailEvidenceClass ? evidenceStatusHelper(detailEvidenceClass) : 'Der Fall braucht noch eine genauere Einordnung.'}
                     </div>
                     <div className="review-body-copy">
-                      <strong>Signal-Sicherheit</strong>: {confidenceValue != null ? `${confidenceValue}% ${signalConfidenceLabel}` : `${signalConfidenceLabel} offen`}.
+                      <strong>{OPERATOR_LABELS.signal_confidence}</strong>: {confidenceValue != null ? `${confidenceValue}% ${signalConfidenceLabel}` : `${signalConfidenceLabel} offen`}.
                     </div>
                     <div className="review-body-copy">
                       <strong>{UI_COPY.stateLevelScope}</strong>: Bundesland-Level, kein City-Forecast.

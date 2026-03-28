@@ -1,5 +1,6 @@
 import React from 'react';
 
+import { OPERATOR_LABELS } from '../../constants/operatorLabels';
 import { additionalSuggestionsText, evidenceStatusHelper, evidenceStatusLabel } from '../../lib/copy';
 import { normalizeGermanText } from '../../lib/plainLanguage';
 import { MediaCampaignsResponse, RecommendationCard, WorkspaceStatusSummary } from '../../types/media';
@@ -478,7 +479,7 @@ function isApprovalReady(card?: RecommendationCard | null): boolean {
 function confidenceLabel(
   signalConfidencePct?: number | null,
   confidence?: number | null,
-  label = 'Signal-Sicherheit',
+  label = OPERATOR_LABELS.signal_confidence,
 ): string {
   const normalized = signalConfidencePercent(signalConfidencePct, confidence);
   if (normalized == null) return `${label} offen`;

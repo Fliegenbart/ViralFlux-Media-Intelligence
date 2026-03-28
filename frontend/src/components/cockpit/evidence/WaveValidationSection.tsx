@@ -122,7 +122,7 @@ const WaveValidationSection: React.FC<Props> = ({
         </div>
         <div className="soft-panel review-panel-soft" style={{ marginTop: 14 }}>
           <div className="evidence-row">
-            <span>Freigabestatus</span>
+            <span>Freigabe-Status</span>
             <strong>{businessValidationLabel(businessValidation?.validation_status)}</strong>
           </div>
           <div className="evidence-row">

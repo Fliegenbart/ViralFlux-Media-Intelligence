@@ -59,11 +59,6 @@ function buildForecast(): RegionalForecastResponse {
               message: 'raw',
               params: { event_probability: 0.81, threshold: 0.7 },
             },
-            {
-              code: 'forecast_confidence_strong',
-              message: 'raw',
-              params: { forecast_confidence: 0.78 },
-            },
           ],
           contributing_signals: [],
           uncertainty: ['Revision risk is still material at 0.33.'],
@@ -95,46 +90,11 @@ function buildForecast(): RegionalForecastResponse {
           usable_source_share: 0.92,
           source_coverage_score: 0.86,
           explanation_summary: 'Berlin: Activate because event probability is 0.81 and source alignment stays supportive.',
-          explanation_summary_detail: {
-            code: 'decision_summary',
-            message: 'raw',
-            params: {
-              bundesland_name: 'Berlin',
-              stage: 'activate',
-              event_probability: 0.81,
-              forecast_confidence: 0.78,
-              agreement_direction: 'up',
-            },
-          },
           uncertainty_summary: 'Revision risk is still material at 0.33.',
-          uncertainty_summary_detail: {
-            code: 'uncertainty_summary',
-            message: 'raw',
-            params: {
-              parts: ['revision_risk'],
-              revision_risk: 0.33,
-            },
-          },
           reason_trace: {
-            why: [
-              'Event probability 0.81 clears the Activate threshold 0.70.',
-            ],
-            why_details: [
-              {
-                code: 'event_probability_activate_threshold',
-                message: 'raw',
-                params: { event_probability: 0.81, threshold: 0.7 },
-              },
-            ],
+            why: ['Event probability 0.81 clears the Activate threshold 0.70.'],
             contributing_signals: [],
             uncertainty: ['Revision risk is still material at 0.33.'],
-            uncertainty_details: [
-              {
-                code: 'revision_risk_material',
-                message: 'raw',
-                params: { revision_risk: 0.33 },
-              },
-            ],
             policy_overrides: [],
           },
         },
@@ -242,21 +202,8 @@ function buildAllocation(): RegionalAllocationResponse {
         decision_label: 'Activate',
         reason_trace: {
           why: ['Activate regions receive the highest base label weight.'],
-          budget_driver_details: [
-            {
-              code: 'budget_driver_activate_multiplier',
-              message: 'raw',
-            },
-          ],
           contributing_signals: [],
           uncertainty: ['Revision risk slightly reduces share.'],
-          uncertainty_details: [
-            {
-              code: 'uncertainty_revision_risk_material',
-              message: 'raw',
-              params: { revision_risk: 0.33 },
-            },
-          ],
           policy_overrides: [],
         },
       },
@@ -327,42 +274,11 @@ function buildRecommendations(): RegionalCampaignRecommendationsResponse {
         },
         recommendation_rationale: {
           why: ['Berlin stays on activate with budget share 46.00%.'],
-          why_details: [
-            {
-              code: 'campaign_stage_budget_share',
-              message: 'raw',
-              params: { region_name: 'Berlin', stage: 'activate', budget_share: 0.46 },
-            },
-          ],
           product_fit: ['Respiratory Core Demand scores 0.94 for the available product set.'],
-          product_fit_details: [
-            {
-              code: 'campaign_product_cluster_fit',
-              message: 'raw',
-              params: {
-                cluster_label: 'Respiratory Core Demand',
-                fit_score: 0.94,
-                products: ['GeloMyrtol forte'],
-              },
-            },
-          ],
           keyword_fit: ['Respiratory Relief Search translates the product cluster into concrete search intent.'],
           budget_notes: ['Suggested campaign budget is 55200.00 EUR.'],
           evidence_notes: ['Evidence class is truth_backed.'],
-          evidence_note_details: [
-            {
-              code: 'campaign_evidence_class',
-              message: 'raw',
-              params: { evidence_class: 'truth_backed' },
-            },
-          ],
           guardrails: ['Spend guardrails are currently satisfied.'],
-          guardrail_details: [
-            {
-              code: 'campaign_guardrail_ready',
-              message: 'raw',
-            },
-          ],
         },
         channels: ['search', 'social'],
         timeline: 'sofort',
@@ -412,7 +328,7 @@ function buildRecommendations(): RegionalCampaignRecommendationsResponse {
 const noop = () => {};
 
 describe('OperationalDashboard', () => {
-  it('renders the first-look operator summary with action, location and certainty', () => {
+  it('renders sticky filters, map, action panel and collapsed detail sections', () => {
     render(
       <OperationalDashboard
         virus="Influenza A"
@@ -430,24 +346,19 @@ describe('OperationalDashboard', () => {
       />,
     );
 
-    expect(screen.getByText('Operative Entscheidung')).toBeInTheDocument();
-    expect(screen.getByText('Was passiert, wo musst du handeln und wie sicher ist das?')).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Activate Berlin auf Bundesland-Level.' })).toBeInTheDocument();
-    expect(screen.getByText('Was passiert?')).toBeInTheDocument();
-    expect(screen.getByText('Wo musst du handeln?')).toBeInTheDocument();
-    expect(screen.getByText('Wie sicher ist das?')).toBeInTheDocument();
-    expect(screen.getByText('Top-Risiko-Regionen')).toBeInTheDocument();
-    expect(screen.getByText('Forecast / Ereigniswahrscheinlichkeit')).toBeInTheDocument();
-    expect(screen.getByText('Budget- / Portfolio-Allokation')).toBeInTheDocument();
-    expect(screen.getByText('Unsicherheit / Evidenz')).toBeInTheDocument();
-    expect(screen.getAllByText('Bundesland-Level').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Ranking-Signal').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Entscheidungs-Priorität').length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/Kein City-Forecast/).length).toBeGreaterThan(0);
-    expect(screen.getByText('Mit Kundendaten gestützt')).toBeInTheDocument();
+    expect(screen.getByText('Wo jetzt gehandelt werden sollte')).toBeInTheDocument();
+    expect(screen.getByLabelText('Sticky Filterleiste')).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'Deutschlandkarte mit Bundesländern' })).toBeInTheDocument();
+    expect(screen.getByText('Berlin: Freigabe')).toBeInTheDocument();
+    expect(screen.getByText('Alle Bundesländer in einer Zeile')).toBeInTheDocument();
+    expect(screen.getAllByText('Respiratory Core Demand').length).toBeGreaterThan(0);
+
+    expect(screen.getByRole('button', { name: /Evidenz/i })).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.getByRole('button', { name: /Kampagnen-Detail/i })).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.getByRole('button', { name: /Nachvollziehbarkeit/i })).toHaveAttribute('aria-expanded', 'false');
   });
 
-  it('updates the first-look action card when the decision-stage filter changes', () => {
+  it('updates the focus panel when the region filter changes', () => {
     render(
       <OperationalDashboard
         virus="Influenza A"
@@ -465,23 +376,21 @@ describe('OperationalDashboard', () => {
       />,
     );
 
-    fireEvent.change(screen.getByRole('combobox', { name: 'Entscheidungsstufe' }), {
-      target: { value: 'watch' },
+    fireEvent.change(screen.getByRole('combobox', { name: 'Region' }), {
+      target: { value: 'SN' },
     });
 
-    expect(screen.getByRole('heading', { name: 'Watch Sachsen auf Bundesland-Level.' })).toBeInTheDocument();
-    expect(screen.getByText('Wo zuerst hinschauen?')).toBeInTheDocument();
+    expect(screen.getByText('Sachsen: Beobachten')).toBeInTheDocument();
+    expect(screen.getAllByText('Bronchial Recovery Support').length).toBeGreaterThan(0);
   });
 
-  it('supports keyboard navigation in the horizon tablist', () => {
-    const onHorizonChange = jest.fn();
-
+  it('opens the evidence section with keyboard-accessible disclosure semantics', () => {
     render(
       <OperationalDashboard
         virus="Influenza A"
         onVirusChange={noop}
         horizonDays={7}
-        onHorizonChange={onHorizonChange}
+        onHorizonChange={noop}
         weeklyBudget={120000}
         forecast={buildForecast()}
         allocation={buildAllocation()}
@@ -493,13 +402,15 @@ describe('OperationalDashboard', () => {
       />,
     );
 
-    const horizonTablist = screen.getByRole('tablist', { name: 'Zeitraum wählen' });
-    fireEvent.keyDown(horizonTablist, { key: 'ArrowLeft' });
+    const evidenceToggle = screen.getByRole('button', { name: /Evidenz/i });
+    fireEvent.click(evidenceToggle);
 
-    expect(onHorizonChange).toHaveBeenCalledWith(5);
+    expect(evidenceToggle).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByText('Forecast-Qualität, Unsicherheit und Backtest')).toBeInTheDocument();
+    expect(screen.getByText('Mit Vorsicht lesen:')).toBeInTheDocument();
   });
 
-  it('keeps the responsive operator layout hooks for top zone, filter row and supporting grid', () => {
+  it('keeps the new command layout hooks for toolbar, hero and ticker', () => {
     const { container } = render(
       <OperationalDashboard
         virus="Influenza A"
@@ -517,9 +428,9 @@ describe('OperationalDashboard', () => {
       />,
     );
 
-    expect(container.querySelector('.ops-top-zone')).toBeTruthy();
-    expect(container.querySelector('.ops-dashboard-grid--three-up')).toBeTruthy();
-    expect(container.querySelector('.operator-toolbar-selects')).toBeTruthy();
+    expect(container.querySelector('.ops-command-toolbar')).toBeTruthy();
+    expect(container.querySelector('.ops-command-hero')).toBeTruthy();
+    expect(container.querySelector('.ops-region-ticker__table')).toBeTruthy();
   });
 
   it('shows a stable empty state for no-model responses', () => {

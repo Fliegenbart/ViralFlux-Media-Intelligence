@@ -15,6 +15,7 @@ import {
 } from 'recharts';
 import type { NameType, ValueType } from 'recharts/types/component/DefaultTooltipContent';
 
+import { OPERATOR_LABELS } from '../../constants/operatorLabels';
 import {
   BacktestChartPoint,
   BacktestResponse,
@@ -593,7 +594,7 @@ export const FocusRegionOutlookPanel: React.FC<FocusRegionOutlookPanelProps> = (
 
       <div className="review-chip-row" style={{ marginBottom: 16 }}>
         <span className="step-chip">Bundesland-Level</span>
-        <span className="step-chip">Kein Ranking-Signal</span>
+        <span className="step-chip">Kein {OPERATOR_LABELS.ranking_signal}</span>
         <span className="step-chip">Kein City-Forecast</span>
       </div>
 
@@ -690,7 +691,7 @@ export const FocusRegionOutlookPanel: React.FC<FocusRegionOutlookPanelProps> = (
             detail: 'Wenn Punkte fehlen, bedeutet das fehlende Beobachtung oder fehlenden Modellwert, nicht Stabilität.',
           },
         ]}
-        note="Event-Wahrscheinlichkeit und Ranking-Signale bleiben bewusst außerhalb dieses Diagramms. Hier geht es nur um bestätigte Werte, Forecast und Unsicherheit."
+        note={`${OPERATOR_LABELS.forecast_event_probability} und ${OPERATOR_LABELS.ranking_signal} bleiben bewusst außerhalb dieses Diagramms. Hier geht es nur um bestätigte Werte, Forecast und Unsicherheit.`}
       />
 
       {chartReady ? (
@@ -853,7 +854,7 @@ export const WaveOutlookPanel: React.FC<WaveOutlookPanelProps> = ({
             detail: 'Leerstellen bedeuten fehlende Beobachtung oder unbelegte Slots, nicht automatisch Ruhe.',
           },
         ]}
-        note="Ranking-Signale und Event-Wahrscheinlichkeit werden hier nicht gemischt. Diese Grafik zeigt nur den validierten Verlauf und seine Unsicherheit."
+        note={`${OPERATOR_LABELS.ranking_signal} und ${OPERATOR_LABELS.forecast_event_probability} werden hier nicht gemischt. Diese Grafik zeigt nur den validierten Verlauf und seine Unsicherheit.`}
       />
 
       <div className="soft-panel" style={{ padding: 16, marginBottom: 16, fontSize: 13, color: 'var(--text-secondary)' }}>
@@ -1242,7 +1243,7 @@ export const ValidationSection: React.FC<ValidationSectionProps> = ({
             detail: 'Fehlende Daten bedeuten Lücke, nicht automatisch Null oder Stabilität.',
           },
         ]}
-        note="Event-Wahrscheinlichkeit und Ranking-Signal sind absichtlich nicht Teil dieser Validierungskurve."
+        note={`${OPERATOR_LABELS.forecast_event_probability} und ${OPERATOR_LABELS.ranking_signal} sind absichtlich nicht Teil dieser Validierungskurve.`}
       />
 
       {loading ? (
@@ -1279,7 +1280,7 @@ export const ValidationSection: React.FC<ValidationSectionProps> = ({
               <Line yAxisId="left" type="linear" dataKey="model" name="Forecast / Modell" stroke="#5e5ce6" strokeWidth={2.2} dot={false} />
               <Line yAxisId="left" type="linear" dataKey="seasonal" name="Saison-Baseline" stroke="#ff9f0a" strokeWidth={1.6} dot={false} strokeDasharray="3 3" />
               <Line yAxisId="left" type="linear" dataKey="persistence" name="Persistenz-Basis" stroke="#64748b" strokeWidth={1.4} dot={false} strokeDasharray="3 3" />
-              {hasBio && <Line yAxisId="right" type="linear" dataKey="bio" name="Ranking-Signal (getrennte Achse)" stroke="#7c3aed" strokeWidth={1.8} dot={false} />}
+              {hasBio && <Line yAxisId="right" type="linear" dataKey="bio" name={`${OPERATOR_LABELS.ranking_signal} (getrennte Achse)`} stroke="#7c3aed" strokeWidth={1.8} dot={false} />}
             </ComposedChart>
           </ResponsiveContainer>
         </div>
@@ -1291,7 +1292,7 @@ export const ValidationSection: React.FC<ValidationSectionProps> = ({
 
       <ChartAxisHint
         xLabel="validierte Zeitpunkte im Rückblicktest"
-        yLabel={hasBio ? 'Truth und Forecast links, Ranking-Signal rechts' : 'Truth und Forecast'}
+        yLabel={hasBio ? `Truth und Forecast links, ${OPERATOR_LABELS.ranking_signal} rechts` : 'Truth und Forecast'}
       />
 
       {(result?.proof_text || result?.llm_insight) && (

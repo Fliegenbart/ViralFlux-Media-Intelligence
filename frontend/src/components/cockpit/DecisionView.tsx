@@ -2,6 +2,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 
 import CollapsibleSection from '../CollapsibleSection';
+import { OPERATOR_LABELS } from '../../constants/operatorLabels';
 import { COCKPIT_SEMANTICS, UI_COPY, additionalSuggestionsText, decisionStateLabel, marketComparisonStateLabel } from '../../lib/copy';
 import {
   BacktestResponse,
@@ -171,7 +172,7 @@ const DecisionView: React.FC<Props> = ({
           <span className="step-chip">Generiert {formatDateTime(decision?.generated_at)}</span>
           <span className="step-chip">{UI_COPY.marketComparison}: {marketComparisonStateLabel(weeklyDecision?.proxy_state)}</span>
           <span className="step-chip">{UI_COPY.customerData}: {truthLayerLabel(decision?.truth_coverage || latestCustomer)}</span>
-          <span className="step-chip">Business-Gate: {businessValidationStatus}</span>
+          <span className="step-chip">{OPERATOR_LABELS.business_validation_gate}: {businessValidationStatus}</span>
           <span className="step-chip">Evidenz: {businessEvidenceTier}</span>
         </div>
       </section>
@@ -293,7 +294,7 @@ const DecisionView: React.FC<Props> = ({
             <div className="section-heading decision-section-heading-tight">
               <h2 className="subsection-title">Was die Entscheidung trägt</h2>
               <p className="subsection-copy">
-                Der Forecast zeigt, wo eine Welle wahrscheinlich entsteht. Das Business-Gate entscheidet separat, ob PEIX daraus schon eine budgetwirksame GELO-Freigabe ableiten darf.
+                Der Forecast zeigt, wo eine Welle wahrscheinlich entsteht. Der {OPERATOR_LABELS.business_validation_gate} entscheidet separat, ob PEIX daraus schon eine budgetwirksame GELO-Freigabe ableiten darf.
               </p>
             </div>
             <div className="review-chip-row decision-stack-top-sm">
@@ -304,7 +305,7 @@ const DecisionView: React.FC<Props> = ({
             </div>
             <div className="metric-strip decision-stack-top-md">
               <div className="metric-box">
-                <span>Business-Gate</span>
+                <span>{OPERATOR_LABELS.business_validation_gate}</span>
                 <strong>{businessValidationStatus}</strong>
               </div>
               <div className="metric-box">

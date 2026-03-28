@@ -332,8 +332,8 @@ describe('PilotPage', () => {
     expect(screen.getByText('Die regionale virale Dynamik ist belastbar genug, um sie extern zu zeigen, zu priorisieren und zu besprechen.')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Was PEIX GELO heute schon zeigen kann' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Operative Empfehlungen' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Pilot-Evidenz und Freigabestatus' })).toBeInTheDocument();
-    expect(screen.getByText('Aktueller Freigabestatus')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Pilot-Evidenz und Freigabe-Status' })).toBeInTheDocument();
+    expect(screen.getByText('Aktueller Freigabe-Status')).toBeInTheDocument();
     expect(screen.getByText(/Fokussiere Berlin jetzt für RSV A und nutze die Verteilung unten als forecast-basierten Szenario-Split/i)).toBeInTheDocument();
   });
 
@@ -368,7 +368,7 @@ describe('PilotPage', () => {
     expect(screen.getByText('Live-Quellabdeckung')).toBeInTheDocument();
     expect(screen.getByText('Live-Quellfrische')).toBeInTheDocument();
     expect(screen.getByText(/Artefakt-Coverage bleibt getrennt/i)).toBeInTheDocument();
-    const evidenceSection = screen.getByText('Aktueller Freigabestatus').closest('.pilot-evidence-card') as HTMLElement | null;
+    const evidenceSection = screen.getByText('Aktueller Freigabe-Status').closest('.pilot-evidence-card') as HTMLElement | null;
     expect(evidenceSection).not.toBeNull();
     if (evidenceSection) {
       expect(within(evidenceSection).getByText('Live-Quellabdeckung')).toBeInTheDocument();
@@ -396,7 +396,7 @@ describe('PilotPage', () => {
     }), expect.any(Function));
 
     fireEvent.click(screen.getByRole('button', { name: 'Evidenz' }));
-    expect(screen.getAllByText('Pilot-Evidenz und Freigabestatus').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Pilot-Evidenz und Freigabe-Status').length).toBeGreaterThan(0);
 
     const operationalSection = screen.getByRole('heading', { name: 'Operative Empfehlungen' }).closest('section');
     expect(operationalSection).not.toBeNull();

@@ -1,6 +1,7 @@
 import React from 'react';
 
 import LoadingSkeleton from '../LoadingSkeleton';
+import { OPERATOR_LABELS } from '../../constants/operatorLabels';
 import { explainInPlainGerman } from '../../lib/plainLanguage';
 import {
   PilotReadoutRegion,
@@ -34,9 +35,9 @@ const STAGE_OPTIONS: Array<{ key: PilotSurfaceStageFilter; label: string }> = [
 ];
 const SCOPE_OPTIONS: Array<{ key: PilotSurfaceScope; label: string; copy: string }> = [
   { key: 'forecast', label: 'Forecast', copy: 'Epidemiologische Lage und Priorisierung' },
-  { key: 'allocation', label: 'Allokation', copy: 'Budgetlogik und Freigabestatus' },
+  { key: 'allocation', label: 'Allokation', copy: 'Budgetlogik und Freigabe-Status' },
   { key: 'recommendation', label: 'Empfehlung', copy: 'Produkt-, Keyword- und Kampagnenplan' },
-  { key: 'evidence', label: 'Evidenz', copy: 'Pilot-Evidenz und Freigabestatus' },
+  { key: 'evidence', label: 'Evidenz', copy: 'Pilot-Evidenz und Freigabe-Status' },
 ];
 
 function normalizeStage(value?: string | null): string {
@@ -85,9 +86,9 @@ function formatTableMetric(value: unknown, digits = 3): string {
   return value.toFixed(digits);
 }
 
-const PRIORITY_SCORE_LABEL = 'Prioritäts-Score';
-const EVENT_PROBABILITY_LABEL = 'Event-Wahrscheinlichkeit';
-const SIGNAL_CONFIDENCE_LABEL = 'Signal-Sicherheit';
+const PRIORITY_SCORE_LABEL = OPERATOR_LABELS.ranking_signal;
+const EVENT_PROBABILITY_LABEL = OPERATOR_LABELS.forecast_event_probability;
+const SIGNAL_CONFIDENCE_LABEL = OPERATOR_LABELS.signal_confidence;
 
 function scopeCopy(scope: PilotSurfaceScope): string {
   return SCOPE_OPTIONS.find((item) => item.key === scope)?.copy || '';
@@ -239,7 +240,7 @@ function FeaturedRegionCard({
           <strong>{formatFractionPercent(row.event_probability, 0)}</strong>
         </div>
         <div className="pilot-inline-metric">
-          <span>Budget-Split</span>
+          <span>{OPERATOR_LABELS.allocation_share}</span>
           <strong>{formatCurrency(row.budget_amount_eur)}</strong>
         </div>
         <div className="pilot-inline-metric">
@@ -303,7 +304,7 @@ function RankedRegionRow({ row }: { row: PilotReadoutRegion }) {
 
       <div className="pilot-ranked-row__stats">
         <div className="pilot-ranked-stat">
-          <span>Budget-Split</span>
+          <span>{OPERATOR_LABELS.allocation_share}</span>
           <strong>{formatCurrency(row.budget_amount_eur)}</strong>
         </div>
         <div className="pilot-ranked-stat">
@@ -643,7 +644,7 @@ const PilotSurface: React.FC<Props> = ({
           <span className="pilot-section-label">Schon heute sichtbar</span>
           <h2>Was PEIX GELO heute schon zeigen kann</h2>
           <ul className="pilot-blocker-list">
-            <li>Regionale virale Wellen werden früh erkannt und mit sichtbarer Signal-Sicherheit eingeordnet.</li>
+            <li>Regionale virale Wellen werden früh erkannt und mit sichtbarer Signalstärke eingeordnet.</li>
             <li>Top-Regionen werden klar priorisiert und mit einer verständlichen Stufenempfehlung versehen.</li>
             <li>Die Budgetsicht zeigt bereits einen forecast-basierten Szenario-Split für die aktuelle Woche.</li>
           </ul>
@@ -752,8 +753,8 @@ const PilotSurface: React.FC<Props> = ({
       <section className="pilot-section pilot-section--evidence">
         <div className="pilot-section__header">
           <div className="pilot-section__headline">
-            <span className="pilot-kicker">Pilot-Evidenz und Freigabestatus</span>
-            <h2>Pilot-Evidenz und Freigabestatus</h2>
+            <span className="pilot-kicker">Pilot-Evidenz und Freigabe-Status</span>
+            <h2>Pilot-Evidenz und Freigabe-Status</h2>
             <p>
               Forecast-Evidenz bleibt als eigene Ebene sichtbar. Die kommerzielle Validierung bleibt davon getrennt und wird explizit ausgewiesen.
             </p>
@@ -765,7 +766,7 @@ const PilotSurface: React.FC<Props> = ({
 
         <div className="pilot-evidence-grid">
           <article className="pilot-evidence-card">
-            <div className="pilot-section-label">Aktueller Freigabestatus</div>
+            <div className="pilot-section-label">Aktueller Freigabe-Status</div>
             <div className="pilot-gate-list">
               {readinessRows.map((item) => (
                 <div key={item.label} className="pilot-gate-row">

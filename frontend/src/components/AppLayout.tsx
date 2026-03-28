@@ -413,7 +413,7 @@ function buildWeeklyReadoutSummary(
     executive?.validation_disclaimer,
     explainReason(leadRegion?.uncertainty_summary_detail),
     leadRegion?.uncertainty_summary,
-  ], 'Keine akute Lücke sichtbar, aber weiter auf Datenfrische und Freigabestatus achten.');
+  ], 'Keine akute Lücke sichtbar, aber weiter auf Datenfrische und Freigabe-Status achten.');
   const coverageWeeks = gate?.coverage_weeks;
   const dataReadiness = coverageWeeks
     ? `${coverageWeeks} Wochen GELO-Daten verbunden`

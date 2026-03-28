@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { useToast } from '../../App';
+import { usePageHeader } from '../../components/AppLayout';
 import NowWorkspace from '../../components/cockpit/NowWorkspace';
 import { useNowPageData } from '../../features/media/useMediaData';
 import { useMediaWorkflow } from '../../features/media/workflowContext';
@@ -9,6 +10,7 @@ import { useMediaWorkflow } from '../../features/media/workflowContext';
 const NowPage: React.FC = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { setPageHeader, clearPageHeader, exportWeeklyReport, pdfLoading } = usePageHeader();
   const {
     virus,
     setVirus,
@@ -30,6 +32,23 @@ const NowPage: React.FC = () => {
     waveRadar,
     waveRadarLoading,
   } = useNowPageData(virus, brand, horizonDays, weeklyBudget, dataVersion, toast);
+
+  useEffect(() => {
+    setPageHeader({
+      contextNote: 'Eine Richtung zuerst. Vertrauen und weitere Optionen direkt darunter.',
+      primaryAction: {
+        label: pdfLoading ? 'Bericht wird erstellt...' : 'Wochenbericht exportieren',
+        onClick: exportWeeklyReport,
+        disabled: pdfLoading,
+      },
+      secondaryAction: {
+        label: 'Evidenz öffnen',
+        onClick: () => navigate('/evidenz'),
+      },
+    });
+
+    return clearPageHeader;
+  }, [clearPageHeader, exportWeeklyReport, navigate, pdfLoading, setPageHeader]);
 
   return (
     <NowWorkspace

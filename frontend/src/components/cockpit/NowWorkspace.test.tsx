@@ -421,14 +421,14 @@ describe('NowWorkspace', () => {
     );
 
     expect(screen.getAllByText('Wochenplan').length).toBeGreaterThan(0);
-    expect(screen.getByText('Entscheidungen sauberer treffen')).toBeInTheDocument();
-    expect(screen.getByText('Operative Hauptentscheidung')).toBeInTheDocument();
+    expect(screen.getByText('Fokus diese Woche')).toBeInTheDocument();
+    expect(screen.getAllByText('Empfohlene Aktion').length).toBeGreaterThan(0);
     expect(screen.getByRole('heading', { name: 'Berlin jetzt priorisieren.' })).toBeInTheDocument();
-    expect(screen.getByText('Einordnung')).toBeInTheDocument();
-    expect(screen.getByText('Ein Signal ist noch keine Freigabe')).toBeInTheDocument();
-    expect(screen.getByText('ViralFlux trennt bewusst zwischen Forecast, Priorisierung, Unsicherheit, Evidenz und operativer Entscheidung.')).toBeInTheDocument();
-    expect(screen.getByText('Weitere relevante Regionen')).toBeInTheDocument();
-    expect(screen.getByText('Was als Nächstes Relevanz gewinnen kann')).toBeInTheDocument();
+    expect(screen.getAllByText('Belastbarkeit').length).toBeGreaterThan(0);
+    expect(screen.getByText('Warum wir das diese Woche vertreten können')).toBeInTheDocument();
+    expect(screen.getByText('Die Empfehlung bleibt nur dann oben, wenn Forecast, Evidenz und Einsatzreife gemeinsam tragen.')).toBeInTheDocument();
+    expect(screen.getByText('Nächste Schritte')).toBeInTheDocument();
+    expect(screen.getByText('Was danach sinnvoll geprüft werden kann')).toBeInTheDocument();
     expect(screen.getByText('Bayern')).toBeInTheDocument();
     expect(screen.getByText('Sachsen')).toBeInTheDocument();
     expect(screen.queryByText('Nordrhein-Westfalen')).not.toBeInTheDocument();

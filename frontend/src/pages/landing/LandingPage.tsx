@@ -15,31 +15,31 @@ import {
 } from './LandingWidgets';
 
 const NAV_ITEMS = [
-  { label: 'Jetzt', path: '/jetzt' },
+  { label: 'Wochenplan', path: '/jetzt' },
   { label: 'Regionen', path: '/regionen' },
   { label: 'Kampagnen', path: '/kampagnen' },
-  { label: 'Qualität', path: '/evidenz' },
+  { label: 'Evidenz', path: '/evidenz' },
 ] as const;
 
 const DOCS_URL = 'https://github.com/Fliegenbart/ViralFlux-Media-Intelligence/blob/main/docs/OPERATORS_GUIDE.md';
 
 const FEATURE_CARDS = [
   {
-    label: 'Frühwarnung',
-    value: '3 bis 7 Tage voraus',
-    meta: 'Forecast auf Bundesland-Ebene, bevor die Lage in der Rückschau klar sichtbar wird.',
+    label: 'Wo zuerst hinschauen',
+    value: 'Bundesländer mit frühem Zug',
+    meta: 'ViralFlux zeigt zuerst die Regionen, in denen sich Dynamik früh genug für eine Wochenentscheidung aufbaut.',
     tone: 'accent' as const,
   },
   {
-    label: 'Entscheidungshilfe',
-    value: 'Signal vor Bauchgefühl',
-    meta: 'Regionen werden nach Signal, Dynamik und operativer Relevanz geordnet.',
+    label: 'Was diese Woche tun',
+    value: 'Empfohlene Aktion statt Datenflut',
+    meta: 'Die Arbeitsfläche startet mit genau einer empfohlenen Richtung und hält Folgeoptionen bewusst dahinter.',
     tone: 'muted' as const,
   },
   {
-    label: 'Freigabe-Gate',
-    value: 'Signal ist nicht gleich Freigabe',
-    meta: 'Epidemiologie und Budget-Freigabe bleiben bewusst getrennt sichtbar.',
+    label: 'Warum wir das vertreten',
+    value: 'Belastbarkeit sichtbar halten',
+    meta: 'Forecast, Evidenz und Freigabe bleiben sichtbar, ohne die Hauptentscheidung zu überlagern.',
     tone: 'default' as const,
   },
 ] as const;
@@ -180,7 +180,7 @@ const LandingPage: React.FC = () => {
 
           <div className="lp-nav-actions">
             <button type="button" onClick={openCockpit} className="media-button">
-              Zum Dashboard
+              Zum Wochenplan
             </button>
             <button
               type="button"
@@ -203,17 +203,17 @@ const LandingPage: React.FC = () => {
                   <span className="landing-hero-kicker">PEIX x GELO</span>
 
                   <h1 className="landing-hero-title">
-                    Regionale Virus-Frühwarnung für Media-Entscheidungen
+                    Die Wochensteuerung für PEIX x GELO
                   </h1>
 
                   <p className="operator-section-shell__copy landing-hero-copytext">
-                    ViralFlux zeigt, wo sich Viruswellen aufbauen und was das für Kampagnen,
-                    Priorisierung und Freigabe bedeutet.
+                    ViralFlux zeigt zuerst, welche Bundesländer jetzt Aufmerksamkeit verdienen,
+                    welche Maßnahme als Nächstes sinnvoll ist und worauf sich diese Einordnung stützt.
                   </p>
 
                   <div className="landing-action-row">
                     <button type="button" onClick={openCockpit} className="media-button">
-                      Zum Dashboard &#8594;
+                      Zum Wochenplan &#8594;
                     </button>
                   </div>
                 </div>
@@ -221,7 +221,7 @@ const LandingPage: React.FC = () => {
                 <OperatorPanel
                   eyebrow="Heute sichtbar"
                   title={topRegion ? `${topRegion.name} zuerst prüfen` : 'Lage im Überblick'}
-                  description="Die Karte zeigt, wo sich Dynamik zuerst aufbaut. Die genaue Einordnung übernimmt danach das Dashboard."
+                  description="Die Startseite zeigt nur die Richtung. Die eigentliche Wochenentscheidung folgt direkt in der Arbeitsfläche."
                   tone="accent"
                   className="landing-live-panel"
                 >
@@ -265,8 +265,8 @@ const LandingPage: React.FC = () => {
           <RevealSection delay={0.04}>
             <OperatorSection
               kicker="Im Überblick"
-              title="Was hier sichtbar wird"
-              description="Die Startseite zeigt nur die Grundlogik. Alles Weitere liegt im Dashboard und in der Evidenz."
+              title="Was du nach dem Login sofort siehst"
+              description="Die Startseite erklärt nur die Logik. Die starke Wirkung entsteht erst in Wochenplan, Regionen, Kampagnen und Evidenz."
             >
               <div className="operator-stat-grid">
                 {FEATURE_CARDS.map((feature) => (

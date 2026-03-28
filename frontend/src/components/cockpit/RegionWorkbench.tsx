@@ -409,8 +409,8 @@ const RegionWorkbench: React.FC<Props> = ({
     <div className="page-stack regions-template-page">
       <OperatorSection
         kicker="Regionen"
-        title="Bundesländer sauber einordnen"
-        description="Regionale Dynamiken werden vergleichbar, ohne Präzision vorzutäuschen, die fachlich nicht belastbar ist."
+        title="Wo diese Woche genauer hingesehen werden sollte"
+        description="Bundesländer werden vergleichbar, damit PEIX schneller sieht, wo Fokus sinnvoll ist und wo noch Zurückhaltung gilt."
         tone="accent"
         className="operator-toolbar-shell"
       >
@@ -419,7 +419,7 @@ const RegionWorkbench: React.FC<Props> = ({
             <span className="now-toolbar__eyebrow">Vergleich</span>
             <div className="now-toolbar__heading">
               <strong>Diese Woche</strong>
-              <span>Regionale Relevanz lesen, Priorisierung einordnen.</span>
+              <span>Bundesländer lesen, Richtung einordnen, erst dann Maßnahmen ableiten.</span>
             </div>
           </div>
           <OperatorChipRail className="review-chip-row">
@@ -438,7 +438,7 @@ const RegionWorkbench: React.FC<Props> = ({
           <div className="workspace-note-card regions-toolbar-note">
             <strong>Datenstand {formatDateShort(activeMap.date)}</strong>
             <span>
-              {workspaceStatus?.data_freshness === 'Beobachten' ? 'Ein Teil der Daten ist aktuell nur mit Vorsicht zu lesen.' : 'Gilt auf Bundesland-Ebene, nicht für einzelne Städte.'}
+              {workspaceStatus?.data_freshness === 'Beobachten' ? 'Ein Teil der Daten ist aktuell nur mit Vorsicht zu lesen.' : 'Bundesland-Ebene, nicht Stadt-Ebene.'}
             </span>
           </div>
         </div>
@@ -450,7 +450,7 @@ const RegionWorkbench: React.FC<Props> = ({
           >
             <div className="regions-action-hero__header">
               <div>
-                <span className="now-weekly-plan-card__label">Operative Hauptregion</span>
+                <span className="now-weekly-plan-card__label">Empfohlene Aktion</span>
                 <h3 className="regions-action-hero__title">
                   {regionalActionHeadline(selectedDirection, primaryRegion?.name)}
                 </h3>
@@ -516,9 +516,9 @@ const RegionWorkbench: React.FC<Props> = ({
           </OperatorPanel>
 
           <OperatorPanel
-            eyebrow="Einordnung"
-            title="Warum diese Region Relevanz gewinnt"
-            description="Die regionale Priorisierung folgt nicht nur dem Signal, sondern der Kombination aus Belastbarkeit, Evidenz und Einsatzreife."
+            eyebrow="Belastbarkeit"
+            title="Warum dieses Bundesland gerade vorne liegt"
+            description="Die Entscheidung folgt nicht nur dem Signal, sondern der Kombination aus Belastbarkeit, Evidenz und Einsatzreife."
             tone="muted"
             className="workspace-zone workspace-zone--trust regions-trust-shell"
           >
@@ -537,8 +537,8 @@ const RegionWorkbench: React.FC<Props> = ({
           </OperatorPanel>
 
           <OperatorPanel
-            eyebrow="Weitere relevante Regionen"
-            title="Was als Nächstes Relevanz gewinnen kann"
+            eyebrow="Nächste Schritte"
+            title="Welche Bundesländer danach folgen können"
             description="Nicht jede Auffälligkeit verdient sofortige Priorität. Sichtbar bleiben nur die nächsten belastbaren Regionen."
             tone="muted"
             className="workspace-zone workspace-zone--secondary regions-secondary-shell"
@@ -575,14 +575,14 @@ const RegionWorkbench: React.FC<Props> = ({
       <div ref={comparisonRef}>
         <OperatorSection
           kicker="Vergleich"
-          title="Regionenvergleich"
-          description="Die Liste bleibt das zentrale Arbeitswerkzeug für Vergleich, Richtung und Priorisierung."
+          title="Vergleich im Detail"
+          description="Die Liste bleibt das wichtigste Werkzeug für Richtung, Reihenfolge und saubere regionale Einordnung."
           tone="muted"
         >
           <div className="regions-workbench-grid">
             <OperatorPanel
               title={regionListTitle}
-              description="Die Priorisierung entsteht aus der Liste. Die Karte dient der räumlichen Orientierung."
+              description="Die Priorisierung entsteht aus der Liste. Die Karte dient nur der räumlichen Orientierung."
               className="workspace-zone workspace-zone--primary regions-list-panel"
             >
               <div className="regions-list-panel__header">
@@ -661,7 +661,7 @@ const RegionWorkbench: React.FC<Props> = ({
 
           <OperatorPanel
             title="Karte zur Orientierung"
-            description="Die Karte hilft bei Auswahl und räumlicher Einordnung. Operative Priorisierung entsteht erst aus Karte und Liste zusammen."
+            description="Die Karte hilft bei Auswahl und räumlicher Einordnung. Die eigentliche Priorisierung entsteht in der Liste."
             tone="muted"
             className="workspace-zone workspace-zone--support regions-map-panel regions-map-shell"
           >

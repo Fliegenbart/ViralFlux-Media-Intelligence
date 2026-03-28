@@ -4,6 +4,7 @@ interface Props {
   title: string;
   subtitle?: string;
   defaultOpen?: boolean;
+  className?: string;
   children: React.ReactNode;
 }
 
@@ -11,6 +12,7 @@ const CollapsibleSection: React.FC<Props> = ({
   title,
   subtitle,
   defaultOpen = false,
+  className,
   children,
 }) => {
   const [open, setOpen] = useState(defaultOpen);
@@ -18,7 +20,7 @@ const CollapsibleSection: React.FC<Props> = ({
   const titleId = useId();
 
   return (
-    <section className="collapsible-section">
+    <section className={['collapsible-section', className].filter(Boolean).join(' ')}>
       <button
         type="button"
         className="collapsible-trigger"

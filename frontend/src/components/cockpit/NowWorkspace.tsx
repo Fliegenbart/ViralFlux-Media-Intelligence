@@ -184,7 +184,7 @@ const NowWorkspace: React.FC<Props> = ({
             title={view.emptyState.title}
             description={view.emptyState.body}
             tone="muted"
-            className="now-briefing-hero now-briefing-hero--weak now-briefing-hero--empty"
+            className="workspace-zone workspace-zone--hero now-briefing-hero now-briefing-hero--weak now-briefing-hero--empty"
           >
             <div className="now-briefing-empty__meta">
               <span>Noch keine belastbare Freigabe</span>
@@ -232,7 +232,7 @@ const NowWorkspace: React.FC<Props> = ({
           <div className="now-briefing-stack now-editorial-stage">
               <OperatorPanel
                 tone={heroRecommendation.state === 'strong' ? 'accent' : 'default'}
-                className={`now-briefing-hero now-briefing-hero--${heroRecommendation.state}`}
+                className={`workspace-zone workspace-zone--hero now-briefing-hero now-briefing-hero--${heroRecommendation.state}`}
               >
                 <div className="now-briefing-hero__header">
                   <div>
@@ -305,7 +305,7 @@ const NowWorkspace: React.FC<Props> = ({
                 title="Ein Signal ist noch keine Freigabe"
                 description="ViralFlux trennt bewusst zwischen Forecast, Priorisierung, Unsicherheit, Evidenz und operativer Entscheidung."
                 tone="muted"
-                className="now-confidence-strip"
+                className="workspace-zone workspace-zone--trust now-confidence-strip"
               >
               <div className="now-trust-grid">
                 {confidenceItems.map((item) => (
@@ -323,7 +323,7 @@ const NowWorkspace: React.FC<Props> = ({
               title="Was als Nächstes Relevanz gewinnen kann"
               description="Nicht jede Auffälligkeit verdient Eskalation. Nicht jeder Forecast verdient Budget. Nicht jede Region verdient sofortige Priorität."
               tone="muted"
-              className="now-briefing-secondary"
+              className="workspace-zone workspace-zone--secondary now-briefing-secondary"
             >
               <div className="now-briefing-secondary__list">
                 {secondaryMoves.length > 0 ? secondaryMoves.map((region, index) => (
@@ -356,6 +356,7 @@ const NowWorkspace: React.FC<Props> = ({
       {!view.emptyState ? (
         <>
           <CollapsibleSection
+            className="workspace-zone workspace-zone--detail"
             title="Vertiefung (optional)"
             subtitle="Historie, Zusatzsignale und Qualitätsdetails nur öffnen, wenn eine tiefere Einordnung nötig ist."
           >

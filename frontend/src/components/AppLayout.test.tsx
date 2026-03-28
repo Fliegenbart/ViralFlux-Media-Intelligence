@@ -32,6 +32,7 @@ const mockedUseMediaWorkflow = useMediaWorkflow as jest.MockedFunction<typeof us
 
 describe('AppLayout theme rendering', () => {
   beforeEach(() => {
+    window.localStorage.clear();
     mockedUseAuth.mockReturnValue({
       authenticated: true,
       handleLogin: jest.fn(),
@@ -117,6 +118,12 @@ describe('AppLayout theme rendering', () => {
     expect(screen.getByRole('link', { name: 'Direkt zum Inhalt springen' })).toHaveAttribute('href', '#main-content');
     expect(screen.getByText('Wochenbericht exportieren')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Regionale Dynamiken früher sehen' })).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: 'Ansichtsmodus' })).toBeInTheDocument();
+    expect(screen.getByText('Status')).toBeInTheDocument();
+    expect(screen.getByText('Fokus')).toBeInTheDocument();
+    expect(screen.getByText('Belastbarkeit')).toBeInTheDocument();
+    expect(screen.getByText('Offene Blocker')).toBeInTheDocument();
+    expect(screen.getByText('Letzter Datenstand')).toBeInTheDocument();
     expect(screen.getAllByText('Mit Vorsicht').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Bayern, Nordrhein-Westfalen').length).toBeGreaterThan(0);
     expect(screen.getByText('Bayern · Nasenspray')).toBeInTheDocument();
@@ -137,6 +144,38 @@ describe('AppLayout theme rendering', () => {
     );
 
     expect(screen.getByLabelText('Helles Design aktivieren')).toBeInTheDocument();
+  });
+
+  it('stores and restores the dense mode preference', () => {
+    mockedUseTheme.mockReturnValue({
+      theme: 'light',
+      toggle: jest.fn(),
+    });
+
+    const { unmount } = render(
+      <MemoryRouter initialEntries={['/jetzt']} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <AppLayout>
+          <div>Inhalt</div>
+        </AppLayout>
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Dense' }));
+
+    expect(window.localStorage.getItem('viralflux-density-mode')).toBe('dense');
+    expect(document.querySelector('.app-shell--operator')).toHaveAttribute('data-density', 'dense');
+
+    unmount();
+
+    render(
+      <MemoryRouter initialEntries={['/jetzt']} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <AppLayout>
+          <div>Inhalt</div>
+        </AppLayout>
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByRole('button', { name: 'Dense' })).toHaveAttribute('aria-pressed', 'true');
   });
 
   it('opens and closes the mobile navigation with keyboard-friendly controls', () => {

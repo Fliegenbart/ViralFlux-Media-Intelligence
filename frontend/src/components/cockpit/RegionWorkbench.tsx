@@ -446,7 +446,7 @@ const RegionWorkbench: React.FC<Props> = ({
         <div className="regions-briefing-stack">
           <OperatorPanel
             tone="accent"
-            className={`regions-action-hero regions-action-hero--${selectedDirection}`}
+            className={`workspace-zone workspace-zone--hero regions-action-hero regions-action-hero--${selectedDirection}`}
           >
             <div className="regions-action-hero__header">
               <div>
@@ -520,7 +520,7 @@ const RegionWorkbench: React.FC<Props> = ({
             title="Warum diese Region Relevanz gewinnt"
             description="Die regionale Priorisierung folgt nicht nur dem Signal, sondern der Kombination aus Belastbarkeit, Evidenz und Einsatzreife."
             tone="muted"
-            className="regions-trust-shell"
+            className="workspace-zone workspace-zone--trust regions-trust-shell"
           >
             <div className="regions-trust-grid">
               {trustItems.map((item) => (
@@ -541,7 +541,7 @@ const RegionWorkbench: React.FC<Props> = ({
             title="Was als Nächstes Relevanz gewinnen kann"
             description="Nicht jede Auffälligkeit verdient sofortige Priorität. Sichtbar bleiben nur die nächsten belastbaren Regionen."
             tone="muted"
-            className="regions-secondary-shell"
+            className="workspace-zone workspace-zone--secondary regions-secondary-shell"
           >
             <div className="regions-secondary-grid">
               {secondaryRegions.length > 0 ? secondaryRegions.map((item) => (
@@ -583,7 +583,7 @@ const RegionWorkbench: React.FC<Props> = ({
             <OperatorPanel
               title={regionListTitle}
               description="Die Priorisierung entsteht aus der Liste. Die Karte dient der räumlichen Orientierung."
-              className="regions-list-panel"
+              className="workspace-zone workspace-zone--primary regions-list-panel"
             >
               <div className="regions-list-panel__header">
                 <OperatorChipRail>
@@ -663,7 +663,7 @@ const RegionWorkbench: React.FC<Props> = ({
             title="Karte zur Orientierung"
             description="Die Karte hilft bei Auswahl und räumlicher Einordnung. Operative Priorisierung entsteht erst aus Karte und Liste zusammen."
             tone="muted"
-            className="regions-map-panel regions-map-shell"
+            className="workspace-zone workspace-zone--support regions-map-panel regions-map-shell"
           >
               <GermanyMap
                 regions={activeMap.regions}
@@ -686,6 +686,7 @@ const RegionWorkbench: React.FC<Props> = ({
 
       <div ref={detailsRef}>
         <CollapsibleSection
+          className="workspace-zone workspace-zone--detail"
           title={region ? `Vertiefung (optional): ${region.name}` : 'Vertiefung (optional)'}
           subtitle="Treiber, Rohdetails und ausführlichere Begründung nur öffnen, wenn eine tiefere Einordnung nötig ist."
         >

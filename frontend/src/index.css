@@ -3719,6 +3719,33 @@ svg g[tabindex="0"]:focus > path {
   font-size: 12px;
 }
 
+.truth-history-item--muted {
+  cursor: default;
+  background: rgba(246, 248, 252, 0.68);
+  border-style: dashed;
+  box-shadow: none;
+}
+
+.truth-history-item--muted:hover {
+  transform: none;
+  border-color: rgba(15, 23, 42, 0.08);
+  box-shadow: none;
+}
+
+.truth-history-divider {
+  display: grid;
+  gap: 10px;
+  padding-top: 4px;
+}
+
+.truth-history-divider__label {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
 .truth-issue-row {
   display: grid;
   gap: 10px;

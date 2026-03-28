@@ -12,6 +12,10 @@ interface Props {
   children: React.ReactNode;
 }
 
+type DensityMode = 'guided' | 'dense';
+
+const DENSITY_STORAGE_KEY = 'viralflux-density-mode';
+
 const PRIMARY_NAV_ITEMS = [
   { label: 'Wochenplan', path: '/jetzt', helper: 'Die operative Hauptentscheidung für diese Woche', icon: 'bolt' },
   { label: 'Regionen', path: '/regionen', helper: 'Welche Bundesländer gerade vorne liegen', icon: 'location_on' },
@@ -54,6 +58,12 @@ const AppLayout: React.FC<Props> = ({ children }) => {
   const navigate = useNavigate();
   const [pdfLoading, setPdfLoading] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [densityMode, setDensityMode] = useState<DensityMode>(() => {
+    if (typeof window === 'undefined') {
+      return 'guided';
+    }
+    return window.localStorage.getItem(DENSITY_STORAGE_KEY) === 'dense' ? 'dense' : 'guided';
+  });
   const mobileToggleRef = useRef<HTMLButtonElement>(null);
   const firstNavItemRef = useRef<HTMLButtonElement>(null);
   const { pilotReadout, loading: readoutLoading } = usePilotSurfaceData({
@@ -72,6 +82,7 @@ const AppLayout: React.FC<Props> = ({ children }) => {
   };
   const exportLabel = 'Wochenbericht exportieren';
   const readoutSummary = buildWeeklyReadoutSummary(pilotReadout, readoutLoading);
+  const decisionSpineItems = buildDecisionSpine(readoutSummary);
 
   const handlePdfDownload = async () => {
     setPdfLoading(true);
@@ -115,8 +126,14 @@ const AppLayout: React.FC<Props> = ({ children }) => {
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [mobileMenuOpen]);
 
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(DENSITY_STORAGE_KEY, densityMode);
+    }
+  }, [densityMode]);
+
   return (
-    <div className="app-shell app-shell--operator">
+    <div className="app-shell app-shell--operator" data-density={densityMode}>
       <a href="#main-content" className="skip-link">Direkt zum Inhalt springen</a>
       <div className="operator-shell">
         <button
@@ -214,6 +231,24 @@ const AppLayout: React.FC<Props> = ({ children }) => {
               </div>
 
               <div className="operator-header__actions">
+                <div className="operator-density-toggle" role="group" aria-label="Ansichtsmodus">
+                  <button
+                    type="button"
+                    className={`operator-density-toggle__button ${densityMode === 'guided' ? 'active' : ''}`}
+                    aria-pressed={densityMode === 'guided'}
+                    onClick={() => setDensityMode('guided')}
+                  >
+                    Guided
+                  </button>
+                  <button
+                    type="button"
+                    className={`operator-density-toggle__button ${densityMode === 'dense' ? 'active' : ''}`}
+                    aria-pressed={densityMode === 'dense'}
+                    onClick={() => setDensityMode('dense')}
+                  >
+                    Dense
+                  </button>
+                </div>
                 <button
                   onClick={handlePdfDownload}
                   disabled={pdfLoading}
@@ -256,13 +291,22 @@ const AppLayout: React.FC<Props> = ({ children }) => {
                   <h1 id="operator-page-title" className="operator-header__title">{currentSection.title}</h1>
                 </div>
                 <p className="operator-header__copy">{currentSection.description}</p>
-                <div className="operator-header__summary-line">
-                  <span>{readoutSummary.focusRegions}</span>
-                  <span>{readoutSummary.nextReview}</span>
-                </div>
               </div>
             </div>
           </header>
+
+          <section className="operator-decision-spine" aria-label="Aktuelle Arbeitslage">
+            {decisionSpineItems.map((item) => (
+              <article
+                key={item.label}
+                className={`operator-decision-spine__item ${item.tone ? `operator-decision-spine__item--${item.tone}` : ''}`}
+              >
+                <span className="operator-decision-spine__label">{item.label}</span>
+                <strong className="operator-decision-spine__value">{item.value}</strong>
+                <p className="operator-decision-spine__meta">{item.meta}</p>
+              </article>
+            ))}
+          </section>
 
           <main className="shell-main operator-main" id="main-content" tabIndex={-1} aria-labelledby="operator-page-title">
             <div className="shell-main-inner operator-main-inner">
@@ -292,6 +336,13 @@ interface WeeklyReadoutSummary {
   stripHeadline: string;
   stripGap: string;
   updatedAt: string;
+}
+
+interface DecisionSpineItem {
+  label: string;
+  value: string;
+  meta: string;
+  tone?: WeeklyReadoutTone;
 }
 
 function buildWeeklyReadoutSummary(
@@ -399,6 +450,41 @@ function buildWeeklyReadoutSummary(
     stripGap,
     updatedAt,
   };
+}
+
+function buildDecisionSpine(readoutSummary: WeeklyReadoutSummary): DecisionSpineItem[] {
+  return [
+    {
+      label: 'Status',
+      value: readoutSummary.status,
+      meta: readoutSummary.stripHeadline,
+      tone: readoutSummary.tone,
+    },
+    {
+      label: 'Fokus',
+      value: readoutSummary.nextReview,
+      meta: readoutSummary.focusRegions,
+    },
+    {
+      label: 'Belastbarkeit',
+      value: readoutSummary.reliability,
+      meta: readoutSummary.dataReadiness,
+      tone: readoutSummary.tone,
+    },
+    {
+      label: 'Offene Blocker',
+      value: readoutSummary.stripGap,
+      meta: shortText(readoutSummary.openGap, 88),
+      tone: readoutSummary.tone === 'go' ? undefined : readoutSummary.tone,
+    },
+    {
+      label: 'Letzter Datenstand',
+      value: readoutSummary.updatedAt,
+      meta: readoutSummary.updatedAt === '-'
+        ? 'Noch kein belastbarer Zeitstempel sichtbar'
+        : 'Zeitpunkt der letzten verdichteten Wochenlage',
+    },
+  ];
 }
 
 function readinessTone(value?: PilotReadoutStatus | null): WeeklyReadoutTone {

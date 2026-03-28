@@ -161,7 +161,7 @@ const CampaignStudio: React.FC<Props> = ({
         ) : (
           <div className="campaign-approval-stack">
             <div className="campaign-command-grid campaign-command-grid--approval">
-              <OperatorPanel tone="accent" className="campaign-focus-panel campaign-approval-hero">
+              <OperatorPanel tone="accent" className="workspace-zone workspace-zone--hero campaign-focus-panel campaign-approval-hero">
                 <div className="campaign-approval-hero__header">
                   <div>
                     <span className="campaign-focus-label">Operativer Fokusfall</span>
@@ -226,7 +226,7 @@ const CampaignStudio: React.FC<Props> = ({
                 title="Warum dieser Fall jetzt vorne liegt"
                 description="Sichtbar wird, ob jetzt eher Prüfung, Freigabe, Klärung oder Übergabe im Vordergrund steht."
                 tone="muted"
-                className="campaign-command-rail campaign-approval-summary"
+                className="workspace-zone workspace-zone--support campaign-command-rail campaign-approval-summary"
               >
                 <div className="campaign-approval-summary__grid">
                   {statusSummary.map((item) => (
@@ -254,7 +254,7 @@ const CampaignStudio: React.FC<Props> = ({
               title="Belastbarkeit, Evidenz und Einsatzreife"
               description="Operative Klarheit entsteht nicht aus einem einzelnen Signal, sondern aus Belastbarkeit, Datenlage und nächstem realen Handlungsschritt."
               tone="muted"
-              className="campaign-trust-panel"
+              className="workspace-zone workspace-zone--trust campaign-trust-panel"
             >
               <div className="workspace-status-grid campaign-trust-grid">
                 {trustItems.map((item) => (
@@ -275,7 +275,7 @@ const CampaignStudio: React.FC<Props> = ({
               title="Weitere Empfehlungen und Pipeline"
               description="Die nächsten relevanten Fälle bleiben sichtbar, ohne die Priorität des Fokusfalls zu verwischen."
               tone="muted"
-              className="campaign-approval-queue"
+              className="workspace-zone workspace-zone--secondary campaign-approval-queue"
             >
               <div className="campaign-approval-queue__list">
                 {queueCards.length > 0 ? queueCards.map((card) => {
@@ -400,6 +400,7 @@ const CampaignStudio: React.FC<Props> = ({
       ) : null}
 
       <CollapsibleSection
+        className="workspace-zone workspace-zone--detail"
         title="Weitere Vorschläge erstellen"
         subtitle="Nur dann relevant, wenn nach dem Fokusfall weitere Maßnahmen vorbereitet werden sollen."
       >

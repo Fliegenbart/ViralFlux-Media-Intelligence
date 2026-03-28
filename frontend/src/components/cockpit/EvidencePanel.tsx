@@ -263,7 +263,7 @@ const EvidencePanel: React.FC<Props> = ({
         className="evidence-briefing-shell"
       >
         <div className="evidence-briefing-grid">
-          <OperatorPanel tone="accent" className="evidence-briefing-hero">
+          <OperatorPanel tone="accent" className="workspace-zone workspace-zone--hero evidence-briefing-hero">
             <div id="evidence-trust" className="evidence-briefing-hero__header">
               <div>
                 <span className="campaign-focus-label">Aktueller Evidenzstatus</span>
@@ -311,7 +311,7 @@ const EvidencePanel: React.FC<Props> = ({
             title="Was die Evidenz bereits trägt"
             description="Sichtbar bleibt, ob die offene Frage derzeit eher Daten, Belastbarkeit oder operative Einsatzreife betrifft."
             tone="muted"
-            className="evidence-trust-panel"
+            className="workspace-zone workspace-zone--trust evidence-trust-panel"
           >
             <div className="workspace-status-grid evidence-trust-grid">
               {trustCards.map((card) => (
@@ -342,6 +342,7 @@ const EvidencePanel: React.FC<Props> = ({
           <OperatorPanel
             title="Bereits verbunden"
             description="Das kann die Wochenplanung heute bereits stützen."
+            className="workspace-zone workspace-zone--support"
           >
             <div className="workspace-note-list">
               {connectedItems.map((item) => (
@@ -355,6 +356,7 @@ const EvidencePanel: React.FC<Props> = ({
           <OperatorPanel
             title="Fehlend oder offen"
             description="Hier liegt der nächste sinnvolle Klärungs-, Qualitäts- oder Import-Schritt."
+            className="workspace-zone workspace-zone--support"
           >
             <div className="workspace-note-list">
               {missingItems.length > 0 ? missingItems.map((item) => (
@@ -372,6 +374,7 @@ const EvidencePanel: React.FC<Props> = ({
       </OperatorSection>
 
       <CollapsibleSection
+        className="workspace-zone workspace-zone--detail"
         title="Kundendaten und Wirkung (optional)"
         subtitle="Zeigt, wie stark Kundendaten die Empfehlungen zusätzlich stützen und absichern."
       >
@@ -388,6 +391,7 @@ const EvidencePanel: React.FC<Props> = ({
       </CollapsibleSection>
 
       <CollapsibleSection
+        className="workspace-zone workspace-zone--detail"
         title="Import und Validierung"
         subtitle="Hier werden fehlende Kundendaten geklärt, CSV-Importe geprüft und bestehende Importe nachvollzogen."
         defaultOpen={importNeedsAttention}
@@ -406,6 +410,7 @@ const EvidencePanel: React.FC<Props> = ({
       </CollapsibleSection>
 
       <CollapsibleSection
+        className="workspace-zone workspace-zone--detail"
         title="Vorhersage und Monitoring (Details)"
         subtitle="Diese Details helfen, die Vorhersage einzuordnen und bleiben bewusst eine zweite Ebene hinter der Evidenzlage."
       >
@@ -430,6 +435,7 @@ const EvidencePanel: React.FC<Props> = ({
       </CollapsibleSection>
 
       <CollapsibleSection
+        className="workspace-zone workspace-zone--detail"
         title="Quellen & Grenzen"
         subtitle="Hier wird sichtbar, welche Live-Daten einfließen, welche Quellen Beobachtung brauchen und wo die fachlichen Grenzen liegen."
       >
@@ -445,6 +451,7 @@ const EvidencePanel: React.FC<Props> = ({
       </CollapsibleSection>
 
       <CollapsibleSection
+        className="workspace-zone workspace-zone--detail"
         title="Technische Tiefe (optional)"
         subtitle="Nur relevant, wenn ein technischer Blick in Signalsystem, Prüfmarker oder Import-Historie nötig ist."
       >

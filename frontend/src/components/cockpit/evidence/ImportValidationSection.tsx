@@ -32,7 +32,11 @@ const ImportValidationSection: React.FC<Props> = ({
   const [sourceLabel, setSourceLabel] = useState('manual_csv');
   const [replaceExisting, setReplaceExisting] = useState(false);
 
-  const selectedBatch = truthBatchDetail?.batch || truthPreview?.batch_summary || truthSnapshot?.latest_batch;
+  const recentImportedBatches = (truthSnapshot?.recent_batches || []).filter((batch) => {
+    const status = String(batch.status || '').toLowerCase();
+    return Number(batch.rows_imported || 0) > 0 || status === 'imported' || status === 'partial_success';
+  });
+  const selectedBatch = truthBatchDetail?.batch || truthPreview?.batch_summary || recentImportedBatches[0] || null;
   const displayIssues: TruthImportIssue[] = truthPreview?.issues?.length
     ? truthPreview.issues
     : (truthBatchDetail?.issues || []);
@@ -167,7 +171,7 @@ const ImportValidationSection: React.FC<Props> = ({
             <h2 className="subsection-title">Bisherige GELO-Importe</h2>
           </div>
           <div className="truth-history-list">
-            {(truthSnapshot?.recent_batches || []).length > 0 ? truthSnapshot!.recent_batches.map((batch: TruthImportBatchSummary) => (
+            {recentImportedBatches.length > 0 ? recentImportedBatches.map((batch: TruthImportBatchSummary) => (
               <button
                 key={batch.batch_id}
                 type="button"
@@ -181,7 +185,7 @@ const ImportValidationSection: React.FC<Props> = ({
                 <small>{batch.rows_imported}/{batch.rows_total} importiert</small>
               </button>
             )) : (
-              <div className="review-muted-copy">Noch keine Importe für Kundendaten vorhanden.</div>
+              <div className="review-muted-copy">Noch keine echten GELO-Importe vorhanden.</div>
             )}
           </div>
         </div>
@@ -213,7 +217,7 @@ const ImportValidationSection: React.FC<Props> = ({
               </div>
             </div>
           ) : (
-            <div className="review-muted-copy">Wähle einen Import aus der Historie oder prüfe eine neue Datei.</div>
+            <div className="review-muted-copy">Wähle einen echten Import aus der Historie oder prüfe eine neue Datei.</div>
           )}
         </div>
       </section>

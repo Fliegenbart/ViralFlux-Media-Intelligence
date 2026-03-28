@@ -117,16 +117,17 @@ describe('AppLayout theme rendering', () => {
     expect(screen.getByRole('banner')).toHaveClass('surface-header');
     expect(screen.getByRole('link', { name: 'Direkt zum Inhalt springen' })).toHaveAttribute('href', '#main-content');
     expect(screen.getByText('Wochenbericht exportieren')).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Regionale Dynamiken früher sehen' })).toBeInTheDocument();
+    expect(screen.getByRole('main')).toHaveAttribute('aria-labelledby', 'operator-page-title');
+    expect(screen.getByRole('heading', { name: 'Regionale Dynamiken früher sehen' })).toHaveClass('sr-only');
     expect(screen.getByRole('group', { name: 'Ansichtsmodus' })).toBeInTheDocument();
-    expect(screen.getByText('Status')).toBeInTheDocument();
-    expect(screen.getByText('Fokus')).toBeInTheDocument();
-    expect(screen.getByText('Belastbarkeit')).toBeInTheDocument();
-    expect(screen.getByText('Offene Blocker')).toBeInTheDocument();
-    expect(screen.getByText('Letzter Datenstand')).toBeInTheDocument();
-    expect(screen.getAllByText('Mit Vorsicht').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Bayern, Nordrhein-Westfalen').length).toBeGreaterThan(0);
-    expect(screen.getByText('Bayern · Nasenspray')).toBeInTheDocument();
+    expect(screen.queryByText('Verdichtet respiratorische Signale, Evidenz und Priorisierung zu einer operativen Wochenlage.')).not.toBeInTheDocument();
+    expect(screen.queryByText('Status')).not.toBeInTheDocument();
+    expect(screen.queryByText('Fokus')).not.toBeInTheDocument();
+    expect(screen.queryByText('Belastbarkeit')).not.toBeInTheDocument();
+    expect(screen.queryByText('Offene Blocker')).not.toBeInTheDocument();
+    expect(screen.queryByText('Letzter Datenstand')).not.toBeInTheDocument();
+    expect(screen.getByText('Die operative Hauptentscheidung für diese Woche')).toBeInTheDocument();
+    expect(screen.getByText('Gilt auf Bundesland-Ebene, nicht für einzelne Städte.')).toBeInTheDocument();
   });
 
   it('shows the light-mode activation label in dark theme', () => {

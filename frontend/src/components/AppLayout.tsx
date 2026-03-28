@@ -2,11 +2,6 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
 import { useTheme, useAuth } from '../App';
 import { apiFetch } from '../lib/api';
-import { usePilotSurfaceData } from '../features/media/usePilotSurfaceData';
-import { useMediaWorkflow } from '../features/media/workflowContext';
-import { PilotReadoutResponse, PilotReadoutStatus, PilotReadoutRegion, StructuredReasonItem } from '../types/media';
-import { formatDateTime } from './cockpit/cockpitUtils';
-import { explainInPlainGerman } from '../lib/plainLanguage';
 
 interface Props {
   children: React.ReactNode;
@@ -53,7 +48,6 @@ const SECTION_META = [
 const AppLayout: React.FC<Props> = ({ children }) => {
   const { theme, toggle } = useTheme();
   const { handleLogout } = useAuth();
-  const { virus, brand, weeklyBudget, dataVersion } = useMediaWorkflow();
   const location = useLocation();
   const navigate = useNavigate();
   const [pdfLoading, setPdfLoading] = useState(false);
@@ -66,13 +60,6 @@ const AppLayout: React.FC<Props> = ({ children }) => {
   });
   const mobileToggleRef = useRef<HTMLButtonElement>(null);
   const firstNavItemRef = useRef<HTMLButtonElement>(null);
-  const { pilotReadout, loading: readoutLoading } = usePilotSurfaceData({
-    brand,
-    virus,
-    horizonDays: 7,
-    weeklyBudget,
-    dataVersion,
-  });
 
   const isActive = (path: string) => location.pathname.startsWith(path);
   const currentSection = SECTION_META.find(({ path }) => location.pathname.startsWith(path)) || {
@@ -81,8 +68,6 @@ const AppLayout: React.FC<Props> = ({ children }) => {
     description: 'Hier bleibt der aktuelle Stand an einem Ort.',
   };
   const exportLabel = 'Wochenbericht exportieren';
-  const readoutSummary = buildWeeklyReadoutSummary(pilotReadout, readoutLoading);
-  const decisionSpineItems = buildDecisionSpine(readoutSummary);
 
   const handlePdfDownload = async () => {
     setPdfLoading(true);
@@ -162,7 +147,7 @@ const AppLayout: React.FC<Props> = ({ children }) => {
 
           <div className="operator-sidebar__brand-block">
             <p className="operator-sidebar__brand-copy">PEIX x GELO Pilot</p>
-            <p className="operator-sidebar__brand-note">Gilt fürs Bundesland, keine Stadt-Prognose.</p>
+            <p className="operator-sidebar__brand-note">Gilt auf Bundesland-Ebene, nicht für einzelne Städte.</p>
           </div>
 
           <nav className="operator-nav" role="navigation" aria-label="Arbeitsbereiche">
@@ -178,8 +163,11 @@ const AppLayout: React.FC<Props> = ({ children }) => {
                   aria-current={active ? 'page' : undefined}
                   title={helper}
                 >
-                  <span className="material-symbols-outlined operator-nav-item__icon" aria-hidden="true">{icon}</span>
-                  <span className="operator-nav-item__label">{label}</span>
+                  <span className="operator-nav-item__headline">
+                    <span className="material-symbols-outlined operator-nav-item__icon" aria-hidden="true">{icon}</span>
+                    <span className="operator-nav-item__label">{label}</span>
+                  </span>
+                  <span className="operator-nav-item__helper">{helper}</span>
                 </button>
               );
             })}
@@ -226,7 +214,11 @@ const AppLayout: React.FC<Props> = ({ children }) => {
                     </span>
                   </button>
 
-                  <span className="operator-header__suite">ViralFlux</span>
+                  <div className="operator-header__suite-group">
+                    <span className="operator-header__suite">ViralFlux</span>
+                    <span className="operator-header__suite-separator" aria-hidden="true">/</span>
+                    <span className="operator-header__section-context">{currentSection.kicker}</span>
+                  </div>
                 </div>
               </div>
 
@@ -278,38 +270,11 @@ const AppLayout: React.FC<Props> = ({ children }) => {
                 </button>
               </div>
             </div>
-
-            <div className="operator-header__meta">
-              <div className="operator-header__hero-meta">
-                <span className="operator-header__status-pill">{currentSection.kicker}</span>
-                <span className={`operator-header__signal operator-header__signal--${readoutSummary.tone}`}>
-                  {readoutSummary.status}
-                </span>
-              </div>
-              <div className="operator-header__copy-block">
-                <div className="operator-header__title-row">
-                  <h1 id="operator-page-title" className="operator-header__title">{currentSection.title}</h1>
-                </div>
-                <p className="operator-header__copy">{currentSection.description}</p>
-              </div>
-            </div>
           </header>
-
-          <section className="operator-decision-spine" aria-label="Aktuelle Arbeitslage">
-            {decisionSpineItems.map((item) => (
-              <article
-                key={item.label}
-                className={`operator-decision-spine__item ${item.tone ? `operator-decision-spine__item--${item.tone}` : ''}`}
-              >
-                <span className="operator-decision-spine__label">{item.label}</span>
-                <strong className="operator-decision-spine__value">{item.value}</strong>
-                <p className="operator-decision-spine__meta">{item.meta}</p>
-              </article>
-            ))}
-          </section>
 
           <main className="shell-main operator-main" id="main-content" tabIndex={-1} aria-labelledby="operator-page-title">
             <div className="shell-main-inner operator-main-inner">
+              <h1 id="operator-page-title" className="sr-only">{currentSection.title}</h1>
               {children}
             </div>
           </main>
@@ -320,199 +285,3 @@ const AppLayout: React.FC<Props> = ({ children }) => {
 };
 
 export default AppLayout;
-
-type WeeklyReadoutTone = 'go' | 'watch' | 'no-go';
-
-interface WeeklyReadoutSummary {
-  tone: WeeklyReadoutTone;
-  status: string;
-  title: string;
-  summary: string;
-  focusRegions: string;
-  nextReview: string;
-  reliability: string;
-  dataReadiness: string;
-  openGap: string;
-  stripHeadline: string;
-  stripGap: string;
-  updatedAt: string;
-}
-
-interface DecisionSpineItem {
-  label: string;
-  value: string;
-  meta: string;
-  tone?: WeeklyReadoutTone;
-}
-
-function buildWeeklyReadoutSummary(
-  pilotReadout: PilotReadoutResponse | null,
-  loading: boolean,
-): WeeklyReadoutSummary {
-  if (loading) {
-    return {
-      tone: 'watch',
-      status: 'Wochenlage wird geladen',
-      title: 'Wochenlage wird vorbereitet',
-      summary: 'Die Plattform verdichtet gerade Regionen, Kampagnen und Evidenz zu einer operativen Einordnung.',
-      focusRegions: 'Wird geladen',
-      nextReview: 'Wird geladen',
-      reliability: 'Wird geladen',
-      dataReadiness: 'Wird geladen',
-      openGap: 'Noch keine Einschätzung',
-      stripHeadline: 'Wochenlage wird vorbereitet',
-      stripGap: 'Wird geladen',
-      updatedAt: '-',
-    };
-  }
-
-  if (!pilotReadout) {
-    return {
-      tone: 'watch',
-      status: 'Wochenlage fehlt gerade',
-      title: 'Wochenlage gerade nicht verfügbar',
-      summary: 'Die verdichtete Wochenlage konnte gerade nicht geladen werden. Der Export bleibt verfügbar.',
-      focusRegions: 'Noch offen',
-      nextReview: 'Wochenplan erneut öffnen',
-      reliability: 'Noch keine klare Einschätzung',
-      dataReadiness: 'Datenlage noch offen',
-      openGap: 'Daten für die Wochenlage fehlen',
-      stripHeadline: 'Wochenlage fehlt',
-      stripGap: 'Daten fehlen',
-      updatedAt: '-',
-    };
-  }
-
-  const executive = pilotReadout.executive_summary;
-  const runContext = pilotReadout.run_context;
-  const gate = runContext?.gate_snapshot;
-  const operationalSummary = pilotReadout.operational_recommendations?.summary;
-  const allRegions = pilotReadout.operational_recommendations?.regions || [];
-  const topRegions = executive?.top_regions?.length ? executive.top_regions : allRegions.slice(0, 3);
-  const leadRegion = topRegions[0] || allRegions[0] || null;
-  const scopeReadiness = runContext?.scope_readiness || executive?.scope_readiness || 'NO_GO';
-  const forecastReadiness = runContext?.forecast_readiness || gate?.forecast_readiness || 'NO_GO';
-  const commercialValidation = runContext?.commercial_validation_status || gate?.commercial_validation_status || gate?.commercial_data_status || 'NO_GO';
-  const focusRegions = topRegions.map((item) => regionIdentity(item)).filter(Boolean).slice(0, 3);
-  const reasonTrace = firstMeaningful([
-    executive?.headline,
-    executive?.what_should_we_do_now,
-    explainReason(executive?.uncertainty_summary_detail),
-    executive?.uncertainty_summary,
-    operationalSummary?.headline,
-  ], 'Die Wochenübersicht bündelt den aktuellen Stand aus Regionen, Kampagnen und Evidenz.');
-  const leadFocus = firstMeaningful([
-    [regionIdentity(leadRegion), leadRegion?.recommended_product].filter(Boolean).join(' · '),
-    [regionIdentity(leadRegion), leadRegion?.campaign_recommendation].filter(Boolean).join(' · '),
-    executive?.what_should_we_do_now,
-  ], 'Noch kein klarer Review-Fall sichtbar');
-  const openGap = firstMeaningful([
-    gate?.missing_requirements?.[0],
-    executive?.budget_recommendation?.blocked_reasons?.[0],
-    pilotReadout.empty_state?.body,
-    executive?.validation_disclaimer,
-    explainReason(leadRegion?.uncertainty_summary_detail),
-    leadRegion?.uncertainty_summary,
-  ], 'Keine akute Lücke sichtbar, aber weiter auf Datenfrische und Freigabe-Status achten.');
-  const coverageWeeks = gate?.coverage_weeks;
-  const dataReadiness = coverageWeeks
-    ? `${coverageWeeks} Wochen GELO-Daten verbunden`
-    : commercialValidation === 'GO'
-      ? 'GELO-Datenlage: ausreichend'
-      : commercialValidation === 'WATCH'
-        ? 'GELO-Datenlage: mit Vorsicht'
-        : 'GELO-Datenlage: im Aufbau';
-  const reliability = forecastReadiness === 'GO'
-    ? (commercialValidation === 'GO' ? 'Sicherheit: gut genug' : 'Sicherheit: ok, Evidenz noch mit Vorsicht')
-    : forecastReadiness === 'WATCH'
-      ? 'Mit Vorsicht: noch nicht überall sicher genug'
-      : 'Noch nicht sicher genug';
-  const tone = readinessTone(scopeReadiness);
-  const status = statusLabel(scopeReadiness);
-  const updatedAt = formatDateTime(runContext?.generated_at || pilotReadout.generated_at || null);
-  const stripHeadline = firstMeaningful([
-    operationalSummary?.headline,
-    executive?.what_should_we_do_now,
-  ], 'Wochenlage wird weiter aufgebaut');
-  const stripGap = shortText(openGap, 58);
-
-  return {
-    tone,
-    status,
-    title: executive?.what_should_we_do_now || 'Was GELO diese Woche zuerst prüfen sollte',
-    summary: reasonTrace,
-    focusRegions: focusRegions.length ? focusRegions.join(', ') : 'Noch keine Fokus-Bundesländer',
-    nextReview: leadFocus,
-    reliability,
-    dataReadiness,
-    openGap,
-    stripHeadline,
-    stripGap,
-    updatedAt,
-  };
-}
-
-function buildDecisionSpine(readoutSummary: WeeklyReadoutSummary): DecisionSpineItem[] {
-  return [
-    {
-      label: 'Status',
-      value: readoutSummary.status,
-      meta: readoutSummary.stripHeadline,
-      tone: readoutSummary.tone,
-    },
-    {
-      label: 'Fokus',
-      value: readoutSummary.nextReview,
-      meta: readoutSummary.focusRegions,
-    },
-    {
-      label: 'Belastbarkeit',
-      value: readoutSummary.reliability,
-      meta: readoutSummary.dataReadiness,
-      tone: readoutSummary.tone,
-    },
-    {
-      label: 'Offene Blocker',
-      value: readoutSummary.stripGap,
-      meta: shortText(readoutSummary.openGap, 88),
-      tone: readoutSummary.tone === 'go' ? undefined : readoutSummary.tone,
-    },
-    {
-      label: 'Letzter Datenstand',
-      value: readoutSummary.updatedAt,
-      meta: readoutSummary.updatedAt === '-'
-        ? 'Noch kein belastbarer Zeitstempel sichtbar'
-        : 'Zeitpunkt der letzten verdichteten Wochenlage',
-    },
-  ];
-}
-
-function readinessTone(value?: PilotReadoutStatus | null): WeeklyReadoutTone {
-  if (value === 'GO') return 'go';
-  if (value === 'WATCH') return 'watch';
-  return 'no-go';
-}
-
-function statusLabel(value?: PilotReadoutStatus | null): string {
-  if (value === 'GO') return 'Bereit';
-  if (value === 'WATCH') return 'Mit Vorsicht';
-  return 'Noch unsicher';
-}
-
-function regionIdentity(region?: PilotReadoutRegion | null): string {
-  return region?.region_name || region?.region_code || '';
-}
-
-function explainReason(value?: StructuredReasonItem | null): string {
-  const explained = explainInPlainGerman(value || null);
-  return explained || '';
-}
-
-function firstMeaningful(values: Array<string | null | undefined>, fallback: string): string {
-  return values.find((value) => typeof value === 'string' && value.trim().length > 0)?.trim() || fallback;
-}
-
-function shortText(value: string, maxLength: number): string {
-  if (value.length <= maxLength) return value;
-  return `${value.slice(0, maxLength - 1).trimEnd()}…`;
-}

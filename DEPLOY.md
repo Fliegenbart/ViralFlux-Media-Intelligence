@@ -72,6 +72,8 @@ Der moderne Release-Smoke prueft:
 - `/api/v1/forecast/regional/campaign-recommendations`
 
 Der Deploy nutzt fuer diese Smoke-Requests standardmaessig ein etwas groesseres Request-Timeout (`SMOKE_TIMEOUT=15`), damit frisch gestartete Services nicht zu frueh als Fehler gewertet werden.
+Fuer geschuetzte Live-Instanzen nutzt der Smoke-Test bevorzugt `SMOKE_BEARER_TOKEN` oder `SMOKE_ADMIN_EMAIL`/`SMOKE_ADMIN_PASSWORD`.
+Wenn diese Werte nicht gesetzt sind und der Test direkt auf dem Deploy-Host laeuft, versucht er als Fallback die laufenden Backend-Container-Credentials aus `virusradar_backend` zu lesen.
 
 Optional kann zusaetzlich `--check-cockpit` gesetzt werden. Der Cockpit-Pfad ist aber nur advisory und nicht mehr der alleinige Go/No-Go-Indikator.
 

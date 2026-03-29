@@ -2,11 +2,65 @@ import unittest
 from contextlib import nullcontext
 from unittest.mock import patch
 
+from app.core.celery_app import celery_app
 from app.services.ml.tasks import train_regional_models_task, train_xgboost_model_task
 from app.services.ml.training_contract import SUPPORTED_VIRUS_TYPES
 
 
 class MLTrainingTaskContractTests(unittest.TestCase):
+    def test_market_backtest_refresh_task_runs_all_supported_viruses(self) -> None:
+        from app.services.ml.tasks import refresh_market_backtests_task
+
+        with patch(
+            "app.services.ml.tasks.get_db_context",
+            return_value=nullcontext(object()),
+        ), patch(
+            "app.services.ml.backtester.BacktestService",
+        ) as backtest_service_cls, patch.object(
+            refresh_market_backtests_task,
+            "update_state",
+        ):
+            backtest_service_cls.return_value.run_market_simulation.return_value = {
+                "status": "success",
+                "persisted_run_id": "bt-123",
+            }
+
+            result = refresh_market_backtests_task.run()
+
+        self.assertEqual(result["virus_types"], list(SUPPORTED_VIRUS_TYPES))
+        self.assertEqual(result["target_source"], "RKI_ARE")
+        self.assertEqual(result["selection_mode"], "all")
+        self.assertEqual(
+            backtest_service_cls.return_value.run_market_simulation.call_count,
+            len(SUPPORTED_VIRUS_TYPES),
+        )
+        self.assertEqual(
+            [
+                call.kwargs
+                for call in backtest_service_cls.return_value.run_market_simulation.call_args_list
+            ],
+            [
+                {
+                    "virus_typ": virus,
+                    "target_source": "RKI_ARE",
+                    "strict_vintage_mode": True,
+                }
+                for virus in SUPPORTED_VIRUS_TYPES
+            ],
+        )
+
+    def test_celery_schedule_refreshes_market_backtests_and_uses_valid_training_kwargs(self) -> None:
+        schedule = celery_app.conf.beat_schedule
+
+        refresh_entry = schedule["daily-market-backtest-refresh"]
+        self.assertEqual(refresh_entry["task"], "refresh_market_backtests_task")
+        self.assertEqual(refresh_entry["schedule"]._orig_hour, 6)
+        self.assertEqual(refresh_entry["schedule"]._orig_minute, 10)
+        self.assertEqual(refresh_entry["kwargs"], {})
+
+        training_entry = schedule["daily-xgboost-training"]
+        self.assertEqual(training_entry["kwargs"], {"virus_typ": None})
+
     def test_run_without_selection_trains_all_supported_viruses(self) -> None:
         with patch(
             "app.services.ml.tasks.get_db_context",

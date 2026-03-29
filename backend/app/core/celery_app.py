@@ -130,6 +130,12 @@ celery_app.conf.beat_schedule = {
         "schedule": crontab(hour=6, minute=0),
         "kwargs": {},
     },
+    # Taeglich 06:10 — Markt-Backtests nach frischer Ingestion neu berechnen
+    "daily-market-backtest-refresh": {
+        "task": "refresh_market_backtests_task",
+        "schedule": crontab(hour=6, minute=10),
+        "kwargs": {},
+    },
     # Taeglich 06:30 — Marketing-Opportunities aus frischen Signalen generieren
     "daily-marketing-opportunities": {
         "task": "generate_marketing_opportunities_task",
@@ -140,7 +146,7 @@ celery_app.conf.beat_schedule = {
     "daily-xgboost-training": {
         "task": "train_xgboost_model_task",
         "schedule": crontab(hour=7, minute=0),
-        "kwargs": {"virus_type": None},  # alle 4 Typen
+        "kwargs": {"virus_typ": None},  # alle 4 Typen
     },
     # Montags 03:00 — RKI SurvStat Kreis-Daten (wochentlich, Rate-Limit-schonend)
     "weekly-survstat-kreis": {

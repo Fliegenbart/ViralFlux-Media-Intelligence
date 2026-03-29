@@ -171,6 +171,79 @@ def train_xgboost_model_task(
     })
 
 
+@celery_app.task(bind=True, name="refresh_market_backtests_task")
+def refresh_market_backtests_task(self) -> Dict[str, Any]:
+    """Refresh persisted MARKET_CHECK backtests for the default RKI_ARE source."""
+    from app.services.ml.backtester import BacktestService
+
+    logger.info(
+        "Celery: Refreshing MARKET_CHECK backtests (virus_types=%s, target_source=%s)",
+        list(SUPPORTED_VIRUS_TYPES),
+        "RKI_ARE",
+    )
+    self.update_state(
+        state="PROGRESS",
+        meta={"step": "Refreshing market backtests...", "progress": 10},
+    )
+
+    results: dict[str, dict[str, Any]] = {}
+
+    with get_db_context() as db:
+        service = BacktestService(db)
+        total = len(SUPPORTED_VIRUS_TYPES)
+
+        for index, virus in enumerate(SUPPORTED_VIRUS_TYPES, start=1):
+            progress = min(95, 10 + int(index / max(total, 1) * 80))
+            self.update_state(
+                state="PROGRESS",
+                meta={
+                    "step": f"Refreshing market backtest for {virus}...",
+                    "progress": progress,
+                },
+            )
+            try:
+                result = service.run_market_simulation(
+                    virus_typ=virus,
+                    target_source="RKI_ARE",
+                    strict_vintage_mode=True,
+                )
+            except Exception as exc:
+                logger.exception("Celery: MARKET_CHECK refresh failed for %s", virus)
+                results[virus] = {"status": "error", "error": str(exc)}
+                continue
+
+            if isinstance(result, dict) and result.get("error"):
+                logger.warning(
+                    "Celery: MARKET_CHECK refresh returned domain error for %s: %s",
+                    virus,
+                    result.get("error"),
+                )
+                results[virus] = {"status": "error", "error": result.get("error")}
+                continue
+
+            results[virus] = {
+                "status": "success",
+                "run_id": result.get("run_id") if isinstance(result, dict) else None,
+                "target_source": "RKI_ARE",
+            }
+
+    failed = [virus for virus, payload in results.items() if payload.get("status") != "success"]
+    status = "success" if not failed else ("error" if len(failed) == len(SUPPORTED_VIRUS_TYPES) else "partial_error")
+    logger.info(
+        "Celery: MARKET_CHECK refresh completed (status=%s, failed=%s)",
+        status,
+        failed,
+    )
+    return _json_safe({
+        "status": status,
+        "virus_types": list(SUPPORTED_VIRUS_TYPES),
+        "selection_mode": "all",
+        "target_source": "RKI_ARE",
+        "results": results,
+        "timestamp": utc_now().isoformat(),
+    })
+
+
 @celery_app.task(bind=True, name="compute_forecast_accuracy_task")
 def compute_forecast_accuracy_task(self) -> Dict[str, Any]:
     """Tägliches Monitoring: vergangene Forecasts mit tatsächlichen Abwasserdaten vergleichen.

@@ -2661,17 +2661,28 @@ class BacktestService:
             "strict_vintage_mode": bool(self.strict_vintage_mode),
             "fallback": "event_time<=cutoff when available_time is NULL",
         }
+        def _safe_metric(value: object, default: float = 0.0) -> float:
+            try:
+                return float(value) if value is not None else float(default)
+            except (TypeError, ValueError):
+                return float(default)
+
+        timing_best_corr = _safe_metric(timing_metrics.get("corr_at_best_lag"))
+        decision_hit_rate = _safe_metric(decision_metrics.get("hit_rate_pct"))
+        decision_false_alarm_rate = _safe_metric(decision_metrics.get("false_alarm_rate_pct"))
+        interval_80_coverage = _safe_metric((result.get("interval_coverage") or {}).get("coverage_80_pct"))
+        event_brier_score = _safe_metric((result.get("event_calibration") or {}).get("brier_score"))
         result["proof_text"] = (
             f"{proof_text} "
             f"Walk-forward Backtest: MAE vs. Persistence {delta_pers:+.2f}%, "
             f"vs. Seasonal-Naive {delta_seas:+.2f}% (historisch; zukuenftige Performance kann abweichen). "
             f"Timing: best_lag={timing_metrics.get('best_lag_days', 0)} Tage, "
-            f"corr@best={timing_metrics.get('corr_at_best_lag', 0)}. "
+            f"corr@best={timing_best_corr}. "
             f"Decision-Layer: TTD median {decision_metrics.get('median_ttd_days', 0)} Tage, "
-            f"Hit-Rate {decision_metrics.get('hit_rate_pct', 0):.1f}%, "
-            f"False-Alarms {decision_metrics.get('false_alarm_rate_pct', 0):.1f}%, "
-            f"Interval 80% {((result.get('interval_coverage') or {}).get('coverage_80_pct', 0.0)):.1f}%, "
-            f"Brier {((result.get('event_calibration') or {}).get('brier_score', 0.0)):.3f}, "
+            f"Hit-Rate {decision_hit_rate:.1f}%, "
+            f"False-Alarms {decision_false_alarm_rate:.1f}%, "
+            f"Interval 80% {interval_80_coverage:.1f}%, "
+            f"Brier {event_brier_score:.3f}, "
             f"Readiness {'GO' if quality_gate.get('overall_passed') else 'WATCH'}."
         )
         result["llm_insight"] = (

@@ -382,6 +382,104 @@ class BacktesterMathTests(unittest.TestCase):
         self.assertEqual(result["forecast_records"][0]["lead_days"], 7)
         self.assertEqual(result["vintage_metrics"]["oos_points"], 2)
 
+    @patch("app.services.ml.backtester.BacktestService._persist_backtest_result", return_value=None)
+    @patch("app.services.ml.backtester.BacktestService._build_planning_curve")
+    @patch("app.services.ml.backtester.BacktestService._best_bio_lead_lag")
+    @patch("app.services.ml.backtester.BacktestService._run_walk_forward_market_backtest")
+    @patch("app.services.ml.backtester.BacktestService._load_market_target")
+    def test_run_market_simulation_handles_none_metrics_in_proof_text(
+        self,
+        load_market_target_mock,
+        run_walk_forward_mock,
+        best_bio_lead_lag_mock,
+        planning_curve_mock,
+        _persist_mock,
+    ) -> None:
+        load_market_target_mock.return_value = (
+            pd.DataFrame({
+                "datum": pd.date_range("2024-01-01", periods=84, freq="W-MON"),
+                "menge": np.linspace(100.0, 200.0, 84),
+                "available_time": pd.date_range("2024-01-08", periods=84, freq="W-MON"),
+            }),
+            {
+                "target_source": "RKI_ARE",
+                "target_key": "RKI_ARE",
+                "target_label": "RKI ARE (Bundesweit, 00+)",
+            },
+        )
+        run_walk_forward_mock.return_value = {
+            "metrics": {
+                "r2_score": 0.42,
+                "correlation": 0.65,
+                "correlation_pct": 65.0,
+                "mae": 12.0,
+                "smape": 18.5,
+                "data_points": 4,
+            },
+            "chart_data": [
+                {
+                    "date": "2025-02-24",
+                    "real_qty": 1200.0,
+                    "predicted_qty": 1180.0,
+                    "is_forecast": False,
+                },
+                {
+                    "date": "2025-03-03",
+                    "real_qty": 1300.0,
+                    "predicted_qty": 1275.0,
+                    "is_forecast": False,
+                },
+            ],
+            "forecast_records": [
+                {
+                    "issue_date": "2025-02-17",
+                    "target_date": "2025-02-24",
+                    "lead_days": 7,
+                    "y_hat": 1180.0,
+                    "y_true": 1200.0,
+                    "horizon_days": 7,
+                },
+                {
+                    "issue_date": "2025-02-24",
+                    "target_date": "2025-03-03",
+                    "lead_days": 7,
+                    "y_hat": 1275.0,
+                    "y_true": 1300.0,
+                    "horizon_days": 7,
+                },
+            ],
+            "decision_metrics": {
+                "median_ttd_days": 7,
+                "hit_rate_pct": 64.3,
+                "false_alarm_rate_pct": 35.7,
+            },
+            "timing_metrics": {
+                "best_lag_days": 7,
+                "corr_at_best_lag": 0.33,
+            },
+            "quality_gate": {"overall_passed": False},
+            "interval_coverage": {"coverage_80_pct": None},
+            "event_calibration": {"brier_score": None},
+            "improvement_vs_baselines": {
+                "mae_vs_persistence_pct": 1.25,
+                "mae_vs_seasonal_pct": 2.5,
+            },
+        }
+        best_bio_lead_lag_mock.return_value = {"best_lag_days": 0, "lag_correlation": 0.2}
+        planning_curve_mock.return_value = {"lead_days": 0, "correlation": 0, "curve": []}
+
+        service = BacktestService(db=None)
+
+        result = service.run_market_simulation(
+            virus_typ="Influenza A",
+            target_source="RKI_ARE",
+            strict_vintage_mode=True,
+        )
+
+        self.assertIn("proof_text", result)
+        self.assertIn("Interval 80% 0.0%", result["proof_text"])
+        self.assertIn("Brier 0.000", result["proof_text"])
+
 
 if __name__ == "__main__":
     unittest.main()

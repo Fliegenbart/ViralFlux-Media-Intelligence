@@ -160,12 +160,22 @@ describe('CampaignStudio', () => {
         onGoalChange={noop}
         onGenerate={noop}
         onOpenRecommendation={onOpenRecommendation}
+        headerActions={(
+          <>
+            <button type="button">Zum Wochenplan</button>
+            <button type="button">Vorschläge erstellen</button>
+            <button type="button" aria-label="Schnellmenü öffnen">Menü</button>
+          </>
+        )}
       />,
     );
 
     expect(screen.getAllByText('Kampagnen').length).toBeGreaterThan(0);
-    expect(screen.getByText('Welcher Fall als Nächstes geprüft werden sollte')).toBeInTheDocument();
+    expect(screen.getAllByRole('heading', { name: 'Welcher Fall als Nächstes geprüft werden sollte' })).toHaveLength(1);
     expect(screen.getByText('Ein Fokusfall zuerst, danach die nächsten prüfbaren Fälle und die restliche Pipeline.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Zum Wochenplan' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Vorschläge erstellen' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Schnellmenü öffnen')).toBeInTheDocument();
     expect(screen.getAllByText('Empfohlene Aktion').length).toBeGreaterThan(0);
     expect(screen.getByText('Nächster Schritt')).toBeInTheDocument();
     expect(screen.getByText('Warum dieser Fall jetzt vorne liegt')).toBeInTheDocument();

@@ -3,7 +3,11 @@ import { useNavigate, useParams } from 'react-router-dom';
 
 import CampaignStudio from '../../components/cockpit/CampaignStudio';
 import { useToast } from '../../App';
-import { usePageHeader } from '../../components/AppLayout';
+import {
+  PageChromeMobileToggle,
+  PageChromeUtilityMenu,
+  usePageHeader,
+} from '../../components/AppLayout';
 import { mediaApi } from '../../features/media/api';
 import { useCampaignsPageData } from '../../features/media/useMediaData';
 import { useMediaWorkflow } from '../../features/media/workflowContext';
@@ -67,20 +71,33 @@ const CampaignsPage: React.FC = () => {
 
   useEffect(() => {
     setPageHeader({
-      contextNote: 'Ein Fokusfall zuerst, die restliche Pipeline danach.',
-      primaryAction: {
-        label: generationLoading ? 'Vorschläge werden erstellt...' : 'Vorschläge erstellen',
-        onClick: generateRecommendations,
-        disabled: generationLoading,
-      },
-      secondaryAction: {
-        label: 'Zum Wochenplan',
-        onClick: () => navigate('/jetzt'),
-      },
+      chromeMode: 'hidden',
     });
 
     return clearPageHeader;
-  }, [clearPageHeader, generateRecommendations, generationLoading, navigate, setPageHeader]);
+  }, [clearPageHeader, setPageHeader]);
+
+  const headerActions = (
+    <div className="operator-page-actions" aria-label="Kampagnenaktionen">
+      <PageChromeMobileToggle />
+      <button
+        type="button"
+        className="operator-page-action operator-page-action--secondary"
+        onClick={() => navigate('/jetzt')}
+      >
+        Zum Wochenplan
+      </button>
+      <button
+        type="button"
+        className="operator-page-action operator-page-action--primary"
+        onClick={generateRecommendations}
+        disabled={generationLoading}
+      >
+        {generationLoading ? 'Vorschläge werden erstellt...' : 'Vorschläge erstellen'}
+      </button>
+      <PageChromeUtilityMenu />
+    </div>
+  );
 
   return (
     <CampaignStudio
@@ -99,6 +116,7 @@ const CampaignsPage: React.FC = () => {
       onOpenRecommendation={(id) => {
         navigate(`/kampagnen/${id}`);
       }}
+      headerActions={headerActions}
     />
   );
 };

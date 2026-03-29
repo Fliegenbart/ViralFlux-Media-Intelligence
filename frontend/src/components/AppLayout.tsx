@@ -16,6 +16,7 @@ interface Props {
 }
 
 type DensityMode = 'guided' | 'dense';
+type PageHeaderChromeMode = 'full' | 'hidden';
 
 export interface PageHeaderAction {
   label: string;
@@ -24,6 +25,7 @@ export interface PageHeaderAction {
 }
 
 export interface PageHeaderConfig {
+  chromeMode?: PageHeaderChromeMode;
   contextNote?: string;
   primaryAction?: PageHeaderAction | null;
   secondaryAction?: PageHeaderAction | null;
@@ -34,6 +36,13 @@ interface PageHeaderContextValue {
   clearPageHeader: () => void;
   exportWeeklyReport: () => Promise<void>;
   pdfLoading: boolean;
+  densityMode: DensityMode;
+  setDensityMode: (mode: DensityMode) => void;
+  theme: 'light' | 'dark';
+  toggleTheme: () => void;
+  handleLogout: () => void;
+  mobileMenuOpen: boolean;
+  toggleMobileMenu: () => void;
 }
 
 const DENSITY_STORAGE_KEY = 'viralflux-density-mode';
@@ -85,9 +94,153 @@ const PageHeaderContext = createContext<PageHeaderContextValue>({
   clearPageHeader: () => {},
   exportWeeklyReport: async () => {},
   pdfLoading: false,
+  densityMode: 'guided',
+  setDensityMode: () => {},
+  theme: 'light',
+  toggleTheme: () => {},
+  handleLogout: () => {},
+  mobileMenuOpen: false,
+  toggleMobileMenu: () => {},
 });
 
 export const usePageHeader = () => useContext(PageHeaderContext);
+
+interface PageChromeMobileToggleProps {
+  buttonRef?: React.RefObject<HTMLButtonElement>;
+}
+
+export const PageChromeMobileToggle: React.FC<PageChromeMobileToggleProps> = ({ buttonRef }) => {
+  const { mobileMenuOpen, toggleMobileMenu } = usePageHeader();
+
+  return (
+    <button
+      ref={buttonRef}
+      type="button"
+      className="shell-mobile-toggle operator-mobile-toggle"
+      onClick={toggleMobileMenu}
+      aria-label={mobileMenuOpen ? 'Navigation schließen' : 'Navigation öffnen'}
+      aria-expanded={mobileMenuOpen}
+      aria-controls="operator-sidebar"
+    >
+      <span style={{ fontSize: 20, lineHeight: 1 }}>
+        {mobileMenuOpen ? '\u2715' : '\u2630'}
+      </span>
+    </button>
+  );
+};
+
+export const PageChromeUtilityMenu: React.FC = () => {
+  const {
+    densityMode,
+    setDensityMode,
+    theme,
+    toggleTheme,
+    handleLogout,
+  } = usePageHeader();
+  const location = useLocation();
+  const [utilityMenuOpen, setUtilityMenuOpen] = useState(false);
+  const utilityMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!utilityMenuOpen) {
+      return undefined;
+    }
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!utilityMenuRef.current?.contains(event.target as Node)) {
+        setUtilityMenuOpen(false);
+      }
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setUtilityMenuOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [utilityMenuOpen]);
+
+  useEffect(() => {
+    setUtilityMenuOpen(false);
+  }, [location.pathname]);
+
+  return (
+    <div className="operator-utility" ref={utilityMenuRef}>
+      <button
+        type="button"
+        className="operator-utility-toggle"
+        aria-label={utilityMenuOpen ? 'Schnellmenü schließen' : 'Schnellmenü öffnen'}
+        aria-haspopup="menu"
+        aria-expanded={utilityMenuOpen}
+        onClick={() => setUtilityMenuOpen((open) => !open)}
+      >
+        <span className="material-symbols-outlined" aria-hidden="true">tune</span>
+      </button>
+
+      {utilityMenuOpen ? (
+        <div className="operator-utility-panel" role="menu" aria-label="Schnellmenü">
+          <div className="operator-utility-panel__section">
+            <span className="operator-utility-panel__label">Ansicht</span>
+            <div className="operator-density-toggle" role="group" aria-label="Ansichtsmodus">
+              <button
+                type="button"
+                className={`operator-density-toggle__button ${densityMode === 'guided' ? 'active' : ''}`}
+                aria-pressed={densityMode === 'guided'}
+                onClick={() => setDensityMode('guided')}
+              >
+                Guided
+              </button>
+              <button
+                type="button"
+                className={`operator-density-toggle__button ${densityMode === 'dense' ? 'active' : ''}`}
+                aria-pressed={densityMode === 'dense'}
+                onClick={() => setDensityMode('dense')}
+              >
+                Dense
+              </button>
+            </div>
+          </div>
+
+          <div className="operator-utility-panel__section">
+            <button
+              type="button"
+              role="menuitem"
+              className="operator-utility-item"
+              onClick={() => {
+                toggleTheme();
+                setUtilityMenuOpen(false);
+              }}
+            >
+              <span className="material-symbols-outlined" aria-hidden="true">
+                {theme === 'dark' ? 'light_mode' : 'dark_mode'}
+              </span>
+              <span>{theme === 'dark' ? 'Helles Design aktivieren' : 'Dunkles Design aktivieren'}</span>
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              className="operator-utility-item"
+              onClick={() => {
+                handleLogout();
+                setUtilityMenuOpen(false);
+              }}
+            >
+              <span className="material-symbols-outlined" aria-hidden="true">logout</span>
+              <span>Abmelden</span>
+            </button>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+};
 
 const AppLayout: React.FC<Props> = ({ children }) => {
   const { theme, toggle } = useTheme();
@@ -96,7 +249,6 @@ const AppLayout: React.FC<Props> = ({ children }) => {
   const navigate = useNavigate();
   const [pdfLoading, setPdfLoading] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [utilityMenuOpen, setUtilityMenuOpen] = useState(false);
   const [pageHeader, setPageHeaderState] = useState<PageHeaderConfig | null>(null);
   const [densityMode, setDensityMode] = useState<DensityMode>(() => {
     if (typeof window === 'undefined') {
@@ -106,7 +258,6 @@ const AppLayout: React.FC<Props> = ({ children }) => {
   });
   const mobileToggleRef = useRef<HTMLButtonElement>(null);
   const firstNavItemRef = useRef<HTMLButtonElement>(null);
-  const utilityMenuRef = useRef<HTMLDivElement>(null);
 
   const isActive = (path: string) => location.pathname.startsWith(path);
   const currentSection = SECTION_META.find(({ path }) => location.pathname.startsWith(path)) || {
@@ -147,7 +298,6 @@ const AppLayout: React.FC<Props> = ({ children }) => {
   const handleNavClick = (path: string) => {
     navigate(path);
     setMobileMenuOpen(false);
-    setUtilityMenuOpen(false);
   };
 
   useEffect(() => {
@@ -169,36 +319,6 @@ const AppLayout: React.FC<Props> = ({ children }) => {
   }, [mobileMenuOpen]);
 
   useEffect(() => {
-    if (!utilityMenuOpen) {
-      return undefined;
-    }
-
-    const handlePointerDown = (event: MouseEvent) => {
-      if (!utilityMenuRef.current?.contains(event.target as Node)) {
-        setUtilityMenuOpen(false);
-      }
-    };
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        setUtilityMenuOpen(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handlePointerDown);
-    document.addEventListener('keydown', handleKeyDown);
-
-    return () => {
-      document.removeEventListener('mousedown', handlePointerDown);
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [utilityMenuOpen]);
-
-  useEffect(() => {
-    setUtilityMenuOpen(false);
-  }, [location.pathname]);
-
-  useEffect(() => {
     if (typeof window !== 'undefined') {
       window.localStorage.setItem(DENSITY_STORAGE_KEY, densityMode);
     }
@@ -209,7 +329,17 @@ const AppLayout: React.FC<Props> = ({ children }) => {
     clearPageHeader,
     exportWeeklyReport: handlePdfDownload,
     pdfLoading,
-  }), [clearPageHeader, handlePdfDownload, pdfLoading, setPageHeader]);
+    densityMode,
+    setDensityMode,
+    theme,
+    toggleTheme: toggle,
+    handleLogout,
+    mobileMenuOpen,
+    toggleMobileMenu: () => setMobileMenuOpen((open) => !open),
+  }), [clearPageHeader, densityMode, handleLogout, handlePdfDownload, mobileMenuOpen, pdfLoading, setPageHeader, theme, toggle]);
+
+  const chromeMode = pageHeader?.chromeMode || 'full';
+  const showHeader = chromeMode !== 'hidden';
 
   const renderPageAction = (
     action: PageHeaderAction | null | undefined,
@@ -309,125 +439,54 @@ const AppLayout: React.FC<Props> = ({ children }) => {
           </aside>
 
           <div className="operator-stage">
-            <header className="operator-header surface-header">
-              <div className="operator-header__topbar">
-                <div className="operator-header__context">
-                  <div className="operator-header__search-row">
-                    <button
-                      ref={mobileToggleRef}
-                      type="button"
-                      className="shell-mobile-toggle operator-mobile-toggle"
-                      onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                      aria-label={mobileMenuOpen ? 'Navigation schließen' : 'Navigation öffnen'}
-                      aria-expanded={mobileMenuOpen}
-                      aria-controls="operator-sidebar"
-                    >
-                      <span style={{ fontSize: 20, lineHeight: 1 }}>
-                        {mobileMenuOpen ? '\u2715' : '\u2630'}
-                      </span>
-                    </button>
+            {showHeader ? (
+              <header className="operator-header surface-header">
+                <div className="operator-header__topbar">
+                  <div className="operator-header__context">
+                    <div className="operator-header__search-row">
+                      <PageChromeMobileToggle buttonRef={mobileToggleRef} />
 
-                    <div className="operator-header__suite-group">
-                      <span className="operator-header__suite">ViralFlux</span>
-                      <span className="operator-header__suite-separator" aria-hidden="true">/</span>
-                      <span className="operator-header__section-context">{currentSection.kicker}</span>
-                    </div>
-                  </div>
-
-                  <div className="operator-header__hero-meta">
-                    <span className="operator-header__signal operator-header__signal--go">
-                      {currentSection.signal}
-                    </span>
-                  </div>
-
-                  <div className="operator-header__copy-block">
-                    <h1 id="operator-page-title" className="operator-header__title">{currentSection.title}</h1>
-                    <p className="operator-header__copy">{currentSection.description}</p>
-                    <div className="operator-header__summary-line">
-                      <span>{pageHeader?.contextNote || currentSection.note}</span>
-                      <span>Gilt auf Bundesland-Ebene</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="operator-header__actions">
-                  <div className="operator-page-actions" aria-label="Seitenaktionen">
-                    {renderPageAction(pageHeader?.secondaryAction, 'secondary')}
-                    {renderPageAction(pageHeader?.primaryAction, 'primary')}
-                  </div>
-
-                  <div className="operator-utility" ref={utilityMenuRef}>
-                    <button
-                      type="button"
-                      className="operator-utility-toggle"
-                      aria-label={utilityMenuOpen ? 'Schnellmenü schließen' : 'Schnellmenü öffnen'}
-                      aria-haspopup="menu"
-                      aria-expanded={utilityMenuOpen}
-                      onClick={() => setUtilityMenuOpen((open) => !open)}
-                    >
-                      <span className="material-symbols-outlined" aria-hidden="true">tune</span>
-                    </button>
-
-                    {utilityMenuOpen ? (
-                      <div className="operator-utility-panel" role="menu" aria-label="Schnellmenü">
-                        <div className="operator-utility-panel__section">
-                          <span className="operator-utility-panel__label">Ansicht</span>
-                          <div className="operator-density-toggle" role="group" aria-label="Ansichtsmodus">
-                            <button
-                              type="button"
-                              className={`operator-density-toggle__button ${densityMode === 'guided' ? 'active' : ''}`}
-                              aria-pressed={densityMode === 'guided'}
-                              onClick={() => setDensityMode('guided')}
-                            >
-                              Guided
-                            </button>
-                            <button
-                              type="button"
-                              className={`operator-density-toggle__button ${densityMode === 'dense' ? 'active' : ''}`}
-                              aria-pressed={densityMode === 'dense'}
-                              onClick={() => setDensityMode('dense')}
-                            >
-                              Dense
-                            </button>
-                          </div>
-                        </div>
-
-                        <div className="operator-utility-panel__section">
-                          <button
-                            type="button"
-                            role="menuitem"
-                            className="operator-utility-item"
-                            onClick={() => {
-                              toggle();
-                              setUtilityMenuOpen(false);
-                            }}
-                          >
-                            <span className="material-symbols-outlined" aria-hidden="true">
-                              {theme === 'dark' ? 'light_mode' : 'dark_mode'}
-                            </span>
-                            <span>{theme === 'dark' ? 'Helles Design aktivieren' : 'Dunkles Design aktivieren'}</span>
-                          </button>
-                          <button
-                            type="button"
-                            role="menuitem"
-                            className="operator-utility-item"
-                            onClick={() => {
-                              handleLogout();
-                              setUtilityMenuOpen(false);
-                            }}
-                          >
-                            <span className="material-symbols-outlined" aria-hidden="true">logout</span>
-                            <span>Abmelden</span>
-                          </button>
-                        </div>
+                      <div className="operator-header__suite-group">
+                        <span className="operator-header__suite">ViralFlux</span>
+                        <span className="operator-header__suite-separator" aria-hidden="true">/</span>
+                        <span className="operator-header__section-context">{currentSection.kicker}</span>
                       </div>
-                    ) : null}
+                    </div>
+
+                    <div className="operator-header__hero-meta">
+                      <span className="operator-header__signal operator-header__signal--go">
+                        {currentSection.signal}
+                      </span>
+                    </div>
+
+                    <div className="operator-header__copy-block">
+                      <h1 id="operator-page-title" className="operator-header__title">{currentSection.title}</h1>
+                      <p className="operator-header__copy">{currentSection.description}</p>
+                      <div className="operator-header__summary-line">
+                        <span>{pageHeader?.contextNote || currentSection.note}</span>
+                        <span>Gilt auf Bundesland-Ebene</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="operator-header__actions">
+                    <div className="operator-page-actions" aria-label="Seitenaktionen">
+                      {renderPageAction(pageHeader?.secondaryAction, 'secondary')}
+                      {renderPageAction(pageHeader?.primaryAction, 'primary')}
+                    </div>
+                    <PageChromeUtilityMenu />
                   </div>
                 </div>
-              </div>
-            </header>
+              </header>
+            ) : null}
 
-            <main className="shell-main operator-main" id="main-content" tabIndex={-1} aria-labelledby="operator-page-title">
+            <main
+              className="shell-main operator-main"
+              id="main-content"
+              tabIndex={-1}
+              aria-labelledby={showHeader ? 'operator-page-title' : undefined}
+              aria-label={showHeader ? undefined : currentSection.title}
+            >
               <div className="shell-main-inner operator-main-inner">
                 {children}
               </div>

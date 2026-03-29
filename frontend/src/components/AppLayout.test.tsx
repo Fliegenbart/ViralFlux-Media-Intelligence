@@ -1,9 +1,9 @@
 import '@testing-library/jest-dom';
-import React from 'react';
+import React, { useEffect } from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 
-import AppLayout from './AppLayout';
+import AppLayout, { usePageHeader } from './AppLayout';
 import { useAuth, useTheme } from '../App';
 
 jest.mock('../App', () => ({
@@ -17,6 +17,20 @@ jest.mock('../lib/api', () => ({
 
 const mockedUseTheme = useTheme as jest.MockedFunction<typeof useTheme>;
 const mockedUseAuth = useAuth as jest.MockedFunction<typeof useAuth>;
+
+const HiddenChromePage: React.FC = () => {
+  const { setPageHeader, clearPageHeader } = usePageHeader();
+
+  useEffect(() => {
+    setPageHeader({
+      chromeMode: 'hidden',
+    });
+
+    return clearPageHeader;
+  }, [clearPageHeader, setPageHeader]);
+
+  return <div>Kampagneninhalt</div>;
+};
 
 describe('AppLayout theme rendering', () => {
   beforeEach(() => {
@@ -129,5 +143,24 @@ describe('AppLayout theme rendering', () => {
     fireEvent.keyDown(document, { key: 'Escape' });
 
     expect(screen.getByRole('button', { name: 'Navigation öffnen' })).toBeInTheDocument();
+  });
+
+  it('hides the large page header when chrome mode is hidden', () => {
+    mockedUseTheme.mockReturnValue({
+      theme: 'light',
+      toggle: jest.fn(),
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/kampagnen']} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <AppLayout>
+          <HiddenChromePage />
+        </AppLayout>
+      </MemoryRouter>,
+    );
+
+    expect(screen.queryByRole('banner')).not.toBeInTheDocument();
+    expect(screen.getByRole('main')).toHaveAttribute('aria-label', 'Welcher Fall als Nächstes geprüft werden sollte');
+    expect(screen.getByText('Kampagneninhalt')).toBeInTheDocument();
   });
 });

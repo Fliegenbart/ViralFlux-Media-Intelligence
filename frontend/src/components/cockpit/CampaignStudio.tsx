@@ -33,7 +33,6 @@ interface Props {
   onGoalChange: (value: string) => void;
   onGenerate: () => void;
   onOpenRecommendation: (id: string) => void;
-  headerActions?: React.ReactNode;
 }
 
 type ApprovalTone = 'success' | 'warning' | 'neutral';
@@ -59,7 +58,6 @@ const CampaignStudio: React.FC<Props> = ({
   onGoalChange,
   onGenerate,
   onOpenRecommendation,
-  headerActions,
 }) => {
   const cards = campaignsView?.cards || [];
   const stateCounts = campaignsView?.summary?.states || {};
@@ -132,10 +130,7 @@ const CampaignStudio: React.FC<Props> = ({
   return (
     <div className="page-stack">
       <OperatorSection
-        kicker="Kampagnen"
         title="Welcher Fall als Nächstes geprüft werden sollte"
-        description="Ein Fokusfall zuerst, danach die nächsten prüfbaren Fälle und die restliche Pipeline."
-        actions={headerActions}
         tone="accent"
         className="campaign-hero-shell"
       >
@@ -325,7 +320,6 @@ const CampaignStudio: React.FC<Props> = ({
         <OperatorSection
           kicker="Pipeline"
           title="Arbeitsphasen"
-          description="Unter dem Fokusfall bleibt die vollständige operative Pipeline sichtbar, aber bewusst nachgeordnet."
           tone="muted"
         >
           <section className="workspace-phase-grid">

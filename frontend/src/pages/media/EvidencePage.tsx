@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 
 import EvidencePanel from '../../components/cockpit/EvidencePanel';
 import { useToast } from '../../App';
+import AnimatedPage from '../../components/AnimatedPage';
 import { usePageHeader } from '../../components/AppLayout';
 import { useEvidencePageData } from '../../features/media/useMediaData';
 import { useMediaWorkflow } from '../../features/media/workflowContext';
@@ -30,7 +31,6 @@ const EvidencePage: React.FC = () => {
 
   useEffect(() => {
     setPageHeader({
-      contextNote: 'Belastbar, noch offen oder nur mit Vorsicht lesbar: genau darum geht es hier.',
       primaryAction: {
         label: 'Importbereich öffnen',
         onClick: () => document.getElementById('evidence-import')?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
@@ -45,6 +45,7 @@ const EvidencePage: React.FC = () => {
   }, [clearPageHeader, navigate, setPageHeader]);
 
   return (
+    <AnimatedPage>
     <EvidencePanel
       evidence={evidence}
       workspaceStatus={workspaceStatus}
@@ -63,6 +64,7 @@ const EvidencePage: React.FC = () => {
       }}
       onLoadTruthBatchDetail={loadTruthBatchDetail}
     />
+    </AnimatedPage>
   );
 };
 

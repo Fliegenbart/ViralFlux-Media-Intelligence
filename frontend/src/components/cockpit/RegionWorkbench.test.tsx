@@ -242,9 +242,7 @@ describe('RegionWorkbench', () => {
       />,
     );
 
-    expect(screen.getAllByText('Regionen').length).toBeGreaterThan(0);
     expect(screen.getByText('Wo diese Woche genauer hingesehen werden sollte')).toBeInTheDocument();
-    expect(screen.getByText('Bundesländer werden vergleichbar, damit PEIX schneller sieht, wo Fokus sinnvoll ist und wo noch Zurückhaltung gilt.')).toBeInTheDocument();
     expect(screen.getAllByText('Empfohlene Aktion').length).toBeGreaterThan(0);
     expect(screen.getByRole('heading', { name: 'Fokus erhöhen in Berlin' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Regionalen Vorschlag öffnen' })).toBeInTheDocument();

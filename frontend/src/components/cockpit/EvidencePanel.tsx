@@ -208,9 +208,7 @@ const EvidencePanel: React.FC<Props> = ({
   if (loading && !evidence) {
     return (
       <OperatorSection
-        kicker="Evidenz"
         title="Evidenz wird aufgebaut"
-        description="Die Seite ordnet gerade neu, was bereits belastbar ist und was noch geklärt werden muss."
         tone="muted"
       >
         <div className="evidence-briefing-skeleton" role="status" aria-live="polite" aria-label="GELO-Datenlage wird geladen">
@@ -228,9 +226,7 @@ const EvidencePanel: React.FC<Props> = ({
   if (!loading && !evidence) {
     return (
       <OperatorSection
-        kicker="Evidenz"
         title="Evidenz noch nicht verfügbar"
-        description="Im Moment fehlt die Datengrundlage. Sichtbar bleibt trotzdem, was fehlt, was bereits gilt und welcher Schritt als Nächstes sinnvoll ist."
         tone="muted"
       >
         <div className="evidence-empty-stage">
@@ -257,9 +253,7 @@ const EvidencePanel: React.FC<Props> = ({
   return (
     <div className="page-stack evidence-template-page">
       <OperatorSection
-        kicker="Evidenz"
         title="Ist die Empfehlung diese Woche belastbar?"
-        description="Zuerst wird sichtbar, was bereits trägt, was noch fehlt und wo die Aussage nur mit Vorsicht gelesen werden sollte."
         tone="accent"
         className="evidence-briefing-shell"
       >
@@ -336,7 +330,6 @@ const EvidencePanel: React.FC<Props> = ({
       <OperatorSection
         kicker="Arbeitskontext"
         title="Was bereits verbunden ist und was noch fehlt"
-        description="Hier liegt der nächste sinnvolle Klärungs-, Qualitäts- oder Import-Schritt."
         tone="muted"
       >
         <div id="evidence-onboarding" className="workspace-two-column evidence-onboarding-grid">

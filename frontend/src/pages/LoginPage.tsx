@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { AlertCircle, AtSign, Lock, LogIn, Building2 } from 'lucide-react';
 import { login } from '../lib/api';
 
 interface LoginPageProps {
@@ -67,7 +68,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
             <form className="login-form" onSubmit={handleSubmit}>
               {error && (
                 <div role="alert" className="login-error">
-                  <span className="material-symbols-outlined" aria-hidden="true">error</span>
+                  <AlertCircle size={18} aria-hidden="true" />
                   <span>{error}</span>
                 </div>
               )}
@@ -75,7 +76,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
               <label className="login-field">
                 <span className="login-field__label">E-Mail-Adresse</span>
                 <span className="login-input-shell">
-                  <span className="material-symbols-outlined login-input-shell__icon" aria-hidden="true">alternate_email</span>
+                  <AtSign size={18} className="login-input-shell__icon" aria-hidden="true" />
                   <input
                     id="login-email"
                     type="email"
@@ -102,7 +103,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
                   </button>
                 </span>
                 <span className="login-input-shell">
-                  <span className="material-symbols-outlined login-input-shell__icon" aria-hidden="true">lock</span>
+                  <Lock size={18} className="login-input-shell__icon" aria-hidden="true" />
                   <input
                     id="login-password"
                     type="password"
@@ -127,7 +128,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
 
               <button type="submit" disabled={loading} className="login-submit">
                 <span>{loading ? 'Anmelden...' : 'Anmelden'}</span>
-                <span className="material-symbols-outlined" aria-hidden="true">login</span>
+                <LogIn size={18} aria-hidden="true" />
               </button>
 
               <div className="login-divider">
@@ -150,7 +151,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
                   disabled
                   title="Azure-Anmeldung ist in diesem Schritt noch nicht aktiv."
                 >
-                  <span className="material-symbols-outlined" aria-hidden="true">corporate_fare</span>
+                  <Building2 size={18} aria-hidden="true" />
                   <span>Azure AD</span>
                 </button>
               </div>

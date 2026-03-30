@@ -337,9 +337,7 @@ const RegionWorkbench: React.FC<Props> = ({
   if (loading && !regionsView) {
     return (
       <OperatorSection
-        kicker="Regionen"
         title="Regionale Priorisierung wird aufgebaut"
-        description="Die regionale Einordnung, die Priorisierung und die weiteren prüfbaren Regionen werden gerade zusammengestellt."
         tone="muted"
       >
         <div className="regions-loading-skeleton" aria-label="Regionale Arbeitsfläche wird geladen">
@@ -360,9 +358,7 @@ const RegionWorkbench: React.FC<Props> = ({
   if (!activeMap?.has_data) {
     return (
       <OperatorSection
-        kicker="Regionen"
         title="Noch keine regionale Einordnung verfügbar"
-        description="Für diese Auswahl liegt aktuell noch keine belastbare regionale Sicht auf Bundesland-Ebene vor."
         tone="muted"
       >
         <div className="regions-empty-stage">
@@ -384,9 +380,7 @@ const RegionWorkbench: React.FC<Props> = ({
   if (regionRows.length === 0) {
     return (
       <OperatorSection
-        kicker="Regionen"
         title="Noch keine klare regionale Reihenfolge"
-        description="Es liegen erste regionale Signale vor, aber noch keine belastbare Reihenfolge für operative Priorisierung."
         tone="muted"
       >
         <div className="regions-empty-stage">
@@ -408,9 +402,7 @@ const RegionWorkbench: React.FC<Props> = ({
   return (
     <div className="page-stack regions-template-page">
       <OperatorSection
-        kicker="Regionen"
         title="Wo diese Woche genauer hingesehen werden sollte"
-        description="Bundesländer werden vergleichbar, damit PEIX schneller sieht, wo Fokus sinnvoll ist und wo noch Zurückhaltung gilt."
         tone="accent"
         className="operator-toolbar-shell"
       >
@@ -576,7 +568,6 @@ const RegionWorkbench: React.FC<Props> = ({
         <OperatorSection
           kicker="Vergleich"
           title="Vergleich im Detail"
-          description="Die Liste bleibt das wichtigste Werkzeug für Richtung, Reihenfolge und saubere regionale Einordnung."
           tone="muted"
         >
           <div className="regions-workbench-grid">

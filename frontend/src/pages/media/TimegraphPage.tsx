@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 
 import { useToast } from '../../App';
+import AnimatedPage from '../../components/AnimatedPage';
 import { usePageHeader } from '../../components/AppLayout';
 import { FocusRegionOutlookPanel } from '../../components/cockpit/BacktestVisuals';
 import { VIRUS_OPTIONS } from '../../components/cockpit/cockpitUtils';
@@ -13,7 +14,7 @@ import { useMediaWorkflow } from '../../features/media/workflowContext';
 
 const TimegraphPage: React.FC = () => {
   const { toast } = useToast();
-  const { setPageHeader, clearPageHeader } = usePageHeader();
+  const { clearPageHeader } = usePageHeader();
   const { virus, setVirus, dataVersion } = useMediaWorkflow();
   const {
     selectedRegion,
@@ -27,18 +28,13 @@ const TimegraphPage: React.FC = () => {
   } = useTimegraphPageData(virus, dataVersion, toast);
 
   useEffect(() => {
-    setPageHeader({
-      contextNote: 'Nur bestätigter Verlauf plus vermutete Fortführung für die nächsten sieben Tage.',
-    });
-
     return clearPageHeader;
-  }, [clearPageHeader, setPageHeader]);
+  }, [clearPageHeader]);
 
   return (
+    <AnimatedPage>
     <OperatorSection
-      kicker="Zeitgraph"
       title="Verlauf und 7-Tage-Fortführung"
-      description="Reduzierte Ansicht nur für die Kurve: Virus wählen, Bundesland wählen, Verlauf lesen."
       tone="accent"
       className="timegraph-page"
     >
@@ -92,6 +88,7 @@ const TimegraphPage: React.FC = () => {
         minimal
       />
     </OperatorSection>
+    </AnimatedPage>
   );
 };
 

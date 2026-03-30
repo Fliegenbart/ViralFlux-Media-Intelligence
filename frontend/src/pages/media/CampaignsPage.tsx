@@ -3,11 +3,8 @@ import { useNavigate, useParams } from 'react-router-dom';
 
 import CampaignStudio from '../../components/cockpit/CampaignStudio';
 import { useToast } from '../../App';
-import {
-  PageChromeMobileToggle,
-  PageChromeUtilityMenu,
-  usePageHeader,
-} from '../../components/AppLayout';
+import AnimatedPage from '../../components/AnimatedPage';
+import { usePageHeader } from '../../components/AppLayout';
 import { mediaApi } from '../../features/media/api';
 import { useCampaignsPageData } from '../../features/media/useMediaData';
 import { useMediaWorkflow } from '../../features/media/workflowContext';
@@ -71,35 +68,22 @@ const CampaignsPage: React.FC = () => {
 
   useEffect(() => {
     setPageHeader({
-      chromeMode: 'hidden',
+      secondaryAction: {
+        label: 'Zum Wochenplan',
+        onClick: () => navigate('/jetzt'),
+      },
+      primaryAction: {
+        label: generationLoading ? 'Vorschläge werden erstellt...' : 'Vorschläge erstellen',
+        onClick: generateRecommendations,
+        disabled: generationLoading,
+      },
     });
 
     return clearPageHeader;
-  }, [clearPageHeader, setPageHeader]);
-
-  const headerActions = (
-    <div className="operator-page-actions" aria-label="Kampagnenaktionen">
-      <PageChromeMobileToggle />
-      <button
-        type="button"
-        className="operator-page-action operator-page-action--secondary"
-        onClick={() => navigate('/jetzt')}
-      >
-        Zum Wochenplan
-      </button>
-      <button
-        type="button"
-        className="operator-page-action operator-page-action--primary"
-        onClick={generateRecommendations}
-        disabled={generationLoading}
-      >
-        {generationLoading ? 'Vorschläge werden erstellt...' : 'Vorschläge erstellen'}
-      </button>
-      <PageChromeUtilityMenu />
-    </div>
-  );
+  }, [clearPageHeader, generateRecommendations, generationLoading, navigate, setPageHeader]);
 
   return (
+    <AnimatedPage>
     <CampaignStudio
       campaignsView={campaignsView}
       virus={virus}
@@ -116,8 +100,8 @@ const CampaignsPage: React.FC = () => {
       onOpenRecommendation={(id) => {
         navigate(`/kampagnen/${id}`);
       }}
-      headerActions={headerActions}
     />
+    </AnimatedPage>
   );
 };
 

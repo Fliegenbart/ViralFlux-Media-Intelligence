@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { useToast } from '../../App';
+import AnimatedPage from '../../components/AnimatedPage';
 import { usePageHeader } from '../../components/AppLayout';
 import NowWorkspace from '../../components/cockpit/NowWorkspace';
 import { useNowPageData } from '../../features/media/useMediaData';
@@ -35,7 +36,6 @@ const NowPage: React.FC = () => {
 
   useEffect(() => {
     setPageHeader({
-      contextNote: 'Eine Richtung zuerst. Vertrauen und weitere Optionen direkt darunter.',
       primaryAction: {
         label: pdfLoading ? 'Bericht wird erstellt...' : 'Wochenbericht exportieren',
         onClick: exportWeeklyReport,
@@ -51,6 +51,7 @@ const NowPage: React.FC = () => {
   }, [clearPageHeader, exportWeeklyReport, navigate, pdfLoading, setPageHeader]);
 
   return (
+    <AnimatedPage>
     <NowWorkspace
       virus={virus}
       onVirusChange={setVirus}
@@ -71,6 +72,7 @@ const NowPage: React.FC = () => {
       onOpenCampaigns={() => navigate('/kampagnen')}
       onOpenEvidence={() => navigate('/evidenz')}
     />
+    </AnimatedPage>
   );
 };
 

@@ -103,12 +103,12 @@ describe('RecommendationDrawer', () => {
     expect(screen.getAllByText('Übergabe vorbereiten').length).toBeGreaterThan(0);
     expect(screen.getByRole('button', { name: /Zweiter Blick: Kennzahlen und Lernsignale/i })).toBeInTheDocument();
     expect(screen.getAllByText(/Bundesland-Level/).length).toBeGreaterThan(0);
-    expect(screen.queryByText(/Ranking-Signal/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Signal-Score/)).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /Zweiter Blick: Kennzahlen und Lernsignale/i }));
 
-    expect(screen.getAllByText(/Ranking-Signal/).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/Entscheidungs-Priorität/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Signal-Score/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Aktivierungs-Priorität/).length).toBeGreaterThan(0);
 
     fireEvent.keyDown(document, { key: 'Escape' });
 

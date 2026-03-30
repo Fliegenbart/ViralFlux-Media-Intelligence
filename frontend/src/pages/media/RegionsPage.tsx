@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 
 import RegionWorkbench from '../../components/cockpit/RegionWorkbench';
 import { useToast } from '../../App';
+import AnimatedPage from '../../components/AnimatedPage';
 import { usePageHeader } from '../../components/AppLayout';
 import { mediaApi } from '../../features/media/api';
 import { useRegionsPageData } from '../../features/media/useMediaData';
@@ -42,7 +43,6 @@ const RegionsPage: React.FC = () => {
 
   useEffect(() => {
     setPageHeader({
-      contextNote: 'Bundesländer vergleichen, ohne lokale Scheingenauigkeit vorzutäuschen.',
       primaryAction: {
         label: 'Zum Wochenplan',
         onClick: () => navigate('/jetzt'),
@@ -83,6 +83,7 @@ const RegionsPage: React.FC = () => {
   };
 
   return (
+    <AnimatedPage>
     <RegionWorkbench
       virus={virus}
       onVirusChange={setVirus}
@@ -95,6 +96,7 @@ const RegionsPage: React.FC = () => {
       onGenerateRegionCampaign={openOrCreateRegionCampaign}
       regionActionLoading={regionActionLoading}
     />
+    </AnimatedPage>
   );
 };
 

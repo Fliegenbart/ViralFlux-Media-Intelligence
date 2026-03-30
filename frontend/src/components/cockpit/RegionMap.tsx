@@ -29,9 +29,15 @@ function formatSignalScore(score?: number): string {
 }
 
 function stageFill(stage: RegionMapRegion['decision_stage']): string {
-  if (stage === 'activate') return 'var(--color-danger, var(--accent-red))';
-  if (stage === 'prepare') return 'var(--color-warning, var(--accent-amber))';
-  return 'var(--color-success, var(--accent-emerald))';
+  if (stage === 'activate') return 'rgba(220, 38, 38, 0.15)';
+  if (stage === 'prepare') return 'rgba(217, 119, 6, 0.12)';
+  return 'rgba(5, 150, 105, 0.08)';
+}
+
+function stageStroke(stage: RegionMapRegion['decision_stage']): string {
+  if (stage === 'activate') return 'rgba(220, 38, 38, 0.4)';
+  if (stage === 'prepare') return 'rgba(217, 119, 6, 0.3)';
+  return 'rgba(5, 150, 105, 0.2)';
 }
 
 const RegionMap: React.FC<Props> = ({ regions, selectedRegion, onRegionClick }) => {
@@ -59,7 +65,7 @@ const RegionMap: React.FC<Props> = ({ regions, selectedRegion, onRegionClick }) 
       >
         <defs>
           <filter id="region-map-glow" x="-30%" y="-30%" width="160%" height="160%">
-            <feDropShadow dx="0" dy="0" stdDeviation="4" floodColor="var(--color-focus-ring, var(--accent-cyan))" floodOpacity="0.55" />
+            <feDropShadow dx="0" dy="0" stdDeviation="2" floodColor="var(--color-primary)" floodOpacity="0.2" />
           </filter>
         </defs>
 
@@ -85,9 +91,9 @@ const RegionMap: React.FC<Props> = ({ regions, selectedRegion, onRegionClick }) 
               aria-label={ariaLabel}
               aria-pressed={selected}
               fill={stageFill(decisionStage)}
-              stroke={highlighted ? 'var(--color-focus-ring, var(--accent-cyan))' : 'rgba(255,255,255,0.28)'}
-              strokeWidth={selected ? 3 : focused ? 2.6 : hovered ? 2 : 1}
-              filter={highlighted ? 'url(#region-map-glow)' : undefined}
+              stroke={highlighted ? 'var(--color-primary)' : 'var(--border-color, #e5e5e5)'}
+              strokeWidth={selected ? 2 : highlighted ? 1.5 : 0.75}
+              filter={selected ? 'url(#region-map-glow)' : undefined}
               className="region-map__path"
               onClick={() => onRegionClick(shape.code)}
               onMouseEnter={() => setHoveredRegion(shape.code)}

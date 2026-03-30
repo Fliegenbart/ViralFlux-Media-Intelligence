@@ -1,0 +1,41 @@
+/* ═══════════════════════════════════════════════════════════════════
+   Recharts  —  library-inline-style overrides
+   ═══════════════════════════════════════════════════════════════════ */
+
+.recharts-cartesian-grid line {
+  stroke: var(--chart-grid) !important;
+}
+
+.recharts-text {
+  fill: var(--chart-axis) !important;
+  font-size: 11px !important;
+  font-weight: 500 !important;
+}
+
+.recharts-cartesian-axis-line,
+.recharts-cartesian-axis-tick-line {
+  display: none !important;
+}
+
+.recharts-tooltip-wrapper .recharts-default-tooltip {
+  background: var(--chart-tooltip-bg) !important;
+  border: 1px solid var(--chart-tooltip-border) !important;
+  border-radius: 18px !important;
+  box-shadow: 0 22px 40px rgba(15, 23, 42, 0.12) !important;
+  padding: 12px !important;
+}
+
+.recharts-tooltip-label {
+  color: var(--chart-tooltip-title) !important;
+  font-weight: 600 !important;
+  font-size: 12px !important;
+}
+
+.recharts-tooltip-item {
+  color: var(--chart-tooltip-text) !important;
+  font-size: 12px !important;
+}
+
+.recharts-dot {
+  display: none;
+}

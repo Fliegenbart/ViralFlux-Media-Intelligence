@@ -1,0 +1,363 @@
+/* ═══ Timegraph ═══ */
+
+/* --- Page Layout --- */
+
+.timegraph-page {
+  gap: 18px;
+}
+
+.timegraph-page__toolbar {
+  display: grid;
+  gap: var(--space-md);
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 280px) 120px;
+  align-items: end;
+}
+
+.timegraph-page__virus-rail {
+  flex-wrap: wrap;
+}
+
+.timegraph-page__region-control {
+  display: grid;
+  gap: var(--space-sm);
+}
+
+.timegraph-page__control-label {
+  font-size: var(--text-label);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.timegraph-page__horizon-note {
+  display: grid;
+  gap: var(--space-sm);
+  align-content: start;
+  padding: 10px var(--space-md);
+  border-radius: 12px;
+  border: 1px solid var(--border-color);
+  background: rgba(255, 255, 255, 0.72);
+}
+
+/* --- Backtest Card --- */
+
+.backtest-block-gap {
+  margin-bottom: var(--space-lg);
+}
+
+.backtest-card {
+  padding: 20px;
+}
+
+.backtest-card--compact {
+  display: grid;
+  gap: var(--space-md);
+}
+
+.backtest-card__header {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-md);
+  align-items: flex-start;
+  margin-bottom: var(--space-lg);
+}
+
+.backtest-card__title {
+  margin: 0;
+  font-size: var(--text-h2);
+  color: var(--text-primary);
+}
+
+.backtest-card__subtitle {
+  margin: 6px 0 0;
+  font-size: var(--text-small);
+  color: var(--text-muted);
+}
+
+.backtest-card__meta {
+  text-align: right;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+/* --- Note Card --- */
+
+.backtest-note-card {
+  padding: var(--space-md);
+}
+
+.backtest-note-card__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.backtest-note-card__swatch {
+  display: inline-block;
+  width: 18px;
+  height: 10px;
+  border-radius: 999px;
+}
+
+.backtest-note-card__title {
+  color: var(--text-primary);
+}
+
+.backtest-note-card__detail,
+.backtest-note-panel__note,
+.backtest-axis-hint,
+.backtest-proof-panel__body {
+  font-size: var(--text-small);
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.backtest-note-card__detail {
+  margin-top: var(--space-sm);
+  line-height: 1.55;
+}
+
+/* --- Note Panel --- */
+
+.backtest-note-panel {
+  padding: var(--space-lg);
+}
+
+.backtest-semantics-grid {
+  margin-top: 10px;
+  display: grid;
+  gap: var(--space-sm);
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.backtest-note-panel__note {
+  margin-top: var(--space-md);
+}
+
+/* --- Axis Hint --- */
+
+.backtest-axis-hint {
+  padding: var(--space-md);
+  margin-top: 14px;
+}
+
+/* --- Tooltip --- */
+
+.backtest-tooltip {
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.94);
+  color: #f8fafc;
+  padding: var(--space-md) 14px;
+  box-shadow: 0 18px 48px rgba(15, 23, 42, 0.24);
+  max-width: 260px;
+}
+
+.backtest-tooltip__title {
+  font-size: var(--text-xs);
+  font-weight: 700;
+}
+
+.backtest-tooltip__label {
+  margin-top: var(--space-xs);
+  font-size: var(--text-xs);
+  color: rgba(226, 232, 240, 0.9);
+}
+
+.backtest-tooltip__list {
+  margin-top: 10px;
+  display: grid;
+  gap: var(--space-sm);
+}
+
+.backtest-tooltip__row {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-md);
+  font-size: var(--text-xs);
+}
+
+/* --- Empty Panel --- */
+
+.backtest-empty-panel {
+  padding: 20px;
+  margin-top: 14px;
+  color: var(--text-muted);
+}
+
+.backtest-empty-panel--lg {
+  padding: var(--space-xl);
+}
+
+/* --- Story Panel --- */
+
+.backtest-story-panel {
+  padding: 18px;
+  margin-bottom: var(--space-lg);
+}
+
+.backtest-story-panel__lead {
+  margin: 0;
+  font-size: var(--text-h3);
+  line-height: 1.5;
+  color: var(--text-primary);
+  font-weight: 700;
+}
+
+.backtest-story-panel__body {
+  margin: 10px 0 0;
+  font-size: var(--text-body);
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+
+.backtest-story-panel__note {
+  margin: var(--space-sm) 0 0;
+  font-size: var(--text-small);
+  line-height: 1.6;
+  color: var(--text-muted);
+}
+
+/* --- Stat Grid --- */
+
+.backtest-stat-grid {
+  display: grid;
+  gap: var(--space-md);
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  margin-bottom: var(--space-lg);
+}
+
+.backtest-stat-card {
+  padding: var(--space-lg);
+}
+
+.backtest-stat-card__label,
+.backtest-proof-panel__label {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+.backtest-stat-card__value {
+  margin-top: 6px;
+  font-size: var(--text-h3);
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.backtest-stat-card__value--teal {
+  color: #2aa198;
+}
+
+.backtest-stat-card__value--amber {
+  color: #ff9f0a;
+}
+
+.backtest-stat-card__value--violet {
+  color: var(--color-brand);
+}
+
+.backtest-stat-card__meta {
+  margin-top: var(--space-xs);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+/* --- Map Grid --- */
+
+.backtest-map-grid {
+  display: grid;
+  gap: var(--space-lg);
+  grid-template-columns: minmax(0, 1.25fr) minmax(260px, 0.95fr);
+  margin-bottom: var(--space-lg);
+}
+
+.backtest-map-panel {
+  padding: var(--space-lg);
+}
+
+.backtest-map-panel__hint {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  margin-bottom: var(--space-md);
+}
+
+/* --- Region Panel --- */
+
+.backtest-region-panel {
+  padding: 18px;
+}
+
+.backtest-region-panel__title {
+  margin-top: var(--space-sm);
+  font-size: var(--text-h2);
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.backtest-region-panel__body {
+  margin: 10px 0 var(--space-lg);
+  font-size: var(--text-body);
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+
+/* --- Rank Card --- */
+
+.backtest-rank-card {
+  padding: var(--space-lg);
+}
+
+.backtest-rank-card__head {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-md);
+  align-items: baseline;
+}
+
+.backtest-rank-card__identity {
+  display: flex;
+  gap: var(--space-sm);
+  align-items: baseline;
+}
+
+.backtest-rank-card__rank {
+  font-size: var(--text-xs);
+  color: var(--color-brand);
+  font-weight: 700;
+  min-width: 20px;
+}
+
+.backtest-rank-card__name {
+  font-size: var(--text-body);
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.backtest-rank-card__date {
+  font-size: var(--text-small);
+  color: var(--text-secondary);
+}
+
+.backtest-rank-card__bar {
+  margin-top: 10px;
+  height: var(--space-sm);
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.16);
+  overflow: hidden;
+}
+
+.backtest-rank-card__note {
+  margin-top: var(--space-sm);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+/* --- Proof Panel --- */
+
+.backtest-proof-panel {
+  padding: var(--space-lg);
+}
+
+.backtest-proof-panel__body {
+  margin-top: 6px;
+  font-size: var(--text-body);
+}

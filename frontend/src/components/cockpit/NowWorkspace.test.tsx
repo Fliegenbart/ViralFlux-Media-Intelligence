@@ -420,7 +420,6 @@ describe('NowWorkspace', () => {
       />,
     );
 
-    expect(screen.getAllByText('Wochenplan').length).toBeGreaterThan(0);
     expect(screen.getByText('Fokus diese Woche')).toBeInTheDocument();
     expect(screen.getAllByText('Empfohlene Aktion').length).toBeGreaterThan(0);
     expect(screen.getByRole('heading', { name: 'Berlin jetzt priorisieren.' })).toBeInTheDocument();

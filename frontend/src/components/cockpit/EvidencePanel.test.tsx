@@ -109,7 +109,6 @@ describe('EvidencePanel', () => {
       />,
     );
 
-    expect(screen.getAllByText('Evidenz').length).toBeGreaterThan(0);
     expect(screen.getByText('Ist die Empfehlung diese Woche belastbar?')).toBeInTheDocument();
     expect(screen.getByText('Aktueller Evidenzstatus')).toBeInTheDocument();
     expect(screen.getByText('Belastbarkeit')).toBeInTheDocument();

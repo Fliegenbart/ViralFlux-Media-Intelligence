@@ -8,7 +8,7 @@ module.exports = {
     extend: {
       fontFamily: {
         sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
-        headline: ['Manrope', 'Inter', 'system-ui', 'sans-serif'],
+        headline: ['Inter', 'system-ui', 'sans-serif'],
         mono: ['JetBrains Mono', 'Menlo', 'monospace'],
       },
       colors: {
@@ -46,27 +46,36 @@ module.exports = {
         },
       },
       boxShadow: {
-        'soft': '0 12px 30px rgba(5, 52, 92, 0.05)',
-        'medium': '0 20px 40px rgba(5, 52, 92, 0.06)',
-        'strong': '0 28px 64px rgba(5, 52, 92, 0.08)',
-        'brand': '0 18px 36px rgba(81, 72, 216, 0.18)',
+        'xs': '0 1px 2px rgba(0, 0, 0, 0.04)',
+        'soft': '0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04)',
+        'medium': '0 4px 12px rgba(0, 0, 0, 0.06)',
+        'strong': '0 8px 24px rgba(0, 0, 0, 0.08)',
+        'brand': '0 1px 3px rgba(99, 102, 241, 0.2)',
       },
       borderRadius: {
         'sm': '8px',
         'md': '12px',
         'lg': '16px',
-        'xl': '24px',
-        '2xl': '32px',
+        'xl': '20px',
+        '2xl': '24px',
       },
       animation: {
         'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-        'float': 'float 6s ease-in-out infinite',
+        'fade-in': 'fadeIn 0.3s ease-out',
+        'slide-up': 'slideUp 0.3s ease-out',
       },
       keyframes: {
-        float: {
-          '0%, 100%': { transform: 'translateY(0)' },
-          '50%': { transform: 'translateY(-8px)' },
+        fadeIn: {
+          '0%': { opacity: '0', transform: 'translateY(4px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' },
         },
+        slideUp: {
+          '0%': { opacity: '0', transform: 'translateY(8px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' },
+        },
+      },
+      transitionTimingFunction: {
+        'smooth': 'cubic-bezier(0.4, 0, 0.2, 1)',
       },
     },
   },

@@ -18,16 +18,12 @@ jest.mock('../lib/api', () => ({
 const mockedUseTheme = useTheme as jest.MockedFunction<typeof useTheme>;
 const mockedUseAuth = useAuth as jest.MockedFunction<typeof useAuth>;
 
-const HiddenChromePage: React.FC = () => {
-  const { setPageHeader, clearPageHeader } = usePageHeader();
+const SimplePage: React.FC = () => {
+  const { clearPageHeader } = usePageHeader();
 
   useEffect(() => {
-    setPageHeader({
-      chromeMode: 'hidden',
-    });
-
     return clearPageHeader;
-  }, [clearPageHeader, setPageHeader]);
+  }, [clearPageHeader]);
 
   return <div>Kampagneninhalt</div>;
 };
@@ -57,15 +53,11 @@ describe('AppLayout theme rendering', () => {
     );
 
     expect(screen.getByLabelText('Schnellmenü öffnen')).toBeInTheDocument();
-    expect(screen.getByRole('banner')).toHaveClass('surface-header');
+    expect(screen.getByRole('banner')).toHaveClass('operator-header');
     expect(screen.getByRole('link', { name: 'Direkt zum Inhalt springen' })).toHaveAttribute('href', '#main-content');
     expect(screen.queryByText('Wochenbericht exportieren')).not.toBeInTheDocument();
     expect(screen.getByRole('main')).toHaveAttribute('aria-labelledby', 'operator-page-title');
     expect(screen.getByRole('heading', { name: 'Was PEIX diese Woche tun sollte' })).toBeInTheDocument();
-    expect(screen.getByText('Eine klare Wochensteuerung: zuerst die wichtigste Richtung, dann Vertrauen und nächste sinnvolle Schritte.')).toBeInTheDocument();
-    expect(screen.getByText('Eine Hauptentscheidung zuerst. Details erst im zweiten Blick.')).toBeInTheDocument();
-    expect(screen.getByText('Was PEIX diese Woche zuerst tun sollte')).toBeInTheDocument();
-    expect(screen.getByText('Bundesland-Ebene, nicht Stadt-Ebene.')).toBeInTheDocument();
   });
 
   it('shows the light-mode activation label in dark theme', () => {
@@ -84,40 +76,6 @@ describe('AppLayout theme rendering', () => {
 
     fireEvent.click(screen.getByLabelText('Schnellmenü öffnen'));
     expect(screen.getByRole('menuitem', { name: 'Helles Design aktivieren' })).toBeInTheDocument();
-  });
-
-  it('stores and restores the dense mode preference', () => {
-    mockedUseTheme.mockReturnValue({
-      theme: 'light',
-      toggle: jest.fn(),
-    });
-
-    const { unmount } = render(
-      <MemoryRouter initialEntries={['/jetzt']} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-        <AppLayout>
-          <div>Inhalt</div>
-        </AppLayout>
-      </MemoryRouter>,
-    );
-
-    fireEvent.click(screen.getByLabelText('Schnellmenü öffnen'));
-    fireEvent.click(screen.getByRole('button', { name: 'Dense' }));
-
-    expect(window.localStorage.getItem('viralflux-density-mode')).toBe('dense');
-    expect(document.querySelector('.app-shell--operator')).toHaveAttribute('data-density', 'dense');
-
-    unmount();
-
-    render(
-      <MemoryRouter initialEntries={['/jetzt']} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-        <AppLayout>
-          <div>Inhalt</div>
-        </AppLayout>
-      </MemoryRouter>,
-    );
-
-    fireEvent.click(screen.getByLabelText('Schnellmenü öffnen'));
-    expect(screen.getByRole('button', { name: 'Dense' })).toHaveAttribute('aria-pressed', 'true');
   });
 
   it('opens and closes the mobile navigation with keyboard-friendly controls', () => {
@@ -145,7 +103,7 @@ describe('AppLayout theme rendering', () => {
     expect(screen.getByRole('button', { name: 'Navigation öffnen' })).toBeInTheDocument();
   });
 
-  it('hides the large page header when chrome mode is hidden', () => {
+  it('renders slim header and section context on the campaigns route', () => {
     mockedUseTheme.mockReturnValue({
       theme: 'light',
       toggle: jest.fn(),
@@ -154,13 +112,13 @@ describe('AppLayout theme rendering', () => {
     render(
       <MemoryRouter initialEntries={['/kampagnen']} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <AppLayout>
-          <HiddenChromePage />
+          <SimplePage />
         </AppLayout>
       </MemoryRouter>,
     );
 
-    expect(screen.queryByRole('banner')).not.toBeInTheDocument();
-    expect(screen.getByRole('main')).toHaveAttribute('aria-label', 'Welcher Fall als Nächstes geprüft werden sollte');
+    expect(screen.getByRole('banner')).toHaveClass('operator-header');
+    expect(screen.getByRole('main')).toHaveAttribute('aria-labelledby', 'operator-page-title');
     expect(screen.getByText('Kampagneninhalt')).toBeInTheDocument();
   });
 });

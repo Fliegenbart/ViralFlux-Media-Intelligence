@@ -1,4 +1,5 @@
 import React from 'react';
+import { Info } from 'lucide-react';
 
 import {
   BacktestResponse,
@@ -119,9 +120,7 @@ const NowWorkspace: React.FC<Props> = ({
   if (loading && !view.hasData) {
     return (
       <OperatorSection
-        kicker="Wochenplan"
         title="Operative Klarheit wird aufgebaut"
-        description="Die Wochenlage, ihre Priorisierung und die belastbaren Prüfpfade werden gerade zusammengestellt."
         tone="muted"
         className="now-template-page now-workspace-shell"
       >
@@ -143,9 +142,7 @@ const NowWorkspace: React.FC<Props> = ({
   return (
     <div className="page-stack now-template-page">
       <OperatorSection
-        kicker="Wochenplan"
         title="Fokus diese Woche"
-        description="Eine klare Richtung zuerst. Vertrauen, Einordnung und weitere Optionen direkt darunter."
         tone="accent"
         className="now-workspace-shell"
       >
@@ -221,7 +218,7 @@ const NowWorkspace: React.FC<Props> = ({
               <div className="now-inline-notes" aria-live="polite">
                 {heroNotes.map((note) => (
                   <div key={note} className="now-inline-note">
-                    <span className="material-symbols-outlined" aria-hidden="true">info</span>
+                    <Info size={16} aria-hidden="true" />
                     <p>{note}</p>
                   </div>
                 ))}
@@ -292,7 +289,7 @@ const NowWorkspace: React.FC<Props> = ({
                   <div className="now-inline-notes" aria-live="polite">
                     {heroNotes.map((note) => (
                       <div key={note} className="now-inline-note">
-                        <span className="material-symbols-outlined" aria-hidden="true">info</span>
+                        <Info size={16} aria-hidden="true" />
                         <p>{note}</p>
                       </div>
                     ))}

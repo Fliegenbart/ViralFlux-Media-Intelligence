@@ -1,0 +1,316 @@
+/* ═══════════════════════════════════════════════════════════════════
+   Design Tokens — ViralFlux Media Intelligence
+   Single source of truth for colors, spacing, type, and surfaces.
+   Import this file before any component styles.
+   ═══════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* Surface colors — clean, flat, Linear-inspired */
+  --bg-primary: #fafafa;
+  --bg-secondary: #ffffff;
+  --bg-card: #ffffff;
+  --bg-card-hover: #ffffff;
+  --bg-subtle: #f5f5f5;
+  --border-color: #e5e5e5;
+  --border-light: #f0f0f0;
+
+  /* Text colors — high contrast, neutral */
+  --text-primary: #0a0a0a;
+  --text-secondary: #525252;
+  --text-muted: #a3a3a3;
+
+  /* Accent colors — restrained indigo palette */
+  --accent-violet: #6366f1;
+  --accent-pink: #a855f7;
+  --accent-orange: #f59e0b;
+  --accent-cyan: #06b6d4;
+  --accent-emerald: #059669;
+  --accent-red: #dc2626;
+  --accent-amber: #d97706;
+  --accent-blue: var(--accent-violet);
+
+  /* Primary action color */
+  --color-primary: #6366f1;
+  --color-primary-hover: #4f46e5;
+  --primary-4: rgba(99, 102, 241, 0.04);
+  --primary-8: rgba(99, 102, 241, 0.08);
+  --primary-12: rgba(99, 102, 241, 0.12);
+  --primary-20: rgba(99, 102, 241, 0.20);
+  --primary-2: rgba(99, 102, 241, 0.02);
+  --primary-6: rgba(99, 102, 241, 0.06);
+  --primary-10: rgba(99, 102, 241, 0.10);
+  --primary-15: rgba(99, 102, 241, 0.15);
+  --primary-24: rgba(99, 102, 241, 0.24);
+  --primary-30: rgba(99, 102, 241, 0.30);
+
+  /* Status colors (semantic) */
+  --status-success: #059669;
+  --status-warning: #d97706;
+  --status-danger: #dc2626;
+  --status-info: #2563eb;
+  --status-danger-bg: rgba(239, 68, 68, 0.06);
+  --status-danger-border: rgba(239, 68, 68, 0.15);
+  --status-warning-bg: rgba(245, 158, 11, 0.06);
+  --status-success-bg: rgba(5, 150, 105, 0.06);
+
+  /* Spacing scale (4px base) */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-lg: 16px;
+  --space-xl: 24px;
+  --space-2xl: 32px;
+  --space-3xl: 48px;
+  --space-section: 64px;
+
+  /* Type scale — tighter, bolder */
+  --text-hero: clamp(2.5rem, 4vw, 3.5rem);
+  --text-h1: 1.875rem;
+  --text-h2: 1.25rem;
+  --text-h3: 1.125rem;
+  --text-body: 0.9375rem;
+  --text-small: 0.8125rem;
+  --text-xs: 0.75rem;
+  --text-label: 0.6875rem;
+  --font-display-serif: 'Inter', system-ui, sans-serif;
+
+  /* Font-weight scale */
+  --weight-normal: 400;
+  --weight-medium: 600;
+  --weight-bold: 700;
+
+  /* Brand colors */
+  --color-brand: #5148d8;
+  --color-brand-light: #6f68f7;
+
+  /* Border radius — consistent, modern */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-pill: 999px;
+
+  /* Shadow scale */
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.08);
+  --shadow-xl: 0 16px 48px rgba(0, 0, 0, 0.10);
+
+  /* Neutral overlays */
+  --overlay-light-50: rgba(255, 255, 255, 0.50);
+  --overlay-light-70: rgba(255, 255, 255, 0.70);
+  --overlay-light-80: rgba(255, 255, 255, 0.80);
+  --overlay-light-90: rgba(255, 255, 255, 0.90);
+  --overlay-dark-4: rgba(0, 0, 0, 0.04);
+  --overlay-dark-6: rgba(0, 0, 0, 0.06);
+  --overlay-dark-8: rgba(0, 0, 0, 0.08);
+  --overlay-dark-12: rgba(0, 0, 0, 0.12);
+
+  /* Semantic surfaces — flat, clean, no gradients */
+  --surface-card-bg: #ffffff;
+  --surface-card-border: var(--border-color);
+  --surface-card-shadow: none;
+  --surface-card-shadow-hover: none;
+  --surface-panel-bg: #ffffff;
+  --surface-panel-border: var(--border-color);
+  --surface-panel-highlight: none;
+  --surface-muted-bg: var(--bg-subtle);
+  --surface-muted-border: var(--border-color);
+  --surface-header-bg: rgba(250, 250, 250, 0.8);
+  --surface-header-border: var(--border-color);
+  --surface-accent-bg: rgba(99, 102, 241, 0.04);
+  --surface-accent-border: rgba(99, 102, 241, 0.12);
+  --surface-info-bg: rgba(59, 130, 246, 0.04);
+  --surface-info-border: rgba(59, 130, 246, 0.15);
+  --surface-success-bg: rgba(5, 150, 105, 0.04);
+  --surface-success-border: rgba(5, 150, 105, 0.15);
+
+  /* Product identity — minimal */
+  --product-shell-bg: var(--bg-primary);
+  --product-shell-border: var(--border-color);
+  --product-shell-shadow: none;
+  --product-nav-bg: #ffffff;
+  --product-nav-border: var(--border-color);
+  --product-nav-item-hover: var(--bg-subtle);
+  --product-nav-item-active: var(--bg-subtle);
+  --product-nav-item-shadow: none;
+  --product-mark-bg: var(--bg-subtle);
+  --product-mark-border: var(--border-color);
+  --product-mark-color: var(--accent-violet);
+  --product-mark-shadow: none;
+  --product-brand-subline: var(--text-muted);
+  --product-brand-kicker: var(--color-primary);
+
+  /* Semantic controls — clean, flat */
+  --control-ghost-bg: transparent;
+  --control-ghost-bg-hover: var(--bg-subtle);
+  --control-ghost-border: var(--border-color);
+  --control-ghost-text: var(--text-secondary);
+  --control-primary-bg: var(--color-primary);
+  --control-primary-shadow: 0 1px 2px rgba(99, 102, 241, 0.2);
+  --control-primary-shadow-hover: 0 1px 3px rgba(99, 102, 241, 0.3);
+  --control-active-bg: var(--color-primary);
+  --control-active-text: #ffffff;
+  --input-bg: #ffffff;
+  --input-border: var(--border-color);
+  --input-placeholder: #a3a3a3;
+
+  /* Semantic badges — subtle tints */
+  --badge-neutral-bg: rgba(163, 163, 163, 0.08);
+  --badge-neutral-border: rgba(163, 163, 163, 0.15);
+  --badge-neutral-text: var(--text-secondary);
+  --badge-info-bg: rgba(37, 99, 235, 0.06);
+  --badge-info-border: rgba(37, 99, 235, 0.12);
+  --badge-info-text: var(--status-info);
+  --badge-success-bg: rgba(5, 150, 105, 0.06);
+  --badge-success-border: rgba(5, 150, 105, 0.12);
+  --badge-success-text: var(--status-success);
+  --badge-warning-bg: rgba(245, 158, 11, 0.06);
+  --badge-warning-border: rgba(245, 158, 11, 0.12);
+  --badge-warning-text: var(--status-warning);
+  --badge-danger-bg: rgba(239, 68, 68, 0.06);
+  --badge-danger-border: rgba(239, 68, 68, 0.12);
+  --badge-danger-text: var(--status-danger);
+
+  /* Semantic charts — subtle, clean */
+  --chart-grid: #f0f0f0;
+  --chart-axis: #a3a3a3;
+  --chart-tooltip-bg: #ffffff;
+  --chart-tooltip-border: #e5e5e5;
+  --chart-tooltip-title: #0a0a0a;
+  --chart-tooltip-text: #525252;
+  --chart-series-truth: #6366f1;
+  --chart-series-forecast: #818cf8;
+  --chart-series-baseline: #f59e0b;
+  --chart-series-reference: #a3a3a3;
+  --chart-series-ranking: #8b5cf6;
+}
+
+/* ─── Dark Theme — neutral grays, not navy ───────────────────── */
+[data-theme="dark"] {
+  --bg-primary: #0a0a0a;
+  --bg-secondary: #141414;
+  --bg-card: #141414;
+  --bg-card-hover: #1c1c1c;
+  --bg-subtle: #1c1c1c;
+  --border-color: #262626;
+  --border-light: #1c1c1c;
+  --text-primary: #fafafa;
+  --text-secondary: #a3a3a3;
+  --text-muted: #737373;
+  --accent-violet: #818cf8;
+  --accent-pink: #c084fc;
+  --accent-orange: #fbbf24;
+  --accent-cyan: #22d3ee;
+  --accent-emerald: #34d399;
+  --accent-red: #f87171;
+  --accent-amber: #fbbf24;
+  --accent-blue: var(--accent-violet);
+
+  --color-primary: #818cf8;
+  --color-primary-hover: #a5b4fc;
+  --primary-4: rgba(129, 140, 248, 0.04);
+  --primary-8: rgba(129, 140, 248, 0.08);
+  --primary-12: rgba(129, 140, 248, 0.12);
+  --primary-20: rgba(129, 140, 248, 0.20);
+  --primary-2: rgba(129, 140, 248, 0.02);
+  --primary-6: rgba(129, 140, 248, 0.06);
+  --primary-10: rgba(129, 140, 248, 0.10);
+  --primary-15: rgba(129, 140, 248, 0.15);
+  --primary-24: rgba(129, 140, 248, 0.24);
+  --primary-30: rgba(129, 140, 248, 0.30);
+
+  --status-success: #10b981;
+  --status-warning: #f59e0b;
+  --status-danger: #ef4444;
+  --status-info: #818cf8;
+  --status-danger-bg: rgba(239, 68, 68, 0.12);
+  --status-danger-border: rgba(239, 68, 68, 0.25);
+  --status-warning-bg: rgba(245, 158, 11, 0.12);
+  --status-success-bg: rgba(16, 185, 129, 0.12);
+
+  --surface-card-bg: transparent;
+  --surface-card-border: transparent;
+  --surface-card-shadow: none;
+  --surface-card-shadow-hover: none;
+  --surface-panel-bg: #141414;
+  --surface-panel-border: #262626;
+  --surface-panel-highlight: none;
+  --surface-muted-bg: #1c1c1c;
+  --surface-muted-border: #262626;
+  --surface-header-bg: rgba(10, 10, 10, 0.8);
+  --surface-header-border: #262626;
+  --surface-accent-bg: rgba(129, 140, 248, 0.08);
+  --surface-accent-border: rgba(129, 140, 248, 0.15);
+  --surface-info-bg: rgba(96, 165, 250, 0.08);
+  --surface-info-border: rgba(96, 165, 250, 0.2);
+  --surface-success-bg: rgba(52, 211, 153, 0.08);
+  --surface-success-border: rgba(52, 211, 153, 0.2);
+
+  --product-shell-bg: #0a0a0a;
+  --product-shell-border: #262626;
+  --product-shell-shadow: none;
+  --product-nav-bg: #141414;
+  --product-nav-border: #262626;
+  --product-nav-item-hover: #1c1c1c;
+  --product-nav-item-active: #1c1c1c;
+  --product-nav-item-shadow: none;
+  --product-mark-bg: #1c1c1c;
+  --product-mark-border: #262626;
+  --product-mark-color: #c7d2fe;
+  --product-mark-shadow: none;
+  --product-brand-subline: #737373;
+  --product-brand-kicker: #a5b4fc;
+
+  --control-ghost-bg: transparent;
+  --control-ghost-bg-hover: #1c1c1c;
+  --control-ghost-border: #262626;
+  --control-ghost-text: var(--text-secondary);
+  --control-primary-bg: #818cf8;
+  --control-primary-shadow: 0 1px 2px rgba(129, 140, 248, 0.2);
+  --control-primary-shadow-hover: 0 1px 3px rgba(129, 140, 248, 0.3);
+  --control-active-bg: #818cf8;
+  --input-bg: #141414;
+  --input-border: #262626;
+  --input-placeholder: #525252;
+
+  --badge-neutral-bg: rgba(38, 38, 38, 0.8);
+  --badge-neutral-border: #333333;
+  --badge-neutral-text: var(--text-secondary);
+  --badge-info-bg: rgba(99, 102, 241, 0.12);
+  --badge-info-border: rgba(99, 102, 241, 0.25);
+  --badge-info-text: #c7d2fe;
+  --badge-success-bg: rgba(16, 185, 129, 0.12);
+  --badge-success-border: rgba(16, 185, 129, 0.25);
+  --badge-success-text: #86efac;
+  --badge-warning-bg: rgba(245, 158, 11, 0.12);
+  --badge-warning-border: rgba(245, 158, 11, 0.25);
+  --badge-warning-text: #fde68a;
+  --badge-danger-bg: rgba(239, 68, 68, 0.12);
+  --badge-danger-border: rgba(239, 68, 68, 0.25);
+  --badge-danger-text: #fda4af;
+
+  --chart-grid: #262626;
+  --chart-axis: #737373;
+  --chart-tooltip-bg: #1c1c1c;
+  --chart-tooltip-border: #262626;
+  --chart-tooltip-title: #fafafa;
+  --chart-tooltip-text: #a3a3a3;
+
+  /* Shadow scale */
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.2);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.4);
+  --shadow-xl: 0 16px 48px rgba(0, 0, 0, 0.5);
+
+  /* Neutral overlays */
+  --overlay-light-50: rgba(255, 255, 255, 0.06);
+  --overlay-light-70: rgba(255, 255, 255, 0.08);
+  --overlay-light-80: rgba(255, 255, 255, 0.10);
+  --overlay-light-90: rgba(255, 255, 255, 0.14);
+  --overlay-dark-4: rgba(255, 255, 255, 0.04);
+  --overlay-dark-6: rgba(255, 255, 255, 0.06);
+  --overlay-dark-8: rgba(255, 255, 255, 0.08);
+  --overlay-dark-12: rgba(255, 255, 255, 0.12);
+}

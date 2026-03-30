@@ -2,13 +2,9 @@ import React, { useMemo, useState } from 'react';
 import { geoMercator, geoPath } from 'd3-geo';
 
 import deBundeslaenderGeo from '../../assets/maps/de-bundeslaender.geo.json';
-import { OPERATOR_LABELS } from '../../constants/operatorLabels';
 import { MapRegion } from './types';
 import {
   formatPercent,
-  metricContractBadge,
-  metricContractDisplayLabel,
-  metricContractNote,
   primarySignalScore,
 } from './cockpitUtils';
 
@@ -121,35 +117,14 @@ const GermanyMap: React.FC<Props> = ({ regions, selectedRegion, onSelectRegion, 
   }, [projection]);
 
   const hovered = hoveredRegion ? regions[hoveredRegion] : null;
-  const hoveredSignalLabel = metricContractDisplayLabel(hovered?.field_contracts, 'signal_score', 'Signal-Score');
-  const hoveredSignalBadge = metricContractBadge(hovered?.field_contracts, 'signal_score', 'Kennzahl');
-  const hoveredSignalNote = metricContractNote(
-    hovered?.field_contracts,
-    'signal_score',
-    'Hilft beim Vergleichen und Priorisieren, ist aber keine Eintrittswahrscheinlichkeit.',
-  );
 
   return (
     <div className="vf-map-panel">
-      <div className="vf-map-legend" aria-label="Legende Bundeslandkarte">
-        <div className="vf-map-legend__title">Orientierungskarte Bundesland-Level</div>
-        <div className="vf-map-legend__items">
-          <span className="vf-map-legend__item">
-            <span className="vf-map-legend__swatch vf-map-legend__swatch--signal" aria-hidden="true" />
-            {OPERATOR_LABELS.ranking_signal} im Bundesland-Vergleich
-          </span>
-          <span className="vf-map-legend__item">
-            <span className="vf-map-legend__swatch vf-map-legend__swatch--selected" aria-hidden="true" />
-            Ausgewähltes Bundesland
-          </span>
-          <span className="vf-map-legend__item">
-            <span className="vf-map-legend__swatch vf-map-legend__swatch--evidence" aria-hidden="true" />
-            Zu wenig Evidenz
-          </span>
-        </div>
-        <p className="vf-map-legend__note">
-          Bundesland-Level. Kein City-Forecast. Die Flächenfarbe hilft bei Auswahl und Orientierung, ersetzt aber nicht die eigentliche Regionsentscheidung.
-        </p>
+      <div className="vf-map-legend" aria-label="Legende">
+        <span className="vf-map-legend__item"><span className="vf-map-legend__swatch vf-map-legend__swatch--high" aria-hidden="true" />Hoch</span>
+        <span className="vf-map-legend__item"><span className="vf-map-legend__swatch vf-map-legend__swatch--mid" aria-hidden="true" />Mittel</span>
+        <span className="vf-map-legend__item"><span className="vf-map-legend__swatch vf-map-legend__swatch--low" aria-hidden="true" />Niedrig</span>
+        <span className="vf-map-legend__item"><span className="vf-map-legend__swatch vf-map-legend__swatch--evidence" aria-hidden="true" />Keine Daten</span>
       </div>
 
       <svg viewBox="0 0 420 460" style={{ width: '100%', maxHeight: 520 }} role="img" aria-label="Deutschlandkarte auf Bundesland-Level">
@@ -172,11 +147,16 @@ const GermanyMap: React.FC<Props> = ({ regions, selectedRegion, onSelectRegion, 
           return (
             <g
               key={`${shape.name}-${shape.code || 'na'}`}
-              className={code === topRegionCode && !insufficientEvidence ? 'region-map__group--pulse' : undefined}
+              className={[
+                'vf-map-region',
+                isHovered && 'vf-map-region--hover',
+                isSelected && 'vf-map-region--selected',
+                code === topRegionCode && !insufficientEvidence && 'region-map__group--pulse',
+              ].filter(Boolean).join(' ')}
               onClick={() => code && region && onSelectRegion(code)}
-              onMouseEnter={() => code && region && setHoveredRegion(code)}
+              onMouseEnter={() => code && setHoveredRegion(code)}
               onMouseLeave={() => setHoveredRegion(null)}
-              onFocus={() => code && region && setHoveredRegion(code)}
+              onFocus={() => code && setHoveredRegion(code)}
               onBlur={() => setHoveredRegion(null)}
               onKeyDown={(event) => {
                 if ((event.key === 'Enter' || event.key === ' ') && code && region) {
@@ -184,35 +164,31 @@ const GermanyMap: React.FC<Props> = ({ regions, selectedRegion, onSelectRegion, 
                   onSelectRegion(code);
                 }
               }}
-              style={{ cursor: code && region ? 'pointer' : 'default' }}
-              role={code && region ? 'button' : undefined}
-              tabIndex={code && region ? 0 : -1}
+              style={{
+                cursor: code ? 'pointer' : 'default',
+                transformOrigin: `${shape.cx}px ${shape.cy}px`,
+              }}
+              role={code ? 'button' : undefined}
+              tabIndex={code ? 0 : -1}
               aria-label={interactionLabel}
               aria-pressed={isSelected}
             >
               <path
+                className="vf-map-region__path"
                 d={shape.d}
                 fill={insufficientEvidence ? 'url(#vf-map-pattern-evidence)' : regionColor(region)}
-                stroke={isSelected ? '#0f4c6e' : isHovered ? 'rgba(15, 76, 110, 0.64)' : 'rgba(203, 213, 225, 0.9)'}
-                strokeWidth={isSelected ? 3 : isHovered ? 2 : 1.1}
-                filter="url(#vf-map-shadow)"
+                stroke={isSelected ? 'var(--color-primary)' : isHovered ? 'rgba(99, 102, 241, 0.5)' : 'rgba(203, 213, 225, 0.6)'}
+                strokeWidth={isSelected ? 2.5 : isHovered ? 1.8 : 0.8}
               />
-              {!insufficientEvidence && (
-                <path
-                  d={shape.d}
-                  fill={regionColor(region)}
-                  opacity={isSelected ? 1 : 0.9}
-                  pointerEvents="none"
-                />
-              )}
               {code && !(code in CALLOUT_TARGETS) && (
                 <>
                   <circle
                     cx={shape.cx}
                     cy={showProbability && region?.impact_probability ? shape.cy - 9 : shape.cy - 5}
                     r={8.4}
-                    fill={isSelected ? '#0f4c6e' : 'rgba(255,255,255,0.95)'}
-                    stroke={isSelected ? '#0f4c6e' : 'rgba(203, 213, 225, 0.7)'}
+                    fill={isSelected ? 'var(--color-primary)' : 'rgba(255,255,255,0.92)'}
+                    stroke={isSelected ? 'var(--color-primary)' : 'rgba(203, 213, 225, 0.5)'}
+                    strokeWidth="0.8"
                   />
                   <text
                     x={shape.cx}
@@ -247,13 +223,14 @@ const GermanyMap: React.FC<Props> = ({ regions, selectedRegion, onSelectRegion, 
           if (!shape) return null;
           return (
             <g key={code} pointerEvents="none">
-              <line x1={shape.cx} y1={shape.cy} x2={target.tx} y2={target.ty} stroke="rgba(71, 85, 105, 0.35)" strokeWidth="1" />
+              <line x1={shape.cx} y1={shape.cy} x2={target.tx} y2={target.ty} stroke="rgba(99, 102, 241, 0.2)" strokeWidth="0.8" />
               <circle
                 cx={target.tx}
                 cy={target.ty}
                 r={8.4}
-                fill={selectedRegion === code ? '#0f4c6e' : 'rgba(255,255,255,0.95)'}
-                stroke={selectedRegion === code ? '#0f4c6e' : 'rgba(203, 213, 225, 0.7)'}
+                fill={selectedRegion === code ? 'var(--color-primary)' : 'rgba(255,255,255,0.92)'}
+                stroke={selectedRegion === code ? 'var(--color-primary)' : 'rgba(203, 213, 225, 0.5)'}
+                strokeWidth="0.8"
               />
               <text x={target.tx} y={target.ty + 2.5} textAnchor="middle" fill={selectedRegion === code ? '#f8fafc' : '#334155'} fontSize="8" fontWeight="700">
                 {code}
@@ -265,18 +242,17 @@ const GermanyMap: React.FC<Props> = ({ regions, selectedRegion, onSelectRegion, 
 
       {hoveredRegion && hovered && (
         <div className="vf-map-tooltip">
-          <div style={{ fontSize: 13, fontWeight: 700 }}>{hovered.name}</div>
-          <div style={{ marginTop: 6, fontSize: 12, color: 'rgba(226, 232, 240, 0.92)' }}>
-            Bundesland-Level · {hoveredSignalLabel} {formatFractionPercent(primarySignalScore(hovered), 0)}
+          <div className="vf-map-tooltip__name">{hovered.name}</div>
+          {hovered.impact_probability != null && hovered.impact_probability > 0 && (
+            <div className="vf-map-tooltip__probability">
+              {formatFractionPercent(hovered.impact_probability, 0)} Wellenwahrscheinlichkeit
+            </div>
+          )}
+          <div className="vf-map-tooltip__meta">
+            Trend {hovered.trend} · {formatPercent(Math.abs(hovered.change_pct || 0), 1)} {(hovered.change_pct || 0) >= 0 ? '↑' : '↓'} WoW
           </div>
-          <div style={{ marginTop: 4, fontSize: 12, color: 'rgba(203, 213, 225, 0.88)' }}>
-            Trend {hovered.trend} · Veränderung {formatPercent(hovered.change_pct || 0, 1)}
-          </div>
-          <div style={{ marginTop: 6, fontSize: 11, color: 'rgba(191, 219, 254, 0.86)' }}>
-            {evidenceLabel(hovered)} · Kein City-Forecast
-          </div>
-          <div style={{ marginTop: 6, fontSize: 11, color: 'rgba(191, 219, 254, 0.86)' }}>
-            {hoveredSignalBadge}: {hoveredSignalNote}
+          <div className="vf-map-tooltip__stage">
+            {hovered.decision_mode_label || evidenceLabel(hovered)}
           </div>
         </div>
       )}

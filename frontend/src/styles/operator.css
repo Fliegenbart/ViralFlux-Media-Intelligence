@@ -583,10 +583,6 @@
 .operator-section-shell,
 .operator-panel-shell {
   position: relative;
-  border-radius: 0;
-  border: none;
-  background: transparent;
-  box-shadow: none;
 }
 
 .operator-section-shell::before,
@@ -595,25 +591,38 @@
 }
 
 .operator-section-shell {
-  padding: 0 0 var(--space-xl) 0;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  box-shadow: var(--surface-card-shadow);
+  padding: var(--space-xl);
 }
 
 .operator-panel-shell {
-  padding: 0 0 var(--space-lg) 0;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  padding: var(--space-xl);
 }
 
-.operator-section-shell--accent,
-.operator-panel-shell--accent {
-  background: transparent;
-  border: none;
+.operator-section-shell--accent {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-light);
   border-left: 3px solid var(--color-primary);
-  box-shadow: none;
 }
 
-.operator-section-shell--muted,
+.operator-panel-shell--accent {
+  background: var(--bg-secondary);
+  border-left: 3px solid var(--color-primary);
+}
+
+.operator-section-shell--muted {
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-light);
+}
+
 .operator-panel-shell--muted {
-  background: transparent;
-  border: none;
+  background: var(--bg-subtle);
 }
 
 .operator-section-shell__header,
@@ -695,20 +704,18 @@
 .operator-stat-card {
   display: grid;
   gap: var(--space-sm);
-  padding: var(--space-md);
-  border-radius: 0;
-  border: none;
-  background: transparent;
-  box-shadow: none;
+  padding: var(--space-lg);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-light);
+  background: var(--bg-secondary);
 }
 
 .operator-stat-card--accent {
-  border: none;
-  background: transparent;
+  border-left: 3px solid var(--color-primary);
 }
 
 .operator-stat-card--muted {
-  background: transparent;
+  background: var(--bg-subtle);
 }
 
 .operator-stat-card__label {
@@ -739,10 +746,11 @@
 .operator-status-card {
   display: grid;
   gap: var(--space-md);
-  border-radius: 0;
-  border: none;
-  background: transparent;
-  box-shadow: none;
+  padding: var(--space-xl);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-light);
+  background: var(--bg-secondary);
+  box-shadow: var(--surface-card-shadow);
 }
 
 .operator-status-card--compact {

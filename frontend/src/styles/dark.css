@@ -25,15 +25,15 @@
 
 /* --- Toasts --- */
 [data-theme="dark"] .toast-success {
-  background: rgba(10, 31, 22, 0.92);
+  background: rgba(5, 150, 105, 0.12);
+  border-color: rgba(5, 150, 105, 0.25);
   color: #bbf7d0;
-  border-color: rgba(34, 197, 94, 0.24);
 }
 
 [data-theme="dark"] .toast-error {
-  background: rgba(48, 20, 14, 0.92);
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.25);
   color: #fed7aa;
-  border-color: rgba(249, 115, 22, 0.24);
 }
 
 [data-theme="dark"] .toast-info {
@@ -248,7 +248,7 @@
   border-color: rgba(125, 211, 252, 0.1);
 }
 
-[data-theme="dark"] .operator-status-card {
+[data-theme="dark"] .operator-status-card--transparent {
   background: transparent;
   border: none;
   box-shadow: none;
@@ -283,13 +283,23 @@
 
 /* --- Operator section / panel shells --- */
 [data-theme="dark"] .operator-section-shell,
-[data-theme="dark"] .operator-panel-shell,
+[data-theme="dark"] .operator-panel-shell {
+  background: var(--bg-secondary);
+  border-color: var(--border-color);
+  box-shadow: var(--surface-card-shadow);
+}
+
 [data-theme="dark"] .workspace-note-card,
-[data-theme="dark"] .workspace-status-card,
-[data-theme="dark"] .operator-stat-card {
+[data-theme="dark"] .workspace-status-card {
   background: transparent;
   border: none;
   box-shadow: none;
+}
+
+[data-theme="dark"] .operator-stat-card,
+[data-theme="dark"] .operator-status-card {
+  background: var(--bg-secondary);
+  border-color: var(--border-color);
 }
 
 /* --- Operator decision spine / sidebar items --- */
@@ -322,7 +332,7 @@
 [data-theme="dark"] .operator-section-shell__kicker,
 [data-theme="dark"] .operator-panel-shell__eyebrow,
 [data-theme="dark"] .now-toolbar__eyebrow {
-  color: #d8b678;
+  color: #a5b4fc;
 }
 
 /* --- Utility panel --- */

@@ -6,7 +6,6 @@ import { normalizeGermanText } from '../../lib/plainLanguage';
 import { MediaCampaignsResponse, RecommendationCard, WorkspaceStatusSummary } from '../../types/media';
 import CollapsibleSection from '../CollapsibleSection';
 import {
-  formatCurrency,
   formatDateShort,
   learningStateLabel,
   recommendationLane,
@@ -80,7 +79,6 @@ const CampaignStudio: React.FC<Props> = ({
     ? buildCampaignDecisionCopy(focusCard)
     : 'Die Seite zeigt danach direkt, welcher Fall zuerst geprüft, freigegeben oder weiter vorbereitet werden sollte.';
   const focusReadiness = focusCard ? approvalReadiness(focusCard) : null;
-  const focusBudgetDirection = focusCard ? budgetDirectionLabel(focusCard) : 'Budgetrichtung offen';
   const focusChannelDirection = focusCard ? channelDirectionLabel(focusCard) : 'Kanalmix wird nach dem ersten Vorschlag sichtbar';
   const focusActionLabel = focusCard ? recommendationActionLabel(focusCard) : 'Erste Vorschläge erstellen';
   const hiddenBacklog = campaignsView?.summary?.hidden_backlog_cards ?? 0;
@@ -574,14 +572,6 @@ function budgetDirectionLabel(card: RecommendationCard): string {
   return 'Budget eher halten';
 }
 
-function budgetSupportCopy(card?: RecommendationCard | null): string {
-  if (!card) return 'Der Wochenrahmen wird sichtbar, sobald ein konkreter Vorschlag vorliegt.';
-  const weeklyBudget = card.campaign_preview?.budget?.weekly_budget_eur;
-  if (typeof weeklyBudget === 'number' && Number.isFinite(weeklyBudget)) {
-    return `Wochenrahmen ${formatCurrency(weeklyBudget)}.`;
-  }
-  return 'Zuerst sichtbar wird die Richtung, nicht bloß eine einzelne Zahl.';
-}
 
 function channelDirectionLabel(card: RecommendationCard): string {
   const entries = Object.entries(card.channel_mix || {})

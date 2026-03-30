@@ -2,7 +2,12 @@ import '@testing-library/jest-dom';
 import React, { act } from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 
-import { buildNowPageViewModel, buildWorkspaceStatus, useNowPageData } from './useMediaData';
+import {
+  buildNowPageViewModel,
+  buildWorkspaceStatus,
+  useNowPageData,
+  useTimegraphPageData,
+} from './useMediaData';
 import { mediaApi } from './api';
 
 jest.mock('./api', () => ({
@@ -42,6 +47,30 @@ function Harness() {
       <div data-testid="loading-state">{loading ? 'loading' : 'ready'}</div>
       <div data-testid="has-data">{view.hasData ? 'yes' : 'no'}</div>
       <div data-testid="summary">{view.summary}</div>
+    </div>
+  );
+}
+
+function TimegraphHarness() {
+  const {
+    loading,
+    backtestLoading,
+    selectedRegion,
+    setSelectedRegion,
+    regionOptions,
+    selectedPrediction,
+    regionalBacktest,
+  } = useTimegraphPageData('Influenza A', 0);
+
+  return (
+    <div>
+      <div data-testid="timegraph-loading">{loading ? 'loading' : 'ready'}</div>
+      <div data-testid="timegraph-backtest-loading">{backtestLoading ? 'loading' : 'ready'}</div>
+      <div data-testid="timegraph-region">{selectedRegion || '-'}</div>
+      <div data-testid="timegraph-region-options">{regionOptions.map((item) => item.code).join(',') || '-'}</div>
+      <div data-testid="timegraph-prediction">{selectedPrediction?.bundesland_name || '-'}</div>
+      <div data-testid="timegraph-backtest">{regionalBacktest?.bundesland_name || '-'}</div>
+      <button type="button" onClick={() => setSelectedRegion('BY')}>Region BY</button>
     </div>
   );
 }
@@ -326,6 +355,71 @@ describe('useNowPageData', () => {
       });
       await Promise.resolve();
     });
+  });
+});
+
+describe('useTimegraphPageData', () => {
+  const mockedMediaApi = mediaApi as jest.Mocked<typeof mediaApi>;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('defaults to the highest-ranked forecast region and reloads the graph when the region changes', async () => {
+    mockedMediaApi.getRegionalForecast.mockResolvedValue(buildForecast([
+      {
+        bundesland: 'BE',
+        bundesland_name: 'Berlin',
+        decision_rank: 1,
+        expected_target_incidence: 160,
+        current_known_incidence: 110,
+      },
+      {
+        bundesland: 'BY',
+        bundesland_name: 'Bayern',
+        decision_rank: 2,
+        expected_target_incidence: 140,
+        current_known_incidence: 101,
+      },
+    ]) as any);
+    mockedMediaApi.getRegionalBacktest.mockImplementation(async (_virus, regionCode) => ({
+      bundesland: regionCode,
+      bundesland_name: regionCode === 'BY' ? 'Bayern' : 'Berlin',
+      timeline: [],
+    }) as any);
+
+    render(<TimegraphHarness />);
+
+    await waitFor(() => expect(screen.getByTestId('timegraph-loading')).toHaveTextContent('ready'));
+    await waitFor(() => expect(screen.getByTestId('timegraph-backtest')).toHaveTextContent('Berlin'));
+
+    expect(mockedMediaApi.getRegionalForecast).toHaveBeenCalledWith('Influenza A', 7);
+    expect(mockedMediaApi.getRegionalBacktest).toHaveBeenCalledWith('Influenza A', 'BE', 7);
+    expect(screen.getByTestId('timegraph-region')).toHaveTextContent('BE');
+    expect(screen.getByTestId('timegraph-region-options')).toHaveTextContent('BE,BY');
+    expect(screen.getByTestId('timegraph-prediction')).toHaveTextContent('Berlin');
+
+    act(() => {
+      screen.getByRole('button', { name: 'Region BY' }).click();
+    });
+
+    await waitFor(() => expect(screen.getByTestId('timegraph-region')).toHaveTextContent('BY'));
+    await waitFor(() => expect(screen.getByTestId('timegraph-backtest')).toHaveTextContent('Bayern'));
+    expect(mockedMediaApi.getRegionalBacktest).toHaveBeenLastCalledWith('Influenza A', 'BY', 7);
+  });
+
+  it('stays calm when no forecast regions are available', async () => {
+    mockedMediaApi.getRegionalForecast.mockResolvedValue(buildForecast([]) as any);
+
+    render(<TimegraphHarness />);
+
+    await waitFor(() => expect(screen.getByTestId('timegraph-loading')).toHaveTextContent('ready'));
+
+    expect(screen.getByTestId('timegraph-region')).toHaveTextContent('-');
+    expect(screen.getByTestId('timegraph-region-options')).toHaveTextContent('-');
+    expect(screen.getByTestId('timegraph-prediction')).toHaveTextContent('-');
+    expect(screen.getByTestId('timegraph-backtest')).toHaveTextContent('-');
+    expect(mockedMediaApi.getRegionalBacktest).not.toHaveBeenCalled();
   });
 });
 

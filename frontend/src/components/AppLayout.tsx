@@ -40,6 +40,7 @@ const DENSITY_STORAGE_KEY = 'viralflux-density-mode';
 
 const PRIMARY_NAV_ITEMS = [
   { label: 'Wochenplan', path: '/jetzt', helper: 'Was PEIX diese Woche zuerst tun sollte', icon: 'bolt' },
+  { label: 'Zeitgraph', path: '/zeitgraph', helper: 'Nur Verlauf und 7-Tage-Ausblick', icon: 'show_chart' },
   { label: 'Regionen', path: '/regionen', helper: 'Wo sich diese Woche genaueres Hinsehen lohnt', icon: 'location_on' },
   { label: 'Kampagnen', path: '/kampagnen', helper: 'Welcher Fall als Nächstes geprüft werden sollte', icon: 'auto_awesome' },
   { label: 'Evidenz', path: '/evidenz', helper: 'Ob die Empfehlung für diese Woche trägt', icon: 'verified' },
@@ -53,6 +54,14 @@ const SECTION_META = [
     description: 'Eine klare Wochensteuerung: zuerst die wichtigste Richtung, dann Vertrauen und nächste sinnvolle Schritte.',
     signal: 'Fokus diese Woche',
     note: 'Eine Hauptentscheidung zuerst. Details erst im zweiten Blick.',
+  },
+  {
+    path: '/zeitgraph',
+    kicker: 'Zeitgraph',
+    title: 'Nur Verlauf und 7-Tage-Ausblick',
+    description: 'Die Kurve bleibt bewusst allein: bestätigte Werte bis zum letzten Stand und danach die vermutete Fortführung für die nächsten sieben Tage.',
+    signal: 'Verlauf + Forecast',
+    note: 'Ein reduzierter Blick nur auf die Kurve.',
   },
   {
     path: '/regionen',

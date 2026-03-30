@@ -364,6 +364,9 @@ interface FocusRegionOutlookPanelProps {
   backtest: RegionalBacktestResponse | null;
   loading: boolean;
   horizonDays: number;
+  minimal?: boolean;
+  title?: string;
+  subtitle?: string;
 }
 
 interface WaveSpreadRow {
@@ -524,6 +527,9 @@ export const FocusRegionOutlookPanel: React.FC<FocusRegionOutlookPanelProps> = (
   backtest,
   loading,
   horizonDays,
+  minimal = false,
+  title,
+  subtitle,
 }) => {
   const rows = useMemo(() => buildFocusRegionChartRows(prediction, backtest), [prediction, backtest]);
   const regionName = prediction?.bundesland_name || backtest?.bundesland_name || 'deine Fokusregion';
@@ -537,6 +543,10 @@ export const FocusRegionOutlookPanel: React.FC<FocusRegionOutlookPanelProps> = (
   const qualityGatePassed = readBooleanFlag(prediction?.quality_gate || null, ['overall_passed', 'passed']);
   const calibrationPassed = readBooleanFlag(prediction?.quality_gate || null, ['calibration_passed']);
   const sampleCoverage = readNumberValue(prediction?.source_coverage || null, ['sample_coverage_pct', 'coverage_pct', 'usable_source_share']);
+  const panelTitle = title || (minimal ? 'Verlauf und 7-Tage-Fortführung' : 'Forecast zur Fokusregion');
+  const panelSubtitle = subtitle || (minimal
+    ? `Bestätigte Werte links, vermutete Fortführung für ${regionName} rechts.`
+    : 'Das ist Support-Inhalt für die Wochenempfehlung auf Bundesland-Level. Wir trennen hier bewusst bestätigte Ist-Werte, Forecast und Unsicherheitsintervall.');
 
   if (loading) {
     return (
@@ -550,9 +560,11 @@ export const FocusRegionOutlookPanel: React.FC<FocusRegionOutlookPanelProps> = (
     return (
       <div className="card" style={{ padding: 20, display: 'grid', gap: 14 }}>
         <div>
-          <h2 style={{ margin: 0, fontSize: 20, color: 'var(--text-primary)' }}>Forecast zur Fokusregion</h2>
+          <h2 style={{ margin: 0, fontSize: 20, color: 'var(--text-primary)' }}>{panelTitle}</h2>
           <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--text-muted)' }}>
-            Hier würden wir den bestätigten Stand, den Forecast und den Unsicherheitskorridor als Support für die Wochenempfehlung getrennt zeigen.
+            {minimal
+              ? 'Sobald für das gewählte Bundesland Daten vorliegen, erscheint hier die Kurve mit Ist-Wert und 7-Tage-Fortführung.'
+              : 'Hier würden wir den bestätigten Stand, den Forecast und den Unsicherheitskorridor als Support für die Wochenempfehlung getrennt zeigen.'}
           </p>
         </div>
         <div className="soft-panel" style={{ padding: 20, color: 'var(--text-muted)' }}>
@@ -566,9 +578,9 @@ export const FocusRegionOutlookPanel: React.FC<FocusRegionOutlookPanelProps> = (
     <div className="card" style={{ padding: 20 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start', marginBottom: 16 }}>
         <div>
-          <h2 style={{ margin: 0, fontSize: 20, color: 'var(--text-primary)' }}>Forecast zur Fokusregion</h2>
+          <h2 style={{ margin: 0, fontSize: 20, color: 'var(--text-primary)' }}>{panelTitle}</h2>
           <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--text-muted)' }}>
-            Das ist Support-Inhalt für die Wochenempfehlung auf Bundesland-Level. Wir trennen hier bewusst bestätigte Ist-Werte, Forecast und Unsicherheitsintervall.
+            {panelSubtitle}
           </p>
         </div>
         <div style={{ textAlign: 'right', fontSize: 12, color: 'var(--text-muted)' }}>
@@ -576,123 +588,133 @@ export const FocusRegionOutlookPanel: React.FC<FocusRegionOutlookPanelProps> = (
         </div>
       </div>
 
-      <div className="soft-panel" style={{ padding: 18, marginBottom: 16 }}>
-        <p style={{ margin: 0, fontSize: 18, lineHeight: 1.5, color: 'var(--text-primary)', fontWeight: 800 }}>
+      {!minimal ? (
+        <>
+          <div className="soft-panel" style={{ padding: 18, marginBottom: 16 }}>
+            <p style={{ margin: 0, fontSize: 18, lineHeight: 1.5, color: 'var(--text-primary)', fontWeight: 800 }}>
+              {prediction
+                ? `In ${horizonDays} Tagen erwarten wir für ${regionName} einen Viruslage-Wert von ca. ${formatVirusLevel(prediction.expected_target_incidence)}, also ${deltaText}.`
+                : `Für ${regionName} können wir gerade noch keine klare ${horizonDays}-Tage-Aussage formulieren.`}
+            </p>
+            <p style={{ margin: '10px 0 0', fontSize: 14, lineHeight: 1.6, color: 'var(--text-secondary)' }}>
+              {prediction
+                ? `Letzter bestätigter Ist-Wert vom ${currentDate}. Forecast-Ziel für ${targetDate}.`
+                : 'Sobald ein frischer Forecast vorliegt, zeigen wir hier den Zieltag und den letzten bestätigten Stand.'}
+            </p>
+            <p style={{ margin: '8px 0 0', fontSize: 13, lineHeight: 1.6, color: 'var(--text-muted)' }}>
+              {uncertaintyText}
+            </p>
+          </div>
+
+          <div className="review-chip-row" style={{ marginBottom: 16 }}>
+            <span className="step-chip">Bundesland-Level</span>
+            <span className="step-chip">Kein {OPERATOR_LABELS.ranking_signal}</span>
+            <span className="step-chip">Kein City-Forecast</span>
+          </div>
+
+          <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', marginBottom: 16 }}>
+            <div className="soft-panel" style={{ padding: 16 }}>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                Fokusregion
+              </div>
+              <div style={{ marginTop: 6, fontSize: 18, fontWeight: 800, color: 'var(--text-primary)' }}>
+                {regionName}
+              </div>
+            </div>
+            <div className="soft-panel" style={{ padding: 16 }}>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                Letzter bestätigter Wert
+              </div>
+              <div style={{ marginTop: 6, fontSize: 18, fontWeight: 800, color: '#0a84ff' }}>
+                {formatVirusLevel(prediction?.current_known_incidence)}
+              </div>
+            </div>
+            <div className="soft-panel" style={{ padding: 16 }}>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                Forecast-Ziel in {horizonDays} Tagen
+              </div>
+              <div style={{ marginTop: 6, fontSize: 18, fontWeight: 800, color: '#5e5ce6' }}>
+                {formatVirusLevel(prediction?.expected_target_incidence)}
+              </div>
+            </div>
+            <div className="soft-panel" style={{ padding: 16 }}>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                Bandbreite
+              </div>
+              <div style={{ marginTop: 6, fontSize: 18, fontWeight: 800, color: 'var(--text-primary)' }}>
+                {isNumber(prediction?.prediction_interval?.lower) && isNumber(prediction?.prediction_interval?.upper)
+                  ? `${formatVirusLevel(prediction?.prediction_interval?.lower)} bis ${formatVirusLevel(prediction?.prediction_interval?.upper)}`
+                  : '-'}
+              </div>
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', marginBottom: 16 }}>
+            <div className="soft-panel" style={{ padding: 16 }}>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                Quality Gate
+              </div>
+              <div style={{ marginTop: 6, fontSize: 18, fontWeight: 800, color: 'var(--text-primary)' }}>
+                {passStateLabel(qualityGatePassed)}
+              </div>
+            </div>
+            <div className="soft-panel" style={{ padding: 16 }}>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                Kalibrierung
+              </div>
+              <div style={{ marginTop: 6, fontSize: 18, fontWeight: 800, color: 'var(--text-primary)' }}>
+                {passStateLabel(calibrationPassed)}
+              </div>
+            </div>
+            <div className="soft-panel" style={{ padding: 16 }}>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                Sample Coverage
+              </div>
+              <div style={{ marginTop: 6, fontSize: 18, fontWeight: 800, color: 'var(--text-primary)' }}>
+                {formatSampleCoverage(sampleCoverage)}
+              </div>
+            </div>
+          </div>
+
+          <ChartSemanticsPanel
+            title="Chart-Konventionen Forecast"
+            items={[
+              {
+                label: 'Truth / Ist-Wert',
+                swatch: { background: '#0a84ff' },
+                detail: 'Bestätigte Beobachtung. Das ist die sichtbare Wahrheit bis zum letzten bekannten Stand.',
+              },
+              {
+                label: 'Forecast',
+                swatch: { background: '#5e5ce6' },
+                detail: 'Modellierter Zielwert. Das ist eine Erwartung, kein gemessener Ist-Wert.',
+              },
+              {
+                label: 'Unsicherheitsintervall',
+                swatch: { background: 'rgba(94,92,230,0.22)' },
+                detail: 'Zeigt den möglichen Bereich um den Forecast. Breiteres Band bedeutet mehr Unsicherheit.',
+              },
+              {
+                label: 'Forecast-Fenster',
+                swatch: { background: 'rgba(94,92,230,0.08)', border: '1px dashed rgba(94,92,230,0.5)' },
+                detail: 'Markiert den Abschnitt zwischen letztem bestätigtem Stand und Forecast-Ziel.',
+              },
+              {
+                label: 'Fehlende Werte',
+                swatch: { background: 'repeating-linear-gradient(45deg, rgba(148,163,184,0.2), rgba(148,163,184,0.2) 4px, rgba(255,255,255,0.8) 4px, rgba(255,255,255,0.8) 8px)' },
+                detail: 'Wenn Punkte fehlen, bedeutet das fehlende Beobachtung oder fehlenden Modellwert, nicht Stabilität.',
+              },
+            ]}
+            note={`${OPERATOR_LABELS.forecast_event_probability} und ${OPERATOR_LABELS.ranking_signal} bleiben bewusst außerhalb dieses Diagramms. Hier geht es nur um bestätigte Werte, Forecast und Unsicherheit.`}
+          />
+        </>
+      ) : (
+        <div className="soft-panel" style={{ padding: 16, marginBottom: 16, fontSize: 14, lineHeight: 1.6, color: 'var(--text-secondary)' }}>
           {prediction
-            ? `In ${horizonDays} Tagen erwarten wir für ${regionName} einen Viruslage-Wert von ca. ${formatVirusLevel(prediction.expected_target_incidence)}, also ${deltaText}.`
-            : `Für ${regionName} können wir gerade noch keine klare ${horizonDays}-Tage-Aussage formulieren.`}
-        </p>
-        <p style={{ margin: '10px 0 0', fontSize: 14, lineHeight: 1.6, color: 'var(--text-secondary)' }}>
-          {prediction
-            ? `Letzter bestätigter Ist-Wert vom ${currentDate}. Forecast-Ziel für ${targetDate}.`
-            : 'Sobald ein frischer Forecast vorliegt, zeigen wir hier den Zieltag und den letzten bestätigten Stand.'}
-        </p>
-        <p style={{ margin: '8px 0 0', fontSize: 13, lineHeight: 1.6, color: 'var(--text-muted)' }}>
-          {uncertaintyText}
-        </p>
-      </div>
-
-      <div className="review-chip-row" style={{ marginBottom: 16 }}>
-        <span className="step-chip">Bundesland-Level</span>
-        <span className="step-chip">Kein {OPERATOR_LABELS.ranking_signal}</span>
-        <span className="step-chip">Kein City-Forecast</span>
-      </div>
-
-      <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', marginBottom: 16 }}>
-        <div className="soft-panel" style={{ padding: 16 }}>
-          <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-            Fokusregion
-          </div>
-          <div style={{ marginTop: 6, fontSize: 18, fontWeight: 800, color: 'var(--text-primary)' }}>
-            {regionName}
-          </div>
+            ? `Letzter bestätigter Ist-Wert vom ${currentDate}. Forecast-Ziel für ${targetDate}. ${uncertaintyText}`
+            : `Für ${regionName} liegt noch kein frischer 7-Tage-Forecast vor.`}
         </div>
-        <div className="soft-panel" style={{ padding: 16 }}>
-          <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-            Letzter bestätigter Wert
-          </div>
-          <div style={{ marginTop: 6, fontSize: 18, fontWeight: 800, color: '#0a84ff' }}>
-            {formatVirusLevel(prediction?.current_known_incidence)}
-          </div>
-        </div>
-        <div className="soft-panel" style={{ padding: 16 }}>
-          <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-            Forecast-Ziel in {horizonDays} Tagen
-          </div>
-          <div style={{ marginTop: 6, fontSize: 18, fontWeight: 800, color: '#5e5ce6' }}>
-            {formatVirusLevel(prediction?.expected_target_incidence)}
-          </div>
-        </div>
-        <div className="soft-panel" style={{ padding: 16 }}>
-          <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-            Bandbreite
-          </div>
-          <div style={{ marginTop: 6, fontSize: 18, fontWeight: 800, color: 'var(--text-primary)' }}>
-            {isNumber(prediction?.prediction_interval?.lower) && isNumber(prediction?.prediction_interval?.upper)
-              ? `${formatVirusLevel(prediction?.prediction_interval?.lower)} bis ${formatVirusLevel(prediction?.prediction_interval?.upper)}`
-              : '-'}
-          </div>
-        </div>
-      </div>
-
-      <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', marginBottom: 16 }}>
-        <div className="soft-panel" style={{ padding: 16 }}>
-          <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-            Quality Gate
-          </div>
-          <div style={{ marginTop: 6, fontSize: 18, fontWeight: 800, color: 'var(--text-primary)' }}>
-            {passStateLabel(qualityGatePassed)}
-          </div>
-        </div>
-        <div className="soft-panel" style={{ padding: 16 }}>
-          <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-            Kalibrierung
-          </div>
-          <div style={{ marginTop: 6, fontSize: 18, fontWeight: 800, color: 'var(--text-primary)' }}>
-            {passStateLabel(calibrationPassed)}
-          </div>
-        </div>
-        <div className="soft-panel" style={{ padding: 16 }}>
-          <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-            Sample Coverage
-          </div>
-          <div style={{ marginTop: 6, fontSize: 18, fontWeight: 800, color: 'var(--text-primary)' }}>
-            {formatSampleCoverage(sampleCoverage)}
-          </div>
-        </div>
-      </div>
-
-      <ChartSemanticsPanel
-        title="Chart-Konventionen Forecast"
-        items={[
-          {
-            label: 'Truth / Ist-Wert',
-            swatch: { background: '#0a84ff' },
-            detail: 'Bestätigte Beobachtung. Das ist die sichtbare Wahrheit bis zum letzten bekannten Stand.',
-          },
-          {
-            label: 'Forecast',
-            swatch: { background: '#5e5ce6' },
-            detail: 'Modellierter Zielwert. Das ist eine Erwartung, kein gemessener Ist-Wert.',
-          },
-          {
-            label: 'Unsicherheitsintervall',
-            swatch: { background: 'rgba(94,92,230,0.22)' },
-            detail: 'Zeigt den möglichen Bereich um den Forecast. Breiteres Band bedeutet mehr Unsicherheit.',
-          },
-          {
-            label: 'Forecast-Fenster',
-            swatch: { background: 'rgba(94,92,230,0.08)', border: '1px dashed rgba(94,92,230,0.5)' },
-            detail: 'Markiert den Abschnitt zwischen letztem bestätigtem Stand und Forecast-Ziel.',
-          },
-          {
-            label: 'Fehlende Werte',
-            swatch: { background: 'repeating-linear-gradient(45deg, rgba(148,163,184,0.2), rgba(148,163,184,0.2) 4px, rgba(255,255,255,0.8) 4px, rgba(255,255,255,0.8) 8px)' },
-            detail: 'Wenn Punkte fehlen, bedeutet das fehlende Beobachtung oder fehlenden Modellwert, nicht Stabilität.',
-          },
-        ]}
-        note={`${OPERATOR_LABELS.forecast_event_probability} und ${OPERATOR_LABELS.ranking_signal} bleiben bewusst außerhalb dieses Diagramms. Hier geht es nur um bestätigte Werte, Forecast und Unsicherheit.`}
-      />
+      )}
 
       {chartReady ? (
         <div style={{ height: 320 }}>
@@ -737,21 +759,25 @@ export const FocusRegionOutlookPanel: React.FC<FocusRegionOutlookPanelProps> = (
         </div>
       )}
 
-      <ChartAxisHint
-        xLabel="Zeitpunkte vom letzten bestätigten Stand bis zum Forecast-Ziel"
-        yLabel="Viruslage-Wert für das ausgewählte Bundesland"
-      />
+      {!minimal ? (
+        <>
+          <ChartAxisHint
+            xLabel="Zeitpunkte vom letzten bestätigten Stand bis zum Forecast-Ziel"
+            yLabel="Viruslage-Wert für das ausgewählte Bundesland"
+          />
 
-      <div className="workspace-note-list" style={{ marginTop: 16 }}>
-        <div className="workspace-note-card">
-          {`Bestätigte Daten links, Forecast rechts: So siehst du sofort, was schon beobachtet ist und was nur die ${horizonDays}-Tage-Erwartung des Modells ist.`}
-        </div>
-        {!backtest?.timeline?.length ? (
-          <div className="workspace-note-card">
-            Für den sauberen regionalen Rückblick fehlen gerade ausreichend historische Punkte. Deshalb zeigen wir den Fokus hier stärker über den aktuellen Forecast.
+          <div className="workspace-note-list" style={{ marginTop: 16 }}>
+            <div className="workspace-note-card">
+              {`Bestätigte Daten links, Forecast rechts: So siehst du sofort, was schon beobachtet ist und was nur die ${horizonDays}-Tage-Erwartung des Modells ist.`}
+            </div>
+            {!backtest?.timeline?.length ? (
+              <div className="workspace-note-card">
+                Für den sauberen regionalen Rückblick fehlen gerade ausreichend historische Punkte. Deshalb zeigen wir den Fokus hier stärker über den aktuellen Forecast.
+              </div>
+            ) : null}
           </div>
-        ) : null}
-      </div>
+        </>
+      ) : null}
     </div>
   );
 };

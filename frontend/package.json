@@ -56,5 +56,10 @@
       "last 1 safari version"
     ]
   },
+  "jest": {
+    "transformIgnorePatterns": [
+      "node_modules/(?!(d3-geo|d3-array|internmap|d3-scale|d3-interpolate|d3-color|d3-format|d3-time|d3-time-format|d3-path|d3-shape|recharts|recharts-scale)/)"
+    ]
+  },
   "proxy": "http://localhost:8000"
 }

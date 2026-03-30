@@ -1437,3 +1437,75 @@
   border: none;
   background: transparent;
 }
+
+/* ── Prediction Hero ── */
+.prediction-hero {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-xl);
+  min-height: 380px;
+  margin-bottom: var(--space-xl);
+}
+
+.prediction-hero__map {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.prediction-hero__map .vf-map-panel {
+  width: 100%;
+}
+
+.prediction-hero__chart {
+  display: flex;
+  flex-direction: column;
+  min-height: 300px;
+}
+
+.prediction-hero-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-sm) var(--space-lg);
+  padding: var(--space-lg) 0;
+  border-top: 1px solid var(--border-light);
+  margin-bottom: var(--space-xl);
+}
+
+.prediction-hero-summary__probability {
+  font-size: var(--text-h1);
+  font-weight: var(--weight-bold);
+  color: var(--color-primary);
+  line-height: 1;
+}
+
+.prediction-hero-summary__text {
+  font-size: var(--text-body);
+  color: var(--text-primary);
+}
+
+.prediction-hero-summary__confidence {
+  width: 100%;
+  font-size: var(--text-small);
+  color: var(--text-muted);
+}
+
+/* ── Pulse Animation for Top Region ── */
+@keyframes region-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+.region-map__group--pulse > path {
+  animation: region-pulse 2s ease-in-out infinite;
+}
+
+.forecast-chart-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 300px;
+  color: var(--text-muted);
+  font-size: var(--text-small);
+}

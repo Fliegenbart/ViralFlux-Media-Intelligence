@@ -1030,4 +1030,8 @@
   .operator-page-action {
     width: 100%;
   }
+
+  .prediction-hero {
+    grid-template-columns: 1fr;
+  }
 }

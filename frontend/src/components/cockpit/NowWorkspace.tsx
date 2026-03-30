@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import { Info } from 'lucide-react';
 
 import {
@@ -11,6 +11,9 @@ import {
 import CollapsibleSection from '../CollapsibleSection';
 import { NowPageViewModel } from '../../features/media/useMediaData';
 import { FocusRegionOutlookPanel, WaveOutlookPanel, WaveSpreadPanel } from './BacktestVisuals';
+import { ForecastChart, PredictionSummary } from './ForecastChart';
+import GermanyMap from './GermanyMap';
+import { MapRegion } from './types';
 import { formatDateTime, VIRUS_OPTIONS } from './cockpitUtils';
 import {
   OperatorChipRail,
@@ -61,6 +64,27 @@ const NowWorkspace: React.FC<Props> = ({
   onOpenEvidence,
 }) => {
   const focusRegion = view.focusRegion;
+
+  // Build regions Record for GermanyMap from forecast predictions
+  const mapRegions = useMemo<Record<string, MapRegion>>(() => {
+    const regions: Record<string, MapRegion> = {};
+    for (const pred of forecast?.predictions || []) {
+      regions[pred.bundesland] = {
+        name: pred.bundesland_name,
+        avg_viruslast: pred.current_known_incidence || 0,
+        intensity: pred.event_probability_calibrated || 0,
+        trend: pred.trend || '',
+        change_pct: pred.change_pct || 0,
+        n_standorte: 0,
+        signal_score: pred.event_probability_calibrated || 0,
+        impact_probability: pred.event_probability_calibrated || 0,
+        forecast_direction: pred.trend || '',
+        priority_rank: pred.decision_rank ?? pred.rank ?? undefined,
+      };
+    }
+    return regions;
+  }, [forecast]);
+
   const heroRecommendation = view.heroRecommendation;
   const heroSupportText = [view.supportState.label, view.supportState.detail].filter(Boolean).join(' · ');
   const secondaryMoves = view.secondaryMoves.slice(0, 2);
@@ -82,6 +106,8 @@ const NowWorkspace: React.FC<Props> = ({
     || sortedPredictions[0]
     || null
   );
+  const [selectedRegionCode, setSelectedRegionCode] = useState<string | null>(null);
+  const effectiveRegionCode = selectedRegionCode || focusPrediction?.bundesland || null;
   const qualityStats = (view.quality.length ? view.quality : [{ label: 'Qualität', value: 'Noch offen' }]).slice(0, 4);
   const inlineNotes = [
     ...(view.supportState.detail ? [view.supportState.detail] : []),
@@ -146,6 +172,34 @@ const NowWorkspace: React.FC<Props> = ({
         tone="accent"
         className="now-workspace-shell"
       >
+        {/* ── Prediction Hero: Map + Chart ── */}
+        <div className="prediction-hero">
+          <div className="prediction-hero__map">
+            <GermanyMap
+              regions={mapRegions}
+              selectedRegion={effectiveRegionCode}
+              onSelectRegion={setSelectedRegionCode}
+              showProbability
+              topRegionCode={sortedPredictions[0]?.bundesland || null}
+            />
+          </div>
+          <div className="prediction-hero__chart">
+            <ForecastChart
+              timeline={focusRegionBacktest?.timeline || []}
+              regionName={focusPrediction?.bundesland_name || ''}
+            />
+          </div>
+        </div>
+        {focusPrediction && (
+          <PredictionSummary
+            probability={focusPrediction.event_probability_calibrated}
+            regionName={focusPrediction.bundesland_name}
+            horizonDays={focusPrediction.horizon_days}
+            confidence={focusPrediction.decision?.forecast_confidence ?? 0}
+            changePct={focusPrediction.change_pct}
+          />
+        )}
+
         <div className="now-toolbar">
           <div className="now-toolbar__intro">
             <span className="now-toolbar__eyebrow">Wochenlage</span>

@@ -93,9 +93,11 @@ interface Props {
   regions: Record<string, MapRegion>;
   selectedRegion: string | null;
   onSelectRegion: (code: string) => void;
+  showProbability?: boolean;
+  topRegionCode?: string | null;
 }
 
-const GermanyMap: React.FC<Props> = ({ regions, selectedRegion, onSelectRegion }) => {
+const GermanyMap: React.FC<Props> = ({ regions, selectedRegion, onSelectRegion, showProbability, topRegionCode }) => {
   const [hoveredRegion, setHoveredRegion] = useState<string | null>(null);
   const projection = useMemo(
     () => geoMercator().fitSize([420, 460], GEO as never),
@@ -170,6 +172,7 @@ const GermanyMap: React.FC<Props> = ({ regions, selectedRegion, onSelectRegion }
           return (
             <g
               key={`${shape.name}-${shape.code || 'na'}`}
+              className={code === topRegionCode && !insufficientEvidence ? 'region-map__group--pulse' : undefined}
               onClick={() => code && region && onSelectRegion(code)}
               onMouseEnter={() => code && region && setHoveredRegion(code)}
               onMouseLeave={() => setHoveredRegion(null)}
@@ -206,14 +209,33 @@ const GermanyMap: React.FC<Props> = ({ regions, selectedRegion, onSelectRegion }
                 <>
                   <circle
                     cx={shape.cx}
-                    cy={shape.cy - 5}
+                    cy={showProbability && region?.impact_probability ? shape.cy - 9 : shape.cy - 5}
                     r={8.4}
                     fill={isSelected ? '#0f4c6e' : 'rgba(255,255,255,0.95)'}
                     stroke={isSelected ? '#0f4c6e' : 'rgba(203, 213, 225, 0.7)'}
                   />
-                  <text x={shape.cx} y={shape.cy - 2.5} textAnchor="middle" fill={isSelected ? '#f8fafc' : '#334155'} fontSize="8" fontWeight="700">
+                  <text
+                    x={shape.cx}
+                    y={showProbability && region?.impact_probability ? shape.cy - 6.5 : shape.cy - 2.5}
+                    textAnchor="middle"
+                    fill={isSelected ? '#f8fafc' : '#334155'}
+                    fontSize="8"
+                    fontWeight="700"
+                  >
                     {code}
                   </text>
+                  {showProbability && region?.impact_probability != null && region.impact_probability > 0 && (
+                    <text
+                      x={shape.cx}
+                      y={shape.cy + 5}
+                      textAnchor="middle"
+                      fill={region.impact_probability > 0.7 ? 'var(--status-danger)' : region.impact_probability > 0.4 ? 'var(--status-warning)' : 'var(--text-muted)'}
+                      fontSize="9"
+                      fontWeight="700"
+                    >
+                      {formatFractionPercent(region.impact_probability, 0)}
+                    </text>
+                  )}
                 </>
               )}
             </g>

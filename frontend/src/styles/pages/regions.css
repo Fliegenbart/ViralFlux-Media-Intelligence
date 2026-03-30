@@ -559,15 +559,15 @@
 }
 
 .region-ticker__stage-dot--activate {
-  background: var(--color-danger, var(--accent-red));
+  background: var(--status-danger);
 }
 
 .region-ticker__stage-dot--prepare {
-  background: var(--color-warning, var(--accent-amber));
+  background: var(--status-warning);
 }
 
 .region-ticker__stage-dot--watch {
-  background: var(--color-success, var(--accent-emerald));
+  background: var(--status-success);
 }
 
 .region-ticker__stage-text {
@@ -588,11 +588,11 @@
 }
 
 .region-ticker__trend--rising {
-  color: var(--color-danger, var(--accent-red));
+  color: var(--status-danger);
 }
 
 .region-ticker__trend--falling {
-  color: var(--color-success, var(--accent-emerald));
+  color: var(--status-success);
 }
 
 .region-ticker__trend--stable {
@@ -623,17 +623,72 @@
 .region-ticker__action--activate {
   background: rgba(168, 54, 75, 0.1);
   border-color: rgba(168, 54, 75, 0.18);
-  color: var(--color-danger, var(--accent-red));
+  color: var(--status-danger);
 }
 
 .region-ticker__action--prepare {
   background: rgba(217, 119, 6, 0.1);
   border-color: rgba(217, 119, 6, 0.18);
-  color: var(--color-warning, var(--accent-amber));
+  color: var(--status-warning);
 }
 
 .region-ticker__action--watch {
   background: rgba(5, 150, 105, 0.1);
   border-color: rgba(5, 150, 105, 0.18);
-  color: var(--color-success, var(--accent-emerald));
+  color: var(--status-success);
+}
+
+/* ── Region Map ── */
+
+.region-map {
+  position: relative;
+  width: 100%;
+  background: transparent;
+}
+
+.region-map__svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.region-map__path {
+  cursor: pointer;
+  transition: opacity 160ms ease, stroke-width 160ms ease, filter 160ms ease;
+}
+
+.region-map__path:hover {
+  opacity: 0.92;
+}
+
+.region-map__path:focus-visible {
+  outline: none;
+  stroke: var(--color-focus-ring, var(--accent-cyan));
+  stroke-width: 2.8;
+  filter: url(#region-map-glow);
+}
+
+.region-map__tooltip {
+  position: absolute;
+  left: 16px;
+  bottom: 16px;
+  display: grid;
+  gap: 4px;
+  max-width: 240px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--surface-header-bg) 94%, rgba(15, 23, 42, 0.92));
+  border: 1px solid var(--surface-panel-border);
+  color: var(--text-primary);
+  box-shadow: 0 18px 48px rgba(15, 23, 42, 0.24);
+  pointer-events: none;
+}
+
+.region-map__tooltip strong {
+  font-size: var(--text-small);
+}
+
+.region-map__tooltip span {
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
 }

@@ -694,3 +694,21 @@
   background: rgba(245, 158, 11, 0.1);
   color: #fcd34d;
 }
+
+/* --- Timegraph --- */
+[data-theme="dark"] .backtest-tooltip {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.36);
+}
+
+/* --- Dashboard --- */
+[data-theme="dark"] .ops-primary-action-card {
+  background: transparent;
+  border-color: var(--border-color);
+}
+
+[data-theme="dark"] .ops-confidence-card {
+  background: var(--bg-secondary);
+  border-color: var(--border-color);
+}

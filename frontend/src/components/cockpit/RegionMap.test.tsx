@@ -62,8 +62,8 @@ describe('RegionMap', () => {
       />,
     );
 
-    expect(screen.getByTestId('region-map-DE-BE')).toHaveAttribute('fill', 'var(--color-danger, var(--accent-red))');
-    expect(screen.getByTestId('region-map-DE-MV')).toHaveAttribute('fill', 'var(--color-warning, var(--accent-amber))');
-    expect(screen.getByTestId('region-map-DE-SH')).toHaveAttribute('fill', 'var(--color-success, var(--accent-emerald))');
+    expect(screen.getByTestId('region-map-DE-BE')).toHaveAttribute('fill', 'rgba(220, 38, 38, 0.15)');
+    expect(screen.getByTestId('region-map-DE-MV')).toHaveAttribute('fill', 'rgba(217, 119, 6, 0.12)');
+    expect(screen.getByTestId('region-map-DE-SH')).toHaveAttribute('fill', 'rgba(5, 150, 105, 0.08)');
   });
 });

@@ -38,6 +38,12 @@ const TimegraphPage: React.FC = () => {
       tone="accent"
       className="timegraph-page"
     >
+      <p className="timegraph-page__context">
+        {regionalBacktest?.bundesland_name || selectedRegion || 'Kein Bundesland'} · {virus} · Horizont {horizonDays} Tage
+        {regionalBacktest?.timeline?.[regionalBacktest.timeline.length - 1]?.as_of_date && (
+          <> · Letzter Datenpunkt: {regionalBacktest.timeline[regionalBacktest.timeline.length - 1].as_of_date}</>
+        )}
+      </p>
       <div className="timegraph-page__toolbar">
         <OperatorChipRail className="timegraph-page__virus-rail">
           {VIRUS_OPTIONS.map((option) => (
@@ -74,9 +80,9 @@ const TimegraphPage: React.FC = () => {
           </select>
         </label>
 
-        <div className="timegraph-page__horizon-note">
+        <div className="timegraph-page__horizon-text">
           <span className="timegraph-page__control-label">Horizont</span>
-          <strong>{horizonDays} Tage</strong>
+          <span>{horizonDays} Tage</span>
         </div>
       </div>
 

@@ -272,8 +272,6 @@ const EvidencePanel: React.FC<Props> = ({
               </span>
             </div>
 
-            <p className="campaign-focus-copy">{heroSummary}</p>
-
             <div className="evidence-briefing-note-grid">
               <div className="workspace-note-card evidence-briefing-note">
                 <strong>Bereits belastbar</strong>
@@ -288,6 +286,8 @@ const EvidencePanel: React.FC<Props> = ({
                 <p>{cautionAndBlocker}</p>
               </div>
             </div>
+
+            <p className="campaign-focus-copy">{heroSummary}</p>
 
             <div className="action-row">
               <a className="media-button" href={primaryCtaHref}>
@@ -304,7 +304,6 @@ const EvidencePanel: React.FC<Props> = ({
           <OperatorPanel
             eyebrow="Belastbarkeit"
             title="Was diese Aussage gerade trägt"
-            description="Sichtbar bleibt, ob die offene Frage derzeit eher Daten, Modell-Belastbarkeit oder operative Einsatzreife betrifft."
             tone="muted"
             className="workspace-zone workspace-zone--trust evidence-trust-panel"
           >
@@ -335,7 +334,6 @@ const EvidencePanel: React.FC<Props> = ({
         <div id="evidence-onboarding" className="workspace-two-column evidence-onboarding-grid">
           <OperatorPanel
             title="Bereits verbunden"
-            description="Das kann die Wochenplanung heute bereits stützen."
             className="workspace-zone workspace-zone--support"
           >
             <div className="workspace-note-list">
@@ -349,7 +347,6 @@ const EvidencePanel: React.FC<Props> = ({
 
           <OperatorPanel
             title="Fehlend oder offen"
-            description="Hier liegt der nächste sinnvolle Klärungs-, Qualitäts- oder Import-Schritt."
             className="workspace-zone workspace-zone--support"
           >
             <div className="workspace-note-list">

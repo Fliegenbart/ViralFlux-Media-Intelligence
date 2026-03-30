@@ -629,6 +629,24 @@
   align-content: start;
 }
 
+/* --- Hero Facts Inline --- */
+
+.campaign-hero-facts-inline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-xs) var(--space-sm);
+  font-size: var(--text-body);
+  color: var(--text-secondary);
+  margin: var(--space-md) 0;
+}
+.campaign-hero-facts-inline strong {
+  color: var(--text-primary);
+}
+.campaign-hero-facts-sep {
+  color: var(--text-muted);
+}
+
 /* --- Review Sheet --- */
 
 .review-sheet {

@@ -425,7 +425,6 @@ describe('NowWorkspace', () => {
     expect(screen.getByRole('heading', { name: 'Berlin jetzt priorisieren.' })).toBeInTheDocument();
     expect(screen.getAllByText('Belastbarkeit').length).toBeGreaterThan(0);
     expect(screen.getByText('Warum wir das diese Woche vertreten können')).toBeInTheDocument();
-    expect(screen.getByText('Die Empfehlung bleibt nur dann oben, wenn Forecast, Evidenz und Einsatzreife gemeinsam tragen.')).toBeInTheDocument();
     expect(screen.getByText('Nächste Schritte')).toBeInTheDocument();
     expect(screen.getByText('Was danach sinnvoll geprüft werden kann')).toBeInTheDocument();
     expect(screen.getByText('Bayern')).toBeInTheDocument();

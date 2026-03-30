@@ -173,8 +173,7 @@ describe('CampaignStudio', () => {
     expect(screen.getAllByText('Danach').length).toBeGreaterThan(0);
     expect(screen.getByText('Arbeitsphasen')).toBeInTheDocument();
     expect(screen.getAllByText('Weitere Vorschläge erstellen').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Blocker prüfen').length).toBeGreaterThan(0);
-    expect(screen.getByText('Aktive Fälle')).toBeInTheDocument();
+    expect(screen.getByText(/Blocker prüfen/)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Empfehlung prüfen' }));
 

@@ -113,7 +113,6 @@ describe('EvidencePanel', () => {
     expect(screen.getByText('Aktueller Evidenzstatus')).toBeInTheDocument();
     expect(screen.getByText('Belastbarkeit')).toBeInTheDocument();
     expect(screen.getByText('Was diese Aussage gerade trägt')).toBeInTheDocument();
-    expect(screen.getByText('Sichtbar bleibt, ob die offene Frage derzeit eher Daten, Modell-Belastbarkeit oder operative Einsatzreife betrifft.')).toBeInTheDocument();
     expect(screen.getByText('Arbeitskontext')).toBeInTheDocument();
     expect(screen.getByText('Was bereits verbunden ist und was noch fehlt')).toBeInTheDocument();
     expect(screen.getByText('Bereits verbunden')).toBeInTheDocument();

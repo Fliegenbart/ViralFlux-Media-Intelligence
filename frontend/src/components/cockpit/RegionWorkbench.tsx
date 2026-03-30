@@ -456,22 +456,12 @@ const RegionWorkbench: React.FC<Props> = ({
 
             <p className="regions-action-hero__copy">{primaryReason}</p>
 
-            <div className="regions-action-hero__facts">
-              <article className="workspace-note-card regions-action-fact">
-                <span className="now-weekly-plan-card__label">Fokusregion</span>
-                <strong>{primaryRegion?.name || 'Noch offen'}</strong>
-                <p>Gilt auf Bundesland-Ebene.</p>
-              </article>
-              <article className="workspace-note-card regions-action-fact">
-                <span className="now-weekly-plan-card__label">Einordnung</span>
-                <strong>{budgetDirection}</strong>
-                <p>{region?.forecast_direction || 'Seitwärts'} · {selectedEvidence}</p>
-              </article>
-              <article className="workspace-note-card regions-action-fact">
-                <span className="now-weekly-plan-card__label">Empfohlene Aktion</span>
-                <strong>{hasRecommendation ? 'Bestehenden Vorschlag prüfen' : 'Regionale Maßnahme vorbereiten'}</strong>
-                <p>{hasRecommendation ? 'Ein bestehender Vorschlag kann direkt geprüft werden.' : 'Nur sinnvoll, wenn die Evidenz dafür ausreicht.'}</p>
-              </article>
+            <div className="regions-hero-facts-inline">
+              <span><strong>{primaryRegion?.name || 'Noch offen'}</strong></span>
+              <span className="regions-hero-facts-sep">&middot;</span>
+              <span>{budgetDirection}</span>
+              <span className="regions-hero-facts-sep">&middot;</span>
+              <span>{hasRecommendation ? 'Vorschlag bereit' : 'Prüfung ausstehend'}</span>
             </div>
 
             {actionDisabledReason ? (
@@ -510,7 +500,6 @@ const RegionWorkbench: React.FC<Props> = ({
           <OperatorPanel
             eyebrow="Belastbarkeit"
             title="Warum dieses Bundesland gerade vorne liegt"
-            description="Die Entscheidung folgt nicht nur dem Signal, sondern der Kombination aus Belastbarkeit, Evidenz und Einsatzreife."
             tone="muted"
             className="workspace-zone workspace-zone--trust regions-trust-shell"
           >
@@ -531,7 +520,6 @@ const RegionWorkbench: React.FC<Props> = ({
           <OperatorPanel
             eyebrow="Nächste Schritte"
             title="Welche Bundesländer danach folgen können"
-            description="Nicht jede Auffälligkeit verdient sofortige Priorität. Sichtbar bleiben nur die nächsten belastbaren Regionen."
             tone="muted"
             className="workspace-zone workspace-zone--secondary regions-secondary-shell"
           >
@@ -573,7 +561,6 @@ const RegionWorkbench: React.FC<Props> = ({
           <div className="regions-workbench-grid">
             <OperatorPanel
               title={regionListTitle}
-              description="Die Priorisierung entsteht aus der Liste. Die Karte dient nur der räumlichen Orientierung."
               className="workspace-zone workspace-zone--primary regions-list-panel"
             >
               <div className="regions-list-panel__header">
@@ -652,7 +639,6 @@ const RegionWorkbench: React.FC<Props> = ({
 
           <OperatorPanel
             title="Karte zur Orientierung"
-            description="Die Karte hilft bei Auswahl und räumlicher Einordnung. Die eigentliche Priorisierung entsteht in der Liste."
             tone="muted"
             className="workspace-zone workspace-zone--support regions-map-panel regions-map-shell"
           >
@@ -684,7 +670,6 @@ const RegionWorkbench: React.FC<Props> = ({
           <div className="workspace-two-column">
             <OperatorPanel
               title="Begründung"
-              description="Die kurze operative Begründung bleibt zuerst sichtbar, die Details folgen darunter."
             >
               <div className="workspace-note-list">
                 <div className="workspace-note-card">{primaryReason}</div>
@@ -698,7 +683,6 @@ const RegionWorkbench: React.FC<Props> = ({
 
             <OperatorPanel
               title="Treiber und Detailsignale"
-              description="Die signalgebenden Details bleiben gebündelt sichtbar, aber bewusst im zweiten Blick."
             >
               <div className="review-chip-row">
                 {(region?.signal_drivers || []).map((driver) => (

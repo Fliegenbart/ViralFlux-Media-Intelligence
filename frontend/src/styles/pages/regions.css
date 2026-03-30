@@ -120,9 +120,9 @@
 .regions-action-hero__title {
   margin: 6px 0 0;
   color: var(--text-primary);
-  font-size: clamp(28px, 3.2vw, 36px);
-  line-height: 1.08;
-  letter-spacing: -0.04em;
+  font-size: clamp(1.5rem, 3vw, 2.25rem);
+  line-height: 1.1;
+  letter-spacing: -0.03em;
 }
 
 .regions-action-hero__pills {
@@ -144,6 +144,26 @@
   display: grid;
   gap: var(--space-md);
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+/* --- Hero Facts Inline --- */
+
+.regions-hero-facts-inline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-xs) var(--space-sm);
+  font-size: var(--text-body);
+  color: var(--text-secondary);
+  margin: var(--space-md) 0;
+}
+
+.regions-hero-facts-inline strong {
+  color: var(--text-primary);
+}
+
+.regions-hero-facts-sep {
+  color: var(--text-muted);
 }
 
 /* --- Action Fact --- */
@@ -223,6 +243,13 @@
 
 .regions-secondary-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.regions-briefing-stack .workspace-status-card p {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .regions-secondary-shell {

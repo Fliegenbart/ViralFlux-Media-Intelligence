@@ -29,14 +29,17 @@
   color: var(--text-muted);
 }
 
-.timegraph-page__horizon-note {
+.timegraph-page__context {
+  margin: 0 0 var(--space-lg);
+  font-size: var(--text-body);
+  color: var(--text-secondary);
+}
+
+.timegraph-page__horizon-text {
   display: grid;
   gap: var(--space-sm);
   align-content: start;
   padding: 10px var(--space-md);
-  border-radius: 12px;
-  border: 1px solid var(--border-color);
-  background: rgba(255, 255, 255, 0.72);
 }
 
 /* --- Backtest Card --- */

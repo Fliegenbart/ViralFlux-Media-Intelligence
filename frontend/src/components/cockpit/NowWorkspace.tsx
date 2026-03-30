@@ -172,6 +172,17 @@ const NowWorkspace: React.FC<Props> = ({
         tone="accent"
         className="now-workspace-shell"
       >
+        {/* ── Prediction Summary (dominant first-viewport statement) ── */}
+        {focusPrediction && (
+          <PredictionSummary
+            probability={focusPrediction.event_probability_calibrated}
+            regionName={focusPrediction.bundesland_name}
+            horizonDays={focusPrediction.horizon_days}
+            confidence={focusPrediction.decision?.forecast_confidence ?? 0}
+            changePct={focusPrediction.change_pct}
+          />
+        )}
+
         {/* ── Prediction Hero: Map + Chart ── */}
         <div className="prediction-hero">
           <div className="prediction-hero__map">
@@ -190,24 +201,8 @@ const NowWorkspace: React.FC<Props> = ({
             />
           </div>
         </div>
-        {focusPrediction && (
-          <PredictionSummary
-            probability={focusPrediction.event_probability_calibrated}
-            regionName={focusPrediction.bundesland_name}
-            horizonDays={focusPrediction.horizon_days}
-            confidence={focusPrediction.decision?.forecast_confidence ?? 0}
-            changePct={focusPrediction.change_pct}
-          />
-        )}
 
         <div className="now-toolbar">
-          <div className="now-toolbar__intro">
-            <span className="now-toolbar__eyebrow">Wochenlage</span>
-            <div className="now-toolbar__heading">
-              <strong>Diese Woche</strong>
-              <span>Signal lesen, Fokus verstehen, nächsten Schritt sauber einordnen.</span>
-            </div>
-          </div>
           <OperatorChipRail className="review-chip-row now-toolbar__rail">
             {VIRUS_OPTIONS.map((option) => (
               <button
@@ -221,13 +216,7 @@ const NowWorkspace: React.FC<Props> = ({
               </button>
             ))}
           </OperatorChipRail>
-          <div className="workspace-note-card now-toolbar-note">
-            <strong>Datenstand {formatDateTime(view.generatedAt)}</strong>
-            <span>
-              {heroRecommendation?.stateLabel || 'Noch ohne belastbare Freigabe'}
-              {' '}· Gilt auf Bundesland-Ebene, nicht für einzelne Städte.
-            </span>
-          </div>
+          <span className="now-toolbar-note">Datenstand {formatDateTime(view.generatedAt)}</span>
         </div>
         {view.emptyState ? (
           <OperatorPanel
@@ -300,14 +289,12 @@ const NowWorkspace: React.FC<Props> = ({
 
                 <p className="now-briefing-hero__copy">{heroRecommendation.whyNow}</p>
 
-                <div className="now-briefing-hero__facts">
-                  {heroFacts.map((item) => (
-                    <article key={item.label} className="workspace-note-card now-briefing-fact">
-                      <span className="now-weekly-plan-card__label">{item.label}</span>
-                      <strong>{item.value}</strong>
-                      <p>{item.detail}</p>
-                    </article>
-                  ))}
+                <div className="now-briefing-hero__facts-inline">
+                  <span className="now-briefing-hero__fact-label">Aktion:</span>
+                  <span>{heroFacts[0].value}</span>
+                  <span className="now-briefing-hero__fact-sep">·</span>
+                  <span className="now-briefing-hero__fact-label">Kontext:</span>
+                  <span>{heroFacts[1].value}</span>
                 </div>
 
                 <div className="action-row">
@@ -354,7 +341,6 @@ const NowWorkspace: React.FC<Props> = ({
               <OperatorPanel
                 eyebrow="Belastbarkeit"
                 title="Warum wir das diese Woche vertreten können"
-                description="Die Empfehlung bleibt nur dann oben, wenn Forecast, Evidenz und Einsatzreife gemeinsam tragen."
                 tone="muted"
                 className="workspace-zone workspace-zone--trust now-confidence-strip"
               >
@@ -372,7 +358,6 @@ const NowWorkspace: React.FC<Props> = ({
             <OperatorPanel
               eyebrow="Nächste Schritte"
               title="Was danach sinnvoll geprüft werden kann"
-              description="Nur die nächsten belastbaren Optionen bleiben sichtbar. Alles andere bleibt bewusst im Hintergrund."
               tone="muted"
               className="workspace-zone workspace-zone--secondary now-briefing-secondary"
             >

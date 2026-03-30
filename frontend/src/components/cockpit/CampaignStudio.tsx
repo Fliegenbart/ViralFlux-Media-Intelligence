@@ -183,22 +183,12 @@ const CampaignStudio: React.FC<Props> = ({
 
                 <p className="campaign-focus-copy">{focusCopy}</p>
 
-                <div className="campaign-metric-grid campaign-approval-hero__facts">
-                  <div className="campaign-metric-card">
-                    <span>Region & Produkt</span>
-                    <strong>{focusCard?.region_codes_display?.join(', ') || focusCard?.region || 'Region offen'}</strong>
-                    <small>{focusCard?.recommended_product || focusCard?.product || 'Produkt noch offen'}</small>
-                  </div>
-                  <div className="campaign-metric-card">
-                    <span>Mediale Richtung</span>
-                    <strong>{focusChannelDirection}</strong>
-                    <small>{focusBudgetDirection}. {budgetSupportCopy(focusCard)}</small>
-                  </div>
-                  <div className="campaign-metric-card">
-                    <span>Empfohlene Aktion</span>
-                    <strong>{focusActionLabel}</strong>
-                    <small>{focusReadiness?.detail || 'Der Fokusfall kann jetzt geöffnet und operativ eingeordnet werden.'}</small>
-                  </div>
+                <div className="campaign-hero-facts-inline">
+                  <span><strong>{focusCard?.region || '—'}</strong> · {focusCard?.product || '—'}</span>
+                  <span className="campaign-hero-facts-sep">·</span>
+                  <span>{focusChannelDirection || 'Offen'}</span>
+                  <span className="campaign-hero-facts-sep">·</span>
+                  <span>{focusActionLabel}</span>
                 </div>
 
                 {focusReadiness?.tone === 'warning' ? (
@@ -251,7 +241,6 @@ const CampaignStudio: React.FC<Props> = ({
             <OperatorPanel
               eyebrow="Belastbarkeit"
               title="Was diesen Fokusfall trägt"
-              description="Operative Klarheit entsteht nicht aus einem einzelnen Signal, sondern aus Belastbarkeit, Datenlage und dem nächsten realen Handlungsschritt."
               tone="muted"
               className="workspace-zone workspace-zone--trust campaign-trust-panel"
             >
@@ -272,7 +261,6 @@ const CampaignStudio: React.FC<Props> = ({
             <OperatorPanel
               eyebrow="Danach"
               title="Welche Fälle als Nächstes folgen"
-              description="Die nächsten relevanten Fälle bleiben sichtbar, ohne die Priorität des Fokusfalls zu verwischen."
               tone="muted"
               className="workspace-zone workspace-zone--secondary campaign-approval-queue"
             >
@@ -317,11 +305,7 @@ const CampaignStudio: React.FC<Props> = ({
       </OperatorSection>
 
       {!loading && cards.length > 0 ? (
-        <OperatorSection
-          kicker="Pipeline"
-          title="Arbeitsphasen"
-          tone="muted"
-        >
+        <CollapsibleSection title="Arbeitsphasen" subtitle="Vorbereitung, Prüfung und aktive Fälle">
           <section className="workspace-phase-grid">
             {phaseGroups.map((group) => (
               <OperatorPanel
@@ -394,7 +378,7 @@ const CampaignStudio: React.FC<Props> = ({
               </OperatorPanel>
             ))}
           </section>
-        </OperatorSection>
+        </CollapsibleSection>
       ) : null}
 
       <CollapsibleSection

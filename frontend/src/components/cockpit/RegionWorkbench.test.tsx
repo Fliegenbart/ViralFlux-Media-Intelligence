@@ -248,7 +248,6 @@ describe('RegionWorkbench', () => {
     expect(screen.getByRole('button', { name: 'Regionalen Vorschlag öffnen' })).toBeInTheDocument();
     expect(screen.getAllByText('Belastbarkeit').length).toBeGreaterThan(0);
     expect(screen.getByText('Warum dieses Bundesland gerade vorne liegt')).toBeInTheDocument();
-    expect(screen.getByText('Die Entscheidung folgt nicht nur dem Signal, sondern der Kombination aus Belastbarkeit, Evidenz und Einsatzreife.')).toBeInTheDocument();
     expect(screen.getAllByText('Belastbarkeit').length).toBeGreaterThan(0);
     expect(screen.getByText('Datenlage')).toBeInTheDocument();
     expect(screen.getByText('Einsatzreife')).toBeInTheDocument();

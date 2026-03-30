@@ -248,7 +248,7 @@ describe('FocusRegionOutlookPanel', () => {
     expect(screen.getByText('Kalibrierung')).toBeInTheDocument();
     expect(screen.getByText('Sample Coverage')).toBeInTheDocument();
     expect(screen.getByText('Bundesland-Level')).toBeInTheDocument();
-    expect(screen.getByText('Kein Ranking-Signal')).toBeInTheDocument();
+    expect(screen.getByText(/Kein\s+Signal-Score/)).toBeInTheDocument();
     expect(screen.getByText(/In 7 Tagen erwarten wir für Berlin einen Viruslage-Wert von ca. 165,0/)).toBeInTheDocument();
     expect(screen.getByText(/Letzter bestätigter Ist-Wert vom 17.03.2026/)).toBeInTheDocument();
     expect(screen.getByText(/Die Richtung ist/)).toBeInTheDocument();

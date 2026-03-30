@@ -10,6 +10,7 @@ import './index.css';
 const LandingPage = lazy(() => import('./pages/LandingPage'));
 const MediaShell = lazy(() => import('./pages/media/MediaShell'));
 const NowPage = lazy(() => import('./pages/media/NowPage'));
+const TimegraphPage = lazy(() => import('./pages/media/TimegraphPage'));
 const RegionsPage = lazy(() => import('./pages/media/RegionsPage'));
 const CampaignsPage = lazy(() => import('./pages/media/CampaignsPage'));
 const EvidencePage = lazy(() => import('./pages/media/EvidencePage'));
@@ -178,6 +179,7 @@ const App: React.FC = () => {
                 <Route path="/welcome" element={<LandingPage />} />
                 <Route element={<MediaShell />}>
                   <Route path="/jetzt" element={<NowPage />} />
+                  <Route path="/zeitgraph" element={<TimegraphPage />} />
                   <Route path="/regionen" element={<RegionsPage />} />
                   <Route path="/kampagnen" element={<CampaignsPage />} />
                   <Route path="/kampagnen/:id" element={<CampaignsPage />} />

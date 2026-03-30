@@ -11116,6 +11116,53 @@ svg g[tabindex="0"]:focus > path {
   min-width: 0;
 }
 
+.timegraph-page {
+  gap: 18px;
+}
+
+.timegraph-page__toolbar {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 280px) 120px;
+  align-items: end;
+}
+
+.timegraph-page__virus-rail {
+  flex-wrap: wrap;
+}
+
+.timegraph-page__region-control {
+  display: grid;
+  gap: 6px;
+}
+
+.timegraph-page__control-label {
+  font-size: var(--text-label);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.timegraph-page__horizon-note {
+  display: grid;
+  gap: 6px;
+  align-content: start;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border-color);
+  background: rgba(255, 255, 255, 0.72);
+}
+
+@media (max-width: 960px) {
+  .timegraph-page__toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .timegraph-page__horizon-note {
+    max-width: 180px;
+  }
+}
+
 .ops-command-toolbar__meta {
   margin-left: auto;
   flex-wrap: wrap;

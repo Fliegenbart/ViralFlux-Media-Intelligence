@@ -3,7 +3,7 @@
 /* --- Page Layout --- */
 
 .timegraph-page {
-  gap: 18px;
+  gap: var(--space-md);
 }
 
 .timegraph-page__toolbar {
@@ -24,7 +24,7 @@
 
 .timegraph-page__control-label {
   font-size: var(--text-label);
-  letter-spacing: 0.08em;
+  letter-spacing: var(--tracking-wide);
   text-transform: uppercase;
   color: var(--text-muted);
 }
@@ -194,7 +194,7 @@
 /* --- Story Panel --- */
 
 .backtest-story-panel {
-  padding: 18px;
+  padding: var(--space-md);
   margin-bottom: var(--space-lg);
 }
 
@@ -286,7 +286,7 @@
 /* --- Region Panel --- */
 
 .backtest-region-panel {
-  padding: 18px;
+  padding: var(--space-md);
 }
 
 .backtest-region-panel__title {

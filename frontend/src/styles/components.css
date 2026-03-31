@@ -8,7 +8,7 @@
 
 .card {
   background: var(--surface-card-bg);
-  border: 1px solid var(--surface-card-border);
+  border: none;
   border-radius: var(--radius-md);
   box-shadow: var(--surface-card-shadow);
   transition:
@@ -35,7 +35,7 @@
 
 .soft-panel {
   background: var(--surface-panel-bg);
-  border: 1px solid var(--surface-panel-border);
+  border: none;
   border-radius: var(--radius-md);
   box-shadow: var(--surface-panel-highlight);
 }
@@ -48,7 +48,8 @@
   gap: var(--space-xs);
   padding: var(--space-xs);
   border-radius: var(--radius-lg);
-  border: 1px solid var(--surface-panel-border);
+  border: none;
+  box-shadow: var(--shadow-xs);
   background: var(--surface-panel-bg);
 }
 
@@ -61,7 +62,7 @@
   color: var(--text-muted);
   background: transparent;
   cursor: pointer;
-  letter-spacing: -0.01em;
+  letter-spacing: var(--tracking-tight);
   transition: all 0.2s ease;
 }
 
@@ -82,12 +83,13 @@
   min-height: 36px;
   padding: 0 15px;
   border-radius: var(--radius-pill);
-  border: 1px solid var(--control-ghost-border);
+  border: none;
+  box-shadow: var(--shadow-xs);
   background: var(--control-ghost-bg);
   color: var(--control-ghost-text);
   font-size: var(--text-small);
   font-weight: 600;
-  letter-spacing: -0.01em;
+  letter-spacing: var(--tracking-tight);
   cursor: pointer;
   box-shadow: var(--surface-panel-highlight);
   transition: all 0.2s ease;
@@ -137,12 +139,11 @@
   min-height: 46px;
   padding: 0 18px;
   border: 1px solid transparent;
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-sm);
   background: var(--control-primary-bg);
   color: var(--control-active-text);
   font-size: var(--text-small);
   font-weight: 700;
-  letter-spacing: 0;
   cursor: pointer;
   box-shadow: var(--control-primary-shadow);
   transition:
@@ -182,7 +183,7 @@
 .metric-box {
   border-radius: var(--radius-md);
   background: var(--surface-panel-bg);
-  border: 1px solid var(--surface-panel-border);
+  border: none;
   padding: var(--space-lg);
   box-shadow:
     var(--surface-panel-highlight),
@@ -192,7 +193,7 @@
 .metric-box span {
   font-size: var(--text-label);
   font-weight: 700;
-  letter-spacing: 0.12em;
+  letter-spacing: var(--tracking-wide);
   text-transform: uppercase;
   color: var(--text-muted);
 }
@@ -203,7 +204,7 @@
   font-size: var(--text-h1);
   font-weight: 700;
   color: var(--text-primary);
-  letter-spacing: -0.04em;
+  letter-spacing: var(--tracking-tight);
 }
 
 /* ─── Step Chips ───────────────────────────────────────────────────── */
@@ -219,7 +220,7 @@
   color: var(--text-muted);
   font-size: var(--text-label);
   font-weight: 700;
-  letter-spacing: 0.08em;
+  letter-spacing: var(--tracking-wide);
   text-transform: uppercase;
   box-shadow: var(--surface-panel-highlight);
   transition: all 0.2s ease;
@@ -363,7 +364,7 @@
 .toast-success {
   background: #f0fdf4;
   color: #1f5135;
-  border: 1px solid rgba(34, 197, 94, 0.18);
+  border: none;
 }
 
 .toast-success .toast-icon {
@@ -374,7 +375,7 @@
 .toast-error {
   background: #fef2f2;
   color: var(--status-danger);
-  border: 1px solid rgba(249, 115, 22, 0.22);
+  border: none;
 }
 
 .toast-error .toast-icon {
@@ -385,7 +386,7 @@
 .toast-info {
   background: #eff6ff;
   color: #1d4ed8;
-  border: 1px solid rgba(59, 130, 246, 0.22);
+  border: none;
 }
 
 .toast-info .toast-icon {
@@ -573,7 +574,7 @@
 
 .drawer-grid {
   display: grid;
-  gap: 18px;
+  gap: var(--space-md);
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
@@ -663,7 +664,7 @@
 }
 
 .decision-hero-shell {
-  padding: 28px;
+  padding: var(--space-xl);
   background:
     radial-gradient(circle at top left, rgba(59, 130, 246, 0.08), transparent 28%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(249, 251, 255, 0.82));
@@ -698,7 +699,7 @@
 
 .hero-grid {
   display: grid;
-  gap: 28px;
+  gap: var(--space-xl);
   grid-template-columns: minmax(0, 1.8fr) minmax(320px, 0.95fr);
 }
 
@@ -718,9 +719,9 @@
 .hero-title {
   margin: 0;
   max-width: 20ch;
-  font-size: clamp(1.92rem, 3.5vw, 2.95rem);
+  font-size: var(--text-display);
   line-height: 1.02;
-  letter-spacing: -0.04em;
+  letter-spacing: var(--tracking-tight);
   font-weight: 800;
   color: var(--text-primary);
   text-wrap: balance;
@@ -744,7 +745,7 @@
 
 .section-heading {
   display: grid;
-  gap: 10px;
+  gap: var(--space-sm);
 }
 
 .section-copy {
@@ -762,15 +763,15 @@
 
 .aside-summary {
   display: grid;
-  gap: 22px;
+  gap: var(--space-lg);
   align-content: space-between;
 }
 
 .summary-headline {
   margin-top: 8px;
-  font-size: clamp(1.75rem, 2.4vw, 2rem);
+  font-size: var(--text-display);
   line-height: 1.04;
-  letter-spacing: -0.05em;
+  letter-spacing: var(--tracking-tight);
   font-weight: 800;
   color: var(--text-primary);
 }
@@ -785,7 +786,7 @@
 .summary-metric {
   font-size: 1.9rem;
   line-height: 1;
-  letter-spacing: -0.05em;
+  letter-spacing: var(--tracking-tight);
   font-weight: 700;
   color: var(--text-primary);
 }
@@ -802,6 +803,15 @@
 .product-brand-copy {
   font-size: 17px;
   font-weight: 700;
-  letter-spacing: -0.03em;
+  letter-spacing: var(--tracking-tight);
   color: var(--text-primary);
+}
+
+/* BMW-level hover states */
+.workspace-status-card:hover,
+.workspace-note-card:hover,
+.campaign-list-card:hover,
+.lane-card:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
 }

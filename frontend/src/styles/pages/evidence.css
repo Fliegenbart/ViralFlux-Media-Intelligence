@@ -27,15 +27,15 @@
   color: var(--color-brand);
   font-size: var(--text-label);
   font-weight: 700;
-  letter-spacing: 0.16em;
+  letter-spacing: var(--tracking-wide);
   text-transform: uppercase;
 }
 
 .evidence-page-header__title {
   margin: 0;
-  font-size: clamp(2.5rem, 4vw, 4rem);
+  font-size: var(--text-hero);
   line-height: 0.96;
-  letter-spacing: -0.06em;
+  letter-spacing: var(--tracking-tight);
   color: var(--text-primary);
 }
 
@@ -195,7 +195,7 @@
   color: var(--text-primary);
   font-size: var(--text-h3);
   line-height: 1.22;
-  letter-spacing: -0.02em;
+  letter-spacing: var(--tracking-tight);
 }
 
 .evidence-empty-stage__panel p {
@@ -254,7 +254,7 @@
 .evidence-sidebar__tab-list,
 .evidence-sidebar__summary {
   display: grid;
-  gap: 18px;
+  gap: var(--space-md);
 }
 
 /* --- Sidebar Tab --- */
@@ -266,8 +266,8 @@
   gap: var(--space-sm);
   padding-left: 50px;
   padding: var(--space-lg) 18px;
-  border-radius: 22px;
-  border: 1px solid rgba(145, 180, 228, 0.16);
+  border-radius: var(--radius-md);
+  border: none;
   background: rgba(255, 255, 255, 0.76);
   cursor: pointer;
   transition: transform 180ms ease, border-color 180ms ease, background 180ms ease, box-shadow 180ms ease;
@@ -288,7 +288,7 @@
 .evidence-sidebar-tab__kicker {
   font-size: var(--text-label);
   font-weight: 700;
-  letter-spacing: 0.16em;
+  letter-spacing: var(--tracking-wide);
   text-transform: uppercase;
   color: var(--text-muted);
 }
@@ -359,7 +359,7 @@
 
 .evidence-overview-grid {
   display: grid;
-  gap: 18px;
+  gap: var(--space-md);
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
@@ -371,15 +371,15 @@
 .evidence-overview-card__label {
   font-size: var(--text-label);
   font-weight: 700;
-  letter-spacing: 0.14em;
+  letter-spacing: var(--tracking-wide);
   text-transform: uppercase;
   color: var(--text-muted);
 }
 
 .evidence-overview-card strong {
-  font-size: clamp(1.55rem, 2.2vw, 2.1rem);
+  font-size: var(--text-h1);
   line-height: 0.95;
-  letter-spacing: -0.05em;
+  letter-spacing: var(--tracking-tight);
   color: var(--text-primary);
 }
 
@@ -387,11 +387,11 @@
 
 .evidence-filter-rail {
   display: grid;
-  gap: 18px;
+  gap: var(--space-md);
   padding: var(--space-xl);
-  border-radius: 28px;
+  border-radius: var(--radius-md);
   background: rgba(255, 255, 255, 0.92);
-  border: 1px solid rgba(255, 255, 255, 0.84);
+  border: none;
   box-shadow: 0 26px 60px rgba(15, 23, 42, 0.08);
 }
 
@@ -420,7 +420,7 @@
   color: var(--text-muted);
   font-size: var(--text-label);
   font-weight: 700;
-  letter-spacing: 0.16em;
+  letter-spacing: var(--tracking-wide);
   text-transform: uppercase;
 }
 
@@ -489,8 +489,8 @@
 .evidence-brief-card {
   display: grid;
   gap: var(--space-sm);
-  padding: 18px;
-  border-radius: 22px;
+  padding: var(--space-md);
+  border-radius: var(--radius-md);
   background: var(--color-brand);
   color: #ffffff;
   overflow: hidden;
@@ -517,22 +517,22 @@
 
 .evidence-primary-stage {
   display: grid;
-  gap: 18px;
-  padding: 26px;
+  gap: var(--space-md);
+  padding: var(--space-lg);
 }
 
 .evidence-primary-stage__header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 18px;
+  gap: var(--space-md);
 }
 
 .evidence-primary-stage__header h2 {
   margin: 0;
   color: var(--text-primary);
-  font-size: 1.4rem;
-  letter-spacing: -0.04em;
+  font-size: var(--text-h1);
+  letter-spacing: var(--tracking-tight);
 }
 
 .evidence-primary-stage__header p {
@@ -552,21 +552,21 @@
 
 .evidence-support-grid {
   display: grid;
-  gap: 18px;
+  gap: var(--space-md);
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .evidence-support-card {
   display: grid;
-  gap: 18px;
+  gap: var(--space-md);
   padding: var(--space-xl);
 }
 
 .evidence-support-card h3 {
   margin: 0;
   color: var(--text-primary);
-  font-size: 1.4rem;
-  letter-spacing: -0.04em;
+  font-size: var(--text-h1);
+  letter-spacing: var(--tracking-tight);
 }
 
 .evidence-support-card p {
@@ -659,8 +659,8 @@
   width: 100%;
   text-align: left;
   padding: var(--space-lg) 18px;
-  border: 1px solid rgba(255, 255, 255, 0.74);
-  border-radius: 20px;
+  border: none;
+  border-radius: var(--radius-md);
   background: rgba(255, 255, 255, 0.58);
   color: var(--text-primary);
   box-shadow: 0 12px 28px rgba(15, 23, 42, 0.04);
@@ -712,7 +712,7 @@
 .truth-history-divider__label {
   font-size: var(--text-xs);
   font-weight: 700;
-  letter-spacing: 0.12em;
+  letter-spacing: var(--tracking-wide);
   text-transform: uppercase;
   color: var(--text-secondary);
 }
@@ -721,9 +721,9 @@
   display: grid;
   gap: var(--space-sm);
   padding: var(--space-lg) 18px;
-  border-radius: 20px;
+  border-radius: var(--radius-md);
   background: rgba(255, 255, 255, 0.56);
-  border: 1px solid rgba(255, 255, 255, 0.72);
+  border: none;
 }
 
 .truth-issue-row div {

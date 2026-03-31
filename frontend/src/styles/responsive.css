@@ -44,7 +44,7 @@
 
   .drawer-panel {
     width: min(720px, 100vw);
-    padding: 22px;
+    padding: var(--space-lg);
   }
 
   /* --- sidebar (1280) --- */
@@ -712,13 +712,13 @@
   .review-sheet-main,
   .review-sheet-aside,
   .operator-status-card {
-    padding: 18px;
+    padding: var(--space-md);
   }
 
   .evidence-sidebar-tab,
   .evidence-overview-card,
   .now-metric-card {
-    padding: 18px;
+    padding: var(--space-md);
   }
 
   .ops-filter-select {
@@ -761,7 +761,7 @@
 
   /* --- 720px merges --- */
   .login-page {
-    padding: 18px;
+    padding: var(--space-md);
   }
 
   .login-card {
@@ -799,7 +799,7 @@
   .now-live-feed,
   .evidence-primary-stage,
   .evidence-filter-rail {
-    padding: 22px;
+    padding: var(--space-lg);
   }
 
   .now-priority-card {
@@ -813,7 +813,7 @@
   }
 
   .landing-hero-shell {
-    padding: 22px;
+    padding: var(--space-lg);
   }
 
   .lp-nav-actions {

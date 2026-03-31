@@ -23,7 +23,7 @@ h4,
 h5,
 h6 {
   font-family: 'Inter', system-ui, sans-serif;
-  letter-spacing: -0.025em;
+  letter-spacing: var(--tracking-tight);
   text-wrap: balance;
 }
 

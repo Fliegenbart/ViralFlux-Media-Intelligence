@@ -30,7 +30,7 @@
   color: var(--text-primary);
   font-size: var(--text-xs);
   font-weight: 700;
-  letter-spacing: 0.06em;
+  letter-spacing: var(--tracking-wide);
   text-transform: uppercase;
 }
 
@@ -88,7 +88,7 @@
 
 .regions-action-hero {
   display: grid;
-  gap: 18px;
+  gap: var(--space-md);
   border-radius: var(--space-2xl);
   background:
     radial-gradient(circle at top left, rgba(190, 151, 80, 0.16), transparent 26%),
@@ -120,9 +120,9 @@
 .regions-action-hero__title {
   margin: 6px 0 0;
   color: var(--text-primary);
-  font-size: clamp(1.5rem, 3vw, 2.25rem);
+  font-size: var(--text-h1);
   line-height: 1.1;
-  letter-spacing: -0.03em;
+  letter-spacing: var(--tracking-tight);
 }
 
 .regions-action-hero__pills {
@@ -209,7 +209,7 @@
   color: var(--text-secondary);
   font-size: var(--text-label);
   font-weight: 700;
-  letter-spacing: 0.08em;
+  letter-spacing: var(--tracking-wide);
   text-transform: uppercase;
 }
 
@@ -345,7 +345,7 @@
   color: var(--text-primary);
   font-size: var(--text-h3);
   line-height: 1.22;
-  letter-spacing: -0.02em;
+  letter-spacing: var(--tracking-tight);
 }
 
 .regions-empty-stage__panel p {
@@ -371,9 +371,9 @@
 }
 
 .regions-compare-list .campaign-list-card {
-  padding: 18px;
-  border-radius: 20px;
-  border: 1px solid rgba(99, 102, 241, 0.14);
+  padding: var(--space-md);
+  border-radius: var(--radius-md);
+  border: none;
   background: rgba(255, 255, 255, 0.94);
   transition:
     transform 180ms ease,
@@ -497,7 +497,7 @@
   font-size: var(--text-label);
   color: var(--text-muted);
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: var(--tracking-wide);
 }
 
 /* ── Map Region Interaction ── */
@@ -551,7 +551,7 @@
 .region-ticker__table th {
   font-size: var(--text-label);
   font-weight: 700;
-  letter-spacing: 0.08em;
+  letter-spacing: var(--tracking-wide);
   text-transform: uppercase;
   color: var(--text-muted);
 }

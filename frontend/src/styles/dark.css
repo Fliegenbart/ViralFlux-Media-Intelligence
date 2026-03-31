@@ -118,7 +118,7 @@
 [data-theme="dark"] .operator-header,
 [data-theme="dark"] .operator-sidebar {
   background: var(--bg-secondary);
-  border-color: var(--border-color);
+  border: none;
 }
 
 [data-theme="dark"] .operator-nav-item:hover {
@@ -285,7 +285,7 @@
 [data-theme="dark"] .operator-section-shell,
 [data-theme="dark"] .operator-panel-shell {
   background: var(--bg-secondary);
-  border-color: var(--border-color);
+  border: none;
   box-shadow: var(--surface-card-shadow);
 }
 
@@ -299,7 +299,8 @@
 [data-theme="dark"] .operator-stat-card,
 [data-theme="dark"] .operator-status-card {
   background: var(--bg-secondary);
-  border-color: var(--border-color);
+  border: none;
+  box-shadow: var(--surface-card-shadow);
 }
 
 /* --- Operator decision spine / sidebar items --- */

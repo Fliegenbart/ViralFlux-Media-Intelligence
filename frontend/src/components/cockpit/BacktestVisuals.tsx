@@ -717,39 +717,68 @@ export const FocusRegionOutlookPanel: React.FC<FocusRegionOutlookPanelProps> = (
       )}
 
       {chartReady ? (
-        <div style={{ height: 320 }}>
+        <div style={{ height: 400 }}>
           <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={rows}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(148, 163, 184, 0.22)" />
-              <XAxis dataKey="dateLabel" tick={{ fill: '#64748b', fontSize: 11 }} />
-              <YAxis tick={{ fill: '#64748b', fontSize: 11 }} />
-              <Tooltip content={(props) => renderChartTooltip({ ...props, title: 'Fokusregion-Forecast' })} />
-              <Legend />
+            <ComposedChart data={rows} margin={{ top: 8, right: 16, bottom: 8, left: 0 }}>
+              <defs>
+                <linearGradient id="forecastGradient" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#4f46e5" stopOpacity={0.18} />
+                  <stop offset="100%" stopColor="#4f46e5" stopOpacity={0.02} />
+                </linearGradient>
+                <linearGradient id="actualGradient" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#0a84ff" stopOpacity={0.12} />
+                  <stop offset="100%" stopColor="#0a84ff" stopOpacity={0.01} />
+                </linearGradient>
+                <filter id="forecastGlow">
+                  <feGaussianBlur stdDeviation="3" result="blur" />
+                  <feMerge>
+                    <feMergeNode in="blur" />
+                    <feMergeNode in="SourceGraphic" />
+                  </feMerge>
+                </filter>
+              </defs>
 
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(148, 163, 184, 0.12)" vertical={false} />
+              <XAxis dataKey="dateLabel" tick={{ fill: '#94a3b8', fontSize: 11 }} tickLine={false} axisLine={false} />
+              <YAxis tick={{ fill: '#94a3b8', fontSize: 11 }} tickLine={false} axisLine={false} width={40} />
+              <Tooltip content={(props) => renderChartTooltip({ ...props, title: 'Fokusregion-Forecast' })} />
+
+              {/* Forecast window — the "future zone" */}
               <ReferenceArea
                 x1={formatDateShort(prediction?.last_data_date || prediction?.as_of_date)}
                 x2={formatDateShort(prediction?.target_date)}
-                fill="rgba(94, 92, 230, 0.05)"
+                fill="rgba(79, 70, 229, 0.06)"
+                strokeOpacity={0}
               />
+
+              {/* "Today" cliff edge — solid line, not dashed */}
               <ReferenceLine
                 x={formatDateShort(prediction?.last_data_date || prediction?.as_of_date)}
-                stroke="#0a84ff"
-                strokeDasharray="4 4"
-                label={{ value: 'Bestätigt bis hier', position: 'top', fill: '#0a84ff', fontSize: 10 }}
+                stroke="#4f46e5"
+                strokeWidth={2}
+                label={{ value: 'Heute', position: 'insideTopRight', fill: '#4f46e5', fontSize: 11, fontWeight: 600 }}
               />
+
+              {/* Target date marker */}
               <ReferenceLine
                 x={formatDateShort(prediction?.target_date)}
-                stroke="#5e5ce6"
-                strokeDasharray="4 4"
-                label={{ value: `+${horizonDays} Tage`, position: 'top', fill: '#5e5ce6', fontSize: 10 }}
+                stroke="#4f46e5"
+                strokeDasharray="6 4"
+                strokeWidth={1.5}
+                label={{ value: `+${horizonDays}d`, position: 'insideTopRight', fill: '#4f46e5', fontSize: 11, fontWeight: 600 }}
               />
 
-              <Area type="linear" dataKey="bandBase" stackId="forecastBand" stroke="none" fill="transparent" activeDot={false} legendType="none" />
-              <Area type="linear" dataKey="bandRange" stackId="forecastBand" stroke="none" fill="rgba(94,92,230,0.16)" activeDot={false} name="Unsicherheitsintervall" />
+              {/* Uncertainty band — more visible */}
+              <Area type="monotone" dataKey="bandBase" stackId="forecastBand" stroke="none" fill="transparent" activeDot={false} legendType="none" />
+              <Area type="monotone" dataKey="bandRange" stackId="forecastBand" stroke="none" fill="rgba(79,70,229,0.14)" activeDot={false} name="Unsicherheitsintervall" />
 
-              <Line type="linear" dataKey="actual" name="Truth / Ist-Wert" stroke="#0a84ff" strokeWidth={2.6} dot={false} />
-              <Line type="linear" dataKey="validated" name={`Validierter ${horizonDays}-Tage-Rückblick`} stroke="#475569" strokeWidth={1.7} dot={false} strokeDasharray="5 4" />
-              <Line type="linear" dataKey="forecast" name={`${horizonDays}-Tage-Forecast`} stroke="#5e5ce6" strokeWidth={3} dot={false} />
+              {/* Historical fill gradient */}
+              <Area type="monotone" dataKey="actual" stroke="none" fill="url(#actualGradient)" activeDot={false} legendType="none" />
+
+              {/* Lines — clear hierarchy */}
+              <Line type="monotone" dataKey="actual" name="Ist-Wert" stroke="#0a84ff" strokeWidth={2.5} dot={false} />
+              <Line type="monotone" dataKey="validated" name={`${horizonDays}d-Rückblick`} stroke="#94a3b8" strokeWidth={1.5} dot={false} strokeDasharray="5 4" />
+              <Line type="monotone" dataKey="forecast" name={`${horizonDays}d-Forecast`} stroke="#4f46e5" strokeWidth={3.5} dot={false} filter="url(#forecastGlow)" />
             </ComposedChart>
           </ResponsiveContainer>
         </div>

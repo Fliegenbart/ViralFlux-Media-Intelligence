@@ -91,100 +91,49 @@ const ForecastChart: React.FC<ForecastChartProps> = ({ timeline, regionName, cla
 
   return (
     <div className={className || ''} style={{ width: '100%', flex: 1 }}>
-      <ResponsiveContainer width="100%" height="100%" minHeight={280}>
-        <ComposedChart data={chartData} margin={{ top: 8, right: 12, bottom: 4, left: 0 }}>
-          <CartesianGrid
-            strokeDasharray="3 3"
-            stroke="var(--border-light, rgba(148,163,184,0.18))"
-            vertical={false}
-          />
-          <XAxis
-            dataKey="dateLabel"
-            tick={{ fontSize: 11, fill: 'var(--text-muted, #94a3b8)' }}
-            tickLine={false}
-            axisLine={{ stroke: 'var(--border-light, rgba(148,163,184,0.18))' }}
-            interval="preserveStartEnd"
-          />
-          <YAxis
-            tick={{ fontSize: 11, fill: 'var(--text-muted, #94a3b8)' }}
-            tickLine={false}
-            axisLine={false}
-            width={40}
-          />
+      <ResponsiveContainer width="100%" height="100%" minHeight={300}>
+        <ComposedChart data={chartData} margin={{ top: 8, right: 16, bottom: 4, left: 0 }}>
+          <defs>
+            <linearGradient id="fcHistGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#4f46e5" stopOpacity={0.12} />
+              <stop offset="100%" stopColor="#4f46e5" stopOpacity={0.01} />
+            </linearGradient>
+            <filter id="fcGlow">
+              <feGaussianBlur stdDeviation="2.5" result="blur" />
+              <feMerge>
+                <feMergeNode in="blur" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
+          </defs>
+
+          <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.12)" vertical={false} />
+          <XAxis dataKey="dateLabel" tick={{ fontSize: 11, fill: '#94a3b8' }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
+          <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} tickLine={false} axisLine={false} width={40} />
           <Tooltip
-            contentStyle={{
-              background: 'var(--surface-primary, #fff)',
-              border: '1px solid var(--border-light, #e2e8f0)',
-              borderRadius: 8,
-              fontSize: 12,
-              boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
-            }}
-            labelFormatter={(label) => `${regionName} - ${label}`}
+            contentStyle={{ background: '#fff', border: 'none', borderRadius: 8, fontSize: 12, boxShadow: '0 4px 16px rgba(0,0,0,0.12)' }}
+            labelFormatter={(label) => `${regionName} · ${label}`}
             formatter={(value: number, name: string) => {
-              const nameMap: Record<string, string> = {
-                historicalLine: 'Ist-Inzidenz',
-                forecastLine: 'Prognose',
-                bandUpper: 'Obergrenze',
-                bandLower: 'Untergrenze',
-              };
+              const nameMap: Record<string, string> = { historicalLine: 'Ist-Inzidenz', forecastLine: 'Prognose', bandUpper: 'Obergrenze', bandLower: 'Untergrenze' };
               return [typeof value === 'number' ? value.toFixed(1) : value, nameMap[name] || name];
             }}
           />
 
           {/* Confidence band */}
-          <Area
-            dataKey="bandUpper"
-            stroke="none"
-            fill="var(--color-primary, #6366f1)"
-            fillOpacity={0.08}
-            isAnimationActive={false}
-            connectNulls={false}
-          />
-          <Area
-            dataKey="bandLower"
-            stroke="none"
-            fill="var(--surface-primary, #fff)"
-            fillOpacity={1}
-            isAnimationActive={false}
-            connectNulls={false}
-          />
+          <Area dataKey="bandUpper" stroke="none" fill="#4f46e5" fillOpacity={0.1} isAnimationActive={false} connectNulls={false} legendType="none" />
+          <Area dataKey="bandLower" stroke="none" fill="#fff" fillOpacity={1} isAnimationActive={false} connectNulls={false} legendType="none" />
 
-          {/* Historical line (solid) */}
-          <Line
-            dataKey="historicalLine"
-            type="monotone"
-            stroke="var(--color-primary, #6366f1)"
-            strokeWidth={2}
-            dot={false}
-            isAnimationActive={false}
-            connectNulls
-          />
+          {/* Historical gradient fill */}
+          <Area dataKey="historicalLine" type="monotone" stroke="none" fill="url(#fcHistGrad)" isAnimationActive={false} connectNulls legendType="none" />
 
-          {/* Forecast line (dashed) */}
-          <Line
-            dataKey="forecastLine"
-            type="monotone"
-            stroke="var(--color-primary, #6366f1)"
-            strokeWidth={2}
-            strokeDasharray="6 4"
-            dot={false}
-            isAnimationActive={false}
-            connectNulls
-          />
+          {/* Historical line */}
+          <Line dataKey="historicalLine" type="monotone" stroke="#4f46e5" strokeWidth={2.5} dot={false} isAnimationActive={false} connectNulls name="Ist-Wert" />
 
-          {/* Today reference line */}
-          <ReferenceLine
-            x={todayLabel}
-            stroke="var(--text-muted, #94a3b8)"
-            strokeDasharray="4 4"
-            strokeWidth={1}
-            label={{
-              value: 'Heute',
-              position: 'top',
-              fill: 'var(--text-muted, #94a3b8)',
-              fontSize: 11,
-            }}
-          />
+          {/* Forecast line — DRAMATIC, with glow */}
+          <Line dataKey="forecastLine" type="monotone" stroke="#4f46e5" strokeWidth={3.5} dot={false} isAnimationActive={false} connectNulls filter="url(#fcGlow)" name="Forecast" />
+
+          {/* Today — solid cliff edge */}
+          <ReferenceLine x={todayLabel} stroke="#4f46e5" strokeWidth={2} label={{ value: 'Heute', position: 'insideTopRight', fill: '#4f46e5', fontSize: 11, fontWeight: 600 }} />
         </ComposedChart>
       </ResponsiveContainer>
     </div>

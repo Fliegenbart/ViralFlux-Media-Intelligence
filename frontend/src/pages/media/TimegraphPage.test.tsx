@@ -69,10 +69,10 @@ describe('TimegraphPage', () => {
   it('renders a reduced graph page with virus chips, region select and a minimal graph', () => {
     render(<TimegraphPage />);
 
-    expect(screen.getByText('Verlauf und 7-Tage-Fortführung')).toBeInTheDocument();
+    expect(screen.getByText(/Influenza A lädt — Berlin/)).toBeInTheDocument();
+    expect(screen.getByText(/Horizont 7 Tage/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Influenza A' })).toBeInTheDocument();
     expect(screen.getByLabelText('Bundesland wählen')).toBeInTheDocument();
-    expect(screen.getByText('7 Tage')).toBeInTheDocument();
     expect(screen.getByTestId('focus-region-graph')).toHaveTextContent('minimal-7');
 
     fireEvent.click(screen.getByRole('button', { name: 'Influenza B' }));

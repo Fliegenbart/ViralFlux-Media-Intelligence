@@ -4,11 +4,7 @@ import { useToast } from '../../App';
 import AnimatedPage from '../../components/AnimatedPage';
 import { usePageHeader } from '../../components/AppLayout';
 import { FocusRegionOutlookPanel } from '../../components/cockpit/BacktestVisuals';
-import { VIRUS_OPTIONS } from '../../components/cockpit/cockpitUtils';
-import {
-  OperatorChipRail,
-  OperatorSection,
-} from '../../components/cockpit/operator/OperatorPrimitives';
+import { formatDateShort, VIRUS_OPTIONS } from '../../components/cockpit/cockpitUtils';
 import { useTimegraphPageData } from '../../features/media/useMediaData';
 import { useMediaWorkflow } from '../../features/media/workflowContext';
 
@@ -31,69 +27,87 @@ const TimegraphPage: React.FC = () => {
     return clearPageHeader;
   }, [clearPageHeader]);
 
+  /* ── derived insight values ── */
+  const prediction = regionalBacktest?.timeline?.[regionalBacktest.timeline.length - 1] || null;
+  const changePct = prediction
+    ? ((prediction.expected_target_incidence - prediction.current_known_incidence) /
+        (prediction.current_known_incidence || 1)) *
+      100
+    : null;
+
+  const trendArrow = changePct != null ? (changePct > 5 ? '\u2197' : changePct < -5 ? '\u2198' : '\u2192') : '\u2014';
+  const trendWord = changePct != null ? (changePct > 5 ? 'steigt' : changePct < -5 ? 'fällt' : 'stabil') : 'lädt';
+  const trendState =
+    changePct != null
+      ? changePct > 20
+        ? 'critical'
+        : changePct > 5
+          ? 'elevated'
+          : changePct < -5
+            ? 'clear'
+            : 'watch'
+      : 'watch';
+  const changePctText =
+    changePct != null ? `${changePct >= 0 ? '+' : ''}${changePct.toFixed(0)}% Veränderung` : 'Wird berechnet';
+  const lastDataDate = prediction?.as_of_date ? formatDateShort(prediction.as_of_date) : null;
+
   return (
     <AnimatedPage>
-    <OperatorSection
-      title="Verlauf und 7-Tage-Fortführung"
-      tone="accent"
-      className="timegraph-page"
-    >
-      <p className="timegraph-page__context">
-        {regionalBacktest?.bundesland_name || selectedRegion || 'Kein Bundesland'} · {virus} · Horizont {horizonDays} Tage
-        {regionalBacktest?.timeline?.[regionalBacktest.timeline.length - 1]?.as_of_date && (
-          <> · Letzter Datenpunkt: {regionalBacktest.timeline[regionalBacktest.timeline.length - 1].as_of_date}</>
-        )}
-      </p>
-      <div className="timegraph-page__toolbar">
-        <OperatorChipRail className="timegraph-page__virus-rail">
-          {VIRUS_OPTIONS.map((option) => (
-            <button
-              key={option}
-              type="button"
-              onClick={() => setVirus(option)}
-              className={`tab-chip ${option === virus ? 'active' : ''}`}
-              aria-pressed={option === virus}
+      <div className="page-stack">
+        <div className="answer-hero" data-state={trendState}>
+          <div className="answer-hero__signal">
+            <span className="answer-hero__dot" />
+            <span className="answer-hero__probability">{trendArrow}</span>
+          </div>
+          <h2 className="answer-hero__title">
+            {virus} {trendWord} — {regionalBacktest?.bundesland_name || selectedRegion || 'Kein Bundesland'}
+          </h2>
+          <p className="answer-hero__meta">
+            {changePctText} · Horizont {horizonDays} Tage
+            {lastDataDate && <> · Stand {lastDataDate}</>}
+          </p>
+          <div className="answer-hero__chips">
+            {VIRUS_OPTIONS.map((option) => (
+              <button
+                key={option}
+                type="button"
+                onClick={() => setVirus(option)}
+                className={`tab-chip ${option === virus ? 'active' : ''}`}
+                aria-pressed={option === virus}
+              >
+                {option}
+              </button>
+            ))}
+            <select
+              aria-label="Bundesland wählen"
+              className="timegraph-region-select"
+              value={selectedRegion || ''}
+              onChange={(event) => setSelectedRegion(event.target.value || null)}
+              disabled={loading || regionOptions.length === 0}
             >
-              {option}
-            </button>
-          ))}
-        </OperatorChipRail>
+              {regionOptions.length > 0 ? (
+                regionOptions.map((option) => (
+                  <option key={option.code} value={option.code}>
+                    {option.name}
+                  </option>
+                ))
+              ) : (
+                <option value="">{loading ? 'Regionen werden geladen' : 'Keine Region verfügbar'}</option>
+              )}
+            </select>
+          </div>
+        </div>
 
-        <label className="timegraph-page__region-control">
-          <span className="timegraph-page__control-label">Bundesland</span>
-          <select
-            aria-label="Bundesland wählen"
-            className="media-input ops-command-filter__select"
-            value={selectedRegion || ''}
-            onChange={(event) => setSelectedRegion(event.target.value || null)}
-            disabled={loading || regionOptions.length === 0}
-          >
-            {regionOptions.length > 0 ? regionOptions.map((option) => (
-              <option key={option.code} value={option.code}>
-                {option.name}
-              </option>
-            )) : (
-              <option value="">
-                {loading ? 'Regionen werden geladen' : 'Keine Region verfügbar'}
-              </option>
-            )}
-          </select>
-        </label>
-
-        <div className="timegraph-page__horizon-text">
-          <span className="timegraph-page__control-label">Horizont</span>
-          <span>{horizonDays} Tage</span>
+        <div className="timegraph-chart-container">
+          <FocusRegionOutlookPanel
+            prediction={selectedPrediction}
+            backtest={regionalBacktest}
+            loading={loading || backtestLoading}
+            horizonDays={horizonDays}
+            minimal
+          />
         </div>
       </div>
-
-      <FocusRegionOutlookPanel
-        prediction={selectedPrediction}
-        backtest={regionalBacktest}
-        loading={loading || backtestLoading}
-        horizonDays={horizonDays}
-        minimal
-      />
-    </OperatorSection>
     </AnimatedPage>
   );
 };

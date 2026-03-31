@@ -1,5 +1,4 @@
 import React, { useMemo, useState } from 'react';
-import { Info } from 'lucide-react';
 
 import {
   BacktestResponse,
@@ -11,12 +10,11 @@ import {
 import CollapsibleSection from '../CollapsibleSection';
 import { NowPageViewModel } from '../../features/media/useMediaData';
 import { FocusRegionOutlookPanel, WaveOutlookPanel, WaveSpreadPanel } from './BacktestVisuals';
-import { ForecastChart, PredictionSummary } from './ForecastChart';
+import { ForecastChart } from './ForecastChart';
 import GermanyMap from './GermanyMap';
 import { MapRegion } from './types';
 import { formatDateTime, VIRUS_OPTIONS } from './cockpitUtils';
 import {
-  OperatorChipRail,
   OperatorPanel,
   OperatorSection,
   OperatorStat,
@@ -143,6 +141,14 @@ const NowWorkspace: React.FC<Props> = ({
     blockers[0] || 'Der nächste sinnvolle Schritt ist die Prüfung von Evidenz oder Regionen.',
   ].filter(Boolean).slice(0, 3);
 
+  const heroState = (() => {
+    const prob = focusPrediction?.event_probability_calibrated ?? 0;
+    if (prob > 0.7) return 'critical';
+    if (prob > 0.4) return 'elevated';
+    if (prob > 0.1) return 'watch';
+    return 'clear';
+  })();
+
   if (loading && !view.hasData) {
     return (
       <OperatorSection
@@ -172,18 +178,59 @@ const NowWorkspace: React.FC<Props> = ({
         tone="accent"
         className="now-workspace-shell"
       >
-        {/* ── Prediction Summary (dominant first-viewport statement) ── */}
-        {focusPrediction && (
-          <PredictionSummary
-            probability={focusPrediction.event_probability_calibrated}
-            regionName={focusPrediction.bundesland_name}
-            horizonDays={focusPrediction.horizon_days}
-            confidence={focusPrediction.decision?.forecast_confidence ?? 0}
-            changePct={focusPrediction.change_pct}
-          />
+        {/* ── 1. Answer Hero — THE dominant element ── */}
+        {focusPrediction ? (
+          <div className="answer-hero" data-state={heroState}>
+            <div className="answer-hero__signal">
+              <span className="answer-hero__dot" />
+              <span className="answer-hero__probability">
+                {Math.round((focusPrediction?.event_probability_calibrated ?? 0) * 100)}%
+              </span>
+            </div>
+            <h2 className="answer-hero__title">{decisionTitle}</h2>
+            <p className="answer-hero__meta">
+              {focusPrediction?.bundesland_name} · {virus} · nächste {focusPrediction?.horizon_days || horizonDays} Tage
+              {focusPrediction?.change_pct != null && (
+                <> · Trend: {focusPrediction.change_pct >= 0 ? '+' : ''}{focusPrediction.change_pct.toFixed(1)}%</>
+              )}
+            </p>
+            <div className="answer-hero__actions">
+              {heroRecommendation && !heroRecommendation.ctaDisabled && (
+                <button type="button" className="media-button answer-hero__cta" onClick={() => {
+                  if (focusRegion?.code) onOpenRegions(focusRegion.code);
+                  else onOpenCampaigns();
+                }}>
+                  {heroRecommendation.actionLabel || 'Details öffnen'}
+                </button>
+              )}
+              <div className="answer-hero__chips">
+                {VIRUS_OPTIONS.map((option) => (
+                  <button key={option} type="button" onClick={() => onVirusChange(option)}
+                    className={`tab-chip ${option === virus ? 'active' : ''}`} aria-pressed={option === virus}>
+                    {option}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="answer-hero" data-state="clear">
+            <div className="answer-hero__signal">
+              <span className="answer-hero__dot" />
+              <span className="answer-hero__probability">&mdash;</span>
+            </div>
+            <h2 className="answer-hero__title">Keine belastbare Aktion diese Woche</h2>
+            <p className="answer-hero__meta">
+              Keine Region zeigt ausreichende Signale für die nächsten {horizonDays} Tage.
+            </p>
+            <div className="answer-hero__actions">
+              <button type="button" className="media-button secondary" onClick={onOpenEvidence}>Evidenz prüfen</button>
+              <button type="button" className="media-button secondary" onClick={() => onOpenRegions()}>Regionen öffnen</button>
+            </div>
+          </div>
         )}
 
-        {/* ── Prediction Hero: Map + Chart ── */}
+        {/* ── 2. Map + Chart (side by side) ── */}
         <div className="prediction-hero">
           <div className="prediction-hero__map">
             <GermanyMap
@@ -201,194 +248,40 @@ const NowWorkspace: React.FC<Props> = ({
             />
           </div>
         </div>
+        <span className="now-data-timestamp">
+          Datenstand {formatDateTime(view.generatedAt)} · {heroRecommendation?.stateLabel || 'Prüfung läuft'}
+        </span>
 
-        <div className="now-toolbar">
-          <OperatorChipRail className="review-chip-row now-toolbar__rail">
-            {VIRUS_OPTIONS.map((option) => (
-              <button
-                key={option}
-                type="button"
-                onClick={() => onVirusChange(option)}
-                className={`tab-chip ${option === virus ? 'active' : ''}`}
-                aria-pressed={option === virus}
-              >
-                {option}
-              </button>
+        {/* ── 3. Trust as compact bar ── */}
+        {confidenceItems.length > 0 && (
+          <div className="trust-bar">
+            {confidenceItems.map((item) => (
+              <div key={item.key} className={`trust-bar__item trust-bar__item--${item.tone}`}>
+                <span className="trust-bar__label">{item.label}</span>
+                <span className="trust-bar__value">{item.value}</span>
+              </div>
             ))}
-          </OperatorChipRail>
-          <span className="now-toolbar-note">Datenstand {formatDateTime(view.generatedAt)}</span>
-        </div>
-        {view.emptyState ? (
-          <OperatorPanel
-            eyebrow="Status"
-            title={view.emptyState.title}
-            description={view.emptyState.body}
-            tone="muted"
-            className="workspace-zone workspace-zone--hero now-briefing-hero now-briefing-hero--weak now-briefing-hero--empty"
-          >
-            <div className="now-briefing-empty__meta">
-              <span>Noch keine belastbare Aktion</span>
-              <span>{virus} · {horizonDays} Tage</span>
-            </div>
-            <div className="now-briefing-empty__body">
-              <div className="now-briefing-empty__summary">
-                <span className="now-weekly-plan-card__label">Fokus diese Woche</span>
-                <strong>Es gibt erste Signale, aber noch keine belastbare Priorisierung für diese Woche.</strong>
-                <p>Die Oberfläche bleibt bewusst zurückhaltend, solange Evidenz und Freigabe nicht ausreichen.</p>
-              </div>
-              <div className="now-briefing-empty__stage">
-                <div className="workspace-note-card now-briefing-empty__signal">
-                  <span className="now-weekly-plan-card__label">Was sichtbar bleibt</span>
-                  <strong>{emptyStateSignals[0] || 'Noch kein freigegebener Fokus'}</strong>
-                  <p>{emptyStateSignals[1] || 'Die Lage bleibt sichtbar, aber noch ohne belastbare Priorisierung.'}</p>
-                </div>
-                <div className="workspace-note-card now-briefing-empty__signal">
-                  <span className="now-weekly-plan-card__label">Sinnvoller nächster Schritt</span>
-                  <strong>Evidenz oder Regionen öffnen</strong>
-                  <p>{emptyStateSignals[2] || 'Zuerst sollte geklärt werden, ob Evidenz oder Regionen bereits eine tragfähige Richtung zeigen.'}</p>
-                </div>
-              </div>
-            </div>
-            <div className="action-row">
-              <button className="media-button" type="button" onClick={onOpenEvidence}>
-                Evidenz prüfen
-              </button>
-              <button className="media-button secondary" type="button" onClick={() => onOpenRegions()}>
-                Regionen öffnen
-              </button>
-            </div>
-            {heroNotes.length > 0 ? (
-              <div className="now-inline-notes" aria-live="polite">
-                {heroNotes.map((note) => (
-                  <div key={note} className="now-inline-note">
-                    <Info size={16} aria-hidden="true" />
-                    <p>{note}</p>
-                  </div>
-                ))}
-              </div>
-            ) : null}
-          </OperatorPanel>
-        ) : heroRecommendation ? (
-          <div className="now-briefing-stack now-editorial-stage">
-              <OperatorPanel
-                tone={heroRecommendation.state === 'strong' ? 'accent' : 'default'}
-                className={`workspace-zone workspace-zone--hero now-briefing-hero now-briefing-hero--${heroRecommendation.state}`}
-              >
-                <div className="now-briefing-hero__header">
-                  <div>
-                    <span className="now-weekly-plan-card__label">Empfohlene Aktion</span>
-                    <h3 className="now-briefing-hero__title">{decisionTitle}</h3>
-                    <div className="now-briefing-hero__meta">{decisionContext}</div>
-                  </div>
-                  <div className="now-briefing-hero__pills">
-                    <span className={`now-state-pill now-state-pill--${heroRecommendation.state}`}>
-                      {heroRecommendation.stateLabel}
-                    </span>
-                  </div>
-                </div>
-
-                <p className="now-briefing-hero__copy">{heroRecommendation.whyNow}</p>
-
-                <div className="now-briefing-hero__facts-inline">
-                  <span className="now-briefing-hero__fact-label">Aktion:</span>
-                  <span>{heroFacts[0].value}</span>
-                  <span className="now-briefing-hero__fact-sep">·</span>
-                  <span className="now-briefing-hero__fact-label">Kontext:</span>
-                  <span>{heroFacts[1].value}</span>
-                </div>
-
-                <div className="action-row">
-                  <button
-                    className="media-button"
-                    type="button"
-                    disabled={heroRecommendation.ctaDisabled}
-                    onClick={() => (
-                      view.primaryRecommendationId
-                        ? onOpenRecommendation(view.primaryRecommendationId)
-                        : onOpenCampaigns()
-                    )}
-                  >
-                    {heroRecommendation.actionLabel}
-                  </button>
-                  <button
-                    className="media-button secondary"
-                    type="button"
-                    onClick={() => onOpenRegions(heroRecommendation.regionCode || focusRegion?.code || undefined)}
-                  >
-                    Bundesland öffnen
-                  </button>
-                  <button className="media-button secondary" type="button" onClick={onOpenEvidence}>
-                    Evidenz prüfen
-                  </button>
-                </div>
-
-                {focusRegion?.budgetLabel && focusRegion.budgetLabel !== '-' ? (
-                  <p className="now-briefing-hero__help">Budgetrahmen {focusRegion.budgetLabel} · nur zur Einordnung, nicht als exakte Vorgabe.</p>
-                ) : null}
-
-                {heroNotes.length > 0 ? (
-                  <div className="now-inline-notes" aria-live="polite">
-                    {heroNotes.map((note) => (
-                      <div key={note} className="now-inline-note">
-                        <Info size={16} aria-hidden="true" />
-                        <p>{note}</p>
-                      </div>
-                    ))}
-                  </div>
-                ) : null}
-              </OperatorPanel>
-
-              <OperatorPanel
-                eyebrow="Belastbarkeit"
-                title="Warum wir das diese Woche vertreten können"
-                tone="muted"
-                className="workspace-zone workspace-zone--trust now-confidence-strip"
-              >
-              <div className="now-trust-grid">
-                {confidenceItems.map((item) => (
-                  <article key={item.key} className={`workspace-status-card workspace-status-card--${item.tone}`}>
-                    <span className="workspace-status-card__question">{item.label}</span>
-                    <strong>{item.value}</strong>
-                    <p>{item.detail}</p>
-                  </article>
-                ))}
-              </div>
-            </OperatorPanel>
-
-            <OperatorPanel
-              eyebrow="Nächste Schritte"
-              title="Was danach sinnvoll geprüft werden kann"
-              tone="muted"
-              className="workspace-zone workspace-zone--secondary now-briefing-secondary"
-            >
-              <div className="now-briefing-secondary__list">
-                {secondaryMoves.length > 0 ? secondaryMoves.map((region, index) => (
-                  <button
-                    type="button"
-                    key={region.code}
-                    onClick={() => onOpenRegions(region.code)}
-                    className="campaign-list-card now-briefing-secondary__item"
-                  >
-                    <div className="now-briefing-secondary__index">0{index + 1}</div>
-                    <div className="now-briefing-secondary__item-copy">
-                      <div className="now-briefing-secondary__item-title">{region.name}</div>
-                      <div className="now-briefing-secondary__item-meta">
-                        {region.stage} · {region.probabilityLabel}
-                      </div>
-                      <p>{region.reason}</p>
-                    </div>
-                  </button>
-                )) : (
-                  <div className="workspace-note-card now-briefing-secondary__empty">
-                    Aktuell gibt es keine weiteren belastbaren Regionen mit vergleichbarer Relevanz.
-                  </div>
-                )}
-              </div>
-            </OperatorPanel>
           </div>
-        ) : null}
+        )}
+
+        {/* ── 4. Secondary moves ── */}
+        {secondaryMoves.length > 0 && (
+          <div className="next-regions">
+            <h3 className="next-regions__title">Nächste Regionen</h3>
+            <div className="next-regions__list">
+              {secondaryMoves.map((region, i) => (
+                <button key={region.code} type="button" className="next-regions__item" onClick={() => onOpenRegions(region.code)}>
+                  <span className="next-regions__rank">{String(i + 1).padStart(2, '0')}</span>
+                  <span className="next-regions__name">{region.name}</span>
+                  <span className="next-regions__meta">{region.stage} · {region.probabilityLabel}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </OperatorSection>
 
+      {/* ── 5. Collapsible Vertiefung (unchanged) ── */}
       {!view.emptyState ? (
         <>
           <CollapsibleSection
@@ -404,10 +297,10 @@ const NowWorkspace: React.FC<Props> = ({
                 horizonDays={horizonDays}
               />
 
-            <OperatorPanel
-              title="Signalqualität und Kontext"
-              description="Verdichteter Blick auf Qualität, Status und Einordnung der wichtigsten Signale."
-            >
+              <OperatorPanel
+                title="Signalqualität und Kontext"
+                description="Verdichteter Blick auf Qualität, Status und Einordnung der wichtigsten Signale."
+              >
                 <div className="operator-stat-grid">
                   {qualityStats.map((item) => (
                     <OperatorStat
@@ -422,10 +315,10 @@ const NowWorkspace: React.FC<Props> = ({
             </div>
 
             <div className="workspace-two-column">
-            <OperatorPanel
-              title="Was noch bremsen kann"
-              description="Nur die Punkte, die vor dem nächsten Schritt bewusst sichtbar bleiben sollen."
-            >
+              <OperatorPanel
+                title="Was noch bremsen kann"
+                description="Nur die Punkte, die vor dem nächsten Schritt bewusst sichtbar bleiben sollen."
+              >
                 <div className="workspace-note-list">
                   {blockers.length > 0 ? blockers.map((risk) => (
                     <div key={risk} className="workspace-note-card">
@@ -437,10 +330,10 @@ const NowWorkspace: React.FC<Props> = ({
                 </div>
               </OperatorPanel>
 
-            <OperatorPanel
-              title="Weitere Hinweise"
-              description="Zusätzliche Hinweise, die hilfreich sind, aber nicht die Hauptentscheidung führen."
-            >
+              <OperatorPanel
+                title="Weitere Hinweise"
+                description="Zusätzliche Hinweise, die hilfreich sind, aber nicht die Hauptentscheidung führen."
+              >
                 <div className="workspace-note-list">
                   {(view.reasons.length > 3 ? view.reasons.slice(3) : view.risks).map((item) => (
                     <div key={item} className="workspace-note-card">

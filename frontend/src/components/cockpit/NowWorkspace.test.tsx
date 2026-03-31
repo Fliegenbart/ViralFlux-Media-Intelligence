@@ -366,7 +366,7 @@ function buildWaveRadar(): WaveRadarResponse {
 }
 
 describe('NowWorkspace', () => {
-  it('keeps the laptop-first layout hooks for toolbar, hero stack and trust grid', () => {
+  it('keeps the laptop-first layout hooks for answer-hero, prediction-hero and trust-bar', () => {
     const { container } = render(
       <NowWorkspace
         virus="Influenza A"
@@ -390,13 +390,13 @@ describe('NowWorkspace', () => {
       />,
     );
 
-    expect(container.querySelector('.now-toolbar')).toBeTruthy();
-    expect(container.querySelector('.now-briefing-stack')).toBeTruthy();
-    expect(container.querySelector('.now-confidence-strip')).toBeTruthy();
-    expect(container.querySelector('.now-trust-grid')).toBeTruthy();
+    expect(container.querySelector('.answer-hero')).toBeTruthy();
+    expect(container.querySelector('.prediction-hero')).toBeTruthy();
+    expect(container.querySelector('.trust-bar')).toBeTruthy();
+    expect(container.querySelector('.next-regions')).toBeTruthy();
   });
 
-  it('shows one dominant briefing hero, the next two moves and support content below trust', () => {
+  it('shows one dominant answer hero, the next two moves and trust bar below', () => {
     render(
       <NowWorkspace
         virus="Influenza A"
@@ -421,24 +421,20 @@ describe('NowWorkspace', () => {
     );
 
     expect(screen.getByText('Fokus diese Woche')).toBeInTheDocument();
-    expect(screen.getAllByText('Empfohlene Aktion').length).toBeGreaterThan(0);
     expect(screen.getByRole('heading', { name: 'Berlin jetzt priorisieren.' })).toBeInTheDocument();
-    expect(screen.getAllByText('Belastbarkeit').length).toBeGreaterThan(0);
-    expect(screen.getByText('Warum wir das diese Woche vertreten können')).toBeInTheDocument();
-    expect(screen.getByText('Nächste Schritte')).toBeInTheDocument();
-    expect(screen.getByText('Was danach sinnvoll geprüft werden kann')).toBeInTheDocument();
+    expect(screen.getByText('81%')).toBeInTheDocument();
     expect(screen.getByText('Bayern')).toBeInTheDocument();
     expect(screen.getByText('Sachsen')).toBeInTheDocument();
     expect(screen.queryByText('Nordrhein-Westfalen')).not.toBeInTheDocument();
     expect(screen.getByText('Sicherheit')).toBeInTheDocument();
     expect(screen.getByText('Daten & Evidenz')).toBeInTheDocument();
     expect(screen.getByText('Handlung & Blocker')).toBeInTheDocument();
-    expect(screen.getByText('Bundesland öffnen')).toBeInTheDocument();
+    expect(screen.getByText('Nächste Regionen')).toBeInTheDocument();
     expect(screen.getByText('Vertiefung (optional)')).toBeInTheDocument();
   });
 
-  it('opens the primary recommendation from the hero action', () => {
-    const onOpenRecommendation = jest.fn();
+  it('opens the focus region from the hero action', () => {
+    const onOpenRegions = jest.fn();
 
     render(
       <NowWorkspace
@@ -456,8 +452,8 @@ describe('NowWorkspace', () => {
         waveOutlookLoading={false}
         waveRadar={buildWaveRadar()}
         waveRadarLoading={false}
-        onOpenRecommendation={onOpenRecommendation}
-        onOpenRegions={noop}
+        onOpenRecommendation={noop}
+        onOpenRegions={onOpenRegions}
         onOpenCampaigns={noop}
         onOpenEvidence={noop}
       />,
@@ -465,7 +461,7 @@ describe('NowWorkspace', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Top-Empfehlung prüfen' }));
 
-    expect(onOpenRecommendation).toHaveBeenCalledWith('rec-1');
+    expect(onOpenRegions).toHaveBeenCalledWith('BE');
   });
 
   it('shows an honest blocked state and disables the primary action when review is blocked', () => {
@@ -512,9 +508,8 @@ describe('NowWorkspace', () => {
       />,
     );
 
-    expect(screen.getAllByText('Vor Review blockiert').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Die Revision der Quelldaten bleibt sichtbar.').length).toBeGreaterThan(0);
-    expect(screen.getByRole('button', { name: 'Top-Empfehlung prüfen' })).toBeDisabled();
+    expect(screen.getByText(/Vor Review blockiert/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Top-Empfehlung prüfen' })).not.toBeInTheDocument();
   });
 
   it('shows a briefing-style loading skeleton before data is available', () => {
@@ -575,8 +570,8 @@ describe('NowWorkspace', () => {
       />,
     );
 
-    expect(screen.getByText('Noch keine belastbare Wochenempfehlung.')).toBeInTheDocument();
-    expect(screen.getByText('Status')).toBeInTheDocument();
+    expect(screen.getByText('Keine belastbare Aktion diese Woche')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Evidenz prüfen' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Regionen öffnen' })).toBeInTheDocument();
   });
 });

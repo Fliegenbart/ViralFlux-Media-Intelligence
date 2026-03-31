@@ -723,3 +723,20 @@
   background: var(--bg-secondary);
   border-color: var(--border-color);
 }
+
+/* Answer Hero dark mode */
+[data-theme="dark"] .answer-hero__probability {
+  color: var(--text-primary);
+}
+[data-theme="dark"] .answer-hero[data-state="critical"] .answer-hero__probability { color: #fca5a5; }
+[data-theme="dark"] .answer-hero[data-state="elevated"] .answer-hero__probability { color: #fcd34d; }
+[data-theme="dark"] .answer-hero[data-state="watch"] .answer-hero__probability { color: #a5b4fc; }
+[data-theme="dark"] .answer-hero[data-state="clear"] .answer-hero__probability { color: #6ee7b7; }
+
+[data-theme="dark"] .trust-bar__item {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+[data-theme="dark"] .next-regions__item:hover {
+  background: rgba(255, 255, 255, 0.04);
+}

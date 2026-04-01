@@ -289,6 +289,8 @@ const AppLayout: React.FC<Props> = ({ children }) => {
     );
   };
 
+  const hasPageActions = Boolean(pageHeader?.secondaryAction || pageHeader?.primaryAction);
+
   return (
     <PageHeaderContext.Provider value={pageHeaderContext}>
       <div className="app-shell app-shell--operator">
@@ -347,19 +349,25 @@ const AppLayout: React.FC<Props> = ({ children }) => {
                   <div className="operator-header__search-row">
                     <PageChromeMobileToggle buttonRef={mobileToggleRef} />
 
-                    <div className="operator-header__suite-group">
-                      <span className="operator-header__suite">ViralFlux</span>
-                      <span className="operator-header__suite-separator" aria-hidden="true">/</span>
-                      <span className="operator-header__section-context">{currentSection.kicker}</span>
+                    <div className="operator-header__section-frame" aria-label="Aktueller Bereich">
+                      <div className="operator-header__section-meta">
+                        <span className="operator-header__suite">ViralFlux</span>
+                        <span className="operator-header__section-chip">Arbeitsbereich</span>
+                      </div>
+                      <div className="operator-header__section-copy">
+                        <span className="operator-header__section-context">{currentSection.kicker}</span>
+                        <h1 id="operator-page-title" className="operator-header__section-title">{currentSection.title}</h1>
+                      </div>
                     </div>
-                    <h1 id="operator-page-title" className="sr-only">{currentSection.title}</h1>
                   </div>
 
                   <div className="operator-header__actions">
-                    <div className="operator-page-actions" aria-label="Seitenaktionen">
-                      {renderPageAction(pageHeader?.secondaryAction, 'secondary')}
-                      {renderPageAction(pageHeader?.primaryAction, 'primary')}
-                    </div>
+                    {hasPageActions ? (
+                      <div className="operator-page-actions" aria-label="Seitenaktionen">
+                        {renderPageAction(pageHeader?.secondaryAction, 'secondary')}
+                        {renderPageAction(pageHeader?.primaryAction, 'primary')}
+                      </div>
+                    ) : null}
                     <PageChromeUtilityMenu />
                   </div>
                 </div>

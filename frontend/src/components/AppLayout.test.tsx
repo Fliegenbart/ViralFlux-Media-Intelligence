@@ -28,6 +28,27 @@ const SimplePage: React.FC = () => {
   return <div>Kampagneninhalt</div>;
 };
 
+const HeaderActionPage: React.FC = () => {
+  const { setPageHeader, clearPageHeader } = usePageHeader();
+
+  useEffect(() => {
+    setPageHeader({
+      primaryAction: {
+        label: 'Wochenbericht exportieren',
+        onClick: jest.fn(),
+      },
+      secondaryAction: {
+        label: 'Evidenz öffnen',
+        onClick: jest.fn(),
+      },
+    });
+
+    return clearPageHeader;
+  }, [clearPageHeader, setPageHeader]);
+
+  return <div>Wochenplaninhalt</div>;
+};
+
 describe('AppLayout theme rendering', () => {
   beforeEach(() => {
     window.localStorage.clear();
@@ -120,5 +141,25 @@ describe('AppLayout theme rendering', () => {
     expect(screen.getByRole('banner')).toHaveClass('operator-header');
     expect(screen.getByRole('main')).toHaveAttribute('aria-labelledby', 'operator-page-title');
     expect(screen.getByText('Kampagneninhalt')).toBeInTheDocument();
+  });
+
+  it('shows simplified section framing and the primary page action on the now route', () => {
+    mockedUseTheme.mockReturnValue({
+      theme: 'light',
+      toggle: jest.fn(),
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/jetzt']} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <AppLayout>
+          <HeaderActionPage />
+        </AppLayout>
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByRole('banner')).toHaveTextContent('Arbeitsbereich');
+    expect(screen.getByRole('heading', { name: 'Was PEIX diese Woche tun sollte' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Wochenbericht exportieren' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Wochenplan' })).toHaveAttribute('aria-current', 'page');
   });
 });

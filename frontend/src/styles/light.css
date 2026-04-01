@@ -26,8 +26,8 @@
 .operator-header.operator-header--slim {
   background: rgba(251, 252, 250, 0.88);
   border-color: rgba(23, 32, 51, 0.08);
-  box-shadow: 0 16px 36px rgba(23, 32, 51, 0.06);
-  backdrop-filter: blur(18px);
+  box-shadow: none;
+  backdrop-filter: blur(10px);
 }
 
 .operator-sidebar {
@@ -39,7 +39,7 @@
 .product-brand-mark {
   background: var(--product-mark-bg);
   border: 1px solid var(--product-mark-border);
-  box-shadow: var(--product-mark-shadow);
+  box-shadow: none;
 }
 
 .operator-nav-item:hover,
@@ -49,8 +49,8 @@
 
 .operator-nav-item.active {
   background: var(--product-nav-item-active);
-  border-color: rgba(15, 118, 110, 0.14);
-  box-shadow: var(--product-nav-item-shadow);
+  border-color: rgba(23, 32, 51, 0.1);
+  box-shadow: none;
 }
 
 .operator-nav-item--secondary {
@@ -95,11 +95,11 @@
 }
 
 .media-button {
-  box-shadow: var(--control-primary-shadow);
+  box-shadow: 0 8px 18px rgba(79, 70, 229, 0.16);
 }
 
 .media-button:hover {
-  box-shadow: var(--control-primary-shadow-hover);
+  box-shadow: 0 10px 22px rgba(79, 70, 229, 0.2);
 }
 
 .media-button.secondary,

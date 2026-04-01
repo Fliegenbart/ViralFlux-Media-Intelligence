@@ -96,7 +96,7 @@ function formatSampleCoverage(value: number | null): string {
   return formatPercent(normalized, 0);
 }
 
-function chartLegendItem(label: string, swatch: React.CSSProperties, detail: string): JSX.Element {
+function chartLegendItem(label: string, swatch: React.CSSProperties, detail: string): React.JSX.Element {
   return (
     <div key={label} className="workspace-note-card backtest-note-card">
       <div className="backtest-note-card__head">

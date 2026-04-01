@@ -82,7 +82,7 @@ const PageHeaderContext = createContext<PageHeaderContextValue>({
 export const usePageHeader = () => useContext(PageHeaderContext);
 
 interface PageChromeMobileToggleProps {
-  buttonRef?: React.RefObject<HTMLButtonElement>;
+  buttonRef?: React.RefObject<HTMLButtonElement | null>;
 }
 
 export const PageChromeMobileToggle: React.FC<PageChromeMobileToggleProps> = ({ buttonRef }) => {

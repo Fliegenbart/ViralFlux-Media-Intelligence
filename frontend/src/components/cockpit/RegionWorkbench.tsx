@@ -330,7 +330,7 @@ const RegionWorkbench: React.FC<Props> = ({
     },
   ];
 
-  const scrollToRef = (ref: React.RefObject<HTMLDivElement>) => {
+  const scrollToRef = (ref: React.RefObject<HTMLDivElement | null>) => {
     ref.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 

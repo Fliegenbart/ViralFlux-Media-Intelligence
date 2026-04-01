@@ -289,15 +289,26 @@ const EvidencePanel: React.FC<Props> = ({
 
             <p className="campaign-focus-copy">{heroSummary}</p>
 
-            <div className="action-row">
-              <a className="media-button" href={primaryCtaHref}>
-                {primaryCtaLabel}
-              </a>
-              {truthSnapshot?.template_url ? (
-                <a className="media-button secondary" href={truthSnapshot.template_url}>
-                  CSV-Vorlage laden
+            <div className="evidence-next-step" aria-label="Nächster Schritt">
+              <span className="evidence-next-step__label">Nächster Schritt</span>
+              <div className="evidence-next-step__body">
+                <strong>{primaryCtaLabel}</strong>
+                <p>
+                  {importNeedsAttention
+                    ? 'Zuerst die fehlenden Daten oder den Import klären, damit die Wochenfreigabe belastbar bleibt.'
+                    : 'Die Wochenfreigabe ist bereit; Details nur dann öffnen, wenn du etwas nachprüfen willst.'}
+                </p>
+              </div>
+              <div className="action-row evidence-next-step__actions">
+                <a className="media-button" href={primaryCtaHref}>
+                  {primaryCtaLabel}
                 </a>
-              ) : null}
+                {truthSnapshot?.template_url ? (
+                  <a className="media-button secondary" href={truthSnapshot.template_url}>
+                    CSV-Vorlage laden
+                  </a>
+                ) : null}
+              </div>
             </div>
           </OperatorPanel>
 

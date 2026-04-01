@@ -25,6 +25,13 @@ jest.mock('./evidence/ImportValidationSection', () => ({
   default: () => <div>ImportValidationSection Mock</div>,
 }));
 
+jest.mock('./cockpitUtils', () => ({
+  __esModule: true,
+  formatDateTime: (value?: string | null) => (value ? '24.03.2026 10:00' : '-'),
+  truthFreshnessLabel: (value?: string | null) => value || 'fresh',
+  truthLayerLabel: () => 'GELO-Datenbasis',
+}));
+
 function buildWorkspaceStatus(): WorkspaceStatusSummary {
   return {
     forecast_status: 'Freigabe bereit',
@@ -69,6 +76,56 @@ function buildWorkspaceStatus(): WorkspaceStatusSummary {
 }
 
 describe('EvidencePanel', () => {
+  it('puts readiness and the next step before trust details and technical sections', () => {
+    render(
+      <EvidencePanel
+        evidence={{
+          source_status: { items: [], live_count: 0, total: 0, live_ratio: 0 },
+          recent_runs: [{ mode: 'forecast_monitoring', status: 'ok' }],
+          truth_coverage: {
+            coverage_weeks: 24,
+            regions_covered: 9,
+            products_covered: 3,
+            truth_freshness_state: 'fresh',
+            last_imported_at: '2026-03-24T10:00:00Z',
+            required_fields_present: ['Produkt vorhanden'],
+            conversion_fields_present: ['Outcome vorhanden'],
+          },
+          truth_snapshot: {
+            latest_batch: {
+              uploaded_at: '2026-03-24T10:00:00Z',
+            },
+            template_url: 'https://example.com/template.csv',
+          },
+          business_validation: {
+            guidance: 'Die Datenlage reicht für vorsichtige Wochenplanung.',
+          },
+        } as any}
+        workspaceStatus={buildWorkspaceStatus()}
+        loading={false}
+        marketValidation={null}
+        marketValidationLoading={false}
+        customerValidation={null}
+        customerValidationLoading={false}
+        truthPreview={null}
+        truthBatchDetail={null}
+        truthActionLoading={false}
+        truthBatchDetailLoading={false}
+        onSubmitTruthCsv={async () => {}}
+        onLoadTruthBatchDetail={async () => {}}
+      />,
+    );
+
+    const nextStep = screen.getByText('Nächster Schritt');
+    const trust = screen.getByText('Was diese Aussage gerade trägt');
+    const technical = screen.getByText('Technische Tiefe (optional)');
+
+    expect(screen.getByText('Ist die Empfehlung diese Woche belastbar?')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Fehlende Evidenz klären' })).toBeInTheDocument();
+    expect(nextStep.compareDocumentPosition(trust) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(trust.compareDocumentPosition(technical) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it('shows the GELO trust and onboarding briefing before the technical sections', () => {
     render(
       <EvidencePanel

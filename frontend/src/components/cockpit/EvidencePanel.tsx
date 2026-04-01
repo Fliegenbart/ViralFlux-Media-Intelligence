@@ -165,7 +165,7 @@ const EvidencePanel: React.FC<Props> = ({
     : 'Evidenzlage prüfen';
   const primaryCtaHref = (!hasTruthData || hasBlockers || sourceAttentionCount > 0)
     ? '#evidence-import'
-    : '#evidence-support';
+    : '#evidence-onboarding';
   const cautionAndBlocker = hasBlockers
     ? `${blockedNow} ${cautionNow}`
     : cautionNow;

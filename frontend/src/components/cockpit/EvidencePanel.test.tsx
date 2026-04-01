@@ -75,6 +75,37 @@ function buildWorkspaceStatus(): WorkspaceStatusSummary {
   };
 }
 
+function buildReadyWorkspaceStatus(): WorkspaceStatusSummary {
+  return {
+    ...buildWorkspaceStatus(),
+    open_blockers: 'Keine',
+    blocker_count: 0,
+    blockers: [],
+    summary: 'Die Datenlage ist für die Wochenplanung belastbar genug.',
+    items: buildWorkspaceStatus().items.map((item) => {
+      if (item.key === 'customer_data_status') {
+        return {
+          ...item,
+          value: 'Verbunden',
+          detail: '24 Wochen verbunden · Produkte und Regionen abgedeckt',
+          tone: 'success' as const,
+        };
+      }
+
+      if (item.key === 'open_blockers') {
+        return {
+          ...item,
+          value: 'Keine',
+          detail: 'Aktuell gibt es keine offenen Blocker.',
+          tone: 'success' as const,
+        };
+      }
+
+      return item;
+    }),
+  };
+}
+
 describe('EvidencePanel', () => {
   it('puts readiness and the next step before trust details and technical sections', () => {
     render(
@@ -188,6 +219,48 @@ describe('EvidencePanel', () => {
     expect(screen.getByText('Technische Tiefe (optional)')).toBeInTheDocument();
     expect(screen.getByText(/Gilt auf Bundesland-Ebene, nicht für einzelne Städte/i)).toBeInTheDocument();
     expect(screen.getAllByText(/nicht für einzelne Städte/i).length).toBeGreaterThan(0);
+  });
+
+  it('links the ready-state evidence CTA to a visible follow-up section', () => {
+    render(
+      <EvidencePanel
+        evidence={{
+          source_status: { items: [], live_count: 6, total: 6, live_ratio: 1 },
+          recent_runs: [{ mode: 'forecast_monitoring', status: 'ok' }],
+          truth_coverage: {
+            coverage_weeks: 24,
+            regions_covered: 9,
+            products_covered: 3,
+            truth_freshness_state: 'fresh',
+            last_imported_at: '2026-03-24T10:00:00Z',
+            required_fields_present: ['Produkt vorhanden'],
+            conversion_fields_present: ['Outcome vorhanden'],
+          },
+          truth_snapshot: {
+            latest_batch: {
+              uploaded_at: '2026-03-24T10:00:00Z',
+            },
+          },
+          outcome_learning_summary: {
+            outcome_signal_score: 0.74,
+          },
+        } as any}
+        workspaceStatus={buildReadyWorkspaceStatus()}
+        loading={false}
+        marketValidation={null}
+        marketValidationLoading={false}
+        customerValidation={null}
+        customerValidationLoading={false}
+        truthPreview={null}
+        truthBatchDetail={null}
+        truthActionLoading={false}
+        truthBatchDetailLoading={false}
+        onSubmitTruthCsv={async () => {}}
+        onLoadTruthBatchDetail={async () => {}}
+      />,
+    );
+
+    expect(screen.getByRole('link', { name: 'Evidenzlage prüfen' })).toHaveAttribute('href', '#evidence-onboarding');
   });
 
   it('announces the loading state for GELO trust data', () => {

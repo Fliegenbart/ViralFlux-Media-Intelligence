@@ -70,9 +70,9 @@
 
 .login-brand-panel__wordmark {
   color: var(--color-brand);
-  font-family: 'Manrope', 'Inter', sans-serif;
+  font-family: var(--font-display-serif);
   font-size: 2.5rem;
-  font-weight: 800;
+  font-weight: 400;
   letter-spacing: var(--tracking-tight);
 }
 
@@ -462,7 +462,7 @@
   margin: 0;
   max-width: 11ch;
   color: var(--text-primary);
-  font-family: 'Inter', system-ui, sans-serif;
+  font-family: var(--font-display-serif);
   font-size: var(--text-display);
   line-height: 1.1;
   letter-spacing: var(--tracking-tight);

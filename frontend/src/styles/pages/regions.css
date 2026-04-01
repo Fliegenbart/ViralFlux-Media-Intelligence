@@ -417,8 +417,13 @@
 /* --- VF Map --- */
 
 .vf-map-panel {
+  position: relative;
   display: grid;
   gap: var(--space-lg);
+}
+
+.vf-map-panel svg {
+  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.06));
 }
 
 /* ── Map Legend (compact inline) ── */
@@ -466,13 +471,14 @@
   left: var(--space-lg);
   bottom: var(--space-lg);
   max-width: 260px;
-  padding: var(--space-md) var(--space-lg);
-  border-radius: var(--radius-md);
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  box-shadow: var(--shadow-lg);
-  color: var(--text-primary);
+  padding: 12px 16px;
+  border-radius: 16px;
+  background: rgba(26, 26, 26, 0.92);
+  border: none;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  color: #fff;
   pointer-events: none;
+  backdrop-filter: blur(12px);
 }
 
 .vf-map-tooltip__name {

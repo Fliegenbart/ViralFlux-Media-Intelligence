@@ -4,7 +4,7 @@
    ═══════════════════════════════════════════════════════════════════ */
 
 /* --- Global --- */
-[data-theme="dark"] body { background: #0a0a0a; }
+[data-theme="dark"] body { background: #111110; }
 [data-theme="dark"] ::-webkit-scrollbar-thumb { background: #333333; }
 [data-theme="dark"] ::-webkit-scrollbar-thumb:hover { background: #525252; }
 
@@ -307,11 +307,20 @@
 [data-theme="dark"] .operator-decision-spine,
 [data-theme="dark"] .operator-decision-spine__item,
 [data-theme="dark"] .now-briefing-secondary__item,
-[data-theme="dark"] .tab-chip,
 [data-theme="dark"] .now-toolbar-note {
   background: rgba(10, 18, 31, 0.72);
   border-color: rgba(148, 163, 184, 0.12);
   box-shadow: none;
+}
+
+[data-theme="dark"] .tab-chip {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-secondary);
+}
+
+[data-theme="dark"] .tab-chip.active {
+  background: var(--color-primary);
+  color: #fff;
 }
 
 [data-theme="dark"] .operator-decision-spine__meta,
@@ -753,6 +762,7 @@
 [data-theme="dark"] .trust-bar__item {
   background: rgba(255, 255, 255, 0.06);
 }
+
 
 [data-theme="dark"] .next-regions__item:hover {
   background: rgba(255, 255, 255, 0.04);

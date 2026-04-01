@@ -6,18 +6,18 @@
 
 :root {
   /* Surface colors — clean, flat, Linear-inspired */
-  --bg-primary: #f8f9fc;
+  --bg-primary: #faf9f7;
   --bg-secondary: #ffffff;
   --bg-card: #ffffff;
   --bg-card-hover: #ffffff;
-  --bg-subtle: #f1f3f9;
-  --border-color: #e2e4eb;
-  --border-light: transparent;
+  --bg-subtle: #f5f3ef;
+  --border-color: #e8e5df;
+  --border-light: #f0ede8;
 
   /* Text colors — high contrast, neutral */
-  --text-primary: #0a0a0a;
-  --text-secondary: #525252;
-  --text-muted: #a3a3a3;
+  --text-primary: #1a1a1a;
+  --text-secondary: #6b6560;
+  --text-muted: #a8a29e;
 
   /* Accent colors — restrained indigo palette */
   --accent-violet: #6366f1;
@@ -65,7 +65,7 @@
 
   /* Type scale — tighter, bolder */
   --text-hero: clamp(2.5rem, 4vw, 3.5rem);
-  --text-display: clamp(2rem, 3.5vw, 3rem);
+  --text-display: clamp(2.5rem, 5vw, 4rem);
   --text-h1: 1.5rem;
   --text-h2: 1.125rem;
   --text-h3: 1.125rem;
@@ -73,7 +73,8 @@
   --text-small: 0.875rem;
   --text-xs: 0.75rem;
   --text-label: 0.6875rem;
-  --font-display-serif: 'Inter', system-ui, sans-serif;
+  --font-display-serif: 'DM Serif Display', Georgia, serif;
+  --font-body: 'Inter', system-ui, -apple-system, sans-serif;
 
   /* Tracking (letter-spacing) */
   --tracking-tight: -0.02em;

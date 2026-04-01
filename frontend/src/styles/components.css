@@ -78,34 +78,27 @@
 }
 
 .tab-chip {
-  display: inline-flex;
-  align-items: center;
-  min-height: 36px;
-  padding: 0 15px;
-  border-radius: var(--radius-pill);
   border: none;
-  box-shadow: var(--shadow-xs);
-  background: var(--control-ghost-bg);
-  color: var(--control-ghost-text);
+  border-radius: 20px;
+  padding: 6px 16px;
   font-size: var(--text-small);
-  font-weight: 600;
-  letter-spacing: var(--tracking-tight);
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: rgba(0, 0, 0, 0.04);
   cursor: pointer;
-  box-shadow: var(--surface-panel-highlight);
-  transition: all 0.2s ease;
+  transition: all 200ms ease;
+  box-shadow: none;
 }
 
 .tab-chip:hover {
-  border-color: rgba(81, 72, 216, 0.2);
+  background: rgba(0, 0, 0, 0.08);
   color: var(--text-primary);
-  background: var(--control-ghost-bg-hover);
 }
 
 .tab-chip.active {
-  color: var(--control-active-text);
-  background: linear-gradient(180deg, var(--color-brand-light) 0%, var(--color-brand) 100%);
-  border-color: transparent;
-  box-shadow: 0 14px 28px rgba(81, 72, 216, 0.24);
+  color: #fff;
+  background: var(--color-primary);
+  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.3);
 }
 
 /* ─── Inputs ───────────────────────────────────────────────────────── */
@@ -136,29 +129,29 @@
 /* ─── Buttons ──────────────────────────────────────────────────────── */
 
 .media-button {
-  min-height: 46px;
-  padding: 0 18px;
-  border: 1px solid transparent;
-  border-radius: var(--radius-sm);
-  background: var(--control-primary-bg);
-  color: var(--control-active-text);
+  min-height: 44px;
+  padding: 0 24px;
+  border: none;
+  border-radius: 22px;
+  background: var(--color-primary);
+  color: #fff;
+  font-family: var(--font-body, 'Inter', sans-serif);
   font-size: var(--text-small);
-  font-weight: 700;
+  font-weight: 600;
+  letter-spacing: 0;
   cursor: pointer;
-  box-shadow: var(--control-primary-shadow);
-  transition:
-    background 0.15s ease,
-    transform 0.1s ease,
-    box-shadow 0.15s ease;
+  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.25);
+  transition: all 200ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }
 
 .media-button:hover {
   transform: translateY(-1px);
-  box-shadow: var(--control-primary-shadow-hover);
+  box-shadow: 0 4px 16px rgba(79, 70, 229, 0.35);
 }
 
 .media-button:active {
-  transform: scale(0.98);
+  transform: translateY(0);
+  box-shadow: 0 1px 4px rgba(79, 70, 229, 0.2);
 }
 
 .media-button:disabled {

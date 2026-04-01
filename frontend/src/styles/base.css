@@ -7,13 +7,18 @@
 /* ─── Global Resets & Body ─────────────────────────────────────── */
 body {
   margin: 0;
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-family: var(--font-body, 'Inter', system-ui, sans-serif);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  overflow-x: hidden;
-  background: var(--bg-primary);
   color: var(--text-primary);
-  font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  background: var(--bg-primary);
+  line-height: 1.6;
+  letter-spacing: -0.01em;
+}
+
+::selection {
+  background: rgba(79, 70, 229, 0.15);
+  color: var(--text-primary);
 }
 
 h1,

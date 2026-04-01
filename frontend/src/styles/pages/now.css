@@ -1549,11 +1549,13 @@
 .answer-hero[data-state="clear"] .answer-hero__dot { background: #22c55e; box-shadow: 0 0 12px rgba(34, 197, 94, 0.3); }
 
 .answer-hero__probability {
-  font-size: clamp(3rem, 8vw, 5rem);
-  font-weight: 700;
-  line-height: 1;
-  letter-spacing: var(--tracking-tight);
+  font-family: var(--font-display-serif);
+  font-size: clamp(4rem, 10vw, 7rem);
+  font-weight: 400;
+  line-height: 0.9;
+  letter-spacing: -0.02em;
   color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
   transition: color 400ms ease, text-shadow 400ms ease;
 }
 
@@ -1577,10 +1579,11 @@
 
 .answer-hero__title {
   margin: 0;
+  font-family: var(--font-display-serif);
   font-size: var(--text-display);
-  font-weight: 700;
+  font-weight: 400;
   line-height: 1.1;
-  letter-spacing: var(--tracking-tight);
+  letter-spacing: -0.01em;
   color: var(--text-primary);
 }
 
@@ -1632,11 +1635,16 @@
 .trust-bar__item {
   display: flex;
   align-items: center;
-  gap: var(--space-sm);
-  padding: var(--space-xs) var(--space-md);
-  border-radius: var(--radius-sm);
-  background: var(--bg-subtle);
+  gap: var(--space-xs);
+  padding: 6px 12px;
+  border-radius: 20px;
+  background: rgba(0, 0, 0, 0.04);
   font-size: var(--text-small);
+  transition: background var(--ease-micro);
+}
+
+.trust-bar__item:hover {
+  background: rgba(0, 0, 0, 0.07);
 }
 
 .trust-bar__label {

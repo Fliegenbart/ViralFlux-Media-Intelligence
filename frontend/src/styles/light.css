@@ -1,0 +1,121 @@
+/* ═══════════════════════════════════════════════════════════════════
+   Light Theme  —  default component foundation overrides
+   Imported after shared/page styles so light mode is the normal path.
+   ═══════════════════════════════════════════════════════════════════ */
+
+.app-shell::before {
+  background:
+    radial-gradient(circle at 16% 14%, rgba(15, 118, 110, 0.05), transparent 26%),
+    radial-gradient(circle at 84% 12%, rgba(47, 111, 134, 0.035), transparent 22%);
+  opacity: 1;
+}
+
+.app-shell--operator {
+  background:
+    radial-gradient(circle at 10% 8%, rgba(15, 118, 110, 0.06), transparent 22%),
+    radial-gradient(circle at 88% 14%, rgba(47, 111, 134, 0.04), transparent 20%),
+    linear-gradient(180deg, #fbfcfa 0%, #f3f7f6 100%);
+}
+
+.operator-shell {
+  background: transparent;
+}
+
+.operator-sidebar,
+.operator-header,
+.operator-header.operator-header--slim {
+  background: rgba(251, 252, 250, 0.88);
+  border-color: rgba(23, 32, 51, 0.08);
+  box-shadow: 0 16px 36px rgba(23, 32, 51, 0.06);
+  backdrop-filter: blur(18px);
+}
+
+.operator-sidebar {
+  border-right: 1px solid rgba(23, 32, 51, 0.08);
+}
+
+.operator-brand-lockup__mark,
+.shell-logo-mark,
+.product-brand-mark {
+  background: var(--product-mark-bg);
+  border: 1px solid var(--product-mark-border);
+  box-shadow: var(--product-mark-shadow);
+}
+
+.operator-nav-item:hover,
+.operator-sidebar-link:hover {
+  background: var(--product-nav-item-hover);
+}
+
+.operator-nav-item.active {
+  background: var(--product-nav-item-active);
+  border-color: rgba(15, 118, 110, 0.14);
+  box-shadow: var(--product-nav-item-shadow);
+}
+
+.operator-nav-item--secondary {
+  border-color: rgba(23, 32, 51, 0.08);
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.card,
+.soft-panel,
+.metric-box,
+.operator-section-shell,
+.operator-panel-shell,
+.operator-stat-card,
+.operator-status-card {
+  background: var(--surface-card-bg);
+  border: 1px solid var(--surface-card-border);
+  box-shadow: var(--surface-card-shadow);
+}
+
+.media-tabs {
+  background: var(--surface-panel-bg);
+  border: 1px solid var(--surface-panel-border);
+  box-shadow: none;
+}
+
+.tab-chip {
+  background: rgba(255, 255, 255, 0.72);
+  border-color: rgba(23, 32, 51, 0.08);
+}
+
+.tab-chip.active {
+  box-shadow: 0 10px 24px rgba(15, 118, 110, 0.16);
+}
+
+.media-input {
+  box-shadow: none;
+}
+
+.media-input:focus {
+  border-color: rgba(15, 118, 110, 0.28);
+  box-shadow: 0 0 0 4px rgba(15, 118, 110, 0.08);
+}
+
+.media-button {
+  box-shadow: var(--control-primary-shadow);
+}
+
+.media-button:hover {
+  box-shadow: var(--control-primary-shadow-hover);
+}
+
+.media-button.secondary,
+.step-chip {
+  border: 1px solid var(--control-ghost-border);
+}
+
+.operator-decision-spine,
+.operator-decision-spine__item,
+.now-briefing-secondary__item,
+.now-toolbar-note,
+.operator-readout-card__stat,
+.operator-readout-card__trust-item,
+.operator-readout-strip__item,
+.evidence-brief-card {
+  background: rgba(255, 255, 255, 0.78);
+  border-color: rgba(23, 32, 51, 0.08);
+  box-shadow: none;
+}

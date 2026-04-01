@@ -1,4 +1,6 @@
 import '@testing-library/jest-dom';
+import { existsSync, readFileSync } from 'fs';
+import { join } from 'path';
 import React from 'react';
 import { render, screen, waitFor, within } from '@testing-library/react';
 
@@ -93,6 +95,17 @@ describe('App routing', () => {
     await waitFor(() => {
       expect(document.documentElement.getAttribute('data-theme')).toBe('light');
     });
+  });
+
+  it('keeps the light foundation outside dark theme overrides', () => {
+    const indexCss = readFileSync(join(__dirname, 'index.css'), 'utf8');
+    const darkCss = readFileSync(join(__dirname, 'styles', 'dark.css'), 'utf8');
+    const lightCssPath = join(__dirname, 'styles', 'light.css');
+
+    expect(existsSync(lightCssPath)).toBe(true);
+    expect(indexCss).toContain("@import './styles/light.css';");
+    expect(darkCss).not.toMatch(/\[data-theme=["']light["']\]/);
+    expect(readFileSync(lightCssPath, 'utf8')).toContain('.app-shell--operator');
   });
 
   it('rehydrates auth state on app startup from browser storage', async () => {

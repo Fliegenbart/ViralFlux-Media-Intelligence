@@ -330,10 +330,6 @@ const RegionWorkbench: React.FC<Props> = ({
     },
   ];
 
-  const scrollToRef = (ref: React.RefObject<HTMLDivElement | null>) => {
-    ref.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  };
-
   if (loading && !regionsView) {
     return (
       <OperatorSection
@@ -471,29 +467,19 @@ const RegionWorkbench: React.FC<Props> = ({
               </div>
             ) : null}
 
-            <div className="action-row">
+            <div className="regions-next-step">
+              <span className="regions-next-step__label">Nächster Schritt</span>
               <button
-                className="media-button"
+                className="media-button regions-next-step__button"
                 type="button"
                 onClick={primaryAction}
                 disabled={!fallbackRegionCode || regionActionLoading || Boolean(actionDisabledReason)}
               >
                 {regionActionLoading ? 'Wird vorbereitet...' : primaryActionLabel}
               </button>
-              <button
-                className="media-button secondary"
-                type="button"
-                onClick={() => scrollToRef(comparisonRef)}
-              >
-                Bundesländer vergleichen
-              </button>
-              <button
-                className="media-button secondary"
-                type="button"
-                onClick={() => scrollToRef(detailsRef)}
-              >
-                Begründung prüfen
-              </button>
+              <p className="regions-next-step__hint">
+                Vergleich, Karte und Details stehen weiter unten, wenn du die Einordnung vertiefen willst.
+              </p>
             </div>
           </OperatorPanel>
 

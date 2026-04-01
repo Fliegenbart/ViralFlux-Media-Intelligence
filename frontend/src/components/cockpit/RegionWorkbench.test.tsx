@@ -1,10 +1,22 @@
 import '@testing-library/jest-dom';
 import React from 'react';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 
 jest.mock('./GermanyMap', () => ({
   __esModule: true,
   default: () => <div>GermanyMap Mock</div>,
+}));
+
+jest.mock('./cockpitUtils', () => ({
+  __esModule: true,
+  formatDateShort: () => '18.03.2026',
+  formatPercent: (value: number, digits = 0) => `${Number(value).toFixed(digits)}%`,
+  metricContractDisplayLabel: () => 'Signalstärke',
+  metricContractNote: () => 'Hilft beim Vergleichen, ist aber keine genaue Vorhersage.',
+  primarySignalScore: (region: { signal_score?: number; peix_score?: number; impact_probability?: number }) => (
+    region.signal_score ?? region.peix_score ?? region.impact_probability ?? 0
+  ),
+  VIRUS_OPTIONS: ['Influenza A', 'Influenza B', 'SARS-CoV-2', 'RSV A'],
 }));
 
 import RegionWorkbench from './RegionWorkbench';
@@ -224,6 +236,37 @@ function buildWorkspaceStatus(): WorkspaceStatusSummary {
 const noop = () => {};
 
 describe('RegionWorkbench', () => {
+  it('keeps one direct action in the top focus card and pushes comparison below', () => {
+    render(
+      <RegionWorkbench
+        virus="Influenza A"
+        onVirusChange={noop}
+        regionsView={buildRegionsView()}
+        workspaceStatus={buildWorkspaceStatus()}
+        loading={false}
+        selectedRegion="BE"
+        onSelectRegion={noop}
+        onOpenRecommendation={noop}
+        onGenerateRegionCampaign={noop}
+        regionActionLoading={false}
+      />,
+    );
+
+    const hero = screen.getByRole('heading', { name: 'Fokus erhöhen in Berlin' }).closest('.regions-action-hero') as HTMLElement | null;
+    expect(hero).toBeTruthy();
+
+    if (!hero) {
+      return;
+    }
+
+    expect(within(hero).getAllByRole('button')).toHaveLength(1);
+    expect(within(hero).getByRole('button', { name: 'Regionalen Vorschlag öffnen' })).toBeInTheDocument();
+    expect(within(hero).queryByRole('button', { name: 'Bundesländer vergleichen' })).not.toBeInTheDocument();
+    expect(within(hero).queryByRole('button', { name: 'Begründung prüfen' })).not.toBeInTheDocument();
+    expect(screen.getByText('Vergleich im Detail')).toBeInTheDocument();
+    expect(screen.getByText('Karte zur Orientierung')).toBeInTheDocument();
+  });
+
   it('shows an action-first regional workspace with trust and secondary regions above the map', () => {
     const onOpenRecommendation = jest.fn();
 

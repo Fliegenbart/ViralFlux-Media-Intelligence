@@ -184,6 +184,7 @@ const NowWorkspace: React.FC<Props> = ({
     <div className="page-stack now-template-page">
       <OperatorSection
         title="Fokus diese Woche"
+        description="Was PEIX und GELO diese Woche tun sollten. Nächste Schritte, Trust und Detailansichten folgen darunter."
         tone="accent"
         className="now-workspace-shell"
       >
@@ -219,6 +220,32 @@ const NowWorkspace: React.FC<Props> = ({
                     {option}
                   </button>
                 ))}
+              </div>
+            </div>
+            <div className="now-next-step" aria-label="Nächster Schritt">
+              <span className="now-next-step__label">Nächster Schritt</span>
+              <div className="now-next-step__actions">
+                <button
+                  type="button"
+                  className="media-button secondary now-next-step__button"
+                  onClick={() => onOpenRegions(focusRegion?.code || undefined)}
+                >
+                  Regionen öffnen
+                </button>
+                <button
+                  type="button"
+                  className="media-button secondary now-next-step__button"
+                  onClick={onOpenCampaigns}
+                >
+                  Kampagnen öffnen
+                </button>
+                <button
+                  type="button"
+                  className="media-button secondary now-next-step__button"
+                  onClick={onOpenEvidence}
+                >
+                  Evidenz öffnen
+                </button>
               </div>
             </div>
           </div>

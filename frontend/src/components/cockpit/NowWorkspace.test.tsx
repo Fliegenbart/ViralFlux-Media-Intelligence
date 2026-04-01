@@ -33,6 +33,53 @@ jest.mock('recharts', () => {
   };
 });
 
+jest.mock('./cockpitUtils', () => ({
+  __esModule: true,
+  formatDateTime: (value?: string | null) => value ? '18.03.2026 08:00' : '-',
+  VIRUS_OPTIONS: ['Influenza A', 'Influenza B', 'SARS-CoV-2', 'RSV A'],
+}));
+
+jest.mock('./BacktestVisuals', () => ({
+  __esModule: true,
+  FocusRegionOutlookPanel: ({ title = 'Fokusregion' }: { title?: string }) => <div>{title}</div>,
+  WaveOutlookPanel: ({ title = 'Marktrückblick' }: { title?: string }) => <div>{title}</div>,
+  WaveSpreadPanel: ({ title = 'Ausbreitungsreihenfolge' }: { title?: string }) => <div>{title}</div>,
+}));
+
+jest.mock('./ForecastChart', () => ({
+  __esModule: true,
+  ForecastChart: () => <div>Forecast chart</div>,
+}));
+
+jest.mock('./GermanyMap', () => ({
+  __esModule: true,
+  default: () => <div>Germany map</div>,
+}));
+
+jest.mock('./Sparkline', () => ({
+  __esModule: true,
+  default: () => <div>Sparkline</div>,
+}));
+
+jest.mock('../CollapsibleSection', () => ({
+  __esModule: true,
+  default: ({
+    title,
+    subtitle,
+    children,
+  }: {
+    title: string;
+    subtitle?: string;
+    children?: React.ReactNode;
+  }) => (
+    <section>
+      <h3>{title}</h3>
+      {subtitle ? <p>{subtitle}</p> : null}
+      {children}
+    </section>
+  ),
+}));
+
 jest.mock('./HistoricalWaveMap', () => ({
   __esModule: true,
   default: ({ onSelectBundesland }: { onSelectBundesland: (bundesland: string) => void }) => (
@@ -366,30 +413,37 @@ function buildWaveRadar(): WaveRadarResponse {
   };
 }
 
+function renderNowWorkspace(
+  overrides: Partial<React.ComponentProps<typeof NowWorkspace>> = {},
+) {
+  return render(
+    <NowWorkspace
+      virus="Influenza A"
+      onVirusChange={noop}
+      horizonDays={7}
+      onHorizonChange={noop}
+      view={buildView()}
+      workspaceStatus={buildWorkspaceStatus()}
+      loading={false}
+      forecast={buildForecast()}
+      focusRegionBacktest={buildFocusRegionBacktest()}
+      focusRegionBacktestLoading={false}
+      waveOutlook={null}
+      waveOutlookLoading={false}
+      waveRadar={buildWaveRadar()}
+      waveRadarLoading={false}
+      onOpenRecommendation={noop}
+      onOpenRegions={noop}
+      onOpenCampaigns={noop}
+      onOpenEvidence={noop}
+      {...overrides}
+    />,
+  );
+}
+
 describe('NowWorkspace', () => {
   it('keeps the laptop-first layout hooks for answer-hero, prediction-hero and trust-bar', () => {
-    const { container } = render(
-      <NowWorkspace
-        virus="Influenza A"
-        onVirusChange={noop}
-        horizonDays={7}
-        onHorizonChange={noop}
-        view={buildView()}
-        workspaceStatus={buildWorkspaceStatus()}
-        loading={false}
-        forecast={buildForecast()}
-        focusRegionBacktest={buildFocusRegionBacktest()}
-        focusRegionBacktestLoading={false}
-        waveOutlook={null}
-        waveOutlookLoading={false}
-        waveRadar={buildWaveRadar()}
-        waveRadarLoading={false}
-        onOpenRecommendation={noop}
-        onOpenRegions={noop}
-        onOpenCampaigns={noop}
-        onOpenEvidence={noop}
-      />,
-    );
+    const { container } = renderNowWorkspace();
 
     expect(container.querySelector('.answer-hero')).toBeTruthy();
     expect(container.querySelector('.prediction-hero')).toBeTruthy();
@@ -397,29 +451,15 @@ describe('NowWorkspace', () => {
     expect(container.querySelector('.next-regions')).toBeTruthy();
   });
 
+  it('leads with the weekly focus and a clear next step', () => {
+    renderNowWorkspace();
+
+    expect(screen.getByText('Fokus diese Woche')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Regionen öffnen' })).toBeInTheDocument();
+  });
+
   it('shows one dominant answer hero, the next two moves and trust bar below', () => {
-    render(
-      <NowWorkspace
-        virus="Influenza A"
-        onVirusChange={noop}
-        horizonDays={7}
-        onHorizonChange={noop}
-        view={buildView()}
-        workspaceStatus={buildWorkspaceStatus()}
-        loading={false}
-        forecast={buildForecast()}
-        focusRegionBacktest={buildFocusRegionBacktest()}
-        focusRegionBacktestLoading={false}
-        waveOutlook={null}
-        waveOutlookLoading={false}
-        waveRadar={buildWaveRadar()}
-        waveRadarLoading={false}
-        onOpenRecommendation={noop}
-        onOpenRegions={noop}
-        onOpenCampaigns={noop}
-        onOpenEvidence={noop}
-      />,
-    );
+    renderNowWorkspace();
 
     expect(screen.getByText('Fokus diese Woche')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Berlin jetzt priorisieren.' })).toBeInTheDocument();
@@ -437,28 +477,7 @@ describe('NowWorkspace', () => {
   it('opens the focus region from the hero action', () => {
     const onOpenRegions = jest.fn();
 
-    render(
-      <NowWorkspace
-        virus="Influenza A"
-        onVirusChange={noop}
-        horizonDays={7}
-        onHorizonChange={noop}
-        view={buildView()}
-        workspaceStatus={buildWorkspaceStatus()}
-        loading={false}
-        forecast={buildForecast()}
-        focusRegionBacktest={buildFocusRegionBacktest()}
-        focusRegionBacktestLoading={false}
-        waveOutlook={null}
-        waveOutlookLoading={false}
-        waveRadar={buildWaveRadar()}
-        waveRadarLoading={false}
-        onOpenRecommendation={noop}
-        onOpenRegions={onOpenRegions}
-        onOpenCampaigns={noop}
-        onOpenEvidence={noop}
-      />,
-    );
+    renderNowWorkspace({ onOpenRegions });
 
     fireEvent.click(screen.getByRole('button', { name: 'Top-Empfehlung prüfen' }));
 
@@ -481,95 +500,50 @@ describe('NowWorkspace', () => {
       },
     };
 
-    render(
-      <NowWorkspace
-        virus="Influenza A"
-        onVirusChange={noop}
-        horizonDays={7}
-        onHorizonChange={noop}
-        view={blockedView}
-        workspaceStatus={{
-          ...buildWorkspaceStatus(),
-          open_blockers: '1 offen',
-          blocker_count: 1,
-          blockers: ['Die Revision der Quelldaten bleibt sichtbar.'],
-        }}
-        loading={false}
-        forecast={buildForecast()}
-        focusRegionBacktest={buildFocusRegionBacktest()}
-        focusRegionBacktestLoading={false}
-        waveOutlook={null}
-        waveOutlookLoading={false}
-        waveRadar={buildWaveRadar()}
-        waveRadarLoading={false}
-        onOpenRecommendation={noop}
-        onOpenRegions={noop}
-        onOpenCampaigns={noop}
-        onOpenEvidence={noop}
-      />,
-    );
+    renderNowWorkspace({
+      view: blockedView,
+      workspaceStatus: {
+        ...buildWorkspaceStatus(),
+        open_blockers: '1 offen',
+        blocker_count: 1,
+        blockers: ['Die Revision der Quelldaten bleibt sichtbar.'],
+      },
+    });
 
     expect(screen.getByText(/Vor Review blockiert/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Top-Empfehlung prüfen' })).not.toBeInTheDocument();
   });
 
   it('shows a briefing-style loading skeleton before data is available', () => {
-    render(
-      <NowWorkspace
-        virus="Influenza A"
-        onVirusChange={noop}
-        horizonDays={7}
-        onHorizonChange={noop}
-        view={{ ...buildView(), hasData: false }}
-        workspaceStatus={null}
-        loading
-        forecast={null}
-        focusRegionBacktest={null}
-        focusRegionBacktestLoading={false}
-        waveOutlook={null}
-        waveOutlookLoading={false}
-        waveRadar={null}
-        waveRadarLoading={false}
-        onOpenRecommendation={noop}
-        onOpenRegions={noop}
-        onOpenCampaigns={noop}
-        onOpenEvidence={noop}
-      />,
-    );
+    renderNowWorkspace({
+      view: { ...buildView(), hasData: false },
+      workspaceStatus: null,
+      loading: true,
+      forecast: null,
+      focusRegionBacktest: null,
+      waveOutlook: null,
+      waveRadar: null,
+    });
 
     expect(screen.getByLabelText('Wochenüberblick wird geladen')).toBeInTheDocument();
   });
 
   it('shows honest weak and empty wording when no weekly recommendation is available', () => {
-    render(
-      <NowWorkspace
-        virus="Influenza A"
-        onVirusChange={noop}
-        horizonDays={7}
-        onHorizonChange={noop}
-        view={{
-          ...buildView(),
-          heroRecommendation: null,
-          emptyState: {
-            title: 'Noch keine belastbare Wochenempfehlung.',
-            body: 'Es fehlen noch belastbare Regional- und Qualitätsdaten für einen klaren Wochenfokus.',
-          },
-        }}
-        workspaceStatus={buildWorkspaceStatus()}
-        loading={false}
-        forecast={null}
-        focusRegionBacktest={null}
-        focusRegionBacktestLoading={false}
-        waveOutlook={null}
-        waveOutlookLoading={false}
-        waveRadar={null}
-        waveRadarLoading={false}
-        onOpenRecommendation={noop}
-        onOpenRegions={noop}
-        onOpenCampaigns={noop}
-        onOpenEvidence={noop}
-      />,
-    );
+    renderNowWorkspace({
+      view: {
+        ...buildView(),
+        heroRecommendation: null,
+        emptyState: {
+          title: 'Noch keine belastbare Wochenempfehlung.',
+          body: 'Es fehlen noch belastbare Regional- und Qualitätsdaten für einen klaren Wochenfokus.',
+        },
+      },
+      workspaceStatus: buildWorkspaceStatus(),
+      forecast: null,
+      focusRegionBacktest: null,
+      waveOutlook: null,
+      waveRadar: null,
+    });
 
     expect(screen.getByText('Keine belastbare Aktion diese Woche')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Evidenz prüfen' })).toBeInTheDocument();

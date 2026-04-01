@@ -459,6 +459,95 @@ class ProductionReadinessServiceTests(unittest.TestCase):
         self.assertEqual(core_item["blockers"], [])
         self.assertTrue(core_item["core_scope_advisories"])
 
+    def test_build_core_snapshot_treats_weekly_release_gap_as_advisory_when_forecast_recency_is_ok(self) -> None:
+        now = datetime(2026, 4, 1, 10, 0, 0)
+        latest_weekly_source = now - timedelta(days=15)
+        self._seed_live_sources(
+            available_time=now - timedelta(days=1),
+            source_times={
+                "grippeweb_are": latest_weekly_source,
+                "grippeweb_ili": latest_weekly_source,
+                "ifsg_rsv": latest_weekly_source,
+            },
+        )
+
+        def fake_artifacts(_self, virus_typ: str, horizon_days: int = 7):
+            coverage = {
+                "grippeweb_are_available": 0.95,
+                "grippeweb_ili_available": 0.94,
+            }
+            if virus_typ in {"Influenza A", "Influenza B"}:
+                coverage["ifsg_influenza_available"] = 0.96
+            elif virus_typ == "RSV A":
+                coverage["ifsg_rsv_available"] = 0.95
+            else:
+                coverage.update(
+                    {
+                        "sars_are_available": 0.91,
+                        "sars_notaufnahme_available": 0.93,
+                        "sars_trends_available": 0.30,
+                    }
+                )
+
+            return {
+                "metadata": {
+                    "feature_columns": ["feature_a"],
+                    "trained_at": (now - timedelta(days=2)).isoformat(),
+                    "model_version": f"regional:{virus_typ}:h{horizon_days}",
+                    "calibration_version": f"isotonic:{virus_typ}:h{horizon_days}",
+                    "quality_gate": {"overall_passed": True, "forecast_readiness": "GO"},
+                    "dataset_manifest": {
+                        "rows": 120,
+                        "states": 16,
+                        "source_coverage": coverage,
+                        "as_of_range": {"end": latest_weekly_source.date().isoformat()},
+                    },
+                    "point_in_time_snapshot": {
+                        "as_of_range": {"end": latest_weekly_source.date().isoformat()},
+                    },
+                },
+                "dataset_manifest": {
+                    "rows": 120,
+                    "states": 16,
+                    "source_coverage": coverage,
+                    "as_of_range": {"end": latest_weekly_source.date().isoformat()},
+                },
+                "point_in_time_snapshot": {
+                    "as_of_range": {"end": latest_weekly_source.date().isoformat()},
+                },
+            }
+
+        with patch(
+            "app.services.ml.regional_forecast.RegionalForecastService._load_artifacts",
+            new=fake_artifacts,
+        ), patch(
+            "app.services.ml.forecast_decision_service.ForecastDecisionService.build_monitoring_snapshot",
+            return_value={
+                "monitoring_status": "warning",
+                "forecast_readiness": "WATCH",
+                "freshness_status": "fresh",
+                "accuracy_freshness_status": "stale",
+                "backtest_freshness_status": "fresh",
+                "model_version": "national:v1",
+            },
+        ):
+            service = ProductionReadinessService(
+                session_factory=self._session_factory,
+                now_provider=lambda: now,
+            )
+            service.settings.CORE_PRODUCTION_SCOPES = "RSV A:h7"
+            service._broker_component = lambda: {"status": "ok", "message": "mocked"}  # type: ignore[method-assign]
+            service._schema_bootstrap_component = lambda: {"status": "ok", "message": "mocked"}  # type: ignore[method-assign]
+            core_snapshot = service.build_core_snapshot()
+
+        core_item = core_snapshot["components"]["core_regional_operational"]["matrix"][0]
+        self.assertEqual(core_snapshot["status"], "healthy")
+        self.assertEqual(core_item["status"], "ok")
+        self.assertEqual(core_item["source_freshness_status"], "warning")
+        self.assertEqual(core_item["source_coverage_required_status"], "warning")
+        self.assertEqual(core_item["blockers"], [])
+        self.assertTrue(core_item["core_scope_advisories"])
+
     def test_build_snapshot_warns_when_live_critical_source_is_stale(self) -> None:
         now = datetime(2026, 3, 23, 10, 0, 0)
         self._seed_live_sources(

@@ -1126,10 +1126,11 @@ class ProductionReadinessService:
         else:
             coverage_status = "critical" if observed_points == 0 else self._coverage_status(coverage_ratio)
         age_days = _day_delta(observed_ts, latest_available_as_of)
+        fresh_days, warning_days = self._source_freshness_windows(cadence_days=cadence_days)
         freshness_status = self._age_status(
             age_days,
-            fresh_days=self.settings.READINESS_SOURCE_FRESH_DAYS,
-            warning_days=self.settings.READINESS_SOURCE_WARNING_DAYS,
+            fresh_days=fresh_days,
+            warning_days=warning_days,
             missing_status="critical",
         )
         return {
@@ -1312,6 +1313,12 @@ class ProductionReadinessService:
             and forecast_recency_status == "ok"
             else source_freshness_status
         )
+        source_coverage_core_status = (
+            "ok"
+            if source_coverage_required_status == "warning"
+            and forecast_recency_status == "ok"
+            else source_coverage_required_status
+        )
 
         availability_status = "ok" if model_availability == "available" else "critical"
         contract_status = "ok" if pilot_contract_supported else "critical"
@@ -1324,7 +1331,7 @@ class ProductionReadinessService:
                 contract_status,
                 source_freshness_core_status,
                 forecast_recency_status,
-                source_coverage_required_status,
+                source_coverage_core_status,
                 quality_status,
                 transition_status,
             ]
@@ -1344,7 +1351,9 @@ class ProductionReadinessService:
             blockers.append("Core scope source freshness is not in the OK window.")
         if forecast_recency_status != "ok":
             blockers.append("Core scope forecast recency is not in the OK window.")
-        if source_coverage_required_status != "ok":
+        if source_coverage_required_status == "warning" and forecast_recency_status == "ok":
+            advisories.append("Core scope required source coverage is below the ideal threshold, but forecast recency is current.")
+        elif source_coverage_required_status != "ok":
             blockers.append("Core scope required source coverage is not OK.")
         if artifact_transition_mode:
             blockers.append("Core scope still uses an artifact transition fallback.")
@@ -1472,3 +1481,9 @@ class ProductionReadinessService:
         if age_days <= int(warning_days):
             return "warning"
         return "critical"
+
+    def _source_freshness_windows(self, *, cadence_days: int) -> tuple[int, int]:
+        cadence = max(int(cadence_days or 1), 1)
+        fresh_days = max(int(self.settings.READINESS_SOURCE_FRESH_DAYS), cadence)
+        warning_days = max(int(self.settings.READINESS_SOURCE_WARNING_DAYS), cadence * 3)
+        return fresh_days, warning_days

@@ -1,6 +1,6 @@
 /* ═══════════════════════════════════════════════════════════════════
    Light Theme  —  default component foundation overrides
-   Imported after shared/page styles so light mode is the normal path.
+   Imported before responsive.css so mobile simplifications still win.
    ═══════════════════════════════════════════════════════════════════ */
 
 .app-shell::before {
@@ -113,9 +113,23 @@
 .now-toolbar-note,
 .operator-readout-card__stat,
 .operator-readout-card__trust-item,
-.operator-readout-strip__item,
-.evidence-brief-card {
+.operator-readout-strip__item {
   background: rgba(255, 255, 255, 0.78);
   border-color: rgba(23, 32, 51, 0.08);
   box-shadow: none;
+}
+
+.evidence-brief-card {
+  background: rgba(255, 255, 255, 0.82);
+  color: var(--text-primary);
+  box-shadow: none;
+}
+
+.evidence-brief-card svg,
+.evidence-brief-card h4 {
+  color: var(--text-primary);
+}
+
+.evidence-brief-card p {
+  color: var(--text-secondary);
 }

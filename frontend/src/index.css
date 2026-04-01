@@ -25,6 +25,6 @@
 
 /* ═══ Overrides ═══ */
 @import './styles/recharts.css';
-@import './styles/responsive.css';
 @import './styles/light.css';
 @import './styles/dark.css';
+@import './styles/responsive.css';

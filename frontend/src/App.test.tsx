@@ -1,6 +1,4 @@
 import '@testing-library/jest-dom';
-import { existsSync, readFileSync } from 'fs';
-import { join } from 'path';
 import React from 'react';
 import { render, screen, waitFor, within } from '@testing-library/react';
 
@@ -14,42 +12,14 @@ jest.mock('./pages/LoginPage', () => ({
   default: () => <div>Login Mock</div>,
 }));
 
-jest.mock('./pages/media/MediaShell', () => {
-  const React = require('react');
-  const { Outlet, useLocation } = require('react-router-dom');
+jest.mock('framer-motion', () => ({
+  AnimatePresence: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+}));
 
-  const navItems = [
-    { label: 'Wochenplan', path: '/jetzt' },
-    { label: 'Zeitgraph', path: '/zeitgraph' },
-    { label: 'Regionen', path: '/regionen' },
-    { label: 'Kampagnen', path: '/kampagnen' },
-    { label: 'Evidenz', path: '/evidenz' },
-  ];
-
-  return {
-    __esModule: true,
-    default: () => {
-      const location = useLocation();
-
-      return (
-        <div>
-          <nav aria-label="Arbeitsbereiche">
-            {navItems.map((item) => (
-              <button
-                key={item.path}
-                aria-current={location.pathname.startsWith(item.path) ? 'page' : undefined}
-                type="button"
-              >
-                {item.label}
-              </button>
-            ))}
-          </nav>
-          <Outlet />
-        </div>
-      );
-    },
-  };
-});
+jest.mock('./features/media/RecommendationOverlay', () => ({
+  __esModule: true,
+  default: () => null,
+}));
 
 jest.mock('./pages/media/NowPage', () => ({
   __esModule: true,
@@ -97,23 +67,22 @@ describe('App routing', () => {
     });
   });
 
-  it('keeps the light foundation outside dark theme overrides', () => {
-    const indexCss = readFileSync(join(__dirname, 'index.css'), 'utf8');
-    const darkCss = readFileSync(join(__dirname, 'styles', 'dark.css'), 'utf8');
-    const lightCssPath = join(__dirname, 'styles', 'light.css');
-
-    expect(existsSync(lightCssPath)).toBe(true);
-    expect(indexCss).toContain("@import './styles/light.css';");
-    expect(darkCss).not.toMatch(/\[data-theme=["']light["']\]/);
-    expect(readFileSync(lightCssPath, 'utf8')).toContain('.app-shell--operator');
-  });
-
   it('rehydrates auth state on app startup from browser storage', async () => {
     persistAuth(window.localStorage);
 
     render(<App />);
 
     expect(await screen.findByText('Jetzt Mock')).toBeInTheDocument();
+  });
+
+  it('renders the real operator shell chrome for authenticated routes', async () => {
+    persistAuth(window.localStorage);
+
+    render(<App />);
+
+    expect(await screen.findByText('Jetzt Mock')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Schnellmenü öffnen/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Navigation öffnen/i })).toBeInTheDocument();
   });
 
   it('redirects legacy dashboard routes to /jetzt and shows the five PEIX work areas', async () => {

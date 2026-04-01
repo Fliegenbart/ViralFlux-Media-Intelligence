@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom';
 import React from 'react';
-import { act, render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 
 import LandingPage from './LandingPage';
@@ -91,7 +91,9 @@ describe('LandingPage', () => {
         'Die Einstiegsseite zeigt die Wochenlage in wenigen Signalen. Die eigentliche Arbeitsfläche öffnet direkt den Wochenplan mit Fokusländern, Richtung und Evidenz.',
       ),
     ).toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: /Wochenplan öffnen/i })[0]).toBeInTheDocument();
+    const hero = screen.getByRole('region', { name: 'Wochenbriefing Einstieg' });
+    expect(within(hero).getByRole('heading', { name: 'Was PEIX x GELO diese Woche entscheiden sollte' })).toBeInTheDocument();
+    expect(within(hero).getAllByRole('button', { name: 'Wochenplan öffnen' })).toHaveLength(1);
     expect(screen.getByRole('button', { name: 'Wochenplan' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Evidenz' })).toBeInTheDocument();
     expect(screen.getByText('Vor dem Einstieg sichtbar')).toBeInTheDocument();

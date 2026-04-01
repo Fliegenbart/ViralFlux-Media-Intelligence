@@ -39,6 +39,10 @@ describe('LoginPage', () => {
         'Melde dich an, um Wochenfokus, Bundesländer und Evidenz für PEIX x GELO zu öffnen.',
       ),
     ).toBeInTheDocument();
+    expect(screen.getByText('PEIX x GELO Wochenbriefing')).toBeInTheDocument();
+    expect(
+      screen.getByText('Bundesländer, Richtung und Evidenz für diese Woche in einer Arbeitsfläche.'),
+    ).toBeInTheDocument();
     expect(screen.queryByText('Oder mit Firmenkonto fortfahren')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Google' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Azure AD' })).not.toBeInTheDocument();

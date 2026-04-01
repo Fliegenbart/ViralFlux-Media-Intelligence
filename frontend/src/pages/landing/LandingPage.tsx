@@ -197,7 +197,10 @@ const LandingPage: React.FC = () => {
       <main className="shell-main landing-main" style={{ zIndex: 5 }}>
         <div className="shell-main-inner landing-main-inner">
           <RevealSection>
-            <section className="operator-section-shell operator-section-shell--accent landing-hero-shell">
+            <section
+              className="operator-section-shell operator-section-shell--accent landing-hero-shell"
+              aria-label="Wochenbriefing Einstieg"
+            >
               <div className="landing-hero-grid">
                 <div className="landing-hero-copy">
                   <span className="landing-hero-kicker">PEIX x GELO</span>

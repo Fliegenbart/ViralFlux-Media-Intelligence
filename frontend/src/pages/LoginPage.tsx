@@ -58,7 +58,13 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
 
         <section className="login-card-shell">
           <div className="login-card">
-            <div className="login-card__mobile-brand">ViralFlux</div>
+            <div className="login-card__mobile-brand">
+              <span className="login-card__mobile-wordmark">ViralFlux</span>
+              <p className="login-card__mobile-kicker">PEIX x GELO Wochenbriefing</p>
+              <p className="login-card__mobile-copy">
+                Bundesländer, Richtung und Evidenz für diese Woche in einer Arbeitsfläche.
+              </p>
+            </div>
 
             <header className="login-card__header">
               <h2>In den Wochenplan</h2>

@@ -778,18 +778,6 @@
     margin-bottom: 18px;
   }
 
-  .login-footer-links {
-    position: static;
-    transform: none;
-    margin-top: 22px;
-    justify-content: center;
-    flex-wrap: wrap;
-  }
-
-  .login-sso-grid {
-    grid-template-columns: 1fr;
-  }
-
   .now-page-header__title,
   .evidence-page-header__title {
     font-size: clamp(2.2rem, 10vw, 3rem);

@@ -69,8 +69,8 @@ function hasInsufficientEvidence(region?: MapRegion): boolean {
 }
 
 function regionColor(region?: MapRegion): string {
-  if (!region) return '#f1f5f9';
-  if (hasInsufficientEvidence(region)) return '#f1f5f9';
+  if (!region) return 'rgba(255, 255, 255, 0.06)';
+  if (hasInsufficientEvidence(region)) return 'rgba(255, 255, 255, 0.06)';
 
   const prob = region.impact_probability ?? primarySignalScore(region);
   const normalized = prob <= 1 ? prob : prob / 100;
@@ -180,8 +180,8 @@ const GermanyMap: React.FC<Props> = ({ regions, selectedRegion, onSelectRegion, 
               <path
                 className="vf-map-region__path"
                 d={shape.d}
-                fill={insufficientEvidence ? '#f1f5f9' : regionColor(region)}
-                stroke={isSelected ? 'var(--color-primary)' : isHovered ? 'rgba(99, 102, 241, 0.5)' : 'rgba(203, 213, 225, 0.6)'}
+                fill={insufficientEvidence ? 'rgba(255,255,255,0.08)' : regionColor(region)}
+                stroke={isSelected ? 'var(--color-primary)' : isHovered ? 'rgba(124, 106, 239, 0.5)' : 'rgba(255, 255, 255, 0.12)'}
                 strokeWidth={isSelected ? 2.5 : isHovered ? 1.8 : 0.8}
               />
               {code && !(code in CALLOUT_TARGETS) && (
@@ -190,7 +190,7 @@ const GermanyMap: React.FC<Props> = ({ regions, selectedRegion, onSelectRegion, 
                     cx={shape.cx}
                     cy={showProbability && region?.impact_probability ? shape.cy - 9 : shape.cy - 5}
                     r={9}
-                    fill={insufficientEvidence ? '#f1f5f9' : regionColor(region)}
+                    fill={insufficientEvidence ? 'rgba(255,255,255,0.08)' : regionColor(region)}
                     stroke="rgba(255,255,255,0.8)"
                     strokeWidth="1.5"
                   />

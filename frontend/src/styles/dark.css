@@ -1,3 +1,5 @@
+/* Base theme is now dark — this file provides additional dark-specific overrides */
+
 /* ═══════════════════════════════════════════════════════════════════
    Dark Theme  —  component-specific overrides
    (Token overrides live in tokens.css under [data-theme="dark"] { … })

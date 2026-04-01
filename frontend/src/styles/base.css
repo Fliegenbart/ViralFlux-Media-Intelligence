@@ -17,8 +17,22 @@ body {
 }
 
 ::selection {
-  background: rgba(79, 70, 229, 0.15);
-  color: var(--text-primary);
+  background: rgba(124, 106, 239, 0.3);
+  color: #fff;
+}
+
+/* ─── Noise Texture Overlay ───────────────────────────────────── */
+body::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 9999;
+  opacity: 0.015;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
 h1,
@@ -39,8 +53,8 @@ code {
 /* ─── Scrollbar ────────────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+::-webkit-scrollbar-thumb { background: #333333; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #525252; }
 
 /* ─── Animations ───────────────────────────────────────────────── */
 @keyframes fadeIn {
@@ -59,8 +73,8 @@ code {
 }
 
 @keyframes pulse-glow {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(67, 56, 202, 0); }
-  50% { box-shadow: 0 0 12px 2px rgba(67, 56, 202, 0.2); }
+  0%, 100% { box-shadow: 0 0 0 0 rgba(124, 106, 239, 0); }
+  50% { box-shadow: 0 0 12px 2px rgba(124, 106, 239, 0.3); }
 }
 
 .fade-in { animation: fadeIn 0.4s ease-out; }

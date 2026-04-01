@@ -157,9 +157,20 @@ describe('AppLayout theme rendering', () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByRole('banner')).toHaveTextContent('Arbeitsbereich');
+    const banner = screen.getByRole('banner');
+    const sectionFrame = screen.getByLabelText('Aktueller Bereich');
+    const pageActions = screen.getByLabelText('Seitenaktionen');
+    const primaryAction = screen.getByRole('button', { name: 'Wochenbericht exportieren' });
+    const secondaryAction = screen.getByRole('button', { name: 'Evidenz öffnen' });
+
+    expect(banner).not.toHaveTextContent('Arbeitsbereich');
+    expect(sectionFrame).toHaveTextContent('ViralFlux');
+    expect(sectionFrame).toHaveTextContent('Wochenplan');
     expect(screen.getByRole('heading', { name: 'Was PEIX diese Woche tun sollte' })).toBeVisible();
-    expect(screen.getByRole('button', { name: 'Wochenbericht exportieren' })).toBeVisible();
-    expect(screen.getByRole('button', { name: 'Wochenplan' })).toHaveAttribute('aria-current', 'page');
+    expect(primaryAction).toBeVisible();
+    expect(primaryAction).toHaveClass('operator-page-action--primary');
+    expect(secondaryAction).toHaveClass('operator-page-action--secondary');
+    expect(pageActions).toContainElement(primaryAction);
+    expect(pageActions.lastElementChild).toBe(primaryAction);
   });
 });

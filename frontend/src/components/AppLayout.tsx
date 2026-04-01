@@ -352,12 +352,10 @@ const AppLayout: React.FC<Props> = ({ children }) => {
                     <div className="operator-header__section-frame" aria-label="Aktueller Bereich">
                       <div className="operator-header__section-meta">
                         <span className="operator-header__suite">ViralFlux</span>
-                        <span className="operator-header__section-chip">Arbeitsbereich</span>
-                      </div>
-                      <div className="operator-header__section-copy">
+                        <span className="operator-header__suite-separator" aria-hidden="true">/</span>
                         <span className="operator-header__section-context">{currentSection.kicker}</span>
-                        <h1 id="operator-page-title" className="operator-header__section-title">{currentSection.title}</h1>
                       </div>
+                      <h1 id="operator-page-title" className="operator-header__section-title">{currentSection.title}</h1>
                     </div>
                   </div>
 

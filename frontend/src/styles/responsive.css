@@ -828,6 +828,20 @@
 
   .landing-hero-title {
     font-size: clamp(2rem, 9vw, 3rem);
+    max-width: none;
+  }
+
+  .landing-live-topline {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .landing-region-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .landing-region-row__score {
+    justify-self: flex-start;
   }
 
   .landing-footer-inner {

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { AlertCircle, AtSign, Lock, LogIn, Building2 } from 'lucide-react';
+import { AlertCircle, AtSign, Lock, LogIn } from 'lucide-react';
 import { login } from '../lib/api';
 
 interface LoginPageProps {
@@ -42,11 +42,11 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
           </div>
 
           <div className="login-brand-panel__copy">
-            <h1 className="login-brand-panel__headline">
-              Klar sehen, <span>was diese Woche zuerst zählt.</span>
-            </h1>
+            <h1 className="login-brand-panel__headline">Die Wochensteuerung für PEIX x GELO</h1>
             <p className="login-brand-panel__text">
-              Nach dem Login siehst du sofort, welches Bundesland Aufmerksamkeit verdient, welche Maßnahme als Nächstes sinnvoll ist und worauf sich diese Einordnung stützt.
+              Der Einstieg führt direkt in den Wochenplan: mit Fokus auf Bundesländer,
+              empfohlene Richtung und der Evidenz, auf die sich PEIX x GELO diese Woche
+              stützen kann.
             </p>
           </div>
 
@@ -61,8 +61,8 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
             <div className="login-card__mobile-brand">ViralFlux</div>
 
             <header className="login-card__header">
-              <h2>Willkommen in der Wochensteuerung</h2>
-              <p>Melde dich an, um Wochenplan, Regionen, Kampagnen und Evidenz zu öffnen.</p>
+              <h2>In den Wochenplan</h2>
+              <p>Melde dich an, um Wochenfokus, Bundesländer und Evidenz für PEIX x GELO zu öffnen.</p>
             </header>
 
             <form className="login-form" onSubmit={handleSubmit}>
@@ -91,17 +91,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
               </label>
 
               <label className="login-field">
-                <span className="login-field__label-row">
-                  <span className="login-field__label">Passwort</span>
-                  <button
-                    type="button"
-                    className="login-inline-link login-inline-link--disabled"
-                    disabled
-                    title="Passwort-Reset ist noch nicht aktiviert."
-                  >
-                    Passwort vergessen?
-                  </button>
-                </span>
+                <span className="login-field__label">Passwort</span>
                 <span className="login-input-shell">
                   <Lock size={18} className="login-input-shell__icon" aria-hidden="true" />
                   <input
@@ -127,34 +117,9 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
               </label>
 
               <button type="submit" disabled={loading} className="login-submit">
-                <span>{loading ? 'Anmelden...' : 'Anmelden'}</span>
+                <span>{loading ? 'Wird geöffnet...' : 'Wochenplan öffnen'}</span>
                 <LogIn size={18} aria-hidden="true" />
               </button>
-
-              <div className="login-divider">
-                <span>Oder mit Firmenkonto fortfahren</span>
-              </div>
-
-              <div className="login-sso-grid" aria-label="Platzhalter für Firmenanmeldung">
-                <button
-                  type="button"
-                  className="login-sso-button"
-                  disabled
-                  title="Google-Anmeldung ist in diesem Schritt noch nicht aktiv."
-                >
-                  <span className="login-sso-button__badge">G</span>
-                  <span>Google</span>
-                </button>
-                <button
-                  type="button"
-                  className="login-sso-button"
-                  disabled
-                  title="Azure-Anmeldung ist in diesem Schritt noch nicht aktiv."
-                >
-                  <Building2 size={18} aria-hidden="true" />
-                  <span>Azure AD</span>
-                </button>
-              </div>
             </form>
 
             <footer className="login-card__footer">
@@ -166,11 +131,6 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
         </section>
       </div>
 
-      <div className="login-footer-links" aria-label="Rechtliche Hinweise">
-        <button type="button" disabled>Datenschutz</button>
-        <button type="button" disabled>Impressum</button>
-        <button type="button" disabled>Systemstatus</button>
-      </div>
     </div>
   );
 };

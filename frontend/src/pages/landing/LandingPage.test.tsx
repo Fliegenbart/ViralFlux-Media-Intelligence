@@ -70,7 +70,7 @@ describe('LandingPage', () => {
     });
   };
 
-  it('shows the simplified landing promise and primary CTA', async () => {
+  it('prioritizes the weekly decision and demotes feature marketing copy', async () => {
     render(
       <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <LandingPage />
@@ -84,17 +84,22 @@ describe('LandingPage', () => {
     });
 
     expect(
-      screen.getByRole('heading', { name: 'Die Wochensteuerung für PEIX x GELO' }),
+      screen.getByRole('heading', { name: 'Was PEIX x GELO diese Woche entscheiden sollte' }),
     ).toBeInTheDocument();
     expect(
-      screen.getByText('ViralFlux zeigt zuerst, welche Bundesländer jetzt Aufmerksamkeit verdienen, welche Maßnahme als Nächstes sinnvoll ist und worauf sich diese Einordnung stützt.'),
+      screen.getByText(
+        'Die Einstiegsseite zeigt die Wochenlage in wenigen Signalen. Die eigentliche Arbeitsfläche öffnet direkt den Wochenplan mit Fokusländern, Richtung und Evidenz.',
+      ),
     ).toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: /Zum Wochenplan/i })[0]).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /Wochenplan öffnen/i })[0]).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Wochenplan' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Evidenz' })).toBeInTheDocument();
-    expect(screen.getByText('Wo zuerst hinschauen')).toBeInTheDocument();
-    expect(screen.getByText('Was diese Woche tun')).toBeInTheDocument();
-    expect(screen.getByText('Warum wir das vertreten')).toBeInTheDocument();
+    expect(screen.getByText('Vor dem Einstieg sichtbar')).toBeInTheDocument();
+    expect(screen.getByText('Wochenfokus für Bundesländer')).toBeInTheDocument();
+    expect(screen.getByText('Evidenz bleibt sichtbar')).toBeInTheDocument();
+    expect(screen.queryByText('Wo zuerst hinschauen')).not.toBeInTheDocument();
+    expect(screen.queryByText('Was diese Woche tun')).not.toBeInTheDocument();
+    expect(screen.queryByText('Warum wir das vertreten')).not.toBeInTheDocument();
   });
 
   it('shows footer status, version and docs link', async () => {

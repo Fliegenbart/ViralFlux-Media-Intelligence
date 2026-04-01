@@ -23,23 +23,23 @@ const NAV_ITEMS = [
 
 const DOCS_URL = 'https://github.com/Fliegenbart/ViralFlux-Media-Intelligence/blob/main/docs/OPERATORS_GUIDE.md';
 
-const FEATURE_CARDS = [
+const BRIEFING_CARDS = [
   {
-    label: 'Wo zuerst hinschauen',
-    value: 'Bundesländer mit frühem Zug',
-    meta: 'ViralFlux zeigt zuerst die Regionen, in denen sich Dynamik früh genug für eine Wochenentscheidung aufbaut.',
+    label: 'Wochenfokus für Bundesländer',
+    value: 'Welche Länder jetzt zuerst geprüft werden sollten',
+    meta: 'Die Einstiegsseite verdichtet die Lage auf wenige Bundesländer, statt schon hier in Details oder Kampagnenlogik abzutauchen.',
     tone: 'accent' as const,
   },
   {
-    label: 'Was diese Woche tun',
-    value: 'Empfohlene Aktion statt Datenflut',
-    meta: 'Die Arbeitsfläche startet mit genau einer empfohlenen Richtung und hält Folgeoptionen bewusst dahinter.',
+    label: 'Nächster Schritt',
+    value: 'Direkt in den Wochenplan statt in Produkt-Erklärungen',
+    meta: 'Der wichtigste Weg führt ohne Umwege in die Arbeitsfläche, in der PEIX x GELO die Wochenentscheidung vorbereitet.',
     tone: 'muted' as const,
   },
   {
-    label: 'Warum wir das vertreten',
-    value: 'Belastbarkeit sichtbar halten',
-    meta: 'Forecast, Evidenz und Freigabe bleiben sichtbar, ohne die Hauptentscheidung zu überlagern.',
+    label: 'Evidenz bleibt sichtbar',
+    value: 'Live-Daten und Belastbarkeit bleiben im Blick',
+    meta: 'Signale, Aktualität und Nachvollziehbarkeit bleiben sichtbar, aber deutlich hinter der eigentlichen Wochenentscheidung.',
     tone: 'default' as const,
   },
 ] as const;
@@ -180,7 +180,7 @@ const LandingPage: React.FC = () => {
 
           <div className="lp-nav-actions">
             <button type="button" onClick={openCockpit} className="media-button">
-              Zum Wochenplan
+              Wochenplan öffnen
             </button>
             <button
               type="button"
@@ -203,17 +203,18 @@ const LandingPage: React.FC = () => {
                   <span className="landing-hero-kicker">PEIX x GELO</span>
 
                   <h1 className="landing-hero-title">
-                    Die Wochensteuerung für PEIX x GELO
+                    Was PEIX x GELO diese Woche entscheiden sollte
                   </h1>
 
                   <p className="operator-section-shell__copy landing-hero-copytext">
-                    ViralFlux zeigt zuerst, welche Bundesländer jetzt Aufmerksamkeit verdienen,
-                    welche Maßnahme als Nächstes sinnvoll ist und worauf sich diese Einordnung stützt.
+                    Die Einstiegsseite zeigt die Wochenlage in wenigen Signalen. Die eigentliche
+                    Arbeitsfläche öffnet direkt den Wochenplan mit Fokusländern, Richtung und
+                    Evidenz.
                   </p>
 
                   <div className="landing-action-row">
                     <button type="button" onClick={openCockpit} className="media-button">
-                      Zum Wochenplan &#8594;
+                      Wochenplan öffnen
                     </button>
                   </div>
                 </div>
@@ -264,12 +265,12 @@ const LandingPage: React.FC = () => {
 
           <RevealSection delay={0.04}>
             <OperatorSection
-              kicker="Im Überblick"
-              title="Was du nach dem Login sofort siehst"
-              description="Die Startseite erklärt nur die Logik. Die starke Wirkung entsteht erst in Wochenplan, Regionen, Kampagnen und Evidenz."
+              kicker="Vor dem Einstieg sichtbar"
+              title="Ruhige Orientierung vor der Arbeitsfläche"
+              description="Die Landeseite beantwortet nur drei Fragen: Wo zuerst schauen, wie direkt in den Wochenplan gehen und worauf sich die Einordnung stützt."
             >
               <div className="operator-stat-grid">
-                {FEATURE_CARDS.map((feature) => (
+                {BRIEFING_CARDS.map((feature) => (
                   <OperatorStat
                     key={feature.label}
                     label={feature.label}

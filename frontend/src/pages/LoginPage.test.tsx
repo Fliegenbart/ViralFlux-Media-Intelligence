@@ -22,19 +22,27 @@ describe('LoginPage', () => {
     jest.resetAllMocks();
   });
 
-  it('frames the product as a weekly steering workspace and submits credentials', async () => {
+  it('frames the login as the weekly steering entry and removes distracting placeholders', async () => {
     const onLogin = jest.fn();
     (login as jest.Mock).mockResolvedValue(undefined);
 
     render(<LoginPage onLogin={onLogin} />);
 
     expect(
-      screen.getByRole('heading', { name: 'Klar sehen, was diese Woche zuerst zählt.' }),
+      screen.getByRole('heading', { name: 'Die Wochensteuerung für PEIX x GELO' }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole('heading', { name: 'Willkommen in der Wochensteuerung' }),
+      screen.getByRole('heading', { name: 'In den Wochenplan' }),
     ).toBeInTheDocument();
-    expect(screen.getByText('Oder mit Firmenkonto fortfahren')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Melde dich an, um Wochenfokus, Bundesländer und Evidenz für PEIX x GELO zu öffnen.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Oder mit Firmenkonto fortfahren')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Google' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Azure AD' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Passwort vergessen?' })).not.toBeInTheDocument();
     expect(screen.getByText(/Noch kein Zugang\?/i)).toBeInTheDocument();
 
     fireEvent.change(screen.getByPlaceholderText('name@firma.de'), {
@@ -43,7 +51,7 @@ describe('LoginPage', () => {
     fireEvent.change(screen.getByPlaceholderText('••••••••'), {
       target: { value: 'secret123' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Anmelden' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Wochenplan öffnen' }));
 
     await waitFor(() => {
       expect(login).toHaveBeenCalledWith('test@example.com', 'secret123', true);

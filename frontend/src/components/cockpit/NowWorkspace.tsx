@@ -85,6 +85,14 @@ const NowWorkspace: React.FC<Props> = ({
   }, [forecast]);
 
   const heroRecommendation = view.heroRecommendation;
+  const nextStepLabel = focusRegion?.code ? 'Regionen öffnen' : 'Kampagnen öffnen';
+  const handleNextStep = () => {
+    if (focusRegion?.code) {
+      onOpenRegions(focusRegion.code || undefined);
+      return;
+    }
+    onOpenCampaigns();
+  };
   const heroSupportText = [view.supportState.label, view.supportState.detail].filter(Boolean).join(' · ');
   const secondaryMoves = view.secondaryMoves.slice(0, 2);
   const trustChecks = view.briefingTrust.items.slice(0, 3);
@@ -204,47 +212,15 @@ const NowWorkspace: React.FC<Props> = ({
                 <> · Trend: {focusPrediction.change_pct >= 0 ? '+' : ''}{focusPrediction.change_pct.toFixed(1)}%</>
               )}
             </p>
-            <div className="answer-hero__actions">
-              {heroRecommendation && !heroRecommendation.ctaDisabled && (
-                <button type="button" className="media-button answer-hero__cta" onClick={() => {
-                  if (focusRegion?.code) onOpenRegions(focusRegion.code);
-                  else onOpenCampaigns();
-                }}>
-                  {heroRecommendation.actionLabel || 'Details öffnen'}
-                </button>
-              )}
-              <div className="answer-hero__chips">
-                {VIRUS_OPTIONS.map((option) => (
-                  <button key={option} type="button" onClick={() => onVirusChange(option)}
-                    className={`tab-chip ${option === virus ? 'active' : ''}`} aria-pressed={option === virus}>
-                    {option}
-                  </button>
-                ))}
-              </div>
-            </div>
             <div className="now-next-step" aria-label="Nächster Schritt">
               <span className="now-next-step__label">Nächster Schritt</span>
               <div className="now-next-step__actions">
                 <button
                   type="button"
-                  className="media-button secondary now-next-step__button"
-                  onClick={() => onOpenRegions(focusRegion?.code || undefined)}
+                  className="media-button now-next-step__button"
+                  onClick={handleNextStep}
                 >
-                  Regionen öffnen
-                </button>
-                <button
-                  type="button"
-                  className="media-button secondary now-next-step__button"
-                  onClick={onOpenCampaigns}
-                >
-                  Kampagnen öffnen
-                </button>
-                <button
-                  type="button"
-                  className="media-button secondary now-next-step__button"
-                  onClick={onOpenEvidence}
-                >
-                  Evidenz öffnen
+                  {nextStepLabel}
                 </button>
               </div>
             </div>
@@ -266,24 +242,6 @@ const NowWorkspace: React.FC<Props> = ({
           </div>
         )}
 
-        {/* ── 2. Map + Chart (side by side) ── */}
-        <div className="prediction-hero">
-          <div className="prediction-hero__map">
-            <GermanyMap
-              regions={mapRegions}
-              selectedRegion={effectiveRegionCode}
-              onSelectRegion={setSelectedRegionCode}
-              showProbability
-              topRegionCode={sortedPredictions[0]?.bundesland || null}
-            />
-          </div>
-          <div className="prediction-hero__chart">
-            <ForecastChart
-              timeline={focusRegionBacktest?.timeline || []}
-              regionName={focusPrediction?.bundesland_name || ''}
-            />
-          </div>
-        </div>
         <span className="now-data-timestamp">
           Datenstand {formatDateTime(view.generatedAt)} · {heroRecommendation?.stateLabel || 'Prüfung läuft'}
         </span>
@@ -304,6 +262,23 @@ const NowWorkspace: React.FC<Props> = ({
           </div>
         )}
 
+        <div className="now-virus-switcher" aria-label="Virus wechseln">
+          <span className="now-virus-switcher__label">Virus wechseln</span>
+          <div className="now-virus-switcher__chips">
+            {VIRUS_OPTIONS.map((option) => (
+              <button
+                key={option}
+                type="button"
+                onClick={() => onVirusChange(option)}
+                className={`tab-chip ${option === virus ? 'active' : ''}`}
+                aria-pressed={option === virus}
+              >
+                {option}
+              </button>
+            ))}
+          </div>
+        </div>
+
         {/* ── 4. Secondary moves ── */}
         {secondaryMoves.length > 0 && (
           <div className="next-regions">
@@ -319,9 +294,31 @@ const NowWorkspace: React.FC<Props> = ({
             </div>
           </div>
         )}
+
+        {/* ── 5. Supporting visuals ── */}
+        <div className="now-supporting-visuals">
+          <span className="now-supporting-visuals__label">Karten und Verlauf als Unterstützung</span>
+          <div className="prediction-hero">
+            <div className="prediction-hero__map">
+              <GermanyMap
+                regions={mapRegions}
+                selectedRegion={effectiveRegionCode}
+                onSelectRegion={setSelectedRegionCode}
+                showProbability
+                topRegionCode={sortedPredictions[0]?.bundesland || null}
+              />
+            </div>
+            <div className="prediction-hero__chart">
+              <ForecastChart
+                timeline={focusRegionBacktest?.timeline || []}
+                regionName={focusPrediction?.bundesland_name || ''}
+              />
+            </div>
+          </div>
+        </div>
       </OperatorSection>
 
-      {/* ── 5. Collapsible Vertiefung (unchanged) ── */}
+      {/* ── 6. Collapsible Vertiefung (unchanged) ── */}
       {!view.emptyState ? (
         <>
           <CollapsibleSection

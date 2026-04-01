@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom';
 import React from 'react';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 
 import NowWorkspace from './NowWorkspace';
 import { NowPageTrustCheck, NowPageViewModel } from '../../features/media/useMediaData';
@@ -451,19 +451,27 @@ describe('NowWorkspace', () => {
     expect(container.querySelector('.next-regions')).toBeTruthy();
   });
 
-  it('leads with the weekly focus and a clear next step', () => {
-    renderNowWorkspace();
+  it('keeps only one direct action in the hero and moves virus switching out of the main CTA row', () => {
+    const { container } = renderNowWorkspace();
 
-    expect(screen.getByText('Fokus diese Woche')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Regionen öffnen' })).toBeInTheDocument();
+    const hero = container.querySelector('.answer-hero') as HTMLElement | null;
+    expect(hero).toBeTruthy();
+
+    if (!hero) {
+      return;
+    }
+
+    expect(within(hero).getByRole('button', { name: 'Regionen öffnen' })).toBeInTheDocument();
+    expect(within(hero).queryByRole('button', { name: 'Kampagnen öffnen' })).not.toBeInTheDocument();
+    expect(within(hero).queryByRole('button', { name: 'Evidenz öffnen' })).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Virus wechseln')).toBeInTheDocument();
   });
 
-  it('shows one dominant answer hero, the next two moves and trust bar below', () => {
-    renderNowWorkspace();
+  it('keeps maps and charts below the weekly decision layer', () => {
+    const { container } = renderNowWorkspace();
 
     expect(screen.getByText('Fokus diese Woche')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Berlin jetzt priorisieren.' })).toBeInTheDocument();
-    expect(screen.getByText('81%')).toBeInTheDocument();
     expect(screen.getByText('Bayern')).toBeInTheDocument();
     expect(screen.getByText('Sachsen')).toBeInTheDocument();
     expect(screen.queryByText('Nordrhein-Westfalen')).not.toBeInTheDocument();
@@ -471,7 +479,16 @@ describe('NowWorkspace', () => {
     expect(screen.getByText('Daten & Evidenz')).toBeInTheDocument();
     expect(screen.getByText('Handlung & Blocker')).toBeInTheDocument();
     expect(screen.getByText('Nächste Regionen')).toBeInTheDocument();
+    expect(screen.getByText('Karten und Verlauf als Unterstützung')).toBeInTheDocument();
     expect(screen.getByText('Vertiefung (optional)')).toBeInTheDocument();
+
+    const hero = container.querySelector('.answer-hero') as HTMLElement | null;
+    const support = container.querySelector('.now-supporting-visuals') as HTMLElement | null;
+    expect(hero).toBeTruthy();
+    expect(support).toBeTruthy();
+    if (hero && support) {
+      expect(hero.compareDocumentPosition(support) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    }
   });
 
   it('opens the focus region from the hero action', () => {
@@ -479,7 +496,7 @@ describe('NowWorkspace', () => {
 
     renderNowWorkspace({ onOpenRegions });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Top-Empfehlung prüfen' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Regionen öffnen' }));
 
     expect(onOpenRegions).toHaveBeenCalledWith('BE');
   });

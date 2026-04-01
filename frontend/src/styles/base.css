@@ -108,6 +108,16 @@ textarea:focus-visible {
   border: 0;
 }
 
+/* ─── Tabular Nums ────────────────────────────────────────────── */
+.answer-hero__probability,
+.trust-bar__value,
+.next-regions__meta,
+.operator-stat-card__value,
+.prediction-hero-summary__probability,
+.metric-box strong {
+  font-variant-numeric: tabular-nums;
+}
+
 /* ─── Reduced Motion ───────────────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
   *,

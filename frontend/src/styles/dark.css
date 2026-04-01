@@ -728,10 +728,27 @@
 [data-theme="dark"] .answer-hero__probability {
   color: var(--text-primary);
 }
-[data-theme="dark"] .answer-hero[data-state="critical"] .answer-hero__probability { color: #fca5a5; }
-[data-theme="dark"] .answer-hero[data-state="elevated"] .answer-hero__probability { color: #fcd34d; }
-[data-theme="dark"] .answer-hero[data-state="watch"] .answer-hero__probability { color: #a5b4fc; }
-[data-theme="dark"] .answer-hero[data-state="clear"] .answer-hero__probability { color: #6ee7b7; }
+[data-theme="dark"] .answer-hero[data-state="critical"] .answer-hero__probability {
+  color: #fca5a5;
+  text-shadow: 0 0 60px rgba(252, 165, 165, 0.3);
+}
+[data-theme="dark"] .answer-hero[data-state="elevated"] .answer-hero__probability {
+  color: #fdba74;
+  text-shadow: 0 0 60px rgba(253, 186, 116, 0.25);
+}
+[data-theme="dark"] .answer-hero[data-state="watch"] .answer-hero__probability {
+  color: #fde047;
+  text-shadow: 0 0 40px rgba(253, 224, 71, 0.2);
+}
+[data-theme="dark"] .answer-hero[data-state="clear"] .answer-hero__probability {
+  color: #86efac;
+  text-shadow: 0 0 40px rgba(134, 239, 172, 0.2);
+}
+
+[data-theme="dark"] .next-regions__item[data-state="critical"] { border-left-color: #fca5a5; }
+[data-theme="dark"] .next-regions__item[data-state="elevated"] { border-left-color: #fdba74; }
+[data-theme="dark"] .next-regions__item[data-state="watch"] { border-left-color: #fde047; }
+[data-theme="dark"] .next-regions__item[data-state="clear"] { border-left-color: #86efac; }
 
 [data-theme="dark"] .trust-bar__item {
   background: rgba(255, 255, 255, 0.06);

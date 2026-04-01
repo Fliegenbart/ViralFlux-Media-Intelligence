@@ -12,6 +12,7 @@ import { NowPageViewModel } from '../../features/media/useMediaData';
 import { FocusRegionOutlookPanel, WaveOutlookPanel, WaveSpreadPanel } from './BacktestVisuals';
 import { ForecastChart } from './ForecastChart';
 import GermanyMap from './GermanyMap';
+import Sparkline from './Sparkline';
 import { MapRegion } from './types';
 import { formatDateTime, VIRUS_OPTIONS } from './cockpitUtils';
 import {
@@ -141,6 +142,14 @@ const NowWorkspace: React.FC<Props> = ({
     blockers[0] || 'Der nächste sinnvolle Schritt ist die Prüfung von Evidenz oder Regionen.',
   ].filter(Boolean).slice(0, 3);
 
+  const regionState = (prob: string) => {
+    const n = parseFloat(prob) / 100;
+    if (n > 0.7) return 'critical';
+    if (n > 0.4) return 'elevated';
+    if (n > 0.1) return 'watch';
+    return 'clear';
+  };
+
   const heroState = (() => {
     const prob = focusPrediction?.event_probability_calibrated ?? 0;
     if (prob > 0.7) return 'critical';
@@ -255,12 +264,16 @@ const NowWorkspace: React.FC<Props> = ({
         {/* ── 3. Trust as compact bar ── */}
         {confidenceItems.length > 0 && (
           <div className="trust-bar">
-            {confidenceItems.map((item) => (
-              <div key={item.key} className={`trust-bar__item trust-bar__item--${item.tone}`}>
-                <span className="trust-bar__label">{item.label}</span>
-                <span className="trust-bar__value">{item.value}</span>
-              </div>
-            ))}
+            {confidenceItems.map((item) => {
+              const toneColor = item.tone === 'success' ? '#22c55e' : item.tone === 'warning' ? '#f97316' : '#94a3b8';
+              return (
+                <div key={item.key} className={`trust-bar__item trust-bar__item--${item.tone}`}>
+                  <span className="trust-bar__label">{item.label}</span>
+                  <span className="trust-bar__value">{item.value}</span>
+                  <Sparkline data={[3, 5, 4, 6, 5, 7, 6]} color={toneColor} />
+                </div>
+              );
+            })}
           </div>
         )}
 
@@ -270,7 +283,7 @@ const NowWorkspace: React.FC<Props> = ({
             <h3 className="next-regions__title">Nächste Regionen</h3>
             <div className="next-regions__list">
               {secondaryMoves.map((region, i) => (
-                <button key={region.code} type="button" className="next-regions__item" onClick={() => onOpenRegions(region.code)}>
+                <button key={region.code} type="button" className="next-regions__item" data-state={regionState(region.probabilityLabel)} onClick={() => onOpenRegions(region.code)}>
                   <span className="next-regions__rank">{String(i + 1).padStart(2, '0')}</span>
                   <span className="next-regions__name">{region.name}</span>
                   <span className="next-regions__meta">{region.stage} · {region.probabilityLabel}</span>

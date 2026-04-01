@@ -69,13 +69,17 @@ function hasInsufficientEvidence(region?: MapRegion): boolean {
 }
 
 function regionColor(region?: MapRegion): string {
-  if (!region) return 'rgba(226, 232, 240, 0.7)';
-  if (hasInsufficientEvidence(region)) return 'rgba(148, 163, 184, 0.22)';
+  if (!region) return '#f1f5f9';
+  if (hasInsufficientEvidence(region)) return '#f1f5f9';
 
-  const signalScore = primarySignalScore(region);
-  const normalized = signalScore <= 1 ? signalScore : signalScore / 100;
-  const alpha = Math.max(0.24, Math.min(0.78, normalized));
-  return `rgba(27, 83, 155, ${alpha})`;
+  const prob = region.impact_probability ?? primarySignalScore(region);
+  const normalized = prob <= 1 ? prob : prob / 100;
+
+  if (normalized > 0.7) return '#ef4444';
+  if (normalized > 0.5) return '#f97316';
+  if (normalized > 0.3) return '#eab308';
+  if (normalized > 0.1) return '#84cc16';
+  return '#22c55e';
 }
 
 function evidenceLabel(region?: MapRegion): string {
@@ -176,7 +180,7 @@ const GermanyMap: React.FC<Props> = ({ regions, selectedRegion, onSelectRegion, 
               <path
                 className="vf-map-region__path"
                 d={shape.d}
-                fill={insufficientEvidence ? 'url(#vf-map-pattern-evidence)' : regionColor(region)}
+                fill={insufficientEvidence ? '#f1f5f9' : regionColor(region)}
                 stroke={isSelected ? 'var(--color-primary)' : isHovered ? 'rgba(99, 102, 241, 0.5)' : 'rgba(203, 213, 225, 0.6)'}
                 strokeWidth={isSelected ? 2.5 : isHovered ? 1.8 : 0.8}
               />
@@ -185,16 +189,16 @@ const GermanyMap: React.FC<Props> = ({ regions, selectedRegion, onSelectRegion, 
                   <circle
                     cx={shape.cx}
                     cy={showProbability && region?.impact_probability ? shape.cy - 9 : shape.cy - 5}
-                    r={8.4}
-                    fill={isSelected ? 'var(--color-primary)' : 'rgba(255,255,255,0.92)'}
-                    stroke={isSelected ? 'var(--color-primary)' : 'rgba(203, 213, 225, 0.5)'}
-                    strokeWidth="0.8"
+                    r={9}
+                    fill={insufficientEvidence ? '#f1f5f9' : regionColor(region)}
+                    stroke="rgba(255,255,255,0.8)"
+                    strokeWidth="1.5"
                   />
                   <text
                     x={shape.cx}
                     y={showProbability && region?.impact_probability ? shape.cy - 6.5 : shape.cy - 2.5}
                     textAnchor="middle"
-                    fill={isSelected ? '#f8fafc' : '#334155'}
+                    fill="#fff"
                     fontSize="8"
                     fontWeight="700"
                   >
@@ -227,12 +231,12 @@ const GermanyMap: React.FC<Props> = ({ regions, selectedRegion, onSelectRegion, 
               <circle
                 cx={target.tx}
                 cy={target.ty}
-                r={8.4}
-                fill={selectedRegion === code ? 'var(--color-primary)' : 'rgba(255,255,255,0.92)'}
-                stroke={selectedRegion === code ? 'var(--color-primary)' : 'rgba(203, 213, 225, 0.5)'}
-                strokeWidth="0.8"
+                r={9}
+                fill={regionColor(code ? regions[code] : undefined)}
+                stroke="rgba(255,255,255,0.8)"
+                strokeWidth="1.5"
               />
-              <text x={target.tx} y={target.ty + 2.5} textAnchor="middle" fill={selectedRegion === code ? '#f8fafc' : '#334155'} fontSize="8" fontWeight="700">
+              <text x={target.tx} y={target.ty + 2.5} textAnchor="middle" fill="#fff" fontSize="8" fontWeight="700">
                 {code}
               </text>
             </g>

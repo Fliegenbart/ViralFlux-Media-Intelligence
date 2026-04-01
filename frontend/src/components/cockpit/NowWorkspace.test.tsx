@@ -20,6 +20,7 @@ jest.mock('recharts', () => {
   return {
     ResponsiveContainer: passthrough,
     ComposedChart: passthrough,
+    LineChart: passthrough,
     CartesianGrid: empty,
     Legend: empty,
     Line: empty,

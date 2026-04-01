@@ -444,19 +444,20 @@
 }
 
 .vf-map-legend__swatch--high {
-  background: rgba(27, 83, 155, 0.7);
+  background: #ef4444;
 }
 
 .vf-map-legend__swatch--mid {
-  background: rgba(27, 83, 155, 0.4);
+  background: #f97316;
 }
 
 .vf-map-legend__swatch--low {
-  background: rgba(27, 83, 155, 0.2);
+  background: #22c55e;
 }
 
 .vf-map-legend__swatch--evidence {
-  background: rgba(148, 163, 184, 0.2);
+  background: #f1f5f9;
+  border: 1px solid #e2e4eb;
 }
 
 /* ── Map Tooltip (rich hover) ── */

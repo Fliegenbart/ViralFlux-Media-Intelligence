@@ -1,11 +1,53 @@
 import '@testing-library/jest-dom';
 import React from 'react';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 
 jest.mock('./lib/api', () => ({
   ...jest.requireActual('./lib/api'),
   apiFetch: jest.fn(),
 }));
+
+jest.mock('./pages/LoginPage', () => ({
+  __esModule: true,
+  default: () => <div>Login Mock</div>,
+}));
+
+jest.mock('./pages/media/MediaShell', () => {
+  const React = require('react');
+  const { Outlet, useLocation } = require('react-router-dom');
+
+  const navItems = [
+    { label: 'Wochenplan', path: '/jetzt' },
+    { label: 'Zeitgraph', path: '/zeitgraph' },
+    { label: 'Regionen', path: '/regionen' },
+    { label: 'Kampagnen', path: '/kampagnen' },
+    { label: 'Evidenz', path: '/evidenz' },
+  ];
+
+  return {
+    __esModule: true,
+    default: () => {
+      const location = useLocation();
+
+      return (
+        <div>
+          <nav aria-label="Arbeitsbereiche">
+            {navItems.map((item) => (
+              <button
+                key={item.path}
+                aria-current={location.pathname.startsWith(item.path) ? 'page' : undefined}
+                type="button"
+              >
+                {item.label}
+              </button>
+            ))}
+          </nav>
+          <Outlet />
+        </div>
+      );
+    },
+  };
+});
 
 jest.mock('./pages/media/NowPage', () => ({
   __esModule: true,
@@ -41,6 +83,16 @@ describe('App routing', () => {
     window.localStorage.clear();
     window.sessionStorage.clear();
     window.history.pushState({}, '', '/');
+  });
+
+  it('applies the light theme by default when no theme is stored', async () => {
+    window.localStorage.removeItem('viralflux-theme');
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(document.documentElement.getAttribute('data-theme')).toBe('light');
+    });
   });
 
   it('rehydrates auth state on app startup from browser storage', async () => {

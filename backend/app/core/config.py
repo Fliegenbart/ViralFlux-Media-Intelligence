@@ -1,5 +1,11 @@
+from pathlib import Path
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from dotenv import load_dotenv
 from functools import lru_cache
+
+
+_DEFAULT_ENV_FILE = Path(__file__).resolve().parents[3] / ".env"
+load_dotenv(_DEFAULT_ENV_FILE, override=False)
 
 
 class Settings(BaseSettings):
@@ -181,7 +187,7 @@ class Settings(BaseSettings):
         return scopes
     
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=_DEFAULT_ENV_FILE,
         case_sensitive=True,
     )
 

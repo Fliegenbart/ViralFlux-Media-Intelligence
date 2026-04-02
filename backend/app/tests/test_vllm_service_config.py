@@ -1,7 +1,12 @@
+import importlib
+import os
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from pydantic_core import ValidationError
 
+from app.core import config as config_module
 from app.core.config import Settings
 from app.services.llm import vllm_service
 
@@ -16,6 +21,33 @@ def build_settings(**overrides: object) -> Settings:
     }
     base_values.update(overrides)
     return Settings(_env_file=None, **base_values)
+
+
+def test_settings_load_repo_env_file_when_started_from_backend_dir(monkeypatch: pytest.MonkeyPatch) -> None:
+    repo_root = Path(__file__).resolve().parents[3]
+    monkeypatch.chdir(repo_root / "backend")
+    for key in ["POSTGRES_USER", "POSTGRES_PASSWORD", "POSTGRES_DB", "OPENWEATHER_API_KEY", "SECRET_KEY"]:
+        monkeypatch.delenv(key, raising=False)
+
+    try:
+        settings = Settings()
+    except ValidationError as exc:  # pragma: no cover - this is the regression signal we care about
+        pytest.fail(f"Settings should load values from the repo .env even inside backend/: {exc}")
+
+    assert settings.POSTGRES_USER == "virusradar"
+    assert settings.POSTGRES_DB == "virusradar_db"
+
+
+def test_config_import_loads_repo_env_into_process_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    repo_root = Path(__file__).resolve().parents[3]
+    monkeypatch.chdir(repo_root / "backend")
+    for key in ["POSTGRES_USER", "POSTGRES_PASSWORD", "POSTGRES_DB", "OPENWEATHER_API_KEY", "SECRET_KEY"]:
+        monkeypatch.delenv(key, raising=False)
+
+    importlib.reload(config_module)
+
+    assert os.getenv("POSTGRES_USER") == "virusradar"
+    assert os.getenv("SECRET_KEY") == "local-dev-secret-key-1234567890"
 
 
 def test_required_vllm_base_url_raises_when_missing() -> None:

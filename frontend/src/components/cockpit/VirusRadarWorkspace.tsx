@@ -14,7 +14,6 @@ import {
   formatCurrency,
   formatDateTime,
   formatPercent,
-  primarySignalScore,
   statusTone,
 } from './cockpitUtils';
 import {
@@ -35,6 +34,11 @@ interface Props {
   onOpenCampaigns: () => void;
   onOpenEvidence: () => void;
 }
+
+type SignalPrediction = {
+  event_probability_calibrated?: number | null;
+  trend?: string | null;
+} | null;
 
 const VirusRadarWorkspace: React.FC<Props> = ({
   virus,
@@ -119,6 +123,7 @@ const VirusRadarWorkspace: React.FC<Props> = ({
     || nowData.workspaceStatus?.summary
     || 'Die Datensicht wird gerade aufgebaut.';
   const chartRegionName = topPrediction?.bundesland_name || focusRegion?.name || '';
+  const dataTimestamp = formatDateTime(nowData.view.generatedAt);
 
   return (
     <div className="page-stack virus-radar-page">
@@ -129,79 +134,103 @@ const VirusRadarWorkspace: React.FC<Props> = ({
         className="virus-radar-shell"
       >
         <section className="virus-radar-hero" aria-label="Wochenentscheidung">
-          <div className="virus-radar-hero__copy">
-            <div className="virus-radar-hero__eyebrow">Media Decision Console</div>
-            <h2 className="virus-radar-hero__title">{decisionHeadline}</h2>
-            <p className="virus-radar-hero__meta">
-              {virus} · {topPrediction?.bundesland_name || focusRegion?.name || 'Bundesland offen'} · nächste {horizonDays} Tage · Stand {formatDateTime(nowData.view.generatedAt)}
-            </p>
-            <div className="virus-radar-hero__stats">
-              <div className="virus-radar-stat">
-                <span className="virus-radar-stat__label">Signal</span>
-                <strong className="virus-radar-stat__value">
-                  {formatProbability(topPrediction?.event_probability_calibrated)}
-                </strong>
-              </div>
-              <div className="virus-radar-stat">
-                <span className="virus-radar-stat__label">Fokus</span>
-                <strong className="virus-radar-stat__value">{focusRegion?.name || 'Noch offen'}</strong>
-              </div>
-              <div className="virus-radar-stat">
-                <span className="virus-radar-stat__label">Datenlage</span>
-                <strong className="virus-radar-stat__value">{nowData.workspaceStatus?.data_freshness || 'Noch offen'}</strong>
-              </div>
-            </div>
-            <div className="virus-radar-hero__actions">
-              <button
-                type="button"
-                className="media-button"
-                onClick={() => recommendationId && onOpenRecommendation(recommendationId)}
-                disabled={!recommendationId}
-              >
-                Empfehlung pruefen
-              </button>
-              <button type="button" className="media-button secondary" onClick={onOpenEvidence}>
-                Evidenz ansehen
-              </button>
-              <button type="button" className="media-button secondary" onClick={onOpenCampaigns}>
-                Kampagnen oeffnen
-              </button>
+          <div className="virus-radar-hero__topline">
+            <span className="virus-radar-hero__product">PEIX / GELO / VIRUS-RADAR</span>
+            <div className="virus-radar-hero__topline-meta">
+              <span>Stand {dataTimestamp}</span>
+              <span>{focusRegion?.name || 'Fokus offen'}</span>
+              <span>{nowData.workspaceStatus?.data_freshness || 'Datenlage offen'}</span>
             </div>
           </div>
 
-          <div className="virus-radar-hero__support">
-            <div className="virus-radar-terminal-card">
-              <span className="virus-radar-terminal-card__label">Warum jetzt</span>
-              <strong className="virus-radar-terminal-card__value">
+          <div className="virus-radar-hero__copy-wrap">
+            <div className="virus-radar-hero__copy">
+              <div className="virus-radar-hero__eyebrow">Entscheidung diese Woche</div>
+              <h2 className="virus-radar-hero__title">{decisionHeadline}</h2>
+              <p className="virus-radar-hero__meta">
+                {virus} · {topPrediction?.bundesland_name || focusRegion?.name || 'Bundesland offen'} · naechste {horizonDays} Tage · Stand {dataTimestamp}
+              </p>
+              <p className="virus-radar-hero__summary">
                 {heroRecommendation?.whyNow || nowData.view.summary}
-              </strong>
-              <span className="virus-radar-terminal-card__detail">{evidenceSummary}</span>
+              </p>
+              <div className="virus-radar-hero__stats">
+                <div className="virus-radar-stat">
+                  <span className="virus-radar-stat__label">Signal</span>
+                  <strong className="virus-radar-stat__value">
+                    {formatProbability(topPrediction?.event_probability_calibrated)}
+                  </strong>
+                </div>
+                <div className="virus-radar-stat">
+                  <span className="virus-radar-stat__label">Fokus</span>
+                  <strong className="virus-radar-stat__value">{focusRegion?.name || 'Noch offen'}</strong>
+                </div>
+                <div className="virus-radar-stat">
+                  <span className="virus-radar-stat__label">Datenlage</span>
+                  <strong className="virus-radar-stat__value">{nowData.workspaceStatus?.data_freshness || 'Noch offen'}</strong>
+                </div>
+              </div>
+              <div className="virus-radar-hero__actions">
+                <button
+                  type="button"
+                  className="media-button"
+                  onClick={() => recommendationId && onOpenRecommendation(recommendationId)}
+                  disabled={!recommendationId}
+                >
+                  Empfehlung pruefen
+                </button>
+                <button type="button" className="media-button secondary" onClick={onOpenEvidence}>
+                  Evidenz ansehen
+                </button>
+                <button type="button" className="media-button secondary" onClick={onOpenCampaigns}>
+                  Kampagnen oeffnen
+                </button>
+              </div>
             </div>
 
-            <div className="virus-radar-virus-switcher" aria-label="Virus wechseln">
-              {['Influenza A', 'Influenza B', 'SARS-CoV-2', 'RSV A'].map((option) => (
-                <button
-                  key={option}
-                  type="button"
-                  onClick={() => onVirusChange(option)}
-                  className={`virus-radar-chip ${option === virus ? 'active' : ''}`}
-                  aria-pressed={option === virus}
-                >
-                  {option}
-                </button>
-              ))}
+            <div className="virus-radar-hero__support">
+              <div className="virus-radar-terminal-card">
+                <span className="virus-radar-terminal-card__label">Decision Basis</span>
+                <strong className="virus-radar-terminal-card__value">
+                  {evidenceSummary}
+                </strong>
+                <span className="virus-radar-terminal-card__detail">
+                  {recommendationId ? 'Empfehlung ist direkt oeffenbar.' : 'Empfehlung wird noch konkretisiert.'}
+                </span>
+              </div>
+
+              <div className="virus-radar-virus-switcher" aria-label="Virus wechseln">
+                {['Influenza A', 'Influenza B', 'SARS-CoV-2', 'RSV A'].map((option) => (
+                  <button
+                    key={option}
+                    type="button"
+                    onClick={() => onVirusChange(option)}
+                    className={`virus-radar-chip ${option === virus ? 'active' : ''}`}
+                    aria-pressed={option === virus}
+                  >
+                    {option}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         </section>
 
-        <section className="virus-radar-strip" aria-label="Schnellstatus">
-          {signalTiles.map((tile) => (
-            <div key={tile.label} className={`virus-radar-strip__item virus-radar-strip__item--${tile.tone}`}>
-              <span className="virus-radar-strip__label">{tile.label}</span>
-              <strong className="virus-radar-strip__value">{tile.value}</strong>
-              <span className="virus-radar-strip__detail">{tile.detail}</span>
-            </div>
-          ))}
+        <section className="virus-radar-strip-shell" aria-label="Schnellstatus">
+          <div className="virus-radar-strip-shell__header">
+            <span className="virus-radar-strip-shell__title">Radar-Tape</span>
+            <span className="virus-radar-strip-shell__summary">
+              Fuenf schnelle Checks fuer Signal, Evidenz, Datenlage, Kampagnen-Reife und Blocker.
+            </span>
+          </div>
+          <div className="virus-radar-strip">
+            {signalTiles.map((tile) => (
+              <div key={tile.label} className={`virus-radar-strip__item virus-radar-strip__item--${tile.tone}`}>
+                <span className="virus-radar-strip__label">{tile.label}</span>
+                <strong className="virus-radar-strip__value">{tile.value}</strong>
+                <span className="virus-radar-strip__detail">{tile.detail}</span>
+              </div>
+            ))}
+          </div>
         </section>
 
         <section className="virus-radar-core-grid">
@@ -373,12 +402,7 @@ function buildSignalTiles({
   workspaceStatus: ReturnType<typeof useNowPageData>['workspaceStatus'];
   evidence: ReturnType<typeof useEvidencePageData>['evidence'];
   campaigns: ReturnType<typeof useCampaignsPageData>['campaignsView'];
-  topPrediction: ReturnType<typeof useNowPageData>['forecast'] extends infer _
-    ? {
-      event_probability_calibrated?: number | null;
-      trend?: string | null;
-    } | null
-    : never;
+  topPrediction: SignalPrediction;
 }) {
   return [
     {

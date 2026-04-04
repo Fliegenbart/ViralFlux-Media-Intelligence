@@ -15,6 +15,7 @@ import {
 } from './LandingWidgets';
 
 const NAV_ITEMS = [
+  { label: 'Virus-Radar', path: '/virus-radar' },
   { label: 'Wochenplan', path: '/jetzt' },
   { label: 'Regionen', path: '/regionen' },
   { label: 'Kampagnen', path: '/kampagnen' },

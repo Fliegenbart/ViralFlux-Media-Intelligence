@@ -453,7 +453,7 @@
 }
 
 .vf-map-panel svg {
-  filter: drop-shadow(0 0 20px rgba(124, 106, 239, 0.1));
+  filter: drop-shadow(0 10px 24px rgba(30, 41, 59, 0.12));
 }
 
 /* ── Map Legend (compact inline) ── */
@@ -468,31 +468,32 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   font-size: var(--text-label);
+  font-weight: 600;
 }
 
 .vf-map-legend__swatch {
-  width: 10px;
-  height: 10px;
-  border-radius: 3px;
+  width: 12px;
+  height: 12px;
+  border-radius: 4px;
 }
 
 .vf-map-legend__swatch--high {
-  background: #ef4444;
+  background: #dc2626;
 }
 
 .vf-map-legend__swatch--mid {
-  background: #f97316;
+  background: #ea580c;
 }
 
 .vf-map-legend__swatch--low {
-  background: #22c55e;
+  background: #16a34a;
 }
 
 .vf-map-legend__swatch--evidence {
-  background: #f1f5f9;
-  border: 1px solid #e2e4eb;
+  background: #e2e8f0;
+  border: 1px solid rgba(71, 85, 105, 0.4);
 }
 
 /* ── Map Tooltip (rich hover) ── */
@@ -543,15 +544,15 @@
 }
 
 .vf-map-region--hover {
-  transform: scale(1.02);
+  transform: scale(1.03);
 }
 
 .vf-map-region--selected {
-  transform: scale(1.01);
+  transform: scale(1.02);
 }
 
 .vf-map-region__path {
-  transition: stroke 200ms ease, stroke-width 200ms ease, fill 200ms ease;
+  transition: stroke 200ms ease, stroke-width 200ms ease, fill 200ms ease, filter 200ms ease;
 }
 
 /* --- Region Ticker --- */

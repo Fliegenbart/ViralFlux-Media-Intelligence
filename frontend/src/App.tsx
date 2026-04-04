@@ -9,6 +9,7 @@ import './index.css';
 /* ── Lazy-loaded pages (code splitting) ────────────────────────── */
 const LandingPage = lazy(() => import('./pages/LandingPage'));
 const MediaShell = lazy(() => import('./pages/media/MediaShell'));
+const VirusRadarPage = lazy(() => import('./pages/media/VirusRadarPage'));
 const NowPage = lazy(() => import('./pages/media/NowPage'));
 const TimegraphPage = lazy(() => import('./pages/media/TimegraphPage'));
 const RegionsPage = lazy(() => import('./pages/media/RegionsPage'));
@@ -178,6 +179,7 @@ const App: React.FC = () => {
                 <Route path="/" element={<Navigate to="/jetzt" replace />} />
                 <Route path="/welcome" element={<LandingPage />} />
                 <Route element={<MediaShell />}>
+                  <Route path="/virus-radar" element={<VirusRadarPage />} />
                   <Route path="/jetzt" element={<NowPage />} />
                   <Route path="/zeitgraph" element={<TimegraphPage />} />
                   <Route path="/regionen" element={<RegionsPage />} />

@@ -116,22 +116,12 @@ const NowWorkspace: React.FC<Props> = ({
   const [selectedRegionCode, setSelectedRegionCode] = useState<string | null>(null);
   const effectiveRegionCode = selectedRegionCode || focusPrediction?.bundesland || null;
   const qualityStats = (view.quality.length ? view.quality : [{ label: 'Qualität', value: 'Noch offen' }]).slice(0, 4);
-  const inlineNotes = [
-    ...(view.supportState.detail ? [view.supportState.detail] : []),
-    ...blockers.slice(0, 2),
-  ].filter(Boolean);
-  const heroNotes = inlineNotes.slice(0, 2);
   const confidenceItems = [
     normalizedTrustChecks[0] || { key: 'forecast', label: 'Belastbarkeit', value: 'Noch offen', detail: 'Die Vorhersage wird gerade neu eingeordnet.', tone: 'muted' },
     normalizedTrustChecks[1] || { key: 'evidence', label: 'Evidenz', value: 'Noch offen', detail: 'Die Evidenzlage wird gerade aktualisiert.', tone: 'muted' },
     normalizedTrustChecks[2] || { key: 'readiness', label: 'Einsatzreife', value: 'Noch offen', detail: 'Die operative Freigabe ist noch offen.', tone: 'muted' },
   ].slice(0, 3);
   const decisionTitle = buildDecisionTitle(heroRecommendation, focusRegion);
-  const decisionContext = [
-    heroRecommendation?.context || view.primaryCampaignContext || null,
-    heroRecommendation?.region || focusRegion?.name || null,
-    heroRecommendation?.stateLabel || null,
-  ].filter(Boolean).join(' · ');
   const heroFacts = [
     {
       label: 'Empfohlene Aktion',
@@ -144,11 +134,6 @@ const NowWorkspace: React.FC<Props> = ({
       detail: `Stand ${formatDateTime(view.generatedAt)}`,
     },
   ];
-  const emptyStateSignals = [
-    heroRecommendation?.stateLabel || 'Noch kein freigegebener Fokus',
-    view.supportState.detail || 'Die Lage bleibt sichtbar, aber noch ohne belastbare Priorisierung.',
-    blockers[0] || 'Der nächste sinnvolle Schritt ist die Prüfung von Evidenz oder Regionen.',
-  ].filter(Boolean).slice(0, 3);
 
   const regionState = (prob: string) => {
     const n = parseFloat(prob) / 100;
@@ -197,105 +182,117 @@ const NowWorkspace: React.FC<Props> = ({
         className="now-workspace-shell"
       >
         {/* ── 1. Answer Hero — THE dominant element ── */}
-        {focusPrediction ? (
-          <div className="answer-hero" data-state={heroState}>
-            <div className="answer-hero__signal">
-              <span className="answer-hero__dot" />
-              <span className="answer-hero__probability">
-                {Math.round((focusPrediction?.event_probability_calibrated ?? 0) * 100)}%
-              </span>
-            </div>
-            <h2 className="answer-hero__title">{decisionTitle}</h2>
-            <p className="answer-hero__meta">
-              {focusPrediction?.bundesland_name} · {virus} · nächste {focusPrediction?.horizon_days || horizonDays} Tage
-              {focusPrediction?.change_pct != null && (
-                <> · Trend: {focusPrediction.change_pct >= 0 ? '+' : ''}{focusPrediction.change_pct.toFixed(1)}%</>
-              )}
-            </p>
-            <div className="now-next-step" aria-label="Nächster Schritt">
-              <span className="now-next-step__label">Nächster Schritt</span>
-              <div className="now-next-step__actions">
-                <button
-                  type="button"
-                  className="media-button now-next-step__button"
-                  onClick={handleNextStep}
-                >
-                  {nextStepLabel}
-                </button>
+        <div className="now-weekly-layout">
+          <div className="now-weekly-layout__main">
+            {focusPrediction ? (
+              <div className="answer-hero" data-state={heroState}>
+                <div className="answer-hero__signal">
+                  <span className="answer-hero__dot" />
+                  <span className="answer-hero__probability">
+                    {Math.round((focusPrediction?.event_probability_calibrated ?? 0) * 100)}%
+                  </span>
+                </div>
+                <h2 className="answer-hero__title">{decisionTitle}</h2>
+                <p className="answer-hero__meta">
+                  {focusPrediction?.bundesland_name} · {virus} · nächste {focusPrediction?.horizon_days || horizonDays} Tage
+                  {focusPrediction?.change_pct != null && (
+                    <> · Trend: {focusPrediction.change_pct >= 0 ? '+' : ''}{focusPrediction.change_pct.toFixed(1)}%</>
+                  )}
+                </p>
+                <div className="answer-hero__facts" aria-label="Wichtige Fakten">
+                  {heroFacts.map((fact) => (
+                    <div key={fact.label} className="answer-hero__fact">
+                      <span className="answer-hero__fact-label">{fact.label}</span>
+                      <strong className="answer-hero__fact-value">{fact.value}</strong>
+                      <span className="answer-hero__fact-detail">{fact.detail}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="now-next-step" aria-label="Nächster Schritt">
+                  <span className="now-next-step__label">Nächster Schritt</span>
+                  <div className="now-next-step__actions">
+                    <button
+                      type="button"
+                      className="media-button now-next-step__button"
+                      onClick={handleNextStep}
+                    >
+                      {nextStepLabel}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="answer-hero" data-state="clear">
+                <div className="answer-hero__signal">
+                  <span className="answer-hero__dot" />
+                  <span className="answer-hero__probability">&mdash;</span>
+                </div>
+                <h2 className="answer-hero__title">Keine belastbare Aktion diese Woche</h2>
+                <p className="answer-hero__meta">
+                  Keine Region zeigt ausreichende Signale für die nächsten {horizonDays} Tage.
+                </p>
+                <div className="answer-hero__actions">
+                  <button type="button" className="media-button secondary" onClick={onOpenEvidence}>Evidenz prüfen</button>
+                  <button type="button" className="media-button secondary" onClick={() => onOpenRegions()}>Regionen öffnen</button>
+                </div>
+              </div>
+            )}
+
+            <span className="now-data-timestamp">
+              Datenstand {formatDateTime(view.generatedAt)} · {heroRecommendation?.stateLabel || 'Prüfung läuft'}
+            </span>
+          </div>
+
+          <aside className="now-weekly-layout__rail" aria-label="Wöchentliche Unterstützung">
+            {confidenceItems.length > 0 && (
+              <div className="trust-bar">
+                {confidenceItems.map((item) => {
+                  const toneColor = item.tone === 'success' ? '#22c55e' : item.tone === 'warning' ? '#f97316' : '#94a3b8';
+                  return (
+                    <div key={item.key} className={`trust-bar__item trust-bar__item--${item.tone}`}>
+                      <span className="trust-bar__label">{item.label}</span>
+                      <span className="trust-bar__value">{item.value}</span>
+                      <Sparkline data={[3, 5, 4, 6, 5, 7, 6]} color={toneColor} />
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            <div className="now-virus-switcher" aria-label="Virus wechseln">
+              <span className="now-virus-switcher__label">Virus wechseln</span>
+              <div className="now-virus-switcher__chips">
+                {VIRUS_OPTIONS.map((option) => (
+                  <button
+                    key={option}
+                    type="button"
+                    onClick={() => onVirusChange(option)}
+                    className={`tab-chip ${option === virus ? 'active' : ''}`}
+                    aria-pressed={option === virus}
+                  >
+                    {option}
+                  </button>
+                ))}
               </div>
             </div>
-          </div>
-        ) : (
-          <div className="answer-hero" data-state="clear">
-            <div className="answer-hero__signal">
-              <span className="answer-hero__dot" />
-              <span className="answer-hero__probability">&mdash;</span>
-            </div>
-            <h2 className="answer-hero__title">Keine belastbare Aktion diese Woche</h2>
-            <p className="answer-hero__meta">
-              Keine Region zeigt ausreichende Signale für die nächsten {horizonDays} Tage.
-            </p>
-            <div className="answer-hero__actions">
-              <button type="button" className="media-button secondary" onClick={onOpenEvidence}>Evidenz prüfen</button>
-              <button type="button" className="media-button secondary" onClick={() => onOpenRegions()}>Regionen öffnen</button>
-            </div>
-          </div>
-        )}
 
-        <span className="now-data-timestamp">
-          Datenstand {formatDateTime(view.generatedAt)} · {heroRecommendation?.stateLabel || 'Prüfung läuft'}
-        </span>
-
-        {/* ── 3. Trust as compact bar ── */}
-        {confidenceItems.length > 0 && (
-          <div className="trust-bar">
-            {confidenceItems.map((item) => {
-              const toneColor = item.tone === 'success' ? '#22c55e' : item.tone === 'warning' ? '#f97316' : '#94a3b8';
-              return (
-                <div key={item.key} className={`trust-bar__item trust-bar__item--${item.tone}`}>
-                  <span className="trust-bar__label">{item.label}</span>
-                  <span className="trust-bar__value">{item.value}</span>
-                  <Sparkline data={[3, 5, 4, 6, 5, 7, 6]} color={toneColor} />
+            {secondaryMoves.length > 0 && (
+              <div className="next-regions">
+                <h3 className="next-regions__title">Nächste Regionen</h3>
+                <div className="next-regions__list">
+                  {secondaryMoves.map((region, i) => (
+                    <button key={region.code} type="button" className="next-regions__item" data-state={regionState(region.probabilityLabel)} onClick={() => onOpenRegions(region.code)}>
+                      <span className="next-regions__rank">{String(i + 1).padStart(2, '0')}</span>
+                      <span className="next-regions__name">{region.name}</span>
+                      <span className="next-regions__meta">{region.stage} · {region.probabilityLabel}</span>
+                    </button>
+                  ))}
                 </div>
-              );
-            })}
-          </div>
-        )}
-
-        <div className="now-virus-switcher" aria-label="Virus wechseln">
-          <span className="now-virus-switcher__label">Virus wechseln</span>
-          <div className="now-virus-switcher__chips">
-            {VIRUS_OPTIONS.map((option) => (
-              <button
-                key={option}
-                type="button"
-                onClick={() => onVirusChange(option)}
-                className={`tab-chip ${option === virus ? 'active' : ''}`}
-                aria-pressed={option === virus}
-              >
-                {option}
-              </button>
-            ))}
-          </div>
+              </div>
+            )}
+          </aside>
         </div>
 
-        {/* ── 4. Secondary moves ── */}
-        {secondaryMoves.length > 0 && (
-          <div className="next-regions">
-            <h3 className="next-regions__title">Nächste Regionen</h3>
-            <div className="next-regions__list">
-              {secondaryMoves.map((region, i) => (
-                <button key={region.code} type="button" className="next-regions__item" data-state={regionState(region.probabilityLabel)} onClick={() => onOpenRegions(region.code)}>
-                  <span className="next-regions__rank">{String(i + 1).padStart(2, '0')}</span>
-                  <span className="next-regions__name">{region.name}</span>
-                  <span className="next-regions__meta">{region.stage} · {region.probabilityLabel}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* ── 5. Supporting visuals ── */}
         <div className="now-supporting-visuals">
           <span className="now-supporting-visuals__label">Karten und Verlauf als Unterstützung</span>
           <div className="prediction-hero">

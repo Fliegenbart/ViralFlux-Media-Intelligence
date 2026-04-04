@@ -69,21 +69,21 @@ function hasInsufficientEvidence(region?: MapRegion): boolean {
 }
 
 function regionColor(region?: MapRegion): string {
-  if (!region) return 'rgba(255, 255, 255, 0.06)';
-  if (hasInsufficientEvidence(region)) return 'rgba(255, 255, 255, 0.06)';
+  if (!region) return 'rgba(226, 232, 240, 0.5)';
+  if (hasInsufficientEvidence(region)) return 'rgba(226, 232, 240, 0.5)';
 
   const prob = region.impact_probability ?? primarySignalScore(region);
   const normalized = prob <= 1 ? prob : prob / 100;
 
-  if (normalized > 0.7) return '#ef4444';
-  if (normalized > 0.5) return '#f97316';
-  if (normalized > 0.3) return '#eab308';
-  if (normalized > 0.1) return '#84cc16';
-  return '#22c55e';
+  if (normalized > 0.7) return '#dc2626';
+  if (normalized > 0.5) return '#ea580c';
+  if (normalized > 0.3) return '#d97706';
+  if (normalized > 0.1) return '#16a34a';
+  return '#15803d';
 }
 
 function evidenceLabel(region?: MapRegion): string {
-  if (!region || hasInsufficientEvidence(region)) return 'Zu wenig Evidenz';
+  if (!region || hasInsufficientEvidence(region)) return 'Keine Evidenz';
   const sourceCount = region.source_trace?.length || 0;
   if (sourceCount >= 2) return 'Mehrere Quellen';
   return 'Erste Evidenz';
@@ -134,10 +134,11 @@ const GermanyMap: React.FC<Props> = ({ regions, selectedRegion, onSelectRegion, 
       <svg viewBox="0 0 420 460" style={{ width: '100%', maxHeight: 520 }} role="img" aria-label="Deutschlandkarte auf Bundesland-Level">
         <defs>
           <filter id="vf-map-shadow" x="-20%" y="-20%" width="140%" height="140%">
-            <feDropShadow dx="0" dy="2" stdDeviation="3" floodColor="#94a3b8" floodOpacity="0.2" />
+            <feDropShadow dx="0" dy="3" stdDeviation="4" floodColor="#64748b" floodOpacity="0.22" />
           </filter>
           <pattern id="vf-map-pattern-evidence" patternUnits="userSpaceOnUse" width="8" height="8" patternTransform="rotate(45)">
-            <line x1="0" y1="0" x2="0" y2="8" stroke="rgba(100, 116, 139, 0.28)" strokeWidth="3" />
+            <rect x="0" y="0" width="8" height="8" fill="rgba(226, 232, 240, 0.9)" />
+            <line x1="0" y1="0" x2="0" y2="8" stroke="rgba(100, 116, 139, 0.5)" strokeWidth="2.6" />
           </pattern>
         </defs>
 
@@ -180,38 +181,38 @@ const GermanyMap: React.FC<Props> = ({ regions, selectedRegion, onSelectRegion, 
               <path
                 className="vf-map-region__path"
                 d={shape.d}
-                fill={insufficientEvidence ? 'rgba(255,255,255,0.08)' : regionColor(region)}
-                stroke={isSelected ? 'var(--color-primary)' : isHovered ? 'rgba(124, 106, 239, 0.5)' : 'rgba(255, 255, 255, 0.12)'}
-                strokeWidth={isSelected ? 2.5 : isHovered ? 1.8 : 0.8}
+                fill={insufficientEvidence ? 'url(#vf-map-pattern-evidence)' : regionColor(region)}
+                stroke={isSelected ? 'var(--color-primary)' : isHovered ? 'rgba(37, 99, 235, 0.6)' : 'rgba(71, 85, 105, 0.35)'}
+                strokeWidth={isSelected ? 2.8 : isHovered ? 2.1 : 1.4}
               />
               {code && !(code in CALLOUT_TARGETS) && (
                 <>
                   <circle
                     cx={shape.cx}
-                    cy={showProbability && region?.impact_probability ? shape.cy - 9 : shape.cy - 5}
-                    r={9}
-                    fill={insufficientEvidence ? 'rgba(255,255,255,0.08)' : regionColor(region)}
-                    stroke="rgba(255,255,255,0.8)"
-                    strokeWidth="1.5"
+                    cy={showProbability ? shape.cy - 11 : shape.cy - 6}
+                    r={10}
+                    fill={insufficientEvidence ? '#e2e8f0' : regionColor(region)}
+                    stroke="rgba(15, 23, 42, 0.65)"
+                    strokeWidth="1.6"
                   />
                   <text
                     x={shape.cx}
-                    y={showProbability && region?.impact_probability ? shape.cy - 6.5 : shape.cy - 2.5}
+                    y={showProbability ? shape.cy - 7.2 : shape.cy - 2.2}
                     textAnchor="middle"
-                    fill="#fff"
-                    fontSize="8"
-                    fontWeight="700"
+                    fill={insufficientEvidence ? '#475569' : '#ffffff'}
+                    fontSize="9"
+                    fontWeight="800"
                   >
                     {code}
                   </text>
-                  {showProbability && region?.impact_probability != null && region.impact_probability > 0 && (
+                  {showProbability && region?.impact_probability != null && (
                     <text
                       x={shape.cx}
-                      y={shape.cy + 5}
+                      y={shape.cy + 6.5}
                       textAnchor="middle"
-                      fill={region.impact_probability > 0.7 ? 'var(--status-danger)' : region.impact_probability > 0.4 ? 'var(--status-warning)' : 'var(--text-muted)'}
-                      fontSize="9"
-                      fontWeight="700"
+                      fill={region.impact_probability > 0.7 ? 'var(--status-danger)' : region.impact_probability > 0.4 ? 'var(--status-warning)' : 'var(--text-secondary)'}
+                      fontSize="10"
+                      fontWeight="800"
                     >
                       {formatFractionPercent(region.impact_probability, 0)}
                     </text>
@@ -227,16 +228,16 @@ const GermanyMap: React.FC<Props> = ({ regions, selectedRegion, onSelectRegion, 
           if (!shape) return null;
           return (
             <g key={code} pointerEvents="none">
-              <line x1={shape.cx} y1={shape.cy} x2={target.tx} y2={target.ty} stroke="rgba(99, 102, 241, 0.2)" strokeWidth="0.8" />
+              <line x1={shape.cx} y1={shape.cy} x2={target.tx} y2={target.ty} stroke="rgba(71, 85, 105, 0.45)" strokeWidth="1.1" />
               <circle
                 cx={target.tx}
                 cy={target.ty}
-                r={9}
+                r={10}
                 fill={regionColor(code ? regions[code] : undefined)}
-                stroke="rgba(255,255,255,0.8)"
-                strokeWidth="1.5"
+                stroke="rgba(15, 23, 42, 0.65)"
+                strokeWidth="1.6"
               />
-              <text x={target.tx} y={target.ty + 2.5} textAnchor="middle" fill="#fff" fontSize="8" fontWeight="700">
+              <text x={target.tx} y={target.ty + 3} textAnchor="middle" fill="#fff" fontSize="9" fontWeight="800">
                 {code}
               </text>
             </g>

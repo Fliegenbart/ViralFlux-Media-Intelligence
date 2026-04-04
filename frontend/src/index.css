@@ -16,6 +16,7 @@
 
 /* ═══ Page-Specific ═══ */
 @import './styles/pages/now.css';
+@import './styles/pages/virus-radar.css';
 @import './styles/pages/evidence.css';
 @import './styles/pages/campaigns.css';
 @import './styles/pages/regions.css';

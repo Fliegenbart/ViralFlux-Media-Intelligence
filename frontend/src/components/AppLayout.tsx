@@ -11,6 +11,7 @@ import { useLocation, useNavigate, Link } from 'react-router-dom';
 import { useTheme, useAuth } from '../App';
 import { apiFetch } from '../lib/api';
 import {
+  Activity,
   Zap,
   TrendingUp,
   MapPin,
@@ -52,6 +53,7 @@ interface PageHeaderContextValue {
 const ICON_SIZE = 18;
 
 const PRIMARY_NAV_ITEMS = [
+  { label: 'Virus-Radar', path: '/virus-radar', helper: 'Alles fuer die Media-Entscheidung auf einer Seite', Icon: Activity },
   { label: 'Wochenplan', path: '/jetzt', helper: 'Was PEIX diese Woche zuerst tun sollte', Icon: Zap },
   { label: 'Zeitgraph', path: '/zeitgraph', helper: 'Nur Verlauf und 7-Tage-Ausblick', Icon: TrendingUp },
   { label: 'Regionen', path: '/regionen', helper: 'Wo sich diese Woche genaueres Hinsehen lohnt', Icon: MapPin },
@@ -60,6 +62,7 @@ const PRIMARY_NAV_ITEMS = [
 ] as const;
 
 const SECTION_META = [
+  { path: '/virus-radar', kicker: 'Virus-Radar', title: 'Die zentrale Media-Entscheidungsseite' },
   { path: '/jetzt', kicker: 'Wochenplan', title: 'Was PEIX diese Woche tun sollte' },
   { path: '/zeitgraph', kicker: 'Zeitgraph', title: 'Nur Verlauf und 7-Tage-Ausblick' },
   { path: '/regionen', kicker: 'Regionen', title: 'Wo diese Woche genauer hingesehen werden sollte' },

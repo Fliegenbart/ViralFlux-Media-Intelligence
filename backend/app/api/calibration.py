@@ -4,17 +4,24 @@ Endpoints für Upload historischer Bestelldaten, Backtesting-Simulation
 und Gewichtsoptimierung.
 """
 
-from fastapi import APIRouter, Depends, UploadFile, File, Query
+from fastapi import APIRouter, Depends, UploadFile, File, Query, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from io import BytesIO, StringIO
 import pandas as pd
 import logging
 
+from app.api.deps import get_current_admin, get_current_user
 from app.db.session import get_db
 
 logger = logging.getLogger(__name__)
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(get_current_user)])
+ALLOWED_TABULAR_CONTENT_TYPES = {
+    "text/csv",
+    "application/csv",
+    "application/vnd.ms-excel",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+}
 
 VALID_VIRUS_TYPES = {"Influenza A", "Influenza B", "SARS-CoV-2", "RSV A"}
 VALID_MARKET_TARGETS = {
@@ -40,7 +47,25 @@ def _read_upload(content: bytes, filename: str) -> pd.DataFrame:
     return df
 
 
-@router.post("/run")
+def _validate_upload(file: UploadFile, content: bytes) -> None:
+    filename = (file.filename or "").lower()
+    if not filename.endswith((".csv", ".xlsx")):
+        raise HTTPException(status_code=400, detail="Nur CSV oder Excel (.xlsx) Dateien erlaubt")
+
+    content_type = (file.content_type or "").lower().strip()
+    if content_type and content_type not in ALLOWED_TABULAR_CONTENT_TYPES:
+        raise HTTPException(status_code=400, detail="Dateityp nicht erlaubt")
+
+    if filename.endswith(".xlsx"):
+        if not content.startswith(b"PK\x03\x04"):
+            raise HTTPException(status_code=400, detail="Ungültige Excel-Datei")
+        return
+
+    if not content or b"\x00" in content[:2048]:
+        raise HTTPException(status_code=400, detail="Ungültige CSV-Datei")
+
+
+@router.post("/run", dependencies=[Depends(get_current_admin)])
 async def run_calibration(
     file: UploadFile = File(...),
     virus_typ: str = Query(default="Influenza A"),
@@ -58,6 +83,7 @@ async def run_calibration(
         virus_typ = "Influenza A"
 
     content = await file.read()
+    _validate_upload(file, content)
     df = _read_upload(content, file.filename or "data.csv")
 
     # Spalten-Validierung
@@ -86,12 +112,13 @@ async def run_calibration(
     )
 
 
-@router.post("/preview")
+@router.post("/preview", dependencies=[Depends(get_current_admin)])
 async def preview_calibration_data(
     file: UploadFile = File(...),
 ):
     """Vorschau der hochgeladenen Kalibrierungsdaten."""
     content = await file.read()
+    _validate_upload(file, content)
     df = _read_upload(content, file.filename or "data.csv")
 
     required = {"datum", "menge"}
@@ -155,7 +182,7 @@ async def download_template():
     )
 
 
-@router.post("/analyze-global")
+@router.post("/analyze-global", dependencies=[Depends(get_current_admin)])
 async def analyze_global_correlations(
     virus_typ: str = Query(default="Influenza A"),
     days_back: int = Query(default=1095, description="Rückblick in Tagen (Default: 3 Jahre)"),
@@ -171,7 +198,7 @@ async def analyze_global_correlations(
     return service.run_global_calibration(virus_typ=virus_typ, days_back=days_back)
 
 
-@router.post("/simulate-market")
+@router.post("/simulate-market", dependencies=[Depends(get_current_admin)])
 async def simulate_market_correlation(
     target: str = Query(
         default="RKI_ARE",

@@ -6,11 +6,12 @@ from pydantic import BaseModel
 from typing import Optional
 import logging
 
+from app.api.deps import get_current_admin, get_current_user
 from app.db.session import get_db
 from app.models.database import InventoryLevel
 
 logger = logging.getLogger(__name__)
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(get_current_user)])
 
 
 class InventoryUpdate(BaseModel):
@@ -58,7 +59,7 @@ async def get_all_inventory(db: Session = Depends(get_db)):
     }
 
 
-@router.post("/update")
+@router.post("/update", dependencies=[Depends(get_current_admin)])
 async def update_inventory(
     item: InventoryUpdate,
     db: Session = Depends(get_db)
@@ -84,7 +85,7 @@ async def update_inventory(
     }
 
 
-@router.post("/seed")
+@router.post("/seed", dependencies=[Depends(get_current_admin)])
 async def seed_inventory(db: Session = Depends(get_db)):
     """Seed initial demo inventory data."""
     demo_data = [

@@ -1,23 +1,29 @@
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import ExpiredSignatureError, JWTError, jwt
 
 from app.core.security import ALGORITHM, SECRET_KEY
 from app.schemas.token import TokenPayload
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
+AUTH_COOKIE_NAME = "viralflux_session"
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login", auto_error=False)
 
 
-async def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
+async def get_current_user(request: Request, token: str | None = Depends(oauth2_scheme)) -> dict:
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
 
+    auth_token = token or request.cookies.get(AUTH_COOKIE_NAME)
+    if not auth_token:
+        raise credentials_exception
+
     try:
         payload = jwt.decode(
-            token,
+            auth_token,
             SECRET_KEY,
             algorithms=[ALGORITHM],
             options={"require_exp": True},

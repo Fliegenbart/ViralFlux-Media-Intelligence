@@ -2,14 +2,6 @@ import '@testing-library/jest-dom';
 import { login, logout } from '../../lib/api';
 import { mediaApi } from './api';
 
-function createToken(expiresInMs = 60_000): string {
-  const payload = window.btoa(JSON.stringify({
-    exp: Math.floor((Date.now() + expiresInMs) / 1000),
-  }));
-
-  return `header.${payload}.signature`;
-}
-
 function mockJsonResponse(body: unknown, status = 200): Response {
   return {
     ok: status >= 200 && status < 300,
@@ -38,8 +30,7 @@ describe('mediaApi authentication', () => {
     window.sessionStorage.clear();
   });
 
-  it('adds the Bearer token to media API requests', async () => {
-    const token = createToken();
+  it('relies on cookie credentials for media API requests', async () => {
     const payload = {
       brand: 'Brand',
       product: 'Produkt',
@@ -52,7 +43,7 @@ describe('mediaApi authentication', () => {
     };
 
     fetchMock
-      .mockResolvedValueOnce(mockJsonResponse({ access_token: token }))
+      .mockResolvedValueOnce(mockJsonResponse({ authenticated: true }))
       .mockResolvedValueOnce(mockJsonResponse({ cards: [] }));
 
     await login('test@example.com', 'secret', true);
@@ -63,7 +54,8 @@ describe('mediaApi authentication', () => {
     const [, requestInit] = fetchMock.mock.calls[1];
     const headers = new Headers(requestInit?.headers);
 
-    expect(headers.get('Authorization')).toBe(`Bearer ${token}`);
+    expect(requestInit?.credentials).toBe('include');
+    expect(headers.get('Authorization')).toBeNull();
     expect(headers.get('Content-Type')).toBe('application/json');
   });
 });

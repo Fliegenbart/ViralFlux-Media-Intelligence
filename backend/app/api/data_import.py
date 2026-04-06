@@ -14,13 +14,20 @@ from io import StringIO, BytesIO
 import logging
 from datetime import datetime
 
+from app.api.deps import get_current_admin, get_current_user
 from app.db.session import get_db
 from app.models.database import UploadHistory
 
 logger = logging.getLogger(__name__)
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(get_current_user)])
 
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
+ALLOWED_TABULAR_CONTENT_TYPES = {
+    "text/csv",
+    "application/csv",
+    "application/vnd.ms-excel",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+}
 
 # Mapping: article_id keywords → virus type for auto-calibration
 _ARTICLE_TO_VIRUS = {
@@ -65,6 +72,41 @@ def _read_file_to_df(content: bytes, filename: str) -> pd.DataFrame:
     # Normalize column names: lowercase, strip whitespace, spaces→underscores
     df.columns = df.columns.str.strip().str.lower().str.replace(" ", "_")
     return df
+
+
+def _looks_like_csv(content: bytes) -> bool:
+    if not content or b"\x00" in content[:2048]:
+        return False
+    try:
+        content[:4096].decode("utf-8")
+        return True
+    except UnicodeDecodeError:
+        try:
+            content[:4096].decode("latin-1")
+            return True
+        except UnicodeDecodeError:
+            return False
+
+
+def _validate_tabular_upload(file: UploadFile, content: bytes) -> None:
+    filename = (file.filename or "").lower()
+    if not filename.endswith((".csv", ".xlsx")):
+        raise HTTPException(400, "Nur CSV oder Excel (.xlsx) Dateien erlaubt")
+
+    if len(content) > MAX_FILE_SIZE:
+        raise HTTPException(400, "Datei zu groß (max. 10 MB)")
+
+    content_type = (file.content_type or "").lower().strip()
+    if content_type and content_type not in ALLOWED_TABULAR_CONTENT_TYPES:
+        raise HTTPException(400, "Dateityp nicht erlaubt")
+
+    if filename.endswith(".xlsx"):
+        if not content.startswith(b"PK\x03\x04"):
+            raise HTTPException(400, "Ungültige Excel-Datei")
+        return
+
+    if not _looks_like_csv(content):
+        raise HTTPException(400, "Ungültige CSV-Datei")
 
 
 def _record_upload(
@@ -114,7 +156,7 @@ def _record_upload(
     }
 
 
-@router.post("/upload/lab-results")
+@router.post("/upload/lab-results", dependencies=[Depends(get_current_admin)])
 async def upload_lab_results(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
@@ -125,17 +167,14 @@ async def upload_lab_results(
     """
     from app.services.fusion_engine.baseline_analyzer import BaselineAnalyzer
 
-    if not file.filename.lower().endswith((".csv", ".xlsx")):
-        raise HTTPException(400, "Nur CSV oder Excel (.xlsx) Dateien erlaubt")
-
     content = await file.read()
-    if len(content) > MAX_FILE_SIZE:
-        raise HTTPException(400, "Datei zu groß (max. 10 MB)")
+    _validate_tabular_upload(file, content)
 
     try:
         df = _read_file_to_df(content, file.filename)
     except Exception as e:
-        raise HTTPException(400, f"Datei konnte nicht gelesen werden: {e}")
+        logger.warning("Lab results upload could not be parsed: %s", e)
+        raise HTTPException(400, "Datei konnte nicht gelesen werden.")
 
     required = {"datum", "test_type", "total_tests", "positive_tests"}
     missing = required - set(df.columns)
@@ -157,10 +196,10 @@ async def upload_lab_results(
             db, file.filename, "lab_results", df, {},
             "datum", status="error", error_message=str(e),
         )
-        raise HTTPException(500, f"Import fehlgeschlagen: {e}")
+        raise HTTPException(500, "Import fehlgeschlagen.")
 
 
-@router.post("/upload/orders")
+@router.post("/upload/orders", dependencies=[Depends(get_current_admin)])
 async def upload_orders(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
@@ -171,17 +210,14 @@ async def upload_orders(
     """
     from app.services.fusion_engine.order_signal_analyzer import OrderSignalAnalyzer
 
-    if not file.filename.lower().endswith((".csv", ".xlsx")):
-        raise HTTPException(400, "Nur CSV oder Excel (.xlsx) Dateien erlaubt")
-
     content = await file.read()
-    if len(content) > MAX_FILE_SIZE:
-        raise HTTPException(400, "Datei zu groß (max. 10 MB)")
+    _validate_tabular_upload(file, content)
 
     try:
         df = _read_file_to_df(content, file.filename)
     except Exception as e:
-        raise HTTPException(400, f"Datei konnte nicht gelesen werden: {e}")
+        logger.warning("Orders upload could not be parsed: %s", e)
+        raise HTTPException(400, "Datei konnte nicht gelesen werden.")
 
     required = {"order_date", "article_id", "quantity"}
     missing = required - set(df.columns)
@@ -243,26 +279,23 @@ async def upload_orders(
             db, file.filename, "orders", df, {},
             "order_date", status="error", error_message=str(e),
         )
-        raise HTTPException(500, f"Import fehlgeschlagen: {e}")
+        raise HTTPException(500, "Import fehlgeschlagen.")
 
 
-@router.post("/preview")
+@router.post("/preview", dependencies=[Depends(get_current_admin)])
 async def preview_file(
     file: UploadFile = File(...),
     upload_type: str = Query(..., pattern="^(lab_results|orders)$"),
 ):
     """Vorschau: erste 5 Zeilen + Spaltenvalidierung (ohne Import)."""
-    if not file.filename.lower().endswith((".csv", ".xlsx")):
-        raise HTTPException(400, "Nur CSV oder Excel (.xlsx) Dateien erlaubt")
-
     content = await file.read()
-    if len(content) > MAX_FILE_SIZE:
-        raise HTTPException(400, "Datei zu groß (max. 10 MB)")
+    _validate_tabular_upload(file, content)
 
     try:
         df = _read_file_to_df(content, file.filename)
     except Exception as e:
-        raise HTTPException(400, f"Datei konnte nicht gelesen werden: {e}")
+        logger.warning("Upload preview could not be parsed: %s", e)
+        raise HTTPException(400, "Datei konnte nicht gelesen werden.")
 
     if upload_type == "lab_results":
         required = {"datum", "test_type", "total_tests", "positive_tests"}
@@ -349,7 +382,7 @@ async def download_template(upload_type: str):
 # ─── RKI SurvStat Landkreis-API ─────────────────────────────────────
 
 
-@router.post("/survstat-export")
+@router.post("/survstat-export", dependencies=[Depends(get_current_admin)])
 async def import_survstat_exports(
     folder: str = Query(..., description="Pfad zum Ordner mit SurvStat-Exports"),
     year: int = Query(2025, description="Datenjahr (Standard: 2025)"),
@@ -370,12 +403,12 @@ async def import_survstat_exports(
         raise HTTPException(400, str(exc))
     except Exception as exc:
         logger.error("SurvStat export import failed: %s", exc)
-        raise HTTPException(500, f"Import fehlgeschlagen: {exc}")
+        raise HTTPException(500, "Import fehlgeschlagen.")
 
     return result
 
 
-@router.post("/survstat-api")
+@router.post("/survstat-api", dependencies=[Depends(get_current_admin)])
 async def trigger_survstat_api_fetch(
     years: list[int] | None = None,
     diseases: list[str] | None = None,
@@ -408,7 +441,7 @@ async def trigger_survstat_api_fetch(
     }
 
 
-@router.post("/survstat-api/discover-kreise")
+@router.post("/survstat-api/discover-kreise", dependencies=[Depends(get_current_admin)])
 async def discover_kreise(db: Session = Depends(get_db)):
     """Landkreis-Namen aus RKI-Hierarchie entdecken und in kreis_einwohner seeden."""
     from app.services.data_ingest.survstat_api_service import SurvstatApiService
@@ -427,7 +460,7 @@ async def discover_kreise(db: Session = Depends(get_db)):
     }
 
 
-@router.post("/survstat-api/sync-kreis-einwohner")
+@router.post("/survstat-api/sync-kreis-einwohner", dependencies=[Depends(get_current_admin)])
 async def sync_kreis_einwohner(
     source_url: str | None = Query(default=None),
     db: Session = Depends(get_db),

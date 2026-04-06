@@ -1,16 +1,22 @@
 """API-Endpunkte für BfArM Lieferengpass-Analyse."""
 
-from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
 import pandas as pd
 import tempfile
 import os
 import logging
 import threading
 
+from app.api.deps import get_current_admin, get_current_user
 from app.services.data_ingest.drug_shortage_service import DrugShortageAnalyzer
 
 logger = logging.getLogger(__name__)
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(get_current_user)])
+ALLOWED_CSV_CONTENT_TYPES = {
+    "text/csv",
+    "application/csv",
+    "application/vnd.ms-excel",
+}
 
 # Singleton-Instanz für gecachte Analyse
 _analyzer: DrugShortageAnalyzer | None = None
@@ -42,7 +48,19 @@ def _ensure_analyzer() -> DrugShortageAnalyzer | None:
     return _analyzer
 
 
-@router.post("/upload")
+def _validate_csv_upload(file: UploadFile, content: bytes) -> None:
+    if not (file.filename or "").lower().endswith(".csv"):
+        raise HTTPException(status_code=400, detail="Nur CSV-Dateien erlaubt")
+
+    content_type = (file.content_type or "").lower().strip()
+    if content_type and content_type not in ALLOWED_CSV_CONTENT_TYPES:
+        raise HTTPException(status_code=400, detail="Dateityp nicht erlaubt")
+
+    if not content or b"\x00" in content[:2048]:
+        raise HTTPException(status_code=400, detail="Ungültige CSV-Datei")
+
+
+@router.post("/upload", dependencies=[Depends(get_current_admin)])
 async def upload_shortage_csv(file: UploadFile = File(...)):
     """Upload und Analyse einer BfArM LEMeldungen CSV-Datei.
 
@@ -51,12 +69,10 @@ async def upload_shortage_csv(file: UploadFile = File(...)):
     """
     global _analyzer
 
-    if not file.filename.endswith('.csv'):
-        raise HTTPException(status_code=400, detail="Nur CSV-Dateien erlaubt")
-
     # Temporäre Datei schreiben
     try:
         content = await file.read()
+        _validate_csv_upload(file, content)
         with tempfile.NamedTemporaryFile(delete=False, suffix='.csv') as tmp:
             tmp.write(content)
             tmp_path = tmp.name
@@ -79,7 +95,7 @@ async def upload_shortage_csv(file: UploadFile = File(...)):
 
     except Exception as e:
         logger.error(f"Fehler beim Verarbeiten der Engpass-CSV: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Datei konnte nicht verarbeitet werden.")
     finally:
         if 'tmp_path' in locals():
             os.unlink(tmp_path)

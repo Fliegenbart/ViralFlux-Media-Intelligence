@@ -2,9 +2,15 @@ import '@testing-library/jest-dom';
 import React from 'react';
 import { render, screen, waitFor, within } from '@testing-library/react';
 
+const mockRehydrateAuth = jest.fn<Promise<boolean>, []>();
+const mockLogout = jest.fn();
+const mockAddAuthChangeListener = jest.fn<() => void, [(authenticated: boolean) => void]>(() => () => {});
+
 jest.mock('./lib/api', () => ({
-  ...jest.requireActual('./lib/api'),
   apiFetch: jest.fn(),
+  rehydrateAuth: (...args: unknown[]) => mockRehydrateAuth(...args as []),
+  logout: (...args: unknown[]) => mockLogout(...args),
+  addAuthChangeListener: (...args: [(authenticated: boolean) => void]) => mockAddAuthChangeListener(...args),
 }));
 
 jest.mock('./pages/LoginPage', () => ({
@@ -40,18 +46,14 @@ jest.mock('./features/media/usePilotSurfaceData', () => ({
 }));
 
 import App from './App';
-import { AUTH_STORAGE_KEY, logout } from './lib/api';
-
-function persistAuth(storage: Storage = window.localStorage) {
-  storage.setItem(AUTH_STORAGE_KEY, JSON.stringify({
-    token: 'stored-token',
-    tokenExpiry: Date.now() + 60_000,
-  }));
-}
 
 describe('App routing', () => {
   beforeEach(() => {
-    logout();
+    mockRehydrateAuth.mockReset();
+    mockRehydrateAuth.mockResolvedValue(true);
+    mockLogout.mockReset();
+    mockAddAuthChangeListener.mockReset();
+    mockAddAuthChangeListener.mockReturnValue(() => {});
     window.localStorage.clear();
     window.sessionStorage.clear();
     window.history.pushState({}, '', '/');
@@ -67,17 +69,13 @@ describe('App routing', () => {
     });
   });
 
-  it('rehydrates auth state on app startup from browser storage', async () => {
-    persistAuth(window.localStorage);
-
+  it('rehydrates auth state on app startup from the backend session check', async () => {
     render(<App />);
 
     expect(await screen.findByText('Jetzt Mock')).toBeInTheDocument();
   });
 
   it('renders the real operator shell chrome for authenticated routes', async () => {
-    persistAuth(window.localStorage);
-
     render(<App />);
 
     expect(await screen.findByText('Jetzt Mock')).toBeInTheDocument();
@@ -86,7 +84,6 @@ describe('App routing', () => {
   });
 
   it('redirects legacy dashboard routes to /jetzt and shows the five PEIX work areas', async () => {
-    persistAuth(window.localStorage);
     window.history.pushState({}, '', '/dashboard');
 
     render(<App />);
@@ -97,7 +94,8 @@ describe('App routing', () => {
     const operatorNav = screen.getByRole('navigation', { name: 'Arbeitsbereiche' });
     const navButtons = within(operatorNav).getAllByRole('button');
 
-    expect(navButtons).toHaveLength(5);
+    expect(navButtons).toHaveLength(6);
+    expect(within(operatorNav).getByRole('button', { name: /Virus-Radar/i })).toBeInTheDocument();
     expect(within(operatorNav).getByRole('button', { name: /Wochenplan/i })).toBeInTheDocument();
     expect(within(operatorNav).getByRole('button', { name: /Zeitgraph/i })).toBeInTheDocument();
     expect(within(operatorNav).getByRole('button', { name: /Regionen/i })).toBeInTheDocument();
@@ -107,7 +105,6 @@ describe('App routing', () => {
   });
 
   it('renders the dedicated Zeitgraph route as its own work area', async () => {
-    persistAuth(window.localStorage);
     window.history.pushState({}, '', '/zeitgraph');
 
     render(<App />);

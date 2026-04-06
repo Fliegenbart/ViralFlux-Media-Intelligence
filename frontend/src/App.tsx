@@ -150,15 +150,49 @@ const PageFallback: React.FC = () => (
 
 /* ── App ────────────────────────────────────────────────────────── */
 const App: React.FC = () => {
-  const [authenticated, setAuthenticated] = useState(rehydrateAuth);
+  const [authenticated, setAuthenticated] = useState(false);
+  const [authReady, setAuthReady] = useState(false);
 
-  useEffect(() => addAuthChangeListener(setAuthenticated), []);
+  useEffect(() => {
+    let active = true;
+
+    void rehydrateAuth()
+      .then((value) => {
+        if (!active) return;
+        setAuthenticated(value);
+        setAuthReady(true);
+      })
+      .catch(() => {
+        if (!active) return;
+        setAuthenticated(false);
+        setAuthReady(true);
+      });
+
+    const unsubscribe = addAuthChangeListener((value) => {
+      if (!active) return;
+      setAuthenticated(value);
+      setAuthReady(true);
+    });
+
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, []);
 
   const handleLogin = useCallback(() => setAuthenticated(true), []);
   const handleLogout = useCallback(() => {
     logout();
     setAuthenticated(false);
   }, []);
+
+  if (!authReady) {
+    return (
+      <ThemeProvider>
+        <PageFallback />
+      </ThemeProvider>
+    );
+  }
 
   if (!authenticated) {
     return (

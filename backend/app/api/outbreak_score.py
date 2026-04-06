@@ -4,16 +4,22 @@ Endpoints für den Outbreak Risk Score, Prophet-Vorhersagen,
 historische Labordaten-Import und Meta-Learner-Training.
 """
 
-from fastapi import APIRouter, Depends, UploadFile, File
+from fastapi import APIRouter, Depends, UploadFile, File, HTTPException
 from sqlalchemy.orm import Session
 import pandas as pd
 from io import StringIO
 import logging
 
+from app.api.deps import get_current_admin, get_current_user
 from app.db.session import get_db
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+ALLOWED_CSV_CONTENT_TYPES = {
+    "text/csv",
+    "application/csv",
+    "application/vnd.ms-excel",
+}
 
 
 # ─── Singleton für DrugShortage-Cache ──────────────────────────────────────
@@ -50,7 +56,19 @@ def _get_shortage_signals() -> dict | None:
     return None
 
 
-@router.get("/current")
+def _validate_csv_upload(file: UploadFile, content: bytes) -> None:
+    if not (file.filename or "").lower().endswith(".csv"):
+        raise HTTPException(status_code=400, detail="Nur CSV-Dateien erlaubt")
+
+    content_type = (file.content_type or "").lower().strip()
+    if content_type and content_type not in ALLOWED_CSV_CONTENT_TYPES:
+        raise HTTPException(status_code=400, detail="Dateityp nicht erlaubt")
+
+    if not content or b"\x00" in content[:2048]:
+        raise HTTPException(status_code=400, detail="Ungültige CSV-Datei")
+
+
+@router.get("/current", dependencies=[Depends(get_current_user)])
 async def get_outbreak_score(
     virus_typ: str = "Influenza A",
     db: Session = Depends(get_db),
@@ -79,7 +97,7 @@ async def get_peix_score(
     return service.build(virus_typ=virus_typ)
 
 
-@router.get("/all")
+@router.get("/all", dependencies=[Depends(get_current_user)])
 async def get_all_outbreak_scores(db: Session = Depends(get_db)):
     """Outbreak Scores für alle Virus-Typen (delegiert an PeixEpiScore)."""
     from app.services.media.peix_score_service import PeixEpiScoreService
@@ -102,7 +120,7 @@ async def get_all_outbreak_scores(db: Session = Depends(get_db)):
     }
 
 
-@router.get("/history")
+@router.get("/history", dependencies=[Depends(get_current_user)])
 async def get_score_history(
     virus_typ: str = None,
     days: int = 90,
@@ -118,7 +136,7 @@ async def get_score_history(
     )
 
 
-@router.post("/compute-prophet")
+@router.post("/compute-prophet", dependencies=[Depends(get_current_admin)])
 async def compute_with_prophet(
     virus_typ: str = "Influenza A",
     forecast_days: int = 28,
@@ -143,7 +161,7 @@ async def compute_with_prophet(
     }
 
 
-@router.post("/train-meta-learner")
+@router.post("/train-meta-learner", dependencies=[Depends(get_current_admin)])
 async def train_meta_learner(
     virus_typ: str = "Influenza A",
     db: Session = Depends(get_db),
@@ -154,7 +172,7 @@ async def train_meta_learner(
     return XGBoostTrainer(db).train(virus_typ=virus_typ)
 
 
-@router.post("/upload-lab-history")
+@router.post("/upload-lab-history", dependencies=[Depends(get_current_admin)])
 async def upload_lab_history(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
@@ -166,6 +184,7 @@ async def upload_lab_history(
     from app.services.fusion_engine.baseline_analyzer import BaselineAnalyzer
 
     content = await file.read()
+    _validate_csv_upload(file, content)
     # Auto-detect encoding & separator
     text = content.decode('utf-8', errors='replace')
     sep = ';' if ';' in text[:500] else ','
@@ -181,7 +200,7 @@ async def upload_lab_history(
     }
 
 
-@router.post("/upload-orders")
+@router.post("/upload-orders", dependencies=[Depends(get_current_admin)])
 async def upload_orders(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
@@ -193,6 +212,7 @@ async def upload_orders(
     from app.services.fusion_engine.order_signal_analyzer import OrderSignalAnalyzer
 
     content = await file.read()
+    _validate_csv_upload(file, content)
     text = content.decode('utf-8', errors='replace')
     sep = ';' if ';' in text[:500] else ','
     df = pd.read_csv(StringIO(text), sep=sep)
@@ -207,7 +227,7 @@ async def upload_orders(
     }
 
 
-@router.get("/baseline")
+@router.get("/baseline", dependencies=[Depends(get_current_user)])
 async def get_seasonal_baseline(
     test_typ: str = None,
     db: Session = Depends(get_db),
@@ -219,7 +239,7 @@ async def get_seasonal_baseline(
     return analyzer.calculate_seasonal_baseline(test_typ=test_typ)
 
 
-@router.get("/order-velocity")
+@router.get("/order-velocity", dependencies=[Depends(get_current_user)])
 async def get_order_velocity(
     article_id: str = None,
     db: Session = Depends(get_db),

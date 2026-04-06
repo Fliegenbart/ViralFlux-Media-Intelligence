@@ -7,9 +7,10 @@ import logging
 from app.db.session import get_db
 from app.models.database import WastewaterData
 from app.services.media.region_tooltip_service import build_region_tooltip
+from app.api.deps import get_current_user
 
 logger = logging.getLogger(__name__)
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(get_current_user)])
 
 BUNDESLAND_NAMES = {
     'BW': 'Baden-Württemberg', 'BY': 'Bayern', 'BE': 'Berlin',

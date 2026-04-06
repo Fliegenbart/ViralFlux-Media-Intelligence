@@ -36,6 +36,7 @@ from app.db.session import (
 )
 from app.services.ops.production_readiness_service import ProductionReadinessService
 from app.services.ops.run_metadata_service import OperationalRunRecorder
+from app.api.deps import get_current_user
 
 # Setup structured logging BEFORE anything else
 settings = get_settings()
@@ -450,7 +451,7 @@ async def prometheus_metrics():
     )
 
 
-@app.get("/api/v1/status")
+@app.get("/api/v1/status", dependencies=[Depends(get_current_user)])
 async def get_status(db: Session = Depends(get_db)):
     """Get system status and data freshness."""
     from app.models.database import (

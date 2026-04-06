@@ -13,9 +13,10 @@ import logging
 
 from app.db.session import get_db
 from app.models.database import InventoryLevel, MLForecast, WastewaterAggregated
+from app.api.deps import get_current_user
 
 logger = logging.getLogger(__name__)
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(get_current_user)])
 
 VIRUS_TEST_MAP = {
     'Influenza A': 'Influenza A/B Schnelltest',

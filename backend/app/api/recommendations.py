@@ -4,11 +4,12 @@ from sqlalchemy.orm import Session
 from datetime import datetime
 import logging
 
+from app.api.deps import get_current_admin, get_current_user
 from app.db.session import get_db, get_db_context
 from app.models.database import MLForecast, LLMRecommendation, InventoryLevel, WastewaterAggregated
 
 logger = logging.getLogger(__name__)
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(get_current_user)])
 
 
 def _build_forecast_context(db: Session, virus_typ: str) -> dict:
@@ -151,7 +152,7 @@ def _generate_rule_based_recommendation(forecast_ctx: dict, inventory_ctx: dict)
     }
 
 
-@router.post("/generate")
+@router.post("/generate", dependencies=[Depends(get_current_admin)])
 async def generate_recommendations(
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db)
@@ -273,7 +274,7 @@ async def get_latest_recommendations(db: Session = Depends(get_db)):
     }
 
 
-@router.post("/{recommendation_id}/approve")
+@router.post("/{recommendation_id}/approve", dependencies=[Depends(get_current_admin)])
 async def approve_recommendation(
     recommendation_id: int,
     db: Session = Depends(get_db)

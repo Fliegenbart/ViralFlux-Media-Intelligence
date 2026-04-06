@@ -1,19 +1,11 @@
 import '@testing-library/jest-dom';
 import {
-  AUTH_STORAGE_KEY,
   apiFetch,
   isAuthenticated,
   login,
+  rehydrateAuth,
   logout,
 } from './api';
-
-function createToken(expiresInMs = 60_000): string {
-  const payload = window.btoa(JSON.stringify({
-    exp: Math.floor((Date.now() + expiresInMs) / 1000),
-  }));
-
-  return `header.${payload}.signature`;
-}
 
 function mockJsonResponse(body: unknown, status = 200): Response {
   return {
@@ -24,7 +16,7 @@ function mockJsonResponse(body: unknown, status = 200): Response {
   } as Response;
 }
 
-describe('auth persistence', () => {
+describe('auth session handling', () => {
   const originalFetch = global.fetch;
   const fetchMock = jest.fn<Promise<Response>, [RequestInfo | URL, RequestInit?]>();
 
@@ -43,56 +35,58 @@ describe('auth persistence', () => {
     window.sessionStorage.clear();
   });
 
-  it('stores token in localStorage when remember me is enabled', async () => {
-    const token = createToken();
-    fetchMock.mockResolvedValueOnce(mockJsonResponse({ access_token: token }));
+  it('logs in with credentials include and stores no token in browser storage', async () => {
+    fetchMock.mockResolvedValueOnce(mockJsonResponse({ authenticated: true }));
 
     await login('test@example.com', 'secret', true);
 
-    expect(JSON.parse(window.localStorage.getItem(AUTH_STORAGE_KEY) || '{}')).toEqual({
-      token,
-      tokenExpiry: expect.any(Number),
-    });
-    expect(window.sessionStorage.getItem(AUTH_STORAGE_KEY)).toBeNull();
+    expect(fetchMock).toHaveBeenCalledWith('/api/auth/login?remember_me=true', expect.objectContaining({
+      method: 'POST',
+      credentials: 'include',
+    }));
+    expect(window.localStorage.length).toBe(0);
+    expect(window.sessionStorage.length).toBe(0);
     expect(isAuthenticated()).toBe(true);
   });
 
-  it('stores token in sessionStorage when remember me is disabled', async () => {
-    const token = createToken();
-    fetchMock.mockResolvedValueOnce(mockJsonResponse({ access_token: token }));
+  it('rehydrates auth state from the server-side session endpoint', async () => {
+    fetchMock.mockResolvedValueOnce(mockJsonResponse({ authenticated: true, subject: 'test@example.com', role: 'admin' }));
 
-    await login('test@example.com', 'secret', false);
+    await expect(rehydrateAuth(true)).resolves.toBe(true);
 
-    expect(window.localStorage.getItem(AUTH_STORAGE_KEY)).toBeNull();
-    expect(JSON.parse(window.sessionStorage.getItem(AUTH_STORAGE_KEY) || '{}')).toEqual({
-      token,
-      tokenExpiry: expect.any(Number),
-    });
+    expect(fetchMock).toHaveBeenCalledWith('/api/auth/session', expect.objectContaining({
+      credentials: 'include',
+    }));
     expect(isAuthenticated()).toBe(true);
   });
 
-  it('clears persisted auth on logout and 401 responses', async () => {
-    const token = createToken();
+  it('clears auth state on logout and 401 responses', async () => {
     fetchMock
-      .mockResolvedValueOnce(mockJsonResponse({ access_token: token }))
+      .mockResolvedValueOnce(mockJsonResponse({ authenticated: true }))
       .mockResolvedValueOnce(mockJsonResponse({ detail: 'expired' }, 401));
 
     await login('test@example.com', 'secret', true);
-    expect(window.localStorage.getItem(AUTH_STORAGE_KEY)).not.toBeNull();
 
     await expect(apiFetch('/api/v1/protected')).rejects.toThrow('Sitzung abgelaufen. Bitte erneut anmelden.');
 
-    expect(window.localStorage.getItem(AUTH_STORAGE_KEY)).toBeNull();
-    expect(window.sessionStorage.getItem(AUTH_STORAGE_KEY)).toBeNull();
+    expect(window.localStorage.length).toBe(0);
+    expect(window.sessionStorage.length).toBe(0);
     expect(isAuthenticated()).toBe(false);
 
-    fetchMock.mockResolvedValueOnce(mockJsonResponse({ access_token: token }));
+    fetchMock
+      .mockResolvedValueOnce(mockJsonResponse({ authenticated: true }))
+      .mockResolvedValueOnce(mockJsonResponse({ authenticated: false }));
+
     await login('test@example.com', 'secret', false);
 
     logout();
 
-    expect(window.localStorage.getItem(AUTH_STORAGE_KEY)).toBeNull();
-    expect(window.sessionStorage.getItem(AUTH_STORAGE_KEY)).toBeNull();
+    expect(fetchMock).toHaveBeenLastCalledWith('/api/auth/logout', expect.objectContaining({
+      credentials: 'include',
+      method: 'POST',
+    }));
+    expect(window.localStorage.length).toBe(0);
+    expect(window.sessionStorage.length).toBe(0);
     expect(isAuthenticated()).toBe(false);
   });
 });

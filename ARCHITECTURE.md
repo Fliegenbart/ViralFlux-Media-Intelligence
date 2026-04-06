@@ -142,6 +142,8 @@ LLMRecommendationService.generate_recommendation()
 
 ### 4. API Endpoints
 
+Interne Legacy-Endpunkte sind JWT-geschützt. Schreibende bzw. Import-Endpunkte sind zusätzlich auf Admin-Rolle begrenzt.
+
 ```
 GET  /api/v1/dashboard/overview
      └─ Aggregiert: Viruslast, Trends, ARE, Notaufnahme, SURVSTAT, Wetter
@@ -307,6 +309,22 @@ model.add_regressor('trends_ma7')          # Moving Average
 - Lokale Verarbeitung (kein Cloud-LLM)
 - vLLM läuft lokal auf eigenem Server
 
+**API Access Controls:**
+- Interne Dashboard-, Inventory-, Recommendation-, Map-, Ordering- und Data-Import-Endpunkte erfordern JWT-Authentifizierung
+- Schreibende/administrative Aktionen erfordern Admin-Rolle
+- `/api/v1/outbreak-score/peix-score` bleibt bewusst öffentlich für die Landing-Page
+
+**Login Protection:**
+- `/api/auth/login` ist rate-limitiert
+- Nach 5 Fehlversuchen wird der Login-Key für 15 Minuten gesperrt
+- Erfolgreicher Login setzt zusätzlich ein `httpOnly` Session-Cookie für Browser-Sessions
+- Das Frontend speichert kein lesbares JWT mehr in `localStorage` oder `sessionStorage`
+
+**Session Flow:**
+- Browser-Requests laufen standardmäßig mit Cookie-Credentials
+- `/api/auth/session` prüft nach Reloads, ob noch eine gültige Session existiert
+- `/api/auth/logout` löscht das Session-Cookie serverseitig aus dem Browser-Kontext
+
 ---
 
 ## 📈 Performance Optimizations
@@ -418,7 +436,7 @@ Internet
 
 ### Health Checks
 - `/health` → Database + API Status
-- `/api/v1/status` → Data Freshness
+- `/api/v1/status` → Data Freshness (nur authentifiziert)
 
 ### Logging
 - Format: JSON (structured)

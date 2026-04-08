@@ -27,6 +27,7 @@ interface Props {
   virus: string;
   onVirusChange: (value: string) => void;
   horizonDays: number;
+  heroForecastLoading: boolean;
   heroForecast: VirusRadarHeroForecastData;
   nowData: ReturnType<typeof useNowPageData>;
   regionsData: ReturnType<typeof useRegionsPageData>;
@@ -57,6 +58,7 @@ const VirusRadarWorkspace: React.FC<Props> = ({
   virus,
   onVirusChange,
   horizonDays,
+  heroForecastLoading,
   heroForecast,
   nowData,
   regionsData,
@@ -164,6 +166,8 @@ const VirusRadarWorkspace: React.FC<Props> = ({
   const selectedPrediction = effectiveRegionCode ? predictionByRegion.get(effectiveRegionCode) || null : null;
   const topVirusSummary = heroForecast.summaries[0] || null;
   const secondVirusSummary = heroForecast.summaries[1] || null;
+  const heroHasData = heroForecast.availableViruses.length > 0;
+  const heroIsLoading = heroForecastLoading && !heroHasData;
   const recommendationId = (
     heroRegionLeaderboardEntry?.recommendation_ref?.card_id
     || (
@@ -219,6 +223,28 @@ const VirusRadarWorkspace: React.FC<Props> = ({
     virus,
     hasTimeline: (nowData.focusRegionBacktest?.timeline || []).length > 0,
   });
+  const heroEyebrow = heroIsLoading
+    ? 'Live-Lagebild wird geladen'
+    : `Live-Lagebild · ${heroForecast.availableViruses.length} Viren`;
+  const heroHeadlinePrimary = heroIsLoading
+    ? 'Das gemeinsame 4-Virus-Lagebild wird geladen.'
+    : heroForecast.headlinePrimary;
+  const heroHeadlineSecondary = heroIsLoading
+    ? 'Die 7-Tage-Prognose wird gerade aufgebaut.'
+    : heroForecast.headlineSecondary;
+  const heroSummary = heroIsLoading
+    ? 'Die Prognosekurven werden im Hintergrund geladen. Sobald sie da sind, siehst du hier wieder das gemeinsame Lagebild der nächsten sieben Tage.'
+    : heroForecast.summary;
+  const heroPrimaryStat = heroIsLoading
+    ? 'Wird geladen'
+    : topVirusSummary
+      ? `${topVirusSummary.virus} ${formatSignedPercent(topVirusSummary.deltaPct)}`
+      : 'Noch offen';
+  const heroSecondaryStat = heroIsLoading
+    ? 'Wird geladen'
+    : secondVirusSummary
+      ? `${secondVirusSummary.virus} ${formatSignedPercent(secondVirusSummary.deltaPct)}`
+      : 'Noch offen';
 
   return (
     <div className="page-stack virus-radar-page">
@@ -240,14 +266,14 @@ const VirusRadarWorkspace: React.FC<Props> = ({
 
           <div className="virus-radar-hero__eyebrow">
             <span className="virus-radar-hero__pulse" aria-hidden="true" />
-            Live-Lagebild · {heroForecast.availableViruses.length} Viren
+            {heroEyebrow}
           </div>
           <h2 className="virus-radar-hero__headline">
-            <span>{heroForecast.headlinePrimary}</span>
-            <span className="virus-radar-hero__headline-accent">{heroForecast.headlineSecondary}</span>
+            <span>{heroHeadlinePrimary}</span>
+            <span className="virus-radar-hero__headline-accent">{heroHeadlineSecondary}</span>
           </h2>
           <p className="virus-radar-hero__summary virus-radar-hero__summary--lead">
-            {heroForecast.summary}
+            {heroSummary}
           </p>
 
           <div className="virus-radar-hero-chart-card">
@@ -284,6 +310,7 @@ const VirusRadarWorkspace: React.FC<Props> = ({
             <MultiVirusForecastChart
               data={heroForecast.chartData}
               className="virus-radar-hero-chart"
+              loading={heroIsLoading}
             />
           </div>
 
@@ -291,13 +318,11 @@ const VirusRadarWorkspace: React.FC<Props> = ({
             <div className="virus-radar-hero__stats">
               <div className="virus-radar-stat">
                 <span className="virus-radar-stat__label">Stärkster Anstieg</span>
-                <strong className="virus-radar-stat__value">
-                  {topVirusSummary ? `${topVirusSummary.virus} ${formatSignedPercent(topVirusSummary.deltaPct)}` : 'Noch offen'}
-                </strong>
+                <strong className="virus-radar-stat__value">{heroPrimaryStat}</strong>
               </div>
               <div className="virus-radar-stat">
                 <span className="virus-radar-stat__label">Danach</span>
-                <strong className="virus-radar-stat__value">{secondVirusSummary ? `${secondVirusSummary.virus} ${formatSignedPercent(secondVirusSummary.deltaPct)}` : 'Noch offen'}</strong>
+                <strong className="virus-radar-stat__value">{heroSecondaryStat}</strong>
               </div>
               <div className="virus-radar-stat">
                 <span className="virus-radar-stat__label">Datenlage</span>

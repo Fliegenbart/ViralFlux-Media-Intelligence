@@ -16,7 +16,7 @@ export function useVirusRadarHeroForecast(
   toast: ToastLike = noop,
 ) {
   const [heroForecast, setHeroForecast] = useState<VirusRadarHeroForecastData>(EMPTY_HERO_FORECAST);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const loadVersionRef = useRef(0);
 
   const loadHeroForecast = useCallback(async () => {

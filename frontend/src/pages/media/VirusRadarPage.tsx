@@ -69,6 +69,7 @@ const VirusRadarPage: React.FC = () => {
         virus={virus}
         onVirusChange={setVirus}
         horizonDays={horizonDays}
+        heroForecastLoading={heroForecastData.loading}
         heroForecast={heroForecastData.heroForecast}
         nowData={nowData}
         regionsData={regionsData}

@@ -18,6 +18,7 @@ import {
 interface MultiVirusForecastChartProps {
   data: VirusRadarHeroChartRow[];
   className?: string;
+  loading?: boolean;
 }
 
 type TooltipEntry = {
@@ -66,6 +67,7 @@ function axisDomain(values: Array<number | null | undefined>): [number, number] 
 const MultiVirusForecastChart: React.FC<MultiVirusForecastChartProps> = ({
   data,
   className,
+  loading = false,
 }) => {
   const chartData = useMemo(() => data.map((row, index) => {
     const nextIsForecast = data[index + 1]?.isForecast ?? false;
@@ -83,6 +85,10 @@ const MultiVirusForecastChart: React.FC<MultiVirusForecastChartProps> = ({
   const yDomain = useMemo(() => axisDomain(
     data.flatMap((row) => VIRUS_RADAR_HERO_VIRUSES.map((virus) => row.series[virus])),
   ), [data]);
+
+  if (loading && !data.length) {
+    return <div className={`forecast-chart-empty ${className || ''}`}>Die 4-Virus-Prognose wird gerade aufgebaut.</div>;
+  }
 
   if (!data.length) {
     return <div className={`forecast-chart-empty ${className || ''}`}>Noch keine gemeinsame Prognose verfügbar.</div>;

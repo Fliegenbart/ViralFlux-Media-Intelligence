@@ -16,7 +16,9 @@ jest.mock('./ForecastChart', () => ({
 
 jest.mock('./MultiVirusForecastChart', () => ({
   __esModule: true,
-  MultiVirusForecastChart: () => <div>Multi virus forecast chart</div>,
+  MultiVirusForecastChart: ({ loading }: { loading?: boolean }) => (
+    <div>{loading ? 'Multi virus forecast loading' : 'Multi virus forecast chart'}</div>
+  ),
 }));
 
 jest.mock('./cockpitUtils', () => ({
@@ -39,6 +41,7 @@ describe('VirusRadarWorkspace', () => {
         virus="Influenza A"
         onVirusChange={noop}
         horizonDays={7}
+        heroForecastLoading={false}
         heroForecast={{
           availableViruses: ['Influenza A', 'Influenza B', 'SARS-CoV-2', 'RSV A'],
           chartData: [
@@ -216,5 +219,82 @@ describe('VirusRadarWorkspace', () => {
     expect(screen.getByText('Wichtigste Regionen diese Woche')).toBeInTheDocument();
     expect(screen.getByText('Fokusregion')).toBeInTheDocument();
     expect(screen.getAllByText('Aktivieren').length).toBeGreaterThan(0);
+  });
+
+  it('shows an honest loading state while the shared hero outlook is still loading', () => {
+    render(
+      <VirusRadarWorkspace
+        virus="Influenza A"
+        onVirusChange={noop}
+        horizonDays={7}
+        heroForecastLoading
+        heroForecast={{
+          availableViruses: [],
+          chartData: [],
+          summaries: [],
+          headlinePrimary: 'Das Lagebild der nächsten 7 Tage.',
+          headlineSecondary: 'Noch keine belastbare 7-Tage-Prognose.',
+          summary: 'Sobald frische Prognosekurven vorliegen, wird hier das gemeinsame Lagebild der nächsten sieben Tage sichtbar.',
+        }}
+        nowData={{
+          view: {
+            generatedAt: '2026-04-04T08:00:00Z',
+            heroRecommendation: null,
+            focusRegion: null,
+            reasons: [],
+            risks: [],
+            summary: '',
+          },
+          forecast: { predictions: [] },
+          workspaceStatus: {
+            data_freshness: 'Lädt',
+            summary: 'Die wichtigsten Daten werden noch geladen.',
+            blocker_count: 0,
+            blockers: [],
+            open_blockers: '0 offen',
+          },
+          focusRegionBacktest: {
+            timeline: [],
+          },
+        } as any}
+        regionsData={{
+          regionsView: {
+            map: {
+              regions: {},
+              top_regions: [],
+              activation_suggestions: [],
+            },
+          },
+        } as any}
+        campaignsData={{
+          campaignsView: {
+            summary: {
+              publishable_cards: 0,
+              active_cards: 0,
+            },
+            cards: [],
+          },
+        } as any}
+        evidenceData={{
+          evidence: {
+            truth_gate: {
+              state: 'Lädt',
+              passed: false,
+              message: 'Evidenz wird geladen.',
+            },
+          },
+        } as any}
+        onOpenRecommendation={noop}
+        onOpenRegions={noop}
+        onOpenCampaigns={noop}
+        onOpenEvidence={noop}
+      />,
+    );
+
+    expect(screen.getByText('Live-Lagebild wird geladen')).toBeInTheDocument();
+    expect(screen.getByText('Das gemeinsame 4-Virus-Lagebild wird geladen.')).toBeInTheDocument();
+    expect(screen.getByText('Die 7-Tage-Prognose wird gerade aufgebaut.')).toBeInTheDocument();
+    expect(screen.getByText('Multi virus forecast loading')).toBeInTheDocument();
+    expect(screen.queryByText('Live-Lagebild · 0 Viren')).not.toBeInTheDocument();
   });
 });

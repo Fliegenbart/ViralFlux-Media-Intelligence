@@ -7,17 +7,31 @@ import { mediaApi } from './api';
 
 jest.mock('./api', () => ({
   mediaApi: {
-    getLatestForecast: jest.fn(),
+    getRegionalPortfolio: jest.fn(),
   },
 }));
 
-function buildForecast(virusTyp: string, valueToday: number, valueFuture: number) {
+function buildPortfolio() {
   return {
-    virus_typ: virusTyp,
-    forecast: [
-      { date: '2026-04-08T00:00:00', predicted_value: valueToday },
-      { date: '2026-04-15T00:00:00', predicted_value: valueFuture },
+    generated_at: '2026-04-08T08:00:00Z',
+    reference_virus: 'Influenza A',
+    summary: {
+      trained_viruses: 4,
+      go_viruses: 1,
+      total_opportunities: 4,
+      watchlist_opportunities: 4,
+      priority_opportunities: 0,
+      validated_opportunities: 0,
+    },
+    benchmark: [],
+    virus_rollup: [
+      { virus_typ: 'Influenza A', top_change_pct: 8, top_region_name: 'Berlin' },
+      { virus_typ: 'Influenza B', top_change_pct: -6, top_region_name: 'Hamburg' },
+      { virus_typ: 'SARS-CoV-2', top_change_pct: 21, top_region_name: 'Saarland' },
+      { virus_typ: 'RSV A', top_change_pct: 45, top_region_name: 'Mecklenburg-Vorpommern' },
     ],
+    region_rollup: [],
+    top_opportunities: [],
   };
 }
 
@@ -40,13 +54,8 @@ describe('useVirusRadarHeroForecast', () => {
     jest.clearAllMocks();
   });
 
-  it('loads all four virus backtests and builds a shared hero outlook', async () => {
-    mockedMediaApi.getLatestForecast.mockImplementation(async (virus: string) => {
-      if (virus === 'RSV A') return buildForecast(virus, 100, 145) as any;
-      if (virus === 'SARS-CoV-2') return buildForecast(virus, 100, 121) as any;
-      if (virus === 'Influenza A') return buildForecast(virus, 100, 108) as any;
-      return buildForecast(virus, 100, 94) as any;
-    });
+  it('loads one shared 7-day portfolio and builds a four-virus hero outlook from it', async () => {
+    mockedMediaApi.getRegionalPortfolio.mockResolvedValue(buildPortfolio() as any);
 
     render(<Harness />);
 
@@ -54,7 +63,7 @@ describe('useVirusRadarHeroForecast', () => {
 
     await waitFor(() => expect(screen.getByTestId('hero-loading')).toHaveTextContent('ready'));
 
-    expect(mockedMediaApi.getLatestForecast).toHaveBeenCalledTimes(4);
+    expect(mockedMediaApi.getRegionalPortfolio).toHaveBeenCalledTimes(1);
     expect(screen.getByTestId('hero-top-virus')).toHaveTextContent('RSV A');
     expect(screen.getByTestId('hero-headline')).toHaveTextContent('RSV A');
   });

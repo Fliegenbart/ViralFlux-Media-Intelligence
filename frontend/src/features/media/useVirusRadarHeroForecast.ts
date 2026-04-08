@@ -1,14 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { LatestForecastResponse } from '../../types/media';
 import { mediaApi } from './api';
 import {
   buildVirusRadarHeroForecastData,
   VirusRadarHeroForecastData,
-  VIRUS_RADAR_HERO_VIRUSES,
 } from './virusRadarHeroForecast';
 
-const EMPTY_HERO_FORECAST = buildVirusRadarHeroForecastData({});
+const EMPTY_HERO_FORECAST = buildVirusRadarHeroForecastData(undefined);
 type ToastLike = (message: string, tone?: 'success' | 'error' | 'info') => void;
 const noop: ToastLike = () => undefined;
 
@@ -27,24 +25,25 @@ export function useVirusRadarHeroForecast(
     const isCurrentLoad = () => loadVersionRef.current === loadVersion;
 
     setLoading(true);
+    try {
+      const portfolio = await mediaApi.getRegionalPortfolio('Influenza A', 4);
 
-    const forecastResults = await Promise.allSettled(
-      VIRUS_RADAR_HERO_VIRUSES.map((virus) => mediaApi.getLatestForecast(virus)),
-    );
+      if (!isCurrentLoad()) return;
 
-    if (!isCurrentLoad()) return;
+      const nextHeroForecast = buildVirusRadarHeroForecastData(portfolio);
+      setHeroForecast(nextHeroForecast);
 
-    const byVirus: Partial<Record<string, LatestForecastResponse | null>> = {};
-    forecastResults.forEach((result, index) => {
-      byVirus[VIRUS_RADAR_HERO_VIRUSES[index]] = result.status === 'fulfilled' ? result.value : null;
-    });
-
-    const nextHeroForecast = buildVirusRadarHeroForecastData(byVirus);
-    setHeroForecast(nextHeroForecast);
-    setLoading(false);
-
-    if (!nextHeroForecast.availableViruses.length) {
-      toast('Das gemeinsame 4-Virus-Lagebild konnte gerade nicht aufgebaut werden.', 'info');
+      if (!nextHeroForecast.availableViruses.length) {
+        toast('Das gemeinsame 4-Virus-Lagebild konnte gerade nicht aufgebaut werden.', 'info');
+      }
+    } catch (error) {
+      if (!isCurrentLoad()) return;
+      setHeroForecast(EMPTY_HERO_FORECAST);
+      toast('Das gemeinsame 4-Virus-Lagebild konnte gerade nicht geladen werden.', 'info');
+    } finally {
+      if (isCurrentLoad()) {
+        setLoading(false);
+      }
     }
   }, [brand, toast]);
 

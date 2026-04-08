@@ -1,4 +1,4 @@
-import { LatestForecastResponse } from '../../types/media';
+import { RegionalPortfolioResponse } from '../../types/media';
 
 export const VIRUS_RADAR_HERO_VIRUSES = [
   'Influenza A',
@@ -58,24 +58,20 @@ function addDays(dateStr: string, days: number): string {
   return date.toISOString().slice(0, 10);
 }
 
-function subtractDays(dateStr: string, days: number): string {
-  return addDays(dateStr, -days);
-}
-
 function normalizeDirection(deltaPct: number): 'steigend' | 'fallend' | 'stabil' {
   if (deltaPct >= 3) return 'steigend';
   if (deltaPct <= -3) return 'fallend';
   return 'stabil';
 }
 
-function extractForecastPoints(result: LatestForecastResponse | null | undefined): ForecastPoint[] {
-  return [...(result?.forecast || [])]
-    .map((point) => ({
-      date: String(point?.date || '').slice(0, 10),
-      value: Number(point?.predicted_value ?? Number.NaN),
-    }))
-    .filter((point) => point.date && Number.isFinite(point.value))
-    .sort((left, right) => left.date.localeCompare(right.date));
+function buildProjectionSeries(today: string, deltaPct: number): ForecastPoint[] {
+  return Array.from({ length: 8 }, (_, dayOffset) => {
+    const progress = dayOffset / 7;
+    return {
+      date: addDays(today, dayOffset),
+      value: Number((100 + (deltaPct * progress)).toFixed(2)),
+    };
+  });
 }
 
 function buildHeadlineSecondary(summaries: VirusRadarHeroSummary[]): string {
@@ -95,47 +91,29 @@ function buildSummary(summaries: VirusRadarHeroSummary[]): string {
 
   const top = summaries[0];
   const second = summaries[1];
-  const topPrefix = `${top.virus} ${top.deltaPct >= 0 ? 'liegt' : 'fällt'} in der 7-Tage-Prognose bei ${top.deltaPct >= 0 ? '+' : ''}${top.deltaPct.toFixed(0)} %.`;
+  const topPrefix = `${top.virus} liegt in der 7-Tage-Richtung bei ${top.deltaPct >= 0 ? '+' : ''}${top.deltaPct.toFixed(0)} %.`;
   if (!second) {
-    return `${topPrefix} Alle Linien sind auf Heute = 100 normiert, damit die Dynamik direkt vergleichbar bleibt.`;
+    return `${topPrefix} Alle Linien sind auf Heute = 100 normiert und zeigen die erwartete 7-Tage-Richtung je Virus.`;
   }
-  return `${topPrefix} Dahinter folgt ${second.virus} mit ${second.deltaPct >= 0 ? '+' : ''}${second.deltaPct.toFixed(0)} %. Alle Linien sind auf Heute = 100 normiert, damit die Dynamik direkt vergleichbar bleibt.`;
+  return `${topPrefix} Dahinter folgt ${second.virus} mit ${second.deltaPct >= 0 ? '+' : ''}${second.deltaPct.toFixed(0)} %. Alle Linien sind auf Heute = 100 normiert und zeigen die erwartete 7-Tage-Richtung je Virus.`;
 }
 
 export function buildVirusRadarHeroForecastData(
-  forecastsByVirus: Partial<Record<string, LatestForecastResponse | null | undefined>>,
+  portfolio: RegionalPortfolioResponse | null | undefined,
   today = new Date().toISOString().slice(0, 10),
 ): VirusRadarHeroForecastData {
-  const windowEnd = addDays(today, 7);
   const seriesByVirus = new Map<string, ForecastPoint[]>();
   const summaries: VirusRadarHeroSummary[] = [];
+  const rollups = portfolio?.virus_rollup || [];
 
   VIRUS_RADAR_HERO_VIRUSES.forEach((virus) => {
-    const forecastPoints = extractForecastPoints(forecastsByVirus[virus]);
-    const anchorPoint = forecastPoints.find((point) => point.date >= today && point.value > 0) || forecastPoints[0];
+    const rollup = rollups.find((item) => item.virus_typ === virus);
+    const deltaPct = Number(rollup?.top_change_pct ?? Number.NaN);
+    if (!Number.isFinite(deltaPct)) return;
 
-    if (!anchorPoint) return;
-
-    const windowPoints = forecastPoints.filter((point) => point.date >= today && point.date <= windowEnd);
-    if (!windowPoints.length) return;
-
-    const normalizedPoints: ForecastPoint[] = [
-      {
-        date: today,
-        value: 100,
-      },
-      ...windowPoints.map((point) => ({
-      date: point.date,
-      value: Number(((point.value / anchorPoint.value) * 100).toFixed(2)),
-      })),
-    ];
+    const normalizedPoints = buildProjectionSeries(today, deltaPct);
     seriesByVirus.set(virus, normalizedPoints);
-
-    const futurePoint = [...normalizedPoints]
-      .filter((point) => point.date > today)
-      .sort((left, right) => right.date.localeCompare(left.date))[0];
-    const projectedIndex = futurePoint?.value ?? 100;
-    const deltaPct = Number((projectedIndex - 100).toFixed(1));
+    const projectedIndex = Number((100 + deltaPct).toFixed(1));
 
     summaries.push({
       virus,

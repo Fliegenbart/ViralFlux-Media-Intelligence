@@ -174,11 +174,20 @@ const VirusRadarWorkspace: React.FC<Props> = ({
       trend: heroTrend,
     },
   });
+  const chartRegionName = heroRegionName || '';
   const whyNowItems = buildWhyNowItems(nowData.view.reasons, evidenceData.evidence?.signal_stack?.summary?.top_drivers);
   const riskItems = buildRiskItems(nowData.workspaceStatus?.blockers, nowData.view.risks, evidenceData.evidence?.known_limits);
+  const whyNowModel = buildWhyNowModel({
+    regionName: chartRegionName,
+    virus,
+    items: whyNowItems,
+  });
+  const riskModel = buildRiskModel({
+    regionName: chartRegionName,
+    items: riskItems,
+  });
   const campaignCards = (campaignsData.campaignsView?.cards || []).slice(0, 3);
   const topActivation = regionsData.regionsView?.map?.activation_suggestions?.slice(0, 3) || [];
-  const chartRegionName = heroRegionName || '';
   const dataTimestamp = formatDateTime(nowData.view.generatedAt);
   const trendInsight = buildTrendInsight({
     regionName: chartRegionName,
@@ -463,10 +472,20 @@ const VirusRadarWorkspace: React.FC<Props> = ({
             title="Was die Entscheidung trägt"
             description="Die wichtigsten Treiber in Klartext, damit man nicht erst mehrere Seiten lesen muss."
           >
-            <div className="virus-radar-list">
-              {whyNowItems.map((item) => (
-                <div key={item} className="virus-radar-list__item">{item}</div>
-              ))}
+            <div className="virus-radar-explain virus-radar-explain--why">
+              <div className="virus-radar-explain__lead">
+                <span className="virus-radar-explain__eyebrow">Kurz gesagt</span>
+                <strong className="virus-radar-explain__headline">{whyNowModel.headline}</strong>
+                <p className="virus-radar-explain__copy">{whyNowModel.copy}</p>
+              </div>
+              <div className="virus-radar-list virus-radar-list--detail">
+                {whyNowModel.items.map((item, index) => (
+                  <div key={`${item}-${index}`} className="virus-radar-list__item virus-radar-list__item--detail">
+                    <span className="virus-radar-list__index">{String(index + 1).padStart(2, '0')}</span>
+                    <span>{item}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           </OperatorPanel>
 
@@ -475,10 +494,20 @@ const VirusRadarWorkspace: React.FC<Props> = ({
             title="Was noch bremst"
             description="Unsicherheiten und Blocker bleiben sichtbar, damit die Entscheidung ehrlich bleibt."
           >
-            <div className="virus-radar-list virus-radar-list--risk">
-              {riskItems.map((item) => (
-                <div key={item} className="virus-radar-list__item">{item}</div>
-              ))}
+            <div className="virus-radar-explain virus-radar-explain--risk">
+              <div className="virus-radar-explain__lead virus-radar-explain__lead--risk">
+                <span className="virus-radar-explain__eyebrow">Freigabe-Risiko</span>
+                <strong className="virus-radar-explain__headline virus-radar-explain__headline--risk">{riskModel.headline}</strong>
+                <p className="virus-radar-explain__copy">{riskModel.copy}</p>
+              </div>
+              <div className="virus-radar-list virus-radar-list--risk virus-radar-list--detail">
+                {riskModel.items.map((item, index) => (
+                  <div key={`${item}-${index}`} className="virus-radar-list__item virus-radar-list__item--detail">
+                    <span className="virus-radar-list__index virus-radar-list__index--risk">{String(index + 1).padStart(2, '0')}</span>
+                    <span>{item}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           </OperatorPanel>
         </section>
@@ -664,6 +693,65 @@ function buildRiskItems(
 ): string[] {
   const combined = [...(blockers || []), ...(risks || []), ...(knownLimits || [])].filter(Boolean);
   return combined.slice(0, 4).length > 0 ? combined.slice(0, 4) : ['Aktuell sind keine zusätzlichen Risiken dokumentiert.'];
+}
+
+function buildWhyNowModel({
+  regionName,
+  virus,
+  items,
+}: {
+  regionName: string;
+  virus: string;
+  items: string[];
+}): {
+  headline: string;
+  copy: string;
+  items: string[];
+} {
+  const safeRegion = regionName || 'Die Fokusregion';
+  const primaryItem = items[0] || 'Noch keine klare Kurzbegründung vorhanden.';
+  const detailItems = items.slice(1);
+
+  return {
+    headline: `${safeRegion} bleibt für ${virus} im Fokus.`,
+    copy: primaryItem,
+    items: detailItems.length > 0 ? detailItems : ['Weitere Treiber werden nachgeladen, sobald zusätzliche Evidenzpunkte vorliegen.'],
+  };
+}
+
+function buildRiskModel({
+  regionName,
+  items,
+}: {
+  regionName: string;
+  items: string[];
+}): {
+  headline: string;
+  copy: string;
+  items: string[];
+} {
+  const safeRegion = regionName || 'Die Fokusregion';
+  const realItems = items.filter((item) => item && item !== 'Aktuell sind keine zusätzlichen Risiken dokumentiert.');
+
+  if (realItems.length === 0) {
+    return {
+      headline: 'Aktuell keine harten Stopps sichtbar.',
+      copy: `${safeRegion} hat derzeit keine zusätzlichen Risikohinweise. Beobachten bleibt sinnvoll, aber es gibt keinen klaren Showstopper.`,
+      items: ['Die Freigabe bleibt trotzdem an die allgemeine Datenlage und Evidenz gekoppelt.'],
+    };
+  }
+
+  const primaryItem = realItems[0];
+  const detailItems = realItems.slice(1);
+  const headline = realItems.length === 1
+    ? 'Ein Prüfpunkt bleibt vor der Freigabe offen.'
+    : `${realItems.length} Punkte bremsen die Freigabe noch.`;
+
+  return {
+    headline,
+    copy: primaryItem,
+    items: detailItems.length > 0 ? detailItems : ['Dieser Punkt sollte vor einer aktiven Budgetverschiebung noch geprüft werden.'],
+  };
 }
 
 function scoreTone(value?: number | null): 'success' | 'warning' | 'danger' | 'neutral' {

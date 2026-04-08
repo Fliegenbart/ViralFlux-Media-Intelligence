@@ -111,6 +111,13 @@ const VirusRadarWorkspace: React.FC<Props> = ({
       tooltip: undefined,
     }));
   }, [regionsData.regionsView?.map?.top_regions, sortedPredictions]);
+  const activationByRegion = useMemo(() => {
+    const entries = regionsData.regionsView?.map?.activation_suggestions || [];
+    return new Map(entries.map((item) => [item.region, item] as const));
+  }, [regionsData.regionsView?.map?.activation_suggestions]);
+  const predictionByRegion = useMemo(() => {
+    return new Map(sortedPredictions.map((item) => [item.bundesland, item] as const));
+  }, [sortedPredictions]);
   const defaultHeroRegionCode = (
     regionsData.regionsView?.map?.activation_suggestions?.[0]?.region
     || regionsData.regionsView?.map?.top_regions?.[0]?.code
@@ -153,6 +160,8 @@ const VirusRadarWorkspace: React.FC<Props> = ({
   const heroChangePct = heroPrediction?.change_pct ?? heroRegion?.change_pct ?? null;
   const effectiveRegionCode = selectedRegionCode || defaultHeroRegionCode;
   const selectedRegion = effectiveRegionCode ? mapRegions[effectiveRegionCode] : null;
+  const selectedActivation = effectiveRegionCode ? activationByRegion.get(effectiveRegionCode) || null : null;
+  const selectedPrediction = effectiveRegionCode ? predictionByRegion.get(effectiveRegionCode) || null : null;
   const topVirusSummary = heroForecast.summaries[0] || null;
   const secondVirusSummary = heroForecast.summaries[1] || null;
   const recommendationId = (
@@ -175,6 +184,20 @@ const VirusRadarWorkspace: React.FC<Props> = ({
     },
   });
   const chartRegionName = heroRegionName || '';
+  const selectedRegionStage = resolveRegionStage(
+    selectedActivation?.priority,
+    selectedPrediction?.decision_label,
+    selectedRegion?.impact_probability ?? selectedRegion?.signal_score ?? null,
+  );
+  const selectedRegionStageTone = regionStageTone(selectedRegionStage);
+  const selectedRegionDetail = buildRegionDetail({
+    regionName: selectedRegion?.name || chartRegionName || effectiveRegionCode || 'Fokusregion',
+    stage: selectedRegionStage,
+    trend: selectedRegion?.trend || selectedPrediction?.trend || null,
+    changePct: selectedRegion?.change_pct ?? selectedPrediction?.change_pct ?? null,
+    impactProbability: selectedRegion?.impact_probability ?? selectedRegion?.signal_score ?? selectedPrediction?.event_probability_calibrated ?? null,
+    reason: selectedActivation?.reason || selectedRegion?.priority_explanation || null,
+  });
   const whyNowItems = buildWhyNowItems(nowData.view.reasons, evidenceData.evidence?.signal_stack?.summary?.top_drivers);
   const riskItems = buildRiskItems(nowData.workspaceStatus?.blockers, nowData.view.risks, evidenceData.evidence?.known_limits);
   const whyNowModel = buildWhyNowModel({
@@ -343,10 +366,53 @@ const VirusRadarWorkspace: React.FC<Props> = ({
           <OperatorPanel
             eyebrow="Signal Map"
             title="Deutschland und Regionenleiter"
-            description="Karte für Orientierung, Ranking für Reihenfolge. Ein Klick auf ein Bundesland setzt den Fokus."
+            description="Die Regionen-Leiter zeigt, wo diese Woche zuerst hingeschaut werden sollte. Die Karte bestätigt das räumliche Muster."
             className="virus-radar-map-panel"
           >
             <div className="virus-radar-map-panel__body">
+              <div className="virus-radar-ladder">
+                <div className="virus-radar-ladder__header">
+                  <span>Wichtigste Regionen diese Woche</span>
+                  <button type="button" className="virus-radar-inline-link" onClick={() => onOpenRegions(effectiveRegionCode || undefined)}>
+                    Regionenansicht
+                  </button>
+                </div>
+                <div className="virus-radar-ladder__focus">
+                  <span className="virus-radar-ladder__focus-label">Fokusregion</span>
+                  <div className="virus-radar-ladder__focus-head">
+                    <strong>{selectedRegionDetail.regionName}</strong>
+                    <span className={`virus-radar-ladder__stage virus-radar-ladder__stage--${selectedRegionStageTone}`}>
+                      {selectedRegionStage}
+                    </span>
+                  </div>
+                  <span className="virus-radar-ladder__focus-meta">
+                    {selectedRegionDetail.meta}
+                  </span>
+                  <p className="virus-radar-ladder__focus-copy">
+                    {selectedRegionDetail.copy}
+                  </p>
+                </div>
+                <div className="virus-radar-ladder__list">
+                  {regionLeaderboard.map((row, index) => (
+                    <RegionLadderRow
+                      key={row.code}
+                      row={row}
+                      index={index}
+                      isActive={effectiveRegionCode === row.code}
+                      stage={resolveRegionStage(
+                        activationByRegion.get(row.code)?.priority,
+                        predictionByRegion.get(row.code)?.decision_label,
+                        row.impact_probability ?? row.signal_score ?? null,
+                      )}
+                      onSelect={() => {
+                        setSelectedRegionCode(row.code);
+                        onOpenRegions(row.code);
+                      }}
+                    />
+                  ))}
+                </div>
+              </div>
+
               <div className="virus-radar-map-panel__map">
                 <GermanyMap
                   regions={mapRegions}
@@ -355,38 +421,6 @@ const VirusRadarWorkspace: React.FC<Props> = ({
                   showProbability
                   topRegionCode={regionLeaderboard[0]?.code || null}
                 />
-              </div>
-
-              <div className="virus-radar-ladder">
-                <div className="virus-radar-ladder__header">
-                  <span>Top-Regionen</span>
-                  <button type="button" className="virus-radar-inline-link" onClick={() => onOpenRegions(effectiveRegionCode || undefined)}>
-                    Regionenansicht
-                  </button>
-                </div>
-                <div className="virus-radar-ladder__list">
-                  {regionLeaderboard.map((row, index) => (
-                    <button
-                      key={row.code}
-                      type="button"
-                      className={`virus-radar-ladder__item ${effectiveRegionCode === row.code ? 'is-active' : ''}`}
-                      onClick={() => {
-                        setSelectedRegionCode(row.code);
-                        onOpenRegions(row.code);
-                      }}
-                    >
-                      <span className="virus-radar-ladder__rank">{String(index + 1).padStart(2, '0')}</span>
-                      <span className="virus-radar-ladder__name">{row.name}</span>
-                      <span className="virus-radar-ladder__probability">{formatProbability(row.impact_probability)}</span>
-                    </button>
-                  ))}
-                </div>
-                {selectedRegion ? (
-                  <div className="virus-radar-ladder__detail">
-                    <strong>{selectedRegion.name || effectiveRegionCode}</strong>
-                    <span>Trend {selectedRegion.trend || 'noch offen'} · {formatPercent(Math.abs(selectedRegion.change_pct || 0), 1)} {(selectedRegion.change_pct || 0) >= 0 ? 'hoch' : 'runter'} zur Vorwoche</span>
-                  </div>
-                ) : null}
               </div>
             </div>
           </OperatorPanel>
@@ -753,6 +787,90 @@ function buildRiskModel({
     items: detailItems.length > 0 ? detailItems : ['Dieser Punkt sollte vor einer aktiven Budgetverschiebung noch geprüft werden.'],
   };
 }
+
+function resolveRegionStage(
+  activationPriority?: string | null,
+  decisionLabel?: string | null,
+  probability?: number | null,
+): string {
+  const raw = String(activationPriority || decisionLabel || '').toLowerCase();
+  if (raw.includes('aktiv') || raw.includes('activate')) return 'Aktivieren';
+  if (raw.includes('vorbereit') || raw.includes('prepare') || raw.includes('halt')) return 'Vorbereiten';
+  if (raw.includes('beobacht') || raw.includes('watch')) return 'Beobachten';
+
+  if (probability == null || Number.isNaN(probability)) return 'Beobachten';
+  const normalized = probability <= 1 ? probability : probability / 100;
+  if (normalized >= 0.7) return 'Aktivieren';
+  if (normalized >= 0.45) return 'Vorbereiten';
+  return 'Beobachten';
+}
+
+function regionStageTone(stage: string): 'activate' | 'prepare' | 'watch' {
+  if (stage === 'Aktivieren') return 'activate';
+  if (stage === 'Vorbereiten') return 'prepare';
+  return 'watch';
+}
+
+function buildRegionDetail({
+  regionName,
+  stage,
+  trend,
+  changePct,
+  impactProbability,
+  reason,
+}: {
+  regionName: string;
+  stage: string;
+  trend?: string | null;
+  changePct?: number | null;
+  impactProbability?: number | null;
+  reason?: string | null;
+}): {
+  regionName: string;
+  meta: string;
+  copy: string;
+} {
+  const probabilityLabel = formatProbability(impactProbability);
+  const deltaLabel = changePct == null || Number.isNaN(changePct)
+    ? 'Vorwochenvergleich offen'
+    : `${changePct >= 0 ? '+' : ''}${changePct.toFixed(1)}% zur Vorwoche`;
+  const trendLabel = trend ? `Trend ${trend}` : 'Trend noch offen';
+
+  return {
+    regionName,
+    meta: `${stage} · ${probabilityLabel} Signal · ${deltaLabel}`,
+    copy: reason || `${regionName} steht aktuell weit oben im Ranking. ${trendLabel} und Signalscore sprechen für eine genauere Prüfung in dieser Woche.`,
+  };
+}
+
+const RegionLadderRow: React.FC<{
+  row: RegionLeaderboardRow;
+  index: number;
+  isActive: boolean;
+  stage: string;
+  onSelect: () => void;
+}> = ({ row, index, isActive, stage, onSelect }) => {
+  const tone = regionStageTone(stage);
+  return (
+    <button
+      type="button"
+      className={`virus-radar-ladder__item ${isActive ? 'is-active' : ''}`}
+      onClick={onSelect}
+    >
+      <span className="virus-radar-ladder__rank">{String(index + 1).padStart(2, '0')}</span>
+      <span className="virus-radar-ladder__main">
+        <span className="virus-radar-ladder__name">{row.name}</span>
+        <span className="virus-radar-ladder__subline">
+          Trend {row.trend || 'offen'}
+        </span>
+      </span>
+      <span className="virus-radar-ladder__meta">
+        <span className={`virus-radar-ladder__stage virus-radar-ladder__stage--${tone}`}>{stage}</span>
+        <span className="virus-radar-ladder__probability">{formatProbability(row.impact_probability ?? row.signal_score)}</span>
+      </span>
+    </button>
+  );
+};
 
 function scoreTone(value?: number | null): 'success' | 'warning' | 'danger' | 'neutral' {
   if (value == null || Number.isNaN(value)) return 'neutral';

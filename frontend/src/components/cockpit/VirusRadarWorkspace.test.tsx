@@ -213,5 +213,8 @@ describe('VirusRadarWorkspace', () => {
     expect(screen.getByText('Signal baut sich deutlich auf.')).toBeInTheDocument();
     expect(screen.getByText('+199.0%')).toBeInTheDocument();
     expect(screen.getByText('Zur Vorwoche')).toBeInTheDocument();
+    expect(screen.getByText('Wichtigste Regionen diese Woche')).toBeInTheDocument();
+    expect(screen.getByText('Fokusregion')).toBeInTheDocument();
+    expect(screen.getAllByText('Aktivieren').length).toBeGreaterThan(0);
   });
 });

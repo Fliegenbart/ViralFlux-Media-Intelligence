@@ -4,10 +4,41 @@ from unittest.mock import patch
 import numpy as np
 import pandas as pd
 
-from app.services.ml.forecast_service import ForecastService
+from app.services.ml.forecast_service import (
+    ForecastService,
+    _resolve_loaded_model_feature_names,
+)
 
 
 class ForecastServiceGuardTests(unittest.TestCase):
+    def test_resolve_loaded_model_feature_names_respects_explicit_metadata_schema(self) -> None:
+        names = _resolve_loaded_model_feature_names(
+            metadata={"feature_names": ["hw_pred", "ridge_pred"]},
+            live_feature_row={"hw_pred": 1.0, "ridge_pred": 2.0, "horizon_days": 7.0},
+            model=None,
+        )
+
+        self.assertEqual(names, ["hw_pred", "ridge_pred"])
+
+    def test_resolve_loaded_model_feature_names_can_append_horizon_for_legacy_models_without_metadata(self) -> None:
+        class _Booster:
+            @staticmethod
+            def num_features() -> int:
+                return 19
+
+        class _Model:
+            @staticmethod
+            def get_booster() -> _Booster:
+                return _Booster()
+
+        names = _resolve_loaded_model_feature_names(
+            metadata={},
+            live_feature_row={"horizon_days": 7.0},
+            model=_Model(),
+        )
+
+        self.assertIn("horizon_days", names)
+
     def test_predict_falls_back_to_in_memory_forecast_when_cached_model_features_do_not_match(self) -> None:
         service = ForecastService(db=None)
 

@@ -313,6 +313,34 @@ def _is_model_feature_compatibility_error(exc: Exception) -> bool:
     )
 
 
+def _loaded_model_expected_feature_count(model: Any | None) -> int | None:
+    if model is None:
+        return None
+    try:
+        booster = model.get_booster()
+        return int(booster.num_features())
+    except Exception:
+        return None
+
+
+def _resolve_loaded_model_feature_names(
+    *,
+    metadata: dict[str, Any],
+    live_feature_row: dict[str, Any],
+    model: Any | None,
+) -> list[str]:
+    explicit_feature_names = list(metadata.get("feature_names") or [])
+    if explicit_feature_names:
+        return explicit_feature_names
+
+    feature_names = list(META_FEATURES)
+    if "horizon_days" in live_feature_row and "horizon_days" not in feature_names:
+        expected_feature_count = _loaded_model_expected_feature_count(model)
+        if expected_feature_count is None or expected_feature_count >= len(feature_names) + 1:
+            feature_names.append("horizon_days")
+    return feature_names
+
+
 def _sigmoid(x: float) -> float:
     """Numerically stable sigmoid."""
     if x >= 0:
@@ -2115,7 +2143,6 @@ class ForecastService:
             }
 
         y = df["y"].values
-        feature_names = list(metadata.get("feature_names") or META_FEATURES)
         live_feature_row = self._build_live_direct_feature_row(
             df,
             virus_typ=virus_typ,
@@ -2130,9 +2157,11 @@ class ForecastService:
                 "horizon_days": horizon,
             }
 
-        if "horizon_days" in live_feature_row and "horizon_days" not in feature_names:
-            feature_names.append("horizon_days")
-
+        feature_names = _resolve_loaded_model_feature_names(
+            metadata=metadata,
+            live_feature_row=live_feature_row,
+            model=model_med,
+        )
         X_row = np.array([[live_feature_row.get(name, 0.0) for name in feature_names]], dtype=float)
         X_row = np.nan_to_num(X_row, nan=0.0, posinf=0.0, neginf=0.0)
 

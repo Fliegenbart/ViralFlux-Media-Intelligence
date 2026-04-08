@@ -46,6 +46,7 @@ class RegionalOperationalSnapshotStore:
         forecast_status = cls._normalized_status(forecast)
         allocation_status = cls._normalized_status(allocation)
         recommendation_status = cls._normalized_status(recommendations)
+        top_prediction = ((forecast.get("predictions") or [])[:1] or [None])[0] or {}
         metadata = {
             "virus_typ": str(virus_typ or "").strip(),
             "horizon_days": int(horizon_days),
@@ -53,6 +54,11 @@ class RegionalOperationalSnapshotStore:
             "forecast_as_of_date": forecast.get("as_of_date"),
             "forecast_generated_at": forecast.get("generated_at"),
             "forecast_regions": len(forecast.get("predictions") or []),
+            "top_region": top_prediction.get("bundesland"),
+            "top_region_name": top_prediction.get("bundesland_name"),
+            "top_event_probability": top_prediction.get("event_probability_calibrated"),
+            "top_change_pct": top_prediction.get("change_pct"),
+            "top_trend": top_prediction.get("trend"),
             "supported_horizon_days": forecast.get("supported_horizon_days") or [],
             "supported_horizon_days_for_virus": forecast.get("supported_horizon_days_for_virus") or [],
             "artifact_transition_mode": forecast.get("artifact_transition_mode"),

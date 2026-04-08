@@ -508,6 +508,22 @@ async def get_regional_portfolio(
     )
 
 
+@router.get("/regional/hero-overview", dependencies=[Depends(get_current_user)])
+async def get_regional_hero_overview(
+    horizon_days: int = Depends(_validated_regional_horizon),
+    reference_virus: str = "Influenza A",
+    db: Session = Depends(get_db),
+):
+    """Return a lightweight, snapshot-backed 4-virus overview for the Virus-Radar hero."""
+    from app.services.ml.regional_forecast import RegionalForecastService
+
+    service = RegionalForecastService(db)
+    return service.build_hero_overview(
+        horizon_days=horizon_days,
+        reference_virus=reference_virus,
+    )
+
+
 @router.get("/regional/validation", dependencies=[Depends(get_current_user)])
 async def get_regional_business_validation(
     virus_typ: str = "Influenza A",

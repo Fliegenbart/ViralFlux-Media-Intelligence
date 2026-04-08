@@ -40,7 +40,13 @@ class RegionalOperationalSnapshotStoreTests(unittest.TestCase):
                 "registry_status": "champion",
                 "promotion_evidence": {"promotion_allowed": True, "promotion_blockers": []},
                 "quality_gate": {"overall_passed": True, "forecast_readiness": "GO"},
-                "predictions": [{"bundesland": "BY"}],
+                "predictions": [{
+                    "bundesland": "BY",
+                    "bundesland_name": "Bayern",
+                    "event_probability_calibrated": 0.61,
+                    "change_pct": 18.4,
+                    "trend": "steigend",
+                }],
             },
             allocation={"generated_at": "2026-03-17T08:01:00", "recommendations": [{"bundesland": "BY"}]},
             recommendations={"generated_at": "2026-03-17T08:02:00", "recommendations": [{"bundesland": "BY"}]},
@@ -71,6 +77,11 @@ class RegionalOperationalSnapshotStoreTests(unittest.TestCase):
         self.assertEqual(latest["forecast_regions"], 1)
         self.assertEqual(latest["allocation_regions"], 1)
         self.assertEqual(latest["recommendation_count"], 1)
+        self.assertEqual(latest["top_region"], "BY")
+        self.assertEqual(latest["top_region_name"], "Bayern")
+        self.assertEqual(latest["top_event_probability"], 0.61)
+        self.assertEqual(latest["top_change_pct"], 18.4)
+        self.assertEqual(latest["top_trend"], "steigend")
         self.assertEqual(latest["forecast_recency_status"], "ok")
         self.assertTrue(latest["pilot_contract_supported"])
         self.assertEqual(latest["metric_semantics_version"], "regional_probabilistic_metrics_v1")

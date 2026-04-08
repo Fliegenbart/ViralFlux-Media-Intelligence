@@ -1114,6 +1114,91 @@ class RegionalForecastService:
             "benchmark": ranked,
         }
 
+    def build_hero_overview(
+        self,
+        *,
+        horizon_days: int = 7,
+        reference_virus: str = "Influenza A",
+    ) -> dict[str, Any]:
+        horizon = ensure_supported_horizon(horizon_days)
+        snapshots = (
+            self.snapshot_store.latest_scope_snapshots(
+                virus_types=SUPPORTED_VIRUS_TYPES,
+                horizon_days_list=[horizon],
+                limit=500,
+            )
+            if self.snapshot_store is not None
+            else {}
+        )
+
+        virus_rollup: list[dict[str, Any]] = []
+        latest_as_of_date: str | None = None
+
+        for virus_typ in SUPPORTED_VIRUS_TYPES:
+            metadata = snapshots.get((virus_typ, horizon)) or {}
+            if not metadata:
+                continue
+
+            top_change_pct = metadata.get("top_change_pct")
+            if top_change_pct is None:
+                continue
+
+            forecast_as_of_date = metadata.get("forecast_as_of_date")
+            if forecast_as_of_date:
+                latest_as_of_date = str(
+                    max(
+                        filter(
+                            None,
+                            [latest_as_of_date, str(forecast_as_of_date)],
+                        )
+                    )
+                )
+
+            virus_rollup.append(
+                {
+                    "virus_typ": virus_typ,
+                    "quality_gate": metadata.get("quality_gate") or {},
+                    "business_gate": metadata.get("business_gate") or {},
+                    "evidence_tier": metadata.get("evidence_tier"),
+                    "aggregate_metrics": {},
+                    "top_region": metadata.get("top_region"),
+                    "top_region_name": metadata.get("top_region_name"),
+                    "top_event_probability": metadata.get("top_event_probability"),
+                    "top_change_pct": top_change_pct,
+                    "top_trend": metadata.get("top_trend"),
+                    "products": GELO_PRODUCTS.get(virus_typ, ["GeloMyrtol forte"]),
+                }
+            )
+
+        go_viruses = sum(
+            1
+            for item in virus_rollup
+            if bool((item.get("quality_gate") or {}).get("overall_passed"))
+            and str((item.get("business_gate") or {}).get("action_class") or "") != "watch_only"
+        )
+
+        return {
+            "generated_at": utc_now().isoformat(),
+            "reference_virus": reference_virus,
+            "latest_as_of_date": latest_as_of_date,
+            "summary": {
+                "trained_viruses": len(virus_rollup),
+                "go_viruses": go_viruses,
+                "total_opportunities": len(virus_rollup),
+                "watchlist_opportunities": max(len(virus_rollup) - go_viruses, 0),
+                "priority_opportunities": 0,
+                "validated_opportunities": go_viruses,
+            },
+            "business_gate": self._business_gate(
+                quality_gate={"overall_passed": bool(go_viruses)},
+            ),
+            "evidence_tier": None,
+            "benchmark": [],
+            "virus_rollup": virus_rollup,
+            "region_rollup": [],
+            "top_opportunities": [],
+        }
+
     def build_portfolio_view(
         self,
         *,

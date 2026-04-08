@@ -7,7 +7,7 @@ import { mediaApi } from './api';
 
 jest.mock('./api', () => ({
   mediaApi: {
-    getRegionalPortfolio: jest.fn(),
+    getRegionalHeroOverview: jest.fn(),
   },
 }));
 
@@ -55,7 +55,7 @@ describe('useVirusRadarHeroForecast', () => {
   });
 
   it('loads one shared 7-day portfolio and builds a four-virus hero outlook from it', async () => {
-    mockedMediaApi.getRegionalPortfolio.mockResolvedValue(buildPortfolio() as any);
+    mockedMediaApi.getRegionalHeroOverview.mockResolvedValue(buildPortfolio() as any);
 
     render(<Harness />);
 
@@ -63,7 +63,7 @@ describe('useVirusRadarHeroForecast', () => {
 
     await waitFor(() => expect(screen.getByTestId('hero-loading')).toHaveTextContent('ready'));
 
-    expect(mockedMediaApi.getRegionalPortfolio).toHaveBeenCalledTimes(1);
+    expect(mockedMediaApi.getRegionalHeroOverview).toHaveBeenCalledTimes(1);
     expect(screen.getByTestId('hero-top-virus')).toHaveTextContent('RSV A');
     expect(screen.getByTestId('hero-headline')).toHaveTextContent('RSV A');
   });

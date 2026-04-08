@@ -221,6 +221,18 @@ export const mediaApi = {
     return fetchJson<RegionalPortfolioResponse>(`/api/v1/forecast/regional/portfolio?${qs.toString()}`, undefined, HEAVY_FETCH_TIMEOUT_MS);
   },
 
+  async getRegionalHeroOverview(referenceVirus = 'Influenza A', horizonDays = 7): Promise<RegionalPortfolioResponse> {
+    const qs = new URLSearchParams({
+      reference_virus: referenceVirus,
+      horizon_days: String(horizonDays),
+    });
+    return fetchJson<RegionalPortfolioResponse>(
+      `/api/v1/forecast/regional/hero-overview?${qs.toString()}`,
+      undefined,
+      DEFAULT_FETCH_TIMEOUT_MS,
+    );
+  },
+
   async getRegionalForecast(
     virus: string,
     horizonDays: number,

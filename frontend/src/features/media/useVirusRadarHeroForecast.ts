@@ -26,7 +26,7 @@ export function useVirusRadarHeroForecast(
 
     setLoading(true);
     try {
-      const portfolio = await mediaApi.getRegionalPortfolio('Influenza A', 4);
+      const portfolio = await mediaApi.getRegionalHeroOverview('Influenza A', 7);
 
       if (!isCurrentLoad()) return;
 

@@ -44,6 +44,11 @@ class ForecastApiTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 401)
 
+    def test_regional_hero_overview_requires_authentication(self) -> None:
+        response = self.client.get("/api/v1/forecast/regional/hero-overview?horizon_days=7")
+
+        self.assertEqual(response.status_code, 401)
+
     def test_forecast_run_requires_admin_role(self) -> None:
         response = self.client.post("/api/v1/forecast/run", headers=self.user_headers)
 
@@ -127,6 +132,48 @@ class ForecastApiTests(unittest.TestCase):
         self.assertIn("reason_trace", first_prediction)
         self.assertEqual(first_prediction["decision"]["stage"], "prepare")
         self.assertIn("expected_target_incidence", first_prediction)
+
+    def test_regional_hero_overview_returns_lightweight_snapshot_rollup(self) -> None:
+        payload = {
+            "generated_at": "2026-04-08T20:00:00",
+            "reference_virus": "Influenza A",
+            "latest_as_of_date": "2026-04-08",
+            "summary": {
+                "trained_viruses": 4,
+                "go_viruses": 1,
+                "total_opportunities": 4,
+                "watchlist_opportunities": 3,
+                "priority_opportunities": 0,
+                "validated_opportunities": 1,
+            },
+            "benchmark": [],
+            "virus_rollup": [
+                {
+                    "virus_typ": "SARS-CoV-2",
+                    "top_region": "SL",
+                    "top_region_name": "Saarland",
+                    "top_event_probability": 0.73,
+                    "top_change_pct": 73.7,
+                }
+            ],
+            "region_rollup": [],
+            "top_opportunities": [],
+        }
+
+        with patch(
+            "app.services.ml.regional_forecast.RegionalForecastService.build_hero_overview",
+            return_value=payload,
+        ):
+            response = self.client.get(
+                "/api/v1/forecast/regional/hero-overview?horizon_days=7",
+                headers=self.admin_headers,
+            )
+
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["summary"]["trained_viruses"], 4)
+        self.assertEqual(body["virus_rollup"][0]["virus_typ"], "SARS-CoV-2")
+        self.assertEqual(body["virus_rollup"][0]["top_change_pct"], 73.7)
 
     def test_experimental_geo_predict_response_stays_shadow_and_cluster_only(self) -> None:
         payload = {

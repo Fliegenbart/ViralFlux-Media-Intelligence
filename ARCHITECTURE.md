@@ -154,6 +154,9 @@ GET  /api/v1/dashboard/timeseries/{virus}
 GET  /api/v1/forecast/{virus}
      └─ ML Prognose Details
 
+GET  /api/v1/forecast/regional/hero-overview
+     └─ Schneller, snapshot-basierter 4-Virus-Überblick für den Virus-Radar-Hero
+
 POST /api/v1/recommendations/generate
      └─ Generiere LLM Empfehlung
 

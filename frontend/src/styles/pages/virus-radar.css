@@ -8,23 +8,12 @@
 
 .virus-radar-hero {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-md);
-  padding: 22px;
-  border-radius: 22px;
-  border: 1px solid rgba(23, 32, 51, 0.14);
-  background:
-    linear-gradient(180deg, rgba(252, 252, 249, 0.98), rgba(245, 246, 242, 0.98)),
-    repeating-linear-gradient(
-      0deg,
-      rgba(23, 32, 51, 0.03) 0,
-      rgba(23, 32, 51, 0.03) 1px,
-      transparent 1px,
-      transparent 26px
-    );
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.7),
-    0 18px 44px rgba(23, 32, 51, 0.08);
+  padding: 24px 24px 28px;
+  border-radius: 24px;
+  border: 1px solid #e2e8e6;
+  background: linear-gradient(180deg, #fafbf8 0%, #f4f7f4 100%);
+  box-shadow: 0 18px 44px rgba(23, 32, 51, 0.06);
 }
 
 .virus-radar-hero__topline {
@@ -67,9 +56,7 @@
 }
 
 .virus-radar-hero__copy-wrap {
-  display: grid;
-  grid-template-columns: minmax(0, 1.35fr) minmax(300px, 0.7fr);
-  gap: var(--space-lg);
+  display: contents;
 }
 
 .virus-radar-hero__copy,
@@ -79,19 +66,49 @@
 }
 
 .virus-radar-hero__eyebrow {
-  color: var(--accent-orange);
-  font-size: var(--text-label);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #e8523a;
+  font-size: 0.74rem;
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
 }
 
-.virus-radar-hero__title {
+.virus-radar-hero__pulse {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #e8523a;
+  box-shadow: 0 0 0 0 rgba(232, 82, 58, 0.55);
+  animation: virus-radar-pulse 1.6s ease-out infinite;
+}
+
+@keyframes virus-radar-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(232, 82, 58, 0.55);
+  }
+  70% {
+    box-shadow: 0 0 0 14px rgba(232, 82, 58, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(232, 82, 58, 0);
+  }
+}
+
+.virus-radar-hero__headline {
   margin: 0;
-  font-size: clamp(2rem, 4vw, 3.2rem);
-  line-height: 0.96;
+  display: grid;
+  gap: 2px;
+  font-size: clamp(2.6rem, 5.2vw, 4.7rem);
+  line-height: 0.98;
   letter-spacing: -0.03em;
   color: var(--text-primary);
+}
+
+.virus-radar-hero__headline-accent {
+  color: #e8523a;
 }
 
 .virus-radar-hero__meta {
@@ -104,10 +121,86 @@
 
 .virus-radar-hero__summary {
   margin: 0;
-  max-width: 64ch;
-  color: var(--text-primary);
-  font-size: 1rem;
+  max-width: 66ch;
+  color: #4b5b58;
+  font-size: 1.05rem;
   line-height: 1.6;
+}
+
+.virus-radar-hero__summary--lead {
+  margin-bottom: 4px;
+}
+
+.virus-radar-hero-chart-card {
+  display: grid;
+  gap: 12px;
+  margin-top: 2px;
+  padding: 28px 32px 18px;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(15, 28, 26, 0.04), 0 12px 40px rgba(15, 28, 26, 0.06);
+}
+
+.virus-radar-hero-chart-card__meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: var(--space-md);
+}
+
+.virus-radar-hero-chart-card__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  color: #4b5b58;
+  font-size: 0.8rem;
+}
+
+.virus-radar-hero-chart-card__legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.virus-radar-hero-chart-card__swatch {
+  width: 14px;
+  height: 8px;
+  border-radius: 2px;
+}
+
+.virus-radar-hero-chart-card__swatch--actual {
+  background: #0f1c1a;
+}
+
+.virus-radar-hero-chart-card__swatch--forecast {
+  background: #e8523a;
+}
+
+.virus-radar-hero-chart-card__swatch--band {
+  border: 1px solid rgba(232, 82, 58, 0.18);
+  background: rgba(232, 82, 58, 0.1);
+}
+
+.virus-radar-hero-chart-card__stamp {
+  display: grid;
+  justify-items: end;
+  gap: 2px;
+  color: #8a9794;
+  font-size: 0.78rem;
+}
+
+.virus-radar-hero-chart-card__stamp strong {
+  color: #4b5b58;
+  font-size: 0.82rem;
+}
+
+.virus-radar-hero-chart {
+  min-height: 340px;
+}
+
+.virus-radar-hero__footer {
+  display: grid;
+  gap: var(--space-md);
 }
 
 .virus-radar-hero__stats {
@@ -173,6 +266,18 @@
   line-height: 1.5;
 }
 
+.virus-radar-hero__support {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+}
+
+.virus-radar-hero__support-copy {
+  margin: 0;
+  color: #8a9794;
+  font-size: 0.85rem;
+  line-height: 1.55;
+}
+
 .virus-radar-virus-switcher {
   display: flex;
   flex-wrap: wrap;
@@ -192,14 +297,14 @@
 }
 
 .virus-radar-chip.active {
-  background: #172033;
+  background: #1f7a66;
   color: #f8fafb;
-  border-color: #172033;
+  border-color: #1f7a66;
 }
 
 .virus-radar-strip-shell {
   display: grid;
-  gap: 10px;
+  gap: 8px;
 }
 
 .virus-radar-strip-shell__header {
@@ -232,7 +337,7 @@
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 0;
   border: 1px solid rgba(23, 32, 51, 0.12);
-  background: rgba(251, 251, 248, 0.92);
+  background: rgba(251, 251, 248, 0.72);
 }
 
 .virus-radar-strip__item {
@@ -288,6 +393,7 @@
   display: grid;
   grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.8fr);
   gap: var(--space-lg);
+  margin-top: 4px;
 }
 
 .virus-radar-core-grid__rail {
@@ -472,7 +578,6 @@
 @media (max-width: 1180px) {
   .virus-radar-strip,
   .virus-radar-analysis-grid,
-  .virus-radar-hero__copy-wrap,
   .virus-radar-core-grid,
   .virus-radar-map-panel__body {
     grid-template-columns: minmax(0, 1fr);
@@ -481,13 +586,18 @@
 
 @media (max-width: 768px) {
   .virus-radar-hero__topline,
-  .virus-radar-strip-shell__header {
+  .virus-radar-strip-shell__header,
+  .virus-radar-hero-chart-card__meta {
     flex-direction: column;
     align-items: flex-start;
   }
 
   .virus-radar-hero__topline-meta {
     justify-content: flex-start;
+  }
+
+  .virus-radar-hero-chart-card {
+    padding: 22px 20px 18px;
   }
 
   .virus-radar-hero__stats {

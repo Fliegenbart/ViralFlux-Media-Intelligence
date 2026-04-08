@@ -6,6 +6,7 @@ import {
   useNowPageData,
   useRegionsPageData,
 } from '../../features/media/useMediaData';
+import { RegionalBacktestTimelinePoint } from '../../types/media/regional';
 import { RecommendationCard } from '../../types/media';
 import GermanyMap from './GermanyMap';
 import { ForecastChart } from './ForecastChart';
@@ -39,6 +40,15 @@ type SignalPrediction = {
   event_probability_calibrated?: number | null;
   trend?: string | null;
 } | null;
+
+type HeroNarrative = {
+  kicker: string;
+  headlinePrimary: string;
+  headlineSecondary: string;
+  summary: string;
+  tone: 'hero-alert' | 'hero-calm';
+  peakDateLabel: string | null;
+};
 
 const VirusRadarWorkspace: React.FC<Props> = ({
   virus,
@@ -106,7 +116,15 @@ const VirusRadarWorkspace: React.FC<Props> = ({
   }, [regionsData.regionsView?.map?.top_regions, sortedPredictions]);
   const effectiveRegionCode = selectedRegionCode || focusRegion?.code || regionLeaderboard[0]?.code || null;
   const selectedRegion = effectiveRegionCode ? mapRegions[effectiveRegionCode] : null;
-  const decisionHeadline = buildDecisionHeadline(heroRecommendation?.direction, heroRecommendation?.region || focusRegion?.name);
+  const heroNarrative = buildHeroNarrative({
+    virus,
+    regionName: topPrediction?.bundesland_name || focusRegion?.name || heroRecommendation?.region || null,
+    generatedAt: nowData.view.generatedAt,
+    timeline: nowData.focusRegionBacktest?.timeline || [],
+    probability: topPrediction?.event_probability_calibrated,
+    recommendationDirection: heroRecommendation?.direction,
+    fallbackSummary: heroRecommendation?.whyNow || nowData.view.summary,
+  });
   const recommendationId = focusRegion?.recommendationId || regionLeaderboard[0]?.recommendation_ref?.card_id || null;
   const signalTiles = buildSignalTiles({
     workspaceStatus: nowData.workspaceStatus,
@@ -118,10 +136,6 @@ const VirusRadarWorkspace: React.FC<Props> = ({
   const riskItems = buildRiskItems(nowData.workspaceStatus?.blockers, nowData.view.risks, evidenceData.evidence?.known_limits);
   const campaignCards = (campaignsData.campaignsView?.cards || []).slice(0, 3);
   const topActivation = regionsData.regionsView?.map?.activation_suggestions?.slice(0, 3) || [];
-  const evidenceSummary = evidenceData.evidence?.truth_gate?.message
-    || evidenceData.evidence?.business_validation?.guidance
-    || nowData.workspaceStatus?.summary
-    || 'Die Datensicht wird gerade aufgebaut.';
   const chartRegionName = topPrediction?.bundesland_name || focusRegion?.name || '';
   const dataTimestamp = formatDateTime(nowData.view.generatedAt);
 
@@ -143,60 +157,89 @@ const VirusRadarWorkspace: React.FC<Props> = ({
             </div>
           </div>
 
-          <div className="virus-radar-hero__copy-wrap">
-            <div className="virus-radar-hero__copy">
-              <div className="virus-radar-hero__eyebrow">Entscheidung diese Woche</div>
-              <h2 className="virus-radar-hero__title">{decisionHeadline}</h2>
-              <p className="virus-radar-hero__meta">
-                {virus} · {topPrediction?.bundesland_name || focusRegion?.name || 'Bundesland offen'} · nächste {horizonDays} Tage · Stand {dataTimestamp}
-              </p>
-              <p className="virus-radar-hero__summary">
-                {heroRecommendation?.whyNow || nowData.view.summary}
-              </p>
-              <div className="virus-radar-hero__stats">
-                <div className="virus-radar-stat">
-                  <span className="virus-radar-stat__label">Signal</span>
-                  <strong className="virus-radar-stat__value">
-                    {formatProbability(topPrediction?.event_probability_calibrated)}
-                  </strong>
-                </div>
-                <div className="virus-radar-stat">
-                  <span className="virus-radar-stat__label">Fokus</span>
-                  <strong className="virus-radar-stat__value">{focusRegion?.name || 'Noch offen'}</strong>
-                </div>
-                <div className="virus-radar-stat">
-                  <span className="virus-radar-stat__label">Datenlage</span>
-                  <strong className="virus-radar-stat__value">{nowData.workspaceStatus?.data_freshness || 'Noch offen'}</strong>
-                </div>
-              </div>
-              <div className="virus-radar-hero__actions">
-                <button
-                  type="button"
-                  className="media-button"
-                  onClick={() => recommendationId && onOpenRecommendation(recommendationId)}
-                  disabled={!recommendationId}
-                >
-                  Empfehlung prüfen
-                </button>
-                <button type="button" className="media-button secondary" onClick={onOpenEvidence}>
-                  Evidenz ansehen
-                </button>
-                <button type="button" className="media-button secondary" onClick={onOpenCampaigns}>
-                  Kampagnen öffnen
-                </button>
-              </div>
-            </div>
+          <div className="virus-radar-hero__eyebrow">
+            <span className="virus-radar-hero__pulse" aria-hidden="true" />
+            {heroNarrative.kicker}
+          </div>
+          <h2 className="virus-radar-hero__headline">
+            <span>{heroNarrative.headlinePrimary}</span>
+            <span className="virus-radar-hero__headline-accent">{heroNarrative.headlineSecondary}</span>
+          </h2>
+          <p className="virus-radar-hero__summary virus-radar-hero__summary--lead">
+            {heroNarrative.summary}
+          </p>
 
-            <div className="virus-radar-hero__support">
-              <div className="virus-radar-terminal-card">
-                <span className="virus-radar-terminal-card__label">Decision Basis</span>
-                <strong className="virus-radar-terminal-card__value">
-                  {evidenceSummary}
-                </strong>
-                <span className="virus-radar-terminal-card__detail">
-                  {recommendationId ? 'Empfehlung ist direkt öffnbar.' : 'Empfehlung wird noch konkretisiert.'}
+          <div className="virus-radar-hero-chart-card">
+            <div className="virus-radar-hero-chart-card__meta">
+              <div className="virus-radar-hero-chart-card__legend">
+                <div className="virus-radar-hero-chart-card__legend-item">
+                  <span className="virus-radar-hero-chart-card__swatch virus-radar-hero-chart-card__swatch--actual" />
+                  Ist · 28 Tage
+                </div>
+                <div className="virus-radar-hero-chart-card__legend-item">
+                  <span className="virus-radar-hero-chart-card__swatch virus-radar-hero-chart-card__swatch--forecast" />
+                  Forecast · {horizonDays} Tage
+                </div>
+                <div className="virus-radar-hero-chart-card__legend-item">
+                  <span className="virus-radar-hero-chart-card__swatch virus-radar-hero-chart-card__swatch--band" />
+                  Konfidenz 80 % / 95 %
+                </div>
+              </div>
+              <div className="virus-radar-hero-chart-card__stamp">
+                <strong>{chartRegionName || focusRegion?.name || 'Bundesland offen'} · {virus}</strong>
+                <span>
+                  Stand {dataTimestamp}
+                  {heroNarrative.peakDateLabel ? ` · Peak ${heroNarrative.peakDateLabel}` : ''}
                 </span>
               </div>
+            </div>
+            <ForecastChart
+              timeline={nowData.focusRegionBacktest?.timeline || []}
+              regionName={chartRegionName}
+              className="virus-radar-hero-chart"
+              variant={heroNarrative.tone}
+            />
+          </div>
+
+          <div className="virus-radar-hero__footer">
+            <div className="virus-radar-hero__stats">
+              <div className="virus-radar-stat">
+                <span className="virus-radar-stat__label">Signal</span>
+                <strong className="virus-radar-stat__value">
+                  {formatProbability(topPrediction?.event_probability_calibrated)}
+                </strong>
+              </div>
+              <div className="virus-radar-stat">
+                <span className="virus-radar-stat__label">Fokus</span>
+                <strong className="virus-radar-stat__value">{focusRegion?.name || 'Noch offen'}</strong>
+              </div>
+              <div className="virus-radar-stat">
+                <span className="virus-radar-stat__label">Datenlage</span>
+                <strong className="virus-radar-stat__value">{nowData.workspaceStatus?.data_freshness || 'Noch offen'}</strong>
+              </div>
+            </div>
+            <div className="virus-radar-hero__actions">
+              <button
+                type="button"
+                className="media-button"
+                onClick={() => recommendationId && onOpenRecommendation(recommendationId)}
+                disabled={!recommendationId}
+              >
+                Empfehlung prüfen
+              </button>
+              <button type="button" className="media-button secondary" onClick={onOpenEvidence}>
+                Evidenz ansehen
+              </button>
+              <button type="button" className="media-button secondary" onClick={onOpenCampaigns}>
+                Kampagnen öffnen
+              </button>
+            </div>
+            <div className="virus-radar-hero__support">
+              <p className="virus-radar-hero__support-copy">
+                {recommendationId
+                  ? 'Die Empfehlung ist direkt prüfbar. Karte, Kampagnen und Evidenz bleiben darunter als Unterstützung.'
+                  : 'Die Richtung ist sichtbar, die konkrete Empfehlung wird noch verdichtet.'}
+              </p>
 
               <div className="virus-radar-virus-switcher" aria-label="Virus wechseln">
                 {['Influenza A', 'Influenza B', 'SARS-CoV-2', 'RSV A'].map((option) => (
@@ -385,6 +428,83 @@ function buildDecisionHeadline(direction?: string | null, region?: string | null
   if (cleanDirection.includes('vorbereit')) return `${cleanRegion} jetzt vorbereiten`;
   if (cleanDirection.includes('beobacht')) return `${cleanRegion} eng beobachten`;
   return `${cleanRegion} jetzt prüfen`;
+}
+
+function buildHeroNarrative({
+  virus,
+  regionName,
+  generatedAt,
+  timeline,
+  probability,
+  recommendationDirection,
+  fallbackSummary,
+}: {
+  virus: string;
+  regionName?: string | null;
+  generatedAt?: string | null;
+  timeline: RegionalBacktestTimelinePoint[];
+  probability?: number | null;
+  recommendationDirection?: string | null;
+  fallbackSummary?: string | null;
+}): HeroNarrative {
+  const cleanRegion = String(regionName || 'Dieses Bundesland').trim();
+  const referenceDate = (generatedAt || '').slice(0, 10);
+  const normalizedProbability = probability == null ? null : (probability <= 1 ? probability : probability / 100);
+  const peakPoint = [...(timeline || [])]
+    .filter((point) => point?.target_date && (!referenceDate || point.target_date >= referenceDate))
+    .sort((left, right) => (right.expected_target_incidence || 0) - (left.expected_target_incidence || 0))[0];
+  const daysToPeak = peakPoint?.target_date && referenceDate
+    ? diffInDays(referenceDate, peakPoint.target_date)
+    : null;
+
+  if (peakPoint && daysToPeak != null && daysToPeak >= 0 && (normalizedProbability == null || normalizedProbability >= 0.55)) {
+    return {
+      kicker: `Live-Signal · ${virus}`,
+      headlinePrimary: `${cleanRegion} läuft heiß.`,
+      headlineSecondary: formatPeakLead(daysToPeak),
+      summary: buildPeakSummary(cleanRegion, peakPoint.target_date, fallbackSummary),
+      tone: 'hero-alert',
+      peakDateLabel: formatDateLabel(peakPoint.target_date),
+    };
+  }
+
+  return {
+    kicker: `Wochenlage · ${virus}`,
+    headlinePrimary: buildDecisionHeadline(recommendationDirection, cleanRegion),
+    headlineSecondary: 'Jetzt fokussiert prüfen.',
+    summary: fallbackSummary || `${cleanRegion} ist diese Woche die klarste Region für die weitere Prüfung.`,
+    tone: 'hero-calm',
+    peakDateLabel: null,
+  };
+}
+
+function diffInDays(start: string, end: string): number {
+  const startDate = new Date(`${start}T00:00:00Z`);
+  const endDate = new Date(`${end}T00:00:00Z`);
+  return Math.round((endDate.getTime() - startDate.getTime()) / 86400000);
+}
+
+function formatPeakLead(daysToPeak: number): string {
+  if (daysToPeak <= 0) return 'Peak heute.';
+  if (daysToPeak === 1) return 'Peak morgen.';
+  return `Peak in ${daysToPeak} Tagen.`;
+}
+
+function buildPeakSummary(regionName: string, peakDate: string, fallbackSummary?: string | null): string {
+  const readableDate = formatDateLabel(peakDate);
+  return fallbackSummary
+    ? `${fallbackSummary} Unsere Vorhersage sieht den Höhepunkt für ${readableDate} – genau das Zeitfenster, in dem GELO in ${regionName} Reichweite priorisieren sollte.`
+    : `Die Welle baut sich messbar auf. Unsere Vorhersage sieht den Höhepunkt für ${readableDate} – genau das Zeitfenster, in dem GELO in ${regionName} Reichweite priorisieren sollte.`;
+}
+
+function formatDateLabel(dateStr?: string | null): string | null {
+  if (!dateStr) return null;
+  const parsed = new Date(`${dateStr}T00:00:00Z`);
+  if (Number.isNaN(parsed.getTime())) return dateStr;
+  return parsed.toLocaleDateString('de-DE', {
+    day: '2-digit',
+    month: 'long',
+  });
 }
 
 function formatProbability(value?: number | null): string {

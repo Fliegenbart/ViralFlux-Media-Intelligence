@@ -14,10 +14,21 @@ jest.mock('./ForecastChart', () => ({
   ForecastChart: () => <div>Forecast chart</div>,
 }));
 
+jest.mock('./cockpitUtils', () => ({
+  formatCurrency: (value: number | null | undefined) => (value == null ? '-' : `${value} EUR`),
+  formatDateTime: () => '04.04.2026 · 08:00',
+  formatPercent: (value: number) => `${Math.round(value)}%`,
+  statusTone: () => ({
+    background: 'rgba(31, 122, 102, 0.12)',
+    color: '#1f7a66',
+    border: '1px solid rgba(31, 122, 102, 0.18)',
+  }),
+}));
+
 const noop = () => {};
 
 describe('VirusRadarWorkspace', () => {
-  it('emphasizes the terminal-style decision hierarchy above the fold', () => {
+  it('renders a hero-style weekly signal with peak framing', () => {
     render(
       <VirusRadarWorkspace
         virus="Influenza A"
@@ -59,7 +70,30 @@ describe('VirusRadarWorkspace', () => {
             blockers: ['Eine Freigabe ist noch offen.'],
             open_blockers: '1 offen',
           },
-          focusRegionBacktest: { timeline: [] },
+          focusRegionBacktest: {
+            timeline: [
+              {
+                bundesland: 'BE',
+                bundesland_name: 'Berlin',
+                as_of_date: '2026-04-03',
+                target_date: '2026-04-03',
+                horizon_days: 7,
+                current_known_incidence: 24,
+                expected_target_incidence: 24,
+              },
+              {
+                bundesland: 'BE',
+                bundesland_name: 'Berlin',
+                as_of_date: '2026-04-04',
+                target_date: '2026-04-08',
+                horizon_days: 7,
+                current_known_incidence: 31,
+                expected_target_incidence: 58,
+                prediction_interval_lower: 49,
+                prediction_interval_upper: 64,
+              },
+            ],
+          },
         } as any}
         regionsData={{
           regionsView: {
@@ -137,7 +171,12 @@ describe('VirusRadarWorkspace', () => {
     );
 
     expect(screen.getByText('PEIX / GELO / VIRUS-RADAR')).toBeInTheDocument();
-    expect(screen.getByText('Entscheidung diese Woche')).toBeInTheDocument();
+    expect(screen.getByText('Live-Signal · Influenza A')).toBeInTheDocument();
+    expect(screen.getByText('Berlin läuft heiß.')).toBeInTheDocument();
+    expect(screen.getByText('Peak in 4 Tagen.')).toBeInTheDocument();
+    expect(screen.getByText('Ist · 28 Tage')).toBeInTheDocument();
+    expect(screen.getByText('Forecast · 7 Tage')).toBeInTheDocument();
+    expect(screen.queryByText('Entscheidung diese Woche')).not.toBeInTheDocument();
     expect(screen.getByText('Radar-Tape')).toBeInTheDocument();
   });
 });

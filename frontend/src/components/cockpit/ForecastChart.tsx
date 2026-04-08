@@ -19,6 +19,7 @@ interface ForecastChartProps {
   timeline: RegionalBacktestTimelinePoint[];
   regionName: string;
   className?: string;
+  variant?: 'default' | 'hero-alert' | 'hero-calm';
 }
 
 function formatDayMonth(dateStr: string): string {
@@ -28,7 +29,40 @@ function formatDayMonth(dateStr: string): string {
   return `${day}.${month}`;
 }
 
-const ForecastChart: React.FC<ForecastChartProps> = ({ timeline, regionName, className }) => {
+const CHART_THEME = {
+  default: {
+    actual: '#4f46e5',
+    forecast: '#4f46e5',
+    forecastBand: '#4f46e5',
+    tick: '#94a3b8',
+    grid: 'rgba(148,163,184,0.12)',
+    reference: '#4f46e5',
+  },
+  'hero-alert': {
+    actual: '#0f1c1a',
+    forecast: '#e8523a',
+    forecastBand: '#e8523a',
+    tick: '#8a9794',
+    grid: 'rgba(138,151,148,0.18)',
+    reference: '#8a9794',
+  },
+  'hero-calm': {
+    actual: '#0f1c1a',
+    forecast: '#1f7a66',
+    forecastBand: '#1f7a66',
+    tick: '#8a9794',
+    grid: 'rgba(138,151,148,0.18)',
+    reference: '#8a9794',
+  },
+} as const;
+
+const ForecastChart: React.FC<ForecastChartProps> = ({
+  timeline,
+  regionName,
+  className,
+  variant = 'default',
+}) => {
+  const theme = CHART_THEME[variant];
   const data = useMemo(() => {
     if (!timeline || timeline.length === 0) return [];
 
@@ -95,8 +129,8 @@ const ForecastChart: React.FC<ForecastChartProps> = ({ timeline, regionName, cla
         <ComposedChart data={chartData} margin={{ top: 8, right: 16, bottom: 4, left: 0 }}>
           <defs>
             <linearGradient id="fcHistGrad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#4f46e5" stopOpacity={0.12} />
-              <stop offset="100%" stopColor="#4f46e5" stopOpacity={0.01} />
+              <stop offset="0%" stopColor={theme.actual} stopOpacity={variant === 'default' ? 0.12 : 0.08} />
+              <stop offset="100%" stopColor={theme.actual} stopOpacity={0.01} />
             </linearGradient>
             <filter id="fcGlow">
               <feGaussianBlur stdDeviation="2.5" result="blur" />
@@ -107,9 +141,9 @@ const ForecastChart: React.FC<ForecastChartProps> = ({ timeline, regionName, cla
             </filter>
           </defs>
 
-          <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.12)" vertical={false} />
-          <XAxis dataKey="dateLabel" tick={{ fontSize: 11, fill: '#94a3b8' }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
-          <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} tickLine={false} axisLine={false} width={40} />
+          <CartesianGrid strokeDasharray="3 3" stroke={theme.grid} vertical={false} />
+          <XAxis dataKey="dateLabel" tick={{ fontSize: 11, fill: theme.tick }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
+          <YAxis tick={{ fontSize: 11, fill: theme.tick }} tickLine={false} axisLine={false} width={40} />
           <Tooltip
             contentStyle={{ background: '#fff', border: 'none', borderRadius: 8, fontSize: 12, boxShadow: '0 4px 16px rgba(0,0,0,0.12)' }}
             labelFormatter={(label) => `${regionName} · ${label}`}
@@ -120,20 +154,20 @@ const ForecastChart: React.FC<ForecastChartProps> = ({ timeline, regionName, cla
           />
 
           {/* Confidence band */}
-          <Area dataKey="bandUpper" stroke="none" fill="#4f46e5" fillOpacity={0.1} isAnimationActive={false} connectNulls={false} legendType="none" />
+          <Area dataKey="bandUpper" stroke="none" fill={theme.forecastBand} fillOpacity={variant === 'default' ? 0.1 : 0.14} isAnimationActive={false} connectNulls={false} legendType="none" />
           <Area dataKey="bandLower" stroke="none" fill="#fff" fillOpacity={1} isAnimationActive={false} connectNulls={false} legendType="none" />
 
           {/* Historical gradient fill */}
           <Area dataKey="historicalLine" type="monotone" stroke="none" fill="url(#fcHistGrad)" isAnimationActive={false} connectNulls legendType="none" />
 
           {/* Historical line */}
-          <Line dataKey="historicalLine" type="monotone" stroke="#4f46e5" strokeWidth={2.5} dot={false} isAnimationActive={false} connectNulls name="Ist-Wert" />
+          <Line dataKey="historicalLine" type="monotone" stroke={theme.actual} strokeWidth={2.5} dot={false} isAnimationActive={false} connectNulls name="Ist-Wert" />
 
           {/* Forecast line — DRAMATIC, with glow */}
-          <Line dataKey="forecastLine" type="monotone" stroke="#4f46e5" strokeWidth={3.5} dot={false} isAnimationActive={false} connectNulls filter="url(#fcGlow)" name="Forecast" />
+          <Line dataKey="forecastLine" type="monotone" stroke={theme.forecast} strokeWidth={variant === 'default' ? 3.5 : 3} dot={false} isAnimationActive={false} connectNulls filter="url(#fcGlow)" name="Forecast" />
 
           {/* Today — solid cliff edge */}
-          <ReferenceLine x={todayLabel} stroke="#4f46e5" strokeWidth={2} label={{ value: 'Heute', position: 'insideTopRight', fill: '#4f46e5', fontSize: 11, fontWeight: 600 }} />
+          <ReferenceLine x={todayLabel} stroke={theme.reference} strokeWidth={variant === 'default' ? 2 : 1.5} label={{ value: 'Heute', position: 'insideTopRight', fill: theme.reference, fontSize: 11, fontWeight: 600 }} />
         </ComposedChart>
       </ResponsiveContainer>
     </div>

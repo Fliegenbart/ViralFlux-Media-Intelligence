@@ -3,7 +3,11 @@ from contextlib import nullcontext
 from unittest.mock import patch
 
 from app.core.celery_app import celery_app
-from app.services.ml.tasks import train_regional_models_task, train_xgboost_model_task
+from app.services.ml.tasks import (
+    refresh_regional_operational_snapshots_task,
+    train_regional_models_task,
+    train_xgboost_model_task,
+)
 from app.services.ml.training_contract import SUPPORTED_VIRUS_TYPES
 
 
@@ -60,6 +64,47 @@ class MLTrainingTaskContractTests(unittest.TestCase):
 
         training_entry = schedule["daily-xgboost-training"]
         self.assertEqual(training_entry["kwargs"], {"virus_typ": None})
+
+        snapshot_entry = schedule["daily-regional-operational-snapshot-refresh"]
+        self.assertEqual(
+            snapshot_entry["task"],
+            "refresh_regional_operational_snapshots_task",
+        )
+        self.assertEqual(snapshot_entry["schedule"]._orig_hour, 7)
+        self.assertEqual(snapshot_entry["schedule"]._orig_minute, 20)
+        self.assertEqual(snapshot_entry["kwargs"], {})
+
+    def test_snapshot_refresh_task_runs_all_supported_viruses(self) -> None:
+        with patch(
+            "app.services.ml.tasks.get_db_context",
+            return_value=nullcontext(object()),
+        ), patch(
+            "app.services.ops.regional_operational_snapshot_refresh.RegionalOperationalSnapshotRefreshService",
+        ) as refresh_service_cls, patch.object(
+            refresh_regional_operational_snapshots_task,
+            "update_state",
+        ) as update_state:
+            refresh_service_cls.return_value.refresh_supported_scopes.return_value = {
+                "status": "success",
+                "records_written": 8,
+                "scope_count": 8,
+            }
+
+            result = refresh_regional_operational_snapshots_task.run()
+
+        refresh_service_cls.return_value.refresh_supported_scopes.assert_called_once_with(
+            virus_types=list(SUPPORTED_VIRUS_TYPES),
+            horizon_days_list=None,
+            weekly_budget_eur=50000.0,
+            top_n=12,
+        )
+        self.assertEqual(result["virus_types"], list(SUPPORTED_VIRUS_TYPES))
+        self.assertEqual(result["selection_mode"], "all")
+        self.assertIsNone(result["virus_typ"])
+        self.assertEqual(
+            update_state.call_args_list[1].kwargs["meta"]["step"],
+            "Refreshing regional operational snapshots...",
+        )
 
     def test_run_without_selection_trains_all_supported_viruses(self) -> None:
         with patch(

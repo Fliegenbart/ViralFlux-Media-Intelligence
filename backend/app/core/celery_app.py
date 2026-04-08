@@ -148,6 +148,12 @@ celery_app.conf.beat_schedule = {
         "schedule": crontab(hour=7, minute=0),
         "kwargs": {"virus_typ": None},  # alle 4 Typen
     },
+    # Taeglich 07:20 — Regionale operative Snapshots fuer Readiness aktualisieren
+    "daily-regional-operational-snapshot-refresh": {
+        "task": "refresh_regional_operational_snapshots_task",
+        "schedule": crontab(hour=7, minute=20),
+        "kwargs": {},
+    },
     # Montags 03:00 — RKI SurvStat Kreis-Daten (wochentlich, Rate-Limit-schonend)
     "weekly-survstat-kreis": {
         "task": "fetch_survstat_kreis_api",

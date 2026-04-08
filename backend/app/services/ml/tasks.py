@@ -171,6 +171,64 @@ def train_xgboost_model_task(
     })
 
 
+@celery_app.task(bind=True, name="refresh_regional_operational_snapshots_task")
+def refresh_regional_operational_snapshots_task(
+    self,
+    virus_typ: str | None = None,
+    virus_types: list[str] | None = None,
+    horizon_days_list: list[int] | None = None,
+    weekly_budget_eur: float = 50000.0,
+    top_n: int = 12,
+) -> Dict[str, Any]:
+    """Refresh persisted regional operational snapshots used by readiness checks."""
+    from app.services.ops.regional_operational_snapshot_refresh import (
+        RegionalOperationalSnapshotRefreshService,
+    )
+
+    selection = normalize_training_selection(
+        virus_typ=virus_typ,
+        virus_types=virus_types,
+    )
+    logger.info(
+        "Celery: refreshing regional operational snapshots (virus_types=%s, horizons=%s)",
+        list(selection.virus_types),
+        horizon_days_list,
+    )
+    self.update_state(
+        state="PROGRESS",
+        meta={"step": "Initializing regional snapshot refresh...", "progress": 10},
+    )
+
+    with get_db_context() as db:
+        service = RegionalOperationalSnapshotRefreshService(db)
+        self.update_state(
+            state="PROGRESS",
+            meta={"step": "Refreshing regional operational snapshots...", "progress": 40},
+        )
+        result = service.refresh_supported_scopes(
+            virus_types=list(selection.virus_types),
+            horizon_days_list=horizon_days_list,
+            weekly_budget_eur=weekly_budget_eur,
+            top_n=top_n,
+        )
+
+    logger.info(
+        "Celery: refreshed regional operational snapshots (records=%s)",
+        result.get("records_written"),
+    )
+    return _json_safe({
+        "status": "success",
+        "result": result,
+        "virus_typ": selection.virus_typ,
+        "virus_types": list(selection.virus_types),
+        "selection_mode": selection.mode,
+        "horizon_days_list": horizon_days_list,
+        "weekly_budget_eur": weekly_budget_eur,
+        "top_n": top_n,
+        "timestamp": utc_now().isoformat(),
+    })
+
+
 @celery_app.task(bind=True, name="refresh_market_backtests_task")
 def refresh_market_backtests_task(self) -> Dict[str, Any]:
     """Refresh persisted MARKET_CHECK backtests for the default RKI_ARE source."""

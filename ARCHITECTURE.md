@@ -429,6 +429,7 @@ Internet
 │  06:20  Google Trends Import            │
 │  06:30  Weather Update                  │
 │  07:00  ML Forecasts Generation         │
+│  07:20  Regional Snapshot Refresh       │
 │  03:00  Database Backup                 │
 │  Alle 3h  Weather Update (Forecast)     │
 └─────────────────────────────────────────┘

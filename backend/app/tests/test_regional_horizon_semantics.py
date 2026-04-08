@@ -170,7 +170,7 @@ class RegionalHorizonSemanticsTests(unittest.TestCase):
                 "horizon_days": 3,
                 "error_type": "ValueError",
                 "error": "Regional backtest produced no valid folds.",
-                "diagnostic_hint": "Bitte Fold-Bildung pruefen.",
+                "diagnostic_hint": "Bitte Fold-Bildung prüfen.",
                 "traceback_tail": ["ValueError: Regional backtest produced no valid folds."],
             }
         )

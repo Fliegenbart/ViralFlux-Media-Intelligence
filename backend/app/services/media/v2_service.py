@@ -842,7 +842,7 @@ class MediaV2Service:
                     row_number=row.get("row_number"),
                     field_name="row",
                     issue_code="duplicate_existing",
-                    message="Fuer diese Woche, dieses Produkt und diese Region existiert bereits ein Datensatz in den Kundendaten.",
+                    message="Für diese Woche, dieses Produkt und diese Region existiert bereits ein Datensatz in den Kundendaten.",
                     raw_row=row.get("raw_row"),
                 ))
                 continue

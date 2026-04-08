@@ -145,7 +145,7 @@ class ForecastApiTests(unittest.TestCase):
             "promotion_allowed": False,
             "claim_scope": "experimental_cluster_level_only",
             "claim_guardrail_message": (
-                "Experimenteller Geo-Pfad auf Cluster-Ebene. Keine Stadt- oder Landkreis-Freigabe fuer Produktion. "
+                "Experimenteller Geo-Pfad auf Cluster-Ebene. Keine Stadt- oder Landkreis-Freigabe für Produktion. "
                 "Keine automatische Ableitung aus Bundesland-Forecasts."
             ),
             "clusters": [
@@ -424,7 +424,7 @@ class ForecastApiTests(unittest.TestCase):
                         "cluster_key": "respiratory_relief_search",
                         "label": "Respiratory Relief Search",
                         "fit_score": 0.89,
-                        "keywords": ["husten schleim loesen"],
+                        "keywords": ["husten schleim lösen"],
                     },
                     "recommendation_rationale": {
                         "why": ["Bayern stays on Activate."],

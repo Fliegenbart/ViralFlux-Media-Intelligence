@@ -1,7 +1,7 @@
 """Public Risk Response — IP-geschützte API-Antwort.
 
 Dieses Schema ist die "Black Box"-Schnittstelle nach außen.
-Keine Gewichtungen, keine Schwellenwerte, keine Rohdaten-Koeffizienten.
+Keine Gewichtungen, keine Schwellenwerte, keine Rohdaten-Köffizienten.
 """
 
 from pydantic import BaseModel, Field

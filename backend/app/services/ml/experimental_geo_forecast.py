@@ -58,7 +58,7 @@ class ExperimentalGeoForecastService:
                 horizon_days=horizon,
                 status="unsupported_public_scope",
                 message=(
-                    "Der experimentelle Geo-Pfad ist oeffentlich nur auf Cluster-Ebene verfuegbar. "
+                    "Der experimentelle Geo-Pfad ist öffentlich nur auf Cluster-Ebene verfügbar. "
                     "Landkreis- oder Stadt-Sicht wird nicht als Forecast-Endpunkt freigegeben."
                 ),
                 geo_level=requested_geo_level or EXPERIMENTAL_GEO_LEVEL,
@@ -76,7 +76,7 @@ class ExperimentalGeoForecastService:
                 horizon_days=horizon,
                 status="insufficient_geo_truth",
                 message=(
-                    "Keine belastbare Landkreis-Truth fuer den experimentellen Geo-Pfad verfuegbar."
+                    "Keine belastbare Landkreis-Truth für den experimentellen Geo-Pfad verfügbar."
                 ),
                 geo_level=EXPERIMENTAL_GEO_LEVEL,
                 summary=None,
@@ -90,8 +90,8 @@ class ExperimentalGeoForecastService:
                 horizon_days=horizon,
                 status="insufficient_geo_truth",
                 message=(
-                    "Zum angefragten Datenstand ist noch keine sichtbare Landkreis-Truth fuer den "
-                    "experimentellen Geo-Pfad verfuegbar."
+                    "Zum angefragten Datenstand ist noch keine sichtbare Landkreis-Truth für den "
+                    "experimentellen Geo-Pfad verfügbar."
                 ),
                 geo_level=EXPERIMENTAL_GEO_LEVEL,
                 summary=None,
@@ -105,7 +105,7 @@ class ExperimentalGeoForecastService:
                 horizon_days=horizon,
                 status="insufficient_geo_truth",
                 message=(
-                    "Die Landkreis-Abdeckung reicht noch nicht fuer einen experimentellen Cluster-Shadow-Run."
+                    "Die Landkreis-Abdeckung reicht noch nicht für einen experimentellen Cluster-Shadow-Run."
                 ),
                 geo_level=EXPERIMENTAL_GEO_LEVEL,
                 summary=summary,
@@ -122,7 +122,7 @@ class ExperimentalGeoForecastService:
                 horizon_days=horizon,
                 status="no_model",
                 message=(
-                    "Die historische Landkreis-Truth ist sichtbar, aber noch nicht stabil genug fuer "
+                    "Die historische Landkreis-Truth ist sichtbar, aber noch nicht stabil genug für "
                     "einen experimentellen Cluster-Schattenpfad."
                 ),
                 geo_level=EXPERIMENTAL_GEO_LEVEL,

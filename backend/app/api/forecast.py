@@ -365,17 +365,17 @@ async def get_experimental_geo_predictions(
     horizon_days: int = Depends(_validated_regional_horizon),
     geo_level: str = Query(
         default="kreis_cluster",
-        description="Oeffentlich freigegebener Geo-Level fuer den experimentellen Shadow-Pfad.",
+        description="Öffentlich freigegebener Geo-Level für den experimentellen Shadow-Pfad.",
     ),
     cluster_count: int = Query(
         default=6,
         ge=2,
         le=12,
-        description="Maximale Zahl experimenteller Cluster fuer den Shadow-Run.",
+        description="Maximale Zahl experimenteller Cluster für den Shadow-Run.",
     ),
     as_of_date: datetime | None = Query(
         default=None,
-        description="Optionaler Datenstand fuer Reproduzierbarkeit im experimentellen Geo-Pfad.",
+        description="Optionaler Datenstand für Reproduzierbarkeit im experimentellen Geo-Pfad.",
     ),
     db: Session = Depends(get_db),
 ):

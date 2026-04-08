@@ -78,7 +78,7 @@ class OpportunityEngineMathTests(unittest.TestCase):
         brief = MarketingOpportunityEngine._build_decision_brief(
             engine,
             urgency_score=82.0,
-            recommendation_reason="Fruehes Nordsignal",
+            recommendation_reason="Frühes Nordsignal",
             trigger_context={"source": "BfArM_API", "event": "SUPPLY_SHOCK_WINDOW"},
             trigger_snapshot={"source": "BfArM_API", "event": "SUPPLY_SHOCK_WINDOW"},
             trigger_evidence={"source": "BfArM_API", "confidence": 0.81},

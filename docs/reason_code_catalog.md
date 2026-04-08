@@ -16,10 +16,10 @@ Diese Datei erklaert in einfachen Worten, welche festen Reason-Codes es gibt und
 Der Grundgedanke:
 
 - Das Backend liefert nicht nur freie Saetze.
-- Es liefert zusaetzlich stabile Codes mit Parametern.
-- Das Frontend uebersetzt diese Codes in lesbare Saetze.
+- Es liefert zusätzlich stabile Codes mit Parametern.
+- Das Frontend übersetzt diese Codes in lesbare Saetze.
 
-So bleibt die Bedeutung stabil, auch wenn sich ein Rohtext spaeter einmal aendert.
+So bleibt die Bedeutung stabil, auch wenn sich ein Rohtext später einmal ändert.
 
 ## Standardformat
 
@@ -40,7 +40,7 @@ Regeln:
 
 - `code` ist die stabile fachliche Bedeutung.
 - `message` ist ein lesbarer Rohsatz aus dem Backend.
-- `params` enthaelt die Zahlen oder Zusatzwerte fuer die spaetere Uebersetzung.
+- `params` enthält die Zahlen oder Zusatzwerte für die spätere Übersetzung.
 
 ## Decision-Layer
 
@@ -49,16 +49,16 @@ Diese Codes kommen aus der regionalen Decision-Logik.
 ### Schwellen und Stufen
 
 - `event_probability_activate_threshold`
-  Bedeutet: Die Forecast-Wahrscheinlichkeit liegt ueber der Schwelle fuer Aktivierung.
+  Bedeutet: Die Forecast-Wahrscheinlichkeit liegt über der Schwelle für Aktivierung.
 - `event_probability_prepare_threshold`
-  Bedeutet: Die Forecast-Wahrscheinlichkeit reicht fuer Vorbereitung, aber noch nicht fuer volle Aktivierung.
+  Bedeutet: Die Forecast-Wahrscheinlichkeit reicht für Vorbereitung, aber noch nicht für volle Aktivierung.
 - `event_probability_below_prepare_threshold`
-  Bedeutet: Die Forecast-Wahrscheinlichkeit reicht noch nicht fuer Vorbereitung.
+  Bedeutet: Die Forecast-Wahrscheinlichkeit reicht noch nicht für Vorbereitung.
 
 ### Forecast-Sicherheit
 
 - `forecast_confidence_strong`
-  Bedeutet: Das Signal ist fuer die aktuelle Entscheidung stabil genug.
+  Bedeutet: Das Signal ist für die aktuelle Entscheidung stabil genug.
 - `forecast_confidence_usable`
   Bedeutet: Das Signal ist brauchbar, aber nicht maximal stark.
 - `forecast_confidence_low`
@@ -71,7 +71,7 @@ Diese Codes kommen aus der regionalen Decision-Logik.
 - `primary_sources_stale`
   Bedeutet: Die wichtigsten Quellen sind eher veraltet.
 - `revision_risk_high`
-  Bedeutet: Nachtraegliche Aenderungen an den Daten sind wahrscheinlich.
+  Bedeutet: Nachtraegliche Änderungen an den Daten sind wahrscheinlich.
 - `revision_risk_material`
   Bedeutet: Revisionsrisiko ist sichtbar, aber nicht maximal.
 - `trend_acceleration_supportive`
@@ -79,13 +79,13 @@ Diese Codes kommen aus der regionalen Decision-Logik.
 - `trend_acceleration_not_convincing`
   Bedeutet: Die Dynamik ist noch nicht stark genug.
 - `cross_source_agreement_low_evidence`
-  Bedeutet: Es gibt zu wenige Quellen fuer einen belastbaren Richtungsabgleich.
+  Bedeutet: Es gibt zu wenige Quellen für einen belastbaren Richtungsabgleich.
 - `cross_source_agreement_upward`
   Bedeutet: Mehrere Quellen zeigen in dieselbe Aufwaertsrichtung.
 - `cross_source_agreement_not_upward`
   Bedeutet: Die Quellen bestaetigen keinen klaren Aufwaertstrend.
 - `quality_gate_not_passed`
-  Bedeutet: Die Forecast-Qualitaetspruefung ist noch nicht bestanden.
+  Bedeutet: Die Forecast-Qualitaetsprüfung ist noch nicht bestanden.
 
 ### Policy und Zusammenfassungen
 
@@ -94,13 +94,13 @@ Diese Codes kommen aus der regionalen Decision-Logik.
 - `policy_override_watch_only`
   Bedeutet: Eine Regel haelt die Region bewusst im Beobachten-Modus.
 - `policy_override_quality_gate`
-  Bedeutet: Die Qualitaetspruefung blockiert eine hoehere Freigabe.
+  Bedeutet: Die Qualitaetsprüfung blockiert eine höhere Freigabe.
 - `policy_override`
-  Bedeutet: Eine andere Freigaberegel veraendert die Endstufe.
+  Bedeutet: Eine andere Freigaberegel verändert die Endstufe.
 - `decision_summary`
-  Kompakte Zusammenfassung der Decision-Lage fuer eine Region.
+  Kompakte Zusammenfassung der Decision-Lage für eine Region.
 - `uncertainty_summary`
-  Kompakte Zusammenfassung der Restunsicherheit fuer eine Region.
+  Kompakte Zusammenfassung der Restunsicherheit für eine Region.
 
 ## Allocation-Layer
 
@@ -109,20 +109,20 @@ Diese Codes kommen aus der Budget- und Allokationslogik.
 ### Grundlogik
 
 - `decision_stage_base`
-  Bedeutet: Die Decision-Stufe setzt die Basis fuer die Allokation.
+  Bedeutet: Die Decision-Stufe setzt die Basis für die Allokation.
 - `ranking_priority_and_probability`
   Bedeutet: Prioritaet und Forecast-Wahrscheinlichkeit bestimmen die Reihenfolge.
 
 ### Budget-Treiber
 
 - `budget_driver_activate_multiplier`
-  Aktivieren-Regionen erhalten den staerksten Zuschlag.
+  Aktivieren-Regionen erhalten den stärksten Zuschlag.
 - `budget_driver_prepare_weighting`
   Vorbereiten-Regionen bleiben allokierbar, aber unter Aktivieren.
 - `budget_driver_watch_observe_only`
-  Beobachten-Regionen erhalten meist kein zusaetzliches Budget.
+  Beobachten-Regionen erhalten meist kein zusätzliches Budget.
 - `budget_driver_confidence_low_penalty`
-  Hoehere Signalsicherheit fuehrt nur zu kleinem Abschlag.
+  Höhere Signalsicherheit fuehrt nur zu kleinem Abschlag.
 - `budget_driver_confidence_moderate_penalty`
   Mittlere Signalsicherheit fuehrt zu moderatem Abschlag.
 - `budget_driver_confidence_high_penalty`
@@ -130,7 +130,7 @@ Diese Codes kommen aus der Budget- und Allokationslogik.
 - `budget_driver_population_weight`
   Reichweite oder Bevoelkerung stuetzt die Allokation.
 - `budget_driver_region_weight_boost`
-  Eine hinterlegte Regionsgewichtung erhoeht den Score.
+  Eine hinterlegte Regionsgewichtung erhöht den Score.
 - `budget_driver_region_weight_reduce`
   Eine hinterlegte Regionsgewichtung senkt den Score.
 - `budget_driver_source_freshness_penalty`
@@ -143,7 +143,7 @@ Diese Codes kommen aus der Budget- und Allokationslogik.
 ### Unsicherheit und Blocker
 
 - `upstream_uncertainty`
-  Uebernimmt Unsicherheit aus dem Decision-Layer.
+  Übernimmt Unsicherheit aus dem Decision-Layer.
 - `uncertainty_revision_risk_material`
   Revisionsrisiko bleibt in der Allokation sichtbar.
 - `uncertainty_source_freshness_soft`
@@ -151,7 +151,7 @@ Diese Codes kommen aus der Budget- und Allokationslogik.
 - `spend_blocker`
   Globaler Spend-Blocker verhindert Freigabe.
 - `budget_ineligible_region`
-  Region ist unter den aktuellen Regeln nicht budgetfaehig.
+  Region ist unter den aktuellen Regeln nicht budgetfähig.
 
 ## Campaign-Layer
 
@@ -162,16 +162,16 @@ Diese Codes kommen aus dem Kampagnenvorschlag.
 - `campaign_stage_budget_share`
   Verbindet Region, Stufe und Budgetanteil.
 - `campaign_wave_plan_support`
-  Begruendet, warum die Region im Wochenplan bleibt.
+  Begründet, warum die Region im Wochenplan bleibt.
 
 ### Produkt- und Keyword-Fit
 
 - `campaign_product_cluster_fit`
-  Begruendet den Produktcluster.
+  Begründet den Produktcluster.
 - `campaign_region_product_fit_boost`
   Region und Produkt passen besonders gut zusammen.
 - `campaign_keyword_cluster_fit`
-  Begruendet den Keywordcluster.
+  Begründet den Keywordcluster.
 
 ### Budget und Evidenz
 
@@ -187,11 +187,11 @@ Diese Codes kommen aus dem Kampagnenvorschlag.
 ### Guardrails
 
 - `campaign_guardrail_ready`
-  Vorschlag ist im aktuellen Rahmen freigabefaehig.
+  Vorschlag ist im aktuellen Rahmen freigabefähig.
 - `campaign_guardrail_bundle_neighbor`
   Budget ist zu klein und sollte gebuendelt werden.
 - `campaign_guardrail_low_confidence_review`
-  Vorschlag braucht wegen zu geringer Sicherheit noch Pruefung.
+  Vorschlag braucht wegen zu geringer Sicherheit noch Prüfung.
 - `campaign_guardrail_blocked`
   Ein operativer oder kommerzieller Blocker haelt den Vorschlag auf.
 - `campaign_guardrail_discussion_only`
@@ -207,20 +207,20 @@ Wichtige Felder:
 - `reason_trace_details`
   Sammelliste aus Decision, Allocation und Campaign-Layer.
 - `uncertainty_summary_detail`
-  Kompakte Restunsicherheit fuer Region oder Executive Summary.
+  Kompakte Restunsicherheit für Region oder Executive Summary.
 
 ## Frontend-Regel
 
 Die UI soll immer so arbeiten:
 
 1. Erst strukturierte Reason-Codes lesen.
-2. Dann mit `plainLanguage.ts` in klare Sprache uebersetzen.
-3. Nur wenn keine strukturierten Details vorliegen, auf Freitext zurueckfallen.
+2. Dann mit `plainLanguage.ts` in klare Sprache übersetzen.
+3. Nur wenn keine strukturierten Details vorliegen, auf Freitext zurückfallen.
 
 ## Pflege-Regel
 
-Wenn ein neuer Reason-Code eingefuehrt wird, muessen immer drei Dinge mitgezogen werden:
+Wenn ein neuer Reason-Code eingefuehrt wird, müssen immer drei Dinge mitgezogen werden:
 
 1. Backend-Code mit `code`, `message` und `params`
-2. Frontend-Uebersetzung in [plainLanguage.ts](/Users/davidwegener/Desktop/viralflux/frontend/src/lib/plainLanguage.ts)
+2. Frontend-Übersetzung in [plainLanguage.ts](/Users/davidwegener/Desktop/viralflux/frontend/src/lib/plainLanguage.ts)
 3. Ein Test im betroffenen Layer

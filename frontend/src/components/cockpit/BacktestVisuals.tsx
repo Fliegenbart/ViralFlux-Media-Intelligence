@@ -1111,7 +1111,7 @@ export const WaveSpreadPanel: React.FC<WaveSpreadPanelProps> = ({
       <div className="backtest-map-grid">
         <div className="soft-panel backtest-map-panel">
           <div className="backtest-map-panel__hint">
-            Deutschlandkarte der historischen Startreihenfolge. Je frueher ein Bundesland gestartet ist, desto staerker ist es eingefaerbt.
+            Deutschlandkarte der historischen Startreihenfolge. Je früher ein Bundesland gestartet ist, desto stärker ist es eingefärbt.
           </div>
           <HistoricalWaveMap
             result={result}
@@ -1130,7 +1130,7 @@ export const WaveSpreadPanel: React.FC<WaveSpreadPanelProps> = ({
           <p className="backtest-region-panel__body">
             {selectedRegion?.wave_rank
               ? `${selectedBundesland} lag in dieser Saison auf Rang ${selectedRank} der sichtbaren Ausbreitung.`
-              : `${selectedBundesland || 'Diese Region'} hat in dieser Saison keinen klaren Wellenstart ueber der gewaehlten Schwelle gezeigt.`}
+              : `${selectedBundesland || 'Diese Region'} hat in dieser Saison keinen klaren Wellenstart über der gewählten Schwelle gezeigt.`}
           </p>
 
           <div className="operator-stat-grid">

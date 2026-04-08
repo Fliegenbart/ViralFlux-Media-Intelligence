@@ -55,12 +55,12 @@ New weather ingest batches now persist their own stable run identity:
 This means new weather forecast rows can be grouped by the exact persisted forecast batch that was visible at the time.
 Older rows without these fields stay usable on the legacy path, but should be interpreted as incomplete for vintage benchmarking.
 
-Fuer den Weather-Vintage-Re-Test ist deshalb wichtig:
+Für den Weather-Vintage-Re-Test ist deshalb wichtig:
 
-- aktuelle Re-Ingests verbessern nur die Coverage fuer neue Forecast-Fenster
+- aktuelle Re-Ingests verbessern nur die Coverage für neue Forecast-Fenster
 - ein historischer 900-Tage-Backtest bleibt trotzdem `inconclusive`, wenn die Forecast-Runs damals nicht wirklich historisch sichtbar gespeichert wurden
 - der Vergleichs-Runner berichtet deshalb jetzt getrennt `coverage_overall`, `coverage_train`, `coverage_test`, `coverage_by_fold`, `first_available_run_identity_date` und `last_available_run_identity_date`
-- wenn diese Coverage im echten Backtest-Fenster zu niedrig bleibt, ist das ein Datenverfuegbarkeitsproblem und kein Urteil gegen `run_timestamp_v1`
+- wenn diese Coverage im echten Backtest-Fenster zu niedrig bleibt, ist das ein Datenverfügbarkeitsproblem und kein Urteil gegen `run_timestamp_v1`
 
 ## Validation Approach
 

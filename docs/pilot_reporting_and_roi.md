@@ -121,10 +121,10 @@ Endpoint:
 
 Wichtig:
 
-- `pilot-reporting` ist jetzt ein Legacy-/Backoffice-Readout fuer historische ROI-Analysen.
+- `pilot-reporting` ist jetzt ein Legacy-/Backoffice-Readout für historische ROI-Analysen.
 - Die kundennahe Pilot-Oberflaeche nutzt stattdessen `GET /api/v1/media/pilot-readout`.
 - `pilot-readout` ist damit die Forecast-First-Leseschicht.
-- `pilot-reporting` ist die spaetere Commercial- und Audit-Schicht.
+- `pilot-reporting` ist die spätere Commercial- und Audit-Schicht.
 
 Supported query parameters:
 

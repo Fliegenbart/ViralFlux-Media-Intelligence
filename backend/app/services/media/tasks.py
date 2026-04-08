@@ -33,9 +33,9 @@ def refine_recommendation_ai_task(self, opportunity_id: str):
 
 @celery_app.task(bind=True, name="generate_weekly_brief_task")
 def generate_weekly_brief_task(self):
-    """Generiert den woechentlichen Gelo Media Action Brief (PDF).
+    """Generiert den wöchentlichen Gelo Media Action Brief (PDF).
 
-    Laeuft montags 08:30 via Celery Beat.
+    Läuft montags 08:30 via Celery Beat.
     """
     logger.info("Starting weekly brief generation")
 
@@ -62,9 +62,9 @@ def generate_weekly_brief_task(self):
 
 @celery_app.task(bind=True, name="generate_marketing_opportunities_task")
 def generate_marketing_opportunities_task(self):
-    """Alle Detektoren ausfuehren und Marketing-Opportunities generieren.
+    """Alle Detektoren ausführen und Marketing-Opportunities generieren.
 
-    Laeuft taeglich nach der Daten-Ingestion (Celery Beat 06:30),
+    Läuft täglich nach der Daten-Ingestion (Celery Beat 06:30),
     damit frische Signale in Opportunities umgewandelt werden.
     """
     logger.info("Starting scheduled marketing opportunity generation")

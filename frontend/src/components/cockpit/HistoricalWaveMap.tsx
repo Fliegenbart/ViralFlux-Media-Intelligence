@@ -230,7 +230,7 @@ const HistoricalWaveMap: React.FC<Props> = ({
             </>
           ) : (
             <div style={{ marginTop: 6, fontSize: 12, color: 'rgba(226, 232, 240, 0.92)' }}>
-              In dieser Saison kein klarer Wellenstart ueber der gewaelten Schwelle.
+              In dieser Saison kein klarer Wellenstart über der gewählten Schwelle.
             </div>
           )}
         </div>

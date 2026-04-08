@@ -243,7 +243,7 @@ const RegionWorkbench: React.FC<Props> = ({
     region?.priority_explanation
       || suggestion?.reason
       || region?.tooltip?.recommendation_text
-      || 'Diese Region zeigt aktuell die staerkste Dynamik aus Vorhersage, Versorgung und Nachfrage.',
+      || 'Diese Region zeigt aktuell die stärkste Dynamik aus Vorhersage, Versorgung und Nachfrage.',
   );
   const comparisonReason = (regionItem?: {
     priority_explanation?: string;

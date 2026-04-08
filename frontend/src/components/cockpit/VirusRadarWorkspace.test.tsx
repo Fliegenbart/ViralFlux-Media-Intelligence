@@ -29,14 +29,14 @@ describe('VirusRadarWorkspace', () => {
             heroRecommendation: {
               direction: 'Aktivieren',
               region: 'Berlin',
-              whyNow: 'Berlin zeigt die staerkste Dynamik fuer GELO in dieser Woche.',
+              whyNow: 'Berlin zeigt die stärkste Dynamik für GELO in dieser Woche.',
             },
             focusRegion: {
               code: 'BE',
               name: 'Berlin',
               recommendationId: 'rec-1',
             },
-            reasons: ['Berlin fuehrt Forecast, Signal und Reife zusammen.'],
+            reasons: ['Berlin führt Forecast, Signal und Reife zusammen.'],
             risks: ['Kundendaten bleiben noch im Aufbau.'],
             summary: 'Berlin ist diese Woche der klarste Fokusfall.',
           },
@@ -54,7 +54,7 @@ describe('VirusRadarWorkspace', () => {
           },
           workspaceStatus: {
             data_freshness: 'Aktuell',
-            summary: 'Die wichtigsten Daten sind aktuell genug fuer die Wochenentscheidung.',
+            summary: 'Die wichtigsten Daten sind aktuell genug für die Wochenentscheidung.',
             blocker_count: 1,
             blockers: ['Eine Freigabe ist noch offen.'],
             open_blockers: '1 offen',
@@ -105,7 +105,7 @@ describe('VirusRadarWorkspace', () => {
                 display_title: 'Berlin jetzt priorisieren',
                 status: 'READY',
                 region: 'Berlin',
-                reason: 'Respiratory Core Demand ist bereit fuer Review.',
+                reason: 'Respiratory Core Demand ist bereit für Review.',
                 campaign_preview: { budget: { weekly_budget_eur: 55000 } },
               },
             ],
@@ -116,7 +116,7 @@ describe('VirusRadarWorkspace', () => {
             truth_gate: {
               state: 'Aktiv',
               passed: true,
-              message: 'Evidenz ist fuer diese Woche ausreichend sichtbar.',
+              message: 'Evidenz ist für diese Woche ausreichend sichtbar.',
             },
             business_validation: {
               guidance: 'GELO kann die Wochenentscheidung mit Vorsicht treffen.',

@@ -1,6 +1,6 @@
 # World-Class Ticket Backlog
 
-Basis fuer dieses Ticket-Set:
+Basis für dieses Ticket-Set:
 - [technical_audit_current_state.md](/Users/davidwegener/Desktop/viralflux/docs/technical_audit_current_state.md)
 - [fluxengine_technical_audit_2026-03-10.md](/Users/davidwegener/Desktop/viralflux/docs/fluxengine_technical_audit_2026-03-10.md)
 - [information-architecture-audit.md](/Users/davidwegener/Desktop/viralflux/docs/information-architecture-audit.md)
@@ -18,10 +18,10 @@ Was muss noch passieren, damit ViralFlux nicht nur interessant wirkt, sondern wi
 
 Weltklasse bedeutet hier:
 
-- der Nutzer versteht in kurzer Zeit, was passiert und was als Naechstes zu tun ist
+- der Nutzer versteht in kurzer Zeit, was passiert und was als Nächstes zu tun ist
 - jede Zahl hat eine ehrliche Bedeutung
 - Budget- und Aktivierungsempfehlungen sind nicht nur regelbasiert, sondern auf echte Ergebnisse rueckfuehrbar
-- das System laesst sich operativ stabil betreiben
+- das System lässt sich operativ stabil betreiben
 
 ## Leitprinzipien
 
@@ -48,11 +48,11 @@ Weltklasse bedeutet hier:
 - priority: `P0`
 - suggested owner role: `product` mit `frontend`
 - why it matters:
-  Im Moment gibt es einen besseren Live-Hauptfluss, aber im Repo liegen noch aeltere oder doppelte Flaechen. Das erzeugt Reibung im Produktdenken und spaeter oft auch im UI.
+  Im Moment gibt es einen besseren Live-Hauptfluss, aber im Repo liegen noch aeltere oder doppelte Flaechen. Das erzeugt Reibung im Produktdenken und später oft auch im UI.
 - exact root cause:
   Das Repo beschreibt selbst doppelte oder alte Flaechen ausserhalb des Live-Hauptpfads. Dadurch ist noch nicht hart genug entschieden, welche Seite welche Frage beantwortet.
 - smallest corrective action:
-  Fuer `/jetzt`, `/regionen`, `/kampagnen`, `/evidenz` je eine Hauptfrage festschreiben und alle Inhalte daran messen.
+  Für `/jetzt`, `/regionen`, `/kampagnen`, `/evidenz` je eine Hauptfrage festschreiben und alle Inhalte daran messen.
 - acceptance criteria:
   - jede der vier Seiten hat eine klar benannte Hauptfrage
   - jedes Hauptelement auf der Seite beantwortet diese Frage
@@ -66,9 +66,9 @@ Weltklasse bedeutet hier:
 - priority: `P0`
 - suggested owner role: `frontend` mit `product`
 - why it matters:
-  Nutzer muessen sofort sehen, ob das System nur eine starke Vermutung hat oder ob eine echte Freigabe moeglich ist.
+  Nutzer müssen sofort sehen, ob das System nur eine starke Vermutung hat oder ob eine echte Freigabe möglich ist.
 - exact root cause:
-  Vertrauen, Datenfrische, Forecast-Qualitaet und Business-Gate sind ueber mehrere Bereiche verteilt. Dadurch fuehlt sich das Produkt schwer lesbar an.
+  Vertrauen, Datenfrische, Forecast-Qualitaet und Business-Gate sind über mehrere Bereiche verteilt. Dadurch fuehlt sich das Produkt schwer lesbar an.
 - smallest corrective action:
   Einen festen Vertrauensblock auf `/jetzt` einbauen mit genau drei Ampeln:
   - Forecast belastbar?
@@ -87,15 +87,15 @@ Weltklasse bedeutet hier:
 - priority: `P1`
 - suggested owner role: `frontend`
 - why it matters:
-  Wenn drei Buttons gleichzeitig gleich wichtig aussehen, weiss ein Nutzer oft nicht, was wirklich als Naechstes kommt.
+  Wenn drei Buttons gleichzeitig gleich wichtig aussehen, weiss ein Nutzer oft nicht, was wirklich als Nächstes kommt.
 - exact root cause:
-  Mehrere Seiten haben noch mehrere starke Anschlussaktionen statt eines klaren primaren naechsten Schritts.
+  Mehrere Seiten haben noch mehrere starke Anschlussaktionen statt eines klaren primaren nächsten Schritts.
 - smallest corrective action:
   Pro Hauptseite genau einen primaeren CTA festlegen. Weitere Aktionen werden sichtbar, aber schwacher gewichtet.
 - acceptance criteria:
   - jede Hauptseite hat genau einen primaeren CTA
   - sekundare Aktionen sind visuell klar nachgeordnet
-  - ein neuer Nutzer kann in einem kurzen Test den naechsten Schritt korrekt benennen
+  - ein neuer Nutzer kann in einem kurzen Test den nächsten Schritt korrekt benennen
 
 ### Ticket VF-WC-04
 
@@ -116,7 +116,7 @@ Weltklasse bedeutet hier:
 - acceptance criteria:
   - zentrale UI-Texte folgen einer dokumentierten Copy-Regel
   - `Probability`, `Confidence`, `Quality Gate`, `Fallback` sind in Alltagssprache erklaert
-  - neue Texte koennen gegen eine kurze Checkliste geprueft werden
+  - neue Texte können gegen eine kurze Checkliste geprüft werden
 
 ## Phase 2 - Output-Semantik und mathematische Ehrlichkeit
 
@@ -130,9 +130,9 @@ Weltklasse bedeutet hier:
 - why it matters:
   Weltklasse bedeutet, dass jedes Feld genau eine saubere Bedeutung hat. Sonst sehen zwei Zahlen gleich aus, meinen aber etwas anderes.
 - exact root cause:
-  Der Forecast-Kern ist relativ stark, aber in spaeteren Layers werden Score, Probability, Confidence und Readiness noch nicht ueberall hart genug getrennt.
+  Der Forecast-Kern ist relativ stark, aber in späteren Layers werden Score, Probability, Confidence und Readiness noch nicht überall hart genug getrennt.
 - smallest corrective action:
-  Ein zentrales Contract-Dokument und passende Response-Felder definieren fuer:
+  Ein zentrales Contract-Dokument und passende Response-Felder definieren für:
   - `score`
   - `event_probability`
   - `confidence`
@@ -142,7 +142,7 @@ Weltklasse bedeutet hier:
 - acceptance criteria:
   - jedes genannte Feld hat eine feste Definition
   - keine zwei Felder teilen dieselbe Semantik unter anderem Namen
-  - API-Responses koennen klar als Ranking, Wahrscheinlichkeit oder Policy-Gate eingeordnet werden
+  - API-Responses können klar als Ranking, Wahrscheinlichkeit oder Policy-Gate eingeordnet werden
 
 ### Ticket VF-WC-06
 
@@ -152,9 +152,9 @@ Weltklasse bedeutet hier:
 - priority: `P0`
 - suggested owner role: `ml` mit `frontend`
 - why it matters:
-  Eine Zahl, die wie eine Wahrscheinlichkeit aussieht, aber nur ein Ranking ist, schadet spaeter dem Vertrauen viel mehr als eine ehrlich benannte Kennzahl.
+  Eine Zahl, die wie eine Wahrscheinlichkeit aussieht, aber nur ein Ranking ist, schadet später dem Vertrauen viel mehr als eine ehrlich benannte Kennzahl.
 - exact root cause:
-  Das Repo benennt selbst mehrere Werte als heuristisch oder nicht belastbar, obwohl sie fuer Nutzer nach harten Wahrscheinlichkeiten klingen.
+  Das Repo benennt selbst mehrere Werte als heuristisch oder nicht belastbar, obwohl sie für Nutzer nach harten Wahrscheinlichkeiten klingen.
 - smallest corrective action:
   Alle betroffenen Felder inventarisieren und dann je Feld entscheiden:
   - sauber kalibrieren
@@ -162,28 +162,28 @@ Weltklasse bedeutet hier:
   - aus der Hauptansicht entfernen
 - acceptance criteria:
   - es gibt keine Nutzerflaeche mehr, in der eine unkalibrierte Kennzahl als Probability erscheint
-  - `confidence` ist entweder empirisch begruendet oder klar als heuristische Sicherheit bezeichnet
+  - `confidence` ist entweder empirisch begründet oder klar als heuristische Sicherheit bezeichnet
   - ein Feldkatalog dokumentiert den finalen Status je Kennzahl
 
 ### Ticket VF-WC-07
 
 - ticket id: `VF-WC-07`
-- title: `Fallback-Verhalten fuer Event-Probability ehrlich und sichtbar machen`
+- title: `Fallback-Verhalten für Event-Probability ehrlich und sichtbar machen`
 - category: `math honesty`
 - priority: `P1`
 - suggested owner role: `ml`
 - why it matters:
-  Ein Fallback kann sinnvoll sein. Gefaehrlich wird er erst dann, wenn niemand merkt, dass er gerade aktiv ist.
+  Ein Fallback kann sinnvoll sein. Gefährlich wird er erst dann, wenn niemand merkt, dass er gerade aktiv ist.
 - exact root cause:
-  Teile des Decision-Pfads koennen auf heuristische Ersatzlogik zurueckfallen.
+  Teile des Decision-Pfads können auf heuristische Ersatzlogik zurückfallen.
 - smallest corrective action:
   Fallbacks als normalen Teil des Vertrags behandeln:
   - wann aktiv
   - warum aktiv
-  - was das fuer die Aussagekraft bedeutet
+  - was das für die Aussagekraft bedeutet
 - acceptance criteria:
   - jede Event-Probability traegt `probability_source` und `fallback_used`
-  - UI und API koennen Fallback klar ausweisen
+  - UI und API können Fallback klar ausweisen
   - bei kritischen Freigaben wird Fallback nicht stillschweigend wie ein vollwertiges Modell behandelt
 
 ### Ticket VF-WC-08
@@ -194,11 +194,11 @@ Weltklasse bedeutet hier:
 - priority: `P1`
 - suggested owner role: `ml`
 - why it matters:
-  Weltklasse-Modelle bleiben nicht gut, weil man sie einmal trainiert. Sie bleiben gut, weil neue Kandidaten nur ueber echte Benchmark-Evidenz live gehen.
+  Weltklasse-Modelle bleiben nicht gut, weil man sie einmal trainiert. Sie bleiben gut, weil neue Kandidaten nur über echte Benchmark-Evidenz live gehen.
 - exact root cause:
-  Der neue Benchmark-Rahmen ist angelegt, aber operative Befuellung und Live-Entscheidung sind noch nicht komplett durchgezogen.
+  Der neue Benchmark-Rahmen ist angelegt, aber operative Befüllung und Live-Entscheidung sind noch nicht komplett durchgezogen.
 - smallest corrective action:
-  Fuer jeden Virus/Horizon-Scope feste Promotionsregeln definieren und reale Backtests in die Registry schreiben.
+  Für jeden Virus/Horizon-Scope feste Promotionsregeln definieren und reale Backtests in die Registry schreiben.
 - acceptance criteria:
   - Champion und Challenger sind pro Scope sichtbar
   - Promotion basiert auf echten Benchmark-Ergebnissen statt auf impliziter Handentscheidung
@@ -212,15 +212,15 @@ Weltklasse bedeutet hier:
 - priority: `P1`
 - suggested owner role: `backend`
 - why it matters:
-  Solange der Live-Pfad stark an Artefakten auf Platte haengt, ist das System schwieriger zu pruefen, zu vergleichen und spaeter zu debuggen.
+  Solange der Live-Pfad stark an Artefakten auf Platte haengt, ist das System schwieriger zu prüfen, zu vergleichen und später zu debuggen.
 - exact root cause:
   Der aktuelle regionale Produktionspfad liest stark aus Artefakten und hat noch keine voll ausgebaute Forecast-Persistenz im Datenbankschema.
 - smallest corrective action:
-  Eine DB-native Persistenz fuer regionale Forecast-Ausgaben und zugehoerige Snapshot-Metadaten einfuehren.
+  Eine DB-native Persistenz für regionale Forecast-Ausgaben und zugehörige Snapshot-Metadaten einfuehren.
 - acceptance criteria:
-  - regionale Live-Forecasts koennen historisch aus der Datenbank nachvollzogen werden
-  - fuer jede Ausgabe sind Modellversion, Horizon, As-of-Date und Qualitaetsmetadaten gespeichert
-  - Ops und Evidenzflaechen muessen nicht mehr primaer aus Dateiartefakten erklaert werden
+  - regionale Live-Forecasts können historisch aus der Datenbank nachvollzogen werden
+  - für jede Ausgabe sind Modellversion, Horizon, As-of-Date und Qualitaetsmetadaten gespeichert
+  - Ops und Evidenzflaechen müssen nicht mehr primaer aus Dateiartefakten erklaert werden
 
 ## Phase 3 - Outcome- und Lift-Layer produktiv machen
 
@@ -236,7 +236,7 @@ Weltklasse bedeutet hier:
 - exact root cause:
   Der kommerzielle Gate-Teil ist aktuell noch durch fehlende echte Outcome-Daten blockiert.
 - smallest corrective action:
-  Wiederkehrenden produktiven Import fuer Spend, Sales, Orders, Revenue, Aktivierungen und Regionen anschliessen.
+  Wiederkehrenden produktiven Import für Spend, Sales, Orders, Revenue, Aktivierungen und Regionen anschliessen.
 - acceptance criteria:
   - erste produktive Outcome-Batches laufen stabil
   - Coverage-Weeks wachsen im System sichtbar an
@@ -257,24 +257,24 @@ Weltklasse bedeutet hier:
   Outcome-Contract so erweitern, dass Aktivierungszyklen, Holdout-Gruppen und Lift-relevante Felder verpflichtend und klar beschrieben sind.
 - acceptance criteria:
   - Outcome-Datenvertrag nennt Aktivierungs-, Kontroll- und Lift-Felder explizit
-  - mindestens zwei Aktivierungszyklen koennen im System unterschieden werden
+  - mindestens zwei Aktivierungszyklen können im System unterschieden werden
   - Holdout-Information ist technisch auswertbar
 
 ### Ticket VF-WC-12
 
 - ticket id: `VF-WC-12`
-- title: `Erstes echtes Lift-Modell fuer expected units und expected revenue bauen`
+- title: `Erstes echtes Lift-Modell für expected units und expected revenue bauen`
 - category: `business math`
 - priority: `P1`
 - suggested owner role: `ml`
 - why it matters:
-  Solange `expected_units_lift` und `expected_revenue_lift` leer bleiben, endet die mathematische Geschichte zu frueh.
+  Solange `expected_units_lift` und `expected_revenue_lift` leer bleiben, endet die mathematische Geschichte zu früh.
 - exact root cause:
-  Das Repo hat die Felder und die Idee, aber noch kein produktives Modell fuer diesen Layer.
+  Das Repo hat die Felder und die Idee, aber noch kein produktives Modell für diesen Layer.
 - smallest corrective action:
-  Ein erstes konservatives Outcome-Modell bauen, das fuer freigegebene Scopes erwarteten Mehrwert plus Unsicherheitsbereich schaetzt.
+  Ein erstes konservatives Outcome-Modell bauen, das für freigegebene Scopes erwarteten Mehrwert plus Unsicherheitsbereich schaetzt.
 - acceptance criteria:
-  - `expected_units_lift` und `expected_revenue_lift` sind fuer geeignete Scopes nicht mehr `None`
+  - `expected_units_lift` und `expected_revenue_lift` sind für geeignete Scopes nicht mehr `None`
   - das Modell liefert einen Unsicherheitsbereich
   - UI und API sagen klar, wann Lift belastbar ist und wann noch nicht
 
@@ -292,16 +292,16 @@ Weltklasse bedeutet hier:
 - exact root cause:
   Die vorhandene Allokation ist bewusst heuristisch und nicht als echter Mehrwert-Optimierer gebaut.
 - smallest corrective action:
-  Einen Challenger bauen, der Budgetvorschlaege aus erwartetem Lift, Risiko und Restriktionen ableitet, aber zuerst nur im Shadow-Mode mitlaeuft.
+  Einen Challenger bauen, der Budgetvorschlaege aus erwartetem Lift, Risiko und Restriktionen ableitet, aber zuerst nur im Shadow-Mode mitläuft.
 - acceptance criteria:
-  - heuristische und lernende Budgetempfehlung koennen parallel verglichen werden
+  - heuristische und lernende Budgetempfehlung können parallel verglichen werden
   - Unterschiede werden pro Region und Produkt erklaert
   - Live-Freigabe erfolgt erst nach nachgewiesenem Mehrwert
 
 ### Ticket VF-WC-14
 
 - ticket id: `VF-WC-14`
-- title: `Budgetempfehlungen mit Gegenbegruendung erklaeren`
+- title: `Budgetempfehlungen mit Gegenbegründung erklaeren`
 - category: `allocation UX`
 - priority: `P2`
 - suggested owner role: `frontend` mit `ml`
@@ -314,9 +314,9 @@ Weltklasse bedeutet hier:
   - warum diese Region hoch priorisiert ist
   - warum andere Regionen nachgeordnet sind
 - acceptance criteria:
-  - Budgetkarten enthalten eine kurze, nachvollziehbare Begruendung
+  - Budgetkarten enthalten eine kurze, nachvollziehbare Begründung
   - mindestens ein Negativgrund wird genannt, wenn Budget nicht freigegeben wird
-  - Budgetentscheidungen koennen in Alltagssprache weitergegeben werden
+  - Budgetentscheidungen können in Alltagssprache weitergegeben werden
 
 ## Phase 5 - Operativen Betrieb haerten
 
@@ -332,10 +332,10 @@ Weltklasse bedeutet hier:
 - exact root cause:
   Teile des Codes brauchen klar Python 3.11+, waehrend lokale Aufrufe sonst schnell mit einer aelteren Version laufen.
 - smallest corrective action:
-  Einen klaren Standard fuer lokale Entwicklung und CI festziehen.
+  Einen klaren Standard für lokale Entwicklung und CI festziehen.
 - acceptance criteria:
   - dokumentierter Python-Standard ist 3.11+
-  - schneller Setup-Pfad fuer neue Entwickler ist dokumentiert
+  - schneller Setup-Pfad für neue Entwickler ist dokumentiert
   - wichtige Test-Suites laufen reproduzierbar mit derselben Runtime
 
 ### Ticket VF-WC-16
@@ -346,7 +346,7 @@ Weltklasse bedeutet hier:
 - priority: `P1`
 - suggested owner role: `backend` mit `product`
 - why it matters:
-  Heute kann ein Scope fachlich gut sein, aber wegen Datenfrische oder fehlender Commercial Truth trotzdem auf `WATCH` wirken. Das ist fuer Nutzer oft schwer zu verstehen.
+  Heute kann ein Scope fachlich gut sein, aber wegen Datenfrische oder fehlender Commercial Truth trotzdem auf `WATCH` wirken. Das ist für Nutzer oft schwer zu verstehen.
 - exact root cause:
   Mehrere Arten von "nicht bereit" liegen nahe beieinander, obwohl sie unterschiedliche Dinge bedeuten.
 - smallest corrective action:
@@ -370,7 +370,7 @@ Weltklasse bedeutet hier:
 - smallest corrective action:
   Training, Benchmarking, Promotion, Rollback und Smoke-Check als festen Ablauf dokumentieren und automatisieren.
 - acceptance criteria:
-  - jeder Modellwechsel hinterlaesst eine nachvollziehbare Spur
+  - jeder Modellwechsel hinterlässt eine nachvollziehbare Spur
   - Rollback ist definiert
   - Smoke-Checks vor und nach Promotion sind Teil des Standardablaufs
 
@@ -380,7 +380,7 @@ Weltklasse bedeutet hier:
    Erst den Produktfluss festziehen, damit wir nicht auf ein verwirrendes Bedienmodell optimieren.
 
 2. `VF-WC-02`
-   Dann Vertrauen sichtbar machen. Das bringt sofort mehr Klarheit fuer Nutzer.
+   Dann Vertrauen sichtbar machen. Das bringt sofort mehr Klarheit für Nutzer.
 
 3. `VF-WC-05`
    Danach die Feldbedeutungen hart definieren. Sonst bauen wir weiter auf uneinheitlicher Semantik.
@@ -389,7 +389,7 @@ Weltklasse bedeutet hier:
    Alles Unehrliche bereinigen: umbenennen, kalibrieren oder rausnehmen.
 
 5. `VF-WC-10`
-   Outcome-Daten produktiv anschliessen. Das ist der groesste Hebel fuer Business-Reife.
+   Outcome-Daten produktiv anschliessen. Das ist der größte Hebel für Business-Reife.
 
 6. `VF-WC-11`
    Aktivierungs- und Holdout-Struktur sauber machen.
@@ -404,10 +404,10 @@ Weltklasse bedeutet hier:
    Persistenz und Nachvollziehbarkeit haerten.
 
 10. `VF-WC-13`
-    Lernende Budget-Engine zunaechst im Shadow-Mode evaluieren.
+    Lernende Budget-Engine zunächst im Shadow-Mode evaluieren.
 
 11. `VF-WC-16`
-    Readiness fuer Nutzer sauber entwirren.
+    Readiness für Nutzer sauber entwirren.
 
 12. `VF-WC-15` und `VF-WC-17`
     Entwicklungs- und Release-Prozess stabil machen.

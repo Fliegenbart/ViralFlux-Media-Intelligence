@@ -79,7 +79,7 @@ class AREKonsultationIngestionService:
         logger.info(
             f"Parsed ARE-Konsultation: {len(df)} rows, "
             f"Altersgruppen: {df['Altersgruppe'].unique().tolist()}, "
-            f"Bundeslaender: {df['Bundesland'].nunique()}"
+            f"Bundesländer: {df['Bundesland'].nunique()}"
         )
         return df
 

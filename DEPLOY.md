@@ -37,8 +37,8 @@ Was der Command macht:
 6. `db` und `redis` im Production-Compose-Projekt hochfahren oder vorhandene Infra-Container sauber wiederverwenden
 7. `frontend-prod`, `backend`, `celery_worker` und `celery_beat` sauber neu erzeugen
 8. Guard-Checks auf `ENVIRONMENT=production`, harte DB-Flags und bind-mount-freien Live-Modus ausführen
-9. Liveness pruefen
-10. modernen Release-Smoke gegen Live, Ready und den regionalen Produktkern ausfuehren
+9. Liveness prüfen
+10. modernen Release-Smoke gegen Live, Ready und den regionalen Produktkern ausführen
 11. Status der Live-Services ausgeben
 
 ## Produktionsflags
@@ -63,7 +63,7 @@ python scripts/smoke_test_release.py \
   --top-n 3
 ```
 
-Der moderne Release-Smoke prueft:
+Der moderne Release-Smoke prüft:
 
 - `/health/live`
 - `/health/ready`
@@ -71,20 +71,20 @@ Der moderne Release-Smoke prueft:
 - `/api/v1/forecast/regional/media-allocation`
 - `/api/v1/forecast/regional/campaign-recommendations`
 
-Der Deploy nutzt fuer diese Smoke-Requests standardmaessig ein etwas groesseres Request-Timeout (`SMOKE_TIMEOUT=15`), damit frisch gestartete Services nicht zu frueh als Fehler gewertet werden.
-Fuer geschuetzte Live-Instanzen nutzt der Smoke-Test bevorzugt `SMOKE_BEARER_TOKEN` oder `SMOKE_ADMIN_EMAIL`/`SMOKE_ADMIN_PASSWORD`.
-Wenn diese Werte nicht gesetzt sind und der Test direkt auf dem Deploy-Host laeuft, versucht er als Fallback die laufenden Backend-Container-Credentials aus `virusradar_backend` zu lesen.
+Der Deploy nutzt für diese Smoke-Requests standardmäßig ein etwas größeres Request-Timeout (`SMOKE_TIMEOUT=15`), damit frisch gestartete Services nicht zu früh als Fehler gewertet werden.
+Für geschützte Live-Instanzen nutzt der Smoke-Test bevorzugt `SMOKE_BEARER_TOKEN` oder `SMOKE_ADMIN_EMAIL`/`SMOKE_ADMIN_PASSWORD`.
+Wenn diese Werte nicht gesetzt sind und der Test direkt auf dem Deploy-Host läuft, versucht er als Fallback die laufenden Backend-Container-Credentials aus `virusradar_backend` zu lesen.
 
-Optional kann zusaetzlich `--check-cockpit` gesetzt werden. Der Cockpit-Pfad ist aber nur advisory und nicht mehr der alleinige Go/No-Go-Indikator.
+Optional kann zusätzlich `--check-cockpit` gesetzt werden. Der Cockpit-Pfad ist aber nur advisory und nicht mehr der alleinige Go/No-Go-Indikator.
 
 Failure-Levels:
 
 - `live_failed`
   - Prozess lebt nicht oder `/health/live` ist nicht gesund.
-  - Deploy-Script rollt zurueck.
+  - Deploy-Script rollt zurück.
 - `business_smoke_failed`
-  - Kernpfade Forecast / Allocation / Recommendation liefern `500`, leere oder ungueltige Payloads.
-  - Deploy-Script rollt zurueck.
+  - Kernpfade Forecast / Allocation / Recommendation liefern `500`, leere oder ungültige Payloads.
+  - Deploy-Script rollt zurück.
 - `ready_blocked`
   - Service lebt und Kernpfade antworten, aber `/health/ready` ist nicht healthy.
   - Deploy bleibt sichtbar, aber der Zustand ist operativ blockiert und muss nachgezogen werden.

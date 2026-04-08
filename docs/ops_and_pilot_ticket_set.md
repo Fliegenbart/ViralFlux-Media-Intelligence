@@ -1,6 +1,6 @@
 # Ops And Pilot Ticket Set
 
-Basis fuer dieses Ticket-Set:
+Basis für dieses Ticket-Set:
 - [live_readiness_blockers_current.md](/Users/davidwegener/Desktop/viralflux/docs/live_readiness_blockers_current.md)
 - [pilot_runbook_peix_gelo.md](/Users/davidwegener/Desktop/viralflux/docs/pilot_runbook_peix_gelo.md)
 - [rsv_h7_live_evaluation_runbook.md](/Users/davidwegener/Desktop/viralflux/docs/rsv_h7_live_evaluation_runbook.md)
@@ -13,7 +13,7 @@ Stand: 2026-03-18
 Es gibt jetzt zwei Ebenen, und genau daran orientiert sich dieses Ticket-Set:
 
 - **Forecast-First-Pilot**
-  kann fuer `GELO / RSV A / h7` glaubwuerdig laufen, wenn der scoped Forecast-Pfad gruen bleibt
+  kann für `GELO / RSV A / h7` glaubwürdig laufen, wenn der scoped Forecast-Pfad grün bleibt
 - **Commercial GO**
   bleibt weiterhin blockiert, solange GELO-Outcome-Daten und Aktivierungs-/Holdout-Evidenz fehlen
 
@@ -31,7 +31,7 @@ Die P2-Tickets bleiben operative Warnungen.
 - priority: `P1`
 - suggested owner role: `data partner` with `backend` support
 - why it matters:
-  Der Forecast-First-Pilot kann bereits gezeigt werden. Was weiterhin fehlt, ist die echte GELO-Outcome-Basis fuer einen spaeteren Commercial GO.
+  Der Forecast-First-Pilot kann bereits gezeigt werden. Was weiterhin fehlt, ist die echte GELO-Outcome-Basis für einen späteren Commercial GO.
 - exact root cause:
   `PilotReadoutService._missing_requirements()` und `BusinessValidationService.evaluate()` sehen derzeit effektiv keinen belastbaren GELO-Truth-Layer:
   - `coverage_weeks = 0` oder zu wenig
@@ -46,7 +46,7 @@ Die P2-Tickets bleiben operative Warnungen.
 - acceptance criteria:
   - mindestens ein erfolgreicher GELO-Batch mit `imported > 0`
   - Audit-/Import-Trail zeigt den Batch sauber
-  - `commercial_validation_status` springt fuer den engen Scope mindestens von `NO_GO` auf `WATCH`
+  - `commercial_validation_status` springt für den engen Scope mindestens von `NO_GO` auf `WATCH`
   - `coverage_weeks > 0`
 
 ### Ticket VF-P1-02
@@ -57,9 +57,9 @@ Die P2-Tickets bleiben operative Warnungen.
 - priority: `P1`
 - suggested owner role: `product` with `data partner` and `backend` support
 - why it matters:
-  Ein erster Datenbatch reicht nicht fuer Commercial GO. Die Business-Validierung braucht Aktivierungszyklen, Holdout-Struktur und Lift-Evidenz.
+  Ein erster Datenbatch reicht nicht für Commercial GO. Die Business-Validierung braucht Aktivierungszyklen, Holdout-Struktur und Lift-Evidenz.
 - exact root cause:
-  `BusinessValidationService.evaluate()` verlangt fuer `validated_for_budget_activation = true`:
+  `BusinessValidationService.evaluate()` verlangt für `validated_for_budget_activation = true`:
   - `coverage_weeks >= 26`
   - `activation_cycles >= 2`
   - `holdout_groups >= 2`
@@ -68,7 +68,7 @@ Die P2-Tickets bleiben operative Warnungen.
   GELO-Export so festziehen, dass jede relevante Aktivierung explizit `campaign_id` oder `activation_cycle`, `holdout_group` und Lift-bezogene Felder mitfuehrt.
 - dependencies:
   - `VF-P1-01`
-  - PEIX / GELO muessen die Zielmetrik fuer den Commercial Layer gemeinsam definieren
+  - PEIX / GELO müssen die Zielmetrik für den Commercial Layer gemeinsam definieren
 - acceptance criteria:
   - Datencontract nennt Aktivierungs-, Holdout- und Lift-Felder explizit
   - mindestens zwei Aktivierungszyklen werden in ViralFlux sichtbar
@@ -87,7 +87,7 @@ Die P2-Tickets bleiben operative Warnungen.
 - why it matters:
   Der enge Forecast-First-Pilot ist fachlich nutzbar, aber `regional_operational` bleibt wegen Source-Freshness degradiert. Das drueckt Vertrauen, obwohl es aktuell kein harter Forecast-First-Blocker ist.
 - exact root cause:
-  Upstream-Quellen sind fuer den aktiven Scope nicht frisch genug, deshalb faellt `source_freshness_status` auf `warning`.
+  Upstream-Quellen sind für den aktiven Scope nicht frisch genug, deshalb faellt `source_freshness_status` auf `warning`.
 - smallest corrective action:
   Quell-Update oder Ingest-Job rerunnen, bis `latest_available_as_of` wieder im frischen Fenster liegt.
 - dependencies:
@@ -103,15 +103,15 @@ Die P2-Tickets bleiben operative Warnungen.
 - priority: `P2`
 - suggested owner role: `ml`
 - why it matters:
-  `forecast_monitoring` bleibt warning-lastig. Das blockiert den engen PEIX/GELO-Forecast-Pilot nicht direkt, laesst die Plattform aber schlechter aussehen als der aktive Scope selbst ist.
+  `forecast_monitoring` bleibt warning-lastig. Das blockiert den engen PEIX/GELO-Forecast-Pilot nicht direkt, lässt die Plattform aber schlechter aussehen als der aktive Scope selbst ist.
 - exact root cause:
-  Monitoring-/Backtest-Artefakte fuer den nationalen Strang sind stale oder unterbeprobt.
+  Monitoring-/Backtest-Artefakte für den nationalen Strang sind stale oder unterbeprobt.
 - smallest corrective action:
   Monitoring- und Backtest-Jobs neu laufen lassen und stale Artefakte ersetzen.
 - dependencies:
   - idealerweise `VF-P2-01`
 - acceptance criteria:
-  - `/api/v1/forecast/monitoring` meldet keine rein stale-bedingten Warnungen mehr fuer den Live-Bestand
+  - `/api/v1/forecast/monitoring` meldet keine rein stale-bedingten Warnungen mehr für den Live-Bestand
 
 ## P3 - Hygiene / Lower-Leverage Improvements
 
@@ -138,16 +138,16 @@ Die P2-Tickets bleiben operative Warnungen.
 ## Recommended Execution Order
 
 1. **Forecast-First-Pilot direkt nutzen**
-   Kein Ticket, sondern die operative Konsequenz. Der enge Scope ist dafuer da, jetzt gezeigt zu werden.
+   Kein Ticket, sondern die operative Konsequenz. Der enge Scope ist dafür da, jetzt gezeigt zu werden.
 
 2. `VF-P1-01`
    Der Commercial Layer braucht echte Outcome-Daten als erste Stufe.
 
 3. `VF-P1-02`
-   Danach Holdout-/Lift-Faehigkeit herstellen.
+   Danach Holdout-/Lift-Fähigkeit herstellen.
 
 4. `VF-P2-01`
-   Source-Freshness fuer den aktiven Scope wieder gruener machen.
+   Source-Freshness für den aktiven Scope wieder grüner machen.
 
 5. `VF-P2-02`
    Nationales Monitoring aufraeumen.
@@ -159,10 +159,10 @@ Die P2-Tickets bleiben operative Warnungen.
 
 ### Credible Forecast-First GO
 
-Der enge Pilot ist ein glaubwuerdiger GO, wenn:
+Der enge Pilot ist ein glaubwürdiger GO, wenn:
 
-1. `RSV A / h7` forecast-seitig gruen bleibt
-2. `pilot-readout` fuer den engen Scope `scope_readiness = GO` liefert
+1. `RSV A / h7` forecast-seitig grün bleibt
+2. `pilot-readout` für den engen Scope `scope_readiness = GO` liefert
 3. die Budgetsicht als `scenario_split` ausgewiesen bleibt
 4. Commercial Validation sichtbar getrennt ist
 
@@ -172,7 +172,7 @@ Die zweite Freigabestufe kommt erst, wenn:
 
 1. GELO-Outcome-Daten produktiv fliessen
 2. Aktivierungszyklen und Holdouts sichtbar sind
-3. Lift-Evidenz verfuegbar ist
+3. Lift-Evidenz verfügbar ist
 4. `commercial_validation_status = GO`
 5. `budget_release_status = GO`
 

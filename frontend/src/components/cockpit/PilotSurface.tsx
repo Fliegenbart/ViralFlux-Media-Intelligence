@@ -859,7 +859,7 @@ const PilotSurface: React.FC<Props> = ({
             </div>
           ) : (
             <div className="pilot-ranked-empty">
-              Fuer diesen Scope ist aktuell keine archivierte Vergleichstabelle verfuegbar.
+              Für diesen Scope ist aktuell keine archivierte Vergleichstabelle verfügbar.
             </div>
           )}
         </div>

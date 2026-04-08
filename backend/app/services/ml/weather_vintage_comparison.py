@@ -604,7 +604,7 @@ def render_weather_vintage_shadow_aggregate_markdown(aggregate: dict[str, Any]) 
     lines = [
         "# Weather Vintage Prospective Shadow Aggregate",
         "",
-        "Dieser Report fasst mehrere prospektive Shadow-Laeufe zusammen. `insufficient_identity`-Laeufe werden nicht als vergleichbar gezaehlt.",
+        "Dieser Report fasst mehrere prospektive Shadow-Läufe zusammen. `insufficient_identity`-Läufe werden nicht als vergleichbar gezaehlt.",
         "",
         "## Summary",
         "",
@@ -697,7 +697,7 @@ def build_weather_vintage_shadow_health_report(
         _add_finding(
             "critical",
             "no_scheduled_shadow_runs",
-            "Es gibt noch keine archivierten scheduled_shadow-Laeufe fuer den Weather-Vintage-Shadow-Betrieb.",
+            "Es gibt noch keine archivierten scheduled_shadow-Läufe für den Weather-Vintage-Shadow-Betrieb.",
         )
     else:
         latest_generated_at = _parse_generated_at(latest_run.get("generated_at"))
@@ -733,7 +733,7 @@ def build_weather_vintage_shadow_health_report(
             _add_finding(
                 "critical",
                 "latest_run_failed",
-                "Der letzte scheduled_shadow-Lauf hat fuer alle Scopes unbrauchbare Ergebnisse geliefert.",
+                "Der letzte scheduled_shadow-Lauf hat für alle Scopes unbrauchbare Ergebnisse geliefert.",
                 run_id=latest_run.get("run_id"),
                 failed_scopes=latest_failed_scopes,
                 archived_scopes=latest_archived_scopes,
@@ -742,7 +742,7 @@ def build_weather_vintage_shadow_health_report(
             _add_finding(
                 "warning",
                 "latest_run_partial_failure",
-                "Der letzte scheduled_shadow-Lauf hat fuer mindestens einen Scope einen Fehler geliefert.",
+                "Der letzte scheduled_shadow-Lauf hat für mindestens einen Scope einen Fehler geliefert.",
                 run_id=latest_run.get("run_id"),
                 failed_scopes=latest_failed_scopes,
                 archived_scopes=latest_archived_scopes,

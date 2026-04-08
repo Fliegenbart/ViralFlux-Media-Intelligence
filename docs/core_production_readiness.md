@@ -11,13 +11,13 @@ Er bewertet:
 - die komplette regionale Scope-Matrix
 - auch nicht-pilotige, Shadow- oder bewusst unsupported Scopes
 
-Das ist fuer Plattformtransparenz richtig, aber fuer die Frage
+Das ist für Plattformtransparenz richtig, aber für die Frage
 
-- "Ist unser aktueller Live-Kernbetrieb ehrlich gruen?"
+- "Ist unser aktueller Live-Kernbetrieb ehrlich grün?"
 
 zu breit.
 
-Deshalb gibt es zusaetzlich:
+Deshalb gibt es zusätzlich:
 
 - `GET /health/core-ready`
 
@@ -33,7 +33,7 @@ Default:
 
 - `RSV A:h7`
 
-Beispiel fuer mehrere Scopes:
+Beispiel für mehrere Scopes:
 
 - `RSV A:h7,Influenza A:h7,Influenza B:h7`
 
@@ -53,7 +53,7 @@ Dabei ist wichtig:
 
 - `source_coverage_required_status` kommt jetzt aus der echten Live-Sicht pro Quelle, nicht mehr primaer aus Trainingsmetadaten.
 - `source_freshness_status` bewertet die letzte sichtbare Live-Lieferung pro kritischer Quelle.
-- gute Artefakt-Coverage allein reicht nicht fuer `core-ready`.
+- gute Artefakt-Coverage allein reicht nicht für `core-ready`.
 
 Wenn einer dieser Punkte nicht passt:
 
@@ -69,7 +69,7 @@ Es ist ein **engerer und ehrlicherer** Check:
 - `/health/ready` beantwortet: "Wie sieht das ganze Portfolio aus?"
 - `/health/core-ready` beantwortet: "Ist der aktuell produktive Kernbetrieb sauber?"
 
-Beide Pfade koennen gleichzeitig sinnvoll sein:
+Beide Pfade können gleichzeitig sinnvoll sein:
 
 - `/health/ready = degraded`
 - `/health/core-ready = healthy`
@@ -96,11 +96,11 @@ Neue operative Consumer sollen deshalb nicht `source_coverage` lesen, sondern di
 - `live_source_coverage_status`
 - `live_source_freshness_status`
 
-## Zielbild fuer PEIX / GELO
+## Zielbild für PEIX / GELO
 
-Fuer den aktuellen PEIX/GELO-Kern bedeutet gruen:
+Für den aktuellen PEIX/GELO-Kern bedeutet grün:
 
-- `RSV A / h7` ist im Forecast-First-Betrieb produktionsfaehig
+- `RSV A / h7` ist im Forecast-First-Betrieb produktionsfähig
 - nicht-pilotige und unsupported Scopes ziehen diese Kernampel nicht mehr mit nach unten
 
 Commercial Validation bleibt weiterhin getrennt:

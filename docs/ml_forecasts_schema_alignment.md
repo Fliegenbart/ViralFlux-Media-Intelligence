@@ -2,20 +2,20 @@
 
 ## Ausgangslage
 
-`ml_forecasts` ist der persistierte Forecast-Store fuer den nationalen Forecast-first-Pfad.
+`ml_forecasts` ist der persistierte Forecast-Store für den nationalen Forecast-first-Pfad.
 Seit der Mehr-Horizont- und Scope-Erweiterung gehoeren zwei Felder zum Pflichtvertrag:
 
 - `region`
 - `horizon_days`
 
-Zusaetzlich werden diese Scopes ueber eigene Indizes adressiert:
+Zusätzlich werden diese Scopes über eigene Indizes adressiert:
 
 - `ix_ml_forecasts_region`
 - `ix_ml_forecasts_horizon_days`
 - `idx_forecast_scope_date`
 - `idx_forecast_scope_created`
 
-Die dazugehoerige Alembic-Migration ist:
+Die dazugehörige Alembic-Migration ist:
 
 - `f1a2b3c4d5e6_add_mlforecast_region_horizon_scope.py`
 
@@ -25,7 +25,7 @@ Der Produktionsfehler `ml_forecasts.region does not exist` entsteht nicht durch 
 sondern durch eine Datenbank, die hinter dem Repo-Migrationsstand liegt.
 
 Der aktuelle ORM-Vertrag in [database.py](/Users/davidwegener/Desktop/viralflux/backend/app/models/database.py)
-enthaelt `region` und `horizon_days` auf `MLForecast`.
+enthält `region` und `horizon_days` auf `MLForecast`.
 Wenn diese Spalten in der DB fehlen, generiert SQLAlchemy bereits beim normalen Query-Load ein fehlerhaftes `SELECT`.
 
 ## Finaler Zielzustand
@@ -41,7 +41,7 @@ Wenn diese Spalten in der DB fehlen, generiert SQLAlchemy bereits beim normalen 
 
 ### 1. Expliziter Schema-Contract
 
-`backend/app/db/schema_contracts.py` definiert den migration-managed Pflichtvertrag fuer `ml_forecasts`.
+`backend/app/db/schema_contracts.py` definiert den migration-managed Pflichtvertrag für `ml_forecasts`.
 
 Wichtige Funktionen:
 
@@ -54,15 +54,15 @@ Wenn `region`, `horizon_days` oder die Scope-Indizes fehlen, wird
 
 ### 2. Startup-/Schema-Check
 
-`backend/app/db/session.py` prueft jetzt nicht mehr nur optionale Runtime-Gaps,
-sondern auch Pflichtfelder, die ausschliesslich per Migration bereitgestellt werden muessen.
+`backend/app/db/session.py` prüft jetzt nicht mehr nur optionale Runtime-Gaps,
+sondern auch Pflichtfelder, die ausschliesslich per Migration bereitgestellt werden müssen.
 
 Wichtig:
 
 - `ml_forecasts.region` und `ml_forecasts.horizon_days` werden **nicht** als Runtime-Patch still nachgezogen
 - fehlende Pflichtmigrationen markieren den DB-Stand explizit als kritisch
 
-### 3. Nationaler Scope fuer Legacy-/Monitoring-Reader
+### 3. Nationaler Scope für Legacy-/Monitoring-Reader
 
 Folgende Services lesen nationale `MLForecast`-Daten jetzt explizit mit `DE/h7`:
 
@@ -87,7 +87,7 @@ Der Fehler bleibt sichtbar, aber als klarer Betriebs-/Schemafehler statt als opa
 ## Migration und Rollout
 
 Das Repo hatte zuvor zwei Alembic-Heads.
-Fuer einen sauberen Deployment-Pfad wurde eine Merge-Revision hinzugefuegt:
+Für einen sauberen Deployment-Pfad wurde eine Merge-Revision hinzugefuegt:
 
 - `9695cafe1234_merge_truth_and_mlforecast_heads.py`
 

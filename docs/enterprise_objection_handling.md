@@ -4,7 +4,7 @@ Stand: 2026-03-17
 
 ## Zweck
 
-Dieses Dokument uebersetzt den realen Systemstand in belastbare Antworten fuer anspruchsvolle PEIX-/GELO- und spaetere Enterprise-Gespraeche.
+Dieses Dokument übersetzt den realen Systemstand in belastbare Antworten für anspruchsvolle PEIX-/GELO- und spätere Enterprise-Gespraeche.
 
 Wichtig:
 
@@ -19,7 +19,7 @@ Die beste Antwort ist meistens:
 1. was kann das System real?
 2. was kann es bewusst noch nicht?
 3. wie wird das Risiko heute kontrolliert?
-4. was ist der naechste Ausbaupfad?
+4. was ist der nächste Ausbaupfad?
 
 ## Einwand 1: "Ist das nicht einfach nur ein Forecast-Dashboard?"
 
@@ -57,7 +57,7 @@ Deshalb gibt es im Produkt explizit:
 
 Ohne diese Schichten waere das System fachlich schwer zu verantworten.
 
-## Einwand 3: "Wenn die Modelle nicht perfekt sind, warum sollte man dafuer viel bezahlen?"
+## Einwand 3: "Wenn die Modelle nicht perfekt sind, warum sollte man dafür viel bezahlen?"
 
 ### Ehrliche Antwort
 
@@ -92,20 +92,20 @@ Die richtige Formulierung ist aktuell:
 
 ### Was man nicht sagen sollte
 
-- "Ja, das ist komplett fertig fuer Always-On-Betrieb."
+- "Ja, das ist komplett fertig für Always-On-Betrieb."
 
-## Einwand 5: "Warum sollte man dann ueberhaupt jetzt mit euch starten?"
+## Einwand 5: "Warum sollte man dann überhaupt jetzt mit euch starten?"
 
 ### Ehrliche Antwort
 
-Weil es sinnvoll sein kann, frueh in einen streng gefuehrten Pilot einzusteigen, statt spaeter nur einen generischen Plattformvertrag zu kaufen.
+Weil es sinnvoll sein kann, früh in einen streng gefuehrten Pilot einzusteigen, statt später nur einen generischen Plattformvertrag zu kaufen.
 
-Ein frueher Pilot schafft:
+Ein früher Pilot schafft:
 
 - gemeinsamen Scope
 - echte Operator-Fragen
 - relevante Outcome-Readouts
-- Grundlage fuer spaetere Vertragsgroesse
+- Grundlage für spätere Vertragsgröße
 
 Aber nur, wenn der Pilot als Pilot verkauft wird und nicht als bereits voll freigegebene Plattform.
 
@@ -143,7 +143,7 @@ Das ist kaufrelevant, weil es verhindert, dass schwache oder veraltete Signale w
 
 ### Ehrliche Antwort
 
-Das System ist in dieser Hinsicht staerker als viele fruehe Data-Science-Produkte.
+Das System ist in dieser Hinsicht stärker als viele frühe Data-Science-Produkte.
 
 Es gibt bereits:
 
@@ -177,16 +177,16 @@ Wichtiger Zusatz:
 
 ### Ehrliche Antwort
 
-Weil Forecast allein fuer Marketing oft zu weit vom Handeln entfernt ist.
+Weil Forecast allein für Marketing oft zu weit vom Handeln entfernt ist.
 
-Allocation und Recommendation uebersetzen das Signal in:
+Allocation und Recommendation übersetzen das Signal in:
 
 - regionale Priorisierung
 - Budgetfokus
 - Aktivierungsniveau
 - Produktcluster
 - Keywordcluster
-- nachvollziehbare Begruendung
+- nachvollziehbare Begründung
 
 Erst dadurch wird aus dem Signal ein operativ diskutierbarer Vorschlag.
 
@@ -204,19 +204,19 @@ Aber das System hat bereits:
 - before/after comparisons
 - KPI-Sichten wie Hit Rate und Lead Time
 
-Damit laesst sich ein ernsthafter Pilot-Readout erzeugen, auch wenn das noch kein belastbares MMM ersetzt.
+Damit lässt sich ein ernsthafter Pilot-Readout erzeugen, auch wenn das noch kein belastbares MMM ersetzt.
 
-## Einwand 12: "Warum sollte das teuer sein, wenn ihr noch nicht ganz gruen seid?"
+## Einwand 12: "Warum sollte das teuer sein, wenn ihr noch nicht ganz grün seid?"
 
 ### Ehrliche Antwort
 
-Weil teuer hier nur dann glaubwuerdig ist, wenn der Preis an Senior-Begleitung, Governance, Reporting und einen klaren Pilot-zu-Plattform-Pfad gekoppelt ist.
+Weil teuer hier nur dann glaubwürdig ist, wenn der Preis an Senior-Begleitung, Governance, Reporting und einen klaren Pilot-zu-Plattform-Pfad gekoppelt ist.
 
-Nicht glaubwuerdig waere:
+Nicht glaubwürdig waere:
 
 - hoher Plattformpreis plus Reife-Claim, den das System heute nicht halten kann
 
-Glaubwuerdig ist:
+Glaubwürdig ist:
 
 - hochpreisiger, streng gefuehrter Pilot
 - mit ehrlicher Plattformperspektive
@@ -225,13 +225,13 @@ Glaubwuerdig ist:
 
 ### Ehrliche Antwort
 
-Weil interne Analysten oft genau diese Kette manuell zusammenbauen muessen:
+Weil interne Analysten oft genau diese Kette manuell zusammenbauen müssen:
 
 - Signale sammeln
 - Regionen priorisieren
 - Budgets diskutieren
-- Begruendungen dokumentieren
-- spaeter Wirkung rekonstruieren
+- Begründungen dokumentieren
+- später Wirkung rekonstruieren
 
 ViralFlux ist wertvoll, wenn es diese Kette standardisiert, beschleunigt und auditierbar macht.
 
@@ -249,6 +249,6 @@ Das sollte offen gesagt werden.
 
 ## Empfohlene Abschlussformel
 
-Eine gute, harte Formulierung fuer Enterprise-Gespraeche ist:
+Eine gute, harte Formulierung für Enterprise-Gespraeche ist:
 
 > ViralFlux ist heute ein ernstzunehmender regionaler Decision- und Activation-Layer mit Explainability-, Allocation-, Recommendation- und Reporting-Substanz. Es ist live sichtbar, aber noch nicht als voll freigegebene Always-On-Plattform zu verkaufen. Der richtige Einstieg ist deshalb ein streng gefuehrter Pilot mit klarer Freigabelogik und transparenter Plattformperspektive.

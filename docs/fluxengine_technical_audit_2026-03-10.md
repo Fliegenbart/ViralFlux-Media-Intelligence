@@ -6,17 +6,17 @@ Datum: 2026-03-10
 
 FluxEngine hat zwei sehr unterschiedliche mathematische Qualitaetsniveaus:
 
-- Der Forecast-/Backtest-Kern ist formal am staerksten. Dort gibt es echte Zeitreihenmodelle, Leakage-Guards, Walk-forward-Logik und Baseline-Vergleiche.
-- Die Score- und Decision-Layer sind deutlich heuristischer. Dort sind mehrere Groessen sauber als Ranking- oder Priorisierungssignale nutzbar, aber nicht als empirisch kalibrierte Wahrscheinlichkeiten oder Konfidenzen.
+- Der Forecast-/Backtest-Kern ist formal am stärksten. Dort gibt es echte Zeitreihenmodelle, Leakage-Guards, Walk-forward-Logik und Baseline-Vergleiche.
+- Die Score- und Decision-Layer sind deutlich heuristischer. Dort sind mehrere Größen sauber als Ranking- oder Priorisierungssignale nutzbar, aber nicht als empirisch kalibrierte Wahrscheinlichkeiten oder Konfidenzen.
 
 Das wichtigste Gesamturteil lautet:
 
-| Subsystem | Urteil | Begruendung |
+| Subsystem | Urteil | Begründung |
 | --- | --- | --- |
 | `forecast_service` | mathematisch konsistent | Reale Modellpipeline mit Leakage-Schutz, OOF-Training und Quantil-Ausgabe. Aber Promotion-Backtest spiegelt die Live-Inferenz nicht vollstaendig. |
 | `backtester` Walk-forward | mathematisch konsistent | As-of-/Vintage-Logik, Baseline-Vergleich, Lead-/Lag-Metriken und Quality Gate sind formal plausibel. |
 | `backtester` Gewichtskalibrierung -> Business-Gewichte | nicht belastbar | Feature-Importances eines autoregressiven SURVSTAT-Modells werden heuristisch auf `bio/market/psycho/context` gemappt und dann produktiv weiterverwendet. |
-| `risk_engine_legacy` | nicht belastbar | Mehrere Einheiten werden unzulaessig gemischt; die Baseline-Korrektur vergleicht einen Fusionsscore mit Positivraten. |
+| `risk_engine_legacy` | nicht belastbar | Mehrere Einheiten werden unzulässig gemischt; die Baseline-Korrektur vergleicht einen Fusionsscore mit Positivraten. |
 | `peix_score_service` | heuristisch konsistent aber nicht statistisch validiert | Die 6D-Fusion ist intern konsistent und sauber begrenzt, aber die Wahrscheinlichkeits-Semantik und Gewichtskalibrierung sind nicht empirisch belegt. |
 | `opportunity_engine` / Detektoren | heuristisch konsistent aber nicht statistisch validiert | `urgency_score` ist als Priorisierung brauchbar, aber nicht als abgesicherte Wirkungs- oder Eintrittswahrscheinlichkeit. |
 
@@ -53,13 +53,13 @@ Ergebnis:
 
 Wichtige Einschraenkungen:
 
-- Die lokale Default-Runtime war Python 3.9; der Repo-Code benoetigt faktisch Python 3.11+ wegen `| None`-Typannotation in `config.py`.
+- Die lokale Default-Runtime war Python 3.9; der Repo-Code benötigt faktisch Python 3.11+ wegen `| None`-Typannotation in `config.py`.
 - Es gibt im Repo keine produktiven Rohdaten und keine `.env`-Datei. `data/raw/` und `data/processed/` enthalten nur `.gitkeep`.
-- Deshalb konnte keine echte produktive OOS-Evaluierung auf befuellter Datenbank gefahren werden. Die empirische Evidenz in diesem Audit stammt aus Code, Tests und reproduzierbarer statischer Laufzeitpruefung.
+- Deshalb konnte keine echte produktive OOS-Evaluierung auf befüllter Datenbank gefahren werden. Die empirische Evidenz in diesem Audit stammt aus Code, Tests und reproduzierbarer statischer Laufzeitprüfung.
 
 ## Claim-Inventar
 
-Die wichtigste Trennung fuer dieses System ist:
+Die wichtigste Trennung für dieses System ist:
 
 | Output | Typ | Aktuelle Semantik im Code | Audit-Urteil |
 | --- | --- | --- | --- |
@@ -71,12 +71,12 @@ Die wichtigste Trennung fuer dieses System ist:
 | `impact_probability` im Peix | Pseudo-Probability | Sigmoid auf Score | nicht belastbar als Probability |
 | `confidence_numeric` / `confidence_label` | Agreement-Proxy | Streuung der Teilsignale | heuristisch konsistent |
 | `urgency_score` | Priorisierung | Detector-spezifische Heuristik | heuristisch konsistent |
-| `confidence_pct` in Opportunity-Briefs | Mix aus Confidence und Urgency | faellt auf `urgency_score` zurueck | nicht belastbar |
+| `confidence_pct` in Opportunity-Briefs | Mix aus Confidence und Urgency | faellt auf `urgency_score` zurück | nicht belastbar |
 | `quality_gate` | Entscheidungs-Gate | Schwellen auf Hit Rate / Lead / Fehler | mathematisch konsistent als Policy-Gate |
 
 ## Detaillierte Analyse
 
-### 1. `forecast_service`: staerkster mathematischer Baustein
+### 1. `forecast_service`: stärkster mathematischer Baustein
 
 Positive Punkte:
 
@@ -90,16 +90,16 @@ Hauptschwaechen:
 1. Promotion-Backtest und Live-Inferenz sind nicht isomorph.
    - Im Promotion-Pfad wird Prophet nicht echt verwendet, sondern als konstanter `prophet_proxy` aus dem letzten Mittelwert approximiert (`forecast_service.py:899-902`).
    - In der Live-Inferenz wird dagegen `_fit_prophet()` wirklich aufgerufen (`forecast_service.py:1052-1059`).
-   - Damit wird nicht exakt das evaluiert, was spaeter deployed wird.
+   - Damit wird nicht exakt das evaluiert, was später deployed wird.
 
 2. Horizon-Features werden waehrend der Validierung nicht rekursiv aktualisiert.
-   - In `evaluate_training_candidate()` wird fuer alle Validierungsschritte dieselbe `last_row` verwendet (`forecast_service.py:908-920`).
-   - Die Basis-Forecasts aendern sich pro Schritt, exogene Meta-Features wie Momentum, AMELAG-Lags oder Trends bleiben aber eingefroren.
-   - Das macht die Validierung fuer laengere Horizonte optimistischer oder zumindest anders als die reale Zeitentwicklung.
+   - In `evaluate_training_candidate()` wird für alle Validierungsschritte dieselbe `last_row` verwendet (`forecast_service.py:908-920`).
+   - Die Basis-Forecasts ändern sich pro Schritt, exogene Meta-Features wie Momentum, AMELAG-Lags oder Trends bleiben aber eingefroren.
+   - Das macht die Validierung für laengere Horizonte optimistischer oder zumindest anders als die reale Zeitentwicklung.
 
 3. `confidence` ist keine empirische Modellkonfidenz.
    - Der Rueckgabewert ist einfach `settings.CONFIDENCE_LEVEL` (`forecast_service.py:1131-1140`).
-   - Das ist ein Intervall-Level-Parameter, keine ausgeschaetzte Zuverlaessigkeit des konkreten Forecasts.
+   - Das ist ein Intervall-Level-Parameter, keine ausgeschaetzte Zuverlässigkeit des konkreten Forecasts.
 
 4. `outbreak_risk_score` ist ein Ranking-Signal, keine Wahrscheinlichkeit.
    - Der Wert entsteht aus einem z-Score gegen die juengste Historie und wird durch eine Sigmoid-Funktion gejagt (`forecast_service.py:975-988`).
@@ -116,7 +116,7 @@ Urteil:
 Positive Punkte:
 
 - Strikte Vintage-/As-of-Logik ist vorhanden und zentral in die Zeitreise-Queries eingebaut.
-- Walk-forward-Backtest trainiert nur auf bis zum Forecast-Zeitpunkt verfuegbaren Zielwerten (`backtester.py:1948-1955`).
+- Walk-forward-Backtest trainiert nur auf bis zum Forecast-Zeitpunkt verfügbaren Zielwerten (`backtester.py:1948-1955`).
 - Es gibt Baseline-Vergleiche gegen Persistence und Seasonal-Naive (`backtester.py:1991-2035`).
 - Lead-/Lag-, TTD-, False-Alarm- und Quality-Gate-Metriken sind explizit implementiert und durch Tests abgesichert.
 
@@ -128,13 +128,13 @@ Hauptschwaechen:
    - Danach werden sie als globale Standardgewichte gespeichert (`backtester.py:2990-3036`).
    - Das ist keine belastbare Schätzung der Business-Dimensionen, sondern eine semantische Nachaggregation.
 
-2. Die Faktor-Zuordnung ist fachlich fragwuerdig.
+2. Die Faktor-Zuordnung ist fachlich fragwürdig.
    - `are_*`, `grippeweb*` und `notaufnahme*` werden zu `market` gemappt (`backtester.py:2882-2889`), obwohl sie epidemiologische oder syndromische Signale sind.
-   - Diese Umkodierung verschiebt spaetere Produktgewichte systematisch.
+   - Diese Umkodierung verschiebt spätere Produktgewichte systematisch.
 
-3. Der Walk-forward-Teil ist staerker als die spaetere 4D-/6D-Kalibrierung.
+3. Der Walk-forward-Teil ist stärker als die spätere 4D-/6D-Kalibrierung.
    - Als Backtest-Engine ist der Pfad gut.
-   - Als Quelle fuer globale Score-Gewichte ist derselbe Pfad zu indirekt und semantisch unsauber.
+   - Als Quelle für globale Score-Gewichte ist derselbe Pfad zu indirekt und semantisch unsauber.
 
 Urteil:
 
@@ -147,15 +147,15 @@ Diese Engine haengt weiterhin produktiv an den Outbreak- und Public-Risk-APIs (`
 
 Hauptprobleme:
 
-1. Das Fusionsgewicht ist groesser als 1.0.
-   - `WEIGHT_BIO + WEIGHT_MARKET + WEIGHT_PSYCHO + WEIGHT_CONTEXT` summieren standardmaessig auf 1.0.
-   - Zusaetzlich wird `prophet_baseline * 0.15` addiert (`risk_engine_legacy.py:823-830`).
-   - Das ist kein normierter Weighted Average mehr, sondern ein uebergewichteter Score mit anschliessendem Cap.
+1. Das Fusionsgewicht ist größer als 1.0.
+   - `WEIGHT_BIO + WEIGHT_MARKET + WEIGHT_PSYCHO + WEIGHT_CONTEXT` summieren standardmäßig auf 1.0.
+   - Zusätzlich wird `prophet_baseline * 0.15` addiert (`risk_engine_legacy.py:823-830`).
+   - Das ist kein normierter Weighted Average mehr, sondern ein übergewichteter Score mit anschliessendem Cap.
 
 2. Die Baseline-Korrektur mischt inkompatible Einheiten.
    - Die historische Baseline basiert auf Positivraten aus Labordaten (`risk_engine_legacy.py:643-653`).
    - Der aktuelle Wert ist aber `raw_score / 100` aus einem zusammengesetzten Fusionsscore (`risk_engine_legacy.py:655-656`).
-   - Ein 0-1 Fusionsscore wird damit gegen eine echte Positivratenverteilung getestet. Das ist mathematisch nicht dieselbe Zielgroesse.
+   - Ein 0-1 Fusionsscore wird damit gegen eine echte Positivratenverteilung getestet. Das ist mathematisch nicht dieselbe Zielgröße.
 
 3. Meta-Overlay mischt absolute Last mit heuristischem Index.
    - `meta_prediction` wird auf das Jahresmaximum der Viruslast normalisiert und dann 70/30 mit dem heuristischen Endscore gemischt (`risk_engine_legacy.py:842-852`).
@@ -170,7 +170,7 @@ Urteil:
 - `final_risk_score`: `nicht belastbar`
 - `confidence_numeric` / `confidence_level`: `heuristisch konsistent aber nicht statistisch validiert`
 
-### 4. `peix_score_service`: brauchbarer Ranking-Score, aber Probability-Semantik ueberzogen
+### 4. `peix_score_service`: brauchbarer Ranking-Score, aber Probability-Semantik überzogen
 
 Positive Punkte:
 
@@ -181,7 +181,7 @@ Positive Punkte:
 Hauptschwaechen:
 
 1. `impact_probability` ist keine kalibrierte Probability.
-   - Sie entsteht nur aus einer Sigmoid-Funktion ueber den Endscore (`peix_score_service.py:285-287`, `364-367`).
+   - Sie entsteht nur aus einer Sigmoid-Funktion über den Endscore (`peix_score_service.py:285-287`, `364-367`).
    - Ohne empirische Kalibrierung ist das eine monotone Score-Abbildung, keine Eintrittswahrscheinlichkeit.
 
 2. Die Gewichtskalibrierung ist heuristisch aufgespalten.
@@ -190,12 +190,12 @@ Hauptschwaechen:
 
 3. Regionale und nationale Ebenen mischen nationale und regionale Signale.
    - `forecast`, `search`, `shortage` und `baseline` sind national und fliessen in jede Region identisch ein (`peix_score_service.py:211-217`, `270-278`).
-   - Regionale Unterschiede entstehen damit hauptsaechlich ueber `bio` und `weather`.
+   - Regionale Unterschiede entstehen damit hauptsächlich über `bio` und `weather`.
    - Das ist als Cockpit-Ranking okay, aber nicht als regionale Risikowahrscheinlichkeit.
 
 4. Nationale Aggregation ist ein einfacher Regionsmittelwert.
    - `national_score` ist der ungewichtete Mittelwert aller Regionen (`peix_score_service.py:317-320`).
-   - Ohne Populations- oder Abdeckungsgewichtung ist das fuer nationale Lageaussagen nur eingeschraenkt belastbar.
+   - Ohne Populations- oder Abdeckungsgewichtung ist das für nationale Lageaussagen nur eingeschraenkt belastbar.
 
 5. Konfidenz bleibt Agreement-basiert.
    - Wie im Legacy-RiskEngine basiert `confidence` auf der Streuung der Dimensionen, nicht auf Datenfrische, Coverage oder OOS-Qualitaet.
@@ -208,7 +208,7 @@ Urteil:
 
 ### 5. Cockpit-/Media-Layer: gleiche Feldnamen, sehr unterschiedliche Mathematik
 
-Im Cockpit werden mehrere heterogene Groessen unter demselben Feld `impact_probability` zusammengefuehrt (`cockpit_service.py:413-520`).
+Im Cockpit werden mehrere heterogene Größen unter demselben Feld `impact_probability` zusammengefuehrt (`cockpit_service.py:413-520`).
 
 Beispiele:
 
@@ -225,8 +225,8 @@ Das Problem ist nicht, dass diese Formeln existieren. Das Problem ist die gemein
 - heissen alle `impact_probability`,
 - werden downstream gemeinsam sortiert, gefiltert und in Budget-/Priorisierungslogik verwendet.
 
-Fuer die Peix-National- und Top-Region-Tiles existiert bereits `score_semantics = "ranking_signal"` (`cockpit_service.py:420-434`).
-Fuer die Einzelquellen fehlt diese semantische Absicherung jedoch.
+Für die Peix-National- und Top-Region-Tiles existiert bereits `score_semantics = "ranking_signal"` (`cockpit_service.py:420-434`).
+Für die Einzelquellen fehlt diese semantische Absicherung jedoch.
 
 Urteil:
 
@@ -245,9 +245,9 @@ Hauptschwaechen:
 
 1. `urgency_score` ist regelbasiert und nicht empirisch an Outcome/Lift kalibriert.
    - Beispiele: Wetterdetektor skaliert lineare Ratios (`weather_forecast.py:272-287`), Predictive Sales nutzt `velocity * 100 * 1.4 + 15`, Resource Scarcity addiert Bonusstufen.
-   - Das ist fuer Priorisierung okay, aber nicht fuer robuste numerische Interpretation.
+   - Das ist für Priorisierung okay, aber nicht für robuste numerische Interpretation.
 
-2. `confidence_pct` faellt auf `urgency_score` zurueck.
+2. `confidence_pct` faellt auf `urgency_score` zurück.
    - Falls kein echtes `raw_confidence` vorliegt, wird `urgency_score` direkt als Konfidenz verwendet (`opportunity_engine.py:2264-2277`).
    - Damit ist "confidence" semantisch oft nur ein umbenanntes Prioritaetsmass.
 
@@ -262,7 +262,7 @@ Urteil:
 
 ## Was aktuell mathematisch valide ist
 
-Ich wuerde die folgenden Teile heute als mathematisch valide im engeren Sinn einordnen:
+Ich würde die folgenden Teile heute als mathematisch valide im engeren Sinn einordnen:
 
 - Walk-forward-/Vintage-Mechanik im `backtester`
 - Leakageschutz und Warmup-Handling im `forecast_service`
@@ -270,7 +270,7 @@ Ich wuerde die folgenden Teile heute als mathematisch valide im engeren Sinn ein
 - Quantil-Monotonie-Fix in der Forecast-Inferenz
 - bounded Composite-Score-Aufbau im `peix_score_service`
 
-Ich wuerde die folgenden Teile explizit **nicht** als mathematisch valide oder empirisch kalibriert bezeichnen:
+Ich würde die folgenden Teile explizit **nicht** als mathematisch valide oder empirisch kalibriert bezeichnen:
 
 - `risk_engine_legacy.final_risk_score`
 - `impact_probability` in Peix und Cockpit, wenn damit Probability gemeint ist
@@ -284,17 +284,17 @@ Ich wuerde die folgenden Teile explizit **nicht** als mathematisch valide oder e
 
 1. `[extern sichtbar]` `impact_probability` semantisch aufraeumen.
    - Wenn keine Kalibrierung vorliegt, Feld in `signal_score` oder `ranking_signal` umbenennen.
-   - Falls API-Kompatibilitaet benoetigt wird: neues Feld `score_semantics` ueberall einfuehren und im Frontend sichtbar auswerten.
+   - Falls API-Kompatibilitaet benötigt wird: neues Feld `score_semantics` überall einfuehren und im Frontend sichtbar auswerten.
 
 2. `[internal only]` `risk_engine_legacy` entweder ausser Betrieb nehmen oder mathematisch entkoppeln.
-   - Prophet-Gewicht in normierte Fusion ueberfuehren.
-   - Baseline-Korrektur nur gegen dieselbe Zielgroesse rechnen.
+   - Prophet-Gewicht in normierte Fusion überfuehren.
+   - Baseline-Korrektur nur gegen dieselbe Zielgröße rechnen.
    - Bis dahin Score nicht als belastbaren Risk Score nach aussen verwenden.
 
 3. `[backtest/model-metadata only]` Gewichtskalibrierung neu aufsetzen.
    - Keine Feature-Importances aus autoregressivem SURVSTAT-Modell mehr in `bio/market/psycho/context` ummappen.
    - Entweder:
-     - direkte Optimierung der 4D-/6D-Score-Gewichte auf das spaetere Zielformat, oder
+     - direkte Optimierung der 4D-/6D-Score-Gewichte auf das spätere Zielformat, oder
      - stabile Handgewichte lassen und nur Forecast-Modelle automatisch promoten.
 
 ### P1
@@ -314,7 +314,7 @@ Ich wuerde die folgenden Teile explizit **nicht** als mathematisch valide oder e
 ### P2
 
 7. `[internal only]` Regionale Aggregation verbessern.
-   - Populations- oder Abdeckungsgewichtung fuer `national_score`.
+   - Populations- oder Abdeckungsgewichtung für `national_score`.
    - Historisch stabile Normierungen statt reiner aktueller Max-Normierung dort, wo Zeitvergleich wichtig ist.
 
 8. `[internal only]` Cockpit-Kacheln vereinheitlichen.
@@ -325,24 +325,24 @@ Ich wuerde die folgenden Teile explizit **nicht** als mathematisch valide oder e
    - Perzentil-Raenge, Normalisierungen und regionale Signalsummen voraggregieren.
    - Das verbessert Laufzeit und verhindert inkonsistente Ad-hoc-Replikation derselben Mathe in mehreren Services.
 
-## Empfohlene naechste Validierungsrunde
+## Empfohlene nächste Validierungsrunde
 
-Sobald eine befuellte Datenbank und `.env` verfuegbar sind:
+Sobald eine befüllte Datenbank und `.env` verfügbar sind:
 
-1. Walk-forward fuer jedes Virus und jede relevante Region ausfuehren.
+1. Walk-forward für jedes Virus und jede relevante Region ausführen.
 2. Coverage der Quantile (`10%` / `90%`) empirisch messen.
 3. `impact_probability` bzw. `outbreak_risk_score` gegen echte Events oder Aktionsschwellen kalibrieren.
-4. `quality_gate` gegen tatsaechliche Business-Entscheidungen und Fehlalarmkosten pruefen.
+4. `quality_gate` gegen tatsaechliche Business-Entscheidungen und Fehlalarmkosten prüfen.
 5. Legacy-RiskEngine und Peix head-to-head gegen denselben Zielmassstab benchmarken.
 
 ## Abschlussurteil
 
-FluxEngine ist **nicht insgesamt mathematisch ungueltig**. Der Forecast-/Backtest-Unterbau ist ernsthaft und ueber weite Strecken sauber gebaut.
+FluxEngine ist **nicht insgesamt mathematisch ungültig**. Der Forecast-/Backtest-Unterbau ist ernsthaft und über weite Strecken sauber gebaut.
 
 Aber:
 
-- die **Wahrscheinlichkeits- und Konfidenzsprache** ist aktuell ueberzogen,
-- die **Legacy-RiskEngine** ist mathematisch unsauber genug, dass ich sie nicht als belastbaren Risikoscore bezeichnen wuerde,
+- die **Wahrscheinlichkeits- und Konfidenzsprache** ist aktuell überzogen,
+- die **Legacy-RiskEngine** ist mathematisch unsauber genug, dass ich sie nicht als belastbaren Risikoscore bezeichnen würde,
 - und die **Kalibrierung der Business-Gewichte** ist derzeit eher eine plausible Heuristik als eine statistisch identifizierte Ableitung.
 
 Die schnellste Wertsteigerung kommt daher nicht aus einem kompletten Rebuild, sondern aus drei gezielten Korrekturen:

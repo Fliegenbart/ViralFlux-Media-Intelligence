@@ -26,29 +26,29 @@ Diese Bewertung basiert auf dem tatsaechlich laufenden System:
 - [ ] Der offizielle Day-one-Pilot-Scope hat mindestens einen Scope mit `quality_gate.forecast_readiness = GO`.
 - [ ] Der Day-one-Pilot-Scope ist fachlich freigegeben, nicht nur technisch erreichbar.
 - [ ] `regional_operational.summary.warning` wird nicht mehr flaechig durch `quality_gate_failures` dominiert.
-- [ ] PEIX/GELO koennen einen explizit freigegebenen Pilot-Scope benennen, statt nur den gesamten technischen Support zu sehen.
+- [ ] PEIX/GELO können einen explizit freigegebenen Pilot-Scope benennen, statt nur den gesamten technischen Support zu sehen.
 
 ## Technische Mindestvoraussetzungen
 
-- [x] Live-Deploy laeuft im produktionsnahen Compose-Pfad.
+- [x] Live-Deploy läuft im produktionsnahen Compose-Pfad.
 - [x] `ENVIRONMENT=production` ist live aktiv.
 - [x] Runtime-Schema-Heilung ist im Live-Standard deaktiviert.
-- [x] `health/live` ist gruen.
+- [x] `health/live` ist grün.
 - [x] `health/ready` ist nicht `unhealthy`.
-- [x] Release-Smoke fuer den Kernpfad endet nicht mehr mit `business_smoke_failed`.
+- [x] Release-Smoke für den Kernpfad endet nicht mehr mit `business_smoke_failed`.
 - [x] Die drei offiziellen Regional-Endpunkte liefern keine `500` mehr.
 - [x] Operative Forecast-Snapshots sind wieder vorhanden.
 - [x] Es gibt keinen unbeabsichtigten `legacy_default_window_fallback` mehr im beobachteten Live-Scope.
-- [ ] Der offizielle Pilot-Scope hat gruene Quality Gates statt nur `WATCH`.
+- [ ] Der offizielle Pilot-Scope hat grüne Quality Gates statt nur `WATCH`.
 
 ## Fachliche Mindestvoraussetzungen
 
 - [x] Offizielle Horizon-Matrix ist dokumentiert.
 - [x] `RSV A / h3` ist explizit unsupported statt still halb-funktional.
 - [x] Der Day-one-Pilotvertrag ist explizit enger als der technische Support.
-- [ ] Fuer den offiziell freizugebenden Pilot-Scope stehen Quality Gates nicht nur auf `WATCH`.
-- [ ] Forecast-/Decision-/Allocation-/Recommendation-Outputs fuer den Pilot-Scope sind nicht nur abrufbar, sondern fachlich freigegeben.
-- [ ] Truth-/Pilot-Reporting ist fuer den externen Pilot intern reproduzierbar abnehmbar.
+- [ ] Für den offiziell freizugebenden Pilot-Scope stehen Quality Gates nicht nur auf `WATCH`.
+- [ ] Forecast-/Decision-/Allocation-/Recommendation-Outputs für den Pilot-Scope sind nicht nur abrufbar, sondern fachlich freigegeben.
+- [ ] Truth-/Pilot-Reporting ist für den externen Pilot intern reproduzierbar abnehmbar.
 
 ## Offizieller Pilot-API-Scope
 
@@ -114,13 +114,13 @@ Wichtig:
 
 ## Bekannte Limitierungen heute
 
-- [x] Live-System ist oeffentlich erreichbar.
-- [x] Regionale Artefakte fuer alle offiziell supported `3/5/7`-Scopes sind vorhanden, ausser dem bewusst unsupported `RSV A / h3`.
+- [x] Live-System ist öffentlich erreichbar.
+- [x] Regionale Artefakte für alle offiziell supported `3/5/7`-Scopes sind vorhanden, ausser dem bewusst unsupported `RSV A / h3`.
 - [x] Operative Forecast-Snapshots werden geschrieben.
 - [x] `health/ready` ist nicht mehr hart rot.
 - [ ] Forecast-Monitoring steht fachlich weiter auf `WATCH`.
 - [ ] Die Day-one-Pilot-Scopes sind noch nicht formal `GO`.
-- [ ] `SARS-CoV-2` bleibt standardmaessig shadow/watch-only.
+- [ ] `SARS-CoV-2` bleibt standardmäßig shadow/watch-only.
 - [ ] Externe operative Empfehlungen sollten weiter unter manuellem Freigabevorbehalt bleiben.
 - [x] `h7` ist als einzige aktive Produktlinie definiert.
 - [x] `h5` wird nicht mehr als aktive Ausbau- oder Freigabelinie behandelt.
@@ -130,14 +130,14 @@ Wichtig:
 
 ### Stufe 1: Live erreichbar
 
-Erfuellt, wenn:
+Erfüllt, wenn:
 
 - `health/live = 200`
-- Deploy im Production-Mode laeuft
+- Deploy im Production-Mode läuft
 
 ### Stufe 2: Ready for pilot
 
-Erfuellt erst, wenn:
+Erfüllt erst, wenn:
 
 - `health/ready` nicht `unhealthy` ist
 - Release-Smoke nicht `business_smoke_failed` ist
@@ -146,16 +146,16 @@ Erfuellt erst, wenn:
 
 ### Stufe 3: Fully production-grade
 
-Erfuellt erst, wenn:
+Erfüllt erst, wenn:
 
-- gesamter offiziell verkaufter Scope stabil gruen oder bewusst unsupported ist
-- Forecast-Recency ueber operative Snapshots laeuft
+- gesamter offiziell verkaufter Scope stabil grün oder bewusst unsupported ist
+- Forecast-Recency über operative Snapshots läuft
 - keine kritischen Source-/Quality-Blocker im freigegebenen Scope verbleiben
-- Release-, Ops- und Pilot-Runbook regelmaessig durchlaufen werden
+- Release-, Ops- und Pilot-Runbook regelmäßig durchlaufen werden
 
 ## Empfehlung heute
 
-Interne Position fuer PEIX / GELO:
+Interne Position für PEIX / GELO:
 
 - Das System ist live sichtbar und technisch belastbarer als zuvor.
 - Der Produktkern ist wieder benutzbar.

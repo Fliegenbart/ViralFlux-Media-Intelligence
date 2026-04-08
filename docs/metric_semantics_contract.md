@@ -42,7 +42,7 @@ Die Grundregel lautet:
 
 - Produktwort: `Event-Wahrscheinlichkeit`
 - Bedeutung:
-  Kalibrierte Wahrscheinlichkeit fuer ein klar definiertes Forecast-Ereignis.
+  Kalibrierte Wahrscheinlichkeit für ein klar definiertes Forecast-Ereignis.
 - Wichtig:
   Nur so benennen, wenn die Zahl wirklich aus dem kalibrierten Forecast-Pfad kommt.
 - Zusatzfelder:
@@ -93,22 +93,22 @@ Die Grundregel lautet:
 - Bedeutung:
   Reifegrad der Outcome- und Business-Evidenz.
 
-## Pflichtregeln fuer UI und API
+## Pflichtregeln für UI und API
 
 1. Eine Kennzahl mit `ranking_signal` darf in der UI nicht wie eine Wahrscheinlichkeit dargestellt werden.
 2. Eine Kennzahl mit `signal_confidence` darf nicht als Modellwahrscheinlichkeit beschrieben werden.
 3. Eine Kennzahl mit `forecast_event_probability` muss sichtbar machen, wenn sie aus einem Fallback kommt.
-4. Outcome-Lernsignale muessen sprachlich klar von Forecast-Signalen getrennt bleiben.
+4. Outcome-Lernsignale müssen sprachlich klar von Forecast-Signalen getrennt bleiben.
 5. Wenn die Semantik unklar ist, wird die Zahl konservativ als `Score` behandelt und nicht als `Probability`.
 
-## Kurzfassung fuer Produkttexte
+## Kurzfassung für Produkttexte
 
 - `Signal-Score`:
   "Hilft beim Vergleichen, ist aber keine Eintrittswahrscheinlichkeit."
 - `Prioritaets-Score`:
   "Hilft bei der Reihenfolge der Aktivierung."
 - `Event-Wahrscheinlichkeit`:
-  "Kalibrierte Wahrscheinlichkeit fuer das definierte Forecast-Ereignis."
+  "Kalibrierte Wahrscheinlichkeit für das definierte Forecast-Ereignis."
 - `Signal-Sicherheit`:
   "Beschreibt Signalsicherheit oder Agreement, nicht die Modellwahrscheinlichkeit."
 - `Outcome-Score`:

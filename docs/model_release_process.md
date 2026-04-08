@@ -105,14 +105,14 @@ python scripts/run_weather_vintage_comparison.py --virus "Influenza A" --virus "
 
 This writes a compact JSON and Markdown report under `app/ml_models/weather_vintage_comparison/`.
 
-Prospektiver Shadow-Betrieb fuer die operativ relevanten h7-Scopes:
+Prospektiver Shadow-Betrieb für die operativ relevanten h7-Scopes:
 
 ```bash
 cd backend
 python scripts/run_weather_vintage_pilot_h7_shadow.py
 ```
 
-Kombinierter Ops-Standardlauf fuer Shadow plus Health-Check:
+Kombinierter Ops-Standardlauf für Shadow plus Health-Check:
 
 ```bash
 cd backend
@@ -130,15 +130,15 @@ Dieser Lauf bleibt additiv und schreibt unter `app/ml_models/weather_vintage_pro
 
 Interpretation:
 
-- der Pilot-Wrapper ist der produktionsnahe Standard-Startpunkt fuer regelmaessige Shadow-Laeufe
-- er markiert echte Regelbetriebslaeufe standardmaessig als `run_purpose = scheduled_shadow`
-- Smoke- oder manuelle Testlaeufe koennen explizit anders markiert werden, zum Beispiel mit `--run-purpose smoke`
-- `run_timestamp_v1` bleibt experimentell; der Legacy-Standard aendert sich dadurch nicht
-- `insufficient_identity`-Laeufe werden archiviert, aber nicht als belastbare Vergleichslaeufe gezaehlt
-- fuer den operativen Takt sollte der Shadow-Lauf regelmaessig mit denselben Standard-Scopes laufen, zum Beispiel einmal pro Tag oder pro relevanten Trainingszyklus
-- ein Review ist erst sinnvoll, wenn mehrere vergleichbare Shadow-Laeufe vorliegen; intern nutzen wir dafuer mindestens grob `6` vergleichbare Laeufe pro Scope
-- `review_ready` bedeutet nur: genug saubere Evidenz fuer eine manuelle Pruefung; es ist immer noch kein automatischer Rollout
-- der echte Review-Report zaehlt standardmaessig nur `scheduled_shadow`-Laeufe; Smoke- und manuelle Evaluationslaeufe bleiben archiviert, verzerren die Review-Statistik aber nicht
+- der Pilot-Wrapper ist der produktionsnahe Standard-Startpunkt für regelmäßige Shadow-Läufe
+- er markiert echte Regelbetriebsläufe standardmäßig als `run_purpose = scheduled_shadow`
+- Smoke- oder manuelle Testläufe können explizit anders markiert werden, zum Beispiel mit `--run-purpose smoke`
+- `run_timestamp_v1` bleibt experimentell; der Legacy-Standard ändert sich dadurch nicht
+- `insufficient_identity`-Läufe werden archiviert, aber nicht als belastbare Vergleichsläufe gezählt
+- für den operativen Takt sollte der Shadow-Lauf regelmäßig mit denselben Standard-Scopes laufen, zum Beispiel einmal pro Tag oder pro relevanten Trainingszyklus
+- ein Review ist erst sinnvoll, wenn mehrere vergleichbare Shadow-Läufe vorliegen; intern nutzen wir dafür mindestens grob `6` vergleichbare Läufe pro Scope
+- `review_ready` bedeutet nur: genug saubere Evidenz für eine manuelle Prüfung; es ist immer noch kein automatischer Rollout
+- der echte Review-Report zählt standardmäßig nur `scheduled_shadow`-Läufe; Smoke- und manuelle Evaluationsläufe bleiben archiviert, verzerren die Review-Statistik aber nicht
 
 Ops-taugliche Startbeispiele:
 
@@ -183,44 +183,44 @@ Persistent=true
 WantedBy=timers.target
 ```
 
-Hinweise fuer den Betrieb:
+Hinweise für den Betrieb:
 
 - der taegliche Standardbefehl ist `python scripts/run_weather_vintage_pilot_h7_ops.py`
 - der reine Shadow-Lauf bleibt `python scripts/run_weather_vintage_pilot_h7_shadow.py`
 - der reine Health-Check bleibt `python scripts/check_weather_vintage_shadow_health.py`
-- der Wrapper setzt standardmaessig `run_purpose = scheduled_shadow`
+- der Wrapper setzt standardmäßig `run_purpose = scheduled_shadow`
 - ein Lockfile verhindert versehentliche Parallelstarts auf demselben Host
 - bei Lock-Konflikt endet der Wrapper mit Exit-Code `2`
 - bei sonstigen Laufzeitfehlern endet er mit Exit-Code `1`
 - der kombinierte Ops-Wrapper gibt bei erfolgreichem Shadow-Lauf direkt den Exit-Code des Health-Checks weiter
 - stdout und stderr sollten im Scheduler in ein Logfile oder Job-Artefakt umgeleitet werden
 
-Monitoring-Check fuer den Shadow-Betrieb:
+Monitoring-Check für den Shadow-Betrieb:
 
 ```bash
 cd backend
 python scripts/check_weather_vintage_shadow_health.py
 ```
 
-Der Check liest die vorhandenen Archivlaeufe und meldet:
+Der Check liest die vorhandenen Archivläufe und meldet:
 
-- `ok`: der Shadow-Betrieb laeuft regelmaessig und liefert weiterhin brauchbare Vergleichslaeufe
-- `warning`: es gibt erste Betriebsprobleme, zum Beispiel zu viele `insufficient_identity`-Laeufe oder zu lange keine brauchbaren Vergleichslaeufe
-- `critical`: der Shadow-Betrieb ist akut unzuverlaessig, zum Beispiel weil gar keine aktuellen `scheduled_shadow`-Laeufe mehr vorliegen oder der letzte Lauf komplett fehlgeschlagen ist
+- `ok`: der Shadow-Betrieb läuft regelmäßig und liefert weiterhin brauchbare Vergleichsläufe
+- `warning`: es gibt erste Betriebsprobleme, zum Beispiel zu viele `insufficient_identity`-Läufe oder zu lange keine brauchbaren Vergleichsläufe
+- `critical`: der Shadow-Betrieb ist akut unzuverlässig, zum Beispiel weil gar keine aktuellen `scheduled_shadow`-Läufe mehr vorliegen oder der letzte Lauf komplett fehlgeschlagen ist
 
-Fuer Scheduler oder Monitoring ist der Exit-Code gedacht:
+Für Scheduler oder Monitoring ist der Exit-Code gedacht:
 
 - `0` = `ok`
 - `1` = `warning`
 - `2` = `critical`
 
-Standardmaessig ueberwacht der Check nur echte `scheduled_shadow`-Laeufe. Smoke- und manuelle Laeufe bleiben archiviert, zaehlen aber nicht in die Betriebsbewertung hinein.
+Standardmäßig überwacht der Check nur echte `scheduled_shadow`-Läufe. Smoke- und manuelle Läufe bleiben archiviert, zählen aber nicht in die Betriebsbewertung hinein.
 
 Warm-up-Regel:
 
 - vor dem ersten echten `scheduled_shadow`-Lauf meldet der Health-Check bewusst `critical`
 - das ist in der Bootstrap-Phase erwartbar und kein Modellproblem
-- fuer den Alltag sollte deshalb der kombinierte Ops-Wrapper genutzt werden: erst Shadow-Lauf, dann Health-Check
+- für den Alltag sollte deshalb der kombinierte Ops-Wrapper genutzt werden: erst Shadow-Lauf, dann Health-Check
 
 CI-Schedule-Beispiel:
 
@@ -232,8 +232,8 @@ cd backend
 Alarm-Regel in einfachen Worten:
 
 - bei Exit-Code `0` kein Alarm
-- bei Exit-Code `1` beobachten und zeitnah pruefen
-- bei Exit-Code `2` Alarm ausloesen
+- bei Exit-Code `1` beobachten und zeitnah prüfen
+- bei Exit-Code `2` Alarm auslösen
 
 ### Step 2. Validate artifact inventory
 

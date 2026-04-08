@@ -14,7 +14,7 @@ EXPERIMENTAL_ROLLOUT_MODE = "shadow"
 EXPERIMENTAL_ACTIVATION_POLICY = "watch_only"
 EXPERIMENTAL_MODEL_FAMILY = "experimental_kreis_cluster_shadow_v1"
 EXPERIMENTAL_GUARDRAIL_MESSAGE = (
-    "Experimenteller Geo-Pfad auf Cluster-Ebene. Keine Stadt- oder Landkreis-Freigabe fuer Produktion. "
+    "Experimenteller Geo-Pfad auf Cluster-Ebene. Keine Stadt- oder Landkreis-Freigabe für Produktion. "
     "Keine automatische Ableitung aus Bundesland-Forecasts."
 )
 

@@ -638,10 +638,10 @@ class RegionalModelTrainer:
     ) -> dict[str, Any]:
         error_message = str(exc) or exc.__class__.__name__
         hint = (
-            "Der Backtest konnte keine gueltigen Zeit-Folds aufbauen. Wahrscheinlich gibt es fuer diesen Scope "
-            "zu wenig stabile Trainingsfenster oder in den Folds fehlt genug Klassenvielfalt fuer Training/Kalibrierung."
+            "Der Backtest konnte keine gültigen Zeit-Folds aufbauen. Wahrscheinlich gibt es für diesen Scope "
+            "zu wenig stabile Trainingsfenster oder in den Folds fehlt genug Klassenvielfalt für Training/Kalibrierung."
             if "no valid folds" in error_message.lower()
-            else "Bitte Fold-Bildung, Datenmenge und Klassenverteilung fuer diesen Scope pruefen."
+            else "Bitte Fold-Bildung, Datenmenge und Klassenverteilung für diesen Scope prüfen."
         )
         return {
             "status": "error",

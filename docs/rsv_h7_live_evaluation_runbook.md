@@ -4,11 +4,11 @@ Stand: 2026-03-17
 
 ## Zweck
 
-Dieses Runbook beschreibt den produktionsnahen, reproduzierbaren Evaluationspfad fuer den RSV A / h7 Ranking-Track.
+Dieses Runbook beschreibt den produktionsnahen, reproduzierbaren Evaluationspfad für den RSV A / h7 Ranking-Track.
 
 Wichtig:
 
-- der Run laeuft gegen die echte ViralFlux-Datenbasis
+- der Run läuft gegen die echte ViralFlux-Datenbasis
 - keine lokalen Fake-Daten
 - keine Gate-Weichzeichnung
 - keine impliziten Zahlen
@@ -24,7 +24,7 @@ Der dedizierte Live-Entrypoint:
 - vergleicht den aktuellen h7-Live-Baseline-Pfad gegen die RSV-spezifischen Ranking-Experimente
 - schreibt rohe und kuratierte Ergebnisse in ein timestamped Archive
 - legt die Vergleichsergebnisse als JSON und Markdown ab
-- kann zusaetzlich einen Audit-Trail-Eintrag schreiben
+- kann zusätzlich einen Audit-Trail-Eintrag schreiben
 
 Der Entry-Point ist:
 
@@ -32,16 +32,16 @@ Der Entry-Point ist:
 
 ## Server Voraussetzungen
 
-Vor dem Lauf sollten diese Bedingungen erfuellt sein:
+Vor dem Lauf sollten diese Bedingungen erfüllt sein:
 
 - der Backend-Container hat Zugriff auf die echte ViralFlux-Postgres-Instanz
-- die kanonischen Baseline-Artefakte fuer RSV A / h7 sind verfuegbar
-- der aktuelle Code-Stand enthaelt den RSV Ranking-Track
-- der Lauf erfolgt in einer Umgebung, in der die Modellartefakte persistent geschrieben werden koennen
+- die kanonischen Baseline-Artefakte für RSV A / h7 sind verfügbar
+- der aktuelle Code-Stand enthält den RSV Ranking-Track
+- der Lauf erfolgt in einer Umgebung, in der die Modellartefakte persistent geschrieben werden können
 
 ## Kanonischer Server-Run
 
-Die autoritative Ausfuehrung ist im Worker- oder Backend-Container:
+Die autoritative Ausführung ist im Worker- oder Backend-Container:
 
 ```bash
 docker exec viralflux_celery_worker python /app/scripts/run_rsv_h7_live_evaluation.py --output-root /app/app/ml_models/regional_panel_h7_live_evaluation
@@ -51,7 +51,7 @@ Wenn der Lauf in einer anderen produktionsnahen Server-Umgebung ausgefuehrt wird
 
 ## Archivierung
 
-Der Lauf schreibt pro Ausfuehrung einen eigenen Archivordner:
+Der Lauf schreibt pro Ausführung einen eigenen Archivordner:
 
 ```text
 backend/app/ml_models/regional_panel_h7_live_evaluation/rsv_a_h7_rsv_ranking/<run_id>/
@@ -71,14 +71,14 @@ Erwartete Dateien:
 - `run_manifest.json`
 - `artifacts/`
 
-Bei Fehlern zusaetzlich:
+Bei Fehlern zusätzlich:
 
 - `error.json`
 - `error.md`
 
 ## Vergleichswerte
 
-Im Report muessen mindestens diese Werte direkt sichtbar sein:
+Im Report müssen mindestens diese Werte direkt sichtbar sein:
 
 - `precision_at_top3`
 - `activation_false_positive_rate`
@@ -88,7 +88,7 @@ Im Report muessen mindestens diese Werte direkt sichtbar sein:
 - `gate_outcome`
 - `retained`
 
-Die Tabelle ist bewusst baseline-vs-experiment aufgebaut. Fuer jede Zeile werden zusaetzlich Delta-Werte gegen die Baseline ausgegeben.
+Die Tabelle ist bewusst baseline-vs-experiment aufgebaut. Für jede Zeile werden zusätzlich Delta-Werte gegen die Baseline ausgegeben.
 
 ## Entscheidungslogik
 
@@ -96,9 +96,9 @@ Die Tabelle ist bewusst baseline-vs-experiment aufgebaut. Fuer jede Zeile werden
 
 Nur dann, wenn alle Punkte gleichzeitig gelten:
 
-- das gewaehlte Experiment ist `retained = true`
+- das gewählte Experiment ist `retained = true`
 - der Gate-Status ist `GO`
-- `precision_at_top3` steigt ehrlich gegenueber der Baseline
+- `precision_at_top3` steigt ehrlich gegenüber der Baseline
 - `activation_false_positive_rate` verschlechtert sich nicht
 - `ece` verschlechtert sich nicht
 - `brier` verschlechtert sich nicht
@@ -117,9 +117,9 @@ Wenn mindestens eines davon zutrifft:
 - `brier` verschlechtert sich
 - der Lauf produziert keine vernuenftige Baseline-vs-Experiment-Zeile
 
-## Kurzvorlage Fuer Das Ergebnis
+## Kurzvorlage Für Das Ergebnis
 
-Nach dem Serverlauf kann diese Vorlage direkt befuellt werden:
+Nach dem Serverlauf kann diese Vorlage direkt befüllt werden:
 
 ```text
 RSV A / h7 Live Evaluation
@@ -145,7 +145,7 @@ Next step:
 
 ## Schnellinterpretation
 
-- `GO`: nur, wenn der Track die Gates ehrlich uebertrifft und nicht nur statistisch "anders" ist
+- `GO`: nur, wenn der Track die Gates ehrlich übertrifft und nicht nur statistisch "anders" ist
 - `WATCH`: wenn die Ranking-Separation besser wird, aber der Scope noch nicht freigegeben werden sollte
 - `NO_GO`: wenn die vermeintliche Verbesserung durch FP- oder Calibration-Regression erkauft ist
 

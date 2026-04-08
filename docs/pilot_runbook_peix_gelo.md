@@ -4,7 +4,7 @@ Stand: 2026-03-18
 
 ## Zweck
 
-Dieses Runbook beschreibt den **eng geschnittenen Forecast-First-Pilot** fuer PEIX / GELO.
+Dieses Runbook beschreibt den **eng geschnittenen Forecast-First-Pilot** für PEIX / GELO.
 
 Wichtig:
 
@@ -18,44 +18,44 @@ Wichtig:
 
 Forecast-First GO bedeutet:
 
-- der Scope ist technisch und epidemiologisch tragfaehig
-- der Forecast ist fuer den Kunden sichtbar und erklaerbar
-- Regionen koennen priorisiert werden
+- der Scope ist technisch und epidemiologisch tragfähig
+- der Forecast ist für den Kunden sichtbar und erklaerbar
+- Regionen können priorisiert werden
 - Budget darf als **Szenario-Split** gezeigt werden
 - Commercial Validation darf noch `WATCH` oder `NO_GO` sein
 
 ### 2. Commercial GO
 
-Commercial GO bedeutet zusaetzlich:
+Commercial GO bedeutet zusätzlich:
 
 - GELO-Outcome-Daten sind angeschlossen
 - Aktivierungszyklen und Holdout-Logik sind sichtbar
-- Lift-/Outcome-Evidenz ist stark genug fuer eine validierte Budgetfreigabe
+- Lift-/Outcome-Evidenz ist stark genug für eine validierte Budgetfreigabe
 
 ## Rollen
 
 ### ViralFlux Produkt / Ops
 
-- prueft Live-, Ready- und Smoke-Status
-- prueft den scoped `pilot-readout`
+- prüft Live-, Ready- und Smoke-Status
+- prüft den scoped `pilot-readout`
 - trennt Forecast-Readiness von Commercial-Validation
-- ist verantwortlich fuer Incident-, Rollback- und Freigabeentscheidungen
+- ist verantwortlich für Incident-, Rollback- und Freigabeentscheidungen
 
 ### PEIX
 
-- nutzt den Forecast-First-Pilot fuer Kundengespraeche
-- verkauft zunaechst Priorisierung, Timing und Szenario-Splits
+- nutzt den Forecast-First-Pilot für Kundengespraeche
+- verkauft zunächst Priorisierung, Timing und Szenario-Splits
 - verspricht ohne GELO-Outcome-Daten keine validierte ROI-Optimierung
 
 ### GELO
 
 - bekommt bereits einen belastbaren Forecast-Readout
-- liefert spaeter Spend-, Sales-, Orders- oder Revenue-Daten fuer den Commercial Layer
-- entscheidet mit ueber Produkt-, Keyword- und Aktivierungslogik
+- liefert später Spend-, Sales-, Orders- oder Revenue-Daten für den Commercial Layer
+- entscheidet mit über Produkt-, Keyword- und Aktivierungslogik
 
 ## Vor jedem Pilot-Readout
 
-### 1. Live-Pruefung
+### 1. Live-Prüfung
 
 ```bash
 curl -s https://fluxengine.labpulse.ai/health/live
@@ -66,13 +66,13 @@ Erwartung:
 - HTTP `200`
 - `status = alive`
 
-### 2. Readiness-Pruefung
+### 2. Readiness-Prüfung
 
 ```bash
 curl -s https://fluxengine.labpulse.ai/health/ready
 ```
 
-Erwartung fuer den Forecast-First-Pilot:
+Erwartung für den Forecast-First-Pilot:
 
 - kein `unhealthy`
 - keine kritischen Blocker im aktiven Demo-Scope
@@ -90,19 +90,19 @@ python scripts/smoke_test_release.py \
   --top-n 3
 ```
 
-Erwartung fuer den Forecast-First-Pilot:
+Erwartung für den Forecast-First-Pilot:
 
 - kein `live_failed`
 - kein `business_smoke_failed`
 - `ready_blocked` ist nur dann kritisch, wenn der aktive Demo-Scope selbst fachlich kippt
 
-### 4. Kanonischen Pilot-Readout pruefen
+### 4. Kanonischen Pilot-Readout prüfen
 
 ```bash
 curl -s "https://fluxengine.labpulse.ai/api/v1/media/pilot-readout?brand=gelo&virus_typ=RSV%20A&horizon_days=7&weekly_budget_eur=120000"
 ```
 
-Erwartung fuer den Forecast-First-Pilot:
+Erwartung für den Forecast-First-Pilot:
 
 - `forecast_readiness = GO`
 - `scope_readiness = GO`
@@ -119,11 +119,11 @@ Commercial-Layer darf dabei noch sein:
 Wichtig:
 
 - `source_coverage` im Snapshot bleibt Artefakt-/Trainingssicht
-- der aktuelle operative Zustand fuer den Pilot-Readout kommt aus den Live-Feldern im `operational_readiness`-Block
+- der aktuelle operative Zustand für den Pilot-Readout kommt aus den Live-Feldern im `operational_readiness`-Block
 
 ## Offizieller Forecast-First-Pilot-Scope
 
-Nur dieser Scope ist heute fuer externe Demos freigegeben:
+Nur dieser Scope ist heute für externe Demos freigegeben:
 
 - `brand = gelo`
 - `virus_typ = RSV A`
@@ -133,7 +133,7 @@ Nur dieser Scope ist heute fuer externe Demos freigegeben:
 ## Was im Forecast-First-Pilot gezeigt werden darf
 
 - Regionen-Ranking mit `decision_stage`, `priority_score`, `event_probability`, `reason_trace`
-- klare Timing- und Priorisierungsstory fuer Top-Regionen
+- klare Timing- und Priorisierungsstory für Top-Regionen
 - Budget als **forecast-basierter Szenario-Split**
 - sichtbare Unsicherheit / Confidence
 - klare Trennung zwischen:
@@ -144,7 +144,7 @@ Nur dieser Scope ist heute fuer externe Demos freigegeben:
 
 - keine bereits bewiesene Umsatz- oder ROI-Optimierung
 - keine implizite Spend-Freigabe ohne GELO-Outcome-Daten
-- kein generelles Plattform-GO ueber andere Viren oder Horizonte hinweg
+- kein generelles Plattform-GO über andere Viren oder Horizonte hinweg
 
 ## Empfohlener Ablauf pro GELO-Meeting
 
@@ -156,7 +156,7 @@ Nur dieser Scope ist heute fuer externe Demos freigegeben:
 6. nur dann den Forecast und die Szenario-Splits zeigen
 7. Commercial Validation separat einordnen:
    - was schon vorhanden ist
-   - was GELO-Daten spaeter freischalten
+   - was GELO-Daten später freischalten
 
 ## Eskalationslogik
 
@@ -172,7 +172,7 @@ Nur dieser Scope ist heute fuer externe Demos freigegeben:
 
 ### Fall C: `scope_readiness != GO` im scoped `pilot-readout`
 
-- kein externer Forecast-First-Pilot fuer diesen Scope
+- kein externer Forecast-First-Pilot für diesen Scope
 - erst Forecast-/Evaluation-/Promotion-Pfad reparieren
 
 ### Fall D: `scope_readiness = GO`, aber `commercial_validation_status != GO`
@@ -182,22 +182,22 @@ Nur dieser Scope ist heute fuer externe Demos freigegeben:
 
 ## Aktueller Ist-Zustand am 2026-03-18
 
-- `health/live` = gruen
+- `health/live` = grün
 - `/health/ready` = degraded, aber nicht unhealthy
-- `RSV A / h7` ist forecast-seitig tragfaehig
+- `RSV A / h7` ist forecast-seitig tragfähig
 - der kanonische `pilot-readout` trennt jetzt Forecast-Readiness und Commercial-Validation
-- GELO-Outcome-Daten fehlen weiterhin fuer den Commercial Layer
+- GELO-Outcome-Daten fehlen weiterhin für den Commercial Layer
 
 ## Harte operative Aussage
 
-Am 18. Maerz 2026 ist der richtige Modus fuer PEIX / GELO:
+Am 18. Maerz 2026 ist der richtige Modus für PEIX / GELO:
 
 - System live zeigen: ja
 - Forecast und regionale Priorisierung zeigen: ja
 - forecast-basierte Budget-Szenario-Splits zeigen: ja
 - validierte Commercial- oder ROI-Claims machen: nein
 
-Der richtige Satz fuer GELO ist:
+Der richtige Satz für GELO ist:
 
 - "Hier seht ihr bereits einen echten Forecast und eine belastbare Regionen-Priorisierung."
-- "Wenn wir jetzt eure echten Outcome-Daten anschliessen, wird daraus zusaetzlich der validierte Commercial Layer."
+- "Wenn wir jetzt eure echten Outcome-Daten anschliessen, wird daraus zusätzlich der validierte Commercial Layer."

@@ -4,7 +4,7 @@ Stand: 2026-03-24
 
 ## Ziel
 
-Dieses Dokument beschreibt den operativen Vertrag fuer den regionalen Forecast-Pfad mit echten `3/5/7`-Horizonten.
+Dieses Dokument beschreibt den operativen Vertrag für den regionalen Forecast-Pfad mit echten `3/5/7`-Horizonten.
 
 Seit dem Scope-Entscheid vom 24.03.2026 gilt aber produktseitig klar:
 
@@ -28,7 +28,7 @@ Der operative Pfad bleibt:
 4. `RegionalMediaAllocationEngine.allocate(...)`
 5. `CampaignRecommendationService`
 6. operativer Snapshot in den Audit-Trail
-7. `ProductionReadinessService` bewertet Verfuegbarkeit, Recency, Coverage, Quality Gate und Pilotvertrag
+7. `ProductionReadinessService` bewertet Verfügbarkeit, Recency, Coverage, Quality Gate und Pilotvertrag
 
 ## Support Matrix vs Pilot Contract
 
@@ -42,7 +42,7 @@ Der operative Pfad bleibt:
 ### Explizit unsupported
 
 - `RSV A / h3`
-  - Grund: Das regionale h3-Training liefert aktuell nicht genug stabile pooled-panel Reihen fuer einen belastbaren Scope.
+  - Grund: Das regionale h3-Training liefert aktuell nicht genug stabile pooled-panel Reihen für einen belastbaren Scope.
 
 ### Day-one pilot-supported
 
@@ -61,7 +61,7 @@ Technisch supported, aber in diesem Pass **nicht** pilot-supported:
 - `Influenza B / h5`
 - `RSV A / h5`
 
-Interpretation fuer die aktuelle Produktarbeit:
+Interpretation für die aktuelle Produktarbeit:
 
 - `h7` ist die aktive Ausbau-, Freigabe- und Kommunikationslinie.
 - `h3` ist kein Fehlerfall mehr, sondern ein Reservepfad mit teilweiser Benchmark-Evidenz bei Influenza.
@@ -80,7 +80,7 @@ Neu ist nur, dass der Gate-Contract jetzt profilbasiert und explizit benannt ist
 
 ### `strict_v1`
 
-Default fuer alle Scopes, die nicht im aktiven `h7`-Pilotvertrag liegen.
+Default für alle Scopes, die nicht im aktiven `h7`-Pilotvertrag liegen.
 
 - `precision_at_top3 >= 0.70`
 - `activation_false_positive_rate <= 0.25`
@@ -90,7 +90,7 @@ Default fuer alle Scopes, die nicht im aktiven `h7`-Pilotvertrag liegen.
 
 ### `pilot_v1`
 
-Nur fuer den engen Day-one-Pilotvertrag.
+Nur für den engen Day-one-Pilotvertrag.
 
 - `precision_at_top3 >= 0.60`
 - `activation_false_positive_rate <= 0.25`
@@ -100,10 +100,10 @@ Nur fuer den engen Day-one-Pilotvertrag.
 
 Wichtig:
 
-- `activation_false_positive_rate` und `ece` bleiben absichtlich unveraendert.
+- `activation_false_positive_rate` und `ece` bleiben absichtlich unverändert.
 - Nicht-Pilot-Scopes werden **nicht** global weichgerechnet.
-- Das gilt bewusst auch fuer `Influenza A / h3` und `Influenza B / h3`: Benchmark-Potenzial allein reicht nicht fuer operative Freigabe.
-- Das persistierte `quality_gate` in den Artefakten enthaelt jetzt zusaetzlich:
+- Das gilt bewusst auch für `Influenza A / h3` und `Influenza B / h3`: Benchmark-Potenzial allein reicht nicht für operative Freigabe.
+- Das persistierte `quality_gate` in den Artefakten enthält jetzt zusätzlich:
   - `profile`
   - `failed_checks`
   - `thresholds`
@@ -114,22 +114,22 @@ Die Schwellen bleiben gleich, aber zwei Metriken sind seit dem
 Semantik-Fix explizit anders zu lesen:
 
 - `precision_at_top3`
-  - Mittelwert der Top-3-Praezision nur ueber `as_of_date`-Gruppen,
+  - Mittelwert der Top-3-Praezision nur über `as_of_date`-Gruppen,
     in denen mindestens ein echtes Event vorkommt.
-  - Tage ohne einziges Event werden fuer diese Kennzahl nicht mehr als
+  - Tage ohne einziges Event werden für diese Kennzahl nicht mehr als
     implizite Null-Praezision mitgemittelt.
 - `activation_false_positive_rate`
-  - Echte False-Positive-Rate ueber Negativfaelle:
+  - Echte False-Positive-Rate über Negativfaelle:
     `false_positives / all_negative_cases`.
   - Wenn eine zeilenweise `action_threshold` vorhanden ist, wird genau
-    diese dynamische Schwelle fuer die Aktivierungsentscheidung benutzt.
+    diese dynamische Schwelle für die Aktivierungsentscheidung benutzt.
 
 Wichtig:
 
-- Historische Artefakte vor diesem Fix koennen fuer diese beiden
+- Historische Artefakte vor diesem Fix können für diese beiden
   Kennzahlen nicht direkt mit neu backfilled Artefakten verglichen
-  werden, ohne die geaenderte Semantik mitzudenken.
-- Nach dieser Vertragsaenderung sind Retrain, Backfill und Recompute
+  werden, ohne die geänderte Semantik mitzudenken.
+- Nach dieser Vertragsänderung sind Retrain, Backfill und Recompute
   Pflicht, bevor Readiness- oder Pilot-Entscheidungen neu bewertet
   werden.
 
@@ -155,8 +155,8 @@ Pflichtdateien pro Scope:
 Wichtige Regeln:
 
 - unvollstaendige Scoped-Artefakte werden nicht still akzeptiert
-- `legacy_default_window_fallback` fuer `h7` ist kein Normalbetrieb
-- nach Gate-/Contract-Aenderungen ist Retrain + Backfill + Recompute Pflicht
+- `legacy_default_window_fallback` für `h7` ist kein Normalbetrieb
+- nach Gate-/Contract-Änderungen ist Retrain + Backfill + Recompute Pflicht
 
 ## Operational Snapshot Contract
 
@@ -187,20 +187,20 @@ Ein `REGIONAL_OPERATIONAL_SNAPSHOT` schreibt pro `virus_typ x horizon_days` jetz
 - `rollout_mode`
 - `activation_policy`
 
-Diese Metadaten werden fuer Release-Smoke, Readiness und spaetere Policy-Promotion wiederverwendet.
+Diese Metadaten werden für Release-Smoke, Readiness und spätere Policy-Promotion wiederverwendet.
 
 Wichtig:
 
-- `source_coverage` bleibt aus Kompatibilitaetsgruenden im Snapshot, spiegelt aber weiter die Artefakt-/Trainingssicht.
+- `source_coverage` bleibt aus Kompatibilitaetsgründen im Snapshot, spiegelt aber weiter die Artefakt-/Trainingssicht.
 - `source_coverage_scope = artifact` markiert diese Altkompatibilitaet jetzt explizit.
 - Die operative Live-Sicht liegt jetzt explizit in `live_source_coverage` und `live_source_freshness`.
-- Gute Trainingsartefakte machen einen Scope nicht mehr implizit gruen, wenn eine kritische Live-Quelle fehlt oder stale ist.
-- wichtige Snapshot-Consumer wie der `pilot-readout` und der `SARS h7`-Promotionspfad sollen den operativen Zustand ueber `live_source_coverage_status` und `live_source_freshness_status` lesen, nicht ueber `source_coverage`
+- Gute Trainingsartefakte machen einen Scope nicht mehr implizit grün, wenn eine kritische Live-Quelle fehlt oder stale ist.
+- wichtige Snapshot-Consumer wie der `pilot-readout` und der `SARS h7`-Promotionspfad sollen den operativen Zustand über `live_source_coverage_status` und `live_source_freshness_status` lesen, nicht über `source_coverage`
 - neuer Code soll `source_coverage` nur noch als Artefakt-/Trainingssignal behandeln, nicht als Live-Gesundheit
 
 ## Required vs Advisory Source Coverage
 
-Readiness behandelt Coverage nicht mehr als blindes Minimum ueber alle Rohsignale.
+Readiness behandelt Coverage nicht mehr als blindes Minimum über alle Rohsignale.
 Sie trennt jetzt explizit:
 
 - Artefakt-/Trainings-Coverage
@@ -230,15 +230,15 @@ Sie trennt jetzt explizit:
 
 ## Live-Coverage Semantik
 
-Die operative Readiness bewertet pro Quelle jetzt fuer das aktuelle `as_of`:
+Die operative Readiness bewertet pro Quelle jetzt für das aktuelle `as_of`:
 
-- ob ueberhaupt sichtbare Live-Daten vorhanden sind
+- ob überhaupt sichtbare Live-Daten vorhanden sind
 - ob diese Quelle kritisch oder nur advisory ist
 - wie frisch die letzte sichtbare Lieferung ist
 
-Fuer taegliche Quellen wie `wastewater`, `sars_notaufnahme` und `sars_trends` gilt bewusst:
+Für taegliche Quellen wie `wastewater`, `sars_notaufnahme` und `sars_trends` gilt bewusst:
 
-- ein sichtbarer aktueller Datenpunkt im kleinen Live-Fenster reicht fuer `live_source_coverage = ok`
+- ein sichtbarer aktueller Datenpunkt im kleinen Live-Fenster reicht für `live_source_coverage = ok`
 - ob dieser Punkt operativ noch brauchbar ist, entscheidet dann `live_source_freshness`
 
 Damit gilt:
@@ -248,16 +248,16 @@ Damit gilt:
 
 ## SARS-CoV-2 Policy
 
-`SARS-CoV-2` bleibt standardmaessig konservativ:
+`SARS-CoV-2` bleibt standardmäßig konservativ:
 
 - `rollout_mode = shadow`
 - `activation_policy = watch_only`
 
-Das gilt weiterhin fuer `h3/h5/h7`, solange keine explizite Promotion aktiviert ist.
+Das gilt weiterhin für `h3/h5/h7`, solange keine explizite Promotion aktiviert ist.
 
-### Bedingter Promotionspfad fuer `SARS-CoV-2 / h7`
+### Bedingter Promotionspfad für `SARS-CoV-2 / h7`
 
-Der Code enthaelt jetzt einen expliziten, aber standardmaessig deaktivierten Promotionspfad.
+Der Code enthält jetzt einen expliziten, aber standardmäßig deaktivierten Promotionspfad.
 
 Die Umschaltung auf:
 
@@ -267,7 +267,7 @@ Die Umschaltung auf:
 ist nur erlaubt, wenn **beides** gilt:
 
 1. die Umgebungsflag `REGIONAL_SARS_H7_PROMOTION_ENABLED=true` ist gesetzt
-2. die letzten **zwei** operativen Snapshots fuer `SARS-CoV-2 / h7` zeigen:
+2. die letzten **zwei** operativen Snapshots für `SARS-CoV-2 / h7` zeigen:
    - `quality_gate.overall_passed == true`
    - `source_coverage_required_status == "ok"`
    - `forecast_recency_status == "ok"`
@@ -281,7 +281,7 @@ Ohne Flag bleibt der Scope selbst dann shadow/watch-only.
 
 - Support-Status
 - Pilotvertrag
-- Modellverfuegbarkeit
+- Modellverfügbarkeit
 - Legacy-Fallback aktiv oder nicht
 - Quality Gate
 - Source Freshness
@@ -315,7 +315,7 @@ docker exec viralflux_celery_worker python /app/scripts/backfill_regional_model_
 docker exec viralflux_celery_worker python /app/scripts/recompute_operational_views.py --horizon 3 --horizon 5 --horizon 7
 ```
 
-### 3. Readiness pruefen
+### 3. Readiness prüfen
 
 ```bash
 curl -s https://fluxengine.labpulse.ai/health/ready
@@ -332,7 +332,7 @@ Nach dem produktionsnahen Backfill und der Recency-Haertung gilt live:
 - `stale_forecasts = 0`
 - `critical = 0`
 - `unsupported = 1`
-- `quality_gate_failures` bleiben der Hauptgrund fuer `warning`
+- `quality_gate_failures` bleiben der Hauptgrund für `warning`
 
 Das heisst:
 

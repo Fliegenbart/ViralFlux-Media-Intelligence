@@ -41,7 +41,7 @@ class AiCampaignPlannerNormalizationTests(unittest.TestCase):
             "playbook_key": "SUPPLY_SHOCK_ATTACK",
             "playbook_title": "Supply Shock",
             "region_name": "Berlin",
-            "message_direction": "Verfuegbarkeit in den Fokus",
+            "message_direction": "Verfügbarkeit in den Fokus",
             "budget_shift_pct": 22.0,
             "shift_bounds": {"min": 25.0, "max": 55.0},
             "channel_mix": {"programmatic": 40, "social": 35, "search": 25},

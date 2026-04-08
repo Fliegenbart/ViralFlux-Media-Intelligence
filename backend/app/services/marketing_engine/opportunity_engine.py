@@ -1,7 +1,7 @@
 """MarketingOpportunityEngine — Hauptorchestrator.
 
-Fuehrt alle Detektoren aus, erzeugt Sales Pitches, matcht Produkte,
-persistiert Opportunities und liefert CRM-faehiges JSON.
+Führt alle Detektoren aus, erzeugt Sales Pitches, matcht Produkte,
+persistiert Opportunities und liefert CRM-fähiges JSON.
 """
 
 from __future__ import annotations
@@ -301,7 +301,7 @@ class MarketingOpportunityEngine:
                         "source": "ForecastDecisionService",
                         "event": f"{virus_typ} Forecast Event Window",
                         "details": (
-                            f"7-Tage Event-Forecast fuer {virus_typ}: "
+                            f"7-Tage Event-Forecast für {virus_typ}: "
                             f"{round(event_probability * 100.0, 1)}% "
                             f"bei Baseline {baseline_value} und Schwelle {primary_threshold}."
                         ),

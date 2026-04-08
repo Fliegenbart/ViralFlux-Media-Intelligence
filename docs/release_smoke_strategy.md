@@ -12,7 +12,7 @@ Der Smoke ist bewusst produktnah und nicht mehr cockpit-zentriert.
 
 ## Canonical Checks
 
-Der aktuelle Standard-Scope fuer den Release-Smoke ist:
+Der aktuelle Standard-Scope für den Release-Smoke ist:
 
 1. `GET /health/live`
 2. `GET /health/ready`
@@ -43,7 +43,7 @@ Bedeutung:
 Folge:
 
 - technischer Deploy-Fail
-- `deploy-live.sh` rollt zurueck
+- `deploy-live.sh` rollt zurück
 
 ### `business_smoke_failed`
 
@@ -55,7 +55,7 @@ Bedeutung:
 Folge:
 
 - Produktkern ist nach Deploy nicht belastbar
-- `deploy-live.sh` rollt zurueck
+- `deploy-live.sh` rollt zurück
 
 ### `ready_blocked`
 
@@ -72,7 +72,7 @@ Folge:
 
 ## Cockpit-Politik
 
-`/api/v1/media/cockpit` kann weiterhin geprueft werden, aber nur optional:
+`/api/v1/media/cockpit` kann weiterhin geprüft werden, aber nur optional:
 
 - per `--check-cockpit`
 - als advisory Zusatzsignal
@@ -81,7 +81,7 @@ Folge:
 Grund:
 
 - der Produktkern liegt inzwischen im regionalen Forecast-/Decision-/Allocation-/Recommendation-Pfad
-- Cockpit ist wertvoll, aber nicht mehr die robusteste einzige Go/No-Go-Pruefung
+- Cockpit ist wertvoll, aber nicht mehr die robusteste einzige Go/No-Go-Prüfung
 
 ## CLI
 
@@ -125,7 +125,7 @@ python scripts/smoke_test_release.py \
 
 ## Warum dieser Schnitt
 
-Der Smoke soll nicht jedes fachliche Modellproblem loesen. Er soll klar beantworten:
+Der Smoke soll nicht jedes fachliche Modellproblem lösen. Er soll klar beantworten:
 
 - ist das System da?
 - ist der Kernpfad benutzbar?
@@ -135,6 +135,6 @@ Genau deshalb trennt der aktuelle Smoke sauber zwischen `live_failed`, `ready_bl
 
 Wichtig:
 
-- `ready_blocked` ist inzwischen die ehrliche Restkategorie fuer einen lebenden, aber noch nicht fachlich freigegebenen regionalen Produktkern
-- fuer PEIX / GELO bedeutet ein `ready_blocked` nicht automatisch, dass der Deploy kaputt ist
+- `ready_blocked` ist inzwischen die ehrliche Restkategorie für einen lebenden, aber noch nicht fachlich freigegebenen regionalen Produktkern
+- für PEIX / GELO bedeutet ein `ready_blocked` nicht automatisch, dass der Deploy kaputt ist
 - es bedeutet, dass Uptime und Produktnutzbarkeit weiter sind als die operative Pilotfreigabe

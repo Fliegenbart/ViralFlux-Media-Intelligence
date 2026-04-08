@@ -4,7 +4,7 @@ Stand: 2026-03-17
 
 ## Zweck
 
-Diese Oberfläche uebersetzt die bestehenden Forecast-, Allocation-, Recommendation- und Pilot-Evidence-Outputs in eine management-taugliche Sicht fuer PEIX und GELO.
+Diese Oberfläche übersetzt die bestehenden Forecast-, Allocation-, Recommendation- und Pilot-Evidence-Outputs in eine management-taugliche Sicht für PEIX und GELO.
 
 Sie ist bewusst keine neue Scoring- oder Decision-Engine. Die Seite liest nur vorhandene Backend-Outputs und ordnet sie so, dass ein Kunde die aktuelle Lage schnell versteht.
 
@@ -51,11 +51,11 @@ Wichtige Customer-Facing Felder:
 Legacy-/Backoffice-Kontexte bleiben getrennt:
 
 - `GET /api/v1/media/pilot-reporting`
-  Nur noch fuer interne / historische Evidence-Analysen.
+  Nur noch für interne / historische Evidence-Analysen.
 - `POST /api/v1/media/outcomes/import`
   Nur noch manueller Backoffice-Fallback.
 - `POST /api/v1/media/outcomes/ingest`
-  Offizielle GELO M2M-Ingestion fuer Outcome-Daten.
+  Offizielle GELO M2M-Ingestion für Outcome-Daten.
 
 ## Screen-Struktur
 
@@ -63,7 +63,7 @@ Legacy-/Backoffice-Kontexte bleiben getrennt:
 
 Antwortet auf die Frage: `What should we do now?`
 
-Enthaelt:
+Enthält:
 
 - aktuelle Lead-Region
 - Entscheidungstage
@@ -71,7 +71,7 @@ Enthaelt:
 - Confidence / Uncertainty
 - kurze Reason-Trace in Klartext
 - die wichtigsten Regionen im aktuellen Filter
-- getrennte Spur fuer:
+- getrennte Spur für:
   - `Forecast Ready`
   - `Commercial Validation`
 
@@ -102,13 +102,13 @@ Die Sicht bleibt bewusst business-first:
 
 Dieser Block macht die Entscheidung nachvollziehbar und auditierbar.
 
-Enthaelt:
+Enthält:
 
-- Scope-Readiness fuer Forecast / Allocation / Recommendation / Evidence
+- Scope-Readiness für Forecast / Allocation / Recommendation / Evidence
 - letzte archivierte Live-Evaluation
 - Truth- / Business-Gate / Holdout / Budget-Release Status
 - fehlende Voraussetzungen in Klartext
-- quarantinierten `legacy_context` mit Sunset-Datum fuer den Altpfad
+- quarantinierten `legacy_context` mit Sunset-Datum für den Altpfad
 
 ## Empty States
 
@@ -123,14 +123,14 @@ Diese Zustände sind bewusst sichtbar und sollen keine implizite Freigabe sugger
 
 Wichtig:
 
-- `ready` kann jetzt fuer den Forecast-First-Pilot gelten, auch wenn der Commercial Layer noch nicht `GO` ist
+- `ready` kann jetzt für den Forecast-First-Pilot gelten, auch wenn der Commercial Layer noch nicht `GO` ist
 - der Commercial-Upgrade-Pfad bleibt im Screen sichtbar
 
 ## Designprinzipien
 
 - keine neue Business-Logik im Frontend
 - keine Charts um der Charts willen
-- klare Entscheidbarkeit statt analytischer Ueberladung
+- klare Entscheidbarkeit statt analytischer Überladung
 - rohe technische Begriffe nur dort, wo sie wirklich als Evidenz helfen
 - GO / WATCH / NO_GO bleibt als operative Sprache sichtbar
 - `priority_score` statt Pseudo-Probability, solange keine echte Kalibrierung vorliegt
@@ -138,16 +138,16 @@ Wichtig:
 
 ## Nutzungslogik
 
-Die Oberflaeche ist fuer den Pilot-Review gedacht:
+Die Oberflaeche ist für den Pilot-Review gedacht:
 
 1. aktuelle Lage lesen
 2. Regionen und Budgets verstehen
 3. Empfehlung und Evidenz nachvollziehen
 4. Readiness beurteilen
 
-Die Seite ist damit die kundennahe Leseschicht fuer PEIX, die GELO in Meetings eine klare und nachvollziehbare Budget- und Priorisierungsstory liefert.
+Die Seite ist damit die kundennahe Leseschicht für PEIX, die GELO in Meetings eine klare und nachvollziehbare Budget- und Priorisierungsstory liefert.
 
 Die ehrliche Standardsprache ist:
 
 - "Hier seht ihr bereits einen echten Forecast und eine belastbare Regionen-Priorisierung."
-- "Mit euren Outcome-Daten wird daraus zusaetzlich der validierte Commercial Layer."
+- "Mit euren Outcome-Daten wird daraus zusätzlich der validierte Commercial Layer."

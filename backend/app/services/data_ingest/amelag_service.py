@@ -120,7 +120,7 @@ class AmelagIngestionService:
         if 'unter_bg' in df.columns:
             df['unter_bg'] = df['unter_bg'].map({'ja': True, 'nein': False})
 
-        logger.info(f"Loaded {len(df)} Einzelstandort rows, {df['standort'].nunique()} sites, {df['bundesland'].nunique()} Bundeslaender")
+        logger.info(f"Loaded {len(df)} Einzelstandort rows, {df['standort'].nunique()} sites, {df['bundesland'].nunique()} Bundesländer")
         return df
 
     def import_einzelstandorte(self, df: pd.DataFrame) -> int:

@@ -322,7 +322,7 @@ class MediaV2ServiceTruthCoverageTests(unittest.TestCase):
                 "decision_scope": "decision_support_only",
                 "evidence_tier": "truth_backed",
                 "message": "GELO-Outcome-Daten sind vorhanden, aber Holdout fehlt noch.",
-                "guidance": "Kontrollgruppen fuer kommende Aktivierungen markieren.",
+                "guidance": "Kontrollgruppen für kommende Aktivierungen markieren.",
             }),
         ):
             payload = self.service.get_decision_payload()

@@ -19,7 +19,7 @@ setup_logging(
 )
 logger = logging.getLogger(__name__)
 
-# Hole die Redis-URL aus den Environment-Variablen (Fallback auf localhost fuer lokale Tests)
+# Hole die Redis-URL aus den Environment-Variablen (Fallback auf localhost für lokale Tests)
 BROKER_URL = os.getenv("CELERY_BROKER_URL", "redis://localhost:6379/0")
 RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", BROKER_URL)
 
@@ -42,7 +42,7 @@ celery_app.conf.update(
     result_serializer="json",
     accept_content=["json"],
     task_track_started=True,
-    worker_prefetch_multiplier=1,  # wichtig fuer ML/LLM-Tasks
+    worker_prefetch_multiplier=1,  # wichtig für ML/LLM-Tasks
     timezone="Europe/Berlin",
     enable_utc=True,
     # Reliability: ack after task completes, reject on worker crash

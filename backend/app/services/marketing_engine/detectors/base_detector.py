@@ -55,10 +55,10 @@ class OpportunityDetector(ABC):
         return f"OPP-{today}-{type_short}-{suffix[:12].upper()}"
 
     def _derive_plz_from_states(self, states: list[str]) -> str:
-        """Leitet PLZ-Cluster aus Bundeslaendern ab.
+        """Leitet PLZ-Cluster aus Bundesländern ab.
 
-        Gibt den haeufigsten PLZ-Bereich zurueck oder 'ALL' wenn
-        keine klare Zuordnung moeglich ist.
+        Gibt den häufigsten PLZ-Bereich zurück oder 'ALL' wenn
+        keine klare Zuordnung möglich ist.
         """
         if not states:
             return "ALL"

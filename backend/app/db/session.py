@@ -363,7 +363,7 @@ def init_db():
             + required_schema_gaps["missing_indexes"]
         )
         raise RuntimeError(
-            "Fehlende Pflicht-Migrationen fuer DB-Kernschema: " + ", ".join(details)
+            "Fehlende Pflicht-Migrationen für DB-Kernschema: " + ", ".join(details)
         )
 
     gaps = _runtime_schema_gaps(existing_tables)

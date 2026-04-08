@@ -113,11 +113,11 @@ const RecommendationOverlay: React.FC = () => {
       const data = await mediaApi.prepareSync(id, connectorKey);
       setSyncPreview(data);
       setConnectorCatalog(data.available_connectors || connectorCatalog);
-      toast('Uebergabevorschau vorbereitet.', 'success');
+      toast('Übergabevorschau vorbereitet.', 'success');
     } catch (error) {
       console.error('Prepare sync failed', error);
       const message = error instanceof Error ? error.message : 'Unbekannter Fehler';
-      toast(`Uebergabevorschau fehlgeschlagen: ${message}`, 'error');
+      toast(`Übergabevorschau fehlgeschlagen: ${message}`, 'error');
     } finally {
       setSyncLoading(false);
     }

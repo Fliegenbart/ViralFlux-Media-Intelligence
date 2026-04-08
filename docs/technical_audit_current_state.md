@@ -148,7 +148,7 @@ Note: the tables below cover the files most relevant to the target system. Gener
 
 | File | Purpose | Reifegrad | Technical debt | Gap vs target state |
 | --- | --- | --- | --- | --- |
-| `backend/app/main.py` | FastAPI entrypoint, router wiring, `/health`, `/metrics` | mature | App description still says `14-Tage-Fruehsignal`; health combines mixed legacy/new signals | Core runtime is not yet framed around a single 3-7 day PEIX product path |
+| `backend/app/main.py` | FastAPI entrypoint, router wiring, `/health`, `/metrics` | mature | App description still says `14-Tage-Frühsignal`; health combines mixed legacy/new signals | Core runtime is not yet framed around a single 3-7 day PEIX product path |
 | `backend/app/core/config.py` | Global settings for forecast and wave services | legacy | `FORECAST_DAYS = 14` and `WAVE_PREDICTION_HORIZON_DAYS = 14` remain default | Core configuration is not yet centered on max 7-day horizons |
 | `backend/app/models/database.py` | Persistence schema for ingest, forecast, backtest, media, and outcome tables | mature | Mixed schema generations; no dedicated regional prediction storage | No database-native persistence for regional 3-7 day forecast outputs |
 

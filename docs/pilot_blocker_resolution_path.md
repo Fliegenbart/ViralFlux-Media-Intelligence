@@ -11,7 +11,7 @@ Stand: 2026-03-18
 
 ## Executive Answer
 
-Ja: Es gibt jetzt einen **kurzen, glaubwuerdigen GO-Pfad ohne GELO-Daten**.
+Ja: Es gibt jetzt einen **kurzen, glaubwürdigen GO-Pfad ohne GELO-Daten**.
 
 Dieser GO-Pfad ist aber bewusst **eng**:
 
@@ -19,24 +19,24 @@ Dieser GO-Pfad ist aber bewusst **eng**:
 - nur `RSV A`
 - nur `h7`
 - nur als **Forecast-First-Pilot**
-- nur fuer Priorisierung, Timing und Szenario-Splits
+- nur für Priorisierung, Timing und Szenario-Splits
 
-Es gibt weiterhin **keinen kurzen GO-Pfad** fuer:
+Es gibt weiterhin **keinen kurzen GO-Pfad** für:
 
 - validierte Commercial-Freigaben
 - ROI-Claims
 - outcome-belegte Budgetoptimierung
 
-## Die 3 kleinsten Voraussetzungen fuer ein glaubwuerdiges GO
+## Die 3 kleinsten Voraussetzungen für ein glaubwürdiges GO
 
-### 1. Der enge Forecast-Scope muss gruen bleiben
+### 1. Der enge Forecast-Scope muss grün bleiben
 
 Ja/Nein-Logik:
 
 - wenn `RSV A / h7` forecast-seitig kippt, gibt es keinen ehrlichen Pilot-GO
 - wenn `RSV A / h7` forecast-seitig `GO` bleibt, kann der Pilot gezeigt werden
 
-Minimal noetig:
+Minimal nötig:
 
 - `scope_readiness = GO` im scoped `pilot-readout`
 - `forecast_readiness = GO`
@@ -49,7 +49,7 @@ Ja/Nein-Logik:
 - wenn PEIX bereits ROI- oder Sales-Optimierung behauptet, ist der Pilot nicht ehrlich
 - wenn PEIX Forecast, Regionen-Priorisierung und Szenario-Splits verkauft, ist der Claim sauber
 
-Minimal noetig:
+Minimal nötig:
 
 - Budgetdarstellung bleibt `scenario_split`
 - `commercial_validation_status != GO` wird sichtbar benannt
@@ -59,17 +59,17 @@ Minimal noetig:
 
 Ja/Nein-Logik:
 
-- wenn fehlende GELO-Daten wie ein Produktfehler wirken, verliert der Pilot Glaubwuerdigkeit
-- wenn klar ist, dass Forecast schon laeuft und GELO-Daten die zweite Stufe freischalten, bleibt die Story stark
+- wenn fehlende GELO-Daten wie ein Produktfehler wirken, verliert der Pilot Glaubwürdigkeit
+- wenn klar ist, dass Forecast schon läuft und GELO-Daten die zweite Stufe freischalten, bleibt die Story stark
 
-Minimal noetig:
+Minimal nötig:
 
 - `/pilot` zeigt bereits Forecast Ready klar vor Commercial Validation
-- GELO-Daten werden als naechste Ausbaustufe erklaert
+- GELO-Daten werden als nächste Ausbaustufe erklaert
 
 ## Minimal Path
 
-Das ist der **kleinste** Weg zu einem glaubwuerdigen Forecast-First-GO.
+Das ist der **kleinste** Weg zu einem glaubwürdigen Forecast-First-GO.
 
 ### Scope
 
@@ -85,7 +85,7 @@ Nur dieser Scope:
 1. **Forecast-First-Semantik aktivieren**
    Das System muss klar trennen zwischen Forecast Ready und Commercial Validation.
 
-2. **Scoped Pilot-Readout pruefen**
+2. **Scoped Pilot-Readout prüfen**
    Der enge Scope muss live liefern:
    - `scope_readiness = GO`
    - `forecast_readiness = GO`
@@ -102,7 +102,7 @@ Nur dieser Scope:
 
 ### Minimal GO Definition
 
-Ein glaubwuerdiger Forecast-First-GO liegt vor, wenn alle Punkte gleichzeitig gelten:
+Ein glaubwürdiger Forecast-First-GO liegt vor, wenn alle Punkte gleichzeitig gelten:
 
 - der enge Scope `GELO / RSV A / h7` ist forecast-seitig `GO`
 - die Live-Evaluation bleibt retained und `GO`
@@ -114,13 +114,13 @@ Ein glaubwuerdiger Forecast-First-GO liegt vor, wenn alle Punkte gleichzeitig ge
 
 ### Phase 1: Forecast-First GO
 
-Das ist der aktuelle naechste Zielzustand.
+Das ist der aktuelle nächste Zielzustand.
 
 Was PEIX dann ehrlich sagen kann:
 
-- "Wir sehen die virale Dynamik frueh."
+- "Wir sehen die virale Dynamik früh."
 - "Wir priorisieren Regionen belastbar."
-- "Wir koennen daraus bereits eine sinnvolle Budget-Szenarioverteilung ableiten."
+- "Wir können daraus bereits eine sinnvolle Budget-Szenarioverteilung ableiten."
 
 Was PEIX noch nicht sagen darf:
 
@@ -136,33 +136,33 @@ Was passiert:
 Was das bringt:
 
 - der Pilot wird lernender
-- Spend-, Sales- und Aktivierungsdaten koennen gespiegelt werden
+- Spend-, Sales- und Aktivierungsdaten können gespiegelt werden
 
 ### Phase 3: Commercial GO
 
 Erst hier entsteht die zweite Freigabestufe.
 
-Noetig:
+Nötig:
 
 - Outcome-Historie
 - Aktivierungszyklen
 - Holdout-Gruppen
 - Lift-Metriken
-- weiterhin gruenes `RSV A / h7`
+- weiterhin grünes `RSV A / h7`
 
 ## Intern vs Extern
 
 ### Extern: PEIX / GELO
 
 - PEIX muss den Forecast-First-Claim sauber fuehren
-- GELO muss fuer den Commercial Layer spaeter Outcome-Daten liefern
-- PEIX und GELO muessen sich spaeter auf Lift-/Holdout-Definitionen einigen
+- GELO muss für den Commercial Layer später Outcome-Daten liefern
+- PEIX und GELO müssen sich später auf Lift-/Holdout-Definitionen einigen
 
 ### Intern: ViralFlux
 
 - den scoped Forecast-Pfad stabil halten
 - die Forecast-First-Semantik im `pilot-readout` und in `/pilot` sauber trennen
-- Commercial Validation weiter sichtbar halten, aber nicht mehr als primaren Pilotblocker fuer Forecast-Demos behandeln
+- Commercial Validation weiter sichtbar halten, aber nicht mehr als primaren Pilotblocker für Forecast-Demos behandeln
 
 ## Was parallel laufen kann
 
@@ -173,7 +173,7 @@ Kann parallel laufen:
 - Aktivierungs-/Holdout-Contract definieren
 - P2/P3-Warnungen bereinigen
 
-Kann nicht logisch uebersprungen werden:
+Kann nicht logisch übersprungen werden:
 
 - echte Commercial-GO-Freigabe ohne Outcome-Daten
 - ROI-Claim ohne Aktivierungs- und Lift-Evidenz
@@ -188,7 +188,7 @@ Der kleinste ehrlich freigebbare Pilot ist:
 - nur `/pilot`
 - nur Forecast, Priorisierung und Szenario-Splits
 
-Das ist **genug**, um GELO den Produktkern zu zeigen und Mitwirkung fuer den Commercial Layer einzuladen.
+Das ist **genug**, um GELO den Produktkern zu zeigen und Mitwirkung für den Commercial Layer einzuladen.
 
 ## What Still Keeps Us At WATCH/NO_GO?
 
@@ -210,7 +210,7 @@ Das ist **genug**, um GELO den Produktkern zu zeigen und Mitwirkung fuer den Com
 ### Wichtig
 
 Diese zweite Liste blockiert **nicht mehr** den Forecast-First-Pilot.
-Sie blockiert nur den spaeteren Commercial GO.
+Sie blockiert nur den späteren Commercial GO.
 
 ## Strict Decision Rule
 
@@ -227,7 +227,7 @@ Nur wenn:
 
 Wenn:
 
-- Forecast schon laeuft
+- Forecast schon läuft
 - GELO-Daten aber noch fehlen oder noch unvollstaendig sind
 
 ### Credible Commercial GO
@@ -238,7 +238,7 @@ Nur wenn:
 - business validation contract satisfied
 - `budget_release_status = GO`
 - `commercial_validation_status = GO`
-- der enge Scope forecast-seitig weiter gruen bleibt
+- der enge Scope forecast-seitig weiter grün bleibt
 
 ## Bottom Line
 
@@ -246,4 +246,4 @@ Die Wahrheit ist jetzt einfacher und nutzbarer:
 
 - Ohne GELO-Daten gibt es **keinen Commercial GO**.
 - Ohne GELO-Daten gibt es aber **sehr wohl einen ehrlichen Forecast-First GO**.
-- Genau dieser enge Forecast-First-GO ist der richtige Weg, um GELO das Tool jetzt zu zeigen und sie fuer den Outcome-Layer zu gewinnen.
+- Genau dieser enge Forecast-First-GO ist der richtige Weg, um GELO das Tool jetzt zu zeigen und sie für den Outcome-Layer zu gewinnen.

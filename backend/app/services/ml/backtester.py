@@ -2621,13 +2621,13 @@ class BacktestService:
             )
         elif lead_lag.get("bio_leads_target_effective"):
             proof_text = (
-                f"XGBoost-Prognose laeuft dem Ist-Wert um ca. {effective_lead_days} Tage voraus "
+                f"XGBoost-Prognose läuft dem Ist-Wert um ca. {effective_lead_days} Tage voraus "
                 f"(Forecast-Horizont {horizon_days}T + Relativ-Lag {relative_lag_days}T). "
                 f"Prognose-Korrelation am optimalen Lag: r={lag_corr} ({lag_strength})."
             )
         elif lead_lag.get("target_leads_bio_effective"):
             proof_text = (
-                f"Ist-Wert laeuft der XGBoost-Prognose um ca. {abs(effective_lead_days)} Tage voraus "
+                f"Ist-Wert läuft der XGBoost-Prognose um ca. {abs(effective_lead_days)} Tage voraus "
                 f"(Forecast-Horizont {horizon_days}T + Relativ-Lag {relative_lag_days}T). "
                 f"Prognose-Korrelation am optimalen Lag: r={lag_corr} ({lag_strength})."
             )
@@ -3589,11 +3589,11 @@ Verwende einen sachlichen, vertrauenswürdigen Ton."""
             "output_path": output_path,
             "proof_statement": (
                 f"ViralFlux-Signal zeigte {ttd_days} Tage vor dem RKI-Peak "
-                f"({rki_peak_date.strftime('%Y-%m-%d')}, {rki_peak_cases:,} Faelle) ein Fruehsignal. "
+                f"({rki_peak_date.strftime('%Y-%m-%d')}, {rki_peak_cases:,} Faelle) ein Frühsignal. "
                 f"Erste Warnung: {ml_first_alert_date.strftime('%Y-%m-%d') if ml_first_alert_date else 'k.A.'}. "
                 f"(Retrospektive Analyse — kein garantierter Vorhersagevorteil.)"
             ) if ml_first_alert_date else (
-                f"Kein ML-Fruehsignal im Evaluationszeitraum ausgeloest. "
+                f"Kein ML-Frühsignal im Evaluationszeitraum ausgelöst. "
                 f"RKI-Peak: {rki_peak_date.strftime('%Y-%m-%d')} ({rki_peak_cases:,} Faelle)."
             ),
         }

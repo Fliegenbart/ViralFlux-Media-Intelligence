@@ -577,7 +577,7 @@ class ForecastDecisionService:
         if str(forecast_quality.get("drift_status") or "unknown") == "warning":
             alerts.append("MAPE-Drift ist im Accuracy-Monitoring aktiv.")
         if latest_market is None:
-            alerts.append("Kein Markt-Backtest fuer das Promotion-Gate vorhanden.")
+            alerts.append("Kein Markt-Backtest für das Promotion-Gate vorhanden.")
         elif backtest_freshness_status != "fresh":
             alerts.append("Letzter Markt-Backtest ist nicht frisch.")
 

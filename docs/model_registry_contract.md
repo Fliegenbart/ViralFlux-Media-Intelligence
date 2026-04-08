@@ -75,7 +75,7 @@ Empfohlen bzw. heute ebenfalls geschrieben:
 
 ## Promotion Evidence
 
-Fuer den regionalen Champion-Pfad wird zusaetzlich ein expliziter `promotion_evidence`-Block persistiert.
+Für den regionalen Champion-Pfad wird zusätzlich ein expliziter `promotion_evidence`-Block persistiert.
 
 Mindestens enthalten:
 

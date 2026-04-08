@@ -1629,7 +1629,7 @@ class RegionalForecastService:
         if action == "activate":
             return f"Sofort aktivieren — Wellenfenster in {TARGET_WINDOW_DAYS[0]}-{TARGET_WINDOW_DAYS[1]} Tagen"
         if action == "prepare":
-            return "In 1-2 Tagen vorbereiten — Signal fuer regionale Aktivierung vorhanden"
+            return "In 1-2 Tagen vorbereiten — Signal für regionale Aktivierung vorhanden"
         return "Beobachten — unterhalb des operationalen Spend-Niveaus"
 
     @staticmethod
@@ -1927,7 +1927,7 @@ class RegionalForecastService:
                 window_end=window_end,
                 signal_context=signal_context,
                 source_mode="error",
-                message="Truth-Layer konnte fuer diese Scope-Abfrage nicht ausgewertet werden.",
+                message="Truth-Layer konnte für diese Scope-Abfrage nicht ausgewertet werden.",
             )
 
     @staticmethod

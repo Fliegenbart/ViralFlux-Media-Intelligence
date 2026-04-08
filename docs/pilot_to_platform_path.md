@@ -4,7 +4,7 @@ Stand: 2026-03-17
 
 ## Ziel
 
-Dieses Dokument beschreibt, wie ViralFlux realistisch von einem strengen PEIX-/GELO-Pilot in einen groesseren Plattformvertrag wachsen kann, ohne mehr zu versprechen als das System heute hergibt.
+Dieses Dokument beschreibt, wie ViralFlux realistisch von einem strengen PEIX-/GELO-Pilot in einen größeren Plattformvertrag wachsen kann, ohne mehr zu versprechen als das System heute hergibt.
 
 ## Ausgangspunkt heute
 
@@ -16,7 +16,7 @@ Der Stand des laufenden Systems ist:
 
 Technische Realitaet heute:
 
-- `health/live` ist gruen
+- `health/live` ist grün
 - `health/ready` ist `503`
 - der moderne Kernpfad-Smoke endet mit `business_smoke_failed`
 - die regionalen Kernendpunkte liefern aktuell live `500`
@@ -89,7 +89,7 @@ Ein bewusst enger Pilot-Scope wird extern genutzt, aber mit manueller Governance
 
 - `health/live`
 - `health/ready` nicht `unhealthy`
-- Forecast, Allocation und Campaign Recommendations fuer den Pilot-Scope
+- Forecast, Allocation und Campaign Recommendations für den Pilot-Scope
 - dokumentierte Support-Matrix
 - Runbook und Freigabelogik
 
@@ -112,7 +112,7 @@ Ein bewusst enger Pilot-Scope wird extern genutzt, aber mit manueller Governance
 
 ### Ziel
 
-ViralFlux wird nicht mehr nur als Experiment genutzt, sondern als regelmaessiger Bestandteil regionaler Aktivierungsplanung.
+ViralFlux wird nicht mehr nur als Experiment genutzt, sondern als regelmäßiger Bestandteil regionaler Aktivierungsplanung.
 
 ### Merkmale
 
@@ -120,14 +120,14 @@ ViralFlux wird nicht mehr nur als Experiment genutzt, sondern als regelmaessiger
 - definierter Support-Scope
 - klarer Go/No-Go Prozess
 - dokumentierte Known Limitations
-- Pilot-Reporting und ROI-Readouts fuer Steering-Runden
+- Pilot-Reporting und ROI-Readouts für Steering-Runden
 
-### Zusaetzlicher Vertragsspielraum
+### Zusätzlicher Vertragsspielraum
 
 - mehr Produkte / Cluster
 - mehr Regionen
-- mehr Regelmaessigkeit
-- staerkere Outcome- und Reporting-Bindung
+- mehr Regelmäßigkeit
+- stärkere Outcome- und Reporting-Bindung
 
 ## Stufe 4: Platform Contract
 
@@ -135,13 +135,13 @@ ViralFlux wird nicht mehr nur als Experiment genutzt, sondern als regelmaessiger
 
 Aus dem Pilot wird eine laufende Decision- und Activation-Plattform.
 
-### Was dafuer zusaetzlich noetig ist
+### Was dafür zusätzlich nötig ist
 
-- stabil gruener Kernpfad
-- Forecast-Recency ueber operative Snapshots statt Trainings-Lag
+- stabil grüner Kernpfad
+- Forecast-Recency über operative Snapshots statt Trainings-Lag
 - reduzierte Quality-/Coverage-Blocker im verkauften Scope
 - konsistente Release-, Smoke- und Rollback-Routine
-- saubere Governance fuer Rollen, Freigaben und Auditability
+- saubere Governance für Rollen, Freigaben und Auditability
 
 ### Was dann verkauft wird
 
@@ -149,9 +149,9 @@ Aus dem Pilot wird eine laufende Decision- und Activation-Plattform.
 - nicht nur ein Projekt, sondern ein Operating Layer
 - mit klaren Support- und Governance-Grenzen
 
-## Pilot-zu-Plattform Uebersetzung
+## Pilot-zu-Plattform Übersetzung
 
-Der groesste Fehler waere, so zu tun, als sei der Schritt vom Pilot zur Plattform rein "mehr vom Gleichen".
+Der größte Fehler waere, so zu tun, als sei der Schritt vom Pilot zur Plattform rein "mehr vom Gleichen".
 
 Tatsaechlich verschiebt sich der Wert in drei Richtungen:
 
@@ -159,11 +159,11 @@ Tatsaechlich verschiebt sich der Wert in drei Richtungen:
 
 Am Anfang kauft der Kunde Einsicht und Priorisierung.
 
-Spaeter kauft er:
+Später kauft er:
 
 - Release-Sicherheit
 - Freigabelogik
-- belastbare Betriebsfaehigkeit
+- belastbare Betriebsfähigkeit
 
 ### 2. Von einer Empfehlung zu einem Entscheidungsprozess
 
@@ -171,19 +171,19 @@ Am Anfang ist die Frage:
 
 - "Ist diese Empfehlung nuetzlich?"
 
-Spaeter ist die Frage:
+Später ist die Frage:
 
-- "Koennen wir darauf regelmaessig und teamuebergreifend arbeiten?"
+- "Können wir darauf regelmäßig und teamübergreifend arbeiten?"
 
 ### 3. Von Pilot-Evidenz zu Vertragsvertrauen
 
-Pilot-Reporting, Outcome-Overlay und Recommendation-History sind nicht nur Add-ons. Sie sind das Material, aus dem ein groesserer Vertrag intern begruendet wird.
+Pilot-Reporting, Outcome-Overlay und Recommendation-History sind nicht nur Add-ons. Sie sind das Material, aus dem ein größerer Vertrag intern begründet wird.
 
 ## Was den Sprung aktuell blockiert
 
-Heute fehlen fuer den naechsten Schritt vor allem:
+Heute fehlen für den nächsten Schritt vor allem:
 
-1. gruener moderner Kernpfad-Smoke
+1. grüner moderner Kernpfad-Smoke
 2. stabile `200` auf den regionalen Produktendpunkten
 3. bessere operative Forecast-Recency
 4. weniger rote regionale Readiness-Blocker
@@ -197,9 +197,9 @@ Deshalb ist die ehrliche Reihenfolge:
 
 ## Die ehrliche Vertriebslogik
 
-Heute sollte ViralFlux fuer PEIX / GELO so verkauft werden:
+Heute sollte ViralFlux für PEIX / GELO so verkauft werden:
 
 - nicht als "fertige Plattform, die nur noch eingeschaltet werden muss"
 - sondern als hochwertiger, streng gefuehrter Pilot mit klarer Plattform-Perspektive
 
-Der Plattformvertrag ist damit keine Fantasie-Stufe, sondern die naechste Ausbaustufe, sobald der operative Kernpfad technisch und fachlich die Pilot-Freigabe wirklich erfuellt.
+Der Plattformvertrag ist damit keine Fantasie-Stufe, sondern die nächste Ausbaustufe, sobald der operative Kernpfad technisch und fachlich die Pilot-Freigabe wirklich erfüllt.

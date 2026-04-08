@@ -154,7 +154,7 @@ class PeixEpiScoreService:
         # 4D (Backtester Ridge) → 6D (PeixEpiScore) Mapping.
         #
         # Der Backtester kalibriert 4 Gewichte: bio, market, psycho, context.
-        # PeixEpiScore benoetigt 6 Dimensionen. Mapping:
+        # PeixEpiScore benötigt 6 Dimensionen. Mapping:
         #   bio    → bio      (1:1, direkt)
         #   market → shortage (1:1, direkt)
         #   psycho → search   (1:1, direkt)
@@ -183,7 +183,7 @@ class PeixEpiScoreService:
             "search": round(psycho_frac, 4),
             "baseline": round(context_frac * 0.20, 4),
         }
-        # Renormalisierung: Summe = 1.0 (noetig wegen Rundung)
+        # Renormalisierung: Summe = 1.0 (nötig wegen Rundung)
         total = sum(self._weights.values())
         if total > 0:
             self._weights = {k: round(v / total, 4) for k, v in self._weights.items()}

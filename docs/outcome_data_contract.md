@@ -2,7 +2,7 @@
 
 ## Zweck
 
-`OutcomeObservation` ist das generische Datenformat fuer optionale kommerzielle Truth-/Outcome-Daten. Es ist absichtlich getrennt von allen epidemiologischen Forecast-Targets.
+`OutcomeObservation` ist das generische Datenformat für optionale kommerzielle Truth-/Outcome-Daten. Es ist absichtlich getrennt von allen epidemiologischen Forecast-Targets.
 
 ## Persistenz
 
@@ -64,7 +64,7 @@ Wenn `outcome_observations` leer ist, normalisiert der Truth-Layer lesend besteh
 | `order_count` | `orders` |
 | `revenue_eur` | `revenue` |
 
-## Beispielpayload fuer `OutcomeObservationInput`
+## Beispielpayload für `OutcomeObservationInput`
 
 ```json
 {
@@ -88,11 +88,11 @@ Wenn `outcome_observations` leer ist, normalisiert der Truth-Layer lesend besteh
 ## Semantische Regeln
 
 - Outcome-Daten bleiben kommerzielle Beobachtungen und werden nicht in Forecast-Truth umgeschrieben.
-- Mehrere Metriken fuer dasselbe Zeitfenster sind erlaubt und sollen als separate Zeilen gespeichert werden.
+- Mehrere Metriken für dasselbe Zeitfenster sind erlaubt und sollen als separate Zeilen gespeichert werden.
 - `holdout_group` gehoert zum Outcome-Layer, nicht zum Forecast-Layer.
-- `metadata` darf angereichert werden, aber die Kernlogik des Truth-Layers darf sich nicht auf frei geformte Felder verlassen, ausser fuer optionale Lift-/Holdout-Hinweise.
+- `metadata` darf angereichert werden, aber die Kernlogik des Truth-Layers darf sich nicht auf frei geformte Felder verlassen, ausser für optionale Lift-/Holdout-Hinweise.
 
-## Scope fuer V1
+## Scope für V1
 
 - Wochen- oder Fensterebene
 - Region- und Produkt-spezifisch

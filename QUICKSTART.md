@@ -71,7 +71,7 @@ STARTUP_STRICT_READINESS=false
 READINESS_REQUIRE_BROKER=false
 ```
 
-Wenn du das Backend nicht in Docker betreibst, nutze stattdessen z. B. `http://127.0.0.1:8001/v1`. Der Backend-Port `8000` ist nur fuer FastAPI und kein sicherer Default fuer vLLM.
+Wenn du das Backend nicht in Docker betreibst, nutze stattdessen z. B. `http://127.0.0.1:8001/v1`. Der Backend-Port `8000` ist nur für FastAPI und kein sicherer Default für vLLM.
 
 ## 3. Datenbank, Redis und Backend starten
 

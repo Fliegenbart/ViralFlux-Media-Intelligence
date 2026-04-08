@@ -240,7 +240,7 @@ def _derive_content_blockers(card: dict[str, Any], now: datetime | None = None) 
 
     mapping_status = str(card.get("mapping_status") or "").strip().lower()
     if mapping_status in MAPPING_BLOCK_STATES:
-        blockers.append("Produkt-Mapping braucht noch eine Pruefung.")
+        blockers.append("Produkt-Mapping braucht noch eine Prüfung.")
 
     start_at, end_at = _activation_window(card, campaign_pack)
     if start_at is None or end_at is None:
@@ -263,7 +263,7 @@ def _derive_content_blockers(card: dict[str, Any], now: datetime | None = None) 
         blockers.append("Leitbotschaft fehlt.")
 
     if guardrails.get("passed") is False:
-        blockers.append("Die Pruefkriterien sind noch nicht erfuellt.")
+        blockers.append("Die Prüfkriterien sind noch nicht erfüllt.")
 
     return _dedupe_messages(blockers)
 

@@ -328,7 +328,7 @@ class WeatherService:
 
     @staticmethod
     def _build_forecast_run_identity(run_started_at: datetime | None = None) -> dict[str, Any]:
-        """Erzeuge eine stabile Persistenz-Identitaet fuer genau einen Forecast-Importlauf."""
+        """Erzeuge eine stabile Persistenz-Identitaet für genau einen Forecast-Importlauf."""
         timestamp = (run_started_at or utc_now()).replace(second=0, microsecond=0)
         return {
             "forecast_run_timestamp": timestamp,

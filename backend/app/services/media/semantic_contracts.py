@@ -75,7 +75,7 @@ def forecast_probability_contract(*, source: str = "ForecastDecisionService") ->
         unit="ratio",
         calibrated=True,
         derived_from="forecast_quality + event_calibration",
-        note="Nur fuer kalibrierte Forecast-Ereignisse verwenden.",
+        note="Nur für kalibrierte Forecast-Ereignisse verwenden.",
     )
 
 
@@ -99,7 +99,7 @@ def priority_score_contract(*, source: str) -> dict[str, Any]:
         unit="score_0_100",
         calibrated=False,
         derived_from="Decision Policy / Opportunity Ranking",
-        note="Nur fuer Aktivierungsreihenfolge, nicht fuer Wahrscheinlichkeitsinterpretation.",
+        note="Nur für Aktivierungsreihenfolge, nicht für Wahrscheinlichkeitsinterpretation.",
     )
 
 

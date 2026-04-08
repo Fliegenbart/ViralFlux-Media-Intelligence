@@ -1,6 +1,6 @@
 # Probability Helper Paths
 
-Diese Notiz beschreibt den kanonischen Helper-Pfad fuer gelernte Event-Wahrscheinlichkeiten und Kalibrierung.
+Diese Notiz beschreibt den kanonischen Helper-Pfad für gelernte Event-Wahrscheinlichkeiten und Kalibrierung.
 
 ## Kanonischer Shared Helper
 
@@ -13,7 +13,7 @@ Die kanonischen Einstiegspunkte sind:
 - `select_probability_calibration_from_raw(...)`
 - `apply_probability_calibration(...)`
 
-Diese Helper sind der Standard fuer:
+Diese Helper sind der Standard für:
 
 - den einfachen learned/calibrated event-probability Pfad
 - wiederverwendbare Kalibrierung bei Modellen, die nur rohe Probability-Arrays haben
@@ -22,8 +22,8 @@ Diese Helper sind der Standard fuer:
 
 Der Simple-Pfad in `ForecastService` verwendet:
 
-- `select_probability_calibration(...)` fuer die Auswahl von `isotonic`, `platt` oder `raw_probability`
-- `apply_probability_calibration(...)` fuer die Anwendung der finalen Kalibrierung
+- `select_probability_calibration(...)` für die Auswahl von `isotonic`, `platt` oder `raw_probability`
+- `apply_probability_calibration(...)` für die Anwendung der finalen Kalibrierung
 
 Damit bleibt die Kalibrierungslogik an einer Stelle konzentriert.
 
@@ -31,13 +31,13 @@ Damit bleibt die Kalibrierungslogik an einer Stelle konzentriert.
 
 Der regionale Hauptpfad in `RegionalModelTrainer` bleibt bewusst strenger:
 
-- `_select_guarded_calibration(...)` ist weiterhin die kanonische Auswahlregel fuer den regionalen Promotion- und Backtest-Pfad
+- `_select_guarded_calibration(...)` ist weiterhin die kanonische Auswahlregel für den regionalen Promotion- und Backtest-Pfad
 - `apply_probability_calibration(...)` bleibt auch dort der gemeinsame Anwendungs-Helper
 
 Der Grund ist fachlich:
 
 - der regionale Hauptpfad guardet nicht nur `brier_score` und `ece`
-- er prueft zusaetzlich operative Kennzahlen wie `precision_at_top3` und `activation_false_positive_rate`
+- er prüft zusätzlich operative Kennzahlen wie `precision_at_top3` und `activation_false_positive_rate`
 
 Deshalb wird die Auswahlregel dort nicht auf den einfacheren Shared Helper reduziert.
 
@@ -53,7 +53,7 @@ Der Modellpfad nutzt jetzt:
 Wichtig:
 
 - das Verhalten bleibt konservativ
-- fuer `LearnedEventModel` sind weiterhin nur `isotonic` oder `raw_passthrough` aktiv
+- für `LearnedEventModel` sind weiterhin nur `isotonic` oder `raw_passthrough` aktiv
 - es wird nicht stillschweigend ein neuer Produktmodus eingefuehrt
 
 ## Fallback-Verhalten

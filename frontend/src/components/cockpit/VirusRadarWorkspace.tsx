@@ -129,7 +129,7 @@ const VirusRadarWorkspace: React.FC<Props> = ({
     <div className="page-stack virus-radar-page">
       <OperatorSection
         title="Virus-Radar"
-        description="Eine zentrale Entscheidungsseite fuer Media. Was jetzt wichtig ist, wo gehandelt werden sollte und welche Risiken oder Blocker noch sichtbar bleiben."
+        description="Eine zentrale Entscheidungsseite für Media. Was jetzt wichtig ist, wo gehandelt werden sollte und welche Risiken oder Blocker noch sichtbar bleiben."
         tone="accent"
         className="virus-radar-shell"
       >
@@ -148,7 +148,7 @@ const VirusRadarWorkspace: React.FC<Props> = ({
               <div className="virus-radar-hero__eyebrow">Entscheidung diese Woche</div>
               <h2 className="virus-radar-hero__title">{decisionHeadline}</h2>
               <p className="virus-radar-hero__meta">
-                {virus} · {topPrediction?.bundesland_name || focusRegion?.name || 'Bundesland offen'} · naechste {horizonDays} Tage · Stand {dataTimestamp}
+                {virus} · {topPrediction?.bundesland_name || focusRegion?.name || 'Bundesland offen'} · nächste {horizonDays} Tage · Stand {dataTimestamp}
               </p>
               <p className="virus-radar-hero__summary">
                 {heroRecommendation?.whyNow || nowData.view.summary}
@@ -176,13 +176,13 @@ const VirusRadarWorkspace: React.FC<Props> = ({
                   onClick={() => recommendationId && onOpenRecommendation(recommendationId)}
                   disabled={!recommendationId}
                 >
-                  Empfehlung pruefen
+                  Empfehlung prüfen
                 </button>
                 <button type="button" className="media-button secondary" onClick={onOpenEvidence}>
                   Evidenz ansehen
                 </button>
                 <button type="button" className="media-button secondary" onClick={onOpenCampaigns}>
-                  Kampagnen oeffnen
+                  Kampagnen öffnen
                 </button>
               </div>
             </div>
@@ -194,7 +194,7 @@ const VirusRadarWorkspace: React.FC<Props> = ({
                   {evidenceSummary}
                 </strong>
                 <span className="virus-radar-terminal-card__detail">
-                  {recommendationId ? 'Empfehlung ist direkt oeffenbar.' : 'Empfehlung wird noch konkretisiert.'}
+                  {recommendationId ? 'Empfehlung ist direkt öffnbar.' : 'Empfehlung wird noch konkretisiert.'}
                 </span>
               </div>
 
@@ -219,7 +219,7 @@ const VirusRadarWorkspace: React.FC<Props> = ({
           <div className="virus-radar-strip-shell__header">
             <span className="virus-radar-strip-shell__title">Radar-Tape</span>
             <span className="virus-radar-strip-shell__summary">
-              Fuenf schnelle Checks fuer Signal, Evidenz, Datenlage, Kampagnen-Reife und Blocker.
+              Fünf schnelle Checks für Signal, Evidenz, Datenlage, Kampagnen-Reife und Blocker.
             </span>
           </div>
           <div className="virus-radar-strip">
@@ -237,7 +237,7 @@ const VirusRadarWorkspace: React.FC<Props> = ({
           <OperatorPanel
             eyebrow="Signal Map"
             title="Deutschland und Regionenleiter"
-            description="Karte fuer Orientierung, Ranking fuer Reihenfolge. Ein Klick auf ein Bundesland setzt den Fokus."
+            description="Karte für Orientierung, Ranking für Reihenfolge. Ein Klick auf ein Bundesland setzt den Fokus."
             className="virus-radar-map-panel"
           >
             <div className="virus-radar-map-panel__body">
@@ -414,7 +414,7 @@ function buildSignalTiles({
     {
       label: 'Evidenz',
       value: evidence?.truth_gate?.state || evidence?.business_validation?.validation_status || 'Noch offen',
-      detail: evidence?.truth_gate?.message || 'Truth- und Business-Lage fuer diese Woche',
+      detail: evidence?.truth_gate?.message || 'Truth- und Business-Lage für diese Woche',
       tone: stateTone(evidence?.truth_gate?.passed ? 'success' : 'warning'),
     },
     {

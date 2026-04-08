@@ -53,7 +53,7 @@ interface PageHeaderContextValue {
 const ICON_SIZE = 18;
 
 const PRIMARY_NAV_ITEMS = [
-  { label: 'Virus-Radar', path: '/virus-radar', helper: 'Alles fuer die Media-Entscheidung auf einer Seite', Icon: Activity },
+  { label: 'Virus-Radar', path: '/virus-radar', helper: 'Alles für die Media-Entscheidung auf einer Seite', Icon: Activity },
   { label: 'Wochenplan', path: '/jetzt', helper: 'Was PEIX diese Woche zuerst tun sollte', Icon: Zap },
   { label: 'Zeitgraph', path: '/zeitgraph', helper: 'Nur Verlauf und 7-Tage-Ausblick', Icon: TrendingUp },
   { label: 'Regionen', path: '/regionen', helper: 'Wo sich diese Woche genaueres Hinsehen lohnt', Icon: MapPin },

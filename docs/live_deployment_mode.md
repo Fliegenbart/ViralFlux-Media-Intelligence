@@ -1,10 +1,10 @@
 # Live Deployment Mode
 
-Diese Datei beschreibt den verbindlichen Betriebsmodus fuer `https://fluxengine.labpulse.ai/`.
+Diese Datei beschreibt den verbindlichen Betriebsmodus für `https://fluxengine.labpulse.ai/`.
 
 ## Kanonischer Standard
 
-Der Live-Deploy nutzt standardmaessig:
+Der Live-Deploy nutzt standardmäßig:
 
 - Compose-Manifest: `docker-compose.prod.yml`
 - Script: `scripts/deploy-live.sh`
@@ -13,7 +13,7 @@ Der Live-Deploy nutzt standardmaessig:
 - Frontend-Port: `172.17.0.1:18080`
 - Public Edge: externer Reverse Proxy vor dem Compose-Stack
 
-`docker-compose.yml` bleibt ausschliesslich fuer lokale Entwicklung gedacht.
+`docker-compose.yml` bleibt ausschliesslich für lokale Entwicklung gedacht.
 
 ## Pflicht-Flags im Live-Modus
 
@@ -34,17 +34,17 @@ Das bedeutet:
 
 ## Mount- und Dateimodell
 
-Der Live-Pfad verwendet keine Host-Bind-Mounts fuer App-Container.
+Der Live-Pfad verwendet keine Host-Bind-Mounts für App-Container.
 
 Stattdessen:
 
-- persistente DB ueber `postgres_data`
-- persistente App-Daten ueber `app_data`
-- persistente Modellartefakte ueber `ml_models`
+- persistente DB über `postgres_data`
+- persistente App-Daten über `app_data`
+- persistente Modellartefakte über `ml_models`
 
 Das reduziert Drift zwischen Host-Dateisystem und Container-Laufzeit.
 
-Weil der Live-Pfad keine Code-Bind-Mounts verwendet, muessen Backend, Worker und Beat beim Deploy als Images neu gebaut werden. Ein `git pull` allein reicht im Live-Modus nicht aus.
+Weil der Live-Pfad keine Code-Bind-Mounts verwendet, müssen Backend, Worker und Beat beim Deploy als Images neu gebaut werden. Ein `git pull` allein reicht im Live-Modus nicht aus.
 
 ## Dev vs. Live
 
@@ -53,18 +53,18 @@ Weil der Live-Pfad keine Code-Bind-Mounts verwendet, muessen Backend, Worker und
 - lokale Entwicklung
 - Host-Bind-Mounts
 - Dev-Defaults
-- bewusst toleranter fuer Bootstrap und Iteration
+- bewusst toleranter für Bootstrap und Iteration
 
 `docker-compose.prod.yml`:
 
 - Live-Deploy und produktionsnahe Server-Laufzeit
 - keine Host-Bind-Mounts
 - produktive Environment-Flags
-- loopback-gebundener Backend-Port und stabiler Frontend-Host-Binding fuer den bestehenden Public-Edge
+- loopback-gebundener Backend-Port und stabiler Frontend-Host-Binding für den bestehenden Public-Edge
 
 ## Deploy-Guardrails
 
-`scripts/deploy-live.sh` erzwingt standardmaessig:
+`scripts/deploy-live.sh` erzwingt standardmäßig:
 
 - `docker-compose.prod.yml` als Compose-Datei
 - `ENVIRONMENT=production` im Backend/Worker/Beat
@@ -74,9 +74,9 @@ Weil der Live-Pfad keine Code-Bind-Mounts verwendet, muessen Backend, Worker und
 - `READINESS_REQUIRE_BROKER=true` im Backend
 - keine Bind-Mounts auf den Live-App-Containern
 
-Ein non-prod Compose-Deploy ist nur mit explizitem Override `ALLOW_DEV_COMPOSE_LIVE=true` moeglich und soll nicht fuer Normalbetrieb verwendet werden.
+Ein non-prod Compose-Deploy ist nur mit explizitem Override `ALLOW_DEV_COMPOSE_LIVE=true` möglich und soll nicht für Normalbetrieb verwendet werden.
 
-Bestehende Infra-Container fuer Postgres und Redis werden im Migrationspfad bewusst wiederverwendet, falls sie bereits unter den kanonischen Namen `virusradar_db` und `viralflux_redis` laufen. Dadurch wird die Umstellung vom alten dev-lastigen Live-Stack auf den neuen Prod-Pfad ohne unnoetige Datenbank-Neuanlage moeglich.
+Bestehende Infra-Container für Postgres und Redis werden im Migrationspfad bewusst wiederverwendet, falls sie bereits unter den kanonischen Namen `virusradar_db` und `viralflux_redis` laufen. Dadurch wird die Umstellung vom alten dev-lastigen Live-Stack auf den neuen Prod-Pfad ohne unnötige Datenbank-Neuanlage möglich.
 
 ## Failure Modes
 
@@ -89,4 +89,4 @@ Typische harte Fehler:
 - Bind-Mounts im Live-Pfad
 - Liveness-Fehler nach dem Rollout
 
-Readiness bleibt bewusst advisory im Deploy-Script, damit ein Release nicht wegen bereits bekannter fachlicher Blocker automatisch zurueckrollt. Die Readiness-Antwort muss aber explizit geprueft werden.
+Readiness bleibt bewusst advisory im Deploy-Script, damit ein Release nicht wegen bereits bekannter fachlicher Blocker automatisch zurückrollt. Die Readiness-Antwort muss aber explizit geprüft werden.

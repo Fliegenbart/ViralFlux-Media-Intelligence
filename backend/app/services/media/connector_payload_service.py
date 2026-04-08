@@ -32,7 +32,7 @@ CONNECTOR_CATALOG: tuple[dict[str, Any], ...] = (
         "key": "meta_ads",
         "label": "Meta Ads",
         "status": "preview",
-        "description": "Vorschau fuer die regionale Uebergabe in Meta Ads.",
+        "description": "Vorschau für die regionale Übergabe in Meta Ads.",
         "supported_channels": ["social", "video", "display"],
         "supported_objectives": ["Awareness", "Traffic", "Conversions"],
     },
@@ -40,7 +40,7 @@ CONNECTOR_CATALOG: tuple[dict[str, Any], ...] = (
         "key": "google_ads",
         "label": "Google Ads",
         "status": "preview",
-        "description": "Vorschau fuer die Uebergabe in Google Ads mit Kampagnen- und Anzeigengruppen-Logik.",
+        "description": "Vorschau für die Übergabe in Google Ads mit Kampagnen- und Anzeigengruppen-Logik.",
         "supported_channels": ["search", "video", "display"],
         "supported_objectives": ["Search", "Video", "Performance"],
     },
@@ -48,7 +48,7 @@ CONNECTOR_CATALOG: tuple[dict[str, Any], ...] = (
         "key": "dv360",
         "label": "DV360",
         "status": "preview",
-        "description": "Vorschau fuer die programmatic Uebergabe in DV360.",
+        "description": "Vorschau für die programmatic Übergabe in DV360.",
         "supported_channels": ["programmatic", "display", "video", "ctv"],
         "supported_objectives": ["Awareness", "Reach", "Consideration"],
     },
@@ -77,7 +77,7 @@ class ConnectorPayloadService:
         connector = cls._resolve_connector(connector_key)
         payload = opportunity.get("campaign_payload") or {}
         if not payload:
-            raise ValueError("Fuer diese Empfehlung liegt noch kein Kampagnenvorschlag vor.")
+            raise ValueError("Für diese Empfehlung liegt noch kein Kampagnenvorschlag vor.")
 
         normalized_package = cls._build_normalized_package(opportunity=opportunity, campaign_payload=payload)
         readiness = cls._build_readiness(
@@ -200,7 +200,7 @@ class ConnectorPayloadService:
 
         workflow_status = str(normalized_package.get("workflow_status") or "DRAFT").upper()
         if workflow_status not in {"APPROVED", "ACTIVATED"}:
-            blockers.append("Die Kampagne muss vor einer Uebergabe zuerst freigegeben werden.")
+            blockers.append("Die Kampagne muss vor einer Übergabe zuerst freigegeben werden.")
 
         if not normalized_package.get("campaign_name"):
             blockers.append("Kampagnenname fehlt.")
@@ -209,7 +209,7 @@ class ConnectorPayloadService:
         if not normalized_package.get("channel_plan"):
             blockers.append("Es ist kein Channel-Plan hinterlegt.")
         if not normalized_package.get("guardrails", {}).get("passed", True):
-            blockers.append("Die Pruefkriterien sind noch nicht erfuellt.")
+            blockers.append("Die Prüfkriterien sind noch nicht erfüllt.")
 
         if not normalized_package.get("region_codes"):
             warnings.append("Keine regionale Zielsteuerung vorhanden; die Vorschau wird national vorbereitet.")

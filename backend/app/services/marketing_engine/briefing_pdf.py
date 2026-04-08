@@ -63,7 +63,7 @@ class BriefingPDF(FPDF):
         self.set_y(-15)
         self.set_font("Helvetica", "", 7)
         self.set_text_color(*_SLATE_400)
-        self.cell(0, 8, f"Seite {self.page_no()} | Vertraulich - nur fuer internen Gebrauch", align="C")
+        self.cell(0, 8, f"Seite {self.page_no()} | Vertraulich - nur für internen Gebrauch", align="C")
 
 
 def generate_briefing_pdf(opp: dict) -> bytes:

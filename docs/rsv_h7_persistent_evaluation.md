@@ -4,7 +4,7 @@ Stand: 2026-03-17
 
 ## Zweck
 
-Dieser Leitfaden beschreibt den persistenten, auditierbaren Evaluationspfad fuer den RSV A / h7 Ranking-Track.
+Dieser Leitfaden beschreibt den persistenten, auditierbaren Evaluationspfad für den RSV A / h7 Ranking-Track.
 
 Ziel ist nicht ein weiterer lokaler Testlauf, sondern ein Server-Run mit dauerhaft lesbaren Artefakten:
 
@@ -35,7 +35,7 @@ python backend/scripts/run_rsv_h7_live_evaluation.py \
 
 ## Persistenter Output Root
 
-Der Run schreibt pro Ausfuehrung einen eigenen Archivbaum:
+Der Run schreibt pro Ausführung einen eigenen Archivbaum:
 
 ```text
 <output-root>/rsv_a_h7_rsv_ranking/<run_id>/
@@ -62,14 +62,14 @@ Jeder erfolgreiche oder teil-erfolgreiche Run muss diese Dateien schreiben:
 - `report.md`
 - `run_manifest.json`
 
-Bei Fehlern koennen zusaetzlich vorhanden sein:
+Bei Fehlern können zusätzlich vorhanden sein:
 
 - `error.json`
 - `error.md`
 
 ## Was Im Manifest Stehen Muss
 
-`run_manifest.json` ist die Audit-Wahrheit fuer den Run. Mindestens diese Felder sollen vorhanden sein:
+`run_manifest.json` ist die Audit-Wahrheit für den Run. Mindestens diese Felder sollen vorhanden sein:
 
 - `run_id`
 - `started_at`
@@ -102,13 +102,13 @@ Die Manifest-Werte duerfen nur aus dem echten Lauf und den echten Artefakten sta
 
 ## Verifikation
 
-Der Run prueft am Ende aktiv, ob alle Pflichtdateien wirklich auf Platte liegen.
+Der Run prüft am Ende aktiv, ob alle Pflichtdateien wirklich auf Platte liegen.
 
 Semantik:
 
 - fehlen Pflichtdateien, endet der Lauf mit Fehlercode `2`
 - wenn nur die Report-Validierung scheitert, bleibt das Artefakt trotzdem sichtbar als `partial_error`
-- der Lauf gilt erst als promotionsfaehig, wenn die Dateien existieren und der Vergleich ehrlich ist
+- der Lauf gilt erst als promotionsfähig, wenn die Dateien existieren und der Vergleich ehrlich ist
 
 ## Vergleichswahrheit
 
@@ -122,7 +122,7 @@ Der Report muss Baseline und Experiment direkt vergleichbar machen und mindesten
 - `gate_outcome`
 - `retained`
 
-Zusatzlich werden Baseline- und Experiment-Pfade archiviert, damit spaetere Reviews ohne Annahmen auskommen.
+Zusatzlich werden Baseline- und Experiment-Pfade archiviert, damit spätere Reviews ohne Annahmen auskommen.
 
 ## Ergebnisvorlage
 
@@ -151,9 +151,9 @@ Next step:
 
 ## Generischer Ausbau
 
-Dieses Muster ist bewusst nicht nur fuer RSV A / h7 gedacht.
+Dieses Muster ist bewusst nicht nur für RSV A / h7 gedacht.
 
-Es kann fuer andere h7-Pilot-Scopes wiederverwendet werden, solange diese drei Punkte gleich bleiben:
+Es kann für andere h7-Pilot-Scopes wiederverwendet werden, solange diese drei Punkte gleich bleiben:
 
 - fester Scope
 - expliziter Output-Root

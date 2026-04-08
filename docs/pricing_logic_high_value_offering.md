@@ -6,10 +6,10 @@ Stand: 2026-03-17
 
 ViralFlux sollte nicht wie ein klassisches Dashboard pro Seat bepreist werden.
 
-Die glaubwuerdige Preislogik ist:
+Die glaubwürdige Preislogik ist:
 
-- bezahlt wird fuer bessere operative Entscheidungen
-- nicht fuer rohe Datenpunkte oder bunte Visualisierung
+- bezahlt wird für bessere operative Entscheidungen
+- nicht für rohe Datenpunkte oder bunte Visualisierung
 
 Das Produkt beruehrt:
 
@@ -22,18 +22,18 @@ Das Produkt beruehrt:
 
 Genau deshalb kann es hochpreisig sein, auch wenn es bewusst nicht als vollautomatisches Media-System verkauft wird.
 
-## Wofuer der Kunde eigentlich zahlt
+## Wofür der Kunde eigentlich zahlt
 
-PEIX und GELO zahlen nicht primaer fuer "ein Forecast-Modell".
+PEIX und GELO zahlen nicht primaer für "ein Forecast-Modell".
 
-Sie zahlen fuer eine Entscheidungskette:
+Sie zahlen für eine Entscheidungskette:
 
-1. regionale Signalfrueherkennung
+1. regionale Signalfrüherkennung
 2. Watch / Prepare / Activate-Logik
 3. Budget- und Aktivierungsheuristik
 4. Produkt-/Keyword-Operationalisierung
 5. Readiness- und Governance-Absicherung
-6. Pilot-Reporting und spaetere Outcome-Diskussion
+6. Pilot-Reporting und spätere Outcome-Diskussion
 
 ## Warum das High-Value statt Commodity ist
 
@@ -44,8 +44,8 @@ Ein High-Value-Angebot in diesem Kontext:
 - reduziert unklare regionale Entscheidungen
 - spart Management-Zeit
 - strukturiert Budgetdiskussionen
-- dokumentiert Begruendungen und Unsicherheit
-- schafft intern nutzbare Evidenz fuer Pilot- und Vertragsentscheidungen
+- dokumentiert Begründungen und Unsicherheit
+- schafft intern nutzbare Evidenz für Pilot- und Vertragsentscheidungen
 
 Das ist naeher an einem Operating Layer als an einem simplen Reporting-Tool.
 
@@ -82,9 +82,9 @@ Das ist naeher an einem Operating Layer als an einem simplen Reporting-Tool.
 
 Als Orientierung, nicht als harter Claim:
 
-- `120k - 250k EUR` fuer einen streng gefuehrten 8- bis 12-Wochen-Pilot
+- `120k - 250k EUR` für einen streng gefuehrten 8- bis 12-Wochen-Pilot
 
-Diese Groesse ist glaubwuerdiger als ein billiger Testballon, wenn echte Senior-Begleitung, Governance und Reporting enthalten sind.
+Diese Größe ist glaubwürdiger als ein billiger Testballon, wenn echte Senior-Begleitung, Governance und Reporting enthalten sind.
 
 ## 2. Paid Operational Pilot
 
@@ -92,12 +92,12 @@ Diese Groesse ist glaubwuerdiger als ein billiger Testballon, wenn echte Senior-
 
 - begrenzter, aber echter Nutzungsscope
 - definierte Viren/Horizonte
-- regelmaessige Operating Cadence
+- regelmäßige Operating Cadence
 - Recommendation History und Outcome-Readouts
 
 ### Preislogik
 
-- hoehere Paketpreise als im Design-Partner-Modus
+- höhere Paketpreise als im Design-Partner-Modus
 - weil nicht mehr nur Exploration, sondern operativer Nutzen verkauft wird
 
 ### Realistische Bandbreite
@@ -122,7 +122,7 @@ Das ist sinnvoll, wenn:
 
 - annualisierte Plattform- oder Retainer-Logik
 - nicht rein nutzer- oder seat-basiert
-- Preisanker ueber:
+- Preisanker über:
   - Anzahl betreuter Marken/Produktfamilien
   - operativen Scope
   - Reporting-/Governance-Anforderungen
@@ -132,16 +132,16 @@ Das ist sinnvoll, wenn:
 
 - `300k - 900k EUR / Jahr`
 
-Nur glaubwuerdig, wenn der Plattformmodus technisch und operativ wirklich freigegeben ist.
+Nur glaubwürdig, wenn der Plattformmodus technisch und operativ wirklich freigegeben ist.
 
 ## Wann man was heute verkaufen sollte
 
-### Heute glaubwuerdig
+### Heute glaubwürdig
 
 - Design-Partner / Gated Pilot
-- spaeter: Paid Operational Pilot
+- später: Paid Operational Pilot
 
-### Heute noch nicht glaubwuerdig
+### Heute noch nicht glaubwürdig
 
 - vollmundiger Always-On-Plattformvertrag ohne technische Gates
 
@@ -151,21 +151,21 @@ Grund:
 - `health/ready` ist `503`
 - der moderne Kernpfad-Smoke faellt aktuell durch
 
-## Preis nicht uebertreiben, sondern richtig begruenden
+## Preis nicht übertreiben, sondern richtig begründen
 
-Die falsche Begruendung waere:
+Die falsche Begründung waere:
 
 - "Wir haben ein super Modell, deshalb teuer."
 
-Die bessere Begruendung ist:
+Die bessere Begründung ist:
 
-- "Wir strukturieren hochrelevante regionale Aktivierungsentscheidungen, machen Unsicherheit sichtbar, disziplinieren Budgetdiskussionen und liefern spaeter auditierbare Pilot-Evidenz."
+- "Wir strukturieren hochrelevante regionale Aktivierungsentscheidungen, machen Unsicherheit sichtbar, disziplinieren Budgetdiskussionen und liefern später auditierbare Pilot-Evidenz."
 
-## Kernargumente fuer einen hohen Preis
+## Kernargumente für einen hohen Preis
 
 ### 1. Budgetrelevanz
 
-Wenn das Tool ueber regionale Aktivierung, Hold vs Activate und Budgetfokus mitentscheidet, bewegt es keine Randfrage, sondern Mediadruck und Opportunitaetskosten.
+Wenn das Tool über regionale Aktivierung, Hold vs Activate und Budgetfokus mitentscheidet, bewegt es keine Randfrage, sondern Mediadruck und Opportunitaetskosten.
 
 ### 2. C-Level-Verwertbarkeit
 
@@ -177,22 +177,22 @@ Das Produkt sitzt naeher an einer Operating Decision Engine als an einem Statist
 
 ### 4. Auditierbarkeit
 
-Recommendation History, Activation History, Truth-Overlay und Pilot-KPIs sind Material fuer Vertragsfortschreibung, nicht nur fuer interne Nerd-Analyse.
+Recommendation History, Activation History, Truth-Overlay und Pilot-KPIs sind Material für Vertragsfortschreibung, nicht nur für interne Nerd-Analyse.
 
-## Preisanker fuer PEIX / GELO
+## Preisanker für PEIX / GELO
 
-Die kaufmaennische Uebersetzung fuer PEIX / GELO sollte heute sein:
+Die kaufmaennische Übersetzung für PEIX / GELO sollte heute sein:
 
 - nicht "wir verkaufen Forecasts"
-- sondern "wir verkaufen eine regionale Entscheidungs- und Aktivierungsschicht fuer hochwertige Media- und Brandsteuerung"
+- sondern "wir verkaufen eine regionale Entscheidungs- und Aktivierungsschicht für hochwertige Media- und Brandsteuerung"
 
 ## Deal-Struktur
 
-Eine glaubwuerdige Deal-Struktur ist:
+Eine glaubwürdige Deal-Struktur ist:
 
 1. Setup- und Hardening-Paket
 2. gefuehrter Pilot
-3. klar definierter Upgrade-Pfad in einen groesseren Vertrag
+3. klar definierter Upgrade-Pfad in einen größeren Vertrag
 
 Optional getrennt bepreist:
 
@@ -205,4 +205,4 @@ Optional getrennt bepreist:
 
 Solange der produktive Kernpfad im Live-System noch `business_smoke_failed` ist, sollte kein Always-On-Plattformpreis versprochen werden.
 
-Der hohe Preis ist glaubwuerdig, wenn er an einen streng gefuehrten Pilot mit ehrlicher Plattformperspektive gebunden ist, nicht an einen ueberzogenen Reife-Claim.
+Der hohe Preis ist glaubwürdig, wenn er an einen streng gefuehrten Pilot mit ehrlicher Plattformperspektive gebunden ist, nicht an einen überzogenen Reife-Claim.

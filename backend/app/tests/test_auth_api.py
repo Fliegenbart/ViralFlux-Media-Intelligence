@@ -5,6 +5,9 @@ from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 
 os.environ.setdefault("ADMIN_EMAIL", "admin@example.com")
 os.environ.setdefault("ADMIN_PASSWORD", "CorrectHorseBatteryStaple123!")
@@ -12,18 +15,34 @@ os.environ.setdefault("ADMIN_PASSWORD", "CorrectHorseBatteryStaple123!")
 from app.api import auth as auth_module
 from app.api.deps import get_current_user
 from app.core.rate_limit import limiter
+from app.db.session import get_db
+from app.models.database import AuditLog, Base
 
 
 class AuthApiTests(unittest.TestCase):
     def setUp(self) -> None:
         limiter.reset()
-        auth_module._FAILED_LOGINS.clear()
-        auth_module._LOCKED_UNTIL.clear()
+        self.engine = create_engine(
+            "sqlite://",
+            connect_args={"check_same_thread": False},
+            poolclass=StaticPool,
+        )
+        TestingSessionLocal = sessionmaker(bind=self.engine)
+        Base.metadata.create_all(bind=self.engine, tables=[AuditLog.__table__])
+        self.db = TestingSessionLocal()
 
         app = FastAPI()
         app.state.limiter = limiter
         app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
         app.include_router(auth_module.router, prefix="/api/auth")
+
+        def override_get_db():
+            try:
+                yield self.db
+            finally:
+                pass
+
+        app.dependency_overrides[get_db] = override_get_db
 
         @app.get("/api/protected")
         async def protected(current_user: dict = Depends(get_current_user)):
@@ -33,6 +52,9 @@ class AuthApiTests(unittest.TestCase):
 
     def tearDown(self) -> None:
         self.client.close()
+        self.db.close()
+        Base.metadata.drop_all(bind=self.engine, tables=[AuditLog.__table__])
+        self.engine.dispose()
         limiter.reset()
 
     def _login(self, username: str, password: str):
@@ -59,9 +81,14 @@ class AuthApiTests(unittest.TestCase):
         success = self._login("admin@example.com", "CorrectHorseBatteryStaple123!")
 
         self.assertEqual(success.status_code, 200)
-        self.assertIn("access_token", success.json())
-        self.assertFalse(auth_module._FAILED_LOGINS)
-        self.assertFalse(auth_module._LOCKED_UNTIL)
+        self.assertEqual(
+            success.json(),
+            {
+                "authenticated": True,
+                "subject": "admin@example.com",
+                "role": "admin",
+            },
+        )
 
     def test_login_sets_http_only_cookie_and_cookie_authenticates_requests(self) -> None:
         response = self._login("admin@example.com", "CorrectHorseBatteryStaple123!")
@@ -91,14 +118,27 @@ class AuthApiTests(unittest.TestCase):
         )
 
     def test_logout_clears_auth_cookie_and_session(self) -> None:
-        self._login("admin@example.com", "CorrectHorseBatteryStaple123!")
+        login_response = self._login("admin@example.com", "CorrectHorseBatteryStaple123!")
+        set_cookie = login_response.headers.get("set-cookie", "")
+        token = set_cookie.split("viralflux_session=", 1)[1].split(";", 1)[0]
+
+        protected_before_logout = self.client.get(
+            "/api/protected",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        self.assertEqual(protected_before_logout.status_code, 200)
 
         logout_response = self.client.post("/api/auth/logout")
         session_response = self.client.get("/api/auth/session")
+        stolen_token_response = self.client.get(
+            "/api/protected",
+            headers={"Authorization": f"Bearer {token}"},
+        )
 
         self.assertEqual(logout_response.status_code, 200)
         self.assertIn("Max-Age=0", logout_response.headers.get("set-cookie", ""))
         self.assertEqual(session_response.status_code, 401)
+        self.assertEqual(stolen_token_response.status_code, 401)
 
 
 if __name__ == "__main__":

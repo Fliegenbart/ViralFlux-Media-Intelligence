@@ -312,7 +312,9 @@ model.add_regressor('trends_ma7')          # Moving Average
 **API Access Controls:**
 - Interne Dashboard-, Inventory-, Recommendation-, Map-, Ordering- und Data-Import-Endpunkte erfordern JWT-Authentifizierung
 - Schreibende/administrative Aktionen erfordern Admin-Rolle
-- `/api/v1/outbreak-score/peix-score` bleibt bewusst öffentlich für die Landing-Page
+- `/api/v1/outbreak-score/peix-score` liefert öffentlich nur noch eine Landing-geeignete Kurzfassung ohne interne Modell-Details
+- `/api/v1/outbreak-score/peix-score/full` erfordert Authentifizierung für die vollständige Score-Ansicht
+- Der mutierende CRM-Export läuft als `POST /api/v1/marketing/export/crm`, nicht mehr als schreibendes `GET`
 
 **Login Protection:**
 - `/api/auth/login` ist rate-limitiert
@@ -322,7 +324,9 @@ model.add_regressor('trends_ma7')          # Moving Average
 
 **Session Flow:**
 - Browser-Requests laufen standardmäßig mit Cookie-Credentials
+- `/api/auth/login` bestätigt Browser-Logins über Session-Status statt ein lesbares JWT im Response-Body zurückzugeben
 - `/api/auth/session` prüft nach Reloads, ob noch eine gültige Session existiert
+- `/api/auth/logout` widerruft neue Sessions serverseitig über die bestehende Audit-Log-Infrastruktur
 - `/api/auth/logout` löscht das Session-Cookie serverseitig aus dem Browser-Kontext
 
 ---

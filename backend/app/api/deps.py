@@ -1,16 +1,70 @@
+from datetime import UTC, datetime
+
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import ExpiredSignatureError, JWTError, jwt
+from sqlalchemy.orm import Session
 
+from app.db.session import get_db
+from app.models.database import AuditLog
 from app.core.security import ALGORITHM, SECRET_KEY
 from app.schemas.token import TokenPayload
 
 AUTH_COOKIE_NAME = "viralflux_session"
+AUTH_SESSION_ENTITY = "auth_session"
+AUTH_LOGOUT_ACTION = "logout"
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login", auto_error=False)
 
 
-async def get_current_user(request: Request, token: str | None = Depends(oauth2_scheme)) -> dict:
+def _supports_audit_queries(db: Session | None) -> bool:
+    return db is not None and hasattr(db, "query")
+
+
+def _is_revoked_session(db: Session, sid: str | None) -> bool:
+    normalized_sid = str(sid or "").strip()
+    if not normalized_sid or not _supports_audit_queries(db):
+        return False
+
+    return (
+        db.query(AuditLog.id)
+        .filter(
+            AuditLog.entity_type == AUTH_SESSION_ENTITY,
+            AuditLog.action == AUTH_LOGOUT_ACTION,
+            AuditLog.reason == normalized_sid,
+        )
+        .first()
+        is not None
+    )
+
+
+def _legacy_token_is_invalidated(db: Session, subject: str | None, issued_at: int | None) -> bool:
+    normalized_subject = str(subject or "").strip()
+    if not normalized_subject or issued_at is None or not _supports_audit_queries(db):
+        return False
+
+    latest_logout = (
+        db.query(AuditLog.timestamp)
+        .filter(
+            AuditLog.entity_type == AUTH_SESSION_ENTITY,
+            AuditLog.action == AUTH_LOGOUT_ACTION,
+            AuditLog.user == normalized_subject,
+        )
+        .order_by(AuditLog.timestamp.desc())
+        .first()
+    )
+    if not latest_logout or not latest_logout[0]:
+        return False
+
+    issued_at_dt = datetime.fromtimestamp(int(issued_at), tz=UTC).replace(tzinfo=None)
+    return issued_at_dt <= latest_logout[0]
+
+
+async def get_current_user(
+    request: Request,
+    token: str | None = Depends(oauth2_scheme),
+    db: Session = Depends(get_db),
+) -> dict:
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -30,6 +84,14 @@ async def get_current_user(request: Request, token: str | None = Depends(oauth2_
         )
         token_payload = TokenPayload.model_validate(payload)
         if not token_payload.sub:
+            raise credentials_exception
+        if _is_revoked_session(db, token_payload.sid):
+            raise credentials_exception
+        if not token_payload.sid and _legacy_token_is_invalidated(
+            db,
+            token_payload.sub,
+            token_payload.iat,
+        ):
             raise credentials_exception
         return token_payload.model_dump()
     except ExpiredSignatureError:

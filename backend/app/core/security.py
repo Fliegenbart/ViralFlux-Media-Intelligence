@@ -2,6 +2,7 @@ from app.core.time import utc_now
 import hashlib
 import logging
 import os
+import secrets
 from datetime import datetime, timedelta
 from typing import Any, Dict
 
@@ -57,6 +58,9 @@ def get_password_hash(password: str) -> str:
 
 def create_access_token(data: Dict[str, Any], expires_delta: timedelta | None = None) -> str:
     to_encode = dict(data)
-    expire = utc_now() + (expires_delta or timedelta(minutes=30))
+    issued_at = utc_now()
+    expire = issued_at + (expires_delta or timedelta(minutes=30))
+    to_encode.setdefault("iat", int(issued_at.timestamp()))
+    to_encode.setdefault("sid", secrets.token_urlsafe(24))
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)

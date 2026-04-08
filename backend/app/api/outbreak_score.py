@@ -20,6 +20,13 @@ ALLOWED_CSV_CONTENT_TYPES = {
     "application/csv",
     "application/vnd.ms-excel",
 }
+PUBLIC_PEIX_REGION_FIELDS = (
+    "region_code",
+    "region_name",
+    "score_0_100",
+    "risk_band",
+    "impact_probability",
+)
 
 
 # ─── Singleton für DrugShortage-Cache ──────────────────────────────────────
@@ -68,6 +75,30 @@ def _validate_csv_upload(file: UploadFile, content: bytes) -> None:
         raise HTTPException(status_code=400, detail="Ungültige CSV-Datei")
 
 
+def _to_public_peix_payload(payload: dict) -> dict:
+    regions = payload.get("regions")
+    safe_regions: dict[str, dict] = {}
+
+    if isinstance(regions, dict):
+        for code, region in regions.items():
+            if not isinstance(region, dict):
+                continue
+            safe_regions[code] = {
+                field: region[field]
+                for field in PUBLIC_PEIX_REGION_FIELDS
+                if field in region
+            }
+
+    public_payload = {
+        "national_score": payload.get("national_score"),
+        "national_band": payload.get("national_band"),
+        "national_impact_probability": payload.get("national_impact_probability"),
+        "generated_at": payload.get("generated_at"),
+        "regions": safe_regions,
+    }
+    return {key: value for key, value in public_payload.items() if value is not None}
+
+
 @router.get("/current", dependencies=[Depends(get_current_user)])
 async def get_outbreak_score(
     virus_typ: str = "Influenza A",
@@ -90,7 +121,19 @@ async def get_peix_score(
     virus_typ: str = "Influenza A",
     db: Session = Depends(get_db),
 ):
-    """PeixEpiScore v2.0 — Unified Score über alle Viren."""
+    """Öffentliche Kurzfassung des PeixEpiScore für die Landing-Page."""
+    from app.services.media.peix_score_service import PeixEpiScoreService
+
+    service = PeixEpiScoreService(db)
+    return _to_public_peix_payload(service.build(virus_typ=virus_typ))
+
+
+@router.get("/peix-score/full", dependencies=[Depends(get_current_user)])
+async def get_peix_score_full(
+    virus_typ: str = "Influenza A",
+    db: Session = Depends(get_db),
+):
+    """Vollständiger PeixEpiScore für authentifizierte Innenansichten."""
     from app.services.media.peix_score_service import PeixEpiScoreService
 
     service = PeixEpiScoreService(db)

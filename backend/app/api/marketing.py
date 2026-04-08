@@ -121,7 +121,7 @@ async def get_stats(db: Session = Depends(get_db), _user: dict = Depends(get_cur
     return stats
 
 
-@router.get("/export/crm")
+@router.post("/export/crm")
 async def export_crm_json(
     ids: str = None,
     db: Session = Depends(get_db),

@@ -28,7 +28,6 @@ class SmokeTestReleaseTests(unittest.TestCase):
         responses = [
             (200, {"status": "alive", "environment": "production", "app_version": "1.0.0"}),
             (200, {"status": "healthy", "components": {}, "blockers": []}),
-            (200, {"access_token": "token-123", "token_type": "bearer"}),
             (
                 200,
                 {
@@ -98,6 +97,15 @@ class SmokeTestReleaseTests(unittest.TestCase):
         with (
             patch.dict(os.environ, {"SMOKE_ADMIN_EMAIL": "ci@test.de", "SMOKE_ADMIN_PASSWORD": "secret"}, clear=False),
             patch.object(smoke_test_release, "_request_json", side_effect=fake_request_json),
+            patch.object(
+                smoke_test_release,
+                "_request_headers",
+                return_value=(
+                    200,
+                    {"Set-Cookie": "viralflux_session=token-123; HttpOnly; Path=/"},
+                    {"authenticated": True, "subject": "ci@test.de", "role": "admin"},
+                ),
+            ) as request_headers_mock,
         ):
             exit_code, result = smoke_test_release.run_smoke(
                 base_url="http://127.0.0.1:8000",
@@ -112,10 +120,11 @@ class SmokeTestReleaseTests(unittest.TestCase):
 
         self.assertEqual(exit_code, smoke_test_release.EXIT_OK)
         self.assertTrue(result["checks"]["auth_login"]["passed"])
-        self.assertEqual(calls[2]["path"], "/api/auth/login")
+        request_headers_mock.assert_called_once()
+        self.assertEqual(request_headers_mock.call_args.args[1], "/api/auth/login")
         self.assertEqual(
-            calls[3]["kwargs"]["headers"],
-            {"Authorization": "Bearer token-123"},
+            calls[2]["kwargs"]["headers"],
+            {"Cookie": "viralflux_session=token-123"},
         )
 
     def test_run_smoke_passes_on_healthy_core_path(self) -> None:
@@ -183,7 +192,10 @@ class SmokeTestReleaseTests(unittest.TestCase):
             ),
         ]
 
-        with patch.object(smoke_test_release, "_request_json", side_effect=responses):
+        with (
+            patch.object(smoke_test_release, "_request_json", side_effect=responses),
+            patch.object(smoke_test_release, "_authenticate_headers", return_value=({}, None)),
+        ):
             exit_code, result = smoke_test_release.run_smoke(
                 base_url="http://127.0.0.1:8000",
                 timeout=5.0,
@@ -262,7 +274,10 @@ class SmokeTestReleaseTests(unittest.TestCase):
             ),
         ]
 
-        with patch.object(smoke_test_release, "_request_json", side_effect=responses):
+        with (
+            patch.object(smoke_test_release, "_request_json", side_effect=responses),
+            patch.object(smoke_test_release, "_authenticate_headers", return_value=({}, None)),
+        ):
             exit_code, result = smoke_test_release.run_smoke(
                 base_url="http://127.0.0.1:8000",
                 timeout=5.0,
@@ -324,7 +339,10 @@ class SmokeTestReleaseTests(unittest.TestCase):
             ),
         ]
 
-        with patch.object(smoke_test_release, "_request_json", side_effect=responses):
+        with (
+            patch.object(smoke_test_release, "_request_json", side_effect=responses),
+            patch.object(smoke_test_release, "_authenticate_headers", return_value=({}, None)),
+        ):
             exit_code, result = smoke_test_release.run_smoke(
                 base_url="http://127.0.0.1:8000",
                 timeout=5.0,
@@ -345,7 +363,6 @@ class SmokeTestReleaseTests(unittest.TestCase):
         responses = [
             (200, {"status": "alive", "environment": "production", "app_version": "1.0.0"}),
             (200, {"status": "healthy", "components": {}, "blockers": []}),
-            (200, {"access_token": "token-from-container", "token_type": "bearer"}),
             (
                 200,
                 {
@@ -418,8 +435,26 @@ class SmokeTestReleaseTests(unittest.TestCase):
         }
 
         with (
-            patch.dict(os.environ, {}, clear=False),
+            patch.dict(
+                os.environ,
+                {
+                    "SMOKE_ADMIN_EMAIL": "",
+                    "SMOKE_ADMIN_PASSWORD": "",
+                    "ADMIN_EMAIL": "",
+                    "ADMIN_PASSWORD": "",
+                },
+                clear=False,
+            ),
             patch.object(smoke_test_release, "_request_json", side_effect=fake_request_json),
+            patch.object(
+                smoke_test_release,
+                "_request_headers",
+                return_value=(
+                    200,
+                    {"Set-Cookie": "viralflux_session=token-from-container; HttpOnly; Path=/"},
+                    {"authenticated": True, "subject": "container@test.de", "role": "admin"},
+                ),
+            ) as request_headers_mock,
         ):
             exit_code, result = smoke_test_release.run_smoke(
                 base_url="http://127.0.0.1:8000",
@@ -435,9 +470,10 @@ class SmokeTestReleaseTests(unittest.TestCase):
         self.assertEqual(exit_code, smoke_test_release.EXIT_OK)
         self.assertTrue(result["checks"]["auth_login"]["passed"])
         self.assertEqual(result["checks"]["auth_login"]["summary"]["auth_source"], "password_login")
-        self.assertEqual(calls[2]["path"], "/api/auth/login")
+        request_headers_mock.assert_called_once()
+        self.assertEqual(request_headers_mock.call_args.args[1], "/api/auth/login")
         self.assertEqual(
-            calls[2]["kwargs"]["data"],
+            request_headers_mock.call_args.kwargs["data"],
             b"username=container%40test.de&password=container-secret",
         )
 
@@ -450,7 +486,10 @@ class SmokeTestReleaseTests(unittest.TestCase):
             (401, {"detail": "Could not validate credentials"}),
         ]
 
-        with patch.object(smoke_test_release, "_request_json", side_effect=responses):
+        with (
+            patch.object(smoke_test_release, "_request_json", side_effect=responses),
+            patch.object(smoke_test_release, "_authenticate_headers", return_value=({}, None)),
+        ):
             exit_code, result = smoke_test_release.run_smoke(
                 base_url="http://127.0.0.1:8000",
                 timeout=5.0,

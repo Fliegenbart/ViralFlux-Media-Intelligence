@@ -129,17 +129,54 @@ class LegacyRouteAuthTests(unittest.TestCase):
         response = self.client.get("/api/v1/ordering/stockout-analysis")
         self.assertEqual(response.status_code, 401)
 
-    def test_outbreak_peix_score_stays_public_for_landing(self) -> None:
+    def test_outbreak_peix_score_stays_public_for_landing_without_internal_model_details(self) -> None:
         payload = {
             "national_score": 0.42,
             "national_band": "elevated",
-            "virus_scores": {},
+            "national_impact_probability": 58.0,
+            "virus_scores": {"Influenza A": {"epi_score": 0.5}},
+            "context_signals": {"forecast": {"weight": 0.2}},
+            "weights_source": "calibrated",
+            "top_drivers": ["forecast"],
+            "generated_at": "2026-04-08T10:00:00Z",
+            "regions": {
+                "BE": {
+                    "region_code": "BE",
+                    "region_name": "Berlin",
+                    "score_0_100": 77.0,
+                    "risk_band": "high",
+                    "impact_probability": 84.0,
+                    "top_drivers": ["forecast"],
+                    "layer_contributions": {"Forecast": 55.0},
+                }
+            },
         }
         with patch("app.services.media.peix_score_service.PeixEpiScoreService.build", return_value=payload):
             response = self.client.get("/api/v1/outbreak-score/peix-score")
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), payload)
+        self.assertEqual(
+            response.json(),
+            {
+                "national_score": 0.42,
+                "national_band": "elevated",
+                "national_impact_probability": 58.0,
+                "generated_at": "2026-04-08T10:00:00Z",
+                "regions": {
+                    "BE": {
+                        "region_code": "BE",
+                        "region_name": "Berlin",
+                        "score_0_100": 77.0,
+                        "risk_band": "high",
+                        "impact_probability": 84.0,
+                    }
+                },
+            },
+        )
+
+    def test_outbreak_peix_score_full_requires_authentication(self) -> None:
+        response = self.client.get("/api/v1/outbreak-score/peix-score/full")
+        self.assertEqual(response.status_code, 401)
 
     def test_outbreak_history_requires_authentication(self) -> None:
         response = self.client.get("/api/v1/outbreak-score/history")

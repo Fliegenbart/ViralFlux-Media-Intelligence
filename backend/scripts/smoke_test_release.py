@@ -66,6 +66,38 @@ def _request_json(
         return exc.code, payload
 
 
+def _request_headers(
+    base_url: str,
+    path: str,
+    timeout: float,
+    *,
+    method: str = "GET",
+    headers: dict[str, str] | None = None,
+    data: bytes | None = None,
+) -> tuple[int, dict[str, str], dict[str, Any]]:
+    url = urllib.parse.urljoin(base_url.rstrip("/") + "/", path.lstrip("/"))
+    request = urllib.request.Request(
+        url=url,
+        method=method,
+        headers=headers or {},
+        data=data,
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            return (
+                response.getcode(),
+                dict(response.headers.items()),
+                json.loads(response.read().decode("utf-8")),
+            )
+    except urllib.error.HTTPError as exc:
+        body = exc.read().decode("utf-8")
+        try:
+            payload = json.loads(body)
+        except json.JSONDecodeError:
+            payload = {"raw_body": body}
+        return exc.code, dict(exc.headers.items()), payload
+
+
 def _build_query(params: dict[str, Any]) -> str:
     return urllib.parse.urlencode(params, quote_via=urllib.parse.quote)
 
@@ -102,7 +134,7 @@ def _authenticate_headers(base_url: str, timeout: float) -> tuple[dict[str, str]
             "password": admin_password,
         }
     ).encode("utf-8")
-    status_code, response = _request_json(
+    status_code, response_headers, response = _request_headers(
         base_url,
         "/api/auth/login",
         timeout,
@@ -110,25 +142,27 @@ def _authenticate_headers(base_url: str, timeout: float) -> tuple[dict[str, str]
         headers={"Content-Type": "application/x-www-form-urlencoded"},
         data=payload,
     )
-    token = str(response.get("access_token") or "").strip()
-    if status_code != 200 or not token:
+    set_cookie = str(response_headers.get("Set-Cookie") or response_headers.get("set-cookie") or "").strip()
+    cookie_header = set_cookie.split(";", 1)[0].strip()
+    if status_code != 200 or not cookie_header:
         return {}, {
             "path": "/api/auth/login",
             "status_code": status_code,
             "passed": False,
             "errors": [f"Admin login for release smoke failed with HTTP {status_code}."],
             "summary": {
-                "token_type": response.get("token_type"),
+                "authenticated": response.get("authenticated"),
+                "role": response.get("role"),
             },
         }
-    return {"Authorization": f"Bearer {token}"}, {
+    return {"Cookie": cookie_header}, {
         "path": "/api/auth/login",
         "status_code": status_code,
         "passed": True,
         "errors": [],
         "summary": {
-            "token_type": response.get("token_type"),
             "auth_source": "password_login",
+            "role": response.get("role"),
         },
     }
 

@@ -19,24 +19,12 @@ from app.core.config import get_settings
 from app.models.database import AuditLog, BacktestRun, MarketingOpportunity
 from app.services.media.ai_campaign_planner import AiCampaignPlanner
 from app.services.media.campaign_guardrails import CampaignGuardrails
-from app.services.media.copy_service import (
-    build_decision_basis_text,
-    build_decision_summary_text,
-    public_condition_label,
-    public_event_label,
-    public_reason_text,
-    public_source_label,
-)
 from app.services.media.message_library import select_gelo_message_pack
 from app.services.media.product_catalog_service import ProductCatalogService
 from app.services.media.peix_score_service import PeixEpiScoreService
 from app.services.media.playbook_engine import PLAYBOOK_CATALOG, PlaybookEngine
 from app.services.media.semantic_contracts import (
-    forecast_probability_contract,
     normalize_confidence_pct,
-    priority_score_contract,
-    ranking_signal_contract,
-    signal_confidence_contract,
 )
 from app.services.ml.forecast_contracts import DEFAULT_DECISION_HORIZON_DAYS
 from app.services.ml.forecast_decision_service import ForecastDecisionService
@@ -46,13 +34,20 @@ from .detectors.predictive_sales_spike import PredictiveSalesSpikeDetector
 from .detectors.resource_scarcity import ResourceScarcityDetector
 from .detectors.weather_forecast import WeatherForecastDetector
 from .opportunity_engine_constants import (
-    BUNDESLAND_NAMES,
     FORECAST_PLAYBOOK_MAP,
 )
 from .opportunity_engine_campaigns import (
     export_crm_json as export_crm_json_impl,
     update_campaign as update_campaign_impl,
     update_status as update_status_impl,
+)
+from .opportunity_engine_campaign_planning import (
+    build_channel_mix as build_channel_mix_impl,
+    build_channel_plan as build_channel_plan_impl,
+    build_measurement_plan as build_measurement_plan_impl,
+    derive_activation_window as derive_activation_window_impl,
+    derive_activation_window_from_days as derive_activation_window_from_days_impl,
+    derive_campaign_name as derive_campaign_name_impl,
 )
 from .opportunity_engine_helpers import (
     canonical_brand,
@@ -69,11 +64,36 @@ from .opportunity_engine_helpers import (
     secondary_products,
     status_filter_values,
 )
+from .opportunity_engine_maintenance import (
+    backfill_peix_context as backfill_peix_context_impl,
+    backfill_product_mapping as backfill_product_mapping_impl,
+    save_opportunity as save_opportunity_impl,
+)
+from .opportunity_engine_playbooks import (
+    build_campaign_pack as build_campaign_pack_impl,
+    campaign_preview_from_payload as campaign_preview_from_payload_impl,
+    enrich_opportunity_for_media as enrich_opportunity_for_media_impl,
+    ensure_synthetic_opportunity_row as ensure_synthetic_opportunity_row_impl,
+    generate_legacy_action_cards as generate_legacy_action_cards_impl,
+    generate_playbook_ai_cards as generate_playbook_ai_cards_impl,
+    get_playbook_catalog as get_playbook_catalog_impl,
+    merge_ai_playbook_payload as merge_ai_playbook_payload_impl,
+    regenerate_ai_plan as regenerate_ai_plan_impl,
+    synthetic_playbook_opportunity as synthetic_playbook_opportunity_impl,
+)
+from .opportunity_engine_presenters import (
+    build_decision_brief as build_decision_brief_impl,
+    decision_facts as decision_facts_impl,
+    model_to_dict as model_to_dict_impl,
+)
 from .opportunity_engine_queries import (
     count_opportunities as count_opportunities_impl,
     get_opportunities as get_opportunities_impl,
     get_recommendation_by_id as get_recommendation_by_id_impl,
     get_stats as get_stats_impl,
+)
+from .opportunity_engine_retrospective import (
+    get_roi_retrospective as get_roi_retrospective_impl,
 )
 from .pitch_generator import PitchGenerator
 from .product_matcher import ProductMatcher
@@ -683,267 +703,17 @@ class MarketingOpportunityEngine:
         max_cards: int,
         virus_typ: str,
     ) -> list[dict[str, Any]]:
-        candidates = self._forecast_first_candidates(
+        return generate_playbook_ai_cards_impl(
+            self,
             opportunities=opportunities,
             brand=brand,
-            virus_typ=virus_typ,
+            product=product,
+            campaign_goal=campaign_goal,
+            weekly_budget=weekly_budget,
             region_scope=region_scope,
             max_cards=max_cards,
+            virus_typ=virus_typ,
         )
-        cards: list[dict[str, Any]] = []
-        now = utc_now()
-        # Bulk generation must stay fast/reliable for dashboards. We therefore
-        # default to deterministic fallback plans and reserve LLM usage for
-        # per-card regeneration flows.
-        ai_disabled = True
-        started = time.monotonic()
-        latest_market_backtest = self._latest_market_backtest(virus_typ=virus_typ)
-
-        for candidate in candidates:
-            # Guard against long-running multi-card generation: once vLLM times out,
-            # skip further calls and use deterministic templates to keep API responsive.
-            if time.monotonic() - started > 110:
-                ai_disabled = True
-
-            playbook_key = str(candidate.get("playbook_key") or "")
-            cfg = PLAYBOOK_CATALOG.get(playbook_key) or {}
-            if not playbook_key or not cfg:
-                continue
-
-            region_code = str(candidate.get("region_code") or "DE")
-            region_label = str(candidate.get("region_name") or self._region_label(region_code))
-            condition_key = str(candidate.get("condition_key") or cfg.get("condition_key") or "bronchitis_husten")
-            synthetic_opportunity = self._synthetic_playbook_opportunity(
-                playbook_key=playbook_key,
-                region_code=region_code,
-                region_label=region_label,
-                candidate=candidate,
-                now=now,
-            )
-            opp_id = self._ensure_synthetic_opportunity_row(
-                synthetic_opportunity=synthetic_opportunity,
-                strategy_mode="PLAYBOOK_AI",
-                playbook_key=playbook_key,
-            )
-
-            product_mapping = self.product_catalog_service.resolve_product_for_opportunity(
-                brand=brand,
-                opportunity=synthetic_opportunity,
-                fallback_product=product,
-            )
-            selected_product = self._select_product_for_opportunity(
-                fallback_product=product,
-                product_mapping=product_mapping,
-            )
-
-            trigger_snapshot = candidate.get("trigger_snapshot") or {}
-            pack = select_gelo_message_pack(
-                brand=brand,
-                product=selected_product,
-                condition_key=condition_key,
-                playbook_key=playbook_key,
-                region_code=region_code,
-                trigger_event=str(trigger_snapshot.get("event") or ""),
-            )
-            enriched_candidate = {
-                **candidate,
-                "forecast_assessment": {
-                    "forecast_quality": candidate.get("forecast_quality") or {},
-                    "event_forecast": candidate.get("event_forecast") or {},
-                },
-                "opportunity_assessment": candidate.get("opportunity_assessment") or {},
-                "message_direction": pack.message_direction,
-                "copy_pack": {
-                    "status": pack.status,
-                    "message_direction": pack.message_direction,
-                    "hero_message": pack.hero_message,
-                    "support_points": pack.support_points,
-                    "creative_angles": pack.creative_angles,
-                    "keyword_clusters": pack.keyword_clusters,
-                    "cta": pack.cta,
-                    "compliance_note": pack.compliance_note,
-                    "library_version": pack.library_version,
-                    "library_source": pack.library_source,
-                },
-            }
-
-            ai_generated = self.ai_planner.generate_plan(
-                playbook_candidate=enriched_candidate,
-                brand=brand,
-                product=selected_product,
-                campaign_goal=campaign_goal,
-                weekly_budget=weekly_budget,
-                skip_ollama=ai_disabled,
-            )
-            # Note: ai_disabled stays True in bulk mode. Single-card regeneration
-            # can use vLLM if desired.
-            guarded = self.guardrails.apply(
-                playbook_key=playbook_key,
-                ai_plan=ai_generated.get("ai_plan") or {},
-                weekly_budget=weekly_budget,
-            )
-            ai_plan = guarded["ai_plan"]
-            guardrail_report = guarded["guardrail_report"]
-            guardrail_notes = guarded["guardrail_notes"]
-
-            forecast_quality = candidate.get("forecast_quality") or {}
-            event_forecast = candidate.get("event_forecast") or {}
-            opportunity_assessment = candidate.get("opportunity_assessment") or {}
-            exploratory_signals = candidate.get("exploratory_signals") or []
-            model_readiness_status = str(forecast_quality.get("forecast_readiness") or "WATCH")
-            workflow_status = (
-                "READY"
-                if model_readiness_status == "GO"
-                and str(opportunity_assessment.get("action_class") or "") == "customer_lift_ready"
-                else "DRAFT"
-            )
-            urgency = float(candidate.get("priority_score") or candidate.get("trigger_strength") or 50.0)
-            confidence_0_1 = round(float(candidate.get("confidence") or 60.0) / 100.0, 2)
-            budget_shift_pct = float(
-                candidate.get("budget_shift_pct")
-                if candidate.get("budget_shift_pct") is not None
-                else (ai_plan.get("budget_shift_pct") or 0.0)
-            )
-            budget_shift_value = round((weekly_budget or 0.0) * (abs(budget_shift_pct) / 100.0), 2)
-            channel_mix = {
-                str(item.get("channel")).lower(): float(item.get("share_pct") or 0.0)
-                for item in (ai_plan.get("channel_plan") or [])
-                if item.get("channel")
-            } or (candidate.get("channel_mix") or {})
-
-            activation_days = int(ai_plan.get("activation_window_days") or 10)
-            activation_window = self._derive_activation_window_from_days(activation_days)
-            peix_context = {
-                "region_code": region_code,
-                "score": round(urgency, 1),
-                "signal_score": round(float(candidate.get("signal_score") or candidate.get("impact_probability") or urgency), 1),
-                "band": "ready" if model_readiness_status == "GO" else "watch",
-                "impact_probability": (
-                    round(float(candidate.get("impact_probability") or 0.0), 1)
-                    if candidate.get("impact_probability") is not None
-                    else None
-                ),
-                "drivers": exploratory_signals,
-                "trigger_event": str(trigger_snapshot.get("event") or ""),
-                "model_readiness_status": model_readiness_status,
-                "model_backtest_run_id": latest_market_backtest.run_id if latest_market_backtest else None,
-            }
-            campaign_payload_signal_contracts = {
-                "signal_score": ranking_signal_contract(source="ForecastDecisionService"),
-                "priority_score": priority_score_contract(source="MarketingOpportunityEngine"),
-                "signal_confidence_pct": signal_confidence_contract(
-                    source="ForecastDecisionService",
-                    derived_from="event_forecast.confidence",
-                ),
-                "event_probability": forecast_probability_contract(),
-            }
-
-            campaign_payload = self._build_campaign_pack(
-                opportunity=synthetic_opportunity,
-                brand=brand,
-                product=selected_product,
-                campaign_goal=campaign_goal,
-                region=region_label,
-                urgency=urgency,
-                confidence=confidence_0_1,
-                weekly_budget=weekly_budget,
-                budget_shift_pct=budget_shift_pct,
-                budget_shift_value=budget_shift_value,
-                channel_mix=channel_mix,
-                activation_window=activation_window,
-                product_mapping={**product_mapping, "condition_key": condition_key},
-                region_codes=[region_code] if region_code != "Gesamt" else [],
-                peix_context=peix_context,
-            )
-            campaign_payload["forecast_assessment"] = {
-                "forecast_quality": forecast_quality,
-                "event_forecast": event_forecast,
-            }
-            campaign_payload["opportunity_assessment"] = opportunity_assessment
-            campaign_payload["exploratory_signals"] = exploratory_signals
-            campaign_payload["signal_contracts"] = campaign_payload_signal_contracts
-            self._merge_ai_playbook_payload(
-                campaign_payload=campaign_payload,
-                playbook_key=playbook_key,
-                candidate=enriched_candidate,
-                ai_plan=ai_plan,
-                ai_generated=ai_generated,
-                guardrail_report=guardrail_report,
-                workflow_status=workflow_status,
-                budget_shift_pct=budget_shift_pct,
-                budget_shift_value=budget_shift_value,
-                weekly_budget=weekly_budget,
-                activation_window=activation_window,
-                condition_key=condition_key,
-            )
-
-            # Enforce deterministic OTC message framework (avoid LLM drift/hallucinations).
-            if "message_framework" not in campaign_payload or not isinstance(campaign_payload["message_framework"], dict):
-                campaign_payload["message_framework"] = {}
-            campaign_payload["message_framework"].update(pack.to_framework())
-
-            self._enrich_opportunity_for_media(
-                opportunity_id=opp_id,
-                brand=brand,
-                product=selected_product,
-                budget_shift_pct=budget_shift_pct,
-                channel_mix=channel_mix,
-                reason=str(trigger_snapshot.get("event") or "") or playbook_key,
-                campaign_payload=campaign_payload,
-                status=workflow_status,
-                activation_start=self._parse_iso_datetime(activation_window.get("start")),
-                activation_end=self._parse_iso_datetime(activation_window.get("end")),
-                playbook_key=playbook_key,
-                strategy_mode="PLAYBOOK_AI",
-            )
-
-            campaign_preview = self._campaign_preview_from_payload(campaign_payload)
-            cards.append(
-                {
-                    "id": opp_id,
-                    "status": workflow_status,
-                    "type": synthetic_opportunity.get("type", "PLAYBOOK_AI"),
-                    "urgency_score": round(urgency, 2),
-                    "brand": brand,
-                    "product": selected_product,
-                    "recommended_product": selected_product,
-                    "campaign_goal": campaign_goal,
-                    "region": region_code,
-                    "region_codes": [region_code],
-                    "budget_shift_pct": round(budget_shift_pct, 1),
-                    "weekly_budget": round(float(weekly_budget or 0.0), 2),
-                    "budget_shift_value": budget_shift_value,
-                    "channel_mix": channel_mix,
-                    "reason": (candidate.get("trigger_snapshot") or {}).get("details")
-                    or (candidate.get("trigger_snapshot") or {}).get("event"),
-                    "confidence": confidence_0_1,
-                    "activation_window": activation_window,
-                    "campaign_preview": campaign_preview,
-                    "mapping_status": product_mapping.get("mapping_status"),
-                    "mapping_confidence": product_mapping.get("mapping_confidence"),
-                    "mapping_reason": product_mapping.get("mapping_reason"),
-                    "condition_key": condition_key,
-                    "condition_label": product_mapping.get("condition_label"),
-                    "mapping_candidate_product": product_mapping.get("candidate_product"),
-                    "rule_source": product_mapping.get("rule_source"),
-                    "peix_context": peix_context,
-                    "campaign_payload": campaign_payload,
-                    "detail_url": f"/kampagnen/{opp_id}",
-                    "playbook_key": playbook_key,
-                    "playbook_title": cfg.get("title"),
-                    "trigger_snapshot": trigger_snapshot,
-                    "guardrail_notes": guardrail_notes,
-                    "ai_generation_status": ai_generated.get("ai_generation_status"),
-                    "strategy_mode": "PLAYBOOK_AI",
-                    "copy_status": pack.status,
-                    "model_readiness_status": model_readiness_status,
-                    "forecast_assessment": campaign_payload.get("forecast_assessment"),
-                    "opportunity_assessment": campaign_payload.get("opportunity_assessment"),
-                    "exploratory_signals": exploratory_signals,
-                }
-            )
-
-        return cards
 
     def _generate_legacy_action_cards(
         self,
@@ -956,130 +726,16 @@ class MarketingOpportunityEngine:
         channel_pool: list[str] | None,
         region_scope: list[str] | None,
     ) -> dict[str, Any]:
-        allowed_regions = [
-            self._normalize_region_token(item)
-            for item in (region_scope or [])
-            if item
-        ]
-        allowed_region_set = {item for item in allowed_regions if item}
-        channels = channel_pool or ["programmatic", "social", "search", "ctv"]
-        peix_build = PeixEpiScoreService(self.db).build()
-        peix_regions = peix_build.get("regions") or {}
-
-        cards: list[dict[str, Any]] = []
-        for opp in opportunities:
-            region_codes = self._extract_region_codes_from_opportunity(opp)
-            is_national = len(region_codes) == 0
-
-            if allowed_region_set:
-                matched = [code for code in region_codes if code in allowed_region_set]
-                if matched:
-                    selected_region = matched[0]
-                elif is_national:
-                    selected_region = allowed_regions[0]
-                    region_codes = [selected_region]
-                else:
-                    continue
-            else:
-                selected_region = region_codes[0] if region_codes else "Gesamt"
-
-            region_label = self._region_label(selected_region)
-            peix_context = self._derive_peix_context(peix_regions, selected_region, opp, peix_national=peix_build)
-
-            urgency = float(opp.get("urgency_score") or 50.0)
-            budget_shift_pct = round(max(8.0, min(45.0, urgency * 0.4)), 1)
-            channel_mix = self._build_channel_mix(channels, opp.get("type", ""), urgency)
-            budget_shift_value = round((weekly_budget or 0.0) * (budget_shift_pct / 100.0), 2)
-            confidence = round(min(0.98, max(0.45, urgency / 100.0)), 2)
-            workflow_status = self._normalize_workflow_status(opp.get("status", "DRAFT"))
-            product_mapping = self.product_catalog_service.resolve_product_for_opportunity(
-                brand=brand,
-                opportunity=opp,
-                fallback_product=product,
-            )
-            selected_product = self._select_product_for_opportunity(
-                fallback_product=product,
-                product_mapping=product_mapping,
-            )
-
-            activation_window = self._derive_activation_window(urgency)
-            campaign_payload = self._build_campaign_pack(
-                opportunity=opp,
-                brand=brand,
-                product=selected_product,
-                campaign_goal=campaign_goal,
-                region=region_label,
-                urgency=urgency,
-                confidence=confidence,
-                weekly_budget=weekly_budget,
-                budget_shift_pct=budget_shift_pct,
-                budget_shift_value=budget_shift_value,
-                channel_mix=channel_mix,
-                activation_window=activation_window,
-                product_mapping=product_mapping,
-                region_codes=region_codes or ([selected_region] if selected_region != "Gesamt" else []),
-                peix_context=peix_context,
-            )
-
-            opp_id = opp.get("id")
-            self._enrich_opportunity_for_media(
-                opportunity_id=opp_id,
-                brand=brand,
-                product=selected_product,
-                budget_shift_pct=budget_shift_pct,
-                channel_mix=channel_mix,
-                reason=opp.get("trigger_context", {}).get("event") or opp.get("type"),
-                campaign_payload=campaign_payload,
-                status=workflow_status,
-                activation_start=self._parse_iso_datetime(activation_window.get("start")),
-                activation_end=self._parse_iso_datetime(activation_window.get("end")),
-            )
-
-            campaign_preview = self._campaign_preview_from_payload(campaign_payload)
-            cards.append(
-                {
-                    "id": opp_id,
-                    "status": workflow_status,
-                    "type": opp.get("type", "UNKNOWN"),
-                    "urgency_score": urgency,
-                    "brand": brand,
-                    "product": selected_product,
-                    "campaign_goal": campaign_goal,
-                    "region": selected_region,
-                    "region_codes": region_codes or ([selected_region] if selected_region != "Gesamt" else []),
-                    "budget_shift_pct": budget_shift_pct,
-                    "weekly_budget": weekly_budget,
-                    "budget_shift_value": budget_shift_value,
-                    "channel_mix": channel_mix,
-                    "reason": opp.get("trigger_context", {}).get("event") or "Epidemiologischer Trigger",
-                    "confidence": confidence,
-                    "sales_pitch": opp.get("sales_pitch"),
-                    "suggested_products": opp.get("suggested_products"),
-                    "activation_window": activation_window,
-                    "campaign_preview": campaign_preview,
-                    "recommended_product": selected_product,
-                    "mapping_status": product_mapping.get("mapping_status"),
-                    "mapping_confidence": product_mapping.get("mapping_confidence"),
-                    "mapping_reason": product_mapping.get("mapping_reason"),
-                    "condition_key": product_mapping.get("condition_key"),
-                    "condition_label": product_mapping.get("condition_label"),
-                    "mapping_candidate_product": product_mapping.get("candidate_product"),
-                    "rule_source": product_mapping.get("rule_source"),
-                    "peix_context": peix_context,
-                    "detail_url": f"/kampagnen/{opp_id}",
-                    "strategy_mode": "LEGACY",
-                }
-            )
-
-        cards.sort(key=lambda x: (x["urgency_score"], x["confidence"]), reverse=True)
-        top_card_id = cards[0]["id"] if cards else None
-        return {
-            "meta": {"generated_at": utc_now().isoformat() + "Z"},
-            "cards": cards,
-            "total_cards": len(cards),
-            "top_card_id": top_card_id,
-            "auto_open_url": f"/kampagnen/{top_card_id}" if top_card_id else None,
-        }
+        return generate_legacy_action_cards_impl(
+            self,
+            opportunities=opportunities,
+            brand=brand,
+            product=product,
+            campaign_goal=campaign_goal,
+            weekly_budget=weekly_budget,
+            channel_pool=channel_pool,
+            region_scope=region_scope,
+        )
 
     @staticmethod
     def _select_product_for_opportunity(
@@ -1114,151 +770,10 @@ class MarketingOpportunityEngine:
         return "Produktfreigabe ausstehend"
 
     def backfill_peix_context(self, *, force: bool = False, limit: int = 1000) -> dict[str, Any]:
-        """Nachträgliches Auffüllen von peix_context für bestehende Recommendations."""
-        query = self.db.query(MarketingOpportunity).order_by(MarketingOpportunity.created_at.desc())
-        if limit > 0:
-            query = query.limit(limit)
-        rows = query.all()
-
-        peix_build = PeixEpiScoreService(self.db).build()
-        peix_regions = peix_build.get("regions") or {}
-
-        scanned = 0
-        updated = 0
-        skipped_existing = 0
-        skipped_no_region = 0
-
-        for row in rows:
-            scanned += 1
-            payload = (row.campaign_payload or {}).copy()
-            existing = payload.get("peix_context") or {}
-
-            if (
-                not force
-                and isinstance(existing, dict)
-                and existing.get("score") is not None
-                and existing.get("region_code")
-            ):
-                skipped_existing += 1
-                continue
-
-            opportunity = {
-                "region_target": row.region_target or {},
-                "campaign_payload": payload,
-                "trigger_context": row.trigger_details
-                or {
-                    "source": row.trigger_source,
-                    "event": row.trigger_event,
-                    "detected_at": row.trigger_detected_at.isoformat() if row.trigger_detected_at else None,
-                },
-            }
-
-            region_codes = self._extract_region_codes_from_opportunity(opportunity)
-            selected_region = region_codes[0] if region_codes else "Gesamt"
-            peix_context = self._derive_peix_context(peix_regions, selected_region, opportunity, peix_national=peix_build)
-
-            if not peix_context:
-                skipped_no_region += 1
-                continue
-
-            payload["peix_context"] = peix_context
-            row.campaign_payload = payload
-            row.updated_at = utc_now()
-            updated += 1
-
-        if updated > 0:
-            self.db.commit()
-
-        return {
-            "success": True,
-            "scanned": scanned,
-            "updated": updated,
-            "skipped_existing": skipped_existing,
-            "skipped_no_region": skipped_no_region,
-            "force": force,
-            "timestamp": utc_now().isoformat(),
-        }
+        return backfill_peix_context_impl(self, force=force, limit=limit)
 
     def backfill_product_mapping(self, *, force: bool = False, limit: int = 1000) -> dict[str, Any]:
-        """Re-resolve product mappings for all existing recommendations.
-
-        Re-runs ``resolve_product_for_opportunity()`` against current
-        ``product_condition_mapping`` table and updates stored
-        ``campaign_payload.product_mapping`` + ``suggested_products``.
-        """
-        query = self.db.query(MarketingOpportunity).order_by(MarketingOpportunity.created_at.desc())
-        if limit > 0:
-            query = query.limit(limit)
-        rows = query.all()
-
-        scanned = 0
-        updated = 0
-        skipped = 0
-
-        for row in rows:
-            scanned += 1
-            payload = (row.campaign_payload or {}).copy()
-            old_pm = payload.get("product_mapping") or {}
-            old_status = str(old_pm.get("mapping_status") or "").strip().lower()
-
-            if not force and old_status == "approved":
-                skipped += 1
-                continue
-
-            condition_key = old_pm.get("condition_key")
-            brand = str(row.brand or "gelo").strip().lower()
-
-            opp_dict = {
-                "region_target": row.region_target or {},
-                "campaign_payload": payload,
-                "trigger_context": row.trigger_details or {},
-            }
-            new_pm = self.product_catalog_service.resolve_product_for_opportunity(
-                brand=brand,
-                opportunity=opp_dict,
-                fallback_product=row.product,
-            )
-
-            if condition_key and not new_pm.get("condition_key"):
-                new_pm["condition_key"] = condition_key
-                new_pm["condition_label"] = old_pm.get("condition_label")
-
-            selected = self._select_product_for_opportunity(
-                fallback_product=row.product or "Alle Gelo-Produkte",
-                product_mapping=new_pm,
-            )
-
-            payload["product_mapping"] = new_pm
-            row.campaign_payload = payload
-
-            if new_pm.get("recommended_product"):
-                products_set = {new_pm["recommended_product"]}
-            else:
-                products_set = set()
-            if new_pm.get("candidate_product"):
-                products_set.add(new_pm["candidate_product"])
-            old_suggested = row.suggested_products or []
-            if isinstance(old_suggested, list):
-                for item in old_suggested:
-                    name = item if isinstance(item, str) else (item.get("product_name") if isinstance(item, dict) else None)
-                    if name and "test" not in name.lower() and "652238" not in name:
-                        products_set.add(name)
-            row.suggested_products = [{"product_name": p} for p in sorted(products_set) if p]
-
-            row.updated_at = utc_now()
-            updated += 1
-
-        if updated > 0:
-            self.db.commit()
-
-        return {
-            "success": True,
-            "scanned": scanned,
-            "updated": updated,
-            "skipped_approved": skipped,
-            "force": force,
-            "timestamp": utc_now().isoformat(),
-        }
+        return backfill_product_mapping_impl(self, force=force, limit=limit)
 
     def update_campaign(
         self,
@@ -1279,154 +794,10 @@ class MarketingOpportunityEngine:
         )
 
     def get_playbook_catalog(self) -> dict[str, Any]:
-        playbooks = self.playbook_engine.get_catalog()
-        return {
-            "count": len(playbooks),
-            "playbooks": playbooks,
-            "strategy_mode": "PLAYBOOK_AI",
-        }
+        return get_playbook_catalog_impl(self)
 
     def regenerate_ai_plan(self, opportunity_id: str) -> dict[str, Any]:
-        row = (
-            self.db.query(MarketingOpportunity)
-            .filter(MarketingOpportunity.opportunity_id == opportunity_id)
-            .first()
-        )
-        if not row:
-            return {"error": f"Opportunity {opportunity_id} nicht gefunden"}
-
-        payload = (row.campaign_payload or {}).copy()
-        playbook = payload.get("playbook") or {}
-        playbook_key = str(row.playbook_key or playbook.get("key") or "").upper()
-        if not playbook_key or playbook_key not in PLAYBOOK_CATALOG:
-            return {"error": "Kein gültiges Playbook auf der Recommendation hinterlegt."}
-
-        cfg = PLAYBOOK_CATALOG[playbook_key]
-        targeting = payload.get("targeting") or {}
-        scope = targeting.get("region_scope")
-        if isinstance(scope, list) and scope:
-            region_code = self._normalize_region_token(str(scope[0])) or "DE"
-        elif isinstance(scope, str):
-            region_code = self._normalize_region_token(scope) or "DE"
-        else:
-            region_code = "DE"
-
-        peix_context = payload.get("peix_context") or {}
-        trigger_snapshot = payload.get("trigger_snapshot") or payload.get("trigger_evidence") or {}
-        budget_plan = payload.get("budget_plan") or {}
-        channel_plan = payload.get("channel_plan") or []
-        channel_mix = {}
-        for item in channel_plan:
-            channel = str(item.get("channel") or "").strip().lower()
-            if not channel:
-                continue
-            channel_mix[channel] = float(item.get("share_pct") or 0.0)
-        if not channel_mix:
-            channel_mix = cfg.get("default_mix") or {}
-
-        trigger_snapshot = payload.get("trigger_snapshot") or payload.get("trigger_evidence") or {}
-        condition_key = (
-            playbook.get("condition_key")
-            or (payload.get("product_mapping") or {}).get("condition_key")
-            or cfg.get("condition_key")
-            or "erkaltung_akut"
-        )
-
-        # Deterministic OTC copy guardrails for the card detail.
-        pack = select_gelo_message_pack(
-            brand=row.brand or "gelo",
-            product=row.product or "gelomyrtol forte",
-            condition_key=str(condition_key),
-            playbook_key=playbook_key,
-            region_code=region_code,
-            trigger_event=str(trigger_snapshot.get("event") or ""),
-        )
-
-        candidate = {
-            "playbook_key": playbook_key,
-            "playbook_title": cfg.get("title"),
-            "playbook_kind": cfg.get("kind"),
-            "condition_key": str(condition_key),
-            "message_direction": pack.message_direction,
-            "region_code": region_code,
-            "region_name": self._region_label(region_code),
-            "impact_probability": float(peix_context.get("impact_probability") or 0.0),
-            "peix_score": float(peix_context.get("score") or 0.0),
-            "peix_band": peix_context.get("band"),
-            "peix_drivers": peix_context.get("drivers") or [],
-            "trigger_strength": float((trigger_snapshot.get("values") or {}).get("signal_strength") or 55.0),
-            "confidence": float((trigger_snapshot.get("confidence") or 0.65) * 100.0),
-            "priority_score": float(row.urgency_score or 55.0),
-            "budget_shift_pct": float(budget_plan.get("budget_shift_pct") or row.budget_shift_pct or 0.0),
-            "channel_mix": channel_mix,
-            "channels": cfg.get("channels") or [],
-            "shift_bounds": {"min": cfg.get("shift_min"), "max": cfg.get("shift_max")},
-            "trigger_snapshot": trigger_snapshot,
-            "copy_pack": {
-                "status": pack.status,
-                "message_direction": pack.message_direction,
-                "hero_message": pack.hero_message,
-                "support_points": pack.support_points,
-                "creative_angles": pack.creative_angles,
-                "keyword_clusters": pack.keyword_clusters,
-                "cta": pack.cta,
-                "compliance_note": pack.compliance_note,
-                "library_version": pack.library_version,
-                "library_source": pack.library_source,
-            },
-        }
-
-        weekly_budget = float(budget_plan.get("weekly_budget_eur") or 0.0)
-        objective = ((payload.get("campaign") or {}).get("objective") or "Media-Optimierung")
-        generated = self.ai_planner.generate_plan(
-            playbook_candidate=candidate,
-            brand=row.brand or "PEIX Partner",
-            product=row.product or "Atemwegslinie",
-            campaign_goal=objective,
-            weekly_budget=weekly_budget,
-        )
-        guarded = self.guardrails.apply(
-            playbook_key=playbook_key,
-            ai_plan=generated.get("ai_plan") or {},
-            weekly_budget=weekly_budget,
-        )
-
-        payload["ai_plan"] = guarded["ai_plan"]
-        payload["guardrail_report"] = guarded["guardrail_report"]
-
-        # AuditLog: Guardrail-Anwendung dokumentieren
-        fixes = guarded.get("guardrail_report", {}).get("applied_fixes", [])
-        if fixes:
-            self.db.add(AuditLog(
-                user="system",
-                action="GUARDRAIL_APPLIED",
-                entity_type="MarketingOpportunity",
-                entity_id=row.id,
-                old_value=None,
-                new_value="; ".join(fixes),
-                reason=row.opportunity_id,
-            ))
-        payload["ai_meta"] = {
-            **(generated.get("ai_meta") or {}),
-            "status": generated.get("ai_generation_status"),
-            "regenerated_at": utc_now().isoformat() + "Z",
-        }
-
-        # Enforce deterministic OTC message framework (avoid LLM drift/hallucinations).
-        if "message_framework" not in payload or not isinstance(payload["message_framework"], dict):
-            payload["message_framework"] = {}
-        payload["message_framework"].update(pack.to_framework())
-
-        row.campaign_payload = payload
-        row.strategy_mode = row.strategy_mode or "PLAYBOOK_AI"
-        row.playbook_key = row.playbook_key or playbook_key
-        row.updated_at = utc_now()
-        self.db.commit()
-
-        result = self._model_to_dict(row, normalize_status=True)
-        result["guardrail_notes"] = guarded.get("guardrail_notes") or []
-        result["ai_generation_status"] = generated.get("ai_generation_status")
-        return result
+        return regenerate_ai_plan_impl(self, opportunity_id)
 
     def update_status(
         self,
@@ -1451,251 +822,19 @@ class MarketingOpportunityEngine:
         return get_stats_impl(self)
 
     def get_roi_retrospective(self) -> dict:
-        """ROI-Retrospektive: Simuliert den Wert vergangener Opportunities.
-
-        Korreliert generierte Empfehlungen mit tatsächlich eingetretenen
-        Infektionswellen (SurvStat) und Modell-Genauigkeit (Backtest).
-        """
-        from app.models.database import BacktestRun, SurvstatWeeklyData
-
-        # 1. Opportunity-Statistiken
-        all_opps = self.db.query(MarketingOpportunity).all()
-        if not all_opps:
-            return {"available": False, "reason": "Keine Opportunities vorhanden"}
-
-        acted_on = [o for o in all_opps if o.status in ("SENT", "APPROVED", "CONVERTED", "ACTIVATED")]
-        missed = [o for o in all_opps if o.status in ("EXPIRED", "DISMISSED")]
-        pending = [o for o in all_opps if o.status in ("NEW", "URGENT", "DRAFT", "READY")]
-
-        avg_urgency_acted = (
-            sum(o.urgency_score for o in acted_on) / len(acted_on)
-            if acted_on else 0
-        )
-        avg_urgency_missed = (
-            sum(o.urgency_score for o in missed) / len(missed)
-            if missed else 0
-        )
-
-        # 2. Modell-Genauigkeit aus letztem Backtest
-        latest_backtest = self._latest_market_backtest()
-
-        model_accuracy = {}
-        if latest_backtest and latest_backtest.metrics:
-            metrics = latest_backtest.metrics
-            quality_gate = metrics.get("quality_gate") or {}
-            timing_metrics = metrics.get("timing_metrics") or {}
-            overall_gate = bool(quality_gate.get("overall_passed"))
-            lead_gate = bool(quality_gate.get("lead_passed", overall_gate))
-            model_accuracy = {
-                "r2_score": round(metrics.get("r2_score", 0), 3),
-                "correlation": round(metrics.get("correlation", 0), 3),
-                "mae": round(metrics.get("mae", 0), 1),
-                "readiness_status": "GO" if (overall_gate and lead_gate) else "WATCH",
-                "lead_passed": lead_gate,
-                "best_lag_days": int(timing_metrics.get("best_lag_days", 0) or 0),
-            }
-            if latest_backtest.improvement_vs_baselines:
-                persistence_val, seasonal_val = self._extract_improvement_vs_baselines(
-                    latest_backtest.improvement_vs_baselines
-                )
-                model_accuracy["improvement_vs_persistence"] = round(float(persistence_val or 0.0), 1)
-                model_accuracy["improvement_vs_seasonal"] = round(float(seasonal_val or 0.0), 1)
-
-        # 3. SurvStat-Trend: Wie hat sich die Infektionslage nach Opportunity-Erstellung entwickelt?
-        signal_accuracy_samples = []
-        for opp in all_opps[:30]:  # Max 30 für Performance
-            created = opp.created_at
-            if not created:
-                continue
-
-            # Inzidenz in der Woche der Opportunity-Erstellung
-            week_at_creation = (
-                self.db.query(SurvstatWeeklyData.incidence)
-                .filter(
-                    SurvstatWeeklyData.bundesland == "Bundesweit",
-                    SurvstatWeeklyData.disease_cluster == "RESPIRATORY",
-                    SurvstatWeeklyData.week_start <= created,
-                )
-                .order_by(SurvstatWeeklyData.week_start.desc())
-                .first()
-            )
-
-            # Inzidenz 2-4 Wochen danach (tatsächlicher Peak)
-            peak_after = (
-                self.db.query(func.max(SurvstatWeeklyData.incidence))
-                .filter(
-                    SurvstatWeeklyData.bundesland == "Bundesweit",
-                    SurvstatWeeklyData.disease_cluster == "RESPIRATORY",
-                    SurvstatWeeklyData.week_start > created,
-                    SurvstatWeeklyData.week_start <= created + timedelta(weeks=4),
-                )
-                .scalar()
-            )
-
-            if week_at_creation and week_at_creation[0] and peak_after:
-                base = week_at_creation[0]
-                if base > 0:
-                    demand_increase = round(((peak_after - base) / base) * 100, 1)
-                    signal_accuracy_samples.append({
-                        "urgency": opp.urgency_score,
-                        "demand_increase_pct": demand_increase,
-                        "type": opp.opportunity_type,
-                    })
-
-        # 4. ROI-Schätzung
-        # Konversionsrate der bearbeiteten Opportunities
-        converted_count = len([o for o in all_opps if o.status in ("CONVERTED", "ACTIVATED")])
-        acted_count = len(acted_on)
-        conversion_rate = round((converted_count / acted_count * 100) if acted_count else 0, 1)
-
-        # Geschätzter Markteffekt: Durchschnittliche Nachfrage-Steigerung nach Signalen
-        avg_demand_increase = (
-            round(sum(s["demand_increase_pct"] for s in signal_accuracy_samples) / len(signal_accuracy_samples), 1)
-            if signal_accuracy_samples else 0
-        )
-
-        # Korrelation: Urgency Score vs. tatsächliche Nachfrage
-        high_urgency_hits = [
-            s for s in signal_accuracy_samples
-            if s["urgency"] >= 70 and s["demand_increase_pct"] > 0
-        ]
-        signal_hit_rate = (
-            round(len(high_urgency_hits) / len([s for s in signal_accuracy_samples if s["urgency"] >= 70]) * 100, 1)
-            if any(s["urgency"] >= 70 for s in signal_accuracy_samples) else 0
-        )
-
-        # "Was wäre wenn" — Missed Opportunities Wert
-        missed_high_urgency = [o for o in missed if o.urgency_score >= 70]
-        missed_value_estimate = len(missed_high_urgency) * (avg_demand_increase / 100 + 1) if avg_demand_increase > 0 else 0
-
-        return {
-            "available": True,
-            "summary": {
-                "total_opportunities": len(all_opps),
-                "acted_on": acted_count,
-                "missed": len(missed),
-                "pending": len(pending),
-                "conversion_rate": conversion_rate,
-            },
-            "urgency_comparison": {
-                "avg_urgency_acted": round(avg_urgency_acted, 1),
-                "avg_urgency_missed": round(avg_urgency_missed, 1),
-            },
-            "signal_quality": {
-                "avg_demand_increase_pct": avg_demand_increase,
-                "signal_hit_rate_pct": signal_hit_rate,
-                "samples_analyzed": len(signal_accuracy_samples),
-            },
-            "model_accuracy": model_accuracy,
-            "missed_opportunity_value": {
-                "high_urgency_missed": len(missed_high_urgency),
-                "estimated_campaigns_lost": len(missed_high_urgency),
-                "avg_potential_demand_lift_pct": avg_demand_increase,
-            },
-            "by_type": {},
-        }
+        return get_roi_retrospective_impl(self)
 
     def _save_opportunity(self, opp: dict) -> bool:
-        """Opportunity in DB speichern (mit Dedup)."""
-        opp_id = opp.get("id", "")
-        existing = (
-            self.db.query(MarketingOpportunity)
-            .filter(MarketingOpportunity.opportunity_id == opp_id)
-            .first()
-        )
-
-        # Build supply-gap payload for persistence (modifier metadata)
-        supply_gap_data = None
-        if opp.get("_supply_gap_applied"):
-            supply_gap_data = {
-                "is_active": True,
-                "priority_multiplier": opp.get("_supply_gap_priority_multiplier", 1.0),
-                "sku": opp.get("_supply_gap_sku", ""),
-                "product": opp.get("_supply_gap_product", ""),
-                "matched_products": opp.get("_supply_gap_matched_products", []),
-            }
-
-        if existing:
-            existing.urgency_score = opp.get("urgency_score", existing.urgency_score)
-            existing.sales_pitch = opp.get("sales_pitch", existing.sales_pitch)
-            existing.suggested_products = opp.get("suggested_products", existing.suggested_products)
-            if supply_gap_data:
-                payload = (existing.campaign_payload or {}).copy()
-                payload["supply_gap"] = supply_gap_data
-                existing.campaign_payload = payload
-            existing.updated_at = utc_now()
-            self.db.commit()
-            return False
-
-        trigger_ctx = opp.get("trigger_context", {})
-        detected_at_str = trigger_ctx.get("detected_at", "")
-        try:
-            detected_at = datetime.fromisoformat(detected_at_str.replace("Z", "+00:00"))
-        except (ValueError, AttributeError):
-            detected_at = utc_now()
-
-        campaign_payload = {}
-        if supply_gap_data:
-            campaign_payload["supply_gap"] = supply_gap_data
-
-        entry = MarketingOpportunity(
-            opportunity_id=opp_id,
-            opportunity_type=opp.get("type", ""),
-            status=opp.get("status", "NEW"),
-            urgency_score=opp.get("urgency_score", 0),
-            region_target=opp.get("region_target"),
-            trigger_source=trigger_ctx.get("source"),
-            trigger_event=trigger_ctx.get("event"),
-            trigger_details=trigger_ctx,
-            trigger_detected_at=detected_at,
-            target_audience=opp.get("target_audience"),
-            sales_pitch=opp.get("sales_pitch"),
-            suggested_products=opp.get("suggested_products"),
-            campaign_payload=campaign_payload if campaign_payload else None,
-            expires_at=utc_now() + timedelta(days=14),
-        )
-        self.db.add(entry)
-        self.db.commit()
-        return True
+        return save_opportunity_impl(self, opp)
 
     def _build_channel_mix(self, channels: list[str], opportunity_type: str, urgency: float) -> dict:
-        """Erzeugt einfachen Kanalmix abhaengig von Typ und Dringlichkeit."""
-        normalized = [c.strip().lower() for c in channels if c and c.strip()]
-        if not normalized:
-            normalized = ["programmatic", "social", "search", "ctv"]
-
-        if len(normalized) == 1:
-            return {normalized[0]: 100}
-
-        base = {c: round(100 / len(normalized), 1) for c in normalized}
-
-        if opportunity_type in {"RESOURCE_SCARCITY", "PREDICTIVE_SALES_SPIKE"} and "search" in base:
-            base["search"] = min(55.0, base["search"] + 15.0)
-        if urgency >= 75 and "programmatic" in base:
-            base["programmatic"] = min(60.0, base["programmatic"] + 10.0)
-        if opportunity_type in {"SEASONAL_DEFICIENCY", "WEATHER_FORECAST"} and "social" in base:
-            base["social"] = min(50.0, base["social"] + 10.0)
-
-        total = sum(base.values()) or 1.0
-        normalized_mix = {k: round(v / total * 100.0, 1) for k, v in base.items()}
-        diff = round(100.0 - sum(normalized_mix.values()), 1)
-        first_key = next(iter(normalized_mix))
-        normalized_mix[first_key] = round(normalized_mix[first_key] + diff, 1)
-        return normalized_mix
+        return build_channel_mix_impl(channels, opportunity_type, urgency)
 
     def _derive_campaign_name(self, brand: str, product: str, region: str, opportunity_type: str) -> str:
-        type_label = opportunity_type.replace("_", " ").title()
-        return f"{brand} | {product} | {region} | {type_label}"
+        return derive_campaign_name_impl(brand, product, region, opportunity_type)
 
     def _derive_activation_window(self, urgency: float) -> dict:
-        start = utc_now()
-        days = 14 if urgency >= 70 else 10 if urgency >= 50 else 7
-        end = start + timedelta(days=days)
-        return {
-            "start": start.isoformat(),
-            "end": end.isoformat(),
-            "flight_days": days,
-        }
+        return derive_activation_window_impl(urgency)
 
     def _build_channel_plan(
         self,
@@ -1703,65 +842,14 @@ class MarketingOpportunityEngine:
         budget_shift_value: float,
         campaign_goal: str,
     ) -> list[dict[str, Any]]:
-        role_map = {
-            "programmatic": "reach",
-            "social": "consideration",
-            "search": "intent",
-            "ctv": "awareness",
-        }
-        format_map = {
-            "programmatic": ["Display", "Video"],
-            "social": ["Feed", "Story", "Reel"],
-            "search": ["Brand", "Symptom", "Wettbewerb"],
-            "ctv": ["Pre-Roll", "Connected TV"],
-        }
-        kpi_map = {
-            "programmatic": "Reach",
-            "social": "CTR",
-            "search": "Qualified Clicks",
-            "ctv": "Completed Views",
-        }
-
-        plan = []
-        for channel, share in channel_mix.items():
-            plan.append(
-                {
-                    "channel": channel,
-                    "role": role_map.get(channel, "reach"),
-                    "share_pct": round(float(share), 1),
-                    "budget_eur": round(budget_shift_value * (float(share) / 100.0), 2),
-                    "formats": format_map.get(channel, ["Standard"]),
-                    "message_angle": f"{campaign_goal}: regionaler Trigger + Verfügbarkeit",
-                    "kpi_primary": kpi_map.get(channel, "CTR"),
-                    "kpi_secondary": ["CPM", "Frequency"],
-                }
-            )
-
-        plan.sort(key=lambda item: item["share_pct"], reverse=True)
-        return plan
+        return build_channel_plan_impl(channel_mix, budget_shift_value, campaign_goal)
 
     def _build_measurement_plan(self, campaign_goal: str, channel_plan: list[dict]) -> dict:
-        primary = "Reach in Trigger-Region" if "awareness" in campaign_goal.lower() else "Qualified Visits"
-        if channel_plan:
-            primary = channel_plan[0].get("kpi_primary") or primary
-
-        return {
-            "primary_kpi": primary,
-            "secondary_kpis": ["CTR", "CPM", "Landing Conversion"],
-            "reporting_cadence": "Daily",
-            "success_criteria": "Steigende KPI in aktivierten Trigger-Regionen bei stabiler Effizienz",
-        }
+        return build_measurement_plan_impl(campaign_goal, channel_plan)
 
     @staticmethod
     def _derive_activation_window_from_days(days: int) -> dict[str, Any]:
-        start = utc_now()
-        duration = max(1, min(28, int(days or 10)))
-        end = start + timedelta(days=duration)
-        return {
-            "start": start.isoformat(),
-            "end": end.isoformat(),
-            "flight_days": duration,
-        }
+        return derive_activation_window_from_days_impl(days)
 
     def _synthetic_playbook_opportunity(
         self,
@@ -1772,33 +860,14 @@ class MarketingOpportunityEngine:
         candidate: dict[str, Any],
         now: datetime,
     ) -> dict[str, Any]:
-        trigger = candidate.get("trigger_snapshot") or {}
-        audience_map = {
-            "MYCOPLASMA_JAEGER": ["Erwachsene mit hartnäckigem Husten", "Hausärzte", "HNO"],
-            "SUPPLY_SHOCK_ATTACK": ["Eltern", "Pädiater", "Apotheken-nahe Zielgruppen"],
-            "WETTER_REFLEX": ["Pendler", "Berufstätige", "Präventionsorientierte Zielgruppen"],
-            "ALLERGIE_BREMSE": ["Allergie-affine Zielgruppen", "Search-Intent mit Heuschnupfen-Kontext"],
-        }
-        return {
-            "id": f"OPP-{now.strftime('%Y-%m-%d')}-AI-{playbook_key[:6]}-{region_code}-{now.strftime('%H%M%S%f')}",
-            "type": playbook_key,
-            "status": "DRAFT",
-            "urgency_score": float(candidate.get("priority_score") or candidate.get("trigger_strength") or 50.0),
-            "region_target": {
-                "country": "DE",
-                "states": [region_code],
-                "plz_cluster": "ALL",
-            },
-            "trigger_context": {
-                "source": trigger.get("source") or "PlaybookEngine",
-                "event": trigger.get("event") or playbook_key,
-                "details": trigger.get("details") or f"{playbook_key} Trigger in {region_label}",
-                "detected_at": now.isoformat(),
-            },
-            "target_audience": audience_map.get(playbook_key) or ["Pharma-Interesse"],
-            "sales_pitch": None,
-            "suggested_products": [],
-        }
+        return synthetic_playbook_opportunity_impl(
+            self,
+            playbook_key=playbook_key,
+            region_code=region_code,
+            region_label=region_label,
+            candidate=candidate,
+            now=now,
+        )
 
     def _ensure_synthetic_opportunity_row(
         self,
@@ -1807,30 +876,12 @@ class MarketingOpportunityEngine:
         strategy_mode: str,
         playbook_key: str,
     ) -> str:
-        trigger_ctx = synthetic_opportunity.get("trigger_context") or {}
-        detected_at_raw = trigger_ctx.get("detected_at")
-        detected_at = self._parse_iso_datetime(detected_at_raw) or utc_now()
-
-        entry = MarketingOpportunity(
-            opportunity_id=synthetic_opportunity["id"],
-            opportunity_type=synthetic_opportunity.get("type", "PLAYBOOK_AI"),
-            status=synthetic_opportunity.get("status", "DRAFT"),
-            urgency_score=float(synthetic_opportunity.get("urgency_score") or 50.0),
-            region_target=synthetic_opportunity.get("region_target"),
-            trigger_source=trigger_ctx.get("source"),
-            trigger_event=trigger_ctx.get("event"),
-            trigger_details=trigger_ctx,
-            trigger_detected_at=detected_at,
-            target_audience=synthetic_opportunity.get("target_audience"),
-            sales_pitch=synthetic_opportunity.get("sales_pitch"),
-            suggested_products=synthetic_opportunity.get("suggested_products"),
+        return ensure_synthetic_opportunity_row_impl(
+            self,
+            synthetic_opportunity=synthetic_opportunity,
             strategy_mode=strategy_mode,
             playbook_key=playbook_key,
-            expires_at=utc_now() + timedelta(days=14),
         )
-        self.db.add(entry)
-        self.db.flush()
-        return entry.opportunity_id
 
     def _merge_ai_playbook_payload(
         self,
@@ -1848,67 +899,21 @@ class MarketingOpportunityEngine:
         activation_window: dict[str, Any],
         condition_key: str,
     ) -> None:
-        flight_days = int(activation_window.get("flight_days") or 7)
-        campaign_payload["meta"]["version"] = "3.0"
-        campaign_payload["meta"]["generator"] = "ViralFlux-Media-v5-PlaybookAI"
-        campaign_payload["campaign"]["status"] = workflow_status
-        campaign_payload["campaign"]["campaign_name"] = ai_plan.get("campaign_name") or campaign_payload["campaign"]["campaign_name"]
-        campaign_payload["campaign"]["objective"] = ai_plan.get("objective") or campaign_payload["campaign"]["objective"]
-        campaign_payload["playbook"] = {
-            "key": playbook_key,
-            "title": candidate.get("playbook_title"),
-            "kind": candidate.get("playbook_kind"),
-            "message_direction": candidate.get("message_direction"),
-            "condition_key": condition_key,
-        }
-        campaign_payload["trigger_snapshot"] = candidate.get("trigger_snapshot") or {}
-        campaign_payload["ai_plan"] = ai_plan
-        campaign_payload["guardrail_report"] = guardrail_report
-        campaign_payload["ai_meta"] = {
-            **(ai_generated.get("ai_meta") or {}),
-            "status": ai_generated.get("ai_generation_status"),
-        }
-        campaign_payload["strategy_mode"] = "PLAYBOOK_AI"
-        campaign_payload["trigger_evidence"] = {
-            "source": (candidate.get("trigger_snapshot") or {}).get("source"),
-            "event": (candidate.get("trigger_snapshot") or {}).get("event"),
-            "details": (candidate.get("trigger_snapshot") or {}).get("details"),
-            "lead_time_days": (candidate.get("trigger_snapshot") or {}).get("lead_time_days"),
-            "confidence": round(float(candidate.get("confidence") or 0.0) / 100.0, 2),
-        }
-        campaign_payload["budget_plan"] = {
-            "weekly_budget_eur": round(float(weekly_budget or 0.0), 2),
-            "budget_shift_pct": round(float(budget_shift_pct), 1),
-            "budget_shift_value_eur": round(float(budget_shift_value), 2),
-            "total_flight_budget_eur": round((float(weekly_budget or 0.0) / 7.0) * flight_days, 2),
-            "currency": "EUR",
-        }
-        if isinstance(ai_plan.get("channel_plan"), list) and ai_plan["channel_plan"]:
-            campaign_payload["channel_plan"] = ai_plan["channel_plan"]
-        kpi_targets = ai_plan.get("kpi_targets") or {}
-        campaign_payload["measurement_plan"] = {
-            "primary_kpi": kpi_targets.get("primary_kpi") or campaign_payload.get("measurement_plan", {}).get("primary_kpi"),
-            "secondary_kpis": kpi_targets.get("secondary_kpis") or campaign_payload.get("measurement_plan", {}).get("secondary_kpis") or [],
-            "reporting_cadence": "Daily",
-            "success_criteria": kpi_targets.get("success_criteria") or campaign_payload.get("measurement_plan", {}).get("success_criteria"),
-        }
-        campaign_payload["message_framework"] = {
-            "hero_message": (ai_plan.get("creative_angles") or [campaign_payload.get("message_framework", {}).get("hero_message")])[0],
-            "support_points": ai_plan.get("creative_angles") or campaign_payload.get("message_framework", {}).get("support_points") or [],
-            "compliance_note": ai_plan.get("compliance_hinweis") or campaign_payload.get("message_framework", {}).get("compliance_note"),
-        }
-        if isinstance(ai_plan.get("next_steps"), list):
-            campaign_payload["execution_checklist"] = [
-                {
-                    "task": item.get("task"),
-                    "owner": item.get("owner"),
-                    "eta": item.get("eta"),
-                    "status": "open",
-                }
-                for item in ai_plan.get("next_steps")
-                if isinstance(item, dict)
-            ]
-        campaign_payload["activation_window"] = activation_window
+        merge_ai_playbook_payload_impl(
+            self,
+            campaign_payload=campaign_payload,
+            playbook_key=playbook_key,
+            candidate=candidate,
+            ai_plan=ai_plan,
+            ai_generated=ai_generated,
+            guardrail_report=guardrail_report,
+            workflow_status=workflow_status,
+            budget_shift_pct=budget_shift_pct,
+            budget_shift_value=budget_shift_value,
+            weekly_budget=weekly_budget,
+            activation_window=activation_window,
+            condition_key=condition_key,
+        )
 
     def _build_campaign_pack(
         self,
@@ -1929,106 +934,27 @@ class MarketingOpportunityEngine:
         region_codes: list[str],
         peix_context: dict[str, Any] | None = None,
     ) -> dict:
-        trigger = opportunity.get("trigger_context", {})
-        channel_plan = self._build_channel_plan(channel_mix, budget_shift_value, campaign_goal)
-        measurement_plan = self._build_measurement_plan(campaign_goal, channel_plan)
-        flight_days = int(activation_window.get("flight_days") or 7)
-
-        return {
-            "meta": {
-                "version": "1.0",
-                "generated_at": utc_now().isoformat() + "Z",
-                "generator": "ViralFlux-Media-v3",
-            },
-            "campaign": {
-                "campaign_name": self._derive_campaign_name(brand, product, region, opportunity.get("type", "")),
-                "objective": campaign_goal,
-                "status": "DRAFT",
-                "priority": "high" if urgency >= 75 else "medium" if urgency >= 50 else "normal",
-            },
-            "targeting": {
-                "region_scope": region_codes or region,
-                "audience_segments": opportunity.get("target_audience") or ["Pharma-Interesse"],
-            },
-            "activation_window": activation_window,
-            "budget_plan": {
-                "weekly_budget_eur": round(float(weekly_budget), 2),
-                "budget_shift_pct": round(float(budget_shift_pct), 1),
-                "budget_shift_value_eur": round(float(budget_shift_value), 2),
-                "total_flight_budget_eur": round((float(weekly_budget) / 7.0) * flight_days, 2),
-                "currency": "EUR",
-            },
-            "channel_plan": channel_plan,
-            "message_framework": {
-                "hero_message": f"{product} jetzt in {region} sichtbar machen, bevor die Nachfragewelle voll einsetzt.",
-                "support_points": [
-                    "Trigger-basiertes Timing statt Rückspiegel-Steuerung",
-                    "Regionale Budgetverschiebung nach epidemiologischen Signalen",
-                    "Verfügbarkeitskommunikation bei Wettbewerbsengpässen",
-                ],
-                "compliance_note": "Claims als Backtest-basiert und konservativ formulieren (z. B. 'kann', 'bis zu').",
-            },
-            "trigger_evidence": {
-                "source": trigger.get("source"),
-                "event": trigger.get("event"),
-                "details": trigger.get("details"),
-                "lead_time_days": 14 if urgency >= 70 else 10,
-                "confidence": confidence,
-            },
-            "product_mapping": {
-                "recommended_product": product_mapping.get("recommended_product") or product,
-                "mapping_status": product_mapping.get("mapping_status"),
-                "mapping_confidence": product_mapping.get("mapping_confidence"),
-                "mapping_reason": product_mapping.get("mapping_reason"),
-                "condition_key": product_mapping.get("condition_key"),
-                "condition_label": product_mapping.get("condition_label"),
-                "candidate_product": product_mapping.get("candidate_product"),
-                "rule_source": product_mapping.get("rule_source"),
-            },
-            "peix_context": peix_context or {},
-            "measurement_plan": measurement_plan,
-            "execution_checklist": [
-                {"task": "Media-Flight in DSP/Ads Manager anlegen", "owner": "Media Ops", "eta": "T+0", "status": "open"},
-                {"task": "Search-Keyword-Set nach Trigger-Region ausrollen", "owner": "Performance Team", "eta": "T+1", "status": "open"},
-                {"task": "Creative-Freigabe mit Compliance abstimmen", "owner": "Account Lead", "eta": "T+1", "status": "open"},
-                {"task": "KPI-Dashboard für Daily Monitoring aktivieren", "owner": "Analytics", "eta": "T+1", "status": "open"},
-            ],
-        }
+        return build_campaign_pack_impl(
+            self,
+            opportunity=opportunity,
+            brand=brand,
+            product=product,
+            campaign_goal=campaign_goal,
+            region=region,
+            urgency=urgency,
+            confidence=confidence,
+            weekly_budget=weekly_budget,
+            budget_shift_pct=budget_shift_pct,
+            budget_shift_value=budget_shift_value,
+            channel_mix=channel_mix,
+            activation_window=activation_window,
+            product_mapping=product_mapping,
+            region_codes=region_codes,
+            peix_context=peix_context,
+        )
 
     def _campaign_preview_from_payload(self, payload: dict) -> dict:
-        campaign = payload.get("campaign") or {}
-        budget = payload.get("budget_plan") or {}
-        measurement = payload.get("measurement_plan") or {}
-        window = payload.get("activation_window") or {}
-        product_mapping = payload.get("product_mapping") or {}
-        peix_context = payload.get("peix_context") or {}
-        forecast_assessment = payload.get("forecast_assessment") or {}
-        opportunity_assessment = payload.get("opportunity_assessment") or {}
-        playbook = payload.get("playbook") or {}
-        ai_meta = payload.get("ai_meta") or {}
-        return {
-            "campaign_name": campaign.get("campaign_name"),
-            "activation_window": {
-                "start": window.get("start"),
-                "end": window.get("end"),
-            },
-            "budget": {
-                "weekly_budget_eur": budget.get("weekly_budget_eur"),
-                "shift_pct": budget.get("budget_shift_pct"),
-                "shift_value_eur": budget.get("budget_shift_value_eur"),
-                "total_flight_budget_eur": budget.get("total_flight_budget_eur"),
-            },
-            "primary_kpi": measurement.get("primary_kpi"),
-            "recommended_product": product_mapping.get("recommended_product"),
-            "mapping_status": product_mapping.get("mapping_status"),
-            "mapping_confidence": product_mapping.get("mapping_confidence"),
-            "peix_context": peix_context,
-            "forecast_assessment": forecast_assessment,
-            "opportunity_assessment": opportunity_assessment,
-            "playbook_key": playbook.get("key"),
-            "playbook_title": playbook.get("title"),
-            "ai_generation_status": ai_meta.get("status"),
-        }
+        return campaign_preview_from_payload_impl(self, payload)
 
     def _enrich_opportunity_for_media(
         self,
@@ -2046,33 +972,21 @@ class MarketingOpportunityEngine:
         playbook_key: str | None = None,
         strategy_mode: str | None = None,
     ) -> None:
-        """Persistiert Media-spezifische Attribute auf Opportunity-Ebene."""
-        if not opportunity_id:
-            return
-        row = (
-            self.db.query(MarketingOpportunity)
-            .filter(MarketingOpportunity.opportunity_id == opportunity_id)
-            .first()
+        enrich_opportunity_for_media_impl(
+            self,
+            opportunity_id=opportunity_id,
+            brand=brand,
+            product=product,
+            budget_shift_pct=budget_shift_pct,
+            channel_mix=channel_mix,
+            reason=reason,
+            campaign_payload=campaign_payload,
+            status=status,
+            activation_start=activation_start,
+            activation_end=activation_end,
+            playbook_key=playbook_key,
+            strategy_mode=strategy_mode,
         )
-        if not row:
-            return
-
-        now = utc_now()
-        row.brand = self._canonical_brand(brand) or "gelo"
-        row.product = product
-        row.status = status
-        row.budget_shift_pct = budget_shift_pct
-        row.channel_mix = channel_mix
-        row.activation_start = activation_start
-        row.activation_end = activation_end
-        row.recommendation_reason = reason
-        row.campaign_payload = campaign_payload
-        if playbook_key is not None:
-            row.playbook_key = playbook_key
-        if strategy_mode is not None:
-            row.strategy_mode = strategy_mode
-        row.updated_at = now
-        self.db.commit()
 
     def _normalize_region_token(self, value: str | None) -> str | None:
         return normalize_region_token(value)
@@ -2136,122 +1050,15 @@ class MarketingOpportunityEngine:
         forecast_assessment: dict[str, Any] | None = None,
         opportunity_assessment: dict[str, Any] | None = None,
     ) -> list[dict[str, Any]]:
-        facts: list[dict[str, Any]] = []
-        raw_source = (
-            trigger_evidence.get("source")
-            or trigger_snapshot.get("source")
-            or "Signal-Fusion"
+        return decision_facts_impl(
+            self,
+            trigger_snapshot=trigger_snapshot,
+            trigger_evidence=trigger_evidence,
+            peix_context=peix_context,
+            confidence_pct_value=confidence_pct,
+            forecast_assessment=forecast_assessment,
+            opportunity_assessment=opportunity_assessment,
         )
-        source = public_source_label(raw_source) or raw_source
-        values = trigger_snapshot.get("values")
-        if isinstance(values, dict):
-            for key in sorted(values.keys()):
-                value = values.get(key)
-                if isinstance(value, (str, int, float, bool)):
-                    facts.append(
-                        {
-                            "key": str(key),
-                            "label": self._fact_label(str(key)),
-                            "value": self._public_fact_value(str(key), value),
-                            "source": source,
-                        }
-                    )
-
-        event = trigger_evidence.get("event") or trigger_snapshot.get("event")
-        if event:
-            facts.append(
-                {
-                    "key": "trigger_event",
-                    "label": "Signal",
-                    "value": public_event_label(str(event)),
-                    "source": source,
-                }
-            )
-
-        lead_time = trigger_evidence.get("lead_time_days") or trigger_snapshot.get("lead_time_days")
-        if lead_time is not None:
-            facts.append(
-                {
-                    "key": "lead_time_days",
-                    "label": "Modell Lead-Time (Tage)",
-                    "value": lead_time,
-                    "source": source,
-                }
-            )
-
-        score = peix_context.get("score")
-        if score is not None:
-            facts.append(
-                {
-                    "key": "signal_score",
-                    "label": "Signal-Score",
-                    "value": score,
-                    "source": "PeixEpiScore",
-                }
-            )
-
-        impact = peix_context.get("impact_probability")
-        if impact is not None:
-            facts.append(
-                {
-                    "key": "impact_probability",
-                    "label": "Signal-Score (%)",
-                    "value": impact,
-                    "source": "PeixEpiScore",
-                }
-            )
-
-        if confidence_pct is not None:
-            facts.append(
-                {
-                    "key": "signal_confidence_pct",
-                    "label": "Signal-Konfidenz (%)",
-                    "value": confidence_pct,
-                    "source": source,
-                }
-            )
-
-        event_forecast = (forecast_assessment or {}).get("event_forecast") or {}
-        if event_forecast.get("event_probability") is not None:
-            facts.append(
-                {
-                    "key": "event_probability_pct",
-                    "label": "Event-Wahrscheinlichkeit",
-                    "value": round(float(event_forecast.get("event_probability") or 0.0) * 100.0, 1),
-                    "source": "ForecastDecisionService",
-                }
-            )
-        quality = (forecast_assessment or {}).get("forecast_quality") or {}
-        if quality.get("forecast_readiness"):
-            facts.append(
-                {
-                    "key": "forecast_readiness",
-                    "label": "Forecast-Readiness",
-                    "value": quality.get("forecast_readiness"),
-                    "source": "Backtest-Promotion-Gate",
-                }
-            )
-
-        if opportunity_assessment and opportunity_assessment.get("truth_readiness"):
-            facts.append(
-                {
-                    "key": "truth_readiness",
-                    "label": "Truth-Readiness",
-                    "value": opportunity_assessment.get("truth_readiness"),
-                    "source": "Outcome-Coverage",
-                }
-            )
-        if opportunity_assessment and opportunity_assessment.get("expected_value_index") is not None:
-            facts.append(
-                {
-                    "key": "expected_value_index",
-                    "label": "Opportunity-Index",
-                    "value": float(opportunity_assessment.get("expected_value_index") or 0.0),
-                    "source": "Forecast-first Ranking",
-                }
-            )
-
-        return facts
 
     def _build_decision_brief(
         self,
@@ -2275,126 +1082,27 @@ class MarketingOpportunityEngine:
         forecast_assessment: dict[str, Any] | None = None,
         opportunity_assessment: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        primary_region_code = region_codes[0] if region_codes else "Gesamt"
-        primary_region = (
-            "Deutschland"
-            if primary_region_code == "Gesamt"
-            else self._region_label(primary_region_code)
-        )
-        secondary_regions = [
-            self._region_label(code) if code in BUNDESLAND_NAMES else code
-            for code in region_codes[1:]
-        ]
-
-        raw_confidence = trigger_evidence.get("confidence")
-        if raw_confidence is None:
-            raw_confidence = trigger_snapshot.get("confidence")
-        confidence_pct = self._confidence_pct(raw_confidence, urgency_score)
-
-        lead_time_days = trigger_evidence.get("lead_time_days") or trigger_snapshot.get("lead_time_days")
-
-        mapping_status_value = str(mapping_status or "").strip().lower() or "needs_review"
-        action_required = (
-            "review_mapping"
-            if mapping_status_value == "needs_review"
-            else "ready_for_activation"
-        )
-
-        primary_product = str(recommended_product or "").strip() or "Produktfreigabe ausstehend"
-        secondary_products = self._secondary_products(
-            suggested_products=suggested_products,
+        return build_decision_brief_impl(
+            self,
+            urgency_score=urgency_score,
+            recommendation_reason=recommendation_reason,
+            trigger_context=trigger_context,
+            trigger_snapshot=trigger_snapshot,
+            trigger_evidence=trigger_evidence,
+            peix_context=peix_context,
+            region_codes=region_codes,
+            condition_key=condition_key,
+            condition_label=condition_label,
+            recommended_product=recommended_product,
+            mapping_status=mapping_status,
+            mapping_reason=mapping_reason,
             mapping_candidate_product=mapping_candidate_product,
-            primary_product=primary_product,
+            suggested_products=suggested_products,
+            budget_shift_pct=budget_shift_pct,
+            budget_shift_pct_fallback=budget_shift_pct_fallback,
+            forecast_assessment=forecast_assessment,
+            opportunity_assessment=opportunity_assessment,
         )
-
-        condition_text = str(condition_label or condition_key or "relevante Lageklasse")
-        rationale = (
-            str(mapping_reason or "").strip()
-            or public_reason_text(
-                reason=recommendation_reason,
-                event=trigger_evidence.get("event") or trigger_snapshot.get("event") or trigger_context.get("event"),
-                details=trigger_evidence.get("details") or trigger_snapshot.get("details"),
-            )
-        )
-
-        source_label = trigger_evidence.get("source") or trigger_snapshot.get("source")
-        source = public_source_label(source_label or "Signal-Fusion") or (source_label or "Signal-Fusion")
-        event_label = trigger_evidence.get("event") or trigger_snapshot.get("event")
-        score = peix_context.get("score")
-        basis_text = build_decision_basis_text(
-            source_label=source_label,
-            event=event_label,
-            score=score,
-        )
-
-        budget_shift = budget_shift_pct if budget_shift_pct is not None else budget_shift_pct_fallback
-
-        summary_sentence = build_decision_summary_text(
-            basis_text=basis_text,
-            condition_text=condition_text,
-            primary_region=primary_region,
-            primary_product=primary_product,
-            action_required=action_required,
-        )
-
-        return {
-            "summary_sentence": summary_sentence,
-            "horizon": {
-                "min_days": 7,
-                "max_days": 14,
-                "model_lead_time_days": lead_time_days,
-            },
-            "facts": self._decision_facts(
-                trigger_snapshot=trigger_snapshot,
-                trigger_evidence=trigger_evidence,
-                peix_context=peix_context,
-                confidence_pct=confidence_pct,
-                forecast_assessment=forecast_assessment,
-                opportunity_assessment=opportunity_assessment,
-            ),
-            "expectation": {
-                "condition_key": condition_key,
-                "condition_label": public_condition_label(condition_label or condition_key),
-                "region_codes": region_codes,
-                "impact_probability": peix_context.get("impact_probability"),
-                "signal_score": peix_context.get("signal_score") or peix_context.get("score"),
-                "peix_score": peix_context.get("score"),
-                "signal_confidence_pct": confidence_pct,
-                "confidence_pct": confidence_pct,
-                "event_probability_pct": (
-                    round(float((((forecast_assessment or {}).get("event_forecast") or {}).get("event_probability") or 0.0) * 100.0), 1)
-                    if ((forecast_assessment or {}).get("event_forecast") or {}).get("event_probability") is not None
-                    else None
-                ),
-                "forecast_readiness": (forecast_assessment or {}).get("forecast_quality", {}).get("forecast_readiness"),
-                "truth_readiness": (opportunity_assessment or {}).get("truth_readiness"),
-                "expected_value_index": (opportunity_assessment or {}).get("expected_value_index"),
-                "rationale": rationale,
-                "field_contracts": {
-                    "signal_score": ranking_signal_contract(source="PeixEpiScore"),
-                    "impact_probability": ranking_signal_contract(
-                        source="PeixEpiScore",
-                        label="Legacy Signal-Score",
-                    ),
-                    "signal_confidence_pct": signal_confidence_contract(
-                        source=source,
-                        derived_from="trigger_evidence.confidence",
-                    ),
-                    "event_probability_pct": forecast_probability_contract(),
-                    "priority_score": priority_score_contract(source="MarketingOpportunityEngine"),
-                },
-            },
-            "recommendation": {
-                "primary_product": primary_product,
-                "primary_region": primary_region,
-                "secondary_regions": secondary_regions,
-                "secondary_products": secondary_products,
-                "budget_shift_pct": budget_shift,
-                "mapping_status": mapping_status_value,
-                "mapping_reason": mapping_reason,
-                "action_required": action_required,
-            },
-        }
 
     def _clean_for_output(self, opp: dict) -> dict:
         return clean_for_output(opp)
@@ -2409,119 +1117,4 @@ class MarketingOpportunityEngine:
         return parse_iso_datetime(value)
 
     def _model_to_dict(self, m: MarketingOpportunity, normalize_status: bool = True) -> dict:
-        """Konvertiert DB-Model zu Output-Dict."""
-        status = self._normalize_workflow_status(m.status) if normalize_status else m.status
-        campaign_payload = m.campaign_payload or {}
-        campaign_preview = self._campaign_preview_from_payload(campaign_payload) if campaign_payload else None
-        product_mapping = campaign_payload.get("product_mapping") or {}
-        peix_context = campaign_payload.get("peix_context") or {}
-        forecast_assessment = campaign_payload.get("forecast_assessment") or {}
-        opportunity_assessment = campaign_payload.get("opportunity_assessment") or {}
-        playbook = campaign_payload.get("playbook") or {}
-        ai_meta = campaign_payload.get("ai_meta") or {}
-        region_codes = self._extract_region_codes_from_opportunity(
-            {
-                "region_target": m.region_target or {},
-                "campaign_payload": campaign_payload,
-            }
-        )
-        trigger_context = (
-            m.trigger_details
-            or {
-                "source": m.trigger_source,
-                "event": m.trigger_event,
-                "detected_at": m.trigger_detected_at.isoformat() if m.trigger_detected_at else None,
-            }
-        )
-        recommended_product = product_mapping.get("recommended_product") or m.product
-        decision_brief = self._build_decision_brief(
-            urgency_score=m.urgency_score,
-            recommendation_reason=m.recommendation_reason,
-            trigger_context=trigger_context,
-            trigger_snapshot=campaign_payload.get("trigger_snapshot") or {},
-            trigger_evidence=campaign_payload.get("trigger_evidence") or {},
-            peix_context=peix_context,
-            region_codes=region_codes,
-            condition_key=product_mapping.get("condition_key"),
-            condition_label=product_mapping.get("condition_label"),
-            recommended_product=recommended_product,
-            mapping_status=product_mapping.get("mapping_status"),
-            mapping_reason=product_mapping.get("mapping_reason"),
-            mapping_candidate_product=product_mapping.get("candidate_product"),
-            suggested_products=m.suggested_products,
-            budget_shift_pct=m.budget_shift_pct,
-            budget_shift_pct_fallback=(campaign_payload.get("budget_plan") or {}).get("budget_shift_pct"),
-            forecast_assessment=forecast_assessment,
-            opportunity_assessment=opportunity_assessment,
-        )
-
-        return {
-            "id": m.opportunity_id,
-            "type": m.opportunity_type,
-            "status": status,
-            "legacy_status": WORKFLOW_TO_LEGACY.get(status, m.status),
-            "urgency_score": m.urgency_score,
-            "priority_score": m.urgency_score,
-            "region_target": m.region_target,
-            "trigger_context": trigger_context,
-            "target_audience": m.target_audience,
-            "sales_pitch": m.sales_pitch,
-            "suggested_products": m.suggested_products,
-            "brand": m.brand,
-            "product": m.product,
-            "region": region_codes[0] if region_codes else "Gesamt",
-            "region_codes": region_codes,
-            "budget_shift_pct": m.budget_shift_pct,
-            "channel_mix": m.channel_mix,
-            "activation_start": m.activation_start.isoformat() if m.activation_start else None,
-            "activation_end": m.activation_end.isoformat() if m.activation_end else None,
-            "recommendation_reason": m.recommendation_reason,
-            "campaign_payload": campaign_payload,
-            "campaign_preview": campaign_preview,
-            "recommended_product": recommended_product,
-            "mapping_status": product_mapping.get("mapping_status"),
-            "mapping_confidence": product_mapping.get("mapping_confidence"),
-            "mapping_reason": product_mapping.get("mapping_reason"),
-            "condition_key": product_mapping.get("condition_key"),
-            "condition_label": product_mapping.get("condition_label"),
-            "mapping_candidate_product": product_mapping.get("candidate_product"),
-            "rule_source": product_mapping.get("rule_source"),
-            "peix_context": peix_context,
-            "signal_score": peix_context.get("signal_score") or peix_context.get("score"),
-            "forecast_assessment": forecast_assessment,
-            "opportunity_assessment": opportunity_assessment,
-            "exploratory_signals": campaign_payload.get("exploratory_signals") or [],
-            "playbook_key": m.playbook_key or playbook.get("key"),
-            "playbook_title": playbook.get("title"),
-            "strategy_mode": m.strategy_mode or campaign_payload.get("strategy_mode"),
-            "trigger_snapshot": campaign_payload.get("trigger_snapshot"),
-            "guardrail_notes": (campaign_payload.get("guardrail_report") or {}).get("applied_fixes"),
-            "ai_generation_status": ai_meta.get("status"),
-            "trigger_evidence": (campaign_payload or {}).get("trigger_evidence"),
-            "decision_brief": decision_brief,
-            "detail_url": f"/kampagnen/{m.opportunity_id}",
-            "created_at": m.created_at.isoformat() if m.created_at else None,
-            "updated_at": m.updated_at.isoformat() if m.updated_at else None,
-            "expires_at": m.expires_at.isoformat() if m.expires_at else None,
-            "exported_at": m.exported_at.isoformat() if m.exported_at else None,
-            # Supply-gap fields (from persisted campaign_payload)
-            # Note: legacy DB records may still carry "conquesting" payloads; we read them as fallback.
-            "is_supply_gap_active": bool(
-                ((campaign_payload.get("supply_gap") or campaign_payload.get("conquesting") or {}).get("is_active", False))
-            ),
-            "supply_gap_match_examples": ", ".join(
-                (
-                    (campaign_payload.get("supply_gap") or {}).get("matched_products")
-                    or (campaign_payload.get("conquesting") or {}).get("matched_drugs", [])
-                )[:3]
-            ),
-            "recommended_priority_multiplier": float(
-                (
-                    (campaign_payload.get("supply_gap") or {}).get("priority_multiplier")
-                    or (campaign_payload.get("conquesting") or {}).get("multiplier", 1.0)
-                )
-            ),
-            "supply_gap_product": (
-                (campaign_payload.get("supply_gap") or campaign_payload.get("conquesting") or {}).get("product", "")
-            ),
-        }
+        return model_to_dict_impl(self, m, normalize_status=normalize_status)

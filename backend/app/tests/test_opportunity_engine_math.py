@@ -1,5 +1,6 @@
 import unittest
 import os
+from datetime import datetime, timezone
 
 # Minimal env bootstrap for app settings during module import.
 os.environ.setdefault("POSTGRES_USER", "test")
@@ -8,6 +9,7 @@ os.environ.setdefault("POSTGRES_DB", "test")
 os.environ.setdefault("OPENWEATHER_API_KEY", "test")
 os.environ.setdefault("SECRET_KEY", "test")
 
+from app.models.database import MarketingOpportunity
 from app.services.marketing_engine.opportunity_engine import MarketingOpportunityEngine
 
 
@@ -101,6 +103,78 @@ class OpportunityEngineMathTests(unittest.TestCase):
             brief["expectation"]["field_contracts"]["signal_confidence_pct"]["source"],
             "BfArM Engpassmonitor",
         )
+
+    def test_model_to_dict_builds_customer_facing_payload(self) -> None:
+        engine = MarketingOpportunityEngine.__new__(MarketingOpportunityEngine)
+        now = datetime.now(timezone.utc)
+        row = MarketingOpportunity(
+            opportunity_id="opp-123",
+            opportunity_type="SUPPLY_SHOCK_ATTACK",
+            status="DRAFT",
+            urgency_score=82.0,
+            region_target={"states": ["SH"]},
+            trigger_source="BfArM_API",
+            trigger_event="SUPPLY_SHOCK_WINDOW",
+            trigger_details={"source": "BfArM_API", "event": "SUPPLY_SHOCK_WINDOW"},
+            target_audience=["Apotheken"],
+            brand="gelo",
+            product="GeloProsed",
+            budget_shift_pct=18.0,
+            channel_mix={"search": 50.0},
+            recommendation_reason="Frühes Nordsignal",
+            campaign_payload={
+                "product_mapping": {
+                    "recommended_product": "GeloProsed",
+                    "mapping_status": "approved",
+                    "condition_key": "erkaltung_akut",
+                    "condition_label": "Akute Erkältung",
+                },
+                "peix_context": {"score": 67.0, "impact_probability": 71.0},
+                "trigger_evidence": {"source": "BfArM_API", "confidence": 0.81},
+                "budget_plan": {"budget_shift_pct": 18.0},
+            },
+            created_at=now,
+            updated_at=now,
+        )
+
+        result = MarketingOpportunityEngine._model_to_dict(engine, row)
+
+        self.assertEqual(result["legacy_status"], "NEW")
+        self.assertEqual(
+            result["decision_brief"]["recommendation"]["primary_product"],
+            "GeloProsed",
+        )
+        self.assertEqual(result["region_codes"], ["SH"])
+
+    def test_build_channel_mix_normalizes_to_hundred_and_boosts_priority_channels(self) -> None:
+        engine = MarketingOpportunityEngine.__new__(MarketingOpportunityEngine)
+
+        mix = MarketingOpportunityEngine._build_channel_mix(
+            engine,
+            ["programmatic", "social", "search"],
+            "RESOURCE_SCARCITY",
+            80.0,
+        )
+
+        self.assertAlmostEqual(sum(mix.values()), 100.0, places=1)
+        self.assertGreater(mix["search"], mix["social"])
+        self.assertGreater(mix["programmatic"], mix["social"])
+
+    def test_build_measurement_plan_prefers_top_channel_kpi(self) -> None:
+        engine = MarketingOpportunityEngine.__new__(MarketingOpportunityEngine)
+
+        plan = MarketingOpportunityEngine._build_measurement_plan(
+            engine,
+            "Awareness Push",
+            [{"kpi_primary": "Completed Views"}],
+        )
+
+        self.assertEqual(plan["primary_kpi"], "Completed Views")
+
+    def test_derive_activation_window_from_days_clamps_duration(self) -> None:
+        window = MarketingOpportunityEngine._derive_activation_window_from_days(99)
+
+        self.assertEqual(window["flight_days"], 28)
 
 
 if __name__ == "__main__":

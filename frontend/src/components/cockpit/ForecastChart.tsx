@@ -9,6 +9,7 @@ import {
   CartesianGrid,
   Tooltip,
   ReferenceLine,
+  ReferenceDot,
 } from 'recharts';
 
 import { RegionalBacktestTimelinePoint } from '../../types/media/regional';
@@ -57,6 +58,89 @@ const CHART_THEME = {
   },
 } as const;
 
+type AxisTickProps = {
+  x?: number;
+  y?: number;
+  payload?: {
+    value?: string | number;
+  };
+  tone: 'x' | 'y';
+};
+
+function ForecastAxisTick({ x = 0, y = 0, payload, tone }: AxisTickProps): React.JSX.Element {
+  const value = payload?.value;
+  const label = tone === 'x' ? formatDayMonth(String(value || '')) : String(value ?? '');
+
+  return (
+    <text
+      x={x}
+      y={y}
+      dy={tone === 'x' ? 18 : 4}
+      textAnchor={tone === 'x' ? 'middle' : 'end'}
+      className={`forecast-chart-axis-tick forecast-chart-axis-tick--${tone}`}
+    >
+      {label}
+    </text>
+  );
+}
+
+type ActiveDotProps = {
+  cx?: number;
+  cy?: number;
+};
+
+function ForecastActiveDot({ cx, cy, color }: ActiveDotProps & { color: string }): React.JSX.Element | null {
+  if (typeof cx !== 'number' || typeof cy !== 'number') return null;
+
+  return (
+    <g>
+      <circle cx={cx} cy={cy} r={14} fill={color} fillOpacity={0.14} />
+      <circle cx={cx} cy={cy} r={6.5} fill="#ffffff" stroke={color} strokeWidth={3} />
+      <circle cx={cx} cy={cy} r={2.75} fill={color} />
+    </g>
+  );
+}
+
+type ReferenceLabelProps = {
+  viewBox?: {
+    x?: number;
+  };
+  value?: string | number;
+  color: string;
+  kind: 'today' | 'peak';
+};
+
+function ForecastReferenceLabel({
+  viewBox,
+  value,
+  color,
+  kind,
+}: ReferenceLabelProps): React.JSX.Element | null {
+  if (!viewBox || typeof viewBox.x !== 'number' || !value) return null;
+
+  return (
+    <text
+      x={viewBox.x + 8}
+      y={24}
+      className={`forecast-chart-reference-label forecast-chart-reference-label--${kind}`}
+      fill={color}
+    >
+      {value}
+    </text>
+  );
+}
+
+type ReferenceLabelCallbackProps = {
+  viewBox?: {
+    x?: number;
+  };
+};
+
+type ActiveDotCallbackProps = {
+  cx?: number;
+  cy?: number;
+};
+
 const ForecastChart: React.FC<ForecastChartProps> = ({
   timeline,
   regionName,
@@ -95,6 +179,22 @@ const ForecastChart: React.FC<ForecastChartProps> = ({
     }));
   }, [data, todayStr]);
 
+  const peakPoint = useMemo(() => {
+    const futurePoints = chartData.filter(
+      (point) =>
+        typeof point.forecastLine === 'number' &&
+        point.date >= todayStr,
+    );
+
+    return futurePoints.reduce<typeof futurePoints[number] | null>((best, point) => {
+      if (!best) return point;
+      return (point.forecastLine ?? Number.NEGATIVE_INFINITY) >
+        (best.forecastLine ?? Number.NEGATIVE_INFINITY)
+        ? point
+        : best;
+    }, null);
+  }, [chartData, todayStr]);
+
   if (!timeline || timeline.length === 0) {
     return (
       <div className={`forecast-chart-empty ${className || ''}`}>
@@ -106,7 +206,7 @@ const ForecastChart: React.FC<ForecastChartProps> = ({
   return (
     <div className={className || ''} style={{ width: '100%', flex: 1 }}>
       <ResponsiveContainer width="100%" height="100%" minHeight={300}>
-        <ComposedChart data={chartData} margin={{ top: 8, right: 16, bottom: 4, left: 0 }}>
+        <ComposedChart data={chartData} margin={{ top: 20, right: 18, bottom: 10, left: 2 }}>
           <defs>
             <linearGradient id="fcHistGrad" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor={theme.actual} stopOpacity={variant === 'default' ? 0.12 : 0.08} />
@@ -122,10 +222,24 @@ const ForecastChart: React.FC<ForecastChartProps> = ({
           </defs>
 
           <CartesianGrid strokeDasharray="3 3" stroke={theme.grid} vertical={false} />
-          <XAxis dataKey="dateLabel" tick={{ fontSize: 11, fill: theme.tick }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
-          <YAxis tick={{ fontSize: 11, fill: theme.tick }} tickLine={false} axisLine={false} width={40} />
+          <XAxis
+            dataKey="dateLabel"
+            tick={<ForecastAxisTick tone="x" />}
+            tickLine={false}
+            axisLine={false}
+            interval="preserveStartEnd"
+            minTickGap={26}
+            tickMargin={10}
+          />
+          <YAxis
+            tick={<ForecastAxisTick tone="y" />}
+            tickLine={false}
+            axisLine={false}
+            width={42}
+            tickMargin={10}
+          />
           <Tooltip
-            cursor={{ stroke: theme.reference, strokeWidth: 1, strokeDasharray: '3 3' }}
+            cursor={{ stroke: theme.reference, strokeWidth: 1.35, strokeDasharray: '3 3', strokeOpacity: 0.72 }}
             content={(props) => (
               <ForecastChartTooltip
                 active={props.active}
@@ -144,13 +258,82 @@ const ForecastChart: React.FC<ForecastChartProps> = ({
           <Area dataKey="historicalLine" type="monotone" stroke="none" fill="url(#fcHistGrad)" isAnimationActive={false} connectNulls legendType="none" />
 
           {/* Historical line */}
-          <Line dataKey="historicalLine" type="monotone" stroke={theme.actual} strokeWidth={2.5} dot={false} isAnimationActive={false} connectNulls name="Ist-Wert" />
+          <Line
+            dataKey="historicalLine"
+            type="monotone"
+            stroke={theme.actual}
+            strokeWidth={variant === 'default' ? 2.6 : 3}
+            dot={false}
+            activeDot={(props: ActiveDotCallbackProps) => (
+              <ForecastActiveDot cx={props.cx} cy={props.cy} color={theme.actual} />
+            )}
+            isAnimationActive={false}
+            connectNulls
+            name="Ist-Wert"
+          />
 
           {/* Forecast line — DRAMATIC, with glow */}
-          <Line dataKey="forecastLine" type="monotone" stroke={theme.forecast} strokeWidth={variant === 'default' ? 3.5 : 3} dot={false} isAnimationActive={false} connectNulls filter="url(#fcGlow)" name="Forecast" />
+          <Line
+            dataKey="forecastLine"
+            type="monotone"
+            stroke={theme.forecast}
+            strokeWidth={variant === 'default' ? 3.5 : 3}
+            strokeDasharray={variant === 'default' ? undefined : '6 4'}
+            dot={false}
+            activeDot={(props: ActiveDotCallbackProps) => (
+              <ForecastActiveDot cx={props.cx} cy={props.cy} color={theme.forecast} />
+            )}
+            isAnimationActive={false}
+            connectNulls
+            filter="url(#fcGlow)"
+            name="Forecast"
+          />
+
+          {peakPoint && peakPoint.dateLabel !== todayLabel && typeof peakPoint.forecastLine === 'number' ? (
+            <>
+              <ReferenceLine
+                x={peakPoint.dateLabel}
+                stroke={theme.forecast}
+                strokeDasharray="3 3"
+                strokeOpacity={0.5}
+                ifOverflow="extendDomain"
+                label={(props: ReferenceLabelCallbackProps) => (
+                  <ForecastReferenceLabel
+                    {...props}
+                    color={theme.forecast}
+                    kind="peak"
+                    value={`Peak · ${peakPoint.dateLabel}`}
+                  />
+                )}
+              />
+              <ReferenceDot
+                x={peakPoint.dateLabel}
+                y={peakPoint.forecastLine}
+                r={5.5}
+                fill={theme.forecast}
+                stroke="#ffffff"
+                strokeWidth={3}
+                ifOverflow="extendDomain"
+              />
+            </>
+          ) : null}
 
           {/* Today — solid cliff edge */}
-          <ReferenceLine x={todayLabel} stroke={theme.reference} strokeWidth={variant === 'default' ? 2 : 1.5} label={{ value: 'Heute', position: 'insideTopRight', fill: theme.reference, fontSize: 11, fontWeight: 600 }} />
+          <ReferenceLine
+            x={todayLabel}
+            stroke={theme.reference}
+            strokeWidth={variant === 'default' ? 1.6 : 1.2}
+            strokeDasharray="2 3"
+            strokeOpacity={0.7}
+            label={(props: ReferenceLabelCallbackProps) => (
+              <ForecastReferenceLabel
+                {...props}
+                color={theme.reference}
+                kind="today"
+                value="Heute"
+              />
+            )}
+          />
         </ComposedChart>
       </ResponsiveContainer>
     </div>

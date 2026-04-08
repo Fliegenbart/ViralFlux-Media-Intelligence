@@ -445,6 +445,7 @@ const VirusRadarWorkspace: React.FC<Props> = ({
                   onSelectRegion={setSelectedRegionCode}
                   showProbability
                   topRegionCode={regionLeaderboard[0]?.code || null}
+                  variant="radar"
                 />
               </div>
             </div>

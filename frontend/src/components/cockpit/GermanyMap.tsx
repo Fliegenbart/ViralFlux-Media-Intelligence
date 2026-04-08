@@ -95,9 +95,34 @@ interface Props {
   onSelectRegion: (code: string) => void;
   showProbability?: boolean;
   topRegionCode?: string | null;
+  variant?: 'default' | 'radar';
 }
 
-const GermanyMap: React.FC<Props> = ({ regions, selectedRegion, onSelectRegion, showProbability, topRegionCode }) => {
+function mapFocusMeta(region?: MapRegion): string {
+  if (!region) return 'Noch keine belastbare Einordnung';
+
+  const parts: string[] = [];
+  if (region.impact_probability != null && region.impact_probability > 0) {
+    parts.push(`${formatFractionPercent(region.impact_probability, 0)} Signal`);
+  }
+  if (region.trend) {
+    parts.push(`Trend ${region.trend}`);
+  }
+  if (region.change_pct != null && !Number.isNaN(region.change_pct)) {
+    parts.push(`${formatPercent(region.change_pct, 1)} zur Vorwoche`);
+  }
+
+  return parts.join(' · ') || evidenceLabel(region);
+}
+
+const GermanyMap: React.FC<Props> = ({
+  regions,
+  selectedRegion,
+  onSelectRegion,
+  showProbability,
+  topRegionCode,
+  variant = 'default',
+}) => {
   const [hoveredRegion, setHoveredRegion] = useState<string | null>(null);
   const projection = useMemo(
     () => geoMercator().fitSize([420, 460], GEO as never),
@@ -121,9 +146,28 @@ const GermanyMap: React.FC<Props> = ({ regions, selectedRegion, onSelectRegion, 
   }, [projection]);
 
   const hovered = hoveredRegion ? regions[hoveredRegion] : null;
+  const focusCode = hoveredRegion || selectedRegion || topRegionCode || null;
+  const focusRegion = focusCode ? regions[focusCode] : null;
+  const focusLabel = focusCode === topRegionCode ? 'Top-Signal auf der Karte' : 'Ausgewählte Region';
+  const radarVariant = variant === 'radar';
 
   return (
-    <div className="vf-map-panel">
+    <div className={`vf-map-panel ${radarVariant ? 'vf-map-panel--radar' : ''}`}>
+      {radarVariant && (
+        <div className="vf-map-panel__status" aria-label="Kartenfokus">
+          <span className="vf-map-panel__status-eyebrow">{focusLabel}</span>
+          <div className="vf-map-panel__status-head">
+            <strong>{focusRegion?.name || 'Deutschlandkarte'}</strong>
+            <span className={`vf-map-panel__status-pill ${focusCode === topRegionCode ? 'is-top' : ''}`}>
+              {focusCode === topRegionCode ? '#1 diese Woche' : 'Details im Fokus'}
+            </span>
+          </div>
+          <span className="vf-map-panel__status-meta">
+            {mapFocusMeta(focusRegion ?? undefined)}
+          </span>
+        </div>
+      )}
+
       <div className="vf-map-legend" aria-label="Legende">
         <span className="vf-map-legend__item"><span className="vf-map-legend__swatch vf-map-legend__swatch--high" aria-hidden="true" />Hoch</span>
         <span className="vf-map-legend__item"><span className="vf-map-legend__swatch vf-map-legend__swatch--mid" aria-hidden="true" />Mittel</span>
@@ -147,7 +191,16 @@ const GermanyMap: React.FC<Props> = ({ regions, selectedRegion, onSelectRegion, 
           const region = code ? regions[code] : undefined;
           const isSelected = Boolean(code && selectedRegion === code);
           const isHovered = Boolean(code && hoveredRegion === code);
+          const isTop = Boolean(code && topRegionCode === code);
           const insufficientEvidence = hasInsufficientEvidence(region);
+          const impactProbability = region?.impact_probability ?? null;
+          const impactProbabilityValue = impactProbability ?? 0;
+          const shouldShowProbability = Boolean(
+            showProbability
+            && impactProbability != null
+            && (!radarVariant || isSelected || isTop || isHovered),
+          );
+          const badgeRadius = radarVariant && (isSelected || isTop) ? 12 : 10;
           const interactionLabel = `${shape.name}, Bundesland-Level, ${evidenceLabel(region)}`;
           return (
             <g
@@ -156,7 +209,9 @@ const GermanyMap: React.FC<Props> = ({ regions, selectedRegion, onSelectRegion, 
                 'vf-map-region',
                 isHovered && 'vf-map-region--hover',
                 isSelected && 'vf-map-region--selected',
-                code === topRegionCode && !insufficientEvidence && 'region-map__group--pulse',
+                isTop && !insufficientEvidence && 'vf-map-region--top',
+                isTop && !insufficientEvidence && 'region-map__group--pulse',
+                radarVariant && !isSelected && !isTop && 'vf-map-region--muted',
               ].filter(Boolean).join(' ')}
               onClick={() => code && region && onSelectRegion(code)}
               onMouseEnter={() => code && setHoveredRegion(code)}
@@ -178,6 +233,12 @@ const GermanyMap: React.FC<Props> = ({ regions, selectedRegion, onSelectRegion, 
               aria-label={interactionLabel}
               aria-pressed={isSelected}
             >
+              {radarVariant && (isSelected || isTop) && (
+                <path
+                  className={`vf-map-region__halo ${isTop ? 'vf-map-region__halo--top' : 'vf-map-region__halo--selected'}`}
+                  d={shape.d}
+                />
+              )}
               <path
                 className="vf-map-region__path"
                 d={shape.d}
@@ -190,31 +251,33 @@ const GermanyMap: React.FC<Props> = ({ regions, selectedRegion, onSelectRegion, 
                   <circle
                     cx={shape.cx}
                     cy={showProbability ? shape.cy - 11 : shape.cy - 6}
-                    r={10}
+                    r={badgeRadius}
                     fill={insufficientEvidence ? '#e2e8f0' : regionColor(region)}
                     stroke="rgba(15, 23, 42, 0.65)"
                     strokeWidth="1.6"
+                    opacity={radarVariant && !isSelected && !isTop ? 0.8 : 1}
                   />
                   <text
                     x={shape.cx}
                     y={showProbability ? shape.cy - 7.2 : shape.cy - 2.2}
                     textAnchor="middle"
                     fill={insufficientEvidence ? '#475569' : '#ffffff'}
-                    fontSize="9"
+                    fontSize={radarVariant && (isSelected || isTop) ? '9.5' : '9'}
                     fontWeight="800"
+                    opacity={radarVariant && !isSelected && !isTop ? 0.86 : 1}
                   >
                     {code}
                   </text>
-                  {showProbability && region?.impact_probability != null && (
+                  {shouldShowProbability && (
                     <text
                       x={shape.cx}
                       y={shape.cy + 6.5}
                       textAnchor="middle"
-                      fill={region.impact_probability > 0.7 ? 'var(--status-danger)' : region.impact_probability > 0.4 ? 'var(--status-warning)' : 'var(--text-secondary)'}
+                      fill={impactProbabilityValue > 0.7 ? 'var(--status-danger)' : impactProbabilityValue > 0.4 ? 'var(--status-warning)' : 'var(--text-secondary)'}
                       fontSize="10"
                       fontWeight="800"
                     >
-                      {formatFractionPercent(region.impact_probability, 0)}
+                      {formatFractionPercent(impactProbabilityValue, 0)}
                     </text>
                   )}
                 </>
@@ -232,12 +295,21 @@ const GermanyMap: React.FC<Props> = ({ regions, selectedRegion, onSelectRegion, 
               <circle
                 cx={target.tx}
                 cy={target.ty}
-                r={10}
+                r={radarVariant && topRegionCode === code ? 12 : 10}
                 fill={regionColor(code ? regions[code] : undefined)}
                 stroke="rgba(15, 23, 42, 0.65)"
                 strokeWidth="1.6"
+                opacity={radarVariant && topRegionCode !== code && selectedRegion !== code ? 0.84 : 1}
               />
-              <text x={target.tx} y={target.ty + 3} textAnchor="middle" fill="#fff" fontSize="9" fontWeight="800">
+              <text
+                x={target.tx}
+                y={target.ty + 3}
+                textAnchor="middle"
+                fill="#fff"
+                fontSize={radarVariant && topRegionCode === code ? '9.5' : '9'}
+                fontWeight="800"
+                opacity={radarVariant && topRegionCode !== code && selectedRegion !== code ? 0.88 : 1}
+              >
                 {code}
               </text>
             </g>

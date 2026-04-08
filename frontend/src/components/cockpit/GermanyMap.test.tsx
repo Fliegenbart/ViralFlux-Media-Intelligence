@@ -2,6 +2,13 @@ import '@testing-library/jest-dom';
 import React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 
+jest.mock('./cockpitUtils', () => ({
+  formatPercent: (value: number, digits = 0) => `${value.toFixed(digits)}%`,
+  primarySignalScore: (region: { signal_score?: number | null; impact_probability?: number | null }) => (
+    region.signal_score ?? region.impact_probability ?? 0
+  ),
+}));
+
 import GermanyMap from './GermanyMap';
 
 jest.mock('d3-geo', () => ({
@@ -43,5 +50,43 @@ describe('GermanyMap', () => {
     fireEvent.keyDown(berlinButton, { key: 'Enter' });
 
     expect(onSelectRegion).toHaveBeenCalledWith('BE');
+  });
+
+  it('renders a calmer radar focus state and only highlights the top signal percentage', () => {
+    render(
+      <GermanyMap
+        variant="radar"
+        regions={{
+          MV: {
+            name: 'Mecklenburg-Vorpommern',
+            trend: 'steigend',
+            change_pct: 199.1,
+            signal_score: 0.55,
+            impact_probability: 0.55,
+            signal_drivers: [{ label: 'ARE', strength_pct: 62 }],
+            source_trace: ['RKI', 'Abwasser'],
+          } as any,
+          BW: {
+            name: 'Baden-Württemberg',
+            trend: 'steigend',
+            change_pct: 78,
+            signal_score: 0.49,
+            impact_probability: 0.49,
+            signal_drivers: [{ label: 'ARE', strength_pct: 48 }],
+            source_trace: ['RKI', 'Abwasser'],
+          } as any,
+        }}
+        selectedRegion={null}
+        onSelectRegion={() => undefined}
+        showProbability
+        topRegionCode="MV"
+      />,
+    );
+
+    expect(screen.getByLabelText('Kartenfokus')).toHaveTextContent('Top-Signal auf der Karte');
+    expect(screen.getByText('Mecklenburg-Vorpommern')).toBeInTheDocument();
+    expect(screen.getByText('#1 diese Woche')).toBeInTheDocument();
+    expect(screen.getByText('55%')).toBeInTheDocument();
+    expect(screen.queryByText('49%')).not.toBeInTheDocument();
   });
 });

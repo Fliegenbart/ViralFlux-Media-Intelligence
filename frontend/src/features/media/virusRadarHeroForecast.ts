@@ -1,0 +1,178 @@
+import { BacktestResponse } from '../../types/media';
+
+export const VIRUS_RADAR_HERO_VIRUSES = [
+  'Influenza A',
+  'Influenza B',
+  'SARS-CoV-2',
+  'RSV A',
+] as const;
+
+export const VIRUS_RADAR_HERO_COLORS: Record<string, string> = {
+  'Influenza A': '#e8523a',
+  'Influenza B': '#1f7a66',
+  'SARS-CoV-2': '#1457d2',
+  'RSV A': '#7a3ff2',
+};
+
+export type VirusRadarHeroVirus = (typeof VIRUS_RADAR_HERO_VIRUSES)[number];
+
+export interface VirusRadarHeroChartRow {
+  date: string;
+  dateLabel: string;
+  isForecast: boolean;
+  series: Record<string, number | null>;
+}
+
+export interface VirusRadarHeroSummary {
+  virus: string;
+  currentIndex: number;
+  projectedIndex: number;
+  deltaPct: number;
+  direction: 'steigend' | 'fallend' | 'stabil';
+}
+
+export interface VirusRadarHeroForecastData {
+  availableViruses: string[];
+  chartData: VirusRadarHeroChartRow[];
+  summaries: VirusRadarHeroSummary[];
+  headlinePrimary: string;
+  headlineSecondary: string;
+  summary: string;
+}
+
+type PlanningPoint = {
+  date: string;
+  value: number;
+};
+
+function formatDayMonth(dateStr: string): string {
+  const date = new Date(dateStr);
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  return `${day}.${month}`;
+}
+
+function addDays(dateStr: string, days: number): string {
+  const date = new Date(`${dateStr}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+function subtractDays(dateStr: string, days: number): string {
+  return addDays(dateStr, -days);
+}
+
+function normalizeDirection(deltaPct: number): 'steigend' | 'fallend' | 'stabil' {
+  if (deltaPct >= 3) return 'steigend';
+  if (deltaPct <= -3) return 'fallend';
+  return 'stabil';
+}
+
+function extractPlanningPoints(result: BacktestResponse | null | undefined): PlanningPoint[] {
+  return [...(result?.planning_curve?.curve || [])]
+    .map((point) => ({
+      date: String(point?.date || point?.target_date || '').slice(0, 10),
+      value: Number(point?.planning_qty ?? Number.NaN),
+    }))
+    .filter((point) => point.date && Number.isFinite(point.value))
+    .sort((left, right) => left.date.localeCompare(right.date));
+}
+
+function buildHeadlineSecondary(summaries: VirusRadarHeroSummary[]): string {
+  if (!summaries.length) return 'Noch keine belastbare 7-Tage-Prognose.';
+
+  const rising = summaries.filter((item) => item.direction === 'steigend');
+  if (rising.length >= 2) return `${rising[0].virus} und ${rising[1].virus} ziehen aktuell am stärksten an.`;
+  if (rising.length === 1) return `${rising[0].virus} zieht aktuell am stärksten an.`;
+  if (summaries[0].direction === 'fallend') return `${summaries[0].virus} flacht aktuell eher ab.`;
+  return `${summaries[0].virus} bleibt aktuell am stabilsten.`;
+}
+
+function buildSummary(summaries: VirusRadarHeroSummary[]): string {
+  if (!summaries.length) {
+    return 'Sobald frische Prognosekurven vorliegen, wird hier das gemeinsame Lagebild der nächsten sieben Tage sichtbar.';
+  }
+
+  const top = summaries[0];
+  const second = summaries[1];
+  const topPrefix = `${top.virus} ${top.deltaPct >= 0 ? 'liegt' : 'fällt'} in der 7-Tage-Prognose bei ${top.deltaPct >= 0 ? '+' : ''}${top.deltaPct.toFixed(0)} %.`;
+  if (!second) {
+    return `${topPrefix} Alle Linien sind auf Heute = 100 normiert, damit die Dynamik direkt vergleichbar bleibt.`;
+  }
+  return `${topPrefix} Dahinter folgt ${second.virus} mit ${second.deltaPct >= 0 ? '+' : ''}${second.deltaPct.toFixed(0)} %. Alle Linien sind auf Heute = 100 normiert, damit die Dynamik direkt vergleichbar bleibt.`;
+}
+
+export function buildVirusRadarHeroForecastData(
+  backtestsByVirus: Partial<Record<string, BacktestResponse | null | undefined>>,
+  today = new Date().toISOString().slice(0, 10),
+): VirusRadarHeroForecastData {
+  const windowStart = subtractDays(today, 28);
+  const windowEnd = addDays(today, 7);
+  const seriesByVirus = new Map<string, PlanningPoint[]>();
+  const summaries: VirusRadarHeroSummary[] = [];
+
+  VIRUS_RADAR_HERO_VIRUSES.forEach((virus) => {
+    const planningPoints = extractPlanningPoints(backtestsByVirus[virus]);
+    const anchorPoint = [...planningPoints]
+      .filter((point) => point.date <= today && point.value > 0)
+      .sort((left, right) => right.date.localeCompare(left.date))[0];
+
+    if (!anchorPoint) return;
+
+    const windowPoints = planningPoints.filter((point) => point.date >= windowStart && point.date <= windowEnd);
+    if (!windowPoints.length) return;
+
+    const normalizedPoints = windowPoints.map((point) => ({
+      date: point.date,
+      value: Number(((point.value / anchorPoint.value) * 100).toFixed(2)),
+    }));
+    seriesByVirus.set(virus, normalizedPoints);
+
+    const futurePoint = [...normalizedPoints]
+      .filter((point) => point.date > today)
+      .sort((left, right) => right.date.localeCompare(left.date))[0];
+    const projectedIndex = futurePoint?.value ?? 100;
+    const deltaPct = Number((projectedIndex - 100).toFixed(1));
+
+    summaries.push({
+      virus,
+      currentIndex: 100,
+      projectedIndex,
+      deltaPct,
+      direction: normalizeDirection(deltaPct),
+    });
+  });
+
+  const allDates = Array.from(
+    new Set(
+      Array.from(seriesByVirus.values()).flatMap((points) => points.map((point) => point.date)),
+    ),
+  ).sort((left, right) => left.localeCompare(right));
+
+  const chartData: VirusRadarHeroChartRow[] = allDates.map((date) => {
+    const series = Object.fromEntries(
+      VIRUS_RADAR_HERO_VIRUSES.map((virus) => {
+        const point = seriesByVirus.get(virus)?.find((entry) => entry.date === date);
+        return [virus, point?.value ?? null];
+      }),
+    );
+
+    return {
+      date,
+      dateLabel: formatDayMonth(date),
+      isForecast: date > today,
+      series,
+    };
+  });
+
+  summaries.sort((left, right) => right.deltaPct - left.deltaPct);
+
+  return {
+    availableViruses: VIRUS_RADAR_HERO_VIRUSES.filter((virus) => seriesByVirus.has(virus)),
+    chartData,
+    summaries,
+    headlinePrimary: 'Das Lagebild der nächsten 7 Tage.',
+    headlineSecondary: buildHeadlineSecondary(summaries),
+    summary: buildSummary(summaries),
+  };
+}

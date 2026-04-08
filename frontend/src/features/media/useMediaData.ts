@@ -21,3 +21,4 @@ export { useRegionsPageData } from './useRegionsPageData';
 export { useCampaignsPageData } from './useCampaignsPageData';
 export { useEvidencePageData } from './useEvidencePageData';
 export { useOperationalDashboardData } from './useOperationalDashboardData';
+export { useVirusRadarHeroForecast } from './useVirusRadarHeroForecast';

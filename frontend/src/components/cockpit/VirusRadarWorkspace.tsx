@@ -6,10 +6,11 @@ import {
   useNowPageData,
   useRegionsPageData,
 } from '../../features/media/useMediaData';
-import { RegionalBacktestTimelinePoint } from '../../types/media/regional';
+import { VirusRadarHeroForecastData } from '../../features/media/virusRadarHeroForecast';
 import { RecommendationCard } from '../../types/media';
 import GermanyMap from './GermanyMap';
 import { ForecastChart } from './ForecastChart';
+import { MultiVirusForecastChart } from './MultiVirusForecastChart';
 import { MapRegion } from './types';
 import {
   formatCurrency,
@@ -26,6 +27,7 @@ interface Props {
   virus: string;
   onVirusChange: (value: string) => void;
   horizonDays: number;
+  heroForecast: VirusRadarHeroForecastData;
   nowData: ReturnType<typeof useNowPageData>;
   regionsData: ReturnType<typeof useRegionsPageData>;
   campaignsData: ReturnType<typeof useCampaignsPageData>;
@@ -51,19 +53,11 @@ type RegionLeaderboardRow = {
   tooltip?: unknown;
 };
 
-type HeroNarrative = {
-  kicker: string;
-  headlinePrimary: string;
-  headlineSecondary: string;
-  summary: string;
-  tone: 'hero-alert' | 'hero-calm';
-  peakDateLabel: string | null;
-};
-
 const VirusRadarWorkspace: React.FC<Props> = ({
   virus,
   onVirusChange,
   horizonDays,
+  heroForecast,
   nowData,
   regionsData,
   campaignsData,
@@ -159,25 +153,8 @@ const VirusRadarWorkspace: React.FC<Props> = ({
   const heroChangePct = heroPrediction?.change_pct ?? heroRegion?.change_pct ?? null;
   const effectiveRegionCode = selectedRegionCode || defaultHeroRegionCode;
   const selectedRegion = effectiveRegionCode ? mapRegions[effectiveRegionCode] : null;
-  const heroFallbackSummary = (
-    heroRegion?.priority_explanation
-    || heroActivation?.reason
-    || (
-      defaultHeroRegionCode && defaultHeroRegionCode === focusRegion?.code
-        ? heroRecommendation?.whyNow
-        : null
-    )
-    || nowData.view.summary
-  );
-  const heroNarrative = buildHeroNarrative({
-    virus,
-    regionName: heroRegionName,
-    generatedAt: nowData.view.generatedAt,
-    timeline: nowData.focusRegionBacktest?.timeline || [],
-    probability: heroSignalProbability,
-    recommendationDirection: heroPrediction?.decision_label || heroRecommendation?.direction,
-    fallbackSummary: heroFallbackSummary,
-  });
+  const topVirusSummary = heroForecast.summaries[0] || null;
+  const secondVirusSummary = heroForecast.summaries[1] || null;
   const recommendationId = (
     heroRegionLeaderboardEntry?.recommendation_ref?.card_id
     || (
@@ -224,59 +201,64 @@ const VirusRadarWorkspace: React.FC<Props> = ({
 
           <div className="virus-radar-hero__eyebrow">
             <span className="virus-radar-hero__pulse" aria-hidden="true" />
-            {heroNarrative.kicker}
+            Live-Lagebild · {heroForecast.availableViruses.length} Viren
           </div>
           <h2 className="virus-radar-hero__headline">
-            <span>{heroNarrative.headlinePrimary}</span>
-            <span className="virus-radar-hero__headline-accent">{heroNarrative.headlineSecondary}</span>
+            <span>{heroForecast.headlinePrimary}</span>
+            <span className="virus-radar-hero__headline-accent">{heroForecast.headlineSecondary}</span>
           </h2>
           <p className="virus-radar-hero__summary virus-radar-hero__summary--lead">
-            {heroNarrative.summary}
+            {heroForecast.summary}
           </p>
 
           <div className="virus-radar-hero-chart-card">
             <div className="virus-radar-hero-chart-card__meta">
               <div className="virus-radar-hero-chart-card__legend">
                 <div className="virus-radar-hero-chart-card__legend-item">
-                  <span className="virus-radar-hero-chart-card__swatch virus-radar-hero-chart-card__swatch--actual" />
-                  Ist · 28 Tage
+                  <span className="virus-radar-hero-chart-card__swatch virus-radar-hero-chart-card__swatch--influenza-a" />
+                  Influenza A
                 </div>
                 <div className="virus-radar-hero-chart-card__legend-item">
-                  <span className="virus-radar-hero-chart-card__swatch virus-radar-hero-chart-card__swatch--forecast" />
+                  <span className="virus-radar-hero-chart-card__swatch virus-radar-hero-chart-card__swatch--influenza-b" />
+                  Influenza B
+                </div>
+                <div className="virus-radar-hero-chart-card__legend-item">
+                  <span className="virus-radar-hero-chart-card__swatch virus-radar-hero-chart-card__swatch--sars-cov-2" />
+                  SARS-CoV-2
+                </div>
+                <div className="virus-radar-hero-chart-card__legend-item">
+                  <span className="virus-radar-hero-chart-card__swatch virus-radar-hero-chart-card__swatch--rsv-a" />
+                  RSV A
+                </div>
+                <div className="virus-radar-hero-chart-card__legend-item virus-radar-hero-chart-card__legend-item--explain">
+                  Heute = 100
+                </div>
+                <div className="virus-radar-hero-chart-card__legend-item virus-radar-hero-chart-card__legend-item--explain">
                   Forecast · {horizonDays} Tage
-                </div>
-                <div className="virus-radar-hero-chart-card__legend-item">
-                  <span className="virus-radar-hero-chart-card__swatch virus-radar-hero-chart-card__swatch--band" />
-                  Konfidenz 80 % / 95 %
                 </div>
               </div>
               <div className="virus-radar-hero-chart-card__stamp">
-                <strong>{chartRegionName || 'Bundesland offen'} · {virus}</strong>
-                <span>
-                  Stand {dataTimestamp}
-                  {heroNarrative.peakDateLabel ? ` · Peak ${heroNarrative.peakDateLabel}` : ''}
-                </span>
+                <strong>Vier Viren im Vergleich</strong>
+                <span>Stand {dataTimestamp}</span>
               </div>
             </div>
-            <ForecastChart
-              timeline={nowData.focusRegionBacktest?.timeline || []}
-              regionName={chartRegionName}
+            <MultiVirusForecastChart
+              data={heroForecast.chartData}
               className="virus-radar-hero-chart"
-              variant={heroNarrative.tone}
             />
           </div>
 
           <div className="virus-radar-hero__footer">
             <div className="virus-radar-hero__stats">
               <div className="virus-radar-stat">
-                <span className="virus-radar-stat__label">Signal</span>
+                <span className="virus-radar-stat__label">Stärkster Anstieg</span>
                 <strong className="virus-radar-stat__value">
-                  {formatProbability(heroSignalProbability)}
+                  {topVirusSummary ? `${topVirusSummary.virus} ${formatSignedPercent(topVirusSummary.deltaPct)}` : 'Noch offen'}
                 </strong>
               </div>
               <div className="virus-radar-stat">
-                <span className="virus-radar-stat__label">Fokus</span>
-                <strong className="virus-radar-stat__value">{heroRegionName || 'Noch offen'}</strong>
+                <span className="virus-radar-stat__label">Danach</span>
+                <strong className="virus-radar-stat__value">{secondVirusSummary ? `${secondVirusSummary.virus} ${formatSignedPercent(secondVirusSummary.deltaPct)}` : 'Noch offen'}</strong>
               </div>
               <div className="virus-radar-stat">
                 <span className="virus-radar-stat__label">Datenlage</span>
@@ -302,8 +284,8 @@ const VirusRadarWorkspace: React.FC<Props> = ({
             <div className="virus-radar-hero__support">
               <p className="virus-radar-hero__support-copy">
                 {recommendationId
-                  ? 'Die Empfehlung ist direkt prüfbar. Karte, Kampagnen und Evidenz bleiben darunter als Unterstützung.'
-                  : 'Die Richtung ist sichtbar, die konkrete Empfehlung wird noch verdichtet.'}
+                  ? 'Oben siehst du das gemeinsame Virus-Lagebild. Die Karte, Regionen und Kampagnen darunter folgen weiter dem aktuell gewählten Virus.'
+                  : 'Oben siehst du das gemeinsame Virus-Lagebild. Die konkrete Aktivierung wird darunter weiter nach Virus und Bundesland verdichtet.'}
               </p>
 
               <div className="virus-radar-virus-switcher" aria-label="Virus wechseln">
@@ -485,97 +467,15 @@ const VirusRadarWorkspace: React.FC<Props> = ({
   );
 };
 
-function buildDecisionHeadline(direction?: string | null, region?: string | null): string {
-  const cleanDirection = String(direction || 'Prüfen').trim().toLowerCase();
-  const cleanRegion = String(region || 'Dieses Bundesland').trim();
-
-  if (cleanDirection.includes('aktiv')) return `${cleanRegion} jetzt priorisieren`;
-  if (cleanDirection.includes('vorbereit')) return `${cleanRegion} jetzt vorbereiten`;
-  if (cleanDirection.includes('beobacht')) return `${cleanRegion} eng beobachten`;
-  return `${cleanRegion} jetzt prüfen`;
-}
-
-function buildHeroNarrative({
-  virus,
-  regionName,
-  generatedAt,
-  timeline,
-  probability,
-  recommendationDirection,
-  fallbackSummary,
-}: {
-  virus: string;
-  regionName?: string | null;
-  generatedAt?: string | null;
-  timeline: RegionalBacktestTimelinePoint[];
-  probability?: number | null;
-  recommendationDirection?: string | null;
-  fallbackSummary?: string | null;
-}): HeroNarrative {
-  const cleanRegion = String(regionName || 'Dieses Bundesland').trim();
-  const referenceDate = (generatedAt || '').slice(0, 10);
-  const normalizedProbability = probability == null ? null : (probability <= 1 ? probability : probability / 100);
-  const peakPoint = [...(timeline || [])]
-    .filter((point) => point?.target_date && (!referenceDate || point.target_date >= referenceDate))
-    .sort((left, right) => (right.expected_target_incidence || 0) - (left.expected_target_incidence || 0))[0];
-  const daysToPeak = peakPoint?.target_date && referenceDate
-    ? diffInDays(referenceDate, peakPoint.target_date)
-    : null;
-
-  if (peakPoint && daysToPeak != null && daysToPeak >= 0 && (normalizedProbability == null || normalizedProbability >= 0.55)) {
-    return {
-      kicker: `Live-Signal · ${virus}`,
-      headlinePrimary: `${cleanRegion} läuft heiß.`,
-      headlineSecondary: formatPeakLead(daysToPeak),
-      summary: buildPeakSummary(cleanRegion, peakPoint.target_date, fallbackSummary),
-      tone: 'hero-alert',
-      peakDateLabel: formatDateLabel(peakPoint.target_date),
-    };
-  }
-
-  return {
-    kicker: `Wochenlage · ${virus}`,
-    headlinePrimary: buildDecisionHeadline(recommendationDirection, cleanRegion),
-    headlineSecondary: 'Jetzt fokussiert prüfen.',
-    summary: fallbackSummary || `${cleanRegion} ist diese Woche die klarste Region für die weitere Prüfung.`,
-    tone: 'hero-calm',
-    peakDateLabel: null,
-  };
-}
-
-function diffInDays(start: string, end: string): number {
-  const startDate = new Date(`${start}T00:00:00Z`);
-  const endDate = new Date(`${end}T00:00:00Z`);
-  return Math.round((endDate.getTime() - startDate.getTime()) / 86400000);
-}
-
-function formatPeakLead(daysToPeak: number): string {
-  if (daysToPeak <= 0) return 'Peak heute.';
-  if (daysToPeak === 1) return 'Peak morgen.';
-  return `Peak in ${daysToPeak} Tagen.`;
-}
-
-function buildPeakSummary(regionName: string, peakDate: string, fallbackSummary?: string | null): string {
-  const readableDate = formatDateLabel(peakDate);
-  return fallbackSummary
-    ? `${fallbackSummary} Unsere Vorhersage sieht den Höhepunkt für ${readableDate} – genau das Zeitfenster, in dem GELO in ${regionName} Reichweite priorisieren sollte.`
-    : `Die Welle baut sich messbar auf. Unsere Vorhersage sieht den Höhepunkt für ${readableDate} – genau das Zeitfenster, in dem GELO in ${regionName} Reichweite priorisieren sollte.`;
-}
-
-function formatDateLabel(dateStr?: string | null): string | null {
-  if (!dateStr) return null;
-  const parsed = new Date(`${dateStr}T00:00:00Z`);
-  if (Number.isNaN(parsed.getTime())) return dateStr;
-  return parsed.toLocaleDateString('de-DE', {
-    day: '2-digit',
-    month: 'long',
-  });
-}
-
 function formatProbability(value?: number | null): string {
   if (value == null || Number.isNaN(value)) return '-';
   const percent = value <= 1 ? value * 100 : value;
   return formatPercent(percent, 0);
+}
+
+function formatSignedPercent(value?: number | null): string {
+  if (value == null || Number.isNaN(value)) return '-';
+  return `${value >= 0 ? '+' : ''}${value.toFixed(0)}%`;
 }
 
 function buildSignalTiles({

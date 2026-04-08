@@ -14,6 +14,11 @@ jest.mock('./ForecastChart', () => ({
   ForecastChart: () => <div>Forecast chart</div>,
 }));
 
+jest.mock('./MultiVirusForecastChart', () => ({
+  __esModule: true,
+  MultiVirusForecastChart: () => <div>Multi virus forecast chart</div>,
+}));
+
 jest.mock('./cockpitUtils', () => ({
   formatCurrency: (value: number | null | undefined) => (value == null ? '-' : `${value} EUR`),
   formatDateTime: () => '04.04.2026 · 08:00',
@@ -28,12 +33,37 @@ jest.mock('./cockpitUtils', () => ({
 const noop = () => {};
 
 describe('VirusRadarWorkspace', () => {
-  it('renders a hero-style weekly signal with peak framing', () => {
+  it('renders a shared four-virus hero outlook with a comparison forecast', () => {
     render(
       <VirusRadarWorkspace
         virus="Influenza A"
         onVirusChange={noop}
         horizonDays={7}
+        heroForecast={{
+          availableViruses: ['Influenza A', 'Influenza B', 'SARS-CoV-2', 'RSV A'],
+          chartData: [
+            {
+              date: '2026-04-08',
+              dateLabel: '08.04',
+              isForecast: false,
+              series: {
+                'Influenza A': 100,
+                'Influenza B': 100,
+                'SARS-CoV-2': 100,
+                'RSV A': 100,
+              },
+            },
+          ],
+          summaries: [
+            { virus: 'RSV A', currentIndex: 100, projectedIndex: 145, deltaPct: 45, direction: 'steigend' },
+            { virus: 'SARS-CoV-2', currentIndex: 100, projectedIndex: 121, deltaPct: 21, direction: 'steigend' },
+            { virus: 'Influenza A', currentIndex: 100, projectedIndex: 108, deltaPct: 8, direction: 'steigend' },
+            { virus: 'Influenza B', currentIndex: 100, projectedIndex: 94, deltaPct: -6, direction: 'fallend' },
+          ],
+          headlinePrimary: 'Das Lagebild der nächsten 7 Tage.',
+          headlineSecondary: 'RSV A und SARS-CoV-2 ziehen aktuell am stärksten an.',
+          summary: 'RSV A liegt in der 7-Tage-Prognose bei +45 %. Dahinter folgt SARS-CoV-2 mit +21 %. Alle Linien sind auf Heute = 100 normiert, damit die Dynamik direkt vergleichbar bleibt.',
+        }}
         nowData={{
           view: {
             generatedAt: '2026-04-04T08:00:00Z',
@@ -171,11 +201,12 @@ describe('VirusRadarWorkspace', () => {
     );
 
     expect(screen.getByText('PEIX / GELO / VIRUS-RADAR')).toBeInTheDocument();
-    expect(screen.getByText('Live-Signal · Influenza A')).toBeInTheDocument();
-    expect(screen.getByText('Mecklenburg-Vorpommern läuft heiß.')).toBeInTheDocument();
-    expect(screen.getByText('Peak in 4 Tagen.')).toBeInTheDocument();
+    expect(screen.getByText('Live-Lagebild · 4 Viren')).toBeInTheDocument();
+    expect(screen.getByText('Das Lagebild der nächsten 7 Tage.')).toBeInTheDocument();
+    expect(screen.getByText('RSV A und SARS-CoV-2 ziehen aktuell am stärksten an.')).toBeInTheDocument();
+    expect(screen.getByText('Multi virus forecast chart')).toBeInTheDocument();
     expect(screen.getAllByText('Mecklenburg-Vorpommern').length).toBeGreaterThan(0);
-    expect(screen.getByText('Ist · 28 Tage')).toBeInTheDocument();
+    expect(screen.getByText('Heute = 100')).toBeInTheDocument();
     expect(screen.getByText('Forecast · 7 Tage')).toBeInTheDocument();
     expect(screen.queryByText('Entscheidung diese Woche')).not.toBeInTheDocument();
     expect(screen.getByText('Radar-Tape')).toBeInTheDocument();

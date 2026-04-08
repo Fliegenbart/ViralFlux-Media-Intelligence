@@ -168,17 +168,17 @@
   border-radius: 2px;
 }
 
-.virus-radar-hero-chart-card__swatch--actual {
-  background: #0f1c1a;
-}
+.virus-radar-hero-chart-card__swatch--influenza-a { background: #e8523a; }
+.virus-radar-hero-chart-card__swatch--influenza-b { background: #1f7a66; }
+.virus-radar-hero-chart-card__swatch--sars-cov-2 { background: #1457d2; }
+.virus-radar-hero-chart-card__swatch--rsv-a { background: #7a3ff2; }
 
-.virus-radar-hero-chart-card__swatch--forecast {
-  background: #e8523a;
-}
-
-.virus-radar-hero-chart-card__swatch--band {
-  border: 1px solid rgba(232, 82, 58, 0.18);
-  background: rgba(232, 82, 58, 0.1);
+.virus-radar-hero-chart-card__legend-item--explain {
+  min-height: 28px;
+  padding: 0 10px;
+  border: 1px solid rgba(23, 32, 51, 0.08);
+  color: #8a9794;
+  background: rgba(248, 250, 249, 0.95);
 }
 
 .virus-radar-hero-chart-card__stamp {
@@ -196,6 +196,43 @@
 
 .virus-radar-hero-chart {
   min-height: 340px;
+}
+
+.virus-radar-multi-chart-tooltip {
+  min-width: 188px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: rgba(15, 28, 26, 0.96);
+  box-shadow: 0 20px 40px rgba(15, 28, 26, 0.18);
+}
+
+.virus-radar-multi-chart-tooltip__title {
+  margin-bottom: 10px;
+  color: rgba(248, 250, 249, 0.78);
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.virus-radar-multi-chart-tooltip__rows {
+  display: grid;
+  gap: 8px;
+}
+
+.virus-radar-multi-chart-tooltip__row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  color: #f8faf9;
+  font-size: 0.95rem;
+}
+
+.virus-radar-multi-chart-tooltip__row strong {
+  color: #f8faf9;
+  font-family: 'JetBrains Mono', 'Menlo', monospace;
+  font-size: 0.95rem;
 }
 
 .virus-radar-hero__footer {

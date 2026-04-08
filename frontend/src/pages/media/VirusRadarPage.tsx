@@ -10,6 +10,7 @@ import {
   useEvidencePageData,
   useNowPageData,
   useRegionsPageData,
+  useVirusRadarHeroForecast,
 } from '../../features/media/useMediaData';
 import { useMediaWorkflow } from '../../features/media/workflowContext';
 
@@ -27,6 +28,7 @@ const VirusRadarPage: React.FC = () => {
   } = useMediaWorkflow();
   const [horizonDays] = useState(7);
   const regionsData = useRegionsPageData(virus, brand, dataVersion, toast);
+  const heroForecastData = useVirusRadarHeroForecast(brand, dataVersion, toast);
   const preferredHeroRegionCode = useMemo(() => (
     regionsData.regionsView?.map?.activation_suggestions?.[0]?.region
     || regionsData.regionsView?.map?.top_regions?.[0]?.code
@@ -67,6 +69,7 @@ const VirusRadarPage: React.FC = () => {
         virus={virus}
         onVirusChange={setVirus}
         horizonDays={horizonDays}
+        heroForecast={heroForecastData.heroForecast}
         nowData={nowData}
         regionsData={regionsData}
         campaignsData={campaignsData}

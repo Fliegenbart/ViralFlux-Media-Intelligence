@@ -1,6 +1,7 @@
 import {
   BacktestResponse,
   ConnectorCatalogItem,
+  LatestForecastResponse,
   MediaCampaignsResponse,
   MediaDecisionResponse,
   MediaEvidenceResponse,
@@ -193,6 +194,10 @@ export const mediaApi = {
 
   async getBacktestRun(runId: string): Promise<BacktestResponse> {
     return fetchJson<BacktestResponse>(`/api/v1/backtest/runs/${encodeURIComponent(runId)}`);
+  },
+
+  async getLatestForecast(virus: string): Promise<LatestForecastResponse> {
+    return fetchJson<LatestForecastResponse>(`/api/v1/forecast/latest/${encodeURIComponent(virus)}`);
   },
 
   async getWaveRadar(virus: string): Promise<WaveRadarResponse> {

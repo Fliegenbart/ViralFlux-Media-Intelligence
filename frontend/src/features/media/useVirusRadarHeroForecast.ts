@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { BacktestResponse } from '../../types/media';
+import { LatestForecastResponse } from '../../types/media';
 import { mediaApi } from './api';
 import {
   buildVirusRadarHeroForecastData,
@@ -28,26 +28,15 @@ export function useVirusRadarHeroForecast(
 
     setLoading(true);
 
-    const decisionResults = await Promise.allSettled(
-      VIRUS_RADAR_HERO_VIRUSES.map((virus) => mediaApi.getDecision(virus, brand)),
+    const forecastResults = await Promise.allSettled(
+      VIRUS_RADAR_HERO_VIRUSES.map((virus) => mediaApi.getLatestForecast(virus)),
     );
 
     if (!isCurrentLoad()) return;
 
-    const waveRuns = decisionResults.map((result, index) => ({
-      virus: VIRUS_RADAR_HERO_VIRUSES[index],
-      runId: result.status === 'fulfilled' ? result.value.wave_run_id || null : null,
-    }));
-
-    const backtestResults = await Promise.allSettled(
-      waveRuns.map((entry) => (entry.runId ? mediaApi.getBacktestRun(entry.runId) : Promise.resolve(null))),
-    );
-
-    if (!isCurrentLoad()) return;
-
-    const byVirus: Partial<Record<string, BacktestResponse | null>> = {};
-    backtestResults.forEach((result, index) => {
-      byVirus[waveRuns[index].virus] = result.status === 'fulfilled' ? result.value : null;
+    const byVirus: Partial<Record<string, LatestForecastResponse | null>> = {};
+    forecastResults.forEach((result, index) => {
+      byVirus[VIRUS_RADAR_HERO_VIRUSES[index]] = result.status === 'fulfilled' ? result.value : null;
     });
 
     const nextHeroForecast = buildVirusRadarHeroForecastData(byVirus);

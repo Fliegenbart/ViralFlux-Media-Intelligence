@@ -1,4 +1,4 @@
-import { BacktestResponse } from '../../types/media';
+import { LatestForecastResponse } from '../../types/media';
 
 export const VIRUS_RADAR_HERO_VIRUSES = [
   'Influenza A',
@@ -40,7 +40,7 @@ export interface VirusRadarHeroForecastData {
   summary: string;
 }
 
-type PlanningPoint = {
+type ForecastPoint = {
   date: string;
   value: number;
 };
@@ -68,11 +68,11 @@ function normalizeDirection(deltaPct: number): 'steigend' | 'fallend' | 'stabil'
   return 'stabil';
 }
 
-function extractPlanningPoints(result: BacktestResponse | null | undefined): PlanningPoint[] {
-  return [...(result?.planning_curve?.curve || [])]
+function extractForecastPoints(result: LatestForecastResponse | null | undefined): ForecastPoint[] {
+  return [...(result?.forecast || [])]
     .map((point) => ({
-      date: String(point?.date || point?.target_date || '').slice(0, 10),
-      value: Number(point?.planning_qty ?? Number.NaN),
+      date: String(point?.date || '').slice(0, 10),
+      value: Number(point?.predicted_value ?? Number.NaN),
     }))
     .filter((point) => point.date && Number.isFinite(point.value))
     .sort((left, right) => left.date.localeCompare(right.date));
@@ -103,29 +103,32 @@ function buildSummary(summaries: VirusRadarHeroSummary[]): string {
 }
 
 export function buildVirusRadarHeroForecastData(
-  backtestsByVirus: Partial<Record<string, BacktestResponse | null | undefined>>,
+  forecastsByVirus: Partial<Record<string, LatestForecastResponse | null | undefined>>,
   today = new Date().toISOString().slice(0, 10),
 ): VirusRadarHeroForecastData {
-  const windowStart = subtractDays(today, 28);
   const windowEnd = addDays(today, 7);
-  const seriesByVirus = new Map<string, PlanningPoint[]>();
+  const seriesByVirus = new Map<string, ForecastPoint[]>();
   const summaries: VirusRadarHeroSummary[] = [];
 
   VIRUS_RADAR_HERO_VIRUSES.forEach((virus) => {
-    const planningPoints = extractPlanningPoints(backtestsByVirus[virus]);
-    const anchorPoint = [...planningPoints]
-      .filter((point) => point.date <= today && point.value > 0)
-      .sort((left, right) => right.date.localeCompare(left.date))[0];
+    const forecastPoints = extractForecastPoints(forecastsByVirus[virus]);
+    const anchorPoint = forecastPoints.find((point) => point.date >= today && point.value > 0) || forecastPoints[0];
 
     if (!anchorPoint) return;
 
-    const windowPoints = planningPoints.filter((point) => point.date >= windowStart && point.date <= windowEnd);
+    const windowPoints = forecastPoints.filter((point) => point.date >= today && point.date <= windowEnd);
     if (!windowPoints.length) return;
 
-    const normalizedPoints = windowPoints.map((point) => ({
+    const normalizedPoints: ForecastPoint[] = [
+      {
+        date: today,
+        value: 100,
+      },
+      ...windowPoints.map((point) => ({
       date: point.date,
       value: Number(((point.value / anchorPoint.value) * 100).toFixed(2)),
-    }));
+      })),
+    ];
     seriesByVirus.set(virus, normalizedPoints);
 
     const futurePoint = [...normalizedPoints]

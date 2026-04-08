@@ -7,20 +7,17 @@ import { mediaApi } from './api';
 
 jest.mock('./api', () => ({
   mediaApi: {
-    getDecision: jest.fn(),
-    getBacktestRun: jest.fn(),
+    getLatestForecast: jest.fn(),
   },
 }));
 
-function buildBacktest(valueToday: number, valueFuture: number) {
+function buildForecast(virusTyp: string, valueToday: number, valueFuture: number) {
   return {
-    planning_curve: {
-      curve: [
-        { date: '2026-04-01', planning_qty: valueToday * 0.8 },
-        { date: '2026-04-08', planning_qty: valueToday },
-        { date: '2026-04-15', planning_qty: valueFuture },
-      ],
-    },
+    virus_typ: virusTyp,
+    forecast: [
+      { date: '2026-04-08T00:00:00', predicted_value: valueToday },
+      { date: '2026-04-15T00:00:00', predicted_value: valueFuture },
+    ],
   };
 }
 
@@ -44,14 +41,11 @@ describe('useVirusRadarHeroForecast', () => {
   });
 
   it('loads all four virus backtests and builds a shared hero outlook', async () => {
-    mockedMediaApi.getDecision.mockImplementation(async (virus: string) => ({
-      wave_run_id: `${virus}-run`,
-    } as any));
-    mockedMediaApi.getBacktestRun.mockImplementation(async (runId: string) => {
-      if (runId.startsWith('RSV A')) return buildBacktest(100, 145) as any;
-      if (runId.startsWith('SARS-CoV-2')) return buildBacktest(100, 121) as any;
-      if (runId.startsWith('Influenza A')) return buildBacktest(100, 108) as any;
-      return buildBacktest(100, 94) as any;
+    mockedMediaApi.getLatestForecast.mockImplementation(async (virus: string) => {
+      if (virus === 'RSV A') return buildForecast(virus, 100, 145) as any;
+      if (virus === 'SARS-CoV-2') return buildForecast(virus, 100, 121) as any;
+      if (virus === 'Influenza A') return buildForecast(virus, 100, 108) as any;
+      return buildForecast(virus, 100, 94) as any;
     });
 
     render(<Harness />);
@@ -60,8 +54,7 @@ describe('useVirusRadarHeroForecast', () => {
 
     await waitFor(() => expect(screen.getByTestId('hero-loading')).toHaveTextContent('ready'));
 
-    expect(mockedMediaApi.getDecision).toHaveBeenCalledTimes(4);
-    expect(mockedMediaApi.getBacktestRun).toHaveBeenCalledTimes(4);
+    expect(mockedMediaApi.getLatestForecast).toHaveBeenCalledTimes(4);
     expect(screen.getByTestId('hero-top-virus')).toHaveTextContent('RSV A');
     expect(screen.getByTestId('hero-headline')).toHaveTextContent('RSV A');
   });

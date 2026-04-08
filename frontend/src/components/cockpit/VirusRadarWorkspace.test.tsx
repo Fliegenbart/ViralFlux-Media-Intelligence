@@ -73,8 +73,8 @@ describe('VirusRadarWorkspace', () => {
           focusRegionBacktest: {
             timeline: [
               {
-                bundesland: 'BE',
-                bundesland_name: 'Berlin',
+                bundesland: 'MV',
+                bundesland_name: 'Mecklenburg-Vorpommern',
                 as_of_date: '2026-04-03',
                 target_date: '2026-04-03',
                 horizon_days: 7,
@@ -82,8 +82,8 @@ describe('VirusRadarWorkspace', () => {
                 expected_target_incidence: 24,
               },
               {
-                bundesland: 'BE',
-                bundesland_name: 'Berlin',
+                bundesland: 'MV',
+                bundesland_name: 'Mecklenburg-Vorpommern',
                 as_of_date: '2026-04-04',
                 target_date: '2026-04-08',
                 horizon_days: 7,
@@ -99,29 +99,29 @@ describe('VirusRadarWorkspace', () => {
           regionsView: {
             map: {
               regions: {
-                BE: {
-                  name: 'Berlin',
+                MV: {
+                  name: 'Mecklenburg-Vorpommern',
                   trend: 'steigend',
-                  change_pct: 12.4,
-                  impact_probability: 0.81,
+                  change_pct: 199,
+                  impact_probability: 0.88,
                 },
               },
               top_regions: [
                 {
-                  code: 'BE',
-                  name: 'Berlin',
+                  code: 'MV',
+                  name: 'Mecklenburg-Vorpommern',
                   trend: 'steigend',
-                  impact_probability: 0.81,
-                  recommendation_ref: { card_id: 'rec-1' },
+                  impact_probability: 0.88,
+                  recommendation_ref: { card_id: 'rec-2' },
                 },
               ],
               activation_suggestions: [
                 {
-                  region: 'BE',
-                  region_name: 'Berlin',
+                  region: 'MV',
+                  region_name: 'Mecklenburg-Vorpommern',
                   priority: 'Aktivieren',
-                  impact_probability: 0.81,
-                  reason: 'Signal, Reife und Relevanz kommen zusammen.',
+                  impact_probability: 0.88,
+                  reason: 'Mecklenburg-Vorpommern zeigt aktuell die höchste Aktivierungsreife.',
                 },
               ],
             },
@@ -172,8 +172,9 @@ describe('VirusRadarWorkspace', () => {
 
     expect(screen.getByText('PEIX / GELO / VIRUS-RADAR')).toBeInTheDocument();
     expect(screen.getByText('Live-Signal · Influenza A')).toBeInTheDocument();
-    expect(screen.getByText('Berlin läuft heiß.')).toBeInTheDocument();
+    expect(screen.getByText('Mecklenburg-Vorpommern läuft heiß.')).toBeInTheDocument();
     expect(screen.getByText('Peak in 4 Tagen.')).toBeInTheDocument();
+    expect(screen.getAllByText('Mecklenburg-Vorpommern').length).toBeGreaterThan(0);
     expect(screen.getByText('Ist · 28 Tage')).toBeInTheDocument();
     expect(screen.getByText('Forecast · 7 Tage')).toBeInTheDocument();
     expect(screen.queryByText('Entscheidung diese Woche')).not.toBeInTheDocument();

@@ -26,6 +26,7 @@ export function useNowPageData(
   weeklyBudget: number,
   dataVersion: number,
   toast: ToastLike = noop,
+  preferredFocusRegionCode: string | null = null,
 ) {
   const [decision, setDecision] = useState<MediaDecisionResponse | null>(null);
   const [evidence, setEvidence] = useState<MediaEvidenceResponse | null>(null);
@@ -150,7 +151,7 @@ export function useNowPageData(
     }
     setWaveRadarLoading(false);
 
-    const focusRegionCode = deriveNowFocusRegionCode(
+    const focusRegionCode = preferredFocusRegionCode || deriveNowFocusRegionCode(
       decisionResult.status === 'fulfilled' ? decisionResult.value : null,
       forecastResult.status === 'fulfilled' ? forecastResult.value : null,
       allocationResult.status === 'fulfilled' ? allocationResult.value : null,
@@ -183,7 +184,7 @@ export function useNowPageData(
     if (backgroundLoadFailed) {
       toast('Ein Teil der Regionaldaten laedt laenger als erwartet. Die Wochenlage bleibt trotzdem sichtbar.', 'info');
     }
-  }, [brand, horizonDays, toast, virus, weeklyBudget]);
+  }, [brand, horizonDays, preferredFocusRegionCode, toast, virus, weeklyBudget]);
 
   useEffect(() => {
     loadNowPage();

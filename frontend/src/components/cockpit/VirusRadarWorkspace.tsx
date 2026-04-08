@@ -41,6 +41,16 @@ type SignalPrediction = {
   trend?: string | null;
 } | null;
 
+type RegionLeaderboardRow = {
+  code: string;
+  name: string;
+  trend?: string;
+  impact_probability?: number;
+  signal_score?: number;
+  recommendation_ref?: { card_id?: string } | null;
+  tooltip?: unknown;
+};
+
 type HeroNarrative = {
   kicker: string;
   headlinePrimary: string;
@@ -71,13 +81,6 @@ const VirusRadarWorkspace: React.FC<Props> = ({
     const rightRank = Number(right.decision_rank ?? right.rank ?? Number.MAX_SAFE_INTEGER);
     return leftRank - rightRank;
   });
-  const topPrediction = (
-    (focusRegion?.code
-      ? sortedPredictions.find((item) => item.bundesland === focusRegion.code)
-      : null)
-    || sortedPredictions[0]
-    || null
-  );
   const mapRegions = useMemo<Record<string, MapRegion>>(() => {
     if (regionsData.regionsView?.map?.regions) {
       return regionsData.regionsView.map.regions;
@@ -100,7 +103,7 @@ const VirusRadarWorkspace: React.FC<Props> = ({
     }
     return fallback;
   }, [nowData.forecast?.predictions, regionsData.regionsView?.map?.regions]);
-  const regionLeaderboard = useMemo(() => {
+  const regionLeaderboard = useMemo<RegionLeaderboardRow[]>(() => {
     const regionRows = regionsData.regionsView?.map?.top_regions || [];
     if (regionRows.length > 0) return regionRows.slice(0, 5);
 
@@ -114,29 +117,91 @@ const VirusRadarWorkspace: React.FC<Props> = ({
       tooltip: undefined,
     }));
   }, [regionsData.regionsView?.map?.top_regions, sortedPredictions]);
-  const effectiveRegionCode = selectedRegionCode || focusRegion?.code || regionLeaderboard[0]?.code || null;
+  const defaultHeroRegionCode = (
+    regionsData.regionsView?.map?.activation_suggestions?.[0]?.region
+    || regionsData.regionsView?.map?.top_regions?.[0]?.code
+    || focusRegion?.code
+    || regionLeaderboard[0]?.code
+    || sortedPredictions[0]?.bundesland
+    || null
+  );
+  const heroRegionLeaderboardEntry = defaultHeroRegionCode
+    ? regionLeaderboard.find((row) => row.code === defaultHeroRegionCode) || null
+    : null;
+  const heroRegion = defaultHeroRegionCode ? mapRegions[defaultHeroRegionCode] || null : null;
+  const heroActivation = defaultHeroRegionCode
+    ? (regionsData.regionsView?.map?.activation_suggestions || []).find((item) => item.region === defaultHeroRegionCode) || null
+    : null;
+  const heroPrediction = (
+    (defaultHeroRegionCode
+      ? sortedPredictions.find((item) => item.bundesland === defaultHeroRegionCode)
+      : null)
+    || null
+  );
+  const heroRegionName = (
+    heroRegion?.name
+    || heroRegionLeaderboardEntry?.name
+    || heroActivation?.region_name
+    || heroPrediction?.bundesland_name
+    || focusRegion?.name
+    || heroRecommendation?.region
+    || null
+  );
+  const heroSignalProbability = (
+    heroPrediction?.event_probability_calibrated
+    ?? heroRegion?.impact_probability
+    ?? heroRegion?.signal_score
+    ?? heroRegionLeaderboardEntry?.impact_probability
+    ?? heroRegionLeaderboardEntry?.signal_score
+    ?? null
+  );
+  const heroTrend = heroPrediction?.trend || heroRegion?.trend || heroRegionLeaderboardEntry?.trend || null;
+  const heroChangePct = heroPrediction?.change_pct ?? heroRegion?.change_pct ?? null;
+  const effectiveRegionCode = selectedRegionCode || defaultHeroRegionCode;
   const selectedRegion = effectiveRegionCode ? mapRegions[effectiveRegionCode] : null;
+  const heroFallbackSummary = (
+    heroRegion?.priority_explanation
+    || heroActivation?.reason
+    || (
+      defaultHeroRegionCode && defaultHeroRegionCode === focusRegion?.code
+        ? heroRecommendation?.whyNow
+        : null
+    )
+    || nowData.view.summary
+  );
   const heroNarrative = buildHeroNarrative({
     virus,
-    regionName: topPrediction?.bundesland_name || focusRegion?.name || heroRecommendation?.region || null,
+    regionName: heroRegionName,
     generatedAt: nowData.view.generatedAt,
     timeline: nowData.focusRegionBacktest?.timeline || [],
-    probability: topPrediction?.event_probability_calibrated,
-    recommendationDirection: heroRecommendation?.direction,
-    fallbackSummary: heroRecommendation?.whyNow || nowData.view.summary,
+    probability: heroSignalProbability,
+    recommendationDirection: heroPrediction?.decision_label || heroRecommendation?.direction,
+    fallbackSummary: heroFallbackSummary,
   });
-  const recommendationId = focusRegion?.recommendationId || regionLeaderboard[0]?.recommendation_ref?.card_id || null;
+  const recommendationId = (
+    heroRegionLeaderboardEntry?.recommendation_ref?.card_id
+    || (
+      defaultHeroRegionCode && defaultHeroRegionCode === focusRegion?.code
+        ? focusRegion?.recommendationId
+        : null
+    )
+    || regionLeaderboard[0]?.recommendation_ref?.card_id
+    || null
+  );
   const signalTiles = buildSignalTiles({
     workspaceStatus: nowData.workspaceStatus,
     evidence: evidenceData.evidence,
     campaigns: campaignsData.campaignsView,
-    topPrediction,
+    topPrediction: {
+      event_probability_calibrated: heroSignalProbability,
+      trend: heroTrend,
+    },
   });
   const whyNowItems = buildWhyNowItems(nowData.view.reasons, evidenceData.evidence?.signal_stack?.summary?.top_drivers);
   const riskItems = buildRiskItems(nowData.workspaceStatus?.blockers, nowData.view.risks, evidenceData.evidence?.known_limits);
   const campaignCards = (campaignsData.campaignsView?.cards || []).slice(0, 3);
   const topActivation = regionsData.regionsView?.map?.activation_suggestions?.slice(0, 3) || [];
-  const chartRegionName = topPrediction?.bundesland_name || focusRegion?.name || '';
+  const chartRegionName = heroRegionName || '';
   const dataTimestamp = formatDateTime(nowData.view.generatedAt);
 
   return (
@@ -152,7 +217,7 @@ const VirusRadarWorkspace: React.FC<Props> = ({
             <span className="virus-radar-hero__product">PEIX / GELO / VIRUS-RADAR</span>
             <div className="virus-radar-hero__topline-meta">
               <span>Stand {dataTimestamp}</span>
-              <span>{focusRegion?.name || 'Fokus offen'}</span>
+              <span>{heroRegionName || 'Fokus offen'}</span>
               <span>{nowData.workspaceStatus?.data_freshness || 'Datenlage offen'}</span>
             </div>
           </div>
@@ -186,7 +251,7 @@ const VirusRadarWorkspace: React.FC<Props> = ({
                 </div>
               </div>
               <div className="virus-radar-hero-chart-card__stamp">
-                <strong>{chartRegionName || focusRegion?.name || 'Bundesland offen'} · {virus}</strong>
+                <strong>{chartRegionName || 'Bundesland offen'} · {virus}</strong>
                 <span>
                   Stand {dataTimestamp}
                   {heroNarrative.peakDateLabel ? ` · Peak ${heroNarrative.peakDateLabel}` : ''}
@@ -206,12 +271,12 @@ const VirusRadarWorkspace: React.FC<Props> = ({
               <div className="virus-radar-stat">
                 <span className="virus-radar-stat__label">Signal</span>
                 <strong className="virus-radar-stat__value">
-                  {formatProbability(topPrediction?.event_probability_calibrated)}
+                  {formatProbability(heroSignalProbability)}
                 </strong>
               </div>
               <div className="virus-radar-stat">
                 <span className="virus-radar-stat__label">Fokus</span>
-                <strong className="virus-radar-stat__value">{focusRegion?.name || 'Noch offen'}</strong>
+                <strong className="virus-radar-stat__value">{heroRegionName || 'Noch offen'}</strong>
               </div>
               <div className="virus-radar-stat">
                 <span className="virus-radar-stat__label">Datenlage</span>
@@ -383,8 +448,8 @@ const VirusRadarWorkspace: React.FC<Props> = ({
               <div className="virus-radar-trend__summary">
                 <strong>{chartRegionName || 'Fokusregion'}</strong>
                 <span>
-                  {topPrediction?.change_pct != null
-                    ? `Veränderung zur Vorwoche: ${topPrediction.change_pct >= 0 ? '+' : ''}${topPrediction.change_pct.toFixed(1)}%`
+                  {heroChangePct != null
+                    ? `Veränderung zur Vorwoche: ${heroChangePct >= 0 ? '+' : ''}${heroChangePct.toFixed(1)}%`
                     : 'Verlauf wird gerade aufgebaut.'}
                 </span>
               </div>

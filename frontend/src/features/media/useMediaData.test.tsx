@@ -66,6 +66,12 @@ function Harness() {
   );
 }
 
+function PreferredFocusHarness() {
+  const { loading } = useNowPageData('Influenza A', 'gelo', 7, 120000, 0, undefined, 'BY');
+
+  return <div data-testid="preferred-focus-loading">{loading ? 'loading' : 'ready'}</div>;
+}
+
 function TimegraphHarness() {
   const {
     loading,
@@ -424,6 +430,27 @@ describe('useNowPageData', () => {
       });
       await Promise.resolve();
     });
+  });
+
+  it('uses the preferred focus region for the hero backtest when Virus-Radar provides one', async () => {
+    mockedMediaApi.getDecision.mockResolvedValue(buildDecision() as any);
+    mockedMediaApi.getEvidence.mockResolvedValue(buildEvidence() as any);
+    mockedMediaApi.getBacktestRun.mockResolvedValue({ run_id: 'wave-1' } as any);
+    mockedMediaApi.getRegionalForecast.mockResolvedValue(buildForecast() as any);
+    mockedMediaApi.getRegionalAllocation.mockResolvedValue({ generated_at: '2026-03-21T09:00:00Z', recommendations: [] } as any);
+    mockedMediaApi.getRegionalCampaignRecommendations.mockResolvedValue({ generated_at: '2026-03-21T09:00:00Z', recommendations: [] } as any);
+    mockedMediaApi.getWaveRadar.mockResolvedValue({ generated_at: '2026-03-21T09:00:00Z', waves: [] } as any);
+    mockedMediaApi.getRegionalBacktest.mockResolvedValue({
+      bundesland: 'BY',
+      bundesland_name: 'Bayern',
+      timeline: [],
+    } as any);
+
+    render(<PreferredFocusHarness />);
+
+    await waitFor(() => expect(screen.getByTestId('preferred-focus-loading')).toHaveTextContent('ready'));
+
+    expect(mockedMediaApi.getRegionalBacktest).toHaveBeenCalledWith('Influenza A', 'BY', 7);
   });
 });
 

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { useToast } from '../../App';
@@ -26,8 +26,22 @@ const VirusRadarPage: React.FC = () => {
     openRecommendation,
   } = useMediaWorkflow();
   const [horizonDays] = useState(7);
-  const nowData = useNowPageData(virus, brand, horizonDays, weeklyBudget, dataVersion, toast);
   const regionsData = useRegionsPageData(virus, brand, dataVersion, toast);
+  const preferredHeroRegionCode = useMemo(() => (
+    regionsData.regionsView?.map?.activation_suggestions?.[0]?.region
+    || regionsData.regionsView?.map?.top_regions?.[0]?.code
+    || regionsData.regionsView?.top_regions?.[0]?.code
+    || null
+  ), [regionsData.regionsView]);
+  const nowData = useNowPageData(
+    virus,
+    brand,
+    horizonDays,
+    weeklyBudget,
+    dataVersion,
+    toast,
+    preferredHeroRegionCode,
+  );
   const campaignsData = useCampaignsPageData(virus, brand, dataVersion, toast);
   const evidenceData = useEvidencePageData(virus, brand, dataVersion, toast);
 

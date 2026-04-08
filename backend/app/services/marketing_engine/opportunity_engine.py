@@ -45,6 +45,36 @@ from .detectors.market_supply_monitor import MarketSupplyMonitor
 from .detectors.predictive_sales_spike import PredictiveSalesSpikeDetector
 from .detectors.resource_scarcity import ResourceScarcityDetector
 from .detectors.weather_forecast import WeatherForecastDetector
+from .opportunity_engine_constants import (
+    BUNDESLAND_NAMES,
+    FORECAST_PLAYBOOK_MAP,
+)
+from .opportunity_engine_campaigns import (
+    export_crm_json as export_crm_json_impl,
+    update_campaign as update_campaign_impl,
+    update_status as update_status_impl,
+)
+from .opportunity_engine_helpers import (
+    canonical_brand,
+    clean_for_output,
+    confidence_pct,
+    derive_peix_context,
+    extract_region_codes_from_opportunity,
+    fact_label,
+    normalize_region_token,
+    normalize_workflow_status,
+    parse_iso_datetime,
+    public_fact_value,
+    region_label,
+    secondary_products,
+    status_filter_values,
+)
+from .opportunity_engine_queries import (
+    count_opportunities as count_opportunities_impl,
+    get_opportunities as get_opportunities_impl,
+    get_recommendation_by_id as get_recommendation_by_id_impl,
+    get_stats as get_stats_impl,
+)
 from .pitch_generator import PitchGenerator
 from .product_matcher import ProductMatcher
 
@@ -52,67 +82,6 @@ logger = logging.getLogger(__name__)
 
 SYSTEM_VERSION = "ViralFlux-Media-v3.0"
 settings = get_settings()
-
-LEGACY_TO_WORKFLOW = {
-    "NEW": "DRAFT",
-    "URGENT": "DRAFT",
-    "SENT": "APPROVED",
-    "CONVERTED": "ACTIVATED",
-}
-
-WORKFLOW_TO_LEGACY = {
-    "DRAFT": "NEW",
-    "READY": "NEW",
-    "APPROVED": "SENT",
-    "ACTIVATED": "CONVERTED",
-    "DISMISSED": "DISMISSED",
-    "EXPIRED": "EXPIRED",
-}
-
-WORKFLOW_STATUSES = {
-    "DRAFT",
-    "READY",
-    "APPROVED",
-    "ACTIVATED",
-    "DISMISSED",
-    "EXPIRED",
-}
-
-ALLOWED_TRANSITIONS = {
-    "DRAFT": {"READY", "DISMISSED"},
-    "READY": {"APPROVED", "DISMISSED"},
-    "APPROVED": {"ACTIVATED", "DISMISSED"},
-    "ACTIVATED": {"EXPIRED", "DISMISSED"},
-    "DISMISSED": set(),
-    "EXPIRED": set(),
-}
-
-BUNDESLAND_NAMES = {
-    "BW": "Baden-Württemberg",
-    "BY": "Bayern",
-    "BE": "Berlin",
-    "BB": "Brandenburg",
-    "HB": "Bremen",
-    "HH": "Hamburg",
-    "HE": "Hessen",
-    "MV": "Mecklenburg-Vorpommern",
-    "NI": "Niedersachsen",
-    "NW": "Nordrhein-Westfalen",
-    "RP": "Rheinland-Pfalz",
-    "SL": "Saarland",
-    "SN": "Sachsen",
-    "ST": "Sachsen-Anhalt",
-    "SH": "Schleswig-Holstein",
-    "TH": "Thüringen",
-}
-REGION_NAME_TO_CODE = {name.lower(): code for code, name in BUNDESLAND_NAMES.items()}
-
-FORECAST_PLAYBOOK_MAP = {
-    "Influenza A": "ERKAELTUNGSWELLE",
-    "Influenza B": "HALSSCHMERZ_HUNTER",
-    "RSV A": "SINUS_DEFENDER",
-    "SARS-CoV-2": "HALSSCHMERZ_HUNTER",
-}
 
 
 class MarketingOpportunityEngine:
@@ -613,27 +582,16 @@ class MarketingOpportunityEngine:
         skip: int = 0,
         normalize_status: bool = True,
     ) -> list[dict]:
-        """Gespeicherte Opportunities mit Filtern abrufen."""
-        query = self.db.query(MarketingOpportunity).order_by(
-            MarketingOpportunity.urgency_score.desc(),
-            MarketingOpportunity.created_at.desc(),
+        return get_opportunities_impl(
+            self,
+            type_filter=type_filter,
+            status_filter=status_filter,
+            brand_filter=brand_filter,
+            min_urgency=min_urgency,
+            limit=limit,
+            skip=skip,
+            normalize_status=normalize_status,
         )
-
-        if type_filter:
-            query = query.filter(MarketingOpportunity.opportunity_type == type_filter)
-        if status_filter:
-            query = query.filter(MarketingOpportunity.status.in_(self._status_filter_values(status_filter)))
-        if brand_filter:
-            canonical_brand = self._canonical_brand(brand_filter)
-            if canonical_brand == "gelo":
-                query = query.filter(func.lower(MarketingOpportunity.brand).like("%gelo%"))
-            else:
-                query = query.filter(func.lower(MarketingOpportunity.brand) == canonical_brand)
-        if min_urgency is not None:
-            query = query.filter(MarketingOpportunity.urgency_score >= min_urgency)
-
-        results = query.offset(skip).limit(limit).all()
-        return [self._model_to_dict(r, normalize_status=normalize_status) for r in results]
 
     def count_opportunities(
         self,
@@ -642,33 +600,16 @@ class MarketingOpportunityEngine:
         brand_filter: str | None = None,
         min_urgency: float | None = None,
     ) -> int:
-        """Gesamtanzahl der Opportunities mit denselben Filtern."""
-        query = self.db.query(func.count(MarketingOpportunity.id))
-
-        if type_filter:
-            query = query.filter(MarketingOpportunity.opportunity_type == type_filter)
-        if status_filter:
-            query = query.filter(MarketingOpportunity.status.in_(self._status_filter_values(status_filter)))
-        if brand_filter:
-            canonical_brand = self._canonical_brand(brand_filter)
-            if canonical_brand == "gelo":
-                query = query.filter(func.lower(MarketingOpportunity.brand).like("%gelo%"))
-            else:
-                query = query.filter(func.lower(MarketingOpportunity.brand) == canonical_brand)
-        if min_urgency is not None:
-            query = query.filter(MarketingOpportunity.urgency_score >= min_urgency)
-
-        return query.scalar() or 0
+        return count_opportunities_impl(
+            self,
+            type_filter=type_filter,
+            status_filter=status_filter,
+            brand_filter=brand_filter,
+            min_urgency=min_urgency,
+        )
 
     def get_recommendation_by_id(self, opportunity_id: str) -> dict | None:
-        row = (
-            self.db.query(MarketingOpportunity)
-            .filter(MarketingOpportunity.opportunity_id == opportunity_id)
-            .first()
-        )
-        if not row:
-            return None
-        return self._model_to_dict(row, normalize_status=True)
+        return get_recommendation_by_id_impl(self, opportunity_id)
 
     def generate_action_cards(
         self,
@@ -1328,103 +1269,14 @@ class MarketingOpportunityEngine:
         channel_plan: list[dict] | None = None,
         kpi_targets: dict | None = None,
     ) -> dict:
-        row = (
-            self.db.query(MarketingOpportunity)
-            .filter(MarketingOpportunity.opportunity_id == opportunity_id)
-            .first()
+        return update_campaign_impl(
+            self,
+            opportunity_id,
+            activation_window=activation_window,
+            budget=budget,
+            channel_plan=channel_plan,
+            kpi_targets=kpi_targets,
         )
-        if not row:
-            return {"error": f"Opportunity {opportunity_id} nicht gefunden"}
-
-        payload = (row.campaign_payload or {}).copy()
-        payload.setdefault("meta", {
-            "version": "1.0",
-            "generated_at": utc_now().isoformat() + "Z",
-            "generator": "ViralFlux-Media-v3",
-        })
-
-        if activation_window:
-            start = self._parse_iso_datetime(activation_window.get("start"))
-            end = self._parse_iso_datetime(activation_window.get("end"))
-            if not start or not end:
-                return {"error": "activation_window.start und activation_window.end sind erforderlich"}
-            if start > end:
-                return {"error": "activation_window.start darf nicht nach activation_window.end liegen"}
-
-            payload["activation_window"] = {
-                "start": start.isoformat(),
-                "end": end.isoformat(),
-                "flight_days": max(1, (end - start).days + 1),
-            }
-            row.activation_start = start
-            row.activation_end = end
-
-        if budget:
-            weekly = float(budget.get("weekly_budget_eur", 0.0))
-            shift_pct = float(budget.get("budget_shift_pct", 0.0))
-            if weekly < 0:
-                return {"error": "Budgets dürfen nicht negativ sein"}
-            if shift_pct > 100 or shift_pct < -100:
-                return {"error": "budget_shift_pct muss zwischen -100 und 100 liegen"}
-
-            shift_value = round(weekly * (abs(shift_pct) / 100.0), 2)
-            window = payload.get("activation_window") or {}
-            flight_days = int(window.get("flight_days") or 7)
-            total_flight_budget = round((weekly / 7.0) * flight_days, 2)
-
-            payload["budget_plan"] = {
-                "weekly_budget_eur": weekly,
-                "budget_shift_pct": shift_pct,
-                "budget_shift_value_eur": shift_value,
-                "total_flight_budget_eur": total_flight_budget,
-                "currency": "EUR",
-            }
-            row.budget_shift_pct = shift_pct
-
-        if channel_plan is not None:
-            if not channel_plan:
-                return {"error": "channel_plan darf nicht leer sein"}
-
-            total_share = round(sum(float(item.get("share_pct", 0.0)) for item in channel_plan), 1)
-            if abs(total_share - 100.0) > 0.2:
-                return {"error": "Channel-Shares müssen in Summe 100 ergeben"}
-
-            budget_plan = payload.get("budget_plan") or {}
-            shift_value = abs(float(budget_plan.get("budget_shift_value_eur", 0.0)))
-
-            normalized = []
-            mix = {}
-            for item in channel_plan:
-                channel = str(item.get("channel", "")).strip().lower()
-                share = round(float(item.get("share_pct", 0.0)), 1)
-                mix[channel] = share
-                normalized.append(
-                    {
-                        "channel": channel,
-                        "role": item.get("role") or "reach",
-                        "share_pct": share,
-                        "budget_eur": round(shift_value * (share / 100.0), 2),
-                        "formats": item.get("formats") or [],
-                        "message_angle": item.get("message_angle") or "Verfügbarkeit + früher Bedarf",
-                        "kpi_primary": item.get("kpi_primary") or "CTR",
-                        "kpi_secondary": item.get("kpi_secondary") or ["CPM"],
-                    }
-                )
-
-            payload["channel_plan"] = normalized
-            row.channel_mix = mix
-
-        if kpi_targets:
-            measurement = payload.get("measurement_plan") or {}
-            measurement["primary_kpi"] = kpi_targets.get("primary_kpi") or measurement.get("primary_kpi")
-            measurement["secondary_kpis"] = kpi_targets.get("secondary_kpis") or measurement.get("secondary_kpis") or []
-            measurement["success_criteria"] = kpi_targets.get("success_criteria") or measurement.get("success_criteria")
-            payload["measurement_plan"] = measurement
-
-        row.campaign_payload = payload
-        row.updated_at = utc_now()
-        self.db.commit()
-        return self._model_to_dict(row, normalize_status=True)
 
     def get_playbook_catalog(self) -> dict[str, Any]:
         playbooks = self.playbook_engine.get_catalog()
@@ -1584,150 +1436,19 @@ class MarketingOpportunityEngine:
         dismiss_reason: str | None = None,
         dismiss_comment: str | None = None,
     ) -> dict:
-        """Status einer Opportunity aktualisieren (Workflow + Legacy kompatibel)."""
-        target = self._normalize_workflow_status(new_status)
-        if target not in WORKFLOW_STATUSES:
-            return {"error": f"Ungültiger Status: {new_status}. Erlaubt: {sorted(WORKFLOW_STATUSES)}"}
-
-        opp = (
-            self.db.query(MarketingOpportunity)
-            .filter(MarketingOpportunity.opportunity_id == opportunity_id)
-            .first()
+        return update_status_impl(
+            self,
+            opportunity_id,
+            new_status,
+            dismiss_reason=dismiss_reason,
+            dismiss_comment=dismiss_comment,
         )
-        if not opp:
-            return {"error": f"Opportunity {opportunity_id} nicht gefunden"}
-
-        current = self._normalize_workflow_status(opp.status)
-        if current != target and target not in ALLOWED_TRANSITIONS.get(current, set()):
-            return {"error": f"Ungültiger Transition: {current} -> {target}"}
-
-        old_status = current
-        opp.status = target
-        opp.updated_at = utc_now()
-
-        payload = (opp.campaign_payload or {}).copy()
-        campaign = (payload.get("campaign") or {}).copy()
-        campaign["status"] = target
-        payload["campaign"] = campaign
-
-        # Dismiss-Grund persistieren
-        if target == "DISMISSED" and (dismiss_reason or dismiss_comment):
-            payload["dismiss_info"] = {
-                "reason": dismiss_reason or "",
-                "comment": (dismiss_comment or "").strip()[:500],
-                "dismissed_at": utc_now().isoformat() + "Z",
-            }
-
-        opp.campaign_payload = payload
-
-        # AuditLog
-        self.db.add(AuditLog(
-            user="system",
-            action="STATUS_CHANGE",
-            entity_type="MarketingOpportunity",
-            entity_id=opp.id,
-            old_value=old_status,
-            new_value=target,
-            reason=opportunity_id,
-        ))
-
-        self.db.commit()
-        return {
-            "opportunity_id": opportunity_id,
-            "old_status": old_status,
-            "new_status": target,
-            "legacy_status": WORKFLOW_TO_LEGACY.get(target, target),
-        }
 
     def export_crm_json(self, opportunity_ids: list[str] | None = None) -> dict:
-        """CRM-Export: Markiert Opportunities als exportiert."""
-        query = self.db.query(MarketingOpportunity)
-
-        if opportunity_ids:
-            query = query.filter(MarketingOpportunity.opportunity_id.in_(opportunity_ids))
-        else:
-            query = query.filter(
-                MarketingOpportunity.status.in_(["NEW", "URGENT", "DRAFT", "READY"])
-            )
-
-        results = query.order_by(MarketingOpportunity.urgency_score.desc()).all()
-
-        now = utc_now()
-        for opp in results:
-            opp.exported_at = now
-
-        self.db.commit()
-
-        opportunities = [self._model_to_dict(r, normalize_status=True) for r in results]
-        return {
-            "meta": {
-                "generated_at": now.isoformat() + "Z",
-                "system_version": SYSTEM_VERSION,
-                "total_opportunities": len(opportunities),
-                "exported_at": now.isoformat() + "Z",
-            },
-            "opportunities": opportunities,
-        }
+        return export_crm_json_impl(self, opportunity_ids, system_version=SYSTEM_VERSION)
 
     def get_stats(self) -> dict:
-        """Aggregierte Statistiken."""
-        total = self.db.query(MarketingOpportunity).count()
-
-        by_type = dict(
-            self.db.query(
-                MarketingOpportunity.opportunity_type,
-                func.count(MarketingOpportunity.id),
-            )
-            .group_by(MarketingOpportunity.opportunity_type)
-            .all()
-        )
-
-        raw_by_status = dict(
-            self.db.query(
-                MarketingOpportunity.status,
-                func.count(MarketingOpportunity.id),
-            )
-            .group_by(MarketingOpportunity.status)
-            .all()
-        )
-
-        by_status: dict[str, int] = {}
-        for status, count in raw_by_status.items():
-            normalized = self._normalize_workflow_status(status)
-            by_status[normalized] = by_status.get(normalized, 0) + count
-
-        avg_urgency = self.db.query(func.avg(MarketingOpportunity.urgency_score)).scalar()
-
-        recent = (
-            self.db.query(MarketingOpportunity)
-            .filter(MarketingOpportunity.created_at >= utc_now() - timedelta(days=7))
-            .count()
-        )
-
-        # Daily breakdown for sparkline (last 7 days)
-        daily_counts: list[int] = []
-        now = utc_now()
-        for days_ago in range(6, -1, -1):
-            day_start = (now - timedelta(days=days_ago)).replace(hour=0, minute=0, second=0, microsecond=0)
-            day_end = day_start + timedelta(days=1)
-            count = (
-                self.db.query(MarketingOpportunity)
-                .filter(
-                    MarketingOpportunity.created_at >= day_start,
-                    MarketingOpportunity.created_at < day_end,
-                )
-                .count()
-            )
-            daily_counts.append(count)
-
-        return {
-            "total": total,
-            "recent_7d": recent,
-            "daily_counts_7d": daily_counts,
-            "by_type": by_type,
-            "by_status": by_status,
-            "avg_urgency": round(avg_urgency, 1) if avg_urgency else 0,
-        }
+        return get_stats_impl(self)
 
     def get_roi_retrospective(self) -> dict:
         """ROI-Retrospektive: Simuliert den Wert vergangener Opportunities.
@@ -2354,58 +2075,17 @@ class MarketingOpportunityEngine:
         self.db.commit()
 
     def _normalize_region_token(self, value: str | None) -> str | None:
-        if not value:
-            return None
-        raw = str(value).strip()
-        if not raw:
-            return None
-
-        upper = raw.upper()
-        if upper in BUNDESLAND_NAMES:
-            return upper
-
-        lower = raw.lower()
-        if lower in {"gesamt", "all", "de", "national", "deutschland"}:
-            return "Gesamt"
-
-        return REGION_NAME_TO_CODE.get(lower)
+        return normalize_region_token(value)
 
     @staticmethod
     def _canonical_brand(value: str | None) -> str:
-        raw = str(value or "").strip().lower()
-        if "gelo" in raw:
-            return "gelo"
-        return raw
+        return canonical_brand(value)
 
     def _region_label(self, region_code: str) -> str:
-        if region_code in BUNDESLAND_NAMES:
-            return BUNDESLAND_NAMES[region_code]
-        return region_code
+        return region_label(region_code)
 
     def _extract_region_codes_from_opportunity(self, opportunity: dict[str, Any]) -> list[str]:
-        region_target = opportunity.get("region_target") or {}
-        campaign_payload = opportunity.get("campaign_payload") or {}
-        targeting = campaign_payload.get("targeting") or {}
-
-        tokens: list[str] = []
-        states = region_target.get("states")
-        if isinstance(states, list):
-            tokens.extend(str(item) for item in states if item)
-
-        scope = targeting.get("region_scope")
-        if isinstance(scope, list):
-            tokens.extend(str(item) for item in scope if item)
-        elif isinstance(scope, str) and scope.strip():
-            tokens.append(scope)
-
-        region_codes: set[str] = set()
-        for token in tokens:
-            normalized = self._normalize_region_token(token)
-            if normalized == "Gesamt":
-                return []
-            if normalized:
-                region_codes.add(normalized)
-        return sorted(region_codes)
+        return extract_region_codes_from_opportunity(opportunity)
 
     def _derive_peix_context(
         self,
@@ -2415,105 +2095,24 @@ class MarketingOpportunityEngine:
         *,
         peix_national: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        trigger = opportunity.get("trigger_context") or {}
-
-        if selected_region == "Gesamt":
-            nat = peix_national or {}
-            score = nat.get("national_score")
-            if score is None:
-                return {}
-            return {
-                "region_code": "Gesamt",
-                "score": score,
-                "signal_score": score,
-                "band": nat.get("national_band"),
-                "impact_probability": nat.get("national_impact_probability"),
-                "drivers": nat.get("top_drivers") or [],
-                "trigger_event": trigger.get("event"),
-            }
-
-        peix_entry = peix_regions.get(selected_region) or {}
-        return {
-            "region_code": selected_region,
-            "score": peix_entry.get("score_0_100"),
-            "signal_score": peix_entry.get("score_0_100"),
-            "band": peix_entry.get("risk_band"),
-            "impact_probability": peix_entry.get("impact_probability"),
-            "drivers": peix_entry.get("top_drivers") or [],
-            "trigger_event": trigger.get("event"),
-        }
+        return derive_peix_context(
+            peix_regions,
+            selected_region,
+            opportunity,
+            peix_national=peix_national,
+        )
 
     @staticmethod
     def _fact_label(key: str) -> str:
-        overrides = {
-            "latest_incidence": "aktuelle Inzidenz",
-            "previous_incidence": "Vorwochen-Inzidenz",
-            "wow_pct": "Wochenwachstum",
-            "p75": "oberes Vergleichsniveau",
-            "bfarm_risk_score": "BfArM-Risikoscore",
-            "respiratory_shortage_count": "Engpässe Atemwege",
-            "pediatric_alert": "Kinderarznei-Hinweis",
-            "are_growth_pct": "ARE-Wachstum",
-            "weather_burden": "Wetterdruck",
-            "psycho_level": "Suchdruck",
-            "psycho_delta": "Suchtrend",
-            "pollen_score": "Pollenlage",
-            "allergy_search_level": "Allergie-Suche",
-            "allergy_search_delta": "Allergie-Trend",
-            "peix_score": "PeixEpiScore",
-            "event_probability_pct": "Event-Wahrscheinlichkeit",
-            "expected_value_index": "Opportunity-Index",
-            "forecast_readiness": "Forecast-Readiness",
-            "truth_readiness": "Truth-Readiness",
-            "avg_recent_incidence": "aktuelle Durchschnitts-Inzidenz",
-            "growth_pct": "Wachstum",
-            "total_infection_load": "gesamte Infektionslast",
-            "median_load": "Median im Vergleich",
-            "relative_to_median": "Abstand zum Median",
-        }
-        normalized = str(key or "").strip().lower()
-        if normalized in overrides:
-            return overrides[normalized]
-
-        raw = str(key or "").strip().replace("_", " ")
-        if not raw:
-            return "Fakt"
-        words = [word.capitalize() for word in raw.split() if word]
-        return " ".join(words) or "Fakt"
+        return fact_label(key)
 
     @staticmethod
     def _confidence_pct(raw_confidence: Any, urgency_score: float | None) -> float | None:
-        del urgency_score
-        return normalize_confidence_pct(raw_confidence)
+        return confidence_pct(raw_confidence, urgency_score)
 
     @staticmethod
     def _public_fact_value(key: str, value: Any) -> Any:
-        normalized_key = str(key or "").strip().lower()
-
-        if isinstance(value, bool):
-            return "Ja" if value else "Nein"
-
-        if isinstance(value, str):
-            stripped = value.strip()
-            if not stripped:
-                return ""
-            if "source" in normalized_key:
-                return public_source_label(stripped) or stripped
-            if "event" in normalized_key:
-                return public_event_label(stripped) or stripped
-            return public_reason_text(reason=stripped)
-
-        if isinstance(value, (int, float)):
-            number = float(value)
-            if any(token in normalized_key for token in ("pct", "probability", "delta", "growth", "share", "wow")):
-                return f"{number:.1f}%"
-            if any(token in normalized_key for token in ("score", "confidence", "strength")):
-                return round(number, 1)
-            if number.is_integer():
-                return int(number)
-            return round(number, 2)
-
-        return value
+        return public_fact_value(key, value)
 
     @staticmethod
     def _secondary_products(
@@ -2521,31 +2120,11 @@ class MarketingOpportunityEngine:
         mapping_candidate_product: str | None,
         primary_product: str | None,
     ) -> list[str]:
-        primary = str(primary_product or "").strip().lower()
-        out: list[str] = []
-        seen: set[str] = set()
-
-        def add(value: Any) -> None:
-            raw = str(value or "").strip()
-            if not raw:
-                return
-            norm = raw.lower()
-            if primary and norm == primary:
-                return
-            if norm in seen:
-                return
-            seen.add(norm)
-            out.append(raw)
-
-        if isinstance(suggested_products, list):
-            for item in suggested_products:
-                if isinstance(item, str):
-                    add(item)
-                    continue
-                if isinstance(item, dict):
-                    add(item.get("product_name") or item.get("product") or item.get("name"))
-        add(mapping_candidate_product)
-        return out
+        return secondary_products(
+            suggested_products=suggested_products,
+            mapping_candidate_product=mapping_candidate_product,
+            primary_product=primary_product,
+        )
 
     def _decision_facts(
         self,
@@ -2818,53 +2397,16 @@ class MarketingOpportunityEngine:
         }
 
     def _clean_for_output(self, opp: dict) -> dict:
-        """Entfernt interne _-Felder und promotiert Supply-Gap Felder für den API-Output."""
-        clean = {k: v for k, v in opp.items() if not k.startswith("_")}
-
-        # Promote supply-gap modifier metadata to public API fields
-        clean["is_supply_gap_active"] = bool(opp.get("_supply_gap_applied", False))
-        if clean["is_supply_gap_active"]:
-            matched_products = opp.get("_supply_gap_matched_products", [])
-            clean["supply_gap_match_examples"] = (
-                ", ".join(matched_products[:3]) if matched_products else ""
-            )
-            clean["recommended_priority_multiplier"] = float(
-                opp.get("_supply_gap_priority_multiplier", 1.0)
-            )
-            clean["supply_gap_product"] = opp.get("_supply_gap_product", "")
-        else:
-            clean["supply_gap_match_examples"] = ""
-            clean["recommended_priority_multiplier"] = 1.0
-            clean["supply_gap_product"] = ""
-
-        return clean
+        return clean_for_output(opp)
 
     def _normalize_workflow_status(self, status: str | None) -> str:
-        if not status:
-            return "DRAFT"
-        normalized = str(status).upper()
-        if normalized in WORKFLOW_STATUSES:
-            return normalized
-        return LEGACY_TO_WORKFLOW.get(normalized, normalized)
+        return normalize_workflow_status(status)
 
     def _status_filter_values(self, status_filter: str) -> set[str]:
-        normalized = self._normalize_workflow_status(status_filter)
-        values = {normalized, status_filter.upper()}
-        if normalized == "DRAFT":
-            values.update({"NEW", "URGENT"})
-        if normalized == "APPROVED":
-            values.add("SENT")
-        if normalized == "ACTIVATED":
-            values.add("CONVERTED")
-        return values
+        return status_filter_values(status_filter)
 
     def _parse_iso_datetime(self, value: str | None) -> datetime | None:
-        if not value:
-            return None
-        try:
-            return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
-        except ValueError:
-            return None
+        return parse_iso_datetime(value)
 
     def _model_to_dict(self, m: MarketingOpportunity, normalize_status: bool = True) -> dict:
         """Konvertiert DB-Model zu Output-Dict."""

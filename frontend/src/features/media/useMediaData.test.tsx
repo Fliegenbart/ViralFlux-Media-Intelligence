@@ -2,10 +2,24 @@ import '@testing-library/jest-dom';
 import React, { act } from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 
+jest.mock('../../components/cockpit/cockpitUtils', () => ({
+  businessValidationLabel: (value: unknown) => String(value || 'Im Aufbau'),
+  evidenceTierLabel: (value: unknown) => String(value || 'Prüfen'),
+  formatDateTime: (value: unknown) => String(value || '-'),
+  formatCurrency: (value: unknown) => `${Number(value || 0).toFixed(0)} EUR`,
+  formatPercent: (value: unknown, digits = 0) => `${Number(value || 0).toFixed(digits)}%`,
+  truthFreshnessLabel: (value: unknown) => String(value || 'Beobachten'),
+  truthLayerLabel: (value: { trust_readiness?: string } | null | undefined) => (
+    value?.trust_readiness === 'im_aufbau' ? 'Im Aufbau' : String(value?.trust_readiness || 'Belastbar')
+  ),
+  workflowLabel: (value: unknown) => String(value || 'Prüfen'),
+}));
+
 import {
   buildNowPageViewModel,
   buildWorkspaceStatus,
   useNowPageData,
+  useRegionsPageData,
   useTimegraphPageData,
 } from './useMediaData';
 import { mediaApi } from './api';
@@ -19,6 +33,7 @@ jest.mock('./api', () => ({
     getRegionalForecast: jest.fn(),
     getRegionalAllocation: jest.fn(),
     getRegionalCampaignRecommendations: jest.fn(),
+    getRegions: jest.fn(),
     getWaveRadar: jest.fn(),
   },
 }));
@@ -71,6 +86,17 @@ function TimegraphHarness() {
       <div data-testid="timegraph-prediction">{selectedPrediction?.bundesland_name || '-'}</div>
       <div data-testid="timegraph-backtest">{regionalBacktest?.bundesland_name || '-'}</div>
       <button type="button" onClick={() => setSelectedRegion('BY')}>Region BY</button>
+    </div>
+  );
+}
+
+function RegionsHarness({ dataVersion }: { dataVersion: number }) {
+  const { regionsLoading, regionsView } = useRegionsPageData('Influenza A', 'gelo', dataVersion);
+
+  return (
+    <div>
+      <div data-testid="regions-loading">{regionsLoading ? 'loading' : 'ready'}</div>
+      <div data-testid="regions-top">{regionsView?.map.top_regions[0]?.code || '-'}</div>
     </div>
   );
 }
@@ -180,6 +206,49 @@ function buildForecast(predictions?: Array<Record<string, unknown>>) {
         expected_target_incidence: 108,
         current_known_incidence: 97,
         reason_trace: { why: ['Nur Reserve'] },
+      },
+    ],
+  } as any;
+}
+
+function buildRegions(topRegionCode: string, topRegionName: string) {
+  return {
+    virus_typ: 'Influenza A',
+    target_source: 'regional',
+    generated_at: '2026-03-21T09:00:00Z',
+    map: {
+      has_data: true,
+      date: '2026-03-21',
+      max_viruslast: 100,
+      regions: {
+        [topRegionCode]: {
+          name: topRegionName,
+          avg_viruslast: 82,
+          intensity: 0.82,
+          trend: 'steigend',
+          change_pct: 18,
+          n_standorte: 2,
+          signal_score: 0.82,
+          priority_rank: 1,
+        },
+      },
+      top_regions: [
+        {
+          code: topRegionCode,
+          name: topRegionName,
+          trend: 'steigend',
+          signal_score: 0.82,
+          priority_rank: 1,
+        },
+      ],
+      activation_suggestions: [],
+    },
+    top_regions: [
+      {
+        code: topRegionCode,
+        name: topRegionName,
+        trend: 'steigend',
+        signal_score: 0.82,
       },
     ],
   } as any;
@@ -420,6 +489,58 @@ describe('useTimegraphPageData', () => {
     expect(screen.getByTestId('timegraph-prediction')).toHaveTextContent('-');
     expect(screen.getByTestId('timegraph-backtest')).toHaveTextContent('-');
     expect(mockedMediaApi.getRegionalBacktest).not.toHaveBeenCalled();
+  });
+});
+
+describe('useRegionsPageData', () => {
+  const mockedMediaApi = mediaApi as jest.Mocked<typeof mediaApi>;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('keeps the newer region result when an older request resolves later', async () => {
+    const firstRegions = createDeferred<any>();
+    const secondRegions = createDeferred<any>();
+    const firstEvidence = createDeferred<any>();
+    const secondEvidence = createDeferred<any>();
+
+    mockedMediaApi.getRegions
+      .mockImplementationOnce(() => firstRegions.promise)
+      .mockImplementationOnce(() => secondRegions.promise);
+    mockedMediaApi.getEvidence
+      .mockImplementationOnce(() => firstEvidence.promise)
+      .mockImplementationOnce(() => secondEvidence.promise);
+
+    const { rerender } = render(<RegionsHarness dataVersion={0} />);
+
+    expect(screen.getByTestId('regions-loading')).toHaveTextContent('loading');
+
+    await act(async () => {
+      rerender(<RegionsHarness dataVersion={1} />);
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      secondRegions.resolve(buildRegions('BY', 'Bayern'));
+      secondEvidence.resolve(buildEvidence());
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('regions-loading')).toHaveTextContent('ready');
+    });
+    expect(screen.getByTestId('regions-top')).toHaveTextContent('BY');
+
+    await act(async () => {
+      firstRegions.resolve(buildRegions('BE', 'Berlin'));
+      firstEvidence.resolve(buildEvidence());
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('regions-top')).toHaveTextContent('BY');
+    });
   });
 });
 

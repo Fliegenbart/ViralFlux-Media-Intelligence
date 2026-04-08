@@ -14,6 +14,7 @@ function mockJsonResponse(body: unknown, status = 200): Response {
 describe('mediaApi authentication', () => {
   const originalFetch = global.fetch;
   const fetchMock = jest.fn<Promise<Response>, [RequestInfo | URL, RequestInit?]>();
+  const originalSetTimeout = window.setTimeout;
 
   beforeAll(() => {
     global.fetch = fetchMock as unknown as typeof fetch;
@@ -28,6 +29,10 @@ describe('mediaApi authentication', () => {
     logout();
     window.localStorage.clear();
     window.sessionStorage.clear();
+  });
+
+  afterEach(() => {
+    window.setTimeout = originalSetTimeout;
   });
 
   it('relies on cookie credentials for media API requests', async () => {
@@ -57,5 +62,19 @@ describe('mediaApi authentication', () => {
     expect(requestInit?.credentials).toBe('include');
     expect(headers.get('Authorization')).toBeNull();
     expect(headers.get('Content-Type')).toBe('application/json');
+  });
+
+  it('gives the campaigns request the heavy timeout budget', async () => {
+    const setTimeoutMock = jest.fn(() => 1 as unknown as number);
+    window.setTimeout = setTimeoutMock as unknown as typeof window.setTimeout;
+
+    fetchMock
+      .mockResolvedValueOnce(mockJsonResponse({ authenticated: true }))
+      .mockResolvedValueOnce(mockJsonResponse({ cards: [] }));
+
+    await login('test@example.com', 'secret', true);
+    await mediaApi.getCampaigns('gelo');
+
+    expect(setTimeoutMock).toHaveBeenCalledWith(expect.any(Function), 45000);
   });
 });

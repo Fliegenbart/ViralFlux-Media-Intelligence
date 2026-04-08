@@ -148,7 +148,11 @@ export const mediaApi = {
 
   async getCampaigns(brand: string): Promise<MediaCampaignsResponse> {
     const qs = new URLSearchParams({ brand, limit: '120' });
-    const data = await fetchJson<MediaCampaignsResponse>(`/api/v1/media/campaigns?${qs.toString()}`);
+    const data = await fetchJson<MediaCampaignsResponse>(
+      `/api/v1/media/campaigns?${qs.toString()}`,
+      undefined,
+      HEAVY_FETCH_TIMEOUT_MS,
+    );
     return {
       ...data,
       cards: sortRecommendations(data.cards || []),

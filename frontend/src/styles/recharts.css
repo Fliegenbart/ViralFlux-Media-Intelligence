@@ -41,3 +41,46 @@
 .recharts-dot {
   display: none;
 }
+
+.forecast-chart-tooltip {
+  min-width: 220px;
+  padding: 14px 16px;
+  border: 1px solid rgba(211, 222, 219, 0.18);
+  border-radius: 18px;
+  background: rgba(18, 24, 31, 0.96);
+  box-shadow: 0 18px 38px rgba(0, 0, 0, 0.24);
+  color: #f5f8f7;
+}
+
+.forecast-chart-tooltip__title {
+  margin-bottom: 10px;
+  color: #f5f8f7;
+  font-size: 0.95rem;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.forecast-chart-tooltip__list {
+  display: grid;
+  gap: 8px;
+}
+
+.forecast-chart-tooltip__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 18px;
+}
+
+.forecast-chart-tooltip__label {
+  color: rgba(232, 238, 236, 0.74);
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+
+.forecast-chart-tooltip__value {
+  color: #ffffff;
+  font-size: 0.95rem;
+  font-weight: 700;
+  line-height: 1.2;
+}

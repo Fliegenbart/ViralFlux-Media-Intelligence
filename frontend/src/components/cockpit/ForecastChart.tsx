@@ -12,6 +12,7 @@ import {
 } from 'recharts';
 
 import { RegionalBacktestTimelinePoint } from '../../types/media/regional';
+import { ForecastChartTooltip } from './ForecastChartTooltip';
 
 /* ── ForecastChart ── */
 
@@ -83,27 +84,6 @@ const ForecastChart: React.FC<ForecastChartProps> = ({
 
   const todayLabel = useMemo(() => formatDayMonth(todayStr), [todayStr]);
 
-  // Split data into historical (up to today) and forecast (from today onward)
-  const { historicalData, forecastData } = useMemo(() => {
-    const historical: typeof data = [];
-    const forecast: typeof data = [];
-
-    for (const point of data) {
-      if (point.date <= todayStr) {
-        historical.push(point);
-      } else {
-        forecast.push(point);
-      }
-    }
-
-    // Add the last historical point to forecast for continuity
-    if (historical.length > 0 && forecast.length > 0) {
-      forecast.unshift(historical[historical.length - 1]);
-    }
-
-    return { historicalData: historical, forecastData: forecast };
-  }, [data, todayStr]);
-
   // Merge into a single dataset for the chart
   const chartData = useMemo(() => {
     return data.map((point) => ({
@@ -145,12 +125,15 @@ const ForecastChart: React.FC<ForecastChartProps> = ({
           <XAxis dataKey="dateLabel" tick={{ fontSize: 11, fill: theme.tick }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
           <YAxis tick={{ fontSize: 11, fill: theme.tick }} tickLine={false} axisLine={false} width={40} />
           <Tooltip
-            contentStyle={{ background: '#fff', border: 'none', borderRadius: 8, fontSize: 12, boxShadow: '0 4px 16px rgba(0,0,0,0.12)' }}
-            labelFormatter={(label) => `${regionName} · ${label}`}
-            formatter={(value: number, name: string) => {
-              const nameMap: Record<string, string> = { historicalLine: 'Ist-Inzidenz', forecastLine: 'Prognose', bandUpper: 'Obergrenze', bandLower: 'Untergrenze' };
-              return [typeof value === 'number' ? value.toFixed(1) : value, nameMap[name] || name];
-            }}
+            cursor={{ stroke: theme.reference, strokeWidth: 1, strokeDasharray: '3 3' }}
+            content={(props) => (
+              <ForecastChartTooltip
+                active={props.active}
+                label={props.label}
+                payload={props.payload as Array<{ name?: string; value?: number | string | null }> | undefined}
+                regionName={regionName}
+              />
+            )}
           />
 
           {/* Confidence band */}

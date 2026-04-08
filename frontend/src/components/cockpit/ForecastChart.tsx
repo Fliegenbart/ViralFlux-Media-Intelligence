@@ -31,6 +31,11 @@ function formatDayMonth(dateStr: string): string {
   return `${day}.${month}`;
 }
 
+function formatForecastAxisTickLabel(value: string | number | undefined, tone: 'x' | 'y'): string {
+  if (tone === 'x') return String(value ?? '');
+  return String(value ?? '');
+}
+
 const CHART_THEME = {
   default: {
     actual: '#4f46e5',
@@ -69,7 +74,7 @@ type AxisTickProps = {
 
 function ForecastAxisTick({ x = 0, y = 0, payload, tone }: AxisTickProps): React.JSX.Element {
   const value = payload?.value;
-  const label = tone === 'x' ? formatDayMonth(String(value || '')) : String(value ?? '');
+  const label = formatForecastAxisTickLabel(value, tone);
 
   return (
     <text
@@ -374,5 +379,5 @@ const PredictionSummary: React.FC<PredictionSummaryProps> = ({
   );
 };
 
-export { ForecastChart, PredictionSummary };
+export { ForecastChart, PredictionSummary, formatForecastAxisTickLabel };
 export type { ForecastChartProps, PredictionSummaryProps };

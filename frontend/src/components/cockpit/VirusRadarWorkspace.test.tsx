@@ -210,5 +210,8 @@ describe('VirusRadarWorkspace', () => {
     expect(screen.getByText('Forecast · 7 Tage')).toBeInTheDocument();
     expect(screen.queryByText('Entscheidung diese Woche')).not.toBeInTheDocument();
     expect(screen.getByText('Radar-Tape')).toBeInTheDocument();
+    expect(screen.getByText('Signal baut sich deutlich auf.')).toBeInTheDocument();
+    expect(screen.getByText('+199.0%')).toBeInTheDocument();
+    expect(screen.getByText('Zur Vorwoche')).toBeInTheDocument();
   });
 });

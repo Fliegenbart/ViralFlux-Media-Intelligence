@@ -180,6 +180,13 @@ const VirusRadarWorkspace: React.FC<Props> = ({
   const topActivation = regionsData.regionsView?.map?.activation_suggestions?.slice(0, 3) || [];
   const chartRegionName = heroRegionName || '';
   const dataTimestamp = formatDateTime(nowData.view.generatedAt);
+  const trendInsight = buildTrendInsight({
+    regionName: chartRegionName,
+    changePct: heroChangePct,
+    trend: heroTrend,
+    virus,
+    hasTimeline: (nowData.focusRegionBacktest?.timeline || []).length > 0,
+  });
 
   return (
     <div className="page-stack virus-radar-page">
@@ -423,17 +430,30 @@ const VirusRadarWorkspace: React.FC<Props> = ({
             description="Nicht nur wo das Signal ist, sondern ob es sich stabil aufbaut."
           >
             <div className="virus-radar-trend">
+              <div className="virus-radar-trend__lead">
+                <div className="virus-radar-trend__narrative">
+                  <span className="virus-radar-trend__eyebrow">Diese Woche</span>
+                  <strong className={`virus-radar-trend__headline virus-radar-trend__headline--${trendInsight.tone}`}>
+                    {trendInsight.headline}
+                  </strong>
+                  <p className="virus-radar-trend__copy">
+                    {trendInsight.copy}
+                  </p>
+                </div>
+                <div className={`virus-radar-trend__metric virus-radar-trend__metric--${trendInsight.tone}`}>
+                  <span className="virus-radar-trend__metric-label">Zur Vorwoche</span>
+                  <strong className="virus-radar-trend__metric-value">{trendInsight.metricValue}</strong>
+                  <span className="virus-radar-trend__metric-detail">{trendInsight.metricDetail}</span>
+                </div>
+              </div>
               <ForecastChart
                 timeline={nowData.focusRegionBacktest?.timeline || []}
                 regionName={chartRegionName}
+                className="virus-radar-trend__chart"
               />
               <div className="virus-radar-trend__summary">
                 <strong>{chartRegionName || 'Fokusregion'}</strong>
-                <span>
-                  {heroChangePct != null
-                    ? `Veränderung zur Vorwoche: ${heroChangePct >= 0 ? '+' : ''}${heroChangePct.toFixed(1)}%`
-                    : 'Verlauf wird gerade aufgebaut.'}
-                </span>
+                <span>{trendInsight.footer}</span>
               </div>
             </div>
           </OperatorPanel>
@@ -476,6 +496,111 @@ function formatProbability(value?: number | null): string {
 function formatSignedPercent(value?: number | null): string {
   if (value == null || Number.isNaN(value)) return '-';
   return `${value >= 0 ? '+' : ''}${value.toFixed(0)}%`;
+}
+
+function formatSignedPercentPrecise(value?: number | null): string {
+  if (value == null || Number.isNaN(value)) return '-';
+  return `${value >= 0 ? '+' : ''}${value.toFixed(1)}%`;
+}
+
+function buildTrendInsight({
+  regionName,
+  changePct,
+  trend,
+  virus,
+  hasTimeline,
+}: {
+  regionName: string;
+  changePct?: number | null;
+  trend?: string | null;
+  virus: string;
+  hasTimeline: boolean;
+}): {
+  tone: 'rising' | 'falling' | 'steady' | 'pending';
+  headline: string;
+  copy: string;
+  metricValue: string;
+  metricDetail: string;
+  footer: string;
+} {
+  if (!hasTimeline) {
+    return {
+      tone: 'pending',
+      headline: 'Signal wird gerade aufgebaut.',
+      copy: 'Sobald genügend Verlaufspunkte vorliegen, wird hier sichtbar, ob sich das Signal wirklich aufbaut oder wieder abkühlt.',
+      metricValue: '-',
+      metricDetail: regionName || 'Fokusregion',
+      footer: `Der 7-Tage-Verlauf für ${virus} wird gerade geladen.`,
+    };
+  }
+
+  const safeRegionName = regionName || 'Die Fokusregion';
+  const roundedDelta = formatSignedPercentPrecise(changePct);
+  const trendLabel = trend ? `Trend ${trend}` : 'Trend wird eingeordnet';
+
+  if (changePct == null || Number.isNaN(changePct)) {
+    return {
+      tone: 'pending',
+      headline: 'Verlauf sichtbar, Vorwochenvergleich noch offen.',
+      copy: `${safeRegionName} ist bereits als Verlauf sichtbar. Der Vergleich zur Vorwoche wird nachgezogen, sobald der Referenzwert vollständig vorliegt.`,
+      metricValue: '-',
+      metricDetail: safeRegionName,
+      footer: `${trendLabel} · 7-Tage-Verlauf für ${virus}.`,
+    };
+  }
+
+  if (changePct >= 25) {
+    return {
+      tone: 'rising',
+      headline: 'Signal baut sich deutlich auf.',
+      copy: `${safeRegionName} liegt ${roundedDelta} zur Vorwoche und zieht damit klar an. Das spricht für erhöhte Aufmerksamkeit in dieser Woche.`,
+      metricValue: roundedDelta,
+      metricDetail: `${safeRegionName} · ${trendLabel}`,
+      footer: `${trendLabel} · 7-Tage-Verlauf für ${virus}.`,
+    };
+  }
+
+  if (changePct >= 5) {
+    return {
+      tone: 'rising',
+      headline: 'Signal zieht weiter an.',
+      copy: `${safeRegionName} liegt ${roundedDelta} zur Vorwoche. Der Ausschlag ist sichtbar, aber noch kein maximaler Peak.`,
+      metricValue: roundedDelta,
+      metricDetail: `${safeRegionName} · ${trendLabel}`,
+      footer: `${trendLabel} · 7-Tage-Verlauf für ${virus}.`,
+    };
+  }
+
+  if (changePct <= -25) {
+    return {
+      tone: 'falling',
+      headline: 'Signal fällt deutlich zurück.',
+      copy: `${safeRegionName} liegt ${roundedDelta} zur Vorwoche. Das spricht eher für Beobachten als für zusätzlichen Mediadrück in dieser Woche.`,
+      metricValue: roundedDelta,
+      metricDetail: `${safeRegionName} · ${trendLabel}`,
+      footer: `${trendLabel} · 7-Tage-Verlauf für ${virus}.`,
+    };
+  }
+
+  if (changePct <= -5) {
+    return {
+      tone: 'falling',
+      headline: 'Signal kühlt wieder ab.',
+      copy: `${safeRegionName} liegt ${roundedDelta} zur Vorwoche. Der Verlauf ist noch relevant, aber nicht mehr so scharf wie zuletzt.`,
+      metricValue: roundedDelta,
+      metricDetail: `${safeRegionName} · ${trendLabel}`,
+      footer: `${trendLabel} · 7-Tage-Verlauf für ${virus}.`,
+    };
+  }
+
+  return {
+    tone: 'steady',
+    headline: 'Signal bleibt weitgehend stabil.',
+    copy: `${safeRegionName} liegt ${roundedDelta} zur Vorwoche. Der Verlauf verändert sich aktuell nur leicht und spricht eher für Beobachten als für einen harten Richtungswechsel.`,
+    metricValue: roundedDelta,
+    metricDetail: `${safeRegionName} · ${trendLabel}`,
+    footer: `${trendLabel} · 7-Tage-Verlauf für ${virus}.`,
+  };
 }
 
 function buildSignalTiles({

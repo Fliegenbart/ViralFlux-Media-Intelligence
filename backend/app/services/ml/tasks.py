@@ -171,6 +171,61 @@ def train_xgboost_model_task(
     })
 
 
+@celery_app.task(bind=True, name="refresh_live_forecasts_task")
+def refresh_live_forecasts_task(
+    self,
+    region: str = "DE",
+    horizon_days: int = 7,
+    include_internal_history: bool = True,
+) -> Dict[str, Any]:
+    """Generate fresh persisted live forecasts for all supported virus types."""
+    from app.services.ml.forecast_service import ForecastService
+
+    logger.info(
+        "Celery: refreshing live forecasts (region=%s, horizon_days=%s, internal=%s)",
+        region,
+        horizon_days,
+        include_internal_history,
+    )
+    self.update_state(
+        state="PROGRESS",
+        meta={"step": "Initializing live forecast refresh...", "progress": 10},
+    )
+
+    with get_db_context() as db:
+        service = ForecastService(db)
+        self.update_state(
+            state="PROGRESS",
+            meta={"step": "Generating live forecasts...", "progress": 40},
+        )
+        result = service.run_forecasts_for_all_viruses(
+            region=region,
+            horizon_days=horizon_days,
+            include_internal_history=include_internal_history,
+        )
+
+    failed = [
+        virus
+        for virus, payload in result.items()
+        if isinstance(payload, dict) and payload.get("error")
+    ]
+    status = "success" if not failed else ("error" if len(failed) == len(result) else "partial_error")
+    logger.info(
+        "Celery: live forecast refresh completed (status=%s, failed=%s)",
+        status,
+        failed,
+    )
+    return _json_safe({
+        "status": status,
+        "result": result,
+        "region": region,
+        "horizon_days": horizon_days,
+        "include_internal_history": include_internal_history,
+        "failed_virus_types": failed,
+        "timestamp": utc_now().isoformat(),
+    })
+
+
 @celery_app.task(bind=True, name="refresh_regional_operational_snapshots_task")
 def refresh_regional_operational_snapshots_task(
     self,

@@ -428,8 +428,13 @@ Internet
 │  06:15  RKI/AKTIN Notaufnahme Import    │
 │  06:20  Google Trends Import            │
 │  06:30  Weather Update                  │
-│  07:00  ML Forecasts Generation         │
-│  07:20  Regional Snapshot Refresh       │
+│  07:00  XGBoost Training                │
+│  07:10  Regional Model Training         │
+│  07:30  Live Forecast Refresh           │
+│  07:40  Market Backtest Refresh         │
+│  07:50  Forecast Accuracy Check         │
+│  08:00  Regional Snapshot Refresh       │
+│  08:10  Marketing Opportunities         │
 │  03:00  Database Backup                 │
 │  Alle 3h  Weather Update (Forecast)     │
 └─────────────────────────────────────────┘

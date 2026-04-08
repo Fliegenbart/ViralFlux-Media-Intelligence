@@ -130,28 +130,40 @@ celery_app.conf.beat_schedule = {
         "schedule": crontab(hour=6, minute=0),
         "kwargs": {},
     },
-    # Taeglich 06:10 — Markt-Backtests nach frischer Ingestion neu berechnen
-    "daily-market-backtest-refresh": {
-        "task": "refresh_market_backtests_task",
-        "schedule": crontab(hour=6, minute=10),
-        "kwargs": {},
-    },
-    # Taeglich 06:30 — Marketing-Opportunities aus frischen Signalen generieren
-    "daily-marketing-opportunities": {
-        "task": "generate_marketing_opportunities_task",
-        "schedule": crontab(hour=6, minute=30),
-        "kwargs": {},
-    },
     # Taeglich 07:00 — XGBoost Retraining mit neuen Daten
     "daily-xgboost-training": {
         "task": "train_xgboost_model_task",
         "schedule": crontab(hour=7, minute=0),
         "kwargs": {"virus_typ": None},  # alle 4 Typen
     },
-    # Taeglich 07:20 — Regionale operative Snapshots fuer Readiness aktualisieren
+    # Taeglich 07:10 — Regionale Modelle nach frischer Ingestion neu trainieren
+    "daily-regional-model-training": {
+        "task": "train_regional_models_task",
+        "schedule": crontab(hour=7, minute=10),
+        "kwargs": {"virus_typ": None},
+    },
+    # Taeglich 07:30 — Frische Live-Forecasts in ml_forecasts persistieren
+    "daily-live-forecast-refresh": {
+        "task": "refresh_live_forecasts_task",
+        "schedule": crontab(hour=7, minute=30),
+        "kwargs": {},
+    },
+    # Taeglich 07:40 — Markt-Backtests nach frischem Training neu berechnen
+    "daily-market-backtest-refresh": {
+        "task": "refresh_market_backtests_task",
+        "schedule": crontab(hour=7, minute=40),
+        "kwargs": {},
+    },
+    # Taeglich 07:50 — Forecast-Accuracy Monitoring nach Daten- und Forecast-Refresh
+    "daily-forecast-accuracy": {
+        "task": "compute_forecast_accuracy_task",
+        "schedule": crontab(hour=7, minute=50),
+        "kwargs": {},
+    },
+    # Taeglich 08:00 — Regionale operative Snapshots fuer Readiness aktualisieren
     "daily-regional-operational-snapshot-refresh": {
         "task": "refresh_regional_operational_snapshots_task",
-        "schedule": crontab(hour=7, minute=20),
+        "schedule": crontab(hour=8, minute=0),
         "kwargs": {},
     },
     # Montags 03:00 — RKI SurvStat Kreis-Daten (wochentlich, Rate-Limit-schonend)
@@ -160,10 +172,10 @@ celery_app.conf.beat_schedule = {
         "schedule": crontab(hour=3, minute=0, day_of_week="monday"),
         "kwargs": {"years": None, "diseases": None},  # aktuelles + Vorjahr
     },
-    # Taeglich 08:00 — Forecast-Accuracy Monitoring (nach Ingestion + Training)
-    "daily-forecast-accuracy": {
-        "task": "compute_forecast_accuracy_task",
-        "schedule": crontab(hour=8, minute=0),
+    # Taeglich 08:10 — Marketing-Opportunities aus frischen Forecasts und Gates generieren
+    "daily-marketing-opportunities": {
+        "task": "generate_marketing_opportunities_task",
+        "schedule": crontab(hour=8, minute=10),
         "kwargs": {},
     },
     # Montags 08:30 — Woechentlicher Gelo Media Action Brief (nach allen Daten-Updates)

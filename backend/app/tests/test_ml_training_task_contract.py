@@ -4,10 +4,13 @@ from unittest.mock import patch
 
 from app.core.celery_app import celery_app
 from app.services.ml.tasks import (
+    refresh_live_forecasts_task,
     refresh_regional_operational_snapshots_task,
     train_regional_models_task,
     train_xgboost_model_task,
 )
+from app.services.ml.forecast_contracts import DEFAULT_DECISION_HORIZON_DAYS
+from app.services.ml.forecast_horizon_utils import DEFAULT_FORECAST_REGION
 from app.services.ml.training_contract import SUPPORTED_VIRUS_TYPES
 
 
@@ -58,21 +61,72 @@ class MLTrainingTaskContractTests(unittest.TestCase):
 
         refresh_entry = schedule["daily-market-backtest-refresh"]
         self.assertEqual(refresh_entry["task"], "refresh_market_backtests_task")
-        self.assertEqual(refresh_entry["schedule"]._orig_hour, 6)
-        self.assertEqual(refresh_entry["schedule"]._orig_minute, 10)
+        self.assertEqual(refresh_entry["schedule"]._orig_hour, 7)
+        self.assertEqual(refresh_entry["schedule"]._orig_minute, 40)
         self.assertEqual(refresh_entry["kwargs"], {})
 
         training_entry = schedule["daily-xgboost-training"]
         self.assertEqual(training_entry["kwargs"], {"virus_typ": None})
+
+        regional_training_entry = schedule["daily-regional-model-training"]
+        self.assertEqual(regional_training_entry["task"], "train_regional_models_task")
+        self.assertEqual(regional_training_entry["schedule"]._orig_hour, 7)
+        self.assertEqual(regional_training_entry["schedule"]._orig_minute, 10)
+        self.assertEqual(regional_training_entry["kwargs"], {"virus_typ": None})
+
+        live_forecast_entry = schedule["daily-live-forecast-refresh"]
+        self.assertEqual(live_forecast_entry["task"], "refresh_live_forecasts_task")
+        self.assertEqual(live_forecast_entry["schedule"]._orig_hour, 7)
+        self.assertEqual(live_forecast_entry["schedule"]._orig_minute, 30)
+        self.assertEqual(live_forecast_entry["kwargs"], {})
 
         snapshot_entry = schedule["daily-regional-operational-snapshot-refresh"]
         self.assertEqual(
             snapshot_entry["task"],
             "refresh_regional_operational_snapshots_task",
         )
-        self.assertEqual(snapshot_entry["schedule"]._orig_hour, 7)
-        self.assertEqual(snapshot_entry["schedule"]._orig_minute, 20)
+        self.assertEqual(snapshot_entry["schedule"]._orig_hour, 8)
+        self.assertEqual(snapshot_entry["schedule"]._orig_minute, 0)
         self.assertEqual(snapshot_entry["kwargs"], {})
+
+        opportunity_entry = schedule["daily-marketing-opportunities"]
+        self.assertEqual(opportunity_entry["task"], "generate_marketing_opportunities_task")
+        self.assertEqual(opportunity_entry["schedule"]._orig_hour, 8)
+        self.assertEqual(opportunity_entry["schedule"]._orig_minute, 10)
+
+        accuracy_entry = schedule["daily-forecast-accuracy"]
+        self.assertEqual(accuracy_entry["task"], "compute_forecast_accuracy_task")
+        self.assertEqual(accuracy_entry["schedule"]._orig_hour, 7)
+        self.assertEqual(accuracy_entry["schedule"]._orig_minute, 50)
+
+    def test_live_forecast_refresh_task_runs_default_scope(self) -> None:
+        with patch(
+            "app.services.ml.tasks.get_db_context",
+            return_value=nullcontext(object()),
+        ), patch(
+            "app.services.ml.forecast_service.ForecastService",
+        ) as forecast_service_cls, patch.object(
+            refresh_live_forecasts_task,
+            "update_state",
+        ) as update_state:
+            forecast_service_cls.return_value.run_forecasts_for_all_viruses.return_value = {
+                "Influenza A": {"status": "success"},
+            }
+
+            result = refresh_live_forecasts_task.run()
+
+        forecast_service_cls.return_value.run_forecasts_for_all_viruses.assert_called_once_with(
+            region=DEFAULT_FORECAST_REGION,
+            horizon_days=DEFAULT_DECISION_HORIZON_DAYS,
+            include_internal_history=True,
+        )
+        self.assertEqual(result["region"], DEFAULT_FORECAST_REGION)
+        self.assertEqual(result["horizon_days"], DEFAULT_DECISION_HORIZON_DAYS)
+        self.assertTrue(result["include_internal_history"])
+        self.assertEqual(
+            update_state.call_args_list[1].kwargs["meta"]["step"],
+            "Generating live forecasts...",
+        )
 
     def test_snapshot_refresh_task_runs_all_supported_viruses(self) -> None:
         with patch(

@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import patch
 
 import numpy as np
 import pandas as pd
@@ -7,6 +8,32 @@ from app.services.ml.forecast_service import ForecastService
 
 
 class ForecastServiceGuardTests(unittest.TestCase):
+    def test_predict_falls_back_to_in_memory_forecast_when_cached_model_features_do_not_match(self) -> None:
+        service = ForecastService(db=None)
+
+        with patch(
+            "app.services.ml.forecast_service._load_cached_models",
+            return_value=(object(), object(), object(), {"version": "legacy-rsv-model"}, None),
+        ), patch.object(
+            service,
+            "_inference_from_loaded_models",
+            side_effect=ValueError("Feature shape mismatch, expected: 18, got 19"),
+        ), patch.object(
+            service,
+            "train_and_forecast",
+            return_value={"status": "success", "virus_typ": "RSV A"},
+        ) as fallback:
+            result = service.predict(virus_typ="RSV A")
+
+        fallback.assert_called_once_with(
+            virus_typ="RSV A",
+            region="DE",
+            horizon_days=7,
+            include_internal_history=True,
+        )
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(result["virus_typ"], "RSV A")
+
     def test_finalize_training_frame_drops_warmup_rows_without_backfill(self) -> None:
         base = pd.Series(np.arange(20, dtype=float))
         raw = pd.DataFrame(

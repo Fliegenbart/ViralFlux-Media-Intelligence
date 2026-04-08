@@ -304,6 +304,15 @@ def invalidate_model_cache(virus_typ: str | None = None) -> None:
             _model_cache.clear()
 
 
+def _is_model_feature_compatibility_error(exc: Exception) -> bool:
+    message = str(exc or "").lower()
+    return (
+        "feature shape mismatch" in message
+        or "number of columns does not match" in message
+        or "feature_names mismatch" in message
+    )
+
+
 def _sigmoid(x: float) -> float:
     """Numerically stable sigmoid."""
     if x >= 0:
@@ -2024,17 +2033,36 @@ class ForecastService:
             )
 
         model_med, model_lo, model_hi, metadata, event_model = cached
-        return self._inference_from_loaded_models(
-            virus_typ=virus_typ,
-            model_med=model_med,
-            model_lo=model_lo,
-            model_hi=model_hi,
-            metadata=metadata,
-            event_model=event_model,
-            region=region_code,
-            horizon_days=horizon,
-            include_internal_history=include_internal_history,
-        )
+        try:
+            return self._inference_from_loaded_models(
+                virus_typ=virus_typ,
+                model_med=model_med,
+                model_lo=model_lo,
+                model_hi=model_hi,
+                metadata=metadata,
+                event_model=event_model,
+                region=region_code,
+                horizon_days=horizon,
+                include_internal_history=include_internal_history,
+            )
+        except Exception as exc:
+            if not _is_model_feature_compatibility_error(exc):
+                raise
+
+            logger.warning(
+                "Cached forecast model for %s/%s/h%s is incompatible with current features (%s). "
+                "Falling back to in-memory train_and_forecast().",
+                virus_typ,
+                region_code,
+                horizon,
+                exc,
+            )
+            return self.train_and_forecast(
+                virus_typ=virus_typ,
+                region=region_code,
+                horizon_days=horizon,
+                include_internal_history=include_internal_history,
+            )
 
     def _inference_from_loaded_models(
         self,

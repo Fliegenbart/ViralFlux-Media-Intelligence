@@ -45,7 +45,7 @@ export function useVirusRadarHeroForecast(
         setLoading(false);
       }
     }
-  }, [brand, toast]);
+  }, [toast]);
 
   useEffect(() => {
     loadHeroForecast();

@@ -214,7 +214,7 @@ export const mediaApi = {
 
   async getRegionalPortfolio(referenceVirus = 'Influenza A', topN = 12): Promise<RegionalPortfolioResponse> {
     const qs = new URLSearchParams({ reference_virus: referenceVirus, top_n: String(topN) });
-    return fetchJson<RegionalPortfolioResponse>(`/api/v1/forecast/regional/portfolio?${qs.toString()}`, undefined, 20000);
+    return fetchJson<RegionalPortfolioResponse>(`/api/v1/forecast/regional/portfolio?${qs.toString()}`, undefined, HEAVY_FETCH_TIMEOUT_MS);
   },
 
   async getRegionalForecast(

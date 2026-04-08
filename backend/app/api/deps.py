@@ -104,6 +104,19 @@ async def get_current_user(
         raise credentials_exception
 
 
+async def get_optional_current_user(
+    request: Request,
+    token: str | None = Depends(oauth2_scheme),
+    db: Session = Depends(get_db),
+) -> dict | None:
+    try:
+        return await get_current_user(request, token, db)
+    except HTTPException as exc:
+        if exc.status_code == status.HTTP_401_UNAUTHORIZED:
+            return None
+        raise
+
+
 async def get_current_admin(current_user: dict = Depends(get_current_user)) -> dict:
     if current_user.get("role") != "admin":
         raise HTTPException(

@@ -7,7 +7,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.api.deps import AUTH_COOKIE_NAME, get_current_user
+from app.api.deps import AUTH_COOKIE_NAME, get_current_user, get_optional_current_user
 from app.core.rate_limit import limiter
 from app.core.time import utc_now
 from app.core.security import create_access_token, get_password_hash, verify_password
@@ -195,7 +195,14 @@ async def login(
 
 
 @router.get("/session", response_model=SessionState)
-async def get_session(current_user: dict = Depends(get_current_user)):
+async def get_session(current_user: dict | None = Depends(get_optional_current_user)):
+    if not current_user:
+        return SessionState(
+            authenticated=False,
+            subject=None,
+            role=None,
+        )
+
     return SessionState(
         authenticated=True,
         subject=current_user.get("sub"),

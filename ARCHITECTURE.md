@@ -328,7 +328,7 @@ model.add_regressor('trends_ma7')          # Moving Average
 **Session Flow:**
 - Browser-Requests laufen standardmäßig mit Cookie-Credentials
 - `/api/auth/login` bestätigt Browser-Logins über Session-Status statt ein lesbares JWT im Response-Body zurückzugeben
-- `/api/auth/session` prüft nach Reloads, ob noch eine gültige Session existiert
+- `/api/auth/session` prüft nach Reloads, ob noch eine gültige Session existiert, und liefert anonymen Browsern ruhig `authenticated: false`
 - `/api/auth/logout` widerruft neue Sessions serverseitig über die bestehende Audit-Log-Infrastruktur
 - `/api/auth/logout` löscht das Session-Cookie serverseitig aus dem Browser-Kontext
 

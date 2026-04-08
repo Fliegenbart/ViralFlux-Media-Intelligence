@@ -117,6 +117,19 @@ class AuthApiTests(unittest.TestCase):
             },
         )
 
+    def test_session_endpoint_reports_unauthenticated_without_active_session(self) -> None:
+        session_response = self.client.get("/api/auth/session")
+
+        self.assertEqual(session_response.status_code, 200)
+        self.assertEqual(
+            session_response.json(),
+            {
+                "authenticated": False,
+                "subject": None,
+                "role": None,
+            },
+        )
+
     def test_logout_clears_auth_cookie_and_session(self) -> None:
         login_response = self._login("admin@example.com", "CorrectHorseBatteryStaple123!")
         set_cookie = login_response.headers.get("set-cookie", "")
@@ -137,7 +150,15 @@ class AuthApiTests(unittest.TestCase):
 
         self.assertEqual(logout_response.status_code, 200)
         self.assertIn("Max-Age=0", logout_response.headers.get("set-cookie", ""))
-        self.assertEqual(session_response.status_code, 401)
+        self.assertEqual(session_response.status_code, 200)
+        self.assertEqual(
+            session_response.json(),
+            {
+                "authenticated": False,
+                "subject": None,
+                "role": None,
+            },
+        )
         self.assertEqual(stolen_token_response.status_code, 401)
 
 

@@ -46,10 +46,10 @@ const BUNDESLAND_NAME_TO_CODE: Record<string, string> = {
   Thüringen: 'TH',
 };
 
-const CALLOUT_TARGETS: Record<string, { tx: number; ty: number }> = {
-  HH: { tx: 385, ty: 52 },
-  BE: { tx: 395, ty: 138 },
-  HB: { tx: 385, ty: 92 },
+const CITY_STATE_HIT_AREAS: Record<string, number> = {
+  HH: 22,
+  BE: 20,
+  HB: 18,
 };
 
 const GEO = deBundeslaenderGeo as GeoBundeslandCollection;
@@ -125,7 +125,7 @@ const GermanyMap: React.FC<Props> = ({
 }) => {
   const [hoveredRegion, setHoveredRegion] = useState<string | null>(null);
   const projection = useMemo(
-    () => geoMercator().fitSize([420, 460], GEO as never),
+    () => geoMercator().fitSize([470, 520], GEO as never),
     [],
   );
 
@@ -175,7 +175,7 @@ const GermanyMap: React.FC<Props> = ({
         <span className="vf-map-legend__item"><span className="vf-map-legend__swatch vf-map-legend__swatch--evidence" aria-hidden="true" />Keine Daten</span>
       </div>
 
-      <svg viewBox="0 0 420 460" style={{ width: '100%', maxHeight: 520 }} role="img" aria-label="Deutschlandkarte auf Bundesland-Level">
+      <svg viewBox="0 0 470 520" style={{ width: '100%', maxHeight: 620 }} role="img" aria-label="Deutschlandkarte auf Bundesland-Level">
         <defs>
           <filter id="vf-map-shadow" x="-20%" y="-20%" width="140%" height="140%">
             <feDropShadow dx="0" dy="3" stdDeviation="4" floodColor="#64748b" floodOpacity="0.22" />
@@ -239,6 +239,14 @@ const GermanyMap: React.FC<Props> = ({
                   d={shape.d}
                 />
               )}
+              {code && code in CITY_STATE_HIT_AREAS && (
+                <circle
+                  className="vf-map-region__hit-area"
+                  cx={shape.cx}
+                  cy={shape.cy}
+                  r={CITY_STATE_HIT_AREAS[code]}
+                />
+              )}
               <path
                 className="vf-map-region__path"
                 d={shape.d}
@@ -246,7 +254,7 @@ const GermanyMap: React.FC<Props> = ({
                 stroke={isSelected ? 'var(--color-primary)' : isHovered ? 'rgba(37, 99, 235, 0.6)' : 'rgba(71, 85, 105, 0.35)'}
                 strokeWidth={isSelected ? 2.8 : isHovered ? 2.1 : 1.4}
               />
-              {code && !(code in CALLOUT_TARGETS) && (
+              {code && (
                 <>
                   <circle
                     cx={shape.cx}
@@ -282,36 +290,6 @@ const GermanyMap: React.FC<Props> = ({
                   )}
                 </>
               )}
-            </g>
-          );
-        })}
-
-        {Object.entries(CALLOUT_TARGETS).map(([code, target]) => {
-          const shape = shapes.find((item) => item.code === code);
-          if (!shape) return null;
-          return (
-            <g key={code} pointerEvents="none">
-              <line x1={shape.cx} y1={shape.cy} x2={target.tx} y2={target.ty} stroke="rgba(71, 85, 105, 0.45)" strokeWidth="1.1" />
-              <circle
-                cx={target.tx}
-                cy={target.ty}
-                r={radarVariant && topRegionCode === code ? 12 : 10}
-                fill={regionColor(code ? regions[code] : undefined)}
-                stroke="rgba(15, 23, 42, 0.65)"
-                strokeWidth="1.6"
-                opacity={radarVariant && topRegionCode !== code && selectedRegion !== code ? 0.84 : 1}
-              />
-              <text
-                x={target.tx}
-                y={target.ty + 3}
-                textAnchor="middle"
-                fill="#fff"
-                fontSize={radarVariant && topRegionCode === code ? '9.5' : '9'}
-                fontWeight="800"
-                opacity={radarVariant && topRegionCode !== code && selectedRegion !== code ? 0.88 : 1}
-              >
-                {code}
-              </text>
             </g>
           );
         })}

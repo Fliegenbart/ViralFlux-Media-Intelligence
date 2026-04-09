@@ -607,6 +607,12 @@
   pointer-events: none;
 }
 
+.vf-map-region__hit-area {
+  fill: rgba(255, 255, 255, 0.001);
+  stroke: transparent;
+  pointer-events: all;
+}
+
 .vf-map-region__halo--top {
   stroke: rgba(232, 82, 58, 0.28);
   stroke-width: 8;

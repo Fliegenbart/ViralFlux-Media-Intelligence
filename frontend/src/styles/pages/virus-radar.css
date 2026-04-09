@@ -455,7 +455,7 @@
 
 .virus-radar-map-panel__body {
   display: grid;
-  grid-template-columns: minmax(360px, 1.08fr) minmax(420px, 0.92fr);
+  grid-template-columns: minmax(320px, 0.9fr) minmax(560px, 1.1fr);
   gap: calc(var(--space-lg) + 4px);
   align-items: stretch;
 }
@@ -463,7 +463,7 @@
 .virus-radar-map-panel__map {
   min-width: 0;
   min-height: 100%;
-  padding: 22px 24px 20px;
+  padding: 18px 20px 16px;
   border: 1px solid rgba(23, 32, 51, 0.08);
   border-radius: 20px;
   background: linear-gradient(180deg, rgba(250, 251, 248, 0.96) 0%, rgba(244, 247, 244, 0.94) 100%);

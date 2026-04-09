@@ -1,6 +1,6 @@
 # Quickstart
 
-Diese Datei ist der **schnellste praktische Einstieg**.
+Diese Datei bietet dir den schnellsten Einstieg in den Produktkern, die aktive Oberfläche und den technischen Kern.
 
 Wenn du mehr Hintergrund willst, lies danach:
 - [README.md](README.md)
@@ -13,6 +13,7 @@ Dieser Quickstart ist für:
 - lokale Entwicklung
 - Frontend und Backend schnell starten
 - die wichtigsten Health-Checks und Tests ausführen
+- den schnellen Einstieg in die produktrelevanten Teile des Systems
 
 Nicht dafür:
 - direkt live deployen
@@ -86,7 +87,8 @@ ADMIN_PASSWORD=replace-me
 
 ENVIRONMENT=development
 DB_AUTO_CREATE_SCHEMA=true
-DB_ALLOW_RUNTIME_SCHEMA_UPDATES=true
+DB_ALLOW_RUNTIME_SCHEMA_UPDATES=false
+STARTUP_ENABLE_BFARM_IMPORT=false
 STARTUP_STRICT_READINESS=false
 READINESS_REQUIRE_BROKER=false
 ```
@@ -95,6 +97,8 @@ Wichtig:
 - `VLLM_BASE_URL` darf **nicht versehentlich auf das Backend selbst zeigen**
 - wenn du das Backend **nicht** in Docker betreibst, nutze z. B. `http://127.0.0.1:8001/v1`
 - `http://localhost:8000` ist der FastAPI-Port und kein guter Default fuer einen externen LLM-Endpunkt
+- der API-Start loest standardmaessig **keinen** versteckten BfArM-Import aus
+- Runtime-Schema-Aenderungen sind im buyer-facing Default **aus** und nur fuer lokale Sonderfaelle ein explizites Opt-in
 
 ## 3. Backend lokal starten
 

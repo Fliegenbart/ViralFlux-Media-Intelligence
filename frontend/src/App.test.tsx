@@ -115,6 +115,21 @@ describe('App routing', () => {
     expect(within(operatorNav).queryByRole('button', { name: /Dashboard/i })).not.toBeInTheDocument();
   });
 
+  it('keeps legacy buyer-facing aliases for decision, pilot, and report on supported pages', async () => {
+    const legacyPaths = ['/entscheidung', '/pilot', '/bericht'];
+
+    for (const path of legacyPaths) {
+      window.history.pushState({}, '', path);
+
+      const view = render(<App />);
+
+      expect(await screen.findByText('Virus-Radar Mock')).toBeInTheDocument();
+      expect(window.location.pathname).toBe('/virus-radar');
+
+      view.unmount();
+    }
+  });
+
   it('renders the dedicated Zeitgraph route as its own work area', async () => {
     window.history.pushState({}, '', '/zeitgraph');
 

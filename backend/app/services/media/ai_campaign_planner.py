@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 from app.core.time import utc_now
-
-from datetime import datetime
 import json
 import logging
 import re
 from typing import Any
 
-from app.services.llm.vllm_service import generate_text, generate_text_sync
+from app.services.llm.vllm_service import generate_text_sync
 from app.services.media.campaign_guardrails import HWG_SYSTEM_PROMPT, check_hwg_compliance
 
 logger = logging.getLogger(__name__)
@@ -49,30 +47,6 @@ _CAMPAIGN_PLAN_SCHEMA: dict[str, Any] = {
 }
 
 
-class AICampaignPlanner:
-    """Einfacher Text-Planer (Banner-Aufhänger), HWG-gesichert."""
-
-    async def plan_campaign(self, region: str, outbreak_score: float) -> str:
-        user_prompt = (
-            f"Plane eine Kampagnen-Strategie für die Region {region}. "
-            f"Aktueller Erkältungs-Score (0-100): {outbreak_score}. "
-            f"Schreibe 3 kurze Aufhänger für Bannerwerbung."
-        )
-
-        messages = [
-            {"role": "system", "content": HWG_SYSTEM_PROMPT},
-            {"role": "user", "content": user_prompt},
-        ]
-
-        strategy_text = await generate_text(messages=messages, temperature=0.2)
-
-        if not check_hwg_compliance(strategy_text):
-            logger.warning("HWG blockiert in AICampaignPlanner für %s", region)
-            return "Aus rechtlichen Gründen (HWG) wurde diese Kampagnenplanung blockiert. Bitte manuell anpassen."
-
-        return strategy_text
-
-
 class AiCampaignPlanner:
     """Generiert strukturierte Kampagnenpläne via strikt lokalem vLLM."""
 
@@ -87,10 +61,9 @@ class AiCampaignPlanner:
         product: str,
         campaign_goal: str,
         weekly_budget: float,
-        skip_ollama: bool = False,
+        skip_llm: bool = False,
     ) -> dict[str, Any]:
-        # Backwards-compatible flag-name (skip_ollama) but now means "skip LLM".
-        if skip_ollama:
+        if skip_llm:
             fallback = self._deterministic_fallback(
                 playbook_candidate=playbook_candidate,
                 campaign_goal=campaign_goal,

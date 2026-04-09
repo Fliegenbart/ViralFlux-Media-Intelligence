@@ -1,12 +1,9 @@
 # World-Class Ticket Backlog
 
 Basis für dieses Ticket-Set:
-- [technical_audit_current_state.md](/Users/davidwegener/Desktop/viralflux/docs/technical_audit_current_state.md)
-- [fluxengine_technical_audit_2026-03-10.md](/Users/davidwegener/Desktop/viralflux/docs/fluxengine_technical_audit_2026-03-10.md)
 - [information-architecture-audit.md](/Users/davidwegener/Desktop/viralflux/docs/information-architecture-audit.md)
 - [forecast_world_class_plan.md](/Users/davidwegener/Desktop/viralflux/docs/forecast_world_class_plan.md)
 - [media_allocation_engine_v1.md](/Users/davidwegener/Desktop/viralflux/docs/media_allocation_engine_v1.md)
-- [live_readiness_blockers_current.md](/Users/davidwegener/Desktop/viralflux/docs/live_readiness_blockers_current.md)
 
 Stand: 2026-03-24
 

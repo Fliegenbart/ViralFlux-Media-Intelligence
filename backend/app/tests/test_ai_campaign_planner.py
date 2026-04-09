@@ -3,6 +3,7 @@ import importlib
 import sys
 import types
 import unittest
+from unittest.mock import patch
 
 class AiCampaignPlannerNormalizationTests(unittest.TestCase):
     @classmethod
@@ -20,8 +21,8 @@ class AiCampaignPlannerNormalizationTests(unittest.TestCase):
         llm_stub.generate_text_sync = lambda *_, **__: '{"campaign_name":"A","objective":"B","budget_shift_pct":30,"activation_window_days":10,"channel_plan":[{"channel":"search","share_pct":100}]}'
         sys.modules["app.services.llm.vllm_service"] = llm_stub
 
-        planner_module = importlib.import_module("app.services.media.ai_campaign_planner")
-        cls.AiCampaignPlanner = planner_module.AiCampaignPlanner
+        cls.planner_module = importlib.import_module("app.services.media.ai_campaign_planner")
+        cls.AiCampaignPlanner = cls.planner_module.AiCampaignPlanner
 
     @classmethod
     def tearDownClass(cls) -> None:
@@ -46,6 +47,46 @@ class AiCampaignPlannerNormalizationTests(unittest.TestCase):
             "shift_bounds": {"min": 25.0, "max": 55.0},
             "channel_mix": {"programmatic": 40, "social": 35, "search": 25},
         }
+
+    def test_module_exposes_only_ai_campaign_planner(self) -> None:
+        self.assertTrue(hasattr(self.planner_module, "AiCampaignPlanner"))
+        self.assertFalse(hasattr(self.planner_module, "AICampaignPlanner"))
+
+    def test_generate_plan_supports_skip_llm_flag(self) -> None:
+        with patch.object(
+            self.planner_module,
+            "generate_text_sync",
+            side_effect=AssertionError("LLM should not be called when skip_llm is set"),
+        ):
+            result = self.planner.generate_plan(
+                playbook_candidate=self.candidate,
+                brand="Brand",
+                product="Product",
+                campaign_goal="Awareness",
+                weekly_budget=1000.0,
+                skip_llm=True,
+            )
+
+        self.assertEqual(result["ai_generation_status"], "fallback_template")
+        self.assertTrue(result["ai_meta"]["fallback_used"])
+
+    def test_generate_plan_falls_back_when_llm_raises(self) -> None:
+        with patch.object(
+            self.planner_module,
+            "generate_text_sync",
+            side_effect=RuntimeError("vLLM connection failed"),
+        ):
+            result = self.planner.generate_plan(
+                playbook_candidate=self.candidate,
+                brand="Brand",
+                product="Product",
+                campaign_goal="Awareness",
+                weekly_budget=1000.0,
+            )
+
+        self.assertEqual(result["ai_generation_status"], "fallback_template")
+        self.assertTrue(result["ai_meta"]["fallback_used"])
+        self.assertIn("vLLM connection failed", result["ai_meta"]["error"])
 
     def test_to_float_plain_number(self) -> None:
         value = self.planner._to_float("25.0", default=0.0)

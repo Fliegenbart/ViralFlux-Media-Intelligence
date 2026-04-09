@@ -198,6 +198,7 @@ async def startup_event():
         app_version=settings.APP_VERSION,
         environment=settings.ENVIRONMENT,
         strict_startup_readiness=settings.EFFECTIVE_STARTUP_STRICT_READINESS,
+        startup_enable_bfarm_import=settings.STARTUP_ENABLE_BFARM_IMPORT,
     )
     
     # Runtime safety-net: initialize schema when database is empty / fresh
@@ -237,7 +238,25 @@ async def startup_event():
     if settings.EFFECTIVE_STARTUP_STRICT_READINESS and readiness_snapshot.get("status") == "unhealthy":
         raise RuntimeError("Startup readiness is unhealthy. See /health/ready for blockers.")
 
-    _launch_bfarm_startup_import_thread()
+    if settings.STARTUP_ENABLE_BFARM_IMPORT:
+        log_event(
+            logger,
+            "startup_bfarm_import_enabled",
+            level=logging.WARNING,
+            mode="explicit_opt_in",
+            note="Running BfArM startup import because STARTUP_ENABLE_BFARM_IMPORT=true.",
+        )
+        _launch_bfarm_startup_import_thread()
+    else:
+        log_event(
+            logger,
+            "startup_bfarm_import_disabled",
+            mode="default_safe",
+            note=(
+                "Skipping hidden BfArM startup import. Set STARTUP_ENABLE_BFARM_IMPORT=true "
+                "only for explicit local special cases."
+            ),
+        )
 
 
 def _startup_skip_metadata(*, action: str, summary: str, lock_name: str) -> dict[str, Any]:

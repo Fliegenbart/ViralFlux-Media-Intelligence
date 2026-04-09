@@ -9,9 +9,14 @@ from app.models.database import (
     AREKonsultation,
     Base,
     GoogleTrendsData,
+    MarketingOpportunity,
     NotaufnahmeSyndromData,
     WastewaterData,
     WeatherData,
+)
+from app.services.media.cockpit.recommendations import (
+    build_recommendation_section,
+    build_region_recommendation_refs,
 )
 from app.services.media.cockpit_service import MediaCockpitService
 
@@ -290,6 +295,97 @@ class CockpitBentoSectionContractTests(unittest.TestCase):
         self.assertEqual(pollen_tile["product_scope"], "GeloSitin")
         self.assertIn("Saison-Pause", pollen_tile["subtitle"])
         self.assertFalse(pollen_tile["is_live"])
+
+
+class CockpitRecommendationSectionContractTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.engine = create_engine("sqlite:///:memory:")
+        TestingSessionLocal = sessionmaker(bind=self.engine)
+        Base.metadata.create_all(bind=self.engine)
+        self.db = TestingSessionLocal()
+
+    def tearDown(self) -> None:
+        self.db.close()
+        Base.metadata.drop_all(bind=self.engine)
+        self.engine.dispose()
+
+    def test_recommendation_section_builds_card_with_workflow_status_and_signal_contract(self) -> None:
+        created_at = datetime(2026, 3, 10, 8, 0, 0)
+        self.db.add(
+            MarketingOpportunity(
+                opportunity_id="opp-001",
+                opportunity_type="regional_push",
+                status="URGENT",
+                urgency_score=74.0,
+                brand="gelo",
+                product="GeloMyrtol",
+                region_target={"states": ["Schleswig-Holstein"]},
+                budget_shift_pct=22.0,
+                activation_start=datetime(2026, 3, 11, 0, 0, 0),
+                activation_end=datetime(2026, 3, 24, 0, 0, 0),
+                recommendation_reason="Abverkauf lokal verstärken",
+                created_at=created_at,
+                campaign_payload={
+                    "campaign": {"campaign_name": "Nordfenster nutzen"},
+                    "budget_plan": {"weekly_budget_eur": 12000, "budget_shift_pct": 22.0},
+                    "measurement_plan": {"primary_kpi": "ROAS"},
+                    "activation_window": {"start": "2026-03-11T00:00:00", "end": "2026-03-24T00:00:00"},
+                    "product_mapping": {
+                        "recommended_product": "GeloMyrtol forte",
+                        "mapping_status": "approved",
+                        "condition_key": "bronchitis_husten",
+                        "condition_label": "Bronchitis & Husten",
+                    },
+                    "peix_context": {"signal_score": 68.0},
+                    "trigger_snapshot": {"source": "Abwasser", "event": "peak"},
+                },
+            )
+        )
+        self.db.commit()
+
+        payload = build_recommendation_section(self.db)
+
+        self.assertEqual(payload["total"], 1)
+        card = payload["cards"][0]
+        self.assertEqual(card["status"], "DRAFT")
+        self.assertEqual(card["region_codes"], ["SH"])
+        self.assertEqual(card["campaign_preview"]["recommended_product"], "GeloMyrtol forte")
+        self.assertEqual(card["field_contracts"]["signal_confidence_pct"]["source"], "Abwasser")
+
+    def test_region_recommendation_refs_skip_archived_cards_and_expand_national_scope(self) -> None:
+        created_at = datetime(2026, 3, 10, 8, 0, 0)
+        self.db.add_all(
+            [
+                MarketingOpportunity(
+                    opportunity_id="opp-dismissed",
+                    opportunity_type="regional_push",
+                    status="DISMISSED",
+                    urgency_score=91.0,
+                    brand="gelo",
+                    product="GeloMyrtol",
+                    region_target={"states": ["HH"]},
+                    created_at=created_at,
+                ),
+                MarketingOpportunity(
+                    opportunity_id="opp-national",
+                    opportunity_type="regional_push",
+                    status="READY",
+                    urgency_score=65.0,
+                    brand="gelo",
+                    product="GeloMyrtol",
+                    region_target={"states": ["deutschland"]},
+                    created_at=created_at + timedelta(hours=1),
+                ),
+            ]
+        )
+        self.db.commit()
+
+        refs = build_region_recommendation_refs(self.db)
+
+        self.assertNotIn("opp-dismissed", {item["card_id"] for item in refs.values()})
+        self.assertEqual(len(refs), 16)
+        self.assertEqual(refs["SH"]["card_id"], "opp-national")
+        self.assertEqual(refs["SH"]["status"], "READY")
 
 
 if __name__ == "__main__":

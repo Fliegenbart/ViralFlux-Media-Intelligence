@@ -1,6 +1,6 @@
 # Quickstart
 
-Diese Datei ist der **schnellste praktische Einstieg**.
+Diese Datei zeigt den schnellsten praktischen Einstieg in die aktive Oberfläche und den technischen Kern.
 
 Wenn du mehr Hintergrund willst, lies danach:
 - [README.md](README.md)
@@ -13,6 +13,7 @@ Dieser Quickstart ist für:
 - lokale Entwicklung
 - Frontend und Backend schnell starten
 - die wichtigsten Health-Checks und Tests ausführen
+- den produktnahen Einstieg ohne alte Umbau- oder Laborsprache
 
 Nicht dafür:
 - direkt live deployen

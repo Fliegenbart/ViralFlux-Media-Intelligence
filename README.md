@@ -2,9 +2,9 @@
 
 ViralFlux ist eine Plattform für **regionale Virus-Frühwarnung** und daraus abgeleitete **operative Media-Entscheidungen**.
 
-Dieses Repository enthält den Produktkern und die aktive UI. Interne Arbeitsnotizen, Agenten-Artefakte und historische Audit-Unterlagen gehören nicht in diesen Buyer-Facing Stand.
+Dieses Repository zeigt den Produktkern, die aktive Oberfläche und den technischen Kern in einer gemeinsamen Sicht. Interne Arbeitsnotizen, Agenten-Artefakte und historische Audit-Unterlagen gehören nicht in diesen Buyer-Facing Stand.
 
-Live-Instanz: [https://fluxengine.labpulse.ai/virus-radar](https://fluxengine.labpulse.ai/virus-radar)
+Aktive Oberfläche: [Virus-Radar](/virus-radar)
 
 ## Was die Plattform macht
 
@@ -15,7 +15,7 @@ In einfachen Worten läuft das System so:
 2. Es baut daraus für jedes Virus und jedes Bundesland einen sauberen Datenstand auf.
 3. Es schätzt die Entwicklung für die nächsten Tage.
 4. Es bewertet, wie relevant ein Bundesland gerade ist.
-5. Es zeigt das Ergebnis in einer operativen Oberfläche für PEIX / GELO.
+5. Es zeigt das Ergebnis in einer operativen Oberfläche für das jeweilige Kundenteam.
 
 ## Was man auf `/virus-radar` sieht
 

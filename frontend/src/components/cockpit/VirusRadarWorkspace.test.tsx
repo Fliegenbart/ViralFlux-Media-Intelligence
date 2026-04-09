@@ -16,8 +16,8 @@ jest.mock('./ForecastChart', () => ({
 
 jest.mock('./MultiVirusForecastChart', () => ({
   __esModule: true,
-  MultiVirusForecastChart: ({ loading }: { loading?: boolean }) => (
-    <div>{loading ? 'Multi virus forecast loading' : 'Multi virus forecast chart'}</div>
+  MultiVirusForecastChart: ({ loading, selectedVirus }: { loading?: boolean; selectedVirus?: string }) => (
+    <div>{loading ? 'Hero virus forecast loading' : `Hero virus forecast chart ${selectedVirus}`}</div>
   ),
 }));
 
@@ -35,7 +35,7 @@ jest.mock('./cockpitUtils', () => ({
 const noop = () => {};
 
 describe('VirusRadarWorkspace', () => {
-  it('renders a shared four-virus hero outlook with a comparison forecast', () => {
+  it('renders one selected virus history plus forecast in the hero', () => {
     render(
       <VirusRadarWorkspace
         virus="Influenza A"
@@ -209,13 +209,14 @@ describe('VirusRadarWorkspace', () => {
     );
 
     expect(screen.getByText('PEIX / GELO / VIRUS-RADAR')).toBeInTheDocument();
-    expect(screen.getByText('Live-Lagebild · 4 Viren')).toBeInTheDocument();
-    expect(screen.getByText('Die letzten Wochen und die nächsten 7 Tage.')).toBeInTheDocument();
-    expect(screen.getByText('RSV A und SARS-CoV-2 ziehen aktuell am stärksten an.')).toBeInTheDocument();
-    expect(screen.getByText('Multi virus forecast chart')).toBeInTheDocument();
+    expect(screen.getByText('Virus-Verlauf · Influenza A')).toBeInTheDocument();
+    expect(screen.getByText('Influenza A · letzte Wochen und nächste 7 Tage.')).toBeInTheDocument();
+    expect(screen.getByText('Durchgezogen siehst du die letzten Wochen, gestrichelt die Prognose.')).toBeInTheDocument();
+    expect(screen.getByText('Hero virus forecast chart Influenza A')).toBeInTheDocument();
     expect(screen.getAllByText('Mecklenburg-Vorpommern').length).toBeGreaterThan(0);
+    expect(screen.getByText('Ist-Verlauf')).toBeInTheDocument();
+    expect(screen.getAllByText('7-Tage-Prognose').length).toBeGreaterThan(0);
     expect(screen.getByText('Heute = 100')).toBeInTheDocument();
-    expect(screen.getByText('Forecast · 7 Tage')).toBeInTheDocument();
     expect(screen.queryByText('Eine zentrale Entscheidungsseite für Media. Was jetzt wichtig ist, wo gehandelt werden sollte und welche Risiken oder Blocker noch sichtbar bleiben.')).not.toBeInTheDocument();
     expect(screen.queryByText('Entscheidung diese Woche')).not.toBeInTheDocument();
     expect(screen.getByText('Radar-Tape')).toBeInTheDocument();
@@ -297,10 +298,10 @@ describe('VirusRadarWorkspace', () => {
       />,
     );
 
-    expect(screen.getByText('Live-Lagebild wird geladen')).toBeInTheDocument();
-    expect(screen.getByText('Das gemeinsame 4-Virus-Lagebild wird geladen.')).toBeInTheDocument();
-    expect(screen.getByText('Die 7-Tage-Prognose wird gerade aufgebaut.')).toBeInTheDocument();
-    expect(screen.getByText('Multi virus forecast loading')).toBeInTheDocument();
-    expect(screen.queryByText('Live-Lagebild · 0 Viren')).not.toBeInTheDocument();
+    expect(screen.getByText('Virus-Verlauf wird geladen')).toBeInTheDocument();
+    expect(screen.getByText('Der Verlauf wird geladen.')).toBeInTheDocument();
+    expect(screen.getByText('Die Prognose wird gerade aufgebaut.')).toBeInTheDocument();
+    expect(screen.getByText('Hero virus forecast loading')).toBeInTheDocument();
+    expect(screen.queryByText('Virus-Verlauf · 0 Viren')).not.toBeInTheDocument();
   });
 });

@@ -6,7 +6,11 @@ import {
   useNowPageData,
   useRegionsPageData,
 } from '../../features/media/useMediaData';
-import { VirusRadarHeroForecastData } from '../../features/media/virusRadarHeroForecast';
+import {
+  VIRUS_RADAR_HERO_COLORS,
+  VIRUS_RADAR_HERO_VIRUSES,
+  VirusRadarHeroForecastData,
+} from '../../features/media/virusRadarHeroForecast';
 import { RecommendationCard } from '../../types/media';
 import GermanyMap from './GermanyMap';
 import { ForecastChart } from './ForecastChart';
@@ -165,9 +169,16 @@ const VirusRadarWorkspace: React.FC<Props> = ({
   const selectedActivation = effectiveRegionCode ? activationByRegion.get(effectiveRegionCode) || null : null;
   const selectedPrediction = effectiveRegionCode ? predictionByRegion.get(effectiveRegionCode) || null : null;
   const topVirusSummary = heroForecast.summaries[0] || null;
-  const secondVirusSummary = heroForecast.summaries[1] || null;
   const heroHasData = heroForecast.availableViruses.length > 0;
   const heroIsLoading = heroForecastLoading && !heroHasData;
+  const selectedHeroVirus = (
+    (heroHasData && heroForecast.availableViruses.includes(virus) ? virus : null)
+    || topVirusSummary?.virus
+    || heroForecast.availableViruses[0]
+    || VIRUS_RADAR_HERO_VIRUSES[0]
+  );
+  const selectedHeroSummary = heroForecast.summaries.find((item) => item.virus === selectedHeroVirus) || null;
+  const selectedHeroColor = VIRUS_RADAR_HERO_COLORS[selectedHeroVirus] || '#1f7a66';
   const recommendationId = (
     heroRegionLeaderboardEntry?.recommendation_ref?.card_id
     || (
@@ -230,26 +241,28 @@ const VirusRadarWorkspace: React.FC<Props> = ({
     hasTimeline: (nowData.focusRegionBacktest?.timeline || []).length > 0,
   });
   const heroEyebrow = heroIsLoading
-    ? 'Live-Lagebild wird geladen'
-    : `Live-Lagebild · ${heroForecast.availableViruses.length} Viren`;
+    ? 'Virus-Verlauf wird geladen'
+    : `Virus-Verlauf · ${selectedHeroVirus}`;
   const heroHeadlinePrimary = heroIsLoading
-    ? 'Das gemeinsame 4-Virus-Lagebild wird geladen.'
-    : heroForecast.headlinePrimary;
+    ? 'Der Verlauf wird geladen.'
+    : `${selectedHeroVirus} · letzte Wochen und nächste ${horizonDays} Tage.`;
   const heroHeadlineSecondary = heroIsLoading
-    ? 'Die 7-Tage-Prognose wird gerade aufgebaut.'
-    : heroForecast.headlineSecondary;
+    ? 'Die Prognose wird gerade aufgebaut.'
+    : 'Durchgezogen siehst du die letzten Wochen, gestrichelt die Prognose.';
   const heroSummary = heroIsLoading
-    ? 'Die Prognosekurven werden im Hintergrund geladen. Sobald sie da sind, siehst du hier wieder das gemeinsame Lagebild der nächsten sieben Tage.'
-    : heroForecast.summary;
+    ? 'Der Verlauf wird im Hintergrund geladen. Sobald die Daten da sind, siehst du hier wieder die letzten Wochen plus die 7-Tage-Prognose.'
+    : selectedHeroSummary
+      ? `${selectedHeroVirus} wird aktuell für die nächsten ${horizonDays} Tage bei ${formatSignedPercent(selectedHeroSummary.deltaPct)} erwartet. Der Graph basiert auf den letzten vorhandenen Wochenwerten und der aktuellen Prognose, nicht auf erfundenen Demo-Daten.`
+      : 'Sobald frische Kurven vorliegen, siehst du hier wieder die letzten Wochen plus die 7-Tage-Prognose.';
   const heroPrimaryStat = heroIsLoading
     ? 'Wird geladen'
-    : topVirusSummary
-      ? `${topVirusSummary.virus} ${formatSignedPercent(topVirusSummary.deltaPct)}`
+    : selectedHeroSummary
+      ? formatSignedPercent(selectedHeroSummary.deltaPct)
       : 'Noch offen';
   const heroSecondaryStat = heroIsLoading
     ? 'Wird geladen'
-    : secondVirusSummary
-      ? `${secondVirusSummary.virus} ${formatSignedPercent(secondVirusSummary.deltaPct)}`
+    : selectedHeroSummary
+      ? selectedHeroSummary.direction
       : 'Noch offen';
 
   return (
@@ -284,48 +297,59 @@ const VirusRadarWorkspace: React.FC<Props> = ({
             <div className="virus-radar-hero-chart-card__meta">
               <div className="virus-radar-hero-chart-card__legend">
                 <div className="virus-radar-hero-chart-card__legend-item">
-                  <span className="virus-radar-hero-chart-card__swatch virus-radar-hero-chart-card__swatch--influenza-a" />
-                  Influenza A
+                  <span className="virus-radar-hero-chart-card__swatch virus-radar-hero-chart-card__swatch--actual" />
+                  Ist-Verlauf
                 </div>
                 <div className="virus-radar-hero-chart-card__legend-item">
-                  <span className="virus-radar-hero-chart-card__swatch virus-radar-hero-chart-card__swatch--influenza-b" />
-                  Influenza B
-                </div>
-                <div className="virus-radar-hero-chart-card__legend-item">
-                  <span className="virus-radar-hero-chart-card__swatch virus-radar-hero-chart-card__swatch--sars-cov-2" />
-                  SARS-CoV-2
-                </div>
-                <div className="virus-radar-hero-chart-card__legend-item">
-                  <span className="virus-radar-hero-chart-card__swatch virus-radar-hero-chart-card__swatch--rsv-a" />
-                  RSV A
+                  <span
+                    className="virus-radar-hero-chart-card__swatch virus-radar-hero-chart-card__swatch--forecast"
+                    style={{ background: selectedHeroColor }}
+                  />
+                  7-Tage-Prognose
                 </div>
                 <div className="virus-radar-hero-chart-card__legend-item virus-radar-hero-chart-card__legend-item--explain">
                   Heute = 100
                 </div>
-                <div className="virus-radar-hero-chart-card__legend-item virus-radar-hero-chart-card__legend-item--explain">
-                  Forecast · {horizonDays} Tage
-                </div>
               </div>
               <div className="virus-radar-hero-chart-card__stamp">
-                <strong>Vier Viren im Vergleich</strong>
+                <strong>{selectedHeroVirus}</strong>
                 <span>Stand {dataTimestamp}</span>
               </div>
             </div>
             <MultiVirusForecastChart
               data={heroForecast.chartData}
+              selectedVirus={selectedHeroVirus}
               className="virus-radar-hero-chart"
               loading={heroIsLoading}
             />
+            <div className="virus-radar-hero-chart-card__footer">
+              <span className="virus-radar-hero-chart-card__hint">
+                Unten wählst du, welchen Virus-Verlauf du oben sehen willst.
+              </span>
+              <div className="virus-radar-virus-switcher virus-radar-virus-switcher--hero" aria-label="Virus im Verlauf wechseln">
+                {VIRUS_RADAR_HERO_VIRUSES.map((option) => (
+                  <button
+                    key={option}
+                    type="button"
+                    onClick={() => onVirusChange(option)}
+                    className={`virus-radar-chip ${option === virus ? 'active' : ''}`}
+                    aria-pressed={option === virus}
+                  >
+                    {option}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
 
           <div className="virus-radar-hero__footer">
             <div className="virus-radar-hero__stats">
               <div className="virus-radar-stat">
-                <span className="virus-radar-stat__label">Stärkster Anstieg</span>
+                <span className="virus-radar-stat__label">7-Tage-Prognose</span>
                 <strong className="virus-radar-stat__value">{heroPrimaryStat}</strong>
               </div>
               <div className="virus-radar-stat">
-                <span className="virus-radar-stat__label">Danach</span>
+                <span className="virus-radar-stat__label">Richtung</span>
                 <strong className="virus-radar-stat__value">{heroSecondaryStat}</strong>
               </div>
               <div className="virus-radar-stat">
@@ -352,23 +376,9 @@ const VirusRadarWorkspace: React.FC<Props> = ({
             <div className="virus-radar-hero__support">
               <p className="virus-radar-hero__support-copy">
                 {recommendationId
-                  ? 'Oben siehst du das gemeinsame Virus-Lagebild. Die Karte, Regionen und Kampagnen darunter folgen weiter dem aktuell gewählten Virus.'
-                  : 'Oben siehst du das gemeinsame Virus-Lagebild. Die konkrete Aktivierung wird darunter weiter nach Virus und Bundesland verdichtet.'}
+                  ? 'Oben siehst du immer den Verlauf des ausgewählten Virus. Die Karte, Regionen und Kampagnen darunter folgen demselben Virus.'
+                  : 'Oben siehst du immer den Verlauf des ausgewählten Virus. Die konkrete Aktivierung wird darunter weiter nach Virus und Bundesland verdichtet.'}
               </p>
-
-              <div className="virus-radar-virus-switcher" aria-label="Virus wechseln">
-                {['Influenza A', 'Influenza B', 'SARS-CoV-2', 'RSV A'].map((option) => (
-                  <button
-                    key={option}
-                    type="button"
-                    onClick={() => onVirusChange(option)}
-                    className={`virus-radar-chip ${option === virus ? 'active' : ''}`}
-                    aria-pressed={option === virus}
-                  >
-                    {option}
-                  </button>
-                ))}
-              </div>
             </div>
           </div>
         </section>

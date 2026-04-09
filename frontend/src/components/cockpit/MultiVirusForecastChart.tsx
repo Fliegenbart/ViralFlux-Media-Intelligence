@@ -3,6 +3,7 @@ import {
   CartesianGrid,
   Line,
   ResponsiveContainer,
+  ReferenceLine,
   Tooltip,
   XAxis,
   YAxis,
@@ -11,12 +12,12 @@ import {
 
 import {
   VIRUS_RADAR_HERO_COLORS,
-  VIRUS_RADAR_HERO_VIRUSES,
   VirusRadarHeroChartRow,
 } from '../../features/media/virusRadarHeroForecast';
 
 interface MultiVirusForecastChartProps {
   data: VirusRadarHeroChartRow[];
+  selectedVirus: string;
   className?: string;
   loading?: boolean;
 }
@@ -31,10 +32,12 @@ function HeroForecastTooltip({
   active,
   label,
   payload,
+  selectedVirus,
 }: {
   active?: boolean;
   label?: string;
   payload?: TooltipEntry[];
+  selectedVirus: string;
 }): React.JSX.Element | null {
   if (!active || !payload?.length) return null;
 
@@ -43,7 +46,7 @@ function HeroForecastTooltip({
 
   return (
     <div className="virus-radar-multi-chart-tooltip">
-      <div className="virus-radar-multi-chart-tooltip__title">{label}</div>
+      <div className="virus-radar-multi-chart-tooltip__title">{selectedVirus} · {label}</div>
       <div className="virus-radar-multi-chart-tooltip__rows">
         {visibleItems.map((entry) => (
           <div key={String(entry.name)} className="virus-radar-multi-chart-tooltip__row">
@@ -66,33 +69,34 @@ function axisDomain(values: Array<number | null | undefined>): [number, number] 
 
 const MultiVirusForecastChart: React.FC<MultiVirusForecastChartProps> = ({
   data,
+  selectedVirus,
   className,
   loading = false,
 }) => {
-  const chartData = useMemo(() => data.map((row, index) => {
-    const nextRow = { dateLabel: row.dateLabel };
+  const chartData = useMemo(() => data.map((row) => ({
+    date: row.date,
+    dateLabel: row.dateLabel,
+    actual: row.actualSeries[selectedVirus],
+    forecast: row.forecastSeries[selectedVirus],
+  })), [data, selectedVirus]);
 
-    VIRUS_RADAR_HERO_VIRUSES.forEach((virus) => {
-      (nextRow as Record<string, number | string | null>)[`${virus}Actual`] = row.actualSeries[virus];
-      (nextRow as Record<string, number | string | null>)[`${virus}Forecast`] = row.forecastSeries[virus];
-    });
-
-    return nextRow;
-  }), [data]);
+  const virusColor = VIRUS_RADAR_HERO_COLORS[selectedVirus] || '#1f7a66';
 
   const yDomain = useMemo(() => axisDomain(
-    data.flatMap((row) => VIRUS_RADAR_HERO_VIRUSES.flatMap((virus) => [
-      row.actualSeries[virus],
-      row.forecastSeries[virus],
-    ])),
-  ), [data]);
+    chartData.flatMap((row) => [row.actual, row.forecast]),
+  ), [chartData]);
+
+  const todayLabel = useMemo(() => {
+    const latestActual = [...chartData].reverse().find((row) => typeof row.actual === 'number' && Number.isFinite(row.actual));
+    return latestActual?.dateLabel || null;
+  }, [chartData]);
 
   if (loading && !data.length) {
-    return <div className={`forecast-chart-empty ${className || ''}`}>Die 4-Virus-Prognose wird gerade aufgebaut.</div>;
+    return <div className={`forecast-chart-empty ${className || ''}`}>Der Virus-Verlauf wird gerade aufgebaut.</div>;
   }
 
   if (!data.length) {
-    return <div className={`forecast-chart-empty ${className || ''}`}>Noch keine gemeinsame Prognose verfügbar.</div>;
+    return <div className={`forecast-chart-empty ${className || ''}`}>Noch kein belastbarer Virus-Verlauf verfügbar.</div>;
   }
 
   return (
@@ -123,37 +127,49 @@ const MultiVirusForecastChart: React.FC<MultiVirusForecastChartProps> = ({
                 active={props.active}
                 label={String(props.label || '')}
                 payload={props.payload as TooltipEntry[] | undefined}
+                selectedVirus={selectedVirus}
               />
             )}
           />
 
-          {VIRUS_RADAR_HERO_VIRUSES.map((virus) => (
-            <Line
-              key={`${virus}-actual`}
-              type="monotone"
-              dataKey={`${virus}Actual`}
-              stroke={VIRUS_RADAR_HERO_COLORS[virus]}
-              strokeWidth={2.6}
-              dot={false}
-              connectNulls
-              isAnimationActive={false}
+          {todayLabel ? (
+            <ReferenceLine
+              x={todayLabel}
+              stroke="#8a9794"
+              strokeWidth={1.2}
+              strokeDasharray="2 3"
+              strokeOpacity={0.72}
+              label={{
+                value: 'Heute',
+                position: 'insideTopLeft',
+                fill: '#8a9794',
+                fontSize: 11,
+                fontWeight: 700,
+              }}
             />
-          ))}
-          {VIRUS_RADAR_HERO_VIRUSES.map((virus) => (
-            <Line
-              key={`${virus}-forecast`}
-              type="monotone"
-              dataKey={`${virus}Forecast`}
-              stroke={VIRUS_RADAR_HERO_COLORS[virus]}
-              strokeWidth={2.6}
-              strokeDasharray="6 4"
-              dot={false}
-              connectNulls
-              activeDot={{ r: 5, stroke: '#ffffff', strokeWidth: 2 }}
-              isAnimationActive={false}
-              name={virus}
-            />
-          ))}
+          ) : null}
+          <Line
+            type="monotone"
+            dataKey="actual"
+            stroke="#0f1c1a"
+            strokeWidth={2.9}
+            dot={false}
+            connectNulls
+            isAnimationActive={false}
+            name="Ist-Verlauf"
+          />
+          <Line
+            type="monotone"
+            dataKey="forecast"
+            stroke={virusColor}
+            strokeWidth={2.9}
+            strokeDasharray="6 4"
+            dot={false}
+            connectNulls
+            activeDot={{ r: 5, stroke: '#ffffff', strokeWidth: 2 }}
+            isAnimationActive={false}
+            name="7-Tage-Prognose"
+          />
         </LineChart>
       </ResponsiveContainer>
     </div>

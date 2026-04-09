@@ -2,8 +2,6 @@
 
 Basis:
 - [backend/app/services/media/semantic_contracts.py](/Users/davidwegener/Desktop/viralflux/backend/app/services/media/semantic_contracts.py)
-- [docs/fluxengine_technical_audit_2026-03-10.md](/Users/davidwegener/Desktop/viralflux/docs/fluxengine_technical_audit_2026-03-10.md)
-- [docs/technical_audit_current_state.md](/Users/davidwegener/Desktop/viralflux/docs/technical_audit_current_state.md)
 
 Stand: 2026-03-24
 

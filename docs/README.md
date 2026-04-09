@@ -8,8 +8,6 @@ This repo keeps long-lived truth in a few small anchors instead of one giant pro
   [ARCHITECTURE.md](/Users/davidwegener/Desktop/viralflux/ARCHITECTURE.md)
 - Production deploy and rollback:
   [DEPLOY.md](/Users/davidwegener/Desktop/viralflux/DEPLOY.md)
-- Latest technical audit:
-  [fluxengine_technical_audit_2026-03-10.md](/Users/davidwegener/Desktop/viralflux/docs/fluxengine_technical_audit_2026-03-10.md)
 - World-class roadmap and ticket backlog:
   [world_class_ticket_backlog.md](/Users/davidwegener/Desktop/viralflux/docs/world_class_ticket_backlog.md)
 - Metric semantics contract:
@@ -22,8 +20,6 @@ This repo keeps long-lived truth in a few small anchors instead of one giant pro
   [pilot_runbook_peix_gelo.md](/Users/davidwegener/Desktop/viralflux/docs/pilot_runbook_peix_gelo.md)
 - PEIX / GELO pilot reporting and ROI:
   [pilot_reporting_and_roi.md](/Users/davidwegener/Desktop/viralflux/docs/pilot_reporting_and_roi.md)
-- Live readiness blockers:
-  [live_readiness_blockers_current.md](/Users/davidwegener/Desktop/viralflux/docs/live_readiness_blockers_current.md)
 - Core production readiness:
   [core_production_readiness.md](/Users/davidwegener/Desktop/viralflux/docs/core_production_readiness.md)
 - Ops and pilot ticket set:

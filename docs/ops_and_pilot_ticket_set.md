@@ -1,7 +1,6 @@
 # Ops And Pilot Ticket Set
 
 Basis für dieses Ticket-Set:
-- [live_readiness_blockers_current.md](/Users/davidwegener/Desktop/viralflux/docs/live_readiness_blockers_current.md)
 - [pilot_runbook_peix_gelo.md](/Users/davidwegener/Desktop/viralflux/docs/pilot_runbook_peix_gelo.md)
 - [rsv_h7_live_evaluation_runbook.md](/Users/davidwegener/Desktop/viralflux/docs/rsv_h7_live_evaluation_runbook.md)
 - [outcome_data_contract.md](/Users/davidwegener/Desktop/viralflux/docs/outcome_data_contract.md)

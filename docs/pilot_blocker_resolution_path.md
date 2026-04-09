@@ -2,7 +2,6 @@
 
 Basis:
 - [ops_and_pilot_ticket_set.md](/Users/davidwegener/Desktop/viralflux/docs/ops_and_pilot_ticket_set.md)
-- [live_readiness_blockers_current.md](/Users/davidwegener/Desktop/viralflux/docs/live_readiness_blockers_current.md)
 - [pilot_runbook_peix_gelo.md](/Users/davidwegener/Desktop/viralflux/docs/pilot_runbook_peix_gelo.md)
 - [pilot_reporting_and_roi.md](/Users/davidwegener/Desktop/viralflux/docs/pilot_reporting_and_roi.md)
 - [outcome_data_contract.md](/Users/davidwegener/Desktop/viralflux/docs/outcome_data_contract.md)

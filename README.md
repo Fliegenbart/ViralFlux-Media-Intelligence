@@ -2,9 +2,9 @@
 
 ViralFlux ist eine Plattform für **regionale Virus-Frühwarnung** und daraus abgeleitete **operative Media-Entscheidungen**.
 
-Dieses Repository zeigt Produktkern, aktive Oberfläche und technischen Kern in einer gemeinsamen Sicht. Hier stehen die Inhalte, die man nach außen verstehen soll, nicht interne Notizen oder alte Projektfassungen.
+Dieses Repository bündelt Produktkern, aktive Oberfläche und technischen Kern in einer gemeinsamen Sicht. So findest du an einem Ort die Teile, die das Produkt nach außen und im Betrieb verständlich machen.
 
-Aktive Oberfläche: [Virus-Radar](/virus-radar)
+Aktive Oberfläche: /virus-radar
 
 ## Was die Plattform macht
 
@@ -19,7 +19,7 @@ In einfachen Worten läuft das System so:
 
 ## Was man auf `/virus-radar` sieht
 
-Die Seite [Virus-Radar](/virus-radar) ist die zentrale Entscheidungsseite.
+Die Seite /virus-radar ist die zentrale Entscheidungsseite.
 
 Sie beantwortet vor allem drei Fragen:
 - **Welcher Virus ist gerade relevant?**

@@ -1,6 +1,6 @@
 # Quickstart
 
-Diese Datei zeigt den schnellsten praktischen Einstieg in den Produktkern, die aktive Oberfläche und den technischen Kern.
+Diese Datei bietet dir den schnellsten Einstieg in den Produktkern, die aktive Oberfläche und den technischen Kern.
 
 Wenn du mehr Hintergrund willst, lies danach:
 - [README.md](README.md)

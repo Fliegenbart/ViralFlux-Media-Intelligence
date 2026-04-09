@@ -1,37 +1,57 @@
 # Quickstart
 
-Diese Datei ist die kurze, praktische Startanleitung.
+Diese Datei ist der **schnellste praktische Einstieg**.
 
-Wenn du mehr Kontext willst, lies zusätzlich:
+Wenn du mehr Hintergrund willst, lies danach:
 - [README.md](README.md)
-- [CONTRIBUTING.md](CONTRIBUTING.md)
+- [ARCHITECTURE.md](ARCHITECTURE.md)
 - [DEPLOY.md](DEPLOY.md)
 
 ## Wofür dieser Quickstart gedacht ist
 
 Dieser Quickstart ist für:
 - lokale Entwicklung
-- schnelles Starten des Frontends
-- schnelles Starten des Backends
-- einfache Health- und Test-Checks
+- Frontend und Backend schnell starten
+- die wichtigsten Health-Checks und Tests ausführen
 
 Nicht dafür:
-- Production direkt mit `docker-compose.yml` deployen
-- den Live-Server manuell „irgendwie“ hochziehen
+- direkt live deployen
+- den Production-Server manuell “irgendwie” anfassen
 
 Für Live gilt immer:
-- erst committen
-- dann auf `main` pushen
-- dann den Server-Deploy nutzen
+1. lokal ändern
+2. gezielt prüfen
+3. committen
+4. auf `main` pushen
+5. den Server über das Deploy-Script aktualisieren
 
-Wenn du am Projekt mitarbeiten willst, lies zusätzlich:
-- [CONTRIBUTING.md](CONTRIBUTING.md)
+## Der schnellste gute Start
+
+Wenn du nur schnell lokal arbeiten willst, ist das der beste Weg:
+
+```bash
+docker compose up -d db redis backend
+cd frontend
+npm install
+npm start
+```
+
+Danach solltest du erreichen:
+- Frontend: [http://localhost:3000](http://localhost:3000)
+- API: [http://localhost:8000](http://localhost:8000)
+- Swagger: [http://localhost:8000/docs](http://localhost:8000/docs)
+
+Wenn etwas klemmt, prüfe zuerst:
+
+```bash
+curl http://localhost:8000/health/live
+docker compose logs -f backend
+```
 
 ## Voraussetzungen
 
 Du brauchst lokal:
-
-- Docker und Docker Compose
+- Docker
 - Node.js 18+
 - Python 3.11+
 
@@ -48,9 +68,9 @@ cd viralflux
 
 ## 2. `.env` anlegen
 
-Falls vorhanden, nutze `.env.example` als Basis.
+Wenn vorhanden, nimm `.env.example` als Startpunkt.
 
-Wichtige Werte für den lokalen Start:
+Wichtige lokale Werte:
 
 ```env
 POSTGRES_USER=virusradar
@@ -71,49 +91,34 @@ STARTUP_STRICT_READINESS=false
 READINESS_REQUIRE_BROKER=false
 ```
 
-Wenn du das Backend nicht in Docker betreibst, nutze stattdessen z. B. `http://127.0.0.1:8001/v1`. Der Backend-Port `8000` ist nur für FastAPI und kein sicherer Default für vLLM.
+Wichtig:
+- `VLLM_BASE_URL` darf **nicht versehentlich auf das Backend selbst zeigen**
+- wenn du das Backend **nicht** in Docker betreibst, nutze z. B. `http://127.0.0.1:8001/v1`
+- `http://localhost:8000` ist der FastAPI-Port und kein guter Default fuer einen externen LLM-Endpunkt
 
-## 3. Datenbank, Redis und Backend starten
+## 3. Backend lokal starten
 
-Der schnellste Weg für lokal ist:
-
-```bash
-docker-compose up -d db redis backend
-```
-
-Danach solltest du diese Endpunkte erreichen:
-
-- [http://localhost:8000/health/live](http://localhost:8000/health/live)
-- [http://localhost:8000/docs](http://localhost:8000/docs)
-
-## 4. Frontend starten
-
-Für Frontend-Arbeit ist dieser Weg meistens am angenehmsten:
+### Empfohlener Weg fuer die meisten Arbeiten
 
 ```bash
-cd frontend
-npm install
-npm start
+docker compose up -d db redis backend
 ```
 
-Dann läuft die App hier:
+Danach pruefst du:
 
-- [http://localhost:3000](http://localhost:3000)
+```bash
+curl http://localhost:8000/health/live
+curl http://localhost:8000/health/ready
+```
 
 Wichtig:
-Das Frontend nutzt lokal einen Proxy auf das Backend unter `http://localhost:8000`.
+- `live` heisst: der Dienst lebt
+- `ready` heisst: der Dienst ist operativ ausreichend bereit
+- `degraded` bei `ready` ist **nicht automatisch** ein Totalausfall
 
-## 5. Optional: Frontend im Container starten
+### Optional: Backend ohne Docker starten
 
-Wenn du lieber auch das Frontend über Docker starten willst:
-
-```bash
-docker-compose --profile dev up -d frontend
-```
-
-## 6. Optional: Backend ohne Docker starten
-
-Wenn du am Python-Code arbeiten willst, ist das oft praktischer:
+Wenn du direkt am Python-Code arbeitest, ist das oft praktischer:
 
 ```bash
 cd backend
@@ -123,84 +128,86 @@ pip install -r requirements.txt
 uvicorn app.main:app --reload
 ```
 
+## 4. Frontend lokal starten
+
+```bash
+cd frontend
+npm install
+npm start
+```
+
+Dann laeuft die App hier:
+- [http://localhost:3000](http://localhost:3000)
+
+Wichtig:
+- lokal nutzt das Frontend einen Proxy auf `http://localhost:8000`
+
+### Optional: Frontend im Container starten
+
+```bash
+docker compose --profile dev up -d frontend
+```
+
+## 5. Login lokal
+
+Es gibt keinen fest eingebauten Demo-User im Frontend.
+
+Lokal nutzt du die Werte aus deiner `.env`:
+- `ADMIN_EMAIL`
+- `ADMIN_PASSWORD`
+
 ## Die 3 wichtigsten lokalen URLs
 
 - Frontend: [http://localhost:3000](http://localhost:3000)
 - API: [http://localhost:8000](http://localhost:8000)
 - Swagger Docs: [http://localhost:8000/docs](http://localhost:8000/docs)
 
-## Login lokal
+## Die wichtigsten Befehle im Alltag
 
-Es gibt keinen festen Demo-Login im Frontend.
-
-Lokal funktionieren die Zugangsdaten aus deiner `.env`:
-
-- `ADMIN_EMAIL`
-- `ADMIN_PASSWORD`
-
-## Nützliche Standardbefehle
-
-### Alle laufenden Container sehen
+### Laufende Container sehen
 
 ```bash
 docker ps
 ```
 
-### Logs vom Backend sehen
+### Backend-Logs ansehen
 
 ```bash
-docker-compose logs -f backend
+docker compose logs -f backend
 ```
 
-### Logs von Redis sehen
+### Redis-Logs ansehen
 
 ```bash
-docker-compose logs -f redis
+docker compose logs -f redis
 ```
 
 ### Datenbank neu starten
 
 ```bash
-docker-compose restart db
+docker compose restart db
 ```
 
-### Frontend testen
+## Die wichtigsten Mindestchecks vor einem Merge
 
-```bash
-cd frontend
-npm test -- --runInBand
-```
-
-### Frontend-Build prüfen
-
-```bash
-cd frontend
-npm run build
-```
-
-### Backend-Tests laufen lassen
-
-```bash
-cd backend
-python3 -m pytest
-```
-
-## Tests und Qualitätschecks
-
-Diese Checks sind die wichtigsten Mindestprüfungen vor einem Merge.
-
-### Frontend
+## Frontend
 
 ```bash
 cd frontend
 npx tsc --noEmit
 CI=true npm test -- --watch=false --runInBand
+```
+
+Wenn du groessere Frontend-Aenderungen gemacht hast:
+
+```bash
+cd frontend
 npm run build
 ```
 
-### Backend
+## Backend
 
-Wenn eine virtuelle Umgebung `.venv-backend311` existiert, ist sie der bevorzugte Weg:
+Wenn `.venv-backend311` existiert, ist das der bevorzugte Weg:
 
 ```bash
 cd backend
@@ -215,35 +222,12 @@ cd backend
 python3 -m pytest
 ```
 
-### Bei gezielten Änderungen
+Bei gezielten Aenderungen gilt:
+- Frontend: nur die betroffenen Tests laufen lassen
+- Backend: nur die kleinste passende `pytest`-Auswahl laufen lassen
+- Docker-/Compose-Aenderungen: `docker compose config` pruefen
 
-- Frontend-Verhalten: nur die betroffenen Tests ausführen
-- Backend-Änderungen: nur die kleinste passende `pytest`-Auswahl laufen lassen
-- Docker-/Compose-Änderungen: `docker compose config` prüfen
-
-## Health-Checks
-
-### Lokal
-
-```bash
-curl http://localhost:8000/health/live
-curl http://localhost:8000/health/ready
-```
-
-### Live
-
-```bash
-curl https://fluxengine.labpulse.ai/health/live
-curl https://fluxengine.labpulse.ai/health/ready
-```
-
-Wichtig:
-- `live` heißt: der Dienst lebt
-- `ready` heißt: der Dienst ist auch operativ ausreichend bereit
-
-Ein `degraded` bei `ready` ist nicht automatisch ein Totalausfall.
-
-## Häufige Probleme
+## Haeufige Probleme
 
 ### Frontend startet nicht
 
@@ -255,24 +239,26 @@ npm install
 
 ### Backend antwortet nicht
 
-Prüfe zuerst:
+Pruefe zuerst:
 
 ```bash
 docker ps
-docker-compose logs -f backend
+docker compose logs -f backend
+curl http://localhost:8000/health/live
 ```
 
-### Datenbank-Verbindung schlägt fehl
+### Datenbank-Verbindung schlaegt fehl
 
 ```bash
-docker-compose restart db
-docker-compose logs -f db
+docker compose restart db
+docker compose logs -f db
 ```
 
-### Port ist schon belegt
+### Ein Port ist schon belegt
 
-Dann läuft meist schon ein anderer Dienst auf demselben Port.
-Prüfe mit:
+Dann laeuft meist schon ein anderer Dienst auf demselben Port.
+
+Pruefe mit:
 
 ```bash
 lsof -i :3000
@@ -280,29 +266,32 @@ lsof -i :8000
 lsof -i :15432
 ```
 
-## Wichtige Warnung für Production
+## Wichtige Warnung fuer Production
 
-`docker-compose.yml` ist nur für lokale Entwicklung gedacht.  
-Der richtige Live-Weg steht in [DEPLOY.md](DEPLOY.md).
+`docker-compose.yml` bzw. `docker compose` im lokalen Arbeitsbaum ist **nur fuer Entwicklung** gedacht.
+
+Fuer Live gilt:
+- niemals direkt aus dem lokalen Arbeitsbaum deployen
+- niemals ad hoc auf dem Server “nachflicken”
+- immer den beschriebenen Weg aus [DEPLOY.md](DEPLOY.md) benutzen
 
 ## Wenn du nur 30 Sekunden hast
 
-Das sind die wichtigsten Befehle:
+Das hier ist der sicherste Kurzweg:
 
 ```bash
-docker-compose up -d db redis backend
+docker compose up -d db redis backend
 cd frontend
 npm install
 npm start
 ```
 
-Dann öffnest du:
-
+Dann oeffnest du:
 - [http://localhost:3000](http://localhost:3000)
 
-Wenn etwas nicht funktioniert, prüfe zuerst:
+Und wenn etwas nicht funktioniert, pruefst du zuerst:
 
 ```bash
-docker-compose logs -f backend
+docker compose logs -f backend
 curl http://localhost:8000/health/live
 ```

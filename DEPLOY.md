@@ -1,49 +1,74 @@
 # Deployment Guide (Production)
 
-Diese Anleitung beschreibt einen produktionsnahen Deploy. Ersetze Platzhalter wie
-`<deploy-host>`, `<deploy-user>`, `<deploy-root>` und `<deploy-script>` passend für deine Umgebung.
+Diese Datei beschreibt den **sicheren Live-Weg**.
 
-## Zielzustand
+In einfachen Worten:
+- lokal entwickeln
+- gezielt pruefen
+- auf `main` pushen
+- auf dem Server das Deploy-Script ausfuehren
 
-- Domain: `https://fluxengine.labpulse.ai/`
-- Public Edge: `voxdrop-nginx` auf `80/443`
-- Live-Frontend: `virusradar_frontend_prod` auf `172.17.0.1:18080`
-- Live-Backend: `virusradar_backend` auf `127.0.0.1:8000`
-- App-Stack: `frontend-prod`, `backend`, `celery_worker`, `celery_beat` im Clean-Compose-Projekt
-- Persistente Infra: `db` und `redis` im selben Production-Compose-Projekt
-- Brand-Default im Prototyp: `gelo`
-- Betriebsmodus: `ENVIRONMENT=production`, keine Runtime-Schema-Heilung, keine Host-Bind-Mounts
+Nicht machen:
+- nicht direkt aus dem lokalen Arbeitsbaum deployen
+- nicht manuell im Live-Checkout herumeditieren
+- nicht `docker-compose.yml` als Live-Manifest benutzen
 
-## Server-Pfade
+## Was ein guter Live-Deploy erreichen soll
 
-- Clean Checkout: `<deploy-root>`
-- Deploy-Script: `<deploy-script>`
-- Versioniertes Deploy-Script im Repo: `<deploy-root>/scripts/deploy-live.sh`
-- Aktuell genutztes Live-Compose-Manifest: `<deploy-root>/docker-compose.prod.yml`
+Nach einem guten Deploy gilt:
+- die neue Version kommt aus `origin/main`
+- Frontend, Backend, Worker und Beat laufen sauber neu
+- `db` und `redis` bleiben als laufende Infra erhalten
+- `/health/live` ist gesund
+- `/health/ready` ist gesund oder zumindest sauber erklaert
+- die wichtigsten Produktpfade antworten
 
-## Standard-Deploy
+## Der normale Live-Weg
+
+Auf dem Server gibt es einen **clean Checkout** und das versionierte Script:
+
+- Repo-Script: `scripts/deploy-live.sh`
+
+Der typische Aufruf auf dem Server sieht so aus:
 
 ```bash
-ssh <deploy-user>@<deploy-host> '<deploy-script>'
+ssh <deploy-user>@<deploy-host> 'cd <deploy-root> && ./scripts/deploy-live.sh'
 ```
 
-Was der Command macht:
+Wichtig:
+- `<deploy-root>` ist der **saubere Server-Checkout**
+- deployt wird immer der Stand von `origin/main`
+- lokale Sonderstaende werden dabei bewusst ignoriert
 
-1. `origin/main` fetchen
-2. lokalen Stand im clean Checkout hart auf `origin/main` setzen
-3. das aktuelle Live-Compose-Manifest `docker-compose.prod.yml` verwenden
-4. Frontend-Image neu bauen
-5. Backend-/Worker-/Beat-Images neu bauen, weil der Live-Pfad keine Code-Bind-Mounts mehr verwendet
-6. `db` und `redis` im Production-Compose-Projekt hochfahren oder vorhandene Infra-Container sauber wiederverwenden
-7. `frontend-prod`, `backend`, `celery_worker` und `celery_beat` sauber neu erzeugen
-8. Guard-Checks auf `ENVIRONMENT=production`, harte DB-Flags und bind-mount-freien Live-Modus ausführen
-9. Liveness prüfen
-10. modernen Release-Smoke gegen Live, Ready und den regionalen Produktkern ausführen
-11. Status der Live-Services ausgeben
+## Was das Deploy-Script wirklich macht
+
+`scripts/deploy-live.sh` arbeitet in dieser Reihenfolge:
+
+1. Es holt den neuesten Stand von `origin/main`.
+2. Es setzt den clean Checkout hart auf genau diesen Stand.
+3. Es erzwingt fuer Live das Produktions-Manifest `docker-compose.prod.yml`.
+4. Es baut Frontend und Backend-Images neu.
+5. Es startet zuerst `db` und `redis`.
+6. Es startet danach `frontend-prod`, `backend`, `celery_worker` und `celery_beat`.
+7. Es prueft Sicherheits-Guards wie:
+   - `ENVIRONMENT=production`
+   - keine Runtime-Schema-Aenderungen
+   - keine Host-Bind-Mounts im Live-Modus
+8. Es prueft `/health/live`.
+9. Es fuehrt den Release-Smoke gegen die Kernpfade aus.
+10. Wenn der Kern fehlschlaegt, rollt es auf den vorherigen Commit zurueck.
+
+## Das richtige Compose-Manifest fuer Live
+
+Fuer Live gilt:
+- `docker-compose.prod.yml` ist der erlaubte Standard
+- `docker-compose.yml` ist nur fuer lokale Entwicklung gedacht
+
+Das Script verweigert standardmaessig absichtlich non-prod Compose-Dateien.
 
 ## Produktionsflags
 
-Der Live-Standard setzt im Backend explizit:
+Im Live-Standard setzt das Backend explizit:
 
 - `ENVIRONMENT=production`
 - `DB_AUTO_CREATE_SCHEMA=false`
@@ -51,7 +76,32 @@ Der Live-Standard setzt im Backend explizit:
 - `STARTUP_STRICT_READINESS=true`
 - `READINESS_REQUIRE_BROKER=true`
 
-## Release-Smoke nach Deploy
+In einfachen Worten:
+- live soll sich die Datenbankstruktur **nicht still selbst heilen**
+- die App soll ehrlich melden, wenn operative Abhaengigkeiten fehlen
+
+## Der wichtigste operative Check nach dem Deploy
+
+Wenn du nach dem Deploy nur wenig Zeit hast, pruefe zuerst:
+
+```bash
+curl https://<your-domain>/health/live
+curl https://<your-domain>/health/ready
+```
+
+Die Bedeutung:
+- `live` = Prozess lebt
+- `ready` = Dienst ist auch operativ ausreichend bereit
+
+Ein `degraded` bei `ready` bedeutet:
+- die App lebt
+- aber Datenfrische, Monitoring oder andere operative Bedingungen sind noch nicht voll gruen
+
+## Release-Smoke
+
+Nach dem Deploy wird zusaetzlich ein Release-Smoke ausgefuehrt.
+
+Manuell kannst du ihn so starten:
 
 ```bash
 cd backend
@@ -63,65 +113,61 @@ python scripts/smoke_test_release.py \
   --top-n 3
 ```
 
-Der moderne Release-Smoke prüft:
-
+Der Smoke-Test prueft vor allem:
 - `/health/live`
 - `/health/ready`
 - `/api/v1/forecast/regional/predict`
 - `/api/v1/forecast/regional/media-allocation`
 - `/api/v1/forecast/regional/campaign-recommendations`
 
-Der Deploy nutzt für diese Smoke-Requests standardmäßig ein etwas größeres Request-Timeout (`SMOKE_TIMEOUT=15`), damit frisch gestartete Services nicht zu früh als Fehler gewertet werden.
-Für geschützte Live-Instanzen nutzt der Smoke-Test bevorzugt `SMOKE_BEARER_TOKEN` oder `SMOKE_ADMIN_EMAIL`/`SMOKE_ADMIN_PASSWORD`.
-Wenn diese Werte nicht gesetzt sind und der Test direkt auf dem Deploy-Host läuft, versucht er als Fallback die laufenden Backend-Container-Credentials aus `virusradar_backend` zu lesen.
+Fuer geschuetzte Umgebungen nutzt der Test bevorzugt:
+- `SMOKE_BEARER_TOKEN`
+- oder `SMOKE_ADMIN_EMAIL` plus `SMOKE_ADMIN_PASSWORD`
 
-Optional kann zusätzlich `--check-cockpit` gesetzt werden. Der Cockpit-Pfad ist aber nur advisory und nicht mehr der alleinige Go/No-Go-Indikator.
+Wenn diese Werte nicht gesetzt sind und der Test direkt auf dem Deploy-Host laeuft, versucht er als Fallback die laufenden Backend-Credentials aus dem Container zu lesen.
 
-Failure-Levels:
+## Wie das Script Fehlschlaege bewertet
 
-- `live_failed`
-  - Prozess lebt nicht oder `/health/live` ist nicht gesund.
-  - Deploy-Script rollt zurück.
-- `business_smoke_failed`
-  - Kernpfade Forecast / Allocation / Recommendation liefern `500`, leere oder ungültige Payloads.
-  - Deploy-Script rollt zurück.
-- `ready_blocked`
-  - Service lebt und Kernpfade antworten, aber `/health/ready` ist nicht healthy.
-  - Deploy bleibt sichtbar, aber der Zustand ist operativ blockiert und muss nachgezogen werden.
+### `live_failed`
 
-Direkte Basischecks bleiben trotzdem sinnvoll:
+Das heisst:
+- der Prozess lebt nicht sauber
+- oder `/health/live` wird nicht gesund
 
-```bash
-curl -I https://<your-domain>
-curl https://<your-domain>/health/live
-curl https://<your-domain>/health/ready
-```
+Folge:
+- das Script rollt zurueck
 
-## Wichtige Hinweise
+### `business_smoke_failed`
 
-- Nicht aus dem alten, lokalen Arbeitsbaum deployen: `/opt/viralflux-media-intelligence` bleibt nur als Altbestand liegen.
-- Produktive Deploys nur über den clean Checkout + Deploy-Script.
-- Keine manuelle Anpassung der App-Dateien im clean Checkout; Änderungen gehören ins GitHub-Repo.
-- `docker-compose.yml` ist nur noch für lokale Entwicklung gedacht und kein zulässiger Live-Deploy-Pfad.
-- Der Live-Deploy verweigert standardmäßig non-prod Compose-Manifeste.
-- Host-Bind-Mounts sind im Live-Standard nicht erlaubt.
-- Runtime-Schema-Mutationen sind im Live-Standard nicht erlaubt.
-- `docker-compose.prod.yml` bildet den produktionsnahen Betriebsmodus ohne internes Proxy-Nebenmodell ab; die öffentliche Edge-Terminierung bleibt bei `voxdrop-nginx`.
-- Die bestehende Public-Edge proxyt aktuell auf `172.17.0.1:18080`; deshalb bleibt diese Frontend-Bindung im Live-Standard bewusst erhalten.
+Das heisst:
+- Kernpfade wie Forecast, Allocation oder Recommendation sind kaputt
+- oder liefern ungueltige / leere Antworten
 
-## Wichtige Betriebsregeln
+Folge:
+- das Script rollt zurueck
 
-Es gibt zwei besonders wichtige Unterschiede zwischen lokal und live:
+### `ready_blocked`
 
-1. `docker-compose.yml` ist nur für lokale Entwicklung gedacht.  
-   Dieses Manifest ist kein zulässiger Live-Deploy-Pfad.
+Das heisst:
+- die App lebt
+- Kernpfade antworten
+- aber `/health/ready` ist operativ noch nicht gesund
 
-2. Live-Deploys laufen über den clean Server-Checkout und das zentrale Deploy-Script.  
-   Der Server deployt immer den Stand von `origin/main`, nicht lokale Sonderstände.
+Folge:
+- der Deploy bleibt sichtbar
+- aber man muss die operative Ursache nachziehen
 
-## Rollback (schnell)
+## Was du live niemals tun solltest
 
-Wenn ein Commit zurückgerollt werden muss:
+- nicht direkt im alten Arbeitsbaum deployen
+- nicht manuell Dateien im clean Checkout editieren
+- nicht `docker-compose.yml` fuer Production nehmen
+- nicht Sicherheits-Flags wie Runtime-Schema-Aenderungen “kurz mal” auf locker stellen
+- nicht Bind-Mounts als Live-Standard einfuehren
+
+## Rollback
+
+Wenn ein Commit sauber zurueck muss:
 
 ```bash
 ssh <deploy-user>@<deploy-host>
@@ -129,15 +175,52 @@ cd <deploy-root>
 git fetch origin
 git checkout main
 git reset --hard <COMMIT_HASH>
-<deploy-script>
+./scripts/deploy-live.sh
 ```
 
-## Troubleshooting
+Wichtig:
+- der Rollback passiert ebenfalls ueber den clean Checkout
+- auch hier gilt: nicht manuell an einzelnen Containern herumoperieren, wenn es vermeidbar ist
 
-- `port is already allocated`:
-  - prüfen, ob ein anderer Service `172.17.0.1:18080` oder `127.0.0.1:8000` belegt
-  - sicherstellen, dass nur der Clean-Stack `virusradar_frontend_prod` bereitstellt
-- CORS-Fehler:
-  - `ALLOWED_ORIGINS` im Backend-Container prüfen
-- API läuft, UI nicht:
-  - `docker ps` für `virusradar_frontend_prod` und `virusradar_backend` prüfen
+## Haeufige Probleme
+
+### `port is already allocated`
+
+Pruefe:
+- ob schon ein anderer Dienst auf `172.17.0.1:18080` oder `127.0.0.1:8000` lauscht
+- ob wirklich nur der vorgesehene Live-Stack das Frontend bereitstellt
+
+### API laeuft, UI aber nicht
+
+Pruefe:
+
+```bash
+docker ps
+```
+
+Achte besonders auf:
+- `virusradar_frontend_prod`
+- `virusradar_backend`
+
+### CORS-Fehler
+
+Dann sollte man im Backend-Container `ALLOWED_ORIGINS` pruefen.
+
+### `/health/ready` ist `degraded`
+
+Dann lebt die App oft trotzdem schon.
+
+Typische Ursachen sind:
+- Datenquellen zu alt
+- operative Snapshots nicht frisch
+- Monitoring-/Forecast-Status noch gelb oder rot
+
+Wichtig:
+- nicht sofort das Deploy rueckgaengig machen
+- erst verstehen, **warum** `ready` degradiert ist
+
+## Die wichtigste Regel zum Schluss
+
+Live-Deploys sollen **wiederholbar, langweilig und sicher** sein.
+
+Wenn ein Deploy davon lebt, dass jemand noch schnell von Hand auf dem Server etwas fixt, ist der Prozess noch nicht gut genug dokumentiert oder automatisiert.

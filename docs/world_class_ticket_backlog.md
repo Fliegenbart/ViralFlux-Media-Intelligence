@@ -1,4 +1,6 @@
-# World-Class Ticket Backlog
+# Produkt- und Betriebs-Backlog
+
+Dieses Dokument ist ein internes Arbeitsdokument. Es beschreibt Prioritäten für Produkt und Betrieb und ist keine buyer-facing Produktbeschreibung.
 
 Basis für dieses Ticket-Set:
 - [technical_audit_current_state.md](/Users/davidwegener/Desktop/viralflux/docs/technical_audit_current_state.md)
@@ -12,16 +14,9 @@ Stand: 2026-03-24
 
 ## Zielbild
 
-Dieses Ticket-Set beantwortet eine einfache Frage:
+Dieses Ticket-Set bündelt die nächsten internen Arbeitsschritte für Produkt, Semantik und Betrieb.
 
-Was muss noch passieren, damit ViralFlux nicht nur interessant wirkt, sondern wirklich weltklasse, leicht bedienbar und mathematisch belastbar wird?
-
-Weltklasse bedeutet hier:
-
-- der Nutzer versteht in kurzer Zeit, was passiert und was als Nächstes zu tun ist
-- jede Zahl hat eine ehrliche Bedeutung
-- Budget- und Aktivierungsempfehlungen sind nicht nur regelbasiert, sondern auf echte Ergebnisse rueckfuehrbar
-- das System lässt sich operativ stabil betreiben
+Es beschreibt, was noch umgesetzt werden muss, damit die bestehende Plattform klarer, ehrlicher und stabiler wird.
 
 ## Leitprinzipien
 

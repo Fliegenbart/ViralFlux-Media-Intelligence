@@ -20,6 +20,12 @@ In einfachen Worten läuft das System so:
 4. Es bewertet, wie relevant ein Bundesland gerade ist.
 5. Es zeigt das Ergebnis in einer operativen Oberfläche für PEIX / GELO.
 
+Der aktive Hauptfluss in der UI ist:
+
+`Login -> /jetzt -> /regionen -> /kampagnen -> /evidenz`
+
+Diese Seiten bilden den Live-Kern des Produkts. Weitere Flächen im Repo dienen als technische Quellen, Altstände oder interne Referenz.
+
 ## Was man auf `/virus-radar` sieht
 
 Die Seite [Virus-Radar](https://fluxengine.labpulse.ai/virus-radar) ist die zentrale Entscheidungsseite.

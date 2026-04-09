@@ -44,10 +44,10 @@ Diese Matrix beschreibt für die aktiven Live-Seiten:
 
 | Flaeche | Beobachtung | Rolle | Entscheidung |
 | --- | --- | --- | --- |
-| `DecisionPage` / `DecisionView` | Enthalten den vorhandenen Verlaufsgrafen und weitere Logik, sind aber nicht im Live-Hauptpfad | Quellflaeche für die Proof-Integration | Inhalt übernehmen, danach bereinigen |
-| `OperationalDashboardPage` / `OperationalDashboard` | Aeltere alternative Darstellung der Wochenlage | Historischer Zwischenstand | Später archivieren oder löschen |
-| `PilotPage` / `PilotSurface` | Eigene Analyseflaeche ausserhalb des Live-Hauptpfads | Spezial- oder Altansicht | Vorerst ausser Hauptmodell halten |
-| `MediaCockpit` / `WeeklyReport` | Nicht Teil der aktiven Hauptrouten | Altbestand | Später getrennt bewerten |
+| `DecisionPage` / `DecisionView` | Enthalten den vorhandenen Verlaufsgrafen und weitere Logik, sind aber nicht im Live-Hauptpfad | Quellflaeche für die Proof-Integration | Im Code rueckbauen |
+| `OperationalDashboardPage` / `OperationalDashboard` | Aeltere alternative Darstellung der Wochenlage | Historischer Zwischenstand | Im Code rueckbauen |
+| `PilotPage` / `PilotSurface` | Eigene Analyseflaeche ausserhalb des Live-Hauptpfads | Spezial- oder Altansicht | Im Code rueckbauen |
+| `MediaCockpit` / `WeeklyReport` | Nicht Teil der aktiven Hauptrouten | Altbestand | Im Code rueckbauen |
 
 ## Bewertungsregeln
 

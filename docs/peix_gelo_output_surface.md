@@ -16,7 +16,9 @@ Seit dem Forecast-First-Update gilt:
 
 ## Route
 
-- Frontend-Route: `/pilot`
+- Historische Frontend-Route: `/pilot`
+- Aktiver Live-Hauptfluss: `Login -> /jetzt -> /regionen -> /kampagnen -> /evidenz`
+- `/pilot` ist historisch und nicht mehr Teil des aktiven Live-Hauptflusses.
 - Shell: `MediaShell`
 - Page-Komponente: `frontend/src/pages/media/PilotPage.tsx`
 - Haupt-UI: `frontend/src/components/cockpit/PilotSurface.tsx`

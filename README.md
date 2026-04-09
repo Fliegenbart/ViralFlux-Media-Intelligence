@@ -2,7 +2,7 @@
 
 ViralFlux ist eine Plattform für **regionale Virus-Frühwarnung** und daraus abgeleitete **operative Media-Entscheidungen**.
 
-Dieses Repository enthält den Produktkern und die aktive UI. Interne Arbeitsnotizen, Agenten-Artefakte und historische Audit-Unterlagen gehören nicht in einen Buyer-Facing Stand und werden separat gehalten.
+Dieses Repository enthält den Produktkern und die aktive UI. Interne Arbeitsnotizen, Agenten-Artefakte und historische Audit-Unterlagen gehören nicht in diesen Buyer-Facing Stand.
 
 Live-Instanz: [https://fluxengine.labpulse.ai/virus-radar](https://fluxengine.labpulse.ai/virus-radar)
 

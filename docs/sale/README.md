@@ -2,7 +2,7 @@
 
 ## Ziel
 
-Dieses Verzeichnis beschreibt, welche Teile des Repos zum Buyer-Facing Stand gehoeren und welche internen Artefakte nicht hinein gehoeren.
+Dieses Verzeichnis beschreibt, welche Teile des Repos zum Buyer-Facing Stand dieses Repos gehören und welche internen Artefakte nicht hinein gehören.
 
 ## Buyer-Facing behalten
 

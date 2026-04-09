@@ -11,7 +11,7 @@ Stand: 2026-03-18
 
 ## Executive Answer
 
-Ja: Es gibt jetzt einen **kurzen, glaubwürdigen GO-Pfad ohne GELO-Daten**.
+Ja: Es gab einen **kurzen, glaubwürdigen GO-Pfad ohne GELO-Daten**.
 
 Dieser GO-Pfad ist aber bewusst **eng**:
 
@@ -21,7 +21,7 @@ Dieser GO-Pfad ist aber bewusst **eng**:
 - nur als **Forecast-First-Pilot**
 - nur für Priorisierung, Timing und Szenario-Splits
 
-Es gibt weiterhin **keinen kurzen GO-Pfad** für:
+Es gab weiterhin **keinen kurzen GO-Pfad** für:
 
 - validierte Commercial-Freigaben
 - ROI-Claims
@@ -33,8 +33,8 @@ Es gibt weiterhin **keinen kurzen GO-Pfad** für:
 
 Ja/Nein-Logik:
 
-- wenn `RSV A / h7` forecast-seitig kippt, gibt es keinen ehrlichen Pilot-GO
-- wenn `RSV A / h7` forecast-seitig `GO` bleibt, kann der Pilot gezeigt werden
+- wenn `RSV A / h7` forecast-seitig kippt, gab es keinen ehrlichen Pilot-GO
+- wenn `RSV A / h7` forecast-seitig `GO` blieb, konnte der Pilot gezeigt werden
 
 Minimal nötig:
 
@@ -46,8 +46,8 @@ Minimal nötig:
 
 Ja/Nein-Logik:
 
-- wenn PEIX bereits ROI- oder Sales-Optimierung behauptet, ist der Pilot nicht ehrlich
-- wenn PEIX Forecast, Regionen-Priorisierung und Szenario-Splits verkauft, ist der Claim sauber
+- wenn PEIX bereits ROI- oder Sales-Optimierung behauptete, war der Pilot nicht ehrlich
+- wenn PEIX Forecast, Regionen-Priorisierung und Szenario-Splits verkaufte, war der Claim sauber
 
 Minimal nötig:
 
@@ -59,12 +59,12 @@ Minimal nötig:
 
 Ja/Nein-Logik:
 
-- wenn fehlende GELO-Daten wie ein Produktfehler wirken, verliert der Pilot Glaubwürdigkeit
-- wenn klar ist, dass Forecast schon läuft und GELO-Daten die zweite Stufe freischalten, bleibt die Story stark
+- wenn fehlende GELO-Daten wie ein Produktfehler wirkten, verlor der Pilot Glaubwürdigkeit
+- wenn klar war, dass Forecast schon lief und GELO-Daten die zweite Stufe freischalten, blieb die Story stark
 
 Minimal nötig:
 
-- `/pilot` zeigt bereits Forecast Ready klar vor Commercial Validation
+- `/pilot` zeigte bereits Forecast Ready klar vor Commercial Validation
 - GELO-Daten werden als nächste Ausbaustufe erklaert
 
 ## Minimal Path
@@ -102,7 +102,7 @@ Nur dieser Scope:
 
 ### Minimal GO Definition
 
-Ein glaubwürdiger Forecast-First-GO liegt vor, wenn alle Punkte gleichzeitig gelten:
+Ein glaubwürdiger Forecast-First-GO lag vor, wenn alle Punkte gleichzeitig galten:
 
 - der enge Scope `GELO / RSV A / h7` ist forecast-seitig `GO`
 - die Live-Evaluation bleibt retained und `GO`
@@ -114,7 +114,7 @@ Ein glaubwürdiger Forecast-First-GO liegt vor, wenn alle Punkte gleichzeitig ge
 
 ### Phase 1: Forecast-First GO
 
-Das ist der aktuelle nächste Zielzustand.
+Das war der damalige nächste Zielzustand.
 
 Was PEIX dann ehrlich sagen kann:
 
@@ -140,7 +140,7 @@ Was das bringt:
 
 ### Phase 3: Commercial GO
 
-Erst hier entsteht die zweite Freigabestufe.
+Erst hier entstand die zweite Freigabestufe.
 
 Nötig:
 
@@ -161,7 +161,7 @@ Nötig:
 ### Intern: ViralFlux
 
 - den scoped Forecast-Pfad stabil halten
-- die Forecast-First-Semantik im `pilot-readout` und in `/pilot` sauber trennen
+- die Forecast-First-Semantik im damaligen `pilot-readout` und in `/pilot` sauber trennen
 - Commercial Validation weiter sichtbar halten, aber nicht mehr als primaren Pilotblocker für Forecast-Demos behandeln
 
 ## Was parallel laufen kann
@@ -180,12 +180,12 @@ Kann nicht logisch übersprungen werden:
 
 ## Smallest Pilot We Could Honestly Release
 
-Der kleinste ehrlich freigebbare Pilot ist:
+Der kleinste ehrlich freigebbare Pilot war:
 
 - nur `GELO`
 - nur `RSV A`
 - nur `h7`
-- nur `/pilot`
+- nur `/pilot` als historische Surface
 - nur Forecast, Priorisierung und Szenario-Splits
 
 Das ist **genug**, um GELO den Produktkern zu zeigen und Mitwirkung für den Commercial Layer einzuladen.
@@ -242,8 +242,8 @@ Nur wenn:
 
 ## Bottom Line
 
-Die Wahrheit ist jetzt einfacher und nutzbarer:
+Die Wahrheit war einfacher und nutzbarer:
 
-- Ohne GELO-Daten gibt es **keinen Commercial GO**.
-- Ohne GELO-Daten gibt es aber **sehr wohl einen ehrlichen Forecast-First GO**.
-- Genau dieser enge Forecast-First-GO ist der richtige Weg, um GELO das Tool jetzt zu zeigen und sie für den Outcome-Layer zu gewinnen.
+- Ohne GELO-Daten gab es **keinen Commercial GO**.
+- Ohne GELO-Daten gab es aber **sehr wohl einen ehrlichen Forecast-First GO**.
+- Genau dieser enge Forecast-First-GO war der richtige Weg, um GELO das Tool zu zeigen und sie für den Outcome-Layer zu gewinnen.

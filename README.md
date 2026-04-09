@@ -26,6 +26,12 @@ Der aktive Hauptfluss in der UI ist:
 
 Diese Seiten bilden den Live-Kern des Produkts. Weitere Flächen im Repo dienen als technische Quellen, Altstände oder interne Referenz.
 
+Technische Kernpfade sind vor allem:
+- `frontend/src/pages/media/`
+- `frontend/src/components/cockpit/`
+- `backend/app/services/ml/`
+- `backend/app/services/data_ingest/`
+
 ## Was man auf `/virus-radar` sieht
 
 Die Seite [Virus-Radar](https://fluxengine.labpulse.ai/virus-radar) ist die zentrale Entscheidungsseite.

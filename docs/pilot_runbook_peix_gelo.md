@@ -4,13 +4,13 @@ Stand: 2026-03-18
 
 ## Zweck
 
-Dieses Runbook beschreibt den **eng geschnittenen Forecast-First-Pilot** für PEIX / GELO.
+Dieses Runbook beschreibt historisch den **eng geschnittenen Forecast-First-Pilot** für PEIX / GELO.
 
 Wichtig:
 
 - `live erreichbar` ist nicht automatisch `commercially validated`
-- der Pilot darf heute schon als **Forecast- und Priorisierungs-Tool** gezeigt werden
-- eine **Budget- oder ROI-Freigabe** bleibt eine zweite Stufe und braucht GELO-Outcome-Daten
+- der Pilot durfte historisch als **Forecast- und Priorisierungs-Tool** gezeigt werden
+- eine **Budget- oder ROI-Freigabe** blieb eine zweite Stufe und brauchte GELO-Outcome-Daten
 
 ## Zwei Freigabestufen
 
@@ -123,12 +123,12 @@ Wichtig:
 
 ## Offizieller Forecast-First-Pilot-Scope
 
-Nur dieser Scope ist heute für externe Demos freigegeben:
+Nur dieser Scope war für externe Demos freigegeben:
 
 - `brand = gelo`
 - `virus_typ = RSV A`
 - `horizon_days = 7`
-- nur die kanonische `/pilot`-Surface bzw. `GET /api/v1/media/pilot-readout`
+- damals die `/pilot`-Surface bzw. `GET /api/v1/media/pilot-readout`
 
 ## Was im Forecast-First-Pilot gezeigt werden darf
 
@@ -185,7 +185,7 @@ Nur dieser Scope ist heute für externe Demos freigegeben:
 - `health/live` = grün
 - `/health/ready` = degraded, aber nicht unhealthy
 - `RSV A / h7` ist forecast-seitig tragfähig
-- der kanonische `pilot-readout` trennt jetzt Forecast-Readiness und Commercial-Validation
+- der damalige `pilot-readout` trennte Forecast-Readiness und Commercial-Validation
 - GELO-Outcome-Daten fehlen weiterhin für den Commercial Layer
 
 ## Harte operative Aussage

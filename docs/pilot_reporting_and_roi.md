@@ -8,7 +8,7 @@ Important:
 
 - the customer-facing product can now run in **Forecast-First** mode without GELO outcome data
 - this reporting and ROI layer is therefore the **second layer**, not the first product claim
-- before GELO data exists, `/pilot` may already show forecast, prioritization, and scenario splits
+- before GELO data existed, `/pilot` could already show forecast, prioritization, and scenario splits
 - only after GELO data flows does this reporting layer become the commercial validation surface
 
 Relevant files:
@@ -35,7 +35,7 @@ Current path:
 2. Decision
 3. Allocation
 4. Campaign recommendation
-5. Customer-facing `pilot-readout`
+5. Historical customer-facing `pilot-readout`
 6. Pilot reporting / ROI audit
 
 The reporting layer does not rewrite epidemiological or allocation logic. It reads persisted recommendation and outcome records and turns them into an audit-ready readout.
@@ -44,9 +44,9 @@ The reporting layer does not rewrite epidemiological or allocation logic. It rea
 
 ### Forecast-First
 
-This is the first product layer for PEIX / GELO.
+This was the first product layer for PEIX / GELO.
 
-It is already valid when:
+It was valid when:
 
 - the active scope is forecast-ready
 - regions can be prioritized
@@ -55,7 +55,7 @@ It is already valid when:
 
 ### Commercial Validation
 
-This reporting layer becomes commercially relevant when:
+This reporting layer became commercially relevant when:
 
 - GELO spend and outcome data are ingested
 - activations and holdouts are visible
@@ -121,10 +121,10 @@ Endpoint:
 
 Wichtig:
 
-- `pilot-reporting` ist jetzt ein Legacy-/Backoffice-Readout für historische ROI-Analysen.
-- Die kundennahe Pilot-Oberflaeche nutzt stattdessen `GET /api/v1/media/pilot-readout`.
-- `pilot-readout` ist damit die Forecast-First-Leseschicht.
-- `pilot-reporting` ist die spätere Commercial- und Audit-Schicht.
+- `pilot-reporting` ist ein Legacy-/Backoffice-Readout für historische ROI-Analysen.
+- Die kundennahe Pilot-Oberflaeche nutzte `GET /api/v1/media/pilot-readout`.
+- `pilot-readout` war damit die Forecast-First-Leseschicht.
+- `pilot-reporting` war die spätere Commercial- und Audit-Schicht.
 
 Supported query parameters:
 

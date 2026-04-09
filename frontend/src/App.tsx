@@ -210,7 +210,7 @@ const App: React.FC = () => {
           <Router>
             <Suspense fallback={<PageFallback />}>
               <Routes>
-                <Route path="/" element={<Navigate to="/jetzt" replace />} />
+                <Route path="/" element={<Navigate to="/virus-radar" replace />} />
                 <Route path="/welcome" element={<LandingPage />} />
                 <Route element={<MediaShell />}>
                   <Route path="/virus-radar" element={<VirusRadarPage />} />
@@ -222,11 +222,11 @@ const App: React.FC = () => {
                   <Route path="/evidenz" element={<EvidencePage />} />
                 </Route>
                 {/* Legacy redirects */}
-                <Route path="/dashboard" element={<Navigate to="/jetzt" replace />} />
-                <Route path="/entscheidung" element={<Navigate to="/jetzt" replace />} />
-                <Route path="/lagebild" element={<Navigate to="/jetzt" replace />} />
-                <Route path="/pilot" element={<Navigate to="/jetzt" replace />} />
-                <Route path="/bericht" element={<Navigate to="/jetzt" replace />} />
+                <Route path="/dashboard" element={<Navigate to="/virus-radar" replace />} />
+                <Route path="/entscheidung" element={<Navigate to="/virus-radar" replace />} />
+                <Route path="/lagebild" element={<Navigate to="/virus-radar" replace />} />
+                <Route path="/pilot" element={<Navigate to="/virus-radar" replace />} />
+                <Route path="/bericht" element={<Navigate to="/virus-radar" replace />} />
                 <Route path="/empfehlungen" element={<Navigate to="/kampagnen" replace />} />
                 <Route path="/empfehlungen/:id" element={<LegacyRecommendationRedirect />} />
                 <Route path="/validierung" element={<Navigate to="/evidenz" replace />} />

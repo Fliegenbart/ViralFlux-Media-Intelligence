@@ -32,6 +32,11 @@ jest.mock('./pages/media/NowPage', () => ({
   default: () => <div>Jetzt Mock</div>,
 }));
 
+jest.mock('./pages/media/VirusRadarPage', () => ({
+  __esModule: true,
+  default: () => <div>Virus-Radar Mock</div>,
+}));
+
 jest.mock('./pages/media/TimegraphPage', () => ({
   __esModule: true,
   default: () => <div>Zeitgraph Mock</div>,
@@ -72,24 +77,30 @@ describe('App routing', () => {
   it('rehydrates auth state on app startup from the backend session check', async () => {
     render(<App />);
 
-    expect(await screen.findByText('Jetzt Mock')).toBeInTheDocument();
+    expect(await screen.findByText('Virus-Radar Mock')).toBeInTheDocument();
   });
 
   it('renders the real operator shell chrome for authenticated routes', async () => {
     render(<App />);
 
-    expect(await screen.findByText('Jetzt Mock')).toBeInTheDocument();
+    expect(await screen.findByText('Virus-Radar Mock')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Schnellmenü öffnen/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Navigation öffnen/i })).toBeInTheDocument();
   });
 
-  it('redirects legacy dashboard routes to /jetzt and shows the five PEIX work areas', async () => {
+  it('redirects root and legacy dashboard routes to /virus-radar and shows the five PEIX work areas', async () => {
+    const firstRender = render(<App />);
+
+    expect(await screen.findByText('Virus-Radar Mock')).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/virus-radar');
+
+    firstRender.unmount();
     window.history.pushState({}, '', '/dashboard');
 
     render(<App />);
 
-    expect(await screen.findByText('Jetzt Mock')).toBeInTheDocument();
-    expect(window.location.pathname).toBe('/jetzt');
+    expect(await screen.findByText('Virus-Radar Mock')).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/virus-radar');
 
     const operatorNav = screen.getByRole('navigation', { name: 'Arbeitsbereiche' });
     const navButtons = within(operatorNav).getAllByRole('button');
@@ -113,5 +124,14 @@ describe('App routing', () => {
 
     const operatorNav = screen.getByRole('navigation', { name: 'Arbeitsbereiche' });
     expect(within(operatorNav).getByRole('button', { name: /Zeitgraph/i })).toHaveAttribute('aria-current', 'page');
+  });
+
+  it('keeps an explicit virus-radar URL after auth instead of redirecting elsewhere', async () => {
+    window.history.pushState({}, '', '/virus-radar');
+
+    render(<App />);
+
+    expect(await screen.findByText('Virus-Radar Mock')).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/virus-radar');
   });
 });

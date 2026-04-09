@@ -56,6 +56,8 @@ data/backups/*
 !data/processed/.gitkeep
 Test-Daten/
 demo-data/
+backend/app/services/data_ingest/klaeranlage_coordinates.py
+backend/app/services/marketing_engine/conquesting_matrix.json
 
 # ML Model Artifacts
 backend/app/ml_models/**/*.json

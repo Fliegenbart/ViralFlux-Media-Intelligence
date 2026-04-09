@@ -1,23 +1,19 @@
 # Sale Cleanup Scope
 
 ## Ziel
-
-Dieses Verzeichnis beschreibt, welche Teile des Repos zum Buyer-Facing Stand dieses Repos gehören und welche internen Artefakte nicht hinein gehören.
+Dieses Verzeichnis beschreibt kurz, was im buyer-facing Stand bleiben soll und was intern bleibt.
 
 ## Buyer-Facing behalten
+- aktuelle Produktoberflaechen
+- Forecast- und Evidenz-Kern
+- knappe Betriebsdoku
 
-- Forecast- und Backtest-Kern
-- aktuelle Media-UI
-- schlanke Betriebsdoku
+## Intern halten
+- interne Agenten- und Superpowers-Artefakte
+- alte Projektlisten
+- Audit-, Blocker- und Pitch-Dokumente
 
-## Buyer-Facing entfernen
-
-- interne Agenten-/Superpowers-Artefakte
-- veraltete Projektlisten
-- interne Audit-, Blocker- und Pitch-Dokumente
-
-## Nicht loeschen, sondern spaeter umbauen
-
+## Spaeter umbauen
 - Auth
 - Runtime-Schema-Updates
 - Startup-Seiteneffekte

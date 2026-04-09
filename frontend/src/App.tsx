@@ -223,10 +223,7 @@ const App: React.FC = () => {
                 </Route>
                 {/* Legacy redirects */}
                 <Route path="/dashboard" element={<Navigate to="/virus-radar" replace />} />
-                <Route path="/entscheidung" element={<Navigate to="/virus-radar" replace />} />
                 <Route path="/lagebild" element={<Navigate to="/virus-radar" replace />} />
-                <Route path="/pilot" element={<Navigate to="/virus-radar" replace />} />
-                <Route path="/bericht" element={<Navigate to="/virus-radar" replace />} />
                 <Route path="/empfehlungen" element={<Navigate to="/kampagnen" replace />} />
                 <Route path="/empfehlungen/:id" element={<LegacyRecommendationRedirect />} />
                 <Route path="/validierung" element={<Navigate to="/evidenz" replace />} />

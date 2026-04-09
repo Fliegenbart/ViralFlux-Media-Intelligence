@@ -1,6 +1,5 @@
 import { RecommendationCard } from '../../types/media';
 import {
-  formatCurrency,
   formatPercent,
   formatSignalScore,
   primarySignalScore,

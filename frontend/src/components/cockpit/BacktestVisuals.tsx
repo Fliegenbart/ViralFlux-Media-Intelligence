@@ -45,12 +45,6 @@ import {
   readBooleanFlag,
   readNumberValue,
 } from './backtestVisuals.utils';
-import type {
-  FocusRegionChartRow,
-  ValidationRow,
-  WaveMarkers,
-  WaveSpreadRow,
-} from './backtestVisuals.utils';
 
 export { buildValidationRows, detectWaveMarkers, getWaveFreshnessHint } from './backtestVisuals.utils';
 

@@ -171,6 +171,50 @@ class ProductCatalogServiceTests(unittest.TestCase):
         self.assertEqual(result[0]["condition_key"], "halsschmerz_heiserkeit")
         self.assertEqual(result[0]["mapping_reason"], "Override Kandidat.")
 
+    def test_infer_condition_from_opportunity_respects_service_override_for_scores(self) -> None:
+        class OverrideCatalogService(ProductCatalogService):
+            def _condition_scores(self, text: str):
+                return {
+                    "immun_support": {"score": 9.0, "hits": ["override"]},
+                    "bronchitis_husten": {"score": 1.0, "hits": ["fallback"]},
+                }
+
+        service = OverrideCatalogService(self.db)
+
+        result = service.infer_condition_from_opportunity(
+            {
+                "type": "RESOURCE_SCARCITY",
+                "trigger_context": {"event": "Husten", "details": "Normal wäre anders"},
+            }
+        )
+
+        self.assertEqual(result, "immun_support")
+
+    def test_upsert_hard_rule_mappings_respects_service_override_for_condition_label(self) -> None:
+        class OverrideCatalogService(ProductCatalogService):
+            @staticmethod
+            def condition_label(condition_key: str | None) -> str:
+                return f"Override Label {condition_key}"
+
+        service = OverrideCatalogService(self.db)
+        product = BrandProduct(
+            brand="gelo",
+            product_name="GeloVital",
+            source_url="https://example.test/gelo",
+            source_hash="hash-4",
+            active=True,
+        )
+        self.db.add(product)
+        self.db.commit()
+
+        result = service._upsert_hard_rule_mappings(
+            brand="gelo",
+            product=product,
+        )
+
+        self.assertEqual(len(result), 1)
+        self.assertIn("Override Label immun_support", result[0]["mapping_reason"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -211,7 +211,7 @@ def resolve_product_for_opportunity(
     }
 
 
-def infer_condition_from_opportunity(opportunity: dict[str, Any]) -> str:
+def infer_condition_from_opportunity(service, opportunity: dict[str, Any]) -> str:
     """Leitet die Lageklasse aus Opportunity-Inhalten ab."""
     trigger = opportunity.get("trigger_context") or {}
     parts = [
@@ -222,7 +222,7 @@ def infer_condition_from_opportunity(opportunity: dict[str, Any]) -> str:
     ]
     text = " ".join(str(p) for p in parts if p).lower()
 
-    scores = _condition_scores(text)
+    scores = service._condition_scores(text)
     if scores:
         best = max(scores.items(), key=lambda item: item[1]["score"])[0]
         return best
@@ -431,7 +431,7 @@ def _upsert_hard_rule_mappings(
 
     candidates: list[dict[str, Any]] = []
     for condition_key in hard_conditions:
-        reason = f"Hard Rule ({product.product_name}) für {condition_label(condition_key)}."
+        reason = f"Hard Rule ({product.product_name}) für {service.condition_label(condition_key)}."
         row = existing_by_key.get(condition_key)
         if row is None:
             row = ProductConditionMapping(

@@ -659,7 +659,7 @@ class ProductCatalogService:
         return product_catalog_matching._is_pediatric_context(opportunity)
 
     def infer_condition_from_opportunity(self, opportunity: dict[str, Any]) -> str:
-        return product_catalog_matching.infer_condition_from_opportunity(opportunity)
+        return product_catalog_matching.infer_condition_from_opportunity(self, opportunity)
 
     @staticmethod
     def condition_label(condition_key: str | None) -> str:

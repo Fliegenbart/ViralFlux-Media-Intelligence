@@ -441,31 +441,38 @@
   display: grid;
   grid-column: 1 / -1;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: stretch;
   gap: var(--space-lg);
 }
 
+.virus-radar-core-grid__rail > .operator-panel-shell {
+  min-height: 100%;
+}
+
 .virus-radar-map-panel .operator-panel-shell__body {
-  gap: var(--space-lg);
+  gap: calc(var(--space-lg) + 4px);
 }
 
 .virus-radar-map-panel__body {
   display: grid;
-  grid-template-columns: minmax(300px, 1fr) minmax(0, 0.88fr);
-  gap: var(--space-lg);
-  align-items: start;
+  grid-template-columns: minmax(360px, 1.08fr) minmax(420px, 0.92fr);
+  gap: calc(var(--space-lg) + 4px);
+  align-items: stretch;
 }
 
 .virus-radar-map-panel__map {
   min-width: 0;
-  padding: 18px 18px 16px;
+  min-height: 100%;
+  padding: 22px 24px 20px;
   border: 1px solid rgba(23, 32, 51, 0.08);
   border-radius: 20px;
   background: linear-gradient(180deg, rgba(250, 251, 248, 0.96) 0%, rgba(244, 247, 244, 0.94) 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
 }
 
 .virus-radar-ladder {
   display: grid;
-  gap: var(--space-md);
+  gap: calc(var(--space-md) + 2px);
 }
 
 .virus-radar-ladder__header {
@@ -483,7 +490,7 @@
 .virus-radar-ladder__focus {
   display: grid;
   gap: 8px;
-  padding: 18px 18px 16px;
+  padding: 20px 22px 18px;
   border: 1px solid rgba(23, 32, 51, 0.1);
   border-radius: 18px;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(247, 249, 248, 0.96) 100%);

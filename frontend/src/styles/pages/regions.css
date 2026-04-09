@@ -630,13 +630,29 @@
 }
 
 .vf-map-panel--radar {
-  gap: 12px;
+  gap: 16px;
+  align-content: start;
+}
+
+.vf-map-panel--radar .vf-map-panel__status {
+  gap: 8px;
+  padding: 18px 20px 16px;
+  border-radius: 18px;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
+}
+
+.vf-map-panel--radar .vf-map-panel__status-head strong {
+  font-size: 1.12rem;
+}
+
+.vf-map-panel--radar .vf-map-panel__status-meta {
+  line-height: 1.6;
 }
 
 .vf-map-panel--radar .vf-map-legend {
-  gap: 10px 14px;
-  padding: 0;
-  opacity: 0.82;
+  gap: 12px 18px;
+  padding: 2px 0 0;
+  opacity: 0.78;
 }
 
 .vf-map-panel--radar .vf-map-legend__item {

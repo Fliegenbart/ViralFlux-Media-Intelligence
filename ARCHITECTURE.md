@@ -1,468 +1,471 @@
-# 🏗️ ViralFlux Media Intelligence - System Architecture
+# ViralFlux Media Intelligence - Architektur
 
-## Overview
+## Kurzfassung
 
-ViralFlux Media Intelligence ist ein dreischichtiges System (Data, ML, Frontend) für predictive Pharma-Media-Steuerung mit folgenden Kernkomponenten:
+ViralFlux ist ein System fuer **regionale Virus-Fruehwarnung** und daraus abgeleitete **operative Media-Entscheidungen**.
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    DATA SOURCES LAYER                        │
-│  RKI AMELAG │ GrippeWeb │ Notaufnahme │ BfArM │ Trends │ Weather │ Ferien │
-└──────────────────────────┬──────────────────────────────────┘
-                           │
-                           v
-┌─────────────────────────────────────────────────────────────┐
-│                  BACKEND / API LAYER                         │
-│  ┌────────────────┐  ┌────────────────┐  ┌───────────────┐ │
-│  │ Data Ingestion │  │  ML Pipeline   │  │ LLM Service   │ │
-│  │   Services     │  │    (Prophet)   │  │    (vLLM)     │ │
-│  └────────────────┘  └────────────────┘  └───────────────┘ │
-│                                                              │
-│  ┌──────────────────────────────────────────────────────┐  │
-│  │         PostgreSQL + TimescaleDB                     │  │
-│  │  (Zeitreihen-optimierte Speicherung)                 │  │
-│  └──────────────────────────────────────────────────────┘  │
-│                                                              │
-│  FastAPI REST API                                            │
-└──────────────────────────┬──────────────────────────────────┘
-                           │
-                           v
-┌─────────────────────────────────────────────────────────────┐
-│                   FRONTEND LAYER                             │
-│  React + TypeScript + TailwindCSS + Recharts                │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐   │
-│  │Dashboard │  │Forecast  │  │ Recomm.  │  │ Settings │   │
-│  └──────────┘  └──────────┘  └──────────┘  └──────────┘   │
-└─────────────────────────────────────────────────────────────┘
-```
+In einfachen Worten macht das System drei Dinge:
+1. Es sammelt Gesundheits- und Kontextdaten aus mehreren Quellen.
+2. Es berechnet daraus pro `Virus x Bundesland x Horizont` eine belastbare Prognose.
+3. Es uebersetzt die Prognose in eine sichtbare Entscheidung wie `Activate`, `Prepare` oder `Watch`.
+
+Die wichtigste Produktoberflaeche dafuer ist aktuell:
+- [`/virus-radar`](https://fluxengine.labpulse.ai/virus-radar)
 
 ---
 
-## 🔧 Tech Stack
+## Systembild
+
+```text
+Externe Quellen
+    ↓
+Data Ingestion
+    ↓
+Zeitreihen + Feature-Bau
+    ↓
+Forecast + Event-Wahrscheinlichkeit
+    ↓
+Regionale Priorisierung + Freigabe-Logik
+    ↓
+API + Snapshots
+    ↓
+Virus-Radar / Regionen / Kampagnen
+```
+
+Anders gesagt:
+- **Quellen** liefern Rohsignale
+- **Feature-Bau** formt daraus saubere Modell-Eingaben
+- **Forecast** schaetzt den kuenftigen Verlauf
+- **Probability / Decision Layer** entscheidet, wie relevant ein Signal operativ ist
+- **Frontend** zeigt das Ergebnis so, dass ein Mensch es schnell lesen und nutzen kann
+
+---
+
+## Die drei Schichten
+
+## 1. Daten-Schicht
+
+Die Daten-Schicht sammelt die laufenden Signale.
+
+Wichtige Quellen:
+- AMELAG / Abwasser
+- GrippeWeb
+- Notaufnahme-Surveillance
+- SURVSTAT
+- Google Trends
+- Wetter
+- Ferien / Kalendereffekte
+- BfArM-Kontext fuer Marketing- und Supply-Signale
+
+Die Rohdaten landen in PostgreSQL / TimescaleDB.
+
+Wichtig:
+- Zeitreihen bleiben moeglichst nah an der Quelle gespeichert
+- Import, Frische und Fehler werden protokolliert
+- lokale Test- und Report-Artefakte gehoeren **nicht** dauerhaft ins Repo
+
+## 2. Modell- und Entscheidungs-Schicht
+
+Hier passiert die eigentliche Fachlogik.
+
+Sie besteht aus mehreren getrennten Ebenen:
+
+1. **Point-in-time Feature-Bau**
+2. **Punktprognose**
+3. **Ereigniswahrscheinlichkeit**
+4. **Unsicherheit / Reliability**
+5. **Regionale Priorisierung**
+
+Diese Trennung ist wichtig, weil ein Forecast allein noch keine gute Business-Entscheidung ist.
+
+## 3. Oberflaechen-Schicht
+
+Die Oberflaeche zeigt nicht einfach Rohdaten, sondern eine verdichtete Sicht:
+- welches Virus ist gerade relevant
+- wie sahen die letzten Wochen aus
+- was wird fuer die naechsten 7 Tage erwartet
+- welche Bundeslaender sollten zuerst geprueft werden
+- was ist freigabereif und was noch nicht
+
+Die wichtigste aktuelle Produktseite ist `Virus-Radar`.
+
+---
+
+## Datenfluss im Alltag
+
+## 1. Ingestion
+
+Mehrere Jobs holen regelmaessig neue Daten.
+
+Typischer Ablauf:
+- TSV / CSV / API abrufen
+- Daten parsen
+- Plausibilitaet pruefen
+- in die Datenbank schreiben
+- Fehler / Erfolg loggen
+
+Der Betrieb ist bewusst scheduler-basiert.
+
+Aktuell laeuft der Tagesrhythmus grob so:
+- `06:00` Ingestion
+- `07:00` Training / Refresh
+- `07:30` Live-Forecasts
+- `08:00` Regionale operative Snapshots
+- `08:10` Marketing Opportunities
+
+## 2. Feature-Bau
+
+Aus den Rohdaten wird fuer jeden Vorhersagepunkt ein sauberer Feature-Satz gebaut.
+
+Ganz wichtig:
+
+```text
+Ein Modell darf nur sehen, was zum Vorhersagezeitpunkt wirklich bekannt war.
+```
+
+Das nennt man hier **point-in-time sauber**.
+
+Typische Features:
+- aktuelle Niveauwerte
+- Trend und Beschleunigung
+- Lags
+- gleitende Fenster
+- Quellabdeckung
+- Datenfrische
+- Wetter- und Kalender-Effekte
+
+## 3. Forecast
+
+Danach wird ein Zukunftswert geschaetzt, zum Beispiel fuer 7 Tage.
+
+Vereinfacht:
+
+```text
+y_hat(t+7) = Modell(x_t)
+```
+
+Dabei ist:
+- `x_t` = alle zum Zeitpunkt `t` sichtbaren Features
+- `y_hat(t+7)` = erwarteter Zielwert in 7 Tagen
+
+Zusatzlich gibt es Unsicherheitsintervalle.
+
+## 4. Event-Wahrscheinlichkeit
+
+Die Plattform trennt Punktwert und Ereigniswahrscheinlichkeit bewusst voneinander.
+
+Nicht die Logik ist:
+- "Punktforecast hoch, also wird es schon wichtig sein"
+
+Sondern:
+
+```text
+P(Ereignis in 7 Tagen | x_t)
+```
+
+Diese Wahrscheinlichkeit kommt aus einem eigenen Probability-/Exceedance-Pfad und wird kalibriert.
+
+Kalibrierung:
+- bevorzugt `isotonic`
+- bei kleineren Samples `logistic / Platt`
+- sonst klar markierter Fallback
+
+## 5. Regionale Entscheidung
+
+Die Plattform priorisiert nicht einfach nach "groesster Prozent-Anstieg".
+
+Stattdessen fliessen mehrere Ebenen zusammen:
+- Event-Wahrscheinlichkeit
+- Trend
+- Datenfrische
+- Quellabdeckung
+- Cross-Source Agreement
+- Unsicherheit / Reliability
+- Business- und Freigabe-Regeln
+
+Erst daraus entstehen Stufen wie:
+- `Activate`
+- `Prepare`
+- `Watch`
+
+---
+
+## Mathematisches Vorgehen
+
+## A. Punktprognose
+
+Das Modell berechnet einen kuenftigen Zielwert.
+
+Vereinfacht:
+
+```text
+y_hat = f(x)
+```
+
+Das ist die Basis fuer:
+- erwartete Inzidenz
+- erwartete Last
+- erwartete Bewegung in den naechsten Tagen
+
+## B. 7-Tage-Veränderung
+
+Die sichtbare Richtungszahl im Produkt liest sich vereinfacht so:
+
+```text
+delta_7d = (forecast_7d - current_value) / current_value
+```
+
+Das ist die Zahl, die spaeter als `+x %` oder `-x %` erscheint.
+
+## C. Hero-Graph auf `Virus-Radar`
+
+Der Hero-Graph oben ist fuer Lesbarkeit normiert:
+
+```text
+hero_index = 100 * Wert / letzter_beobachteter_Wert
+```
+
+Das bedeutet:
+- `100` = heute / letzter real beobachteter Punkt
+- `110` = ungefaehr 10 % ueber heute
+- `90` = ungefaehr 10 % unter heute
+
+Wichtig:
+- das ist **nur die Darstellungslogik**
+- intern rechnen die Modelle weiterhin mit echten Werten
+
+## D. Warum das wichtig ist
+
+Ohne diese Normierung wuerde oft ein Virus die Achse dominieren und die anderen waeren schlecht lesbar.
+
+Mit der Normierung wird sichtbar:
+- wie der Verlauf zuletzt aussah
+- wie sich das Modell ab heute bewegt
+- ob die Richtung eher steigt, faellt oder stabil bleibt
+
+---
+
+## Was man auf `/virus-radar` sieht
+
+`Virus-Radar` ist die wichtigste Entscheidungsseite.
+
+Sie beantwortet im Kern:
+- welcher Virus ist gerade im Fokus
+- wie sieht sein Verlauf aus
+- welche Bundeslaender sind operativ zuerst relevant
+- was ist schon freigabereif
+- was bremst noch
+
+## Hero oben
+
+Der Hero zeigt immer **einen Virus auf einmal**.
+
+Er besteht aus:
+- kurzer Kernaussage
+- Verlauf der letzten Wochen
+- 7-Tage-Prognose
+- Umschaltern fuer vier Viren
+
+Bedeutung:
+- **schwarz, durchgezogen** = letzte beobachtete Wochen
+- **farbig, gestrichelt** = naechste 7 Tage Prognose
+- **Heute = 100** = normierter Vergleichspunkt
+
+Der Graph ist also **nicht imaginiert**, sondern:
+- echte letzte Werte
+- plus modellierte Prognose
+
+## Signal Map
+
+Darunter zeigt die Karte:
+- welche Bundeslaender diese Woche am wichtigsten sind
+- welche Region aktuell im Fokus ist
+- wie die Leiter der Top-Regionen aussieht
+
+## Activation Queue / Campaign Readiness
+
+Diese Karten uebersetzen Signal in operative Reihenfolge:
+- wer als naechstes geprueft wird
+- was schon review- oder freigabereif ist
+
+---
+
+## Zentrale API-Pfade
+
+Die Plattform hat viele Endpunkte. Fuer das aktuelle Produktbild sind diese besonders wichtig:
+
+- `GET /api/v1/forecast/regional/predict`
+  - regionale Forecasts je Virus und Horizont
+
+- `GET /api/v1/forecast/regional/hero-overview`
+  - schneller Hero-Pfad fuer `Virus-Radar`
+  - liest vorbereitete Snapshots / Wochenhistorie statt jedes Mal den schweren Portfolio-Pfad neu zu rechnen
+
+- `GET /api/v1/forecast/regional/media-allocation`
+  - Budget-/Stage-Sicht auf Regionen
+
+- `GET /api/v1/forecast/regional/campaign-recommendations`
+  - verdichtete Kampagnen-Vorschlaege
+
+- `POST /api/v1/marketing/export/crm`
+  - mutierender Export, bewusst als `POST`
+
+---
+
+## Datenhaltung
+
+## Wichtige Gruppen
+
+### Zeitreihen
+- Abwasser
+- Trends
+- Wetter
+- GrippeWeb
+- Notaufnahme
+- SURVSTAT
+
+### Modell-Ausgaben
+- Forecasts
+- Unsicherheitsintervalle
+- Kalibrierungs- und Quality-Metadaten
+
+### Operative Ebenen
+- Snapshots fuer schnelle Produktpfade
+- Entscheidungs-Spuren
+- Audit-Logs
+- Kampagnen- und Opportunity-Zustaende
+
+## Warum Snapshots wichtig sind
+
+Fuer die Produktoberflaeche ist nicht jeder Live-Weg sinnvoll.
+
+Einige Screens brauchen:
+- schnell
+- stabil
+- reproduzierbar
+
+Deshalb werden operative Snapshots geschrieben, damit das Frontend nicht jedes Mal schwere Rechenpfade live neu ausloest.
+
+---
+
+## Security und Produktschutz
+
+## Auth
+
+- Browser laufen ueber Session-Cookies
+- interne Legacy-Routen sind JWT-geschuetzt
+- schreibende Admin-Aktionen brauchen Admin-Rolle
+
+## Session-Verhalten
+
+- `/api/auth/login` setzt eine Browser-Session
+- `/api/auth/session` liefert fuer anonyme Browser ruhig `authenticated: false`
+- `/api/auth/logout` widerruft neue Sessions serverseitig
+
+## Oeffentliche vs. interne Daten
+
+Das System trennt bewusst:
+- oeffentliche / landing-geeignete Kurzfassungen
+- interne Detailansichten
+
+Beispiel:
+- `/api/v1/outbreak-score/peix-score` gibt nur die sichere Kurzfassung
+- `/api/v1/outbreak-score/peix-score/full` braucht Auth
+
+---
+
+## Betriebslogik
+
+## Health
+
+- `/health/live`
+  - lebt der Prozess?
+
+- `/health/ready`
+  - ist das System operativ ausreichend frisch und gesund?
+
+Wichtig:
+- `live = healthy` bedeutet nur, dass die App laeuft
+- `ready = healthy` bedeutet, dass auch Daten, Snapshots und operative Voraussetzungen passen
+
+## Warum `ready` degradiert sein kann
+
+Typische Gruende:
+- externe Quelle alt
+- Snapshot-Refresh fehlt
+- Forecast-Monitoring kritisch
+- regionale operative Sicht zu alt
+
+Das ist bewusst strenger als nur "Server lebt".
+
+---
+
+## Repo-Hygiene
+
+Das GitHub-Repo soll enthalten:
+- Code
+- Dokumentation
+- stabile Referenzdateien
+
+Das GitHub-Repo soll **nicht** enthalten:
+- alte generierte Reports
+- lokale Screenshots
+- lokale Benchmark-Artefakte
+- lokale Hilfsdaten
+
+Deshalb sind unter anderem ignoriert:
+- `output/`
+- `data/raw/`
+- `data/processed/`
+- `demo-data/`
+- `Test-Daten/`
+
+---
+
+## Tech-Stack
+
+### Frontend
+- React
+- TypeScript
+- Recharts
+- React Router
 
 ### Backend
-- **Framework:** FastAPI 0.109
-- **Database:** PostgreSQL 15 + TimescaleDB
-- **ML:** Prophet 1.1.5, scikit-learn
-- **LLM:** vLLM (OpenAI-kompatibel, strikt lokal)
-- **Data Processing:** Pandas, NumPy
-- **API Clients:** pytrends, requests, aiohttp
-- **Task Scheduling:** Celery Beat + Celery Worker
+- FastAPI
+- Pandas / NumPy
+- scikit-learn
+- Prophet
+- Celery
 
-### Frontend
-- **Framework:** React 18 + TypeScript
-- **Styling:** TailwindCSS 3.4
-- **Charts:** Recharts 2.10
-- **State:** React Hooks + SWR
-- **Routing:** React Router v6
-
-### Infrastructure
-- **Containerization:** Docker + Docker Compose
-- **Web Server:** Nginx (Reverse Proxy)
-- **Database:** TimescaleDB (PostgreSQL Extension)
+### Infrastruktur
+- PostgreSQL / TimescaleDB
+- Docker Compose
+- Nginx
 
 ---
 
-## 📊 Datenfluss
+## Die wichtigste Architektur-Idee
 
-### 1. Data Ingestion (täglich 6:00 Uhr)
+Die wichtigste Architektur-Idee ist nicht ein bestimmtes Framework, sondern diese Trennung:
 
-```python
-Celery Beat Schedule
-    ↓
-Celery Worker Task
-    ↓
-AmelagIngestionService.run_full_import()
-    ├─ Fetch TSV from GitHub
-    ├─ Parse & Validate
-    ├─ Store in WastewaterData / WastewaterAggregated
-    └─ Log success/failure
+1. **Daten sammeln**
+2. **point-in-time sauber Features bauen**
+3. **Forecast und Wahrscheinlichkeit getrennt rechnen**
+4. **Business-/Freigabe-Logik getrennt anwenden**
+5. **das Ergebnis fuer Menschen klar darstellen**
 
-NotaufnahmeIngestionService.run_full_import()
-    ├─ Fetch TSV from GitHub (Syndrome + Standorte)
-    ├─ Parse & Validate
-    ├─ Store in NotaufnahmeSyndromData / NotaufnahmeStandort
-    └─ Log success/failure
-
-GoogleTrendsService.run_full_import()
-    ├─ Fetch via pytrends (Rate-Limited)
-    ├─ Process keyword chunks (max 5/request)
-    ├─ Store in GoogleTrendsData
-    └─ 60s pause between requests
-
-WeatherService.run_full_import()
-    ├─ Fetch current & forecast (OpenWeather API)
-    ├─ Process 5 cities
-    ├─ Store in WeatherData
-    └─ Update every 3 hours
-
-SchoolHolidaysService.run_full_import()
-    ├─ Load static data (2025-2026)
-    ├─ Store in SchoolHolidays
-    └─ Yearly update
-```
-
-### 2. ML Pipeline (nach Datenimport)
-
-```python
-ForecastService.run_forecasts_for_all_viruses()
-    ↓
-For each virus (Influenza A/B, SARS-CoV-2, RSV):
-    ├─ prepare_training_data(lookback=180 days)
-    │   ├─ Fetch: Wastewater, Trends, Weather, GrippeWeb, Notaufnahme, Holidays
-    │   ├─ Feature Engineering: Lag-7, Lag-14, MA-7
-    │   └─ Output: DataFrame with 15+ features
-    │
-    ├─ Prophet Model Training
-    │   ├─ Add regressors: trends, weather, holidays, lags
-    │   ├─ Fit model (daily, weekly, yearly seasonality)
-    │   └─ Hyperparameters: changepoint_prior_scale=0.05
-    │
-    ├─ Generate Forecast (14 days)
-    │   ├─ make_future_dataframe(periods=14)
-    │   ├─ predict() with confidence intervals
-    │   └─ Calculate feature importance (correlations)
-    │
-    └─ save_forecast(to Database)
-        └─ Store in MLForecast table
-```
-
-### 3. LLM Recommendations (on-demand)
-
-```python
-LLMRecommendationService.generate_recommendation()
-    ├─ Build context (forecast + inventory + trends)
-    ├─ Generate prompt with structured data
-    ├─ Call vLLM API (OpenAI-compatible, local)
-    ├─ Parse response
-    ├─ Extract structured action (increase/decrease/maintain)
-    └─ save_recommendation(to Database)
-        └─ Store in LLMRecommendation table
-```
-
-### 4. API Endpoints
-
-Interne Legacy-Endpunkte sind JWT-geschützt. Schreibende bzw. Import-Endpunkte sind zusätzlich auf Admin-Rolle begrenzt.
-
-```
-GET  /api/v1/dashboard/overview
-     └─ Aggregiert: Viruslast, Trends, ARE, Notaufnahme, SURVSTAT, Wetter
-
-GET  /api/v1/dashboard/timeseries/{virus}
-     └─ Historische Daten + Forecast
-
-GET  /api/v1/forecast/{virus}
-     └─ ML Prognose Details
-
-GET  /api/v1/forecast/regional/hero-overview
-     └─ Schneller 4-Virus-Hero: Snapshot-Rollup plus echte Wochenhistorie aus Markt-Backtests
-        und gespeicherter Forecast-Endpunkt für den nächsten Zielpunkt
-
-POST /api/v1/recommendations/generate
-     └─ Generiere LLM Empfehlung
-
-POST /api/v1/recommendations/{id}/approve
-     └─ Human Approval (ANNEx 22)
-
-POST /api/v1/ingest/run-all
-     └─ Manueller Vollimport aller Datenquellen
-
-POST /api/v1/ingest/notaufnahme
-     └─ Notaufnahmesurveillance Import (RKI/AKTIN)
-
-POST /api/v1/ingest/survstat-local
-     └─ Lokaler SURVSTAT Wochenimport (manuell)
-
-POST /api/v1/calibration/simulate-market
-     └─ Twin-Mode Markt-Check (RKI_ARE oder SURVSTAT Targets)
-```
+So wird vermieden, dass:
+- Rohsignal und Business-Entscheidung vermischt werden
+- Prognose und Fakt verwechselt werden
+- die Oberflaeche schwere Rechenpfade dauernd live neu ausloest
 
 ---
 
-## 🗄️ Datenbankschema
+## Weiterfuehrende Dokumente
 
-### Zeitreihen-Tabellen (TimescaleDB Hypertables)
-
-**wastewater_data** (Einzelstandorte)
-- `id`, `standort`, `bundesland`, `datum`, `virus_typ`
-- `viruslast`, `viruslast_normalisiert`, `vorhersage`
-- `obere_schranke`, `untere_schranke`, `einwohner`
-- Index: (datum, virus_typ), (standort, bundesland)
-
-**wastewater_aggregated** (Bundesweit)
-- `id`, `datum`, `virus_typ`, `n_standorte`, `anteil_bev`
-- `viruslast`, `viruslast_normalisiert`, `vorhersage`
-- Index: (datum, virus_typ)
-
-**google_trends_data**
-- `id`, `datum`, `keyword`, `region`, `interest_score`
-- Index: (datum, keyword)
-
-**weather_data**
-- `id`, `datum`, `city`, `temperatur`, `luftfeuchtigkeit`
-- `luftdruck`, `wetter_beschreibung`
-- Index: (datum, city)
-
-**grippeweb_data**
-- `id`, `datum`, `kalenderwoche`, `erkrankung_typ`
-- `altersgruppe`, `bundesland`, `inzidenz`
-- Index: (datum, erkrankung_typ)
-
-**notaufnahme_syndrome_data**
-- `id`, `datum`, `ed_type`, `age_group`, `syndrome`
-- `relative_cases`, `relative_cases_7day_ma`, `expected_value`
-- `expected_lowerbound`, `expected_upperbound`, `ed_count`
-- Index: (datum, syndrome), (syndrome, ed_type, age_group)
-
-**notaufnahme_standorte**
-- `id`, `ik_number`, `ed_name`, `ed_type`, `level_of_care`
-- `state`, `state_id`, `latitude`, `longitude`
-- Index: (ik_number), (state, ed_type)
-
-**survstat_weekly_data**
-- `id`, `week_label`, `week_start`, `year`, `week`
-- `bundesland`, `disease`, `incidence`, `source_file`
-- Index: (week_label, bundesland), (disease, week_start)
-
-### ML & LLM Tabellen
-
-**ml_forecasts**
-- `id`, `created_at`, `forecast_date`, `virus_typ`
-- `predicted_value`, `lower_bound`, `upper_bound`
-- `confidence`, `model_version`, `features_used` (JSON)
-
-**llm_recommendations**
-- `id`, `recommendation_text`, `context_data` (JSON)
-- `suggested_action` (JSON), `confidence_score`
-- `approved`, `approved_by`, `approved_at`
-- `modified_action` (JSON)
-- Foreign Key → `ml_forecasts(id)`
-
-**audit_logs** (ANNEx 22 Compliance)
-- `id`, `timestamp`, `user`, `action`
-- `entity_type`, `entity_id`, `old_value`, `new_value`
-- `reason`, `ip_address`
-
----
-
-## 🤖 ML Model Details
-
-### Prophet Configuration
-
-```python
-model = Prophet(
-    daily_seasonality=True,      # Tägliche Muster
-    weekly_seasonality=True,     # Wochenmuster (Wochenende)
-    yearly_seasonality=True,     # Saisonale Grippe-Wellen
-    changepoint_prior_scale=0.05, # Flexibilität für Trend-Änderungen
-    interval_width=0.95          # 95% Konfidenzintervall
-)
-
-# Regressoren
-model.add_regressor('trends_score')        # Google Trends
-model.add_regressor('are_inzidenz')        # GrippeWeb ARE
-model.add_regressor('temperatur')          # Wetter
-model.add_regressor('luftfeuchtigkeit')
-model.add_regressor('schulferien')         # Binär
-model.add_regressor('viruslast_lag7')      # Autoregressive
-model.add_regressor('viruslast_lag14')
-model.add_regressor('trends_ma7')          # Moving Average
-```
-
-### Feature Engineering
-
-**Lag Features:**
-- `viruslast_lag7`: Viruslast vor 7 Tagen
-- `viruslast_lag14`: Viruslast vor 14 Tagen
-
-**Moving Averages:**
-- `viruslast_ma7`: 7-Tage-Durchschnitt
-- `trends_ma7`: Trends 7-Tage-Durchschnitt
-
-**Binary Features:**
-- `schulferien`: 1 wenn Ferien, sonst 0
-
-**Normalization:**
-- Temperatur: -10°C bis 40°C
-- Luftfeuchtigkeit: 0-100%
-- Trends: 0-100
-
----
-
-## 🔐 Security & Compliance
-
-### ANNEx 22 Compliance
-
-**Transparency:**
-- Alle ML-Entscheidungen sind erklärbar
-- Feature Importance wird gespeichert
-- Model Version Tracking
-
-**Human Oversight:**
-- Keine automatischen Bestellungen
-- Alle Empfehlungen müssen approved werden
-- User kann Empfehlung modifizieren
-
-**Audit Trail:**
-- Vollständige Protokollierung in `audit_logs`
-- Who, What, When, Why
-- Unveränderbar (Append-Only)
-
-**Data Privacy:**
-- DSGVO-konform
-- Lokale Verarbeitung (kein Cloud-LLM)
-- vLLM läuft lokal auf eigenem Server
-
-**API Access Controls:**
-- Interne Dashboard-, Inventory-, Recommendation-, Map-, Ordering- und Data-Import-Endpunkte erfordern JWT-Authentifizierung
-- Schreibende/administrative Aktionen erfordern Admin-Rolle
-- `/api/v1/outbreak-score/peix-score` liefert öffentlich nur noch eine Landing-geeignete Kurzfassung ohne interne Modell-Details
-- `/api/v1/outbreak-score/peix-score/full` erfordert Authentifizierung für die vollständige Score-Ansicht
-- Der mutierende CRM-Export läuft als `POST /api/v1/marketing/export/crm`, nicht mehr als schreibendes `GET`
-
-**Login Protection:**
-- `/api/auth/login` ist rate-limitiert
-- Nach 5 Fehlversuchen wird der Login-Key für 15 Minuten gesperrt
-- Erfolgreicher Login setzt zusätzlich ein `httpOnly` Session-Cookie für Browser-Sessions
-- Das Frontend speichert kein lesbares JWT mehr in `localStorage` oder `sessionStorage`
-
-**Session Flow:**
-- Browser-Requests laufen standardmäßig mit Cookie-Credentials
-- `/api/auth/login` bestätigt Browser-Logins über Session-Status statt ein lesbares JWT im Response-Body zurückzugeben
-- `/api/auth/session` prüft nach Reloads, ob noch eine gültige Session existiert, und liefert anonymen Browsern ruhig `authenticated: false`
-- `/api/auth/logout` widerruft neue Sessions serverseitig über die bestehende Audit-Log-Infrastruktur
-- `/api/auth/logout` löscht das Session-Cookie serverseitig aus dem Browser-Kontext
-
----
-
-## 📈 Performance Optimizations
-
-### Database
-- TimescaleDB Hypertables für Zeitreihen
-- Chunk Size: 7 days
-- Compression nach 30 Tagen
-- Indexes auf häufige Queries
-
-### API
-- Connection Pooling (SQLAlchemy)
-- Async Endpoints (FastAPI)
-- Rate Limiting (100 req/min)
-- Caching (TTL: 1 hour)
-
-### Frontend
-- Code Splitting (React.lazy)
-- SWR für Data Fetching (Auto-Revalidate)
-- Memoization (useMemo, useCallback)
-- Production Build Optimierung
-
----
-
-## 🚀 Deployment Architecture
-
-### Production Setup (Hetzner)
-
-```
-Internet
-    │
-    v
-┌───────────────┐
-│    Nginx      │  Port 80/443 (SSL)
-│ Reverse Proxy │
-└───────┬───────┘
-        │
-        ├──────────────────┐
-        │                  │
-        v                  v
-┌──────────────┐   ┌──────────────┐
-│   Frontend   │   │   Backend    │
-│  (React)     │   │  (FastAPI)   │
-│  Port 3000   │   │  Port 8000   │
-└──────────────┘   └───────┬──────┘
-                           │
-                           v
-                   ┌───────────────┐
-                   │  PostgreSQL   │
-                   │ + TimescaleDB │
-                   │  Port 5432    │
-                   └───────────────┘
-
-┌──────────────────────┐
-│  vLLM (lokal)        │
-│  eigener Endpoint    │
-│  z. B. host.docker.  │
-│  internal:8001/v1    │
-└──────────────────────┘
-```
-
-### Docker Compose Services
-
-1. **db** (TimescaleDB)
-   - Image: `timescale/timescaledb:latest-pg15`
-   - Volume: `postgres_data`
-   - Health Check: `pg_isready`
-
-2. **backend** (FastAPI)
-   - Build: `Dockerfile.backend`
-   - Depends: db
-   - Environment: .env
-   - Restart: always
-
-3. **frontend** (React)
-   - Development Build: `Dockerfile.frontend.dev`
-   - Production Build: `Dockerfile.frontend`
-   - Depends: backend
-   - Node-Dev-Server für Entwicklung, statischer Build mit nginx für Produktion
-
-4. **nginx** (Reverse Proxy)
-   - Profile: production
-   - SSL/TLS Termination
-   - Rate Limiting
-   - Gzip Compression
-
----
-
-## 🔄 Data Update Schedule
-
-```
-┌─────────────────────────────────────────┐
-│        Automatisierte Updates           │
-├─────────────────────────────────────────┤
-│  06:00  RKI AMELAG Import               │
-│  06:10  RKI GrippeWeb Import            │
-│  06:15  RKI/AKTIN Notaufnahme Import    │
-│  06:20  Google Trends Import            │
-│  06:30  Weather Update                  │
-│  07:00  XGBoost Training                │
-│  07:10  Regional Model Training         │
-│  07:30  Live Forecast Refresh           │
-│  07:40  Market Backtest Refresh         │
-│  07:50  Forecast Accuracy Check         │
-│  08:00  Regional Snapshot Refresh       │
-│  08:10  Marketing Opportunities         │
-│  03:00  Database Backup                 │
-│  Alle 3h  Weather Update (Forecast)     │
-└─────────────────────────────────────────┘
-```
-
----
-
-## 📊 Monitoring & Logging
-
-### Health Checks
-- `/health` → Database + API Status
-- `/api/v1/status` → Data Freshness (nur authentifiziert)
-
-### Logging
-- Format: JSON (structured)
-- Level: INFO (Production), DEBUG (Development)
-- Storage: Docker volumes
-- Rotation: Daily
-
-### Metrics (geplant)
-- Prometheus Client
-- Grafana Dashboards
-- Alerting via Email/Slack
-
----
-
-**Made with ❤️ for smarter healthcare decisions**
+- [README.md](README.md)
+- [QUICKSTART.md](QUICKSTART.md)
+- [DEPLOY.md](DEPLOY.md)
+- [docs/OPERATORS_GUIDE.md](docs/OPERATORS_GUIDE.md)
+- [docs/forecast_probability_stack.md](docs/forecast_probability_stack.md)
+- [docs/forecast_world_class_architecture.md](docs/forecast_world_class_architecture.md)

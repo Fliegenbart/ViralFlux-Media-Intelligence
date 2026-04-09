@@ -139,60 +139,64 @@ class PitchGenerator:
         }
 
     def _generate_llm_pitch(self, *, opportunity_type: str, context: dict) -> dict | None:
-        brand = str(context.get("brand") or "Gelo")
-        product = str(context.get("product") or context.get("_article_id") or "Gelo Produkt")
-        region = str((context.get("region_target") or {}).get("plz_cluster") or "DE")
-        condition_key = str(context.get("_condition") or "erkaltung_akut")
+        try:
+            brand = str(context.get("brand") or "Gelo")
+            product = str(context.get("product") or context.get("_article_id") or "Gelo Produkt")
+            region = str((context.get("region_target") or {}).get("plz_cluster") or "DE")
+            condition_key = str(context.get("_condition") or "erkaltung_akut")
 
-        pack = select_gelo_message_pack(
-            brand=brand,
-            product=product,
-            condition_key=condition_key,
-            playbook_key=None,
-            region_code=None,
-            trigger_event=str((context.get("trigger_context") or {}).get("event") or ""),
-        )
-        hints = pack.to_prompt_hints()
+            pack = select_gelo_message_pack(
+                brand=brand,
+                product=product,
+                condition_key=condition_key,
+                playbook_key=None,
+                region_code=None,
+                trigger_event=str((context.get("trigger_context") or {}).get("event") or ""),
+            )
+            hints = pack.to_prompt_hints()
 
-        prompt = (
-            "Erstelle einen kurzen Marketing-Pitch für ein OTC-Produkt (Gelo) für den deutschen Markt.\n"
-            "Hard Rules (HWG): Keine Heilversprechen, keine Garantien, keine Nebenwirkungsfreiheit.\n"
-            "Output: NUR valides JSON (eine Zeile, ohne Markdown) mit Keys:\n"
-            '- "headline_email" (max 120 Zeichen),\n'
-            '- "script_phone" (max 420 Zeichen),\n'
-            '- "call_to_action" (max 60 Zeichen).\n'
-            "Sprache: Deutsch. Konservativ und professionell.\n\n"
-            f"Opportunity-Type: {opportunity_type}\n"
-            f"Region/Context: {json.dumps(context, ensure_ascii=True)}\n"
-            f"Copy-Hints (deterministisch, nicht erfinden): {json.dumps(hints, ensure_ascii=True)}\n"
-        )
+            prompt = (
+                "Erstelle einen kurzen Marketing-Pitch für ein OTC-Produkt (Gelo) für den deutschen Markt.\n"
+                "Hard Rules (HWG): Keine Heilversprechen, keine Garantien, keine Nebenwirkungsfreiheit.\n"
+                "Output: NUR valides JSON (eine Zeile, ohne Markdown) mit Keys:\n"
+                '- "headline_email" (max 120 Zeichen),\n'
+                '- "script_phone" (max 420 Zeichen),\n'
+                '- "call_to_action" (max 60 Zeichen).\n'
+                "Sprache: Deutsch. Konservativ und professionell.\n\n"
+                f"Opportunity-Type: {opportunity_type}\n"
+                f"Region/Context: {json.dumps(context, ensure_ascii=True)}\n"
+                f"Copy-Hints (deterministisch, nicht erfinden): {json.dumps(hints, ensure_ascii=True)}\n"
+            )
 
-        messages = [
-            {"role": "system", "content": HWG_SYSTEM_PROMPT},
-            {"role": "user", "content": prompt},
-        ]
+            messages = [
+                {"role": "system", "content": HWG_SYSTEM_PROMPT},
+                {"role": "user", "content": prompt},
+            ]
 
-        raw = generate_text_sync(messages=messages, temperature=0.2)
-        pitch = _parse_json_response(raw)
-        if not pitch:
+            raw = generate_text_sync(messages=messages, temperature=0.2)
+            pitch = _parse_json_response(raw)
+            if not pitch:
+                return None
+
+            headline = str(pitch.get("headline_email") or "").strip()
+            script = str(pitch.get("script_phone") or "").strip()
+            cta = str(pitch.get("call_to_action") or "").strip()
+            if not headline or not script or not cta:
+                return None
+
+            combined = f"{headline}\n{script}\n{cta}"
+            if not check_hwg_compliance(combined):
+                logger.warning("HWG blockiert LLM Pitch (type=%s)", opportunity_type)
+                return None
+
+            return {
+                "headline_email": headline,
+                "script_phone": script,
+                "call_to_action": cta,
+            }
+        except Exception as exc:
+            logger.warning("LLM Pitch fehlgeschlagen, deterministic fallback aktiv: %s", exc)
             return None
-
-        headline = str(pitch.get("headline_email") or "").strip()
-        script = str(pitch.get("script_phone") or "").strip()
-        cta = str(pitch.get("call_to_action") or "").strip()
-        if not headline or not script or not cta:
-            return None
-
-        combined = f"{headline}\n{script}\n{cta}"
-        if not check_hwg_compliance(combined):
-            logger.warning("HWG blockiert LLM Pitch (type=%s)", opportunity_type)
-            return None
-
-        return {
-            "headline_email": headline,
-            "script_phone": script,
-            "call_to_action": cta,
-        }
 
     def _generate_resource_scarcity(self, ctx: dict) -> dict:
         region = str((ctx.get("region_target") or {}).get("plz_cluster") or "Deutschland")

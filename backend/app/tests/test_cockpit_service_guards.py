@@ -1,10 +1,18 @@
 import unittest
 from datetime import datetime, timedelta
+from unittest.mock import patch
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from app.models.database import Base, WastewaterData
+from app.models.database import (
+    AREKonsultation,
+    Base,
+    GoogleTrendsData,
+    NotaufnahmeSyndromData,
+    WastewaterData,
+    WeatherData,
+)
 from app.services.media.cockpit_service import MediaCockpitService
 
 
@@ -180,6 +188,108 @@ class CockpitMapSectionContractTests(unittest.TestCase):
         self.assertIn("BE", payload["regions"])
         self.assertEqual(payload["regions"]["BE"]["avg_viruslast"], 0.0)
         self.assertTrue(any(item["region"] == "SH" for item in payload["activation_suggestions"]))
+
+
+class CockpitBentoSectionContractTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.engine = create_engine("sqlite:///:memory:")
+        TestingSessionLocal = sessionmaker(bind=self.engine)
+        Base.metadata.create_all(bind=self.engine)
+        self.db = TestingSessionLocal()
+        self.service = MediaCockpitService(self.db)
+
+    def tearDown(self) -> None:
+        self.db.close()
+        Base.metadata.drop_all(bind=self.engine)
+        self.engine.dispose()
+
+    def test_bento_section_exposes_tiles_with_live_status_and_top_region(self) -> None:
+        current_date = datetime(2026, 3, 10)
+        self.db.add_all([
+            AREKonsultation(
+                datum=current_date,
+                available_time=current_date,
+                kalenderwoche=11,
+                saison="2025/2026",
+                altersgruppe="00+",
+                bundesland="Bundesweit",
+                konsultationsinzidenz=2400,
+            ),
+            NotaufnahmeSyndromData(
+                datum=current_date,
+                ed_type="all",
+                age_group="00+",
+                syndrome="ILI",
+                relative_cases=8.2,
+                relative_cases_7day_ma=9.1,
+            ),
+            GoogleTrendsData(
+                datum=current_date,
+                available_time=current_date,
+                keyword="influenza",
+                region="DE",
+                interest_score=64,
+            ),
+            WeatherData(
+                datum=current_date,
+                available_time=current_date,
+                city="Berlin",
+                temperatur=4.0,
+                luftfeuchtigkeit=82.0,
+                uv_index=1.0,
+            ),
+        ])
+        self.db.commit()
+
+        source_status = {
+            "items": [
+                {"source_key": "wastewater", "is_live": True, "last_updated": current_date.isoformat()},
+                {"source_key": "bfarm_shortage", "is_live": False, "last_updated": None},
+            ],
+        }
+
+        with patch(
+            "app.services.media.cockpit.bento_section.get_cached_signals",
+            return_value={"current_risk_score": 55.0, "wave_type": "Versorgungslage"},
+        ):
+            payload = self.service._bento_section(
+                virus_typ="Influenza A",
+                map_section={
+                    "max_viruslast": 180000.0,
+                    "top_regions": [
+                        {"name": "Schleswig-Holstein", "signal_score": 68.0},
+                    ],
+                },
+                peix_score={"national_score": 72.0, "national_band": "high"},
+                source_status=source_status,
+            )
+
+        self.assertEqual(payload["count"], 10)
+        tiles_by_id = {tile["id"]: tile for tile in payload["tiles"]}
+        self.assertEqual(tiles_by_id["map_top_region"]["value"], "Schleswig-Holstein")
+        self.assertTrue(tiles_by_id["map_top_region"]["is_live"])
+        self.assertEqual(tiles_by_id["map_top_region"]["last_updated"], current_date.isoformat())
+        self.assertEqual(tiles_by_id["bfarm"]["subtitle"], "Versorgungslage")
+
+    def test_bento_section_keeps_pollen_tile_as_stale_fallback_without_recent_pollen_data(self) -> None:
+        current_date = datetime(2026, 3, 10)
+        source_status = {"items": [{"source_key": "pollen", "is_live": False, "last_updated": None}]}
+
+        with patch(
+            "app.services.media.cockpit.bento_section.get_cached_signals",
+            return_value={},
+        ):
+            payload = self.service._bento_section(
+                virus_typ="Influenza A",
+                map_section={"max_viruslast": 0.0, "top_regions": []},
+                peix_score={"national_score": 0.0, "national_band": "low"},
+                source_status=source_status,
+            )
+
+        pollen_tile = next(tile for tile in payload["tiles"] if tile["id"] == "pollen")
+        self.assertEqual(pollen_tile["product_scope"], "GeloSitin")
+        self.assertIn("Saison-Pause", pollen_tile["subtitle"])
+        self.assertFalse(pollen_tile["is_live"])
 
 
 if __name__ == "__main__":

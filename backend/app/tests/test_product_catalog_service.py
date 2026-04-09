@@ -111,6 +111,66 @@ class ProductCatalogServiceTests(unittest.TestCase):
         self.assertEqual(result["condition_key"], "bronchitis_husten")
         self.assertEqual(result["rule_source"], "auto")
 
+    def test_resolve_product_for_opportunity_respects_service_override(self) -> None:
+        class OverrideCatalogService(ProductCatalogService):
+            def _best_mapping(self, brand_key: str, condition_key: str, *, approved_only: bool):
+                if approved_only:
+                    return {
+                        "product_name": "Override Produkt",
+                        "fit_score": 0.77,
+                        "mapping_reason": "Override aktiv.",
+                        "is_approved": True,
+                        "priority": 777,
+                        "rule_source": "override",
+                    }
+                return None
+
+        service = OverrideCatalogService(self.db)
+
+        result = service.resolve_product_for_opportunity(
+            brand="gelo",
+            opportunity={"type": "RESOURCE_SCARCITY"},
+        )
+
+        self.assertEqual(result["mapping_status"], "approved")
+        self.assertEqual(result["recommended_product"], "Override Produkt")
+        self.assertEqual(result["mapping_reason"], "Override aktiv.")
+        self.assertEqual(result["rule_source"], "override")
+
+    def test_upsert_auto_mappings_respects_service_override_for_candidates(self) -> None:
+        class OverrideCatalogService(ProductCatalogService):
+            def _derive_condition_candidates(self, *, product_name: str, text_blob: str):
+                return [
+                    {
+                        "condition_key": "halsschmerz_heiserkeit",
+                        "fit_score": 0.88,
+                        "mapping_reason": "Override Kandidat.",
+                        "priority": 88,
+                    }
+                ]
+
+        service = OverrideCatalogService(self.db)
+        product = BrandProduct(
+            brand="gelo",
+            product_name="Beliebiges Produkt",
+            source_url="https://example.test/gelo",
+            source_hash="hash-3",
+            active=True,
+        )
+        self.db.add(product)
+        self.db.commit()
+
+        result = service._upsert_auto_mappings(
+            brand="gelo",
+            product=product,
+            text_blob="Text ohne Standardsignal",
+            reset_approval=True,
+        )
+
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["condition_key"], "halsschmerz_heiserkeit")
+        self.assertEqual(result[0]["mapping_reason"], "Override Kandidat.")
+
 
 if __name__ == "__main__":
     unittest.main()

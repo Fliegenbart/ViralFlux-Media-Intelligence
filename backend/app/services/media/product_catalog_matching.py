@@ -141,8 +141,8 @@ def resolve_product_for_opportunity(
 ) -> dict[str, Any]:
     """Liefert Produkt-Mapping für eine Opportunity (nur approved produktiv)."""
     brand_key = service._normalize_brand(brand)
-    condition_key = infer_condition_from_opportunity(opportunity)
-    pediatric_context = _is_pediatric_context(opportunity)
+    condition_key = service.infer_condition_from_opportunity(opportunity)
+    pediatric_context = service._is_pediatric_context(opportunity)
 
     if brand_key != "gelo":
         return {
@@ -151,13 +151,12 @@ def resolve_product_for_opportunity(
             "mapping_confidence": None,
             "mapping_reason": "Produkt-Mapping nur für Gelo-Brand aktiviert.",
             "condition_key": condition_key,
-            "condition_label": condition_label(condition_key),
+            "condition_label": service.condition_label(condition_key),
             "candidate_product": None,
             "rule_source": None,
         }
 
-    preferred_hard = _preferred_hard_rule_mapping(
-        service,
+    preferred_hard = service._preferred_hard_rule_mapping(
         brand_key=brand_key,
         condition_key=condition_key,
         pediatric_context=pediatric_context,
@@ -169,12 +168,12 @@ def resolve_product_for_opportunity(
             "mapping_confidence": preferred_hard["fit_score"],
             "mapping_reason": preferred_hard["mapping_reason"] or "Hard Rule aktiv.",
             "condition_key": condition_key,
-            "condition_label": condition_label(condition_key),
+            "condition_label": service.condition_label(condition_key),
             "candidate_product": preferred_hard["product_name"],
             "rule_source": preferred_hard.get("rule_source", "hard_rule"),
         }
 
-    approved = _best_mapping(service, brand_key, condition_key, approved_only=True)
+    approved = service._best_mapping(brand_key, condition_key, approved_only=True)
     if approved:
         return {
             "recommended_product": approved["product_name"],
@@ -182,12 +181,12 @@ def resolve_product_for_opportunity(
             "mapping_confidence": approved["fit_score"],
             "mapping_reason": approved["mapping_reason"] or "Freigegebenes Mapping.",
             "condition_key": condition_key,
-            "condition_label": condition_label(condition_key),
+            "condition_label": service.condition_label(condition_key),
             "candidate_product": approved["product_name"],
             "rule_source": approved.get("rule_source", "auto"),
         }
 
-    candidate = _best_mapping(service, brand_key, condition_key, approved_only=False)
+    candidate = service._best_mapping(brand_key, condition_key, approved_only=False)
     if candidate:
         reason = (
             f"Zuordnung für {candidate['product_name']} vorhanden, "
@@ -206,7 +205,7 @@ def resolve_product_for_opportunity(
         "mapping_confidence": confidence,
         "mapping_reason": reason,
         "condition_key": condition_key,
-        "condition_label": condition_label(condition_key),
+        "condition_label": service.condition_label(condition_key),
         "candidate_product": candidate_product,
         "rule_source": candidate.get("rule_source") if candidate else None,
     }
@@ -344,8 +343,7 @@ def _upsert_auto_mappings(
     reset_approval: bool,
 ) -> list[dict[str, Any]]:
     now = utc_now()
-    candidates = _derive_condition_candidates(
-        service,
+    candidates = service._derive_condition_candidates(
         product_name=product.product_name,
         text_blob=text_blob,
     )
@@ -482,7 +480,7 @@ def _derive_condition_candidates(
     text_blob: str,
 ) -> list[dict[str, Any]]:
     text = (text_blob or "").lower()
-    scores = _condition_scores(text)
+    scores = service._condition_scores(text)
 
     normalized_name = service._normalize_name(product_name)
     for hinted in NAME_HINTS.get(normalized_name, []):

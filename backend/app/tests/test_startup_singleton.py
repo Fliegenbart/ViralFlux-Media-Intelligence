@@ -33,6 +33,11 @@ def _temporary_module_overrides(overrides: dict[str, ModuleType]):
 
 
 def _import_main_for_tests():
+    sentinel = object()
+    app_package = importlib.import_module("app")
+    previous_main_module = sys.modules.get("app.main", sentinel)
+    previous_main_attr = getattr(app_package, "main", sentinel)
+
     readiness_stub = ModuleType("app.services.ops.production_readiness_service")
     readiness_stub.ProductionReadinessService = type(
         "_StubProductionReadinessService",
@@ -50,7 +55,23 @@ def _import_main_for_tests():
         }
     ):
         sys.modules.pop("app.main", None)
-        return importlib.import_module("app.main")
+        if previous_main_attr is not sentinel and hasattr(app_package, "main"):
+            delattr(app_package, "main")
+
+        imported_main = importlib.import_module("app.main")
+
+    if previous_main_module is sentinel:
+        sys.modules.pop("app.main", None)
+    else:
+        sys.modules["app.main"] = previous_main_module
+
+    if previous_main_attr is sentinel:
+        if hasattr(app_package, "main"):
+            delattr(app_package, "main")
+    else:
+        setattr(app_package, "main", previous_main_attr)
+
+    return imported_main
 
 
 main = _import_main_for_tests()
@@ -92,6 +113,26 @@ class StartupSingletonTests(unittest.TestCase):
 
         sys.modules.pop("tests.original_module", None)
         sys.modules.pop("tests.late_loaded_module", None)
+
+    def test_import_main_for_tests_does_not_leave_app_main_in_global_import_cache(self) -> None:
+        app_package = importlib.import_module("app")
+        previous_module = sys.modules.pop("app.main", None)
+        previous_attr = getattr(app_package, "main", None)
+        had_attr = hasattr(app_package, "main")
+        if had_attr:
+            delattr(app_package, "main")
+
+        try:
+            isolated_main = _import_main_for_tests()
+
+            self.assertEqual(isolated_main.__name__, "app.main")
+            self.assertNotIn("app.main", sys.modules)
+            self.assertFalse(hasattr(app_package, "main"))
+        finally:
+            if previous_module is not None:
+                sys.modules["app.main"] = previous_module
+            if had_attr:
+                setattr(app_package, "main", previous_attr)
 
     def test_startup_event_skips_bfarm_import_when_flag_is_disabled(self) -> None:
         readiness_snapshot = {

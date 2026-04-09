@@ -13,6 +13,25 @@ os.environ.setdefault("ADMIN_EMAIL", "admin@example.com")
 os.environ.setdefault("ADMIN_PASSWORD", "very-strong-admin-password")
 
 
+@contextmanager
+def _temporary_module_overrides(overrides: dict[str, ModuleType]):
+    original_modules = {
+        name: sys.modules[name]
+        for name in overrides
+        if name in sys.modules
+    }
+    missing_modules = [name for name in overrides if name not in sys.modules]
+
+    sys.modules.update(overrides)
+    try:
+        yield
+    finally:
+        for name, module in original_modules.items():
+            sys.modules[name] = module
+        for name in missing_modules:
+            sys.modules.pop(name, None)
+
+
 def _import_main_for_tests():
     readiness_stub = ModuleType("app.services.ops.production_readiness_service")
     readiness_stub.ProductionReadinessService = type(
@@ -24,12 +43,11 @@ def _import_main_for_tests():
     xgboost_stub.XGBClassifier = object
     xgboost_stub.XGBRegressor = object
 
-    with patch.dict(
-        sys.modules,
+    with _temporary_module_overrides(
         {
             "app.services.ops.production_readiness_service": readiness_stub,
             "xgboost": xgboost_stub,
-        },
+        }
     ):
         sys.modules.pop("app.main", None)
         return importlib.import_module("app.main")
@@ -49,6 +67,32 @@ def _db_context(db: object):
 
 
 class StartupSingletonTests(unittest.TestCase):
+    def test_temporary_module_overrides_restore_only_stubbed_modules(self) -> None:
+        original_module = ModuleType("tests.original_module")
+        replacement_module = ModuleType("tests.original_module")
+        stubbed_module = ModuleType("tests.stubbed_module")
+        late_loaded_module = ModuleType("tests.late_loaded_module")
+        sys.modules["tests.original_module"] = original_module
+        sys.modules.pop("tests.stubbed_module", None)
+        sys.modules.pop("tests.late_loaded_module", None)
+
+        with _temporary_module_overrides(
+            {
+                "tests.original_module": replacement_module,
+                "tests.stubbed_module": stubbed_module,
+            }
+        ):
+            self.assertIs(sys.modules["tests.original_module"], replacement_module)
+            self.assertIs(sys.modules["tests.stubbed_module"], stubbed_module)
+            sys.modules["tests.late_loaded_module"] = late_loaded_module
+
+        self.assertIs(sys.modules["tests.original_module"], original_module)
+        self.assertNotIn("tests.stubbed_module", sys.modules)
+        self.assertIs(sys.modules["tests.late_loaded_module"], late_loaded_module)
+
+        sys.modules.pop("tests.original_module", None)
+        sys.modules.pop("tests.late_loaded_module", None)
+
     def test_startup_event_skips_bfarm_import_when_flag_is_disabled(self) -> None:
         readiness_snapshot = {
             "status": "healthy",

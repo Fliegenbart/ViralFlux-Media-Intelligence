@@ -213,8 +213,6 @@ async def generate_recommendations(
                     {"role": "user", "content": user_prompt},
                 ]
                 llm_text = await generate_text(messages=messages, temperature=0.3)
-                if llm_text.startswith("FEHLER:"):
-                    raise RuntimeError(llm_text)
 
                 rec = dict(base)
                 rec["recommendation_text"] = llm_text

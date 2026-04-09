@@ -1,4 +1,5 @@
 import unittest
+import types
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -192,6 +193,28 @@ class BacktesterMathTests(unittest.TestCase):
         self.assertFalse(failed["error_passed"])
         self.assertFalse(failed["lead_passed"])
         self.assertFalse(failed["overall_passed"])
+
+    def test_generate_llm_insight_falls_back_when_vllm_raises(self) -> None:
+        service = BacktestService(db=None)
+        llm_stub = types.ModuleType("app.services.llm.vllm_service")
+
+        def _raise_runtime_error(*_args, **_kwargs):
+            raise RuntimeError("Local vLLM endpoint is unavailable.")
+
+        llm_stub.generate_text_sync = _raise_runtime_error
+
+        with patch.dict("sys.modules", {"app.services.llm.vllm_service": llm_stub}):
+            text = service._generate_llm_insight(
+                weights={"bio": 0.5, "market": 0.2, "psycho": 0.2, "context": 0.1},
+                r2=0.81,
+                correlation=0.74,
+                mae=12.0,
+                n_samples=12,
+                virus_typ="RSV A",
+            )
+
+        self.assertIn("Die Analyse von 12 Datenpunkten", text)
+        self.assertIn("Wir empfehlen, das Modell", text)
 
     def test_best_bio_lag_prefers_positive_alignment_over_stronger_negative(self) -> None:
         service = BacktestService(db=None)

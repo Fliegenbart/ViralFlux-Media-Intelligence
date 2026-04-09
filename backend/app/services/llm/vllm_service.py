@@ -38,9 +38,9 @@ async def generate_text(messages: list[dict], temperature: float = 0.2) -> str:
             temperature=temperature,
         )
         return response.choices[0].message.content
-    except Exception as e:
-        logger.error(f"VLLM Connection Error: {str(e)}")
-        return "FEHLER: Der lokale KI-Server antwortet nicht."
+    except Exception as exc:
+        logger.exception("VLLM connection error")
+        raise RuntimeError("Local vLLM endpoint is unavailable.") from exc
 
 
 def generate_text_sync(messages: list[dict], temperature: float = 0.2) -> str:
@@ -52,9 +52,9 @@ def generate_text_sync(messages: list[dict], temperature: float = 0.2) -> str:
             temperature=temperature,
         )
         return response.choices[0].message.content
-    except Exception as e:
-        logger.error(f"VLLM Connection Error: {str(e)}")
-        return "FEHLER: Der lokale KI-Server antwortet nicht."
+    except Exception as exc:
+        logger.exception("VLLM connection error")
+        raise RuntimeError("Local vLLM endpoint is unavailable.") from exc
 
 
 async def generate_vision(
@@ -87,9 +87,9 @@ async def generate_vision(
             temperature=temperature,
         )
         return response.choices[0].message.content
-    except Exception as e:
-        logger.error(f"VLLM Vision Error: {str(e)}")
-        return "FEHLER: Bild konnte nicht lokal verarbeitet werden."
+    except Exception as exc:
+        logger.exception("VLLM vision error")
+        raise RuntimeError("Local vLLM endpoint is unavailable.") from exc
 
 
 def generate_vision_sync(
@@ -122,6 +122,6 @@ def generate_vision_sync(
             temperature=temperature,
         )
         return response.choices[0].message.content
-    except Exception as e:
-        logger.error(f"VLLM Vision Error: {str(e)}")
-        return "FEHLER: Bild konnte nicht lokal verarbeitet werden."
+    except Exception as exc:
+        logger.exception("VLLM vision error")
+        raise RuntimeError("Local vLLM endpoint is unavailable.") from exc

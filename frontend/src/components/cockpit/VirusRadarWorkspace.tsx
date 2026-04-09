@@ -249,8 +249,6 @@ const VirusRadarWorkspace: React.FC<Props> = ({
   return (
     <div className="page-stack virus-radar-page">
       <OperatorSection
-        title="Virus-Radar"
-        description="Eine zentrale Entscheidungsseite für Media. Was jetzt wichtig ist, wo gehandelt werden sollte und welche Risiken oder Blocker noch sichtbar bleiben."
         tone="accent"
         className="virus-radar-shell"
       >

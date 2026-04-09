@@ -6,7 +6,7 @@ import pandas as pd
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from app.models.database import Base
+from app.models.database import BacktestPoint, BacktestRun, Base, MLForecast
 from app.services.media.truth_layer_contracts import OutcomeObservationInput
 from app.services.media.truth_layer_service import TruthLayerService
 from app.services.ml.experimental_geo_forecast import ExperimentalGeoForecastService
@@ -1315,6 +1315,65 @@ class RegionalTruthLayerIntegrationTests(unittest.TestCase):
         self.assertEqual(first["budget_release_recommendation"], "release")
         self.assertEqual(first["truth_assessments"][0]["product"], "GeloMyrtol forte")
         self.assertEqual(result["truth_layer"]["spend_gate_status_counts"]["released"], 1)
+
+    def test_build_hero_overview_includes_historical_and_forecast_timeseries(self) -> None:
+        self.db.add(
+            BacktestRun(
+                run_id="bt_influenza_a",
+                mode="MARKET_CHECK",
+                status="success",
+                virus_typ="Influenza A",
+                target_source="RKI_ARE",
+                target_key="RKI_ARE",
+                target_label="RKI ARE",
+            )
+        )
+        self.db.add_all(
+            [
+                BacktestPoint(run_id="bt_influenza_a", date=datetime(2026, 3, 11), real_qty=920.0),
+                BacktestPoint(run_id="bt_influenza_a", date=datetime(2026, 3, 18), real_qty=1040.0),
+                BacktestPoint(run_id="bt_influenza_a", date=datetime(2026, 3, 25), real_qty=1000.0),
+                MLForecast(
+                    virus_typ="Influenza A",
+                    region="DE",
+                    horizon_days=7,
+                    forecast_date=datetime(2026, 4, 1),
+                    predicted_value=1180.0,
+                ),
+            ]
+        )
+        self.db.commit()
+
+        service = RegionalForecastService(db=self.db)
+        service.snapshot_store.latest_scope_snapshots = lambda **kwargs: {
+            ("Influenza A", 7): {
+                "top_region": "BW",
+                "top_region_name": "Baden-Württemberg",
+                "top_event_probability": 0.74,
+                "top_change_pct": 18.0,
+                "top_trend": "steigend",
+                "quality_gate": {"overall_passed": True},
+                "business_gate": {"action_class": "prepare"},
+                "forecast_as_of_date": "2026-03-25",
+            }
+        }
+
+        result = service.build_hero_overview(horizon_days=7, reference_virus="Influenza A")
+
+        self.assertEqual(result["virus_rollup"][0]["virus_typ"], "Influenza A")
+        self.assertIn("hero_timeseries", result)
+        self.assertEqual(len(result["hero_timeseries"]), 1)
+        series = result["hero_timeseries"][0]
+        self.assertEqual(series["virus_typ"], "Influenza A")
+        self.assertEqual(
+            series["points"],
+            [
+                {"date": "2026-03-11", "actual_value": 920.0},
+                {"date": "2026-03-18", "actual_value": 1040.0},
+                {"date": "2026-03-25", "actual_value": 1000.0},
+                {"date": "2026-04-01", "forecast_value": 1180.0},
+            ],
+        )
 
 
 class RegionalCampaignRecommendationIntegrationTests(unittest.TestCase):

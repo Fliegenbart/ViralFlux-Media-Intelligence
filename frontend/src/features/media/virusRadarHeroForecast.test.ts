@@ -25,13 +25,22 @@ function buildPortfolioRollup(
       top_region_name: entry.top_region_name || entry.virus_typ,
       top_change_pct: entry.top_change_pct,
     })),
+    hero_timeseries: values.map((entry, index) => ({
+      virus_typ: entry.virus_typ,
+      run_id: `run-${index + 1}`,
+      points: [
+        { date: '2026-03-18', actual_value: 82 + (index * 4) },
+        { date: '2026-03-25', actual_value: 100 },
+        { date: '2026-04-01', forecast_value: 100 * (1 + entry.top_change_pct / 100) },
+      ],
+    })),
     region_rollup: [],
     top_opportunities: [],
   };
 }
 
 describe('buildVirusRadarHeroForecastData', () => {
-  it('builds a shared 7-day comparison from the portfolio rollup and ranks the strongest outlook first', () => {
+  it('builds a shared history-plus-forecast comparison from hero timeseries and ranks the strongest outlook first', () => {
     const result = buildVirusRadarHeroForecastData(
       buildPortfolioRollup([
         { virus_typ: 'Influenza A', top_change_pct: 8, top_region_name: 'Berlin' },
@@ -43,14 +52,12 @@ describe('buildVirusRadarHeroForecastData', () => {
     );
 
     expect(result.availableViruses).toEqual(VIRUS_RADAR_HERO_VIRUSES);
-    expect(result.chartData).toHaveLength(8);
-    expect(result.chartData[0].date).toBe('2026-04-08');
-    expect(result.chartData[0].series['Influenza A']).toBe(100);
-    expect(result.chartData[0].series['Influenza B']).toBe(100);
-    expect(result.chartData[0].series['SARS-CoV-2']).toBe(100);
-    expect(result.chartData[0].series['RSV A']).toBe(100);
-    expect(result.chartData[7].date).toBe('2026-04-15');
-    expect(result.chartData[7].series['RSV A']).toBe(145);
+    expect(result.chartData).toHaveLength(3);
+    expect(result.chartData[0].date).toBe('2026-03-18');
+    expect(result.chartData[1].actualSeries['Influenza A']).toBe(100);
+    expect(result.chartData[1].forecastSeries['Influenza A']).toBe(100);
+    expect(result.chartData[2].date).toBe('2026-04-01');
+    expect(result.chartData[2].forecastSeries['RSV A']).toBeCloseTo(145, 0);
     expect(result.summaries.map((item) => item.virus)).toEqual([
       'RSV A',
       'SARS-CoV-2',
@@ -60,5 +67,6 @@ describe('buildVirusRadarHeroForecastData', () => {
     expect(result.summaries[0].deltaPct).toBeCloseTo(45);
     expect(result.summaries[3].direction).toBe('fallend');
     expect(result.headlineSecondary).toContain('RSV A');
+    expect(result.headlinePrimary).toContain('letzten Wochen');
   });
 });

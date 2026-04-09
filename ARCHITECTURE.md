@@ -155,7 +155,8 @@ GET  /api/v1/forecast/{virus}
      └─ ML Prognose Details
 
 GET  /api/v1/forecast/regional/hero-overview
-     └─ Schneller, snapshot-basierter 4-Virus-Überblick für den Virus-Radar-Hero
+     └─ Schneller 4-Virus-Hero: Snapshot-Rollup plus echte Wochenhistorie aus Markt-Backtests
+        und gespeicherter Forecast-Endpunkt für den nächsten Zielpunkt
 
 POST /api/v1/recommendations/generate
      └─ Generiere LLM Empfehlung

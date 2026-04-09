@@ -70,20 +70,21 @@ const MultiVirusForecastChart: React.FC<MultiVirusForecastChartProps> = ({
   loading = false,
 }) => {
   const chartData = useMemo(() => data.map((row, index) => {
-    const nextIsForecast = data[index + 1]?.isForecast ?? false;
     const nextRow = { dateLabel: row.dateLabel };
 
     VIRUS_RADAR_HERO_VIRUSES.forEach((virus) => {
-      const value = row.series[virus];
-      (nextRow as Record<string, number | string | null>)[`${virus}Actual`] = row.isForecast ? null : value;
-      (nextRow as Record<string, number | string | null>)[`${virus}Forecast`] = row.isForecast || nextIsForecast ? value : null;
+      (nextRow as Record<string, number | string | null>)[`${virus}Actual`] = row.actualSeries[virus];
+      (nextRow as Record<string, number | string | null>)[`${virus}Forecast`] = row.forecastSeries[virus];
     });
 
     return nextRow;
   }), [data]);
 
   const yDomain = useMemo(() => axisDomain(
-    data.flatMap((row) => VIRUS_RADAR_HERO_VIRUSES.map((virus) => row.series[virus])),
+    data.flatMap((row) => VIRUS_RADAR_HERO_VIRUSES.flatMap((virus) => [
+      row.actualSeries[virus],
+      row.forecastSeries[virus],
+    ])),
   ), [data]);
 
   if (loading && !data.length) {

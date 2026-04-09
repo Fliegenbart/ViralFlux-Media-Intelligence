@@ -15,6 +15,7 @@ import pandas as pd
 from xgboost import XGBClassifier, XGBRegressor
 
 from app.core.config import get_settings
+from app.models.database import BacktestPoint, BacktestRun, MLForecast
 from app.services.media.business_validation_service import BusinessValidationService
 from app.services.media.campaign_recommendation_service import CampaignRecommendationService
 from app.services.media.truth_layer_service import TruthLayerService
@@ -85,6 +86,78 @@ class RegionalForecastService:
             return bool(get_settings().REGIONAL_SARS_H7_PROMOTION_ENABLED)
         except Exception:
             return False
+
+    def _hero_timeseries_for_virus(
+        self,
+        *,
+        virus_typ: str,
+        horizon_days: int,
+        lookback_points: int = 8,
+    ) -> dict[str, Any] | None:
+        if self.db is None:
+            return None
+
+        latest_run = (
+            self.db.query(BacktestRun)
+            .filter(
+                BacktestRun.mode == "MARKET_CHECK",
+                BacktestRun.virus_typ == virus_typ,
+            )
+            .order_by(BacktestRun.created_at.desc(), BacktestRun.id.desc())
+            .first()
+        )
+        if latest_run is None:
+            return None
+
+        history_rows = (
+            self.db.query(BacktestPoint)
+            .filter(
+                BacktestPoint.run_id == latest_run.run_id,
+                BacktestPoint.region.is_(None),
+            )
+            .order_by(BacktestPoint.date.asc(), BacktestPoint.id.asc())
+            .all()
+        )
+        actual_rows = [row for row in history_rows if row.date is not None and row.real_qty is not None]
+        if not actual_rows:
+            return None
+
+        points = [
+            {
+                "date": row.date.date().isoformat(),
+                "actual_value": round(float(row.real_qty), 1),
+            }
+            for row in actual_rows[-max(int(lookback_points), 1):]
+        ]
+
+        latest_forecast = (
+            self.db.query(MLForecast)
+            .filter(
+                MLForecast.virus_typ == virus_typ,
+                MLForecast.region == "DE",
+                MLForecast.horizon_days == int(horizon_days),
+            )
+            .order_by(MLForecast.created_at.desc(), MLForecast.forecast_date.desc(), MLForecast.id.desc())
+            .first()
+        )
+
+        if (
+            latest_forecast is not None
+            and latest_forecast.forecast_date is not None
+            and latest_forecast.predicted_value is not None
+        ):
+            points.append(
+                {
+                    "date": latest_forecast.forecast_date.date().isoformat(),
+                    "forecast_value": round(float(latest_forecast.predicted_value), 1),
+                }
+            )
+
+        return {
+            "virus_typ": virus_typ,
+            "run_id": latest_run.run_id,
+            "points": points,
+        }
 
     def _effective_rollout_contract(
         self,
@@ -1132,10 +1205,17 @@ class RegionalForecastService:
         )
 
         virus_rollup: list[dict[str, Any]] = []
+        hero_timeseries: list[dict[str, Any]] = []
         latest_as_of_date: str | None = None
 
         for virus_typ in SUPPORTED_VIRUS_TYPES:
             metadata = snapshots.get((virus_typ, horizon)) or {}
+            series = self._hero_timeseries_for_virus(
+                virus_typ=virus_typ,
+                horizon_days=horizon,
+            )
+            if series:
+                hero_timeseries.append(series)
             if not metadata:
                 continue
 
@@ -1195,6 +1275,7 @@ class RegionalForecastService:
             "evidence_tier": None,
             "benchmark": [],
             "virus_rollup": virus_rollup,
+            "hero_timeseries": hero_timeseries,
             "region_rollup": [],
             "top_opportunities": [],
         }

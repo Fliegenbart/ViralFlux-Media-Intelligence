@@ -110,6 +110,18 @@ export interface RegionalPortfolioVirusRollup {
   products?: string[];
 }
 
+export interface RegionalPortfolioHeroSeriesPoint {
+  date: string;
+  actual_value?: number;
+  forecast_value?: number;
+}
+
+export interface RegionalPortfolioHeroSeries {
+  virus_typ: string;
+  run_id?: string;
+  points: RegionalPortfolioHeroSeriesPoint[];
+}
+
 export interface RegionalPortfolioResponse {
   generated_at: string;
   reference_virus: string;
@@ -126,6 +138,7 @@ export interface RegionalPortfolioResponse {
   evidence_tier?: string;
   benchmark: RegionalBenchmarkItem[];
   virus_rollup: RegionalPortfolioVirusRollup[];
+  hero_timeseries?: RegionalPortfolioHeroSeries[];
   region_rollup: RegionalPortfolioRegionRollup[];
   top_opportunities: RegionalPortfolioOpportunity[];
 }

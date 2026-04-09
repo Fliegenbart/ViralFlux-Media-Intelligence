@@ -48,8 +48,13 @@ describe('VirusRadarWorkspace', () => {
             {
               date: '2026-04-08',
               dateLabel: '08.04',
-              isForecast: false,
-              series: {
+              actualSeries: {
+                'Influenza A': 100,
+                'Influenza B': 100,
+                'SARS-CoV-2': 100,
+                'RSV A': 100,
+              },
+              forecastSeries: {
                 'Influenza A': 100,
                 'Influenza B': 100,
                 'SARS-CoV-2': 100,
@@ -63,7 +68,7 @@ describe('VirusRadarWorkspace', () => {
             { virus: 'Influenza A', currentIndex: 100, projectedIndex: 108, deltaPct: 8, direction: 'steigend' },
             { virus: 'Influenza B', currentIndex: 100, projectedIndex: 94, deltaPct: -6, direction: 'fallend' },
           ],
-          headlinePrimary: 'Das Lagebild der nächsten 7 Tage.',
+          headlinePrimary: 'Die letzten Wochen und die nächsten 7 Tage.',
           headlineSecondary: 'RSV A und SARS-CoV-2 ziehen aktuell am stärksten an.',
           summary: 'RSV A liegt in der 7-Tage-Prognose bei +45 %. Dahinter folgt SARS-CoV-2 mit +21 %. Alle Linien sind auf Heute = 100 normiert, damit die Dynamik direkt vergleichbar bleibt.',
         }}
@@ -205,12 +210,13 @@ describe('VirusRadarWorkspace', () => {
 
     expect(screen.getByText('PEIX / GELO / VIRUS-RADAR')).toBeInTheDocument();
     expect(screen.getByText('Live-Lagebild · 4 Viren')).toBeInTheDocument();
-    expect(screen.getByText('Das Lagebild der nächsten 7 Tage.')).toBeInTheDocument();
+    expect(screen.getByText('Die letzten Wochen und die nächsten 7 Tage.')).toBeInTheDocument();
     expect(screen.getByText('RSV A und SARS-CoV-2 ziehen aktuell am stärksten an.')).toBeInTheDocument();
     expect(screen.getByText('Multi virus forecast chart')).toBeInTheDocument();
     expect(screen.getAllByText('Mecklenburg-Vorpommern').length).toBeGreaterThan(0);
     expect(screen.getByText('Heute = 100')).toBeInTheDocument();
     expect(screen.getByText('Forecast · 7 Tage')).toBeInTheDocument();
+    expect(screen.queryByText('Eine zentrale Entscheidungsseite für Media. Was jetzt wichtig ist, wo gehandelt werden sollte und welche Risiken oder Blocker noch sichtbar bleiben.')).not.toBeInTheDocument();
     expect(screen.queryByText('Entscheidung diese Woche')).not.toBeInTheDocument();
     expect(screen.getByText('Radar-Tape')).toBeInTheDocument();
     expect(screen.getByText('Signal baut sich deutlich auf.')).toBeInTheDocument();

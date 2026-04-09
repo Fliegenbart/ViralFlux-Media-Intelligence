@@ -30,6 +30,40 @@ function buildPortfolio() {
       { virus_typ: 'SARS-CoV-2', top_change_pct: 21, top_region_name: 'Saarland' },
       { virus_typ: 'RSV A', top_change_pct: 45, top_region_name: 'Mecklenburg-Vorpommern' },
     ],
+    hero_timeseries: [
+      {
+        virus_typ: 'Influenza A',
+        points: [
+          { date: '2026-03-18', actual_value: 88 },
+          { date: '2026-03-25', actual_value: 100 },
+          { date: '2026-04-01', forecast_value: 108 },
+        ],
+      },
+      {
+        virus_typ: 'Influenza B',
+        points: [
+          { date: '2026-03-18', actual_value: 104 },
+          { date: '2026-03-25', actual_value: 100 },
+          { date: '2026-04-01', forecast_value: 94 },
+        ],
+      },
+      {
+        virus_typ: 'SARS-CoV-2',
+        points: [
+          { date: '2026-03-18', actual_value: 90 },
+          { date: '2026-03-25', actual_value: 100 },
+          { date: '2026-04-01', forecast_value: 121 },
+        ],
+      },
+      {
+        virus_typ: 'RSV A',
+        points: [
+          { date: '2026-03-18', actual_value: 70 },
+          { date: '2026-03-25', actual_value: 100 },
+          { date: '2026-04-01', forecast_value: 145 },
+        ],
+      },
+    ],
     region_rollup: [],
     top_opportunities: [],
   };

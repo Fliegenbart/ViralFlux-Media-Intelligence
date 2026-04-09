@@ -514,7 +514,7 @@ async def get_regional_hero_overview(
     reference_virus: str = "Influenza A",
     db: Session = Depends(get_db),
 ):
-    """Return a lightweight, snapshot-backed 4-virus overview for the Virus-Radar hero."""
+    """Return a lightweight 4-virus overview for the Virus-Radar hero with snapshot rollup and stored time series."""
     from app.services.ml.regional_forecast import RegionalForecastService
 
     service = RegionalForecastService(db)

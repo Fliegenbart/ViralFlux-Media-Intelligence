@@ -502,6 +502,10 @@ def _float_or_none(service: Any, value: Any) -> float | None:
         return None
 
 
+def _truth_gate(service: Any, truth_coverage: dict[str, Any]) -> dict[str, Any]:
+    return service.truth_gate_service.evaluate(truth_coverage)
+
+
 def _latest_import_batch(service: Any, *, brand: str) -> MediaOutcomeImportBatch | SimpleNamespace | None:
     if _uses_legacy_outcome_batch_schema(service):
         rows = _legacy_import_batch_rows(service, brand=brand, limit=1)

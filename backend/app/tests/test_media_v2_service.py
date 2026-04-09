@@ -354,6 +354,17 @@ class MediaV2ServiceTruthCoverageTests(unittest.TestCase):
         self.assertEqual(payload, "header1,header2\n")
         mocked_builder.assert_called_once_with(self.service)
 
+    def test_truth_gate_delegates_to_outcomes_module(self) -> None:
+        truth_coverage = {"coverage_weeks": 12}
+        with patch(
+            "app.services.media.v2.outcomes._truth_gate",
+            return_value={"ok": "truth-gate"},
+        ) as mocked_builder:
+            payload = self.service._truth_gate(truth_coverage)
+
+        self.assertEqual(payload, {"ok": "truth-gate"})
+        mocked_builder.assert_called_once_with(self.service, truth_coverage)
+
     def test_get_campaigns_payload_delegates_to_campaigns_builder(self) -> None:
         with patch(
             "app.services.media.v2_service.build_campaigns_payload",

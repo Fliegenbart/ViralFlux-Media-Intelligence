@@ -13,7 +13,6 @@ from sqlalchemy.orm import Session
 
 from app.models.database import (
     BacktestRun,
-    BrandProduct,
     ForecastAccuracyLog,
     GoogleTrendsData,
     MarketingOpportunity,
@@ -29,12 +28,9 @@ from app.services.media.business_validation_service import BusinessValidationSer
 from app.services.media.cockpit_service import MediaCockpitService
 from app.services.media.outcome_signal_service import OutcomeSignalService
 from app.services.media.peix_score_service import PeixEpiScoreService
-from app.services.media.product_catalog_service import ProductCatalogService
 from app.services.media.recommendation_contracts import (
-    BUNDESLAND_NAMES,
     dedupe_group_id,
     enrich_card_v2,
-    normalize_region_code,
     to_card_response,
 )
 from app.services.media.semantic_contracts import (
@@ -104,25 +100,6 @@ SIGNAL_GROUPS: dict[str, dict[str, str]] = {
 }
 
 CORE_SIGNAL_KEYS = {"wastewater", "survstat", "are_konsultation", "notaufnahme"}
-METRIC_FIELD_LABELS = {
-    "media_spend_eur": "Mediabudget",
-    "impressions": "Impressionen",
-    "clicks": "Klicks",
-    "qualified_visits": "Qualifizierte Besuche",
-    "search_lift_index": "Suchanstieg",
-    "sales_units": "Verkäufe",
-    "order_count": "Bestellungen",
-    "revenue_eur": "Umsatz",
-}
-REQUIRED_OUTCOME_FIELD_NAMES = ("media_spend_eur",)
-CONVERSION_OUTCOME_FIELD_NAMES = ("sales_units", "order_count", "revenue_eur")
-OPTIONAL_OUTCOME_FIELD_NAMES = ("qualified_visits", "search_lift_index", "impressions", "clicks")
-OUTCOME_TEMPLATE_HEADERS = (
-    "week_start,product,region_code,media_spend_eur,sales_units,order_count,revenue_eur,"
-    "qualified_visits,search_lift_index,impressions,clicks\n"
-    "2026-02-02,GeloProsed,SH,12000,140,,,320,18.5,240000,5800\n"
-    "2026-02-09,GeloRevoice,Hamburg,9000,,44,18500,210,12.0,120000,2900\n"
-)
 QUEUE_LIFECYCLE_PRIORITY = {
     "SYNC_READY": 5,
     "APPROVE": 4,
@@ -930,7 +907,7 @@ class MediaV2Service:
         return outcomes_module._float_or_none(self, value)
 
     def _truth_gate(self, truth_coverage: dict[str, Any]) -> dict[str, Any]:
-        return self.truth_gate_service.evaluate(truth_coverage)
+        return outcomes_module._truth_gate(self, truth_coverage)
 
     def _latest_import_batch(self, *, brand: str) -> MediaOutcomeImportBatch | None:
         return outcomes_module._latest_import_batch(self, brand=brand)

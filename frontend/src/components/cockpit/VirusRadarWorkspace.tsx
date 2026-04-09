@@ -37,12 +37,10 @@ import {
   buildTrendInsight,
   buildWhyNowItems,
   buildWhyNowModel,
-  formatProbability,
   formatSignedPercent,
   regionStageTone,
   resolveRegionStage,
 } from './virusRadarWorkspace.utils';
-import type { SignalPrediction } from './virusRadarWorkspace.utils';
 
 interface Props {
   virus: string;

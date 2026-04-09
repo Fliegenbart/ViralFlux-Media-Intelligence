@@ -114,6 +114,46 @@ class CockpitServiceGuardTests(unittest.TestCase):
         self.assertEqual(payload["items"][0]["region_code"], "SH")
         self.assertNotIn("ignored_field", payload["items"][0])
 
+    def test_recommendation_section_wrapper_delegates_via_module_path(self) -> None:
+        service = MediaCockpitService(db=object())
+        expected = {"total": 1, "cards": [{"id": "patched"}]}
+
+        with patch(
+            "app.services.media.cockpit.recommendations.build_recommendation_section",
+            return_value=expected,
+        ) as build_mock:
+            payload = service._recommendation_section()
+
+        self.assertIs(payload, expected)
+        build_mock.assert_called_once_with(service.db)
+
+    def test_region_recommendation_refs_wrapper_delegates_via_module_path(self) -> None:
+        service = MediaCockpitService(db=object())
+        expected = {"SH": {"card_id": "patched"}}
+
+        with patch(
+            "app.services.media.cockpit.recommendations.build_region_recommendation_refs",
+            return_value=expected,
+        ) as build_mock:
+            payload = service._region_recommendation_refs()
+
+        self.assertIs(payload, expected)
+        build_mock.assert_called_once_with(service.db)
+
+    def test_extract_region_codes_wrapper_delegates_via_module_path(self) -> None:
+        service = MediaCockpitService(db=None)
+        row = MarketingOpportunity(opportunity_id="opp-wrapper")
+        expected = ["SH", "HH"]
+
+        with patch(
+            "app.services.media.cockpit.recommendations.extract_region_codes_from_row",
+            return_value=expected,
+        ) as extract_mock:
+            payload = service._extract_region_codes_from_row(row)
+
+        self.assertIs(payload, expected)
+        extract_mock.assert_called_once_with(row)
+
 
 class CockpitMapSectionContractTests(unittest.TestCase):
     def setUp(self) -> None:

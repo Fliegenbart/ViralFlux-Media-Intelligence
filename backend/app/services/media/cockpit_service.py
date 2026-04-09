@@ -17,11 +17,7 @@ from app.services.media.cockpit.freshness import (
     build_source_status,
 )
 from app.services.media.cockpit.map_section import build_map_section
-from app.services.media.cockpit.recommendations import (
-    build_recommendation_section,
-    build_region_recommendation_refs,
-    extract_region_codes_from_row,
-)
+from app.services.media.cockpit import recommendations as cockpit_recommendations
 from app.services.media.cockpit.signals import (
     build_campaign_refs_section as cockpit_build_campaign_refs_section,
     build_ranking_signal_fields as cockpit_build_ranking_signal_fields,
@@ -184,13 +180,13 @@ class MediaCockpitService:
         )
 
     def _recommendation_section(self) -> dict:
-        return build_recommendation_section(self.db)
+        return cockpit_recommendations.build_recommendation_section(self.db)
 
     def _region_recommendation_refs(self) -> dict[str, dict[str, Any]]:
-        return build_region_recommendation_refs(self.db)
+        return cockpit_recommendations.build_region_recommendation_refs(self.db)
 
     def _extract_region_codes_from_row(self, row: MarketingOpportunity) -> list[str]:
-        return extract_region_codes_from_row(row)
+        return cockpit_recommendations.extract_region_codes_from_row(row)
 
     def _backtest_summary(self, virus_typ: str, target_source: str) -> dict:
         return build_backtest_summary(

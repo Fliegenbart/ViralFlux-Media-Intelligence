@@ -3,6 +3,7 @@ import {
   CartesianGrid,
   Line,
   ResponsiveContainer,
+  ReferenceArea,
   ReferenceLine,
   Tooltip,
   XAxis,
@@ -51,7 +52,10 @@ function HeroForecastTooltip({
         {visibleItems.map((entry) => (
           <div key={String(entry.name)} className="virus-radar-multi-chart-tooltip__row">
             <span style={{ color: entry.color || '#4b5b58' }}>{entry.name}</span>
-            <strong>{Number(entry.value).toFixed(0)}</strong>
+            <div className="virus-radar-multi-chart-tooltip__value">
+              <strong>{Number(entry.value).toFixed(0)}</strong>
+              <small>Index</small>
+            </div>
           </div>
         ))}
       </div>
@@ -90,6 +94,7 @@ const MultiVirusForecastChart: React.FC<MultiVirusForecastChartProps> = ({
     const latestActual = [...chartData].reverse().find((row) => typeof row.actual === 'number' && Number.isFinite(row.actual));
     return latestActual?.dateLabel || null;
   }, [chartData]);
+  const forecastEndLabel = chartData[chartData.length - 1]?.dateLabel || null;
 
   if (loading && !data.length) {
     return <div className={`forecast-chart-empty ${className || ''}`}>Der Virus-Verlauf wird gerade aufgebaut.</div>;
@@ -132,6 +137,16 @@ const MultiVirusForecastChart: React.FC<MultiVirusForecastChartProps> = ({
             )}
           />
 
+          {todayLabel && forecastEndLabel && todayLabel !== forecastEndLabel ? (
+            <ReferenceArea
+              x1={todayLabel}
+              x2={forecastEndLabel}
+              fill={virusColor}
+              fillOpacity={0.05}
+              ifOverflow="extendDomain"
+            />
+          ) : null}
+
           {todayLabel ? (
             <ReferenceLine
               x={todayLabel}
@@ -156,7 +171,7 @@ const MultiVirusForecastChart: React.FC<MultiVirusForecastChartProps> = ({
             dot={false}
             connectNulls
             isAnimationActive={false}
-            name="Ist-Verlauf"
+            name="Letzte Wochen"
           />
           <Line
             type="monotone"
@@ -168,7 +183,7 @@ const MultiVirusForecastChart: React.FC<MultiVirusForecastChartProps> = ({
             connectNulls
             activeDot={{ r: 5, stroke: '#ffffff', strokeWidth: 2 }}
             isAnimationActive={false}
-            name="7-Tage-Prognose"
+            name="Nächste 7 Tage"
           />
         </LineChart>
       </ResponsiveContainer>

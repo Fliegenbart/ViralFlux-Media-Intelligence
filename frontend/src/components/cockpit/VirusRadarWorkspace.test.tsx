@@ -214,9 +214,10 @@ describe('VirusRadarWorkspace', () => {
     expect(screen.getByText('Durchgezogen siehst du die letzten Wochen, gestrichelt die Prognose.')).toBeInTheDocument();
     expect(screen.getByText('Hero virus forecast chart Influenza A')).toBeInTheDocument();
     expect(screen.getAllByText('Mecklenburg-Vorpommern').length).toBeGreaterThan(0);
-    expect(screen.getByText('Ist-Verlauf')).toBeInTheDocument();
-    expect(screen.getAllByText('7-Tage-Prognose').length).toBeGreaterThan(0);
+    expect(screen.getByText('Letzte Wochen')).toBeInTheDocument();
+    expect(screen.getByText('Nächste 7 Tage')).toBeInTheDocument();
     expect(screen.getByText('Heute = 100')).toBeInTheDocument();
+    expect(screen.getByText('Links siehst du die letzten Wochen, rechts die nächsten 7 Tage. Alle Werte sind auf Heute = 100 normiert, damit die Richtung sauber vergleichbar bleibt.')).toBeInTheDocument();
     expect(screen.queryByText('Eine zentrale Entscheidungsseite für Media. Was jetzt wichtig ist, wo gehandelt werden sollte und welche Risiken oder Blocker noch sichtbar bleiben.')).not.toBeInTheDocument();
     expect(screen.queryByText('Entscheidung diese Woche')).not.toBeInTheDocument();
     expect(screen.getByText('Radar-Tape')).toBeInTheDocument();

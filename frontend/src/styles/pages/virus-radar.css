@@ -251,10 +251,23 @@
   font-size: 0.95rem;
 }
 
+.virus-radar-multi-chart-tooltip__value {
+  display: grid;
+  justify-items: end;
+  gap: 2px;
+}
+
 .virus-radar-multi-chart-tooltip__row strong {
   color: #f8faf9;
   font-family: 'JetBrains Mono', 'Menlo', monospace;
   font-size: 0.95rem;
+}
+
+.virus-radar-multi-chart-tooltip__value small {
+  color: rgba(248, 250, 249, 0.62);
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .virus-radar-hero__footer {

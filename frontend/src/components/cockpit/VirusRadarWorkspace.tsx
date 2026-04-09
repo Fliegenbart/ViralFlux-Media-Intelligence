@@ -298,14 +298,14 @@ const VirusRadarWorkspace: React.FC<Props> = ({
               <div className="virus-radar-hero-chart-card__legend">
                 <div className="virus-radar-hero-chart-card__legend-item">
                   <span className="virus-radar-hero-chart-card__swatch virus-radar-hero-chart-card__swatch--actual" />
-                  Ist-Verlauf
+                  Letzte Wochen
                 </div>
                 <div className="virus-radar-hero-chart-card__legend-item">
                   <span
                     className="virus-radar-hero-chart-card__swatch virus-radar-hero-chart-card__swatch--forecast"
                     style={{ background: selectedHeroColor }}
                   />
-                  7-Tage-Prognose
+                  Nächste 7 Tage
                 </div>
                 <div className="virus-radar-hero-chart-card__legend-item virus-radar-hero-chart-card__legend-item--explain">
                   Heute = 100
@@ -324,7 +324,7 @@ const VirusRadarWorkspace: React.FC<Props> = ({
             />
             <div className="virus-radar-hero-chart-card__footer">
               <span className="virus-radar-hero-chart-card__hint">
-                Unten wählst du, welchen Virus-Verlauf du oben sehen willst.
+                Links siehst du die letzten Wochen, rechts die nächsten 7 Tage. Alle Werte sind auf Heute = 100 normiert, damit die Richtung sauber vergleichbar bleibt.
               </span>
               <div className="virus-radar-virus-switcher virus-radar-virus-switcher--hero" aria-label="Virus im Verlauf wechseln">
                 {VIRUS_RADAR_HERO_VIRUSES.map((option) => (
@@ -345,11 +345,11 @@ const VirusRadarWorkspace: React.FC<Props> = ({
           <div className="virus-radar-hero__footer">
             <div className="virus-radar-hero__stats">
               <div className="virus-radar-stat">
-                <span className="virus-radar-stat__label">7-Tage-Prognose</span>
+                <span className="virus-radar-stat__label">7-Tage-Delta</span>
                 <strong className="virus-radar-stat__value">{heroPrimaryStat}</strong>
               </div>
               <div className="virus-radar-stat">
-                <span className="virus-radar-stat__label">Richtung</span>
+                <span className="virus-radar-stat__label">Tendenz</span>
                 <strong className="virus-radar-stat__value">{heroSecondaryStat}</strong>
               </div>
               <div className="virus-radar-stat">

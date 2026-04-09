@@ -17,14 +17,10 @@ Seit dem Forecast-First-Update gilt:
 ## Route
 
 - Historische Frontend-Route: `/pilot`
-- Aktiver Live-Hauptfluss: `Login -> /jetzt -> /regionen -> /kampagnen -> /evidenz`
-- `/pilot` ist historisch und nicht mehr Teil des aktiven Live-Hauptflusses.
-- Shell: `MediaShell`
-- Page-Komponente: `frontend/src/pages/media/PilotPage.tsx`
-- Haupt-UI: `frontend/src/components/cockpit/PilotSurface.tsx`
-- Datenhook: `frontend/src/features/media/usePilotSurfaceData.ts`
-- API-Client: `frontend/src/features/media/api.ts`
-- Typen: `frontend/src/types/media/pilotReadout.ts`
+- Heutiges Live-Verhalten: `/pilot` ist nur noch eine Legacy-Route und leitet auf `/virus-radar` um.
+- Aktive Live-Navigation: `/virus-radar`, `/jetzt`, `/zeitgraph`, `/regionen`, `/kampagnen`, `/evidenz`
+- Der frühere `/pilot`-Pfad bleibt nur noch als historische Produkt- und API-Dokumentation relevant.
+- Die frühere Frontend-Umsetzung wurde im Legacy-Cleanup entfernt und existiert nicht mehr als eigene Live-Seite.
 
 ## Datenquellen
 

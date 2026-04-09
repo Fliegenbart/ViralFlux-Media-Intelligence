@@ -20,11 +20,15 @@ In einfachen Worten läuft das System so:
 4. Es bewertet, wie relevant ein Bundesland gerade ist.
 5. Es zeigt das Ergebnis in einer operativen Oberfläche für PEIX / GELO.
 
-Der aktive Hauptfluss in der UI ist:
+Die aktive Live-Navigation in der UI ist:
 
-`Login -> /jetzt -> /regionen -> /kampagnen -> /evidenz`
+`/virus-radar`, `/jetzt`, `/zeitgraph`, `/regionen`, `/kampagnen`, `/evidenz`
 
-Diese Seiten bilden den Live-Kern des Produkts. Weitere Flächen im Repo dienen als technische Quellen, Altstände oder interne Referenz.
+Der operative Kernfluss für die tägliche Arbeit ist:
+
+`/jetzt -> /regionen -> /kampagnen -> /evidenz`
+
+`/virus-radar` bleibt die zentrale Einstiegs- und Überblicksseite. `/zeitgraph` ist eine ergänzende Analysefläche. Weitere Flächen im Repo dienen als technische Quellen, Altstände oder interne Referenz.
 
 Technische Kernpfade sind vor allem:
 - `frontend/src/pages/media/`

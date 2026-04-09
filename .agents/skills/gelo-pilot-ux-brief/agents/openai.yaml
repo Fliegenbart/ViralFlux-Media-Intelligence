@@ -1,4 +1,0 @@
-interface:
-  display_name: "GELO Pilot UX Brief"
-  short_description: "Keep GELO pilot UX decision-first and focused"
-  default_prompt: "Use $gelo-pilot-ux-brief to reframe this frontend work around what PEIX and GELO should do this week."

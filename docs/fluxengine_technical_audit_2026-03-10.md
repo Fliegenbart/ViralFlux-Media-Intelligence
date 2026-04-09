@@ -16,7 +16,7 @@ Das wichtigste Gesamturteil lautet:
 | `forecast_service` | mathematisch konsistent | Reale Modellpipeline mit Leakage-Schutz, OOF-Training und Quantil-Ausgabe. Aber Promotion-Backtest spiegelt die Live-Inferenz nicht vollstaendig. |
 | `backtester` Walk-forward | mathematisch konsistent | As-of-/Vintage-Logik, Baseline-Vergleich, Lead-/Lag-Metriken und Quality Gate sind formal plausibel. |
 | `backtester` Gewichtskalibrierung -> Business-Gewichte | nicht belastbar | Feature-Importances eines autoregressiven SURVSTAT-Modells werden heuristisch auf `bio/market/psycho/context` gemappt und dann produktiv weiterverwendet. |
-| `risk_engine_legacy` | nicht belastbar | Mehrere Einheiten werden unzulässig gemischt; die Baseline-Korrektur vergleicht einen Fusionsscore mit Positivraten. |
+| ehemalige Legacy-Risk-Engine (Auditstand 2026-03) | nicht belastbar | Mehrere Einheiten wurden unzulässig gemischt; die Baseline-Korrektur verglich einen Fusionsscore mit Positivraten. |
 | `peix_score_service` | heuristisch konsistent aber nicht statistisch validiert | Die 6D-Fusion ist intern konsistent und sauber begrenzt, aber die Wahrscheinlichkeits-Semantik und Gewichtskalibrierung sind nicht empirisch belegt. |
 | `opportunity_engine` / Detektoren | heuristisch konsistent aber nicht statistisch validiert | `urgency_score` ist als Priorisierung brauchbar, aber nicht als abgesicherte Wirkungs- oder Eintrittswahrscheinlichkeit. |
 
@@ -26,7 +26,7 @@ Analysierte Kernpfade:
 
 - `backend/app/services/ml/forecast_service.py`
 - `backend/app/services/ml/backtester.py`
-- `backend/app/services/fusion_engine/risk_engine_legacy.py`
+- historische Legacy-Risk-Engine (zum Auditzeitpunkt im Repo, inzwischen entfernt)
 - `backend/app/services/media/peix_score_service.py`
 - `backend/app/services/marketing_engine/opportunity_engine.py`
 - relevante API-/Cockpit- und Detector-Pfade
@@ -75,6 +75,12 @@ Die wichtigste Trennung für dieses System ist:
 | `quality_gate` | Entscheidungs-Gate | Schwellen auf Hit Rate / Lead / Fehler | mathematisch konsistent als Policy-Gate |
 
 ## Detaillierte Analyse
+
+Hinweis zur Einordnung:
+
+- Dieses Dokument beschreibt den Auditstand vom 10.03.2026.
+- Einige damals geprüfte Legacy-Dateien wurden inzwischen aus dem aktiven Repo entfernt.
+- Wo dieses Audit von der "Legacy-Risk-Engine" spricht, ist damit die damalige, inzwischen entfernte Implementierung gemeint.
 
 ### 1. `forecast_service`: stärkster mathematischer Baustein
 
@@ -141,28 +147,28 @@ Urteil:
 - Walk-forward, Vintage, Quality Gate: `mathematisch konsistent`
 - Feature-Importance -> 4D-Gewichte -> globale Defaults: `nicht belastbar`
 
-### 3. `risk_engine_legacy`: zentrale mathematische Schwachstelle
+### 3. Ehemalige Legacy-Risk-Engine: zentrale mathematische Schwachstelle
 
-Diese Engine haengt weiterhin produktiv an den Outbreak- und Public-Risk-APIs (`api/outbreak_score.py:63-71`, `api/public_api.py:207-214`).
+Zum Auditzeitpunkt hing diese Engine weiterhin produktiv an den Outbreak- und Public-Risk-APIs (`api/outbreak_score.py:63-71`, `api/public_api.py:207-214`).
 
 Hauptprobleme:
 
 1. Das Fusionsgewicht ist größer als 1.0.
    - `WEIGHT_BIO + WEIGHT_MARKET + WEIGHT_PSYCHO + WEIGHT_CONTEXT` summieren standardmäßig auf 1.0.
-   - Zusätzlich wird `prophet_baseline * 0.15` addiert (`risk_engine_legacy.py:823-830`).
+   - Zusätzlich wurde `prophet_baseline * 0.15` addiert.
    - Das ist kein normierter Weighted Average mehr, sondern ein übergewichteter Score mit anschliessendem Cap.
 
 2. Die Baseline-Korrektur mischt inkompatible Einheiten.
-   - Die historische Baseline basiert auf Positivraten aus Labordaten (`risk_engine_legacy.py:643-653`).
-   - Der aktuelle Wert ist aber `raw_score / 100` aus einem zusammengesetzten Fusionsscore (`risk_engine_legacy.py:655-656`).
+   - Die historische Baseline basierte auf Positivraten aus Labordaten.
+   - Der aktuelle Wert war aber `raw_score / 100` aus einem zusammengesetzten Fusionsscore.
    - Ein 0-1 Fusionsscore wird damit gegen eine echte Positivratenverteilung getestet. Das ist mathematisch nicht dieselbe Zielgröße.
 
 3. Meta-Overlay mischt absolute Last mit heuristischem Index.
-   - `meta_prediction` wird auf das Jahresmaximum der Viruslast normalisiert und dann 70/30 mit dem heuristischen Endscore gemischt (`risk_engine_legacy.py:842-852`).
+   - `meta_prediction` wurde auf das Jahresmaximum der Viruslast normalisiert und dann 70/30 mit dem heuristischen Endscore gemischt.
    - Auch hier werden unterschiedliche Semantiken auf dieselbe 0-100 Achse gezwungen.
 
 4. Konfidenz ist Agreement, nicht Evidenzqualitaet.
-   - `confidence_numeric` haengt nur von der Streuung der Teilscores ab (`risk_engine_legacy.py:598-621`).
+   - `confidence_numeric` hing nur von der Streuung der Teilscores ab.
    - Das misst Signal-Konsens, nicht Messqualitaet, Coverage oder OOS-Genauigkeit.
 
 Urteil:
@@ -176,7 +182,7 @@ Positive Punkte:
 
 - Die 6D-Gewichte summieren sich sauber auf 1.0 (`peix_score_service.py:87-95`).
 - Der Score ist begrenzt, die adaptive Epi-Score-Logik bleibt innerhalb `0..1`, und die Endfusion ist intern konsistent (`peix_score_service.py:270-287`).
-- Die Implementierung ist wesentlich sauberer als `risk_engine_legacy`.
+- Die Implementierung ist wesentlich sauberer als die damalige Legacy-Risk-Engine.
 
 Hauptschwaechen:
 
@@ -272,7 +278,7 @@ Ich würde die folgenden Teile heute als mathematisch valide im engeren Sinn ein
 
 Ich würde die folgenden Teile explizit **nicht** als mathematisch valide oder empirisch kalibriert bezeichnen:
 
-- `risk_engine_legacy.final_risk_score`
+- `final_risk_score` der damaligen Legacy-Risk-Engine
 - `impact_probability` in Peix und Cockpit, wenn damit Probability gemeint ist
 - `forecast.confidence` als Modellkonfidenz
 - `confidence_pct` in Opportunities
@@ -286,7 +292,7 @@ Ich würde die folgenden Teile explizit **nicht** als mathematisch valide oder e
    - Wenn keine Kalibrierung vorliegt, Feld in `signal_score` oder `ranking_signal` umbenennen.
    - Falls API-Kompatibilitaet benötigt wird: neues Feld `score_semantics` überall einfuehren und im Frontend sichtbar auswerten.
 
-2. `[internal only]` `risk_engine_legacy` entweder ausser Betrieb nehmen oder mathematisch entkoppeln.
+2. `[internal only]` damalige Legacy-Risk-Engine entweder ausser Betrieb nehmen oder mathematisch entkoppeln.
    - Prophet-Gewicht in normierte Fusion überfuehren.
    - Baseline-Korrektur nur gegen dieselbe Zielgröße rechnen.
    - Bis dahin Score nicht als belastbaren Risk Score nach aussen verwenden.
@@ -345,8 +351,8 @@ Aber:
 - die **Legacy-RiskEngine** ist mathematisch unsauber genug, dass ich sie nicht als belastbaren Risikoscore bezeichnen würde,
 - und die **Kalibrierung der Business-Gewichte** ist derzeit eher eine plausible Heuristik als eine statistisch identifizierte Ableitung.
 
-Die schnellste Wertsteigerung kommt daher nicht aus einem kompletten Rebuild, sondern aus drei gezielten Korrekturen:
+Die schnellste Wertsteigerung kam daher nicht aus einem kompletten Rebuild, sondern aus drei gezielten Korrekturen:
 
 1. Probability-/Confidence-Semantik ehrlich machen,
-2. `risk_engine_legacy` aus dem kritischen Pfad nehmen oder hart korrigieren,
+2. die damalige Legacy-Risk-Engine aus dem kritischen Pfad nehmen oder hart korrigieren,
 3. Gewichtskalibrierung von Forecast-Feature-Importances entkoppeln.

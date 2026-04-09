@@ -458,8 +458,8 @@ const VirusRadarWorkspace: React.FC<Props> = ({
           <div className="virus-radar-core-grid__rail">
             <OperatorPanel
               eyebrow="Activation Queue"
-              title="Nächste Schritte nach Region"
-              description="Welche Bundesländer als Nächstes in der Media-Prüfung landen sollten."
+              title="Wer als Nächstes dran ist"
+              description="Die nächste Reihenfolge für die Media-Prüfung."
             >
               <div className="virus-radar-secondary-lead virus-radar-secondary-lead--queue">
                 <span className="virus-radar-secondary-lead__eyebrow">Kurz gesagt</span>
@@ -482,15 +482,15 @@ const VirusRadarWorkspace: React.FC<Props> = ({
                     <span className="virus-radar-queue__reason">{item.reason}</span>
                   </div>
                 )) : (
-                  <div className="virus-radar-empty">Noch keine regionale Reihenfolge vorhanden.</div>
+                  <div className="virus-radar-empty">Noch keine Reihenfolge sichtbar.</div>
                 )}
               </div>
             </OperatorPanel>
 
             <OperatorPanel
               eyebrow="Campaign Readiness"
-              title="Was kampagnenreif ist"
-              description="Die wichtigsten Vorschläge, damit Analyse in Handlung übergeht."
+              title="Was jetzt freigegeben werden kann"
+              description="Die stärksten Vorschläge für den nächsten Move."
             >
               <div className="virus-radar-secondary-lead virus-radar-secondary-lead--campaigns">
                 <span className="virus-radar-secondary-lead__eyebrow">Kurz gesagt</span>
@@ -505,7 +505,7 @@ const VirusRadarWorkspace: React.FC<Props> = ({
                     onOpen={() => onOpenRecommendation(card.id)}
                   />
                 )) : (
-                  <div className="virus-radar-empty">Noch keine Kampagnenvorschläge sichtbar.</div>
+                  <div className="virus-radar-empty">Noch nichts freigabereif.</div>
                 )}
               </div>
             </OperatorPanel>
@@ -785,8 +785,8 @@ function buildActivationQueueModel(
 ): { headline: string; copy: string } {
   if (items.length === 0) {
     return {
-      headline: 'Noch keine Reihenfolge für die Regionsprüfung.',
-      copy: 'Sobald Aktivierungshinweise vorliegen, siehst du hier sofort, welche Bundesländer zuerst in die Prüfung gehen.',
+      headline: 'Die nächste Reihenfolge ist noch offen.',
+      copy: 'Sobald die Aktivierung klarer wird, siehst du hier sofort, welche Region als Nächstes dran ist.',
     };
   }
 
@@ -796,8 +796,8 @@ function buildActivationQueueModel(
   const leadSignal = formatProbability(lead.impact_probability);
 
   return {
-    headline: `${leadRegion} führt die nächste Prüf-Reihenfolge an.`,
-    copy: `${leadPriority} ist aktuell der stärkste nächste Schritt. ${leadSignal !== '-' ? `${leadSignal} Signal` : 'Das Signal wird noch eingeordnet'}${lead.reason ? ` · ${lead.reason}` : '.'}`,
+    headline: `${leadRegion} ist als Nächstes dran.`,
+    copy: `${leadPriority} ist jetzt der sinnvollste Schritt.${leadSignal !== '-' ? ` ${leadSignal} Signal.` : ' Signal wird noch eingeordnet.'}${lead.reason ? ` ${lead.reason}` : ''}`,
   };
 }
 
@@ -815,10 +815,10 @@ function buildCampaignReadinessModel({
 
   if (cards.length === 0) {
     return {
-      headline: 'Noch kein Vorschlag ist kampagnenreif.',
+      headline: 'Noch nichts ist freigabereif.',
       copy: active > 0
-        ? `${active} Vorschläge sind sichtbar, aber noch nicht freigabereif. Sobald sich das ändert, steht hier der nächste konkrete Move.`
-        : 'Sobald aus Analyse konkrete Vorschläge werden, siehst du hier sofort, was direkt in die Umsetzung gehen kann.',
+        ? `${active} Vorschläge sind sichtbar, aber noch nicht bereit für Review. Sobald sich das ändert, steht hier der nächste konkrete Move.`
+        : 'Sobald aus Analyse konkrete Vorschläge werden, siehst du hier sofort, was direkt ins Review gehen kann.',
     };
   }
 
@@ -827,9 +827,9 @@ function buildCampaignReadinessModel({
 
   return {
     headline: publishable > 0
-      ? `${publishable} Vorschlag${publishable === 1 ? '' : 'e'} sind reviewbereit.`
-      : `${leadTitle} ist der stärkste nächste Vorschlag.`,
-    copy: `${active} aktive Karte${active === 1 ? '' : 'n'} im Blick. ${lead.reason || lead.decision_brief?.summary_sentence || 'Die Kurzbegründung ist bereits sichtbar und kann direkt geprüft werden.'}`,
+      ? `${publishable} Vorschlag${publishable === 1 ? '' : 'e'} kann${publishable === 1 ? '' : 'en'} jetzt ins Review.`
+      : `${leadTitle} ist der nächste stärkste Move.`,
+    copy: `${active} aktive Karte${active === 1 ? '' : 'n'} im Blick. ${lead.reason || lead.decision_brief?.summary_sentence || 'Die Kurzbegründung ist sichtbar und kann direkt geprüft werden.'}`,
   };
 }
 

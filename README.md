@@ -1,11 +1,8 @@
 # ViralFlux Media Intelligence
 
-ViralFlux ist eine Plattform für **regionale Virus-Frühwarnung** und daraus abgeleitete **operative Media-Entscheidungen**.
+ViralFlux ist eine Plattform fuer **regionale Virus-Fruehwarnung** und daraus abgeleitete **operative Media-Entscheidungen**.
 
-Das Ziel ist einfach:
-- früh erkennen, **wo** sich respiratorische Dynamiken aufbauen
-- abschätzen, **wie** sich die Lage in den nächsten Tagen entwickelt
-- daraus ableiten, **welche Bundesländer zuerst geprüft oder aktiviert werden sollten**
+Dieses Repository enthaelt den Produktkern, die aktive UI und die technischen Kernpfade. Interne Arbeitsnotizen, Agenten-Artefakte und historische Audit-Unterlagen gehoeren nicht in einen Buyer-Facing Stand und werden separat gehalten.
 
 Live-Instanz: [https://fluxengine.labpulse.ai/virus-radar](https://fluxengine.labpulse.ai/virus-radar)
 

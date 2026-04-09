@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import importlib
 import os
 import sys
-from types import SimpleNamespace
+from types import ModuleType, SimpleNamespace
 import unittest
 from contextlib import contextmanager
 from unittest.mock import MagicMock, patch
@@ -10,12 +11,31 @@ from unittest.mock import MagicMock, patch
 
 os.environ.setdefault("ADMIN_EMAIL", "admin@example.com")
 os.environ.setdefault("ADMIN_PASSWORD", "very-strong-admin-password")
-sys.modules.setdefault(
-    "xgboost",
-    SimpleNamespace(XGBClassifier=object, XGBRegressor=object),
-)
 
-from app import main
+
+def _import_main_for_tests():
+    readiness_stub = ModuleType("app.services.ops.production_readiness_service")
+    readiness_stub.ProductionReadinessService = type(
+        "_StubProductionReadinessService",
+        (),
+        {},
+    )
+    xgboost_stub = ModuleType("xgboost")
+    xgboost_stub.XGBClassifier = object
+    xgboost_stub.XGBRegressor = object
+
+    with patch.dict(
+        sys.modules,
+        {
+            "app.services.ops.production_readiness_service": readiness_stub,
+            "xgboost": xgboost_stub,
+        },
+    ):
+        sys.modules.pop("app.main", None)
+        return importlib.import_module("app.main")
+
+
+main = _import_main_for_tests()
 
 
 @contextmanager

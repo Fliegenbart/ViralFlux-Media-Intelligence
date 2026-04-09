@@ -56,7 +56,8 @@ services:
       - ADMIN_PASSWORD=${ADMIN_PASSWORD}
       - ENVIRONMENT=${ENVIRONMENT:-development}
       - DB_AUTO_CREATE_SCHEMA=${DB_AUTO_CREATE_SCHEMA:-true}
-      - DB_ALLOW_RUNTIME_SCHEMA_UPDATES=${DB_ALLOW_RUNTIME_SCHEMA_UPDATES:-true}
+      - DB_ALLOW_RUNTIME_SCHEMA_UPDATES=${DB_ALLOW_RUNTIME_SCHEMA_UPDATES:-false}
+      - STARTUP_ENABLE_BFARM_IMPORT=${STARTUP_ENABLE_BFARM_IMPORT:-false}
       - STARTUP_STRICT_READINESS=${STARTUP_STRICT_READINESS:-false}
       - READINESS_REQUIRE_BROKER=${READINESS_REQUIRE_BROKER:-false}
       - ALLOWED_ORIGINS=https://fluxengine.labpulse.ai,https://www.fluxengine.labpulse.ai,https://labpulse.belegsync.com,http://5.9.106.75:8501
@@ -104,7 +105,7 @@ services:
       - ADMIN_PASSWORD=${ADMIN_PASSWORD}
       - ENVIRONMENT=${ENVIRONMENT:-development}
       - DB_AUTO_CREATE_SCHEMA=${DB_AUTO_CREATE_SCHEMA:-true}
-      - DB_ALLOW_RUNTIME_SCHEMA_UPDATES=${DB_ALLOW_RUNTIME_SCHEMA_UPDATES:-true}
+      - DB_ALLOW_RUNTIME_SCHEMA_UPDATES=${DB_ALLOW_RUNTIME_SCHEMA_UPDATES:-false}
       - CELERY_BROKER_URL=redis://viralflux_redis:6379/0
       - CELERY_RESULT_BACKEND=redis://viralflux_redis:6379/0
       - VLLM_BASE_URL=${VLLM_BASE_URL:-http://host.docker.internal:8001/v1} # Greift auf lokalen vLLM zu
@@ -147,7 +148,7 @@ services:
       - ADMIN_PASSWORD=${ADMIN_PASSWORD}
       - ENVIRONMENT=${ENVIRONMENT:-development}
       - DB_AUTO_CREATE_SCHEMA=${DB_AUTO_CREATE_SCHEMA:-true}
-      - DB_ALLOW_RUNTIME_SCHEMA_UPDATES=${DB_ALLOW_RUNTIME_SCHEMA_UPDATES:-true}
+      - DB_ALLOW_RUNTIME_SCHEMA_UPDATES=${DB_ALLOW_RUNTIME_SCHEMA_UPDATES:-false}
       - CELERY_BROKER_URL=redis://viralflux_redis:6379/0
       - CELERY_RESULT_BACKEND=redis://viralflux_redis:6379/0
       - VLLM_BASE_URL=${VLLM_BASE_URL:-http://host.docker.internal:8001/v1}

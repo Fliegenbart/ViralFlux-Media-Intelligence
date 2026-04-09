@@ -17,7 +17,7 @@ import { useMediaWorkflow } from '../../features/media/workflowContext';
 const VirusRadarPage: React.FC = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { setPageHeader, clearPageHeader, exportWeeklyReport, pdfLoading } = usePageHeader();
+  const { setPageHeader, clearPageHeader, exportBriefingPdf, pdfLoading } = usePageHeader();
   const {
     virus,
     setVirus,
@@ -51,7 +51,7 @@ const VirusRadarPage: React.FC = () => {
     setPageHeader({
       primaryAction: {
         label: pdfLoading ? 'Bericht wird erstellt...' : 'Wochenbericht exportieren',
-        onClick: exportWeeklyReport,
+        onClick: exportBriefingPdf,
         disabled: pdfLoading,
       },
       secondaryAction: {
@@ -61,7 +61,7 @@ const VirusRadarPage: React.FC = () => {
     });
 
     return clearPageHeader;
-  }, [clearPageHeader, exportWeeklyReport, navigate, pdfLoading, setPageHeader]);
+  }, [clearPageHeader, exportBriefingPdf, navigate, pdfLoading, setPageHeader]);
 
   return (
     <AnimatedPage>

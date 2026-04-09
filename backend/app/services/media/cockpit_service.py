@@ -11,7 +11,6 @@ from sqlalchemy.orm import Session
 
 from app.models.database import (
     AREKonsultation,
-    BacktestRun,
     GoogleTrendsData,
     MarketingOpportunity,
     NotaufnahmeSyndromData,
@@ -22,6 +21,12 @@ from app.models.database import (
     WeatherData,
 )
 from app.services.data_ingest.bfarm_service import get_cached_signals
+from app.services.media.cockpit.backtest import build_backtest_summary
+from app.services.media.cockpit.freshness import (
+    build_data_freshness,
+    build_source_freshness_summary,
+    build_source_status,
+)
 from app.services.media.peix_score_service import PeixEpiScoreService
 from app.services.media.recommendation_contracts import to_card_response
 from app.services.media.region_tooltip_service import build_region_tooltip
@@ -58,17 +63,6 @@ LEGACY_TO_WORKFLOW = {
     "URGENT": "DRAFT",
     "SENT": "APPROVED",
     "CONVERTED": "ACTIVATED",
-}
-
-SOURCE_SLA_DAYS = {
-    "wastewater": 10,
-    "are_konsultation": 14,
-    "notaufnahme": 3,
-    "survstat": 14,
-    "weather": 2,
-    "pollen": 2,
-    "google_trends": 4,
-    "bfarm_shortage": 7,
 }
 
 _NOTAUFNAHME_BY_VIRUS = {
@@ -254,20 +248,7 @@ class MediaCockpitService:
         }
 
     def _source_freshness_summary(self, source_status: dict[str, Any]) -> dict[str, Any]:
-        items = source_status.get("items") or []
-        core_source_keys = ("wastewater", "survstat", "are_konsultation", "notaufnahme")
-        core_sources = [item for item in items if item.get("source_key") in core_source_keys]
-        degraded_sources = [
-            item for item in items
-            if item.get("freshness_state") in {"stale", "no_data"}
-        ]
-        return {
-            "live_ratio": source_status.get("live_ratio"),
-            "live_count": source_status.get("live_count"),
-            "total": source_status.get("total"),
-            "core_sources": core_sources,
-            "degraded_sources": degraded_sources,
-        }
+        return build_source_freshness_summary(source_status)
 
     def _campaign_refs_section(
         self,
@@ -985,156 +966,17 @@ class MediaCockpitService:
         return sorted(normalized)
 
     def _backtest_summary(self, virus_typ: str, target_source: str) -> dict:
-        latest_market_query = self.db.query(BacktestRun).filter(
-            BacktestRun.mode == "MARKET_CHECK",
-            BacktestRun.virus_typ == virus_typ,
+        return build_backtest_summary(
+            self.db,
+            virus_typ=virus_typ,
+            target_source=target_source,
         )
-        if target_source:
-            latest_market_query = latest_market_query.filter(
-                func.upper(BacktestRun.target_source) == str(target_source).strip().upper()
-            )
-        latest_market = latest_market_query.order_by(BacktestRun.created_at.desc()).first()
-
-        latest_customer = self.db.query(BacktestRun).filter(
-            BacktestRun.mode == "CUSTOMER_CHECK",
-            BacktestRun.virus_typ == virus_typ,
-        ).order_by(BacktestRun.created_at.desc()).first()
-
-        def _pack(row: BacktestRun | None) -> dict | None:
-            if not row:
-                return None
-            metrics = row.metrics or {}
-            return {
-                "run_id": row.run_id,
-                "mode": row.mode,
-                "target_source": row.target_source,
-                "target_label": row.target_label,
-                "metrics": metrics,
-                "decision_metrics": metrics.get("decision_metrics"),
-                "interval_coverage": metrics.get("interval_coverage"),
-                "event_calibration": metrics.get("event_calibration"),
-                "quality_gate": metrics.get("quality_gate"),
-                "timing_metrics": metrics.get("timing_metrics"),
-                "lead_lag": row.lead_lag or {},
-                "proof_text": row.proof_text,
-                "created_at": row.created_at.isoformat() if row.created_at else None,
-            }
-
-        recent_runs = self.db.query(BacktestRun).order_by(BacktestRun.created_at.desc()).limit(8).all()
-
-        return {
-            "target_source": target_source,
-            "latest_market": _pack(latest_market),
-            "latest_customer": _pack(latest_customer),
-            "recent_runs": [
-                {
-                    "run_id": row.run_id,
-                    "mode": row.mode,
-                    "target_source": row.target_source,
-                    "virus_typ": row.virus_typ,
-                    "metrics": row.metrics or {},
-                    "created_at": row.created_at.isoformat() if row.created_at else None,
-                }
-                for row in recent_runs
-            ],
-        }
 
     def _data_freshness(self) -> dict:
-        now = utc_now()
-
-        def _max_date_for(model_cls, *col_names: str):
-            for col_name in col_names:
-                col = getattr(model_cls, col_name, None)
-                if col is None:
-                    continue
-                value = self.db.query(func.max(col)).scalar()
-                if value:
-                    return self._normalize_freshness_timestamp(value, now=now)
-            return None
-
-        bfarm_freshness = None
-        signals = get_cached_signals() or {}
-        analysis_date = signals.get("analysis_date")
-        if analysis_date:
-            try:
-                bfarm_freshness = self._normalize_freshness_timestamp(
-                    datetime.fromisoformat(str(analysis_date)),
-                    now=now,
-                )
-            except ValueError:
-                bfarm_freshness = None
-
-        return {
-            "wastewater": _max_date_for(WastewaterAggregated, "available_time", "datum", "created_at"),
-            "are_konsultation": _max_date_for(AREKonsultation, "available_time", "datum", "created_at"),
-            "survstat": _max_date_for(SurvstatWeeklyData, "available_time", "week_start", "created_at"),
-            "notaufnahme": _max_date_for(NotaufnahmeSyndromData, "datum", "created_at"),
-            "weather": _max_date_for(WeatherData, "available_time", "datum", "created_at"),
-            "pollen": _max_date_for(PollenData, "available_time", "datum", "created_at"),
-            "google_trends": _max_date_for(GoogleTrendsData, "available_time", "datum", "created_at"),
-            "bfarm_shortage": bfarm_freshness,
-            "marketing": _max_date_for(MarketingOpportunity, "updated_at", "created_at"),
-            "backtest": _max_date_for(BacktestRun, "created_at"),
-        }
+        return build_data_freshness(
+            self.db,
+            normalize_freshness_timestamp=self._normalize_freshness_timestamp,
+        )
 
     def _source_status(self, data_freshness: dict[str, Any]) -> dict[str, Any]:
-        now = utc_now()
-        labels = {
-            "wastewater": "AMELAG Abwasser",
-            "are_konsultation": "RKI ARE",
-            "notaufnahme": "RKI/AKTIN Notaufnahme",
-            "survstat": "RKI SURVSTAT",
-            "weather": "DWD/BrightSky Wetter",
-            "pollen": "DWD Pollen",
-            "google_trends": "Google Trends",
-            "bfarm_shortage": "BfArM Engpässe",
-        }
-
-        items = []
-        live_count = 0
-        for source_key, sla_days in SOURCE_SLA_DAYS.items():
-            raw_ts = data_freshness.get(source_key)
-            parsed = None
-            if raw_ts:
-                try:
-                    parsed = datetime.fromisoformat(str(raw_ts).replace("Z", "+00:00"))
-                    if parsed.tzinfo is not None:
-                        parsed = parsed.replace(tzinfo=None)
-                except ValueError:
-                    parsed = None
-
-            age_days = None
-            if parsed is not None:
-                age_days = max(0.0, (now - parsed).total_seconds() / 86400.0)
-
-            is_live = bool(parsed is not None and age_days is not None and age_days <= float(sla_days))
-            freshness_state = "live" if is_live else ("stale" if parsed else "no_data")
-            if freshness_state == "live":
-                status_color = "green"
-            else:
-                status_color = "amber"
-            feed_reachable = parsed is not None
-            if is_live:
-                live_count += 1
-
-            items.append({
-                "source_key": source_key,
-                "label": labels.get(source_key, source_key),
-                "last_updated": parsed.isoformat() if parsed else None,
-                "age_days": round(age_days, 2) if age_days is not None else None,
-                "sla_days": sla_days,
-                "feed_reachable": feed_reachable,
-                "feed_status_color": "green" if feed_reachable else "amber",
-                "freshness_state": freshness_state,
-                "is_live": is_live,
-                "status_color": status_color,
-            })
-
-        items.sort(key=lambda row: (not row["is_live"], row["source_key"]))
-
-        return {
-            "items": items,
-            "live_count": live_count,
-            "total": len(items),
-            "live_ratio": round((live_count / len(items)) * 100.0, 1) if items else 0.0,
-        }
+        return build_source_status(data_freshness)

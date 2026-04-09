@@ -232,6 +232,61 @@ class MediaV2ServiceTruthCoverageTests(unittest.TestCase):
         self.assertEqual(stored.region_code, "SH")
         self.assertEqual(stored.media_spend_eur, 15000)
 
+    def test_get_decision_payload_delegates_to_decision_builder(self) -> None:
+        with patch(
+            "app.services.media.v2_service.build_decision_payload",
+            return_value={"ok": "decision"},
+        ) as mocked_builder:
+            payload = self.service.get_decision_payload(brand="gelo", virus_typ="Influenza A")
+
+        self.assertEqual(payload, {"ok": "decision"})
+        mocked_builder.assert_called_once_with(
+            self.service,
+            virus_typ="Influenza A",
+            target_source="RKI_ARE",
+            brand="gelo",
+        )
+
+    def test_get_regions_payload_delegates_to_regions_builder(self) -> None:
+        with patch(
+            "app.services.media.v2_service.build_regions_payload",
+            return_value={"ok": "regions"},
+        ) as mocked_builder:
+            payload = self.service.get_regions_payload(brand="gelo", virus_typ="Influenza A")
+
+        self.assertEqual(payload, {"ok": "regions"})
+        mocked_builder.assert_called_once_with(
+            self.service,
+            virus_typ="Influenza A",
+            target_source="RKI_ARE",
+            brand="gelo",
+        )
+
+    def test_get_campaigns_payload_delegates_to_campaigns_builder(self) -> None:
+        with patch(
+            "app.services.media.v2_service.build_campaigns_payload",
+            return_value={"ok": "campaigns"},
+        ) as mocked_builder:
+            payload = self.service.get_campaigns_payload(brand="gelo", limit=42)
+
+        self.assertEqual(payload, {"ok": "campaigns"})
+        mocked_builder.assert_called_once_with(self.service, brand="gelo", limit=42)
+
+    def test_get_evidence_payload_delegates_to_evidence_builder(self) -> None:
+        with patch(
+            "app.services.media.v2_service.build_evidence_payload",
+            return_value={"ok": "evidence"},
+        ) as mocked_builder:
+            payload = self.service.get_evidence_payload(brand="gelo", virus_typ="Influenza A")
+
+        self.assertEqual(payload, {"ok": "evidence"})
+        mocked_builder.assert_called_once_with(
+            self.service,
+            virus_typ="Influenza A",
+            target_source="RKI_ARE",
+            brand="gelo",
+        )
+
     def test_truth_gate_marks_stale_truth_as_risk(self) -> None:
         self._seed_truth_reference(datetime(2026, 3, 3))
         start = datetime(2025, 7, 21)

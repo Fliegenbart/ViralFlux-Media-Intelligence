@@ -303,7 +303,7 @@ def _ensure_runtime_schema_updates():
 
 
 def init_db():
-    """Initialize database - create all tables."""
+    """Validate database schema before startup."""
     logger.info("Checking database schema bootstrap state...")
     auto_create = settings.EFFECTIVE_DB_AUTO_CREATE_SCHEMA
     allow_runtime_updates = settings.EFFECTIVE_DB_ALLOW_RUNTIME_SCHEMA_UPDATES
@@ -320,25 +320,19 @@ def init_db():
     }
 
     if missing_tables:
-        if auto_create:
-            Base.metadata.create_all(bind=engine)
-            actions.append("create_all")
-            existing_tables = set(inspect(engine).get_table_names())
-            missing_tables = sorted(expected_tables - existing_tables)
-        if missing_tables:
-            summary = {
-                "status": "critical",
-                "message": "Database schema is incomplete and auto-create is disabled.",
-                "auto_create_schema": auto_create,
-                "runtime_schema_updates_enabled": allow_runtime_updates,
-                "missing_tables": missing_tables,
-                "warnings": warnings,
-                "actions": actions,
-            }
-            _set_last_init_summary(summary)
-            raise RuntimeError(
-                "Fehlende DB-Tabellen ohne Auto-Create: " + ", ".join(missing_tables)
-            )
+        summary = {
+            "status": "critical",
+            "message": "Database schema is incomplete and requires explicit migrations.",
+            "auto_create_schema": auto_create,
+            "runtime_schema_updates_enabled": allow_runtime_updates,
+            "missing_tables": missing_tables,
+            "warnings": warnings,
+            "actions": actions,
+        }
+        _set_last_init_summary(summary)
+        raise RuntimeError(
+            "Fehlende DB-Tabellen ohne explizite Migration: " + ", ".join(missing_tables)
+        )
 
     required_schema_gaps = get_required_schema_contract_gaps(engine)
     if (
@@ -368,30 +362,22 @@ def init_db():
 
     gaps = _runtime_schema_gaps(existing_tables)
     if gaps["missing_columns"] or gaps["missing_indexes"]:
-        if allow_runtime_updates:
-            _ensure_runtime_schema_updates()
-            actions.append("runtime_schema_updates")
-            warnings.append(
-                "Runtime schema updates were applied. Replace this with an explicit migration before release."
-            )
-            gaps = _runtime_schema_gaps()
-        if gaps["missing_columns"] or gaps["missing_indexes"]:
-            summary = {
-                "status": "critical",
-                "message": "Database schema has unapplied runtime gaps.",
-                "auto_create_schema": auto_create,
-                "runtime_schema_updates_enabled": allow_runtime_updates,
-                "missing_tables": missing_tables,
-                "required_schema_gaps": required_schema_gaps,
-                "runtime_schema_gaps": gaps,
-                "warnings": warnings,
-                "actions": actions,
-            }
-            _set_last_init_summary(summary)
-            details = gaps["missing_columns"] + gaps["missing_indexes"]
-            raise RuntimeError(
-                "Fehlende DB-Migrationen/Schema-Gaps: " + ", ".join(details)
-            )
+        summary = {
+            "status": "critical",
+            "message": "Database schema has unapplied runtime gaps.",
+            "auto_create_schema": auto_create,
+            "runtime_schema_updates_enabled": allow_runtime_updates,
+            "missing_tables": missing_tables,
+            "required_schema_gaps": required_schema_gaps,
+            "runtime_schema_gaps": gaps,
+            "warnings": warnings,
+            "actions": actions,
+        }
+        _set_last_init_summary(summary)
+        details = gaps["missing_columns"] + gaps["missing_indexes"]
+        raise RuntimeError(
+            "Fehlende DB-Migrationen/Schema-Gaps: " + ", ".join(details)
+        )
 
     summary = {
         "status": "warning" if warnings else "ok",

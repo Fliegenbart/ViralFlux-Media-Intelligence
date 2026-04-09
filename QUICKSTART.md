@@ -85,9 +85,8 @@ ADMIN_EMAIL=admin@example.com
 ADMIN_PASSWORD=replace-me
 
 ENVIRONMENT=development
-DB_AUTO_CREATE_SCHEMA=true
-DB_ALLOW_RUNTIME_SCHEMA_UPDATES=true
 STARTUP_STRICT_READINESS=false
+STARTUP_BFARM_IMPORT_ENABLED=false
 READINESS_REQUIRE_BROKER=false
 ```
 
@@ -95,8 +94,23 @@ Wichtig:
 - `VLLM_BASE_URL` darf **nicht versehentlich auf das Backend selbst zeigen**
 - wenn du das Backend **nicht** in Docker betreibst, nutze z. B. `http://127.0.0.1:8001/v1`
 - `http://localhost:8000` ist der FastAPI-Port und kein guter Default fuer einen externen LLM-Endpunkt
+- der API-Start legt **keine** Tabellen mehr still an und fuehrt **keine** stillen Schema-Reparaturen aus
 
-## 3. Backend lokal starten
+## 3. Datenbank-Migrationen explizit anwenden
+
+Bevor du das Backend startest, bringst du das Schema bewusst auf den aktuellen Stand:
+
+```bash
+cd backend
+alembic upgrade head
+```
+
+Wichtig:
+- dieser Schritt ist Pflicht, wenn sich das Datenbankschema geaendert hat
+- der API-Start repariert fehlende Tabellen oder Spalten **nicht** mehr selbst
+- der BfArM-Import startet lokal standardmaessig **nicht** automatisch beim App-Start
+
+## 4. Backend lokal starten
 
 ### Empfohlener Weg fuer die meisten Arbeiten
 
@@ -128,7 +142,7 @@ pip install -r requirements.txt
 uvicorn app.main:app --reload
 ```
 
-## 4. Frontend lokal starten
+## 5. Frontend lokal starten
 
 ```bash
 cd frontend
@@ -148,7 +162,7 @@ Wichtig:
 docker compose --profile dev up -d frontend
 ```
 
-## 5. Login lokal
+## 6. Login lokal
 
 Es gibt keinen fest eingebauten Demo-User im Frontend.
 

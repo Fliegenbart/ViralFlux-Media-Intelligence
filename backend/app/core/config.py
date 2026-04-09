@@ -115,6 +115,7 @@ class Settings(BaseSettings):
     DB_AUTO_CREATE_SCHEMA: bool | None = None
     DB_ALLOW_RUNTIME_SCHEMA_UPDATES: bool | None = None
     STARTUP_STRICT_READINESS: bool | None = None
+    STARTUP_BFARM_IMPORT_ENABLED: bool = False
     READINESS_REQUIRE_BROKER: bool | None = None
     READINESS_SOURCE_FRESH_DAYS: int = 7
     READINESS_SOURCE_WARNING_DAYS: int = 14

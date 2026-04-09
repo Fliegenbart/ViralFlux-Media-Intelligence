@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import asyncio
 import os
 from types import SimpleNamespace
 import unittest
 from contextlib import contextmanager
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 
 os.environ.setdefault("ADMIN_EMAIL", "admin@example.com")
@@ -94,3 +95,30 @@ class StartupSingletonTests(unittest.TestCase):
         self.assertTrue(
             any(call.args[1] == "startup_bfarm_pull_completed" for call in log_event_mock.call_args_list)
         )
+
+    def test_startup_does_not_launch_bfarm_thread_when_flag_is_disabled(self) -> None:
+        with (
+            patch.object(
+                main,
+                "settings",
+                SimpleNamespace(
+                    APP_NAME=main.settings.APP_NAME,
+                    APP_VERSION=main.settings.APP_VERSION,
+                    ENVIRONMENT=main.settings.ENVIRONMENT,
+                    EFFECTIVE_STARTUP_STRICT_READINESS=main.settings.EFFECTIVE_STARTUP_STRICT_READINESS,
+                    STARTUP_BFARM_IMPORT_ENABLED=False,
+                ),
+            ),
+            patch.object(main, "_launch_bfarm_startup_import_thread") as launch_mock,
+            patch.object(main, "check_db_connection", AsyncMock(return_value=True)),
+            patch.object(main, "init_db", MagicMock(return_value={"status": "ok"})),
+            patch.object(
+                main.ProductionReadinessService,
+                "build_snapshot",
+                lambda self, deep_checks=False: {"status": "healthy", "blockers": []},
+            ),
+            patch.object(main, "_record_startup_readiness_once", lambda *_args, **_kwargs: {"run_id": "test"}),
+        ):
+            asyncio.run(main.startup_event())
+
+        launch_mock.assert_not_called()

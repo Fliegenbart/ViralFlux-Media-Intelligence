@@ -200,8 +200,7 @@ async def startup_event():
         strict_startup_readiness=settings.EFFECTIVE_STARTUP_STRICT_READINESS,
     )
     
-    # Runtime safety-net: initialize schema when database is empty / fresh
-    # (migrations are still managed separately).
+    # Startup verifies the schema contract but does not create or mutate it.
     db_healthy = await check_db_connection()
     if not db_healthy:
         log_event(
@@ -237,7 +236,10 @@ async def startup_event():
     if settings.EFFECTIVE_STARTUP_STRICT_READINESS and readiness_snapshot.get("status") == "unhealthy":
         raise RuntimeError("Startup readiness is unhealthy. See /health/ready for blockers.")
 
-    _launch_bfarm_startup_import_thread()
+    if settings.STARTUP_BFARM_IMPORT_ENABLED:
+        _launch_bfarm_startup_import_thread()
+    else:
+        log_event(logger, "startup_bfarm_import_disabled")
 
 
 def _startup_skip_metadata(*, action: str, summary: str, lock_name: str) -> dict[str, Any]:

@@ -74,11 +74,40 @@ Im Live-Standard setzt das Backend explizit:
 - `DB_AUTO_CREATE_SCHEMA=false`
 - `DB_ALLOW_RUNTIME_SCHEMA_UPDATES=false`
 - `STARTUP_STRICT_READINESS=true`
+- `STARTUP_BFARM_IMPORT_ENABLED=false`
 - `READINESS_REQUIRE_BROKER=true`
 
 In einfachen Worten:
 - live soll sich die Datenbankstruktur **nicht still selbst heilen**
+- fehlende Tabellen oder Spalten muessen vor dem Backend-Start explizit per Alembic migriert werden
 - die App soll ehrlich melden, wenn operative Abhaengigkeiten fehlen
+- der BfArM-Import soll nicht ungefragt beim API-Start loslaufen
+
+## Pflichtschritt fuer Datenbankschema
+
+Wenn ein Release Schema-Aenderungen enthaelt, musst du die Migration bewusst ausfuehren, bevor oder waehrend du das Backend neu startest:
+
+```bash
+cd backend
+alembic upgrade head
+```
+
+Wichtig:
+- der aktuelle Backend-Startup erstellt keine Tabellen mehr selbst
+- der aktuelle Backend-Startup fuehrt keine Runtime-Schema-Reparaturen mehr aus
+- diese Migration ist daher ein expliziter Betriebs-Schritt und nicht mehr implizit im App-Start versteckt
+
+## BfArM-Import bewusst ausloesen
+
+Der BfArM-Import laeuft nicht mehr automatisch beim API-Start.
+
+Nutze dafuer den bestehenden Ingest-Pfad, zum Beispiel:
+
+```bash
+curl -X POST https://<your-domain>/api/v1/ingest/bfarm
+```
+
+Oder fuehre die bestehende Ingest-Pipeline / den dafuer vorgesehenen Task aus.
 
 ## Der wichtigste operative Check nach dem Deploy
 

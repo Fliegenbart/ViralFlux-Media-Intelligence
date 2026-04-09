@@ -2,7 +2,7 @@
 
 ## Ziel
 
-Dieses Verzeichnis beschreibt, welche Teile des Repos fuer Kaeufer sichtbar bleiben sollen und welche internen Artefakte nicht in einen Buyer-Facing Branch gehoeren.
+Dieses Verzeichnis beschreibt, welche Teile des Repos zum Buyer-Facing Stand gehoeren und welche internen Artefakte nicht hinein gehoeren.
 
 ## Buyer-Facing behalten
 

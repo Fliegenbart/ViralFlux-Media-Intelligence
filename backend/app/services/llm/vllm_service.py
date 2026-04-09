@@ -39,8 +39,8 @@ async def generate_text(messages: list[dict], temperature: float = 0.2) -> str:
         )
         return response.choices[0].message.content
     except Exception as e:
-        logger.error(f"VLLM Connection Error: {str(e)}")
-        return "FEHLER: Der lokale KI-Server antwortet nicht."
+        logger.exception("VLLM Connection Error during async text request")
+        raise RuntimeError("Lokale vLLM-Anfrage fehlgeschlagen.") from e
 
 
 def generate_text_sync(messages: list[dict], temperature: float = 0.2) -> str:
@@ -53,8 +53,8 @@ def generate_text_sync(messages: list[dict], temperature: float = 0.2) -> str:
         )
         return response.choices[0].message.content
     except Exception as e:
-        logger.error(f"VLLM Connection Error: {str(e)}")
-        return "FEHLER: Der lokale KI-Server antwortet nicht."
+        logger.exception("VLLM Connection Error during sync text request")
+        raise RuntimeError("Lokale vLLM-Anfrage fehlgeschlagen.") from e
 
 
 async def generate_vision(
@@ -88,8 +88,8 @@ async def generate_vision(
         )
         return response.choices[0].message.content
     except Exception as e:
-        logger.error(f"VLLM Vision Error: {str(e)}")
-        return "FEHLER: Bild konnte nicht lokal verarbeitet werden."
+        logger.exception("VLLM Vision Error during async image request")
+        raise RuntimeError("Lokale vLLM-Bildanfrage fehlgeschlagen.") from e
 
 
 def generate_vision_sync(
@@ -123,5 +123,5 @@ def generate_vision_sync(
         )
         return response.choices[0].message.content
     except Exception as e:
-        logger.error(f"VLLM Vision Error: {str(e)}")
-        return "FEHLER: Bild konnte nicht lokal verarbeitet werden."
+        logger.exception("VLLM Vision Error during sync image request")
+        raise RuntimeError("Lokale vLLM-Bildanfrage fehlgeschlagen.") from e

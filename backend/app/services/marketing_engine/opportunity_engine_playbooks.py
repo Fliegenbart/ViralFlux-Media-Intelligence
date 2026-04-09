@@ -119,7 +119,7 @@ def generate_playbook_ai_cards(
             product=selected_product,
             campaign_goal=campaign_goal,
             weekly_budget=weekly_budget,
-            skip_ollama=ai_disabled,
+            skip_llm=ai_disabled,
         )
         guarded = engine.guardrails.apply(
             playbook_key=playbook_key,

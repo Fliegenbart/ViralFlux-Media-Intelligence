@@ -12,6 +12,18 @@ import {
 } from './BacktestVisuals';
 import { BacktestResponse } from '../../types/media';
 
+jest.mock('./cockpitUtils', () => ({
+  VIRUS_OPTIONS: ['Influenza A', 'Influenza B', 'SARS-CoV-2', 'RSV A'],
+  formatDateShort: (value?: string | null) => {
+    if (!value) return '-';
+    const iso = String(value).slice(0, 10);
+    const [year, month, day] = iso.split('-');
+    return `${day}.${month}.${year}`;
+  },
+  formatDateTime: () => '04.04.2026 · 08:00',
+  formatPercent: (value: number) => `${Math.round(value)}%`,
+}));
+
 jest.mock('recharts', () => {
   const ReactLib = require('react');
 

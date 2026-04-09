@@ -215,6 +215,12 @@ const VirusRadarWorkspace: React.FC<Props> = ({
   });
   const campaignCards = (campaignsData.campaignsView?.cards || []).slice(0, 3);
   const topActivation = regionsData.regionsView?.map?.activation_suggestions?.slice(0, 3) || [];
+  const activationQueueModel = buildActivationQueueModel(topActivation);
+  const campaignReadinessModel = buildCampaignReadinessModel({
+    cards: campaignCards,
+    publishableCards: campaignsData.campaignsView?.summary?.publishable_cards,
+    activeCards: campaignsData.campaignsView?.summary?.active_cards,
+  });
   const dataTimestamp = formatDateTime(nowData.view.generatedAt);
   const trendInsight = buildTrendInsight({
     regionName: chartRegionName,
@@ -455,14 +461,25 @@ const VirusRadarWorkspace: React.FC<Props> = ({
               title="Nächste Schritte nach Region"
               description="Welche Bundesländer als Nächstes in der Media-Prüfung landen sollten."
             >
+              <div className="virus-radar-secondary-lead virus-radar-secondary-lead--queue">
+                <span className="virus-radar-secondary-lead__eyebrow">Kurz gesagt</span>
+                <strong className="virus-radar-secondary-lead__headline">{activationQueueModel.headline}</strong>
+                <p className="virus-radar-secondary-lead__copy">{activationQueueModel.copy}</p>
+              </div>
               <div className="virus-radar-queue">
-                {topActivation.length > 0 ? topActivation.map((item) => (
+                {topActivation.length > 0 ? topActivation.map((item, index) => (
                   <div key={item.region} className="virus-radar-queue__item">
-                    <div>
-                      <strong>{item.region_name}</strong>
-                      <span>{item.priority} · {formatProbability(item.impact_probability)}</span>
+                    <div className="virus-radar-queue__item-head">
+                      <span className="virus-radar-queue__rank">{String(index + 1).padStart(2, '0')}</span>
+                      <div className="virus-radar-queue__item-copy">
+                        <strong>{item.region_name}</strong>
+                        <span>{formatProbability(item.impact_probability)} Signal · {item.priority}</span>
+                      </div>
+                      <span className={`virus-radar-ladder__stage virus-radar-ladder__stage--${regionStageTone(item.priority)}`}>
+                        {item.priority}
+                      </span>
                     </div>
-                    <span>{item.reason}</span>
+                    <span className="virus-radar-queue__reason">{item.reason}</span>
                   </div>
                 )) : (
                   <div className="virus-radar-empty">Noch keine regionale Reihenfolge vorhanden.</div>
@@ -475,6 +492,11 @@ const VirusRadarWorkspace: React.FC<Props> = ({
               title="Was kampagnenreif ist"
               description="Die wichtigsten Vorschläge, damit Analyse in Handlung übergeht."
             >
+              <div className="virus-radar-secondary-lead virus-radar-secondary-lead--campaigns">
+                <span className="virus-radar-secondary-lead__eyebrow">Kurz gesagt</span>
+                <strong className="virus-radar-secondary-lead__headline">{campaignReadinessModel.headline}</strong>
+                <p className="virus-radar-secondary-lead__copy">{campaignReadinessModel.copy}</p>
+              </div>
               <div className="virus-radar-campaigns">
                 {campaignCards.length > 0 ? campaignCards.map((card) => (
                   <CampaignReadinessCard
@@ -751,6 +773,64 @@ function buildRiskItems(
 ): string[] {
   const combined = [...(blockers || []), ...(risks || []), ...(knownLimits || [])].filter(Boolean);
   return combined.slice(0, 4).length > 0 ? combined.slice(0, 4) : ['Aktuell sind keine zusätzlichen Risiken dokumentiert.'];
+}
+
+function buildActivationQueueModel(
+  items: Array<{
+    region_name?: string | null;
+    priority?: string | null;
+    impact_probability?: number | null;
+    reason?: string | null;
+  }>,
+): { headline: string; copy: string } {
+  if (items.length === 0) {
+    return {
+      headline: 'Noch keine Reihenfolge für die Regionsprüfung.',
+      copy: 'Sobald Aktivierungshinweise vorliegen, siehst du hier sofort, welche Bundesländer zuerst in die Prüfung gehen.',
+    };
+  }
+
+  const lead = items[0];
+  const leadRegion = lead.region_name || 'Die Fokusregion';
+  const leadPriority = lead.priority || 'Beobachten';
+  const leadSignal = formatProbability(lead.impact_probability);
+
+  return {
+    headline: `${leadRegion} führt die nächste Prüf-Reihenfolge an.`,
+    copy: `${leadPriority} ist aktuell der stärkste nächste Schritt. ${leadSignal !== '-' ? `${leadSignal} Signal` : 'Das Signal wird noch eingeordnet'}${lead.reason ? ` · ${lead.reason}` : '.'}`,
+  };
+}
+
+function buildCampaignReadinessModel({
+  cards,
+  publishableCards,
+  activeCards,
+}: {
+  cards: RecommendationCard[];
+  publishableCards?: number | null;
+  activeCards?: number | null;
+}): { headline: string; copy: string } {
+  const publishable = publishableCards ?? 0;
+  const active = activeCards ?? 0;
+
+  if (cards.length === 0) {
+    return {
+      headline: 'Noch kein Vorschlag ist kampagnenreif.',
+      copy: active > 0
+        ? `${active} Vorschläge sind sichtbar, aber noch nicht freigabereif. Sobald sich das ändert, steht hier der nächste konkrete Move.`
+        : 'Sobald aus Analyse konkrete Vorschläge werden, siehst du hier sofort, was direkt in die Umsetzung gehen kann.',
+    };
+  }
+
+  const lead = cards[0];
+  const leadTitle = lead.display_title || lead.campaign_name || lead.region || 'Der nächste Vorschlag';
+
+  return {
+    headline: publishable > 0
+      ? `${publishable} Vorschlag${publishable === 1 ? '' : 'e'} sind reviewbereit.`
+      : `${leadTitle} ist der stärkste nächste Vorschlag.`,
+    copy: `${active} aktive Karte${active === 1 ? '' : 'n'} im Blick. ${lead.reason || lead.decision_brief?.summary_sentence || 'Die Kurzbegründung ist bereits sichtbar und kann direkt geprüft werden.'}`,
+  };
 }
 
 function buildWhyNowModel({

@@ -548,6 +548,48 @@
   gap: var(--space-sm);
 }
 
+.virus-radar-secondary-lead {
+  display: grid;
+  gap: 8px;
+  padding: 16px 18px;
+  border: 1px solid rgba(23, 32, 51, 0.08);
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(247, 249, 248, 0.95));
+  box-shadow: 0 10px 24px rgba(15, 28, 26, 0.04);
+}
+
+.virus-radar-secondary-lead--queue {
+  border-color: rgba(15, 118, 110, 0.12);
+  background: linear-gradient(180deg, rgba(245, 252, 249, 0.98), rgba(238, 247, 243, 0.96));
+}
+
+.virus-radar-secondary-lead--campaigns {
+  border-color: rgba(20, 87, 210, 0.12);
+  background: linear-gradient(180deg, rgba(246, 249, 255, 0.98), rgba(239, 245, 255, 0.96));
+}
+
+.virus-radar-secondary-lead__eyebrow {
+  color: #8a9794;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.virus-radar-secondary-lead__headline {
+  color: var(--text-primary);
+  font-size: clamp(1.05rem, 1.3vw, 1.3rem);
+  line-height: 1.15;
+  letter-spacing: -0.03em;
+}
+
+.virus-radar-secondary-lead__copy {
+  margin: 0;
+  color: #4b5b58;
+  font-size: 0.92rem;
+  line-height: 1.55;
+}
+
 .virus-radar-ladder__item,
 .virus-radar-campaign-card {
   all: unset;
@@ -598,7 +640,8 @@
 .virus-radar-ladder__rank,
 .virus-radar-ladder__probability,
 .virus-radar-campaign-card__meta,
-.virus-radar-queue__item span {
+.virus-radar-queue__item-copy span,
+.virus-radar-queue__rank {
   font-family: 'JetBrains Mono', 'Menlo', monospace;
 }
 
@@ -651,7 +694,7 @@
   color: var(--text-primary);
 }
 
-.virus-radar-queue__item span,
+.virus-radar-queue__item-copy span,
 .virus-radar-campaign-card span,
 .virus-radar-list__item,
 .virus-radar-empty {
@@ -667,6 +710,49 @@
   padding: 14px 16px;
   border-left: 2px solid rgba(23, 32, 51, 0.24);
   background: rgba(255, 255, 255, 0.84);
+}
+
+.virus-radar-queue__item {
+  gap: 10px;
+  border-left-width: 3px;
+  border-left-color: rgba(15, 118, 110, 0.28);
+  border-radius: 16px;
+}
+
+.virus-radar-queue__item-head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 12px;
+}
+
+.virus-radar-queue__rank {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  min-height: 32px;
+  border-radius: 999px;
+  background: rgba(15, 118, 110, 0.1);
+  color: #1f7a66;
+  font-family: 'JetBrains Mono', 'Menlo', monospace;
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.virus-radar-queue__item-copy {
+  display: grid;
+  gap: 4px;
+}
+
+.virus-radar-queue__reason {
+  color: #4b5b58;
+}
+
+.virus-radar-campaign-card {
+  gap: 10px;
+  padding: 16px 18px;
+  border-radius: 16px;
 }
 
 .virus-radar-campaign-card__header,

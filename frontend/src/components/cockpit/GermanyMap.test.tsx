@@ -4,6 +4,10 @@ import { fireEvent, render, screen } from '@testing-library/react';
 
 jest.mock('./cockpitUtils', () => ({
   formatPercent: (value: number, digits = 0) => `${value.toFixed(digits)}%`,
+  formatSignalScore: (value: number, digits = 0) => {
+    const normalized = value <= 1 ? value * 100 : value;
+    return `${normalized.toFixed(digits)}/100`;
+  },
   primarySignalScore: (region: { signal_score?: number | null; impact_probability?: number | null }) => (
     region.signal_score ?? region.impact_probability ?? 0
   ),
@@ -88,5 +92,30 @@ describe('GermanyMap', () => {
     expect(screen.getByText('Top-Region')).toBeInTheDocument();
     expect(screen.getByText('55%')).toBeInTheDocument();
     expect(screen.queryByText('49%')).not.toBeInTheDocument();
+  });
+
+  it('labels hovered peix map values as signal score instead of wave probability', () => {
+    render(
+      <GermanyMap
+        regions={{
+          BE: {
+            name: 'Berlin',
+            trend: 'steigend',
+            change_pct: 12,
+            signal_score: 0.82,
+            impact_probability: 0.82,
+            signal_drivers: [{ label: 'ARE', strength_pct: 62 }],
+            source_trace: ['RKI', 'Abwasser'],
+          } as any,
+        }}
+        selectedRegion={null}
+        onSelectRegion={() => undefined}
+      />,
+    );
+
+    fireEvent.mouseEnter(screen.getByRole('button', { name: /Berlin, Bundesland-Level/i }));
+
+    expect(screen.getByText('82/100 Signalwert')).toBeInTheDocument();
+    expect(screen.queryByText(/Wellenwahrscheinlichkeit/i)).not.toBeInTheDocument();
   });
 });

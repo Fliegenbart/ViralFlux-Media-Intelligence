@@ -5,7 +5,7 @@ Integriert alle 4 Virus-Typen als gewichteten Durchschnitt.
 
 Formel:
   PeixEpiScore = (bio_aggregate × 0.50 + forecast × 0.15 + weather × 0.10
-                  + shortage × 0.10 + search × 0.10 + baseline × 0.05) × 100
+                  + shortage × 0.15 + search × 0.05 + baseline × 0.05) × 100
 
   bio_aggregate = Σ(virus_weight_i × epi_score_i)  über alle 4 Viren
 
@@ -40,6 +40,7 @@ from app.models.database import (
 )
 from app.services.data_ingest.bfarm_service import get_cached_signals
 from app.services.data_ingest.weather_service import CITY_STATE_MAP
+from app.services.media.semantic_contracts import ranking_signal_contract
 from app.services.ml.forecast_contracts import DEFAULT_DECISION_HORIZON_DAYS
 from app.services.ml.forecast_horizon_utils import DEFAULT_FORECAST_REGION
 
@@ -139,10 +140,10 @@ class PeixEpiScoreService:
     def __init__(self, db: Session):
         self.db = db
         self._weights = dict(DEFAULT_WEIGHTS)
-        self._load_calibrated_weights()
+        self._load_translated_lab_policy_weights()
 
-    def _load_calibrated_weights(self) -> None:
-        """Lade Ridge-optimierte Gewichte aus LabConfiguration (Backtester)."""
+    def _load_translated_lab_policy_weights(self) -> None:
+        """Leite heuristische Policy-Gewichte aus der 4D-LabConfiguration ab."""
         config = self.db.query(LabConfiguration).filter_by(
             is_global_default=True
         ).first()
@@ -150,10 +151,13 @@ class PeixEpiScoreService:
         if not config:
             return
 
-        # 4D (Backtester Ridge) → 6D (PeixEpiScore) Mapping.
+        # 4D (LabConfiguration) → 6D (PeixEpiScore) Mapping.
         #
-        # Der Backtester kalibriert 4 Gewichte: bio, market, psycho, context.
-        # PeixEpiScore benötigt 6 Dimensionen. Mapping:
+        # Die LabConfiguration liefert 4 Gewichte: bio, market, psycho, context.
+        # PeixEpiScore benötigt 6 Dimensionen. Das folgende Mapping ist eine
+        # explizite Policy-Übersetzung und keine direkte statistische Kalibrierung.
+        #
+        # Mapping:
         #   bio    → bio      (1:1, direkt)
         #   market → shortage (1:1, direkt)
         #   psycho → search   (1:1, direkt)
@@ -188,9 +192,28 @@ class PeixEpiScoreService:
             self._weights = {k: round(v / total, 4) for k, v in self._weights.items()}
 
         logger.info(
-            f"PeixEpiScore: Kalibrierte Gewichte geladen "
+            f"PeixEpiScore: Abgeleitete Policy-Gewichte aus LabConfiguration geladen "
             f"(Basis: {config.analyzed_days} Tage, R²={config.correlation_score})"
         )
+
+    @staticmethod
+    def _weights_source_label(weights: dict[str, float]) -> str:
+        return "manual_policy_default" if weights == DEFAULT_WEIGHTS else "translated_lab_policy"
+
+    @staticmethod
+    def _ranking_signal_metadata(*, score_field: str, legacy_field: str, label: str) -> dict[str, Any]:
+        return {
+            "score_semantics": "ranking_signal",
+            "impact_probability_semantics": "ranking_signal",
+            "impact_probability_deprecated": True,
+            "field_contracts": {
+                score_field: ranking_signal_contract(source="PeixEpiScore", label=label),
+                legacy_field: ranking_signal_contract(
+                    source="PeixEpiScore",
+                    label="Legacy Signal-Alias",
+                ),
+            },
+        }
 
     def build(self, virus_typ: str = "Influenza A") -> dict[str, Any]:
         """Berechne den PeixEpiScore für alle Regionen."""
@@ -315,6 +338,11 @@ class PeixEpiScoreService:
                 "impact_probability": impact_probability,
                 "top_drivers": top_drivers,
                 "layer_contributions": self._normalized_contributions(layer_contributions),
+                **self._ranking_signal_metadata(
+                    score_field="score_0_100",
+                    legacy_field="impact_probability",
+                    label="Signalwert",
+                ),
             }
 
         # --- National ---
@@ -372,10 +400,15 @@ class PeixEpiScoreService:
             "context_signals": context_signals,
             "confidence": confidence,
             "confidence_label": confidence_label,
-            "weights_source": "calibrated" if self._weights != DEFAULT_WEIGHTS else "default",
+            "weights_source": self._weights_source_label(self._weights),
             "top_drivers": national_drivers,
             "regions": regions,
             "generated_at": utc_now().isoformat(),
+            **self._ranking_signal_metadata(
+                score_field="national_score",
+                legacy_field="national_impact_probability",
+                label="Nationaler Signalwert",
+            ),
         }
 
     # ─── Epi-Score Berechnung (per Virus, adaptiv) ────────────────────────

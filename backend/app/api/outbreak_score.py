@@ -26,6 +26,9 @@ PUBLIC_PEIX_REGION_FIELDS = (
     "score_0_100",
     "risk_band",
     "impact_probability",
+    "score_semantics",
+    "impact_probability_semantics",
+    "impact_probability_deprecated",
 )
 
 
@@ -93,6 +96,9 @@ def _to_public_peix_payload(payload: dict) -> dict:
         "national_score": payload.get("national_score"),
         "national_band": payload.get("national_band"),
         "national_impact_probability": payload.get("national_impact_probability"),
+        "score_semantics": payload.get("score_semantics"),
+        "impact_probability_semantics": payload.get("impact_probability_semantics"),
+        "impact_probability_deprecated": payload.get("impact_probability_deprecated"),
         "generated_at": payload.get("generated_at"),
         "regions": safe_regions,
     }

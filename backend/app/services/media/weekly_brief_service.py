@@ -167,6 +167,29 @@ def _normalize_tile_line(text: str) -> str:
     return normalized.replace("Signalscore", "Signalwert")
 
 
+def _normalize_signal_score(value: Any) -> float:
+    try:
+        score = float(value or 0)
+    except (TypeError, ValueError):
+        return 0.0
+    if score <= 1.0:
+        score *= 100.0
+    return max(0.0, min(100.0, score))
+
+
+def _primary_signal_score(item: dict[str, Any] | None) -> float:
+    payload = item or {}
+    for key in ("signal_score", "peix_score", "score_0_100", "impact_probability"):
+        if key in payload and payload.get(key) is not None:
+            return round(_normalize_signal_score(payload.get(key)), 1)
+    return 0.0
+
+
+def _format_signal_score(value: Any, digits: int = 0) -> str:
+    score = _normalize_signal_score(value)
+    return f"{score:.{digits}f}/100"
+
+
 def _action_card_title(card: dict[str, Any]) -> str:
     title = str(
         card.get("display_title")
@@ -216,7 +239,7 @@ class WeeklyBriefService:
                 for code, data in regions.items()
                 if isinstance(data, dict)
             ],
-            key=lambda r: float(r.get("impact_probability", 0) or 0),
+            key=_primary_signal_score,
             reverse=True,
         )
 
@@ -252,8 +275,7 @@ class WeeklyBriefService:
         if region_list:
             top_region = region_list[0]
             top_region_name = top_region.get("name", top_region.get("code", "der Fokusregion"))
-            top_region_score = float(top_region.get("peix_score", top_region.get("score_0_100", 0)) or 0)
-            top_region_impact = float(top_region.get("impact_probability", 0) or 0)
+            top_region_score = _primary_signal_score(top_region)
             pdf.set_fill_color(238, 242, 255)
             pdf.set_draw_color(*_INDIGO)
             pdf.set_line_width(0.2)
@@ -265,7 +287,7 @@ class WeeklyBriefService:
                 _safe(
                     "Aktuelle Hauptaussage: "
                     f"Das früheste relevante Signal sehen wir derzeit in {top_region_name}. "
-                    f"Die Region führt die Priorisierung mit {top_region_score:.0f}/100 und einem Frühsignal von {top_region_impact:.0f}% an."
+                    f"Die Region führt die Priorisierung mit einem Signalwert von {_format_signal_score(top_region_score)} an."
                 ),
                 border=1,
                 fill=True,
@@ -278,10 +300,9 @@ class WeeklyBriefService:
         _section(pdf, "Signalbild Deutschland")
         national_score = peix.get("national_score", 0)
         national_band = peix.get("national_band", "-")
-        national_impact = peix.get("national_impact_probability", 0)
         _kv(pdf, "Nationaler Index:", f"{national_score:.0f} / 100", bold_value=True)
         _kv(pdf, "Risiko-Band:", str(national_band).upper(), bold_value=True)
-        _kv(pdf, "Signalwert:", f"{national_impact:.1f}%", bold_value=True)
+        _kv(pdf, "Signalwert:", _format_signal_score(national_score, digits=1), bold_value=True)
         _kv(pdf, "Einordnung:", "Priorisierung für frühe regionale Signale", bold_value=True)
         _kv(pdf, "Dominanter Virus:", virus_typ)
         pdf.ln(2)
@@ -292,13 +313,13 @@ class WeeklyBriefService:
             title = _tile_display_title(tile.get("title", ""))
             value = tile.get("value", "")
             unit = tile.get("unit", "")
-            impact = tile.get("impact_probability")
+            signal_score = _primary_signal_score(tile)
             is_live = tile.get("is_live", False)
 
             pdf.set_font("Helvetica", "B" if is_live else "", 9)
             pdf.set_text_color(*_SLATE_700)
             display_val = f"{value}{unit}" if unit else str(value)
-            impact_str = f"Signalwert: {impact:.0f}%" if impact is not None else ""
+            impact_str = f"Signalwert: {_format_signal_score(signal_score)}" if signal_score > 0 else ""
             live_marker = "[LIVE]" if is_live else "[STALE]"
             signal_line = _normalize_tile_line(f"  {live_marker} {title}: {display_val}   {impact_str}")
             pdf.cell(0, 6,
@@ -315,7 +336,7 @@ class WeeklyBriefService:
             pdf.set_fill_color(*_INDIGO)
             pdf.cell(40, 7, "  Region", fill=True)
             pdf.cell(25, 7, "Score", align="C", fill=True)
-            pdf.cell(25, 7, "Frühsignal", align="C", fill=True)
+            pdf.cell(25, 7, "Signalwert", align="C", fill=True)
             pdf.cell(25, 7, "Trend", align="C", fill=True)
             pdf.cell(0, 7, "Änderung", align="C", fill=True,
                      new_x="LMARGIN", new_y="NEXT")
@@ -328,7 +349,7 @@ class WeeklyBriefService:
 
                 name = reg.get("name", reg.get("code", "?"))
                 score = reg.get("peix_score", reg.get("score_0_100", 0))
-                impact = reg.get("impact_probability", 0)
+                signal_score = _primary_signal_score(reg)
                 trend = reg.get("trend", "-")
                 change = reg.get("change_pct", 0)
 
@@ -337,7 +358,7 @@ class WeeklyBriefService:
 
                 pdf.cell(40, 6, _safe(f"  {name}"), fill=True)
                 pdf.cell(25, 6, f"{float(score or 0):.0f}", align="C", fill=True)
-                pdf.cell(25, 6, f"{float(impact or 0):.0f}%", align="C", fill=True)
+                pdf.cell(25, 6, _safe(_format_signal_score(signal_score)), align="C", fill=True)
                 pdf.cell(25, 6, _safe(trend_arrow), align="C", fill=True)
                 pdf.cell(0, 6, _safe(change_str), align="C", fill=True,
                          new_x="LMARGIN", new_y="NEXT")
@@ -369,24 +390,24 @@ class WeeklyBriefService:
         pdf.set_fill_color(*_INDIGO)
         pdf.cell(45, 7, "  Region", fill=True)
         pdf.cell(25, 7, "Score", align="C", fill=True)
-        pdf.cell(25, 7, "Frühsignal", align="C", fill=True)
+        pdf.cell(25, 7, "Signalwert", align="C", fill=True)
         pdf.cell(30, 7, "Empfehlung", align="C", fill=True)
         pdf.cell(0, 7, "Begründung", fill=True, new_x="LMARGIN", new_y="NEXT")
 
         for i, reg in enumerate(region_list[:8]):
             score = float(reg.get("peix_score", reg.get("score_0_100", 0)) or 0)
-            impact = float(reg.get("impact_probability", 0) or 0)
+            signal_score = _primary_signal_score(reg)
             name = reg.get("name", reg.get("code", "?"))
 
-            if impact >= 80:
+            if signal_score >= 80:
                 shift = "+30-40%"
                 reason = "sehr frühes Signal - zuerst prüfen"
                 color = _RED
-            elif impact >= 60:
+            elif signal_score >= 60:
                 shift = "+15-25%"
                 reason = "frühes Signal - Budgeterhöhung prüfen"
                 color = _AMBER
-            elif impact >= 40:
+            elif signal_score >= 40:
                 shift = "Halten"
                 reason = "beobachten - noch nicht freigeben"
                 color = _SLATE_700
@@ -401,7 +422,7 @@ class WeeklyBriefService:
             pdf.set_text_color(*_SLATE_700)
             pdf.cell(45, 6, _safe(f"  {name}"), fill=True)
             pdf.cell(25, 6, f"{score:.0f}", align="C", fill=True)
-            pdf.cell(25, 6, f"{impact:.0f}%", align="C", fill=True)
+            pdf.cell(25, 6, _safe(_format_signal_score(signal_score)), align="C", fill=True)
             pdf.set_text_color(*color)
             pdf.set_font("Helvetica", "B", 9)
             pdf.cell(30, 6, _safe(shift), align="C", fill=True)

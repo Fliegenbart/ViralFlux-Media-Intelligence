@@ -21,6 +21,28 @@ class CockpitServiceGuardTests(unittest.TestCase):
 
         self.assertEqual(normalized, past.isoformat())
 
+    def test_primary_signal_score_prefers_signal_score_over_legacy_alias(self) -> None:
+        score = MediaCockpitService._primary_signal_score({
+            "signal_score": 67.0,
+            "peix_score": 63.0,
+            "impact_probability": 88.0,
+        })
+
+        self.assertEqual(score, 67.0)
+
+    def test_ranking_signal_fields_mark_legacy_alias_as_deprecated(self) -> None:
+        payload = MediaCockpitService(None)._ranking_signal_fields(
+            signal_score=67.0,
+            legacy_alias=88.0,
+            source="PeixEpiScore",
+        )
+
+        self.assertEqual(payload["score_semantics"], "ranking_signal")
+        self.assertEqual(payload["impact_probability_semantics"], "ranking_signal")
+        self.assertTrue(payload["impact_probability_deprecated"])
+        self.assertEqual(payload["signal_score"], 67.0)
+        self.assertEqual(payload["impact_probability"], 88.0)
+
 
 if __name__ == "__main__":
     unittest.main()

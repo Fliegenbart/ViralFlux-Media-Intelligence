@@ -97,11 +97,19 @@ export function formatPercent(value?: number | null, digits = 0): string {
   return `${value.toFixed(digits)}%`;
 }
 
+export function formatSignalScore(value?: number | null, digits = 0): string {
+  if (value == null || Number.isNaN(value)) return '-';
+  const normalized = value <= 1 ? value * 100 : value;
+  return `${normalized.toFixed(digits)}/100`;
+}
+
 export function primarySignalScore(
   item?: { signal_score?: number | null; peix_score?: number | null; impact_probability?: number | null } | null,
 ): number {
   if (!item) return 0;
-  return Number(item.signal_score ?? item.peix_score ?? item.impact_probability ?? 0);
+  const raw = Number(item.signal_score ?? item.peix_score ?? item.impact_probability ?? 0);
+  if (Number.isNaN(raw)) return 0;
+  return raw <= 1 ? raw * 100 : raw;
 }
 
 export function signalConfidencePercent(

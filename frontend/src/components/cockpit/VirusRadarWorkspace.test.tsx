@@ -25,6 +25,16 @@ jest.mock('./cockpitUtils', () => ({
   formatCurrency: (value: number | null | undefined) => (value == null ? '-' : `${value} EUR`),
   formatDateTime: () => '04.04.2026 · 08:00',
   formatPercent: (value: number) => `${Math.round(value)}%`,
+  formatSignalScore: (value: number | null | undefined, digits = 0) => {
+    if (value == null || Number.isNaN(value)) return '-';
+    const normalized = value <= 1 ? value * 100 : value;
+    return `${normalized.toFixed(digits)}/100`;
+  },
+  primarySignalScore: (item: { signal_score?: number | null; peix_score?: number | null; impact_probability?: number | null } | null | undefined) => {
+    if (!item) return 0;
+    const raw = item.signal_score ?? item.peix_score ?? item.impact_probability ?? 0;
+    return raw <= 1 ? raw * 100 : raw;
+  },
   statusTone: () => ({
     background: 'rgba(31, 122, 102, 0.12)',
     color: '#1f7a66',
@@ -227,6 +237,7 @@ describe('VirusRadarWorkspace', () => {
     expect(screen.getByText('Wichtigste Regionen diese Woche')).toBeInTheDocument();
     expect(screen.getByText('Fokusregion')).toBeInTheDocument();
     expect(screen.getAllByText('Aktivieren').length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/88\/100 Signalwert/i).length).toBeGreaterThan(0);
   });
 
   it('shows an honest loading state while the shared hero outlook is still loading', () => {

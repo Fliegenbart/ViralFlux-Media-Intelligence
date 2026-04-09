@@ -12,10 +12,8 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.models.database import AuditLog, MarketingOpportunity
-from app.services.marketing_engine.opportunity_engine import (
-    BUNDESLAND_NAMES,
-    MarketingOpportunityEngine,
-)
+from app.services.marketing_engine.opportunity_engine import MarketingOpportunityEngine
+from app.services.marketing_engine.opportunity_engine_constants import BUNDESLAND_NAMES
 from app.services.media.truth_layer_service import TruthLayerService
 
 

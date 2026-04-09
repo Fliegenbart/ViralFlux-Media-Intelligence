@@ -134,9 +134,12 @@ class LegacyRouteAuthTests(unittest.TestCase):
             "national_score": 0.42,
             "national_band": "elevated",
             "national_impact_probability": 58.0,
+            "score_semantics": "ranking_signal",
+            "impact_probability_semantics": "ranking_signal",
+            "impact_probability_deprecated": True,
             "virus_scores": {"Influenza A": {"epi_score": 0.5}},
             "context_signals": {"forecast": {"weight": 0.2}},
-            "weights_source": "calibrated",
+            "weights_source": "translated_lab_policy",
             "top_drivers": ["forecast"],
             "generated_at": "2026-04-08T10:00:00Z",
             "regions": {
@@ -146,6 +149,9 @@ class LegacyRouteAuthTests(unittest.TestCase):
                     "score_0_100": 77.0,
                     "risk_band": "high",
                     "impact_probability": 84.0,
+                    "score_semantics": "ranking_signal",
+                    "impact_probability_semantics": "ranking_signal",
+                    "impact_probability_deprecated": True,
                     "top_drivers": ["forecast"],
                     "layer_contributions": {"Forecast": 55.0},
                 }
@@ -161,6 +167,9 @@ class LegacyRouteAuthTests(unittest.TestCase):
                 "national_score": 0.42,
                 "national_band": "elevated",
                 "national_impact_probability": 58.0,
+                "score_semantics": "ranking_signal",
+                "impact_probability_semantics": "ranking_signal",
+                "impact_probability_deprecated": True,
                 "generated_at": "2026-04-08T10:00:00Z",
                 "regions": {
                     "BE": {
@@ -169,6 +178,9 @@ class LegacyRouteAuthTests(unittest.TestCase):
                         "score_0_100": 77.0,
                         "risk_band": "high",
                         "impact_probability": 84.0,
+                        "score_semantics": "ranking_signal",
+                        "impact_probability_semantics": "ranking_signal",
+                        "impact_probability_deprecated": True,
                     }
                 },
             },

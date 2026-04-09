@@ -20,6 +20,8 @@ import {
   formatCurrency,
   formatDateTime,
   formatPercent,
+  formatSignalScore,
+  primarySignalScore,
   statusTone,
 } from './cockpitUtils';
 import {
@@ -210,7 +212,7 @@ const VirusRadarWorkspace: React.FC<Props> = ({
     stage: selectedRegionStage,
     trend: selectedRegion?.trend || selectedPrediction?.trend || null,
     changePct: selectedRegion?.change_pct ?? selectedPrediction?.change_pct ?? null,
-    impactProbability: selectedRegion?.impact_probability ?? selectedRegion?.signal_score ?? selectedPrediction?.event_probability_calibrated ?? null,
+    signalScore: selectedRegion?.signal_score ?? selectedRegion?.impact_probability ?? selectedPrediction?.event_probability_calibrated ?? null,
     reason: selectedActivation?.reason || selectedRegion?.priority_explanation || null,
   });
   const whyNowItems = buildWhyNowItems(nowData.view.reasons, evidenceData.evidence?.signal_stack?.summary?.top_drivers);
@@ -441,7 +443,7 @@ const VirusRadarWorkspace: React.FC<Props> = ({
                       stage={resolveRegionStage(
                         activationByRegion.get(row.code)?.priority,
                         predictionByRegion.get(row.code)?.decision_label,
-                        row.impact_probability ?? row.signal_score ?? null,
+                        primarySignalScore(row) || null,
                       )}
                       onSelect={() => {
                         setSelectedRegionCode(row.code);
@@ -483,7 +485,7 @@ const VirusRadarWorkspace: React.FC<Props> = ({
                       <span className="virus-radar-queue__rank">{String(index + 1).padStart(2, '0')}</span>
                       <div className="virus-radar-queue__item-copy">
                         <strong>{item.region_name}</strong>
-                        <span>{formatProbability(item.impact_probability)} Signal · {item.priority}</span>
+                        <span>{formatSignalScore(primarySignalScore(item))} Signalwert · {item.priority}</span>
                       </div>
                       <span className={`virus-radar-ladder__stage virus-radar-ladder__stage--${regionStageTone(item.priority)}`}>
                         {item.priority}
@@ -789,6 +791,7 @@ function buildActivationQueueModel(
   items: Array<{
     region_name?: string | null;
     priority?: string | null;
+    signal_score?: number | null;
     impact_probability?: number | null;
     reason?: string | null;
   }>,
@@ -803,11 +806,11 @@ function buildActivationQueueModel(
   const lead = items[0];
   const leadRegion = lead.region_name || 'Die Fokusregion';
   const leadPriority = lead.priority || 'Beobachten';
-  const leadSignal = formatProbability(lead.impact_probability);
+  const leadSignal = formatSignalScore(primarySignalScore(lead));
 
   return {
     headline: `${leadRegion} ist als Nächstes dran.`,
-    copy: `${leadPriority} ist jetzt der sinnvollste Schritt.${leadSignal !== '-' ? ` ${leadSignal} Signal.` : ' Signal wird noch eingeordnet.'}${lead.reason ? ` ${lead.reason}` : ''}`,
+    copy: `${leadPriority} ist jetzt der sinnvollste Schritt.${leadSignal !== '-' ? ` ${leadSignal} Signalwert.` : ' Signal wird noch eingeordnet.'}${lead.reason ? ` ${lead.reason}` : ''}`,
   };
 }
 
@@ -930,21 +933,21 @@ function buildRegionDetail({
   stage,
   trend,
   changePct,
-  impactProbability,
+  signalScore,
   reason,
 }: {
   regionName: string;
   stage: string;
   trend?: string | null;
   changePct?: number | null;
-  impactProbability?: number | null;
+  signalScore?: number | null;
   reason?: string | null;
 }): {
   regionName: string;
   meta: string;
   copy: string;
 } {
-  const probabilityLabel = formatProbability(impactProbability);
+  const signalLabel = formatSignalScore(signalScore);
   const deltaLabel = changePct == null || Number.isNaN(changePct)
     ? 'Vorwochenvergleich offen'
     : `${changePct >= 0 ? '+' : ''}${changePct.toFixed(1)}% zur Vorwoche`;
@@ -952,7 +955,7 @@ function buildRegionDetail({
 
   return {
     regionName,
-    meta: `${stage} · ${probabilityLabel} Signal · ${deltaLabel}`,
+    meta: `${stage} · ${signalLabel} Signalwert · ${deltaLabel}`,
     copy: reason || `${regionName} steht aktuell weit oben im Ranking. ${trendLabel} und Signalscore sprechen für eine genauere Prüfung in dieser Woche.`,
   };
 }
@@ -980,7 +983,7 @@ const RegionLadderRow: React.FC<{
       </span>
       <span className="virus-radar-ladder__meta">
         <span className={`virus-radar-ladder__stage virus-radar-ladder__stage--${tone}`}>{stage}</span>
-        <span className="virus-radar-ladder__probability">{formatProbability(row.impact_probability ?? row.signal_score)}</span>
+        <span className="virus-radar-ladder__probability">{formatSignalScore(primarySignalScore(row))}</span>
       </span>
     </button>
   );

@@ -158,6 +158,15 @@ class MediaCockpitService:
         except (TypeError, ValueError):
             return None
 
+    @classmethod
+    def _primary_signal_score(cls, item: dict[str, Any] | None) -> float:
+        payload = item or {}
+        for key in ("signal_score", "peix_score", "score_0_100", "impact_probability"):
+            score = cls._coerce_float(payload.get(key))
+            if score is not None:
+                return round(score, 1)
+        return 0.0
+
     def _ranking_signal_fields(
         self,
         *,
@@ -175,6 +184,8 @@ class MediaCockpitService:
 
         payload: dict[str, Any] = {
             "score_semantics": "ranking_signal",
+            "impact_probability_semantics": "ranking_signal",
+            "impact_probability_deprecated": True,
             "field_contracts": {
                 "signal_score": ranking_signal_contract(source=source, label=label),
                 "impact_probability": ranking_signal_contract(
@@ -347,7 +358,7 @@ class MediaCockpitService:
                 legacy_alias=peix_entry.get("impact_probability"),
                 source="PeixEpiScore",
             )
-            tooltip_signal_score = signal_fields.get("signal_score") or signal_fields.get("impact_probability")
+            tooltip_signal_score = self._primary_signal_score(signal_fields)
 
             # Vorhersage-Delta berechnen
             vorhersage_delta_pct = None
@@ -404,14 +415,14 @@ class MediaCockpitService:
                 legacy_alias=peix_entry.get("impact_probability"),
                 source="PeixEpiScore",
             )
-            tooltip_signal_score = signal_fields.get("signal_score") or signal_fields.get("impact_probability")
+            tooltip_signal_score = self._primary_signal_score(signal_fields)
             fallback_payload = {
                 "name": name,
                 "avg_viruslast": 0.0,
                 "avg_normalisiert": None,
                 "n_standorte": 0,
                 "einwohner": 0,
-                "intensity": round(float(peix_entry.get("impact_probability", 0)) / 100.0, 2),
+                "intensity": round(self._primary_signal_score(peix_entry) / 100.0, 2),
                 "trend": "stabil",
                 "change_pct": 0.0,
                 "peix_score": peix_entry.get("score_0_100"),
@@ -434,7 +445,7 @@ class MediaCockpitService:
 
         ranking.sort(
             key=lambda x: (
-                float(x.get("signal_score") or x.get("peix_score") or x.get("impact_probability") or 0.0),
+                self._primary_signal_score(x),
                 float(x.get("avg_viruslast") or 0.0),
             ),
             reverse=True,
@@ -443,7 +454,7 @@ class MediaCockpitService:
 
         activation_suggestions = []
         for item in top_regions[:5]:
-            signal_score = float(item.get("signal_score") or item.get("impact_probability") or 0.0)
+            signal_score = self._primary_signal_score(item)
             if item["trend"] == "steigend" or signal_score >= 60:
                 priority_score = round(
                     min(
@@ -475,6 +486,8 @@ class MediaCockpitService:
                     ),
                     "recommendation_ref": item.get("recommendation_ref"),
                     "score_semantics": "ranking_signal",
+                    "impact_probability_semantics": "ranking_signal",
+                    "impact_probability_deprecated": True,
                     "field_contracts": {
                         "signal_score": ranking_signal_contract(source="PeixEpiScore"),
                         "priority_score": priority_score_contract(source="MediaCockpitService"),
@@ -634,7 +647,7 @@ class MediaCockpitService:
                 value=top_region.get("name") if top_region else "-",
                 unit="",
                 subtitle=(
-                    f"Signal-Score {float(top_region.get('signal_score') or top_region.get('impact_probability') or 0.0):.1f}%"
+                    f"Signalwert {self._primary_signal_score(top_region):.1f}/100"
                     if top_region else "Keine Daten"
                 ),
                 signal_score=top_region.get("signal_score") if top_region else 0.0,

@@ -103,6 +103,10 @@ export interface PeixRegionScore {
   score_0_100: number;
   risk_band: string;
   impact_probability: number;
+  score_semantics?: string;
+  impact_probability_semantics?: string;
+  impact_probability_deprecated?: boolean;
+  field_contracts?: Record<string, MetricContract>;
   top_drivers: PeixDriver[];
   layer_contributions: Record<string, number>;
 }
@@ -123,11 +127,15 @@ export interface PeixScoreSummary {
   national_score: number;
   national_band: string;
   national_impact_probability: number;
+  score_semantics?: string;
+  impact_probability_semantics?: string;
+  impact_probability_deprecated?: boolean;
   virus_scores?: Record<string, PeixVirusScoreInfo>;
   context_signals?: Record<string, PeixContextSignalInfo>;
   confidence?: number;
   confidence_label?: string;
   weights_source?: string;
+  field_contracts?: Record<string, MetricContract>;
   top_drivers: PeixDriver[];
   regions: Record<string, PeixRegionScore>;
   generated_at: string;

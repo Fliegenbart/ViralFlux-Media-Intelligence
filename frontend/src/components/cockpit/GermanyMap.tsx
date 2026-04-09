@@ -5,6 +5,7 @@ import deBundeslaenderGeo from '../../assets/maps/de-bundeslaender.geo.json';
 import { MapRegion } from './types';
 import {
   formatPercent,
+  formatSignalScore,
   primarySignalScore,
 } from './cockpitUtils';
 
@@ -102,8 +103,9 @@ function mapFocusMeta(region?: MapRegion): string {
   if (!region) return 'Noch keine belastbare Einordnung';
 
   const parts: string[] = [];
-  if (region.impact_probability != null && region.impact_probability > 0) {
-    parts.push(`${formatFractionPercent(region.impact_probability, 0)} Signal`);
+  const signalScore = primarySignalScore(region);
+  if (signalScore > 0) {
+    parts.push(`Signalwert ${formatSignalScore(signalScore)}`);
   }
   if (region.trend) {
     parts.push(`Trend ${region.trend}`);
@@ -307,9 +309,9 @@ const GermanyMap: React.FC<Props> = ({
       {hoveredRegion && hovered && (
         <div className="vf-map-tooltip">
           <div className="vf-map-tooltip__name">{hovered.name}</div>
-          {hovered.impact_probability != null && hovered.impact_probability > 0 && (
+          {primarySignalScore(hovered) > 0 && (
             <div className="vf-map-tooltip__probability">
-              {formatFractionPercent(hovered.impact_probability, 0)} Wellenwahrscheinlichkeit
+              {formatSignalScore(primarySignalScore(hovered))} Signalwert
             </div>
           )}
           <div className="vf-map-tooltip__meta">

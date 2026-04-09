@@ -43,6 +43,60 @@ class CockpitServiceGuardTests(unittest.TestCase):
         self.assertEqual(payload["signal_score"], 67.0)
         self.assertEqual(payload["impact_probability"], 88.0)
 
+    def test_signal_snapshot_prefers_signal_score_for_top_region(self) -> None:
+        snapshot = MediaCockpitService(None)._signal_snapshot_section(
+            virus_typ="Influenza A",
+            peix_score={
+                "national_band": "high",
+                "top_drivers": [{"label": "AMELAG"}],
+                "national_score": 72.0,
+                "national_impact_probability": 84.0,
+            },
+            map_section={
+                "top_regions": [
+                    {
+                        "code": "SH",
+                        "name": "Schleswig-Holstein",
+                        "trend": "steigend",
+                        "signal_score": 68.0,
+                        "impact_probability": 91.0,
+                    },
+                ],
+            },
+        )
+
+        self.assertEqual(snapshot["national"]["signal_score"], 72.0)
+        self.assertEqual(snapshot["national"]["impact_probability"], 84.0)
+        self.assertEqual(snapshot["top_region"]["signal_score"], 68.0)
+        self.assertEqual(snapshot["top_region"]["impact_probability"], 91.0)
+
+    def test_campaign_refs_section_normalizes_and_sorts_references(self) -> None:
+        payload = MediaCockpitService(None)._campaign_refs_section({
+            "HH": {
+                "card_id": "card-hh",
+                "detail_url": "/kampagnen/card-hh",
+                "status": "READY",
+                "urgency_score": 52.0,
+                "brand": "gelo",
+                "product": "GeloProsed",
+                "priority_score": 52.0,
+                "ignored_field": "x",
+            },
+            "SH": {
+                "card_id": "card-sh",
+                "detail_url": "/kampagnen/card-sh",
+                "status": "APPROVED",
+                "urgency_score": 71.0,
+                "brand": "gelo",
+                "product": "GeloRevoice",
+                "priority_score": 71.0,
+            },
+        })
+
+        self.assertEqual(payload["regions_with_recommendations"], 2)
+        self.assertEqual(payload["items"][0]["region_code"], "SH")
+        self.assertNotIn("ignored_field", payload["items"][0])
+
 
 if __name__ == "__main__":
     unittest.main()

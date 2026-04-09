@@ -69,8 +69,6 @@ export interface CockpitResponse {
   data_freshness: Record<string, string | null>;
 }
 
-export type MediaCockpitView = 'decision' | 'regions' | 'campaigns' | 'evidence';
-
 export type CampaignLaneId = 'prepare' | 'review' | 'approve' | 'sync' | 'live';
 
 export interface CampaignLane {

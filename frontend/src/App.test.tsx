@@ -42,14 +42,6 @@ jest.mock('./pages/media/TimegraphPage', () => ({
   default: () => <div>Zeitgraph Mock</div>,
 }));
 
-jest.mock('./features/media/usePilotSurfaceData', () => ({
-  usePilotSurfaceData: () => ({
-    pilotReadout: null,
-    loading: false,
-    loadSurface: jest.fn(),
-  }),
-}));
-
 import App from './App';
 
 describe('App routing', () => {

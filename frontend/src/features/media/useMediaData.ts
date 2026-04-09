@@ -16,9 +16,7 @@ export {
 } from './useMediaData.shared';
 export { useNowPageData } from './useNowPageData';
 export { type TimegraphRegionOption, useTimegraphPageData } from './useTimegraphPageData';
-export { useDecisionPageData } from './useDecisionPageData';
 export { useRegionsPageData } from './useRegionsPageData';
 export { useCampaignsPageData } from './useCampaignsPageData';
 export { useEvidencePageData } from './useEvidencePageData';
-export { useOperationalDashboardData } from './useOperationalDashboardData';
 export { useVirusRadarHeroForecast } from './useVirusRadarHeroForecast';

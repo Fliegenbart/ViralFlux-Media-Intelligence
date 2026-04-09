@@ -233,7 +233,7 @@ class PilotReadoutService:
                     "status": "frozen",
                     "sunset_date": _LEGACY_RISK_ENGINE_CUTOFF_DATE,
                     "customer_surface_exposed": False,
-                    "note": "Der alte Risk-Engine- und Supply-Shock-Pfad ist isoliert und bestimmt dieses Piloturteil nicht mehr.",
+                    "note": "Der alte Legacy-Risk-Pfad ist entfernt und bestimmt dieses Piloturteil nicht mehr.",
                 },
             },
         }

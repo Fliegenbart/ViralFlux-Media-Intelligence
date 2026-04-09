@@ -1,7 +1,8 @@
-"""BacktestService — Modell-Kalibrierung via historisches Backtesting.
+"""BacktestService — Modell-Kalibrierung via historischem Backtesting.
 
-Simuliert die RiskEngine für jeden Tag in der Kundenhistorie,
-optimiert Gewichte via Ridge Regression und generiert LLM-Insights.
+Simuliert den historischen Score-/Forecast-Stack für jeden Tag in der
+Kundenhistorie, optimiert Gewichte via Ridge Regression und generiert
+begleitende Insights.
 """
 
 from __future__ import annotations

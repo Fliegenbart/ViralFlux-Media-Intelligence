@@ -1,8 +1,7 @@
 """PeixEpiScore v2.0 — Unified Score Service.
 
 Einziger, finaler Score für das ViralFlux-Dashboard.
-Nutzt bestehende Normalisierungsfunktionen aus der RiskEngine und
-integriert alle 4 Virus-Typen als gewichteten Durchschnitt.
+Integriert alle 4 Virus-Typen als gewichteten Durchschnitt.
 
 Formel:
   PeixEpiScore = (bio_aggregate × 0.50 + forecast × 0.15 + weather × 0.10
@@ -10,7 +9,7 @@ Formel:
 
   bio_aggregate = Σ(virus_weight_i × epi_score_i)  über alle 4 Viren
 
-Kein Supply-Shock Override. BfArM max 10 Punkte Einfluss.
+Kein legacy Override. BfArM max. 10 Punkte Einfluss.
 """
 
 from __future__ import annotations
@@ -281,7 +280,7 @@ class PeixEpiScoreService:
                 + baseline * self._weights["baseline"]
             )
 
-            # Genius Multipliers (abgeschwächt)
+            # Konservativer Schulstart-Multiplikator als Zusatzsignal.
             multiplier = 1.0
             if school_start and region_weather > PEIX_CONFIG["school_start_weather_min"]:
                 multiplier = PEIX_CONFIG["school_start_multiplier"]

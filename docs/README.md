@@ -1,6 +1,6 @@
 # Docs Index
 
-This index points to the small set of docs that define the live product and deployment truth.
+This index points to the small set of documents that define the live product, deployment, and operating truth for the current PEIX/GELO surface.
 
 ## Primary References
 

@@ -1,6 +1,7 @@
 # ViralFlux Media Intelligence
 
 ViralFlux ist eine Plattform für **regionale Virus-Frühwarnung** und daraus abgeleitete **operative Media-Entscheidungen**.
+Dieses Repository zeigt den aktiven Produktkern, den Live-Hauptpfad der Oberfläche und die zugehörigen Betriebs- und Datenpfade.
 
 Das Ziel ist einfach:
 - früh erkennen, **wo** sich respiratorische Dynamiken aufbauen

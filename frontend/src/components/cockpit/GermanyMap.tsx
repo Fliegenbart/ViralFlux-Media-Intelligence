@@ -148,7 +148,7 @@ const GermanyMap: React.FC<Props> = ({
   const hovered = hoveredRegion ? regions[hoveredRegion] : null;
   const focusCode = hoveredRegion || selectedRegion || topRegionCode || null;
   const focusRegion = focusCode ? regions[focusCode] : null;
-  const focusLabel = focusCode === topRegionCode ? 'Top-Signal auf der Karte' : 'Ausgewählte Region';
+  const focusLabel = focusCode === topRegionCode ? 'Stärkstes Signal auf der Karte' : 'Gerade im Fokus';
   const radarVariant = variant === 'radar';
 
   return (
@@ -159,7 +159,7 @@ const GermanyMap: React.FC<Props> = ({
           <div className="vf-map-panel__status-head">
             <strong>{focusRegion?.name || 'Deutschlandkarte'}</strong>
             <span className={`vf-map-panel__status-pill ${focusCode === topRegionCode ? 'is-top' : ''}`}>
-              {focusCode === topRegionCode ? '#1 diese Woche' : 'Details im Fokus'}
+              {focusCode === topRegionCode ? 'Top-Region' : 'Ausgewählt'}
             </span>
           </div>
           <span className="vf-map-panel__status-meta">
@@ -169,10 +169,10 @@ const GermanyMap: React.FC<Props> = ({
       )}
 
       <div className="vf-map-legend" aria-label="Legende">
-        <span className="vf-map-legend__item"><span className="vf-map-legend__swatch vf-map-legend__swatch--high" aria-hidden="true" />Hoch</span>
+        <span className="vf-map-legend__item"><span className="vf-map-legend__swatch vf-map-legend__swatch--high" aria-hidden="true" />Stark</span>
         <span className="vf-map-legend__item"><span className="vf-map-legend__swatch vf-map-legend__swatch--mid" aria-hidden="true" />Mittel</span>
-        <span className="vf-map-legend__item"><span className="vf-map-legend__swatch vf-map-legend__swatch--low" aria-hidden="true" />Niedrig</span>
-        <span className="vf-map-legend__item"><span className="vf-map-legend__swatch vf-map-legend__swatch--evidence" aria-hidden="true" />Keine Daten</span>
+        <span className="vf-map-legend__item"><span className="vf-map-legend__swatch vf-map-legend__swatch--low" aria-hidden="true" />Leicht</span>
+        <span className="vf-map-legend__item"><span className="vf-map-legend__swatch vf-map-legend__swatch--evidence" aria-hidden="true" />Keine Evidenz</span>
       </div>
 
       <svg viewBox="0 0 470 520" style={{ width: '100%', maxHeight: 620 }} role="img" aria-label="Deutschlandkarte auf Bundesland-Level">
@@ -200,7 +200,16 @@ const GermanyMap: React.FC<Props> = ({
             && impactProbability != null
             && (!radarVariant || isSelected || isTop || isHovered),
           );
-          const badgeRadius = radarVariant && (isSelected || isTop) ? 12 : 10;
+          const badgeRadius = radarVariant ? ((isSelected || isTop) ? 12 : 8.5) : 10;
+          const badgeFill = insufficientEvidence
+            ? '#e2e8f0'
+            : (radarVariant && !isSelected && !isTop ? 'rgba(255, 255, 255, 0.8)' : regionColor(region));
+          const badgeStroke = radarVariant && !isSelected && !isTop
+            ? 'rgba(71, 85, 105, 0.22)'
+            : 'rgba(15, 23, 42, 0.58)';
+          const badgeTextFill = insufficientEvidence
+            ? '#475569'
+            : (radarVariant && !isSelected && !isTop ? '#334155' : '#ffffff');
           const interactionLabel = `${shape.name}, Bundesland-Level, ${evidenceLabel(region)}`;
           return (
             <g
@@ -260,19 +269,19 @@ const GermanyMap: React.FC<Props> = ({
                     cx={shape.cx}
                     cy={showProbability ? shape.cy - 11 : shape.cy - 6}
                     r={badgeRadius}
-                    fill={insufficientEvidence ? '#e2e8f0' : regionColor(region)}
-                    stroke="rgba(15, 23, 42, 0.65)"
-                    strokeWidth="1.6"
+                    fill={badgeFill}
+                    stroke={badgeStroke}
+                    strokeWidth={radarVariant && !isSelected && !isTop ? '1.2' : '1.6'}
                     opacity={radarVariant && !isSelected && !isTop ? 0.8 : 1}
                   />
                   <text
                     x={shape.cx}
                     y={showProbability ? shape.cy - 7.2 : shape.cy - 2.2}
                     textAnchor="middle"
-                    fill={insufficientEvidence ? '#475569' : '#ffffff'}
+                    fill={badgeTextFill}
                     fontSize={radarVariant && (isSelected || isTop) ? '9.5' : '9'}
-                    fontWeight="800"
-                    opacity={radarVariant && !isSelected && !isTop ? 0.86 : 1}
+                    fontWeight={radarVariant && !isSelected && !isTop ? '700' : '800'}
+                    opacity={radarVariant && !isSelected && !isTop ? 0.9 : 1}
                   >
                     {code}
                   </text>

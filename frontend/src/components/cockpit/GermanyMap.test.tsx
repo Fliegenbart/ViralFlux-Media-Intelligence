@@ -44,8 +44,8 @@ describe('GermanyMap', () => {
     );
 
     expect(screen.getByLabelText('Legende')).toBeInTheDocument();
-    expect(screen.getByText('Hoch')).toBeInTheDocument();
-    expect(screen.getByText('Keine Daten')).toBeInTheDocument();
+    expect(screen.getByText('Stark')).toBeInTheDocument();
+    expect(screen.getByText('Keine Evidenz')).toBeInTheDocument();
     const berlinButton = screen.getByRole('button', { name: /Berlin, Bundesland-Level/i });
     fireEvent.keyDown(berlinButton, { key: 'Enter' });
 
@@ -83,9 +83,9 @@ describe('GermanyMap', () => {
       />,
     );
 
-    expect(screen.getByLabelText('Kartenfokus')).toHaveTextContent('Top-Signal auf der Karte');
+    expect(screen.getByLabelText('Kartenfokus')).toHaveTextContent('Stärkstes Signal auf der Karte');
     expect(screen.getByText('Mecklenburg-Vorpommern')).toBeInTheDocument();
-    expect(screen.getByText('#1 diese Woche')).toBeInTheDocument();
+    expect(screen.getByText('Top-Region')).toBeInTheDocument();
     expect(screen.getByText('55%')).toBeInTheDocument();
     expect(screen.queryByText('49%')).not.toBeInTheDocument();
   });

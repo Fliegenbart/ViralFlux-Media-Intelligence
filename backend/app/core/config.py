@@ -114,6 +114,7 @@ class Settings(BaseSettings):
     # Operations / Startup Safety
     DB_AUTO_CREATE_SCHEMA: bool | None = None
     DB_ALLOW_RUNTIME_SCHEMA_UPDATES: bool | None = None
+    STARTUP_ENABLE_BFARM_IMPORT: bool = False
     STARTUP_STRICT_READINESS: bool | None = None
     READINESS_REQUIRE_BROKER: bool | None = None
     READINESS_SOURCE_FRESH_DAYS: int = 7
@@ -147,7 +148,7 @@ class Settings(BaseSettings):
     def EFFECTIVE_DB_ALLOW_RUNTIME_SCHEMA_UPDATES(self) -> bool:
         if self.DB_ALLOW_RUNTIME_SCHEMA_UPDATES is not None:
             return bool(self.DB_ALLOW_RUNTIME_SCHEMA_UPDATES)
-        return self.ENVIRONMENT in {"development", "test"}
+        return False
 
     @property
     def EFFECTIVE_STARTUP_STRICT_READINESS(self) -> bool:

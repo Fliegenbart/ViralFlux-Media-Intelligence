@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import sys
 from types import SimpleNamespace
 import unittest
 from contextlib import contextmanager
@@ -9,6 +10,10 @@ from unittest.mock import MagicMock, patch
 
 os.environ.setdefault("ADMIN_EMAIL", "admin@example.com")
 os.environ.setdefault("ADMIN_PASSWORD", "very-strong-admin-password")
+sys.modules.setdefault(
+    "xgboost",
+    SimpleNamespace(XGBClassifier=object, XGBRegressor=object),
+)
 
 from app import main
 
@@ -24,6 +29,72 @@ def _db_context(db: object):
 
 
 class StartupSingletonTests(unittest.TestCase):
+    def test_startup_event_skips_bfarm_import_when_flag_is_disabled(self) -> None:
+        readiness_snapshot = {
+            "status": "healthy",
+            "components": {},
+            "blockers": [],
+            "checked_at": "2026-03-26T10:00:00",
+        }
+
+        with (
+            patch.object(main, "settings", SimpleNamespace(
+                APP_NAME="ViralFlux Media Intelligence",
+                APP_VERSION="1.0.0",
+                ENVIRONMENT="development",
+                EFFECTIVE_STARTUP_STRICT_READINESS=False,
+                STARTUP_ENABLE_BFARM_IMPORT=False,
+            )),
+            patch.object(main, "check_db_connection") as check_db_connection_mock,
+            patch.object(main, "init_db", return_value={"status": "ok", "warnings": [], "actions": []}),
+            patch.object(main, "ProductionReadinessService") as readiness_service_cls,
+            patch.object(main, "_record_startup_readiness_once", return_value={"status": "healthy"}),
+            patch.object(main, "_launch_bfarm_startup_import_thread") as launch_import_mock,
+            patch.object(main, "log_event") as log_event_mock,
+        ):
+            check_db_connection_mock.return_value = True
+            readiness_service_cls.return_value.build_snapshot.return_value = readiness_snapshot
+
+            import asyncio
+
+            asyncio.run(main.startup_event())
+
+        launch_import_mock.assert_not_called()
+        self.assertTrue(
+            any(call.args[1] == "startup_bfarm_import_disabled" for call in log_event_mock.call_args_list)
+        )
+
+    def test_startup_event_launches_bfarm_import_when_flag_is_enabled(self) -> None:
+        readiness_snapshot = {
+            "status": "healthy",
+            "components": {},
+            "blockers": [],
+            "checked_at": "2026-03-26T10:00:00",
+        }
+
+        with (
+            patch.object(main, "settings", SimpleNamespace(
+                APP_NAME="ViralFlux Media Intelligence",
+                APP_VERSION="1.0.0",
+                ENVIRONMENT="development",
+                EFFECTIVE_STARTUP_STRICT_READINESS=False,
+                STARTUP_ENABLE_BFARM_IMPORT=True,
+            )),
+            patch.object(main, "check_db_connection") as check_db_connection_mock,
+            patch.object(main, "init_db", return_value={"status": "ok", "warnings": [], "actions": []}),
+            patch.object(main, "ProductionReadinessService") as readiness_service_cls,
+            patch.object(main, "_record_startup_readiness_once", return_value={"status": "healthy"}),
+            patch.object(main, "_launch_bfarm_startup_import_thread") as launch_import_mock,
+        ):
+            check_db_connection_mock.return_value = True
+            readiness_service_cls.return_value.build_snapshot.return_value = readiness_snapshot
+
+            import asyncio
+
+            asyncio.run(main.startup_event())
+
+        launch_import_mock.assert_called_once_with()
+
     def test_record_startup_readiness_skips_when_lock_is_busy(self) -> None:
         snapshot = {"status": "healthy", "components": {}, "blockers": [], "checked_at": "2026-03-26T10:00:00"}
 

@@ -369,10 +369,16 @@ def init_db():
     gaps = _runtime_schema_gaps(existing_tables)
     if gaps["missing_columns"] or gaps["missing_indexes"]:
         if allow_runtime_updates:
+            runtime_update_warning = (
+                "Runtime schema updates are enabled and will modify the schema now. "
+                "This is only a temporary safety-net for explicit local exceptions and must "
+                "be replaced by explicit migrations before any release."
+            )
+            logger.warning(runtime_update_warning)
             _ensure_runtime_schema_updates()
             actions.append("runtime_schema_updates")
             warnings.append(
-                "Runtime schema updates were applied. Replace this with an explicit migration before release."
+                "Runtime schema updates were applied as a temporary safety-net. This must be replaced by explicit migrations before any release."
             )
             gaps = _runtime_schema_gaps()
         if gaps["missing_columns"] or gaps["missing_indexes"]:

@@ -262,6 +262,98 @@ class MediaV2ServiceTruthCoverageTests(unittest.TestCase):
             brand="gelo",
         )
 
+    def test_get_truth_coverage_delegates_to_outcomes_module(self) -> None:
+        with patch(
+            "app.services.media.v2.outcomes.build_truth_coverage",
+            return_value={"ok": "coverage"},
+        ) as mocked_builder:
+            payload = self.service.get_truth_coverage(brand="gelo", virus_typ="Influenza A")
+
+        self.assertEqual(payload, {"ok": "coverage"})
+        mocked_builder.assert_called_once_with(
+            self.service,
+            brand="gelo",
+            virus_typ="Influenza A",
+        )
+
+    def test_get_truth_evidence_delegates_to_outcomes_module(self) -> None:
+        with patch(
+            "app.services.media.v2.outcomes.build_truth_evidence",
+            return_value={"ok": "truth-evidence"},
+        ) as mocked_builder:
+            payload = self.service.get_truth_evidence(brand="gelo", virus_typ="Influenza A")
+
+        self.assertEqual(payload, {"ok": "truth-evidence"})
+        mocked_builder.assert_called_once_with(
+            self.service,
+            brand="gelo",
+            virus_typ="Influenza A",
+        )
+
+    def test_import_outcomes_delegates_to_outcomes_module(self) -> None:
+        rows = [{"week_start": "2026-02-02T00:00:00"}]
+        with patch(
+            "app.services.media.v2.outcomes.import_outcomes",
+            return_value={"ok": "import"},
+        ) as mocked_builder:
+            payload = self.service.import_outcomes(
+                source_label="manual_csv",
+                records=rows,
+                brand="gelo",
+                replace_existing=True,
+                validate_only=True,
+                file_name="truth.csv",
+            )
+
+        self.assertEqual(payload, {"ok": "import"})
+        mocked_builder.assert_called_once_with(
+            self.service,
+            source_label="manual_csv",
+            records=rows,
+            csv_payload=None,
+            brand="gelo",
+            replace_existing=True,
+            validate_only=True,
+            file_name="truth.csv",
+        )
+
+    def test_list_outcome_import_batches_delegates_to_outcomes_module(self) -> None:
+        with patch(
+            "app.services.media.v2.outcomes.list_outcome_import_batches",
+            return_value=[{"batch_id": "abc"}],
+        ) as mocked_builder:
+            payload = self.service.list_outcome_import_batches(brand="gelo", limit=7)
+
+        self.assertEqual(payload, [{"batch_id": "abc"}])
+        mocked_builder.assert_called_once_with(
+            self.service,
+            brand="gelo",
+            limit=7,
+        )
+
+    def test_get_outcome_import_batch_detail_delegates_to_outcomes_module(self) -> None:
+        with patch(
+            "app.services.media.v2.outcomes.get_outcome_import_batch_detail",
+            return_value={"batch": {"batch_id": "abc"}},
+        ) as mocked_builder:
+            payload = self.service.get_outcome_import_batch_detail(batch_id="abc")
+
+        self.assertEqual(payload, {"batch": {"batch_id": "abc"}})
+        mocked_builder.assert_called_once_with(
+            self.service,
+            batch_id="abc",
+        )
+
+    def test_outcome_template_csv_delegates_to_outcomes_module(self) -> None:
+        with patch(
+            "app.services.media.v2.outcomes.outcome_template_csv",
+            return_value="header1,header2\n",
+        ) as mocked_builder:
+            payload = self.service.outcome_template_csv()
+
+        self.assertEqual(payload, "header1,header2\n")
+        mocked_builder.assert_called_once_with(self.service)
+
     def test_get_campaigns_payload_delegates_to_campaigns_builder(self) -> None:
         with patch(
             "app.services.media.v2_service.build_campaigns_payload",

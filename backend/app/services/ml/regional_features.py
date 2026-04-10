@@ -38,6 +38,10 @@ from app.services.ml.exogenous_feature_contracts import (
 )
 from app.services.ml.nowcast_contracts import NowcastObservation, NowcastResult
 from app.services.ml.nowcast_revision import NowcastRevisionService
+from app.services.ml import regional_features_builders
+from app.services.ml import regional_features_helpers
+from app.services.ml import regional_features_manifests
+from app.services.ml import regional_features_sources
 from app.services.ml.regional_panel_utils import (
     ALL_BUNDESLAENDER,
     BUNDESLAND_NAMES,
@@ -322,160 +326,10 @@ class RegionalFeatureBuilder:
         return sorted(available)
 
     def dataset_manifest(self, virus_typ: str, panel: pd.DataFrame) -> dict[str, Any]:
-        event_config = event_definition_config_for_virus(virus_typ)
-        weather_metadata = dict(
-            panel.attrs.get("weather_forecast_metadata")
-            or getattr(self, "_last_weather_forecast_metadata", {})
-            or empty_weather_forecast_vintage_metadata(WEATHER_FORECAST_VINTAGE_DISABLED)
-        )
-        if panel.empty:
-            return {
-                "virus_typ": virus_typ,
-                "event_definition_version": EVENT_DEFINITION_VERSION,
-                "event_definition_config": event_config.to_manifest(),
-                "target_window_days": list(TARGET_WINDOW_DAYS),
-                "source_lag_days": SOURCE_LAG_DAYS,
-                "exogenous_feature_semantics_version": EXOGENOUS_FEATURE_SEMANTICS_VERSION,
-                "exogenous_feature_semantics": exogenous_feature_semantics_manifest(),
-                "weather_forecast_vintage_mode": weather_metadata.get("weather_forecast_vintage_mode"),
-                "weather_forecast_issue_time_semantics": weather_metadata.get("weather_forecast_issue_time_semantics"),
-                "weather_forecast_run_identity_present": bool(
-                    weather_metadata.get("weather_forecast_run_identity_present")
-                ),
-                "weather_forecast_run_identity_source": weather_metadata.get(
-                    "weather_forecast_run_identity_source"
-                ),
-                "weather_forecast_run_identity_quality": weather_metadata.get(
-                    "weather_forecast_run_identity_quality"
-                ),
-                "rows": 0,
-                "truth_source": "unavailable",
-                "source_coverage": {},
-                "training_source_coverage": {},
-            }
-
-        target_window_days = (
-            list(panel["target_window_days"].iloc[0])
-            if "target_window_days" in panel.columns and len(panel) > 0
-            else list(TARGET_WINDOW_DAYS)
-        )
-        horizon_days = (
-            int(panel["horizon_days"].iloc[0])
-            if "horizon_days" in panel.columns and len(panel) > 0
-            else target_window_days[-1]
-        )
-        truth_sources = sorted(str(value) for value in panel["truth_source"].dropna().unique())
-        source_coverage = {
-            column: round(float(panel[column].mean()), 4)
-            for column in (
-                "grippeweb_are_available",
-                "grippeweb_ili_available",
-                "ifsg_influenza_available",
-                "ifsg_rsv_available",
-                "sars_are_available",
-                "sars_notaufnahme_available",
-                "sars_trends_available",
-            )
-            if column in panel.columns
-        }
-        return {
-            "virus_typ": virus_typ,
-            "horizon_days": horizon_days,
-            "event_definition_version": EVENT_DEFINITION_VERSION,
-            "event_definition_config": event_config.to_manifest(),
-            "target_window_days": target_window_days,
-            "source_lag_days": SOURCE_LAG_DAYS,
-            "exogenous_feature_semantics_version": EXOGENOUS_FEATURE_SEMANTICS_VERSION,
-            "exogenous_feature_semantics": exogenous_feature_semantics_manifest(),
-            "weather_forecast_vintage_mode": weather_metadata.get("weather_forecast_vintage_mode"),
-            "weather_forecast_issue_time_semantics": weather_metadata.get("weather_forecast_issue_time_semantics"),
-            "weather_forecast_run_identity_present": bool(
-                weather_metadata.get("weather_forecast_run_identity_present")
-            ),
-            "weather_forecast_run_identity_source": weather_metadata.get(
-                "weather_forecast_run_identity_source"
-            ),
-            "weather_forecast_run_identity_quality": weather_metadata.get(
-                "weather_forecast_run_identity_quality"
-            ),
-            "rows": int(len(panel)),
-            "states": int(panel["bundesland"].nunique()),
-            "unique_as_of_dates": int(panel["as_of_date"].nunique()),
-            "as_of_range": {
-                "start": str(panel["as_of_date"].min()),
-                "end": str(panel["as_of_date"].max()),
-            },
-            "truth_source": truth_sources[0] if len(truth_sources) == 1 else truth_sources,
-            "source_coverage": source_coverage,
-            "training_source_coverage": dict(source_coverage),
-        }
+        return regional_features_manifests.dataset_manifest(self, virus_typ, panel)
 
     def point_in_time_snapshot_manifest(self, virus_typ: str, panel: pd.DataFrame) -> dict[str, Any]:
-        dataset_manifest = self.dataset_manifest(virus_typ=virus_typ, panel=panel)
-        if panel.empty:
-            return {
-                "virus_typ": virus_typ,
-                "snapshot_type": "regional_panel_as_of_training",
-                "captured_at": utc_now().isoformat(),
-                "rows": 0,
-                "source_lag_days": SOURCE_LAG_DAYS,
-                "exogenous_feature_semantics_version": EXOGENOUS_FEATURE_SEMANTICS_VERSION,
-                "weather_forecast_vintage_mode": dataset_manifest.get("weather_forecast_vintage_mode"),
-                "weather_forecast_issue_time_semantics": dataset_manifest.get("weather_forecast_issue_time_semantics"),
-                "weather_forecast_run_identity_present": dataset_manifest.get("weather_forecast_run_identity_present"),
-                "weather_forecast_run_identity_source": dataset_manifest.get(
-                    "weather_forecast_run_identity_source"
-                ),
-                "weather_forecast_run_identity_quality": dataset_manifest.get(
-                    "weather_forecast_run_identity_quality"
-                ),
-                "dataset_manifest": dataset_manifest,
-            }
-
-        state_row_counts = {
-            code: int(count)
-            for code, count in panel.groupby("bundesland")["as_of_date"].count().to_dict().items()
-        }
-        return {
-            "virus_typ": virus_typ,
-            "horizon_days": dataset_manifest.get("horizon_days"),
-            "snapshot_type": "regional_panel_as_of_training",
-            "captured_at": utc_now().isoformat(),
-            "rows": int(len(panel)),
-            "states": int(panel["bundesland"].nunique()),
-            "unique_as_of_dates": int(panel["as_of_date"].nunique()),
-            "as_of_range": {
-                "start": str(panel["as_of_date"].min()),
-                "end": str(panel["as_of_date"].max()),
-            },
-            "state_row_counts": state_row_counts,
-            "feature_columns": sorted(
-                column for column in panel.columns
-                if column not in {
-                    "virus_typ",
-                    "bundesland",
-                    "bundesland_name",
-                    "as_of_date",
-                    "target_week_start",
-                    "target_window_days",
-                    "event_definition_version",
-                    "truth_source",
-                }
-            ),
-            "source_lag_days": SOURCE_LAG_DAYS,
-            "exogenous_feature_semantics_version": EXOGENOUS_FEATURE_SEMANTICS_VERSION,
-            "weather_forecast_vintage_mode": dataset_manifest.get("weather_forecast_vintage_mode"),
-            "weather_forecast_issue_time_semantics": dataset_manifest.get("weather_forecast_issue_time_semantics"),
-            "weather_forecast_run_identity_present": dataset_manifest.get("weather_forecast_run_identity_present"),
-            "weather_forecast_run_identity_source": dataset_manifest.get(
-                "weather_forecast_run_identity_source"
-            ),
-            "weather_forecast_run_identity_quality": dataset_manifest.get(
-                "weather_forecast_run_identity_quality"
-            ),
-            "target_window_days": dataset_manifest.get("target_window_days") or list(TARGET_WINDOW_DAYS),
-            "dataset_manifest": dataset_manifest,
-        }
+        return regional_features_manifests.point_in_time_snapshot_manifest(self, virus_typ, panel)
 
     def live_source_readiness_frames(
         self,
@@ -484,365 +338,50 @@ class RegionalFeatureBuilder:
         as_of_date: datetime | pd.Timestamp,
         lookback_days: int = 28,
     ) -> dict[str, pd.DataFrame]:
-        effective_as_of = pd.Timestamp(as_of_date).normalize()
-        start_date = effective_as_of - pd.Timedelta(days=max(int(lookback_days), 28))
-        grippeweb = self._load_grippeweb_signals(start_date, effective_as_of)
-        frames: dict[str, pd.DataFrame] = {
-            "wastewater": self._load_wastewater_daily(virus_typ, start_date),
-            "grippeweb_are": grippeweb.loc[grippeweb["signal_type"] == "ARE"].copy()
-            if not grippeweb.empty
-            else pd.DataFrame(),
-            "grippeweb_ili": grippeweb.loc[grippeweb["signal_type"] == "ILI"].copy()
-            if not grippeweb.empty
-            else pd.DataFrame(),
-        }
-        if virus_typ in {"Influenza A", "Influenza B"}:
-            frames["ifsg_influenza"] = self._load_influenza_ifsg(start_date, effective_as_of)
-        elif virus_typ == "RSV A":
-            frames["ifsg_rsv"] = self._load_rsv_ifsg(start_date, effective_as_of)
-        elif virus_typ == "SARS-CoV-2":
-            frames["sars_are"] = self._load_are_konsultation(start_date, effective_as_of)
-            frames["sars_notaufnahme"] = self._load_notaufnahme_covid(start_date, effective_as_of)
-            frames["sars_trends"] = self._load_corona_test_trends(start_date, effective_as_of)
-        return {
-            source_id: frame.reset_index(drop=True) if not frame.empty else pd.DataFrame()
-            for source_id, frame in frames.items()
-        }
+        return regional_features_manifests.live_source_readiness_frames(
+            self,
+            virus_typ=virus_typ,
+            as_of_date=as_of_date,
+            lookback_days=lookback_days,
+        )
 
     def _load_wastewater_daily(self, virus_typ: str, start_date: pd.Timestamp) -> pd.DataFrame:
-        rows = (
-            self.db.query(
-                WastewaterData.bundesland,
-                WastewaterData.datum,
-                func.max(WastewaterData.available_time).label("available_time"),
-                func.avg(WastewaterData.viruslast).label("viral_load"),
-                func.count(WastewaterData.id).label("site_count"),
-                func.avg(func.cast(func.coalesce(WastewaterData.unter_bg, False), Integer)).label("under_bg_share"),
-                func.stddev_pop(WastewaterData.viruslast).label("viral_std"),
-            )
-            .filter(
-                WastewaterData.virus_typ == virus_typ,
-                WastewaterData.datum >= start_date.to_pydatetime(),
-                WastewaterData.viruslast.isnot(None),
-            )
-            .group_by(
-                WastewaterData.bundesland,
-                WastewaterData.datum,
-            )
-            .order_by(WastewaterData.datum.asc())
-            .all()
-        )
-
-        frame = pd.DataFrame(
-            [
-                {
-                    "bundesland": normalize_state_code(row.bundesland),
-                    "datum": pd.Timestamp(row.datum).normalize(),
-                    "available_time": effective_available_time(row.datum, row.available_time, 0),
-                    "viral_load": float(row.viral_load or 0.0),
-                    "site_count": int(row.site_count or 0),
-                    "under_bg_share": float(row.under_bg_share or 0.0),
-                    "viral_std": float(row.viral_std or 0.0),
-                }
-                for row in rows
-                if normalize_state_code(row.bundesland)
-            ]
-        )
-        if frame.empty:
-            return frame
-
-        return frame.sort_values(["bundesland", "datum"]).reset_index(drop=True)
+        return regional_features_sources.load_wastewater_daily(self, virus_typ, start_date)
 
     def _load_supported_wastewater_context(
         self,
         virus_typ: str,
         start_date: pd.Timestamp,
     ) -> dict[str, pd.DataFrame]:
-        bundle: dict[str, pd.DataFrame] = {}
-        for candidate in SUPPORTED_VIRUS_TYPES:
-            frame = self._load_wastewater_daily(candidate, start_date)
-            if not frame.empty:
-                bundle[candidate] = frame
-        if virus_typ not in bundle:
-            bundle[virus_typ] = self._load_wastewater_daily(virus_typ, start_date)
-        return bundle
+        return regional_features_sources.load_supported_wastewater_context(
+            self,
+            virus_typ,
+            start_date,
+        )
 
     def _load_truth_series(self, virus_typ: str, start_date: pd.Timestamp) -> pd.DataFrame:
-        truth = self._load_truth_from_kreis(virus_typ=virus_typ, start_date=start_date)
-        if truth.empty:
-            truth = self._load_truth_from_weekly(virus_typ=virus_typ, start_date=start_date)
-        return truth
+        return regional_features_sources.load_truth_series(self, virus_typ, start_date)
 
     def load_landkreis_truth_series(self, virus_typ: str, start_date: pd.Timestamp) -> pd.DataFrame:
-        if self.db is None:
-            return pd.DataFrame()
-        diseases = SURVSTAT_VIRUS_MAP.get(virus_typ, [])
-        if not diseases:
-            return pd.DataFrame()
-
-        rows = (
-            self.db.query(
-                SurvstatKreisData.year,
-                SurvstatKreisData.week,
-                SurvstatKreisData.week_label,
-                SurvstatKreisData.kreis,
-                KreisEinwohner.ags,
-                KreisEinwohner.bundesland,
-                KreisEinwohner.einwohner,
-                func.sum(SurvstatKreisData.fallzahl).label("total_cases"),
-            )
-            .join(KreisEinwohner, KreisEinwohner.kreis_name == SurvstatKreisData.kreis)
-            .filter(
-                func.lower(SurvstatKreisData.disease).in_(diseases),
-                SurvstatKreisData.year >= start_date.year,
-            )
-            .group_by(
-                SurvstatKreisData.year,
-                SurvstatKreisData.week,
-                SurvstatKreisData.week_label,
-                SurvstatKreisData.kreis,
-                KreisEinwohner.ags,
-                KreisEinwohner.bundesland,
-                KreisEinwohner.einwohner,
-            )
-            .order_by(
-                SurvstatKreisData.year.asc(),
-                SurvstatKreisData.week.asc(),
-                SurvstatKreisData.kreis.asc(),
-            )
-            .all()
-        )
-
-        frame = pd.DataFrame(
-            [
-                {
-                    "geo_unit_level": "landkreis",
-                    "geo_unit_id": str(row.ags or _geo_unit_fallback_id(row.kreis)),
-                    "geo_unit_name": str(row.kreis),
-                    "parent_bundesland": normalize_state_code(row.bundesland),
-                    "parent_bundesland_name": str(row.bundesland or ""),
-                    "population": float(row.einwohner or 0.0),
-                    "week_start": self._week_start_from_label(row.week_label),
-                    "available_date": effective_available_time(
-                        self._week_start_from_label(row.week_label),
-                        None,
-                        SOURCE_LAG_DAYS["survstat_kreis"],
-                    ),
-                    "incidence": (
-                        (float(row.total_cases or 0.0) / float(row.einwohner or 0.0)) * 100_000.0
-                        if float(row.einwohner or 0.0) > 0.0
-                        else np.nan
-                    ),
-                    "truth_source": "survstat_kreis",
-                }
-                for row in rows
-                if normalize_state_code(row.bundesland)
-            ]
-        )
-        if frame.empty:
-            return frame
-
-        return (
-            frame.dropna(subset=["incidence"])
-            .loc[lambda df: df["population"] > 0.0]
-            .sort_values(["geo_unit_id", "week_start"])
-            .reset_index(drop=True)
-        )
+        return regional_features_sources.load_landkreis_truth_series(self, virus_typ, start_date)
 
     def _load_truth_from_kreis(self, virus_typ: str, start_date: pd.Timestamp) -> pd.DataFrame:
-        diseases = SURVSTAT_VIRUS_MAP.get(virus_typ, [])
-        if not diseases:
-            return pd.DataFrame()
-
-        state_populations = self._load_state_population_map()
-        if not state_populations:
-            logger.warning("Regional truth fallback to weekly SurvStat because Kreis state populations are unavailable.")
-            return pd.DataFrame()
-
-        rows = (
-            self.db.query(
-                SurvstatKreisData.year,
-                SurvstatKreisData.week,
-                SurvstatKreisData.week_label,
-                KreisEinwohner.bundesland,
-                func.sum(SurvstatKreisData.fallzahl).label("total_cases"),
-            )
-            .join(KreisEinwohner, KreisEinwohner.kreis_name == SurvstatKreisData.kreis)
-            .filter(
-                func.lower(SurvstatKreisData.disease).in_(diseases),
-                SurvstatKreisData.year >= start_date.year,
-            )
-            .group_by(
-                SurvstatKreisData.year,
-                SurvstatKreisData.week,
-                SurvstatKreisData.week_label,
-                KreisEinwohner.bundesland,
-            )
-            .order_by(
-                SurvstatKreisData.year.asc(),
-                SurvstatKreisData.week.asc(),
-            )
-            .all()
-        )
-
-        if not rows:
-            return pd.DataFrame()
-
-        frame = pd.DataFrame(
-            [
-                {
-                    "bundesland": normalize_state_code(row.bundesland),
-                    "week_start": self._week_start_from_label(row.week_label),
-                    "available_date": effective_available_time(
-                        self._week_start_from_label(row.week_label),
-                        None,
-                        SOURCE_LAG_DAYS["survstat_kreis"],
-                    ),
-                    "incidence": (
-                        (float(row.total_cases or 0.0) / state_populations[normalize_state_code(row.bundesland)]) * 100_000.0
-                        if normalize_state_code(row.bundesland) in state_populations
-                        and state_populations[normalize_state_code(row.bundesland)] > 0
-                        else np.nan
-                    ),
-                    "truth_source": "survstat_kreis",
-                }
-                for row in rows
-                if normalize_state_code(row.bundesland)
-            ]
-        )
-        if frame.empty or frame["incidence"].notna().sum() == 0:
-            logger.warning("Regional truth fallback to weekly SurvStat because Kreis population data is unusable.")
-            return pd.DataFrame()
-
-        return (
-            frame.dropna(subset=["incidence"])
-            .sort_values(["bundesland", "week_start"])
-            .reset_index(drop=True)
-        )
+        return regional_features_sources.load_truth_from_kreis(self, virus_typ, start_date)
 
     def _load_state_population_map(self) -> dict[str, float]:
-        rows = (
-            self.db.query(
-                KreisEinwohner.bundesland,
-                func.sum(KreisEinwohner.einwohner).label("population"),
-            )
-            .filter(KreisEinwohner.einwohner > 0)
-            .group_by(KreisEinwohner.bundesland)
-            .all()
-        )
-        return {
-            code: float(row.population or 0.0)
-            for row in rows
-            if (code := normalize_state_code(row.bundesland)) and float(row.population or 0.0) > 0
-        }
+        return regional_features_sources.load_state_population_map(self)
 
     def _load_truth_from_weekly(self, virus_typ: str, start_date: pd.Timestamp) -> pd.DataFrame:
-        diseases = SURVSTAT_VIRUS_MAP.get(virus_typ, [])
-        if not diseases:
-            return pd.DataFrame()
-
-        rows = (
-            self.db.query(
-                SurvstatWeeklyData.week_start,
-                func.max(SurvstatWeeklyData.available_time).label("available_time"),
-                SurvstatWeeklyData.bundesland,
-                func.sum(SurvstatWeeklyData.incidence).label("incidence"),
-            )
-            .filter(
-                func.lower(SurvstatWeeklyData.disease).in_(diseases),
-                SurvstatWeeklyData.week_start >= start_date.to_pydatetime(),
-                SurvstatWeeklyData.bundesland != "Gesamt",
-            )
-            .group_by(
-                SurvstatWeeklyData.week_start,
-                SurvstatWeeklyData.bundesland,
-            )
-            .order_by(SurvstatWeeklyData.week_start.asc())
-            .all()
-        )
-
-        frame = pd.DataFrame(
-            [
-                {
-                    "bundesland": normalize_state_code(row.bundesland),
-                    "week_start": pd.Timestamp(row.week_start).normalize(),
-                    "available_date": effective_available_time(
-                        row.week_start,
-                        row.available_time,
-                        SOURCE_LAG_DAYS["survstat_weekly"],
-                    ),
-                    "incidence": float(row.incidence or 0.0),
-                    "truth_source": "survstat_weekly",
-                }
-                for row in rows
-                if normalize_state_code(row.bundesland)
-            ]
-        )
-        if frame.empty:
-            return frame
-        return frame.sort_values(["bundesland", "week_start"]).reset_index(drop=True)
+        return regional_features_sources.load_truth_from_weekly(self, virus_typ, start_date)
 
     def _load_grippeweb_signals(self, start_date: pd.Timestamp, end_date: pd.Timestamp) -> pd.DataFrame:
-        if self.db is None:
-            return pd.DataFrame()
-        rows = (
-            self.db.query(
-                GrippeWebData.bundesland,
-                GrippeWebData.datum,
-                GrippeWebData.erkrankung_typ,
-                func.max(GrippeWebData.created_at).label("created_at"),
-                func.avg(GrippeWebData.inzidenz).label("incidence"),
-            )
-            .filter(
-                GrippeWebData.datum >= start_date.to_pydatetime(),
-                GrippeWebData.datum <= end_date.to_pydatetime(),
-                GrippeWebData.erkrankung_typ.in_(["ARE", "ILI"]),
-                GrippeWebData.altersgruppe.in_(["00+", "Gesamt"]),
-            )
-            .group_by(
-                GrippeWebData.bundesland,
-                GrippeWebData.datum,
-                GrippeWebData.erkrankung_typ,
-            )
-            .order_by(GrippeWebData.datum.asc())
-            .all()
-        )
-
-        frame = pd.DataFrame(
-            [
-                {
-                    "bundesland": normalize_state_code(row.bundesland),
-                    "datum": pd.Timestamp(row.datum).normalize(),
-                    "available_time": self._created_proxy_available_time(
-                        datum=row.datum,
-                        created_at=row.created_at,
-                        fallback_lag_days=SOURCE_LAG_DAYS["grippeweb"],
-                    ),
-                    "signal_type": str(row.erkrankung_typ or "").strip().upper(),
-                    "incidence": float(row.incidence or 0.0),
-                }
-                for row in rows
-            ]
-        )
-        if frame.empty:
-            return frame
-        return frame.sort_values(["signal_type", "bundesland", "datum"], na_position="last").reset_index(drop=True)
+        return regional_features_sources.load_grippeweb_signals(self, start_date, end_date)
 
     def _load_influenza_ifsg(self, start_date: pd.Timestamp, end_date: pd.Timestamp) -> pd.DataFrame:
-        return self._load_ifsg_signal_frame(
-            model=InfluenzaData,
-            start_date=start_date,
-            end_date=end_date,
-            lag_key="influenza_ifsg",
-        )
+        return regional_features_sources.load_influenza_ifsg(self, start_date, end_date)
 
     def _load_rsv_ifsg(self, start_date: pd.Timestamp, end_date: pd.Timestamp) -> pd.DataFrame:
-        return self._load_ifsg_signal_frame(
-            model=RSVData,
-            start_date=start_date,
-            end_date=end_date,
-            lag_key="rsv_ifsg",
-        )
+        return regional_features_sources.load_rsv_ifsg(self, start_date, end_date)
 
     def _load_ifsg_signal_frame(
         self,
@@ -852,297 +391,31 @@ class RegionalFeatureBuilder:
         end_date: pd.Timestamp,
         lag_key: str,
     ) -> pd.DataFrame:
-        if self.db is None:
-            return pd.DataFrame()
-        rows = (
-            self.db.query(
-                model.region,
-                model.datum,
-                func.max(model.available_time).label("available_time"),
-                func.avg(model.inzidenz).label("incidence"),
-            )
-            .filter(
-                model.datum >= start_date.to_pydatetime(),
-                model.datum <= end_date.to_pydatetime(),
-                model.altersgruppe.in_(["00+", "Gesamt"]),
-            )
-            .group_by(
-                model.region,
-                model.datum,
-            )
-            .order_by(model.datum.asc())
-            .all()
+        return regional_features_sources.load_ifsg_signal_frame(
+            self,
+            model=model,
+            start_date=start_date,
+            end_date=end_date,
+            lag_key=lag_key,
         )
-
-        frame = pd.DataFrame(
-            [
-                {
-                    "bundesland": normalize_state_code(row.region),
-                    "datum": pd.Timestamp(row.datum).normalize(),
-                    "available_time": effective_available_time(
-                        row.datum,
-                        row.available_time,
-                        SOURCE_LAG_DAYS[lag_key],
-                    ),
-                    "incidence": float(row.incidence or 0.0),
-                }
-                for row in rows
-                if normalize_state_code(row.region)
-            ]
-        )
-        if frame.empty:
-            return frame
-        sort_columns = ["bundesland", "datum"]
-        if "forecast_run_timestamp" in frame.columns:
-            sort_columns.append("forecast_run_timestamp")
-        return frame.sort_values(sort_columns).reset_index(drop=True)
 
     def _load_are_konsultation(self, start_date: pd.Timestamp, end_date: pd.Timestamp) -> pd.DataFrame:
-        if self.db is None:
-            return pd.DataFrame()
-        rows = (
-            self.db.query(
-                AREKonsultation.bundesland,
-                AREKonsultation.datum,
-                func.max(AREKonsultation.available_time).label("available_time"),
-                func.avg(AREKonsultation.konsultationsinzidenz).label("incidence"),
-            )
-            .filter(
-                AREKonsultation.altersgruppe == "00+",
-                AREKonsultation.datum >= start_date.to_pydatetime(),
-                AREKonsultation.datum <= end_date.to_pydatetime(),
-            )
-            .group_by(
-                AREKonsultation.bundesland,
-                AREKonsultation.datum,
-            )
-            .all()
-        )
-        frame = pd.DataFrame(
-            [
-                {
-                    "bundesland": normalize_state_code(row.bundesland),
-                    "datum": pd.Timestamp(row.datum).normalize(),
-                    "available_time": effective_available_time(
-                        row.datum,
-                        row.available_time,
-                        SOURCE_LAG_DAYS["are_konsultation"],
-                    ),
-                    "incidence": float(row.incidence or 0.0),
-                }
-                for row in rows
-                if normalize_state_code(row.bundesland)
-            ]
-        )
-        if frame.empty:
-            return frame
-        return frame.sort_values(["bundesland", "datum"]).reset_index(drop=True)
+        return regional_features_sources.load_are_konsultation(self, start_date, end_date)
 
     def _load_notaufnahme_covid(self, start_date: pd.Timestamp, end_date: pd.Timestamp) -> pd.DataFrame:
-        if self.db is None:
-            return pd.DataFrame()
-        rows = (
-            self.db.query(NotaufnahmeSyndromData)
-            .filter(
-                NotaufnahmeSyndromData.syndrome == "COVID",
-                NotaufnahmeSyndromData.ed_type == "all",
-                NotaufnahmeSyndromData.age_group == "00+",
-                NotaufnahmeSyndromData.datum >= start_date.to_pydatetime(),
-                NotaufnahmeSyndromData.datum <= end_date.to_pydatetime(),
-            )
-            .order_by(NotaufnahmeSyndromData.datum.asc())
-            .all()
-        )
-        frame = pd.DataFrame(
-            [
-                {
-                    "datum": pd.Timestamp(row.datum).normalize(),
-                    "available_time": self._created_proxy_available_time(
-                        datum=row.datum,
-                        created_at=row.created_at,
-                        fallback_lag_days=SOURCE_LAG_DAYS["notaufnahme"],
-                    ),
-                    "level": float(row.relative_cases or 0.0),
-                    "ma7": float(
-                        row.relative_cases_7day_ma
-                        if row.relative_cases_7day_ma is not None
-                        else row.relative_cases
-                        or 0.0
-                    ),
-                    "expected_value": float(row.expected_value or 0.0),
-                    "expected_upperbound": float(row.expected_upperbound or 0.0),
-                }
-                for row in rows
-            ]
-        )
-        if frame.empty:
-            return frame
-        return frame.sort_values("datum").reset_index(drop=True)
+        return regional_features_sources.load_notaufnahme_covid(self, start_date, end_date)
 
     def _load_corona_test_trends(self, start_date: pd.Timestamp, end_date: pd.Timestamp) -> pd.DataFrame:
-        if self.db is None:
-            return pd.DataFrame()
-        rows = (
-            self.db.query(
-                GoogleTrendsData.datum,
-                func.max(GoogleTrendsData.available_time).label("available_time"),
-                func.avg(GoogleTrendsData.interest_score).label("interest_score"),
-            )
-            .filter(
-                func.lower(GoogleTrendsData.keyword) == "corona test",
-                GoogleTrendsData.region == "DE",
-                GoogleTrendsData.datum >= start_date.to_pydatetime(),
-                GoogleTrendsData.datum <= end_date.to_pydatetime(),
-            )
-            .group_by(GoogleTrendsData.datum)
-            .order_by(GoogleTrendsData.datum.asc())
-            .all()
-        )
-        frame = pd.DataFrame(
-            [
-                {
-                    "datum": pd.Timestamp(row.datum).normalize(),
-                    "available_time": effective_available_time(
-                        row.datum,
-                        row.available_time,
-                        SOURCE_LAG_DAYS["google_trends"],
-                    ),
-                    "interest_score": float(row.interest_score or 0.0),
-                }
-                for row in rows
-            ]
-        )
-        if frame.empty:
-            return frame
-        return frame.sort_values("datum").reset_index(drop=True)
+        return regional_features_sources.load_corona_test_trends(self, start_date, end_date)
 
     def _load_weather(self, start_date: pd.Timestamp, end_date: pd.Timestamp) -> pd.DataFrame:
-        rows = (
-            self.db.query(
-                WeatherData.city,
-                WeatherData.datum,
-                WeatherData.data_type,
-                WeatherData.forecast_run_timestamp,
-                WeatherData.forecast_run_id,
-                WeatherData.forecast_run_identity_source,
-                WeatherData.forecast_run_identity_quality,
-                func.max(WeatherData.available_time).label("available_time"),
-                func.max(WeatherData.created_at).label("created_at"),
-                func.avg(WeatherData.temperatur).label("temp"),
-                func.avg(WeatherData.luftfeuchtigkeit).label("humidity"),
-            )
-            .filter(
-                WeatherData.datum >= start_date.to_pydatetime(),
-                WeatherData.datum <= end_date.to_pydatetime(),
-                WeatherData.city.in_(list(CITY_TO_BUNDESLAND.keys())),
-            )
-            .group_by(
-                WeatherData.city,
-                WeatherData.datum,
-                WeatherData.data_type,
-                WeatherData.forecast_run_timestamp,
-                WeatherData.forecast_run_id,
-                WeatherData.forecast_run_identity_source,
-                WeatherData.forecast_run_identity_quality,
-            )
-            .all()
-        )
-
-        frame = pd.DataFrame(
-            [
-                {
-                    "bundesland": CITY_TO_BUNDESLAND.get(row.city),
-                    "datum": pd.Timestamp(row.datum).normalize(),
-                    "available_time": effective_available_time(row.datum, row.available_time, 0),
-                    "issue_time": (
-                        pd.Timestamp(row.forecast_run_timestamp)
-                        if row.forecast_run_timestamp is not None
-                        else (
-                            pd.Timestamp(row.created_at)
-                            if row.created_at is not None
-                            else pd.NaT
-                        )
-                    ),
-                    "forecast_run_timestamp": (
-                        pd.Timestamp(row.forecast_run_timestamp)
-                        if row.forecast_run_timestamp is not None
-                        else pd.NaT
-                    ),
-                    "forecast_run_id": str(row.forecast_run_id) if row.forecast_run_id is not None else None,
-                    "forecast_run_identity_source": (
-                        str(row.forecast_run_identity_source)
-                        if row.forecast_run_identity_source
-                        else (
-                            WEATHER_FORECAST_RUN_IDENTITY_SOURCE_MISSING
-                            if str(row.data_type or "") == "DAILY_FORECAST"
-                            else "not_applicable"
-                        )
-                    ),
-                    "forecast_run_identity_quality": (
-                        str(row.forecast_run_identity_quality)
-                        if row.forecast_run_identity_quality
-                        else (
-                            WEATHER_FORECAST_RUN_IDENTITY_QUALITY_MISSING
-                            if str(row.data_type or "") == "DAILY_FORECAST"
-                            else "not_applicable"
-                        )
-                    ),
-                    "data_type": str(row.data_type or "CURRENT"),
-                    "temp": float(row.temp or 0.0),
-                    "humidity": float(row.humidity or 0.0),
-                }
-                for row in rows
-                if CITY_TO_BUNDESLAND.get(row.city)
-            ]
-        )
-        if frame.empty:
-            return frame
-        return frame.sort_values(["bundesland", "datum"]).reset_index(drop=True)
+        return regional_features_sources.load_weather(self, start_date, end_date)
 
     def _load_pollen(self, start_date: pd.Timestamp, end_date: pd.Timestamp) -> pd.DataFrame:
-        rows = (
-            self.db.query(
-                PollenData.region_code,
-                PollenData.datum,
-                func.max(PollenData.available_time).label("available_time"),
-                func.max(PollenData.pollen_index).label("max_index"),
-            )
-            .filter(
-                PollenData.datum >= start_date.to_pydatetime(),
-                PollenData.datum <= end_date.to_pydatetime(),
-            )
-            .group_by(PollenData.region_code, PollenData.datum)
-            .all()
-        )
-        frame = pd.DataFrame(
-            [
-                {
-                    "bundesland": normalize_state_code(row.region_code),
-                    "datum": pd.Timestamp(row.datum).normalize(),
-                    "available_time": effective_available_time(
-                        row.datum,
-                        row.available_time,
-                        SOURCE_LAG_DAYS["pollen"],
-                    ),
-                    "pollen_index": float(row.max_index or 0.0),
-                }
-                for row in rows
-                if normalize_state_code(row.region_code)
-            ]
-        )
-        return frame.sort_values(["bundesland", "datum"]).reset_index(drop=True) if not frame.empty else frame
+        return regional_features_sources.load_pollen(self, start_date, end_date)
 
     def _load_holidays(self) -> dict[str, list[tuple[pd.Timestamp, pd.Timestamp]]]:
-        rows = self.db.query(SchoolHolidays).all()
-        holiday_ranges: dict[str, list[tuple[pd.Timestamp, pd.Timestamp]]] = {}
-        for row in rows:
-            code = normalize_state_code(row.bundesland)
-            if not code:
-                continue
-            holiday_ranges.setdefault(code, []).append(
-                (pd.Timestamp(row.start_datum).normalize(), pd.Timestamp(row.end_datum).normalize())
-            )
-        return holiday_ranges
+        return regional_features_sources.load_holidays(self)
 
     def _build_rows(
         self,
@@ -1172,234 +445,33 @@ class RegionalFeatureBuilder:
         weather_forecast_vintage_mode: str,
         weather_forecast_metadata: dict[str, Any],
     ) -> list[dict[str, Any]]:
-        if wastewater.empty or truth.empty:
-            return []
-        horizon = ensure_supported_horizon(horizon_days)
-        event_config = event_definition_config_for_virus(virus_typ)
-
-        wastewater_by_state = {
-            state: frame.sort_values("datum").reset_index(drop=True)
-            for state, frame in wastewater.groupby("bundesland")
-        }
-        wastewater_context_by_virus_state = {
-            candidate_virus: {
-                state: frame.sort_values("datum").reset_index(drop=True)
-                for state, frame in candidate_frame.groupby("bundesland")
-            }
-            for candidate_virus, candidate_frame in wastewater_context.items()
-            if candidate_frame is not None and not candidate_frame.empty
-        }
-        truth_by_state = {
-            state: frame.sort_values("week_start").reset_index(drop=True)
-            for state, frame in truth.groupby("bundesland")
-        }
-        grippeweb_by_state = {
-            (signal_type, state): frame.sort_values("datum").reset_index(drop=True)
-            for (signal_type, state), frame in grippeweb.dropna(subset=["bundesland"]).groupby(["signal_type", "bundesland"])
-        } if not grippeweb.empty else {}
-        grippeweb_national = {
-            signal_type: frame.sort_values("datum").reset_index(drop=True)
-            for signal_type, frame in grippeweb.loc[grippeweb["bundesland"].isna()].groupby("signal_type")
-        } if not grippeweb.empty else {}
-        influenza_by_state = {
-            state: frame.sort_values("datum").reset_index(drop=True)
-            for state, frame in influenza_ifsg.groupby("bundesland")
-        } if not influenza_ifsg.empty else {}
-        rsv_by_state = {
-            state: frame.sort_values("datum").reset_index(drop=True)
-            for state, frame in rsv_ifsg.groupby("bundesland")
-        } if not rsv_ifsg.empty else {}
-        are_by_state = {
-            state: frame.sort_values("datum").reset_index(drop=True)
-            for state, frame in are.groupby("bundesland")
-        } if not are.empty else {}
-        national_notaufnahme = notaufnahme.sort_values("datum").reset_index(drop=True) if not notaufnahme.empty else None
-        national_trends = trends.sort_values("datum").reset_index(drop=True) if not trends.empty else None
-        weather_by_state = {
-            state: frame.sort_values("datum").reset_index(drop=True)
-            for state, frame in weather.groupby("bundesland")
-        } if not weather.empty else {}
-        pollen_by_state = {
-            state: frame.sort_values("datum").reset_index(drop=True)
-            for state, frame in pollen.groupby("bundesland")
-        } if not pollen.empty else {}
-
-        max_sites = {
-            state: max(int(frame["site_count"].max() or 0), 1)
-            for state, frame in wastewater_by_state.items()
-        }
-
-        rows: list[dict[str, Any]] = []
-        for state in sorted(set(wastewater_by_state) & set(truth_by_state)):
-            ww_frame = wastewater_by_state[state]
-            truth_frame = truth_by_state[state]
-            candidate_dates = ww_frame.loc[
-                (ww_frame["datum"] >= start_date) & (ww_frame["datum"] <= end_date),
-                "datum",
-            ].drop_duplicates().sort_values()
-
-            for as_of in candidate_dates:
-                visible_ww = ww_frame.loc[
-                    (ww_frame["datum"] <= as_of) & (ww_frame["available_time"] <= as_of)
-                ].copy()
-                if len(visible_ww) < 8:
-                    continue
-
-                visible_truth = truth_frame.loc[truth_frame["available_date"] <= as_of].copy()
-                if len(visible_truth) < 8:
-                    continue
-
-                visible_grippeweb_state = {
-                    signal_type: self._visible_signal_frame(
-                        grippeweb_by_state.get((signal_type, state)),
-                        as_of=as_of,
-                    )
-                    for signal_type in ("ARE", "ILI")
-                }
-                visible_grippeweb_national = {
-                    signal_type: self._visible_signal_frame(
-                        grippeweb_national.get(signal_type),
-                        as_of=as_of,
-                    )
-                    for signal_type in ("ARE", "ILI")
-                }
-                visible_influenza_ifsg = self._visible_signal_frame(
-                    influenza_by_state.get(state),
-                    as_of=as_of,
-                )
-                visible_rsv_ifsg = self._visible_signal_frame(
-                    rsv_by_state.get(state),
-                    as_of=as_of,
-                )
-                visible_are = None
-                if virus_typ == "SARS-CoV-2":
-                    are_frame = are_by_state.get(state)
-                    if are_frame is not None and not are_frame.empty:
-                        visible_are = are_frame.loc[
-                            (are_frame["datum"] <= as_of) & (are_frame["available_time"] <= as_of)
-                        ].copy()
-                    else:
-                        visible_are = pd.DataFrame()
-
-                visible_notaufnahme = None
-                if virus_typ == "SARS-CoV-2" and national_notaufnahme is not None:
-                    visible_notaufnahme = national_notaufnahme.loc[
-                        (national_notaufnahme["datum"] <= as_of)
-                        & (national_notaufnahme["available_time"] <= as_of)
-                    ].copy()
-
-                visible_trends = None
-                if virus_typ == "SARS-CoV-2" and national_trends is not None:
-                    visible_trends = observed_as_of_only_rows(
-                        national_trends,
-                        as_of=as_of,
-                    )
-
-                target_date = self._target_date(as_of, horizon)
-                target_week_start = self._target_week_start(as_of, horizon)
-
-                target_row = truth_frame.loc[truth_frame["week_start"] == target_week_start]
-
-                current_truth = visible_truth.iloc[-1]
-                next_truth = target_row.iloc[0] if not target_row.empty else None
-                truth_source = str(current_truth.get("truth_source") or "survstat_weekly")
-                truth_nowcast = self.nowcast_service.evaluate_frame(
-                    source_id=truth_source,
-                    signal_id=truth_source,
-                    frame=visible_truth,
-                    as_of_date=as_of,
-                    value_column="incidence",
-                    reference_column="week_start",
-                    available_column="available_date",
-                    region_code=state,
-                    metadata={"truth_source": truth_source},
-                )
-                effective_current_incidence = self.nowcast_service.preferred_value(
-                    truth_nowcast,
-                    use_revision_adjusted=self._use_revision_adjusted_for_source(
-                        source_id=truth_source,
-                        result=truth_nowcast,
-                        revision_policy=revision_policy,
-                        source_revision_policy=source_revision_policy,
-                        fallback_use_revision_adjusted=use_revision_adjusted,
-                    ),
-                )
-                baseline, mad = seasonal_baseline_and_mad(
-                    truth_frame,
-                    target_week_start,
-                    max_history_weeks=event_config.baseline_max_history_weeks,
-                    upper_quantile_cap=event_config.baseline_upper_quantile_cap,
-                )
-                latest_ww_snapshot = self._latest_wastewater_snapshot_by_state(wastewater_by_state, as_of)
-                latest_cross_virus_snapshots = {
-                    candidate_virus: self._latest_wastewater_snapshot_by_state(candidate_frames, as_of)
-                    for candidate_virus, candidate_frames in wastewater_context_by_virus_state.items()
-                    if candidate_virus != virus_typ
-                }
-                feature_row = self._build_feature_row(
-                    virus_typ=virus_typ,
-                    state=state,
-                    as_of=as_of,
-                    visible_ww=visible_ww,
-                    visible_truth=visible_truth,
-                    visible_grippeweb_state=visible_grippeweb_state,
-                    visible_grippeweb_national=visible_grippeweb_national,
-                    visible_influenza_ifsg=visible_influenza_ifsg,
-                    visible_rsv_ifsg=visible_rsv_ifsg,
-                    visible_are=visible_are,
-                    visible_notaufnahme=visible_notaufnahme,
-                    visible_trends=visible_trends,
-                    weather_frame=weather_by_state.get(state),
-                    pollen_frame=pollen_by_state.get(state),
-                    holiday_ranges=holidays.get(state, []),
-                    latest_ww_snapshot=latest_ww_snapshot,
-                    latest_cross_virus_snapshots=latest_cross_virus_snapshots,
-                    state_population=float(state_populations.get(state, 0.0)),
-                    max_site_count=max_sites.get(state, 1),
-                    horizon_days=horizon,
-                    target_week_start=target_week_start,
-                    current_known_incidence=float(effective_current_incidence),
-                    seasonal_baseline=float(baseline),
-                    seasonal_mad=float(mad),
-                    include_nowcast=include_nowcast,
-                    use_revision_adjusted=use_revision_adjusted,
-                    revision_policy=revision_policy,
-                    source_revision_policy=source_revision_policy,
-                    weather_forecast_vintage_mode=weather_forecast_vintage_mode,
-                    weather_forecast_metadata=weather_forecast_metadata,
-                    truth_nowcast=truth_nowcast,
-                )
-                if feature_row is None:
-                    continue
-
-                row_payload = {
-                    "virus_typ": virus_typ,
-                    "bundesland": state,
-                    "bundesland_name": BUNDESLAND_NAMES.get(state, state),
-                    "as_of_date": pd.Timestamp(as_of).normalize(),
-                    "target_date": pd.Timestamp(target_date).normalize(),
-                    "target_week_start": pd.Timestamp(target_week_start).normalize(),
-                    "target_window_days": [horizon, horizon],
-                    "horizon_days": horizon,
-                    "event_definition_version": EVENT_DEFINITION_VERSION,
-                    "truth_source": str(
-                        (next_truth.get("truth_source") if next_truth is not None else None)
-                        or current_truth.get("truth_source")
-                        or "survstat_weekly"
-                    ),
-                    "current_known_incidence": float(effective_current_incidence),
-                    "next_week_incidence": (
-                        float(next_truth["incidence"] or 0.0)
-                        if include_targets and next_truth is not None
-                        else np.nan
-                    ),
-                    "seasonal_baseline": float(baseline),
-                    "seasonal_mad": float(mad),
-                    **feature_row,
-                }
-                rows.append(row_payload)
-
-        return rows
+        return regional_features_builders.build_rows(
+            self,
+            virus_typ=virus_typ,
+            wastewater=wastewater,
+            wastewater_context=wastewater_context,
+            truth=truth,
+            grippeweb=grippeweb,
+            influenza_ifsg=influenza_ifsg,
+            rsv_ifsg=rsv_ifsg,
+            are=are,
+            notaufnahme=notaufnahme,
+            trends=trends,
+            weather=weather,
+            pollen=pollen,
+            holidays=holidays,
+            state_populations=state_populations,
+            start_date=start_date,
+            end_date=end_date,
+            horizon_days=horizon_days,
+            include_targets=include_targets,
+            include_nowcast=include_nowcast,
+            use_revision_adjusted=use_revision_adjusted,
+            revision_policy=revision_policy,
+            source_revision_policy=source_revision_policy,
+            weather_forecast_vintage_mode=weather_forecast_vintage_mode,
+            weather_forecast_metadata=weather_forecast_metadata,
+        )
 
     def _build_feature_row(
         self,
@@ -1436,124 +508,29 @@ class RegionalFeatureBuilder:
         weather_forecast_metadata: dict[str, Any],
         truth_nowcast: NowcastResult,
     ) -> dict[str, Any] | None:
-        nowcast_features: dict[str, float] = {}
-        ww_latest = visible_ww.iloc[-1]
-        ww_nowcast = self.nowcast_service.evaluate_frame(
-            source_id="wastewater",
-            signal_id=virus_typ,
-            frame=visible_ww,
-            as_of_date=as_of,
-            value_column="viral_load",
-            region_code=state,
-            metadata={"virus_typ": virus_typ},
-        )
-        ww_level = self.nowcast_service.preferred_value(
-            ww_nowcast,
-            use_revision_adjusted=self._use_revision_adjusted_for_source(
-                source_id="wastewater",
-                result=ww_nowcast,
-                revision_policy=revision_policy,
-                source_revision_policy=source_revision_policy,
-                fallback_use_revision_adjusted=use_revision_adjusted,
-            ),
-        )
-        ww_lag4 = self._latest_value_as_of(visible_ww, as_of - pd.Timedelta(days=4), "viral_load")
-        ww_lag7 = self._latest_value_as_of(visible_ww, as_of - pd.Timedelta(days=7), "viral_load")
-        ww_lag14 = self._latest_value_as_of(visible_ww, as_of - pd.Timedelta(days=14), "viral_load")
-        ww_site_lag7 = self._latest_value_as_of(visible_ww, as_of - pd.Timedelta(days=7), "site_count")
-        ww_under_bg_lag7 = self._latest_value_as_of(visible_ww, as_of - pd.Timedelta(days=7), "under_bg_share")
-        ww_dispersion_lag7 = self._latest_value_as_of(visible_ww, as_of - pd.Timedelta(days=7), "viral_std")
-        ww_window7 = visible_ww.loc[visible_ww["datum"] >= as_of - pd.Timedelta(days=7)]
-        ww_window28 = visible_ww.loc[visible_ww["datum"] >= as_of - pd.Timedelta(days=28)]
-        ww_site_count = float(ww_latest["site_count"] or 0.0)
-        ww_slope7d = float((ww_level - ww_lag7) / max(abs(ww_lag7), 1.0))
-        ww_slope14d = float((ww_lag7 - ww_lag14) / max(abs(ww_lag14), 1.0))
-        ww_acceleration7d = float(ww_slope7d - ww_slope14d)
-        if include_nowcast:
-            nowcast_features.update(self._nowcast_feature_family("ww_level", ww_nowcast))
-            nowcast_features.update(
-                self._nowcast_feature_family("survstat_current_incidence", truth_nowcast)
-            )
-
-        truth_lag1 = self._latest_truth_value(visible_truth, lag_weeks=1)
-        truth_lag2 = self._latest_truth_value(visible_truth, lag_weeks=2)
-        truth_lag4 = self._latest_truth_value(visible_truth, lag_weeks=4)
-        truth_lag8 = self._latest_truth_value(visible_truth, lag_weeks=8)
-
-        neighbor_values = [
-            snapshot["viral_load"]
-            for code in REGIONAL_NEIGHBORS.get(state, [])
-            if (snapshot := latest_ww_snapshot.get(code))
-        ]
-        neighbor_slopes = [
-            snapshot["slope7d"]
-            for code in REGIONAL_NEIGHBORS.get(state, [])
-            if (snapshot := latest_ww_snapshot.get(code))
-        ]
-        national_values = [snapshot["viral_load"] for snapshot in latest_ww_snapshot.values()]
-        national_slopes = [snapshot["slope7d"] for snapshot in latest_ww_snapshot.values()]
-        national_accelerations = [snapshot["acceleration7d"] for snapshot in latest_ww_snapshot.values()]
-        neighbor_mean = float(np.mean(neighbor_values)) if neighbor_values else 0.0
-        national_mean = float(np.mean(national_values)) if national_values else 0.0
-        site_coverage_vs_28d = float(
-            ww_site_count / max(float(ww_window28["site_count"].median() or 0.0), 1.0)
-        )
-        state_population_millions = float(state_population / 1_000_000.0) if state_population > 0 else 0.0
-        cross_virus_features = self._cross_virus_features(
-            target_virus=virus_typ,
-            state=state,
-            latest_cross_virus_snapshots=latest_cross_virus_snapshots,
-        )
-
-        weather_features = self._weather_features(
-            weather_frame,
-            as_of,
-            horizon_days=horizon_days,
-            vintage_mode=weather_forecast_vintage_mode,
-            vintage_metadata=weather_forecast_metadata,
-        )
-        pollen_context = self._pollen_context(pollen_frame, as_of)
-        holiday_share = self._holiday_share_in_target_window(
-            holiday_ranges,
-            as_of,
-            horizon_days=horizon_days,
-        )
-        grippeweb_features = self._grippeweb_context_features(
-            state=state,
-            as_of=as_of,
-            visible_state_signals=visible_grippeweb_state,
-            visible_national_signals=visible_grippeweb_national,
-            current_known_incidence=current_known_incidence,
-            seasonal_baseline=seasonal_baseline,
-            seasonal_mad=seasonal_mad,
-            include_nowcast=include_nowcast,
-            use_revision_adjusted=use_revision_adjusted,
-            revision_policy=revision_policy,
-            source_revision_policy=source_revision_policy,
-        )
-        virus_specific_ifsg_features = self._virus_specific_ifsg_features(
+        return regional_features_builders.build_feature_row(
+            self,
             virus_typ=virus_typ,
             state=state,
             as_of=as_of,
+            visible_ww=visible_ww,
+            visible_truth=visible_truth,
+            visible_grippeweb_state=visible_grippeweb_state,
+            visible_grippeweb_national=visible_grippeweb_national,
             visible_influenza_ifsg=visible_influenza_ifsg,
             visible_rsv_ifsg=visible_rsv_ifsg,
-            current_known_incidence=current_known_incidence,
-            seasonal_baseline=seasonal_baseline,
-            seasonal_mad=seasonal_mad,
-            include_nowcast=include_nowcast,
-            use_revision_adjusted=use_revision_adjusted,
-            revision_policy=revision_policy,
-            source_revision_policy=source_revision_policy,
-        )
-        sars_context_features = self._sars_context_features(
-            virus_typ=virus_typ,
-            state=state,
-            as_of=as_of,
             visible_are=visible_are,
             visible_notaufnahme=visible_notaufnahme,
             visible_trends=visible_trends,
-            ww_level=ww_level,
-            ww_slope7d=ww_slope7d,
+            weather_frame=weather_frame,
+            pollen_frame=pollen_frame,
+            holiday_ranges=holiday_ranges,
+            latest_ww_snapshot=latest_ww_snapshot,
+            latest_cross_virus_snapshots=latest_cross_virus_snapshots,
+            state_population=state_population,
+            max_site_count=max_site_count,
+            horizon_days=horizon_days,
+            target_week_start=target_week_start,
             current_known_incidence=current_known_incidence,
             seasonal_baseline=seasonal_baseline,
             seasonal_mad=seasonal_mad,
@@ -1561,101 +538,10 @@ class RegionalFeatureBuilder:
             use_revision_adjusted=use_revision_adjusted,
             revision_policy=revision_policy,
             source_revision_policy=source_revision_policy,
+            weather_forecast_vintage_mode=weather_forecast_vintage_mode,
+            weather_forecast_metadata=weather_forecast_metadata,
+            truth_nowcast=truth_nowcast,
         )
-        if include_nowcast:
-            weather_nowcast = self._manual_nowcast_result(
-                source_id="weather",
-                signal_id="forecast_temp_3_7",
-                region_code=state,
-                as_of=as_of,
-                raw_value=float(weather_features.get("weather_forecast_temp_3_7") or 0.0),
-                reference_date=self._latest_reference_date(weather_frame, as_of=as_of),
-                available_time=self._latest_available_time(weather_frame, as_of=as_of),
-                coverage_ratio=1.0 if weather_frame is not None and not weather_frame.empty else 0.0,
-            )
-            pollen_nowcast = self._manual_nowcast_result(
-                source_id="pollen",
-                signal_id="context_score",
-                region_code=state,
-                as_of=as_of,
-                raw_value=float(pollen_context),
-                reference_date=self._latest_reference_date(pollen_frame, as_of=as_of),
-                available_time=self._latest_available_time(pollen_frame, as_of=as_of),
-                coverage_ratio=1.0 if pollen_frame is not None and not pollen_frame.empty else 0.0,
-            )
-            holiday_nowcast = self._manual_nowcast_result(
-                source_id="school_holidays",
-                signal_id="target_window_share",
-                region_code=state,
-                as_of=as_of,
-                raw_value=float(holiday_share),
-                reference_date=as_of,
-                available_time=as_of,
-                coverage_ratio=1.0,
-            )
-            nowcast_features.update(self._nowcast_feature_family("weather_context", weather_nowcast))
-            nowcast_features.update(self._nowcast_feature_family("pollen_context", pollen_nowcast))
-            nowcast_features.update(self._nowcast_feature_family("holiday_context", holiday_nowcast))
-
-        return {
-            "ww_level": ww_level,
-            "ww_lag4d": float(ww_lag4),
-            "ww_lag7d": float(ww_lag7),
-            "ww_lag14d": float(ww_lag14),
-            "ww_slope7d": ww_slope7d,
-            "ww_acceleration7d": ww_acceleration7d,
-            "ww_mean7d": float(ww_window7["viral_load"].mean() or 0.0),
-            "ww_std7d": float(ww_window7["viral_load"].std(ddof=0) or 0.0),
-            "ww_level_vs_28d_median": float(
-                ww_level - float(ww_window28["viral_load"].median() or 0.0)
-            ),
-            "ww_site_count": ww_site_count,
-            "ww_site_coverage_ratio": float(ww_site_count / max(float(max_site_count), 1.0)),
-            "ww_site_coverage_vs_28d": site_coverage_vs_28d,
-            "ww_site_count_delta7d": float(ww_site_count - ww_site_lag7),
-            "ww_site_count_ratio7d": float((ww_site_count - ww_site_lag7) / max(abs(ww_site_lag7), 1.0)),
-            "ww_missing_days7d": self._missing_days_in_window(visible_ww, as_of, 7),
-            "ww_missing_days14d": self._missing_days_in_window(visible_ww, as_of, 14),
-            "ww_observation_lag_days": float(max((pd.Timestamp(as_of) - pd.Timestamp(ww_latest["datum"])).days, 0)),
-            "ww_coverage_break_flag": float(site_coverage_vs_28d < 0.75),
-            "ww_under_bg_share7d": float(ww_window7["under_bg_share"].mean() or 0.0),
-            "ww_under_bg_trend7d": float(float(ww_latest["under_bg_share"] or 0.0) - ww_under_bg_lag7),
-            "ww_regional_dispersion7d": float(ww_window7["viral_std"].mean() or 0.0),
-            "ww_regional_dispersion_delta7d": float(float(ww_latest["viral_std"] or 0.0) - ww_dispersion_lag7),
-            "survstat_current_incidence": float(current_known_incidence),
-            "survstat_lag1w": float(truth_lag1),
-            "survstat_lag2w": float(truth_lag2),
-            "survstat_lag4w": float(truth_lag4),
-            "survstat_lag8w": float(truth_lag8),
-            "survstat_momentum_2w": float((truth_lag1 - truth_lag2) / max(abs(truth_lag2), 1.0)),
-            "survstat_momentum_4w": float((truth_lag1 - truth_lag4) / max(abs(truth_lag4), 1.0)),
-            "survstat_seasonal_baseline": float(seasonal_baseline),
-            "survstat_seasonal_mad": float(seasonal_mad),
-            "survstat_baseline_gap": float(current_known_incidence - seasonal_baseline),
-            "survstat_baseline_zscore": float((current_known_incidence - seasonal_baseline) / max(seasonal_mad, 1.0)),
-            "neighbor_ww_level": neighbor_mean,
-            "neighbor_ww_slope7d": float(np.mean(neighbor_slopes)) if neighbor_slopes else 0.0,
-            "national_ww_level": national_mean,
-            "national_ww_slope7d": float(np.mean(national_slopes)) if national_slopes else 0.0,
-            "national_ww_acceleration7d": float(np.mean(national_accelerations)) if national_accelerations else 0.0,
-            "ww_relative_to_neighbor_mean": float(ww_level - neighbor_mean),
-            "ww_relative_to_national": float(ww_level - national_mean),
-            "ww_share_of_national": float(ww_level / max(abs(national_mean), 1.0)),
-            "state_population_millions": state_population_millions,
-            "ww_sites_per_million": float(ww_site_count / max(state_population_millions, 0.1)),
-            "state_neighbor_count": float(len(REGIONAL_NEIGHBORS.get(state, []))),
-            "state_is_city_state": float(state in {"BE", "HB", "HH"}),
-            "target_holiday_share": float(holiday_share),
-            "target_holiday_any": float(holiday_share > 0.0),
-            "target_week_iso": float(target_week_start.isocalendar().week),
-            "pollen_context_score": float(pollen_context),
-            **weather_features,
-            **cross_virus_features,
-            **grippeweb_features,
-            **virus_specific_ifsg_features,
-            **sars_context_features,
-            **nowcast_features,
-        }
 
     @staticmethod
     def _created_proxy_available_time(
@@ -2133,51 +1019,34 @@ class RegionalFeatureBuilder:
 
     @staticmethod
     def _relative_delta(current_value: float, previous_value: float) -> float:
-        return float((current_value - previous_value) / max(abs(previous_value), 1.0))
+        return regional_features_helpers.relative_delta(current_value, previous_value)
 
     @staticmethod
     def _latest_value_as_of(frame: pd.DataFrame, as_of: pd.Timestamp, column: str) -> float:
-        if frame is None or frame.empty or "datum" not in frame.columns or column not in frame.columns:
-            return 0.0
-        visible = frame.loc[frame["datum"] <= as_of]
-        if visible.empty:
-            return 0.0
-        return float(visible.iloc[-1][column] or 0.0)
+        return regional_features_helpers.latest_value_as_of(frame, as_of, column)
 
     @staticmethod
     def _window_mean(frame: pd.DataFrame | None, *, as_of: pd.Timestamp, window_days: int, column: str) -> float:
-        if (
-            frame is None
-            or frame.empty
-            or window_days <= 0
-            or "datum" not in frame.columns
-            or column not in frame.columns
-        ):
-            return 0.0
-        window_start = as_of - pd.Timedelta(days=window_days - 1)
-        visible = frame.loc[(frame["datum"] >= window_start) & (frame["datum"] <= as_of)]
-        if visible.empty:
-            return 0.0
-        return float(visible[column].astype(float).mean() or 0.0)
+        return regional_features_helpers.window_mean(
+            frame,
+            as_of=as_of,
+            window_days=window_days,
+            column=column,
+        )
 
     @staticmethod
     def _latest_truth_value(frame: pd.DataFrame, lag_weeks: int) -> float:
-        if len(frame) <= lag_weeks:
-            return 0.0
-        return float(frame.iloc[-(lag_weeks + 1)]["incidence"] or 0.0)
+        return regional_features_helpers.latest_truth_value(frame, lag_weeks)
 
     @staticmethod
     def _latest_wastewater_by_state(
         wastewater_by_state: dict[str, pd.DataFrame],
         as_of: pd.Timestamp,
     ) -> dict[str, float]:
-        latest: dict[str, float] = {}
-        for state, frame in wastewater_by_state.items():
-            visible = frame.loc[(frame["datum"] <= as_of) & (frame["available_time"] <= as_of)]
-            if visible.empty:
-                continue
-            latest[state] = float(visible.iloc[-1]["viral_load"] or 0.0)
-        return latest
+        return regional_features_helpers.latest_wastewater_by_state(
+            wastewater_by_state,
+            as_of,
+        )
 
     @classmethod
     def _latest_wastewater_snapshot_by_state(
@@ -2185,32 +1054,14 @@ class RegionalFeatureBuilder:
         wastewater_by_state: dict[str, pd.DataFrame],
         as_of: pd.Timestamp,
     ) -> dict[str, dict[str, float]]:
-        latest: dict[str, dict[str, float]] = {}
-        for state, frame in wastewater_by_state.items():
-            visible = frame.loc[(frame["datum"] <= as_of) & (frame["available_time"] <= as_of)]
-            if visible.empty:
-                continue
-            latest_row = visible.iloc[-1]
-            level = float(latest_row["viral_load"] or 0.0)
-            lag7 = cls._latest_value_as_of(visible, as_of - pd.Timedelta(days=7), "viral_load")
-            lag14 = cls._latest_value_as_of(visible, as_of - pd.Timedelta(days=14), "viral_load")
-            slope7 = float((level - lag7) / max(abs(lag7), 1.0))
-            slope14 = float((lag7 - lag14) / max(abs(lag14), 1.0))
-            latest[state] = {
-                "viral_load": level,
-                "slope7d": slope7,
-                "acceleration7d": float(slope7 - slope14),
-            }
-        return latest
+        return regional_features_helpers.latest_wastewater_snapshot_by_state(
+            wastewater_by_state,
+            as_of,
+        )
 
     @staticmethod
     def _missing_days_in_window(frame: pd.DataFrame, as_of: pd.Timestamp, window_days: int) -> float:
-        if window_days <= 0:
-            return 0.0
-        window_start = as_of - pd.Timedelta(days=window_days - 1)
-        visible = frame.loc[(frame["datum"] >= window_start) & (frame["datum"] <= as_of)]
-        observed_days = int(visible["datum"].nunique()) if not visible.empty else 0
-        return float(max(window_days - observed_days, 0))
+        return regional_features_helpers.missing_days_in_window(frame, as_of, window_days)
 
     def _cross_virus_features(
         self,
@@ -2219,23 +1070,11 @@ class RegionalFeatureBuilder:
         state: str,
         latest_cross_virus_snapshots: dict[str, dict[str, dict[str, float]]],
     ) -> dict[str, float]:
-        features: dict[str, float] = {}
-        for candidate_virus in SUPPORTED_VIRUS_TYPES:
-            if candidate_virus == target_virus:
-                continue
-            slug = _feature_virus_slug(candidate_virus)
-            snapshot = latest_cross_virus_snapshots.get(candidate_virus, {})
-            state_metrics = snapshot.get(state, {})
-            national_levels = [metrics["viral_load"] for metrics in snapshot.values()]
-            national_slopes = [metrics["slope7d"] for metrics in snapshot.values()]
-            state_level = float(state_metrics.get("viral_load") or 0.0)
-            national_level = float(np.mean(national_levels)) if national_levels else 0.0
-            features[f"xdisease_state_level_{slug}"] = state_level
-            features[f"xdisease_state_slope7d_{slug}"] = float(state_metrics.get("slope7d") or 0.0)
-            features[f"xdisease_national_level_{slug}"] = national_level
-            features[f"xdisease_national_slope7d_{slug}"] = float(np.mean(national_slopes)) if national_slopes else 0.0
-            features[f"xdisease_relative_level_{slug}"] = float(state_level - national_level)
-        return features
+        return regional_features_helpers.cross_virus_features(
+            target_virus=target_virus,
+            state=state,
+            latest_cross_virus_snapshots=latest_cross_virus_snapshots,
+        )
 
     @staticmethod
     def _weather_features(
@@ -2246,155 +1085,17 @@ class RegionalFeatureBuilder:
         vintage_mode: str = WEATHER_FORECAST_VINTAGE_DISABLED,
         vintage_metadata: dict[str, Any] | None = None,
     ) -> dict[str, float]:
-        metadata = vintage_metadata if vintage_metadata is not None else {}
-        metadata.setdefault(
-            "weather_forecast_vintage_mode",
-            normalize_weather_forecast_vintage_mode(vintage_mode),
+        return regional_features_helpers.weather_features(
+            weather_frame,
+            as_of,
+            horizon_days=horizon_days,
+            vintage_mode=vintage_mode,
+            vintage_metadata=vintage_metadata,
         )
-        metadata.setdefault(
-            "weather_forecast_issue_time_semantics",
-            WEATHER_FORECAST_ISSUE_TIME_SEMANTICS,
-        )
-        metadata.setdefault("weather_forecast_run_identity_present", False)
-        metadata.setdefault(
-            "weather_forecast_run_identity_source",
-            WEATHER_FORECAST_RUN_IDENTITY_SOURCE_MISSING,
-        )
-        metadata.setdefault(
-            "weather_forecast_run_identity_quality",
-            WEATHER_FORECAST_RUN_IDENTITY_QUALITY_MISSING,
-        )
-        metadata.setdefault("weather_forecast_vintage_degraded", False)
-        if weather_frame is None or weather_frame.empty:
-            return {
-                "weather_forecast_temp_3_7": 0.0,
-                "weather_forecast_humidity_3_7": 0.0,
-                "weather_temp_anomaly_3_7": 0.0,
-                "weather_humidity_anomaly_3_7": 0.0,
-            }
-
-        visible = weather_frame.loc[weather_frame["available_time"] <= as_of].copy()
-        observed = observed_as_of_only_rows(
-            visible.loc[
-                visible["data_type"].isin(["CURRENT", "DAILY_OBSERVATION"])
-            ].copy(),
-            as_of=as_of,
-        )
-        target_date = RegionalFeatureBuilder._target_date(as_of, horizon_days)
-        raw_forecast_candidates = visible.loc[
-            (visible["data_type"] == "DAILY_FORECAST")
-            & (visible["datum"] > as_of)
-        ].copy()
-        if not raw_forecast_candidates.empty:
-            if "forecast_run_identity_source" in raw_forecast_candidates.columns:
-                sources = sorted(
-                    {
-                        str(value)
-                        for value in raw_forecast_candidates["forecast_run_identity_source"].dropna().unique()
-                    }
-                )
-                if len(sources) == 1:
-                    metadata["weather_forecast_run_identity_source"] = sources[0]
-                elif len(sources) > 1:
-                    metadata["weather_forecast_run_identity_source"] = "mixed"
-            if "forecast_run_identity_quality" in raw_forecast_candidates.columns:
-                qualities = sorted(
-                    {
-                        str(value)
-                        for value in raw_forecast_candidates["forecast_run_identity_quality"].dropna().unique()
-                    }
-                )
-                if len(qualities) == 1:
-                    metadata["weather_forecast_run_identity_quality"] = qualities[0]
-                elif len(qualities) > 1:
-                    metadata["weather_forecast_run_identity_quality"] = "mixed"
-        normalized_vintage_mode = normalize_weather_forecast_vintage_mode(vintage_mode)
-        if normalized_vintage_mode == WEATHER_FORECAST_VINTAGE_RUN_TIMESTAMP_V1:
-            forecast_candidates, selected_vintage = select_weather_forecast_vintage_rows(
-                raw_forecast_candidates,
-                as_of=as_of,
-            )
-            for key, value in selected_vintage.items():
-                if key in {
-                    "weather_forecast_selected_run_timestamp",
-                    "weather_forecast_selected_run_id",
-                } and value is not None:
-                    metadata[key] = value
-            metadata["weather_forecast_run_identity_present"] = bool(
-                metadata.get("weather_forecast_run_identity_present")
-                or selected_vintage.get("weather_forecast_run_identity_present")
-            )
-            metadata["weather_forecast_vintage_degraded"] = bool(
-                metadata.get("weather_forecast_vintage_degraded")
-                or selected_vintage.get("weather_forecast_vintage_degraded")
-            )
-            if selected_vintage.get("weather_forecast_run_identity_source"):
-                metadata["weather_forecast_run_identity_source"] = selected_vintage.get(
-                    "weather_forecast_run_identity_source"
-                )
-            if selected_vintage.get("weather_forecast_run_identity_quality"):
-                metadata["weather_forecast_run_identity_quality"] = selected_vintage.get(
-                    "weather_forecast_run_identity_quality"
-                )
-        else:
-            forecast_candidates = issue_time_forecast_rows(
-                raw_forecast_candidates,
-                as_of=as_of,
-                contract=EXOGENOUS_FEATURE_CONTRACTS["weather_daily_forecast"],
-            )
-            has_persisted_run_identity = (
-                "forecast_run_timestamp" in raw_forecast_candidates.columns
-                and raw_forecast_candidates["forecast_run_timestamp"].notna().any()
-            )
-            metadata["weather_forecast_run_identity_present"] = bool(
-                metadata.get("weather_forecast_run_identity_present")
-                or has_persisted_run_identity
-            )
-            if not has_persisted_run_identity and (
-                "issue_time" in raw_forecast_candidates.columns
-                and raw_forecast_candidates["issue_time"].notna().any()
-            ):
-                metadata["weather_forecast_run_identity_source"] = WEATHER_FORECAST_RUN_IDENTITY_SOURCE_LEGACY
-                metadata["weather_forecast_run_identity_quality"] = WEATHER_FORECAST_RUN_IDENTITY_QUALITY_LEGACY
-        if not raw_forecast_candidates.empty and forecast_candidates.empty:
-            logger.warning(
-                "Dropping future weather forecast rows without issue-time semantics for as_of=%s.",
-                as_of.date(),
-            )
-
-        obs_temp = float(observed.tail(7)["temp"].mean() or 0.0) if not observed.empty else 0.0
-        obs_humidity = float(observed.tail(7)["humidity"].mean() or 0.0) if not observed.empty else 0.0
-        if forecast_candidates.empty:
-            forecast = forecast_candidates.copy()
-        else:
-            forecast = forecast_candidates.loc[forecast_candidates["datum"] == target_date].copy()
-        if forecast.empty and not forecast_candidates.empty:
-            forecast_candidates["target_distance_days"] = (
-                forecast_candidates["datum"] - target_date
-            ).abs() / pd.Timedelta(days=1)
-            forecast = forecast_candidates.sort_values(["target_distance_days", "datum"]).head(3)
-        fc_temp_mean = float(forecast["temp"].mean()) if not forecast.empty else float("nan")
-        fc_humidity_mean = float(forecast["humidity"].mean()) if not forecast.empty else float("nan")
-        fc_temp = obs_temp if np.isnan(fc_temp_mean) else fc_temp_mean
-        fc_humidity = obs_humidity if np.isnan(fc_humidity_mean) else fc_humidity_mean
-        return {
-            "weather_forecast_temp_3_7": fc_temp,
-            "weather_forecast_humidity_3_7": fc_humidity,
-            "weather_temp_anomaly_3_7": fc_temp - obs_temp,
-            "weather_humidity_anomaly_3_7": fc_humidity - obs_humidity,
-        }
 
     @staticmethod
     def _pollen_context(pollen_frame: pd.DataFrame | None, as_of: pd.Timestamp) -> float:
-        if pollen_frame is None or pollen_frame.empty:
-            return 0.0
-        visible = observed_as_of_only_rows(
-            pollen_frame,
-            as_of=as_of,
-        )
-        if visible.empty:
-            return 0.0
-        return float(visible.tail(3)["pollen_index"].mean() or 0.0)
+        return regional_features_helpers.pollen_context(pollen_frame, as_of)
 
     @staticmethod
     def _holiday_share_in_target_window(
@@ -2403,30 +1104,24 @@ class RegionalFeatureBuilder:
         *,
         horizon_days: int,
     ) -> float:
-        target_date = RegionalFeatureBuilder._target_date(as_of, horizon_days)
-        return float(any(start <= target_date <= end for start, end in holiday_ranges))
+        return regional_features_helpers.holiday_share_in_target_window(
+            holiday_ranges,
+            as_of,
+            horizon_days=horizon_days,
+        )
 
     @staticmethod
     def _target_date(as_of: pd.Timestamp, horizon_days: int) -> pd.Timestamp:
-        horizon = ensure_supported_horizon(horizon_days)
-        return (pd.Timestamp(as_of) + pd.Timedelta(days=horizon)).normalize()
+        return regional_features_helpers.target_date(as_of, horizon_days)
 
     @classmethod
     def _target_week_start(cls, as_of: pd.Timestamp, horizon_days: int) -> pd.Timestamp:
-        target_date = cls._target_date(as_of, horizon_days)
-        return (target_date - pd.Timedelta(days=int(target_date.weekday()))).normalize()
+        return regional_features_helpers.target_week_start(as_of, horizon_days)
 
     @staticmethod
     def _week_start_from_label(week_label: str) -> pd.Timestamp:
-        year_text, week_text = str(week_label).split("_", 1)
-        return pd.Timestamp.fromisocalendar(int(year_text), max(int(week_text), 1), 1).normalize()
+        return regional_features_helpers.week_start_from_label(week_label)
 
     @staticmethod
     def _finalize_panel(rows: list[dict[str, Any]]) -> pd.DataFrame:
-        if not rows:
-            return pd.DataFrame()
-
-        frame = pd.DataFrame(rows).sort_values(["as_of_date", "bundesland"]).reset_index(drop=True)
-        for code in ALL_BUNDESLAENDER:
-            frame[f"state_{code}"] = (frame["bundesland"] == code).astype(float)
-        return frame
+        return regional_features_helpers.finalize_panel(rows)

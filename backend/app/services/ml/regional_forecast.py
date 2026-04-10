@@ -19,6 +19,9 @@ from app.models.database import BacktestPoint, BacktestRun, MLForecast
 from app.services.media.business_validation_service import BusinessValidationService
 from app.services.media.campaign_recommendation_service import CampaignRecommendationService
 from app.services.media.truth_layer_service import TruthLayerService
+from app.services.ml import regional_forecast_artifacts
+from app.services.ml import regional_forecast_media
+from app.services.ml import regional_forecast_truth
 from app.services.ml.forecast_decision_service import ForecastDecisionService
 from app.services.ml.forecast_orchestrator import ForecastOrchestrator
 from app.services.ml.forecast_horizon_utils import (
@@ -1495,233 +1498,69 @@ class RegionalForecastService:
         }
 
     def _load_artifacts(self, virus_typ: str, horizon_days: int = 7) -> dict[str, Any]:
-        horizon = ensure_supported_horizon(horizon_days)
-        model_dir = regional_model_artifact_dir(
-            self.models_dir,
+        return regional_forecast_artifacts.load_artifacts(
+            self,
             virus_typ=virus_typ,
-            horizon_days=horizon,
+            horizon_days=horizon_days,
+            ensure_supported_horizon_fn=ensure_supported_horizon,
+            regional_model_artifact_dir_fn=regional_model_artifact_dir,
+            supported_forecast_horizons=SUPPORTED_FORECAST_HORIZONS,
+            target_window_days=TARGET_WINDOW_DAYS,
+            virus_slug_fn=_virus_slug,
+            training_only_panel_columns=TRAINING_ONLY_PANEL_COLUMNS,
         )
-        if model_dir.exists():
-            missing_files = self._missing_artifact_files(model_dir)
-            if missing_files:
-                return {
-                    "load_error": (
-                        f"Artefakt-Bundle für {virus_typ}/h{horizon} ist unvollständig: "
-                        f"{', '.join(missing_files)}"
-                    ),
-                }
-        payload = self._artifact_payload_from_dir(model_dir)
-        if payload:
-            metadata = dict(payload.get("metadata") or {})
-            metadata_horizon = metadata.get("horizon_days")
-            if metadata_horizon is None:
-                payload["load_error"] = (
-                    f"Metadaten für {virus_typ}/h{horizon} fehlen das Pflichtfeld 'horizon_days'."
-                )
-                return payload
-            if int(metadata_horizon) != horizon:
-                payload["load_error"] = (
-                    f"Metadaten-Horizon {metadata_horizon} passt nicht zur Anfrage h{horizon}."
-                )
-                return payload
-            metadata.setdefault("target_window_days", self._target_window_for_horizon(horizon))
-            metadata.setdefault("supported_horizon_days", list(SUPPORTED_FORECAST_HORIZONS))
-            invalid_feature_columns = self._invalid_inference_feature_columns(
-                metadata.get("feature_columns") or []
-            )
-            if invalid_feature_columns:
-                payload["load_error"] = (
-                    f"Artefakt-Bundle für {virus_typ}/h{horizon} enthält trainingsinterne "
-                    f"Feature-Spalten: {', '.join(invalid_feature_columns)}. "
-                    "Bitte horizon-spezifisches Retraining durchführen."
-                )
-                return payload
-            payload["metadata"] = metadata
-            return payload
-
-        if horizon != 7:
-            return {}
-
-        legacy_dir = self.models_dir / _virus_slug(virus_typ)
-        if legacy_dir.exists():
-            missing_files = self._missing_artifact_files(legacy_dir)
-            if missing_files:
-                return {
-                    "load_error": (
-                        f"Legacy-Artefakt-Bundle für {virus_typ}/h{horizon} ist unvollständig: "
-                        f"{', '.join(missing_files)}"
-                    ),
-                }
-        legacy_payload = self._artifact_payload_from_dir(legacy_dir)
-        if not legacy_payload:
-            return {}
-
-        metadata = dict(legacy_payload.get("metadata") or {})
-        metadata["horizon_days"] = horizon
-        metadata["target_window_days"] = metadata.get("target_window_days") or list(TARGET_WINDOW_DAYS)
-        metadata["requested_horizon_days"] = horizon
-        metadata["supported_horizon_days"] = list(SUPPORTED_FORECAST_HORIZONS)
-        metadata["artifact_transition_mode"] = "legacy_default_window_fallback"
-        legacy_payload["metadata"] = metadata
-        legacy_payload["artifact_transition_mode"] = "legacy_default_window_fallback"
-        invalid_feature_columns = self._invalid_inference_feature_columns(
-            metadata.get("feature_columns") or []
-        )
-        if invalid_feature_columns:
-            legacy_payload["load_error"] = (
-                f"Legacy-Artefakt-Bundle für {virus_typ}/h{horizon} enthält trainingsinterne "
-                f"Feature-Spalten: {', '.join(invalid_feature_columns)}. "
-                "Bitte horizon-spezifisches Retraining durchführen."
-            )
-        return legacy_payload
 
     @staticmethod
     def _required_artifact_paths(model_dir: Path) -> dict[str, Path]:
-        return {
-            "classifier": model_dir / "classifier.json",
-            "regressor_median": model_dir / "regressor_median.json",
-            "regressor_lower": model_dir / "regressor_lower.json",
-            "regressor_upper": model_dir / "regressor_upper.json",
-            "calibration": model_dir / "calibration.pkl",
-            "metadata": model_dir / "metadata.json",
-        }
+        return regional_forecast_artifacts.required_artifact_paths(model_dir)
 
     @classmethod
     def _missing_artifact_files(cls, model_dir: Path) -> list[str]:
-        return [
-            path.name
-            for path in cls._required_artifact_paths(model_dir).values()
-            if not path.exists()
-        ]
+        return regional_forecast_artifacts.missing_artifact_files(
+            model_dir,
+            required_artifact_paths_fn=cls._required_artifact_paths,
+        )
 
     @staticmethod
     def _invalid_inference_feature_columns(feature_columns: list[str]) -> list[str]:
-        return sorted(
-            {
-                str(column)
-                for column in feature_columns
-                if str(column) in TRAINING_ONLY_PANEL_COLUMNS
-            }
+        return regional_forecast_artifacts.invalid_inference_feature_columns(
+            feature_columns,
+            training_only_panel_columns=TRAINING_ONLY_PANEL_COLUMNS,
         )
 
     @classmethod
     def _artifact_payload_from_dir(cls, model_dir: Path) -> dict[str, Any]:
-        required_paths = cls._required_artifact_paths(model_dir)
-        if not all(path.exists() for path in required_paths.values()):
-            return {}
-
-        classifier = XGBClassifier()
-        classifier.load_model(str(required_paths["classifier"]))
-        regressor_median = XGBRegressor()
-        regressor_median.load_model(str(required_paths["regressor_median"]))
-        regressor_lower = XGBRegressor()
-        regressor_lower.load_model(str(required_paths["regressor_lower"]))
-        regressor_upper = XGBRegressor()
-        regressor_upper.load_model(str(required_paths["regressor_upper"]))
-        metadata = json.loads(required_paths["metadata"].read_text())
-        hierarchy_models: dict[str, dict[str, XGBRegressor]] = {}
-        optional_hierarchy_paths = {
-            "cluster": {
-                "median": model_dir / "cluster_regressor_median.json",
-                "lower": model_dir / "cluster_regressor_lower.json",
-                "upper": model_dir / "cluster_regressor_upper.json",
-            },
-            "national": {
-                "median": model_dir / "national_regressor_median.json",
-                "lower": model_dir / "national_regressor_lower.json",
-                "upper": model_dir / "national_regressor_upper.json",
-            },
-        }
-        for level, level_paths in optional_hierarchy_paths.items():
-            if not all(path.exists() for path in level_paths.values()):
-                continue
-            bundle: dict[str, XGBRegressor] = {}
-            for name, path in level_paths.items():
-                model = XGBRegressor()
-                model.load_model(str(path))
-                bundle[name] = model
-            hierarchy_models[level] = bundle
-        quantile_regressors: dict[float, XGBRegressor] = {}
-        for quantile in metadata.get("forecast_quantiles") or []:
-            quantile_path = model_dir / f"q{int(round(float(quantile) * 1000)):04d}.json"
-            if not quantile_path.exists():
-                continue
-            model = XGBRegressor()
-            model.load_model(str(quantile_path))
-            quantile_regressors[float(quantile)] = model
-        with open(required_paths["calibration"], "rb") as handle:
-            calibration = pickle.load(handle)
-        dataset_manifest_path = model_dir / "dataset_manifest.json"
-        point_in_time_path = model_dir / "point_in_time_snapshot.json"
-        return {
-            "classifier": classifier,
-            "regressor_median": regressor_median,
-            "regressor_lower": regressor_lower,
-            "regressor_upper": regressor_upper,
-            "quantile_regressors": quantile_regressors,
-            "hierarchy_models": hierarchy_models,
-            "calibration": calibration,
-            "metadata": metadata,
-            "dataset_manifest": json.loads(dataset_manifest_path.read_text()) if dataset_manifest_path.exists() else None,
-            "point_in_time_snapshot": json.loads(point_in_time_path.read_text()) if point_in_time_path.exists() else None,
-        }
+        return regional_forecast_artifacts.artifact_payload_from_dir(
+            model_dir,
+            required_artifact_paths_fn=cls._required_artifact_paths,
+            xgb_classifier_cls=XGBClassifier,
+            xgb_regressor_cls=XGBRegressor,
+            json_module=json,
+            pickle_module=pickle,
+        )
 
     @staticmethod
     def _apply_calibration(calibration: Any, raw_probabilities: np.ndarray) -> np.ndarray:
-        if calibration is None:
-            return np.clip(raw_probabilities.astype(float), 0.001, 0.999)
-        return np.clip(calibration.predict(raw_probabilities.astype(float)), 0.001, 0.999)
+        return regional_forecast_artifacts.apply_calibration(
+            calibration,
+            raw_probabilities,
+            np_module=np,
+        )
 
     def _latest_as_of_date(self, virus_typ: str) -> pd.Timestamp:
         return self.feature_builder.latest_available_as_of_date(virus_typ=virus_typ)
 
     @staticmethod
     def _decision_stage_sort_value(stage: str | None) -> int:
-        return {
-            "activate": 3,
-            "prepare": 2,
-            "watch": 1,
-        }.get(str(stage or "watch").strip().lower(), 0)
+        return regional_forecast_media.decision_stage_sort_value(stage)
 
     @classmethod
     def _decision_priority_sort_key(cls, item: dict[str, Any]) -> tuple[float, float, float, float]:
-        decision = item.get("decision") or {}
-        return (
-            float(cls._decision_stage_sort_value(decision.get("stage"))),
-            float(item.get("priority_score") or 0.0),
-            float(item.get("event_probability_calibrated") or 0.0),
-            float(item.get("change_pct") or 0.0),
-        )
+        return regional_forecast_media.decision_priority_sort_key(item)
 
     @classmethod
     def _decision_summary(cls, predictions: list[dict[str, Any]]) -> dict[str, Any]:
-        if not predictions:
-            return {
-                "watch_regions": 0,
-                "prepare_regions": 0,
-                "activate_regions": 0,
-                "avg_priority_score": 0.0,
-                "top_region": None,
-                "top_region_decision": None,
-            }
-
-        ranked_decisions = sorted(
-            predictions,
-            key=cls._decision_priority_sort_key,
-            reverse=True,
-        )
-        top_region = ranked_decisions[0]
-        return {
-            "watch_regions": sum(1 for item in predictions if str(item.get("decision_label") or "").lower() == "watch"),
-            "prepare_regions": sum(1 for item in predictions if str(item.get("decision_label") or "").lower() == "prepare"),
-            "activate_regions": sum(1 for item in predictions if str(item.get("decision_label") or "").lower() == "activate"),
-            "avg_priority_score": round(
-                sum(float(item.get("priority_score") or 0.0) for item in predictions) / len(predictions),
-                4,
-            ),
-            "top_region": top_region.get("bundesland"),
-            "top_region_decision": top_region.get("decision_label"),
-        }
+        return regional_forecast_media.decision_summary(predictions)
 
     @staticmethod
     def _media_spend_gate(
@@ -1730,14 +1569,11 @@ class RegionalForecastService:
         business_gate: dict[str, Any],
         activation_policy: str,
     ) -> tuple[bool, list[str]]:
-        blockers: list[str] = []
-        if activation_policy == "watch_only":
-            blockers.append("Activation policy 'watch_only' forces observation mode.")
-        if not business_gate.get("validated_for_budget_activation"):
-            blockers.append("Business-Gate noch nicht validiert.")
-        if not quality_gate.get("overall_passed"):
-            blockers.append("Quality Gate blockiert Aktivierung.")
-        return len(blockers) == 0, blockers
+        return regional_forecast_media.media_spend_gate(
+            quality_gate=quality_gate,
+            business_gate=business_gate,
+            activation_policy=activation_policy,
+        )
 
     @staticmethod
     def _media_action(
@@ -1745,19 +1581,14 @@ class RegionalForecastService:
         recommended_level: str,
         spend_enabled: bool,
     ) -> str:
-        if not spend_enabled:
-            return "watch"
-        stage = str(recommended_level or "Watch").strip().lower()
-        if stage in {"activate", "prepare"}:
-            return stage
-        return "watch"
+        return regional_forecast_media.media_action(
+            recommended_level=recommended_level,
+            spend_enabled=spend_enabled,
+        )
 
     @staticmethod
     def _media_intensity(action: str) -> str:
-        return {
-            "activate": "high",
-            "prepare": "medium",
-        }.get(str(action or "watch").strip().lower(), "low")
+        return regional_forecast_media.media_intensity(action)
 
     @staticmethod
     def _products_from_allocation(
@@ -1765,13 +1596,11 @@ class RegionalForecastService:
         allocation_item: dict[str, Any],
         virus_typ: str,
     ) -> list[str]:
-        product_clusters = allocation_item.get("product_clusters") or []
-        if product_clusters:
-            cluster = product_clusters[0] or {}
-            products = [str(item) for item in cluster.get("products") or [] if str(item).strip()]
-            if products:
-                return products
-        return GELO_PRODUCTS.get(virus_typ, ["GeloMyrtol forte"])
+        return regional_forecast_media.products_from_allocation(
+            allocation_item=allocation_item,
+            virus_typ=virus_typ,
+            gelo_products=GELO_PRODUCTS,
+        )
 
     @staticmethod
     def _media_timeline(
@@ -1782,21 +1611,14 @@ class RegionalForecastService:
         business_gate: dict[str, Any],
         quality_gate: dict[str, Any],
     ) -> str:
-        if not spend_enabled:
-            return (
-                "Nur beobachten — Shadow-Policy blockiert Aktivierung"
-                if activation_policy == "watch_only"
-                else "Nur beobachten — Business-Gate noch nicht validiert"
-                if not business_gate.get("validated_for_budget_activation")
-                else "Nur beobachten — Quality Gate blockiert Aktivierung"
-                if not quality_gate.get("overall_passed")
-                else "Nur beobachten — Spend aktuell blockiert"
-            )
-        if action == "activate":
-            return f"Sofort aktivieren — Wellenfenster in {TARGET_WINDOW_DAYS[0]}-{TARGET_WINDOW_DAYS[1]} Tagen"
-        if action == "prepare":
-            return "In 1-2 Tagen vorbereiten — Signal für regionale Aktivierung vorhanden"
-        return "Beobachten — unterhalb des operationalen Spend-Niveaus"
+        return regional_forecast_media.media_timeline(
+            action=action,
+            spend_enabled=spend_enabled,
+            activation_policy=activation_policy,
+            business_gate=business_gate,
+            quality_gate=quality_gate,
+            target_window_days=TARGET_WINDOW_DAYS,
+        )
 
     @staticmethod
     def _media_headline(
@@ -1805,47 +1627,19 @@ class RegionalForecastService:
         recommendations: list[dict[str, Any]],
         spend_enabled: bool,
     ) -> str:
-        prioritized = [
-            item["bundesland"]
-            for item in recommendations
-            if item["action"] in {"activate", "prepare"} and float(item.get("suggested_budget_share") or 0.0) > 0.0
-        ]
-        if prioritized and spend_enabled:
-            return f"{virus_typ}: Budget auf {', '.join(prioritized[:3])} fokussieren"
-        return f"{virus_typ}: aktuell kein validierter Aktivierungs-Case"
+        return regional_forecast_media.media_headline(
+            virus_typ=virus_typ,
+            recommendations=recommendations,
+            spend_enabled=spend_enabled,
+        )
 
     @staticmethod
     def _metric_delta(candidate: dict[str, Any], reference: dict[str, Any]) -> dict[str, float]:
-        delta: dict[str, float] = {}
-        for metric in (
-            "precision_at_top3",
-            "precision_at_top5",
-            "pr_auc",
-            "brier_score",
-            "ece",
-            "activation_false_positive_rate",
-        ):
-            if metric in candidate and metric in reference:
-                delta[metric] = round(float(candidate[metric]) - float(reference[metric]), 6)
-        return delta
+        return regional_forecast_media.metric_delta(candidate, reference)
 
     @staticmethod
     def _benchmark_score(item: dict[str, Any]) -> float:
-        metrics = item.get("aggregate_metrics") or {}
-        quality_gate = item.get("quality_gate") or {}
-        precision = float(metrics.get("precision_at_top3") or 0.0)
-        pr_auc = float(metrics.get("pr_auc") or 0.0)
-        ece = float(metrics.get("ece") or 1.0)
-        fp_rate = float(metrics.get("activation_false_positive_rate") or 1.0)
-        score = (
-            precision * 0.4
-            + pr_auc * 0.35
-            + max(0.0, 1.0 - min(ece, 1.0)) * 0.15
-            + max(0.0, 1.0 - min(fp_rate, 1.0)) * 0.10
-        )
-        if quality_gate.get("overall_passed"):
-            score += 0.1
-        return round(score * 100.0, 2)
+        return regional_forecast_media.benchmark_score(item)
 
     def _portfolio_priority_score(
         self,
@@ -1853,20 +1647,10 @@ class RegionalForecastService:
         prediction: dict[str, Any],
         benchmark_item: dict[str, Any],
     ) -> float:
-        probability = float(prediction.get("event_probability_calibrated") or 0.0)
-        change_pct = float(prediction.get("change_pct") or 0.0)
-        benchmark_score = float(benchmark_item.get("benchmark_score") or 0.0) / 100.0
-        quality_gate = prediction.get("quality_gate") or {}
-        activation_policy = str(prediction.get("activation_policy") or "quality_gate")
-        business_gate = prediction.get("business_gate") or benchmark_item.get("business_gate") or {}
-        if activation_policy == "watch_only":
-            readiness_multiplier = 0.78
-        elif not business_gate.get("validated_for_budget_activation"):
-            readiness_multiplier = 0.84 if quality_gate.get("overall_passed") else 0.68
-        else:
-            readiness_multiplier = 1.0 if quality_gate.get("overall_passed") else 0.72
-        momentum_multiplier = 1.0 + min(max(change_pct, 0.0), 80.0) / 200.0
-        return round(probability * max(benchmark_score, 0.05) * readiness_multiplier * momentum_multiplier * 100.0, 2)
+        return regional_forecast_media.portfolio_priority_score(
+            prediction=prediction,
+            benchmark_item=benchmark_item,
+        )
 
     def _portfolio_action(
         self,
@@ -1874,79 +1658,21 @@ class RegionalForecastService:
         prediction: dict[str, Any],
         benchmark_item: dict[str, Any],
     ) -> tuple[str, str]:
-        probability = float(prediction.get("event_probability_calibrated") or 0.0)
-        change_pct = float(prediction.get("change_pct") or 0.0)
-        threshold = float(prediction.get("action_threshold") or 0.6)
-        quality_gate = prediction.get("quality_gate") or {}
-        activation_policy = str(prediction.get("activation_policy") or "quality_gate")
-        business_gate = prediction.get("business_gate") or benchmark_item.get("business_gate") or {}
-
-        if activation_policy == "watch_only":
-            if float(benchmark_item.get("benchmark_score") or 0.0) >= 35.0 and probability >= max(0.45, threshold * 0.8):
-                return "prioritize", "medium"
-            return "watch", "low"
-
-        if not business_gate.get("validated_for_budget_activation"):
-            if float(benchmark_item.get("benchmark_score") or 0.0) >= 35.0 and probability >= max(0.45, threshold * 0.8):
-                return "prioritize", "medium"
-            return "watch", "low"
-        if quality_gate.get("overall_passed") and probability >= threshold and change_pct >= 20:
-            return "activate", "high"
-        if quality_gate.get("overall_passed") and probability >= threshold:
-            return "prepare", "medium"
-        if float(benchmark_item.get("benchmark_score") or 0.0) >= 35.0 and probability >= max(0.45, threshold * 0.8):
-            return "prioritize", "medium"
-        return "watch", "low"
+        return regional_forecast_media.portfolio_action(
+            prediction=prediction,
+            benchmark_item=benchmark_item,
+        )
 
     @staticmethod
     def _region_rollup(opportunities: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        grouped: dict[str, list[dict[str, Any]]] = {}
-        for item in opportunities:
-            grouped.setdefault(item["bundesland"], []).append(item)
-
-        region_rollup: list[dict[str, Any]] = []
-        for bundesland, items in grouped.items():
-            ranked_items = sorted(
-                items,
-                key=lambda item: float(item.get("portfolio_priority_score") or 0.0),
-                reverse=True,
-            )
-            leader = ranked_items[0]
-            region_rollup.append(
-                {
-                    "bundesland": bundesland,
-                    "bundesland_name": leader["bundesland_name"],
-                    "leading_virus": leader["virus_typ"],
-                    "leading_probability": leader["event_probability_calibrated"],
-                    "leading_priority_score": leader["portfolio_priority_score"],
-                    "top_signals": [
-                        {
-                            "virus_typ": item["virus_typ"],
-                            "portfolio_action": item["portfolio_action"],
-                            "portfolio_priority_score": item["portfolio_priority_score"],
-                            "event_probability_calibrated": item["event_probability_calibrated"],
-                        }
-                        for item in ranked_items[:3]
-                    ],
-                }
-            )
-
-        region_rollup.sort(
-            key=lambda item: float(item.get("leading_priority_score") or 0.0),
-            reverse=True,
-        )
-        return region_rollup
+        return regional_forecast_media.region_rollup(opportunities)
 
     def _truth_readiness(self, *, brand: str = "gelo") -> dict[str, Any]:
-        if self.db is None:
-            return {
-                "coverage_weeks": 0,
-                "truth_readiness": "noch_nicht_angeschlossen",
-                "truth_ready": False,
-                "expected_units_lift_enabled": False,
-                "expected_revenue_lift_enabled": False,
-            }
-        return ForecastDecisionService(self.db).get_truth_readiness(brand=brand)
+        return regional_forecast_truth.truth_readiness(
+            self,
+            brand=brand,
+            forecast_decision_service_cls=ForecastDecisionService,
+        )
 
     def _business_gate(
         self,
@@ -1955,28 +1681,13 @@ class RegionalForecastService:
         truth_readiness: dict[str, Any] | None = None,
         brand: str = "gelo",
     ) -> dict[str, Any]:
-        forecast_ready = bool((quality_gate or {}).get("overall_passed"))
-        if self.db is None:
-            truth = truth_readiness or self._truth_readiness(brand=brand)
-            return {
-                "truth_readiness": str(truth.get("truth_readiness") or "noch_nicht_angeschlossen"),
-                "truth_ready": bool(truth.get("truth_ready")),
-                "coverage_weeks": int(truth.get("coverage_weeks") or 0),
-                "expected_units_lift_enabled": False,
-                "expected_revenue_lift_enabled": False,
-                "action_class": "watch_only" if not forecast_ready else "market_watch",
-                "validation_status": "pending_truth_connection" if int(truth.get("coverage_weeks") or 0) <= 0 else "building_truth_layer",
-                "decision_scope": "decision_support_only",
-                "validated_for_budget_activation": False,
-                "evidence_tier": "no_truth" if int(truth.get("coverage_weeks") or 0) <= 0 else "observational",
-            }
-
-        validation = BusinessValidationService(self.db).evaluate(
+        return regional_forecast_truth.business_gate(
+            self,
+            quality_gate=quality_gate,
+            truth_readiness=truth_readiness,
             brand=brand,
-            truth_coverage=truth_readiness,
+            business_validation_service_cls=BusinessValidationService,
         )
-        validation["quality_gate_passed"] = forecast_ready
-        return validation
 
     def _truth_layer_assessment_for_products(
         self,
@@ -1989,64 +1700,16 @@ class RegionalForecastService:
         operational_gate_open: bool,
         brand: str = "gelo",
     ) -> dict[str, Any]:
-        normalized_products = [
-            str(product).strip()
-            for product in products
-            if str(product or "").strip()
-        ] or [""]
-        window_start, window_end = self._truth_assessment_window(target_week_start)
-        assessments: list[dict[str, Any]] = []
-        for product in normalized_products:
-            assessment = self._truth_layer_assessment_for_product(
-                brand=brand,
-                region_code=region_code,
-                product=product or None,
-                window_start=window_start,
-                window_end=window_end,
-                signal_context=signal_context,
-            )
-            spend_gate_status, budget_release_recommendation = self._commercial_truth_gate(
-                truth_assessment=assessment,
-                operational_action=operational_action,
-                operational_gate_open=operational_gate_open,
-            )
-            assessments.append(
-                {
-                    "product": product or None,
-                    "scope": assessment.get("scope") or {},
-                    "outcome_readiness": assessment.get("outcome_readiness") or {},
-                    "evidence_status": assessment.get("evidence_status"),
-                    "evidence_confidence": assessment.get("evidence_confidence"),
-                    "signal_outcome_agreement": assessment.get("signal_outcome_agreement") or {},
-                    "holdout_eligibility": assessment.get("holdout_eligibility") or {},
-                    "commercial_gate": assessment.get("commercial_gate") or {},
-                    "metadata": assessment.get("metadata") or {},
-                    "spend_gate_status": spend_gate_status,
-                    "budget_release_recommendation": budget_release_recommendation,
-                }
-            )
-
-        primary = assessments[0]
-        return {
-            "truth_layer_enabled": bool(self.db is not None),
-            "truth_scope": {
-                "brand": str(brand or "gelo").strip().lower(),
-                "region_code": str(region_code or "").strip().upper() or None,
-                "window_start": window_start.isoformat(),
-                "window_end": window_end.isoformat(),
-                "lookback_weeks": _TRUTH_LOOKBACK_WEEKS,
-                "products": [item["product"] for item in assessments],
-                "primary_product": primary["product"],
-            },
-            "outcome_readiness": primary["outcome_readiness"],
-            "evidence_status": primary["evidence_status"],
-            "evidence_confidence": primary["evidence_confidence"],
-            "signal_outcome_agreement": primary["signal_outcome_agreement"],
-            "spend_gate_status": primary["spend_gate_status"],
-            "budget_release_recommendation": primary["budget_release_recommendation"],
-            "commercial_gate": primary["commercial_gate"],
-            "truth_assessments": assessments,
-        }
+        return regional_forecast_truth.truth_layer_assessment_for_products(
+            self,
+            region_code=region_code,
+            products=products,
+            target_week_start=target_week_start,
+            signal_context=signal_context,
+            operational_action=operational_action,
+            operational_gate_open=operational_gate_open,
+            brand=brand,
+        )
 
     def _truth_layer_assessment_for_product(
         self,
@@ -2058,50 +1721,24 @@ class RegionalForecastService:
         window_end: datetime,
         signal_context: dict[str, Any],
     ) -> dict[str, Any]:
-        if self.db is None:
-            return self._fallback_truth_assessment(
-                brand=brand,
-                region_code=region_code,
-                product=product,
-                window_start=window_start,
-                window_end=window_end,
-                signal_context=signal_context,
-                source_mode="unavailable",
-                message="Truth-Layer ist optional; in dieser Laufzeit ist keine Outcome-Datenbank verbunden.",
-            )
-        try:
-            return TruthLayerService(self.db).assess(
-                brand=brand,
-                region_code=region_code,
-                product=product,
-                window_start=window_start,
-                window_end=window_end,
-                signal_context=signal_context,
-            )
-        except Exception:
-            logger.exception(
-                "Truth layer assessment failed for brand=%s region=%s product=%s",
-                brand,
-                region_code,
-                product,
-            )
-            return self._fallback_truth_assessment(
-                brand=brand,
-                region_code=region_code,
-                product=product,
-                window_start=window_start,
-                window_end=window_end,
-                signal_context=signal_context,
-                source_mode="error",
-                message="Truth-Layer konnte für diese Scope-Abfrage nicht ausgewertet werden.",
-            )
+        return regional_forecast_truth.truth_layer_assessment_for_product(
+            self,
+            brand=brand,
+            region_code=region_code,
+            product=product,
+            window_start=window_start,
+            window_end=window_end,
+            signal_context=signal_context,
+            truth_layer_service_cls=TruthLayerService,
+            logger=logger,
+        )
 
     @staticmethod
     def _truth_assessment_window(target_week_start: Any) -> tuple[datetime, datetime]:
-        target_start = pd.Timestamp(target_week_start).normalize()
-        return (
-            (target_start - pd.Timedelta(weeks=_TRUTH_LOOKBACK_WEEKS)).to_pydatetime(),
-            (target_start + pd.Timedelta(days=6)).to_pydatetime(),
+        return regional_forecast_truth.truth_assessment_window(
+            target_week_start,
+            truth_lookback_weeks=_TRUTH_LOOKBACK_WEEKS,
+            pd_module=pd,
         )
 
     @staticmethod
@@ -2111,29 +1748,11 @@ class RegionalForecastService:
         confidence: float | None = None,
         stage: str | None = None,
     ) -> dict[str, Any]:
-        decision = dict(prediction.get("decision") or {})
-        decision_stage = str(
-            stage
-            or decision.get("stage")
-            or prediction.get("decision_label")
-            or ""
-        ).strip().lower()
-        event_probability = float(prediction.get("event_probability_calibrated") or 0.0)
-        forecast_confidence = (
-            confidence
-            if confidence is not None
-            else decision.get("forecast_confidence")
+        return regional_forecast_truth.truth_signal_context(
+            prediction=prediction,
+            confidence=confidence,
+            stage=stage,
         )
-        signal_present = decision_stage in {"activate", "prepare"} or event_probability >= 0.5
-        context = {
-            "signal_present": signal_present,
-            "decision_stage": decision_stage or None,
-            "event_probability": event_probability,
-        }
-        if forecast_confidence is not None:
-            context["confidence"] = float(forecast_confidence)
-            context["forecast_confidence"] = float(forecast_confidence)
-        return context
 
     @staticmethod
     def _fallback_truth_assessment(
@@ -2147,61 +1766,16 @@ class RegionalForecastService:
         source_mode: str,
         message: str,
     ) -> dict[str, Any]:
-        signal_present = bool(signal_context.get("signal_present"))
-        signal_confidence = signal_context.get("confidence") or signal_context.get("forecast_confidence")
-        try:
-            normalized_confidence = float(signal_confidence or signal_context.get("event_probability") or 0.0)
-        except (TypeError, ValueError):
-            normalized_confidence = 0.0
-        return {
-            "scope": {
-                "brand": str(brand or "gelo").strip().lower(),
-                "region_code": str(region_code or "").strip().upper() or None,
-                "product": str(product).strip() if product else None,
-                "window_start": window_start.isoformat(),
-                "window_end": window_end.isoformat(),
-            },
-            "outcome_readiness": {
-                "status": "missing",
-                "score": 0.0,
-                "coverage_weeks": 0,
-                "metrics_present": [],
-                "regions_present": 0,
-                "products_present": 0,
-                "spend_windows": 0,
-                "response_windows": 0,
-                "notes": [message],
-            },
-            "signal_outcome_agreement": {
-                "status": "no_outcome_support" if signal_present else "no_signal",
-                "signal_present": signal_present,
-                "historical_response_observed": False,
-                "score": round(0.2 * normalized_confidence, 4) if signal_present else None,
-                "signal_confidence": round(normalized_confidence, 4) if signal_present else None,
-                "outcome_support_score": 0.0,
-                "outcome_confidence": 0.0,
-                "notes": [message],
-            },
-            "holdout_eligibility": {
-                "eligible": False,
-                "ready": False,
-                "holdout_groups": [],
-                "reason": "No scoped outcome data is available for holdout validation.",
-            },
-            "evidence_status": "no_truth",
-            "evidence_confidence": 0.0,
-            "commercial_gate": {
-                "budget_decision_allowed": False,
-                "decision_scope": "decision_support_only",
-                "message": message,
-            },
-            "metadata": {
-                "source_mode": source_mode,
-                "observations": 0,
-                "metrics_present": [],
-                "optional_layer": True,
-            },
-        }
+        return regional_forecast_truth.fallback_truth_assessment(
+            brand=brand,
+            region_code=region_code,
+            product=product,
+            window_start=window_start,
+            window_end=window_end,
+            signal_context=signal_context,
+            source_mode=source_mode,
+            message=message,
+        )
 
     @staticmethod
     def _commercial_truth_gate(
@@ -2210,44 +1784,18 @@ class RegionalForecastService:
         operational_action: str,
         operational_gate_open: bool,
     ) -> tuple[str, str]:
-        action = str(operational_action or "watch").strip().lower()
-        evidence_status = str(truth_assessment.get("evidence_status") or "no_truth").strip().lower()
-        budget_allowed = bool((truth_assessment.get("commercial_gate") or {}).get("budget_decision_allowed"))
-
-        if action == "prioritize":
-            return "prioritize_only", "hold"
-        if action not in {"activate", "prepare"}:
-            return "not_applicable", "hold"
-        if not operational_gate_open:
-            return "blocked_operational_gate", "hold"
-        if budget_allowed or evidence_status == "commercially_validated":
-            return "released", "release"
-        if evidence_status in {"holdout_ready", "truth_backed"}:
-            return "guarded_release", "limited_release"
-        return "manual_review_required", "manual_review"
+        return regional_forecast_truth.commercial_truth_gate(
+            truth_assessment=truth_assessment,
+            operational_action=operational_action,
+            operational_gate_open=operational_gate_open,
+        )
 
     def _truth_layer_rollup(self, items: list[dict[str, Any]]) -> dict[str, Any]:
-        evidence_status_counts: dict[str, int] = {}
-        spend_gate_status_counts: dict[str, int] = {}
-        budget_release_counts: dict[str, int] = {}
-        for item in items:
-            evidence_status = str(item.get("evidence_status") or "").strip()
-            spend_gate_status = str(item.get("spend_gate_status") or "").strip()
-            budget_release = str(item.get("budget_release_recommendation") or "").strip()
-            if evidence_status:
-                evidence_status_counts[evidence_status] = evidence_status_counts.get(evidence_status, 0) + 1
-            if spend_gate_status:
-                spend_gate_status_counts[spend_gate_status] = spend_gate_status_counts.get(spend_gate_status, 0) + 1
-            if budget_release:
-                budget_release_counts[budget_release] = budget_release_counts.get(budget_release, 0) + 1
-        return {
-            "enabled": bool(self.db is not None),
-            "lookback_weeks": _TRUTH_LOOKBACK_WEEKS,
-            "scopes_evaluated": len(items),
-            "evidence_status_counts": evidence_status_counts,
-            "spend_gate_status_counts": spend_gate_status_counts,
-            "budget_release_recommendation_counts": budget_release_counts,
-        }
+        return regional_forecast_truth.truth_layer_rollup(
+            self,
+            items,
+            truth_lookback_weeks=_TRUTH_LOOKBACK_WEEKS,
+        )
 
     @staticmethod
     def _model_version(metadata: dict[str, Any]) -> str:

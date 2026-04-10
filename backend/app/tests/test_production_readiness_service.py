@@ -198,6 +198,23 @@ class ProductionReadinessServiceTests(unittest.TestCase):
     def _unsupported_scope_count(self) -> int:
         return (len(SUPPORTED_VIRUS_TYPES) * len(SUPPORTED_FORECAST_HORIZONS)) - self._supported_scope_count()
 
+    @patch("app.services.ops.production_readiness_service.get_last_init_summary")
+    def test_schema_bootstrap_component_marks_warnings_without_crashing(self, summary_mock) -> None:
+        summary_mock.return_value = {
+            "status": "ok",
+            "warnings": ["pending_manual_review"],
+            "message": "Startup schema verification completed with warnings.",
+        }
+
+        component = ProductionReadinessService._schema_bootstrap_component()
+
+        self.assertEqual(component["status"], "warning")
+        self.assertEqual(
+            component["message"],
+            "Startup schema verification completed with warnings.",
+        )
+        self.assertEqual(component["details"], summary_mock.return_value)
+
     @patch("app.services.ops.production_readiness_live_sources.latest_source_state")
     def test_latest_source_state_delegates_to_live_sources_module(self, latest_mock) -> None:
         latest_mock.return_value = {"status": "ok"}

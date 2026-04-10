@@ -342,3 +342,215 @@ def test_apply_calibration_wrapper_delegates_to_module() -> None:
 
     assert result == "calibrated"
     mocked.assert_called_once_with("calibration", "raw", np_module=regional_forecast_module.np)
+
+
+def test_truth_readiness_wrapper_delegates_to_module() -> None:
+    service = RegionalForecastService(db=None)
+    sentinel = {"truth_ready": False}
+
+    with patch(
+        "app.services.ml.regional_forecast_truth.truth_readiness",
+        return_value=sentinel,
+    ) as mocked:
+        result = service._truth_readiness(brand="gelo")
+
+    assert result is sentinel
+    mocked.assert_called_once_with(
+        service,
+        brand="gelo",
+        forecast_decision_service_cls=regional_forecast_module.ForecastDecisionService,
+    )
+
+
+def test_business_gate_wrapper_delegates_to_module() -> None:
+    service = RegionalForecastService(db=None)
+    sentinel = {"validated_for_budget_activation": False}
+
+    with patch(
+        "app.services.ml.regional_forecast_truth.business_gate",
+        return_value=sentinel,
+    ) as mocked:
+        result = service._business_gate(
+            quality_gate={"overall_passed": True},
+            truth_readiness={"truth_ready": False},
+            brand="gelo",
+        )
+
+    assert result is sentinel
+    mocked.assert_called_once_with(
+        service,
+        quality_gate={"overall_passed": True},
+        truth_readiness={"truth_ready": False},
+        brand="gelo",
+        business_validation_service_cls=regional_forecast_module.BusinessValidationService,
+    )
+
+
+def test_truth_layer_assessment_for_products_wrapper_delegates_to_module() -> None:
+    service = RegionalForecastService(db=None)
+    sentinel = {"truth_layer_enabled": False}
+
+    with patch(
+        "app.services.ml.regional_forecast_truth.truth_layer_assessment_for_products",
+        return_value=sentinel,
+    ) as mocked:
+        result = service._truth_layer_assessment_for_products(
+            region_code="BY",
+            products=["GeloMyrtol forte"],
+            target_week_start="2026-04-06",
+            signal_context={"signal_present": True},
+            operational_action="activate",
+            operational_gate_open=True,
+            brand="gelo",
+        )
+
+    assert result is sentinel
+    mocked.assert_called_once_with(
+        service,
+        region_code="BY",
+        products=["GeloMyrtol forte"],
+        target_week_start="2026-04-06",
+        signal_context={"signal_present": True},
+        operational_action="activate",
+        operational_gate_open=True,
+        brand="gelo",
+    )
+
+
+def test_truth_layer_assessment_for_product_wrapper_delegates_to_module() -> None:
+    service = RegionalForecastService(db=None)
+    sentinel = {"evidence_status": "no_truth"}
+
+    with patch(
+        "app.services.ml.regional_forecast_truth.truth_layer_assessment_for_product",
+        return_value=sentinel,
+    ) as mocked:
+        result = service._truth_layer_assessment_for_product(
+            brand="gelo",
+            region_code="BY",
+            product="GeloMyrtol forte",
+            window_start="2026-01-01",
+            window_end="2026-03-31",
+            signal_context={"signal_present": True},
+        )
+
+    assert result is sentinel
+    mocked.assert_called_once_with(
+        service,
+        brand="gelo",
+        region_code="BY",
+        product="GeloMyrtol forte",
+        window_start="2026-01-01",
+        window_end="2026-03-31",
+        signal_context={"signal_present": True},
+        truth_layer_service_cls=regional_forecast_module.TruthLayerService,
+        logger=regional_forecast_module.logger,
+    )
+
+
+def test_truth_assessment_window_wrapper_delegates_to_module() -> None:
+    sentinel = ("start", "end")
+
+    with patch(
+        "app.services.ml.regional_forecast_truth.truth_assessment_window",
+        return_value=sentinel,
+    ) as mocked:
+        result = RegionalForecastService._truth_assessment_window("2026-04-06")
+
+    assert result is sentinel
+    mocked.assert_called_once_with(
+        "2026-04-06",
+        truth_lookback_weeks=regional_forecast_module._TRUTH_LOOKBACK_WEEKS,
+        pd_module=regional_forecast_module.pd,
+    )
+
+
+def test_truth_signal_context_wrapper_delegates_to_module() -> None:
+    sentinel = {"signal_present": True}
+
+    with patch(
+        "app.services.ml.regional_forecast_truth.truth_signal_context",
+        return_value=sentinel,
+    ) as mocked:
+        result = RegionalForecastService._truth_signal_context(
+            prediction={"decision": {"stage": "activate"}},
+            confidence=0.8,
+            stage="activate",
+        )
+
+    assert result is sentinel
+    mocked.assert_called_once_with(
+        prediction={"decision": {"stage": "activate"}},
+        confidence=0.8,
+        stage="activate",
+    )
+
+
+def test_fallback_truth_assessment_wrapper_delegates_to_module() -> None:
+    sentinel = {"evidence_status": "no_truth"}
+
+    with patch(
+        "app.services.ml.regional_forecast_truth.fallback_truth_assessment",
+        return_value=sentinel,
+    ) as mocked:
+        result = RegionalForecastService._fallback_truth_assessment(
+            brand="gelo",
+            region_code="BY",
+            product="GeloMyrtol forte",
+            window_start="2026-01-01",
+            window_end="2026-03-31",
+            signal_context={"signal_present": True},
+            source_mode="unavailable",
+            message="fehlend",
+        )
+
+    assert result is sentinel
+    mocked.assert_called_once_with(
+        brand="gelo",
+        region_code="BY",
+        product="GeloMyrtol forte",
+        window_start="2026-01-01",
+        window_end="2026-03-31",
+        signal_context={"signal_present": True},
+        source_mode="unavailable",
+        message="fehlend",
+    )
+
+
+def test_commercial_truth_gate_wrapper_delegates_to_module() -> None:
+    sentinel = ("released", "release")
+
+    with patch(
+        "app.services.ml.regional_forecast_truth.commercial_truth_gate",
+        return_value=sentinel,
+    ) as mocked:
+        result = RegionalForecastService._commercial_truth_gate(
+            truth_assessment={"evidence_status": "truth_backed"},
+            operational_action="activate",
+            operational_gate_open=True,
+        )
+
+    assert result is sentinel
+    mocked.assert_called_once_with(
+        truth_assessment={"evidence_status": "truth_backed"},
+        operational_action="activate",
+        operational_gate_open=True,
+    )
+
+
+def test_truth_layer_rollup_wrapper_delegates_to_module() -> None:
+    service = RegionalForecastService(db=None)
+    sentinel = {"enabled": False}
+
+    with patch(
+        "app.services.ml.regional_forecast_truth.truth_layer_rollup",
+        return_value=sentinel,
+    ) as mocked:
+        result = service._truth_layer_rollup([{"evidence_status": "no_truth"}])
+
+    assert result is sentinel
+    mocked.assert_called_once_with(
+        service,
+        [{"evidence_status": "no_truth"}],
+        truth_lookback_weeks=regional_forecast_module._TRUTH_LOOKBACK_WEEKS,
+    )

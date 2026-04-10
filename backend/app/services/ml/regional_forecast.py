@@ -21,6 +21,7 @@ from app.services.media.campaign_recommendation_service import CampaignRecommend
 from app.services.media.truth_layer_service import TruthLayerService
 from app.services.ml import regional_forecast_artifacts
 from app.services.ml import regional_forecast_media
+from app.services.ml import regional_forecast_truth
 from app.services.ml.forecast_decision_service import ForecastDecisionService
 from app.services.ml.forecast_orchestrator import ForecastOrchestrator
 from app.services.ml.forecast_horizon_utils import (
@@ -1667,15 +1668,11 @@ class RegionalForecastService:
         return regional_forecast_media.region_rollup(opportunities)
 
     def _truth_readiness(self, *, brand: str = "gelo") -> dict[str, Any]:
-        if self.db is None:
-            return {
-                "coverage_weeks": 0,
-                "truth_readiness": "noch_nicht_angeschlossen",
-                "truth_ready": False,
-                "expected_units_lift_enabled": False,
-                "expected_revenue_lift_enabled": False,
-            }
-        return ForecastDecisionService(self.db).get_truth_readiness(brand=brand)
+        return regional_forecast_truth.truth_readiness(
+            self,
+            brand=brand,
+            forecast_decision_service_cls=ForecastDecisionService,
+        )
 
     def _business_gate(
         self,
@@ -1684,28 +1681,13 @@ class RegionalForecastService:
         truth_readiness: dict[str, Any] | None = None,
         brand: str = "gelo",
     ) -> dict[str, Any]:
-        forecast_ready = bool((quality_gate or {}).get("overall_passed"))
-        if self.db is None:
-            truth = truth_readiness or self._truth_readiness(brand=brand)
-            return {
-                "truth_readiness": str(truth.get("truth_readiness") or "noch_nicht_angeschlossen"),
-                "truth_ready": bool(truth.get("truth_ready")),
-                "coverage_weeks": int(truth.get("coverage_weeks") or 0),
-                "expected_units_lift_enabled": False,
-                "expected_revenue_lift_enabled": False,
-                "action_class": "watch_only" if not forecast_ready else "market_watch",
-                "validation_status": "pending_truth_connection" if int(truth.get("coverage_weeks") or 0) <= 0 else "building_truth_layer",
-                "decision_scope": "decision_support_only",
-                "validated_for_budget_activation": False,
-                "evidence_tier": "no_truth" if int(truth.get("coverage_weeks") or 0) <= 0 else "observational",
-            }
-
-        validation = BusinessValidationService(self.db).evaluate(
+        return regional_forecast_truth.business_gate(
+            self,
+            quality_gate=quality_gate,
+            truth_readiness=truth_readiness,
             brand=brand,
-            truth_coverage=truth_readiness,
+            business_validation_service_cls=BusinessValidationService,
         )
-        validation["quality_gate_passed"] = forecast_ready
-        return validation
 
     def _truth_layer_assessment_for_products(
         self,
@@ -1718,64 +1700,16 @@ class RegionalForecastService:
         operational_gate_open: bool,
         brand: str = "gelo",
     ) -> dict[str, Any]:
-        normalized_products = [
-            str(product).strip()
-            for product in products
-            if str(product or "").strip()
-        ] or [""]
-        window_start, window_end = self._truth_assessment_window(target_week_start)
-        assessments: list[dict[str, Any]] = []
-        for product in normalized_products:
-            assessment = self._truth_layer_assessment_for_product(
-                brand=brand,
-                region_code=region_code,
-                product=product or None,
-                window_start=window_start,
-                window_end=window_end,
-                signal_context=signal_context,
-            )
-            spend_gate_status, budget_release_recommendation = self._commercial_truth_gate(
-                truth_assessment=assessment,
-                operational_action=operational_action,
-                operational_gate_open=operational_gate_open,
-            )
-            assessments.append(
-                {
-                    "product": product or None,
-                    "scope": assessment.get("scope") or {},
-                    "outcome_readiness": assessment.get("outcome_readiness") or {},
-                    "evidence_status": assessment.get("evidence_status"),
-                    "evidence_confidence": assessment.get("evidence_confidence"),
-                    "signal_outcome_agreement": assessment.get("signal_outcome_agreement") or {},
-                    "holdout_eligibility": assessment.get("holdout_eligibility") or {},
-                    "commercial_gate": assessment.get("commercial_gate") or {},
-                    "metadata": assessment.get("metadata") or {},
-                    "spend_gate_status": spend_gate_status,
-                    "budget_release_recommendation": budget_release_recommendation,
-                }
-            )
-
-        primary = assessments[0]
-        return {
-            "truth_layer_enabled": bool(self.db is not None),
-            "truth_scope": {
-                "brand": str(brand or "gelo").strip().lower(),
-                "region_code": str(region_code or "").strip().upper() or None,
-                "window_start": window_start.isoformat(),
-                "window_end": window_end.isoformat(),
-                "lookback_weeks": _TRUTH_LOOKBACK_WEEKS,
-                "products": [item["product"] for item in assessments],
-                "primary_product": primary["product"],
-            },
-            "outcome_readiness": primary["outcome_readiness"],
-            "evidence_status": primary["evidence_status"],
-            "evidence_confidence": primary["evidence_confidence"],
-            "signal_outcome_agreement": primary["signal_outcome_agreement"],
-            "spend_gate_status": primary["spend_gate_status"],
-            "budget_release_recommendation": primary["budget_release_recommendation"],
-            "commercial_gate": primary["commercial_gate"],
-            "truth_assessments": assessments,
-        }
+        return regional_forecast_truth.truth_layer_assessment_for_products(
+            self,
+            region_code=region_code,
+            products=products,
+            target_week_start=target_week_start,
+            signal_context=signal_context,
+            operational_action=operational_action,
+            operational_gate_open=operational_gate_open,
+            brand=brand,
+        )
 
     def _truth_layer_assessment_for_product(
         self,
@@ -1787,50 +1721,24 @@ class RegionalForecastService:
         window_end: datetime,
         signal_context: dict[str, Any],
     ) -> dict[str, Any]:
-        if self.db is None:
-            return self._fallback_truth_assessment(
-                brand=brand,
-                region_code=region_code,
-                product=product,
-                window_start=window_start,
-                window_end=window_end,
-                signal_context=signal_context,
-                source_mode="unavailable",
-                message="Truth-Layer ist optional; in dieser Laufzeit ist keine Outcome-Datenbank verbunden.",
-            )
-        try:
-            return TruthLayerService(self.db).assess(
-                brand=brand,
-                region_code=region_code,
-                product=product,
-                window_start=window_start,
-                window_end=window_end,
-                signal_context=signal_context,
-            )
-        except Exception:
-            logger.exception(
-                "Truth layer assessment failed for brand=%s region=%s product=%s",
-                brand,
-                region_code,
-                product,
-            )
-            return self._fallback_truth_assessment(
-                brand=brand,
-                region_code=region_code,
-                product=product,
-                window_start=window_start,
-                window_end=window_end,
-                signal_context=signal_context,
-                source_mode="error",
-                message="Truth-Layer konnte für diese Scope-Abfrage nicht ausgewertet werden.",
-            )
+        return regional_forecast_truth.truth_layer_assessment_for_product(
+            self,
+            brand=brand,
+            region_code=region_code,
+            product=product,
+            window_start=window_start,
+            window_end=window_end,
+            signal_context=signal_context,
+            truth_layer_service_cls=TruthLayerService,
+            logger=logger,
+        )
 
     @staticmethod
     def _truth_assessment_window(target_week_start: Any) -> tuple[datetime, datetime]:
-        target_start = pd.Timestamp(target_week_start).normalize()
-        return (
-            (target_start - pd.Timedelta(weeks=_TRUTH_LOOKBACK_WEEKS)).to_pydatetime(),
-            (target_start + pd.Timedelta(days=6)).to_pydatetime(),
+        return regional_forecast_truth.truth_assessment_window(
+            target_week_start,
+            truth_lookback_weeks=_TRUTH_LOOKBACK_WEEKS,
+            pd_module=pd,
         )
 
     @staticmethod
@@ -1840,29 +1748,11 @@ class RegionalForecastService:
         confidence: float | None = None,
         stage: str | None = None,
     ) -> dict[str, Any]:
-        decision = dict(prediction.get("decision") or {})
-        decision_stage = str(
-            stage
-            or decision.get("stage")
-            or prediction.get("decision_label")
-            or ""
-        ).strip().lower()
-        event_probability = float(prediction.get("event_probability_calibrated") or 0.0)
-        forecast_confidence = (
-            confidence
-            if confidence is not None
-            else decision.get("forecast_confidence")
+        return regional_forecast_truth.truth_signal_context(
+            prediction=prediction,
+            confidence=confidence,
+            stage=stage,
         )
-        signal_present = decision_stage in {"activate", "prepare"} or event_probability >= 0.5
-        context = {
-            "signal_present": signal_present,
-            "decision_stage": decision_stage or None,
-            "event_probability": event_probability,
-        }
-        if forecast_confidence is not None:
-            context["confidence"] = float(forecast_confidence)
-            context["forecast_confidence"] = float(forecast_confidence)
-        return context
 
     @staticmethod
     def _fallback_truth_assessment(
@@ -1876,61 +1766,16 @@ class RegionalForecastService:
         source_mode: str,
         message: str,
     ) -> dict[str, Any]:
-        signal_present = bool(signal_context.get("signal_present"))
-        signal_confidence = signal_context.get("confidence") or signal_context.get("forecast_confidence")
-        try:
-            normalized_confidence = float(signal_confidence or signal_context.get("event_probability") or 0.0)
-        except (TypeError, ValueError):
-            normalized_confidence = 0.0
-        return {
-            "scope": {
-                "brand": str(brand or "gelo").strip().lower(),
-                "region_code": str(region_code or "").strip().upper() or None,
-                "product": str(product).strip() if product else None,
-                "window_start": window_start.isoformat(),
-                "window_end": window_end.isoformat(),
-            },
-            "outcome_readiness": {
-                "status": "missing",
-                "score": 0.0,
-                "coverage_weeks": 0,
-                "metrics_present": [],
-                "regions_present": 0,
-                "products_present": 0,
-                "spend_windows": 0,
-                "response_windows": 0,
-                "notes": [message],
-            },
-            "signal_outcome_agreement": {
-                "status": "no_outcome_support" if signal_present else "no_signal",
-                "signal_present": signal_present,
-                "historical_response_observed": False,
-                "score": round(0.2 * normalized_confidence, 4) if signal_present else None,
-                "signal_confidence": round(normalized_confidence, 4) if signal_present else None,
-                "outcome_support_score": 0.0,
-                "outcome_confidence": 0.0,
-                "notes": [message],
-            },
-            "holdout_eligibility": {
-                "eligible": False,
-                "ready": False,
-                "holdout_groups": [],
-                "reason": "No scoped outcome data is available for holdout validation.",
-            },
-            "evidence_status": "no_truth",
-            "evidence_confidence": 0.0,
-            "commercial_gate": {
-                "budget_decision_allowed": False,
-                "decision_scope": "decision_support_only",
-                "message": message,
-            },
-            "metadata": {
-                "source_mode": source_mode,
-                "observations": 0,
-                "metrics_present": [],
-                "optional_layer": True,
-            },
-        }
+        return regional_forecast_truth.fallback_truth_assessment(
+            brand=brand,
+            region_code=region_code,
+            product=product,
+            window_start=window_start,
+            window_end=window_end,
+            signal_context=signal_context,
+            source_mode=source_mode,
+            message=message,
+        )
 
     @staticmethod
     def _commercial_truth_gate(
@@ -1939,44 +1784,18 @@ class RegionalForecastService:
         operational_action: str,
         operational_gate_open: bool,
     ) -> tuple[str, str]:
-        action = str(operational_action or "watch").strip().lower()
-        evidence_status = str(truth_assessment.get("evidence_status") or "no_truth").strip().lower()
-        budget_allowed = bool((truth_assessment.get("commercial_gate") or {}).get("budget_decision_allowed"))
-
-        if action == "prioritize":
-            return "prioritize_only", "hold"
-        if action not in {"activate", "prepare"}:
-            return "not_applicable", "hold"
-        if not operational_gate_open:
-            return "blocked_operational_gate", "hold"
-        if budget_allowed or evidence_status == "commercially_validated":
-            return "released", "release"
-        if evidence_status in {"holdout_ready", "truth_backed"}:
-            return "guarded_release", "limited_release"
-        return "manual_review_required", "manual_review"
+        return regional_forecast_truth.commercial_truth_gate(
+            truth_assessment=truth_assessment,
+            operational_action=operational_action,
+            operational_gate_open=operational_gate_open,
+        )
 
     def _truth_layer_rollup(self, items: list[dict[str, Any]]) -> dict[str, Any]:
-        evidence_status_counts: dict[str, int] = {}
-        spend_gate_status_counts: dict[str, int] = {}
-        budget_release_counts: dict[str, int] = {}
-        for item in items:
-            evidence_status = str(item.get("evidence_status") or "").strip()
-            spend_gate_status = str(item.get("spend_gate_status") or "").strip()
-            budget_release = str(item.get("budget_release_recommendation") or "").strip()
-            if evidence_status:
-                evidence_status_counts[evidence_status] = evidence_status_counts.get(evidence_status, 0) + 1
-            if spend_gate_status:
-                spend_gate_status_counts[spend_gate_status] = spend_gate_status_counts.get(spend_gate_status, 0) + 1
-            if budget_release:
-                budget_release_counts[budget_release] = budget_release_counts.get(budget_release, 0) + 1
-        return {
-            "enabled": bool(self.db is not None),
-            "lookback_weeks": _TRUTH_LOOKBACK_WEEKS,
-            "scopes_evaluated": len(items),
-            "evidence_status_counts": evidence_status_counts,
-            "spend_gate_status_counts": spend_gate_status_counts,
-            "budget_release_recommendation_counts": budget_release_counts,
-        }
+        return regional_forecast_truth.truth_layer_rollup(
+            self,
+            items,
+            truth_lookback_weeks=_TRUTH_LOOKBACK_WEEKS,
+        )
 
     @staticmethod
     def _model_version(metadata: dict[str, Any]) -> str:

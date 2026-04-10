@@ -1,5 +1,7 @@
 import unittest
+from unittest.mock import patch
 
+import app.services.ml.regional_decision_engine as decision_module
 from app.services.ml.regional_decision_engine import DEFAULT_RULE_CONFIG, RegionalDecisionEngine
 
 
@@ -263,6 +265,221 @@ class RegionalDecisionEngineTests(unittest.TestCase):
         self.assertEqual(sars_config.version, "regional_decision_sars_v1")
         self.assertGreater(sars_config.activate_probability_threshold, default_config.activate_probability_threshold)
         self.assertGreater(sars_config.activate_score_threshold, default_config.activate_score_threshold)
+
+    def test_component_trace_wrapper_delegates_to_module(self) -> None:
+        sentinel = ["trace"]
+
+        with patch(
+            "app.services.ml.regional_decision_engine_reasoning.component_trace",
+            return_value=sentinel,
+        ) as mocked:
+            result = self.engine._component_trace(
+                components={"event_probability": 0.8},
+                config=DEFAULT_RULE_CONFIG,
+                trend_bundle={"signals": []},
+                agreement_bundle={"direction": "up"},
+                revision_risk=0.1,
+                freshness_days=1.0,
+            )
+
+        self.assertIs(result, sentinel)
+        mocked.assert_called_once_with(
+            components={"event_probability": 0.8},
+            config=DEFAULT_RULE_CONFIG,
+            trend_bundle={"signals": []},
+            agreement_bundle={"direction": "up"},
+            revision_risk=0.1,
+            freshness_days=1.0,
+            decision_component_score_cls=decision_module.DecisionComponentScore,
+        )
+
+    def test_reason_trace_wrapper_delegates_to_module(self) -> None:
+        sentinel = object()
+
+        with patch(
+            "app.services.ml.regional_decision_engine_reasoning.reason_trace",
+            return_value=sentinel,
+        ) as mocked:
+            result = self.engine._reason_trace(
+                signal_stage="activate",
+                stage="activate",
+                event_probability=0.8,
+                forecast_confidence=0.7,
+                freshness_score=0.7,
+                freshness_days=1.0,
+                revision_risk=0.1,
+                trend_bundle={"score": 0.7, "raw": 0.2},
+                agreement_bundle={"support_score": 0.7, "signal_count": 2, "direction": "up"},
+                thresholds={"activate_probability": 0.65, "activate_forecast_confidence": 0.62, "activate_freshness": 0.58, "prepare_freshness": 0.42, "prepare_revision_risk_max": 0.70, "activate_revision_risk_max": 0.45, "activate_trend": 0.58, "prepare_trend": 0.45, "prepare_agreement": 0.45},
+                policy_overrides=[],
+                component_trace=[],
+                quality_gate={"overall_passed": True},
+                config=DEFAULT_RULE_CONFIG,
+            )
+
+        self.assertIs(result, sentinel)
+        mocked.assert_called_once_with(
+            signal_stage="activate",
+            stage="activate",
+            event_probability=0.8,
+            forecast_confidence=0.7,
+            freshness_score=0.7,
+            freshness_days=1.0,
+            revision_risk=0.1,
+            trend_bundle={"score": 0.7, "raw": 0.2},
+            agreement_bundle={"support_score": 0.7, "signal_count": 2, "direction": "up"},
+            thresholds={"activate_probability": 0.65, "activate_forecast_confidence": 0.62, "activate_freshness": 0.58, "prepare_freshness": 0.42, "prepare_revision_risk_max": 0.70, "activate_revision_risk_max": 0.45, "activate_trend": 0.58, "prepare_trend": 0.45, "prepare_agreement": 0.45},
+            policy_overrides=[],
+            component_trace=[],
+            quality_gate={"overall_passed": True},
+            config=DEFAULT_RULE_CONFIG,
+            decision_reason_trace_cls=decision_module.DecisionReasonTrace,
+        )
+
+    def test_explanation_summary_wrapper_delegates_to_module(self) -> None:
+        with patch(
+            "app.services.ml.regional_decision_engine_reasoning.explanation_summary",
+            return_value="summary",
+        ) as mocked:
+            result = self.engine._explanation_summary(
+                bundesland_name="Bayern",
+                stage="activate",
+                event_probability=0.8,
+                forecast_confidence=0.7,
+                trend_bundle={"raw": 0.2},
+                agreement_bundle={"direction": "up"},
+            )
+
+        self.assertEqual(result, "summary")
+        mocked.assert_called_once_with(
+            bundesland_name="Bayern",
+            stage="activate",
+            event_probability=0.8,
+            forecast_confidence=0.7,
+            trend_bundle={"raw": 0.2},
+            agreement_bundle={"direction": "up"},
+        )
+
+    def test_uncertainty_summary_wrapper_delegates_to_module(self) -> None:
+        with patch(
+            "app.services.ml.regional_decision_engine_reasoning.uncertainty_summary",
+            return_value="uncertain",
+        ) as mocked:
+            result = self.engine._uncertainty_summary(
+                revision_risk=0.3,
+                freshness_score=0.5,
+                agreement_bundle={"signal_count": 1, "direction": "flat"},
+                quality_gate={"overall_passed": False},
+                config=DEFAULT_RULE_CONFIG,
+            )
+
+        self.assertEqual(result, "uncertain")
+        mocked.assert_called_once_with(
+            revision_risk=0.3,
+            freshness_score=0.5,
+            agreement_bundle={"signal_count": 1, "direction": "flat"},
+            quality_gate={"overall_passed": False},
+            config=DEFAULT_RULE_CONFIG,
+        )
+
+    def test_collect_source_snapshot_wrapper_delegates_to_module(self) -> None:
+        sentinel = {"freshness_score": 0.8}
+
+        with patch(
+            "app.services.ml.regional_decision_engine_signals.collect_source_snapshot",
+            return_value=sentinel,
+        ) as mocked:
+            result = self.engine._collect_source_snapshot(
+                prefixes=("ww_level",),
+                feature_row={"ww_level_freshness_days": 1.0},
+            )
+
+        self.assertIs(result, sentinel)
+        mocked.assert_called_once_with(
+            self.engine,
+            prefixes=("ww_level",),
+            feature_row={"ww_level_freshness_days": 1.0},
+            source_prefix_to_config=decision_module.SOURCE_PREFIX_TO_CONFIG,
+            nowcast_source_configs=decision_module.NOWCAST_SOURCE_CONFIGS,
+            clamp_fn=decision_module._clamp,
+        )
+
+    def test_forecast_confidence_score_wrapper_delegates_to_module(self) -> None:
+        with patch(
+            "app.services.ml.regional_decision_engine_signals.forecast_confidence_score",
+            return_value=0.77,
+        ) as mocked:
+            result = self.engine._forecast_confidence_score(
+                prediction=self._prediction(),
+                metadata=self._metadata(),
+                freshness_score=0.8,
+                usable_share=0.9,
+                coverage_score=0.95,
+                quality_gate={"overall_passed": True},
+                config=DEFAULT_RULE_CONFIG,
+            )
+
+        self.assertEqual(result, 0.77)
+        mocked.assert_called_once_with(
+            prediction=self._prediction(),
+            metadata=self._metadata(),
+            freshness_score=0.8,
+            usable_share=0.9,
+            coverage_score=0.95,
+            quality_gate={"overall_passed": True},
+            config=DEFAULT_RULE_CONFIG,
+            clamp_fn=decision_module._clamp,
+        )
+
+    def test_signal_stage_wrapper_delegates_to_module(self) -> None:
+        with patch(
+            "app.services.ml.regional_decision_engine_signals.signal_stage",
+            return_value="prepare",
+        ) as mocked:
+            result = self.engine._signal_stage(
+                decision_score=0.6,
+                event_probability=0.6,
+                forecast_confidence=0.6,
+                freshness_score=0.6,
+                revision_risk=0.2,
+                trend_score=0.5,
+                agreement_support_score=0.6,
+                agreement_signal_count=2,
+                thresholds={"prepare_score": 0.5, "prepare_probability": 0.5, "prepare_forecast_confidence": 0.48, "prepare_freshness": 0.42, "prepare_revision_risk_max": 0.70, "prepare_trend": 0.45, "prepare_agreement": 0.45, "activate_score": 0.72, "activate_probability": 0.65, "activate_forecast_confidence": 0.62, "activate_freshness": 0.58, "activate_revision_risk_max": 0.45, "activate_trend": 0.58, "activate_agreement": 0.60},
+                config=DEFAULT_RULE_CONFIG,
+            )
+
+        self.assertEqual(result, "prepare")
+        mocked.assert_called_once_with(
+            decision_score=0.6,
+            event_probability=0.6,
+            forecast_confidence=0.6,
+            freshness_score=0.6,
+            revision_risk=0.2,
+            trend_score=0.5,
+            agreement_support_score=0.6,
+            agreement_signal_count=2,
+            thresholds={"prepare_score": 0.5, "prepare_probability": 0.5, "prepare_forecast_confidence": 0.48, "prepare_freshness": 0.42, "prepare_revision_risk_max": 0.70, "prepare_trend": 0.45, "prepare_agreement": 0.45, "activate_score": 0.72, "activate_probability": 0.65, "activate_forecast_confidence": 0.62, "activate_freshness": 0.58, "activate_revision_risk_max": 0.45, "activate_trend": 0.58, "activate_agreement": 0.60},
+            config=DEFAULT_RULE_CONFIG,
+        )
+
+    def test_policy_stage_wrapper_delegates_to_module(self) -> None:
+        sentinel = ("watch", ["forced"])
+
+        with patch(
+            "app.services.ml.regional_decision_engine_signals.policy_stage",
+            return_value=sentinel,
+        ) as mocked:
+            result = self.engine._policy_stage(
+                signal_stage="activate",
+                prediction=self._prediction(activation_policy="watch_only"),
+            )
+
+        self.assertEqual(result, sentinel)
+        mocked.assert_called_once_with(
+            signal_stage="activate",
+            prediction=self._prediction(activation_policy="watch_only"),
+        )
 
 
 if __name__ == "__main__":

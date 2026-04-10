@@ -69,6 +69,7 @@ from app.services.ml import (
     regional_trainer_artifacts,
     regional_trainer_backtest,
     regional_trainer_hierarchy,
+    regional_trainer_orchestration,
     regional_trainer_rollout,
     regional_trainer_training,
 )
@@ -240,54 +241,13 @@ class RegionalModelTrainer:
         weather_forecast_vintage_mode: str | None = None,
         weather_vintage_comparison: bool = False,
     ) -> dict[str, Any]:
-        horizons = self._selected_horizons(
-            horizon_days=horizon_days,
-            horizon_days_list=horizon_days_list,
-        )
-        if len(horizons) > 1:
-            scopes = {
-                f"h{horizon}": self.train_all_regions(
-                    virus_typ=virus_typ,
-                    lookback_days=lookback_days,
-                    persist=persist,
-                    horizon_days=horizon,
-                    weather_forecast_vintage_mode=weather_forecast_vintage_mode,
-                    weather_vintage_comparison=weather_vintage_comparison,
-                )
-                for horizon in horizons
-            }
-            statuses = [payload.get("status") for payload in scopes.values()]
-            return {
-                "status": (
-                    "success"
-                    if statuses and all(status in {"success", "unsupported"} for status in statuses)
-                    else "partial_error"
-                ),
-                "virus_typ": virus_typ,
-                "horizon_days_list": list(horizons),
-                "trained": sum(int((payload or {}).get("trained") or 0) for payload in scopes.values()),
-                "failed": sum(int((payload or {}).get("failed") or 0) for payload in scopes.values()),
-                "unsupported": sum(
-                    1
-                    for payload in scopes.values()
-                    if (payload or {}).get("status") == "unsupported"
-                ),
-                "scopes": scopes,
-                "aggregate_metrics": {
-                    key: (payload or {}).get("aggregate_metrics") or {}
-                    for key, payload in scopes.items()
-                },
-                "quality_gate": {
-                    key: (payload or {}).get("quality_gate") or {}
-                    for key, payload in scopes.items()
-                },
-            }
-
-        return self._train_single_horizon(
+        return regional_trainer_orchestration.train_all_regions(
+            self,
             virus_typ=virus_typ,
             lookback_days=lookback_days,
             persist=persist,
-            horizon_days=horizons[0],
+            horizon_days=horizon_days,
+            horizon_days_list=horizon_days_list,
             weather_forecast_vintage_mode=weather_forecast_vintage_mode,
             weather_vintage_comparison=weather_vintage_comparison,
         )
@@ -352,12 +312,13 @@ class RegionalModelTrainer:
         weather_forecast_vintage_mode: str | None = None,
         weather_vintage_comparison: bool = False,
     ) -> dict[str, Any]:
-        return self.train_selected_viruses_all_regions(
-            virus_types=SUPPORTED_VIRUS_TYPES,
+        return regional_trainer_orchestration.train_all_viruses_all_regions(
+            self,
             lookback_days=lookback_days,
             horizon_days=horizon_days,
             weather_forecast_vintage_mode=weather_forecast_vintage_mode,
             weather_vintage_comparison=weather_vintage_comparison,
+            supported_virus_types=SUPPORTED_VIRUS_TYPES,
         )
 
     def train_selected_viruses_all_regions(
@@ -370,17 +331,15 @@ class RegionalModelTrainer:
         weather_forecast_vintage_mode: str | None = None,
         weather_vintage_comparison: bool = False,
     ) -> dict[str, Any]:
-        return {
-            virus_typ: self.train_all_regions(
-                virus_typ=virus_typ,
-                lookback_days=lookback_days,
-                horizon_days=horizon_days,
-                horizon_days_list=horizon_days_list,
-                weather_forecast_vintage_mode=weather_forecast_vintage_mode,
-                weather_vintage_comparison=weather_vintage_comparison,
-            )
-            for virus_typ in virus_types
-        }
+        return regional_trainer_orchestration.train_selected_viruses_all_regions(
+            self,
+            virus_types=virus_types,
+            lookback_days=lookback_days,
+            horizon_days=horizon_days,
+            horizon_days_list=horizon_days_list,
+            weather_forecast_vintage_mode=weather_forecast_vintage_mode,
+            weather_vintage_comparison=weather_vintage_comparison,
+        )
 
     @staticmethod
     def _selected_horizons(
@@ -558,83 +517,24 @@ class RegionalModelTrainer:
         return summaries
 
     def load_artifacts(self, virus_typ: str, horizon_days: int = 7) -> dict[str, Any]:
-        horizon = ensure_supported_horizon(horizon_days)
-        model_dir = regional_model_artifact_dir(
-            self.models_dir,
+        return regional_trainer_orchestration.load_artifacts(
+            self,
             virus_typ=virus_typ,
-            horizon_days=horizon,
+            horizon_days=horizon_days,
+            ensure_supported_horizon_fn=ensure_supported_horizon,
+            regional_model_artifact_dir_fn=regional_model_artifact_dir,
+            target_window_for_horizon_fn=_target_window_for_horizon,
+            supported_forecast_horizons=SUPPORTED_FORECAST_HORIZONS,
+            training_only_panel_columns=TRAINING_ONLY_PANEL_COLUMNS,
+            virus_slug_fn=_virus_slug,
         )
-        if model_dir.exists() and not self._artifact_payload_from_dir(model_dir):
-            return {
-                "load_error": (
-                    f"Artefakt-Bundle für {virus_typ}/h{horizon} ist unvollständig."
-                )
-            }
-        payload = self._artifact_payload_from_dir(model_dir)
-        if payload:
-            metadata = payload.setdefault("metadata", {})
-            metadata.setdefault("horizon_days", horizon)
-            metadata.setdefault("target_window_days", _target_window_for_horizon(horizon))
-            metadata.setdefault("supported_horizon_days", list(SUPPORTED_FORECAST_HORIZONS))
-            invalid_feature_columns = self._invalid_inference_feature_columns(
-                metadata.get("feature_columns") or []
-            )
-            if invalid_feature_columns:
-                payload["load_error"] = (
-                    f"Artefakt-Bundle für {virus_typ}/h{horizon} enthält trainingsinterne "
-                    f"Feature-Spalten: {', '.join(invalid_feature_columns)}. "
-                    "Bitte horizon-spezifisches Retraining durchführen."
-                )
-            return payload
-
-        if horizon != 7:
-            return {}
-
-        legacy_dir = self.models_dir / _virus_slug(virus_typ)
-        if legacy_dir.exists() and not self._artifact_payload_from_dir(legacy_dir):
-            return {
-                "load_error": (
-                    f"Legacy-Artefakt-Bundle für {virus_typ}/h{horizon} ist unvollständig."
-                )
-            }
-        legacy_payload = self._artifact_payload_from_dir(legacy_dir)
-        if not legacy_payload:
-            return {}
-
-        metadata = dict(legacy_payload.get("metadata") or {})
-        metadata.setdefault("horizon_days", horizon)
-        metadata["target_window_days"] = metadata.get("target_window_days") or list(TARGET_WINDOW_DAYS)
-        metadata["artifact_transition_mode"] = "legacy_default_window_fallback"
-        metadata["requested_horizon_days"] = horizon
-        metadata["artifact_dir"] = str(legacy_dir)
-        legacy_payload["metadata"] = metadata
-        legacy_payload["artifact_transition_mode"] = "legacy_default_window_fallback"
-        invalid_feature_columns = self._invalid_inference_feature_columns(
-            metadata.get("feature_columns") or []
-        )
-        if invalid_feature_columns:
-            legacy_payload["load_error"] = (
-                f"Legacy-Artefakt-Bundle für {virus_typ}/h{horizon} enthält trainingsinterne "
-                f"Feature-Spalten: {', '.join(invalid_feature_columns)}. "
-                "Bitte horizon-spezifisches Retraining durchführen."
-            )
-        return legacy_payload
 
     @staticmethod
     def _artifact_payload_from_dir(model_dir: Path) -> dict[str, Any]:
-        if not model_dir.exists():
-            return {}
-        payload: dict[str, Any] = {}
-        meta_path = model_dir / "metadata.json"
-        backtest_path = model_dir / "backtest.json"
-        point_in_time_path = model_dir / "point_in_time_snapshot.json"
-        if meta_path.exists():
-            payload["metadata"] = json.loads(meta_path.read_text())
-        if backtest_path.exists():
-            payload["backtest"] = json.loads(backtest_path.read_text())
-        if point_in_time_path.exists():
-            payload["point_in_time_snapshot"] = json.loads(point_in_time_path.read_text())
-        return payload
+        return regional_trainer_orchestration.artifact_payload_from_dir(
+            model_dir,
+            json_module=json,
+        )
 
     def _feature_columns(self, panel: pd.DataFrame) -> list[str]:
         columns = [

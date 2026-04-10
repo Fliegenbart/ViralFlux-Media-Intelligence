@@ -396,3 +396,106 @@ class RegionalTrainerRefactorGuardTests(unittest.TestCase):
             activation_policy_for_virus_fn=ANY,
             signal_bundle_version_for_virus_fn=ANY,
         )
+
+    @patch("app.services.ml.regional_trainer_orchestration.train_all_regions")
+    def test_train_all_regions_wrapper_delegates_to_module(self, train_mock) -> None:
+        train_mock.return_value = {"status": "success", "trained": 16}
+        trainer = RegionalModelTrainer(db=None)
+
+        result = trainer.train_all_regions(
+            virus_typ="Influenza A",
+            lookback_days=900,
+            persist=False,
+            horizon_days=7,
+            horizon_days_list=[7, 14],
+            weather_forecast_vintage_mode="matching_as_of",
+            weather_vintage_comparison=True,
+        )
+
+        self.assertEqual(result, {"status": "success", "trained": 16})
+        train_mock.assert_called_once_with(
+            trainer,
+            virus_typ="Influenza A",
+            lookback_days=900,
+            persist=False,
+            horizon_days=7,
+            horizon_days_list=[7, 14],
+            weather_forecast_vintage_mode="matching_as_of",
+            weather_vintage_comparison=True,
+        )
+
+    @patch("app.services.ml.regional_trainer_orchestration.train_all_viruses_all_regions")
+    def test_train_all_viruses_wrapper_delegates_to_module(self, train_mock) -> None:
+        train_mock.return_value = {"Influenza A": {"trained": 16}}
+        trainer = RegionalModelTrainer(db=None)
+
+        result = trainer.train_all_viruses_all_regions(
+            lookback_days=1200,
+            horizon_days=14,
+            weather_forecast_vintage_mode="disabled",
+            weather_vintage_comparison=True,
+        )
+
+        self.assertEqual(result, {"Influenza A": {"trained": 16}})
+        train_mock.assert_called_once_with(
+            trainer,
+            lookback_days=1200,
+            horizon_days=14,
+            weather_forecast_vintage_mode="disabled",
+            weather_vintage_comparison=True,
+            supported_virus_types=ANY,
+        )
+
+    @patch("app.services.ml.regional_trainer_orchestration.train_selected_viruses_all_regions")
+    def test_train_selected_viruses_wrapper_delegates_to_module(self, train_mock) -> None:
+        train_mock.return_value = {"Influenza A": {"trained": 16}}
+        trainer = RegionalModelTrainer(db=None)
+
+        result = trainer.train_selected_viruses_all_regions(
+            virus_types=["Influenza A", "RSV A"],
+            lookback_days=1000,
+            horizon_days=7,
+            horizon_days_list=[7],
+            weather_forecast_vintage_mode="matching_as_of",
+            weather_vintage_comparison=False,
+        )
+
+        self.assertEqual(result, {"Influenza A": {"trained": 16}})
+        train_mock.assert_called_once_with(
+            trainer,
+            virus_types=["Influenza A", "RSV A"],
+            lookback_days=1000,
+            horizon_days=7,
+            horizon_days_list=[7],
+            weather_forecast_vintage_mode="matching_as_of",
+            weather_vintage_comparison=False,
+        )
+
+    @patch("app.services.ml.regional_trainer_orchestration.load_artifacts")
+    def test_load_artifacts_wrapper_delegates_to_module(self, load_mock) -> None:
+        load_mock.return_value = {"metadata": {"horizon_days": 7}}
+        trainer = RegionalModelTrainer(db=None)
+
+        result = trainer.load_artifacts("Influenza A", horizon_days=7)
+
+        self.assertEqual(result, {"metadata": {"horizon_days": 7}})
+        load_mock.assert_called_once_with(
+            trainer,
+            virus_typ="Influenza A",
+            horizon_days=7,
+            ensure_supported_horizon_fn=ANY,
+            regional_model_artifact_dir_fn=ANY,
+            target_window_for_horizon_fn=ANY,
+            supported_forecast_horizons=ANY,
+            training_only_panel_columns=ANY,
+            virus_slug_fn=ANY,
+        )
+
+    @patch("app.services.ml.regional_trainer_orchestration.artifact_payload_from_dir")
+    def test_artifact_payload_from_dir_wrapper_delegates_to_module(self, payload_mock) -> None:
+        payload_mock.return_value = {"metadata": {"trained_at": "2026-04-10T12:00:00"}}
+
+        result = RegionalModelTrainer._artifact_payload_from_dir("model-dir")
+
+        self.assertEqual(result, {"metadata": {"trained_at": "2026-04-10T12:00:00"}})
+        payload_mock.assert_called_once_with("model-dir", json_module=ANY)

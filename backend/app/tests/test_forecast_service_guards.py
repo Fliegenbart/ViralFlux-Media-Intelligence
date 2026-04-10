@@ -11,6 +11,71 @@ from app.services.ml.forecast_service import (
 
 
 class ForecastServiceGuardTests(unittest.TestCase):
+    @patch("app.services.ml.forecast_service_inference.predict")
+    def test_predict_wrapper_delegates_to_module(self, predict_mock) -> None:
+        predict_mock.return_value = {"status": "success", "virus_typ": "Influenza A"}
+        service = ForecastService(db=None)
+
+        result = service.predict(
+            virus_typ="Influenza A",
+            region="BY",
+            horizon_days=14,
+            include_internal_history=False,
+        )
+
+        self.assertEqual(result, {"status": "success", "virus_typ": "Influenza A"})
+        predict_mock.assert_called_once_with(
+            service,
+            virus_typ="Influenza A",
+            region="BY",
+            horizon_days=14,
+            include_internal_history=False,
+            normalize_forecast_region_fn=ANY,
+            ensure_supported_horizon_fn=ANY,
+            load_cached_models_fn=ANY,
+            is_model_feature_compatibility_error_fn=ANY,
+            logger=ANY,
+        )
+
+    @patch("app.services.ml.forecast_service_inference.inference_from_loaded_models")
+    def test_inference_from_loaded_models_wrapper_delegates_to_module(self, inference_mock) -> None:
+        inference_mock.return_value = {"model_version": "xgb_stack_v1_loaded"}
+        service = ForecastService(db=None)
+
+        result = service._inference_from_loaded_models(
+            virus_typ="Influenza A",
+            model_med="median-model",
+            model_lo="lower-model",
+            model_hi="upper-model",
+            metadata={"version": "xgb_stack_v1_loaded"},
+            event_model=None,
+            region="DE",
+            horizon_days=7,
+            include_internal_history=True,
+        )
+
+        self.assertEqual(result, {"model_version": "xgb_stack_v1_loaded"})
+        inference_mock.assert_called_once_with(
+            service,
+            virus_typ="Influenza A",
+            model_med="median-model",
+            model_lo="lower-model",
+            model_hi="upper-model",
+            metadata={"version": "xgb_stack_v1_loaded"},
+            event_model=None,
+            region="DE",
+            horizon_days=7,
+            include_internal_history=True,
+            normalize_forecast_region_fn=ANY,
+            ensure_supported_horizon_fn=ANY,
+            min_direct_train_points=ANY,
+            np_module=ANY,
+            pd_module=ANY,
+            timedelta_cls=ANY,
+            utc_now_fn=ANY,
+            logger=ANY,
+        )
+
     @patch("app.services.ml.forecast_service_event_probability.fit_event_classifier_model")
     def test_fit_event_classifier_model_wrapper_delegates_to_module(self, fit_mock) -> None:
         fit_mock.return_value = "event-model"

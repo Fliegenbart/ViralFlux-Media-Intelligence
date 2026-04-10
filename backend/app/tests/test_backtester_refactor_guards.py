@@ -8,6 +8,106 @@ from app.services.ml.forecast_contracts import HEURISTIC_EVENT_SCORE_SOURCE
 
 
 class BacktesterRefactorGuardTests(unittest.TestCase):
+    @patch("app.services.ml.backtester_autoregressive.build_survstat_ar_row")
+    def test_build_survstat_ar_row_wrapper_delegates_to_module(
+        self,
+        autoregressive_mock,
+    ) -> None:
+        autoregressive_mock.return_value = {"y_lag1": 1.0}
+
+        result = BacktestService._build_survstat_ar_row(
+            series="series",
+            idx=12,
+            target_date="2026-01-01",
+        )
+
+        self.assertEqual(result, {"y_lag1": 1.0})
+        autoregressive_mock.assert_called_once_with(
+            series="series",
+            idx=12,
+            target_date="2026-01-01",
+            xgboost_survstat_features=BacktestService.XGBOOST_SURVSTAT_FEATURES,
+        )
+
+    @patch("app.services.ml.backtester_autoregressive.build_survstat_ar_training_data")
+    def test_build_survstat_ar_training_data_wrapper_delegates_to_module(
+        self,
+        autoregressive_mock,
+    ) -> None:
+        autoregressive_mock.return_value = ("X", "y")
+        service = BacktestService(db=None)
+
+        result = service._build_survstat_ar_training_data("train-frame")
+
+        self.assertEqual(result, ("X", "y"))
+        autoregressive_mock.assert_called_once_with(
+            "train-frame",
+            xgboost_survstat_features=BacktestService.XGBOOST_SURVSTAT_FEATURES,
+            build_survstat_ar_row_fn=service._build_survstat_ar_row,
+        )
+
+    @patch("app.services.ml.backtester_targets.resolve_survstat_disease")
+    def test_resolve_survstat_disease_wrapper_delegates_to_module(
+        self,
+        targets_mock,
+    ) -> None:
+        targets_mock.return_value = "Influenza, saisonal"
+        service = BacktestService(db=None)
+
+        result = service._resolve_survstat_disease("SURVSTAT")
+
+        self.assertEqual(result, "Influenza, saisonal")
+        targets_mock.assert_called_once_with(
+            service,
+            "SURVSTAT",
+        )
+
+    @patch("app.services.ml.backtester_targets.load_market_target")
+    def test_load_market_target_wrapper_delegates_to_module(
+        self,
+        targets_mock,
+    ) -> None:
+        sentinel = ("frame", {"target_key": "RKI_ARE"})
+        targets_mock.return_value = sentinel
+        service = BacktestService(db=None)
+
+        result = service._load_market_target(
+            target_source="RKI_ARE",
+            days_back=365,
+            bundesland="Berlin",
+        )
+
+        self.assertEqual(result, sentinel)
+        targets_mock.assert_called_once_with(
+            service,
+            target_source="RKI_ARE",
+            days_back=365,
+            bundesland="Berlin",
+        )
+
+    @patch("app.services.ml.backtester_targets.build_planning_curve")
+    def test_build_planning_curve_wrapper_delegates_to_module(
+        self,
+        targets_mock,
+    ) -> None:
+        sentinel = {"lead_days": 14, "curve": []}
+        targets_mock.return_value = sentinel
+        service = BacktestService(db=None)
+
+        result = service._build_planning_curve(
+            target_df="target-frame",
+            virus_typ="Influenza A",
+            days_back=1200,
+        )
+
+        self.assertEqual(result, sentinel)
+        targets_mock.assert_called_once_with(
+            service,
+            target_df="target-frame",
+            virus_typ="Influenza A",
+            days_back=1200,
+        )
+
     @patch("app.services.ml.backtester_reporting.run_global_calibration")
     def test_run_global_calibration_wrapper_delegates_to_module(
         self,

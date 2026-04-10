@@ -13,7 +13,6 @@ from typing import Optional, Tuple
 from uuid import uuid4
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_, or_
-import math
 from sklearn.ensemble import GradientBoostingClassifier, GradientBoostingRegressor
 import logging
 
@@ -37,9 +36,11 @@ from app.services.ml.forecast_contracts import (
     HEURISTIC_EVENT_SCORE_SOURCE,
 )
 from app.services.ml import (
+    backtester_autoregressive,
     backtester_metrics,
     backtester_reporting,
     backtester_simulation,
+    backtester_targets,
     backtester_walk_forward,
     backtester_workflows,
 )
@@ -682,86 +683,22 @@ class BacktestService:
         idx: int,
         target_date: datetime,
     ) -> dict[str, float]:
-        """Baut einen einzelnen Feature-Vektor aus der SURVSTAT-Zeitreihe.
-
-        Args:
-            series: Sortierte Zeitreihe der menge-Werte (Index 0 = ältester)
-            idx: Position in der Zeitreihe
-            target_date: Datum für saisonale Features
-        """
-        n = len(series)
-        val = float(series.iloc[idx]) if idx < n else 0.0
-
-        def _lag(k: int) -> float:
-            i = idx - k
-            return float(series.iloc[i]) if 0 <= i < n else 0.0
-
-        y_lag1 = _lag(1)
-        y_lag2 = _lag(2)
-        y_lag4 = _lag(4)
-        y_lag8 = _lag(8)
-        y_lag52 = _lag(52)
-
-        # Rolling statistics (über die letzten k Punkte VOR idx)
-        window4 = [float(series.iloc[idx - j]) for j in range(1, 5) if 0 <= idx - j < n]
-        window8 = [float(series.iloc[idx - j]) for j in range(1, 9) if 0 <= idx - j < n]
-        y_roll4_mean = float(np.mean(window4)) if window4 else 0.0
-        y_roll4_std = float(np.std(window4)) if len(window4) >= 2 else 0.0
-        y_roll8_mean = float(np.mean(window8)) if window8 else 0.0
-
-        # Rate of change
-        y_roc1 = (y_lag1 - _lag(2)) / max(_lag(2), 1e-6) if _lag(2) > 0 else 0.0
-        y_roc4 = (y_lag1 - _lag(5)) / max(_lag(5), 1e-6) if _lag(5) > 0 else 0.0
-
-        # Seasonal encoding
-        iso_week = target_date.isocalendar()[1]
-        week_sin = round(math.sin(2 * math.pi * iso_week / 52), 4)
-        week_cos = round(math.cos(2 * math.pi * iso_week / 52), 4)
-
-        # Level: aktueller Wert / langfristiger Median
-        all_vals = [float(series.iloc[j]) for j in range(max(0, idx - 52), idx) if j < n]
-        median_val = float(np.median(all_vals)) if all_vals else 1.0
-        y_level = y_lag1 / max(median_val, 1e-6)
-
-        return {
-            "y_lag1": y_lag1, "y_lag2": y_lag2, "y_lag4": y_lag4,
-            "y_lag8": y_lag8, "y_lag52": y_lag52,
-            "y_roll4_mean": y_roll4_mean, "y_roll4_std": y_roll4_std,
-            "y_roll8_mean": y_roll8_mean,
-            "y_roc1": y_roc1, "y_roc4": y_roc4,
-            "week_sin": week_sin, "week_cos": week_cos,
-            "y_level": y_level,
-        }
+        return backtester_autoregressive.build_survstat_ar_row(
+            series=series,
+            idx=idx,
+            target_date=target_date,
+            xgboost_survstat_features=BacktestService.XGBOOST_SURVSTAT_FEATURES,
+        )
 
     def _build_survstat_ar_training_data(
         self,
         train_df: pd.DataFrame,
     ) -> tuple[np.ndarray, np.ndarray]:
-        """Baut X/y aus SURVSTAT train_df für XGBoost.
-
-        train_df muss Spalten 'datum' und 'menge' haben, sortiert nach datum.
-        Gibt (X, y) zurück wobei X die autoregressive Feature-Matrix ist.
-        Skipt die ersten 52 Zeilen (brauchen lag52).
-        """
-        series = train_df["menge"].reset_index(drop=True)
-        dates = train_df["datum"].reset_index(drop=True)
-        n = len(series)
-        min_idx = min(52, n - 1)  # brauchen mindestens lag52
-
-        rows = []
-        targets = []
-        for i in range(max(min_idx, 1), n):
-            feat = self._build_survstat_ar_row(series, i, dates.iloc[i])
-            rows.append([feat[c] for c in self.XGBOOST_SURVSTAT_FEATURES])
-            targets.append(float(series.iloc[i]))
-
-        if not rows:
-            return np.empty((0, len(self.XGBOOST_SURVSTAT_FEATURES))), np.empty(0)
-
-        X = np.array(rows, dtype=float)
-        y = np.array(targets, dtype=float)
-        X = np.nan_to_num(X, nan=0.0, posinf=0.0, neginf=0.0)
-        return X, y
+        return backtester_autoregressive.build_survstat_ar_training_data(
+            train_df,
+            xgboost_survstat_features=self.XGBOOST_SURVSTAT_FEATURES,
+            build_survstat_ar_row_fn=self._build_survstat_ar_row,
+        )
 
     # ─────────────────────────────────────────────────────────────────────────
     # Haupt-Kalibrierung
@@ -802,27 +739,7 @@ class BacktestService:
         )
 
     def _resolve_survstat_disease(self, source_token: str) -> Optional[str]:
-        """Mappt Zieltoken auf einen konkreten SURVSTAT-Disease-String."""
-        token = (source_token or "").strip()
-        token_upper = token.upper()
-
-        if token_upper in self.SURVSTAT_TARGET_ALIASES:
-            token = self.SURVSTAT_TARGET_ALIASES[token_upper]
-
-        # Exakter Match zuerst
-        exact = self.db.query(SurvstatWeeklyData.disease).filter(
-            SurvstatWeeklyData.disease == token
-        ).first()
-        if exact:
-            return exact[0]
-
-        # Fuzzy-Match per LIKE
-        pattern = f"%{token.lower()}%"
-        row = self.db.query(SurvstatWeeklyData.disease).filter(
-            func.lower(SurvstatWeeklyData.disease).like(pattern)
-        ).order_by(SurvstatWeeklyData.disease.asc()).first()
-
-        return row[0] if row else None
+        return backtester_targets.resolve_survstat_disease(self, source_token)
 
     def _load_market_target(
         self,
@@ -830,103 +747,12 @@ class BacktestService:
         days_back: int = 730,
         bundesland: str = "",
     ) -> Tuple[pd.DataFrame, dict]:
-        """Lädt externe Markt-Proxy-Wahrheit für Twin-Mode Market-Check."""
-        token = (target_source or "RKI_ARE").strip()
-        token_upper = token.upper()
-        start_date = datetime.now() - timedelta(days=days_back)
-        bl_filter = bundesland.strip() if bundesland else "Gesamt"
-
-        # --- ATEMWEGSINDEX: Aggregat aller respiratorischen Erreger ---
-        if token_upper == "ATEMWEGSINDEX":
-            surv_rows = self.db.query(
-                SurvstatWeeklyData.week_start,
-                SurvstatWeeklyData.week_label,
-                func.sum(SurvstatWeeklyData.incidence).label("total_incidence"),
-                func.min(SurvstatWeeklyData.available_time).label("available_time"),
-            ).filter(
-                SurvstatWeeklyData.disease.in_(self.GELO_ATEMWEG_DISEASES),
-                SurvstatWeeklyData.bundesland == bl_filter,
-                or_(SurvstatWeeklyData.age_group == "Gesamt", SurvstatWeeklyData.age_group.is_(None)),
-                SurvstatWeeklyData.week_start >= start_date,
-            ).group_by(
-                SurvstatWeeklyData.week_start,
-                SurvstatWeeklyData.week_label,
-            ).order_by(SurvstatWeeklyData.week_start.asc()).all()
-
-            df = pd.DataFrame([{
-                "datum": row.week_start,
-                "menge": float(row.total_incidence or 0),
-                "available_time": row.available_time or row.week_start,
-            } for row in surv_rows])
-
-            bl_label = bl_filter if bl_filter != "Gesamt" else "Bundesweit"
-            return df, {
-                "target_source": "ATEMWEGSINDEX",
-                "target_label": f"Atemwegsindex ({bl_label})",
-                "target_key": "ATEMWEGSINDEX",
-                "disease": None,
-                "bundesland": bl_filter,
-            }
-
-        # --- RKI_ARE ---
-        if token_upper == "RKI_ARE":
-            bl_are = "Bundesweit" if bl_filter == "Gesamt" else bl_filter
-            are_rows = self.db.query(AREKonsultation).filter(
-                AREKonsultation.altersgruppe == "00+",
-                AREKonsultation.bundesland == bl_are,
-                AREKonsultation.datum >= start_date,
-            ).order_by(AREKonsultation.datum.asc()).all()
-
-            df = pd.DataFrame([{
-                "datum": row.datum,
-                "menge": row.konsultationsinzidenz,
-                "available_time": row.available_time or row.datum,
-            } for row in are_rows if row.konsultationsinzidenz is not None])
-
-            return df, {
-                "target_source": "RKI_ARE",
-                "target_label": f"RKI ARE ({bl_are}, 00+)",
-                "target_key": "RKI_ARE",
-                "bundesland": bl_filter,
-            }
-
-        # --- SURVSTAT Einzelerreger ---
-        if token_upper.startswith("SURVSTAT:"):
-            survstat_token = token.split(":", 1)[1].strip()
-        else:
-            survstat_token = self.SURVSTAT_TARGET_ALIASES.get(token_upper, token)
-
-        disease = self._resolve_survstat_disease(survstat_token)
-        if not disease:
-            available = self.db.query(SurvstatWeeklyData.disease).distinct().order_by(
-                SurvstatWeeklyData.disease.asc()
-            ).limit(12).all()
-            available_names = [row[0] for row in available]
-            raise ValueError(
-                f"SURVSTAT Ziel '{target_source}' nicht gefunden. "
-                f"Verfügbar (Auszug): {available_names}"
-            )
-
-        surv_rows = self.db.query(SurvstatWeeklyData).filter(
-            SurvstatWeeklyData.disease == disease,
-            SurvstatWeeklyData.bundesland == bl_filter,
-            SurvstatWeeklyData.week_start >= start_date,
-        ).order_by(SurvstatWeeklyData.week_start.asc()).all()
-
-        df = pd.DataFrame([{
-            "datum": row.week_start,
-            "menge": row.incidence,
-            "available_time": row.available_time or row.week_start,
-        } for row in surv_rows if row.incidence is not None])
-
-        bl_label = bl_filter if bl_filter != "Gesamt" else "Bundesweit"
-        return df, {
-            "target_source": "SURVSTAT",
-            "target_label": f"SURVSTAT {disease} ({bl_label})",
-            "target_key": token_upper,
-            "disease": disease,
-            "bundesland": bl_filter,
-        }
+        return backtester_targets.load_market_target(
+            self,
+            target_source=target_source,
+            days_back=days_back,
+            bundesland=bundesland,
+        )
 
     @staticmethod
     def _estimate_step_days(df_sim: pd.DataFrame) -> int:
@@ -938,97 +764,12 @@ class BacktestService:
         virus_typ: str = "Influenza A",
         days_back: int = 2500,
     ) -> dict:
-        """Planungskurve: Abwasser um empirischen Lead shiften + skalieren.
-
-        Statt ML-Forecast nutzt dies die empirische Cross-Korrelation
-        zwischen Abwasser und Target. Robuster als Modell-Prognose.
-        """
-        from sklearn.linear_model import LinearRegression
-
-        start_date = datetime.now() - timedelta(days=days_back)
-
-        # 1. Abwasser wöchentlich aggregieren
-        ww_weekly = self.db.query(
-            func.date_trunc("week", WastewaterAggregated.datum).label("week"),
-            func.avg(WastewaterAggregated.viruslast).label("avg_vl"),
-        ).filter(
-            WastewaterAggregated.virus_typ == virus_typ,
-            WastewaterAggregated.datum >= start_date,
-        ).group_by(
-            func.date_trunc("week", WastewaterAggregated.datum)
-        ).order_by("week").all()
-
-        if len(ww_weekly) < 10:
-            return {"lead_days": 0, "correlation": 0, "curve": []}
-
-        ww_df = pd.DataFrame([
-            {"week": r.week, "viruslast": float(r.avg_vl or 0)}
-            for r in ww_weekly
-        ]).set_index("week")
-
-        # 2. Target wöchentlich
-        tgt_df = target_df.copy()
-        tgt_df["datum"] = pd.to_datetime(tgt_df["datum"])
-        tgt_df = tgt_df.set_index("datum")[["menge"]].dropna()
-
-        # 3. Align + Cross-Korrelation
-        merged = ww_df.join(tgt_df, how="inner").dropna()
-        if len(merged) < 15:
-            return {"lead_days": 0, "correlation": 0, "curve": []}
-
-        vl = merged["viruslast"].values
-        inc = merged["menge"].values
-        vl_n = (vl - vl.mean()) / (vl.std() + 1e-9)
-        inc_n = (inc - inc.mean()) / (inc.std() + 1e-9)
-
-        best_lag = 0
-        best_corr = 0.0
-        for lag in range(0, 5):  # 0-4 Wochen, nur positiv (Abwasser führt)
-            if lag > 0:
-                x, y = vl_n[:-lag], inc_n[lag:]
-            else:
-                x, y = vl_n, inc_n
-            if len(x) < 10:
-                continue
-            corr = float(np.corrcoef(x, y)[0, 1])
-            if corr > best_corr:
-                best_corr = corr
-                best_lag = lag
-
-        lead_days = best_lag * 7
-
-        # 4. Lineare Regression: incidence[t+lag] = a * viruslast[t] + b
-        if best_lag > 0:
-            X_reg = vl[:-best_lag].reshape(-1, 1)
-            y_reg = inc[best_lag:]
-        else:
-            X_reg = vl.reshape(-1, 1)
-            y_reg = inc
-
-        reg = LinearRegression().fit(X_reg, y_reg)
-
-        # 5. Planungskurve: Jeder Abwasser-Punkt → Prognose für +lead_days
-        curve = []
-        for _, row_data in ww_df.iterrows():
-            ww_date = row_data.name
-            target_date = ww_date + timedelta(days=lead_days)
-            predicted = max(0, float(reg.predict([[row_data["viruslast"]]])[0]))
-            curve.append({
-                "date": target_date.strftime("%Y-%m-%d"),
-                "based_on": ww_date.strftime("%Y-%m-%d"),
-                "issue_date": ww_date.strftime("%Y-%m-%d"),
-                "target_date": target_date.strftime("%Y-%m-%d"),
-                "planning_qty": round(predicted, 2),
-            })
-
-        return {
-            "lead_days": lead_days,
-            "lead_weeks": best_lag,
-            "correlation": round(best_corr, 3),
-            "regression_coef": round(float(reg.coef_[0]), 6),
-            "regression_intercept": round(float(reg.intercept_), 2),
-            "curve": sorted(curve, key=lambda r: r["date"]),
-        }
+        return backtester_targets.build_planning_curve(
+            self,
+            target_df=target_df,
+            virus_typ=virus_typ,
+            days_back=days_back,
+        )
 
     def _best_bio_lead_lag(self, df_sim: pd.DataFrame, max_lag_points: int = 6) -> dict:
         return backtester_metrics.best_bio_lead_lag(

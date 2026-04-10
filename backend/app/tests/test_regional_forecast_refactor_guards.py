@@ -760,3 +760,79 @@ def test_calibration_version_wrapper_delegates_to_module() -> None:
 
     assert result == "isotonic:2026"
     mocked.assert_called_once_with(metadata)
+
+
+def test_generate_media_allocation_wrapper_delegates_to_module() -> None:
+    service = RegionalForecastService(db=None)
+    sentinel = {"recommendations": []}
+
+    with patch(
+        "app.services.ml.regional_forecast_workflows.generate_media_allocation",
+        return_value=sentinel,
+    ) as mocked:
+        result = service.generate_media_allocation(
+            virus_typ="Influenza A",
+            weekly_budget_eur=1500.0,
+            horizon_days=7,
+        )
+
+    assert result is sentinel
+    mocked.assert_called_once_with(
+        service,
+        virus_typ="Influenza A",
+        weekly_budget_eur=1500.0,
+        horizon_days=7,
+        rollout_mode_for_virus_fn=regional_forecast_module.rollout_mode_for_virus,
+        activation_policy_for_virus_fn=regional_forecast_module.activation_policy_for_virus,
+        gelo_products=regional_forecast_module.GELO_PRODUCTS,
+        media_channels=regional_forecast_module.MEDIA_CHANNELS,
+        utc_now_fn=regional_forecast_module.utc_now,
+    )
+
+
+def test_generate_media_activation_wrapper_delegates_to_module() -> None:
+    service = RegionalForecastService(db=None)
+    sentinel = {"recommendations": []}
+
+    with patch(
+        "app.services.ml.regional_forecast_workflows.generate_media_activation",
+        return_value=sentinel,
+    ) as mocked:
+        result = service.generate_media_activation(
+            virus_typ="Influenza A",
+            weekly_budget_eur=1500.0,
+            horizon_days=7,
+        )
+
+    assert result is sentinel
+    mocked.assert_called_once_with(
+        service,
+        virus_typ="Influenza A",
+        weekly_budget_eur=1500.0,
+        horizon_days=7,
+    )
+
+
+def test_generate_campaign_recommendations_wrapper_delegates_to_module() -> None:
+    service = RegionalForecastService(db=None)
+    sentinel = {"recommendations": []}
+
+    with patch(
+        "app.services.ml.regional_forecast_workflows.generate_campaign_recommendations",
+        return_value=sentinel,
+    ) as mocked:
+        result = service.generate_campaign_recommendations(
+            virus_typ="Influenza A",
+            weekly_budget_eur=1500.0,
+            horizon_days=7,
+            top_n=5,
+        )
+
+    assert result is sentinel
+    mocked.assert_called_once_with(
+        service,
+        virus_typ="Influenza A",
+        weekly_budget_eur=1500.0,
+        horizon_days=7,
+        top_n=5,
+    )

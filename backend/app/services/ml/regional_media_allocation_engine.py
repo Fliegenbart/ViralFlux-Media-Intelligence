@@ -701,14 +701,14 @@ class RegionalMediaAllocationEngine:
             return "blocked"
         if stage == "prepare":
             return "prepare_only"
+        if spend_blockers:
+            return "blocked"
         if stage not in set(self.config.spend_enabled_labels):
             return "observe"
         if confidence < float(self.config.confidence_thresholds.get("low") or 0.45):
             return "cautious"
         if confidence < float(self.config.confidence_thresholds.get("medium") or 0.60):
             return "guarded"
-        if spend_blockers:
-            return "blocked"
         return "ready"
 
     @staticmethod

@@ -158,9 +158,14 @@ class RegionalMediaAllocationEngineTests(unittest.TestCase):
         prepare_item = next(item for item in payload["recommendations"] if item["bundesland"] == "BY")
         self.assertEqual(prepare_item["recommended_activation_level"], "Prepare")
         self.assertEqual(prepare_item["priority_rank"], 1)
+        self.assertIs(prepare_item["metadata"]["eligible_for_budget"], False)
         self.assertEqual(prepare_item["suggested_budget_share"], 0.0)
         self.assertEqual(prepare_item["suggested_budget_eur"], 0.0)
         self.assertEqual(prepare_item["spend_readiness"], "prepare_only")
+        self.assertIn(
+            "Prepare is an early-warning stage. Keep the region visible, but do not release paid budget yet.",
+            prepare_item["reason_trace"]["blockers"],
+        )
 
     def test_non_prepare_spend_readiness_preserves_existing_states(self) -> None:
         payload = self.engine.allocate(
@@ -227,6 +232,33 @@ class RegionalMediaAllocationEngineTests(unittest.TestCase):
         self.assertEqual(recommendations["HE"]["spend_readiness"], "guarded")
         self.assertEqual(recommendations["SN"]["spend_readiness"], "cautious")
         self.assertEqual(recommendations["BB"]["spend_readiness"], "observe")
+
+    def test_spend_blockers_force_activate_readiness_to_blocked(self) -> None:
+        payload = self.engine.allocate(
+            virus_typ="Influenza A",
+            total_budget_eur=20_000,
+            predictions=[
+                _prediction(
+                    bundesland="HE",
+                    bundesland_name="Hessen",
+                    stage="activate",
+                    priority_score=0.55,
+                    event_probability=0.51,
+                    forecast_confidence=0.36,
+                    source_freshness_score=0.42,
+                    usable_source_share=0.58,
+                    source_coverage_score=0.60,
+                    source_revision_risk=0.58,
+                ),
+            ],
+            spend_enabled=True,
+            spend_blockers=["Quality Gate blockiert Aktivierung."],
+        )
+
+        recommendation = payload["recommendations"][0]
+        self.assertEqual(recommendation["recommended_activation_level"], "Activate")
+        self.assertIs(recommendation["metadata"]["eligible_for_budget"], False)
+        self.assertEqual(recommendation["spend_readiness"], "blocked")
 
     def test_budget_shares_sum_to_one_when_spend_is_enabled(self) -> None:
         payload = self.engine.allocate(

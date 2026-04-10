@@ -81,6 +81,7 @@ from app.services.ml import forecast_service_internal_history
 from app.services.ml import forecast_service_event_probability
 from app.services.ml import forecast_service_inference
 from app.services.ml import forecast_service_direct_training
+from app.services.ml import forecast_service_quality_contracts
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -1337,45 +1338,19 @@ class ForecastService:
         predicted: list[float],
         actual: list[float],
     ) -> dict[str, float]:
-        pred_arr = np.asarray(predicted, dtype=float)
-        act_arr = np.asarray(actual, dtype=float)
-        errors = pred_arr - act_arr
-        mae = float(np.mean(np.abs(errors)))
-        rmse = float(np.sqrt(np.mean(errors ** 2)))
-        nonzero = act_arr != 0
-        mape = float(np.mean(np.abs(errors[nonzero] / act_arr[nonzero])) * 100) if nonzero.any() else 0.0
-        return {
-            "mae": round(mae, 4),
-            "rmse": round(rmse, 4),
-            "mape": round(mape, 2),
-        }
+        return forecast_service_quality_contracts.compute_regression_metrics(
+            predicted,
+            actual,
+            np_module=np,
+        )
 
     @staticmethod
     def _backtest_quality_score(backtest_metrics: dict[str, Any] | None) -> float | None:
-        if not backtest_metrics:
-            return None
-        mape = backtest_metrics.get("mape")
-        if mape is None:
-            return None
-        return round(max(0.0, min(1.0, 1.0 - (float(mape) / 100.0))), 4)
+        return forecast_service_quality_contracts.backtest_quality_score(backtest_metrics)
 
     @staticmethod
     def _calibration_passed(backtest_metrics: dict[str, Any] | None) -> bool | None:
-        if not backtest_metrics:
-            return None
-        brier = backtest_metrics.get("brier_score")
-        ece = backtest_metrics.get("ece")
-        logloss_value = backtest_metrics.get("logloss")
-        checks: list[bool] = []
-        if brier is not None:
-            checks.append(float(brier) <= 0.25)
-        if ece is not None:
-            checks.append(float(ece) <= 0.10)
-        if logloss_value is not None:
-            checks.append(float(logloss_value) <= 0.70)
-        if not checks:
-            return None
-        return all(checks)
+        return forecast_service_quality_contracts.calibration_passed(backtest_metrics)
 
     def _quality_meta_from_backtest(
         self,
@@ -1393,38 +1368,24 @@ class ForecastService:
         interval_coverage: dict[str, Any] | None = None,
         promotion_gate: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        metrics = dict(backtest_metrics or {})
-        reliability_score = metrics.get("reliability_score")
-        if reliability_score is None:
-            reliability_score = reliability_score_from_metrics(
-                metrics,
-                coverage_metrics=metrics,
-            )
-        return {
-            "event_probability": event_probability,
-            "forecast_ready": forecast_ready,
-            "drift_status": drift_status,
-            "baseline_deltas": baseline_deltas or {},
-            "timing_metrics": timing_metrics or {},
-            "interval_coverage": interval_coverage or {},
-            "promotion_gate": promotion_gate or {},
-            "confidence": reliability_score,
-            "reliability_score": reliability_score,
-            "confidence_semantics": CONFIDENCE_SEMANTICS_ALIAS,
-            "backtest_quality_score": self._backtest_quality_score(metrics),
-            "brier_score": metrics.get("brier_score"),
-            "ece": metrics.get("ece"),
-            "calibration_passed": self._calibration_passed(metrics),
-            "probability_source": probability_source,
-            "calibration_mode": calibration_mode,
-            "calibration_method": f"{probability_source}:{calibration_mode}",
-            # This is not per-forecast predictive uncertainty. It only tells the
-            # consumer that the score comes from backtest reliability evidence.
-            "uncertainty_source": BACKTEST_RELIABILITY_PROXY_SOURCE,
-            "fallback_reason": fallback_reason,
-            "learned_model_version": learned_model_version,
-            "fallback_used": fallback_reason is not None,
-        }
+        return forecast_service_quality_contracts.quality_meta_from_backtest(
+            self,
+            backtest_metrics=backtest_metrics,
+            event_probability=event_probability,
+            probability_source=probability_source,
+            calibration_mode=calibration_mode,
+            fallback_reason=fallback_reason,
+            learned_model_version=learned_model_version,
+            forecast_ready=forecast_ready,
+            drift_status=drift_status,
+            baseline_deltas=baseline_deltas,
+            timing_metrics=timing_metrics,
+            interval_coverage=interval_coverage,
+            promotion_gate=promotion_gate,
+            reliability_score_from_metrics_fn=reliability_score_from_metrics,
+            confidence_semantics_alias=CONFIDENCE_SEMANTICS_ALIAS,
+            backtest_reliability_proxy_source=BACKTEST_RELIABILITY_PROXY_SOURCE,
+        )
 
     def _compute_outbreak_risk(
         self,
@@ -1433,13 +1394,13 @@ class ForecastService:
         window: int = 30,
     ) -> float:
         """Compute outbreak risk score (0.0 – 1.0) via z-score sigmoid."""
-        recent = y_history[-min(window, len(y_history)) :]
-        mean_val = float(np.mean(recent))
-        std_val = float(np.std(recent))
-        if std_val < 1e-9:
-            return 0.5
-        z = (prediction - mean_val) / std_val
-        return round(_sigmoid(z), 3)
+        return forecast_service_quality_contracts.compute_outbreak_risk(
+            prediction,
+            y_history,
+            window=window,
+            np_module=np,
+            sigmoid_fn=_sigmoid,
+        )
 
     def _build_contracts(
         self,
@@ -1453,94 +1414,29 @@ class ForecastService:
         issue_date: datetime | None = None,
         quality_meta: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        region_code = normalize_forecast_region(region)
-        horizon = ensure_supported_horizon(horizon_days)
-        issue_ts = issue_date or utc_now()
-        burden = BurdenForecast(
-            target=virus_typ,
-            region=region_code,
-            issue_date=issue_ts.isoformat(),
-            horizon_days=horizon,
+        return forecast_service_quality_contracts.build_contracts(
+            self,
+            virus_typ=virus_typ,
+            region=region,
+            horizon_days=horizon_days,
+            forecast_records=forecast_records,
             model_version=model_version,
-            points=[
-                BurdenForecastPoint(
-                    target_date=item["ds"].isoformat() if item.get("ds") else "",
-                    median=float(item.get("yhat") or 0.0),
-                    lower=(
-                        float(item["yhat_lower"])
-                        if item.get("yhat_lower") is not None
-                        else None
-                    ),
-                    upper=(
-                        float(item["yhat_upper"])
-                        if item.get("yhat_upper") is not None
-                        else None
-                    ),
-                )
-                for item in forecast_records
-            ],
+            y_history=y_history,
+            issue_date=issue_date,
+            quality_meta=quality_meta,
+            normalize_forecast_region_fn=normalize_forecast_region,
+            ensure_supported_horizon_fn=ensure_supported_horizon,
+            burden_forecast_cls=BurdenForecast,
+            burden_forecast_point_cls=BurdenForecastPoint,
+            event_forecast_cls=EventForecast,
+            forecast_quality_cls=ForecastQuality,
+            confidence_label_fn=confidence_label,
+            backtest_reliability_proxy_source=BACKTEST_RELIABILITY_PROXY_SOURCE,
+            confidence_semantics_alias=CONFIDENCE_SEMANTICS_ALIAS,
+            default_decision_event_threshold_pct=DEFAULT_DECISION_EVENT_THRESHOLD_PCT,
+            utc_now_fn=utc_now,
+            np_module=np,
         )
-
-        baseline = float(np.median(y_history[-min(len(y_history), 84) :])) if len(y_history) > 0 else 0.0
-        event_probability = quality_meta.get("event_probability") if quality_meta else None
-        reliability_score = (
-            quality_meta.get("reliability_score")
-            if quality_meta and quality_meta.get("reliability_score") is not None
-            else (quality_meta.get("confidence") if quality_meta else None)
-        )
-        confidence_value = reliability_score
-        backtest_quality_score = quality_meta.get("backtest_quality_score") if quality_meta else None
-        calibration_mode = (quality_meta.get("calibration_mode") if quality_meta else None) or "raw_probability"
-        probability_source = (quality_meta.get("probability_source") if quality_meta else None) or "empirical_event_prevalence"
-        fallback_reason = quality_meta.get("fallback_reason") if quality_meta else None
-        event = EventForecast(
-            event_key=f"{virus_typ.lower().replace(' ', '_')}_growth_h{horizon}",
-            horizon_days=horizon,
-            event_probability=event_probability,
-            threshold_pct=DEFAULT_DECISION_EVENT_THRESHOLD_PCT,
-            baseline_value=round(baseline, 3) if baseline > 0 else None,
-            threshold_value=round(baseline * 1.25, 3) if baseline > 0 else None,
-            calibration_method=(quality_meta.get("calibration_method") if quality_meta else None)
-            or f"{probability_source}:{calibration_mode}",
-            brier_score=quality_meta.get("brier_score") if quality_meta else None,
-            ece=quality_meta.get("ece") if quality_meta else None,
-            calibration_passed=quality_meta.get("calibration_passed") if quality_meta else None,
-            confidence=confidence_value,
-            confidence_label=(
-                confidence_label(confidence_value)
-                if confidence_value is not None
-                else None
-            ),
-            reliability_score=reliability_score,
-            backtest_quality_score=backtest_quality_score,
-            probability_source=probability_source,
-            calibration_mode=calibration_mode,
-            uncertainty_source=(
-                (quality_meta.get("uncertainty_source") if quality_meta else None)
-                or BACKTEST_RELIABILITY_PROXY_SOURCE
-            ),
-            confidence_semantics=(
-                (quality_meta.get("confidence_semantics") if quality_meta else None)
-                or CONFIDENCE_SEMANTICS_ALIAS
-            ),
-            fallback_reason=fallback_reason,
-            learned_model_version=(quality_meta.get("learned_model_version") if quality_meta else None),
-            fallback_used=bool((quality_meta.get("fallback_used") if quality_meta else fallback_reason is not None)),
-        )
-        forecast_quality = ForecastQuality(
-            forecast_readiness="GO" if quality_meta and quality_meta.get("forecast_ready") else "WATCH",
-            drift_status=str(quality_meta.get("drift_status") or "unknown") if quality_meta else "unknown",
-            freshness_status="fresh",
-            baseline_deltas=quality_meta.get("baseline_deltas") or {} if quality_meta else {},
-            timing_metrics=quality_meta.get("timing_metrics") or {} if quality_meta else {},
-            interval_coverage=quality_meta.get("interval_coverage") or {} if quality_meta else {},
-            promotion_gate=quality_meta.get("promotion_gate") or {} if quality_meta else {},
-        )
-        return {
-            "burden_forecast": burden.to_dict(),
-            "event_forecast": event.to_dict(),
-            "forecast_quality": forecast_quality.to_dict(),
-        }
 
     # ═══════════════════════════════════════════════════════════════════
     #  INFERENCE (loads pre-trained models from disk)

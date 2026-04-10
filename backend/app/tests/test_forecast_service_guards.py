@@ -5,8 +5,21 @@ import numpy as np
 import pandas as pd
 
 from app.services.ml.forecast_service import (
+    BACKTEST_RELIABILITY_PROXY_SOURCE,
+    CONFIDENCE_SEMANTICS_ALIAS,
+    DEFAULT_DECISION_EVENT_THRESHOLD_PCT,
+    BurdenForecast,
+    BurdenForecastPoint,
+    EventForecast,
     ForecastService,
+    ForecastQuality,
     _resolve_loaded_model_feature_names,
+    _sigmoid,
+    confidence_label,
+    ensure_supported_horizon,
+    normalize_forecast_region,
+    reliability_score_from_metrics,
+    utc_now,
 )
 
 
@@ -125,6 +138,128 @@ class ForecastServiceGuardTests(unittest.TestCase):
             meta_features=ANY,
             np_module=ANY,
             logger=ANY,
+        )
+
+    @patch("app.services.ml.forecast_service_quality_contracts.compute_regression_metrics")
+    def test_compute_regression_metrics_wrapper_delegates_to_module(self, delegated) -> None:
+        delegated.return_value = {"mae": 1.2}
+
+        result = ForecastService._compute_regression_metrics([1.0], [2.0])
+
+        self.assertEqual(result, {"mae": 1.2})
+        delegated.assert_called_once_with([1.0], [2.0], np_module=ANY)
+
+    @patch("app.services.ml.forecast_service_quality_contracts.backtest_quality_score")
+    def test_backtest_quality_score_wrapper_delegates_to_module(self, delegated) -> None:
+        delegated.return_value = 0.77
+
+        result = ForecastService._backtest_quality_score({"mape": 23.0})
+
+        self.assertEqual(result, 0.77)
+        delegated.assert_called_once_with({"mape": 23.0})
+
+    @patch("app.services.ml.forecast_service_quality_contracts.calibration_passed")
+    def test_calibration_passed_wrapper_delegates_to_module(self, delegated) -> None:
+        delegated.return_value = True
+
+        result = ForecastService._calibration_passed({"brier_score": 0.1})
+
+        self.assertTrue(result)
+        delegated.assert_called_once_with({"brier_score": 0.1})
+
+    @patch("app.services.ml.forecast_service_quality_contracts.quality_meta_from_backtest")
+    def test_quality_meta_from_backtest_wrapper_delegates_to_module(self, delegated) -> None:
+        delegated.return_value = {"confidence": 0.81}
+        service = ForecastService(db=None)
+
+        result = service._quality_meta_from_backtest(
+            backtest_metrics={"mape": 12.0},
+            event_probability=0.63,
+            probability_source="learned",
+            calibration_mode="platt",
+            fallback_reason=None,
+            learned_model_version="v1",
+            forecast_ready=True,
+            drift_status="ok",
+            baseline_deltas={"delta": 1.0},
+            timing_metrics={"lag": 2.0},
+            interval_coverage={"p50": 0.7},
+            promotion_gate={"status": "go"},
+        )
+
+        self.assertEqual(result, {"confidence": 0.81})
+        delegated.assert_called_once_with(
+            service,
+            backtest_metrics={"mape": 12.0},
+            event_probability=0.63,
+            probability_source="learned",
+            calibration_mode="platt",
+            fallback_reason=None,
+            learned_model_version="v1",
+            forecast_ready=True,
+            drift_status="ok",
+            baseline_deltas={"delta": 1.0},
+            timing_metrics={"lag": 2.0},
+            interval_coverage={"p50": 0.7},
+            promotion_gate={"status": "go"},
+            reliability_score_from_metrics_fn=reliability_score_from_metrics,
+            confidence_semantics_alias=CONFIDENCE_SEMANTICS_ALIAS,
+            backtest_reliability_proxy_source=BACKTEST_RELIABILITY_PROXY_SOURCE,
+        )
+
+    @patch("app.services.ml.forecast_service_quality_contracts.compute_outbreak_risk")
+    def test_compute_outbreak_risk_wrapper_delegates_to_module(self, delegated) -> None:
+        delegated.return_value = 0.55
+        service = ForecastService(db=None)
+        history = np.array([1.0, 2.0], dtype=float)
+
+        result = service._compute_outbreak_risk(42.0, history, window=21)
+
+        self.assertEqual(result, 0.55)
+        delegated.assert_called_once_with(42.0, history, window=21, np_module=ANY, sigmoid_fn=_sigmoid)
+
+    @patch("app.services.ml.forecast_service_quality_contracts.build_contracts")
+    def test_build_contracts_wrapper_delegates_to_module(self, delegated) -> None:
+        delegated.return_value = {"event_forecast": {"confidence": 0.7}}
+        service = ForecastService(db=None)
+        history = np.array([10.0, 11.0], dtype=float)
+        forecast_records = [{"ds": pd.Timestamp("2026-01-10"), "yhat": 12.0}]
+        issue_date = pd.Timestamp("2026-01-03").to_pydatetime()
+
+        result = service._build_contracts(
+            virus_typ="Influenza A",
+            region="DE",
+            horizon_days=7,
+            forecast_records=forecast_records,
+            model_version="v1",
+            y_history=history,
+            issue_date=issue_date,
+            quality_meta={"event_probability": 0.6},
+        )
+
+        self.assertEqual(result, {"event_forecast": {"confidence": 0.7}})
+        delegated.assert_called_once_with(
+            service,
+            virus_typ="Influenza A",
+            region="DE",
+            horizon_days=7,
+            forecast_records=forecast_records,
+            model_version="v1",
+            y_history=history,
+            issue_date=issue_date,
+            quality_meta={"event_probability": 0.6},
+            normalize_forecast_region_fn=normalize_forecast_region,
+            ensure_supported_horizon_fn=ensure_supported_horizon,
+            burden_forecast_cls=BurdenForecast,
+            burden_forecast_point_cls=BurdenForecastPoint,
+            event_forecast_cls=EventForecast,
+            forecast_quality_cls=ForecastQuality,
+            confidence_label_fn=confidence_label,
+            backtest_reliability_proxy_source=BACKTEST_RELIABILITY_PROXY_SOURCE,
+            confidence_semantics_alias=CONFIDENCE_SEMANTICS_ALIAS,
+            default_decision_event_threshold_pct=DEFAULT_DECISION_EVENT_THRESHOLD_PCT,
+            utc_now_fn=utc_now,
+            np_module=ANY,
         )
 
     @patch("app.services.ml.forecast_service_inference.predict")

@@ -499,3 +499,56 @@ class RegionalTrainerRefactorGuardTests(unittest.TestCase):
 
         self.assertEqual(result, {"metadata": {"trained_at": "2026-04-10T12:00:00"}})
         payload_mock.assert_called_once_with("model-dir", json_module=ANY)
+
+    @patch("app.services.ml.regional_trainer_calibration.calibration_guard_metrics")
+    def test_calibration_guard_metrics_wrapper_delegates_to_module(self, metrics_mock) -> None:
+        metrics_mock.return_value = {"brier_score": 0.12, "ece": 0.03}
+
+        result = RegionalModelTrainer._calibration_guard_metrics(
+            as_of_dates=["2026-04-01", "2026-04-02"],
+            labels=[0, 1],
+            probabilities=[0.2, 0.8],
+            action_threshold=0.55,
+        )
+
+        self.assertEqual(result, {"brier_score": 0.12, "ece": 0.03})
+        metrics_mock.assert_called_once_with(
+            as_of_dates=["2026-04-01", "2026-04-02"],
+            labels=[0, 1],
+            probabilities=[0.2, 0.8],
+            action_threshold=0.55,
+            apply_calibration_fn=ANY,
+            pd_module=ANY,
+            np_module=ANY,
+            brier_score_safe_fn=ANY,
+            compute_ece_fn=ANY,
+            precision_at_k_fn=ANY,
+            activation_false_positive_rate_fn=ANY,
+        )
+
+    @patch("app.services.ml.regional_trainer_calibration.select_guarded_calibration")
+    def test_select_guarded_calibration_wrapper_delegates_to_module(self, calibration_mock) -> None:
+        calibration_mock.return_value = ("calibration-token", "isotonic_guarded")
+        trainer = RegionalModelTrainer(db=None)
+
+        result = trainer._select_guarded_calibration(
+            calibration_frame="calibration-frame",
+            raw_probability_col="event_probability_raw",
+            action_threshold=0.6,
+            min_recall_for_threshold=0.4,
+            label_col="event_label",
+            date_col="as_of_date",
+        )
+
+        self.assertEqual(result, ("calibration-token", "isotonic_guarded"))
+        calibration_mock.assert_called_once_with(
+            trainer,
+            calibration_frame="calibration-frame",
+            raw_probability_col="event_probability_raw",
+            action_threshold=0.6,
+            min_recall_for_threshold=0.4,
+            label_col="event_label",
+            date_col="as_of_date",
+            calibration_guard_epsilon=ANY,
+            choose_action_threshold_fn=ANY,
+        )

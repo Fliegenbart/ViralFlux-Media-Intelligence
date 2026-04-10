@@ -554,3 +554,209 @@ def test_truth_layer_rollup_wrapper_delegates_to_module() -> None:
         [{"evidence_status": "no_truth"}],
         truth_lookback_weeks=regional_forecast_module._TRUTH_LOOKBACK_WEEKS,
     )
+
+
+def test_empty_forecast_response_wrapper_delegates_to_module() -> None:
+    service = RegionalForecastService(db=None)
+    sentinel = {"status": "no_model"}
+
+    with patch(
+        "app.services.ml.regional_forecast_views.empty_forecast_response",
+        return_value=sentinel,
+    ) as mocked:
+        result = service._empty_forecast_response(
+            virus_typ="Influenza A",
+            horizon_days=7,
+            status="no_model",
+            message="kein Modell",
+        )
+
+    assert result is sentinel
+    mocked.assert_called_once_with(
+        service,
+        virus_typ="Influenza A",
+        horizon_days=7,
+        status="no_model",
+        message="kein Modell",
+        artifact_transition_mode=None,
+        supported_horizon_days_for_virus=None,
+        ensure_supported_horizon_fn=ANY,
+        supported_forecast_horizons=regional_forecast_module.SUPPORTED_FORECAST_HORIZONS,
+        utc_now_fn=regional_forecast_module.utc_now,
+    )
+
+
+def test_empty_media_allocation_response_wrapper_delegates_to_module() -> None:
+    service = RegionalForecastService(db=None)
+    sentinel = {"status": "no_model"}
+
+    with patch(
+        "app.services.ml.regional_forecast_views.empty_media_allocation_response",
+        return_value=sentinel,
+    ) as mocked:
+        result = service._empty_media_allocation_response(
+            virus_typ="Influenza A",
+            weekly_budget_eur=1000.0,
+            horizon_days=7,
+            status="no_model",
+            message="kein Modell",
+            quality_gate={"overall_passed": False},
+            business_gate={"validated_for_budget_activation": False},
+            rollout_mode="gated",
+            activation_policy="quality_gate",
+        )
+
+    assert result is sentinel
+    mocked.assert_called_once_with(
+        service,
+        virus_typ="Influenza A",
+        weekly_budget_eur=1000.0,
+        horizon_days=7,
+        status="no_model",
+        message="kein Modell",
+        quality_gate={"overall_passed": False},
+        business_gate={"validated_for_budget_activation": False},
+        rollout_mode="gated",
+        activation_policy="quality_gate",
+        gelo_products=regional_forecast_module.GELO_PRODUCTS,
+        supported_forecast_horizons=regional_forecast_module.SUPPORTED_FORECAST_HORIZONS,
+        utc_now_fn=regional_forecast_module.utc_now,
+    )
+
+
+def test_benchmark_supported_viruses_wrapper_delegates_to_module() -> None:
+    service = RegionalForecastService(db=None)
+    sentinel = {"benchmark": []}
+
+    with patch(
+        "app.services.ml.regional_forecast_views.benchmark_supported_viruses",
+        return_value=sentinel,
+    ) as mocked:
+        result = service.benchmark_supported_viruses(
+            reference_virus="Influenza A",
+            horizon_days=7,
+        )
+
+    assert result is sentinel
+    mocked.assert_called_once_with(
+        service,
+        reference_virus="Influenza A",
+        horizon_days=7,
+        ensure_supported_horizon_fn=ANY,
+        supported_virus_types=regional_forecast_module.SUPPORTED_VIRUS_TYPES,
+        regional_horizon_support_status_fn=regional_forecast_module.regional_horizon_support_status,
+        artifact_source_coverage_scope=regional_forecast_module.ARTIFACT_SOURCE_COVERAGE_SCOPE,
+        rollout_mode_for_virus_fn=regional_forecast_module.rollout_mode_for_virus,
+        activation_policy_for_virus_fn=regional_forecast_module.activation_policy_for_virus,
+        signal_bundle_version_for_virus_fn=regional_forecast_module.signal_bundle_version_for_virus,
+        utc_now_fn=regional_forecast_module.utc_now,
+    )
+
+
+def test_build_hero_overview_wrapper_delegates_to_module() -> None:
+    service = RegionalForecastService(db=None)
+    sentinel = {"hero_timeseries": []}
+
+    with patch(
+        "app.services.ml.regional_forecast_views.build_hero_overview",
+        return_value=sentinel,
+    ) as mocked:
+        result = service.build_hero_overview(
+            horizon_days=7,
+            reference_virus="Influenza A",
+        )
+
+    assert result is sentinel
+    mocked.assert_called_once_with(
+        service,
+        horizon_days=7,
+        reference_virus="Influenza A",
+        ensure_supported_horizon_fn=ANY,
+        supported_virus_types=regional_forecast_module.SUPPORTED_VIRUS_TYPES,
+        gelo_products=regional_forecast_module.GELO_PRODUCTS,
+        utc_now_fn=regional_forecast_module.utc_now,
+    )
+
+
+def test_build_portfolio_view_wrapper_delegates_to_module() -> None:
+    service = RegionalForecastService(db=None)
+    sentinel = {"top_opportunities": []}
+
+    with patch(
+        "app.services.ml.regional_forecast_views.build_portfolio_view",
+        return_value=sentinel,
+    ) as mocked:
+        result = service.build_portfolio_view(
+            horizon_days=7,
+            top_n=12,
+            reference_virus="Influenza A",
+        )
+
+    assert result is sentinel
+    mocked.assert_called_once_with(
+        service,
+        horizon_days=7,
+        top_n=12,
+        reference_virus="Influenza A",
+        ensure_supported_horizon_fn=ANY,
+        supported_virus_types=regional_forecast_module.SUPPORTED_VIRUS_TYPES,
+        gelo_products=regional_forecast_module.GELO_PRODUCTS,
+        media_channels=regional_forecast_module.MEDIA_CHANNELS,
+        utc_now_fn=regional_forecast_module.utc_now,
+    )
+
+
+def test_get_validation_summary_wrapper_delegates_to_module() -> None:
+    service = RegionalForecastService(db=None)
+    sentinel = {"status": "trained"}
+
+    with patch(
+        "app.services.ml.regional_forecast_views.get_validation_summary",
+        return_value=sentinel,
+    ) as mocked:
+        result = service.get_validation_summary(
+            virus_typ="Influenza A",
+            brand="gelo",
+            horizon_days=7,
+        )
+
+    assert result is sentinel
+    mocked.assert_called_once_with(
+        service,
+        virus_typ="Influenza A",
+        brand="gelo",
+        horizon_days=7,
+        ensure_supported_horizon_fn=ANY,
+        regional_horizon_support_status_fn=regional_forecast_module.regional_horizon_support_status,
+        artifact_source_coverage_scope=regional_forecast_module.ARTIFACT_SOURCE_COVERAGE_SCOPE,
+        signal_bundle_version_for_virus_fn=regional_forecast_module.signal_bundle_version_for_virus,
+        rollout_mode_for_virus_fn=regional_forecast_module.rollout_mode_for_virus,
+        activation_policy_for_virus_fn=regional_forecast_module.activation_policy_for_virus,
+        utc_now_fn=regional_forecast_module.utc_now,
+    )
+
+
+def test_model_version_wrapper_delegates_to_module() -> None:
+    metadata = {"model_family": "regional_pooled_panel", "trained_at": "2026-01-01T00:00:00"}
+
+    with patch(
+        "app.services.ml.regional_forecast_views.model_version",
+        return_value="regional_pooled_panel:2026",
+    ) as mocked:
+        result = RegionalForecastService._model_version(metadata)
+
+    assert result == "regional_pooled_panel:2026"
+    mocked.assert_called_once_with(metadata)
+
+
+def test_calibration_version_wrapper_delegates_to_module() -> None:
+    metadata = {"trained_at": "2026-01-01T00:00:00"}
+
+    with patch(
+        "app.services.ml.regional_forecast_views.calibration_version",
+        return_value="isotonic:2026",
+    ) as mocked:
+        result = RegionalForecastService._calibration_version(metadata)
+
+    assert result == "isotonic:2026"
+    mocked.assert_called_once_with(metadata)

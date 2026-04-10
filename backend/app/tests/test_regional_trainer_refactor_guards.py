@@ -247,3 +247,65 @@ class RegionalTrainerRefactorGuardTests(unittest.TestCase):
             event_definition_version=ANY,
             target_window_days=ANY,
         )
+
+    @patch("app.services.ml.regional_trainer_training.train_single_horizon")
+    def test_train_single_horizon_wrapper_delegates_to_module(self, train_mock) -> None:
+        train_mock.return_value = {"status": "success", "trained": 16}
+        trainer = RegionalModelTrainer(db=None)
+
+        result = trainer._train_single_horizon(
+            virus_typ="Influenza A",
+            lookback_days=900,
+            persist=True,
+            horizon_days=7,
+            weather_forecast_vintage_mode="matching_as_of",
+            weather_vintage_comparison=True,
+        )
+
+        self.assertEqual(result, {"status": "success", "trained": 16})
+        train_mock.assert_called_once_with(
+            trainer,
+            virus_typ="Influenza A",
+            lookback_days=900,
+            persist=True,
+            horizon_days=7,
+            weather_forecast_vintage_mode="matching_as_of",
+            weather_vintage_comparison=True,
+            target_window_for_horizon_fn=ANY,
+            ensure_supported_horizon_fn=ANY,
+            regional_horizon_support_status_fn=ANY,
+            supported_forecast_horizons=ANY,
+            canonical_forecast_quantiles=ANY,
+            default_metric_semantics_version=ANY,
+            default_promotion_min_sample_count=ANY,
+            event_definition_version=ANY,
+            all_bundeslaender=ANY,
+            normalize_weather_forecast_vintage_mode_fn=ANY,
+            regional_model_artifact_dir_fn=ANY,
+            json_safe_fn=ANY,
+            utc_now_fn=ANY,
+            logger=ANY,
+            traceback_module=ANY,
+        )
+
+    @patch("app.services.ml.regional_trainer_training.training_error_payload")
+    def test_training_error_payload_wrapper_delegates_to_module(self, error_mock) -> None:
+        error_mock.return_value = {"status": "error", "error_type": "ValueError"}
+
+        result = RegionalModelTrainer._training_error_payload(
+            virus_typ="Influenza A",
+            horizon_days=7,
+            exc=ValueError("kaputt"),
+            lookback_days=900,
+        )
+
+        self.assertEqual(result, {"status": "error", "error_type": "ValueError"})
+        error_mock.assert_called_once_with(
+            virus_typ="Influenza A",
+            horizon_days=7,
+            exc=ANY,
+            lookback_days=900,
+            target_window_for_horizon_fn=ANY,
+            all_bundeslaender=ANY,
+            traceback_module=ANY,
+        )

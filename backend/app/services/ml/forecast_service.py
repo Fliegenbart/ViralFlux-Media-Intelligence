@@ -87,6 +87,7 @@ from app.services.ml import forecast_service_backtest
 from app.services.ml import forecast_service_estimators
 from app.services.ml import forecast_service_preparation
 from app.services.ml import forecast_service_sources
+from app.services.ml import forecast_service_features
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -411,39 +412,11 @@ class ForecastService:
 
     @staticmethod
     def _finalize_training_frame(df: pd.DataFrame) -> pd.DataFrame:
-        """Leakage-safe post processing for engineered training features.
-
-        We explicitly avoid backfilling lagged or rolling features from the
-        future into the past. Instead we:
-        1. forward-fill a small set of source signals that are naturally held
-           until a newer observation arrives,
-        2. drop the warm-up rows required by the largest lag (14 days),
-        3. zero-fill any remaining gaps.
-        """
-        cleaned = df.copy()
-        cleaned = cleaned.sort_values("ds").reset_index(drop=True)
-        cleaned = cleaned.replace([np.inf, -np.inf], np.nan)
-
-        held_signal_cols = [
-            "trends_score",
-            "schulferien",
-            "amelag_pred",
-            "xd_load",
-            "survstat_incidence",
-            "lab_positivity_rate",
-            "lab_signal_available",
-            "lab_baseline_mean",
-            "lab_baseline_zscore",
-        ]
-        for col in held_signal_cols:
-            if col in cleaned.columns:
-                cleaned[col] = cleaned[col].ffill()
-
-        if len(cleaned) > LEAKAGE_SAFE_WARMUP_ROWS:
-            cleaned = cleaned.iloc[LEAKAGE_SAFE_WARMUP_ROWS:].copy()
-
-        cleaned = cleaned.fillna(0.0).reset_index(drop=True)
-        return cleaned
+        return forecast_service_features.finalize_training_frame(
+            df,
+            leakage_safe_warmup_rows=LEAKAGE_SAFE_WARMUP_ROWS,
+            np_module=np,
+        )
 
     @staticmethod
     def _region_variants(region: str) -> list[str]:
@@ -511,26 +484,12 @@ class ForecastService:
         prophet_pred: float,
     ) -> dict[str, float]:
         """Build one inference row for the XGBoost meta-learner."""
-        return {
-            "hw_pred": float(hw_pred),
-            "ridge_pred": float(ridge_pred),
-            "prophet_pred": float(prophet_pred),
-            "amelag_lag4": float(last_row.get("amelag_lag4", 0.0)),
-            "amelag_lag7": float(last_row.get("amelag_lag7", 0.0)),
-            "trend_momentum_7d": float(last_row.get("trend_momentum_7d", 0.0)),
-            "schulferien": float(last_row.get("schulferien", 0.0)),
-            "trends_score": float(last_row.get("trends_score", 0.0)),
-            "xdisease_lag7": float(last_row.get("xdisease_lag7", 0.0)),
-            "xdisease_lag14": float(last_row.get("xdisease_lag14", 0.0)),
-            "survstat_incidence": float(last_row.get("survstat_incidence", 0.0)),
-            "survstat_lag7": float(last_row.get("survstat_lag7", 0.0)),
-            "survstat_lag14": float(last_row.get("survstat_lag14", 0.0)),
-            "lab_positivity_rate": float(last_row.get("lab_positivity_rate", 0.0)),
-            "lab_signal_available": float(last_row.get("lab_signal_available", 0.0)),
-            "lab_baseline_mean": float(last_row.get("lab_baseline_mean", 0.0)),
-            "lab_baseline_zscore": float(last_row.get("lab_baseline_zscore", 0.0)),
-            "lab_positivity_lag7": float(last_row.get("lab_positivity_lag7", 0.0)),
-        }
+        return forecast_service_features.build_meta_feature_row(
+            last_row,
+            hw_pred=hw_pred,
+            ridge_pred=ridge_pred,
+            prophet_pred=prophet_pred,
+        )
 
     def _augment_with_internal_history(
         self,
@@ -646,19 +605,17 @@ class ForecastService:
 
     @staticmethod
     def _direct_ridge_feature_columns(frame: pd.DataFrame) -> list[str]:
-        return [column for column in RIDGE_DIRECT_FEATURES if column in frame.columns]
+        return forecast_service_features.direct_ridge_feature_columns(
+            frame,
+            ridge_direct_features=RIDGE_DIRECT_FEATURES,
+        )
 
     @staticmethod
     def _event_feature_columns(frame: pd.DataFrame) -> list[str]:
-        columns: list[str] = []
-        if "current_y" in frame.columns:
-            columns.append("current_y")
-        for name in META_FEATURES:
-            if name in frame.columns and name not in columns:
-                columns.append(name)
-        if "horizon_days" in frame.columns and "horizon_days" not in columns:
-            columns.append("horizon_days")
-        return columns
+        return forecast_service_features.event_feature_columns(
+            frame,
+            meta_features=META_FEATURES,
+        )
 
     @staticmethod
     def _build_live_event_feature_row(
@@ -667,21 +624,15 @@ class ForecastService:
         live_feature_row: dict[str, float],
         horizon_days: int,
     ) -> dict[str, float]:
-        feature_row = dict(live_feature_row)
-        feature_row["current_y"] = float(raw["y"].iloc[-1]) if not raw.empty else 0.0
-        feature_row["horizon_days"] = float(horizon_days)
-        return feature_row
+        return forecast_service_features.build_live_event_feature_row(
+            raw=raw,
+            live_feature_row=live_feature_row,
+            horizon_days=horizon_days,
+        )
 
     @staticmethod
     def _event_model_candidates() -> list[str]:
-        candidates = ["logistic_regression"]
-        try:
-            from xgboost import XGBClassifier  # noqa: F401
-
-            candidates.append("xgb_classifier")
-        except Exception:
-            pass
-        return candidates
+        return forecast_service_features.event_model_candidates()
 
     @staticmethod
     def _fit_event_classifier_model(

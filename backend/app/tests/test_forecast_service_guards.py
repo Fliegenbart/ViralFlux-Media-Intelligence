@@ -835,6 +835,83 @@ class ForecastServiceGuardTests(unittest.TestCase):
         self.assertEqual(result["status"], "success")
         self.assertEqual(result["virus_typ"], "RSV A")
 
+    @patch("app.services.ml.forecast_service_features.finalize_training_frame")
+    def test_finalize_training_frame_wrapper_delegates_to_module(self, delegated) -> None:
+        raw = pd.DataFrame({"ds": pd.to_datetime(["2026-01-01"]), "y": [1.0]})
+        delegated.return_value = raw.copy()
+
+        result = ForecastService._finalize_training_frame(raw)
+
+        self.assertEqual(result["y"].tolist(), [1.0])
+        delegated.assert_called_once_with(
+            raw,
+            leakage_safe_warmup_rows=ANY,
+            np_module=ANY,
+        )
+
+    @patch("app.services.ml.forecast_service_features.build_meta_feature_row")
+    def test_build_meta_feature_row_wrapper_delegates_to_module(self, delegated) -> None:
+        delegated.return_value = {"hw_pred": 1.0}
+        row = pd.Series({"trends_score": 2.0})
+
+        result = ForecastService._build_meta_feature_row(
+            row,
+            hw_pred=1.0,
+            ridge_pred=2.0,
+            prophet_pred=3.0,
+        )
+
+        self.assertEqual(result, {"hw_pred": 1.0})
+        delegated.assert_called_once_with(
+            row,
+            hw_pred=1.0,
+            ridge_pred=2.0,
+            prophet_pred=3.0,
+        )
+
+    @patch("app.services.ml.forecast_service_features.direct_ridge_feature_columns")
+    def test_direct_ridge_feature_columns_wrapper_delegates_to_module(self, delegated) -> None:
+        delegated.return_value = ["lag1"]
+        frame = pd.DataFrame({"lag1": [1.0]})
+
+        result = ForecastService._direct_ridge_feature_columns(frame)
+
+        self.assertEqual(result, ["lag1"])
+        delegated.assert_called_once_with(frame, ridge_direct_features=ANY)
+
+    @patch("app.services.ml.forecast_service_features.event_feature_columns")
+    def test_event_feature_columns_wrapper_delegates_to_module(self, delegated) -> None:
+        delegated.return_value = ["current_y", "hw_pred"]
+        frame = pd.DataFrame({"current_y": [1.0], "hw_pred": [2.0]})
+
+        result = ForecastService._event_feature_columns(frame)
+
+        self.assertEqual(result, ["current_y", "hw_pred"])
+        delegated.assert_called_once_with(frame, meta_features=ANY)
+
+    @patch("app.services.ml.forecast_service_features.build_live_event_feature_row")
+    def test_build_live_event_feature_row_wrapper_delegates_to_module(self, delegated) -> None:
+        delegated.return_value = {"current_y": 5.0, "horizon_days": 7.0}
+        raw = pd.DataFrame({"y": [5.0]})
+
+        result = ForecastService._build_live_event_feature_row(
+            raw=raw,
+            live_feature_row={"hw_pred": 1.0},
+            horizon_days=7,
+        )
+
+        self.assertEqual(result, {"current_y": 5.0, "horizon_days": 7.0})
+        delegated.assert_called_once_with(raw=raw, live_feature_row={"hw_pred": 1.0}, horizon_days=7)
+
+    @patch("app.services.ml.forecast_service_features.event_model_candidates")
+    def test_event_model_candidates_wrapper_delegates_to_module(self, delegated) -> None:
+        delegated.return_value = ["logistic_regression", "xgb_classifier"]
+
+        result = ForecastService._event_model_candidates()
+
+        self.assertEqual(result, ["logistic_regression", "xgb_classifier"])
+        delegated.assert_called_once_with()
+
     def test_finalize_training_frame_drops_warmup_rows_without_backfill(self) -> None:
         base = pd.Series(np.arange(20, dtype=float))
         raw = pd.DataFrame(

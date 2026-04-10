@@ -44,6 +44,7 @@ from app.services.media.v2.decision import build_decision_payload
 from app.services.media.v2.evidence import build_evidence_payload
 from app.services.media.v2 import lineage
 from app.services.media.v2 import outcomes as outcomes_module
+from app.services.media.v2 import prioritization
 from app.services.media.v2 import queue
 from app.services.media.v2.regions import build_regions_payload
 
@@ -319,14 +320,7 @@ class MediaV2Service:
         return reasons[:3]
 
     def _forecast_direction(self, region: dict[str, Any]) -> str:
-        if region.get("tooltip", {}).get("forecast_trend"):
-            return str(region["tooltip"]["forecast_trend"])
-        change = float(region.get("change_pct") or 0.0)
-        if change >= 10:
-            return "aufwärts"
-        if change <= -10:
-            return "abwärts"
-        return "seitwärts"
+        return prioritization._forecast_direction(self, region)
 
     def _priority_explanation(
         self,
@@ -339,29 +333,16 @@ class MediaV2Service:
         actionability_score: int,
         decision_mode: str,
     ) -> str:
-        trend = str(region.get("trend") or "stabil")
-        name = str(region.get("name") or "Die Region")
-        if decision_mode == "supply_window":
-            return (
-                f"{name} bleibt im Fokus, weil Versorgungssignal und Kontext ein Aktivierungsfenster öffnen. "
-                "Das ist keine reine Welleneskalation, sondern eine defensive Versorgungschance."
-            )
-        if momentum_score < 40 and severity_score >= 70:
-            return (
-                f"{name} beschleunigt aktuell nicht, bleibt aber wegen hohem Ausgangsniveau und hoher Umsetzbarkeit "
-                "für Prüfung und Vorbereitung priorisiert."
-            )
-        if momentum_score >= 60 and forecast_direction == "aufwärts":
-            return (
-                f"{name} zeigt ein frühes Signal: steigende Dynamik, aufwärts gerichtete Vorhersage und hohe Umsetzbarkeit."
-            )
-        if trend == "fallend" and actionability_score >= 65:
-            return (
-                f"{name} fällt kurzfristig, bleibt aber für defensive Planung relevant: Niveau und Umsetzbarkeit sind noch hoch."
-            )
-        if suggestion.get("reason"):
-            return str(suggestion["reason"])
-        return f"{name} wird aus epidemiologischer Lage, Vorhersage und Umsetzungschance priorisiert."
+        return prioritization._priority_explanation(
+            self,
+            region=region,
+            suggestion=suggestion,
+            forecast_direction=forecast_direction,
+            severity_score=severity_score,
+            momentum_score=momentum_score,
+            actionability_score=actionability_score,
+            decision_mode=decision_mode,
+        )
 
     def _campaign_state_counts(self, cards: list[dict[str, Any]]) -> dict[str, int]:
         return queue._campaign_state_counts(self, cards)
@@ -458,25 +439,14 @@ class MediaV2Service:
         )
 
     def _severity_score(self, region: dict[str, Any]) -> int:
-        impact = float(region.get("signal_score") or region.get("impact_probability") or region.get("peix_score") or 0.0)
-        intensity = float(region.get("intensity") or 0.0) * 100.0
-        return int(round(max(impact, intensity)))
+        return prioritization._severity_score(self, region)
 
     def _momentum_score(self, *, region: dict[str, Any], forecast_direction: str) -> int:
-        change = max(-40.0, min(40.0, float(region.get("change_pct") or 0.0)))
-        score = 50.0 + (change * 0.7)
-        trend = str(region.get("trend") or "").lower()
-        if trend == "steigend":
-            score += 6.0
-        elif trend == "fallend":
-            score -= 6.0
-
-        if forecast_direction == "aufwärts":
-            score += 18.0
-        elif forecast_direction == "abwärts":
-            score -= 18.0
-
-        return int(round(max(0.0, min(100.0, score))))
+        return prioritization._momentum_score(
+            self,
+            region=region,
+            forecast_direction=forecast_direction,
+        )
 
     def _actionability_score(
         self,
@@ -486,37 +456,19 @@ class MediaV2Service:
         severity_score: int,
         momentum_score: int,
     ) -> int:
-        recommendation_ref = region.get("recommendation_ref") or {}
-        urgency_score = float(recommendation_ref.get("urgency_score") or 0.0)
-        urgency_normalized = min(max(urgency_score / 2.0, 0.0), 100.0)
-        package_bonus = 10.0 if recommendation_ref.get("card_id") or suggestion.get("budget_shift_pct") else 0.0
-        actionability = (
-            severity_score * 0.50
-            + urgency_normalized * 0.25
-            + max(momentum_score, 25) * 0.15
-            + package_bonus
+        return prioritization._actionability_score(
+            self,
+            region=region,
+            suggestion=suggestion,
+            severity_score=severity_score,
+            momentum_score=momentum_score,
         )
-        return int(round(max(0.0, min(100.0, actionability))))
 
     def _region_decision_mode(self, peix_region: dict[str, Any]) -> dict[str, str]:
-        contributions = peix_region.get("layer_contributions") or {}
-        epidemic_total = float(contributions.get("Bio") or 0.0) + float(contributions.get("Forecast") or 0.0)
-        supply_total = float(contributions.get("Shortage") or 0.0)
-        context_total = sum(float(contributions.get(key) or 0.0) for key in ("Weather", "Search", "Baseline"))
-        return self._decision_mode_from_contributions(
-            epidemic_total=epidemic_total,
-            supply_total=supply_total,
-            context_total=context_total,
-        )
+        return prioritization._region_decision_mode(self, peix_region)
 
     def _region_source_trace(self, peix_region: dict[str, Any]) -> list[str]:
-        trace = ["AMELAG", "SurvStat", "Vorhersage", "ARE"]
-        contributions = peix_region.get("layer_contributions") or {}
-        if float(contributions.get("Shortage") or 0.0) > 0:
-            trace.append("BfArM")
-        if float(contributions.get("Weather") or 0.0) > 0:
-            trace.append("Wetter")
-        return trace
+        return prioritization._region_source_trace(self, peix_region)
 
     def _read_model_metadata(self, virus_typ: str) -> dict[str, Any]:
         return lineage._read_model_metadata(self, virus_typ)

@@ -562,6 +562,105 @@ class MediaV2ServiceTruthCoverageTests(unittest.TestCase):
         self.assertEqual(queue["primary_cards"][0]["variant_count"], 2)
         self.assertEqual(queue["primary_cards"][0]["variants"][0]["id"], "variant-low")
 
+    def test_prioritization_wrappers_delegate_to_module(self) -> None:
+        region = {"name": "Hamburg", "change_pct": 14}
+        suggestion = {"reason": "Aus Pilot sichtbar"}
+        peix_region = {"layer_contributions": {"Bio": 12.0}}
+        with (
+            patch(
+                "app.services.media.v2.prioritization._forecast_direction",
+                return_value="aufwärts",
+            ) as mocked_forecast,
+            patch(
+                "app.services.media.v2.prioritization._priority_explanation",
+                return_value="Hamburg priorisieren",
+            ) as mocked_explanation,
+            patch(
+                "app.services.media.v2.prioritization._severity_score",
+                return_value=77,
+            ) as mocked_severity,
+            patch(
+                "app.services.media.v2.prioritization._region_decision_mode",
+                return_value={"key": "mixed"},
+            ) as mocked_mode,
+        ):
+            forecast = self.service._forecast_direction(region)
+            explanation = self.service._priority_explanation(
+                region=region,
+                suggestion=suggestion,
+                forecast_direction="aufwärts",
+                severity_score=77,
+                momentum_score=62,
+                actionability_score=68,
+                decision_mode="mixed",
+            )
+            severity = self.service._severity_score(region)
+            mode = self.service._region_decision_mode(peix_region)
+
+        self.assertEqual(forecast, "aufwärts")
+        self.assertEqual(explanation, "Hamburg priorisieren")
+        self.assertEqual(severity, 77)
+        self.assertEqual(mode, {"key": "mixed"})
+        mocked_forecast.assert_called_once_with(self.service, region)
+        mocked_explanation.assert_called_once_with(
+            self.service,
+            region=region,
+            suggestion=suggestion,
+            forecast_direction="aufwärts",
+            severity_score=77,
+            momentum_score=62,
+            actionability_score=68,
+            decision_mode="mixed",
+        )
+        mocked_severity.assert_called_once_with(self.service, region)
+        mocked_mode.assert_called_once_with(self.service, peix_region)
+
+    def test_momentum_score_delegates_to_prioritization_module(self) -> None:
+        region = {"change_pct": 12.0}
+        with patch(
+            "app.services.media.v2.prioritization._momentum_score",
+            return_value=71,
+        ) as mocked_momentum:
+            score = self.service._momentum_score(region=region, forecast_direction="aufwärts")
+
+        self.assertEqual(score, 71)
+        mocked_momentum.assert_called_once_with(
+            self.service,
+            region=region,
+            forecast_direction="aufwärts",
+        )
+
+    def test_region_decision_mode_still_respects_service_decision_mode_override(self) -> None:
+        class OverrideMediaV2Service(MediaV2Service):
+            def _decision_mode_from_contributions(
+                self,
+                *,
+                epidemic_total: float,
+                supply_total: float,
+                context_total: float,
+            ) -> dict[str, str]:
+                return {
+                    "key": "override",
+                    "label": f"{epidemic_total}/{supply_total}/{context_total}",
+                }
+
+        service = OverrideMediaV2Service(self.db)
+        peix_region = {
+            "layer_contributions": {
+                "Bio": 10.0,
+                "Forecast": 5.0,
+                "Shortage": 2.0,
+                "Weather": 1.0,
+                "Search": 3.0,
+                "Baseline": 4.0,
+            }
+        }
+
+        mode = service._region_decision_mode(peix_region)
+
+        self.assertEqual(mode["key"], "override")
+        self.assertEqual(mode["label"], "15.0/2.0/8.0")
+
     def test_get_evidence_payload_delegates_to_evidence_builder(self) -> None:
         with patch(
             "app.services.media.v2_service.build_evidence_payload",

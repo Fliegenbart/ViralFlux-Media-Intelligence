@@ -84,6 +84,7 @@ from app.services.ml import forecast_service_direct_training
 from app.services.ml import forecast_service_quality_contracts
 from app.services.ml import forecast_service_pipeline
 from app.services.ml import forecast_service_backtest
+from app.services.ml import forecast_service_estimators
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -784,55 +785,13 @@ class ForecastService:
         - n >= 4:   Damped trend only (short series, prevents divergence)
         - n < 4:    Simple moving average extrapolation
         """
-        n = len(y)
-        try:
-            if n >= 104:
-                # 2+ years: multiplicative seasonal captures amplitude changes
-                sp = min(52, n // 2)
-                hw_model = ExponentialSmoothing(
-                    y, trend="add", seasonal="mul",
-                    seasonal_periods=sp,
-                    initialization_method="estimated",
-                )
-            elif n >= 8:
-                # Additive seasonal with capped period
-                sp = min(52, n // 2)
-                hw_model = ExponentialSmoothing(
-                    y, trend="add", seasonal="add",
-                    seasonal_periods=sp,
-                    initialization_method="estimated",
-                )
-            elif n >= 4:
-                # Damped trend — no seasonal, but prevents linear divergence
-                hw_model = ExponentialSmoothing(
-                    y, trend="add", damped_trend=True,
-                    initialization_method="estimated",
-                )
-            else:
-                # Too few points — use moving average extrapolation
-                recent_mean = float(np.mean(y[-min(3, n):]))
-                return np.full(n_steps, max(0.0, recent_mean))
-
-            hw_fit = hw_model.fit(optimized=True)
-            forecast = hw_fit.forecast(n_steps)
-            # Clip to prevent implausible values
-            max_hist = float(np.max(y)) if len(y) > 0 else 1.0
-            forecast = np.clip(forecast, 0.0, max_hist * 3.0)
-            return forecast
-
-        except Exception as e:
-            logger.warning(f"Holt-Winters failed, using damped extrapolation: {e}")
-            # Damped linear extrapolation from recent points
-            recent = y[-min(5, n):]
-            slope = (recent[-1] - recent[0]) / max(len(recent) - 1, 1)
-            # Damping factor reduces slope influence over time
-            base = float(y[-1])
-            max_hist = float(np.max(y)) if len(y) > 0 else 1.0
-            forecast = np.array([
-                base + slope * (i + 1) * (0.85 ** i)
-                for i in range(n_steps)
-            ])
-            return np.clip(forecast, 0.0, max_hist * 3.0)
+        return forecast_service_estimators.fit_holt_winters(
+            y,
+            n_steps,
+            np_module=np,
+            exponential_smoothing_cls=ExponentialSmoothing,
+            logger=logger,
+        )
 
     def _fit_ridge(
         self,
@@ -841,61 +800,14 @@ class ForecastService:
         n_steps: int,
     ) -> tuple[np.ndarray, dict[str, float]]:
         """Base estimator 2: Ridge Regression on lag/trend features."""
-        feature_cols = [
-            "lag1",
-            "lag2",
-            "lag3",
-            "ma3",
-            "ma5",
-            "trends_score",
-            "schulferien",
-            "roc",
-            "lab_positivity_rate",
-            "lab_signal_available",
-            "lab_baseline_mean",
-            "lab_baseline_zscore",
-        ]
-        available = [c for c in feature_cols if c in df.columns]
-
-        if len(available) < 2:
-            return np.full(n_steps, y[-1]), {}
-
-        try:
-            X = df[available].values
-            ridge = Ridge(alpha=1.0)
-            ridge.fit(X, y)
-
-            forecast: list[float] = []
-            last_row = df[available].iloc[-1].values.copy()
-            last_vals = list(y[-5:])
-
-            for _ in range(n_steps):
-                pred = float(ridge.predict(last_row.reshape(1, -1))[0])
-                forecast.append(pred)
-                last_vals.append(pred)
-                if "lag1" in available:
-                    last_row[available.index("lag1")] = pred
-                if "lag2" in available:
-                    last_row[available.index("lag2")] = last_vals[-2] if len(last_vals) >= 2 else pred
-                if "lag3" in available:
-                    last_row[available.index("lag3")] = last_vals[-3] if len(last_vals) >= 3 else pred
-                if "ma3" in available:
-                    last_row[available.index("ma3")] = np.mean(last_vals[-3:])
-                if "ma5" in available:
-                    last_row[available.index("ma5")] = np.mean(last_vals[-5:])
-                if "roc" in available:
-                    prev = last_vals[-2] if len(last_vals) >= 2 else 1.0
-                    last_row[available.index("roc")] = (pred - prev) / prev if prev != 0 else 0.0
-
-            importance: dict[str, float] = {}
-            total_abs = float(np.sum(np.abs(ridge.coef_))) + 1e-9
-            for fname, coef in zip(available, ridge.coef_):
-                importance[fname] = round(abs(float(coef)) / total_abs, 3)
-
-            return np.array(forecast), importance
-        except Exception as e:
-            logger.warning(f"Ridge regression failed: {e}")
-            return np.full(n_steps, y[-1]), {}
+        return forecast_service_estimators.fit_ridge(
+            df,
+            y,
+            n_steps,
+            np_module=np,
+            ridge_cls=Ridge,
+            logger=logger,
+        )
 
     def _fit_prophet(
         self,
@@ -903,22 +815,13 @@ class ForecastService:
         n_steps: int,
     ) -> np.ndarray | None:
         """Base estimator 3: Facebook Prophet with regressors."""
-        try:
-            from app.services.fusion_engine.prophet_predictor import ProphetPredictor
-
-            predictor = ProphetPredictor(self.db)
-            result = predictor.fit_and_predict(
-                virus_typ=virus_typ,
-                forecast_days=n_steps,
-            )
-
-            if result and "forecast" in result and result["forecast"]:
-                preds = [max(0.0, item["yhat"]) for item in result["forecast"]]
-                return np.array(preds[:n_steps])
-        except Exception as e:
-            logger.warning(f"Prophet failed for {virus_typ}: {e}")
-
-        return None
+        return forecast_service_estimators.fit_prophet(
+            self,
+            virus_typ,
+            n_steps,
+            np_module=np,
+            logger=logger,
+        )
 
     @staticmethod
     def _direct_ridge_feature_columns(frame: pd.DataFrame) -> list[str]:

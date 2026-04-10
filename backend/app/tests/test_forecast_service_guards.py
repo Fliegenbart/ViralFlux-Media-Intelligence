@@ -51,6 +51,59 @@ class ForecastServiceGuardTests(unittest.TestCase):
             pd_module=ANY,
         )
 
+    @patch("app.services.ml.forecast_service_estimators.fit_holt_winters")
+    def test_fit_holt_winters_wrapper_delegates_to_module(self, delegated) -> None:
+        delegated.return_value = np.array([1.0, 2.0], dtype=float)
+        service = ForecastService(db=None)
+        history = np.array([3.0, 4.0, 5.0], dtype=float)
+
+        result = service._fit_holt_winters(history, 2)
+
+        self.assertEqual(result.tolist(), [1.0, 2.0])
+        delegated.assert_called_once_with(
+            history,
+            2,
+            np_module=ANY,
+            exponential_smoothing_cls=ANY,
+            logger=ANY,
+        )
+
+    @patch("app.services.ml.forecast_service_estimators.fit_ridge")
+    def test_fit_ridge_wrapper_delegates_to_module(self, delegated) -> None:
+        delegated.return_value = (np.array([7.0], dtype=float), {"lag1": 1.0})
+        service = ForecastService(db=None)
+        frame = pd.DataFrame({"lag1": [1.0], "lag2": [2.0]})
+        target = np.array([3.0], dtype=float)
+
+        result = service._fit_ridge(frame, target, 1)
+
+        self.assertEqual(result[0].tolist(), [7.0])
+        self.assertEqual(result[1], {"lag1": 1.0})
+        delegated.assert_called_once_with(
+            frame,
+            target,
+            1,
+            np_module=ANY,
+            ridge_cls=ANY,
+            logger=ANY,
+        )
+
+    @patch("app.services.ml.forecast_service_estimators.fit_prophet")
+    def test_fit_prophet_wrapper_delegates_to_module(self, delegated) -> None:
+        delegated.return_value = np.array([9.0, 10.0], dtype=float)
+        service = ForecastService(db=None)
+
+        result = service._fit_prophet("Influenza A", 2)
+
+        self.assertEqual(result.tolist(), [9.0, 10.0])
+        delegated.assert_called_once_with(
+            service,
+            "Influenza A",
+            2,
+            np_module=ANY,
+            logger=ANY,
+        )
+
     @patch("app.services.ml.forecast_service_direct_training.build_live_direct_feature_row")
     def test_build_live_direct_feature_row_wrapper_delegates_to_module(self, row_mock) -> None:
         row_mock.return_value = {"hw_pred": 1.0, "ridge_pred": 2.0}

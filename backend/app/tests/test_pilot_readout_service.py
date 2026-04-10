@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import json
+import importlib
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -385,6 +387,67 @@ class PilotReadoutServiceTests(unittest.TestCase):
             payload["run_context"]["gate_snapshot"]["operational_readiness"]["live_source_coverage_readiness"],
             "WATCH",
         )
+
+    def test_gate_snapshot_delegates_to_readiness_module(self) -> None:
+        service = self._service()
+
+        with patch(
+            "app.services.media.pilot_readout_readiness._gate_snapshot",
+            return_value={"scope_readiness": "WATCH"},
+        ) as mocked:
+            result = service._gate_snapshot(
+                forecast={"quality_gate": {}},
+                truth_coverage={},
+                business_validation={},
+                evaluation=None,
+                operational_snapshot=None,
+                forecast_readiness="WATCH",
+                commercial_validation_status="WATCH",
+                overall_scope_readiness="WATCH",
+                missing_requirements=[],
+            )
+
+        mocked.assert_called_once()
+        self.assertEqual(result["scope_readiness"], "WATCH")
+
+    def test_forecast_scope_readiness_delegates_to_readiness_module(self) -> None:
+        service = self._service()
+
+        with patch(
+            "app.services.media.pilot_readout_readiness._forecast_scope_readiness",
+            return_value="GO",
+        ) as mocked:
+            result = service._forecast_scope_readiness(
+                {"status": "trained", "predictions": [{}], "quality_gate": {"overall_passed": True}},
+                operational_snapshot=None,
+            )
+
+        mocked.assert_called_once_with(
+            service,
+            {"status": "trained", "predictions": [{}], "quality_gate": {"overall_passed": True}},
+            operational_snapshot=None,
+        )
+        self.assertEqual(result, "GO")
+
+    def test_promotion_status_still_uses_service_override_for_forecast_scope_readiness(self) -> None:
+        class OverrideService(PilotReadoutService):
+            def _forecast_scope_readiness(
+                self,
+                forecast: dict[str, object],
+                *,
+                operational_snapshot: dict[str, object] | None = None,
+            ) -> str:
+                return "GO"
+
+        service = OverrideService(self.db, live_evaluation_root=Path(self.tempdir.name))
+
+        result = service._promotion_status(
+            evaluation=None,
+            forecast={"status": "no_model"},
+            operational_snapshot=None,
+        )
+
+        self.assertEqual(result, "operational_go_without_budget_release")
 
 
 if __name__ == "__main__":

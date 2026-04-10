@@ -262,6 +262,98 @@ class MediaV2ServiceTruthCoverageTests(unittest.TestCase):
             brand="gelo",
         )
 
+    def test_get_signal_stack_delegates_to_lineage_module(self) -> None:
+        with patch(
+            "app.services.media.v2.lineage.build_signal_stack_payload",
+            return_value={"ok": "signal-stack"},
+        ) as mocked_builder:
+            payload = self.service.get_signal_stack(virus_typ="Influenza A")
+
+        self.assertEqual(payload, {"ok": "signal-stack"})
+        mocked_builder.assert_called_once_with(
+            self.service,
+            virus_typ="Influenza A",
+        )
+
+    def test_get_model_lineage_delegates_to_lineage_module(self) -> None:
+        with patch(
+            "app.services.media.v2.lineage.build_model_lineage_payload",
+            return_value={"ok": "model-lineage"},
+        ) as mocked_builder:
+            payload = self.service.get_model_lineage(virus_typ="Influenza A")
+
+        self.assertEqual(payload, {"ok": "model-lineage"})
+        mocked_builder.assert_called_once_with(
+            self.service,
+            virus_typ="Influenza A",
+        )
+
+    def test_private_lineage_wrappers_delegate_to_lineage_module(self) -> None:
+        with (
+            patch(
+                "app.services.media.v2.lineage._signal_group_summary",
+                return_value={"decision_mode": "epidemic_wave"},
+            ) as mocked_summary,
+            patch(
+                "app.services.media.v2.lineage._decision_mode_from_contributions",
+                return_value={"key": "mixed"},
+            ) as mocked_mode,
+            patch(
+                "app.services.media.v2.lineage._read_model_metadata",
+                return_value={"version": "v-test"},
+            ) as mocked_metadata,
+        ):
+            summary = self.service._signal_group_summary({"national_score": 72.0})
+            mode = self.service._decision_mode_from_contributions(
+                epidemic_total=10.0,
+                supply_total=5.0,
+                context_total=2.0,
+            )
+            metadata = self.service._read_model_metadata("Influenza A")
+
+        self.assertEqual(summary, {"decision_mode": "epidemic_wave"})
+        self.assertEqual(mode, {"key": "mixed"})
+        self.assertEqual(metadata, {"version": "v-test"})
+        mocked_summary.assert_called_once_with(self.service, {"national_score": 72.0})
+        mocked_mode.assert_called_once_with(
+            self.service,
+            epidemic_total=10.0,
+            supply_total=5.0,
+            context_total=2.0,
+        )
+        mocked_metadata.assert_called_once_with(self.service, "Influenza A")
+
+    def test_signal_stack_still_uses_service_get_model_lineage_override(self) -> None:
+        class OverrideMediaV2Service(MediaV2Service):
+            def get_model_lineage(self, *, virus_typ: str = "Influenza A") -> dict:
+                return {"feature_families": ["override-family"], "drift_state": "ok"}
+
+        service = OverrideMediaV2Service(self.db)
+        service.cockpit_service.get_cockpit_payload = lambda **_: {
+            "data_freshness": {"wastewater": "2026-04-01T00:00:00Z"},
+            "source_status": {
+                "items": [
+                    {"source_key": "wastewater", "freshness_state": "fresh"},
+                ]
+            },
+            "peix_epi_score": {
+                "national_score": 71.0,
+                "national_band": "high",
+                "top_drivers": [],
+                "context_signals": {},
+                "virus_scores": {
+                    "Influenza A": {"contribution": 20.0},
+                },
+            },
+        }
+
+        payload = service.get_signal_stack(virus_typ="Influenza A")
+
+        self.assertEqual(
+            payload["summary"]["math_stack"]["feature_families"],
+            ["override-family"],
+        )
+
     def test_get_truth_coverage_delegates_to_outcomes_module(self) -> None:
         with patch(
             "app.services.media.v2.outcomes.build_truth_coverage",

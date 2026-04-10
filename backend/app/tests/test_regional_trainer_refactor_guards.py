@@ -107,3 +107,72 @@ class RegionalTrainerRefactorGuardTests(unittest.TestCase):
 
         self.assertEqual(result, (0.75, 0.5))
         metrics_mock.assert_called_once_with("state-frame", action_threshold=0.6)
+
+    @patch("app.services.ml.regional_trainer_hierarchy.hierarchy_reconciled_benchmark_frame")
+    def test_hierarchy_reconciled_benchmark_frame_wrapper_delegates_to_module(self, reconcile_mock) -> None:
+        reconcile_mock.return_value = {"rows": 3}
+        trainer = RegionalModelTrainer(db=None)
+
+        result = trainer._hierarchy_reconciled_benchmark_frame(
+            oof_frame="oof-frame",
+            source_panel="source-panel",
+        )
+
+        self.assertEqual(result, {"rows": 3})
+        reconcile_mock.assert_called_once_with(
+            trainer,
+            oof_frame="oof-frame",
+            source_panel="source-panel",
+            state_order_from_codes_fn=ANY,
+        )
+
+    @patch("app.services.ml.regional_trainer_hierarchy.estimate_hierarchy_blend_choice")
+    def test_estimate_hierarchy_blend_choice_wrapper_delegates_to_module(self, choice_mock) -> None:
+        choice_mock.return_value = {"weight": 0.4, "scope": "same_regime"}
+        trainer = RegionalModelTrainer(db=None)
+
+        result = trainer._estimate_hierarchy_blend_choice(
+            [{"truth": 10.0}],
+            target_as_of_date="2026-03-10",
+            target_regime="respiratory_peak",
+            target_horizon_days=7,
+        )
+
+        self.assertEqual(result, {"weight": 0.4, "scope": "same_regime"})
+        choice_mock.assert_called_once_with(
+            trainer,
+            [{"truth": 10.0}],
+            target_as_of_date="2026-03-10",
+            target_regime="respiratory_peak",
+            target_horizon_days=7,
+            min_total_samples=ANY,
+            min_regime_samples=ANY,
+            weight_grid=ANY,
+            blend_epsilon=ANY,
+        )
+
+    @patch("app.services.ml.regional_trainer_hierarchy.fit_hierarchy_models")
+    def test_fit_hierarchy_models_wrapper_delegates_to_module(self, fit_mock) -> None:
+        fit_mock.return_value = ({"cluster": {"median": "reg"}}, {"cluster": "residual_log"})
+        trainer = RegionalModelTrainer(db=None)
+
+        result = trainer._fit_hierarchy_models(
+            panel="panel-frame",
+            feature_columns=["f1"],
+            state_feature_columns=["s1"],
+            reg_lower="lower-reg",
+            reg_median="median-reg",
+            reg_upper="upper-reg",
+        )
+
+        self.assertEqual(result, ({"cluster": {"median": "reg"}}, {"cluster": "residual_log"}))
+        fit_mock.assert_called_once_with(
+            trainer,
+            panel="panel-frame",
+            feature_columns=["f1"],
+            state_feature_columns=["s1"],
+            reg_lower="lower-reg",
+            reg_median="median-reg",
+            reg_upper="upper-reg",
+            regressor_config=ANY,
+        )

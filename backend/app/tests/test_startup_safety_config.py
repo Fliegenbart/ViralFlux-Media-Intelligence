@@ -21,7 +21,10 @@ def build_settings(**overrides: object) -> Settings:
 
 
 def test_runtime_schema_updates_default_to_disabled_in_development() -> None:
-    settings = build_settings(ENVIRONMENT="development")
+    settings = build_settings(
+        ENVIRONMENT="development",
+        DB_ALLOW_RUNTIME_SCHEMA_UPDATES=False,
+    )
 
     assert settings.EFFECTIVE_DB_ALLOW_RUNTIME_SCHEMA_UPDATES is False
 
@@ -41,7 +44,9 @@ def test_startup_bfarm_import_default_is_disabled() -> None:
     assert settings.STARTUP_ENABLE_BFARM_IMPORT is False
 
 
-def test_init_db_warns_loudly_when_runtime_schema_updates_are_applied(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_init_db_warns_when_runtime_schema_updates_flag_is_requested_but_ignored(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     existing_tables = set(session_module.Base.metadata.tables.keys())
 
     monkeypatch.setattr(
@@ -63,20 +68,17 @@ def test_init_db_warns_loudly_when_runtime_schema_updates_are_applied(monkeypatc
         "missing_indexes": [],
     })
 
-    gap_calls = iter([
-        {"missing_columns": ["wastewater_data.available_time"], "missing_indexes": []},
-        {"missing_columns": [], "missing_indexes": []},
-    ])
-    monkeypatch.setattr(session_module, "_runtime_schema_gaps", lambda existing_tables=None: next(gap_calls))
-
-    ensure_calls: list[str] = []
-    monkeypatch.setattr(session_module, "_ensure_runtime_schema_updates", lambda: ensure_calls.append("called"))
+    monkeypatch.setattr(
+        session_module,
+        "_runtime_schema_gaps",
+        lambda existing_tables=None: {"missing_columns": [], "missing_indexes": []},
+    )
 
     summary = session_module.init_db()
 
-    assert ensure_calls == ["called"]
     assert summary["status"] == "warning"
-    assert summary["actions"] == ["runtime_schema_updates"]
+    assert summary["schema_management_mode"] == "verify_only"
+    assert summary["actions"] == []
     assert summary["warnings"] == [
-        "Runtime schema updates were applied as a temporary safety-net. This must be replaced by explicit migrations before any release."
+        "DB_ALLOW_RUNTIME_SCHEMA_UPDATES is deprecated and ignored. Startup runs in verify-only mode; apply explicit migrations instead."
     ]

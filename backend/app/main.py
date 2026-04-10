@@ -2,7 +2,6 @@ from app.core.time import utc_now
 import asyncio
 import logging
 import time
-import threading
 from datetime import datetime
 from typing import Any
 
@@ -36,6 +35,10 @@ from app.db.session import (
 )
 from app.services.ops.production_readiness_service import ProductionReadinessService
 from app.services.ops.run_metadata_service import OperationalRunRecorder
+from app.startup_runtime import (
+    launch_bfarm_startup_import_thread,
+    safe_record_startup_readiness_once,
+)
 from app.api.deps import get_current_user
 
 # Setup structured logging BEFORE anything else
@@ -201,8 +204,8 @@ async def startup_event():
         startup_enable_bfarm_import=settings.STARTUP_ENABLE_BFARM_IMPORT,
     )
     
-    # Runtime safety-net: initialize schema when database is empty / fresh
-    # (migrations are still managed separately).
+    # Startup should verify critical dependencies first instead of silently
+    # mutating the schema behind the operator's back.
     db_healthy = await check_db_connection()
     if not db_healthy:
         log_event(
@@ -227,7 +230,13 @@ async def startup_event():
     readiness_snapshot = ProductionReadinessService().build_snapshot(deep_checks=False)
     app.state.startup_readiness = readiness_snapshot
     app.state.startup_completed_at = utc_now().isoformat()
-    app.state.startup_run_metadata = _record_startup_readiness_once(readiness_snapshot)
+    app.state.startup_run_metadata = safe_record_startup_readiness_once(
+        readiness_snapshot=readiness_snapshot,
+        record_once=_record_startup_readiness_once,
+        settings_obj=settings,
+        logger_obj=logger,
+        log_event_fn=log_event,
+    )
 
     log_event(
         logger,
@@ -373,12 +382,7 @@ def _run_bfarm_startup_import_once() -> None:
 
 
 def _launch_bfarm_startup_import_thread() -> None:
-    thread = threading.Thread(
-        target=_run_bfarm_startup_import_once,
-        daemon=True,
-        name="startup-bfarm-import",
-    )
-    thread.start()
+    launch_bfarm_startup_import_thread(target=_run_bfarm_startup_import_once)
 
 
 @app.on_event("shutdown")

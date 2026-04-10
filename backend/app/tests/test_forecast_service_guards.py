@@ -1,16 +1,494 @@
 import unittest
-from unittest.mock import patch
+from unittest.mock import ANY, patch
 
 import numpy as np
 import pandas as pd
 
 from app.services.ml.forecast_service import (
+    BACKTEST_RELIABILITY_PROXY_SOURCE,
+    CONFIDENCE_SEMANTICS_ALIAS,
+    DEFAULT_DECISION_EVENT_THRESHOLD_PCT,
+    BurdenForecast,
+    BurdenForecastPoint,
+    EventForecast,
     ForecastService,
+    ForecastQuality,
     _resolve_loaded_model_feature_names,
+    _sigmoid,
+    confidence_label,
+    ensure_supported_horizon,
+    normalize_forecast_region,
+    reliability_score_from_metrics,
+    utc_now,
 )
 
 
 class ForecastServiceGuardTests(unittest.TestCase):
+    @patch("app.services.ml.forecast_service_direct_training.build_direct_training_panel_from_frame")
+    def test_build_direct_training_panel_from_frame_wrapper_delegates_to_module(self, panel_mock) -> None:
+        panel_mock.return_value = pd.DataFrame({"hw_pred": [1.0]})
+        service = ForecastService(db=None)
+        raw = pd.DataFrame({"ds": pd.to_datetime(["2026-01-01"]), "y": [1.0]})
+
+        result = service._build_direct_training_panel_from_frame(
+            raw,
+            horizon_days=7,
+            n_splits=3,
+        )
+
+        self.assertEqual(result["hw_pred"].tolist(), [1.0])
+        panel_mock.assert_called_once_with(
+            service,
+            raw,
+            horizon_days=7,
+            n_splits=3,
+            ensure_supported_horizon_fn=ANY,
+            build_direct_target_frame_fn=ANY,
+            min_direct_train_points=ANY,
+            ridge_cls=ANY,
+            time_series_split_cls=ANY,
+            np_module=ANY,
+            pd_module=ANY,
+        )
+
+    @patch("app.services.ml.forecast_service_direct_training.build_live_direct_feature_row")
+    def test_build_live_direct_feature_row_wrapper_delegates_to_module(self, row_mock) -> None:
+        row_mock.return_value = {"hw_pred": 1.0, "ridge_pred": 2.0}
+        service = ForecastService(db=None)
+        raw = pd.DataFrame({"ds": pd.to_datetime(["2026-01-01"]), "y": [1.0]})
+
+        result = service._build_live_direct_feature_row(
+            raw,
+            virus_typ="Influenza A",
+            horizon_days=7,
+            region="DE",
+        )
+
+        self.assertEqual(result, {"hw_pred": 1.0, "ridge_pred": 2.0})
+        row_mock.assert_called_once_with(
+            service,
+            raw,
+            virus_typ="Influenza A",
+            horizon_days=7,
+            region="DE",
+            ensure_supported_horizon_fn=ANY,
+            default_forecast_region=ANY,
+            normalize_forecast_region_fn=ANY,
+            build_direct_target_frame_fn=ANY,
+            min_direct_train_points=ANY,
+            ridge_cls=ANY,
+            np_module=ANY,
+        )
+
+    @patch("app.services.ml.forecast_service_direct_training.fit_xgboost_meta_from_panel")
+    def test_fit_xgboost_meta_from_panel_wrapper_delegates_to_module(self, fit_mock) -> None:
+        fit_mock.return_value = ("median", "lower", "upper", ["hw_pred"], {"hw_pred": 1.0})
+        service = ForecastService(db=None)
+        panel = pd.DataFrame({"hw_pred": [1.0], "y_target": [2.0]})
+
+        result = service._fit_xgboost_meta_from_panel(
+            panel,
+            target_column="y_target",
+            model_config={"median": {"n_estimators": 10}},
+        )
+
+        self.assertEqual(result, ("median", "lower", "upper", ["hw_pred"], {"hw_pred": 1.0}))
+        fit_mock.assert_called_once_with(
+            service,
+            panel,
+            target_column="y_target",
+            model_config={"median": {"n_estimators": 10}},
+            meta_features=ANY,
+            np_module=ANY,
+        )
+
+    @patch("app.services.ml.forecast_service_direct_training.generate_oof_predictions")
+    def test_generate_oof_predictions_wrapper_delegates_to_module(self, oof_mock) -> None:
+        oof_mock.return_value = pd.DataFrame({"hw_pred": [0.0], "ridge_pred": [0.0]})
+        service = ForecastService(db=None)
+        frame = pd.DataFrame({"y": [1.0]})
+
+        result = service._generate_oof_predictions(frame, n_splits=2)
+
+        self.assertEqual(result["hw_pred"].tolist(), [0.0])
+        oof_mock.assert_called_once_with(
+            service,
+            frame,
+            n_splits=2,
+            time_series_split_cls=ANY,
+            np_module=ANY,
+            pd_module=ANY,
+        )
+
+    @patch("app.services.ml.forecast_service_direct_training.fit_xgboost_meta")
+    def test_fit_xgboost_meta_wrapper_delegates_to_module(self, fit_mock) -> None:
+        fit_mock.return_value = ("median", "lower", "upper", {"hw_pred": 0.5})
+        service = ForecastService(db=None)
+        df = pd.DataFrame({"y": [1.0]})
+        oof = pd.DataFrame({"hw_pred": [0.0], "ridge_pred": [0.0]})
+
+        result = service._fit_xgboost_meta(df, oof, model_config=None)
+
+        self.assertEqual(result, ("median", "lower", "upper", {"hw_pred": 0.5}))
+        fit_mock.assert_called_once_with(
+            service,
+            df,
+            oof,
+            model_config=None,
+            meta_features=ANY,
+            np_module=ANY,
+            logger=ANY,
+        )
+
+    @patch("app.services.ml.forecast_service_quality_contracts.compute_regression_metrics")
+    def test_compute_regression_metrics_wrapper_delegates_to_module(self, delegated) -> None:
+        delegated.return_value = {"mae": 1.2}
+
+        result = ForecastService._compute_regression_metrics([1.0], [2.0])
+
+        self.assertEqual(result, {"mae": 1.2})
+        delegated.assert_called_once_with([1.0], [2.0], np_module=ANY)
+
+    @patch("app.services.ml.forecast_service_quality_contracts.backtest_quality_score")
+    def test_backtest_quality_score_wrapper_delegates_to_module(self, delegated) -> None:
+        delegated.return_value = 0.77
+
+        result = ForecastService._backtest_quality_score({"mape": 23.0})
+
+        self.assertEqual(result, 0.77)
+        delegated.assert_called_once_with({"mape": 23.0})
+
+    @patch("app.services.ml.forecast_service_quality_contracts.calibration_passed")
+    def test_calibration_passed_wrapper_delegates_to_module(self, delegated) -> None:
+        delegated.return_value = True
+
+        result = ForecastService._calibration_passed({"brier_score": 0.1})
+
+        self.assertTrue(result)
+        delegated.assert_called_once_with({"brier_score": 0.1})
+
+    @patch("app.services.ml.forecast_service_quality_contracts.quality_meta_from_backtest")
+    def test_quality_meta_from_backtest_wrapper_delegates_to_module(self, delegated) -> None:
+        delegated.return_value = {"confidence": 0.81}
+        service = ForecastService(db=None)
+
+        result = service._quality_meta_from_backtest(
+            backtest_metrics={"mape": 12.0},
+            event_probability=0.63,
+            probability_source="learned",
+            calibration_mode="platt",
+            fallback_reason=None,
+            learned_model_version="v1",
+            forecast_ready=True,
+            drift_status="ok",
+            baseline_deltas={"delta": 1.0},
+            timing_metrics={"lag": 2.0},
+            interval_coverage={"p50": 0.7},
+            promotion_gate={"status": "go"},
+        )
+
+        self.assertEqual(result, {"confidence": 0.81})
+        delegated.assert_called_once_with(
+            service,
+            backtest_metrics={"mape": 12.0},
+            event_probability=0.63,
+            probability_source="learned",
+            calibration_mode="platt",
+            fallback_reason=None,
+            learned_model_version="v1",
+            forecast_ready=True,
+            drift_status="ok",
+            baseline_deltas={"delta": 1.0},
+            timing_metrics={"lag": 2.0},
+            interval_coverage={"p50": 0.7},
+            promotion_gate={"status": "go"},
+            reliability_score_from_metrics_fn=reliability_score_from_metrics,
+            confidence_semantics_alias=CONFIDENCE_SEMANTICS_ALIAS,
+            backtest_reliability_proxy_source=BACKTEST_RELIABILITY_PROXY_SOURCE,
+        )
+
+    @patch("app.services.ml.forecast_service_quality_contracts.compute_outbreak_risk")
+    def test_compute_outbreak_risk_wrapper_delegates_to_module(self, delegated) -> None:
+        delegated.return_value = 0.55
+        service = ForecastService(db=None)
+        history = np.array([1.0, 2.0], dtype=float)
+
+        result = service._compute_outbreak_risk(42.0, history, window=21)
+
+        self.assertEqual(result, 0.55)
+        delegated.assert_called_once_with(42.0, history, window=21, np_module=ANY, sigmoid_fn=_sigmoid)
+
+    @patch("app.services.ml.forecast_service_quality_contracts.build_contracts")
+    def test_build_contracts_wrapper_delegates_to_module(self, delegated) -> None:
+        delegated.return_value = {"event_forecast": {"confidence": 0.7}}
+        service = ForecastService(db=None)
+        history = np.array([10.0, 11.0], dtype=float)
+        forecast_records = [{"ds": pd.Timestamp("2026-01-10"), "yhat": 12.0}]
+        issue_date = pd.Timestamp("2026-01-03").to_pydatetime()
+
+        result = service._build_contracts(
+            virus_typ="Influenza A",
+            region="DE",
+            horizon_days=7,
+            forecast_records=forecast_records,
+            model_version="v1",
+            y_history=history,
+            issue_date=issue_date,
+            quality_meta={"event_probability": 0.6},
+        )
+
+        self.assertEqual(result, {"event_forecast": {"confidence": 0.7}})
+        delegated.assert_called_once_with(
+            service,
+            virus_typ="Influenza A",
+            region="DE",
+            horizon_days=7,
+            forecast_records=forecast_records,
+            model_version="v1",
+            y_history=history,
+            issue_date=issue_date,
+            quality_meta={"event_probability": 0.6},
+            normalize_forecast_region_fn=normalize_forecast_region,
+            ensure_supported_horizon_fn=ensure_supported_horizon,
+            burden_forecast_cls=BurdenForecast,
+            burden_forecast_point_cls=BurdenForecastPoint,
+            event_forecast_cls=EventForecast,
+            forecast_quality_cls=ForecastQuality,
+            confidence_label_fn=confidence_label,
+            backtest_reliability_proxy_source=BACKTEST_RELIABILITY_PROXY_SOURCE,
+            confidence_semantics_alias=CONFIDENCE_SEMANTICS_ALIAS,
+            default_decision_event_threshold_pct=DEFAULT_DECISION_EVENT_THRESHOLD_PCT,
+            utc_now_fn=utc_now,
+            np_module=ANY,
+        )
+
+    @patch("app.services.ml.forecast_service_inference.predict")
+    def test_predict_wrapper_delegates_to_module(self, predict_mock) -> None:
+        predict_mock.return_value = {"status": "success", "virus_typ": "Influenza A"}
+        service = ForecastService(db=None)
+
+        result = service.predict(
+            virus_typ="Influenza A",
+            region="BY",
+            horizon_days=14,
+            include_internal_history=False,
+        )
+
+        self.assertEqual(result, {"status": "success", "virus_typ": "Influenza A"})
+        predict_mock.assert_called_once_with(
+            service,
+            virus_typ="Influenza A",
+            region="BY",
+            horizon_days=14,
+            include_internal_history=False,
+            normalize_forecast_region_fn=ANY,
+            ensure_supported_horizon_fn=ANY,
+            load_cached_models_fn=ANY,
+            is_model_feature_compatibility_error_fn=ANY,
+            logger=ANY,
+        )
+
+    @patch("app.services.ml.forecast_service_inference.inference_from_loaded_models")
+    def test_inference_from_loaded_models_wrapper_delegates_to_module(self, inference_mock) -> None:
+        inference_mock.return_value = {"model_version": "xgb_stack_v1_loaded"}
+        service = ForecastService(db=None)
+
+        result = service._inference_from_loaded_models(
+            virus_typ="Influenza A",
+            model_med="median-model",
+            model_lo="lower-model",
+            model_hi="upper-model",
+            metadata={"version": "xgb_stack_v1_loaded"},
+            event_model=None,
+            region="DE",
+            horizon_days=7,
+            include_internal_history=True,
+        )
+
+        self.assertEqual(result, {"model_version": "xgb_stack_v1_loaded"})
+        inference_mock.assert_called_once_with(
+            service,
+            virus_typ="Influenza A",
+            model_med="median-model",
+            model_lo="lower-model",
+            model_hi="upper-model",
+            metadata={"version": "xgb_stack_v1_loaded"},
+            event_model=None,
+            region="DE",
+            horizon_days=7,
+            include_internal_history=True,
+            normalize_forecast_region_fn=ANY,
+            ensure_supported_horizon_fn=ANY,
+            min_direct_train_points=ANY,
+            np_module=ANY,
+            pd_module=ANY,
+            timedelta_cls=ANY,
+            utc_now_fn=ANY,
+            logger=ANY,
+        )
+
+    @patch("app.services.ml.forecast_service_event_probability.fit_event_classifier_model")
+    def test_fit_event_classifier_model_wrapper_delegates_to_module(self, fit_mock) -> None:
+        fit_mock.return_value = "event-model"
+        train_df = pd.DataFrame({"event_target": [0, 1], "current_y": [1.0, 2.0]})
+
+        result = ForecastService._fit_event_classifier_model(
+            train_df,
+            feature_names=["current_y"],
+            model_family="logistic_regression",
+        )
+
+        self.assertEqual(result, "event-model")
+        fit_mock.assert_called_once_with(
+            train_df,
+            feature_names=["current_y"],
+            model_family="logistic_regression",
+            np_module=ANY,
+            empirical_event_classifier_cls=ANY,
+            default_event_classifier_config=ANY,
+            pipeline_cls=ANY,
+            standard_scaler_cls=ANY,
+            logistic_regression_cls=ANY,
+        )
+
+    @patch("app.services.ml.forecast_service_event_probability.build_event_oof_predictions")
+    def test_build_event_oof_predictions_wrapper_delegates_to_module(self, oof_mock) -> None:
+        oof_mock.return_value = pd.DataFrame({"fold": [1], "event_probability_raw": [0.7]})
+        service = ForecastService(db=None)
+        panel = pd.DataFrame({"event_target": [0, 1]})
+
+        result = service._build_event_oof_predictions(
+            panel,
+            feature_names=["current_y"],
+            model_family="logistic_regression",
+            walk_forward_stride=4,
+            max_splits=3,
+            min_train_points=20,
+        )
+
+        self.assertEqual(result["event_probability_raw"].tolist(), [0.7])
+        oof_mock.assert_called_once_with(
+            service,
+            panel,
+            feature_names=["current_y"],
+            model_family="logistic_regression",
+            walk_forward_stride=4,
+            max_splits=3,
+            min_train_points=20,
+            default_walk_forward_stride=ANY,
+            min_direct_train_points=ANY,
+            build_walk_forward_splits_fn=ANY,
+            np_module=ANY,
+            pd_module=ANY,
+        )
+
+    @patch("app.services.ml.forecast_service_event_probability.select_best_event_candidate")
+    def test_select_best_event_candidate_wrapper_delegates_to_module(self, select_mock) -> None:
+        select_mock.return_value = {"model_family": "logistic_regression"}
+        candidates = [{"model_family": "xgb_classifier", "oof_frame": pd.DataFrame({"x": [1]})}]
+
+        result = ForecastService._select_best_event_candidate(candidates)
+
+        self.assertEqual(result, {"model_family": "logistic_regression"})
+        select_mock.assert_called_once_with(
+            candidates,
+            pd_module=ANY,
+        )
+
+    @patch("app.services.ml.forecast_service_event_probability.build_event_probability_model_from_panel")
+    def test_build_event_probability_model_from_panel_wrapper_delegates_to_module(self, build_mock) -> None:
+        build_mock.return_value = {"model_family": "empirical_prevalence"}
+        service = ForecastService(db=None)
+        panel = pd.DataFrame({"event_target": [0, 1]})
+
+        result = service._build_event_probability_model_from_panel(
+            panel,
+            walk_forward_stride=5,
+            max_splits=2,
+        )
+
+        self.assertEqual(result, {"model_family": "empirical_prevalence"})
+        build_mock.assert_called_once_with(
+            service,
+            panel,
+            walk_forward_stride=5,
+            max_splits=2,
+            default_walk_forward_stride=ANY,
+            min_direct_train_points=ANY,
+            learned_probability_model_cls=ANY,
+            empirical_event_classifier_cls=ANY,
+            compute_classification_metrics_fn=ANY,
+            select_probability_calibration_fn=ANY,
+            apply_probability_calibration_fn=ANY,
+            reliability_score_from_metrics_fn=ANY,
+            np_module=ANY,
+            pd_module=ANY,
+        )
+
+    @patch("app.services.ml.forecast_service_internal_history.augment_with_internal_history")
+    def test_augment_with_internal_history_wrapper_delegates_to_module(self, augment_mock) -> None:
+        augment_mock.return_value = pd.DataFrame({"y": [1.0], "lab_positivity_rate": [0.2]})
+        service = ForecastService(db=None)
+        df = pd.DataFrame({"ds": pd.to_datetime(["2026-01-01"]), "y": [1.0]})
+
+        result = service._augment_with_internal_history(
+            df=df,
+            virus_typ="Influenza A",
+            start_date=pd.Timestamp("2025-01-01"),
+            region="DE",
+        )
+
+        self.assertEqual(result["lab_positivity_rate"].tolist(), [0.2])
+        augment_mock.assert_called_once_with(
+            service,
+            df=df,
+            virus_typ="Influenza A",
+            start_date=pd.Timestamp("2025-01-01"),
+            region="DE",
+        )
+
+    @patch("app.services.ml.forecast_service_internal_history.load_internal_history_frame")
+    def test_load_internal_history_frame_wrapper_delegates_to_module(self, load_mock) -> None:
+        load_mock.return_value = pd.DataFrame({"anzahl_tests": [100]})
+        service = ForecastService(db=None)
+
+        result = service._load_internal_history_frame(
+            virus_typ="Influenza A",
+            start_date=pd.Timestamp("2025-01-01"),
+            region="BY",
+        )
+
+        self.assertEqual(result["anzahl_tests"].tolist(), [100])
+        load_mock.assert_called_once_with(
+            service,
+            virus_typ="Influenza A",
+            start_date=pd.Timestamp("2025-01-01"),
+            region="BY",
+            internal_history_test_map=ANY,
+            ganzimmun_model=ANY,
+            normalize_forecast_region_fn=ANY,
+            default_forecast_region=ANY,
+            func_module=ANY,
+            timedelta_cls=ANY,
+            pd_module=ANY,
+        )
+
+    @patch("app.services.ml.forecast_service_internal_history.build_internal_history_feature_frame")
+    def test_build_internal_history_feature_frame_wrapper_delegates_to_module(self, build_mock) -> None:
+        build_mock.return_value = pd.DataFrame({"lab_signal_available": [1.0]})
+        ds = pd.Series(pd.to_datetime(["2026-01-10"]))
+        history = pd.DataFrame({"datum": pd.to_datetime(["2026-01-05"])})
+
+        result = ForecastService._build_internal_history_feature_frame(ds, history)
+
+        self.assertEqual(result["lab_signal_available"].tolist(), [1.0])
+        build_mock.assert_called_once_with(
+            ds,
+            history,
+            pd_module=ANY,
+            timedelta_cls=ANY,
+        )
+
     def test_resolve_loaded_model_feature_names_respects_explicit_metadata_schema(self) -> None:
         names = _resolve_loaded_model_feature_names(
             metadata={"feature_names": ["hw_pred", "ridge_pred"]},

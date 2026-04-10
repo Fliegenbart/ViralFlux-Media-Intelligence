@@ -151,11 +151,82 @@ class RegionalMediaAllocationEngineTests(unittest.TestCase):
             spend_enabled=True,
         )
 
+        self.assertEqual(
+            [item["bundesland"] for item in payload["recommendations"]],
+            ["BY", "BB"],
+        )
         prepare_item = next(item for item in payload["recommendations"] if item["bundesland"] == "BY")
         self.assertEqual(prepare_item["recommended_activation_level"], "Prepare")
+        self.assertEqual(prepare_item["priority_rank"], 1)
         self.assertEqual(prepare_item["suggested_budget_share"], 0.0)
         self.assertEqual(prepare_item["suggested_budget_eur"], 0.0)
         self.assertEqual(prepare_item["spend_readiness"], "prepare_only")
+
+    def test_non_prepare_spend_readiness_preserves_existing_states(self) -> None:
+        payload = self.engine.allocate(
+            virus_typ="Influenza A",
+            total_budget_eur=20_000,
+            predictions=[
+                _prediction(
+                    bundesland="BY",
+                    bundesland_name="Bayern",
+                    stage="activate",
+                    priority_score=0.84,
+                    event_probability=0.80,
+                    forecast_confidence=0.77,
+                    source_freshness_score=0.92,
+                    usable_source_share=0.95,
+                    source_coverage_score=0.93,
+                    source_revision_risk=0.10,
+                ),
+                _prediction(
+                    bundesland="HE",
+                    bundesland_name="Hessen",
+                    stage="activate",
+                    priority_score=0.55,
+                    event_probability=0.51,
+                    forecast_confidence=0.36,
+                    source_freshness_score=0.42,
+                    usable_source_share=0.58,
+                    source_coverage_score=0.60,
+                    source_revision_risk=0.58,
+                ),
+                _prediction(
+                    bundesland="SN",
+                    bundesland_name="Sachsen",
+                    stage="activate",
+                    priority_score=0.42,
+                    event_probability=0.41,
+                    forecast_confidence=0.20,
+                    source_freshness_score=0.30,
+                    usable_source_share=0.40,
+                    source_coverage_score=0.40,
+                    source_revision_risk=0.70,
+                ),
+                _prediction(
+                    bundesland="BB",
+                    bundesland_name="Brandenburg",
+                    stage="watch",
+                    priority_score=0.38,
+                    event_probability=0.20,
+                    forecast_confidence=0.51,
+                    source_freshness_score=0.64,
+                    usable_source_share=0.70,
+                    source_coverage_score=0.71,
+                    source_revision_risk=0.22,
+                ),
+            ],
+            spend_enabled=True,
+        )
+
+        recommendations = {
+            item["bundesland"]: item
+            for item in payload["recommendations"]
+        }
+        self.assertEqual(recommendations["BY"]["spend_readiness"], "ready")
+        self.assertEqual(recommendations["HE"]["spend_readiness"], "guarded")
+        self.assertEqual(recommendations["SN"]["spend_readiness"], "cautious")
+        self.assertEqual(recommendations["BB"]["spend_readiness"], "observe")
 
     def test_budget_shares_sum_to_one_when_spend_is_enabled(self) -> None:
         payload = self.engine.allocate(

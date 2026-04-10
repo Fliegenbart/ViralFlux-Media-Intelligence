@@ -265,9 +265,9 @@ class RegionalMediaAllocationEngine:
         )
         spend_readiness = self._spend_readiness(
             stage=stage,
+            confidence=confidence,
             spend_enabled=spend_enabled,
             spend_blockers=spend_blockers,
-            eligible_for_budget=eligible_for_budget,
         )
         return {
             "bundesland": bundesland,
@@ -693,19 +693,23 @@ class RegionalMediaAllocationEngine:
         self,
         *,
         stage: str,
+        confidence: float,
         spend_enabled: bool,
         spend_blockers: Sequence[str],
-        eligible_for_budget: bool,
     ) -> str:
         if not spend_enabled:
             return "blocked"
-        if spend_blockers:
-            return "blocked"
         if stage == "prepare":
             return "prepare_only"
-        if eligible_for_budget:
-            return "ready"
-        return "watch_only"
+        if stage not in set(self.config.spend_enabled_labels):
+            return "observe"
+        if confidence < float(self.config.confidence_thresholds.get("low") or 0.45):
+            return "cautious"
+        if confidence < float(self.config.confidence_thresholds.get("medium") or 0.60):
+            return "guarded"
+        if spend_blockers:
+            return "blocked"
+        return "ready"
 
     @staticmethod
     def _rank_sort_key(item: Mapping[str, Any]) -> tuple[float, float, float, float]:

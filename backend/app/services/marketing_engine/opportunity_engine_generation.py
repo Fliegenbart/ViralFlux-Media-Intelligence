@@ -326,7 +326,8 @@ def _apply_supply_gap_priority_multipliers(
 
 
 def _kreis_bundesland(engine, kreis_name: str) -> str:
-    return _KREIS_BL_MAP.get(kreis_name, "")
+    kreis_map = getattr(engine, "_KREIS_BL_MAP", _KREIS_BL_MAP)
+    return kreis_map.get(kreis_name, "")
 
 
 def _enrich_kreis_targeting(
@@ -335,10 +336,12 @@ def _enrich_kreis_targeting(
 ) -> list[dict[str, Any]]:
     from app.models.database import SurvstatKreisData
 
+    condition_cluster_map = getattr(engine, "_CONDITION_CLUSTER_MAP", _CONDITION_CLUSTER_MAP)
+
     needed_clusters = set()
     for opp in opportunities:
         condition = opp.get("_condition", "")
-        cluster = _CONDITION_CLUSTER_MAP.get(condition)
+        cluster = condition_cluster_map.get(condition)
         if cluster:
             needed_clusters.add(cluster)
 
@@ -410,7 +413,7 @@ def _enrich_kreis_targeting(
 
     for opp in opportunities:
         condition = opp.get("_condition", "")
-        cluster = _CONDITION_CLUSTER_MAP.get(condition)
+        cluster = condition_cluster_map.get(condition)
         top_kreise = kreise_by_cluster.get(cluster, []) if cluster else []
 
         if top_kreise:

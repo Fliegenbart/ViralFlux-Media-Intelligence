@@ -149,6 +149,54 @@ class OpportunityEngineGenerationBehaviorTests(unittest.TestCase):
         )
         self.assertEqual(candidates[0]["exploratory_signals"][0]["type"], "override")
 
+    def test_kreis_bundesland_still_respects_engine_override_map(self) -> None:
+        engine = MarketingOpportunityEngine.__new__(MarketingOpportunityEngine)
+        engine._KREIS_BL_MAP = {"LK Override": "Override-Land"}
+
+        result = MarketingOpportunityEngine._kreis_bundesland(engine, "LK Override")
+
+        self.assertEqual(result, "Override-Land")
+
+    def test_enrich_kreis_targeting_uses_engine_override_condition_cluster_map(self) -> None:
+        class FakeQuery:
+            def filter(self, *args, **kwargs):
+                return self
+
+            def group_by(self, *args, **kwargs):
+                return self
+
+            def order_by(self, *args, **kwargs):
+                return self
+
+            def limit(self, *args, **kwargs):
+                return self
+
+            def all(self):
+                return [type("Row", (), {"kreis": "LK Override", "total_faelle": 44})()]
+
+            def scalar(self):
+                return None
+
+        class FakeDb:
+            def query(self, *args, **kwargs):
+                return FakeQuery()
+
+        engine = MarketingOpportunityEngine.__new__(MarketingOpportunityEngine)
+        engine.db = FakeDb()
+        engine._CONDITION_CLUSTER_MAP = {"custom_condition": "RESPIRATORY"}
+        engine._kreis_bundesland = lambda kreis_name: "Override-Land"
+
+        opportunities = [{"_condition": "custom_condition", "region_target": {}}]
+
+        result = MarketingOpportunityEngine._enrich_kreis_targeting(engine, opportunities)
+
+        self.assertEqual(result[0]["region_target"]["top_kreise"], ["LK Override"])
+        self.assertEqual(
+            result[0]["region_target"]["kreis_detail"][0]["bundesland"],
+            "Override-Land",
+        )
+        self.assertEqual(result[0]["region_target"]["states"], ["Override-Land"])
+
 
 if __name__ == "__main__":
     unittest.main()

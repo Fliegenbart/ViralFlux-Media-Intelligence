@@ -552,3 +552,121 @@ class RegionalTrainerRefactorGuardTests(unittest.TestCase):
             calibration_guard_epsilon=ANY,
             choose_action_threshold_fn=ANY,
         )
+
+    @patch("app.services.ml.regional_trainer_events.event_labels")
+    def test_event_labels_wrapper_delegates_to_module(self, event_mock) -> None:
+        event_mock.return_value = [0, 1, 1]
+
+        result = RegionalModelTrainer._event_labels(
+            "panel-frame",
+            virus_typ="Influenza A",
+            tau=1.1,
+            kappa=0.4,
+            event_config={"name": "resp"},
+        )
+
+        self.assertEqual(result, [0, 1, 1])
+        event_mock.assert_called_once_with(
+            "panel-frame",
+            virus_typ="Influenza A",
+            tau=1.1,
+            kappa=0.4,
+            event_config={"name": "resp"},
+            np_module=ANY,
+            build_event_label_fn=ANY,
+            event_definition_config_for_virus_fn=ANY,
+        )
+
+    @patch("app.services.ml.regional_trainer_events.select_event_definition")
+    def test_select_event_definition_wrapper_delegates_to_module(self, event_mock) -> None:
+        event_mock.return_value = {"tau": 1.0, "kappa": 0.5, "action_threshold": 0.6}
+        trainer = RegionalModelTrainer(db=None)
+
+        result = trainer._select_event_definition(
+            virus_typ="Influenza A",
+            panel="panel-frame",
+            feature_columns=["f1", "f2"],
+            event_config={"tau_grid": [1.0]},
+        )
+
+        self.assertEqual(result, {"tau": 1.0, "kappa": 0.5, "action_threshold": 0.6})
+        event_mock.assert_called_once_with(
+            trainer,
+            virus_typ="Influenza A",
+            panel="panel-frame",
+            feature_columns=["f1", "f2"],
+            event_config={"tau_grid": [1.0]},
+            event_definition_config_for_virus_fn=ANY,
+            choose_action_threshold_fn=ANY,
+            average_precision_safe_fn=ANY,
+        )
+
+    @patch("app.services.ml.regional_trainer_events.oof_classification_predictions")
+    def test_oof_classification_predictions_wrapper_delegates_to_module(self, event_mock) -> None:
+        event_mock.return_value = "oof-frame"
+        trainer = RegionalModelTrainer(db=None)
+
+        result = trainer._oof_classification_predictions(
+            panel="panel-frame",
+            labels=[0, 1, 1],
+            feature_columns=["f1", "f2"],
+            min_recall_for_threshold=0.4,
+        )
+
+        self.assertEqual(result, "oof-frame")
+        event_mock.assert_called_once_with(
+            trainer,
+            panel="panel-frame",
+            labels=[0, 1, 1],
+            feature_columns=["f1", "f2"],
+            min_recall_for_threshold=0.4,
+            pd_module=ANY,
+            time_based_panel_splits_fn=ANY,
+        )
+
+    @patch("app.services.ml.regional_trainer_events.amelag_only_probabilities")
+    def test_amelag_only_probabilities_wrapper_delegates_to_module(self, event_mock) -> None:
+        event_mock.return_value = [0.2, 0.8]
+        trainer = RegionalModelTrainer(db=None)
+
+        result = trainer._amelag_only_probabilities(
+            train_df="train-frame",
+            test_df="test-frame",
+            feature_columns=["amelag_signal"],
+        )
+
+        self.assertEqual(result, [0.2, 0.8])
+        event_mock.assert_called_once_with(
+            trainer,
+            train_df="train-frame",
+            test_df="test-frame",
+            feature_columns=["amelag_signal"],
+            np_module=ANY,
+        )
+
+    @patch("app.services.ml.regional_trainer_events.event_probability_from_prediction")
+    def test_event_probability_from_prediction_wrapper_delegates_to_module(self, event_mock) -> None:
+        event_mock.return_value = [0.1, 0.9]
+
+        result = RegionalModelTrainer._event_probability_from_prediction(
+            predicted_next=[15.0, 25.0],
+            current_known=[10.0, 12.0],
+            baseline=[8.0, 9.0],
+            mad=[2.0, 3.0],
+            tau=1.0,
+            kappa=0.5,
+            min_absolute_incidence=5.0,
+        )
+
+        self.assertEqual(result, [0.1, 0.9])
+        event_mock.assert_called_once_with(
+            predicted_next=[15.0, 25.0],
+            current_known=[10.0, 12.0],
+            baseline=[8.0, 9.0],
+            mad=[2.0, 3.0],
+            tau=1.0,
+            kappa=0.5,
+            min_absolute_incidence=5.0,
+            np_module=ANY,
+            absolute_incidence_threshold_fn=ANY,
+        )

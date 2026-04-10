@@ -69,6 +69,7 @@ from app.services.ml import (
     regional_trainer_artifacts,
     regional_trainer_backtest,
     regional_trainer_calibration,
+    regional_trainer_events,
     regional_trainer_hierarchy,
     regional_trainer_orchestration,
     regional_trainer_rollout,
@@ -599,21 +600,15 @@ class RegionalModelTrainer:
         kappa: float,
         event_config=None,
     ) -> np.ndarray:
-        config = event_config or event_definition_config_for_virus(virus_typ)
-        return np.asarray(
-            [
-                build_event_label(
-                    current_known_incidence=row.current_known_incidence,
-                    next_week_incidence=row.next_week_incidence,
-                    seasonal_baseline=row.seasonal_baseline,
-                    seasonal_mad=row.seasonal_mad,
-                    tau=tau,
-                    kappa=kappa,
-                    min_absolute_incidence=config.min_absolute_incidence,
-                )
-                for row in panel.itertuples()
-            ],
-            dtype=int,
+        return regional_trainer_events.event_labels(
+            panel,
+            virus_typ=virus_typ,
+            tau=tau,
+            kappa=kappa,
+            event_config=event_config,
+            np_module=np,
+            build_event_label_fn=build_event_label,
+            event_definition_config_for_virus_fn=event_definition_config_for_virus,
         )
 
     def _select_event_definition(
@@ -624,67 +619,16 @@ class RegionalModelTrainer:
         feature_columns: list[str],
         event_config=None,
     ) -> dict[str, Any]:
-        config = event_config or event_definition_config_for_virus(virus_typ)
-        best: dict[str, Any] | None = None
-
-        for tau in config.tau_grid:
-            for kappa in config.kappa_grid:
-                labels = self._event_labels(
-                    panel,
-                    virus_typ=virus_typ,
-                    tau=tau,
-                    kappa=kappa,
-                    event_config=config,
-                )
-                if labels.sum() < 12:
-                    continue
-                evaluation = self._oof_classification_predictions(
-                    panel=panel,
-                    labels=labels,
-                    feature_columns=feature_columns,
-                    min_recall_for_threshold=config.min_recall_for_selection,
-                )
-                if evaluation is None:
-                    continue
-                threshold, precision, recall = choose_action_threshold(
-                    evaluation["event_probability_calibrated"],
-                    evaluation["event_label"],
-                    min_recall=config.min_recall_for_selection,
-                )
-                candidate = {
-                    "tau": tau,
-                    "kappa": kappa,
-                    "action_threshold": threshold,
-                    "precision": precision,
-                    "recall": recall,
-                    "pr_auc": average_precision_safe(
-                        evaluation["event_label"],
-                        evaluation["event_probability_calibrated"],
-                    ),
-                    "positive_rate": float(np.mean(labels)),
-                }
-                if best is None:
-                    best = candidate
-                    continue
-                if candidate["precision"] > best["precision"]:
-                    best = candidate
-                elif np.isclose(candidate["precision"], best["precision"]):
-                    if candidate["pr_auc"] > best["pr_auc"] or (
-                        np.isclose(candidate["pr_auc"], best["pr_auc"]) and candidate["recall"] > best["recall"]
-                    ):
-                        best = candidate
-
-        if best is None:
-            best = {
-                "tau": float(config.tau_grid[min(len(config.tau_grid) // 2, len(config.tau_grid) - 1)]),
-                "kappa": float(config.kappa_grid[min(len(config.kappa_grid) // 2, len(config.kappa_grid) - 1)]),
-                "action_threshold": 0.6,
-                "precision": 0.0,
-                "recall": 0.0,
-                "pr_auc": 0.0,
-                "positive_rate": 0.0,
-            }
-        return best
+        return regional_trainer_events.select_event_definition(
+            self,
+            virus_typ=virus_typ,
+            panel=panel,
+            feature_columns=feature_columns,
+            event_config=event_config,
+            event_definition_config_for_virus_fn=event_definition_config_for_virus,
+            choose_action_threshold_fn=choose_action_threshold,
+            average_precision_safe_fn=average_precision_safe,
+        )
 
     def _oof_classification_predictions(
         self,
@@ -694,67 +638,15 @@ class RegionalModelTrainer:
         feature_columns: list[str],
         min_recall_for_threshold: float = 0.35,
     ) -> pd.DataFrame | None:
-        working = panel.copy()
-        working["event_label"] = labels.astype(int)
-        working["as_of_date"] = pd.to_datetime(working["as_of_date"]).dt.normalize()
-        splits = time_based_panel_splits(
-            working["as_of_date"],
-            n_splits=5,
-            min_train_periods=90,
-            min_test_periods=21,
+        return regional_trainer_events.oof_classification_predictions(
+            self,
+            panel=panel,
+            labels=labels,
+            feature_columns=feature_columns,
+            min_recall_for_threshold=min_recall_for_threshold,
+            pd_module=pd,
+            time_based_panel_splits_fn=time_based_panel_splits,
         )
-        if not splits:
-            return None
-
-        oof_frames: list[pd.DataFrame] = []
-        for fold_idx, (train_dates, test_dates) in enumerate(splits):
-            train_mask = working["as_of_date"].isin(train_dates)
-            test_mask = working["as_of_date"].isin(test_dates)
-            train_df = working.loc[train_mask].copy()
-            test_df = working.loc[test_mask].copy()
-            if train_df.empty or test_df.empty or train_df["event_label"].nunique() < 2:
-                continue
-
-            calib_split = self._calibration_split_dates(train_dates)
-            if not calib_split:
-                continue
-            model_train_dates, cal_dates = calib_split
-            model_train_df = train_df.loc[train_df["as_of_date"].isin(model_train_dates)].copy()
-            cal_df = train_df.loc[train_df["as_of_date"].isin(cal_dates)].copy()
-            if model_train_df.empty or cal_df.empty or model_train_df["event_label"].nunique() < 2:
-                continue
-
-            classifier = self._fit_classifier_from_frame(model_train_df, feature_columns)
-            calibration, _calibration_mode = self._select_guarded_calibration(
-                calibration_frame=pd.DataFrame(
-                    {
-                        "as_of_date": cal_df["as_of_date"].values,
-                        "event_label": cal_df["event_label"].values.astype(int),
-                        "event_probability_raw": classifier.predict_proba(
-                            cal_df[feature_columns].to_numpy()
-                        )[:, 1],
-                    }
-                ),
-                raw_probability_col="event_probability_raw",
-                min_recall_for_threshold=min_recall_for_threshold,
-            )
-            raw_probs = classifier.predict_proba(test_df[feature_columns].to_numpy())[:, 1]
-            calibrated_probs = self._apply_calibration(calibration, raw_probs)
-
-            oof_frames.append(
-                pd.DataFrame(
-                    {
-                        "fold": fold_idx,
-                        "as_of_date": test_df["as_of_date"].values,
-                        "event_label": test_df["event_label"].values,
-                        "event_probability_calibrated": calibrated_probs,
-                    }
-                )
-            )
-
-        if not oof_frames:
-            return None
-        return pd.concat(oof_frames, ignore_index=True)
 
     def _build_backtest_bundle(
         self,
@@ -1206,15 +1098,13 @@ class RegionalModelTrainer:
         test_df: pd.DataFrame,
         feature_columns: list[str],
     ) -> np.ndarray:
-        if not feature_columns or train_df["event_label"].nunique() < 2:
-            base_rate = float(train_df["event_label"].mean() or 0.0)
-            return np.full(len(test_df), base_rate, dtype=float)
-
-        classifier = self._fit_classifier_from_frame(train_df, feature_columns)
-        raw_prob = classifier.predict_proba(test_df[feature_columns].to_numpy())[:, 1]
-        train_raw = classifier.predict_proba(train_df[feature_columns].to_numpy())[:, 1]
-        calibration = self._fit_isotonic(train_raw, train_df["event_label"].to_numpy())
-        return self._apply_calibration(calibration, raw_prob)
+        return regional_trainer_events.amelag_only_probabilities(
+            self,
+            train_df=train_df,
+            test_df=test_df,
+            feature_columns=feature_columns,
+            np_module=np,
+        )
 
     @staticmethod
     def _event_probability_from_prediction(
@@ -1227,27 +1117,17 @@ class RegionalModelTrainer:
         kappa: float,
         min_absolute_incidence: float,
     ) -> np.ndarray:
-        predicted_next = np.asarray(predicted_next, dtype=float)
-        current_known = np.asarray(current_known, dtype=float)
-        baseline = np.asarray(baseline, dtype=float)
-        mad = np.maximum(np.asarray(mad, dtype=float), 1.0)
-
-        relative_gap = np.log1p(np.maximum(predicted_next, 0.0)) - np.log1p(np.maximum(current_known, 0.0)) - tau
-        absolute_threshold = np.asarray(
-            [
-                absolute_incidence_threshold(
-                    seasonal_baseline=baseline_value,
-                    seasonal_mad=mad_value,
-                    kappa=kappa,
-                    min_absolute_incidence=min_absolute_incidence,
-                )
-                for baseline_value, mad_value in zip(baseline, mad, strict=False)
-            ],
-            dtype=float,
+        return regional_trainer_events.event_probability_from_prediction(
+            predicted_next=predicted_next,
+            current_known=current_known,
+            baseline=baseline,
+            mad=mad,
+            tau=tau,
+            kappa=kappa,
+            min_absolute_incidence=min_absolute_incidence,
+            np_module=np,
+            absolute_incidence_threshold_fn=absolute_incidence_threshold,
         )
-        absolute_gap = (predicted_next - absolute_threshold) / mad
-        logits = np.minimum(relative_gap / max(tau, 0.05), absolute_gap)
-        return 1.0 / (1.0 + np.exp(-logits))
 
     @staticmethod
     def _aggregate_metrics(frame: pd.DataFrame, *, action_threshold: float) -> dict[str, float]:

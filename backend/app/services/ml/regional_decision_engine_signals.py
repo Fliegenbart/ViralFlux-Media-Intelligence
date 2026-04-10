@@ -267,6 +267,7 @@ def signal_stage(
     trend_score: float,
     agreement_support_score: float,
     agreement_signal_count: int,
+    agreement_direction: str,
     thresholds: Mapping[str, float],
     config: Any,
 ) -> str:
@@ -277,6 +278,11 @@ def signal_stage(
     prepare_agreement_ok = (
         agreement_signal_count < int(config.min_agreement_signal_count)
         or agreement_support_score >= float(thresholds["prepare_agreement"])
+    )
+    early_prepare_score_floor = max(0.0, float(thresholds["prepare_score"]) - 0.06)
+    early_prepare_agreement_ok = (
+        prepare_agreement_ok
+        or (agreement_signal_count >= 1 and str(agreement_direction).lower() == "up")
     )
 
     if all(
@@ -303,6 +309,17 @@ def signal_stage(
         )
     ):
         return "prepare"
+    if all(
+        (
+            decision_score >= early_prepare_score_floor,
+            forecast_confidence >= float(thresholds["prepare_forecast_confidence"]),
+            freshness_score >= float(thresholds["prepare_freshness"]),
+            revision_risk <= float(thresholds["prepare_revision_risk_max"]),
+            trend_score >= float(thresholds["prepare_trend"]),
+            early_prepare_agreement_ok,
+        )
+    ):
+        return "prepare_early"
     return "watch"
 
 
@@ -314,10 +331,17 @@ def policy_stage(
     overrides: list[str] = []
     activation_policy = str(prediction.get("activation_policy") or "quality_gate")
     quality_gate = dict(prediction.get("quality_gate") or {})
-    if activation_policy == "watch_only" and signal_stage != "watch":
-        overrides.append("Activation policy 'watch_only' downgrades the operational stage to Watch.")
+    if signal_stage == "watch":
         return "watch", overrides
-    if not quality_gate.get("overall_passed") and signal_stage != "watch":
-        overrides.append("Regional quality gate is not passed, so activation stays on Watch.")
-        return "watch", overrides
+
+    if activation_policy == "watch_only":
+        overrides.append("Activation policy 'watch_only' keeps the region in Prepare until budget release is allowed.")
+        return "prepare", overrides
+
+    if not quality_gate.get("overall_passed"):
+        overrides.append("Regional quality gate blocks Activate, but the region stays visible as Prepare.")
+        return "prepare", overrides
+
+    if signal_stage == "prepare_early":
+        return "prepare", overrides
     return signal_stage, overrides

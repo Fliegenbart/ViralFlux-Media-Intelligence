@@ -233,6 +233,7 @@ class RegionalDecisionEngine:
             trend_score=trend_bundle["score"],
             agreement_support_score=agreement_bundle["support_score"],
             agreement_signal_count=agreement_bundle["signal_count"],
+            agreement_direction=agreement_bundle["direction"],
             thresholds=thresholds,
             config=config,
         )
@@ -430,6 +431,7 @@ class RegionalDecisionEngine:
         trend_score: float,
         agreement_support_score: float,
         agreement_signal_count: int,
+        agreement_direction: str,
         thresholds: Mapping[str, float],
         config: RegionalDecisionRuleConfig,
     ) -> str:
@@ -442,6 +444,7 @@ class RegionalDecisionEngine:
             trend_score=trend_score,
             agreement_support_score=agreement_support_score,
             agreement_signal_count=agreement_signal_count,
+            agreement_direction=agreement_direction,
             thresholds=thresholds,
             config=config,
         )
@@ -471,13 +474,13 @@ class RegionalDecisionEngine:
             return cls._reason_detail(
                 "policy_override_watch_only",
                 message,
-                final_stage="watch",
+                final_stage="prepare",
             )
         if "quality gate" in normalized:
             return cls._reason_detail(
                 "policy_override_quality_gate",
                 message,
-                final_stage="watch",
+                final_stage="prepare",
             )
         return cls._reason_detail("policy_override", message)
 

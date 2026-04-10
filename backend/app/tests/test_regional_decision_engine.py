@@ -154,7 +154,7 @@ class RegionalDecisionEngineTests(unittest.TestCase):
         self.assertTrue(decision.reason_trace.uncertainty)
         self.assertIn("thin agreement evidence", decision.uncertainty_summary)
 
-    def test_quality_gate_downgrades_activate_signal_to_watch(self) -> None:
+    def test_quality_gate_downgrades_activate_to_prepare_not_watch(self) -> None:
         decision = self.engine.evaluate(
             virus_typ="Influenza A",
             prediction=self._prediction(quality_gate_passed=False),
@@ -163,23 +163,55 @@ class RegionalDecisionEngineTests(unittest.TestCase):
         )
 
         self.assertEqual(decision.signal_stage, "activate")
-        self.assertEqual(decision.stage, "watch")
+        self.assertEqual(decision.stage, "prepare")
         self.assertTrue(decision.reason_trace.policy_overrides)
         self.assertIn("quality gate", decision.reason_trace.policy_overrides[0].lower())
         self.assertIn("quality gate not passed", decision.uncertainty_summary)
 
-    def test_watch_only_policy_downgrades_final_stage_without_hiding_signal_stage(self) -> None:
+    def test_watch_only_policy_keeps_early_prepare_visible(self) -> None:
         decision = self.engine.evaluate(
             virus_typ="Influenza A",
-            prediction=self._prediction(activation_policy="watch_only"),
-            feature_row=self._feature_row(),
-            metadata=self._metadata(),
+            prediction=self._prediction(
+                event_probability=0.004,
+                activation_policy="watch_only",
+                action_threshold=0.9,
+            ),
+            feature_row=self._feature_row(
+                trend_raw=0.12,
+                secondary_trend_raw=0.06,
+                signal_value=0.09,
+            ),
+            metadata=self._metadata(
+                ece=0.08,
+                brier_score=0.11,
+                pr_auc=0.61,
+            ),
         )
 
-        self.assertEqual(decision.signal_stage, "activate")
-        self.assertEqual(decision.stage, "watch")
-        self.assertIn("watch_only", decision.reason_trace.policy_overrides[0])
+        self.assertEqual(decision.signal_stage, "prepare_early")
+        self.assertEqual(decision.stage, "prepare")
+        self.assertIn("watch_only", " ".join(decision.reason_trace.policy_overrides).lower())
         self.assertTrue(decision.reason_trace.why)
+
+    def test_signal_stage_returns_prepare_early_for_strong_early_warning_without_probability_threshold(self) -> None:
+        config = self.engine.get_config("Influenza A")
+        thresholds = self.engine._thresholds(config=config, action_threshold=0.9)
+
+        stage = self.engine._signal_stage(
+            decision_score=max(thresholds["prepare_score"] - 0.06, 0.0),
+            event_probability=0.004,
+            forecast_confidence=thresholds["prepare_forecast_confidence"],
+            freshness_score=thresholds["prepare_freshness"],
+            revision_risk=thresholds["prepare_revision_risk_max"] - 0.05,
+            trend_score=thresholds["prepare_trend"],
+            agreement_support_score=0.0,
+            agreement_signal_count=1,
+            agreement_direction="up",
+            thresholds=thresholds,
+            config=config,
+        )
+
+        self.assertEqual(stage, "prepare_early")
 
     def test_reason_trace_and_uncertainty_summary_are_present_for_mixed_case(self) -> None:
         decision = self.engine.evaluate(
@@ -226,6 +258,7 @@ class RegionalDecisionEngineTests(unittest.TestCase):
             trend_score=thresholds["activate_trend"],
             agreement_support_score=thresholds["activate_agreement"],
             agreement_signal_count=config.min_agreement_signal_count,
+            agreement_direction="up",
             thresholds=thresholds,
             config=config,
         )
@@ -238,18 +271,20 @@ class RegionalDecisionEngineTests(unittest.TestCase):
             trend_score=thresholds["prepare_trend"],
             agreement_support_score=thresholds["prepare_agreement"],
             agreement_signal_count=config.min_agreement_signal_count,
+            agreement_direction="up",
             thresholds=thresholds,
             config=config,
         )
         watch_stage = self.engine._signal_stage(
             decision_score=thresholds["prepare_score"],
-            event_probability=thresholds["prepare_probability"] - 0.0001,
+            event_probability=thresholds["prepare_probability"],
             forecast_confidence=thresholds["prepare_forecast_confidence"],
             freshness_score=thresholds["prepare_freshness"],
             revision_risk=thresholds["prepare_revision_risk_max"],
-            trend_score=thresholds["prepare_trend"],
+            trend_score=thresholds["prepare_trend"] - 0.0001,
             agreement_support_score=thresholds["prepare_agreement"],
             agreement_signal_count=config.min_agreement_signal_count,
+            agreement_direction="up",
             thresholds=thresholds,
             config=config,
         )
@@ -445,6 +480,7 @@ class RegionalDecisionEngineTests(unittest.TestCase):
                 trend_score=0.5,
                 agreement_support_score=0.6,
                 agreement_signal_count=2,
+                agreement_direction="up",
                 thresholds={"prepare_score": 0.5, "prepare_probability": 0.5, "prepare_forecast_confidence": 0.48, "prepare_freshness": 0.42, "prepare_revision_risk_max": 0.70, "prepare_trend": 0.45, "prepare_agreement": 0.45, "activate_score": 0.72, "activate_probability": 0.65, "activate_forecast_confidence": 0.62, "activate_freshness": 0.58, "activate_revision_risk_max": 0.45, "activate_trend": 0.58, "activate_agreement": 0.60},
                 config=DEFAULT_RULE_CONFIG,
             )
@@ -459,6 +495,7 @@ class RegionalDecisionEngineTests(unittest.TestCase):
             trend_score=0.5,
             agreement_support_score=0.6,
             agreement_signal_count=2,
+            agreement_direction="up",
             thresholds={"prepare_score": 0.5, "prepare_probability": 0.5, "prepare_forecast_confidence": 0.48, "prepare_freshness": 0.42, "prepare_revision_risk_max": 0.70, "prepare_trend": 0.45, "prepare_agreement": 0.45, "activate_score": 0.72, "activate_probability": 0.65, "activate_forecast_confidence": 0.62, "activate_freshness": 0.58, "activate_revision_risk_max": 0.45, "activate_trend": 0.58, "activate_agreement": 0.60},
             config=DEFAULT_RULE_CONFIG,
         )

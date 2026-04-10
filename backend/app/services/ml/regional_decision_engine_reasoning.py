@@ -16,13 +16,13 @@ def policy_override_detail(message: str) -> dict[str, Any]:
         return reason_detail(
             "policy_override_watch_only",
             message,
-            final_stage="watch",
+            final_stage="prepare",
         )
     if "quality gate" in normalized:
         return reason_detail(
             "policy_override_quality_gate",
             message,
-            final_stage="watch",
+            final_stage="prepare",
         )
     return reason_detail("policy_override", message)
 

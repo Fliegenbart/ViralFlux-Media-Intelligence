@@ -207,6 +207,8 @@ class PeixEpiScoreService:
 
     def build(self, virus_typ: str = "Influenza A") -> dict[str, Any]:
         """Berechne den PeixEpiScore für alle Regionen."""
+        config = getattr(self, "PEIX_CONFIG", PEIX_CONFIG)
+        region_code_to_name = getattr(self, "REGION_CODE_TO_NAME", REGION_CODE_TO_NAME)
 
         # --- Regionale Signale sammeln ---
         wastewater_per_virus = {}
@@ -269,7 +271,7 @@ class PeixEpiScoreService:
 
         # --- Regionale Berechnung ---
         regions: dict[str, dict[str, Any]] = {}
-        for code, region_name in REGION_CODE_TO_NAME.items():
+        for code, region_name in region_code_to_name.items():
             # Per-Virus regional epi scores
             region_virus_epis = []
             for v, v_weight in VIRUS_WEIGHTS.items():
@@ -295,8 +297,8 @@ class PeixEpiScoreService:
 
             # Konservativer Schulstart-Multiplikator als Zusatzsignal.
             multiplier = 1.0
-            if school_start and region_weather > PEIX_CONFIG["school_start_weather_min"]:
-                multiplier = PEIX_CONFIG["school_start_multiplier"]
+            if school_start and region_weather > config["school_start_weather_min"]:
+                multiplier = config["school_start_multiplier"]
 
             score = round(_clamp(raw_score * multiplier) * 100.0, 1)
             risk_band = self._score_to_band(score)
@@ -403,8 +405,8 @@ class PeixEpiScoreService:
 
     # ─── Epi-Score Berechnung (per Virus, adaptiv) ────────────────────────
 
-    @staticmethod
     def _compute_epi_score(
+        self,
         *,
         wastewater: float,
         are: float,
@@ -417,12 +419,13 @@ class PeixEpiScoreService:
           Wastewater 35% + ARE 25% + Notaufnahme 20% + SurvStat 20%
         Fallback auf 3/2/1-Komponenten wenn Daten fehlen.
         """
+        config = getattr(self, "PEIX_CONFIG", PEIX_CONFIG)
         has_are = are > 0
         has_not = notaufnahme > 0
         has_surv = survstat > 0
 
         if has_are and has_not and has_surv:
-            w = PEIX_CONFIG["epi_weights_4"]
+            w = config["epi_weights_4"]
             score = wastewater * w["wastewater"] + are * w["are"] + notaufnahme * w["notaufnahme"] + survstat * w["survstat"]
         elif has_are and has_surv:
             score = wastewater * 0.40 + are * 0.30 + survstat * 0.30
@@ -481,13 +484,13 @@ class PeixEpiScoreService:
     def _score_to_probability(score: float) -> float:
         return _clamp(1.0 / (1.0 + math.exp(-(score - 50.0) / 11.0)), 0.0, 1.0) * 100.0
 
-    @staticmethod
-    def _score_to_band(score: float) -> str:
-        if score >= PEIX_CONFIG["risk_band_high"]:
+    def _score_to_band(self, score: float) -> str:
+        config = getattr(self, "PEIX_CONFIG", PEIX_CONFIG)
+        if score >= config["risk_band_high"]:
             return "critical"
-        if score >= PEIX_CONFIG["risk_band_elevated"]:
+        if score >= config["risk_band_elevated"]:
             return "high"
-        if score >= PEIX_CONFIG["risk_band_moderate"]:
+        if score >= config["risk_band_moderate"]:
             return "elevated"
         return "low"
 

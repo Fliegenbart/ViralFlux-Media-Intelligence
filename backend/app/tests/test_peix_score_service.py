@@ -244,6 +244,64 @@ class PeixScoreServiceTests(unittest.TestCase):
 
         self.assertEqual(signal, {"XX": 1.0})
 
+    def test_build_still_uses_service_region_mapping_override(self) -> None:
+        service = _stub_peix_service()
+        service.REGION_CODE_TO_NAME = {"XX": "Override Region"}
+        service._wastewater_by_region = lambda _virus: {"XX": 0.9}
+        service._are_by_region = lambda: {"XX": 0.8}
+        service._weather_by_region = lambda: {"XX": 0.6}
+        service._survstat_by_region = lambda _virus: {"XX": 0.5}
+
+        payload = service.build("Influenza A")
+
+        self.assertEqual(list(payload["regions"].keys()), ["XX"])
+        self.assertEqual(payload["regions"]["XX"]["region_name"], "Override Region")
+
+    def test_build_still_uses_service_peix_config_override_for_school_start_multiplier(self) -> None:
+        service = _stub_peix_service()
+        service.PEIX_CONFIG = {
+            **PeixEpiScoreService.PEIX_CONFIG,
+            "school_start_multiplier": 2.0,
+            "school_start_weather_min": 0.0,
+        }
+        service._is_school_start = lambda: True
+
+        payload = service.build("Influenza A")
+
+        self.assertEqual(payload["regions"]["BE"]["score_0_100"], 100.0)
+
+    def test_compute_epi_score_still_uses_service_peix_config_override(self) -> None:
+        service = PeixEpiScoreService.__new__(PeixEpiScoreService)
+        service.PEIX_CONFIG = {
+            **PeixEpiScoreService.PEIX_CONFIG,
+            "epi_weights_4": {
+                "wastewater": 1.0,
+                "are": 0.0,
+                "notaufnahme": 0.0,
+                "survstat": 0.0,
+            },
+        }
+
+        score = service._compute_epi_score(
+            wastewater=0.9,
+            are=0.8,
+            notaufnahme=0.4,
+            survstat=0.5,
+        )
+
+        self.assertEqual(score, 0.9)
+
+    def test_score_to_band_still_uses_service_peix_config_override(self) -> None:
+        service = PeixEpiScoreService.__new__(PeixEpiScoreService)
+        service.PEIX_CONFIG = {
+            **PeixEpiScoreService.PEIX_CONFIG,
+            "risk_band_high": 90,
+            "risk_band_elevated": 80,
+            "risk_band_moderate": 70,
+        }
+
+        self.assertEqual(service._score_to_band(56.3), "low")
+
     def test_build_marks_peix_as_ranking_signal_and_deprecates_probability_alias(self) -> None:
         payload = _stub_peix_service().build("Influenza A")
 

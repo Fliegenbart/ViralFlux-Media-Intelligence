@@ -80,6 +80,7 @@ from app.services.ml.training_contract import INTERNAL_HISTORY_TEST_MAP
 from app.services.ml import forecast_service_internal_history
 from app.services.ml import forecast_service_event_probability
 from app.services.ml import forecast_service_inference
+from app.services.ml import forecast_service_direct_training
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -1060,77 +1061,19 @@ class ForecastService:
         horizon_days: int,
         n_splits: int = 5,
     ) -> pd.DataFrame:
-        horizon = ensure_supported_horizon(horizon_days)
-        direct = build_direct_target_frame(raw, horizon_days=horizon)
-        if direct.empty:
-            return direct
-
-        prophet_proxy = (
-            direct["current_y"]
-            .rolling(window=7, min_periods=1)
-            .mean()
-            .shift(1)
+        return forecast_service_direct_training.build_direct_training_panel_from_frame(
+            self,
+            raw,
+            horizon_days=horizon_days,
+            n_splits=n_splits,
+            ensure_supported_horizon_fn=ensure_supported_horizon,
+            build_direct_target_frame_fn=build_direct_target_frame,
+            min_direct_train_points=MIN_DIRECT_TRAIN_POINTS,
+            ridge_cls=Ridge,
+            time_series_split_cls=TimeSeriesSplit,
+            np_module=np,
+            pd_module=pd,
         )
-        # Keep this fallback causal: the direct panel predicts a future target, so
-        # current_y is known at issue time, but any backward fill from later rows would leak.
-        direct["prophet_pred"] = prophet_proxy.fillna(direct["current_y"]).astype(float)
-
-        oof = pd.DataFrame(index=direct.index, columns=["hw_pred", "ridge_pred"], dtype=float)
-        feature_cols = self._direct_ridge_feature_columns(direct)
-        n_time_splits = min(max(2, int(n_splits)), max(len(direct) // 8, 2))
-
-        try:
-            tscv = TimeSeriesSplit(n_splits=n_time_splits)
-            split_iter = list(tscv.split(direct))
-        except ValueError:
-            split_iter = []
-
-        for train_idx, val_idx in split_iter:
-            if len(train_idx) < max(MIN_DIRECT_TRAIN_POINTS, 12) or len(val_idx) < 1:
-                continue
-
-            train_panel = direct.iloc[train_idx].copy()
-            val_panel = direct.iloc[val_idx].copy()
-
-            if feature_cols:
-                ridge = Ridge(alpha=1.0)
-                ridge.fit(
-                    train_panel[feature_cols].to_numpy(dtype=float),
-                    train_panel["y_target"].to_numpy(dtype=float),
-                )
-                ridge_preds = np.maximum(
-                    ridge.predict(val_panel[feature_cols].to_numpy(dtype=float)),
-                    0.0,
-                )
-                oof.loc[val_idx, "ridge_pred"] = ridge_preds
-
-            for idx in val_idx:
-                issue_date = pd.Timestamp(direct.iloc[idx]["issue_date"])
-                history = raw.loc[raw["ds"] <= issue_date, "y"].to_numpy(dtype=float)
-                if len(history) == 0:
-                    oof.loc[idx, "hw_pred"] = 0.0
-                    continue
-                hw_forecast = self._fit_holt_winters(history, horizon)
-                hw_step = min(horizon - 1, max(len(hw_forecast) - 1, 0))
-                oof.loc[idx, "hw_pred"] = max(0.0, float(hw_forecast[hw_step]))
-
-        # Never backward-fill OOF features: that would copy later fold predictions
-        # into earlier issue dates and create a hidden temporal leak.
-        causal_oof_fallback = direct["current_y"].astype(float)
-        direct["hw_pred"] = (
-            oof["hw_pred"]
-            .ffill()
-            .fillna(causal_oof_fallback)
-            .astype(float)
-        )
-        direct["ridge_pred"] = (
-            oof["ridge_pred"]
-            .ffill()
-            .fillna(causal_oof_fallback)
-            .astype(float)
-        )
-        direct = direct.replace([np.inf, -np.inf], np.nan).fillna(0.0)
-        return direct.reset_index(drop=True)
 
     def _build_live_direct_feature_row(
         self,
@@ -1140,46 +1083,20 @@ class ForecastService:
         horizon_days: int,
         region: str = DEFAULT_FORECAST_REGION,
     ) -> dict[str, float]:
-        horizon = ensure_supported_horizon(horizon_days)
-        if raw.empty:
-            return {}
-
-        last_row = raw.iloc[-1].copy()
-        history = raw["y"].to_numpy(dtype=float)
-        hw_forecast = self._fit_holt_winters(history, horizon)
-        hw_pred = max(0.0, float(hw_forecast[min(horizon - 1, max(len(hw_forecast) - 1, 0))]))
-
-        direct_train = build_direct_target_frame(raw, horizon_days=horizon)
-        feature_cols = self._direct_ridge_feature_columns(direct_train) if not direct_train.empty else []
-        if feature_cols and len(direct_train) >= max(MIN_DIRECT_TRAIN_POINTS, 12):
-            ridge = Ridge(alpha=1.0)
-            ridge.fit(
-                direct_train[feature_cols].to_numpy(dtype=float),
-                direct_train["y_target"].to_numpy(dtype=float),
-            )
-            ridge_row = np.array([[float(last_row.get(name, 0.0)) for name in feature_cols]], dtype=float)
-            ridge_pred = max(0.0, float(ridge.predict(ridge_row)[0]))
-        else:
-            ridge_pred = max(0.0, float(last_row.get("y", 0.0)))
-
-        prophet_forecast = self._fit_prophet(virus_typ, horizon) if normalize_forecast_region(region) == DEFAULT_FORECAST_REGION else None
-        if prophet_forecast is not None and len(prophet_forecast) >= horizon:
-            prophet_pred = max(0.0, float(prophet_forecast[horizon - 1]))
-        else:
-            prophet_pred = float(
-                raw["y"]
-                .tail(min(7, len(raw)))
-                .mean()
-            )
-
-        feature_row = self._build_meta_feature_row(
-            last_row,
-            hw_pred=hw_pred,
-            ridge_pred=ridge_pred,
-            prophet_pred=prophet_pred,
+        return forecast_service_direct_training.build_live_direct_feature_row(
+            self,
+            raw,
+            virus_typ=virus_typ,
+            horizon_days=horizon_days,
+            region=region,
+            ensure_supported_horizon_fn=ensure_supported_horizon,
+            default_forecast_region=DEFAULT_FORECAST_REGION,
+            normalize_forecast_region_fn=normalize_forecast_region,
+            build_direct_target_frame_fn=build_direct_target_frame,
+            min_direct_train_points=MIN_DIRECT_TRAIN_POINTS,
+            ridge_cls=Ridge,
+            np_module=np,
         )
-        feature_row["horizon_days"] = float(horizon)
-        return feature_row
 
     def _fit_xgboost_meta_from_panel(
         self,
@@ -1188,36 +1105,14 @@ class ForecastService:
         target_column: str = "y_target",
         model_config: dict[str, dict[str, Any]] | None = None,
     ) -> tuple[Any, Any, Any, list[str], dict[str, float]]:
-        from xgboost import XGBRegressor
-
-        available_meta = [f for f in META_FEATURES if f in panel.columns]
-        if "horizon_days" in panel.columns and "horizon_days" not in available_meta:
-            available_meta.append("horizon_days")
-        if not available_meta:
-            raise ValueError("No direct meta features available for XGBoost fitting.")
-
-        X = panel[available_meta].to_numpy(dtype=float)
-        y = panel[target_column].to_numpy(dtype=float)
-        X = np.nan_to_num(X, nan=0.0, posinf=0.0, neginf=0.0)
-
-        cfg = self._resolve_xgb_quantile_config(model_config)
-
-        model_median = XGBRegressor(**cfg["median"])
-        model_median.fit(X, y)
-
-        model_lower = XGBRegressor(**cfg["lower"])
-        model_lower.fit(X, y)
-
-        model_upper = XGBRegressor(**cfg["upper"])
-        model_upper.fit(X, y)
-
-        importance_raw = model_median.feature_importances_
-        total = float(np.sum(importance_raw)) + 1e-9
-        feature_importance = {
-            fname: round(float(imp) / total, 3)
-            for fname, imp in zip(available_meta, importance_raw)
-        }
-        return model_median, model_lower, model_upper, available_meta, feature_importance
+        return forecast_service_direct_training.fit_xgboost_meta_from_panel(
+            self,
+            panel,
+            target_column=target_column,
+            model_config=model_config,
+            meta_features=META_FEATURES,
+            np_module=np,
+        )
 
     # ═══════════════════════════════════════════════════════════════════
     #  XGBOOST META-LEARNER
@@ -1228,43 +1123,14 @@ class ForecastService:
         df: pd.DataFrame,
         n_splits: int = 5,
     ) -> pd.DataFrame:
-        """Generate out-of-fold predictions from base estimators using TimeSeriesSplit.
-
-        For each fold, HW and Ridge are trained on the train split and
-        predicted on the validation split. Prophet predictions are estimated
-        from the last known training values (simplified — Prophet is expensive).
-        """
-        y = df["y"].values
-        tscv = TimeSeriesSplit(n_splits=n_splits)
-
-        oof = pd.DataFrame(index=df.index, columns=["hw_pred", "ridge_pred"], dtype=float)
-        oof[:] = np.nan
-
-        for train_idx, val_idx in tscv.split(df):
-            if len(train_idx) < 10 or len(val_idx) < 1:
-                continue
-
-            y_train = y[train_idx]
-            n_val = len(val_idx)
-
-            # HW
-            hw_preds = self._fit_holt_winters(y_train, n_val)
-            oof.loc[val_idx, "hw_pred"] = hw_preds[:n_val]
-
-            # Ridge
-            df_train = df.iloc[train_idx]
-            ridge_preds, _ = self._fit_ridge(df_train, y_train, n_val)
-            oof.loc[val_idx, "ridge_pred"] = ridge_preds[:n_val]
-
-        history_series = pd.Series(y, index=df.index, dtype=float).ffill()
-        causal_history_fallback = history_series.shift(1).fillna(0.0)
-
-        # Keep OOF fallback strictly historical: no backward fill and never use
-        # the final series value, because both would leak future information.
-        oof["hw_pred"] = oof["hw_pred"].ffill().fillna(causal_history_fallback).astype(float)
-        oof["ridge_pred"] = oof["ridge_pred"].ffill().fillna(causal_history_fallback).astype(float)
-
-        return oof
+        return forecast_service_direct_training.generate_oof_predictions(
+            self,
+            df,
+            n_splits=n_splits,
+            time_series_split_cls=TimeSeriesSplit,
+            np_module=np,
+            pd_module=pd,
+        )
 
     def _fit_xgboost_meta(
         self,
@@ -1272,53 +1138,15 @@ class ForecastService:
         oof: pd.DataFrame,
         model_config: dict[str, dict[str, Any]] | None = None,
     ) -> tuple[Any, Any, Any, dict[str, float]]:
-        """Train XGBoost meta-learner with quantile regression (asymmetric loss).
-
-        Returns (model_median, model_lower, model_upper, feature_importance).
-        """
-        from xgboost import XGBRegressor
-
-        # Merge OOF predictions into feature DataFrame
-        df_meta = df.copy()
-        df_meta["hw_pred"] = oof["hw_pred"].values
-        df_meta["ridge_pred"] = oof["ridge_pred"].values
-        # Prophet OOF proxy: 7-day rolling mean shifted by forecast horizon (14d)
-        # to prevent target leakage during training.  With shift(1) the rolling
-        # window contained data the model wouldn't have at prediction time.
-        df_meta["prophet_pred"] = df_meta["y"].rolling(window=7, min_periods=1).mean().shift(14)
-
-        # Build feature matrix
-        available_meta = [f for f in META_FEATURES if f in df_meta.columns]
-        X = df_meta[available_meta].values
-        y = df_meta["y"].values
-
-        # Replace any remaining NaN/inf
-        X = np.nan_to_num(X, nan=0.0, posinf=0.0, neginf=0.0)
-
-        cfg = self._resolve_xgb_quantile_config(model_config)
-
-        # ── Median model (main prediction — 50th percentile) ──
-        model_median = XGBRegressor(**cfg["median"])
-        model_median.fit(X, y)
-
-        # ── Lower bound (10th percentile) ──
-        model_lower = XGBRegressor(**cfg["lower"])
-        model_lower.fit(X, y)
-
-        # ── Upper bound (90th percentile) ──
-        model_upper = XGBRegressor(**cfg["upper"])
-        model_upper.fit(X, y)
-
-        # Feature importance from median model
-        importance_raw = model_median.feature_importances_
-        total = float(np.sum(importance_raw)) + 1e-9
-        feature_importance = {
-            fname: round(float(imp) / total, 3)
-            for fname, imp in zip(available_meta, importance_raw)
-        }
-
-        logger.info(f"XGBoost meta-learner trained on {len(y)} samples, {len(available_meta)} features")
-        return model_median, model_lower, model_upper, feature_importance
+        return forecast_service_direct_training.fit_xgboost_meta(
+            self,
+            df,
+            oof,
+            model_config=model_config,
+            meta_features=META_FEATURES,
+            np_module=np,
+            logger=logger,
+        )
 
     @staticmethod
     def _resolve_xgb_quantile_config(

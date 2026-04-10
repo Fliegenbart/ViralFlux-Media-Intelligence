@@ -11,6 +11,122 @@ from app.services.ml.forecast_service import (
 
 
 class ForecastServiceGuardTests(unittest.TestCase):
+    @patch("app.services.ml.forecast_service_direct_training.build_direct_training_panel_from_frame")
+    def test_build_direct_training_panel_from_frame_wrapper_delegates_to_module(self, panel_mock) -> None:
+        panel_mock.return_value = pd.DataFrame({"hw_pred": [1.0]})
+        service = ForecastService(db=None)
+        raw = pd.DataFrame({"ds": pd.to_datetime(["2026-01-01"]), "y": [1.0]})
+
+        result = service._build_direct_training_panel_from_frame(
+            raw,
+            horizon_days=7,
+            n_splits=3,
+        )
+
+        self.assertEqual(result["hw_pred"].tolist(), [1.0])
+        panel_mock.assert_called_once_with(
+            service,
+            raw,
+            horizon_days=7,
+            n_splits=3,
+            ensure_supported_horizon_fn=ANY,
+            build_direct_target_frame_fn=ANY,
+            min_direct_train_points=ANY,
+            ridge_cls=ANY,
+            time_series_split_cls=ANY,
+            np_module=ANY,
+            pd_module=ANY,
+        )
+
+    @patch("app.services.ml.forecast_service_direct_training.build_live_direct_feature_row")
+    def test_build_live_direct_feature_row_wrapper_delegates_to_module(self, row_mock) -> None:
+        row_mock.return_value = {"hw_pred": 1.0, "ridge_pred": 2.0}
+        service = ForecastService(db=None)
+        raw = pd.DataFrame({"ds": pd.to_datetime(["2026-01-01"]), "y": [1.0]})
+
+        result = service._build_live_direct_feature_row(
+            raw,
+            virus_typ="Influenza A",
+            horizon_days=7,
+            region="DE",
+        )
+
+        self.assertEqual(result, {"hw_pred": 1.0, "ridge_pred": 2.0})
+        row_mock.assert_called_once_with(
+            service,
+            raw,
+            virus_typ="Influenza A",
+            horizon_days=7,
+            region="DE",
+            ensure_supported_horizon_fn=ANY,
+            default_forecast_region=ANY,
+            normalize_forecast_region_fn=ANY,
+            build_direct_target_frame_fn=ANY,
+            min_direct_train_points=ANY,
+            ridge_cls=ANY,
+            np_module=ANY,
+        )
+
+    @patch("app.services.ml.forecast_service_direct_training.fit_xgboost_meta_from_panel")
+    def test_fit_xgboost_meta_from_panel_wrapper_delegates_to_module(self, fit_mock) -> None:
+        fit_mock.return_value = ("median", "lower", "upper", ["hw_pred"], {"hw_pred": 1.0})
+        service = ForecastService(db=None)
+        panel = pd.DataFrame({"hw_pred": [1.0], "y_target": [2.0]})
+
+        result = service._fit_xgboost_meta_from_panel(
+            panel,
+            target_column="y_target",
+            model_config={"median": {"n_estimators": 10}},
+        )
+
+        self.assertEqual(result, ("median", "lower", "upper", ["hw_pred"], {"hw_pred": 1.0}))
+        fit_mock.assert_called_once_with(
+            service,
+            panel,
+            target_column="y_target",
+            model_config={"median": {"n_estimators": 10}},
+            meta_features=ANY,
+            np_module=ANY,
+        )
+
+    @patch("app.services.ml.forecast_service_direct_training.generate_oof_predictions")
+    def test_generate_oof_predictions_wrapper_delegates_to_module(self, oof_mock) -> None:
+        oof_mock.return_value = pd.DataFrame({"hw_pred": [0.0], "ridge_pred": [0.0]})
+        service = ForecastService(db=None)
+        frame = pd.DataFrame({"y": [1.0]})
+
+        result = service._generate_oof_predictions(frame, n_splits=2)
+
+        self.assertEqual(result["hw_pred"].tolist(), [0.0])
+        oof_mock.assert_called_once_with(
+            service,
+            frame,
+            n_splits=2,
+            time_series_split_cls=ANY,
+            np_module=ANY,
+            pd_module=ANY,
+        )
+
+    @patch("app.services.ml.forecast_service_direct_training.fit_xgboost_meta")
+    def test_fit_xgboost_meta_wrapper_delegates_to_module(self, fit_mock) -> None:
+        fit_mock.return_value = ("median", "lower", "upper", {"hw_pred": 0.5})
+        service = ForecastService(db=None)
+        df = pd.DataFrame({"y": [1.0]})
+        oof = pd.DataFrame({"hw_pred": [0.0], "ridge_pred": [0.0]})
+
+        result = service._fit_xgboost_meta(df, oof, model_config=None)
+
+        self.assertEqual(result, ("median", "lower", "upper", {"hw_pred": 0.5}))
+        fit_mock.assert_called_once_with(
+            service,
+            df,
+            oof,
+            model_config=None,
+            meta_features=ANY,
+            np_module=ANY,
+            logger=ANY,
+        )
+
     @patch("app.services.ml.forecast_service_inference.predict")
     def test_predict_wrapper_delegates_to_module(self, predict_mock) -> None:
         predict_mock.return_value = {"status": "success", "virus_typ": "Influenza A"}

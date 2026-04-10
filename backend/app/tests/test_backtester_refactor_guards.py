@@ -8,6 +8,90 @@ from app.services.ml.forecast_contracts import HEURISTIC_EVENT_SCORE_SOURCE
 
 
 class BacktesterRefactorGuardTests(unittest.TestCase):
+    @patch("app.services.ml.backtester_workflows.run_market_simulation")
+    def test_run_market_simulation_wrapper_delegates_to_module(
+        self,
+        workflow_mock,
+    ) -> None:
+        workflow_mock.return_value = {"mode": "MARKET_CHECK", "metrics": {"data_points": 12}}
+        service = BacktestService(db=None)
+
+        result = service.run_market_simulation(
+            virus_typ="RSV A",
+            target_source="RKI_SURVSTAT",
+            days_back=365,
+            horizon_days=14,
+            min_train_points=24,
+            delay_rules={"weather": 2},
+            strict_vintage_mode=False,
+            bundesland="Berlin",
+        )
+
+        self.assertEqual(result, {"mode": "MARKET_CHECK", "metrics": {"data_points": 12}})
+        workflow_mock.assert_called_once_with(
+            service,
+            virus_typ="RSV A",
+            target_source="RKI_SURVSTAT",
+            days_back=365,
+            horizon_days=14,
+            min_train_points=24,
+            delay_rules={"weather": 2},
+            strict_vintage_mode=False,
+            bundesland="Berlin",
+        )
+
+    @patch("app.services.ml.backtester_workflows.run_customer_simulation")
+    def test_run_customer_simulation_wrapper_delegates_to_module(
+        self,
+        workflow_mock,
+    ) -> None:
+        workflow_mock.return_value = {"mode": "CUSTOMER_CHECK", "metrics": {"data_points": 18}}
+        service = BacktestService(db=None)
+
+        result = service.run_customer_simulation(
+            customer_df="customer-frame",
+            virus_typ="Influenza A",
+            horizon_days=7,
+            min_train_points=20,
+            strict_vintage_mode=True,
+        )
+
+        self.assertEqual(result, {"mode": "CUSTOMER_CHECK", "metrics": {"data_points": 18}})
+        workflow_mock.assert_called_once_with(
+            service,
+            customer_df="customer-frame",
+            virus_typ="Influenza A",
+            horizon_days=7,
+            min_train_points=20,
+            strict_vintage_mode=True,
+        )
+
+    @patch("app.services.ml.backtester_workflows.run_calibration")
+    def test_run_calibration_wrapper_delegates_to_module(
+        self,
+        workflow_mock,
+    ) -> None:
+        workflow_mock.return_value = {"mode": "CALIBRATION_OOS", "metrics": {"data_points": 9}}
+        service = BacktestService(db=None)
+
+        result = service.run_calibration(
+            customer_df="customer-frame",
+            virus_typ="Influenza B",
+            horizon_days=10,
+            min_train_points=22,
+            strict_vintage_mode=False,
+        )
+
+        self.assertEqual(result, {"mode": "CALIBRATION_OOS", "metrics": {"data_points": 9}})
+        workflow_mock.assert_called_once_with(
+            service,
+            customer_df="customer-frame",
+            virus_typ="Influenza B",
+            horizon_days=10,
+            min_train_points=22,
+            strict_vintage_mode=False,
+        )
+
     @patch("app.services.ml.backtester_simulation.simulate_rows_from_target")
     def test_simulate_rows_from_target_wrapper_delegates_to_module(
         self,

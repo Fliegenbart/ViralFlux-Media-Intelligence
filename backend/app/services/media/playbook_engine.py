@@ -9,24 +9,13 @@ Erzeugt regionalspezifische Playbook-Kandidaten aus:
 """
 
 from __future__ import annotations
-from app.core.time import utc_now
 
-from datetime import datetime, timedelta
 from statistics import quantiles
 from typing import Any
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.models.database import (
-    AREKonsultation,
-    GoogleTrendsData,
-    PollenData,
-    SurvstatWeeklyData,
-    WeatherData,
-)
-from app.services.data_ingest.bfarm_service import get_cached_signals
-from app.services.data_ingest.weather_service import CITY_STATE_MAP
 from app.services.media.peix_score_service import PeixEpiScoreService
 
 
@@ -241,83 +230,13 @@ class PlaybookEngine:
         peix_regions: dict[str, Any],
         allowed_regions: list[str],
     ) -> list[dict[str, Any]]:
-        rows = self.db.query(SurvstatWeeklyData).filter(
-            func.lower(SurvstatWeeklyData.disease).like("%mycoplas%"),
-            SurvstatWeeklyData.bundesland != "Gesamt",
-        ).order_by(SurvstatWeeklyData.week_start.desc()).all()
-        if not rows:
-            return []
+        from app.services.media import playbook_engine_candidates
 
-        grouped: dict[str, list[SurvstatWeeklyData]] = {}
-        for row in rows:
-            code = REGION_NAME_TO_CODE.get(str(row.bundesland or "").strip().lower())
-            if not code or code not in allowed_regions:
-                continue
-            grouped.setdefault(code, []).append(row)
-
-        candidates: list[dict[str, Any]] = []
-        for code, values in grouped.items():
-            series = sorted(values, key=lambda item: item.week_start)
-            if len(series) < 2:
-                continue
-
-            latest = float(series[-1].incidence or 0.0)
-            prev = float(series[-2].incidence or 0.0)
-            wow = ((latest - prev) / prev) if prev > 0 else (1.0 if latest > 0 else 0.0)
-            history = [float(v.incidence or 0.0) for v in series if v.incidence is not None]
-            p75 = self._p75(history)
-            seasonal_hit = latest >= p75 and latest > 0
-
-            peix_entry = peix_regions.get(code) or {}
-            peix_score = float(peix_entry.get("score_0_100") or 0.0)
-            if peix_score > 85:
-                # Zu breite Gesamtwelle: spezifischer Mycoplasma-Playbook-Wert sinkt.
-                damp = 0.78
-            else:
-                damp = 1.0
-
-            trigger_active = wow >= 0.30 or seasonal_hit
-            if not trigger_active:
-                continue
-
-            strength = min(
-                100.0,
-                max(
-                    0.0,
-                    ((45.0 + max(0.0, wow) * 70.0 + (15.0 if seasonal_hit else 0.0)) * damp),
-                ),
-            )
-            confidence = min(96.0, 62.0 + min(22.0, len(history) / 4.0))
-            priority = self._priority_score(trigger_strength=strength, confidence=confidence)
-            shift_pct = self._shift_from_strength("MYCOPLASMA_JAEGER", strength)
-
-            candidates.append(
-                self._candidate_payload(
-                    playbook_key="MYCOPLASMA_JAEGER",
-                    region_code=code,
-                    peix_entry=peix_entry,
-                    trigger_strength=strength,
-                    confidence=confidence,
-                    priority_score=priority,
-                    budget_shift_pct=shift_pct,
-                    trigger_snapshot={
-                        "source": "RKI SURVSTAT",
-                        "event": "MYCOPLASMA_WOW_SPIKE",
-                        "details": (
-                            f"Mycoplasma-Inzidenz {latest:.1f} vs. {prev:.1f} Vorwoche "
-                            f"({wow * 100:+.1f}% WoW, p75={p75:.1f})."
-                        ),
-                        "lead_time_days": 10,
-                        "values": {
-                            "latest_incidence": round(latest, 3),
-                            "previous_incidence": round(prev, 3),
-                            "wow_pct": round(wow * 100.0, 2),
-                            "p75": round(p75, 3),
-                        },
-                    },
-                )
-            )
-        return candidates
+        return playbook_engine_candidates.mycoplasma_candidates(
+            self,
+            peix_regions=peix_regions,
+            allowed_regions=allowed_regions,
+        )
 
     def _supply_candidates(
         self,
@@ -325,63 +244,13 @@ class PlaybookEngine:
         peix_regions: dict[str, Any],
         allowed_regions: list[str],
     ) -> list[dict[str, Any]]:
-        signals = get_cached_signals() or {}
-        risk = float(signals.get("current_risk_score") or 0.0)
-        if risk < 70.0:
-            return []
+        from app.services.media import playbook_engine_candidates
 
-        by_category = signals.get("by_category") or {}
-        respiratory_shortage = float((by_category.get("Atemwege") or {}).get("high_demand") or 0.0)
-        pediatric_shortage = float((by_category.get("Antibiotika") or {}).get("pediatric") or 0.0)
-        pediatric_alert = bool(signals.get("pediatric_alert"))
-        wave_type = str(signals.get("wave_type") or "n/a")
-
-        are_growth = self._are_growth_by_region()
-        candidates: list[dict[str, Any]] = []
-        for code in allowed_regions:
-            peix_entry = peix_regions.get(code) or {}
-            growth = are_growth.get(code, 0.0)
-            growth_score = min(100.0, max(0.0, growth * 100.0))
-            if growth_score < 10.0 and respiratory_shortage <= 0:
-                continue
-            bonus = 8.0 if pediatric_alert else 0.0
-            if respiratory_shortage <= 0 and pediatric_shortage <= 0:
-                bonus -= 10.0
-            strength = min(100.0, max(0.0, risk * 0.65 + growth_score * 0.35 + bonus))
-            if strength < 40.0:
-                continue
-            confidence = min(95.0, 68.0 + min(20.0, respiratory_shortage * 3.0) + (5.0 if pediatric_alert else 0.0))
-            priority = self._priority_score(trigger_strength=strength, confidence=confidence)
-            shift_pct = self._shift_from_strength("SUPPLY_SHOCK_ATTACK", strength)
-
-            candidates.append(
-                self._candidate_payload(
-                    playbook_key="SUPPLY_SHOCK_ATTACK",
-                    region_code=code,
-                    peix_entry=peix_entry,
-                    trigger_strength=strength,
-                    confidence=confidence,
-                    priority_score=priority,
-                    budget_shift_pct=shift_pct,
-                    trigger_snapshot={
-                        "source": "BfArM + RKI",
-                        "event": "SUPPLY_SHOCK_WINDOW",
-                        "details": (
-                            f"BfArM Risiko {risk:.1f}/100 (Welle: {wave_type}), "
-                            f"Atemwegs-Engpässe={respiratory_shortage:.0f}, "
-                            f"ARE-Wachstum {growth * 100.0:+.1f}%."
-                        ),
-                        "lead_time_days": 7,
-                        "values": {
-                            "bfarm_risk_score": round(risk, 2),
-                            "respiratory_shortage_count": respiratory_shortage,
-                            "pediatric_alert": pediatric_alert,
-                            "are_growth_pct": round(growth * 100.0, 2),
-                        },
-                    },
-                )
-            )
-        return candidates
+        return playbook_engine_candidates.supply_candidates(
+            self,
+            peix_regions=peix_regions,
+            allowed_regions=allowed_regions,
+        )
 
     def _wetter_candidates(
         self,
@@ -389,55 +258,13 @@ class PlaybookEngine:
         peix_regions: dict[str, Any],
         allowed_regions: list[str],
     ) -> list[dict[str, Any]]:
-        weather_burden = self._weather_burden_by_region()
-        if not weather_burden:
-            return []
-        psycho = self._google_signal_score(["immunsystem", "erkältung", "husten", "bronchitis"])
+        from app.services.media import playbook_engine_candidates
 
-        candidates: list[dict[str, Any]] = []
-        for code in allowed_regions:
-            burden = float(weather_burden.get(code) or 0.0)
-            peix_entry = peix_regions.get(code) or {}
-            if burden < 45.0:
-                continue
-
-            psycho_level = float(psycho.get("current") or 0.0)
-            psycho_delta = float(psycho.get("delta") or 0.0)
-            psycho_score = max(0.0, min(100.0, psycho_level + max(0.0, psycho_delta) * 1.2))
-            strength = min(100.0, max(0.0, burden * 0.65 + psycho_score * 0.35))
-            if strength < 42.0:
-                continue
-
-            confidence = min(92.0, 60.0 + (12.0 if burden >= 60 else 5.0) + (8.0 if psycho_delta > 0 else 0.0))
-            priority = self._priority_score(trigger_strength=strength, confidence=confidence)
-            shift_pct = self._shift_from_strength("WETTER_REFLEX", strength)
-
-            candidates.append(
-                self._candidate_payload(
-                    playbook_key="WETTER_REFLEX",
-                    region_code=code,
-                    peix_entry=peix_entry,
-                    trigger_strength=strength,
-                    confidence=confidence,
-                    priority_score=priority,
-                    budget_shift_pct=shift_pct,
-                    trigger_snapshot={
-                        "source": "DWD/BrightSky + Google Trends",
-                        "event": "WETTER_BELASTUNG_PLUS_PSYCHO",
-                        "details": (
-                            f"8-Tage Wetterdruck {burden:.1f}/100, "
-                            f"Psycho-Signal {psycho_level:.1f}/100 ({psycho_delta:+.1f} Delta)."
-                        ),
-                        "lead_time_days": 8,
-                        "values": {
-                            "weather_burden": round(burden, 2),
-                            "psycho_level": round(psycho_level, 2),
-                            "psycho_delta": round(psycho_delta, 2),
-                        },
-                    },
-                )
-            )
-        return candidates
+        return playbook_engine_candidates.weather_candidates(
+            self,
+            peix_regions=peix_regions,
+            allowed_regions=allowed_regions,
+        )
 
     def _allergy_candidates(
         self,
@@ -445,64 +272,13 @@ class PlaybookEngine:
         peix_regions: dict[str, Any],
         allowed_regions: list[str],
     ) -> list[dict[str, Any]]:
-        pollen = self._pollen_by_region()
-        if not pollen:
-            return []
-        allergy = self._google_signal_score(["heuschnupfen", "pollenallergie", "augen jucken", "laufende nase"])
+        from app.services.media import playbook_engine_candidates
 
-        candidates: list[dict[str, Any]] = []
-        for code in allowed_regions:
-            pollen_score = float(pollen.get(code) or 0.0)
-            if pollen_score < 45.0:
-                continue
-
-            peix_entry = peix_regions.get(code) or {}
-            peix_score = float(peix_entry.get("score_0_100") or 0.0)
-            impact = float(peix_entry.get("impact_probability") or 0.0)
-            allergy_level = float(allergy.get("current") or 0.0)
-            allergy_delta = float(allergy.get("delta") or 0.0)
-            allergy_score = max(0.0, min(100.0, allergy_level + max(0.0, allergy_delta) * 1.2))
-            if peix_score >= 60.0 and allergy_score < 60.0:
-                continue
-
-            strength = min(
-                100.0,
-                max(0.0, pollen_score * 0.45 + allergy_score * 0.35 + (100.0 - peix_score) * 0.20),
-            )
-            if strength < 50.0:
-                continue
-
-            confidence = min(94.0, 66.0 + (12.0 if pollen_score >= 60 else 4.0) + (8.0 if allergy_delta > 0 else 0.0))
-            priority = self._priority_score(trigger_strength=strength, confidence=confidence)
-            shift_pct = self._shift_from_strength("ALLERGIE_BREMSE", strength)
-
-            candidates.append(
-                self._candidate_payload(
-                    playbook_key="ALLERGIE_BREMSE",
-                    region_code=code,
-                    peix_entry=peix_entry,
-                    trigger_strength=strength,
-                    confidence=confidence,
-                    priority_score=priority,
-                    budget_shift_pct=shift_pct,
-                    trigger_snapshot={
-                        "source": "DWD Pollen + Google Trends + Peix",
-                        "event": "ALLERGY_FALSE_POSITIVE_FILTER",
-                        "details": (
-                            f"Pollen {pollen_score:.1f}/100, Allergie-Suche {allergy_level:.1f}/100 "
-                            f"({allergy_delta:+.1f}), Peix {peix_score:.1f}/100."
-                        ),
-                        "lead_time_days": 2,
-                        "values": {
-                            "pollen_score": round(pollen_score, 2),
-                            "allergy_search_level": round(allergy_level, 2),
-                            "allergy_search_delta": round(allergy_delta, 2),
-                            "peix_score": round(peix_score, 2),
-                        },
-                    },
-                )
-            )
-        return candidates
+        return playbook_engine_candidates.allergy_candidates(
+            self,
+            peix_regions=peix_regions,
+            allowed_regions=allowed_regions,
+        )
 
     def _halsschmerz_candidates(
         self,
@@ -510,63 +286,13 @@ class PlaybookEngine:
         peix_regions: dict[str, Any],
         allowed_regions: list[str],
     ) -> list[dict[str, Any]]:
-        """Triggert bei steigenden Keuchhusten/Influenza-Inzidenzen (Halsschmerz-Proxy)."""
-        rows = self.db.query(SurvstatWeeklyData).filter(
-            SurvstatWeeklyData.disease_cluster == "RESPIRATORY",
-            SurvstatWeeklyData.bundesland != "Gesamt",
-        ).order_by(SurvstatWeeklyData.week_start.desc()).limit(2000).all()
-        if not rows:
-            return []
+        from app.services.media import playbook_engine_candidates
 
-        grouped: dict[str, list[float]] = {}
-        for row in rows:
-            code = REGION_NAME_TO_CODE.get(str(row.bundesland or "").strip().lower())
-            if not code or code not in allowed_regions:
-                continue
-            grouped.setdefault(code, []).append(float(row.incidence or 0.0))
-
-        candidates: list[dict[str, Any]] = []
-        for code, values in grouped.items():
-            if len(values) < 2:
-                continue
-            avg_recent = sum(values[:4]) / min(4, len(values))
-            avg_old = sum(values[4:8]) / max(1, min(4, len(values[4:8]))) if len(values) > 4 else avg_recent * 0.8
-            growth = (avg_recent - avg_old) / max(1.0, avg_old)
-
-            if growth < 0.10 and avg_recent < 50:
-                continue
-
-            peix_entry = peix_regions.get(code) or {}
-            strength = min(100.0, max(0.0, 40.0 + growth * 80.0 + min(20.0, avg_recent / 10.0)))
-            confidence = min(90.0, 55.0 + min(25.0, len(values) / 3.0))
-            priority = self._priority_score(trigger_strength=strength, confidence=confidence)
-            shift_pct = self._shift_from_strength("HALSSCHMERZ_HUNTER", strength)
-
-            candidates.append(
-                self._candidate_payload(
-                    playbook_key="HALSSCHMERZ_HUNTER",
-                    region_code=code,
-                    peix_entry=peix_entry,
-                    trigger_strength=strength,
-                    confidence=confidence,
-                    priority_score=priority,
-                    budget_shift_pct=shift_pct,
-                    trigger_snapshot={
-                        "source": "RKI SURVSTAT",
-                        "event": "RESPIRATORY_GROWTH_HALSSCHMERZ",
-                        "details": (
-                            f"Atemwegs-Inzidenz Ø{avg_recent:.1f} (Wachstum {growth * 100:+.1f}%), "
-                            f"Halsschmerz-Kampagne empfohlen."
-                        ),
-                        "lead_time_days": 7,
-                        "values": {
-                            "avg_recent_incidence": round(avg_recent, 2),
-                            "growth_pct": round(growth * 100, 2),
-                        },
-                    },
-                )
-            )
-        return candidates
+        return playbook_engine_candidates.halsschmerz_candidates(
+            self,
+            peix_regions=peix_regions,
+            allowed_regions=allowed_regions,
+        )
 
     def _erkaeltungswelle_candidates(
         self,
@@ -574,63 +300,13 @@ class PlaybookEngine:
         peix_regions: dict[str, Any],
         allowed_regions: list[str],
     ) -> list[dict[str, Any]]:
-        """Triggert bei breiter Infektionslast (COVID + Influenza + Noro kombiniert)."""
-        rows = self.db.query(SurvstatWeeklyData).filter(
-            SurvstatWeeklyData.bundesland != "Gesamt",
-            SurvstatWeeklyData.disease_cluster.in_(["RESPIRATORY", "GASTROINTESTINAL"]),
-        ).order_by(SurvstatWeeklyData.week_start.desc()).limit(3000).all()
-        if not rows:
-            return []
+        from app.services.media import playbook_engine_candidates
 
-        grouped: dict[str, float] = {}
-        for row in rows:
-            code = REGION_NAME_TO_CODE.get(str(row.bundesland or "").strip().lower())
-            if not code or code not in allowed_regions:
-                continue
-            grouped[code] = grouped.get(code, 0.0) + float(row.incidence or 0.0)
-
-        candidates: list[dict[str, Any]] = []
-        if not grouped:
-            return []
-        median_load = sorted(grouped.values())[len(grouped) // 2]
-
-        for code, total_load in grouped.items():
-            if total_load < median_load * 1.1:
-                continue
-
-            peix_entry = peix_regions.get(code) or {}
-            relative = total_load / max(1.0, median_load)
-            strength = min(100.0, max(0.0, 35.0 + (relative - 1.0) * 140.0))
-            confidence = min(88.0, 60.0 + min(20.0, total_load / 50.0))
-            priority = self._priority_score(trigger_strength=strength, confidence=confidence)
-            shift_pct = self._shift_from_strength("ERKAELTUNGSWELLE", strength)
-
-            candidates.append(
-                self._candidate_payload(
-                    playbook_key="ERKAELTUNGSWELLE",
-                    region_code=code,
-                    peix_entry=peix_entry,
-                    trigger_strength=strength,
-                    confidence=confidence,
-                    priority_score=priority,
-                    budget_shift_pct=shift_pct,
-                    trigger_snapshot={
-                        "source": "RKI SURVSTAT",
-                        "event": "BROAD_INFECTION_WAVE",
-                        "details": (
-                            f"Gesamtlast {total_load:.0f} (Median {median_load:.0f}, "
-                            f"{relative:.1f}x), breite Erkältungswelle."
-                        ),
-                        "lead_time_days": 5,
-                        "values": {
-                            "total_infection_load": round(total_load, 1),
-                            "median_load": round(median_load, 1),
-                            "relative_to_median": round(relative, 2),
-                        },
-                    },
-                )
-            )
-        return candidates
+        return playbook_engine_candidates.erkaeltungswelle_candidates(
+            self,
+            peix_regions=peix_regions,
+            allowed_regions=allowed_regions,
+        )
 
     def _sinus_candidates(
         self,
@@ -638,62 +314,13 @@ class PlaybookEngine:
         peix_regions: dict[str, Any],
         allowed_regions: list[str],
     ) -> list[dict[str, Any]]:
-        """Triggert bei RSV/Pneumokokken-Signalen (Sinusitis/Nasennebenhöhlen-Proxy)."""
-        rows = self.db.query(SurvstatWeeklyData).filter(
-            func.lower(SurvstatWeeklyData.disease).in_([
-                "rsv (meldepflicht gemäß ifsg)",
-                "pneumokokken (meldepflicht gemäß ifsg)",
-            ]),
-            SurvstatWeeklyData.bundesland != "Gesamt",
-        ).order_by(SurvstatWeeklyData.week_start.desc()).limit(1500).all()
-        if not rows:
-            return []
+        from app.services.media import playbook_engine_candidates
 
-        grouped: dict[str, list[float]] = {}
-        for row in rows:
-            code = REGION_NAME_TO_CODE.get(str(row.bundesland or "").strip().lower())
-            if not code or code not in allowed_regions:
-                continue
-            grouped.setdefault(code, []).append(float(row.incidence or 0.0))
-
-        candidates: list[dict[str, Any]] = []
-        for code, values in grouped.items():
-            if len(values) < 2:
-                continue
-            avg_recent = sum(values[:4]) / min(4, len(values))
-            if avg_recent < 5.0:
-                continue
-
-            peix_entry = peix_regions.get(code) or {}
-            strength = min(100.0, max(0.0, 30.0 + min(70.0, avg_recent * 0.7)))
-            confidence = min(85.0, 50.0 + min(25.0, len(values) / 3.0))
-            priority = self._priority_score(trigger_strength=strength, confidence=confidence)
-            shift_pct = self._shift_from_strength("SINUS_DEFENDER", strength)
-
-            candidates.append(
-                self._candidate_payload(
-                    playbook_key="SINUS_DEFENDER",
-                    region_code=code,
-                    peix_entry=peix_entry,
-                    trigger_strength=strength,
-                    confidence=confidence,
-                    priority_score=priority,
-                    budget_shift_pct=shift_pct,
-                    trigger_snapshot={
-                        "source": "RKI SURVSTAT",
-                        "event": "RSV_PNEUMO_SINUS_SIGNAL",
-                        "details": (
-                            f"RSV/Pneumokokken Ø-Inzidenz {avg_recent:.1f}, "
-                            f"Nasennebenhöhlen-Kampagne empfohlen."
-                        ),
-                        "lead_time_days": 10,
-                        "values": {
-                            "avg_recent_incidence": round(avg_recent, 2),
-                        },
-                    },
-                )
-            )
-        return candidates
+        return playbook_engine_candidates.sinus_candidates(
+            self,
+            peix_regions=peix_regions,
+            allowed_regions=allowed_regions,
+        )
 
     def _candidate_payload(
         self,
@@ -749,111 +376,24 @@ class PlaybookEngine:
         return low - (low - high) * norm
 
     def _are_growth_by_region(self) -> dict[str, float]:
-        rows = self.db.query(AREKonsultation).filter(
-            AREKonsultation.altersgruppe == "00+",
-            AREKonsultation.bundesland != "Bundesweit",
-        ).order_by(AREKonsultation.datum.desc()).all()
-        grouped: dict[str, list[AREKonsultation]] = {}
-        for row in rows:
-            code = REGION_NAME_TO_CODE.get(str(row.bundesland or "").strip().lower())
-            if not code:
-                continue
-            grouped.setdefault(code, []).append(row)
+        from app.services.media import playbook_engine_signals
 
-        growth: dict[str, float] = {}
-        for code, values in grouped.items():
-            series = sorted(values, key=lambda item: item.datum)
-            if len(series) < 2:
-                continue
-            latest = float(series[-1].konsultationsinzidenz or 0.0)
-            prev = float(series[-2].konsultationsinzidenz or 0.0)
-            if prev <= 0:
-                growth[code] = 0.0 if latest <= 0 else 1.0
-            else:
-                growth[code] = (latest - prev) / prev
-        return growth
+        return playbook_engine_signals.are_growth_by_region(self)
 
     def _weather_burden_by_region(self) -> dict[str, float]:
-        now = utc_now()
-        until = now + timedelta(days=8)
-        rows = self.db.query(WeatherData).filter(
-            WeatherData.data_type == "DAILY_FORECAST",
-            WeatherData.datum >= now,
-            WeatherData.datum <= until,
-        ).all()
-        if not rows:
-            return {}
+        from app.services.media import playbook_engine_signals
 
-        per_region: dict[str, list[float]] = {}
-        for row in rows:
-            state = CITY_STATE_MAP.get(str(row.city or ""))
-            if not state:
-                continue
-            code = REGION_NAME_TO_CODE.get(state.lower())
-            if not code:
-                continue
-
-            temp = float(row.temperatur) if row.temperatur is not None else 7.0
-            uv = float(row.uv_index) if row.uv_index is not None else 2.0
-            rain_prob = float(row.niederschlag_wahrscheinlichkeit) if row.niederschlag_wahrscheinlichkeit is not None else 35.0
-            rain_prob = rain_prob / 100.0 if rain_prob > 1.0 else rain_prob
-            temp_factor = max(0.0, min(1.0, (10.0 - temp) / 12.0))
-            uv_factor = max(0.0, min(1.0, (2.0 - uv) / 2.0))
-            rain_factor = max(0.0, min(1.0, rain_prob))
-            burden = (temp_factor * 0.45 + uv_factor * 0.20 + rain_factor * 0.35) * 100.0
-            per_region.setdefault(code, []).append(burden)
-
-        return {
-            code: round(sum(values) / max(len(values), 1), 2)
-            for code, values in per_region.items()
-        }
+        return playbook_engine_signals.weather_burden_by_region(self)
 
     def _pollen_by_region(self) -> dict[str, float]:
-        latest = self.db.query(func.max(PollenData.datum)).scalar()
-        if not latest:
-            return {}
-        # Frische-Check: Keine Pollen-Daten älter als 3 Tage verwenden
-        if (utc_now() - latest) > timedelta(days=3):
-            return {}
-        rows = self.db.query(
-            PollenData.region_code,
-            func.max(PollenData.pollen_index).label("max_index"),
-        ).filter(
-            PollenData.datum == latest,
-        ).group_by(PollenData.region_code).all()
-        return {
-            str(row.region_code).upper(): round(max(0.0, min(100.0, (float(row.max_index or 0.0) / 3.0) * 100.0)), 2)
-            for row in rows
-        }
+        from app.services.media import playbook_engine_signals
+
+        return playbook_engine_signals.pollen_by_region(self)
 
     def _google_signal_score(self, keywords: list[str]) -> dict[str, float]:
-        now = utc_now()
-        recent_start = now - timedelta(days=14)
-        prev_start = now - timedelta(days=28)
-        prev_end = recent_start
+        from app.services.media import playbook_engine_signals
 
-        base = self.db.query(func.avg(GoogleTrendsData.interest_score))
-        recent = (
-            base.filter(
-                GoogleTrendsData.datum >= recent_start,
-                GoogleTrendsData.datum <= now,
-                self._keyword_filter(keywords),
-            ).scalar()
-            or 0.0
-        )
-        previous = (
-            base.filter(
-                GoogleTrendsData.datum >= prev_start,
-                GoogleTrendsData.datum < prev_end,
-                self._keyword_filter(keywords),
-            ).scalar()
-            or 0.0
-        )
-        return {
-            "current": float(recent),
-            "previous": float(previous),
-            "delta": float(recent) - float(previous),
-        }
+        return playbook_engine_signals.google_signal_score(self, keywords)
 
     @staticmethod
     def _keyword_filter(keywords: list[str]):

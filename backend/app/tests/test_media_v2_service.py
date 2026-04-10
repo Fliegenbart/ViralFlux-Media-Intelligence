@@ -232,6 +232,640 @@ class MediaV2ServiceTruthCoverageTests(unittest.TestCase):
         self.assertEqual(stored.region_code, "SH")
         self.assertEqual(stored.media_spend_eur, 15000)
 
+    def test_get_decision_payload_delegates_to_decision_builder(self) -> None:
+        with patch(
+            "app.services.media.v2_service.build_decision_payload",
+            return_value={"ok": "decision"},
+        ) as mocked_builder:
+            payload = self.service.get_decision_payload(brand="gelo", virus_typ="Influenza A")
+
+        self.assertEqual(payload, {"ok": "decision"})
+        mocked_builder.assert_called_once_with(
+            self.service,
+            virus_typ="Influenza A",
+            target_source="RKI_ARE",
+            brand="gelo",
+        )
+
+    def test_get_regions_payload_delegates_to_regions_builder(self) -> None:
+        with patch(
+            "app.services.media.v2_service.build_regions_payload",
+            return_value={"ok": "regions"},
+        ) as mocked_builder:
+            payload = self.service.get_regions_payload(brand="gelo", virus_typ="Influenza A")
+
+        self.assertEqual(payload, {"ok": "regions"})
+        mocked_builder.assert_called_once_with(
+            self.service,
+            virus_typ="Influenza A",
+            target_source="RKI_ARE",
+            brand="gelo",
+        )
+
+    def test_get_signal_stack_delegates_to_lineage_module(self) -> None:
+        with patch(
+            "app.services.media.v2.lineage.build_signal_stack_payload",
+            return_value={"ok": "signal-stack"},
+        ) as mocked_builder:
+            payload = self.service.get_signal_stack(virus_typ="Influenza A")
+
+        self.assertEqual(payload, {"ok": "signal-stack"})
+        mocked_builder.assert_called_once_with(
+            self.service,
+            virus_typ="Influenza A",
+        )
+
+    def test_get_model_lineage_delegates_to_lineage_module(self) -> None:
+        with patch(
+            "app.services.media.v2.lineage.build_model_lineage_payload",
+            return_value={"ok": "model-lineage"},
+        ) as mocked_builder:
+            payload = self.service.get_model_lineage(virus_typ="Influenza A")
+
+        self.assertEqual(payload, {"ok": "model-lineage"})
+        mocked_builder.assert_called_once_with(
+            self.service,
+            virus_typ="Influenza A",
+        )
+
+    def test_private_lineage_wrappers_delegate_to_lineage_module(self) -> None:
+        with (
+            patch(
+                "app.services.media.v2.lineage._signal_group_summary",
+                return_value={"decision_mode": "epidemic_wave"},
+            ) as mocked_summary,
+            patch(
+                "app.services.media.v2.lineage._decision_mode_from_contributions",
+                return_value={"key": "mixed"},
+            ) as mocked_mode,
+            patch(
+                "app.services.media.v2.lineage._read_model_metadata",
+                return_value={"version": "v-test"},
+            ) as mocked_metadata,
+        ):
+            summary = self.service._signal_group_summary({"national_score": 72.0})
+            mode = self.service._decision_mode_from_contributions(
+                epidemic_total=10.0,
+                supply_total=5.0,
+                context_total=2.0,
+            )
+            metadata = self.service._read_model_metadata("Influenza A")
+
+        self.assertEqual(summary, {"decision_mode": "epidemic_wave"})
+        self.assertEqual(mode, {"key": "mixed"})
+        self.assertEqual(metadata, {"version": "v-test"})
+        mocked_summary.assert_called_once_with(self.service, {"national_score": 72.0})
+        mocked_mode.assert_called_once_with(
+            self.service,
+            epidemic_total=10.0,
+            supply_total=5.0,
+            context_total=2.0,
+        )
+        mocked_metadata.assert_called_once_with(self.service, "Influenza A")
+
+    def test_signal_stack_still_uses_service_get_model_lineage_override(self) -> None:
+        class OverrideMediaV2Service(MediaV2Service):
+            def get_model_lineage(self, *, virus_typ: str = "Influenza A") -> dict:
+                return {"feature_families": ["override-family"], "drift_state": "ok"}
+
+        service = OverrideMediaV2Service(self.db)
+        service.cockpit_service.get_cockpit_payload = lambda **_: {
+            "data_freshness": {"wastewater": "2026-04-01T00:00:00Z"},
+            "source_status": {
+                "items": [
+                    {"source_key": "wastewater", "freshness_state": "fresh"},
+                ]
+            },
+            "peix_epi_score": {
+                "national_score": 71.0,
+                "national_band": "high",
+                "top_drivers": [],
+                "context_signals": {},
+                "virus_scores": {
+                    "Influenza A": {"contribution": 20.0},
+                },
+            },
+        }
+
+        payload = service.get_signal_stack(virus_typ="Influenza A")
+
+        self.assertEqual(
+            payload["summary"]["math_stack"]["feature_families"],
+            ["override-family"],
+        )
+
+    def test_get_truth_coverage_delegates_to_outcomes_module(self) -> None:
+        with patch(
+            "app.services.media.v2.outcomes.build_truth_coverage",
+            return_value={"ok": "coverage"},
+        ) as mocked_builder:
+            payload = self.service.get_truth_coverage(brand="gelo", virus_typ="Influenza A")
+
+        self.assertEqual(payload, {"ok": "coverage"})
+        mocked_builder.assert_called_once_with(
+            self.service,
+            brand="gelo",
+            virus_typ="Influenza A",
+        )
+
+    def test_get_truth_evidence_delegates_to_outcomes_module(self) -> None:
+        with patch(
+            "app.services.media.v2.outcomes.build_truth_evidence",
+            return_value={"ok": "truth-evidence"},
+        ) as mocked_builder:
+            payload = self.service.get_truth_evidence(brand="gelo", virus_typ="Influenza A")
+
+        self.assertEqual(payload, {"ok": "truth-evidence"})
+        mocked_builder.assert_called_once_with(
+            self.service,
+            brand="gelo",
+            virus_typ="Influenza A",
+        )
+
+    def test_import_outcomes_delegates_to_outcomes_module(self) -> None:
+        rows = [{"week_start": "2026-02-02T00:00:00"}]
+        with patch(
+            "app.services.media.v2.outcomes.import_outcomes",
+            return_value={"ok": "import"},
+        ) as mocked_builder:
+            payload = self.service.import_outcomes(
+                source_label="manual_csv",
+                records=rows,
+                brand="gelo",
+                replace_existing=True,
+                validate_only=True,
+                file_name="truth.csv",
+            )
+
+        self.assertEqual(payload, {"ok": "import"})
+        mocked_builder.assert_called_once_with(
+            self.service,
+            source_label="manual_csv",
+            records=rows,
+            csv_payload=None,
+            brand="gelo",
+            replace_existing=True,
+            validate_only=True,
+            file_name="truth.csv",
+        )
+
+    def test_list_outcome_import_batches_delegates_to_outcomes_module(self) -> None:
+        with patch(
+            "app.services.media.v2.outcomes.list_outcome_import_batches",
+            return_value=[{"batch_id": "abc"}],
+        ) as mocked_builder:
+            payload = self.service.list_outcome_import_batches(brand="gelo", limit=7)
+
+        self.assertEqual(payload, [{"batch_id": "abc"}])
+        mocked_builder.assert_called_once_with(
+            self.service,
+            brand="gelo",
+            limit=7,
+        )
+
+    def test_get_outcome_import_batch_detail_delegates_to_outcomes_module(self) -> None:
+        with patch(
+            "app.services.media.v2.outcomes.get_outcome_import_batch_detail",
+            return_value={"batch": {"batch_id": "abc"}},
+        ) as mocked_builder:
+            payload = self.service.get_outcome_import_batch_detail(batch_id="abc")
+
+        self.assertEqual(payload, {"batch": {"batch_id": "abc"}})
+        mocked_builder.assert_called_once_with(
+            self.service,
+            batch_id="abc",
+        )
+
+    def test_outcome_template_csv_delegates_to_outcomes_module(self) -> None:
+        with patch(
+            "app.services.media.v2.outcomes.outcome_template_csv",
+            return_value="header1,header2\n",
+        ) as mocked_builder:
+            payload = self.service.outcome_template_csv()
+
+        self.assertEqual(payload, "header1,header2\n")
+        mocked_builder.assert_called_once_with(self.service)
+
+    def test_truth_gate_delegates_to_outcomes_module(self) -> None:
+        truth_coverage = {"coverage_weeks": 12}
+        with patch(
+            "app.services.media.v2.outcomes._truth_gate",
+            return_value={"ok": "truth-gate"},
+        ) as mocked_builder:
+            payload = self.service._truth_gate(truth_coverage)
+
+        self.assertEqual(payload, {"ok": "truth-gate"})
+        mocked_builder.assert_called_once_with(self.service, truth_coverage)
+
+    def test_get_campaigns_payload_delegates_to_campaigns_builder(self) -> None:
+        with patch(
+            "app.services.media.v2_service.build_campaigns_payload",
+            return_value={"ok": "campaigns"},
+        ) as mocked_builder:
+            payload = self.service.get_campaigns_payload(brand="gelo", limit=42)
+
+        self.assertEqual(payload, {"ok": "campaigns"})
+        mocked_builder.assert_called_once_with(self.service, brand="gelo", limit=42)
+
+    def test_campaign_state_counts_delegates_to_queue_module(self) -> None:
+        cards = [{"lifecycle_state": "APPROVE"}]
+        with patch(
+            "app.services.media.v2.queue._campaign_state_counts",
+            return_value={"APPROVE": 1},
+        ) as mocked_builder:
+            payload = self.service._campaign_state_counts(cards)
+
+        self.assertEqual(payload, {"APPROVE": 1})
+        mocked_builder.assert_called_once_with(self.service, cards)
+
+    def test_build_campaign_queue_delegates_to_queue_module(self) -> None:
+        cards = [{"id": "card-1"}]
+        with patch(
+            "app.services.media.v2.queue._build_campaign_queue",
+            return_value={"visible_cards": []},
+        ) as mocked_builder:
+            payload = self.service._build_campaign_queue(cards, visible_limit=5)
+
+        self.assertEqual(payload, {"visible_cards": []})
+        mocked_builder.assert_called_once_with(
+            self.service,
+            cards,
+            visible_limit=5,
+        )
+
+    def test_decision_focus_card_and_recommended_action_delegate_to_queue_module(self) -> None:
+        cards = [{"id": "card-1"}]
+        top_card = {"id": "card-1"}
+        top_regions = [{"name": "Hamburg"}]
+        with (
+            patch(
+                "app.services.media.v2.queue._decision_focus_card",
+                return_value={"id": "focus"},
+            ) as mocked_focus,
+            patch(
+                "app.services.media.v2.queue._recommended_action",
+                return_value="Aktion",
+            ) as mocked_action,
+        ):
+            focus = self.service._decision_focus_card(cards)
+            action = self.service._recommended_action(
+                decision_state="GO",
+                top_card=top_card,
+                top_regions=top_regions,
+                decision_mode="mixed",
+            )
+
+        self.assertEqual(focus, {"id": "focus"})
+        self.assertEqual(action, "Aktion")
+        mocked_focus.assert_called_once_with(self.service, cards)
+        mocked_action.assert_called_once_with(
+            self.service,
+            decision_state="GO",
+            top_card=top_card,
+            top_regions=top_regions,
+            decision_mode="mixed",
+        )
+
+    def test_build_campaign_queue_still_respects_service_campaign_sort_key_override(self) -> None:
+        class OverrideMediaV2Service(MediaV2Service):
+            def _campaign_sort_key(self, item: dict) -> tuple:
+                return (item.get("manual_rank", 0),)
+
+        service = OverrideMediaV2Service(self.db)
+        cards = [
+            {
+                "id": "variant-low",
+                "opportunity_id": 1,
+                "lifecycle_state": "REVIEW",
+                "manual_rank": 1,
+                "recommended_product": "GeloProsed",
+            },
+            {
+                "id": "variant-high",
+                "opportunity_id": 1,
+                "lifecycle_state": "APPROVE",
+                "manual_rank": 9,
+                "recommended_product": "GeloProsed",
+            },
+            {
+                "id": "other",
+                "opportunity_id": 2,
+                "lifecycle_state": "PREPARE",
+                "manual_rank": 3,
+                "recommended_product": "GeloRevoice",
+            },
+        ]
+
+        queue = service._build_campaign_queue(cards, visible_limit=8)
+
+        self.assertEqual(queue["primary_cards"][0]["id"], "variant-high")
+        self.assertEqual(queue["primary_cards"][0]["variant_count"], 2)
+        self.assertEqual(queue["primary_cards"][0]["variants"][0]["id"], "variant-low")
+
+    def test_prioritization_wrappers_delegate_to_module(self) -> None:
+        region = {"name": "Hamburg", "change_pct": 14}
+        suggestion = {"reason": "Aus Pilot sichtbar"}
+        peix_region = {"layer_contributions": {"Bio": 12.0}}
+        with (
+            patch(
+                "app.services.media.v2.prioritization._forecast_direction",
+                return_value="aufwärts",
+            ) as mocked_forecast,
+            patch(
+                "app.services.media.v2.prioritization._priority_explanation",
+                return_value="Hamburg priorisieren",
+            ) as mocked_explanation,
+            patch(
+                "app.services.media.v2.prioritization._severity_score",
+                return_value=77,
+            ) as mocked_severity,
+            patch(
+                "app.services.media.v2.prioritization._region_decision_mode",
+                return_value={"key": "mixed"},
+            ) as mocked_mode,
+        ):
+            forecast = self.service._forecast_direction(region)
+            explanation = self.service._priority_explanation(
+                region=region,
+                suggestion=suggestion,
+                forecast_direction="aufwärts",
+                severity_score=77,
+                momentum_score=62,
+                actionability_score=68,
+                decision_mode="mixed",
+            )
+            severity = self.service._severity_score(region)
+            mode = self.service._region_decision_mode(peix_region)
+
+        self.assertEqual(forecast, "aufwärts")
+        self.assertEqual(explanation, "Hamburg priorisieren")
+        self.assertEqual(severity, 77)
+        self.assertEqual(mode, {"key": "mixed"})
+        mocked_forecast.assert_called_once_with(self.service, region)
+        mocked_explanation.assert_called_once_with(
+            self.service,
+            region=region,
+            suggestion=suggestion,
+            forecast_direction="aufwärts",
+            severity_score=77,
+            momentum_score=62,
+            actionability_score=68,
+            decision_mode="mixed",
+        )
+        mocked_severity.assert_called_once_with(self.service, region)
+        mocked_mode.assert_called_once_with(self.service, peix_region)
+
+    def test_momentum_score_delegates_to_prioritization_module(self) -> None:
+        region = {"change_pct": 12.0}
+        with patch(
+            "app.services.media.v2.prioritization._momentum_score",
+            return_value=71,
+        ) as mocked_momentum:
+            score = self.service._momentum_score(region=region, forecast_direction="aufwärts")
+
+        self.assertEqual(score, 71)
+        mocked_momentum.assert_called_once_with(
+            self.service,
+            region=region,
+            forecast_direction="aufwärts",
+        )
+
+    def test_region_decision_mode_still_respects_service_decision_mode_override(self) -> None:
+        class OverrideMediaV2Service(MediaV2Service):
+            def _decision_mode_from_contributions(
+                self,
+                *,
+                epidemic_total: float,
+                supply_total: float,
+                context_total: float,
+            ) -> dict[str, str]:
+                return {
+                    "key": "override",
+                    "label": f"{epidemic_total}/{supply_total}/{context_total}",
+                }
+
+        service = OverrideMediaV2Service(self.db)
+        peix_region = {
+            "layer_contributions": {
+                "Bio": 10.0,
+                "Forecast": 5.0,
+                "Shortage": 2.0,
+                "Weather": 1.0,
+                "Search": 3.0,
+                "Baseline": 4.0,
+            }
+        }
+
+        mode = service._region_decision_mode(peix_region)
+
+        self.assertEqual(mode["key"], "override")
+        self.assertEqual(mode["label"], "15.0/2.0/8.0")
+
+    def test_campaign_cards_delegate_to_cards_module(self) -> None:
+        with patch(
+            "app.services.media.v2.cards._campaign_cards",
+            return_value=[{"id": "card-1"}],
+        ) as mocked_builder:
+            cards = self.service._campaign_cards(brand="gelo", limit=25)
+
+        self.assertEqual(cards, [{"id": "card-1"}])
+        mocked_builder.assert_called_once_with(
+            self.service,
+            brand="gelo",
+            limit=25,
+        )
+
+    def test_card_learning_wrappers_delegate_to_cards_module(self) -> None:
+        card = {"id": "card-1"}
+        learning_bundle = {"scope": "pilot"}
+        truth_gate = {"learning_state": "im_aufbau"}
+        with (
+            patch(
+                "app.services.media.v2.cards._attach_outcome_learning_to_card",
+                return_value={"id": "card-1", "priority_score": 73.0},
+            ) as mocked_attach,
+            patch(
+                "app.services.media.v2.cards._learned_priority_score",
+                return_value=71.5,
+            ) as mocked_score,
+        ):
+            enriched = self.service._attach_outcome_learning_to_card(
+                card=card,
+                learning_bundle=learning_bundle,
+                truth_gate=truth_gate,
+            )
+            score = self.service._learned_priority_score(
+                base_priority=60.0,
+                outcome_signal_score=80.0,
+                truth_gate=truth_gate,
+            )
+
+        self.assertEqual(enriched, {"id": "card-1", "priority_score": 73.0})
+        self.assertEqual(score, 71.5)
+        mocked_attach.assert_called_once_with(
+            self.service,
+            card=card,
+            learning_bundle=learning_bundle,
+            truth_gate=truth_gate,
+        )
+        mocked_score.assert_called_once_with(
+            self.service,
+            base_priority=60.0,
+            outcome_signal_score=80.0,
+            truth_gate=truth_gate,
+        )
+
+    def test_campaign_cards_still_respect_service_campaign_sort_key_override(self) -> None:
+        class OverrideMediaV2Service(MediaV2Service):
+            def _campaign_sort_key(self, item: dict) -> tuple:
+                return (item.get("manual_rank", 0),)
+
+            def _attach_outcome_learning_to_card(
+                self,
+                *,
+                card: dict[str, object],
+                learning_bundle: dict[str, object],
+                truth_gate: dict[str, object],
+            ) -> dict[str, object]:
+                enriched = dict(card)
+                enriched["manual_rank"] = 9 if card.get("id") == "opp-high" else 1
+                return enriched
+
+        service = OverrideMediaV2Service(self.db)
+        opportunities = [
+            {
+                "id": "opp-low",
+                "status": "READY",
+                "type": "activation",
+                "brand": "gelo",
+                "product": "GeloProsed",
+                "recommended_product": "GeloProsed",
+                "region_codes": ["SH"],
+                "urgency_score": 60.0,
+                "manual_rank": 1,
+            },
+            {
+                "id": "opp-high",
+                "status": "READY",
+                "type": "activation",
+                "brand": "gelo",
+                "product": "GeloRevoice",
+                "recommended_product": "GeloRevoice",
+                "region_codes": ["HH"],
+                "urgency_score": 60.0,
+                "manual_rank": 9,
+            },
+        ]
+
+        with (
+            patch.object(service.engine, "get_opportunities", return_value=opportunities),
+            patch.object(service, "get_truth_coverage", return_value={"coverage_weeks": 0}),
+            patch.object(service.truth_gate_service, "evaluate", return_value={"learning_state": "missing"}),
+            patch.object(service.outcome_signal_service, "build_learning_bundle", return_value={"bundle": True}),
+        ):
+            cards = service._campaign_cards(brand="gelo", limit=20)
+
+        self.assertEqual(cards[0]["id"], "opp-high")
+        self.assertEqual(cards[1]["id"], "opp-low")
+
+    def test_guidance_wrappers_delegate_to_module(self) -> None:
+        source_status = {"items": [{"source_key": "wastewater", "is_live": True}]}
+        top_card = {"display_title": "Nord"}
+        top_regions = [{"name": "Hamburg", "signal_score": 72.0}]
+        cockpit = {"peix_epi_score": {"top_drivers": [{"label": "AMELAG"}]}}
+        signal_summary = {"decision_mode_reason": "Kontext und Signal tragen gemeinsam."}
+        with (
+            patch(
+                "app.services.media.v2.guidance._decision_freshness_state",
+                return_value="fresh",
+            ) as mocked_freshness,
+            patch(
+                "app.services.media.v2.guidance._build_why_now",
+                return_value=["Grund 1", "Grund 2", "Grund 3"],
+            ) as mocked_why_now,
+            patch(
+                "app.services.media.v2.guidance._known_limits",
+                return_value=["Limit 1"],
+            ) as mocked_limits,
+        ):
+            freshness = self.service._decision_freshness_state(source_status)
+            why_now = self.service._build_why_now(
+                top_card=top_card,
+                top_regions=top_regions,
+                cockpit=cockpit,
+                decision_state="GO",
+                signal_summary=signal_summary,
+            )
+            limits = self.service._known_limits(cockpit, "Influenza A")
+
+        self.assertEqual(freshness, "fresh")
+        self.assertEqual(why_now, ["Grund 1", "Grund 2", "Grund 3"])
+        self.assertEqual(limits, ["Limit 1"])
+        mocked_freshness.assert_called_once_with(self.service, source_status)
+        mocked_why_now.assert_called_once_with(
+            self.service,
+            top_card=top_card,
+            top_regions=top_regions,
+            cockpit=cockpit,
+            decision_state="GO",
+            signal_summary=signal_summary,
+        )
+        mocked_limits.assert_called_once_with(
+            self.service,
+            cockpit,
+            "Influenza A",
+            truth_coverage=None,
+            truth_validation_legacy=None,
+        )
+
+    def test_known_limits_still_respects_service_truth_coverage_override(self) -> None:
+        class OverrideMediaV2Service(MediaV2Service):
+            def get_truth_coverage(
+                self,
+                *,
+                brand: str = "gelo",
+                virus_typ: str | None = None,
+            ) -> dict[str, object]:
+                return {
+                    "coverage_weeks": 40,
+                    "truth_freshness_state": "fresh",
+                    "conversion_fields_present": ["Verkäufe"],
+                }
+
+        service = OverrideMediaV2Service(self.db)
+        cockpit = {
+            "backtest_summary": {
+                "latest_market": {
+                    "quality_gate": {
+                        "overall_passed": True,
+                    }
+                }
+            }
+        }
+
+        limits = service._known_limits(cockpit, "Influenza A")
+
+        self.assertNotIn("Kundennahe Daten decken noch keine 26 Wochen ab.", limits)
+        self.assertNotIn(
+            "In den Kundendaten fehlt noch mindestens eine belastbare Wirkungszahl wie Verkäufe, Bestellungen oder Umsatz.",
+            limits,
+        )
+
+    def test_get_evidence_payload_delegates_to_evidence_builder(self) -> None:
+        with patch(
+            "app.services.media.v2_service.build_evidence_payload",
+            return_value={"ok": "evidence"},
+        ) as mocked_builder:
+            payload = self.service.get_evidence_payload(brand="gelo", virus_typ="Influenza A")
+
+        self.assertEqual(payload, {"ok": "evidence"})
+        mocked_builder.assert_called_once_with(
+            self.service,
+            virus_typ="Influenza A",
+            target_source="RKI_ARE",
+            brand="gelo",
+        )
+
     def test_truth_gate_marks_stale_truth_as_risk(self) -> None:
         self._seed_truth_reference(datetime(2026, 3, 3))
         start = datetime(2025, 7, 21)

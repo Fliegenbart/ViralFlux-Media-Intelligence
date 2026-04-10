@@ -41,7 +41,7 @@ export interface PageHeaderConfig {
 interface PageHeaderContextValue {
   setPageHeader: (config: PageHeaderConfig | null) => void;
   clearPageHeader: () => void;
-  exportWeeklyReport: () => Promise<void>;
+  exportBriefingPdf: () => Promise<void>;
   pdfLoading: boolean;
   theme: 'light' | 'dark';
   toggleTheme: () => void;
@@ -73,7 +73,7 @@ const SECTION_META = [
 const PageHeaderContext = createContext<PageHeaderContextValue>({
   setPageHeader: () => {},
   clearPageHeader: () => {},
-  exportWeeklyReport: async () => {},
+  exportBriefingPdf: async () => {},
   pdfLoading: false,
   theme: 'light',
   toggleTheme: () => {},
@@ -265,7 +265,7 @@ const AppLayout: React.FC<Props> = ({ children }) => {
   const pageHeaderContext = useMemo<PageHeaderContextValue>(() => ({
     setPageHeader,
     clearPageHeader,
-    exportWeeklyReport: handlePdfDownload,
+    exportBriefingPdf: handlePdfDownload,
     pdfLoading,
     theme,
     toggleTheme: toggle,

@@ -40,7 +40,7 @@ async def generate_text(messages: list[dict], temperature: float = 0.2) -> str:
         return response.choices[0].message.content
     except Exception as e:
         logger.exception("VLLM Connection Error during async text request")
-        raise RuntimeError("Lokale vLLM-Anfrage fehlgeschlagen.") from e
+        raise RuntimeError("Local vLLM endpoint is unavailable.") from e
 
 
 def generate_text_sync(messages: list[dict], temperature: float = 0.2) -> str:
@@ -54,7 +54,7 @@ def generate_text_sync(messages: list[dict], temperature: float = 0.2) -> str:
         return response.choices[0].message.content
     except Exception as e:
         logger.exception("VLLM Connection Error during sync text request")
-        raise RuntimeError("Lokale vLLM-Anfrage fehlgeschlagen.") from e
+        raise RuntimeError("Local vLLM endpoint is unavailable.") from e
 
 
 async def generate_vision(
@@ -89,7 +89,7 @@ async def generate_vision(
         return response.choices[0].message.content
     except Exception as e:
         logger.exception("VLLM Vision Error during async image request")
-        raise RuntimeError("Lokale vLLM-Bildanfrage fehlgeschlagen.") from e
+        raise RuntimeError("Local vLLM endpoint is unavailable.") from e
 
 
 def generate_vision_sync(
@@ -124,4 +124,4 @@ def generate_vision_sync(
         return response.choices[0].message.content
     except Exception as e:
         logger.exception("VLLM Vision Error during sync image request")
-        raise RuntimeError("Lokale vLLM-Bildanfrage fehlgeschlagen.") from e
+        raise RuntimeError("Local vLLM endpoint is unavailable.") from e

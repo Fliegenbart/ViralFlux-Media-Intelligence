@@ -1,4 +1,5 @@
 import unittest
+import importlib
 from datetime import datetime, timedelta
 from unittest.mock import patch
 
@@ -99,6 +100,25 @@ class WaveRadarApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["status"], "ok")
 
+    def test_core_route_module_exposes_core_paths(self) -> None:
+        core_module = importlib.import_module("app.api.backtest_routes_core")
+        paths = {route.path for route in core_module.router.routes}
+
+        self.assertIn("/market", paths)
+        self.assertIn("/customer", paths)
+        self.assertIn("/business-pitch", paths)
+        self.assertIn("/top-regions", paths)
+        self.assertIn("/runs", paths)
+        self.assertIn("/runs/{run_id}", paths)
+
+    def test_signal_route_module_exposes_signal_paths(self) -> None:
+        signals_module = importlib.import_module("app.api.backtest_routes_signals")
+        paths = {route.path for route in signals_module.router.routes}
+
+        self.assertIn("/peix-validation", paths)
+        self.assertIn("/wave-radar", paths)
+        self.assertIn("/outbreak-alerts", paths)
+
     def test_wave_radar_returns_ranked_onsets_and_spread_summary(self) -> None:
         baseline_points = [
             (datetime(2024, 2, 5), "Berlin", 10.0),
@@ -162,3 +182,35 @@ class WaveRadarApiTests(unittest.TestCase):
         body = response.json()
         self.assertIn("Keine regionalen Daten", body["error"])
         self.assertIn("influenza", body["available"])
+
+    def test_outbreak_alerts_returns_signal_alerts_through_aggregator_router(self) -> None:
+        week_points = [
+            (datetime(2025, 10, 6), "Berlin", 10.0),
+            (datetime(2025, 10, 13), "Berlin", 11.0),
+            (datetime(2025, 10, 20), "Berlin", 12.0),
+            (datetime(2025, 10, 27), "Berlin", 16.0),
+            (datetime(2025, 11, 3), "Berlin", 19.0),
+            (datetime(2025, 11, 10), "Berlin", 24.0),
+            (datetime(2025, 10, 6), "Gesamt", 12.0),
+            (datetime(2025, 10, 13), "Gesamt", 12.0),
+            (datetime(2025, 10, 20), "Gesamt", 13.0),
+            (datetime(2025, 10, 27), "Gesamt", 15.0),
+            (datetime(2025, 11, 3), "Gesamt", 17.0),
+            (datetime(2025, 11, 10), "Gesamt", 20.0),
+        ]
+        for week_start, bundesland, incidence in week_points:
+            self._add_survstat_point(week_start, bundesland, incidence)
+        self.db.commit()
+
+        with patch("app.api.backtest_routes_signals._compute_lead_lag", return_value=2):
+            response = self.client.get(
+                "/api/v1/backtest/outbreak-alerts",
+                headers=self.user_headers,
+            )
+
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["total_alerts"], 1)
+        self.assertEqual(body["alerts"][0]["bundesland"], "Berlin")
+        self.assertEqual(body["alerts"][0]["disease"], "Influenza")
+        self.assertEqual(body["alerts"][0]["urgency"], "high")

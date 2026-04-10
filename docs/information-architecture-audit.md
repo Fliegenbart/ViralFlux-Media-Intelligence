@@ -2,27 +2,33 @@
 
 ## Ziel
 
-Diese Matrix beschreibt für die aktiven Live-Seiten:
+Diese Matrix beschreibt die aktiven Live-Seiten und den operativen Kernfluss:
 
 - welches Element welche Frage beantwortet
 - welche Funktion es im Ablauf hat
 - was passieren würde, wenn es fehlt
 - ob es behalten, vereinfacht, verschoben, entfernt oder neu ergaenzt werden soll
 
-## Hauptfluss
+## Live-Navigation
 
-`Login -> /jetzt -> /regionen -> /kampagnen -> /evidenz`
+`/virus-radar`, `/jetzt`, `/zeitgraph`, `/regionen`, `/kampagnen`, `/evidenz`
+
+## Operativer Hauptfluss
+
+`/jetzt -> /regionen -> /kampagnen -> /evidenz`
 
 ## Live-Seiten
 
 | Seite | Element | Beantwortete Frage | Funktion | Wenn es fehlt | Entscheidung |
 | --- | --- | --- | --- | --- | --- |
+| `/virus-radar` | Hero-Graph + Verdichtung | Wie sieht die aktuelle Lage auf einen Blick aus? | Einstieg und Überblick über Viruslage, Forecast und Priorisierung | Die App verliert ihre zentrale Start- und Überblicksseite | Behalten |
 | `/jetzt` | Proof-Graph "Verlauf der Welle" | Warum hat ViralFlux hier einen echten Vorteil? | Sichtbarer Beweis für zeitlichen Vorsprung | Die Seite wirkt wie eine Behauptung ohne klaren Beleg | Neu ergaenzt |
 | `/jetzt` | Hauptentscheidung | Was tun wir jetzt? | Leitet aus dem Verlauf den nächsten Schritt ab | Der Nutzer sieht Daten, aber keine klare Handlung | Behalten |
 | `/jetzt` | Vertrauensblock "Wie sicher ist das?" | Kann ich der Entscheidung trauen? | Kompakter Sicherheitscheck | Die Entscheidung wirkt zu hart oder zu unsicher | Behalten |
 | `/jetzt` | Als Nächstes prüfen | Wohin gehe ich nach dem ersten Blick? | Bruecke zu Regionenarbeit | Der Fluss endet nach dem ersten Lesen | Behalten |
 | `/jetzt` | Was wir noch prüfen | Was bremst noch? | Zeigt Restunsicherheit ohne den Fokus zu zerstoeren | Offene Risiken verschwinden aus dem Blick | Vereinfachen |
 | `/jetzt` | Weitere Details | Was ist für den zweiten Blick relevant? | Lagert Tiefeninfos nach unten aus | Die Seite wird oben zu dicht | Behalten |
+| `/zeitgraph` | Ein-Virus-Verlauf + 7-Tage-Ausblick | Wie entwickelt sich ein Virus isoliert weiter? | Ergänzende Analysefläche für Verlauf und Forecast ohne übrige Operativlogik | Der Forecast-Verlauf lässt sich nur indirekt aus anderen Seiten lesen | Behalten |
 | `/regionen` | Fokusregion | Welche Region ist zuerst wichtig? | Verdichtet die Regionsauswahl auf einen klaren Fall | Die Kartenansicht bleibt zu abstrakt | Behalten |
 | `/regionen` | Karte | Wo sehe ich die Alternativen? | Ermöglicht Auswahl und Orientierung | Regionenvergleich wird unklar | Behalten |
 | `/regionen` | Warum diese Region | Warum genau diese Region? | Erklaert Treiber und Kontext | Region wirkt willkuerlich | Behalten |
@@ -44,10 +50,10 @@ Diese Matrix beschreibt für die aktiven Live-Seiten:
 
 | Flaeche | Beobachtung | Rolle | Entscheidung |
 | --- | --- | --- | --- |
-| `DecisionPage` / `DecisionView` | Enthalten den vorhandenen Verlaufsgrafen und weitere Logik, sind aber nicht im Live-Hauptpfad | Quellflaeche für die Proof-Integration | Inhalt übernehmen, danach bereinigen |
-| `OperationalDashboardPage` / `OperationalDashboard` | Aeltere alternative Darstellung der Wochenlage | Historischer Zwischenstand | Später archivieren oder löschen |
-| `PilotPage` / `PilotSurface` | Eigene Analyseflaeche ausserhalb des Live-Hauptpfads | Spezial- oder Altansicht | Vorerst ausser Hauptmodell halten |
-| `MediaCockpit` / `WeeklyReport` | Nicht Teil der aktiven Hauptrouten | Altbestand | Später getrennt bewerten |
+| `DecisionPage` / `DecisionView` | Enthalten den vorhandenen Verlaufsgrafen und weitere Logik, sind aber nicht im Live-Hauptpfad | Quellflaeche für die Proof-Integration | Im Code rueckbauen |
+| `OperationalDashboardPage` / `OperationalDashboard` | Aeltere alternative Darstellung der Wochenlage | Historischer Zwischenstand | Im Code rueckbauen |
+| `PilotPage` / `PilotSurface` | Eigene Analyseflaeche ausserhalb des Live-Hauptpfads | Spezial- oder Altansicht | Im Code rueckbauen |
+| `MediaCockpit` / `WeeklyReport` | Nicht Teil der aktiven Hauptrouten | Altbestand | Im Code rueckbauen |
 
 ## Bewertungsregeln
 

@@ -3169,8 +3169,6 @@ Verwende einen sachlichen, vertrauenswürdigen Ton."""
                 {"role": "user", "content": prompt},
             ]
             text = generate_text_sync(messages=messages, temperature=0.2)
-            if text.startswith("FEHLER:"):
-                raise RuntimeError(text)
             return text
         except Exception as e:
             logger.warning(f"LLM Insight fehlgeschlagen: {e}")

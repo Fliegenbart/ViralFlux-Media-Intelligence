@@ -15,6 +15,11 @@ jest.mock('../../App', () => ({
   }),
 }));
 
+jest.mock('../../components/cockpit/cockpitUtils', () => ({
+  formatDateShort: (value: string) => value,
+  VIRUS_OPTIONS: ['Influenza A', 'Influenza B', 'SARS-CoV-2', 'RSV A'],
+}));
+
 jest.mock('../../components/AppLayout', () => ({
   usePageHeader: () => ({
     setPageHeader: mockSetPageHeader,

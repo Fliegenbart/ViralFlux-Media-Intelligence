@@ -104,3 +104,17 @@ def test_vllm_clients_use_central_settings(monkeypatch: pytest.MonkeyPatch) -> N
             "api_key": "local",
         },
     }
+
+
+def test_generate_text_sync_raises_runtime_error_when_client_fails(monkeypatch: pytest.MonkeyPatch) -> None:
+    class FailingClient:
+        class chat:
+            class completions:
+                @staticmethod
+                def create(*_args, **_kwargs):
+                    raise ValueError("boom")
+
+    monkeypatch.setattr(vllm_service, "get_sync_client", lambda: FailingClient())
+
+    with pytest.raises(RuntimeError, match="Local vLLM endpoint is unavailable."):
+        vllm_service.generate_text_sync(messages=[{"role": "user", "content": "hi"}])

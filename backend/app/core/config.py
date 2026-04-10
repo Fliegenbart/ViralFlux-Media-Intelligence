@@ -1,10 +1,19 @@
-from pathlib import Path
-from pydantic_settings import BaseSettings, SettingsConfigDict
-from dotenv import load_dotenv
 from functools import lru_cache
+from pathlib import Path
+
+from dotenv import load_dotenv
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-_DEFAULT_ENV_FILE = Path(__file__).resolve().parents[3] / ".env"
+def _find_default_env_file() -> Path:
+    for parent in Path(__file__).resolve().parents:
+        candidate = parent / ".env"
+        if candidate.exists():
+            return candidate
+    return Path(__file__).resolve().parents[3] / ".env"
+
+
+_DEFAULT_ENV_FILE = _find_default_env_file()
 load_dotenv(_DEFAULT_ENV_FILE, override=False)
 
 
@@ -116,6 +125,7 @@ class Settings(BaseSettings):
     DB_ALLOW_RUNTIME_SCHEMA_UPDATES: bool | None = None
     STARTUP_ENABLE_BFARM_IMPORT: bool = False
     STARTUP_STRICT_READINESS: bool | None = None
+    STARTUP_BFARM_IMPORT_ENABLED: bool = False
     READINESS_REQUIRE_BROKER: bool | None = None
     READINESS_SOURCE_FRESH_DAYS: int = 7
     READINESS_SOURCE_WARNING_DAYS: int = 14

@@ -167,6 +167,20 @@ class AiCampaignPlannerNormalizationTests(unittest.TestCase):
         with self.assertRaises(json.JSONDecodeError):
             self.planner._parse_json_response("kein json vorhanden")
 
+    def test_generate_plan_skip_llm_uses_deterministic_fallback(self) -> None:
+        result = self.planner.generate_plan(
+            playbook_candidate=self.candidate,
+            brand="gelo",
+            product="product-x",
+            campaign_goal="Awareness",
+            weekly_budget=120000.0,
+            skip_llm=True,
+        )
+
+        self.assertEqual(result["ai_generation_status"], "fallback_template")
+        self.assertTrue(result["ai_meta"]["fallback_used"])
+        self.assertIn("ai_plan", result)
+
 
 if __name__ == "__main__":
     unittest.main()

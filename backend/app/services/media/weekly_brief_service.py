@@ -17,6 +17,8 @@ from typing import Any
 from fpdf import FPDF
 from sqlalchemy.orm import Session
 
+from app.services.media import weekly_brief_formatting
+
 logger = logging.getLogger(__name__)
 
 # ── Brand Colors (shared with briefing_pdf.py) ──
@@ -29,45 +31,8 @@ _RED = (220, 38, 38)
 _WHITE = (255, 255, 255)
 _BG = (248, 250, 252)
 
-_SOURCE_LABELS = {
-    "wastewater": "Abwasser",
-    "are konsultation": "ARE-Konsultation",
-    "survstat": "SurvStat",
-    "notaufnahme": "Notaufnahme",
-    "weather": "Wetter",
-    "pollen": "Pollen",
-    "google trends": "Google Trends",
-    "bfarm shortage": "BfArM-Engpässe",
-    "marketing": "Kundendaten",
-    "backtest": "Rückblicktest",
-}
-
-_TILE_LABELS = {
-    "SURVSTAT Respiratory": "SurvStat Atemwege",
-    "Top Chancenregion": "Früheste Signalregion",
-    "Signalscore Deutschland": "Signalwert Deutschland",
-    "BfArM Engpass-Signal": "BfArM-Engpasssignal",
-    "Google Trends Infekt": "Google Trends Atemwege",
-    "ARE Konsultationsinzidenz": "ARE-Konsultationsinzidenz",
-}
-
-
 def _safe(text: Any) -> str:
-    """Sanitize text for Latin-1 encoding (core PDF fonts).
-
-    Latin-1 natively supports ä ö ü Ä Ö Ü ß — only replace characters
-    outside the Latin-1 range (smart quotes, em-dashes, arrows, etc.).
-    """
-    if not isinstance(text, str):
-        text = str(text) if text is not None else ""
-    replacements = {
-        "\u2014": "-", "\u2013": "-", "\u2018": "'", "\u2019": "'",
-        "\u201c": '"', "\u201d": '"', "\u2026": "...", "\u2022": "*",
-        "\u00a0": " ", "\u2197": "^", "\u2198": "v", "\u2192": "->",
-    }
-    for old, new in replacements.items():
-        text = text.replace(old, new)
-    return text.encode("latin-1", errors="replace").decode("latin-1")
+    return weekly_brief_formatting.safe(text)
 
 
 class _ActionBriefPDF(FPDF):
@@ -125,82 +90,35 @@ def _kv(pdf: FPDF, label: str, value: str, bold_value: bool = False) -> None:
 
 
 def _source_display_label(source: str | None) -> str:
-    raw = str(source or "").strip()
-    if not raw:
-        return "-"
-    normalized = raw.lower().replace("_", " ").replace("-", " ")
-    normalized = " ".join(normalized.split())
-    if normalized in _SOURCE_LABELS:
-        return _SOURCE_LABELS[normalized]
-    return raw.replace("_", " ").title()
+    return weekly_brief_formatting.source_display_label(source)
 
 
 def _dedupe_cards(cards: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    unique_cards: list[dict[str, Any]] = []
-    seen: set[tuple[str, str]] = set()
-
-    for card in cards:
-        product = str(card.get("recommended_product", card.get("product", "")) or "").strip().lower()
-        reason = str(card.get("reason", card.get("recommendation_reason", "")) or "").strip().lower()
-        signature = (product, reason)
-        if signature in seen:
-            continue
-        seen.add(signature)
-        unique_cards.append(card)
-
-    return unique_cards
+    return weekly_brief_formatting.dedupe_cards(cards)
 
 
 def _tile_display_title(title: str | None) -> str:
-    raw = str(title or "").strip()
-    if not raw:
-        return "-"
-    if raw in _TILE_LABELS:
-        return _TILE_LABELS[raw]
-    return raw.replace("Signalscore", "Signalwert")
+    return weekly_brief_formatting.tile_display_title(title)
 
 
 def _normalize_tile_line(text: str) -> str:
-    normalized = str(text or "")
-    for source, replacement in _TILE_LABELS.items():
-        normalized = normalized.replace(source, replacement)
-    return normalized.replace("Signalscore", "Signalwert")
+    return weekly_brief_formatting.normalize_tile_line(text)
 
 
 def _normalize_signal_score(value: Any) -> float:
-    try:
-        score = float(value or 0)
-    except (TypeError, ValueError):
-        return 0.0
-    if score <= 1.0:
-        score *= 100.0
-    return max(0.0, min(100.0, score))
+    return weekly_brief_formatting.normalize_signal_score(value)
 
 
 def _primary_signal_score(item: dict[str, Any] | None) -> float:
-    payload = item or {}
-    for key in ("signal_score", "peix_score", "score_0_100", "impact_probability"):
-        if key in payload and payload.get(key) is not None:
-            return round(_normalize_signal_score(payload.get(key)), 1)
-    return 0.0
+    return weekly_brief_formatting.primary_signal_score(item)
 
 
 def _format_signal_score(value: Any, digits: int = 0) -> str:
-    score = _normalize_signal_score(value)
-    return f"{score:.{digits}f}/100"
+    return weekly_brief_formatting.format_signal_score(value, digits=digits)
 
 
 def _action_card_title(card: dict[str, Any]) -> str:
-    title = str(
-        card.get("display_title")
-        or card.get("recommended_product")
-        or card.get("product")
-        or "Kampagnenvorschlag"
-    ).strip()
-    reason = str(card.get("reason") or card.get("recommendation_reason") or "").strip()
-    if reason and reason.lower() not in title.lower():
-        return f"{title}: {reason}"
-    return title
+    return weekly_brief_formatting.action_card_title(card)
 
 
 class WeeklyBriefService:

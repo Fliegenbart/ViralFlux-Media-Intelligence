@@ -1,4 +1,7 @@
+from unittest.mock import patch
+
 from app.services.media.weekly_brief_service import (
+    _action_card_title,
     _dedupe_cards,
     _format_signal_score,
     _normalize_tile_line,
@@ -62,3 +65,53 @@ def test_primary_signal_score_prefers_explicit_score_over_legacy_probability_ali
 def test_format_signal_score_uses_score_scale_instead_of_percent():
     assert _format_signal_score(77.0) == "77/100"
     assert _format_signal_score(0.77) == "77/100"
+
+
+def test_source_display_label_wrapper_delegates_to_formatting_module():
+    with patch(
+        "app.services.media.weekly_brief_service.weekly_brief_formatting.source_display_label",
+        return_value="Delegated Quelle",
+    ) as mocked:
+        result = _source_display_label("weather")
+
+    assert result == "Delegated Quelle"
+    mocked.assert_called_once_with("weather")
+
+
+def test_dedupe_cards_wrapper_delegates_to_formatting_module():
+    cards = [{"recommended_product": "Atemwegslinie", "reason": "kritische Engpässe"}]
+
+    with patch(
+        "app.services.media.weekly_brief_service.weekly_brief_formatting.dedupe_cards",
+        return_value=[{"recommended_product": "Delegated"}],
+    ) as mocked:
+        result = _dedupe_cards(cards)
+
+    assert result == [{"recommended_product": "Delegated"}]
+    mocked.assert_called_once_with(cards)
+
+
+def test_primary_signal_score_wrapper_delegates_to_formatting_module():
+    payload = {"signal_score": 71.0}
+
+    with patch(
+        "app.services.media.weekly_brief_service.weekly_brief_formatting.primary_signal_score",
+        return_value=55.0,
+    ) as mocked:
+        result = _primary_signal_score(payload)
+
+    assert result == 55.0
+    mocked.assert_called_once_with(payload)
+
+
+def test_action_card_title_wrapper_delegates_to_formatting_module():
+    card = {"recommended_product": "Atemwegslinie", "reason": "kritische Engpässe"}
+
+    with patch(
+        "app.services.media.weekly_brief_service.weekly_brief_formatting.action_card_title",
+        return_value="Delegated Titel",
+    ) as mocked:
+        result = _action_card_title(card)
+
+    assert result == "Delegated Titel"
+    mocked.assert_called_once_with(card)

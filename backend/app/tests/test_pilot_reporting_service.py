@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import unittest
 from datetime import datetime, timedelta
+from unittest.mock import patch
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -172,6 +173,84 @@ class PilotReportingServiceTests(unittest.TestCase):
             sales_values=[170.0, 166.0, 120.0, 118.0],
         )
         self.db.commit()
+
+    def test_build_scope_comparison_wrapper_delegates_to_outcomes_module(self) -> None:
+        expected = {"comparison_id": "patched"}
+
+        with patch(
+            "app.services.media.pilot_reporting_outcomes.build_scope_comparison",
+            return_value=expected,
+        ) as build_mock:
+            payload = self.service._build_scope_comparison(
+                brand="gelo",
+                card={"id": "opp-1"},
+                scope={"region_code": "SH", "region_name": "Schleswig-Holstein"},
+                activation_window={"start": "2026-01-15T00:00:00", "end": "2026-01-28T00:00:00"},
+                signal_context={"stage": "activate"},
+                lead_time_days=14,
+                current_status="ACTIVATED",
+            )
+
+        self.assertIs(payload, expected)
+        build_mock.assert_called_once_with(
+            self.service,
+            brand="gelo",
+            card={"id": "opp-1"},
+            scope={"region_code": "SH", "region_name": "Schleswig-Holstein"},
+            activation_window={"start": "2026-01-15T00:00:00", "end": "2026-01-28T00:00:00"},
+            signal_context={"stage": "activate"},
+            lead_time_days=14,
+            current_status="ACTIVATED",
+        )
+
+    def test_metric_summary_wrapper_delegates_to_outcomes_module(self) -> None:
+        expected = {"source_mode": "patched", "observation_count": 1, "coverage_weeks": 1, "metrics": {}}
+
+        with patch(
+            "app.services.media.pilot_reporting_outcomes.metric_summary",
+            return_value=expected,
+        ) as summary_mock:
+            payload = self.service._metric_summary(
+                brand="gelo",
+                product="GeloProsed",
+                region_code="SH",
+                window_start=datetime(2026, 1, 1),
+                window_end=datetime(2026, 1, 31),
+            )
+
+        self.assertIs(payload, expected)
+        summary_mock.assert_called_once_with(
+            self.service,
+            brand="gelo",
+            product="GeloProsed",
+            region_code="SH",
+            window_start=datetime(2026, 1, 1),
+            window_end=datetime(2026, 1, 31),
+        )
+
+    def test_region_evidence_view_wrapper_delegates_to_outcomes_module(self) -> None:
+        expected = [{"region_code": "SH"}]
+
+        with patch(
+            "app.services.media.pilot_reporting_outcomes.region_evidence_view",
+            return_value=expected,
+        ) as view_mock:
+            payload = self.service._region_evidence_view({"SH": {"recommendations": 1}})
+
+        self.assertIs(payload, expected)
+        view_mock.assert_called_once_with({"SH": {"recommendations": 1}})
+
+    def test_pilot_kpi_summary_wrapper_delegates_to_outcomes_module(self) -> None:
+        expected = {"hit_rate": {"value": 1.0}}
+
+        with patch(
+            "app.services.media.pilot_reporting_outcomes.pilot_kpi_summary",
+            return_value=expected,
+        ) as summary_mock:
+            payload = self.service._pilot_kpi_summary([{"comparison_id": "patched"}])
+
+        self.assertIs(payload, expected)
+        summary_mock.assert_called_once_with([{"comparison_id": "patched"}])
 
     def test_build_pilot_report_returns_history_activation_views_and_kpis(self) -> None:
         report = self.service.build_pilot_report(

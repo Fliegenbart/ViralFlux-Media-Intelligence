@@ -1,5 +1,5 @@
 import unittest
-from unittest.mock import patch
+from unittest.mock import ANY, patch
 
 import numpy as np
 import pandas as pd
@@ -11,6 +11,70 @@ from app.services.ml.forecast_service import (
 
 
 class ForecastServiceGuardTests(unittest.TestCase):
+    @patch("app.services.ml.forecast_service_internal_history.augment_with_internal_history")
+    def test_augment_with_internal_history_wrapper_delegates_to_module(self, augment_mock) -> None:
+        augment_mock.return_value = pd.DataFrame({"y": [1.0], "lab_positivity_rate": [0.2]})
+        service = ForecastService(db=None)
+        df = pd.DataFrame({"ds": pd.to_datetime(["2026-01-01"]), "y": [1.0]})
+
+        result = service._augment_with_internal_history(
+            df=df,
+            virus_typ="Influenza A",
+            start_date=pd.Timestamp("2025-01-01"),
+            region="DE",
+        )
+
+        self.assertEqual(result["lab_positivity_rate"].tolist(), [0.2])
+        augment_mock.assert_called_once_with(
+            service,
+            df=df,
+            virus_typ="Influenza A",
+            start_date=pd.Timestamp("2025-01-01"),
+            region="DE",
+        )
+
+    @patch("app.services.ml.forecast_service_internal_history.load_internal_history_frame")
+    def test_load_internal_history_frame_wrapper_delegates_to_module(self, load_mock) -> None:
+        load_mock.return_value = pd.DataFrame({"anzahl_tests": [100]})
+        service = ForecastService(db=None)
+
+        result = service._load_internal_history_frame(
+            virus_typ="Influenza A",
+            start_date=pd.Timestamp("2025-01-01"),
+            region="BY",
+        )
+
+        self.assertEqual(result["anzahl_tests"].tolist(), [100])
+        load_mock.assert_called_once_with(
+            service,
+            virus_typ="Influenza A",
+            start_date=pd.Timestamp("2025-01-01"),
+            region="BY",
+            internal_history_test_map=ANY,
+            ganzimmun_model=ANY,
+            normalize_forecast_region_fn=ANY,
+            default_forecast_region=ANY,
+            func_module=ANY,
+            timedelta_cls=ANY,
+            pd_module=ANY,
+        )
+
+    @patch("app.services.ml.forecast_service_internal_history.build_internal_history_feature_frame")
+    def test_build_internal_history_feature_frame_wrapper_delegates_to_module(self, build_mock) -> None:
+        build_mock.return_value = pd.DataFrame({"lab_signal_available": [1.0]})
+        ds = pd.Series(pd.to_datetime(["2026-01-10"]))
+        history = pd.DataFrame({"datum": pd.to_datetime(["2026-01-05"])})
+
+        result = ForecastService._build_internal_history_feature_frame(ds, history)
+
+        self.assertEqual(result["lab_signal_available"].tolist(), [1.0])
+        build_mock.assert_called_once_with(
+            ds,
+            history,
+            pd_module=ANY,
+            timedelta_cls=ANY,
+        )
+
     def test_resolve_loaded_model_feature_names_respects_explicit_metadata_schema(self) -> None:
         names = _resolve_loaded_model_feature_names(
             metadata={"feature_names": ["hw_pred", "ridge_pred"]},

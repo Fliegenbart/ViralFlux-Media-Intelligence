@@ -77,6 +77,7 @@ from app.services.ml.forecast_horizon_utils import (
 )
 from app.services.ml.regional_panel_utils import BUNDESLAND_NAMES
 from app.services.ml.training_contract import INTERNAL_HISTORY_TEST_MAP
+from app.services.ml import forecast_service_internal_history
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -710,15 +711,13 @@ class ForecastService:
         start_date: datetime,
         region: str,
     ) -> pd.DataFrame:
-        history_df = self._load_internal_history_frame(
+        return forecast_service_internal_history.augment_with_internal_history(
+            self,
+            df=df,
             virus_typ=virus_typ,
             start_date=start_date,
             region=region,
         )
-        features = self._build_internal_history_feature_frame(df["ds"], history_df)
-        combined = pd.concat([df.reset_index(drop=True), features], axis=1)
-        combined["lab_positivity_lag7"] = combined["lab_positivity_rate"].shift(7)
-        return combined
 
     def _load_internal_history_frame(
         self,
@@ -727,38 +726,18 @@ class ForecastService:
         start_date: datetime,
         region: str,
     ) -> pd.DataFrame:
-        aliases = INTERNAL_HISTORY_TEST_MAP.get(virus_typ, [])
-        if not aliases:
-            return pd.DataFrame()
-
-        query = (
-            self.db.query(GanzimmunData)
-            .filter(
-                GanzimmunData.datum >= start_date - timedelta(days=365 * 5),
-                GanzimmunData.anzahl_tests.isnot(None),
-                GanzimmunData.anzahl_tests > 0,
-                func.lower(GanzimmunData.test_typ).in_(aliases),
-            )
-        )
-        region_code = normalize_forecast_region(region)
-        if region_code != DEFAULT_FORECAST_REGION:
-            query = query.filter(
-                GanzimmunData.region.in_(self._region_variants(region_code)),
-            )
-        rows = query.order_by(GanzimmunData.datum.asc()).all()
-        if not rows:
-            return pd.DataFrame()
-
-        return pd.DataFrame(
-            [
-                {
-                    "datum": pd.to_datetime(row.datum),
-                    "available_time": pd.to_datetime(row.available_time) if row.available_time else pd.NaT,
-                    "anzahl_tests": int(row.anzahl_tests or 0),
-                    "positive_ergebnisse": int(row.positive_ergebnisse or 0),
-                }
-                for row in rows
-            ]
+        return forecast_service_internal_history.load_internal_history_frame(
+            self,
+            virus_typ=virus_typ,
+            start_date=start_date,
+            region=region,
+            internal_history_test_map=INTERNAL_HISTORY_TEST_MAP,
+            ganzimmun_model=GanzimmunData,
+            normalize_forecast_region_fn=normalize_forecast_region,
+            default_forecast_region=DEFAULT_FORECAST_REGION,
+            func_module=func,
+            timedelta_cls=timedelta,
+            pd_module=pd,
         )
 
     @staticmethod
@@ -766,71 +745,12 @@ class ForecastService:
         ds_index: pd.Series,
         history_df: pd.DataFrame,
     ) -> pd.DataFrame:
-        columns = [
-            "lab_positivity_rate",
-            "lab_signal_available",
-            "lab_baseline_mean",
-            "lab_baseline_zscore",
-        ]
-        if history_df.empty:
-            return pd.DataFrame(0.0, index=range(len(ds_index)), columns=columns)
-
-        history = history_df.copy()
-        history["datum"] = pd.to_datetime(history["datum"])
-        history["available_time"] = pd.to_datetime(history["available_time"])
-        history["effective_available"] = history["available_time"].fillna(history["datum"])
-        history["anzahl_tests"] = pd.to_numeric(
-            history["anzahl_tests"], errors="coerce",
-        ).fillna(0).clip(lower=0)
-        history["positive_ergebnisse"] = pd.to_numeric(
-            history["positive_ergebnisse"], errors="coerce",
-        ).fillna(0).clip(lower=0)
-        history = history.loc[history["anzahl_tests"] > 0].copy()
-        if history.empty:
-            return pd.DataFrame(0.0, index=range(len(ds_index)), columns=columns)
-
-        history["rate"] = history["positive_ergebnisse"] / history["anzahl_tests"]
-        iso = history["datum"].dt.isocalendar()
-        history["iso_week"] = iso.week.astype(int)
-        history["iso_year"] = iso.year.astype(int)
-
-        rows: list[dict[str, float]] = []
-        for ds in pd.to_datetime(ds_index):
-            visible = history.loc[
-                (history["datum"] <= ds)
-                & (history["effective_available"] <= ds)
-            ]
-            if visible.empty:
-                rows.append({name: 0.0 for name in columns})
-                continue
-
-            recent = visible.loc[visible["datum"] > ds - timedelta(days=14)]
-            total_tests = float(recent["anzahl_tests"].sum())
-            positivity = float(recent["positive_ergebnisse"].sum() / total_tests) if total_tests > 0 else 0.0
-
-            ds_iso = ds.isocalendar()
-            baseline_pool = visible.loc[
-                (visible["iso_week"] == int(ds_iso.week))
-                & (visible["iso_year"] < int(ds_iso.year))
-            ]
-            if len(baseline_pool) >= 2:
-                baseline_mean = float(baseline_pool["rate"].mean())
-                baseline_std = float(baseline_pool["rate"].std()) or 0.01
-                z_score = (positivity - baseline_mean) / baseline_std
-            else:
-                baseline_mean = 0.0
-                z_score = 0.0
-
-            rows.append(
-                {
-                    "lab_positivity_rate": positivity,
-                    "lab_signal_available": 1.0 if total_tests > 0 else 0.0,
-                    "lab_baseline_mean": baseline_mean,
-                    "lab_baseline_zscore": float(z_score),
-                }
-            )
-
-        return pd.DataFrame(rows, columns=columns)
+        return forecast_service_internal_history.build_internal_history_feature_frame(
+            ds_index,
+            history_df,
+            pd_module=pd,
+            timedelta_cls=timedelta,
+        )
 
     def _is_holiday(self, datum: datetime, *, region: str = DEFAULT_FORECAST_REGION) -> bool:
         """Check if date falls in school holidays."""

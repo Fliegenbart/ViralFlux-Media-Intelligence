@@ -281,8 +281,14 @@ def signal_stage(
     )
     early_prepare_score_floor = max(0.0, float(thresholds["prepare_score"]) - 0.06)
     early_prepare_agreement_ok = (
-        prepare_agreement_ok
-        or (agreement_signal_count >= 1 and str(agreement_direction).lower() == "up")
+        (
+            agreement_signal_count < int(config.min_agreement_signal_count)
+            and str(agreement_direction).lower() == "up"
+        )
+        or (
+            agreement_signal_count >= int(config.min_agreement_signal_count)
+            and prepare_agreement_ok
+        )
     )
 
     if all(

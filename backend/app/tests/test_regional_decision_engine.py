@@ -213,6 +213,62 @@ class RegionalDecisionEngineTests(unittest.TestCase):
 
         self.assertEqual(stage, "prepare_early")
 
+    def test_signal_stage_does_not_return_prepare_early_for_sparse_downward_agreement(self) -> None:
+        config = self.engine.get_config("Influenza A")
+        thresholds = self.engine._thresholds(config=config, action_threshold=0.9)
+
+        stage = self.engine._signal_stage(
+            decision_score=max(thresholds["prepare_score"] - 0.06, 0.0),
+            event_probability=0.004,
+            forecast_confidence=thresholds["prepare_forecast_confidence"],
+            freshness_score=thresholds["prepare_freshness"],
+            revision_risk=thresholds["prepare_revision_risk_max"] - 0.05,
+            trend_score=thresholds["prepare_trend"],
+            agreement_support_score=0.0,
+            agreement_signal_count=1,
+            agreement_direction="down",
+            thresholds=thresholds,
+            config=config,
+        )
+
+        self.assertEqual(stage, "watch")
+
+    def test_evaluate_preserves_prepare_early_reasoning_without_policy_override(self) -> None:
+        decision = self.engine.evaluate(
+            virus_typ="Influenza A",
+            prediction=self._prediction(
+                event_probability=0.004,
+                action_threshold=0.9,
+            ),
+            feature_row=self._feature_row(
+                trend_raw=0.12,
+                secondary_trend_raw=0.06,
+                signal_value=0.09,
+            ),
+            metadata=self._metadata(
+                ece=0.08,
+                brier_score=0.11,
+                pr_auc=0.61,
+            ),
+        )
+
+        self.assertEqual(decision.signal_stage, "prepare_early")
+        self.assertEqual(decision.stage, "prepare")
+        self.assertTrue(decision.reason_trace.why)
+        self.assertTrue(
+            any(
+                item["code"] == "event_probability_prepare_early_threshold"
+                for item in decision.reason_trace.why_details
+            )
+        )
+        self.assertEqual(decision.reason_trace.policy_overrides, [])
+        self.assertFalse(
+            any(
+                item["code"] == "final_stage_policy_overlay"
+                for item in decision.reason_trace.uncertainty_details
+            )
+        )
+
     def test_reason_trace_and_uncertainty_summary_are_present_for_mixed_case(self) -> None:
         decision = self.engine.evaluate(
             virus_typ="Influenza A",

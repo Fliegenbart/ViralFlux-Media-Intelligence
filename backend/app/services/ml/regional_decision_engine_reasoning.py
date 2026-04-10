@@ -113,6 +113,19 @@ def reason_trace(
                 threshold=round(float(thresholds["prepare_probability"]), 4),
             )
         )
+    elif signal_stage == "prepare_early":
+        message = (
+            f"Event probability {event_probability:.2f} is below the full Prepare threshold {float(thresholds['prepare_probability']):.2f}, but early-warning signals are strong enough for a visible Prepare stage."
+        )
+        why.append(message)
+        why_details.append(
+            reason_detail(
+                "event_probability_prepare_early_threshold",
+                message,
+                event_probability=round(event_probability, 4),
+                threshold=round(float(thresholds["prepare_probability"]), 4),
+            )
+        )
     else:
         message = (
             f"Event probability {event_probability:.2f} stays below the rule set needed for Prepare/Activate."
@@ -273,7 +286,7 @@ def reason_trace(
                 message,
             )
         )
-    if stage != signal_stage and not policy_overrides:
+    if stage != signal_stage and not policy_overrides and signal_stage != "prepare_early":
         message = "Final stage differs from the raw signal stage because of a policy overlay."
         uncertainty.append(message)
         uncertainty_details.append(

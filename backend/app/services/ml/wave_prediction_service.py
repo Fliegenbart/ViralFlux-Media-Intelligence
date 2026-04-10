@@ -28,6 +28,7 @@ from app.services.ml.regional_panel_utils import (
     normalize_state_code,
 )
 from app.services.ml.training_contract import SUPPORTED_VIRUS_TYPES, normalize_virus_type
+from app.services.ml import wave_prediction_sources
 from app.services.ml.wave_prediction_utils import (
     WaveLabelConfig,
     atomic_json_dump,
@@ -618,17 +619,12 @@ class WavePredictionService:
         start_date: pd.Timestamp,
         end_date: pd.Timestamp,
     ) -> dict[str, Any]:
-        return {
-            "wastewater": self.feature_builder._load_wastewater_daily(pathogen, start_date),
-            "truth": self.feature_builder._load_truth_series(pathogen, start_date),
-            "grippeweb": self.feature_builder._load_grippeweb_signals(start_date, end_date),
-            "influenza_ifsg": self.feature_builder._load_influenza_ifsg(start_date, end_date),
-            "rsv_ifsg": self.feature_builder._load_rsv_ifsg(start_date, end_date),
-            "are_consultation": self.feature_builder._load_are_konsultation(start_date, end_date),
-            "weather": self.feature_builder._load_weather(start_date, end_date),
-            "holidays": self.feature_builder._load_holidays(),
-            "populations": self.feature_builder._load_state_population_map(),
-        }
+        return wave_prediction_sources.load_source_frames(
+            self,
+            pathogen=pathogen,
+            start_date=start_date,
+            end_date=end_date,
+        )
 
     def _build_rows_for_pathogen(
         self,
@@ -640,218 +636,23 @@ class WavePredictionService:
         horizon_days: int,
         region_code: str | None,
     ) -> list[dict[str, Any]]:
-        truth = self._coerce_frame(source_frames.get("truth"))
-        if truth.empty:
-            return []
-
-        wastewater = self._coerce_frame(source_frames.get("wastewater"))
-        grippeweb = self._coerce_frame(source_frames.get("grippeweb"))
-        influenza_ifsg = self._coerce_frame(source_frames.get("influenza_ifsg"))
-        rsv_ifsg = self._coerce_frame(source_frames.get("rsv_ifsg"))
-        are_consultation = self._coerce_frame(source_frames.get("are_consultation"))
-        weather = self._coerce_frame(source_frames.get("weather"))
-        holidays = source_frames.get("holidays") or {}
-        populations = source_frames.get("populations") or {}
-        label_config = wave_label_config_for_pathogen(pathogen, self.settings)
-
-        truth_by_state = {
-            state: frame.sort_values("week_start").reset_index(drop=True)
-            for state, frame in truth.groupby("bundesland")
-        }
-        wastewater_by_state = self._group_by_state(wastewater)
-        influenza_by_state = self._group_by_state(influenza_ifsg)
-        rsv_by_state = self._group_by_state(rsv_ifsg)
-        are_consultation_by_state = self._group_by_state(are_consultation)
-        weather_by_state = self._group_by_state(weather)
-        grippeweb_by_key = (
-            {
-                (signal_type, state): frame.sort_values("datum").reset_index(drop=True)
-                for (signal_type, state), frame in grippeweb.dropna(subset=["bundesland"]).groupby(["signal_type", "bundesland"])
-            }
-            if not grippeweb.empty
-            else {}
+        return wave_prediction_sources.build_rows_for_pathogen(
+            self,
+            pathogen=pathogen,
+            source_frames=source_frames,
+            start_date=start_date,
+            end_date=end_date,
+            horizon_days=horizon_days,
+            region_code=region_code,
+            wave_label_config_for_pathogen_fn=wave_label_config_for_pathogen,
+            build_daily_signal_features_fn=build_daily_signal_features,
+            weather_context_features_fn=weather_context_features,
+            school_holiday_features_fn=school_holiday_features,
+            bundesland_names=BUNDESLAND_NAMES,
+            pathogen_slug_fn=_pathogen_slug,
+            pd_module=pd,
+            np_module=np,
         )
-
-        rows: list[dict[str, Any]] = []
-        target_regions = [region_code] if region_code else sorted(truth_by_state.keys())
-        date_index = pd.date_range(start_date, end_date, freq="D")
-        for state in target_regions:
-            truth_state = truth_by_state.get(state)
-            if truth_state is None or truth_state.empty:
-                continue
-
-            wastewater_state = wastewater_by_state.get(state, pd.DataFrame())
-            influenza_state = influenza_by_state.get(state, pd.DataFrame())
-            rsv_state = rsv_by_state.get(state, pd.DataFrame())
-            are_state = are_consultation_by_state.get(state, pd.DataFrame())
-            weather_state = weather_by_state.get(state, pd.DataFrame())
-            grippeweb_are_state = grippeweb_by_key.get(("ARE", state), pd.DataFrame())
-            grippeweb_ili_state = grippeweb_by_key.get(("ILI", state), pd.DataFrame())
-
-            truth_feature_frame = truth_state.assign(datum=pd.to_datetime(truth_state["available_date"]).dt.normalize())
-            for as_of in date_index:
-                visible_truth = truth_state.loc[truth_state["available_date"] <= as_of].copy()
-                if visible_truth.empty:
-                    continue
-
-                target_date = (as_of + pd.Timedelta(days=horizon_days)).normalize()
-                target_week_start = target_date - pd.Timedelta(days=target_date.weekday())
-                target_row = truth_state.loc[truth_state["week_start"] == target_week_start]
-                if target_row.empty:
-                    continue
-
-                future_truth = truth_state.loc[
-                    (truth_state["week_start"] > as_of) & (truth_state["week_start"] <= as_of + pd.Timedelta(days=horizon_days))
-                ].copy()
-                current_truth = visible_truth.iloc[-1]
-                wave_label, wave_event_date = label_wave_start(future_truth, visible_truth, label_config)
-
-                wastewater_visible = self._visible_as_of(wastewater_state, as_of)
-                influenza_visible = self._visible_as_of(influenza_state, as_of)
-                rsv_visible = self._visible_as_of(rsv_state, as_of)
-                are_visible = self._visible_as_of(are_state, as_of)
-                grippeweb_are_visible = self._visible_as_of(grippeweb_are_state, as_of)
-                grippeweb_ili_visible = self._visible_as_of(grippeweb_ili_state, as_of)
-
-                truth_features = build_daily_signal_features(
-                    truth_feature_frame.loc[truth_feature_frame["available_date"] <= as_of].assign(
-                        datum=pd.to_datetime(truth_feature_frame["datum"]).dt.normalize(),
-                        value=truth_feature_frame["incidence"].astype(float),
-                    ),
-                    as_of=as_of,
-                    prefix="truth",
-                    date_col="datum",
-                    value_col="value",
-                )
-                wastewater_features = build_daily_signal_features(
-                    wastewater_visible.assign(
-                        signal_date=pd.to_datetime(wastewater_visible["available_time"]).dt.normalize(),
-                        value=wastewater_visible["viral_load"].astype(float),
-                    ) if not wastewater_visible.empty else wastewater_visible,
-                    as_of=as_of,
-                    prefix="wastewater",
-                    date_col="signal_date",
-                    value_col="value",
-                )
-                symptom_are_features = build_daily_signal_features(
-                    grippeweb_are_visible.assign(
-                        signal_date=pd.to_datetime(grippeweb_are_visible["available_time"]).dt.normalize(),
-                        value=grippeweb_are_visible["incidence"].astype(float),
-                    ) if not grippeweb_are_visible.empty else grippeweb_are_visible,
-                    as_of=as_of,
-                    prefix="grippeweb_are",
-                    date_col="signal_date",
-                    value_col="value",
-                )
-                symptom_ili_features = build_daily_signal_features(
-                    grippeweb_ili_visible.assign(
-                        signal_date=pd.to_datetime(grippeweb_ili_visible["available_time"]).dt.normalize(),
-                        value=grippeweb_ili_visible["incidence"].astype(float),
-                    ) if not grippeweb_ili_visible.empty else grippeweb_ili_visible,
-                    as_of=as_of,
-                    prefix="grippeweb_ili",
-                    date_col="signal_date",
-                    value_col="value",
-                )
-                consultation_features = build_daily_signal_features(
-                    are_visible.assign(
-                        signal_date=pd.to_datetime(are_visible["available_time"]).dt.normalize(),
-                        value=are_visible["incidence"].astype(float),
-                    ) if not are_visible.empty else are_visible,
-                    as_of=as_of,
-                    prefix="consultation_are",
-                    date_col="signal_date",
-                    value_col="value",
-                )
-                virus_ifsg_frame = influenza_visible if pathogen in {"Influenza A", "Influenza B"} else rsv_visible if pathogen == "RSV A" else pd.DataFrame()
-                virus_ifsg_features = build_daily_signal_features(
-                    virus_ifsg_frame.assign(
-                        signal_date=pd.to_datetime(virus_ifsg_frame["available_time"]).dt.normalize(),
-                        value=virus_ifsg_frame["incidence"].astype(float),
-                    ) if not virus_ifsg_frame.empty else virus_ifsg_frame,
-                    as_of=as_of,
-                    prefix="virus_ifsg",
-                    date_col="signal_date",
-                    value_col="value",
-                )
-                weather_features = weather_context_features(
-                    weather_state,
-                    as_of=as_of,
-                    enable_forecast_weather=bool(self.settings.WAVE_PREDICTION_ENABLE_FORECAST_WEATHER),
-                )
-                holiday_features = school_holiday_features(
-                    holidays.get(state, []),
-                    as_of=as_of,
-                    horizon_days=horizon_days,
-                )
-
-                row = {
-                    "as_of_date": as_of,
-                    "region": state,
-                    "region_name": BUNDESLAND_NAMES.get(state, state),
-                    "pathogen": pathogen,
-                    "pathogen_slug": _pathogen_slug(pathogen),
-                    "horizon_days": horizon_days,
-                    "target_date": target_date,
-                    "target_week_start": target_week_start,
-                    "target_window_end": as_of + pd.Timedelta(days=horizon_days),
-                    "source_truth_week_start": pd.Timestamp(current_truth["week_start"]).normalize(),
-                    "source_truth_available_date": pd.Timestamp(current_truth["available_date"]).normalize(),
-                    "truth_source": str(current_truth.get("truth_source") or "unknown"),
-                    "target_regression": float(target_row.iloc[0]["incidence"] or 0.0),
-                    "target_regression_log": float(np.log1p(max(float(target_row.iloc[0]["incidence"] or 0.0), 0.0))),
-                    "target_wave14": int(wave_label),
-                    "wave_event_date": wave_event_date,
-                    "wave_event_reason": "ruleset_event" if wave_label else None,
-                    "future_truth_max": float(future_truth["incidence"].max() or 0.0) if not future_truth.empty else 0.0,
-                    "future_truth_growth_ratio": self._growth_ratio(future_truth),
-                    "raw_truth_incidence": float(current_truth["incidence"] or 0.0),
-                    "raw_wastewater_level": self._latest_column_value(wastewater_visible, "viral_load"),
-                    "raw_grippeweb_are": self._latest_column_value(grippeweb_are_visible, "incidence"),
-                    "raw_grippeweb_ili": self._latest_column_value(grippeweb_ili_visible, "incidence"),
-                    "raw_consultation_are": self._latest_column_value(are_visible, "incidence"),
-                    "raw_virus_ifsg": self._latest_column_value(virus_ifsg_frame, "incidence"),
-                    "raw_weather_temp": self._latest_column_value(
-                        weather_state.loc[
-                            weather_state["datum"] <= as_of
-                        ] if not weather_state.empty else weather_state,
-                        "temp",
-                    ),
-                    "raw_weather_humidity": self._latest_column_value(
-                        weather_state.loc[
-                            weather_state["datum"] <= as_of
-                        ] if not weather_state.empty else weather_state,
-                        "humidity",
-                    ),
-                }
-                row.update(truth_features)
-                row.update(wastewater_features)
-                row.update(symptom_are_features)
-                row.update(symptom_ili_features)
-                row.update(consultation_features)
-                row.update(virus_ifsg_features)
-                row.update(weather_features)
-                row.update(holiday_features)
-                if bool(self.settings.WAVE_PREDICTION_ENABLE_DEMOGRAPHICS):
-                    row["population"] = float(populations.get(state) or 0.0)
-                if bool(self.settings.WAVE_PREDICTION_ENABLE_INTERACTIONS):
-                    symptom_level = max(
-                        float(row.get("consultation_are_level") or 0.0),
-                        float(row.get("grippeweb_are_level") or 0.0),
-                    )
-                    row["wastewater_x_humidity"] = float(row.get("wastewater_level", 0.0) * row.get("avg_humidity_7", 0.0))
-                    row["incidence_x_holiday"] = float(row.get("truth_level", 0.0) * row.get("is_school_holiday", 0.0))
-                    row["symptomburden_x_weather"] = float(symptom_level * row.get("avg_temp_7", 0.0))
-                    row["wastewater_minus_incidence_zscore"] = float(
-                        row.get("wastewater_zscore_28", 0.0) - row.get("truth_zscore_28", 0.0)
-                    )
-
-                row["month"] = float(as_of.month)
-                row["week_of_year"] = float(as_of.isocalendar().week)
-                row["quarter"] = float(as_of.quarter)
-                row["day_of_year"] = float(as_of.dayofyear)
-                rows.append(row)
-        return rows
 
     def _persist_artifacts(
         self,
@@ -915,42 +716,23 @@ class WavePredictionService:
 
     @staticmethod
     def _visible_as_of(frame: pd.DataFrame | None, as_of: pd.Timestamp) -> pd.DataFrame:
-        if frame is None or frame.empty:
-            return pd.DataFrame()
-        visible = frame.copy()
-        if "available_time" in visible.columns:
-            visible = visible.loc[pd.to_datetime(visible["available_time"]) <= as_of].copy()
-        if "datum" in visible.columns:
-            visible = visible.loc[pd.to_datetime(visible["datum"]).dt.normalize() <= as_of].copy()
-        return visible.sort_values("datum").reset_index(drop=True)
+        return wave_prediction_sources.visible_as_of(frame, as_of, pd_module=pd)
 
     @staticmethod
     def _group_by_state(frame: pd.DataFrame | None) -> dict[str, pd.DataFrame]:
-        if frame is None or frame.empty or "bundesland" not in frame.columns:
-            return {}
-        return {
-            state: part.sort_values("datum").reset_index(drop=True)
-            for state, part in frame.groupby("bundesland")
-        }
+        return wave_prediction_sources.group_by_state(frame)
 
     @staticmethod
     def _coerce_frame(frame: pd.DataFrame | None) -> pd.DataFrame:
-        if frame is None:
-            return pd.DataFrame()
-        return frame.copy()
+        return wave_prediction_sources.coerce_frame(frame)
 
     @staticmethod
     def _latest_column_value(frame: pd.DataFrame | None, column: str) -> float:
-        if frame is None or frame.empty or column not in frame.columns:
-            return 0.0
-        return float(frame.iloc[-1][column] or 0.0)
+        return wave_prediction_sources.latest_column_value(frame, column)
 
     @staticmethod
     def _growth_ratio(future_truth: pd.DataFrame) -> float:
-        if future_truth is None or future_truth.empty or len(future_truth) < 2:
-            return 0.0
-        values = future_truth["incidence"].astype(float)
-        return float((values.iloc[-1] - values.iloc[0]) / max(abs(values.iloc[0]), 1.0))
+        return wave_prediction_sources.growth_ratio(future_truth)
 
     @staticmethod
     def _fit_calibration(

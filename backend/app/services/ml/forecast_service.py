@@ -88,6 +88,7 @@ from app.services.ml import forecast_service_estimators
 from app.services.ml import forecast_service_preparation
 from app.services.ml import forecast_service_sources
 from app.services.ml import forecast_service_features
+from app.services.ml import forecast_service_model_cache
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -228,76 +229,25 @@ def _load_cached_models(
     region: str = DEFAULT_FORECAST_REGION,
     horizon_days: int = DEFAULT_DECISION_HORIZON_DAYS,
 ) -> tuple[Any, Any, Any, dict[str, Any], LearnedProbabilityModel | None] | None:
-    """Load XGBoost models from disk with in-memory caching.
-
-    Returns ``(model_median, model_lower, model_upper, metadata)``
-    or *None* when no serialised model exists for *virus_typ*.
-    """
-    from xgboost import XGBRegressor
-
-    slug = _virus_slug(virus_typ)
-    region_code = normalize_forecast_region(region)
-    horizon = ensure_supported_horizon(horizon_days)
-    cache_key = f"{slug}|{region_code}|{horizon}"
-
-    with _cache_lock:
-        if cache_key in _model_cache:
-            return _model_cache[cache_key]
-
-    model_dir = model_artifact_dir(
-        _ML_MODELS_DIR,
-        virus_typ=virus_typ,
-        region=region_code,
-        horizon_days=horizon,
+    """Load XGBoost models from disk with in-memory caching."""
+    return forecast_service_model_cache.load_cached_models(
+        virus_typ,
+        region=region,
+        horizon_days=horizon_days,
+        ml_models_dir=_ML_MODELS_DIR,
+        event_model_artifact_name=EVENT_MODEL_ARTIFACT_NAME,
+        default_forecast_region=DEFAULT_FORECAST_REGION,
+        default_decision_horizon_days=DEFAULT_DECISION_HORIZON_DAYS,
+        learned_probability_model_cls=LearnedProbabilityModel,
+        normalize_forecast_region_fn=normalize_forecast_region,
+        ensure_supported_horizon_fn=ensure_supported_horizon,
+        model_artifact_dir_fn=model_artifact_dir,
+        json_module=json,
+        pickle_module=pickle,
+        cache=_model_cache,
+        cache_lock=_cache_lock,
+        logger=logger,
     )
-    metadata_path = model_dir / "metadata.json"
-
-    if not metadata_path.exists() and region_code == DEFAULT_FORECAST_REGION and horizon == DEFAULT_DECISION_HORIZON_DAYS:
-        legacy_dir = _ML_MODELS_DIR / slug
-        legacy_metadata = legacy_dir / "metadata.json"
-        if legacy_metadata.exists():
-            model_dir = legacy_dir
-            metadata_path = legacy_metadata
-
-    if not metadata_path.exists():
-        return None
-
-    try:
-        with open(metadata_path) as f:
-            metadata = json.load(f)
-
-        model_med = XGBRegressor()
-        model_med.load_model(str(model_dir / "model_median.json"))
-
-        model_lo = XGBRegressor()
-        model_lo.load_model(str(model_dir / "model_lower.json"))
-
-        model_hi = XGBRegressor()
-        model_hi.load_model(str(model_dir / "model_upper.json"))
-
-        event_model: LearnedProbabilityModel | None = None
-        event_model_path = model_dir / EVENT_MODEL_ARTIFACT_NAME
-        if event_model_path.exists():
-            with open(event_model_path, "rb") as handle:
-                loaded = pickle.load(handle)
-            if isinstance(loaded, LearnedProbabilityModel):
-                event_model = loaded
-
-        result = (model_med, model_lo, model_hi, metadata, event_model)
-
-        with _cache_lock:
-            _model_cache[cache_key] = result
-
-        logger.info(
-            f"Loaded XGBoost models from disk for {virus_typ}/{region_code}/h{horizon} "
-            f"(version={metadata.get('version')}, "
-            f"trained_at={metadata.get('trained_at')})"
-        )
-        return result
-
-    except Exception as e:
-        logger.warning(f"Failed to load models for {virus_typ}: {e}")
-        return None
 
 
 def invalidate_model_cache(virus_typ: str | None = None) -> None:
@@ -305,23 +255,16 @@ def invalidate_model_cache(virus_typ: str | None = None) -> None:
 
     Called by ``XGBoostTrainer`` after writing fresh artefacts.
     """
-    with _cache_lock:
-        if virus_typ:
-            prefix = f"{_virus_slug(virus_typ)}|"
-            for key in list(_model_cache.keys()):
-                if key.startswith(prefix):
-                    _model_cache.pop(key, None)
-        else:
-            _model_cache.clear()
+    forecast_service_model_cache.invalidate_model_cache(
+        virus_typ,
+        virus_slug_fn=_virus_slug,
+        cache=_model_cache,
+        cache_lock=_cache_lock,
+    )
 
 
 def _is_model_feature_compatibility_error(exc: Exception) -> bool:
-    message = str(exc or "").lower()
-    return (
-        "feature shape mismatch" in message
-        or "number of columns does not match" in message
-        or "feature_names mismatch" in message
-    )
+    return forecast_service_model_cache.is_model_feature_compatibility_error(exc)
 
 
 def _loaded_model_expected_feature_count(model: Any | None) -> int | None:
@@ -340,16 +283,12 @@ def _resolve_loaded_model_feature_names(
     live_feature_row: dict[str, Any],
     model: Any | None,
 ) -> list[str]:
-    explicit_feature_names = list(metadata.get("feature_names") or [])
-    if explicit_feature_names:
-        return explicit_feature_names
-
-    feature_names = list(META_FEATURES)
-    if "horizon_days" in live_feature_row and "horizon_days" not in feature_names:
-        expected_feature_count = _loaded_model_expected_feature_count(model)
-        if expected_feature_count is None or expected_feature_count >= len(feature_names) + 1:
-            feature_names.append("horizon_days")
-    return feature_names
+    return forecast_service_model_cache.resolve_loaded_model_feature_names(
+        metadata=metadata,
+        live_feature_row=live_feature_row,
+        model=model,
+        meta_features=META_FEATURES,
+    )
 
 
 def _sigmoid(x: float) -> float:

@@ -13,10 +13,13 @@ from app.services.ml.forecast_service import (
     EventForecast,
     ForecastService,
     ForecastQuality,
+    _is_model_feature_compatibility_error,
+    _load_cached_models,
     _resolve_loaded_model_feature_names,
     _sigmoid,
     confidence_label,
     ensure_supported_horizon,
+    invalidate_model_cache,
     normalize_forecast_region,
     reliability_score_from_metrics,
     utc_now,
@@ -24,6 +27,70 @@ from app.services.ml.forecast_service import (
 
 
 class ForecastServiceGuardTests(unittest.TestCase):
+    @patch("app.services.ml.forecast_service_model_cache.load_cached_models")
+    def test_load_cached_models_wrapper_delegates_to_module(self, delegated) -> None:
+        delegated.return_value = ("med", "lo", "hi", {"version": "v1"}, None)
+
+        result = _load_cached_models("Influenza A", region="BY", horizon_days=14)
+
+        self.assertEqual(result, ("med", "lo", "hi", {"version": "v1"}, None))
+        delegated.assert_called_once_with(
+            "Influenza A",
+            region="BY",
+            horizon_days=14,
+            ml_models_dir=ANY,
+            event_model_artifact_name=ANY,
+            default_forecast_region=ANY,
+            default_decision_horizon_days=ANY,
+            learned_probability_model_cls=ANY,
+            normalize_forecast_region_fn=ANY,
+            ensure_supported_horizon_fn=ANY,
+            model_artifact_dir_fn=ANY,
+            json_module=ANY,
+            pickle_module=ANY,
+            cache=ANY,
+            cache_lock=ANY,
+            logger=ANY,
+        )
+
+    @patch("app.services.ml.forecast_service_model_cache.invalidate_model_cache")
+    def test_invalidate_model_cache_wrapper_delegates_to_module(self, delegated) -> None:
+        invalidate_model_cache("Influenza A")
+
+        delegated.assert_called_once_with(
+            "Influenza A",
+            virus_slug_fn=ANY,
+            cache=ANY,
+            cache_lock=ANY,
+        )
+
+    @patch("app.services.ml.forecast_service_model_cache.is_model_feature_compatibility_error")
+    def test_is_model_feature_compatibility_error_wrapper_delegates_to_module(self, delegated) -> None:
+        delegated.return_value = True
+
+        result = _is_model_feature_compatibility_error(ValueError("Feature shape mismatch"))
+
+        self.assertTrue(result)
+        delegated.assert_called_once()
+
+    @patch("app.services.ml.forecast_service_model_cache.resolve_loaded_model_feature_names")
+    def test_resolve_loaded_model_feature_names_wrapper_delegates_to_module(self, delegated) -> None:
+        delegated.return_value = ["hw_pred", "horizon_days"]
+
+        result = _resolve_loaded_model_feature_names(
+            metadata={},
+            live_feature_row={"horizon_days": 7.0},
+            model=None,
+        )
+
+        self.assertEqual(result, ["hw_pred", "horizon_days"])
+        delegated.assert_called_once_with(
+            metadata={},
+            live_feature_row={"horizon_days": 7.0},
+            model=None,
+            meta_features=ANY,
+        )
+
     @patch("app.services.ml.forecast_service_sources.region_variants")
     def test_region_variants_wrapper_delegates_to_module(self, delegated) -> None:
         delegated.return_value = ["BY", "Bayern"]

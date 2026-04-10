@@ -16,11 +16,7 @@ from uuid import uuid4
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_, or_
 import math
-from sklearn.linear_model import Ridge
 from sklearn.ensemble import GradientBoostingClassifier, GradientBoostingRegressor
-from sklearn.metrics import r2_score, mean_absolute_error
-from sklearn.preprocessing import StandardScaler
-from xgboost import XGBRegressor
 import logging
 
 from app.models.database import (
@@ -44,7 +40,7 @@ from app.services.ml.forecast_contracts import (
     HEURISTIC_EVENT_SCORE_SOURCE,
     heuristic_event_score_from_forecast,
 )
-from app.services.ml import backtester_metrics
+from app.services.ml import backtester_metrics, backtester_simulation, backtester_walk_forward
 
 logger = logging.getLogger(__name__)
 
@@ -778,113 +774,16 @@ class BacktestService:
         enhanced: bool = False,
         target_disease: Optional[str] = None,
     ) -> list[dict]:
-        """Berechne Sub-Scores je Ziel-Datenpunkt ohne Future-Leak.
-
-        Args:
-            enhanced: If True, include raw signals + temporal features
-                      for the improved GradientBoosting pipeline.
-            target_disease: SurvStat disease name for cross-disease features.
-        """
-        if target_df.empty:
-            return []
-
-        df = target_df.copy()
-        df["datum"] = pd.to_datetime(df["datum"], errors="coerce")
-        df["menge"] = pd.to_numeric(df["menge"], errors="coerce")
-        df = df.dropna(subset=["datum", "menge"]).sort_values("datum").reset_index(drop=True)
-
-        menge_values = df["menge"].tolist()
-
-        # Seasonal baselines per ISO-Woche (für Residual-Modellierung)
-        df["_iso_week"] = df["datum"].apply(lambda d: d.isocalendar()[1])
-        seasonal_baselines: dict[int, float] = {}
-        for wk in range(1, 54):
-            vals = df[df["_iso_week"] == wk]["menge"].tolist()
-            seasonal_baselines[wk] = float(np.median(vals)) if vals else 0.0
-
-        simulation_rows = []
-        for idx, row in df.iterrows():
-            target_date = row["datum"]
-            sim_date = target_date - timedelta(days=max(0, int(horizon_days)))
-            real_qty = float(row["menge"])
-            baseline = seasonal_baselines.get(int(row["_iso_week"]), 0.0)
-
-            try:
-                scores = self._compute_sub_scores_at_date(
-                    sim_date,
-                    virus_typ,
-                    delay_rules=delay_rules,
-                    target_disease=target_disease,
-                )
-                row_dict = {
-                    "date": target_date.strftime("%Y-%m-%d"),
-                    "feature_date": sim_date.strftime("%Y-%m-%d"),
-                    "real_qty": real_qty,
-                    "bio": scores["bio"],
-                    "market": scores["market"],
-                    "psycho": scores["psycho"],
-                    "context": scores["context"],
-                    "school_start": scores["school_start"],
-                }
-
-                if enhanced:
-                    # Raw signals
-                    row_dict["wastewater_raw"] = scores["wastewater_raw"]
-                    row_dict["positivity_raw"] = scores["positivity_raw"]
-                    row_dict["are_consultation_raw"] = scores.get("are_consultation_raw", 0.0)
-                    row_dict["trends_raw"] = scores["trends_raw"]
-                    row_dict["weather_temp"] = scores["weather_temp"]
-                    row_dict["weather_humidity"] = scores["weather_humidity"]
-                    row_dict["school_start_float"] = scores["school_start_float"]
-                    row_dict["xdisease_load"] = scores["xdisease_load"]
-
-                    # Distributed-Lag Abwasser
-                    row_dict["ww_lag0w"] = scores["ww_lag0w"]
-                    row_dict["ww_lag1w"] = scores["ww_lag1w"]
-                    row_dict["ww_lag2w"] = scores["ww_lag2w"]
-                    row_dict["ww_lag3w"] = scores["ww_lag3w"]
-                    row_dict["ww_max_3w"] = scores["ww_max_3w"]
-                    row_dict["ww_slope_2w"] = scores["ww_slope_2w"]
-
-                    # Syndromische Signale
-                    row_dict["grippeweb_are"] = scores["grippeweb_are"]
-                    row_dict["notaufnahme_ari"] = scores["notaufnahme_ari"]
-
-                    # SurvStat Cross-Disease
-                    row_dict["survstat_xdisease_1"] = scores["survstat_xdisease_1"]
-                    row_dict["survstat_xdisease_2"] = scores["survstat_xdisease_2"]
-
-                    # Target rate of change — row-level vintage
-                    i = int(idx)
-                    if "available_time" in df.columns:
-                        vintage_mask = df["available_time"] <= sim_date
-                        vintage_vals = df.loc[vintage_mask, "menge"].tolist()
-                    else:
-                        vintage_vals = menge_values[:i]
-                    if len(vintage_vals) >= 2:
-                        row_dict["target_roc"] = (vintage_vals[-1] - vintage_vals[-2]) / vintage_vals[-2] if vintage_vals[-2] > 0 else 0.0
-                    else:
-                        row_dict["target_roc"] = 0.0
-
-                    # Niveauanker: seasonal_baseline + target_level
-                    row_dict["seasonal_baseline"] = baseline
-                    if vintage_vals:
-                        seasonal_med = max(float(np.median(vintage_vals)), 1.0)
-                        row_dict["target_level"] = round(float(vintage_vals[-1]) / seasonal_med, 4)
-                    else:
-                        row_dict["target_level"] = 0.0
-
-                    # Saisonalität am TARGET_DATE (deterministisch bekannt)
-                    iso_week = target_date.isocalendar()[1]
-                    row_dict["week_sin"] = round(math.sin(2 * math.pi * iso_week / 52), 4)
-                    row_dict["week_cos"] = round(math.cos(2 * math.pi * iso_week / 52), 4)
-
-                simulation_rows.append(row_dict)
-            except Exception as e:
-                logger.warning(f"Simulation für {sim_date} fehlgeschlagen: {e}")
-                continue
-
-        return simulation_rows
+        """Delegiert die Simulationszeilen an das ausgelagerte Hilfsmodul."""
+        return backtester_simulation.simulate_rows_from_target(
+            self,
+            target_df=target_df,
+            virus_typ=virus_typ,
+            horizon_days=horizon_days,
+            delay_rules=delay_rules,
+            enhanced=enhanced,
+            target_disease=target_disease,
+        )
 
     def _fit_regression_from_simulation(
         self,
@@ -892,83 +791,13 @@ class BacktestService:
         virus_typ: str,
         use_llm: bool = True,
     ) -> dict:
-        """Ridge-Fit und Metrikberechnung auf simulierten Features."""
-        if df_sim.empty:
-            return {"error": "Keine Datenpunkte konnten simuliert werden."}
-
-        feature_cols = ["bio", "market", "psycho", "context"]
-        X = df_sim[feature_cols].values
-        y = df_sim["real_qty"].values
-
-        scaler = StandardScaler()
-        X_scaled = scaler.fit_transform(X)
-
-        model = Ridge(alpha=1.0, fit_intercept=True)
-        model.fit(X_scaled, y)
-
-        y_pred = model.predict(X_scaled)
-        r2 = r2_score(y, y_pred)
-        mae = mean_absolute_error(y, y_pred)
-
-        raw_coefs = np.abs(model.coef_)
-        total = raw_coefs.sum()
-        if total > 0:
-            weights_pct = {
-                col: round(float(raw_coefs[i] / total), 2)
-                for i, col in enumerate(feature_cols)
-            }
-        else:
-            weights_pct = dict(self.DEFAULT_WEIGHTS)
-
-        if y.max() > 0:
-            y_pred_scaled = y_pred * (y.mean() / y_pred.mean()) if y_pred.mean() > 0 else y_pred
-        else:
-            y_pred_scaled = y_pred
-
-        chart_data = []
-        records = df_sim.to_dict(orient="records")
-        for i, row in enumerate(records):
-            chart_data.append({
-                "date": row["date"],
-                "real_qty": row["real_qty"],
-                "predicted_qty": round(float(y_pred_scaled[i]), 1),
-                "bio": row["bio"],
-                "psycho": row["psycho"],
-                "context": row["context"],
-            })
-
-        correlation = float(np.corrcoef(y, y_pred)[0, 1]) if len(y) > 2 else 0.0
-        if np.isnan(correlation):
-            correlation = 0.0
-
-        if use_llm:
-            llm_insight = self._generate_llm_insight(
-                weights_pct, r2, correlation, mae, len(df_sim), virus_typ
-            )
-        else:
-            llm_insight = (
-                f"Simulation über {len(df_sim)} Datenpunkte: "
-                f"R²={r2:.2f}, Korrelation={correlation:.1%}, MAE={mae:.1f}. "
-                f"Dominanter Treiber: {max(weights_pct, key=weights_pct.get)}."
-            )
-
-        return {
-            "metrics": {
-                "r2_score": round(r2, 3),
-                "correlation": round(correlation, 3),
-                "correlation_pct": round(abs(correlation) * 100, 1),
-                "mae": round(mae, 1),
-                "data_points": len(df_sim),
-                "date_range": {
-                    "start": df_sim["date"].min(),
-                    "end": df_sim["date"].max(),
-                },
-            },
-            "default_weights": dict(self.DEFAULT_WEIGHTS),
-            "optimized_weights": weights_pct,
-            "llm_insight": llm_insight,
-            "chart_data": chart_data,
-        }
+        """Delegiert Ridge-Fit und Kennzahlen an das ausgelagerte Hilfsmodul."""
+        return backtester_simulation.fit_regression_from_simulation(
+            self,
+            df_sim=df_sim,
+            virus_typ=virus_typ,
+            use_llm=use_llm,
+        )
 
     def _resolve_survstat_disease(self, source_token: str) -> Optional[str]:
         """Mappt Zieltoken auf einen konkreten SURVSTAT-Disease-String."""
@@ -1488,16 +1317,12 @@ class BacktestService:
 
     @staticmethod
     def _seasonal_naive_baseline(train_df: pd.DataFrame, target_week: int, target_month: int) -> float:
-        """Seasonal Baseline: Median der gleichen ISO-Woche (konsistent mit Residual-Training)."""
-        same_week = train_df[train_df["iso_week"] == target_week]
-        if not same_week.empty:
-            return float(same_week["menge"].median())
-
-        same_month = train_df[train_df["month"] == target_month]
-        if not same_month.empty:
-            return float(same_month["menge"].median())
-
-        return float(train_df["menge"].median())
+        """Delegiert die saisonale Baseline an das ausgelagerte Hilfsmodul."""
+        return backtester_walk_forward.seasonal_naive_baseline(
+            train_df,
+            target_week=target_week,
+            target_month=target_month,
+        )
 
     def _run_walk_forward_market_backtest(
         self,
@@ -1509,357 +1334,17 @@ class BacktestService:
         exclude_are: bool = False,
         target_disease: Optional[str] = None,
     ) -> dict:
-        """Walk-forward Backtest mit XGBoost auf autoregressive SURVSTAT-Features.
-
-        Trainiert rein auf historischen SURVSTAT-Zeitreihendaten (Lags, Rolling,
-        Saisonalität). AMELAG-Viruslast wird als Zusatzinfo in chart_data ausgegeben.
-        """
-        df = target_df.copy()
-        df["datum"] = pd.to_datetime(df["datum"], errors="coerce")
-        df["menge"] = pd.to_numeric(df["menge"], errors="coerce")
-        if "available_time" in df.columns:
-            df["available_time"] = pd.to_datetime(df["available_time"], errors="coerce")
-        else:
-            df["available_time"] = pd.NaT
-        df["available_time"] = df["available_time"].fillna(df["datum"])
-        df = df.dropna(subset=["datum", "menge"]).sort_values("datum").reset_index(drop=True)
-        if df.empty:
-            return {"error": "Keine validen Zielwerte für Walk-forward Backtest verfügbar."}
-
-        # Baseline-Hilfsspalten
-        isocal = df["datum"].dt.isocalendar()
-        df["iso_week"] = isocal.week.astype(int)
-        df["month"] = df["datum"].dt.month.astype(int)
-
-        # XGBoost auf autoregressive SURVSTAT-Features
-        feature_cols = list(self.XGBOOST_SURVSTAT_FEATURES)
-
-        folds: list[dict] = []
-        importance_accumulator: list[np.ndarray] = []
-        xgb_fold_count = 0
-
-        for _, row in df.iterrows():
-            target_time = row["datum"]
-            target_value = float(row["menge"])
-            target_week = int(row["iso_week"])
-            target_month = int(row["month"])
-            forecast_time = target_time - timedelta(days=max(0, int(horizon_days)))
-
-            if self.strict_vintage_mode:
-                train_target_df = df[df["available_time"] <= forecast_time].copy()
-            else:
-                train_target_df = df[df["datum"] <= forecast_time].copy()
-            if len(train_target_df) < min_train_points:
-                continue
-
-            # XGBoost: Autoregressive Features rein aus SURVSTAT-Zeitreihe
-            train_sorted = train_target_df[["datum", "menge"]].sort_values("datum").reset_index(drop=True)
-            X_train, y_train = self._build_survstat_ar_training_data(train_sorted)
-            if len(X_train) < 10:
-                continue
-
-            # XGBoost Regressor (keine bio/psycho/context Mischung)
-            n_train = len(X_train)
-            xgb_fold_count += 1
-            model = XGBRegressor(
-                n_estimators=min(200, max(50, n_train * 2)),
-                max_depth=4 if n_train >= 60 else 3,
-                learning_rate=0.05,
-                subsample=0.8,
-                colsample_bytree=0.8,
-                min_child_weight=3,
-                random_state=42,
-                verbosity=0,
-            )
-            model.fit(X_train, y_train)
-            importance_accumulator.append(model.feature_importances_)
-
-            # Test-Features für den Vorhersagepunkt
-            series = train_sorted["menge"].reset_index(drop=True)
-            test_feat = self._build_survstat_ar_row(
-                series, len(series), target_time,
-            )
-            X_test = np.array([[test_feat.get(c, 0.0) for c in self.XGBOOST_SURVSTAT_FEATURES]])
-            X_test = np.nan_to_num(X_test, nan=0.0, posinf=0.0, neginf=0.0)
-
-            y_hat = max(0.0, float(model.predict(X_test)[0]))
-            y_max = float(y_train.max())
-            y_hat = min(y_hat, y_max * 2.5)
-
-            # Baselines für Vergleich
-            baseline_persistence = float(train_target_df.iloc[-1]["menge"])
-            seasonal_bl = self._seasonal_naive_baseline(
-                train_target_df, target_week=target_week, target_month=target_month,
-            )
-            decision_window = train_target_df[
-                train_target_df["datum"] >= (forecast_time - timedelta(days=self.DECISION_BASELINE_WINDOW_DAYS))
-            ]
-            if decision_window.empty:
-                decision_window = train_target_df
-            decision_baseline = float(decision_window["menge"].median()) if not decision_window.empty else seasonal_bl
-            heuristic_event_score = heuristic_event_score_from_forecast(
-                prediction=y_hat,
-                baseline=decision_baseline if decision_baseline > 0 else max(seasonal_bl, 1.0),
-                lower_bound=max(0.0, y_hat - 1.28 * max(float(np.std(y_train)), 1.0)),
-                upper_bound=y_hat + 1.28 * max(float(np.std(y_train)), 1.0),
-                threshold_pct=float(self.DECISION_EVENT_THRESHOLD_PCT),
-            )
-
-            # AMELAG Rohdaten für Chart-Anzeige
-            amelag_val = self._amelag_raw_at_date(target_time, virus_typ)
-
-            folds.append({
-                "forecast_time": forecast_time,
-                "target_time": target_time,
-                "real_qty": target_value,
-                "predicted_qty": y_hat,
-                "predicted_qty_level": y_hat,
-                "predicted_qty_lead": y_hat,
-                "predicted_qty_decision": y_hat,
-                "p_event": None,
-                "event_probability": None,
-                "heuristic_event_score": heuristic_event_score,
-                "probability_source": HEURISTIC_EVENT_SCORE_SOURCE,
-                "selected_variant": "xgboost",
-                "baseline_persistence": baseline_persistence,
-                "baseline_seasonal": seasonal_bl,
-                "decision_baseline": round(decision_baseline, 4),
-                "amelag_viruslast": amelag_val,
-            })
-
-        if not folds:
-            return {
-                "error": (
-                    "Walk-forward erzeugte keine validen Folds. "
-                    f"Erhöhe days_back oder reduziere min_train_points (aktuell {min_train_points})."
-                )
-            }
-
-        pred_df = pd.DataFrame(folds).sort_values("target_time").reset_index(drop=True)
-        y_true = pred_df["real_qty"].to_numpy(dtype=float)
-        y_hat = pred_df["predicted_qty"].to_numpy(dtype=float)
-        y_persistence = pred_df["baseline_persistence"].to_numpy(dtype=float)
-        y_seasonal = pred_df["baseline_seasonal"].to_numpy(dtype=float)
-
-        model_metrics = self._compute_forecast_metrics(y_true, y_hat)
-        persistence_metrics = self._compute_forecast_metrics(y_true, y_persistence)
-        seasonal_metrics = self._compute_forecast_metrics(y_true, y_seasonal)
-
-        model_mae = max(model_metrics["mae"], 1e-9)
-        pers_mae = max(persistence_metrics["mae"], 1e-9)
-        seas_mae = max(seasonal_metrics["mae"], 1e-9)
-
-        # Feature importance: XGBoost (letzter Fold = größtes Training)
-        imp_cols = feature_cols
-        if importance_accumulator:
-            last_imp = importance_accumulator[-1]
-            total = float(last_imp.sum())
-            if total > 0:
-                optimized_weights = {
-                    col: round(float(last_imp[i] / total), 3)
-                    for i, col in enumerate(imp_cols[:len(last_imp)])
-                }
-            else:
-                optimized_weights = dict(self.DEFAULT_WEIGHTS)
-        else:
-            optimized_weights = dict(self.DEFAULT_WEIGHTS)
-
-        # --- Future Forecast Extension (6 weeks ahead) mit XGBoost ---
-        forecast_weeks = 6
-        residuals = y_true - y_hat
-        residual_std = (
-            float(np.std(residuals)) if len(residuals) > 2
-            else float(np.std(y_true) * 0.3)
+        """Delegiert den Walk-forward Backtest an das ausgelagerte Hilfsmodul."""
+        return backtester_walk_forward.run_walk_forward_market_backtest(
+            self,
+            target_df=target_df,
+            virus_typ=virus_typ,
+            horizon_days=horizon_days,
+            min_train_points=min_train_points,
+            delay_rules=delay_rules,
+            exclude_are=exclude_are,
+            target_disease=target_disease,
         )
-        last_target_time = pred_df["target_time"].max()
-        # Extend the series with actual values for autoregressive features
-        rolling_series = list(df.loc[df["datum"] <= last_target_time, "menge"].values)
-        forecast_chart: list[dict] = []
-
-        try:
-            for w in range(1, forecast_weeks + 1):
-                future_target = last_target_time + timedelta(weeks=w)
-                future_forecast = future_target - timedelta(
-                    days=max(0, int(horizon_days))
-                )
-
-                # Build AR features from extended series
-                fc_series = pd.Series(rolling_series, dtype=float)
-                fc_feat = self._build_survstat_ar_row(
-                    fc_series, len(fc_series), future_target,
-                )
-                X_fc = np.array([[fc_feat.get(c, 0.0) for c in self.XGBOOST_SURVSTAT_FEATURES]])
-                X_fc = np.nan_to_num(X_fc, nan=0.0, posinf=0.0, neginf=0.0)
-                y_fc = max(0.0, float(model.predict(X_fc)[0]))
-
-                hf = math.sqrt(w)
-                ci_80 = 1.28 * residual_std * hf
-                ci_95 = 1.96 * residual_std * hf
-
-                forecast_chart.append({
-                    "date": future_target.strftime("%Y-%m-%d"),
-                    "issue_date": future_forecast.strftime("%Y-%m-%d"),
-                    "target_date": future_target.strftime("%Y-%m-%d"),
-                    "forecast_qty": round(y_fc, 3),
-                    "ci_80_lower": round(max(0, y_fc - ci_80), 3),
-                    "ci_80_upper": round(y_fc + ci_80, 3),
-                    "ci_95_lower": round(max(0, y_fc - ci_95), 3),
-                    "ci_95_upper": round(y_fc + ci_95, 3),
-                    "is_forecast": True,
-                })
-                rolling_series.append(y_fc)
-        except Exception:
-            pass  # forecast is best-effort; backtest results always returned
-
-        # Sauberes Datenmodell: forecast_records + chart_data für beide Ansichten
-        # forecast_records: Jeder Fold als Record mit issue_date + target_date
-        forecast_records = [
-            {
-                "issue_date": row["forecast_time"].strftime("%Y-%m-%d"),
-                "target_date": row["target_time"].strftime("%Y-%m-%d"),
-                "y_hat": round(float(row["predicted_qty"]), 3),
-                "y_true": float(row["real_qty"]),
-                "baseline_persistence": float(row["baseline_persistence"]),
-                "baseline_seasonal": float(row["baseline_seasonal"]),
-                "decision_baseline": float(row.get("decision_baseline") or 0.0),
-                "horizon_days": int(horizon_days),
-                "lead_days": int((row["target_time"] - row["forecast_time"]).days),
-            }
-            for _, row in pred_df.iterrows()
-        ]
-        decision_forecast_records = [
-            {
-                "issue_date": row["forecast_time"].strftime("%Y-%m-%d"),
-                "target_date": row["target_time"].strftime("%Y-%m-%d"),
-                "y_hat": round(float(row.get("predicted_qty_decision", row["predicted_qty"])), 3),
-                "y_hat_level": round(float(row.get("predicted_qty_level", row["predicted_qty"])), 3),
-                "y_hat_lead": round(float(row.get("predicted_qty_lead", row["predicted_qty"])), 3),
-                "p_event": (
-                    round(float(row["event_probability"]), 4)
-                    if row.get("event_probability") is not None
-                    else None
-                ),
-                "event_probability": (
-                    round(float(row["event_probability"]), 4)
-                    if row.get("event_probability") is not None
-                    else None
-                ),
-                "heuristic_event_score": (
-                    round(float(row["heuristic_event_score"]), 4)
-                    if row.get("heuristic_event_score") is not None
-                    else None
-                ),
-                "probability_source": str(row.get("probability_source") or HEURISTIC_EVENT_SCORE_SOURCE),
-                "selected_variant": str(row.get("selected_variant") or "level"),
-                "y_true": float(row["real_qty"]),
-                "baseline_persistence": float(row["baseline_persistence"]),
-                "baseline_seasonal": float(row["baseline_seasonal"]),
-                "decision_baseline": float(row.get("decision_baseline") or 0.0),
-                "horizon_days": int(horizon_days),
-                "lead_days": int((row["target_time"] - row["forecast_time"]).days),
-            }
-            for _, row in pred_df.iterrows()
-        ]
-
-        # chart_data: Validierungsansicht (beide am target_date, Standard)
-        # OOS-Konfidenzintervalle basierend auf residual_std (konstant, kein Horizont-Faktor)
-        ci_80_half = 1.28 * residual_std
-        ci_95_half = 1.96 * residual_std
-        historical_chart = [
-            {
-                "date": row["target_time"].strftime("%Y-%m-%d"),
-                "issue_date": row["forecast_time"].strftime("%Y-%m-%d"),
-                "target_date": row["target_time"].strftime("%Y-%m-%d"),
-                "real_qty": float(row["real_qty"]),
-                "predicted_qty": round(float(row["predicted_qty"]), 3),
-                "ci_80_lower": round(max(0.0, float(row["predicted_qty"]) - ci_80_half), 3),
-                "ci_80_upper": round(float(row["predicted_qty"]) + ci_80_half, 3),
-                "ci_95_lower": round(max(0.0, float(row["predicted_qty"]) - ci_95_half), 3),
-                "ci_95_upper": round(float(row["predicted_qty"]) + ci_95_half, 3),
-                "amelag_viruslast": round(float(row["amelag_viruslast"]), 3) if row.get("amelag_viruslast") is not None else None,
-                "is_forecast": False,
-            }
-            for _, row in pred_df.iterrows()
-        ]
-
-        # Bridge: last historical point starts the forecast line
-        if historical_chart and forecast_chart:
-            historical_chart[-1]["forecast_qty"] = historical_chart[-1]["predicted_qty"]
-
-        chart_data = historical_chart + forecast_chart
-        vintage_records = decision_forecast_records or forecast_records
-        vintage_metrics = self._compute_vintage_metrics(
-            forecast_records=vintage_records,
-            configured_horizon_days=int(horizon_days),
-        )
-        decision_metrics = self._compute_decision_metrics(
-            forecast_records=vintage_records,
-            threshold_pct=float(self.DECISION_EVENT_THRESHOLD_PCT),
-            vintage_metrics=vintage_metrics,
-        )
-        interval_coverage = self._compute_interval_coverage_metrics(historical_chart)
-        event_calibration = self._compute_event_calibration_metrics(
-            decision_forecast_records,
-            threshold_pct=float(self.DECISION_EVENT_THRESHOLD_PCT),
-        )
-        timing_metrics = self._compute_timing_metrics(
-            forecast_records=vintage_records,
-            horizon_days=int(horizon_days),
-        )
-        quality_gate = self._build_quality_gate(
-            decision_metrics,
-            timing_metrics,
-            improvement_vs_baselines={
-                "mae_vs_persistence_pct": round((pers_mae - model_mae) / pers_mae * 100, 2),
-                "mae_vs_seasonal_pct": round((seas_mae - model_mae) / seas_mae * 100, 2),
-            },
-            interval_coverage=interval_coverage,
-            event_calibration=None if event_calibration.get("calibration_skipped") else event_calibration,
-        )
-
-        return {
-            "metrics": {
-                **model_metrics,
-                "data_points": int(len(pred_df)),
-                "date_range": {
-                    "start": pred_df["target_time"].min().strftime("%Y-%m-%d"),
-                    "end": pred_df["target_time"].max().strftime("%Y-%m-%d"),
-                },
-            },
-            "baseline_metrics": {
-                "persistence": persistence_metrics,
-                "seasonal_naive": seasonal_metrics,
-            },
-            "improvement_vs_baselines": {
-                "mae_vs_persistence_pct": round((pers_mae - model_mae) / pers_mae * 100, 2),
-                "mae_vs_seasonal_pct": round((seas_mae - model_mae) / seas_mae * 100, 2),
-            },
-            "optimized_weights": optimized_weights,
-            "default_weights": dict(self.DEFAULT_WEIGHTS),
-            "model_type": "XGBoost",
-            "xgb_folds": xgb_fold_count,
-            "feature_count": len(imp_cols) if importance_accumulator else len(feature_cols),
-            "feature_names": imp_cols if importance_accumulator else feature_cols,
-            "chart_data": chart_data,
-            "forecast_records": forecast_records,
-            "decision_forecast_records": decision_forecast_records,
-            "vintage_metrics": vintage_metrics,
-            "decision_metrics": decision_metrics,
-            "interval_coverage": interval_coverage,
-            "event_calibration": event_calibration,
-            "timing_metrics": timing_metrics,
-            "quality_gate": quality_gate,
-            "forecast_weeks": len(forecast_chart),
-            "residual_std": round(residual_std, 4),
-            "walk_forward": {
-                "enabled": True,
-                "folds": int(len(pred_df)),
-                "horizon_days": int(horizon_days),
-                "min_train_points": int(min_train_points),
-                "strict_vintage_mode": bool(self.strict_vintage_mode),
-                "delay_rules_days": dict(self.DEFAULT_DELAY_RULES_DAYS | (delay_rules or {})),
-            },
-        }
 
     def run_market_simulation(
         self,

@@ -8,6 +8,86 @@ from app.services.ml.forecast_contracts import HEURISTIC_EVENT_SCORE_SOURCE
 
 
 class BacktesterRefactorGuardTests(unittest.TestCase):
+    @patch("app.services.ml.backtester_simulation.simulate_rows_from_target")
+    def test_simulate_rows_from_target_wrapper_delegates_to_module(
+        self,
+        simulate_mock,
+    ) -> None:
+        simulate_mock.return_value = [{"date": "2024-01-08", "real_qty": 10.0}]
+        service = BacktestService(db=None)
+
+        result = service._simulate_rows_from_target(
+            target_df="target-frame",
+            virus_typ="Influenza A",
+            horizon_days=7,
+            delay_rules={"weather": 2},
+            enhanced=True,
+            target_disease="mycoplasma",
+        )
+
+        self.assertEqual(result, [{"date": "2024-01-08", "real_qty": 10.0}])
+        simulate_mock.assert_called_once_with(
+            service,
+            target_df="target-frame",
+            virus_typ="Influenza A",
+            horizon_days=7,
+            delay_rules={"weather": 2},
+            enhanced=True,
+            target_disease="mycoplasma",
+        )
+
+    @patch("app.services.ml.backtester_simulation.fit_regression_from_simulation")
+    def test_fit_regression_from_simulation_wrapper_delegates_to_module(
+        self,
+        fit_mock,
+    ) -> None:
+        fit_mock.return_value = {"metrics": {"r2_score": 0.81}}
+        service = BacktestService(db=None)
+
+        result = service._fit_regression_from_simulation(
+            df_sim="simulation-frame",
+            virus_typ="RSV A",
+            use_llm=False,
+        )
+
+        self.assertEqual(result, {"metrics": {"r2_score": 0.81}})
+        fit_mock.assert_called_once_with(
+            service,
+            df_sim="simulation-frame",
+            virus_typ="RSV A",
+            use_llm=False,
+        )
+
+    @patch("app.services.ml.backtester_walk_forward.run_walk_forward_market_backtest")
+    def test_run_walk_forward_market_backtest_wrapper_delegates_to_module(
+        self,
+        walk_forward_mock,
+    ) -> None:
+        walk_forward_mock.return_value = {"metrics": {"data_points": 3}}
+        service = BacktestService(db=None)
+
+        result = service._run_walk_forward_market_backtest(
+            target_df="target-frame",
+            virus_typ="Influenza A",
+            horizon_days=7,
+            min_train_points=12,
+            delay_rules={"weather": 2},
+            exclude_are=True,
+            target_disease="mycoplasma",
+        )
+
+        self.assertEqual(result, {"metrics": {"data_points": 3}})
+        walk_forward_mock.assert_called_once_with(
+            service,
+            target_df="target-frame",
+            virus_typ="Influenza A",
+            horizon_days=7,
+            min_train_points=12,
+            delay_rules={"weather": 2},
+            exclude_are=True,
+            target_disease="mycoplasma",
+        )
+
     @patch("app.services.ml.backtester_metrics.compute_decision_metrics")
     def test_compute_decision_metrics_wrapper_delegates_with_quality_targets(
         self,

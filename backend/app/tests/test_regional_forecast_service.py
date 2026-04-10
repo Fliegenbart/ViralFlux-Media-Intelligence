@@ -393,8 +393,15 @@ class RegionalForecastServiceTests(unittest.TestCase):
         self.assertTrue(top["reason_trace"]["uncertainty"])
         self.assertIn("Remaining uncertainty", top["uncertainty_summary"])
 
-    def test_media_activation_downgrades_to_watch_when_quality_gate_fails(self) -> None:
-        service = self._make_service(quality_gate_passed=False)
+    def test_media_activation_exposes_prepare_when_quality_gate_blocks_spend(self) -> None:
+        service = self._make_service(
+            quality_gate_passed=False,
+            inference_panel=self._decision_ready_panel().iloc[[0]].copy(),
+            probabilities=[0.82],
+            median_values=[28.0],
+            lower_values=[24.0],
+            upper_values=[32.0],
+        )
 
         result = service.generate_media_activation(
             virus_typ="Influenza A",
@@ -404,8 +411,11 @@ class RegionalForecastServiceTests(unittest.TestCase):
 
         self.assertEqual(result["summary"]["quality_gate"]["forecast_readiness"], "WATCH")
         self.assertEqual(result["summary"]["total_budget_allocated"], 0.0)
-        self.assertTrue(all(item["action"] == "watch" for item in result["recommendations"]))
+        self.assertEqual(result["summary"]["prepare_regions"], 1)
+        self.assertEqual(result["summary"]["watch_regions"], 0)
+        self.assertTrue(all(item["action"] == "prepare" for item in result["recommendations"]))
         self.assertTrue(all(item["budget_eur"] == 0.0 for item in result["recommendations"]))
+        self.assertTrue(all("vorbereit" in item["timeline"].lower() for item in result["recommendations"]))
 
     def test_media_activation_exposes_allocation_fields_and_normalized_budget(self) -> None:
         service = self._make_service(
@@ -509,10 +519,15 @@ class RegionalForecastServiceTests(unittest.TestCase):
         self.assertEqual(result["predictions"], [])
         self.assertIn("target_incidence", result["message"])
 
-    def test_media_activation_stays_watch_until_business_gate_is_validated(self) -> None:
+    def test_media_activation_exposes_prepare_when_business_gate_blocks_spend(self) -> None:
         service = self._make_service(
             quality_gate_passed=True,
             validated_for_budget_activation=False,
+            inference_panel=self._decision_ready_panel().iloc[[0]].copy(),
+            probabilities=[0.82],
+            median_values=[28.0],
+            lower_values=[24.0],
+            upper_values=[32.0],
         )
 
         result = service.generate_media_activation(
@@ -524,9 +539,12 @@ class RegionalForecastServiceTests(unittest.TestCase):
         self.assertEqual(result["summary"]["quality_gate"]["forecast_readiness"], "GO")
         self.assertFalse(result["summary"]["business_gate"]["validated_for_budget_activation"])
         self.assertEqual(result["summary"]["total_budget_allocated"], 0.0)
-        self.assertTrue(all(item["action"] == "watch" for item in result["recommendations"]))
+        self.assertEqual(result["summary"]["prepare_regions"], 1)
+        self.assertEqual(result["summary"]["watch_regions"], 0)
+        self.assertTrue(all(item["action"] == "prepare" for item in result["recommendations"]))
+        self.assertTrue(all(item["budget_eur"] == 0.0 for item in result["recommendations"]))
         self.assertTrue(
-            all("Business-Gate" in item["timeline"] for item in result["recommendations"])
+            all("vorbereit" in item["timeline"].lower() for item in result["recommendations"])
         )
 
     def test_sars_forecast_and_media_activation_respect_shadow_watch_policy(self) -> None:
@@ -536,6 +554,11 @@ class RegionalForecastServiceTests(unittest.TestCase):
             rollout_mode="shadow",
             activation_policy="watch_only",
             signal_bundle_version="sars_hybrid_v1",
+            inference_panel=self._decision_ready_panel().iloc[[0]].copy(),
+            probabilities=[0.82],
+            median_values=[28.0],
+            lower_values=[24.0],
+            upper_values=[32.0],
         )
 
         forecast = service.predict_all_regions(virus_typ="SARS-CoV-2", horizon_days=7)
@@ -553,7 +576,10 @@ class RegionalForecastServiceTests(unittest.TestCase):
         self.assertEqual(media["summary"]["rollout_mode"], "shadow")
         self.assertEqual(media["summary"]["activation_policy"], "watch_only")
         self.assertEqual(media["summary"]["total_budget_allocated"], 0.0)
-        self.assertTrue(all(item["action"] == "watch" for item in media["recommendations"]))
+        self.assertEqual(media["summary"]["prepare_regions"], 1)
+        self.assertEqual(media["summary"]["watch_regions"], 0)
+        self.assertTrue(all(item["action"] == "prepare" for item in media["recommendations"]))
+        self.assertTrue(all(item["budget_eur"] == 0.0 for item in media["recommendations"]))
 
     def test_sars_h7_stays_shadow_without_explicit_promotion_flag(self) -> None:
         service = self._make_service(

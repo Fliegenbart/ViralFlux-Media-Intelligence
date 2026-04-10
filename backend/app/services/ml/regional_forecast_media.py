@@ -74,9 +74,9 @@ def media_action(
     recommended_level: str,
     spend_enabled: bool,
 ) -> str:
-    if not spend_enabled:
-        return "watch"
     stage = str(recommended_level or "Watch").strip().lower()
+    if not spend_enabled:
+        return "prepare" if stage in {"activate", "prepare"} else "watch"
     if stage in {"activate", "prepare"}:
         return stage
     return "watch"
@@ -114,6 +114,14 @@ def media_timeline(
     target_window_days: list[int],
 ) -> str:
     if not spend_enabled:
+        if action == "prepare":
+            if activation_policy == "watch_only":
+                return "Nur vorbereiten — Shadow-Policy blockiert Aktivierung"
+            if not business_gate.get("validated_for_budget_activation"):
+                return "Nur vorbereiten — Business-Gate noch nicht validiert"
+            if not quality_gate.get("overall_passed"):
+                return "Nur vorbereiten — Quality Gate blockiert Aktivierung"
+            return "Nur vorbereiten — Spend aktuell blockiert"
         return (
             "Nur beobachten — Shadow-Policy blockiert Aktivierung"
             if activation_policy == "watch_only"

@@ -467,6 +467,101 @@ class MediaV2ServiceTruthCoverageTests(unittest.TestCase):
         self.assertEqual(payload, {"ok": "campaigns"})
         mocked_builder.assert_called_once_with(self.service, brand="gelo", limit=42)
 
+    def test_campaign_state_counts_delegates_to_queue_module(self) -> None:
+        cards = [{"lifecycle_state": "APPROVE"}]
+        with patch(
+            "app.services.media.v2.queue._campaign_state_counts",
+            return_value={"APPROVE": 1},
+        ) as mocked_builder:
+            payload = self.service._campaign_state_counts(cards)
+
+        self.assertEqual(payload, {"APPROVE": 1})
+        mocked_builder.assert_called_once_with(self.service, cards)
+
+    def test_build_campaign_queue_delegates_to_queue_module(self) -> None:
+        cards = [{"id": "card-1"}]
+        with patch(
+            "app.services.media.v2.queue._build_campaign_queue",
+            return_value={"visible_cards": []},
+        ) as mocked_builder:
+            payload = self.service._build_campaign_queue(cards, visible_limit=5)
+
+        self.assertEqual(payload, {"visible_cards": []})
+        mocked_builder.assert_called_once_with(
+            self.service,
+            cards,
+            visible_limit=5,
+        )
+
+    def test_decision_focus_card_and_recommended_action_delegate_to_queue_module(self) -> None:
+        cards = [{"id": "card-1"}]
+        top_card = {"id": "card-1"}
+        top_regions = [{"name": "Hamburg"}]
+        with (
+            patch(
+                "app.services.media.v2.queue._decision_focus_card",
+                return_value={"id": "focus"},
+            ) as mocked_focus,
+            patch(
+                "app.services.media.v2.queue._recommended_action",
+                return_value="Aktion",
+            ) as mocked_action,
+        ):
+            focus = self.service._decision_focus_card(cards)
+            action = self.service._recommended_action(
+                decision_state="GO",
+                top_card=top_card,
+                top_regions=top_regions,
+                decision_mode="mixed",
+            )
+
+        self.assertEqual(focus, {"id": "focus"})
+        self.assertEqual(action, "Aktion")
+        mocked_focus.assert_called_once_with(self.service, cards)
+        mocked_action.assert_called_once_with(
+            self.service,
+            decision_state="GO",
+            top_card=top_card,
+            top_regions=top_regions,
+            decision_mode="mixed",
+        )
+
+    def test_build_campaign_queue_still_respects_service_campaign_sort_key_override(self) -> None:
+        class OverrideMediaV2Service(MediaV2Service):
+            def _campaign_sort_key(self, item: dict) -> tuple:
+                return (item.get("manual_rank", 0),)
+
+        service = OverrideMediaV2Service(self.db)
+        cards = [
+            {
+                "id": "variant-low",
+                "opportunity_id": 1,
+                "lifecycle_state": "REVIEW",
+                "manual_rank": 1,
+                "recommended_product": "GeloProsed",
+            },
+            {
+                "id": "variant-high",
+                "opportunity_id": 1,
+                "lifecycle_state": "APPROVE",
+                "manual_rank": 9,
+                "recommended_product": "GeloProsed",
+            },
+            {
+                "id": "other",
+                "opportunity_id": 2,
+                "lifecycle_state": "PREPARE",
+                "manual_rank": 3,
+                "recommended_product": "GeloRevoice",
+            },
+        ]
+
+        queue = service._build_campaign_queue(cards, visible_limit=8)
+
+        self.assertEqual(queue["primary_cards"][0]["id"], "variant-high")
+        self.assertEqual(queue["primary_cards"][0]["variant_count"], 2)
+        self.assertEqual(queue["primary_cards"][0]["variants"][0]["id"], "variant-low")
+
     def test_get_evidence_payload_delegates_to_evidence_builder(self) -> None:
         with patch(
             "app.services.media.v2_service.build_evidence_payload",

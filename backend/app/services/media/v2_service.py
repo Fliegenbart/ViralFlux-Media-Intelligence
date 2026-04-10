@@ -1,7 +1,6 @@
 from __future__ import annotations
 from app.core.time import utc_now
 
-from collections import defaultdict
 from datetime import datetime, timedelta
 from types import SimpleNamespace
 from typing import Any
@@ -24,7 +23,6 @@ from app.services.media.cockpit_service import MediaCockpitService
 from app.services.media.outcome_signal_service import OutcomeSignalService
 from app.services.media.peix_score_service import PeixEpiScoreService
 from app.services.media.recommendation_contracts import (
-    dedupe_group_id,
     enrich_card_v2,
     to_card_response,
 )
@@ -46,17 +44,8 @@ from app.services.media.v2.decision import build_decision_payload
 from app.services.media.v2.evidence import build_evidence_payload
 from app.services.media.v2 import lineage
 from app.services.media.v2 import outcomes as outcomes_module
+from app.services.media.v2 import queue
 from app.services.media.v2.regions import build_regions_payload
-QUEUE_LIFECYCLE_PRIORITY = {
-    "SYNC_READY": 5,
-    "APPROVE": 4,
-    "REVIEW": 3,
-    "PREPARE": 2,
-    "LIVE": 1,
-    "EXPIRED": 0,
-    "ARCHIVED": 0,
-}
-QUEUE_LANE_ORDER = ("APPROVE", "REVIEW", "SYNC_READY", "PREPARE", "LIVE")
 
 
 class MediaV2Service:
@@ -375,25 +364,10 @@ class MediaV2Service:
         return f"{name} wird aus epidemiologischer Lage, Vorhersage und Umsetzungschance priorisiert."
 
     def _campaign_state_counts(self, cards: list[dict[str, Any]]) -> dict[str, int]:
-        counts: dict[str, int] = defaultdict(int)
-        for card in cards:
-            counts[str(card.get("lifecycle_state") or "PREPARE")] += 1
-        return dict(sorted(counts.items()))
+        return queue._campaign_state_counts(self, cards)
 
     def _campaign_sort_key(self, item: dict[str, Any]) -> tuple[Any, ...]:
-        lifecycle = str(item.get("lifecycle_state") or "").upper()
-        blockers = item.get("publish_blockers") or []
-        freshness = str(item.get("freshness_state") or "").lower()
-        return (
-            item.get("is_publishable", False),
-            QUEUE_LIFECYCLE_PRIORITY.get(lifecycle, 0),
-            freshness == "current",
-            freshness == "scheduled",
-            -len(blockers),
-            float(item.get("priority_score") or item.get("urgency_score") or 0.0),
-            float(item.get("signal_confidence_pct") or item.get("confidence") or 0.0),
-            str(item.get("updated_at") or item.get("created_at") or ""),
-        )
+        return queue._campaign_sort_key(self, item)
 
     def _build_campaign_queue(
         self,
@@ -401,46 +375,7 @@ class MediaV2Service:
         *,
         visible_limit: int = 8,
     ) -> dict[str, Any]:
-        active_cards = [card for card in cards if card.get("lifecycle_state") not in {"EXPIRED", "ARCHIVED"}]
-        grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
-        archived_cards: list[dict[str, Any]] = []
-
-        for card in cards:
-            if card.get("lifecycle_state") in {"EXPIRED", "ARCHIVED"}:
-                archived_cards.append(card)
-                continue
-            grouped[dedupe_group_id(card)].append(card)
-
-        primary_cards: list[dict[str, Any]] = []
-        for group_cards in grouped.values():
-            ranked = sorted(group_cards, key=self._campaign_sort_key, reverse=True)
-            primary = dict(ranked[0])
-            primary["is_primary_variant"] = True
-            primary["variant_count"] = len(ranked)
-            primary["variants"] = [
-                {
-                    "id": item.get("id"),
-                    "status": item.get("status"),
-                    "lifecycle_state": item.get("lifecycle_state"),
-                    "display_title": item.get("display_title"),
-                }
-                for item in ranked[1:]
-            ]
-            primary_cards.append(primary)
-
-        primary_cards.sort(key=self._campaign_sort_key, reverse=True)
-        visible_cards = self._select_visible_queue_cards(primary_cards, limit=visible_limit)
-
-        return {
-            "active_cards": active_cards,
-            "primary_cards": primary_cards,
-            "visible_cards": visible_cards,
-            "archived_cards": archived_cards,
-            "summary": {
-                "visible_cards": len(visible_cards),
-                "hidden_backlog_cards": max(len(primary_cards) - len(visible_cards), 0),
-            },
-        }
+        return queue._build_campaign_queue(self, cards, visible_limit=visible_limit)
 
     def _select_visible_queue_cards(
         self,
@@ -448,67 +383,17 @@ class MediaV2Service:
         *,
         limit: int,
     ) -> list[dict[str, Any]]:
-        if len(cards) <= limit:
-            return cards
-
-        by_lane: dict[str, list[dict[str, Any]]] = defaultdict(list)
-        for card in cards:
-            by_lane[str(card.get("lifecycle_state") or "PREPARE").upper()].append(card)
-
-        selected: list[dict[str, Any]] = []
-        seen_ids: set[str] = set()
-
-        for lane in QUEUE_LANE_ORDER:
-            lane_cards = by_lane.get(lane) or []
-            if not lane_cards:
-                continue
-            card = lane_cards[0]
-            card_id = str(card.get("id") or "")
-            if card_id and card_id not in seen_ids:
-                selected.append(card)
-                seen_ids.add(card_id)
-            if len(selected) >= limit:
-                return selected[:limit]
-
-        for lane in QUEUE_LANE_ORDER:
-            for card in by_lane.get(lane, [])[1:]:
-                card_id = str(card.get("id") or "")
-                if card_id and card_id in seen_ids:
-                    continue
-                selected.append(card)
-                if card_id:
-                    seen_ids.add(card_id)
-                if len(selected) >= limit:
-                    return selected[:limit]
-
-        return selected[:limit]
+        return queue._select_visible_queue_cards(self, cards, limit=limit)
 
     def _decision_focus_card(self, cards: list[dict[str, Any]]) -> dict[str, Any] | None:
-        preferred = [
-            card for card in cards
-            if str(card.get("lifecycle_state") or "").upper() in {"SYNC_READY", "APPROVE", "REVIEW"}
-        ]
-        if preferred:
-            return preferred[0]
-        return cards[0] if cards else None
+        return queue._decision_focus_card(self, cards)
 
     def _decision_top_products(
         self,
         cards: list[dict[str, Any]],
         top_card: dict[str, Any] | None,
     ) -> list[str]:
-        products: list[str] = []
-        for card in cards:
-            product = str(card.get("recommended_product") or card.get("product") or "").strip()
-            if product and product not in products:
-                products.append(product)
-            if len(products) >= 3:
-                break
-        if not products and top_card:
-            product = str(top_card.get("recommended_product") or top_card.get("product") or "").strip()
-            if product:
-                products.append(product)
-        return products
+        return queue._decision_top_products(self, cards, top_card)
 
     def _recommended_action(
         self,
@@ -518,37 +403,13 @@ class MediaV2Service:
         top_regions: list[dict[str, Any]],
         decision_mode: str,
     ) -> str:
-        primary_region = (
-            top_card.get("decision_brief", {}).get("recommendation", {}).get("primary_region")
-            if top_card else None
-        ) or (top_regions[0].get("name") if top_regions else None)
-        product = (
-            top_card.get("recommended_product")
-            or top_card.get("product")
-            if top_card else None
+        return queue._recommended_action(
+            self,
+            decision_state=decision_state,
+            top_card=top_card,
+            top_regions=top_regions,
+            decision_mode=decision_mode,
         )
-        top_summary = top_card.get("decision_brief", {}).get("summary_sentence") if top_card else None
-
-        if decision_state == "GO" and top_summary:
-            return str(top_summary)
-        if decision_state == "GO":
-            if primary_region and product:
-                return f"Diese Woche freigeben: {product} in {primary_region} priorisieren."
-            return "Diese Woche freigeben: die stärksten regionalen Vorschläge in die Aktivierung ziehen."
-
-        if decision_mode == "supply_window":
-            if primary_region and product:
-                return f"Diese Woche vorbereiten: {product} in {primary_region} als Versorgungschance absichern, aber noch keinen nationalen Shift freigeben."
-            return "Diese Woche vorbereiten: Versorgungssignale beobachten und nur prüfbare Vorschläge weiterziehen."
-        if decision_mode == "mixed":
-            if primary_region and product:
-                return f"Diese Woche vorbereiten: {product} in {primary_region} priorisieren, weil Epi-Signal und Kontext gemeinsam tragen, aber noch keinen nationalen Shift freigeben."
-            return "Diese Woche vorbereiten: Epi-Signal und Kontext beobachten und keine harte Aktivierung freigeben."
-        if primary_region and product:
-            return f"Diese Woche vorbereiten: {product} in {primary_region} priorisieren, aber noch keinen nationalen Shift freigeben."
-        if primary_region:
-            return f"Diese Woche vorbereiten: {primary_region} priorisieren und nur prüfbare Vorschläge weiterziehen."
-        return "Diese Woche vorbereiten: Signal beobachten, Regionen priorisieren und keine harte Aktivierung freigeben."
 
     def _known_limits(
         self,

@@ -13,10 +13,13 @@ from app.services.ml.forecast_service import (
     EventForecast,
     ForecastService,
     ForecastQuality,
+    _is_model_feature_compatibility_error,
+    _load_cached_models,
     _resolve_loaded_model_feature_names,
     _sigmoid,
     confidence_label,
     ensure_supported_horizon,
+    invalidate_model_cache,
     normalize_forecast_region,
     reliability_score_from_metrics,
     utc_now,
@@ -24,6 +27,189 @@ from app.services.ml.forecast_service import (
 
 
 class ForecastServiceGuardTests(unittest.TestCase):
+    @patch("app.services.ml.forecast_service_model_cache.load_cached_models")
+    def test_load_cached_models_wrapper_delegates_to_module(self, delegated) -> None:
+        delegated.return_value = ("med", "lo", "hi", {"version": "v1"}, None)
+
+        result = _load_cached_models("Influenza A", region="BY", horizon_days=14)
+
+        self.assertEqual(result, ("med", "lo", "hi", {"version": "v1"}, None))
+        delegated.assert_called_once_with(
+            "Influenza A",
+            region="BY",
+            horizon_days=14,
+            ml_models_dir=ANY,
+            event_model_artifact_name=ANY,
+            default_forecast_region=ANY,
+            default_decision_horizon_days=ANY,
+            learned_probability_model_cls=ANY,
+            normalize_forecast_region_fn=ANY,
+            ensure_supported_horizon_fn=ANY,
+            model_artifact_dir_fn=ANY,
+            json_module=ANY,
+            pickle_module=ANY,
+            cache=ANY,
+            cache_lock=ANY,
+            logger=ANY,
+        )
+
+    @patch("app.services.ml.forecast_service_model_cache.invalidate_model_cache")
+    def test_invalidate_model_cache_wrapper_delegates_to_module(self, delegated) -> None:
+        invalidate_model_cache("Influenza A")
+
+        delegated.assert_called_once_with(
+            "Influenza A",
+            virus_slug_fn=ANY,
+            cache=ANY,
+            cache_lock=ANY,
+        )
+
+    @patch("app.services.ml.forecast_service_model_cache.is_model_feature_compatibility_error")
+    def test_is_model_feature_compatibility_error_wrapper_delegates_to_module(self, delegated) -> None:
+        delegated.return_value = True
+
+        result = _is_model_feature_compatibility_error(ValueError("Feature shape mismatch"))
+
+        self.assertTrue(result)
+        delegated.assert_called_once()
+
+    @patch("app.services.ml.forecast_service_model_cache.resolve_loaded_model_feature_names")
+    def test_resolve_loaded_model_feature_names_wrapper_delegates_to_module(self, delegated) -> None:
+        delegated.return_value = ["hw_pred", "horizon_days"]
+
+        result = _resolve_loaded_model_feature_names(
+            metadata={},
+            live_feature_row={"horizon_days": 7.0},
+            model=None,
+        )
+
+        self.assertEqual(result, ["hw_pred", "horizon_days"])
+        delegated.assert_called_once_with(
+            metadata={},
+            live_feature_row={"horizon_days": 7.0},
+            model=None,
+            meta_features=ANY,
+        )
+
+    @patch("app.services.ml.forecast_service_sources.region_variants")
+    def test_region_variants_wrapper_delegates_to_module(self, delegated) -> None:
+        delegated.return_value = ["BY", "Bayern"]
+
+        result = ForecastService._region_variants("BY")
+
+        self.assertEqual(result, ["BY", "Bayern"])
+        delegated.assert_called_once_with("BY", normalize_forecast_region_fn=ANY, default_forecast_region=ANY, bundesland_names=ANY)
+
+    @patch("app.services.ml.forecast_service_sources.survstat_region_values")
+    def test_survstat_region_values_wrapper_delegates_to_module(self, delegated) -> None:
+        delegated.return_value = ["BY", "Bayern", "Gesamt"]
+
+        result = ForecastService._survstat_region_values("BY")
+
+        self.assertEqual(result, ["BY", "Bayern", "Gesamt"])
+        delegated.assert_called_once_with("BY", region_variants_fn=ANY, normalize_forecast_region_fn=ANY, default_forecast_region=ANY)
+
+    @patch("app.services.ml.forecast_service_sources.load_wastewater_training_frame")
+    def test_load_wastewater_training_frame_wrapper_delegates_to_module(self, delegated) -> None:
+        delegated.return_value = pd.DataFrame({"ds": [pd.Timestamp("2026-01-01")], "y": [1.0]})
+        service = ForecastService(db=None)
+
+        result = service._load_wastewater_training_frame(
+            virus_typ="Influenza A",
+            start_date=pd.Timestamp("2025-01-01").to_pydatetime(),
+            region="BY",
+        )
+
+        self.assertEqual(result["y"].tolist(), [1.0])
+        delegated.assert_called_once_with(
+            service,
+            virus_typ="Influenza A",
+            start_date=pd.Timestamp("2025-01-01").to_pydatetime(),
+            region="BY",
+            normalize_forecast_region_fn=ANY,
+            default_forecast_region=ANY,
+            region_variants_fn=ANY,
+            wastewater_aggregated_model=ANY,
+            wastewater_data_model=ANY,
+            func_module=ANY,
+            pd_module=ANY,
+        )
+
+    @patch("app.services.ml.forecast_service_sources.load_google_trends_rows")
+    def test_load_google_trends_rows_wrapper_delegates_to_module(self, delegated) -> None:
+        delegated.return_value = ["trend-row"]
+        service = ForecastService(db=None)
+
+        result = service._load_google_trends_rows(
+            keywords=["Grippe"],
+            start_date=pd.Timestamp("2025-01-01").to_pydatetime(),
+            region="BY",
+        )
+
+        self.assertEqual(result, ["trend-row"])
+        delegated.assert_called_once_with(
+            service,
+            keywords=["Grippe"],
+            start_date=pd.Timestamp("2025-01-01").to_pydatetime(),
+            region="BY",
+            normalize_forecast_region_fn=ANY,
+            default_forecast_region=ANY,
+            region_variants_fn=ANY,
+            google_trends_data_model=ANY,
+        )
+
+    @patch("app.services.ml.forecast_service_sources.is_holiday")
+    def test_is_holiday_wrapper_delegates_to_module(self, delegated) -> None:
+        delegated.return_value = True
+        service = ForecastService(db=None)
+        day = pd.Timestamp("2026-01-03").to_pydatetime()
+
+        result = service._is_holiday(day, region="BY")
+
+        self.assertTrue(result)
+        delegated.assert_called_once_with(
+            service,
+            day,
+            region="BY",
+            normalize_forecast_region_fn=ANY,
+            default_forecast_region=ANY,
+            region_variants_fn=ANY,
+            school_holidays_model=ANY,
+        )
+
+    @patch("app.services.ml.forecast_service_preparation.prepare_training_data")
+    def test_prepare_training_data_wrapper_delegates_to_module(self, delegated) -> None:
+        delegated.return_value = pd.DataFrame({"region": ["DE"], "y": [1.0]})
+        service = ForecastService(db=None)
+
+        result = service.prepare_training_data(
+            virus_typ="Influenza A",
+            lookback_days=120,
+            include_internal_history=False,
+            region="BY",
+        )
+
+        self.assertEqual(result["region"].tolist(), ["DE"])
+        delegated.assert_called_once_with(
+            service,
+            virus_typ="Influenza A",
+            lookback_days=120,
+            include_internal_history=False,
+            region="BY",
+            normalize_forecast_region_fn=ANY,
+            default_forecast_region=ANY,
+            cross_disease_map=ANY,
+            survstat_virus_map=ANY,
+            wastewater_aggregated_model=ANY,
+            survstat_weekly_data_model=ANY,
+            func_module=ANY,
+            pd_module=ANY,
+            np_module=ANY,
+            datetime_cls=ANY,
+            timedelta_cls=ANY,
+            logger=ANY,
+        )
+
     @patch("app.services.ml.forecast_service_direct_training.build_direct_training_panel_from_frame")
     def test_build_direct_training_panel_from_frame_wrapper_delegates_to_module(self, panel_mock) -> None:
         panel_mock.return_value = pd.DataFrame({"hw_pred": [1.0]})
@@ -49,6 +235,59 @@ class ForecastServiceGuardTests(unittest.TestCase):
             time_series_split_cls=ANY,
             np_module=ANY,
             pd_module=ANY,
+        )
+
+    @patch("app.services.ml.forecast_service_estimators.fit_holt_winters")
+    def test_fit_holt_winters_wrapper_delegates_to_module(self, delegated) -> None:
+        delegated.return_value = np.array([1.0, 2.0], dtype=float)
+        service = ForecastService(db=None)
+        history = np.array([3.0, 4.0, 5.0], dtype=float)
+
+        result = service._fit_holt_winters(history, 2)
+
+        self.assertEqual(result.tolist(), [1.0, 2.0])
+        delegated.assert_called_once_with(
+            history,
+            2,
+            np_module=ANY,
+            exponential_smoothing_cls=ANY,
+            logger=ANY,
+        )
+
+    @patch("app.services.ml.forecast_service_estimators.fit_ridge")
+    def test_fit_ridge_wrapper_delegates_to_module(self, delegated) -> None:
+        delegated.return_value = (np.array([7.0], dtype=float), {"lag1": 1.0})
+        service = ForecastService(db=None)
+        frame = pd.DataFrame({"lag1": [1.0], "lag2": [2.0]})
+        target = np.array([3.0], dtype=float)
+
+        result = service._fit_ridge(frame, target, 1)
+
+        self.assertEqual(result[0].tolist(), [7.0])
+        self.assertEqual(result[1], {"lag1": 1.0})
+        delegated.assert_called_once_with(
+            frame,
+            target,
+            1,
+            np_module=ANY,
+            ridge_cls=ANY,
+            logger=ANY,
+        )
+
+    @patch("app.services.ml.forecast_service_estimators.fit_prophet")
+    def test_fit_prophet_wrapper_delegates_to_module(self, delegated) -> None:
+        delegated.return_value = np.array([9.0, 10.0], dtype=float)
+        service = ForecastService(db=None)
+
+        result = service._fit_prophet("Influenza A", 2)
+
+        self.assertEqual(result.tolist(), [9.0, 10.0])
+        delegated.assert_called_once_with(
+            service,
+            "Influenza A",
+            2,
+            np_module=ANY,
+            logger=ANY,
         )
 
     @patch("app.services.ml.forecast_service_direct_training.build_live_direct_feature_row")
@@ -137,6 +376,126 @@ class ForecastServiceGuardTests(unittest.TestCase):
             model_config=None,
             meta_features=ANY,
             np_module=ANY,
+            logger=ANY,
+        )
+
+    @patch("app.services.ml.forecast_service_backtest.evaluate_training_candidate")
+    def test_evaluate_training_candidate_wrapper_delegates_to_module(self, delegated) -> None:
+        delegated.return_value = {"window_count": 3, "region": "DE"}
+        service = ForecastService(db=None)
+
+        result = service.evaluate_training_candidate(
+            "Influenza A",
+            include_internal_history=False,
+            model_config={"median": {"n_estimators": 10}},
+            n_windows=4,
+            walk_forward_stride=2,
+            max_splits=3,
+            region="BY",
+            horizon_days=14,
+        )
+
+        self.assertEqual(result, {"window_count": 3, "region": "DE"})
+        delegated.assert_called_once_with(
+            service,
+            "Influenza A",
+            include_internal_history=False,
+            model_config={"median": {"n_estimators": 10}},
+            n_windows=4,
+            walk_forward_stride=2,
+            max_splits=3,
+            region="BY",
+            horizon_days=14,
+            normalize_forecast_region_fn=ANY,
+            ensure_supported_horizon_fn=ANY,
+            default_forecast_region=ANY,
+            default_decision_horizon_days=ANY,
+            default_walk_forward_stride=ANY,
+            min_direct_train_points=ANY,
+            build_walk_forward_splits_fn=ANY,
+            compute_regression_metrics_fn=ANY,
+            compute_classification_metrics_fn=ANY,
+            summarize_probabilistic_metrics_fn=ANY,
+            np_module=ANY,
+            pd_module=ANY,
+        )
+
+    @patch("app.services.ml.forecast_service_pipeline.train_and_forecast")
+    def test_train_and_forecast_wrapper_delegates_to_module(self, delegated) -> None:
+        delegated.return_value = {"status": "success", "virus_typ": "Influenza A"}
+        service = ForecastService(db=None)
+
+        result = service.train_and_forecast(
+            virus_typ="Influenza A",
+            region="BY",
+            horizon_days=14,
+            include_internal_history=False,
+        )
+
+        self.assertEqual(result, {"status": "success", "virus_typ": "Influenza A"})
+        delegated.assert_called_once_with(
+            service,
+            virus_typ="Influenza A",
+            region="BY",
+            horizon_days=14,
+            include_internal_history=False,
+            normalize_forecast_region_fn=ANY,
+            ensure_supported_horizon_fn=ANY,
+            min_direct_train_points=ANY,
+            utc_now_fn=ANY,
+            timedelta_cls=ANY,
+            np_module=ANY,
+            pd_module=ANY,
+            logger=ANY,
+        )
+
+    @patch("app.services.ml.forecast_service_pipeline.save_forecast")
+    def test_save_forecast_wrapper_delegates_to_module(self, delegated) -> None:
+        delegated.return_value = 2
+        service = ForecastService(db=None)
+        forecast_data = {
+            "virus_typ": "Influenza A",
+            "region": "DE",
+            "horizon_days": 7,
+            "forecast": [{"ds": pd.Timestamp("2026-01-10"), "yhat": 1.0}],
+            "model_version": "v1",
+        }
+
+        result = service.save_forecast(forecast_data)
+
+        self.assertEqual(result, 2)
+        delegated.assert_called_once_with(
+            service,
+            forecast_data,
+            normalize_forecast_region_fn=ANY,
+            ensure_supported_horizon_fn=ANY,
+            normalize_event_forecast_payload_fn=ANY,
+            default_decision_horizon_days=ANY,
+            ml_forecast_cls=ANY,
+            logger=ANY,
+        )
+
+    @patch("app.services.ml.forecast_service_pipeline.run_forecasts_for_all_viruses")
+    def test_run_forecasts_for_all_viruses_wrapper_delegates_to_module(self, delegated) -> None:
+        delegated.return_value = {"Influenza A": {"status": "success"}}
+        service = ForecastService(db=None)
+
+        result = service.run_forecasts_for_all_viruses(
+            region="BY",
+            horizon_days=14,
+            include_internal_history=False,
+        )
+
+        self.assertEqual(result, {"Influenza A": {"status": "success"}})
+        delegated.assert_called_once_with(
+            service,
+            region="BY",
+            horizon_days=14,
+            include_internal_history=False,
+            normalize_forecast_region_fn=ANY,
+            ensure_supported_horizon_fn=ANY,
+            default_forecast_region=ANY,
+            default_decision_horizon_days=ANY,
             logger=ANY,
         )
 
@@ -542,6 +901,83 @@ class ForecastServiceGuardTests(unittest.TestCase):
         )
         self.assertEqual(result["status"], "success")
         self.assertEqual(result["virus_typ"], "RSV A")
+
+    @patch("app.services.ml.forecast_service_features.finalize_training_frame")
+    def test_finalize_training_frame_wrapper_delegates_to_module(self, delegated) -> None:
+        raw = pd.DataFrame({"ds": pd.to_datetime(["2026-01-01"]), "y": [1.0]})
+        delegated.return_value = raw.copy()
+
+        result = ForecastService._finalize_training_frame(raw)
+
+        self.assertEqual(result["y"].tolist(), [1.0])
+        delegated.assert_called_once_with(
+            raw,
+            leakage_safe_warmup_rows=ANY,
+            np_module=ANY,
+        )
+
+    @patch("app.services.ml.forecast_service_features.build_meta_feature_row")
+    def test_build_meta_feature_row_wrapper_delegates_to_module(self, delegated) -> None:
+        delegated.return_value = {"hw_pred": 1.0}
+        row = pd.Series({"trends_score": 2.0})
+
+        result = ForecastService._build_meta_feature_row(
+            row,
+            hw_pred=1.0,
+            ridge_pred=2.0,
+            prophet_pred=3.0,
+        )
+
+        self.assertEqual(result, {"hw_pred": 1.0})
+        delegated.assert_called_once_with(
+            row,
+            hw_pred=1.0,
+            ridge_pred=2.0,
+            prophet_pred=3.0,
+        )
+
+    @patch("app.services.ml.forecast_service_features.direct_ridge_feature_columns")
+    def test_direct_ridge_feature_columns_wrapper_delegates_to_module(self, delegated) -> None:
+        delegated.return_value = ["lag1"]
+        frame = pd.DataFrame({"lag1": [1.0]})
+
+        result = ForecastService._direct_ridge_feature_columns(frame)
+
+        self.assertEqual(result, ["lag1"])
+        delegated.assert_called_once_with(frame, ridge_direct_features=ANY)
+
+    @patch("app.services.ml.forecast_service_features.event_feature_columns")
+    def test_event_feature_columns_wrapper_delegates_to_module(self, delegated) -> None:
+        delegated.return_value = ["current_y", "hw_pred"]
+        frame = pd.DataFrame({"current_y": [1.0], "hw_pred": [2.0]})
+
+        result = ForecastService._event_feature_columns(frame)
+
+        self.assertEqual(result, ["current_y", "hw_pred"])
+        delegated.assert_called_once_with(frame, meta_features=ANY)
+
+    @patch("app.services.ml.forecast_service_features.build_live_event_feature_row")
+    def test_build_live_event_feature_row_wrapper_delegates_to_module(self, delegated) -> None:
+        delegated.return_value = {"current_y": 5.0, "horizon_days": 7.0}
+        raw = pd.DataFrame({"y": [5.0]})
+
+        result = ForecastService._build_live_event_feature_row(
+            raw=raw,
+            live_feature_row={"hw_pred": 1.0},
+            horizon_days=7,
+        )
+
+        self.assertEqual(result, {"current_y": 5.0, "horizon_days": 7.0})
+        delegated.assert_called_once_with(raw=raw, live_feature_row={"hw_pred": 1.0}, horizon_days=7)
+
+    @patch("app.services.ml.forecast_service_features.event_model_candidates")
+    def test_event_model_candidates_wrapper_delegates_to_module(self, delegated) -> None:
+        delegated.return_value = ["logistic_regression", "xgb_classifier"]
+
+        result = ForecastService._event_model_candidates()
+
+        self.assertEqual(result, ["logistic_regression", "xgb_classifier"])
+        delegated.assert_called_once_with()
 
     def test_finalize_training_frame_drops_warmup_rows_without_backfill(self) -> None:
         base = pd.Series(np.arange(20, dtype=float))

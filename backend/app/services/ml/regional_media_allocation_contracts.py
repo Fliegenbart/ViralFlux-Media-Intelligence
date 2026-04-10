@@ -32,7 +32,7 @@ class RegionalMediaAllocationConfig:
     component_weights: dict[str, float] = field(default_factory=dict)
     confidence_thresholds: dict[str, float] = field(default_factory=dict)
     confidence_penalties: dict[str, float] = field(default_factory=dict)
-    spend_enabled_labels: tuple[str, ...] = ("prepare", "activate")
+    spend_enabled_labels: tuple[str, ...] = ("activate",)
     use_population_weighting: bool = True
     population_reference_millions: float = 8.0
     watch_budget_share_cap: float = 0.0

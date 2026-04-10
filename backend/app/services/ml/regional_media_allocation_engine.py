@@ -45,7 +45,7 @@ DEFAULT_MEDIA_ALLOCATION_CONFIG = RegionalMediaAllocationConfig(
         "low": 0.55,
         "medium": 0.82,
     },
-    spend_enabled_labels=("prepare", "activate"),
+    spend_enabled_labels=("activate",),
     use_population_weighting=True,
     population_reference_millions=8.0,
     watch_budget_share_cap=0.0,
@@ -259,14 +259,15 @@ class RegionalMediaAllocationEngine:
         )
         eligible_for_budget = bool(
             spend_enabled
+            and not spend_blockers
             and stage in set(self.config.spend_enabled_labels)
             and allocation_score > 0.0
         )
         spend_readiness = self._spend_readiness(
             stage=stage,
-            confidence=confidence,
             spend_enabled=spend_enabled,
             spend_blockers=spend_blockers,
+            eligible_for_budget=eligible_for_budget,
         )
         return {
             "bundesland": bundesland,
@@ -495,10 +496,10 @@ class RegionalMediaAllocationEngine:
                 self._reason_detail("budget_driver_activate_multiplier", message)
             )
         elif stage.lower() == "prepare":
-            message = "Prepare regions stay eligible, but below Activate in weighting."
+            message = "Prepare is an early-warning stage. Keep the region visible, but do not release paid budget yet."
             budget_drivers.append(message)
             budget_driver_details.append(
-                self._reason_detail("budget_driver_prepare_weighting", message)
+                self._reason_detail("budget_driver_prepare_no_budget_release", message)
             )
         else:
             message = "Watch regions are observation-first and usually receive no spend."
@@ -638,12 +639,21 @@ class RegionalMediaAllocationEngine:
 
         blockers: list[str] = []
         blocker_details: list[dict[str, Any]] = []
-        if not spend_enabled:
-            for blocker in spend_blockers:
-                message = str(blocker)
-                blockers.append(message)
-                blocker_details.append(self._reason_detail("spend_blocker", message))
-        elif not bool(item["eligible_for_budget"]):
+        if stage.lower() == "prepare":
+            message = "Prepare is an early-warning stage. Keep the region visible, but do not release paid budget yet."
+            blockers.append(message)
+            blocker_details.append(
+                self._reason_detail("budget_prepare_no_release", message)
+            )
+        for blocker in spend_blockers:
+            message = str(blocker)
+            blockers.append(message)
+            blocker_details.append(self._reason_detail("spend_blocker", message))
+        if not spend_enabled and not spend_blockers:
+            message = "Spend is currently disabled."
+            blockers.append(message)
+            blocker_details.append(self._reason_detail("spend_disabled", message))
+        elif not bool(item["eligible_for_budget"]) and stage.lower() != "prepare" and not spend_blockers:
             message = "Region is not currently eligible for spend under the configured label rules."
             blockers.append(message)
             blocker_details.append(
@@ -683,21 +693,19 @@ class RegionalMediaAllocationEngine:
         self,
         *,
         stage: str,
-        confidence: float,
         spend_enabled: bool,
         spend_blockers: Sequence[str],
+        eligible_for_budget: bool,
     ) -> str:
         if not spend_enabled:
             return "blocked"
-        if stage not in set(self.config.spend_enabled_labels):
-            return "observe"
-        if confidence < float(self.config.confidence_thresholds.get("low") or 0.45):
-            return "cautious"
-        if confidence < float(self.config.confidence_thresholds.get("medium") or 0.60):
-            return "guarded"
         if spend_blockers:
             return "blocked"
-        return "ready"
+        if stage == "prepare":
+            return "prepare_only"
+        if eligible_for_budget:
+            return "ready"
+        return "watch_only"
 
     @staticmethod
     def _rank_sort_key(item: Mapping[str, Any]) -> tuple[float, float, float, float]:

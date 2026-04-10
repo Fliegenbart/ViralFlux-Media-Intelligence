@@ -118,6 +118,45 @@ class RegionalMediaAllocationEngineTests(unittest.TestCase):
         )
         self.assertEqual(recommendations[2]["suggested_budget_share"], 0.0)
 
+    def test_prepare_regions_stay_ranked_but_receive_zero_budget(self) -> None:
+        payload = self.engine.allocate(
+            virus_typ="Influenza A",
+            total_budget_eur=20_000,
+            predictions=[
+                _prediction(
+                    bundesland="BY",
+                    bundesland_name="Bayern",
+                    stage="prepare",
+                    priority_score=0.61,
+                    event_probability=0.004,
+                    forecast_confidence=0.66,
+                    source_freshness_score=0.78,
+                    usable_source_share=0.82,
+                    source_coverage_score=0.80,
+                    source_revision_risk=0.18,
+                ),
+                _prediction(
+                    bundesland="BB",
+                    bundesland_name="Brandenburg",
+                    stage="watch",
+                    priority_score=0.38,
+                    event_probability=0.002,
+                    forecast_confidence=0.51,
+                    source_freshness_score=0.64,
+                    usable_source_share=0.70,
+                    source_coverage_score=0.71,
+                    source_revision_risk=0.22,
+                ),
+            ],
+            spend_enabled=True,
+        )
+
+        prepare_item = next(item for item in payload["recommendations"] if item["bundesland"] == "BY")
+        self.assertEqual(prepare_item["recommended_activation_level"], "Prepare")
+        self.assertEqual(prepare_item["suggested_budget_share"], 0.0)
+        self.assertEqual(prepare_item["suggested_budget_eur"], 0.0)
+        self.assertEqual(prepare_item["spend_readiness"], "prepare_only")
+
     def test_budget_shares_sum_to_one_when_spend_is_enabled(self) -> None:
         payload = self.engine.allocate(
             virus_typ="Influenza A",

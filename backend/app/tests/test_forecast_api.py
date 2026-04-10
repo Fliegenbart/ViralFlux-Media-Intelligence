@@ -158,6 +158,10 @@ class ForecastApiTests(unittest.TestCase):
                         "stage": "prepare",
                         "signal_stage": "prepare_early",
                         "decision_score": 0.58,
+                        "explanation_summary": (
+                            "Bayern shows an early warning pattern. Prepare assets and monitoring, "
+                            "but do not release paid budget yet."
+                        ),
                         "metadata": {"prepare_mode": "early_warning"},
                     },
                 }
@@ -181,6 +185,7 @@ class ForecastApiTests(unittest.TestCase):
         first_prediction = body["predictions"][0]
         self.assertEqual(first_prediction["decision"]["stage"], "prepare")
         self.assertEqual(first_prediction["decision"]["signal_stage"], "prepare_early")
+        self.assertIn("do not release paid budget yet", first_prediction["decision"]["explanation_summary"].lower())
         self.assertEqual(first_prediction["decision"]["metadata"]["prepare_mode"], "early_warning")
 
     def test_regional_hero_overview_returns_lightweight_snapshot_rollup(self) -> None:

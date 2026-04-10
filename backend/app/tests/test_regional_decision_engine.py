@@ -129,6 +129,7 @@ class RegionalDecisionEngineTests(unittest.TestCase):
         self.assertEqual(decision.stage, "prepare")
         self.assertGreaterEqual(decision.decision_score, DEFAULT_RULE_CONFIG.prepare_score_threshold)
         self.assertLess(decision.event_probability, decision.thresholds["activate_probability"])
+        self.assertEqual(decision.metadata["prepare_mode"], "standard_prepare")
 
     def test_evaluate_marks_sparse_low_confidence_region_as_watch(self) -> None:
         decision = self.engine.evaluate(
@@ -260,6 +261,7 @@ class RegionalDecisionEngineTests(unittest.TestCase):
         )
         self.assertEqual(decision.reason_trace.why_details[0]["code"], "prepare_early_signal")
         self.assertIn("early warning", decision.explanation_summary.lower())
+        self.assertIn("do not release paid budget yet", decision.explanation_summary.lower())
         self.assertEqual(decision.reason_trace.policy_overrides, [])
         self.assertFalse(
             any(

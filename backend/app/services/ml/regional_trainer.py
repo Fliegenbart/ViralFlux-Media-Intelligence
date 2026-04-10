@@ -71,6 +71,7 @@ from app.services.ml import (
     regional_trainer_calibration,
     regional_trainer_events,
     regional_trainer_hierarchy,
+    regional_trainer_modeling,
     regional_trainer_orchestration,
     regional_trainer_rollout,
     regional_trainer_training,
@@ -984,16 +985,13 @@ class RegionalModelTrainer:
         y: np.ndarray,
         sample_weight: np.ndarray | None = None,
     ) -> XGBClassifier:
-        positives = max(int(np.sum(y == 1)), 1)
-        negatives = max(int(np.sum(y == 0)), 1)
-        config = dict(REGIONAL_CLASSIFIER_CONFIG)
-        config["scale_pos_weight"] = float(negatives / positives)
-        model = XGBClassifier(**config)
-        fit_kwargs: dict[str, Any] = {}
-        if sample_weight is not None:
-            fit_kwargs["sample_weight"] = sample_weight
-        model.fit(X, y, **fit_kwargs)
-        return model
+        return regional_trainer_modeling.fit_classifier(
+            X=X,
+            y=y,
+            sample_weight=sample_weight,
+            classifier_cls=XGBClassifier,
+            classifier_config=REGIONAL_CLASSIFIER_CONFIG,
+        )
 
     @staticmethod
     def _fit_regressor(
@@ -1003,21 +1001,22 @@ class RegionalModelTrainer:
         config: dict[str, Any],
         sample_weight: np.ndarray | None = None,
     ) -> XGBRegressor:
-        model = XGBRegressor(**config)
-        fit_kwargs: dict[str, Any] = {}
-        if sample_weight is not None:
-            fit_kwargs["sample_weight"] = sample_weight
-        model.fit(X, y, **fit_kwargs)
-        return model
+        return regional_trainer_modeling.fit_regressor(
+            X=X,
+            y=y,
+            config=config,
+            sample_weight=sample_weight,
+            regressor_cls=XGBRegressor,
+        )
 
     def _sample_weights(self, frame: pd.DataFrame) -> np.ndarray | None:
         return None
 
     def _fit_classifier_from_frame(self, frame: pd.DataFrame, feature_columns: list[str]) -> XGBClassifier:
-        return self._fit_classifier(
-            frame[feature_columns].to_numpy(),
-            frame["event_label"].to_numpy(),
-            sample_weight=self._sample_weights(frame),
+        return regional_trainer_modeling.fit_classifier_from_frame(
+            self,
+            frame,
+            feature_columns,
         )
 
     def _fit_regressor_from_frame(
@@ -1027,25 +1026,29 @@ class RegionalModelTrainer:
         config: dict[str, Any],
         target_col: str = "y_next_log",
     ) -> XGBRegressor:
-        return self._fit_regressor(
-            frame[feature_columns].to_numpy(),
-            frame[target_col].to_numpy(),
-            config=config,
-            sample_weight=self._sample_weights(frame),
+        return regional_trainer_modeling.fit_regressor_from_frame(
+            self,
+            frame,
+            feature_columns,
+            config,
+            target_col=target_col,
         )
 
     @staticmethod
     def _fit_isotonic(raw_probabilities: np.ndarray, labels: np.ndarray) -> IsotonicRegression | None:
-        return fit_isotonic_calibrator(
+        return regional_trainer_modeling.fit_isotonic(
             raw_probabilities,
             labels,
-            min_samples=20,
-            min_class_support=1,
+            fit_isotonic_calibrator_fn=fit_isotonic_calibrator,
         )
 
     @staticmethod
     def _apply_calibration(calibration: IsotonicRegression | None, raw_probabilities: np.ndarray) -> np.ndarray:
-        return apply_probability_calibration(calibration, raw_probabilities)
+        return regional_trainer_modeling.apply_calibration(
+            calibration,
+            raw_probabilities,
+            apply_probability_calibration_fn=apply_probability_calibration,
+        )
 
     @staticmethod
     def _calibration_guard_metrics(

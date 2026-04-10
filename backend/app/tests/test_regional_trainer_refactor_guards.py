@@ -670,3 +670,103 @@ class RegionalTrainerRefactorGuardTests(unittest.TestCase):
             np_module=ANY,
             absolute_incidence_threshold_fn=ANY,
         )
+
+    @patch("app.services.ml.regional_trainer_modeling.fit_classifier")
+    def test_fit_classifier_wrapper_delegates_to_module(self, modeling_mock) -> None:
+        modeling_mock.return_value = "classifier-model"
+
+        result = RegionalModelTrainer._fit_classifier(
+            X=[[1.0, 2.0]],
+            y=[0, 1],
+            sample_weight=[1.0, 2.0],
+        )
+
+        self.assertEqual(result, "classifier-model")
+        modeling_mock.assert_called_once_with(
+            X=[[1.0, 2.0]],
+            y=[0, 1],
+            sample_weight=[1.0, 2.0],
+            classifier_cls=ANY,
+            classifier_config=ANY,
+        )
+
+    @patch("app.services.ml.regional_trainer_modeling.fit_regressor")
+    def test_fit_regressor_wrapper_delegates_to_module(self, modeling_mock) -> None:
+        modeling_mock.return_value = "regressor-model"
+
+        result = RegionalModelTrainer._fit_regressor(
+            X=[[1.0, 2.0]],
+            y=[0.2, 0.4],
+            config={"max_depth": 4},
+            sample_weight=[1.0, 1.0],
+        )
+
+        self.assertEqual(result, "regressor-model")
+        modeling_mock.assert_called_once_with(
+            X=[[1.0, 2.0]],
+            y=[0.2, 0.4],
+            config={"max_depth": 4},
+            sample_weight=[1.0, 1.0],
+            regressor_cls=ANY,
+        )
+
+    @patch("app.services.ml.regional_trainer_modeling.fit_classifier_from_frame")
+    def test_fit_classifier_from_frame_wrapper_delegates_to_module(self, modeling_mock) -> None:
+        modeling_mock.return_value = "classifier-model"
+        trainer = RegionalModelTrainer(db=None)
+
+        result = trainer._fit_classifier_from_frame("panel-frame", ["f1", "f2"])
+
+        self.assertEqual(result, "classifier-model")
+        modeling_mock.assert_called_once_with(
+            trainer,
+            "panel-frame",
+            ["f1", "f2"],
+        )
+
+    @patch("app.services.ml.regional_trainer_modeling.fit_regressor_from_frame")
+    def test_fit_regressor_from_frame_wrapper_delegates_to_module(self, modeling_mock) -> None:
+        modeling_mock.return_value = "regressor-model"
+        trainer = RegionalModelTrainer(db=None)
+
+        result = trainer._fit_regressor_from_frame(
+            "panel-frame",
+            ["f1", "f2"],
+            {"max_depth": 4},
+            target_col="target_col",
+        )
+
+        self.assertEqual(result, "regressor-model")
+        modeling_mock.assert_called_once_with(
+            trainer,
+            "panel-frame",
+            ["f1", "f2"],
+            {"max_depth": 4},
+            target_col="target_col",
+        )
+
+    @patch("app.services.ml.regional_trainer_modeling.fit_isotonic")
+    def test_fit_isotonic_wrapper_delegates_to_module(self, modeling_mock) -> None:
+        modeling_mock.return_value = "isotonic-model"
+
+        result = RegionalModelTrainer._fit_isotonic([0.1, 0.8], [0, 1])
+
+        self.assertEqual(result, "isotonic-model")
+        modeling_mock.assert_called_once_with(
+            [0.1, 0.8],
+            [0, 1],
+            fit_isotonic_calibrator_fn=ANY,
+        )
+
+    @patch("app.services.ml.regional_trainer_modeling.apply_calibration")
+    def test_apply_calibration_wrapper_delegates_to_module(self, modeling_mock) -> None:
+        modeling_mock.return_value = [0.2, 0.9]
+
+        result = RegionalModelTrainer._apply_calibration("calibration-model", [0.1, 0.8])
+
+        self.assertEqual(result, [0.2, 0.9])
+        modeling_mock.assert_called_once_with(
+            "calibration-model",
+            [0.1, 0.8],
+            apply_probability_calibration_fn=ANY,
+        )

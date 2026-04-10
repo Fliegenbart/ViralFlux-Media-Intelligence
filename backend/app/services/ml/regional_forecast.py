@@ -19,6 +19,7 @@ from app.models.database import BacktestPoint, BacktestRun, MLForecast
 from app.services.media.business_validation_service import BusinessValidationService
 from app.services.media.campaign_recommendation_service import CampaignRecommendationService
 from app.services.media.truth_layer_service import TruthLayerService
+from app.services.ml import regional_forecast_artifacts
 from app.services.ml import regional_forecast_media
 from app.services.ml.forecast_decision_service import ForecastDecisionService
 from app.services.ml.forecast_orchestrator import ForecastOrchestrator
@@ -1496,182 +1497,54 @@ class RegionalForecastService:
         }
 
     def _load_artifacts(self, virus_typ: str, horizon_days: int = 7) -> dict[str, Any]:
-        horizon = ensure_supported_horizon(horizon_days)
-        model_dir = regional_model_artifact_dir(
-            self.models_dir,
+        return regional_forecast_artifacts.load_artifacts(
+            self,
             virus_typ=virus_typ,
-            horizon_days=horizon,
+            horizon_days=horizon_days,
+            ensure_supported_horizon_fn=ensure_supported_horizon,
+            regional_model_artifact_dir_fn=regional_model_artifact_dir,
+            supported_forecast_horizons=SUPPORTED_FORECAST_HORIZONS,
+            target_window_days=TARGET_WINDOW_DAYS,
+            virus_slug_fn=_virus_slug,
+            training_only_panel_columns=TRAINING_ONLY_PANEL_COLUMNS,
         )
-        if model_dir.exists():
-            missing_files = self._missing_artifact_files(model_dir)
-            if missing_files:
-                return {
-                    "load_error": (
-                        f"Artefakt-Bundle für {virus_typ}/h{horizon} ist unvollständig: "
-                        f"{', '.join(missing_files)}"
-                    ),
-                }
-        payload = self._artifact_payload_from_dir(model_dir)
-        if payload:
-            metadata = dict(payload.get("metadata") or {})
-            metadata_horizon = metadata.get("horizon_days")
-            if metadata_horizon is None:
-                payload["load_error"] = (
-                    f"Metadaten für {virus_typ}/h{horizon} fehlen das Pflichtfeld 'horizon_days'."
-                )
-                return payload
-            if int(metadata_horizon) != horizon:
-                payload["load_error"] = (
-                    f"Metadaten-Horizon {metadata_horizon} passt nicht zur Anfrage h{horizon}."
-                )
-                return payload
-            metadata.setdefault("target_window_days", self._target_window_for_horizon(horizon))
-            metadata.setdefault("supported_horizon_days", list(SUPPORTED_FORECAST_HORIZONS))
-            invalid_feature_columns = self._invalid_inference_feature_columns(
-                metadata.get("feature_columns") or []
-            )
-            if invalid_feature_columns:
-                payload["load_error"] = (
-                    f"Artefakt-Bundle für {virus_typ}/h{horizon} enthält trainingsinterne "
-                    f"Feature-Spalten: {', '.join(invalid_feature_columns)}. "
-                    "Bitte horizon-spezifisches Retraining durchführen."
-                )
-                return payload
-            payload["metadata"] = metadata
-            return payload
-
-        if horizon != 7:
-            return {}
-
-        legacy_dir = self.models_dir / _virus_slug(virus_typ)
-        if legacy_dir.exists():
-            missing_files = self._missing_artifact_files(legacy_dir)
-            if missing_files:
-                return {
-                    "load_error": (
-                        f"Legacy-Artefakt-Bundle für {virus_typ}/h{horizon} ist unvollständig: "
-                        f"{', '.join(missing_files)}"
-                    ),
-                }
-        legacy_payload = self._artifact_payload_from_dir(legacy_dir)
-        if not legacy_payload:
-            return {}
-
-        metadata = dict(legacy_payload.get("metadata") or {})
-        metadata["horizon_days"] = horizon
-        metadata["target_window_days"] = metadata.get("target_window_days") or list(TARGET_WINDOW_DAYS)
-        metadata["requested_horizon_days"] = horizon
-        metadata["supported_horizon_days"] = list(SUPPORTED_FORECAST_HORIZONS)
-        metadata["artifact_transition_mode"] = "legacy_default_window_fallback"
-        legacy_payload["metadata"] = metadata
-        legacy_payload["artifact_transition_mode"] = "legacy_default_window_fallback"
-        invalid_feature_columns = self._invalid_inference_feature_columns(
-            metadata.get("feature_columns") or []
-        )
-        if invalid_feature_columns:
-            legacy_payload["load_error"] = (
-                f"Legacy-Artefakt-Bundle für {virus_typ}/h{horizon} enthält trainingsinterne "
-                f"Feature-Spalten: {', '.join(invalid_feature_columns)}. "
-                "Bitte horizon-spezifisches Retraining durchführen."
-            )
-        return legacy_payload
 
     @staticmethod
     def _required_artifact_paths(model_dir: Path) -> dict[str, Path]:
-        return {
-            "classifier": model_dir / "classifier.json",
-            "regressor_median": model_dir / "regressor_median.json",
-            "regressor_lower": model_dir / "regressor_lower.json",
-            "regressor_upper": model_dir / "regressor_upper.json",
-            "calibration": model_dir / "calibration.pkl",
-            "metadata": model_dir / "metadata.json",
-        }
+        return regional_forecast_artifacts.required_artifact_paths(model_dir)
 
     @classmethod
     def _missing_artifact_files(cls, model_dir: Path) -> list[str]:
-        return [
-            path.name
-            for path in cls._required_artifact_paths(model_dir).values()
-            if not path.exists()
-        ]
+        return regional_forecast_artifacts.missing_artifact_files(
+            model_dir,
+            required_artifact_paths_fn=cls._required_artifact_paths,
+        )
 
     @staticmethod
     def _invalid_inference_feature_columns(feature_columns: list[str]) -> list[str]:
-        return sorted(
-            {
-                str(column)
-                for column in feature_columns
-                if str(column) in TRAINING_ONLY_PANEL_COLUMNS
-            }
+        return regional_forecast_artifacts.invalid_inference_feature_columns(
+            feature_columns,
+            training_only_panel_columns=TRAINING_ONLY_PANEL_COLUMNS,
         )
 
     @classmethod
     def _artifact_payload_from_dir(cls, model_dir: Path) -> dict[str, Any]:
-        required_paths = cls._required_artifact_paths(model_dir)
-        if not all(path.exists() for path in required_paths.values()):
-            return {}
-
-        classifier = XGBClassifier()
-        classifier.load_model(str(required_paths["classifier"]))
-        regressor_median = XGBRegressor()
-        regressor_median.load_model(str(required_paths["regressor_median"]))
-        regressor_lower = XGBRegressor()
-        regressor_lower.load_model(str(required_paths["regressor_lower"]))
-        regressor_upper = XGBRegressor()
-        regressor_upper.load_model(str(required_paths["regressor_upper"]))
-        metadata = json.loads(required_paths["metadata"].read_text())
-        hierarchy_models: dict[str, dict[str, XGBRegressor]] = {}
-        optional_hierarchy_paths = {
-            "cluster": {
-                "median": model_dir / "cluster_regressor_median.json",
-                "lower": model_dir / "cluster_regressor_lower.json",
-                "upper": model_dir / "cluster_regressor_upper.json",
-            },
-            "national": {
-                "median": model_dir / "national_regressor_median.json",
-                "lower": model_dir / "national_regressor_lower.json",
-                "upper": model_dir / "national_regressor_upper.json",
-            },
-        }
-        for level, level_paths in optional_hierarchy_paths.items():
-            if not all(path.exists() for path in level_paths.values()):
-                continue
-            bundle: dict[str, XGBRegressor] = {}
-            for name, path in level_paths.items():
-                model = XGBRegressor()
-                model.load_model(str(path))
-                bundle[name] = model
-            hierarchy_models[level] = bundle
-        quantile_regressors: dict[float, XGBRegressor] = {}
-        for quantile in metadata.get("forecast_quantiles") or []:
-            quantile_path = model_dir / f"q{int(round(float(quantile) * 1000)):04d}.json"
-            if not quantile_path.exists():
-                continue
-            model = XGBRegressor()
-            model.load_model(str(quantile_path))
-            quantile_regressors[float(quantile)] = model
-        with open(required_paths["calibration"], "rb") as handle:
-            calibration = pickle.load(handle)
-        dataset_manifest_path = model_dir / "dataset_manifest.json"
-        point_in_time_path = model_dir / "point_in_time_snapshot.json"
-        return {
-            "classifier": classifier,
-            "regressor_median": regressor_median,
-            "regressor_lower": regressor_lower,
-            "regressor_upper": regressor_upper,
-            "quantile_regressors": quantile_regressors,
-            "hierarchy_models": hierarchy_models,
-            "calibration": calibration,
-            "metadata": metadata,
-            "dataset_manifest": json.loads(dataset_manifest_path.read_text()) if dataset_manifest_path.exists() else None,
-            "point_in_time_snapshot": json.loads(point_in_time_path.read_text()) if point_in_time_path.exists() else None,
-        }
+        return regional_forecast_artifacts.artifact_payload_from_dir(
+            model_dir,
+            required_artifact_paths_fn=cls._required_artifact_paths,
+            xgb_classifier_cls=XGBClassifier,
+            xgb_regressor_cls=XGBRegressor,
+            json_module=json,
+            pickle_module=pickle,
+        )
 
     @staticmethod
     def _apply_calibration(calibration: Any, raw_probabilities: np.ndarray) -> np.ndarray:
-        if calibration is None:
-            return np.clip(raw_probabilities.astype(float), 0.001, 0.999)
-        return np.clip(calibration.predict(raw_probabilities.astype(float)), 0.001, 0.999)
+        return regional_forecast_artifacts.apply_calibration(
+            calibration,
+            raw_probabilities,
+            np_module=np,
+        )
 
     def _latest_as_of_date(self, virus_typ: str) -> pd.Timestamp:
         return self.feature_builder.latest_available_as_of_date(virus_typ=virus_typ)

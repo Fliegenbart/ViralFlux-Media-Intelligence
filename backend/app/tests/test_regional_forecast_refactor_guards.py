@@ -1,4 +1,5 @@
-from unittest.mock import patch
+from pathlib import Path
+from unittest.mock import ANY, patch
 
 from app.services.ml import regional_forecast as regional_forecast_module
 from app.services.ml.regional_forecast import RegionalForecastService
@@ -238,3 +239,106 @@ def test_region_rollup_wrapper_delegates_to_module() -> None:
 
     assert result is sentinel
     mocked.assert_called_once_with(opportunities)
+
+
+def test_load_artifacts_wrapper_delegates_to_module() -> None:
+    service = RegionalForecastService(db=None)
+    sentinel = {"metadata": {"horizon_days": 7}}
+
+    with patch(
+        "app.services.ml.regional_forecast_artifacts.load_artifacts",
+        return_value=sentinel,
+    ) as mocked:
+        result = service._load_artifacts("Influenza A", horizon_days=7)
+
+    assert result is sentinel
+    mocked.assert_called_once_with(
+        service,
+        virus_typ="Influenza A",
+        horizon_days=7,
+        ensure_supported_horizon_fn=ANY,
+        regional_model_artifact_dir_fn=ANY,
+        supported_forecast_horizons=regional_forecast_module.SUPPORTED_FORECAST_HORIZONS,
+        target_window_days=regional_forecast_module.TARGET_WINDOW_DAYS,
+        virus_slug_fn=ANY,
+        training_only_panel_columns=regional_forecast_module.TRAINING_ONLY_PANEL_COLUMNS,
+    )
+
+
+def test_required_artifact_paths_wrapper_delegates_to_module() -> None:
+    model_dir = Path("/tmp/influenza_a")
+    sentinel = {"classifier": model_dir / "classifier.json"}
+
+    with patch(
+        "app.services.ml.regional_forecast_artifacts.required_artifact_paths",
+        return_value=sentinel,
+    ) as mocked:
+        result = RegionalForecastService._required_artifact_paths(model_dir)
+
+    assert result is sentinel
+    mocked.assert_called_once_with(model_dir)
+
+
+def test_missing_artifact_files_wrapper_delegates_to_module() -> None:
+    model_dir = Path("/tmp/influenza_a")
+    sentinel = ["classifier.json"]
+
+    with patch(
+        "app.services.ml.regional_forecast_artifacts.missing_artifact_files",
+        return_value=sentinel,
+    ) as mocked:
+        result = RegionalForecastService._missing_artifact_files(model_dir)
+
+    assert result is sentinel
+    mocked.assert_called_once_with(
+        model_dir,
+        required_artifact_paths_fn=ANY,
+    )
+
+
+def test_invalid_inference_feature_columns_wrapper_delegates_to_module() -> None:
+    sentinel = ["target_incidence"]
+
+    with patch(
+        "app.services.ml.regional_forecast_artifacts.invalid_inference_feature_columns",
+        return_value=sentinel,
+    ) as mocked:
+        result = RegionalForecastService._invalid_inference_feature_columns(["f1", "target_incidence"])
+
+    assert result is sentinel
+    mocked.assert_called_once_with(
+        ["f1", "target_incidence"],
+        training_only_panel_columns=regional_forecast_module.TRAINING_ONLY_PANEL_COLUMNS,
+    )
+
+
+def test_artifact_payload_from_dir_wrapper_delegates_to_module() -> None:
+    model_dir = Path("/tmp/influenza_a")
+    sentinel = {"metadata": {"trained_at": "2026-01-01T00:00:00"}}
+
+    with patch(
+        "app.services.ml.regional_forecast_artifacts.artifact_payload_from_dir",
+        return_value=sentinel,
+    ) as mocked:
+        result = RegionalForecastService._artifact_payload_from_dir(model_dir)
+
+    assert result is sentinel
+    mocked.assert_called_once_with(
+        model_dir,
+        required_artifact_paths_fn=ANY,
+        xgb_classifier_cls=regional_forecast_module.XGBClassifier,
+        xgb_regressor_cls=regional_forecast_module.XGBRegressor,
+        json_module=regional_forecast_module.json,
+        pickle_module=regional_forecast_module.pickle,
+    )
+
+
+def test_apply_calibration_wrapper_delegates_to_module() -> None:
+    with patch(
+        "app.services.ml.regional_forecast_artifacts.apply_calibration",
+        return_value="calibrated",
+    ) as mocked:
+        result = RegionalForecastService._apply_calibration("calibration", "raw")
+
+    assert result == "calibrated"
+    mocked.assert_called_once_with("calibration", "raw", np_module=regional_forecast_module.np)

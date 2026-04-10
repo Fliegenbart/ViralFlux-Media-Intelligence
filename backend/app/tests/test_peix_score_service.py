@@ -2,7 +2,7 @@ from app.core.time import utc_now
 import unittest
 from datetime import datetime, timedelta
 from decimal import Decimal
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -33,6 +33,30 @@ def _stub_peix_service(
 
 
 class PeixScoreServiceTests(unittest.TestCase):
+    def test_search_signal_delegates_to_signals_module(self) -> None:
+        service = PeixEpiScoreService.__new__(PeixEpiScoreService)
+
+        with patch(
+            "app.services.media.peix_score_signals._search_signal",
+            return_value=0.42,
+        ) as mocked:
+            result = service._search_signal()
+
+        mocked.assert_called_once_with(service)
+        self.assertEqual(result, 0.42)
+
+    def test_forecast_signal_delegates_to_signals_module(self) -> None:
+        service = PeixEpiScoreService.__new__(PeixEpiScoreService)
+
+        with patch(
+            "app.services.media.peix_score_signals._forecast_signal",
+            return_value=0.61,
+        ) as mocked:
+            result = service._forecast_signal("Influenza A")
+
+        mocked.assert_called_once_with(service, "Influenza A")
+        self.assertEqual(result, 0.61)
+
     def test_search_signal_handles_decimal_averages(self) -> None:
         config_query = MagicMock()
         config_query.filter_by.return_value.first.return_value = None
@@ -121,6 +145,34 @@ class PeixScoreServiceTests(unittest.TestCase):
             db.close()
             Base.metadata.drop_all(bind=engine)
             engine.dispose()
+
+    def test_baseline_adjustment_still_uses_service_override_for_positivity_rate(self) -> None:
+        class OverrideService(PeixEpiScoreService):
+            def _get_positivity_rate(self, virus_typ: str) -> float:
+                return 0.9
+
+        historical_rows = []
+        base_date = utc_now().replace(microsecond=0)
+        for index, value in enumerate([0.1, 0.2, 0.3, 0.4] * 20):
+            historical_rows.append(
+                type(
+                    "LabRow",
+                    (),
+                    {
+                        "datum": base_date - timedelta(weeks=52 * (index // 4)),
+                        "anzahl_tests": 100,
+                        "positive_ergebnisse": int(value * 100),
+                    },
+                )()
+            )
+
+        service = OverrideService.__new__(OverrideService)
+        service.db = MagicMock()
+        service.db.query.return_value.filter.return_value.all.return_value = historical_rows
+
+        score = service._baseline_adjustment("Influenza A")
+
+        self.assertGreater(score, 0.9)
 
     def test_build_marks_peix_as_ranking_signal_and_deprecates_probability_alias(self) -> None:
         payload = _stub_peix_service().build("Influenza A")

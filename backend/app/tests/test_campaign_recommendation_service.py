@@ -180,6 +180,10 @@ class CampaignRecommendationServiceTests(unittest.TestCase):
             "no paid activation budget is released yet",
             " ".join(first["recommendation_rationale"]["guardrails"]).lower(),
         )
+        self.assertIn(
+            "Suggested campaign budget is 0.00 EUR until Activate is reached and spend gates open.",
+            first["recommendation_rationale"]["budget_notes"],
+        )
 
     def test_empty_allocation_returns_stable_payload(self) -> None:
         payload = self.service.recommend_from_allocation(

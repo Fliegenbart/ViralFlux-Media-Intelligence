@@ -105,9 +105,14 @@ def build_rationale(
             fit_score=round(float(keyword_cluster.fit_score), 4),
         ),
     ]
-    budget_notes = [
-        f"Suggested campaign budget is {budget_amount:.2f} EUR.",
-    ]
+    if stage_key == "prepare" and budget_amount <= 0.0:
+        budget_notes = [
+            "Suggested campaign budget is 0.00 EUR until Activate is reached and spend gates open.",
+        ]
+    else:
+        budget_notes = [
+            f"Suggested campaign budget is {budget_amount:.2f} EUR.",
+        ]
     budget_note_details = [
         reason_detail_builder(
             "campaign_budget_amount",

@@ -303,10 +303,11 @@ def _ensure_runtime_schema_updates():
 
 
 def init_db():
-    """Initialize database - create all tables."""
+    """Verify startup database state without mutating migration-managed schema."""
     logger.info("Checking database schema bootstrap state...")
     auto_create = settings.EFFECTIVE_DB_AUTO_CREATE_SCHEMA
     allow_runtime_updates = settings.EFFECTIVE_DB_ALLOW_RUNTIME_SCHEMA_UPDATES
+    schema_management_mode = "verify_only"
     inspector = inspect(engine)
     existing_tables = set(inspector.get_table_names())
     expected_tables = set(Base.metadata.tables.keys())
@@ -318,6 +319,11 @@ def init_db():
         "missing_columns": [],
         "missing_indexes": [],
     }
+
+    if allow_runtime_updates:
+        warnings.append(
+            "DB_ALLOW_RUNTIME_SCHEMA_UPDATES is deprecated and ignored. Startup runs in verify-only mode; apply explicit migrations instead."
+        )
 
     if missing_tables:
         if auto_create:
@@ -331,6 +337,7 @@ def init_db():
                 "message": "Database schema is incomplete and auto-create is disabled.",
                 "auto_create_schema": auto_create,
                 "runtime_schema_updates_enabled": allow_runtime_updates,
+                "schema_management_mode": schema_management_mode,
                 "missing_tables": missing_tables,
                 "warnings": warnings,
                 "actions": actions,
@@ -351,6 +358,7 @@ def init_db():
             "message": "Database schema is missing required migration-managed fields.",
             "auto_create_schema": auto_create,
             "runtime_schema_updates_enabled": allow_runtime_updates,
+            "schema_management_mode": schema_management_mode,
             "missing_tables": missing_tables,
             "required_schema_gaps": required_schema_gaps,
             "warnings": warnings,
@@ -373,6 +381,7 @@ def init_db():
             "message": "Database schema has unapplied runtime gaps.",
             "auto_create_schema": auto_create,
             "runtime_schema_updates_enabled": allow_runtime_updates,
+            "schema_management_mode": schema_management_mode,
             "missing_tables": missing_tables,
             "required_schema_gaps": required_schema_gaps,
             "runtime_schema_gaps": gaps,
@@ -390,6 +399,7 @@ def init_db():
         "message": "Database schema verification completed.",
         "auto_create_schema": auto_create,
         "runtime_schema_updates_enabled": allow_runtime_updates,
+        "schema_management_mode": schema_management_mode,
         "missing_tables": missing_tables,
         "required_schema_gaps": required_schema_gaps,
         "runtime_schema_gaps": gaps,

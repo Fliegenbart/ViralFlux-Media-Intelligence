@@ -11,6 +11,104 @@ from app.services.ml.forecast_service import (
 
 
 class ForecastServiceGuardTests(unittest.TestCase):
+    @patch("app.services.ml.forecast_service_event_probability.fit_event_classifier_model")
+    def test_fit_event_classifier_model_wrapper_delegates_to_module(self, fit_mock) -> None:
+        fit_mock.return_value = "event-model"
+        train_df = pd.DataFrame({"event_target": [0, 1], "current_y": [1.0, 2.0]})
+
+        result = ForecastService._fit_event_classifier_model(
+            train_df,
+            feature_names=["current_y"],
+            model_family="logistic_regression",
+        )
+
+        self.assertEqual(result, "event-model")
+        fit_mock.assert_called_once_with(
+            train_df,
+            feature_names=["current_y"],
+            model_family="logistic_regression",
+            np_module=ANY,
+            empirical_event_classifier_cls=ANY,
+            default_event_classifier_config=ANY,
+            pipeline_cls=ANY,
+            standard_scaler_cls=ANY,
+            logistic_regression_cls=ANY,
+        )
+
+    @patch("app.services.ml.forecast_service_event_probability.build_event_oof_predictions")
+    def test_build_event_oof_predictions_wrapper_delegates_to_module(self, oof_mock) -> None:
+        oof_mock.return_value = pd.DataFrame({"fold": [1], "event_probability_raw": [0.7]})
+        service = ForecastService(db=None)
+        panel = pd.DataFrame({"event_target": [0, 1]})
+
+        result = service._build_event_oof_predictions(
+            panel,
+            feature_names=["current_y"],
+            model_family="logistic_regression",
+            walk_forward_stride=4,
+            max_splits=3,
+            min_train_points=20,
+        )
+
+        self.assertEqual(result["event_probability_raw"].tolist(), [0.7])
+        oof_mock.assert_called_once_with(
+            service,
+            panel,
+            feature_names=["current_y"],
+            model_family="logistic_regression",
+            walk_forward_stride=4,
+            max_splits=3,
+            min_train_points=20,
+            default_walk_forward_stride=ANY,
+            min_direct_train_points=ANY,
+            build_walk_forward_splits_fn=ANY,
+            np_module=ANY,
+            pd_module=ANY,
+        )
+
+    @patch("app.services.ml.forecast_service_event_probability.select_best_event_candidate")
+    def test_select_best_event_candidate_wrapper_delegates_to_module(self, select_mock) -> None:
+        select_mock.return_value = {"model_family": "logistic_regression"}
+        candidates = [{"model_family": "xgb_classifier", "oof_frame": pd.DataFrame({"x": [1]})}]
+
+        result = ForecastService._select_best_event_candidate(candidates)
+
+        self.assertEqual(result, {"model_family": "logistic_regression"})
+        select_mock.assert_called_once_with(
+            candidates,
+            pd_module=ANY,
+        )
+
+    @patch("app.services.ml.forecast_service_event_probability.build_event_probability_model_from_panel")
+    def test_build_event_probability_model_from_panel_wrapper_delegates_to_module(self, build_mock) -> None:
+        build_mock.return_value = {"model_family": "empirical_prevalence"}
+        service = ForecastService(db=None)
+        panel = pd.DataFrame({"event_target": [0, 1]})
+
+        result = service._build_event_probability_model_from_panel(
+            panel,
+            walk_forward_stride=5,
+            max_splits=2,
+        )
+
+        self.assertEqual(result, {"model_family": "empirical_prevalence"})
+        build_mock.assert_called_once_with(
+            service,
+            panel,
+            walk_forward_stride=5,
+            max_splits=2,
+            default_walk_forward_stride=ANY,
+            min_direct_train_points=ANY,
+            learned_probability_model_cls=ANY,
+            empirical_event_classifier_cls=ANY,
+            compute_classification_metrics_fn=ANY,
+            select_probability_calibration_fn=ANY,
+            apply_probability_calibration_fn=ANY,
+            reliability_score_from_metrics_fn=ANY,
+            np_module=ANY,
+            pd_module=ANY,
+        )
+
     @patch("app.services.ml.forecast_service_internal_history.augment_with_internal_history")
     def test_augment_with_internal_history_wrapper_delegates_to_module(self, augment_mock) -> None:
         augment_mock.return_value = pd.DataFrame({"y": [1.0], "lab_positivity_rate": [0.2]})

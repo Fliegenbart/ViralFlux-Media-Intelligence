@@ -309,3 +309,90 @@ class RegionalTrainerRefactorGuardTests(unittest.TestCase):
             all_bundeslaender=ANY,
             traceback_module=ANY,
         )
+
+    @patch("app.services.ml.regional_trainer_rollout.weather_vintage_metrics_delta")
+    def test_weather_vintage_metrics_delta_wrapper_delegates_to_module(self, delta_mock) -> None:
+        delta_mock.return_value = {"pr_auc": 0.05}
+
+        result = RegionalModelTrainer._weather_vintage_metrics_delta(
+            {"pr_auc": 0.2},
+            {"pr_auc": 0.25},
+        )
+
+        self.assertEqual(result, {"pr_auc": 0.05})
+        delta_mock.assert_called_once_with({"pr_auc": 0.2}, {"pr_auc": 0.25})
+
+    @patch("app.services.ml.regional_trainer_rollout.weather_vintage_mode_summary")
+    def test_weather_vintage_mode_summary_wrapper_delegates_to_module(self, summary_mock) -> None:
+        summary_mock.return_value = {"weather_forecast_vintage_mode": "matching_as_of"}
+
+        result = RegionalModelTrainer._weather_vintage_mode_summary(
+            weather_forecast_vintage_mode="matching_as_of",
+            dataset_manifest={"rows": 10},
+            backtest_bundle={"aggregate_metrics": {}},
+            selection={"tau": 1.0},
+            calibration_mode="raw_passthrough",
+        )
+
+        self.assertEqual(result, {"weather_forecast_vintage_mode": "matching_as_of"})
+        summary_mock.assert_called_once_with(
+            weather_forecast_vintage_mode="matching_as_of",
+            dataset_manifest={"rows": 10},
+            backtest_bundle={"aggregate_metrics": {}},
+            selection={"tau": 1.0},
+            calibration_mode="raw_passthrough",
+            json_safe_fn=ANY,
+        )
+
+    @patch("app.services.ml.regional_trainer_rollout.build_weather_vintage_comparison")
+    def test_build_weather_vintage_comparison_wrapper_delegates_to_module(self, comparison_mock) -> None:
+        comparison_mock.return_value = {"comparison_status": "ok"}
+        trainer = RegionalModelTrainer(db=None)
+
+        result = trainer._build_weather_vintage_comparison(
+            virus_typ="Influenza A",
+            lookback_days=900,
+            horizon_days=7,
+            primary_summary={"weather_forecast_vintage_mode": "disabled"},
+            event_config={"name": "resp"},
+        )
+
+        self.assertEqual(result, {"comparison_status": "ok"})
+        comparison_mock.assert_called_once_with(
+            trainer,
+            virus_typ="Influenza A",
+            lookback_days=900,
+            horizon_days=7,
+            primary_summary={"weather_forecast_vintage_mode": "disabled"},
+            event_config={"name": "resp"},
+            normalize_weather_forecast_vintage_mode_fn=ANY,
+            weather_forecast_vintage_run_timestamp_v1=ANY,
+            weather_forecast_vintage_disabled=ANY,
+            target_window_for_horizon_fn=ANY,
+            json_safe_fn=ANY,
+        )
+
+    @patch("app.services.ml.regional_trainer_rollout.rollout_metadata")
+    def test_rollout_metadata_wrapper_delegates_to_module(self, rollout_mock) -> None:
+        rollout_mock.return_value = {"rollout_mode": "shadow"}
+        trainer = RegionalModelTrainer(db=None)
+
+        result = trainer._rollout_metadata(
+            virus_typ="SARS-CoV-2",
+            horizon_days=7,
+            aggregate_metrics={"pr_auc": 0.3},
+            baseline_metrics={"persistence": {}},
+            previous_artifact={"metadata": {}},
+        )
+
+        self.assertEqual(result, {"rollout_mode": "shadow"})
+        rollout_mock.assert_called_once_with(
+            virus_typ="SARS-CoV-2",
+            horizon_days=7,
+            aggregate_metrics={"pr_auc": 0.3},
+            baseline_metrics={"persistence": {}},
+            previous_artifact={"metadata": {}},
+            rollout_mode_for_virus_fn=ANY,
+            activation_policy_for_virus_fn=ANY,
+            signal_bundle_version_for_virus_fn=ANY,
+        )

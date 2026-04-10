@@ -1,10 +1,13 @@
 import json
 import tempfile
 import unittest
+from datetime import datetime
 from pathlib import Path
+from unittest.mock import patch
 
 import pandas as pd
 
+import app.services.ml.weather_vintage_comparison as weather_module
 from app.services.ml.weather_forecast_vintage import (
     WEATHER_FORECAST_VINTAGE_DISABLED,
     WEATHER_FORECAST_VINTAGE_RUN_TIMESTAMP_V1,
@@ -85,6 +88,222 @@ def _comparison_payload(relative_wis_delta: float = -0.04, crps_delta: float = -
 
 
 class WeatherVintageComparisonTests(unittest.TestCase):
+    def test_scope_report_wrapper_delegates_to_module(self) -> None:
+        sentinel = {"virus_typ": "Influenza A", "verdict": "better"}
+
+        with patch(
+            "app.services.ml.weather_vintage_reporting.scope_report_from_training_result",
+            return_value=sentinel,
+        ) as mocked:
+            result = scope_report_from_training_result(
+                virus_typ="Influenza A",
+                horizon_days=7,
+                result=_comparison_payload(),
+            )
+
+        self.assertIs(result, sentinel)
+        mocked.assert_called_once_with(
+            virus_typ="Influenza A",
+            horizon_days=7,
+            result=_comparison_payload(),
+            weather_forecast_vintage_disabled=weather_module.WEATHER_FORECAST_VINTAGE_DISABLED,
+            weather_forecast_vintage_run_timestamp_v1=weather_module.WEATHER_FORECAST_VINTAGE_RUN_TIMESTAMP_V1,
+            json_safe_fn=weather_module._json_safe,
+            classify_weather_vintage_result_fn=weather_module.classify_weather_vintage_result,
+        )
+
+    def test_shadow_summary_wrapper_delegates_to_module(self) -> None:
+        sentinel = {"run_id": "run_001"}
+        report = {"scopes": []}
+
+        with patch(
+            "app.services.ml.weather_vintage_reporting.build_weather_vintage_shadow_summary",
+            return_value=sentinel,
+        ) as mocked:
+            result = build_weather_vintage_shadow_summary(
+                report=report,
+                generated_at="2026-03-26T10:00:00",
+                run_id="run_001",
+                run_purpose="scheduled_shadow",
+            )
+
+        self.assertIs(result, sentinel)
+        mocked.assert_called_once_with(
+            report=report,
+            generated_at="2026-03-26T10:00:00",
+            run_id="run_001",
+            run_purpose="scheduled_shadow",
+            json_safe_fn=weather_module._json_safe,
+            determine_weather_vintage_comparison_eligibility_fn=weather_module.determine_weather_vintage_comparison_eligibility,
+            extract_mode_snapshot_fn=weather_module._extract_mode_snapshot,
+            weather_forecast_vintage_disabled=weather_module.WEATHER_FORECAST_VINTAGE_DISABLED,
+            weather_forecast_vintage_run_timestamp_v1=weather_module.WEATHER_FORECAST_VINTAGE_RUN_TIMESTAMP_V1,
+        )
+
+    def test_shadow_aggregate_wrapper_delegates_to_module(self) -> None:
+        sentinel = {"archived_runs": 1}
+
+        with patch(
+            "app.services.ml.weather_vintage_reporting.build_weather_vintage_shadow_aggregate",
+            return_value=sentinel,
+        ) as mocked:
+            result = build_weather_vintage_shadow_aggregate([{"run_id": "run_001"}])
+
+        self.assertIs(result, sentinel)
+        mocked.assert_called_once_with(
+            [{"run_id": "run_001"}],
+            gate_rank_fn=weather_module._gate_rank,
+            json_safe_fn=weather_module._json_safe,
+            determine_weather_vintage_review_status_fn=weather_module.determine_weather_vintage_review_status,
+            scope_review_recommendation_fn=weather_module._scope_review_recommendation,
+            pd_module=weather_module.pd,
+        )
+
+    def test_shadow_archive_wrapper_delegates_to_module(self) -> None:
+        sentinel = {"summary_json": Path("/tmp/summary.json")}
+
+        with patch(
+            "app.services.ml.weather_vintage_reporting.write_weather_vintage_shadow_archive",
+            return_value=sentinel,
+        ) as mocked:
+            result = write_weather_vintage_shadow_archive(
+                archive_dir=Path("/tmp/run_001"),
+                report={"status": "ok"},
+                generated_at="2026-03-26T10:00:00",
+                run_id="run_001",
+                manifest={"run_purpose": "scheduled_shadow"},
+            )
+
+        self.assertIs(result, sentinel)
+        mocked.assert_called_once_with(
+            archive_dir=Path("/tmp/run_001"),
+            report={"status": "ok"},
+            generated_at="2026-03-26T10:00:00",
+            run_id="run_001",
+            manifest={"run_purpose": "scheduled_shadow"},
+            json_module=weather_module.json,
+            json_safe_fn=weather_module._json_safe,
+            render_weather_vintage_markdown_fn=weather_module.render_weather_vintage_markdown,
+            build_weather_vintage_shadow_summary_fn=weather_module.build_weather_vintage_shadow_summary,
+        )
+
+    def test_shadow_health_wrapper_delegates_to_module(self) -> None:
+        sentinel = {"status": "ok"}
+        now = datetime(2026, 3, 27, 12, 0, 0)
+
+        with patch(
+            "app.services.ml.weather_vintage_health.build_weather_vintage_shadow_health_report",
+            return_value=sentinel,
+        ) as mocked:
+            result = weather_module.build_weather_vintage_shadow_health_report(
+                [{"run_id": "run_001"}],
+                now=now,
+            )
+
+        self.assertIs(result, sentinel)
+        mocked.assert_called_once_with(
+            [{"run_id": "run_001"}],
+            now=now,
+            max_run_age_hours=weather_module.WEATHER_VINTAGE_HEALTH_MAX_RUN_AGE_HOURS,
+            max_days_without_comparable=weather_module.WEATHER_VINTAGE_HEALTH_MAX_DAYS_WITHOUT_COMPARABLE,
+            max_insufficient_identity_streak=weather_module.WEATHER_VINTAGE_HEALTH_MAX_INSUFFICIENT_IDENTITY_STREAK,
+            parse_generated_at_fn=weather_module._parse_generated_at,
+            weather_health_status_exit_code_fn=weather_module._weather_health_status_exit_code,
+            combine_weather_health_status_fn=weather_module._combine_weather_health_status,
+            json_safe_fn=weather_module._json_safe,
+        )
+
+    def test_load_weather_identity_wrapper_delegates_to_module(self) -> None:
+        sentinel = pd.DataFrame([{"datum": "2026-03-27"}])
+        runner = WeatherVintageComparisonRunner(db="db")
+        start_date = pd.Timestamp("2026-03-01")
+        end_date = pd.Timestamp("2026-03-31")
+
+        with patch(
+            "app.services.ml.weather_vintage_coverage.load_weather_identity_frame",
+            return_value=sentinel,
+        ) as mocked:
+            result = runner._load_weather_identity_frame(
+                start_date=start_date,
+                end_date=end_date,
+            )
+
+        self.assertIs(result, sentinel)
+        mocked.assert_called_once_with(
+            "db",
+            start_date=start_date,
+            end_date=end_date,
+            weather_data_model=weather_module.WeatherData,
+            pd_module=weather_module.pd,
+        )
+
+    def test_coverage_summary_wrapper_delegates_to_module(self) -> None:
+        sentinel = {"coverage_status": "sufficient"}
+        panel = pd.DataFrame({"as_of_date": ["2026-01-01"]})
+        weather_frame = pd.DataFrame({"datum": ["2026-01-08"]})
+
+        with patch(
+            "app.services.ml.weather_vintage_coverage.summarize_backtest_weather_identity_coverage",
+            return_value=sentinel,
+        ) as mocked:
+            result = WeatherVintageComparisonRunner.summarize_backtest_weather_identity_coverage(
+                panel=panel,
+                weather_frame=weather_frame,
+                horizon_days=7,
+            )
+
+        self.assertIs(result, sentinel)
+        mocked.assert_called_once_with(
+            panel=panel,
+            weather_frame=weather_frame,
+            horizon_days=7,
+            time_based_panel_splits_fn=weather_module.time_based_panel_splits,
+            min_test_coverage=weather_module.WEATHER_VINTAGE_MIN_TEST_COVERAGE,
+            min_train_coverage=weather_module.WEATHER_VINTAGE_MIN_TRAIN_COVERAGE,
+            time_block_days=weather_module.WEATHER_VINTAGE_TIME_BLOCK_DAYS,
+            json_safe_fn=weather_module._json_safe,
+            pd_module=weather_module.pd,
+        )
+
+    def test_coverage_analyzer_wrapper_delegates_to_module(self) -> None:
+        sentinel = {"coverage_status": "sufficient"}
+        runner = WeatherVintageComparisonRunner(db="db")
+        trainer = object()
+
+        with patch(
+            "app.services.ml.weather_vintage_coverage.analyze_scope_coverage",
+            return_value=sentinel,
+        ) as mocked:
+            result = runner._analyze_scope_coverage(
+                trainer,
+                "Influenza A",
+                7,
+                900,
+            )
+
+        self.assertIs(result, sentinel)
+        mocked.assert_called_once()
+        args, kwargs = mocked.call_args
+        self.assertEqual(args, ())
+        self.assertIs(kwargs["trainer"], trainer)
+        self.assertEqual(kwargs["virus_typ"], "Influenza A")
+        self.assertEqual(kwargs["horizon_days"], 7)
+        self.assertEqual(kwargs["lookback_days"], 900)
+        self.assertEqual(
+            kwargs["weather_forecast_vintage_run_timestamp_v1"],
+            weather_module.WEATHER_FORECAST_VINTAGE_RUN_TIMESTAMP_V1,
+        )
+        self.assertIs(kwargs["pd_module"], weather_module.pd)
+        self.assertEqual(
+            kwargs["load_weather_identity_frame_fn"].__func__,
+            runner._load_weather_identity_frame.__func__,
+        )
+        self.assertIs(kwargs["load_weather_identity_frame_fn"].__self__, runner)
+        self.assertIs(
+            kwargs["summarize_backtest_weather_identity_coverage_fn"],
+            runner.summarize_backtest_weather_identity_coverage,
+        )
+
     def test_shadow_archive_writes_expected_file_set(self) -> None:
         report = {
             "status": "ok",

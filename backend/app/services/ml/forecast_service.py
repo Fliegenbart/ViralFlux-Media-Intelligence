@@ -86,6 +86,7 @@ from app.services.ml import forecast_service_pipeline
 from app.services.ml import forecast_service_backtest
 from app.services.ml import forecast_service_estimators
 from app.services.ml import forecast_service_preparation
+from app.services.ml import forecast_service_sources
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -446,25 +447,21 @@ class ForecastService:
 
     @staticmethod
     def _region_variants(region: str) -> list[str]:
-        region_code = normalize_forecast_region(region)
-        if region_code == DEFAULT_FORECAST_REGION:
-            return [DEFAULT_FORECAST_REGION]
-
-        variants = [region_code]
-        state_name = BUNDESLAND_NAMES.get(region_code)
-        if state_name:
-            variants.append(state_name)
-        return variants
+        return forecast_service_sources.region_variants(
+            region,
+            normalize_forecast_region_fn=normalize_forecast_region,
+            default_forecast_region=DEFAULT_FORECAST_REGION,
+            bundesland_names=BUNDESLAND_NAMES,
+        )
 
     @classmethod
     def _survstat_region_values(cls, region: str) -> list[str]:
-        region_code = normalize_forecast_region(region)
-        if region_code == DEFAULT_FORECAST_REGION:
-            return ["Gesamt", DEFAULT_FORECAST_REGION]
-        values = cls._region_variants(region_code)
-        if "Gesamt" not in values:
-            values.append("Gesamt")
-        return values
+        return forecast_service_sources.survstat_region_values(
+            region,
+            region_variants_fn=cls._region_variants,
+            normalize_forecast_region_fn=normalize_forecast_region,
+            default_forecast_region=DEFAULT_FORECAST_REGION,
+        )
 
     def _load_wastewater_training_frame(
         self,
@@ -473,55 +470,18 @@ class ForecastService:
         start_date: datetime,
         region: str,
     ) -> pd.DataFrame:
-        region_code = normalize_forecast_region(region)
-        if region_code == DEFAULT_FORECAST_REGION:
-            wastewater = (
-                self.db.query(WastewaterAggregated)
-                .filter(
-                    WastewaterAggregated.virus_typ == virus_typ,
-                    WastewaterAggregated.datum >= start_date,
-                )
-                .order_by(WastewaterAggregated.datum.asc())
-                .all()
-            )
-            return pd.DataFrame(
-                [
-                    {
-                        "ds": w.datum,
-                        "y": w.viruslast,
-                        "viruslast_normalized": w.viruslast_normalisiert,
-                        "amelag_pred": w.vorhersage,
-                    }
-                    for w in wastewater
-                ]
-            )
-
-        wastewater = (
-            self.db.query(
-                WastewaterData.datum.label("ds"),
-                func.avg(WastewaterData.viruslast).label("y"),
-                func.avg(WastewaterData.viruslast_normalisiert).label("viruslast_normalized"),
-                func.avg(WastewaterData.vorhersage).label("amelag_pred"),
-            )
-            .filter(
-                WastewaterData.virus_typ == virus_typ,
-                WastewaterData.datum >= start_date,
-                WastewaterData.bundesland.in_(self._region_variants(region_code)),
-            )
-            .group_by(WastewaterData.datum)
-            .order_by(WastewaterData.datum.asc())
-            .all()
-        )
-        return pd.DataFrame(
-            [
-                {
-                    "ds": row.ds,
-                    "y": float(row.y or 0.0),
-                    "viruslast_normalized": float(row.viruslast_normalized or 0.0),
-                    "amelag_pred": float(row.amelag_pred or 0.0),
-                }
-                for row in wastewater
-            ]
+        return forecast_service_sources.load_wastewater_training_frame(
+            self,
+            virus_typ=virus_typ,
+            start_date=start_date,
+            region=region,
+            normalize_forecast_region_fn=normalize_forecast_region,
+            default_forecast_region=DEFAULT_FORECAST_REGION,
+            region_variants_fn=self._region_variants,
+            wastewater_aggregated_model=WastewaterAggregated,
+            wastewater_data_model=WastewaterData,
+            func_module=func,
+            pd_module=pd,
         )
 
     def _load_google_trends_rows(
@@ -531,30 +491,15 @@ class ForecastService:
         start_date: datetime,
         region: str,
     ) -> list[GoogleTrendsData]:
-        region_code = normalize_forecast_region(region)
-        region_variants = self._region_variants(region_code)
-
-        if region_code != DEFAULT_FORECAST_REGION:
-            region_rows = (
-                self.db.query(GoogleTrendsData)
-                .filter(
-                    GoogleTrendsData.keyword.in_(keywords),
-                    GoogleTrendsData.datum >= start_date,
-                    GoogleTrendsData.region.in_(region_variants),
-                )
-                .all()
-            )
-            if region_rows:
-                return region_rows
-
-        return (
-            self.db.query(GoogleTrendsData)
-            .filter(
-                GoogleTrendsData.keyword.in_(keywords),
-                GoogleTrendsData.datum >= start_date,
-                GoogleTrendsData.region == DEFAULT_FORECAST_REGION,
-            )
-            .all()
+        return forecast_service_sources.load_google_trends_rows(
+            self,
+            keywords=keywords,
+            start_date=start_date,
+            region=region,
+            normalize_forecast_region_fn=normalize_forecast_region,
+            default_forecast_region=DEFAULT_FORECAST_REGION,
+            region_variants_fn=self._region_variants,
+            google_trends_data_model=GoogleTrendsData,
         )
 
     @staticmethod
@@ -638,16 +583,15 @@ class ForecastService:
 
     def _is_holiday(self, datum: datetime, *, region: str = DEFAULT_FORECAST_REGION) -> bool:
         """Check if date falls in school holidays."""
-        query = self.db.query(SchoolHolidays).filter(
-            SchoolHolidays.start_datum <= datum,
-            SchoolHolidays.end_datum >= datum,
+        return forecast_service_sources.is_holiday(
+            self,
+            datum,
+            region=region,
+            normalize_forecast_region_fn=normalize_forecast_region,
+            default_forecast_region=DEFAULT_FORECAST_REGION,
+            region_variants_fn=self._region_variants,
+            school_holidays_model=SchoolHolidays,
         )
-        region_code = normalize_forecast_region(region)
-        if region_code != DEFAULT_FORECAST_REGION:
-            query = query.filter(
-                SchoolHolidays.bundesland.in_(self._region_variants(region_code)),
-            )
-        return query.first() is not None
 
     # ═══════════════════════════════════════════════════════════════════
     #  BASE ESTIMATORS

@@ -24,6 +24,92 @@ from app.services.ml.forecast_service import (
 
 
 class ForecastServiceGuardTests(unittest.TestCase):
+    @patch("app.services.ml.forecast_service_sources.region_variants")
+    def test_region_variants_wrapper_delegates_to_module(self, delegated) -> None:
+        delegated.return_value = ["BY", "Bayern"]
+
+        result = ForecastService._region_variants("BY")
+
+        self.assertEqual(result, ["BY", "Bayern"])
+        delegated.assert_called_once_with("BY", normalize_forecast_region_fn=ANY, default_forecast_region=ANY, bundesland_names=ANY)
+
+    @patch("app.services.ml.forecast_service_sources.survstat_region_values")
+    def test_survstat_region_values_wrapper_delegates_to_module(self, delegated) -> None:
+        delegated.return_value = ["BY", "Bayern", "Gesamt"]
+
+        result = ForecastService._survstat_region_values("BY")
+
+        self.assertEqual(result, ["BY", "Bayern", "Gesamt"])
+        delegated.assert_called_once_with("BY", region_variants_fn=ANY, normalize_forecast_region_fn=ANY, default_forecast_region=ANY)
+
+    @patch("app.services.ml.forecast_service_sources.load_wastewater_training_frame")
+    def test_load_wastewater_training_frame_wrapper_delegates_to_module(self, delegated) -> None:
+        delegated.return_value = pd.DataFrame({"ds": [pd.Timestamp("2026-01-01")], "y": [1.0]})
+        service = ForecastService(db=None)
+
+        result = service._load_wastewater_training_frame(
+            virus_typ="Influenza A",
+            start_date=pd.Timestamp("2025-01-01").to_pydatetime(),
+            region="BY",
+        )
+
+        self.assertEqual(result["y"].tolist(), [1.0])
+        delegated.assert_called_once_with(
+            service,
+            virus_typ="Influenza A",
+            start_date=pd.Timestamp("2025-01-01").to_pydatetime(),
+            region="BY",
+            normalize_forecast_region_fn=ANY,
+            default_forecast_region=ANY,
+            region_variants_fn=ANY,
+            wastewater_aggregated_model=ANY,
+            wastewater_data_model=ANY,
+            func_module=ANY,
+            pd_module=ANY,
+        )
+
+    @patch("app.services.ml.forecast_service_sources.load_google_trends_rows")
+    def test_load_google_trends_rows_wrapper_delegates_to_module(self, delegated) -> None:
+        delegated.return_value = ["trend-row"]
+        service = ForecastService(db=None)
+
+        result = service._load_google_trends_rows(
+            keywords=["Grippe"],
+            start_date=pd.Timestamp("2025-01-01").to_pydatetime(),
+            region="BY",
+        )
+
+        self.assertEqual(result, ["trend-row"])
+        delegated.assert_called_once_with(
+            service,
+            keywords=["Grippe"],
+            start_date=pd.Timestamp("2025-01-01").to_pydatetime(),
+            region="BY",
+            normalize_forecast_region_fn=ANY,
+            default_forecast_region=ANY,
+            region_variants_fn=ANY,
+            google_trends_data_model=ANY,
+        )
+
+    @patch("app.services.ml.forecast_service_sources.is_holiday")
+    def test_is_holiday_wrapper_delegates_to_module(self, delegated) -> None:
+        delegated.return_value = True
+        service = ForecastService(db=None)
+        day = pd.Timestamp("2026-01-03").to_pydatetime()
+
+        result = service._is_holiday(day, region="BY")
+
+        self.assertTrue(result)
+        delegated.assert_called_once_with(
+            service,
+            day,
+            region="BY",
+            normalize_forecast_region_fn=ANY,
+            default_forecast_region=ANY,
+            region_variants_fn=ANY,
+            school_holidays_model=ANY,
+        )
+
     @patch("app.services.ml.forecast_service_preparation.prepare_training_data")
     def test_prepare_training_data_wrapper_delegates_to_module(self, delegated) -> None:
         delegated.return_value = pd.DataFrame({"region": ["DE"], "y": [1.0]})

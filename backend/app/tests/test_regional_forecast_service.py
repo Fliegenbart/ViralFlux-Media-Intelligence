@@ -578,6 +578,12 @@ class RegionalForecastServiceTests(unittest.TestCase):
         self.assertEqual(media["summary"]["total_budget_allocated"], 0.0)
         self.assertEqual(media["summary"]["prepare_regions"], 1)
         self.assertEqual(media["summary"]["watch_regions"], 0)
+        self.assertTrue(
+            any(
+                "preparation-only" in str(blocker).lower()
+                for blocker in media["summary"]["spend_blockers"]
+            )
+        )
         self.assertTrue(all(item["action"] == "prepare" for item in media["recommendations"]))
         self.assertTrue(all(item["budget_eur"] == 0.0 for item in media["recommendations"]))
 

@@ -61,7 +61,7 @@ def media_spend_gate(
 ) -> tuple[bool, list[str]]:
     blockers: list[str] = []
     if activation_policy == "watch_only":
-        blockers.append("Activation policy 'watch_only' forces observation mode.")
+        blockers.append("Activation policy 'watch_only' keeps the region in preparation-only mode.")
     if not business_gate.get("validated_for_budget_activation"):
         blockers.append("Business-Gate noch nicht validiert.")
     if not quality_gate.get("overall_passed"):

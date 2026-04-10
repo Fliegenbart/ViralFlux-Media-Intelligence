@@ -154,6 +154,33 @@ class CampaignRecommendationServiceTests(unittest.TestCase):
             " ".join(first["recommendation_rationale"]["guardrails"]),
         )
 
+    def test_prepare_recommendation_without_budget_stays_discussion_only(self) -> None:
+        payload = self.service.recommend_from_allocation(
+            allocation_payload={
+                "virus_typ": "Influenza A",
+                "recommendations": [
+                    _allocation_item(
+                        bundesland="BE",
+                        bundesland_name="Berlin",
+                        activation_level="Prepare",
+                        budget_share=0.0,
+                        budget_amount=0.0,
+                        confidence=0.69,
+                        products=["GeloRevoice"],
+                        spend_gate_status="guarded_release",
+                        budget_release_recommendation="hold",
+                    ),
+                ],
+            }
+        )
+
+        first = payload["recommendations"][0]
+        self.assertEqual(first["spend_guardrail_status"], "observe_only")
+        self.assertIn(
+            "no paid activation budget is released yet",
+            " ".join(first["recommendation_rationale"]["guardrails"]).lower(),
+        )
+
     def test_empty_allocation_returns_stable_payload(self) -> None:
         payload = self.service.recommend_from_allocation(
             allocation_payload={

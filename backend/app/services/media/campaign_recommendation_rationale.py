@@ -30,25 +30,47 @@ def build_rationale(
         or ""
     )
     confidence = float(allocation_item.get("confidence") or 0.0)
-    why = [
-        f"{region_name} stays on {stage} with budget share {budget_share:.2%}.",
-        f"Allocation confidence {confidence:.2f} and priority rank {int(allocation_item.get('priority_rank') or 0)} keep the region in the current wave plan.",
-    ]
-    why_details = [
-        reason_detail_builder(
-            "campaign_stage_budget_share",
-            why[0],
-            region_name=region_name,
-            stage=stage,
-            budget_share=round(budget_share, 6),
-        ),
-        reason_detail_builder(
-            "campaign_wave_plan_support",
-            why[1],
-            confidence=round(confidence, 4),
-            priority_rank=int(allocation_item.get("priority_rank") or 0),
-        ),
-    ]
+    stage_key = str(stage or "").strip().lower()
+    if stage_key == "prepare" and budget_amount <= 0.0:
+        why = [
+            f"{region_name} is an early-warning Prepare region. Operative preparation is justified, but no paid activation budget is released yet.",
+            f"Allocation confidence {confidence:.2f} is good enough for preparation work, not for live spend release.",
+        ]
+        why_details = [
+            reason_detail_builder(
+                "campaign_prepare_early_warning",
+                why[0],
+                region_name=region_name,
+                stage=stage,
+                budget_amount=round(budget_amount, 2),
+            ),
+            reason_detail_builder(
+                "campaign_prepare_no_live_spend",
+                why[1],
+                confidence=round(confidence, 4),
+                priority_rank=int(allocation_item.get("priority_rank") or 0),
+            ),
+        ]
+    else:
+        why = [
+            f"{region_name} stays on {stage} with budget share {budget_share:.2%}.",
+            f"Allocation confidence {confidence:.2f} and priority rank {int(allocation_item.get('priority_rank') or 0)} keep the region in the current wave plan.",
+        ]
+        why_details = [
+            reason_detail_builder(
+                "campaign_stage_budget_share",
+                why[0],
+                region_name=region_name,
+                stage=stage,
+                budget_share=round(budget_share, 6),
+            ),
+            reason_detail_builder(
+                "campaign_wave_plan_support",
+                why[1],
+                confidence=round(confidence, 4),
+                priority_rank=int(allocation_item.get("priority_rank") or 0),
+            ),
+        ]
     product_fit = [
         f"{product_cluster.label} scores {float(product_cluster.fit_score):.2f} for the available product set {product_cluster.products or allocation_item.get('products') or []}.",
     ]
@@ -155,7 +177,10 @@ def build_rationale(
             reason_detail_builder("campaign_guardrail_blocked", message)
         )
     else:
-        message = "Recommendation stays discussion-only for now."
+        if stage_key == "prepare" and budget_amount <= 0.0:
+            message = "No paid activation budget is released yet. Recommendation stays preparation-only for now."
+        else:
+            message = "Recommendation stays preparation-only for now."
         guardrails.append(message)
         guardrail_details.append(
             reason_detail_builder("campaign_guardrail_discussion_only", message)

@@ -768,6 +768,89 @@ class MediaV2ServiceTruthCoverageTests(unittest.TestCase):
         self.assertEqual(cards[0]["id"], "opp-high")
         self.assertEqual(cards[1]["id"], "opp-low")
 
+    def test_guidance_wrappers_delegate_to_module(self) -> None:
+        source_status = {"items": [{"source_key": "wastewater", "is_live": True}]}
+        top_card = {"display_title": "Nord"}
+        top_regions = [{"name": "Hamburg", "signal_score": 72.0}]
+        cockpit = {"peix_epi_score": {"top_drivers": [{"label": "AMELAG"}]}}
+        signal_summary = {"decision_mode_reason": "Kontext und Signal tragen gemeinsam."}
+        with (
+            patch(
+                "app.services.media.v2.guidance._decision_freshness_state",
+                return_value="fresh",
+            ) as mocked_freshness,
+            patch(
+                "app.services.media.v2.guidance._build_why_now",
+                return_value=["Grund 1", "Grund 2", "Grund 3"],
+            ) as mocked_why_now,
+            patch(
+                "app.services.media.v2.guidance._known_limits",
+                return_value=["Limit 1"],
+            ) as mocked_limits,
+        ):
+            freshness = self.service._decision_freshness_state(source_status)
+            why_now = self.service._build_why_now(
+                top_card=top_card,
+                top_regions=top_regions,
+                cockpit=cockpit,
+                decision_state="GO",
+                signal_summary=signal_summary,
+            )
+            limits = self.service._known_limits(cockpit, "Influenza A")
+
+        self.assertEqual(freshness, "fresh")
+        self.assertEqual(why_now, ["Grund 1", "Grund 2", "Grund 3"])
+        self.assertEqual(limits, ["Limit 1"])
+        mocked_freshness.assert_called_once_with(self.service, source_status)
+        mocked_why_now.assert_called_once_with(
+            self.service,
+            top_card=top_card,
+            top_regions=top_regions,
+            cockpit=cockpit,
+            decision_state="GO",
+            signal_summary=signal_summary,
+        )
+        mocked_limits.assert_called_once_with(
+            self.service,
+            cockpit,
+            "Influenza A",
+            truth_coverage=None,
+            truth_validation_legacy=None,
+        )
+
+    def test_known_limits_still_respects_service_truth_coverage_override(self) -> None:
+        class OverrideMediaV2Service(MediaV2Service):
+            def get_truth_coverage(
+                self,
+                *,
+                brand: str = "gelo",
+                virus_typ: str | None = None,
+            ) -> dict[str, object]:
+                return {
+                    "coverage_weeks": 40,
+                    "truth_freshness_state": "fresh",
+                    "conversion_fields_present": ["Verkäufe"],
+                }
+
+        service = OverrideMediaV2Service(self.db)
+        cockpit = {
+            "backtest_summary": {
+                "latest_market": {
+                    "quality_gate": {
+                        "overall_passed": True,
+                    }
+                }
+            }
+        }
+
+        limits = service._known_limits(cockpit, "Influenza A")
+
+        self.assertNotIn("Kundennahe Daten decken noch keine 26 Wochen ab.", limits)
+        self.assertNotIn(
+            "In den Kundendaten fehlt noch mindestens eine belastbare Wirkungszahl wie Verkäufe, Bestellungen oder Umsatz.",
+            limits,
+        )
+
     def test_get_evidence_payload_delegates_to_evidence_builder(self) -> None:
         with patch(
             "app.services.media.v2_service.build_evidence_payload",

@@ -309,6 +309,161 @@ class ProductionReadinessServiceTests(unittest.TestCase):
         self.assertEqual(state["source_coverage_required_status"], "ok")
         self.assertEqual(state["required_live_sources"], ["wastewater"])
 
+    @patch("app.services.ops.production_readiness_matrix.regional_matrix_item")
+    def test_regional_matrix_item_delegates_to_matrix_module(self, matrix_mock) -> None:
+        now = datetime(2026, 3, 17, 10, 0, 0)
+        service = ProductionReadinessService(
+            session_factory=self._session_factory,
+            now_provider=lambda: now,
+        )
+        forecast_service = object()
+        latest_state = {"status": "ok"}
+        matrix_mock.return_value = {"status": "warning"}
+
+        result = service._regional_matrix_item(
+            service=forecast_service,
+            virus_typ="Influenza A",
+            horizon_days=7,
+            observed_at=now,
+            latest_source_state=latest_state,
+            operational_snapshot=None,
+            recent_operational_snapshots=None,
+        )
+
+        self.assertEqual(result, {"status": "warning"})
+        matrix_mock.assert_called_once_with(
+            service,
+            service=forecast_service,
+            virus_typ="Influenza A",
+            horizon_days=7,
+            observed_at=now,
+            latest_source_state=latest_state,
+            operational_snapshot=None,
+            recent_operational_snapshots=None,
+        )
+
+    @patch("app.services.ops.production_readiness_matrix.source_coverage_contract")
+    def test_source_coverage_contract_delegates_to_matrix_module(self, contract_mock) -> None:
+        service = ProductionReadinessService(
+            session_factory=self._session_factory,
+            now_provider=lambda: datetime(2026, 3, 17, 10, 0, 0),
+        )
+        contract_mock.return_value = {"effective_status": "warning"}
+
+        result = service._source_coverage_contract(
+            virus_typ="SARS-CoV-2",
+            source_coverage={"sars_are_available": 0.8},
+        )
+
+        self.assertEqual(result, {"effective_status": "warning"})
+        contract_mock.assert_called_once_with(
+            service,
+            virus_typ="SARS-CoV-2",
+            source_coverage={"sars_are_available": 0.8},
+        )
+
+    def test_source_coverage_contract_marks_missing_advisory_keys_as_warning(self) -> None:
+        service = ProductionReadinessService(
+            session_factory=self._session_factory,
+            now_provider=lambda: datetime(2026, 3, 17, 10, 0, 0),
+        )
+
+        result = service._source_coverage_contract(
+            virus_typ="SARS-CoV-2",
+            source_coverage={
+                "grippeweb_are_available": 0.95,
+                "grippeweb_ili_available": 0.94,
+                "sars_are_available": 0.91,
+                "sars_notaufnahme_available": 0.93,
+            },
+        )
+
+        self.assertEqual(result["required_status"], "ok")
+        self.assertEqual(result["optional_status"], "warning")
+        self.assertEqual(result["effective_status"], "warning")
+        self.assertIn("sars_trends_available", result["optional_keys"])
+
+    def test_regional_matrix_item_respects_service_override_for_source_coverage_contract(self) -> None:
+        class OverrideReadinessService(ProductionReadinessService):
+            def _source_coverage_contract(self, *, virus_typ: str, source_coverage: dict[str, Any]) -> dict[str, Any]:
+                return {
+                    "required_keys": ["override_required"],
+                    "optional_keys": [],
+                    "missing_required_keys": [],
+                    "required_floor": 1.0,
+                    "required_status": "ok",
+                    "optional_floor": None,
+                    "optional_status": "unknown",
+                    "effective_floor": 1.0,
+                    "effective_status": "override_status",
+                    "advisories": [],
+                }
+
+        class FakeForecastService:
+            def _load_artifacts(self, virus_typ: str, horizon_days: int = 7):
+                return {
+                    "metadata": {
+                        "feature_columns": ["feature_a"],
+                        "trained_at": "2026-03-15T00:00:00",
+                        "model_version": "regional:test",
+                        "calibration_version": "isotonic:test",
+                        "quality_gate": {"overall_passed": True, "forecast_readiness": "GO"},
+                        "dataset_manifest": {
+                            "source_coverage": {
+                                "grippeweb_are_available": 0.95,
+                                "grippeweb_ili_available": 0.94,
+                                "ifsg_influenza_available": 0.96,
+                            },
+                            "as_of_range": {"end": "2026-03-16T00:00:00"},
+                        },
+                    },
+                    "dataset_manifest": {
+                        "source_coverage": {
+                            "grippeweb_are_available": 0.95,
+                            "grippeweb_ili_available": 0.94,
+                            "ifsg_influenza_available": 0.96,
+                        },
+                        "as_of_range": {"end": "2026-03-16T00:00:00"},
+                    },
+                    "point_in_time_snapshot": {"as_of_range": {"end": "2026-03-16T00:00:00"}},
+                }
+
+        now = datetime(2026, 3, 17, 10, 0, 0)
+        service = OverrideReadinessService(
+            session_factory=self._session_factory,
+            now_provider=lambda: now,
+        )
+
+        result = service._regional_matrix_item(
+            service=FakeForecastService(),
+            virus_typ="Influenza A",
+            horizon_days=7,
+            observed_at=now,
+            latest_source_state={
+                "latest_available_as_of": now - timedelta(days=1),
+                "source_age_days": 1,
+                "live_source_freshness_status": "ok",
+                "live_source_coverage_status": "ok",
+                "live_source_coverage": {},
+                "live_source_freshness": {},
+                "source_criticality": {},
+                "advisories": [],
+                "blockers": [],
+                "source_coverage_floor": 1.0,
+                "required_coverage_floor": 1.0,
+                "source_coverage_required_status": "ok",
+                "required_live_sources": ["wastewater"],
+                "optional_coverage_floor": None,
+                "source_coverage_optional_status": "unknown",
+                "optional_live_sources": [],
+                "missing_required_live_sources": [],
+            },
+            operational_snapshot=None,
+            recent_operational_snapshots=None,
+        )
+
+        self.assertEqual(result["artifact_source_coverage_status"], "override_status")
+
     def test_build_snapshot_reports_healthy_when_models_and_sources_are_fresh(self) -> None:
         now = datetime(2026, 3, 17, 10, 0, 0)
         self._seed_wastewater(available_time=now - timedelta(days=1))

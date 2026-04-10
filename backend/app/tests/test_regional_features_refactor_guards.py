@@ -190,3 +190,90 @@ def test_live_source_readiness_frames_wrapper_delegates_to_module() -> None:
         as_of_date=as_of_date,
         lookback_days=35,
     )
+
+
+def test_build_rows_wrapper_delegates_to_module() -> None:
+    builder = RegionalFeatureBuilder(db=None)
+    sentinel = [{"bundesland": "BY"}]
+    kwargs = {
+        "virus_typ": "Influenza A",
+        "wastewater": pd.DataFrame(),
+        "wastewater_context": {},
+        "truth": pd.DataFrame(),
+        "grippeweb": pd.DataFrame(),
+        "influenza_ifsg": pd.DataFrame(),
+        "rsv_ifsg": pd.DataFrame(),
+        "are": pd.DataFrame(),
+        "notaufnahme": pd.DataFrame(),
+        "trends": pd.DataFrame(),
+        "weather": pd.DataFrame(),
+        "pollen": pd.DataFrame(),
+        "holidays": {},
+        "state_populations": {},
+        "start_date": pd.Timestamp("2026-01-01"),
+        "end_date": pd.Timestamp("2026-01-31"),
+        "horizon_days": 7,
+        "include_targets": True,
+        "include_nowcast": False,
+        "use_revision_adjusted": False,
+        "revision_policy": "none",
+        "source_revision_policy": None,
+        "weather_forecast_vintage_mode": "disabled",
+        "weather_forecast_metadata": {},
+    }
+
+    with patch(
+        "app.services.ml.regional_features_builders.build_rows",
+        return_value=sentinel,
+    ) as mocked:
+        result = builder._build_rows(**kwargs)
+
+    assert result is sentinel
+    mocked.assert_called_once_with(builder, **kwargs)
+
+
+def test_build_feature_row_wrapper_delegates_to_module() -> None:
+    builder = RegionalFeatureBuilder(db=None)
+    sentinel = {"ww_level": 1.0}
+    kwargs = {
+        "virus_typ": "Influenza A",
+        "state": "BY",
+        "as_of": pd.Timestamp("2026-03-10"),
+        "visible_ww": pd.DataFrame([{"datum": pd.Timestamp("2026-03-10"), "site_count": 1, "under_bg_share": 0.0, "viral_std": 0.0, "viral_load": 1.0}]),
+        "visible_truth": pd.DataFrame([{"week_start": pd.Timestamp("2026-03-03"), "incidence": 2.0}]),
+        "visible_grippeweb_state": {},
+        "visible_grippeweb_national": {},
+        "visible_influenza_ifsg": None,
+        "visible_rsv_ifsg": None,
+        "visible_are": None,
+        "visible_notaufnahme": None,
+        "visible_trends": None,
+        "weather_frame": None,
+        "pollen_frame": None,
+        "holiday_ranges": [],
+        "latest_ww_snapshot": {},
+        "latest_cross_virus_snapshots": {},
+        "state_population": 1000000.0,
+        "max_site_count": 1,
+        "horizon_days": 7,
+        "target_week_start": pd.Timestamp("2026-03-17"),
+        "current_known_incidence": 2.0,
+        "seasonal_baseline": 1.0,
+        "seasonal_mad": 1.0,
+        "include_nowcast": False,
+        "use_revision_adjusted": False,
+        "revision_policy": "none",
+        "source_revision_policy": None,
+        "weather_forecast_vintage_mode": "disabled",
+        "weather_forecast_metadata": {},
+        "truth_nowcast": object(),
+    }
+
+    with patch(
+        "app.services.ml.regional_features_builders.build_feature_row",
+        return_value=sentinel,
+    ) as mocked:
+        result = builder._build_feature_row(**kwargs)
+
+    assert result is sentinel
+    mocked.assert_called_once_with(builder, **kwargs)

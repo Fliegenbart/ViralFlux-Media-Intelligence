@@ -277,3 +277,105 @@ def test_build_feature_row_wrapper_delegates_to_module() -> None:
 
     assert result is sentinel
     mocked.assert_called_once_with(builder, **kwargs)
+
+
+def test_relative_delta_wrapper_delegates_to_module() -> None:
+    sentinel = 0.75
+
+    with patch(
+        "app.services.ml.regional_features_helpers.relative_delta",
+        return_value=sentinel,
+    ) as mocked:
+        result = RegionalFeatureBuilder._relative_delta(4.0, 2.0)
+
+    assert result == sentinel
+    mocked.assert_called_once_with(4.0, 2.0)
+
+
+def test_cross_virus_features_wrapper_delegates_to_module() -> None:
+    builder = RegionalFeatureBuilder(db=None)
+    sentinel = {"xdisease_state_level_rsv_a": 1.5}
+
+    with patch(
+        "app.services.ml.regional_features_helpers.cross_virus_features",
+        return_value=sentinel,
+    ) as mocked:
+        result = builder._cross_virus_features(
+            target_virus="Influenza A",
+            state="BY",
+            latest_cross_virus_snapshots={},
+        )
+
+    assert result is sentinel
+    mocked.assert_called_once_with(
+        target_virus="Influenza A",
+        state="BY",
+        latest_cross_virus_snapshots={},
+    )
+
+
+def test_weather_features_wrapper_delegates_to_module() -> None:
+    sentinel = {"weather_forecast_temp_3_7": 5.0}
+    frame = pd.DataFrame([{"datum": pd.Timestamp("2026-03-10")}])
+
+    with patch(
+        "app.services.ml.regional_features_helpers.weather_features",
+        return_value=sentinel,
+    ) as mocked:
+        result = RegionalFeatureBuilder._weather_features(
+            frame,
+            pd.Timestamp("2026-03-10"),
+            horizon_days=7,
+            vintage_mode="disabled",
+            vintage_metadata={},
+        )
+
+    assert result is sentinel
+    mocked.assert_called_once_with(
+        frame,
+        pd.Timestamp("2026-03-10"),
+        horizon_days=7,
+        vintage_mode="disabled",
+        vintage_metadata={},
+    )
+
+
+def test_target_date_wrapper_delegates_to_module() -> None:
+    sentinel = pd.Timestamp("2026-03-17")
+    as_of = pd.Timestamp("2026-03-10")
+
+    with patch(
+        "app.services.ml.regional_features_helpers.target_date",
+        return_value=sentinel,
+    ) as mocked:
+        result = RegionalFeatureBuilder._target_date(as_of, 7)
+
+    assert result == sentinel
+    mocked.assert_called_once_with(as_of, 7)
+
+
+def test_week_start_from_label_wrapper_delegates_to_module() -> None:
+    sentinel = pd.Timestamp("2026-03-09")
+
+    with patch(
+        "app.services.ml.regional_features_helpers.week_start_from_label",
+        return_value=sentinel,
+    ) as mocked:
+        result = RegionalFeatureBuilder._week_start_from_label("2026_11")
+
+    assert result == sentinel
+    mocked.assert_called_once_with("2026_11")
+
+
+def test_finalize_panel_wrapper_delegates_to_module() -> None:
+    rows = [{"bundesland": "BY", "as_of_date": pd.Timestamp("2026-03-10")}]
+    sentinel = pd.DataFrame(rows)
+
+    with patch(
+        "app.services.ml.regional_features_helpers.finalize_panel",
+        return_value=sentinel,
+    ) as mocked:
+        result = RegionalFeatureBuilder._finalize_panel(rows)
+
+    assert result is sentinel
+    mocked.assert_called_once_with(rows)

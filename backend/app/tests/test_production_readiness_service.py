@@ -198,6 +198,117 @@ class ProductionReadinessServiceTests(unittest.TestCase):
     def _unsupported_scope_count(self) -> int:
         return (len(SUPPORTED_VIRUS_TYPES) * len(SUPPORTED_FORECAST_HORIZONS)) - self._supported_scope_count()
 
+    @patch("app.services.ops.production_readiness_live_sources.latest_source_state")
+    def test_latest_source_state_delegates_to_live_sources_module(self, latest_mock) -> None:
+        latest_mock.return_value = {"status": "ok"}
+        service = ProductionReadinessService(
+            session_factory=self._session_factory,
+            now_provider=lambda: datetime(2026, 3, 17, 10, 0, 0),
+        )
+
+        result = service._latest_source_state(
+            self.db,
+            virus_typ="Influenza A",
+            observed_at=datetime(2026, 3, 17, 10, 0, 0),
+        )
+
+        self.assertEqual(result, {"status": "ok"})
+        latest_mock.assert_called_once_with(
+            service,
+            self.db,
+            virus_typ="Influenza A",
+            observed_at=datetime(2026, 3, 17, 10, 0, 0),
+        )
+
+    @patch("app.services.ops.production_readiness_live_sources.load_live_source_frames")
+    def test_load_live_source_frames_delegates_to_live_sources_module(self, frames_mock) -> None:
+        frames_mock.return_value = {"wastewater": "frame"}
+        service = ProductionReadinessService(
+            session_factory=self._session_factory,
+            now_provider=lambda: datetime(2026, 3, 17, 10, 0, 0),
+        )
+
+        result = service._load_live_source_frames(
+            self.db,
+            virus_typ="RSV A",
+            observed_at=datetime(2026, 3, 17, 10, 0, 0),
+        )
+
+        self.assertEqual(result, {"wastewater": "frame"})
+        frames_mock.assert_called_once_with(
+            service,
+            self.db,
+            virus_typ="RSV A",
+            observed_at=datetime(2026, 3, 17, 10, 0, 0),
+        )
+
+    def test_latest_source_state_reports_missing_required_live_source_as_critical(self) -> None:
+        now = datetime(2026, 3, 17, 10, 0, 0)
+        self._seed_live_sources(
+            available_time=now - timedelta(days=1),
+            skip_sources={"sars_are"},
+        )
+        service = ProductionReadinessService(
+            session_factory=self._session_factory,
+            now_provider=lambda: now,
+        )
+
+        state = service._latest_source_state(
+            self.db,
+            virus_typ="SARS-CoV-2",
+            observed_at=now,
+        )
+
+        self.assertEqual(state["source_coverage_required_status"], "critical")
+        self.assertIn("sars_are", state["missing_required_live_sources"])
+        self.assertIn("Critical live source coverage is missing or too low: sars_are.", state["blockers"])
+
+    def test_latest_source_state_respects_service_override_for_frame_loading(self) -> None:
+        class OverrideReadinessService(ProductionReadinessService):
+            def _load_live_source_frames(self, db, *, virus_typ: str, observed_at: datetime):
+                frame = self._live_frame_from_available_rows(
+                    rows=[
+                        type(
+                            "Row",
+                            (),
+                            {
+                                "datum": observed_at - timedelta(days=1),
+                                "available_time": observed_at - timedelta(days=1),
+                            },
+                        )()
+                    ],
+                    lag_days=0,
+                )
+                return {"wastewater": frame}
+
+            @staticmethod
+            def _live_source_specs(virus_typ: str):
+                return (
+                    {
+                        "source_id": "wastewater",
+                        "criticality": "critical",
+                        "cadence_days": 1,
+                        "coverage_window_days": 2,
+                        "minimum_points": 1,
+                        "label": "Wastewater",
+                    },
+                )
+
+        now = datetime(2026, 3, 17, 10, 0, 0)
+        service = OverrideReadinessService(
+            session_factory=self._session_factory,
+            now_provider=lambda: now,
+        )
+
+        state = service._latest_source_state(
+            self.db,
+            virus_typ="Influenza A",
+            observed_at=now,
+        )
+
+        self.assertEqual(state["source_coverage_required_status"], "ok")
+        self.assertEqual(state["required_live_sources"], ["wastewater"])
+
     def test_build_snapshot_reports_healthy_when_models_and_sources_are_fresh(self) -> None:
         now = datetime(2026, 3, 17, 10, 0, 0)
         self._seed_wastewater(available_time=now - timedelta(days=1))

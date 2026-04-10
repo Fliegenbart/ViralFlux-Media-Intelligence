@@ -140,6 +140,47 @@ class ForecastServiceGuardTests(unittest.TestCase):
             logger=ANY,
         )
 
+    @patch("app.services.ml.forecast_service_backtest.evaluate_training_candidate")
+    def test_evaluate_training_candidate_wrapper_delegates_to_module(self, delegated) -> None:
+        delegated.return_value = {"window_count": 3, "region": "DE"}
+        service = ForecastService(db=None)
+
+        result = service.evaluate_training_candidate(
+            "Influenza A",
+            include_internal_history=False,
+            model_config={"median": {"n_estimators": 10}},
+            n_windows=4,
+            walk_forward_stride=2,
+            max_splits=3,
+            region="BY",
+            horizon_days=14,
+        )
+
+        self.assertEqual(result, {"window_count": 3, "region": "DE"})
+        delegated.assert_called_once_with(
+            service,
+            "Influenza A",
+            include_internal_history=False,
+            model_config={"median": {"n_estimators": 10}},
+            n_windows=4,
+            walk_forward_stride=2,
+            max_splits=3,
+            region="BY",
+            horizon_days=14,
+            normalize_forecast_region_fn=ANY,
+            ensure_supported_horizon_fn=ANY,
+            default_forecast_region=ANY,
+            default_decision_horizon_days=ANY,
+            default_walk_forward_stride=ANY,
+            min_direct_train_points=ANY,
+            build_walk_forward_splits_fn=ANY,
+            compute_regression_metrics_fn=ANY,
+            compute_classification_metrics_fn=ANY,
+            summarize_probabilistic_metrics_fn=ANY,
+            np_module=ANY,
+            pd_module=ANY,
+        )
+
     @patch("app.services.ml.forecast_service_pipeline.train_and_forecast")
     def test_train_and_forecast_wrapper_delegates_to_module(self, delegated) -> None:
         delegated.return_value = {"status": "success", "virus_typ": "Influenza A"}

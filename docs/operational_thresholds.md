@@ -112,10 +112,10 @@ Operational consequence:
 
 After raw stage assignment, the engine applies two hard operational downgrade rules:
 
-1. `activation_policy == "watch_only"` forces the final stage to `Watch`
-2. `quality_gate.overall_passed == false` forces the final stage to `Watch`
+1. `activation_policy == "watch_only"` forces the final stage to `Prepare`
+2. `quality_gate.overall_passed == false` forces the final stage to `Prepare`
 
-These downgrades are surfaced in `reason_trace.policy_overrides`.
+These downgrades keep the region visible for operational preparation, but they block paid budget release until `Activate` is allowed. They are surfaced in `reason_trace.policy_overrides`.
 
 ## Low-Confidence And Low-Data Handling
 

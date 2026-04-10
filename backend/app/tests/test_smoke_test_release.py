@@ -57,7 +57,18 @@ class SmokeTestReleaseTests(unittest.TestCase):
                             "recommended_activation_level": "Prepare",
                             "suggested_budget_share": 0.0,
                             "suggested_budget_amount": 0.0,
-                            "allocation_reason_trace": {"drivers": ["early_prepare_signal"]},
+                            "allocation_reason_trace": {
+                                "why": [
+                                    "Prepare is an early-warning stage. Keep the region visible, but do not release paid budget yet.",
+                                ],
+                                "budget_drivers": [
+                                    "Suggested budget share is 0.00%.",
+                                ],
+                                "uncertainty": [],
+                                "blockers": [
+                                    "Prepare is an early-warning stage. Keep the region visible, but do not release paid budget yet.",
+                                ],
+                            },
                             "confidence": 0.66,
                         }
                     ],
@@ -71,7 +82,8 @@ class SmokeTestReleaseTests(unittest.TestCase):
                     "summary": {
                         "top_region": "BY",
                         "top_product_cluster": "Respiratory Core Demand",
-                        "ready_recommendations": 1,
+                        "ready_recommendations": 0,
+                        "observe_only_recommendations": 1,
                     },
                     "recommendations": [
                         {
@@ -83,9 +95,15 @@ class SmokeTestReleaseTests(unittest.TestCase):
                             "confidence": 0.66,
                             "evidence_class": "moderate",
                             "recommendation_rationale": {
-                                "summary": [
-                                    "Early warning supports preparation, but no paid activation budget is released yet."
-                                ]
+                                "why": [
+                                    "BY is an early-warning Prepare region. Operative preparation is justified, but no paid activation budget is released yet.",
+                                ],
+                                "budget_notes": [
+                                    "Suggested campaign budget is 0.00 EUR until Activate is reached and spend gates open.",
+                                ],
+                                "guardrails": [
+                                    "Recommendation stays preparation-only for now.",
+                                ],
                             },
                         }
                     ],
@@ -164,7 +182,18 @@ class SmokeTestReleaseTests(unittest.TestCase):
                             "recommended_activation_level": "Prepare",
                             "suggested_budget_share": 0.0,
                             "suggested_budget_amount": 0.0,
-                            "allocation_reason_trace": {"drivers": ["early_prepare_signal"]},
+                            "allocation_reason_trace": {
+                                "why": [
+                                    "Prepare is an early-warning stage. Keep the region visible, but do not release paid budget yet.",
+                                ],
+                                "budget_drivers": [
+                                    "Suggested budget share is 0.00%.",
+                                ],
+                                "uncertainty": [],
+                                "blockers": [
+                                    "Prepare is an early-warning stage. Keep the region visible, but do not release paid budget yet.",
+                                ],
+                            },
                             "confidence": 0.66,
                         }
                     ],
@@ -178,7 +207,8 @@ class SmokeTestReleaseTests(unittest.TestCase):
                     "summary": {
                         "top_region": "BY",
                         "top_product_cluster": "Respiratory Core Demand",
-                        "ready_recommendations": 1,
+                        "ready_recommendations": 0,
+                        "observe_only_recommendations": 1,
                     },
                     "recommendations": [
                         {
@@ -190,9 +220,15 @@ class SmokeTestReleaseTests(unittest.TestCase):
                             "confidence": 0.66,
                             "evidence_class": "moderate",
                             "recommendation_rationale": {
-                                "summary": [
-                                    "Early warning supports preparation, but no paid activation budget is released yet."
-                                ]
+                                "why": [
+                                    "BY is an early-warning Prepare region. Operative preparation is justified, but no paid activation budget is released yet.",
+                                ],
+                                "budget_notes": [
+                                    "Suggested campaign budget is 0.00 EUR until Activate is reached and spend gates open.",
+                                ],
+                                "guardrails": [
+                                    "Recommendation stays preparation-only for now.",
+                                ],
                             },
                         }
                     ],
@@ -221,6 +257,7 @@ class SmokeTestReleaseTests(unittest.TestCase):
         self.assertTrue(result["checks"]["regional_forecast"]["passed"])
         self.assertTrue(result["checks"]["regional_allocation"]["passed"])
         self.assertTrue(result["checks"]["regional_campaign_recommendations"]["passed"])
+        self.assertEqual(result["checks"]["regional_campaign_recommendations"]["summary"]["ready_recommendations"], 0)
 
     def test_run_smoke_flags_ready_blocked_without_business_failure(self) -> None:
         responses = [
@@ -254,7 +291,18 @@ class SmokeTestReleaseTests(unittest.TestCase):
                             "recommended_activation_level": "Prepare",
                             "suggested_budget_share": 0.0,
                             "suggested_budget_amount": 0.0,
-                            "allocation_reason_trace": {"drivers": ["early_prepare_signal"]},
+                            "allocation_reason_trace": {
+                                "why": [
+                                    "Prepare is an early-warning stage. Keep the region visible, but do not release paid budget yet.",
+                                ],
+                                "budget_drivers": [
+                                    "Suggested budget share is 0.00%.",
+                                ],
+                                "uncertainty": [],
+                                "blockers": [
+                                    "Prepare is an early-warning stage. Keep the region visible, but do not release paid budget yet.",
+                                ],
+                            },
                             "confidence": 0.66,
                         }
                     ],
@@ -276,9 +324,15 @@ class SmokeTestReleaseTests(unittest.TestCase):
                             "confidence": 0.66,
                             "evidence_class": "moderate",
                             "recommendation_rationale": {
-                                "summary": [
-                                    "Early warning supports preparation, but no paid activation budget is released yet."
-                                ]
+                                "why": [
+                                    "BY is an early-warning Prepare region. Operative preparation is justified, but no paid activation budget is released yet.",
+                                ],
+                                "budget_notes": [
+                                    "Suggested campaign budget is 0.00 EUR until Activate is reached and spend gates open.",
+                                ],
+                                "guardrails": [
+                                    "Recommendation stays preparation-only for now.",
+                                ],
                             },
                         }
                     ],
@@ -323,7 +377,18 @@ class SmokeTestReleaseTests(unittest.TestCase):
                             "recommended_activation_level": "Prepare",
                             "suggested_budget_share": 0.0,
                             "suggested_budget_amount": 0.0,
-                            "allocation_reason_trace": {"drivers": ["early_prepare_signal"]},
+                            "allocation_reason_trace": {
+                                "why": [
+                                    "Prepare is an early-warning stage. Keep the region visible, but do not release paid budget yet.",
+                                ],
+                                "budget_drivers": [
+                                    "Suggested budget share is 0.00%.",
+                                ],
+                                "uncertainty": [],
+                                "blockers": [
+                                    "Prepare is an early-warning stage. Keep the region visible, but do not release paid budget yet.",
+                                ],
+                            },
                             "confidence": 0.66,
                         }
                     ],
@@ -345,9 +410,15 @@ class SmokeTestReleaseTests(unittest.TestCase):
                             "confidence": 0.66,
                             "evidence_class": "moderate",
                             "recommendation_rationale": {
-                                "summary": [
-                                    "Early warning supports preparation, but no paid activation budget is released yet."
-                                ]
+                                "why": [
+                                    "BY is an early-warning Prepare region. Operative preparation is justified, but no paid activation budget is released yet.",
+                                ],
+                                "budget_notes": [
+                                    "Suggested campaign budget is 0.00 EUR until Activate is reached and spend gates open.",
+                                ],
+                                "guardrails": [
+                                    "Recommendation stays preparation-only for now.",
+                                ],
                             },
                         }
                     ],
@@ -408,7 +479,18 @@ class SmokeTestReleaseTests(unittest.TestCase):
                             "recommended_activation_level": "Prepare",
                             "suggested_budget_share": 0.0,
                             "suggested_budget_amount": 0.0,
-                            "allocation_reason_trace": {"drivers": ["early_prepare_signal"]},
+                            "allocation_reason_trace": {
+                                "why": [
+                                    "Prepare is an early-warning stage. Keep the region visible, but do not release paid budget yet.",
+                                ],
+                                "budget_drivers": [
+                                    "Suggested budget share is 0.00%.",
+                                ],
+                                "uncertainty": [],
+                                "blockers": [
+                                    "Prepare is an early-warning stage. Keep the region visible, but do not release paid budget yet.",
+                                ],
+                            },
                             "confidence": 0.66,
                         }
                     ],
@@ -422,7 +504,8 @@ class SmokeTestReleaseTests(unittest.TestCase):
                     "summary": {
                         "top_region": "BY",
                         "top_product_cluster": "Respiratory Core Demand",
-                        "ready_recommendations": 1,
+                        "ready_recommendations": 0,
+                        "observe_only_recommendations": 1,
                     },
                     "recommendations": [
                         {
@@ -434,9 +517,15 @@ class SmokeTestReleaseTests(unittest.TestCase):
                             "confidence": 0.66,
                             "evidence_class": "moderate",
                             "recommendation_rationale": {
-                                "summary": [
-                                    "Early warning supports preparation, but no paid activation budget is released yet."
-                                ]
+                                "why": [
+                                    "BY is an early-warning Prepare region. Operative preparation is justified, but no paid activation budget is released yet.",
+                                ],
+                                "budget_notes": [
+                                    "Suggested campaign budget is 0.00 EUR until Activate is reached and spend gates open.",
+                                ],
+                                "guardrails": [
+                                    "Recommendation stays preparation-only for now.",
+                                ],
                             },
                         }
                     ],

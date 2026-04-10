@@ -177,8 +177,12 @@ class CampaignRecommendationServiceTests(unittest.TestCase):
         first = payload["recommendations"][0]
         self.assertEqual(first["spend_guardrail_status"], "observe_only")
         self.assertIn(
-            "no paid activation budget is released yet",
-            " ".join(first["recommendation_rationale"]["guardrails"]).lower(),
+            "Berlin is an early-warning Prepare region. Operative preparation is justified, but no paid activation budget is released yet.",
+            first["recommendation_rationale"]["why"],
+        )
+        self.assertEqual(
+            first["recommendation_rationale"]["guardrails"],
+            ["Recommendation stays preparation-only for now."],
         )
         self.assertIn(
             "Suggested campaign budget is 0.00 EUR until Activate is reached and spend gates open.",

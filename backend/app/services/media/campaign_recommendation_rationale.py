@@ -182,10 +182,7 @@ def build_rationale(
             reason_detail_builder("campaign_guardrail_blocked", message)
         )
     else:
-        if stage_key == "prepare" and budget_amount <= 0.0:
-            message = "No paid activation budget is released yet. Recommendation stays preparation-only for now."
-        else:
-            message = "Recommendation stays preparation-only for now."
+        message = "Recommendation stays preparation-only for now."
         guardrails.append(message)
         guardrail_details.append(
             reason_detail_builder("campaign_guardrail_discussion_only", message)

@@ -1,4 +1,12 @@
+import sys
+import types
+from datetime import datetime
+from unittest.mock import patch
+
 from app.services.media.weekly_brief_service import (
+    WeeklyBriefService,
+    _ActionBriefPDF,
+    _action_card_title,
     _dedupe_cards,
     _format_signal_score,
     _normalize_tile_line,
@@ -62,3 +70,155 @@ def test_primary_signal_score_prefers_explicit_score_over_legacy_probability_ali
 def test_format_signal_score_uses_score_scale_instead_of_percent():
     assert _format_signal_score(77.0) == "77/100"
     assert _format_signal_score(0.77) == "77/100"
+
+
+def test_source_display_label_wrapper_delegates_to_formatting_module():
+    with patch(
+        "app.services.media.weekly_brief_service.weekly_brief_formatting.source_display_label",
+        return_value="Delegated Quelle",
+    ) as mocked:
+        result = _source_display_label("weather")
+
+    assert result == "Delegated Quelle"
+    mocked.assert_called_once_with("weather")
+
+
+def test_dedupe_cards_wrapper_delegates_to_formatting_module():
+    cards = [{"recommended_product": "Atemwegslinie", "reason": "kritische Engpässe"}]
+
+    with patch(
+        "app.services.media.weekly_brief_service.weekly_brief_formatting.dedupe_cards",
+        return_value=[{"recommended_product": "Delegated"}],
+    ) as mocked:
+        result = _dedupe_cards(cards)
+
+    assert result == [{"recommended_product": "Delegated"}]
+    mocked.assert_called_once_with(cards)
+
+
+def test_primary_signal_score_wrapper_delegates_to_formatting_module():
+    payload = {"signal_score": 71.0}
+
+    with patch(
+        "app.services.media.weekly_brief_service.weekly_brief_formatting.primary_signal_score",
+        return_value=55.0,
+    ) as mocked:
+        result = _primary_signal_score(payload)
+
+    assert result == 55.0
+    mocked.assert_called_once_with(payload)
+
+
+def test_action_card_title_wrapper_delegates_to_formatting_module():
+    card = {"recommended_product": "Atemwegslinie", "reason": "kritische Engpässe"}
+
+    with patch(
+        "app.services.media.weekly_brief_service.weekly_brief_formatting.action_card_title",
+        return_value="Delegated Titel",
+    ) as mocked:
+        result = _action_card_title(card)
+
+    assert result == "Delegated Titel"
+    mocked.assert_called_once_with(card)
+
+
+def test_render_signal_page_wrapper_delegates_to_pages_module():
+    service = WeeklyBriefService(db=None)
+    pdf = _ActionBriefPDF("2026-W15")
+
+    with patch(
+        "app.services.media.weekly_brief_service.weekly_brief_pages.render_signal_page"
+    ) as mocked:
+        service._render_signal_page(
+            pdf,
+            calendar_week="2026-W15",
+            now=datetime(2026, 4, 10, 9, 0, 0),
+            iso_week=15,
+            iso_year=2026,
+            virus_typ="Influenza A",
+            peix={},
+            tiles=[],
+            region_list=[],
+        )
+
+    mocked.assert_called_once_with(
+        service,
+        pdf,
+        calendar_week="2026-W15",
+        now=datetime(2026, 4, 10, 9, 0, 0),
+        iso_week=15,
+        iso_year=2026,
+        virus_typ="Influenza A",
+        peix={},
+        tiles=[],
+        region_list=[],
+    )
+
+
+def test_render_action_page_wrapper_delegates_to_pages_module():
+    service = WeeklyBriefService(db=None)
+    pdf = _ActionBriefPDF("2026-W15")
+
+    with patch(
+        "app.services.media.weekly_brief_service.weekly_brief_pages.render_action_page"
+    ) as mocked:
+        service._render_action_page(pdf, region_list=[], top_cards=[])
+
+    mocked.assert_called_once_with(service, pdf, region_list=[], top_cards=[])
+
+
+def test_render_evidence_page_wrapper_delegates_to_pages_module():
+    service = WeeklyBriefService(db=None)
+    pdf = _ActionBriefPDF("2026-W15")
+
+    with patch(
+        "app.services.media.weekly_brief_service.weekly_brief_pages.render_evidence_page"
+    ) as mocked:
+        service._render_evidence_page(
+            pdf,
+            freshness={},
+            now=datetime(2026, 4, 10, 9, 0, 0),
+            pitch_results=[],
+        )
+
+    mocked.assert_called_once_with(
+        service,
+        pdf,
+        freshness={},
+        now=datetime(2026, 4, 10, 9, 0, 0),
+        pitch_results=[],
+    )
+
+
+def test_generate_uses_national_impact_probability_in_summary():
+    service = WeeklyBriefService(db=None)
+
+    cockpit_module = types.ModuleType("app.services.media.cockpit_service")
+
+    class DummyCockpitService:
+        def __init__(self, db):
+            self.db = db
+
+        def get_cockpit_payload(self, *, virus_typ: str):
+            return {
+                "peix_epi_score": {
+                    "national_score": 71.0,
+                    "national_band": "hoch",
+                    "national_impact_probability": 84.0,
+                },
+                "bento": {"tiles": []},
+                "map": {"regions": {}},
+                "recommendations": {"cards": []},
+                "data_freshness": {},
+            }
+
+    cockpit_module.MediaCockpitService = DummyCockpitService
+
+    with patch.dict(sys.modules, {"app.services.media.cockpit_service": cockpit_module}):
+        with patch("app.services.media.weekly_brief_service.utc_now", return_value=datetime(2026, 4, 10, 9, 0, 0)):
+            with patch.object(service, "_run_backtest_pitches", return_value=[]):
+                with patch.object(service, "_save_to_db") as save_mock:
+                    result = service.generate(virus_typ="Influenza A")
+
+    assert result["summary"]["national_impact"] == 84.0
+    save_mock.assert_called_once()

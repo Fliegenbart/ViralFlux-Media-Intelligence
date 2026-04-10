@@ -17,6 +17,9 @@ from typing import Any
 from fpdf import FPDF
 from sqlalchemy.orm import Session
 
+from app.services.media import weekly_brief_formatting
+from app.services.media import weekly_brief_pages
+
 logger = logging.getLogger(__name__)
 
 # ── Brand Colors (shared with briefing_pdf.py) ──
@@ -29,45 +32,8 @@ _RED = (220, 38, 38)
 _WHITE = (255, 255, 255)
 _BG = (248, 250, 252)
 
-_SOURCE_LABELS = {
-    "wastewater": "Abwasser",
-    "are konsultation": "ARE-Konsultation",
-    "survstat": "SurvStat",
-    "notaufnahme": "Notaufnahme",
-    "weather": "Wetter",
-    "pollen": "Pollen",
-    "google trends": "Google Trends",
-    "bfarm shortage": "BfArM-Engpässe",
-    "marketing": "Kundendaten",
-    "backtest": "Rückblicktest",
-}
-
-_TILE_LABELS = {
-    "SURVSTAT Respiratory": "SurvStat Atemwege",
-    "Top Chancenregion": "Früheste Signalregion",
-    "Signalscore Deutschland": "Signalwert Deutschland",
-    "BfArM Engpass-Signal": "BfArM-Engpasssignal",
-    "Google Trends Infekt": "Google Trends Atemwege",
-    "ARE Konsultationsinzidenz": "ARE-Konsultationsinzidenz",
-}
-
-
 def _safe(text: Any) -> str:
-    """Sanitize text for Latin-1 encoding (core PDF fonts).
-
-    Latin-1 natively supports ä ö ü Ä Ö Ü ß — only replace characters
-    outside the Latin-1 range (smart quotes, em-dashes, arrows, etc.).
-    """
-    if not isinstance(text, str):
-        text = str(text) if text is not None else ""
-    replacements = {
-        "\u2014": "-", "\u2013": "-", "\u2018": "'", "\u2019": "'",
-        "\u201c": '"', "\u201d": '"', "\u2026": "...", "\u2022": "*",
-        "\u00a0": " ", "\u2197": "^", "\u2198": "v", "\u2192": "->",
-    }
-    for old, new in replacements.items():
-        text = text.replace(old, new)
-    return text.encode("latin-1", errors="replace").decode("latin-1")
+    return weekly_brief_formatting.safe(text)
 
 
 class _ActionBriefPDF(FPDF):
@@ -125,82 +91,35 @@ def _kv(pdf: FPDF, label: str, value: str, bold_value: bool = False) -> None:
 
 
 def _source_display_label(source: str | None) -> str:
-    raw = str(source or "").strip()
-    if not raw:
-        return "-"
-    normalized = raw.lower().replace("_", " ").replace("-", " ")
-    normalized = " ".join(normalized.split())
-    if normalized in _SOURCE_LABELS:
-        return _SOURCE_LABELS[normalized]
-    return raw.replace("_", " ").title()
+    return weekly_brief_formatting.source_display_label(source)
 
 
 def _dedupe_cards(cards: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    unique_cards: list[dict[str, Any]] = []
-    seen: set[tuple[str, str]] = set()
-
-    for card in cards:
-        product = str(card.get("recommended_product", card.get("product", "")) or "").strip().lower()
-        reason = str(card.get("reason", card.get("recommendation_reason", "")) or "").strip().lower()
-        signature = (product, reason)
-        if signature in seen:
-            continue
-        seen.add(signature)
-        unique_cards.append(card)
-
-    return unique_cards
+    return weekly_brief_formatting.dedupe_cards(cards)
 
 
 def _tile_display_title(title: str | None) -> str:
-    raw = str(title or "").strip()
-    if not raw:
-        return "-"
-    if raw in _TILE_LABELS:
-        return _TILE_LABELS[raw]
-    return raw.replace("Signalscore", "Signalwert")
+    return weekly_brief_formatting.tile_display_title(title)
 
 
 def _normalize_tile_line(text: str) -> str:
-    normalized = str(text or "")
-    for source, replacement in _TILE_LABELS.items():
-        normalized = normalized.replace(source, replacement)
-    return normalized.replace("Signalscore", "Signalwert")
+    return weekly_brief_formatting.normalize_tile_line(text)
 
 
 def _normalize_signal_score(value: Any) -> float:
-    try:
-        score = float(value or 0)
-    except (TypeError, ValueError):
-        return 0.0
-    if score <= 1.0:
-        score *= 100.0
-    return max(0.0, min(100.0, score))
+    return weekly_brief_formatting.normalize_signal_score(value)
 
 
 def _primary_signal_score(item: dict[str, Any] | None) -> float:
-    payload = item or {}
-    for key in ("signal_score", "peix_score", "score_0_100", "impact_probability"):
-        if key in payload and payload.get(key) is not None:
-            return round(_normalize_signal_score(payload.get(key)), 1)
-    return 0.0
+    return weekly_brief_formatting.primary_signal_score(item)
 
 
 def _format_signal_score(value: Any, digits: int = 0) -> str:
-    score = _normalize_signal_score(value)
-    return f"{score:.{digits}f}/100"
+    return weekly_brief_formatting.format_signal_score(value, digits=digits)
 
 
 def _action_card_title(card: dict[str, Any]) -> str:
-    title = str(
-        card.get("display_title")
-        or card.get("recommended_product")
-        or card.get("product")
-        or "Kampagnenvorschlag"
-    ).strip()
-    reason = str(card.get("reason") or card.get("recommendation_reason") or "").strip()
-    if reason and reason.lower() not in title.lower():
-        return f"{title}: {reason}"
-    return title
+    return weekly_brief_formatting.action_card_title(card)
 
 
 class WeeklyBriefService:
@@ -208,6 +127,25 @@ class WeeklyBriefService:
 
     def __init__(self, db: Session):
         self.db = db
+        self._INDIGO = _INDIGO
+        self._SLATE_700 = _SLATE_700
+        self._SLATE_400 = _SLATE_400
+        self._AMBER = _AMBER
+        self._GREEN = _GREEN
+        self._RED = _RED
+        self._WHITE = _WHITE
+        self._BG = _BG
+        self._safe = _safe
+        self._section = _section
+        self._kv = _kv
+        self._source_display_label = _source_display_label
+        self._dedupe_cards = _dedupe_cards
+        self._tile_display_title = _tile_display_title
+        self._normalize_tile_line = _normalize_tile_line
+        self._normalize_signal_score = _normalize_signal_score
+        self._primary_signal_score = _primary_signal_score
+        self._format_signal_score = _format_signal_score
+        self._action_card_title = _action_card_title
 
     def generate(self, *, virus_typ: str = "Influenza A") -> dict[str, Any]:
         """Generate the weekly brief PDF. Returns dict with pdf_bytes + metadata."""
@@ -231,6 +169,12 @@ class WeeklyBriefService:
         recs = cockpit.get("recommendations") or {}
         cards = recs.get("cards") or []
         freshness = cockpit.get("data_freshness") or {}
+        national_score = peix.get("national_score", 0)
+        national_band = peix.get("national_band", "-")
+        national_impact = round(
+            _normalize_signal_score(peix.get("national_impact_probability", peix.get("national_score", 0))),
+            1,
+        )
 
         # Sort regions by impact
         region_list = sorted(
@@ -251,321 +195,29 @@ class WeeklyBriefService:
         # Build PDF
         pdf = _ActionBriefPDF(calendar_week)
         pdf.set_auto_page_break(auto=True, margin=20)
-
-        # ═══════════════════════════════════════════════════════════════
-        # SEITE 1: LAGEBILD DEUTSCHLAND
-        # ═══════════════════════════════════════════════════════════════
-        pdf.add_page()
-
-        pdf.set_font("Helvetica", "B", 20)
-        pdf.set_text_color(*_INDIGO)
-        pdf.cell(0, 12, _safe(f"PEIX x GELO Wochenbericht  -  KW {iso_cal.week}/{iso_cal.year}"),
-                 new_x="LMARGIN", new_y="NEXT")
-        pdf.ln(2)
-
-        pdf.set_font("Helvetica", "", 10)
-        pdf.set_text_color(*_SLATE_700)
-        pdf.multi_cell(0, 6, _safe(
-            f"Automatisierte Lageeinschätzung für PEIX und GELO. "
-            f"Sie zeigt, wo in den nächsten 3 bis 7 Tagen die frühesten regionalen Signale einer Atemwegswelle entstehen könnten. "
-            f"Generiert: {now.strftime('%d.%m.%Y %H:%M')} UTC."
-        ), new_x="LMARGIN", new_y="NEXT")
-        pdf.ln(4)
-
-        if region_list:
-            top_region = region_list[0]
-            top_region_name = top_region.get("name", top_region.get("code", "der Fokusregion"))
-            top_region_score = _primary_signal_score(top_region)
-            pdf.set_fill_color(238, 242, 255)
-            pdf.set_draw_color(*_INDIGO)
-            pdf.set_line_width(0.2)
-            pdf.set_font("Helvetica", "B", 10)
-            pdf.set_text_color(*_INDIGO)
-            pdf.multi_cell(
-                0,
-                7,
-                _safe(
-                    "Aktuelle Hauptaussage: "
-                    f"Das früheste relevante Signal sehen wir derzeit in {top_region_name}. "
-                    f"Die Region führt die Priorisierung mit einem Signalwert von {_format_signal_score(top_region_score)} an."
-                ),
-                border=1,
-                fill=True,
-                new_x="LMARGIN",
-                new_y="NEXT",
-            )
-            pdf.ln(4)
-
-        # Signalscore national
-        _section(pdf, "Signalbild Deutschland")
-        national_score = peix.get("national_score", 0)
-        national_band = peix.get("national_band", "-")
-        _kv(pdf, "Nationaler Index:", f"{national_score:.0f} / 100", bold_value=True)
-        _kv(pdf, "Risiko-Band:", str(national_band).upper(), bold_value=True)
-        _kv(pdf, "Signalwert:", _format_signal_score(national_score, digits=1), bold_value=True)
-        _kv(pdf, "Einordnung:", "Priorisierung für frühe regionale Signale", bold_value=True)
-        _kv(pdf, "Dominanter Virus:", virus_typ)
-        pdf.ln(2)
-
-        # Bento-Tiles Zusammenfassung
-        _section(pdf, "Signal-Übersicht")
-        for tile in tiles[:8]:
-            title = _tile_display_title(tile.get("title", ""))
-            value = tile.get("value", "")
-            unit = tile.get("unit", "")
-            signal_score = _primary_signal_score(tile)
-            is_live = tile.get("is_live", False)
-
-            pdf.set_font("Helvetica", "B" if is_live else "", 9)
-            pdf.set_text_color(*_SLATE_700)
-            display_val = f"{value}{unit}" if unit else str(value)
-            impact_str = f"Signalwert: {_format_signal_score(signal_score)}" if signal_score > 0 else ""
-            live_marker = "[LIVE]" if is_live else "[STALE]"
-            signal_line = _normalize_tile_line(f"  {live_marker} {title}: {display_val}   {impact_str}")
-            pdf.cell(0, 6,
-                     _safe(signal_line),
-                     new_x="LMARGIN", new_y="NEXT")
-        pdf.ln(2)
-
-        # Top-Regionen
-        _section(pdf, "Regionen mit dem frühesten Signal")
-        if region_list:
-            # Table header
-            pdf.set_font("Helvetica", "B", 9)
-            pdf.set_text_color(*_WHITE)
-            pdf.set_fill_color(*_INDIGO)
-            pdf.cell(40, 7, "  Region", fill=True)
-            pdf.cell(25, 7, "Score", align="C", fill=True)
-            pdf.cell(25, 7, "Signalwert", align="C", fill=True)
-            pdf.cell(25, 7, "Trend", align="C", fill=True)
-            pdf.cell(0, 7, "Änderung", align="C", fill=True,
-                     new_x="LMARGIN", new_y="NEXT")
-
-            for i, reg in enumerate(region_list[:8]):
-                pdf.set_font("Helvetica", "B" if i < 3 else "", 9)
-                pdf.set_text_color(*_SLATE_700)
-                bg = _BG if i % 2 == 0 else _WHITE
-                pdf.set_fill_color(*bg)
-
-                name = reg.get("name", reg.get("code", "?"))
-                score = reg.get("peix_score", reg.get("score_0_100", 0))
-                signal_score = _primary_signal_score(reg)
-                trend = reg.get("trend", "-")
-                change = reg.get("change_pct", 0)
-
-                trend_arrow = "^" if trend == "steigend" else ("v" if trend == "fallend" else "->")
-                change_str = f"{change:+.1f}%" if change else "-"
-
-                pdf.cell(40, 6, _safe(f"  {name}"), fill=True)
-                pdf.cell(25, 6, f"{float(score or 0):.0f}", align="C", fill=True)
-                pdf.cell(25, 6, _safe(_format_signal_score(signal_score)), align="C", fill=True)
-                pdf.cell(25, 6, _safe(trend_arrow), align="C", fill=True)
-                pdf.cell(0, 6, _safe(change_str), align="C", fill=True,
-                         new_x="LMARGIN", new_y="NEXT")
-
-        # ═══════════════════════════════════════════════════════════════
-        # SEITE 2: ARBEITSVORSCHLAG
-        # ═══════════════════════════════════════════════════════════════
-        pdf.add_page()
-
-        pdf.set_font("Helvetica", "B", 16)
-        pdf.set_text_color(*_INDIGO)
-        pdf.cell(0, 10, "Arbeitsvorschlag für Regionen und Produkte",
-                 new_x="LMARGIN", new_y="NEXT")
-        pdf.ln(2)
-
-        # Regionale Allokation
-        _section(pdf, "Regionale Budget-Prüfung")
-        pdf.set_font("Helvetica", "", 9)
-        pdf.set_text_color(*_SLATE_700)
-        pdf.multi_cell(0, 5, _safe(
-            "Hinweis für Budget- und Produktprüfung basierend auf Signalwert und Vorhersage im 3-, 5- oder 7-Tage-Fenster. "
-            "Die Tabelle ist eine Priorisierung, keine automatische Freigabe."
-        ), new_x="LMARGIN", new_y="NEXT")
-        pdf.ln(3)
-
-        # Budget shift table
-        pdf.set_font("Helvetica", "B", 9)
-        pdf.set_text_color(*_WHITE)
-        pdf.set_fill_color(*_INDIGO)
-        pdf.cell(45, 7, "  Region", fill=True)
-        pdf.cell(25, 7, "Score", align="C", fill=True)
-        pdf.cell(25, 7, "Signalwert", align="C", fill=True)
-        pdf.cell(30, 7, "Empfehlung", align="C", fill=True)
-        pdf.cell(0, 7, "Begründung", fill=True, new_x="LMARGIN", new_y="NEXT")
-
-        for i, reg in enumerate(region_list[:8]):
-            score = float(reg.get("peix_score", reg.get("score_0_100", 0)) or 0)
-            signal_score = _primary_signal_score(reg)
-            name = reg.get("name", reg.get("code", "?"))
-
-            if signal_score >= 80:
-                shift = "+30-40%"
-                reason = "sehr frühes Signal - zuerst prüfen"
-                color = _RED
-            elif signal_score >= 60:
-                shift = "+15-25%"
-                reason = "frühes Signal - Budgeterhöhung prüfen"
-                color = _AMBER
-            elif signal_score >= 40:
-                shift = "Halten"
-                reason = "beobachten - noch nicht freigeben"
-                color = _SLATE_700
-            else:
-                shift = "-10-20%"
-                reason = "späteres Signal - eher umschichten"
-                color = _GREEN
-
-            bg = _BG if i % 2 == 0 else _WHITE
-            pdf.set_fill_color(*bg)
-            pdf.set_font("Helvetica", "B" if i < 3 else "", 9)
-            pdf.set_text_color(*_SLATE_700)
-            pdf.cell(45, 6, _safe(f"  {name}"), fill=True)
-            pdf.cell(25, 6, f"{score:.0f}", align="C", fill=True)
-            pdf.cell(25, 6, _safe(_format_signal_score(signal_score)), align="C", fill=True)
-            pdf.set_text_color(*color)
-            pdf.set_font("Helvetica", "B", 9)
-            pdf.cell(30, 6, _safe(shift), align="C", fill=True)
-            pdf.set_text_color(*_SLATE_700)
-            pdf.set_font("Helvetica", "", 8)
-            pdf.cell(0, 6, _safe(reason), fill=True, new_x="LMARGIN", new_y="NEXT")
-
-        pdf.ln(6)
-
-        # Top Action Cards
-        _section(pdf, "Produkt-Priorisierung zur Prüfung")
-        if top_cards:
-            for i, card in enumerate(top_cards[:5], start=1):
-                product = _action_card_title(card)
-                urgency = float(card.get("urgency_score", 0) or 0)
-                reason = card.get("reason", card.get("recommendation_reason", ""))
-                card_regions = card.get("region_codes", [])
-                budget_shift = card.get("budget_shift_pct", 0)
-
-                pdf.set_font("Helvetica", "B", 10)
-                pdf.set_text_color(*_INDIGO)
-                pdf.cell(0, 7, _safe(f"{i}. {product} (Dringlichkeit: {urgency:.0f})"),
-                         new_x="LMARGIN", new_y="NEXT")
-
-                pdf.set_font("Helvetica", "", 9)
-                pdf.set_text_color(*_SLATE_700)
-                if card_regions:
-                    pdf.cell(0, 5,
-                             _safe(f"   Regionen: {', '.join(card_regions[:5])}  |  "
-                                   f"Budgetänderung: +{float(budget_shift or 0):.1f}%"),
-                             new_x="LMARGIN", new_y="NEXT")
-                if reason:
-                    pdf.set_font("Helvetica", "I", 8)
-                    pdf.set_text_color(*_SLATE_400)
-                    pdf.multi_cell(0, 4, _safe(f"   {reason[:200]}"),
-                                   new_x="LMARGIN", new_y="NEXT")
-                pdf.ln(2)
-        else:
-            pdf.set_font("Helvetica", "I", 10)
-            pdf.set_text_color(*_SLATE_400)
-            pdf.cell(0, 7, "Keine aktiven Empfehlungen in dieser Woche.",
-                     new_x="LMARGIN", new_y="NEXT")
-
-        # ═══════════════════════════════════════════════════════════════
-        # SEITE 3: BEGRÜNDUNG
-        # ═══════════════════════════════════════════════════════════════
-        pdf.add_page()
-
-        pdf.set_font("Helvetica", "B", 16)
-        pdf.set_text_color(*_INDIGO)
-        pdf.cell(0, 10, "Warum wir die Vorhersage vertreten", new_x="LMARGIN", new_y="NEXT")
-        pdf.ln(2)
-
-        # Business Pitch Report
-        _section(pdf, "Rückblicktest auf frühere Wellen")
-
+        self._render_signal_page(
+            pdf,
+            calendar_week=calendar_week,
+            now=now,
+            iso_week=iso_cal.week,
+            iso_year=iso_cal.year,
+            virus_typ=virus_typ,
+            peix=peix,
+            tiles=tiles,
+            region_list=region_list,
+        )
+        self._render_action_page(
+            pdf,
+            region_list=region_list,
+            top_cards=top_cards,
+        )
         pitch_results = self._run_backtest_pitches()
-        if pitch_results:
-            for pr in pitch_results:
-                season = pr.get("season", "")
-                ttd = pr.get("ttd_advantage_days", 0)
-                peak_date = pr.get("rki_peak_date", "-")
-                peak_cases = pr.get("rki_peak_cases", 0)
-                first_alert = pr.get("ml_first_alert_date", "-")
-
-                pdf.set_font("Helvetica", "B", 10)
-                pdf.set_text_color(*_SLATE_700)
-                pdf.cell(0, 7, _safe(f"Saison {season}:"),
-                         new_x="LMARGIN", new_y="NEXT")
-
-                pdf.set_font("Helvetica", "", 9)
-                _kv(pdf, "RKI-Peak:", f"{peak_date} ({peak_cases:,} Fälle)".replace(",", "."))
-                _kv(pdf, "Erstes Frühsignal:", str(first_alert))
-                _kv(pdf, "Abstand bis zum späteren Peak:", f"{ttd} Tage", bold_value=True)
-                pdf.ln(2)
-
-            # Summary
-            avg_ttd = sum(p.get("ttd_advantage_days", 0) for p in pitch_results) / max(len(pitch_results), 1)
-            pdf.ln(2)
-            pdf.set_font("Helvetica", "B", 11)
-            pdf.set_text_color(*_INDIGO)
-            pdf.cell(0, 8, _safe(
-                f"Im Rückblick lag das erste Signal im Schnitt {avg_ttd:.0f} Tage vor dem späteren RKI-Peak."
-            ), new_x="LMARGIN", new_y="NEXT")
-            pdf.set_font("Helvetica", "", 9)
-            pdf.set_text_color(*_SLATE_700)
-            pdf.multi_cell(
-                0,
-                5,
-                _safe(
-                    "Für die operative Steuerung nutzen wir trotzdem nur das kurze 3-, 5- oder 7-Tage-Fenster. "
-                    "Der große historische Abstand zeigt vor allem, dass frühe Signale oft lange vor dem späteren Peak sichtbar werden."
-                ),
-                new_x="LMARGIN",
-                new_y="NEXT",
-            )
-        else:
-            pdf.set_font("Helvetica", "I", 10)
-            pdf.set_text_color(*_SLATE_400)
-            pdf.cell(0, 7, "Daten aus dem Rückblicktest sind nicht verfügbar.",
-                     new_x="LMARGIN", new_y="NEXT")
-
-        pdf.ln(4)
-
-        # Data Freshness
-        _section(pdf, "Stand der Datenquellen")
-        for source, ts_str in freshness.items():
-            if not ts_str:
-                continue
-            try:
-                ts = datetime.fromisoformat(str(ts_str).replace("Z", "+00:00"))
-                age_days = (now - ts.replace(tzinfo=None)).total_seconds() / 86400
-                status = "AKTUELL" if age_days < 7 else "ALT"
-            except (ValueError, TypeError):
-                age_days = -1
-                status = "?"
-
-            pdf.set_font("Helvetica", "B", 8)
-            color = _GREEN if status == "AKTUELL" else _RED if status == "ALT" else _AMBER
-            pdf.set_text_color(*color)
-            pdf.cell(20, 5, _safe(f"[{status}]"))
-            pdf.set_text_color(*_SLATE_700)
-            pdf.cell(56, 5, _safe(_source_display_label(source)))
-            pdf.set_text_color(*_SLATE_400)
-            pdf.set_font("Helvetica", "", 9)
-            pdf.cell(
-                0,
-                5,
-                _safe(f"{age_days:.1f} Tage alt" if age_days >= 0 else "Zeit nicht bekannt"),
-                new_x="LMARGIN",
-                new_y="NEXT",
-            )
-
-        pdf.ln(6)
-
-        # Disclaimer
-        pdf.set_font("Helvetica", "I", 8)
-        pdf.set_text_color(*_SLATE_400)
-        pdf.multi_cell(0, 4, _safe(
-            "Hinweis: Dieser Bericht zeigt wahrscheinliche frühe Starts einer Welle auf Basis historischer Analysen und aktueller Signale. "
-            "Die genannten Vorlaufzeiten sind historische Werte und keine Garantie für die nächste Woche. "
-            "Alle Empfehlungen dienen als Entscheidungshilfe; die finale Mediaplanung bleibt eine fachliche Freigabe."
-        ), new_x="LMARGIN", new_y="NEXT")
+        self._render_evidence_page(
+            pdf,
+            freshness=freshness,
+            now=now,
+            pitch_results=pitch_results,
+        )
 
         # ── Output ──
         buf = io.BytesIO()
@@ -621,6 +273,62 @@ class WeeklyBriefService:
             except Exception as e:
                 logger.warning("Backtest pitch failed for %s-%s: %s", start, end, e)
         return results
+
+    def _render_signal_page(
+        self,
+        pdf: FPDF,
+        *,
+        calendar_week: str,
+        now: datetime,
+        iso_week: int,
+        iso_year: int,
+        virus_typ: str,
+        peix: dict[str, Any],
+        tiles: list[dict[str, Any]],
+        region_list: list[dict[str, Any]],
+    ) -> None:
+        weekly_brief_pages.render_signal_page(
+            self,
+            pdf,
+            calendar_week=calendar_week,
+            now=now,
+            iso_week=iso_week,
+            iso_year=iso_year,
+            virus_typ=virus_typ,
+            peix=peix,
+            tiles=tiles,
+            region_list=region_list,
+        )
+
+    def _render_action_page(
+        self,
+        pdf: FPDF,
+        *,
+        region_list: list[dict[str, Any]],
+        top_cards: list[dict[str, Any]],
+    ) -> None:
+        weekly_brief_pages.render_action_page(
+            self,
+            pdf,
+            region_list=region_list,
+            top_cards=top_cards,
+        )
+
+    def _render_evidence_page(
+        self,
+        pdf: FPDF,
+        *,
+        freshness: dict[str, Any],
+        now: datetime,
+        pitch_results: list[dict[str, Any]],
+    ) -> None:
+        weekly_brief_pages.render_evidence_page(
+            self,
+            pdf,
+            freshness=freshness,
+            now=now,
+            pitch_results=pitch_results,
+        )
 
     def _save_to_db(
         self,

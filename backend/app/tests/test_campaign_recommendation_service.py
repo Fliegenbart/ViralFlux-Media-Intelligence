@@ -1,5 +1,10 @@
 import unittest
+from unittest.mock import patch
 
+from app.services.media.campaign_recommendation_contracts import (
+    CampaignClusterSelection,
+    CampaignRecommendationRationale,
+)
 from app.services.media.campaign_recommendation_service import CampaignRecommendationService
 
 
@@ -163,6 +168,112 @@ class CampaignRecommendationServiceTests(unittest.TestCase):
         self.assertEqual(payload["recommendations"], [])
         self.assertEqual(payload["summary"]["total_recommendations"], 0)
         self.assertIn("config", payload)
+
+    def test_available_products_wrapper_delegates_to_scoring_module(self) -> None:
+        allocation_item = _allocation_item(
+            bundesland="BY",
+            bundesland_name="Bayern",
+            activation_level="Activate",
+            budget_share=0.42,
+            budget_amount=21000.0,
+            confidence=0.83,
+            products=["GeloMyrtol forte"],
+        )
+
+        with patch(
+            "app.services.media.campaign_recommendation_scoring.available_products",
+            return_value=["Delegated Product"],
+        ) as mocked:
+            result = self.service._available_products(allocation_item)
+
+        self.assertEqual(result, ["Delegated Product"])
+        mocked.assert_called_once_with(allocation_item)
+
+    def test_guardrail_status_wrapper_delegates_to_scoring_module(self) -> None:
+        with patch(
+            "app.services.media.campaign_recommendation_scoring.guardrail_status",
+            return_value="delegated_guardrail",
+        ) as mocked:
+            result = self.service._guardrail_status(
+                stage="prepare",
+                budget_share=0.2,
+                budget_amount=6000.0,
+                confidence=0.7,
+                spend_gate_status="released",
+            )
+
+        self.assertEqual(result, "delegated_guardrail")
+        mocked.assert_called_once_with(
+            self.service.config,
+            stage="prepare",
+            budget_share=0.2,
+            budget_amount=6000.0,
+            confidence=0.7,
+            spend_gate_status="released",
+        )
+
+    def test_rationale_wrapper_delegates_to_rationale_module(self) -> None:
+        allocation_item = _allocation_item(
+            bundesland="BE",
+            bundesland_name="Berlin",
+            activation_level="Prepare",
+            budget_share=0.18,
+            budget_amount=9000.0,
+            confidence=0.69,
+            products=["GeloRevoice"],
+        )
+        product_cluster = CampaignClusterSelection(
+            cluster_key="voice_cluster",
+            label="Voice Cluster",
+            fit_score=0.9,
+        )
+        keyword_cluster = CampaignClusterSelection(
+            cluster_key="voice_keywords",
+            label="Voice Keywords",
+            fit_score=0.88,
+            keywords=["voice help"],
+        )
+        delegated = CampaignRecommendationRationale(guardrails=["delegated"])
+
+        with patch(
+            "app.services.media.campaign_recommendation_rationale.build_rationale",
+            return_value=delegated,
+        ) as mocked:
+            result = self.service._rationale(
+                stage="Prepare",
+                allocation_item=allocation_item,
+                product_cluster=product_cluster,
+                keyword_cluster=keyword_cluster,
+                evidence_class="truth_backed",
+                guardrail_status="ready",
+                budget_share=0.18,
+                budget_amount=9000.0,
+            )
+
+        self.assertIs(result, delegated)
+        mocked.assert_called_once_with(
+            reason_detail_builder=self.service._reason_detail,
+            stage="Prepare",
+            allocation_item=allocation_item,
+            product_cluster=product_cluster,
+            keyword_cluster=keyword_cluster,
+            evidence_class="truth_backed",
+            guardrail_status="ready",
+            budget_share=0.18,
+            budget_amount=9000.0,
+        )
+
+    def test_headline_wrapper_delegates_to_scoring_module(self) -> None:
+        recommendations = [{"region": "BY"}]
+
+        with patch(
+            "app.services.media.campaign_recommendation_scoring.headline",
+            return_value="delegated headline",
+        ) as mocked:
+            result = self.service._headline(virus_typ="Influenza A", recommendations=recommendations)
+
+        self.assertEqual(result, "delegated headline")
+        mocked.assert_called_once_with(virus_typ="Influenza A", recommendations=recommendations)
 
 
 if __name__ == "__main__":

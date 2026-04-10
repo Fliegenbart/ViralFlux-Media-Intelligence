@@ -24,6 +24,39 @@ from app.services.ml.forecast_service import (
 
 
 class ForecastServiceGuardTests(unittest.TestCase):
+    @patch("app.services.ml.forecast_service_preparation.prepare_training_data")
+    def test_prepare_training_data_wrapper_delegates_to_module(self, delegated) -> None:
+        delegated.return_value = pd.DataFrame({"region": ["DE"], "y": [1.0]})
+        service = ForecastService(db=None)
+
+        result = service.prepare_training_data(
+            virus_typ="Influenza A",
+            lookback_days=120,
+            include_internal_history=False,
+            region="BY",
+        )
+
+        self.assertEqual(result["region"].tolist(), ["DE"])
+        delegated.assert_called_once_with(
+            service,
+            virus_typ="Influenza A",
+            lookback_days=120,
+            include_internal_history=False,
+            region="BY",
+            normalize_forecast_region_fn=ANY,
+            default_forecast_region=ANY,
+            cross_disease_map=ANY,
+            survstat_virus_map=ANY,
+            wastewater_aggregated_model=ANY,
+            survstat_weekly_data_model=ANY,
+            func_module=ANY,
+            pd_module=ANY,
+            np_module=ANY,
+            datetime_cls=ANY,
+            timedelta_cls=ANY,
+            logger=ANY,
+        )
+
     @patch("app.services.ml.forecast_service_direct_training.build_direct_training_panel_from_frame")
     def test_build_direct_training_panel_from_frame_wrapper_delegates_to_module(self, panel_mock) -> None:
         panel_mock.return_value = pd.DataFrame({"hw_pred": [1.0]})

@@ -85,6 +85,7 @@ from app.services.ml import forecast_service_quality_contracts
 from app.services.ml import forecast_service_pipeline
 from app.services.ml import forecast_service_backtest
 from app.services.ml import forecast_service_estimators
+from app.services.ml import forecast_service_preparation
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -387,149 +388,25 @@ class ForecastService:
         region: str = DEFAULT_FORECAST_REGION,
     ) -> pd.DataFrame:
         """Build feature DataFrame from wastewater, trends, holidays, AMELAG."""
-        region_code = normalize_forecast_region(region)
-        logger.info(f"Preparing training data for {virus_typ}/{region_code}")
-        start_date = datetime.now() - timedelta(days=lookback_days)
-
-        # 1. Wastewater viral load (target) + AMELAG vorhersage
-        df = self._load_wastewater_training_frame(
+        return forecast_service_preparation.prepare_training_data(
+            self,
             virus_typ=virus_typ,
-            start_date=start_date,
-            region=region_code,
+            lookback_days=lookback_days,
+            include_internal_history=include_internal_history,
+            region=region,
+            normalize_forecast_region_fn=normalize_forecast_region,
+            default_forecast_region=DEFAULT_FORECAST_REGION,
+            cross_disease_map=CROSS_DISEASE_MAP,
+            survstat_virus_map=SURVSTAT_VIRUS_MAP,
+            wastewater_aggregated_model=WastewaterAggregated,
+            survstat_weekly_data_model=SurvstatWeeklyData,
+            func_module=func,
+            pd_module=pd,
+            np_module=np,
+            datetime_cls=datetime,
+            timedelta_cls=timedelta,
+            logger=logger,
         )
-        if df.empty:
-            logger.warning(f"No wastewater data found for {virus_typ}")
-            return pd.DataFrame()
-
-        df = df.sort_values("ds").reset_index(drop=True)
-        df["ds"] = pd.to_datetime(df["ds"])
-
-        # 2. Google Trends
-        trends_keywords = ["Grippe", "Erkältung", "Fieber"]
-        trends = self._load_google_trends_rows(
-            keywords=trends_keywords,
-            start_date=start_date,
-            region=region_code,
-        )
-
-        if trends:
-            trends_df = pd.DataFrame(
-                [{"ds": pd.to_datetime(t.datum), "interest_score": t.interest_score} for t in trends]
-            )
-            trends_avg = trends_df.groupby("ds")["interest_score"].mean().reset_index()
-            trends_avg.columns = ["ds", "trends_score"]
-            df = df.merge(trends_avg, on="ds", how="left")
-        else:
-            df["trends_score"] = 0.0
-
-        # 3. School holidays
-        df["schulferien"] = df["ds"].apply(
-            lambda d: 1.0 if self._is_holiday(d, region=region_code) else 0.0
-        )
-
-        if include_internal_history:
-            df = self._augment_with_internal_history(
-                df=df,
-                virus_typ=virus_typ,
-                start_date=start_date,
-                region=region_code,
-            )
-        else:
-            df["lab_positivity_rate"] = 0.0
-            df["lab_signal_available"] = 0.0
-            df["lab_baseline_mean"] = 0.0
-            df["lab_baseline_zscore"] = 0.0
-            df["lab_positivity_lag7"] = 0.0
-
-        # 4. Lag features
-        df["lag1"] = df["y"].shift(1)
-        df["lag2"] = df["y"].shift(2)
-        df["lag3"] = df["y"].shift(3)
-
-        # 5. Moving averages (shifted by 1 to avoid target leakage)
-        df["ma3"] = df["y"].rolling(window=3, min_periods=1).mean().shift(1)
-        df["ma5"] = df["y"].rolling(window=5, min_periods=1).mean().shift(1)
-
-        # 6. Rate of change (shifted by 1 to avoid target leakage)
-        df["roc"] = df["y"].pct_change().shift(1)
-
-        # 7. Trend momentum (7-day slope as 1st derivative)
-        y_shifted = df["y"].shift(7).replace(0, np.nan)
-        df["trend_momentum_7d"] = df["y"].diff(periods=7) / y_shifted
-
-        # 8. AMELAG vorhersage time-lagged features (wastewater leads demand by 4-7 days)
-        df["amelag_lag4"] = df["amelag_pred"].shift(4)
-        df["amelag_lag7"] = df["amelag_pred"].shift(7)
-
-        # 9. Cross-disease features: aggregierte Viruslast anderer Erreger
-        xdisease_viruses = CROSS_DISEASE_MAP.get(virus_typ, [])
-        if xdisease_viruses:
-            xd_data = (
-                self.db.query(
-                    WastewaterAggregated.datum,
-                    func.avg(WastewaterAggregated.viruslast_normalisiert).label("xd_load"),
-                )
-                .filter(
-                    WastewaterAggregated.virus_typ.in_(xdisease_viruses),
-                    WastewaterAggregated.datum >= start_date,
-                )
-                .group_by(WastewaterAggregated.datum)
-                .all()
-            )
-            if xd_data:
-                xd_df = pd.DataFrame(
-                    [{"ds": pd.to_datetime(r.datum), "xd_load": float(r.xd_load or 0)} for r in xd_data]
-                )
-                df = df.merge(xd_df, on="ds", how="left")
-                df["xd_load"] = df["xd_load"].fillna(0.0)
-            else:
-                df["xd_load"] = 0.0
-        else:
-            df["xd_load"] = 0.0
-        df["xdisease_lag7"] = df["xd_load"].shift(7)
-        df["xdisease_lag14"] = df["xd_load"].shift(14)
-
-        # 10. SurvStat RKI-Meldeinzidenzen (wöchentlich → forward-fill auf Tagesauflösung)
-        survstat_diseases = SURVSTAT_VIRUS_MAP.get(virus_typ, [])
-        if survstat_diseases:
-            surv_rows = (
-                self.db.query(
-                    SurvstatWeeklyData.week_start,
-                    func.sum(SurvstatWeeklyData.incidence).label("total_incidence"),
-                )
-                .filter(
-                    func.lower(SurvstatWeeklyData.disease).in_(survstat_diseases),
-                    SurvstatWeeklyData.bundesland.in_(self._survstat_region_values(region_code)),
-                    SurvstatWeeklyData.week > 0,
-                    SurvstatWeeklyData.week_start >= start_date,
-                )
-                .group_by(SurvstatWeeklyData.week_start)
-                .order_by(SurvstatWeeklyData.week_start.asc())
-                .all()
-            )
-            if surv_rows:
-                surv_df = pd.DataFrame(
-                    [{"ds": pd.to_datetime(r.week_start), "survstat_raw": float(r.total_incidence or 0)}
-                     for r in surv_rows]
-                )
-                # Max-Normalisierung auf [0, 1]
-                surv_max = surv_df["survstat_raw"].max() or 1.0
-                surv_df["survstat_incidence"] = surv_df["survstat_raw"] / surv_max
-                surv_df = surv_df[["ds", "survstat_incidence"]]
-                df = df.merge(surv_df, on="ds", how="left")
-                df["survstat_incidence"] = df["survstat_incidence"].ffill().fillna(0.0)
-            else:
-                df["survstat_incidence"] = 0.0
-        else:
-            df["survstat_incidence"] = 0.0
-        df["survstat_lag7"] = df["survstat_incidence"].shift(7)
-        df["survstat_lag14"] = df["survstat_incidence"].shift(14)
-
-        df = self._finalize_training_frame(df)
-        df["region"] = region_code
-
-        logger.info(f"Training data prepared: {len(df)} rows, {len(df.columns)} features")
-        return df
 
     @staticmethod
     def _finalize_training_frame(df: pd.DataFrame) -> pd.DataFrame:

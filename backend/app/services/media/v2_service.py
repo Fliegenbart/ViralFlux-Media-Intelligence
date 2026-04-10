@@ -24,18 +24,14 @@ from app.services.media.outcome_signal_service import OutcomeSignalService
 from app.services.media.peix_score_service import PeixEpiScoreService
 from app.services.media.recommendation_contracts import (
     enrich_card_v2,
-    to_card_response,
 )
 from app.services.media.semantic_contracts import (
     business_gate_contract,
     evidence_tier_contract,
     forecast_probability_contract,
-    outcome_confidence_contract,
-    outcome_signal_contract,
     priority_score_contract,
     ranking_signal_contract,
     signal_confidence_contract,
-    truth_readiness_contract,
 )
 from app.services.media.truth_gate_service import TruthGateService
 from app.services.ml.forecast_decision_service import ForecastDecisionService
@@ -44,6 +40,7 @@ from app.services.media.v2.decision import build_decision_payload
 from app.services.media.v2.evidence import build_evidence_payload
 from app.services.media.v2 import lineage
 from app.services.media.v2 import outcomes as outcomes_module
+from app.services.media.v2 import cards as cards_module
 from app.services.media.v2 import prioritization
 from app.services.media.v2 import queue
 from app.services.media.v2.regions import build_regions_payload
@@ -195,31 +192,7 @@ class MediaV2Service:
         return outcomes_module.outcome_template_csv(self)
 
     def _campaign_cards(self, *, brand: str = "gelo", limit: int = 120) -> list[dict[str, Any]]:
-        opportunities = self.engine.get_opportunities(
-            brand_filter=brand,
-            limit=limit,
-            normalize_status=True,
-        )
-        truth_coverage = self.get_truth_coverage(brand=brand)
-        truth_gate = self.truth_gate_service.evaluate(truth_coverage)
-        learning_bundle = self.outcome_signal_service.build_learning_bundle(
-            brand=brand,
-            truth_coverage=truth_coverage,
-            truth_gate=truth_gate,
-        )
-        cards = [
-            self._attach_outcome_learning_to_card(
-                card=to_card_response(opp, include_preview=True),
-                learning_bundle=learning_bundle,
-                truth_gate=truth_gate,
-            )
-            for opp in opportunities
-        ]
-        cards.sort(
-            key=self._campaign_sort_key,
-            reverse=True,
-        )
-        return cards
+        return cards_module._campaign_cards(self, brand=brand, limit=limit)
 
     def _attach_outcome_learning_to_card(
         self,
@@ -228,32 +201,12 @@ class MediaV2Service:
         learning_bundle: dict[str, Any],
         truth_gate: dict[str, Any],
     ) -> dict[str, Any]:
-        learning_signal = self.outcome_signal_service.signal_for_card(
+        return cards_module._attach_outcome_learning_to_card(
+            self,
             card=card,
-            bundle=learning_bundle,
-        )
-        learned_priority = self._learned_priority_score(
-            base_priority=float(card.get("priority_score") or card.get("urgency_score") or 0.0),
-            outcome_signal_score=learning_signal.get("outcome_signal_score"),
+            learning_bundle=learning_bundle,
             truth_gate=truth_gate,
         )
-        updated_contracts = dict(card.get("field_contracts") or {})
-        updated_contracts.update({
-            "outcome_signal_score": outcome_signal_contract(),
-            "outcome_confidence_pct": outcome_confidence_contract(),
-            "truth_readiness": truth_readiness_contract(),
-        })
-        return card | {
-            "priority_score": learned_priority,
-            "learning_state": learning_signal.get("learning_state"),
-            "outcome_signal_score": learning_signal.get("outcome_signal_score"),
-            "outcome_confidence_pct": learning_signal.get("outcome_confidence_pct"),
-            "outcome_learning_scope": learning_signal.get("outcome_learning_scope"),
-            "outcome_learning_explanation": learning_signal.get("outcome_learning_explanation"),
-            "observed_response": learning_signal.get("observed_response"),
-            "learned_lifts": learning_signal.get("learned_lifts"),
-            "field_contracts": updated_contracts,
-        }
 
     def _learned_priority_score(
         self,
@@ -262,20 +215,12 @@ class MediaV2Service:
         outcome_signal_score: Any,
         truth_gate: dict[str, Any],
     ) -> float:
-        learning_state = str(truth_gate.get("learning_state") or "missing").lower()
-        if learning_state in {"missing", "explorative", "stale"}:
-            learning_weight = 0.0 if learning_state == "missing" else 0.12
-        elif learning_state == "im_aufbau":
-            learning_weight = 0.20
-        else:
-            learning_weight = 0.30
-
-        try:
-            outcome_score = float(outcome_signal_score)
-        except (TypeError, ValueError):
-            outcome_score = 0.0
-        blended = base_priority * (1.0 - learning_weight) + outcome_score * learning_weight
-        return round(max(0.0, min(100.0, blended)), 1)
+        return cards_module._learned_priority_score(
+            self,
+            base_priority=base_priority,
+            outcome_signal_score=outcome_signal_score,
+            truth_gate=truth_gate,
+        )
 
     def _decision_freshness_state(self, source_status: dict[str, Any]) -> str:
         items = source_status.get("items") or []

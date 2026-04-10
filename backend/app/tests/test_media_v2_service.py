@@ -661,6 +661,113 @@ class MediaV2ServiceTruthCoverageTests(unittest.TestCase):
         self.assertEqual(mode["key"], "override")
         self.assertEqual(mode["label"], "15.0/2.0/8.0")
 
+    def test_campaign_cards_delegate_to_cards_module(self) -> None:
+        with patch(
+            "app.services.media.v2.cards._campaign_cards",
+            return_value=[{"id": "card-1"}],
+        ) as mocked_builder:
+            cards = self.service._campaign_cards(brand="gelo", limit=25)
+
+        self.assertEqual(cards, [{"id": "card-1"}])
+        mocked_builder.assert_called_once_with(
+            self.service,
+            brand="gelo",
+            limit=25,
+        )
+
+    def test_card_learning_wrappers_delegate_to_cards_module(self) -> None:
+        card = {"id": "card-1"}
+        learning_bundle = {"scope": "pilot"}
+        truth_gate = {"learning_state": "im_aufbau"}
+        with (
+            patch(
+                "app.services.media.v2.cards._attach_outcome_learning_to_card",
+                return_value={"id": "card-1", "priority_score": 73.0},
+            ) as mocked_attach,
+            patch(
+                "app.services.media.v2.cards._learned_priority_score",
+                return_value=71.5,
+            ) as mocked_score,
+        ):
+            enriched = self.service._attach_outcome_learning_to_card(
+                card=card,
+                learning_bundle=learning_bundle,
+                truth_gate=truth_gate,
+            )
+            score = self.service._learned_priority_score(
+                base_priority=60.0,
+                outcome_signal_score=80.0,
+                truth_gate=truth_gate,
+            )
+
+        self.assertEqual(enriched, {"id": "card-1", "priority_score": 73.0})
+        self.assertEqual(score, 71.5)
+        mocked_attach.assert_called_once_with(
+            self.service,
+            card=card,
+            learning_bundle=learning_bundle,
+            truth_gate=truth_gate,
+        )
+        mocked_score.assert_called_once_with(
+            self.service,
+            base_priority=60.0,
+            outcome_signal_score=80.0,
+            truth_gate=truth_gate,
+        )
+
+    def test_campaign_cards_still_respect_service_campaign_sort_key_override(self) -> None:
+        class OverrideMediaV2Service(MediaV2Service):
+            def _campaign_sort_key(self, item: dict) -> tuple:
+                return (item.get("manual_rank", 0),)
+
+            def _attach_outcome_learning_to_card(
+                self,
+                *,
+                card: dict[str, object],
+                learning_bundle: dict[str, object],
+                truth_gate: dict[str, object],
+            ) -> dict[str, object]:
+                enriched = dict(card)
+                enriched["manual_rank"] = 9 if card.get("id") == "opp-high" else 1
+                return enriched
+
+        service = OverrideMediaV2Service(self.db)
+        opportunities = [
+            {
+                "id": "opp-low",
+                "status": "READY",
+                "type": "activation",
+                "brand": "gelo",
+                "product": "GeloProsed",
+                "recommended_product": "GeloProsed",
+                "region_codes": ["SH"],
+                "urgency_score": 60.0,
+                "manual_rank": 1,
+            },
+            {
+                "id": "opp-high",
+                "status": "READY",
+                "type": "activation",
+                "brand": "gelo",
+                "product": "GeloRevoice",
+                "recommended_product": "GeloRevoice",
+                "region_codes": ["HH"],
+                "urgency_score": 60.0,
+                "manual_rank": 9,
+            },
+        ]
+
+        with (
+            patch.object(service.engine, "get_opportunities", return_value=opportunities),
+            patch.object(service, "get_truth_coverage", return_value={"coverage_weeks": 0}),
+            patch.object(service.truth_gate_service, "evaluate", return_value={"learning_state": "missing"}),
+            patch.object(service.outcome_signal_service, "build_learning_bundle", return_value={"bundle": True}),
+        ):
+            cards = service._campaign_cards(brand="gelo", limit=20)
+
+        self.assertEqual(cards[0]["id"], "opp-high")
+        self.assertEqual(cards[1]["id"], "opp-low")
+
     def test_get_evidence_payload_delegates_to_evidence_builder(self) -> None:
         with patch(
             "app.services.media.v2_service.build_evidence_payload",

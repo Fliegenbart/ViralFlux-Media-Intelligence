@@ -6,6 +6,7 @@ from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
 from typing import Any
 
+from app.services.media import campaign_recommendation_rationale, campaign_recommendation_scoring
 from app.services.media.campaign_recommendation_contracts import (
     CampaignClusterSelection,
     CampaignRecommendation,
@@ -310,17 +311,7 @@ class CampaignRecommendationService:
 
     @staticmethod
     def _available_products(allocation_item: Mapping[str, Any]) -> list[str]:
-        products = [str(item) for item in (allocation_item.get("products") or []) if str(item).strip()]
-        if products:
-            return products
-        clusters = allocation_item.get("product_clusters") or []
-        collected: list[str] = []
-        for cluster in clusters:
-            for product in cluster.get("products") or []:
-                value = str(product).strip()
-                if value and value not in collected:
-                    collected.append(value)
-        return collected
+        return campaign_recommendation_scoring.available_products(allocation_item)
 
     def _select_product_cluster(
         self,
@@ -332,55 +323,14 @@ class CampaignRecommendationService:
         available_products: Sequence[str],
         allocation_item: Mapping[str, Any],
     ) -> CampaignClusterSelection:
-        hinted_clusters = {
-            str(item.get("cluster_key") or ""): float(item.get("fit_score") or 0.0)
-            for item in (allocation_item.get("product_clusters") or [])
-        }
-        candidates: list[CampaignClusterSelection] = []
-        available_set = {str(product).strip() for product in available_products if str(product).strip()}
-        for cluster in self.config.product_clusters:
-            if cluster.supported_viruses and virus_typ not in set(cluster.supported_viruses):
-                continue
-            overlap = self._product_overlap(cluster=cluster, available_products=available_set)
-            if overlap <= 0.0:
-                continue
-            allocation_hint = _clamp(hinted_clusters.get(cluster.cluster_key, 0.0))
-            stage_fit = _clamp(float(cluster.activation_fit.get(stage, 0.70)))
-            region_multiplier = self._region_fit_multiplier(region=region, cluster_key=cluster.cluster_key)
-            raw_fit = (
-                0.35 * float(cluster.base_fit)
-                + 0.25 * overlap
-                + 0.20 * stage_fit
-                + 0.10 * confidence
-                + 0.10 * allocation_hint
-            ) * region_multiplier
-            candidates.append(
-                CampaignClusterSelection(
-                    cluster_key=cluster.cluster_key,
-                    label=cluster.label,
-                    fit_score=round(_clamp(raw_fit, 0.0, 1.25), 4),
-                    products=[product for product in cluster.products if product in available_set],
-                    metadata={
-                        "source": "campaign_recommendation_v1",
-                        "base_fit": round(float(cluster.base_fit), 4),
-                        "product_overlap": round(overlap, 4),
-                        "stage_fit": round(stage_fit, 4),
-                        "allocation_hint": round(allocation_hint, 4),
-                        "region_fit_multiplier": round(region_multiplier, 4),
-                        **dict(cluster.metadata or {}),
-                    },
-                )
-            )
-        if candidates:
-            candidates.sort(key=lambda item: (float(item.fit_score), len(item.products)), reverse=True)
-            return candidates[0]
-
-        return CampaignClusterSelection(
-            cluster_key="unmapped_product_cluster",
-            label="Fallback Product Cluster",
-            fit_score=round(_clamp(0.40 + (confidence * 0.20)), 4),
-            products=list(available_products),
-            metadata={"source": "campaign_recommendation_fallback"},
+        return campaign_recommendation_scoring.select_product_cluster(
+            self.config,
+            virus_typ=virus_typ,
+            stage=stage,
+            region=region,
+            confidence=confidence,
+            available_products=available_products,
+            allocation_item=allocation_item,
         )
 
     def _select_keyword_cluster(
@@ -392,46 +342,13 @@ class CampaignRecommendationService:
         confidence: float,
         product_cluster: CampaignClusterSelection,
     ) -> CampaignClusterSelection:
-        candidates: list[CampaignClusterSelection] = []
-        for cluster in self.config.keyword_clusters:
-            if cluster.product_cluster_key != product_cluster.cluster_key:
-                continue
-            if cluster.supported_viruses and virus_typ not in set(cluster.supported_viruses):
-                continue
-            stage_fit = _clamp(float(cluster.activation_fit.get(stage, 0.70)))
-            region_multiplier = self._region_fit_multiplier(region=region, cluster_key=cluster.product_cluster_key)
-            raw_fit = (
-                0.50 * float(product_cluster.fit_score)
-                + 0.25 * float(cluster.base_fit)
-                + 0.15 * stage_fit
-                + 0.10 * confidence
-            ) * region_multiplier
-            candidates.append(
-                CampaignClusterSelection(
-                    cluster_key=cluster.cluster_key,
-                    label=cluster.label,
-                    fit_score=round(_clamp(raw_fit, 0.0, 1.25), 4),
-                    keywords=list(cluster.keywords),
-                    metadata={
-                        "source": "campaign_recommendation_v1",
-                        "product_cluster_key": cluster.product_cluster_key,
-                        "base_fit": round(float(cluster.base_fit), 4),
-                        "stage_fit": round(stage_fit, 4),
-                        "region_fit_multiplier": round(region_multiplier, 4),
-                        **dict(cluster.metadata or {}),
-                    },
-                )
-            )
-        if candidates:
-            candidates.sort(key=lambda item: (float(item.fit_score), len(item.keywords)), reverse=True)
-            return candidates[0]
-
-        return CampaignClusterSelection(
-            cluster_key="fallback_keyword_cluster",
-            label="Fallback Search Demand Cluster",
-            fit_score=round(_clamp(0.35 + (0.25 * confidence)), 4),
-            keywords=["atemwege beruhigen", "husten symptomhilfe", "erkaltung beschwerden"],
-            metadata={"source": "campaign_recommendation_fallback"},
+        return campaign_recommendation_scoring.select_keyword_cluster(
+            self.config,
+            virus_typ=virus_typ,
+            stage=stage,
+            region=region,
+            confidence=confidence,
+            product_cluster=product_cluster,
         )
 
     @staticmethod
@@ -440,14 +357,17 @@ class CampaignRecommendationService:
         cluster: ProductClusterConfig,
         available_products: set[str],
     ) -> float:
-        if not cluster.products:
-            return 0.0
-        overlap = len(set(cluster.products) & set(available_products))
-        return _clamp(overlap / max(len(set(cluster.products)), 1))
+        return campaign_recommendation_scoring.product_overlap(
+            cluster=cluster,
+            available_products=available_products,
+        )
 
     def _region_fit_multiplier(self, *, region: str, cluster_key: str) -> float:
-        region_fits = self.config.region_product_fit or {}
-        return max(float((region_fits.get(region) or {}).get(cluster_key) or 1.0), 0.0)
+        return campaign_recommendation_scoring.region_fit_multiplier(
+            self.config,
+            region=region,
+            cluster_key=cluster_key,
+        )
 
     def _guardrail_status(
         self,
@@ -458,34 +378,18 @@ class CampaignRecommendationService:
         confidence: float,
         spend_gate_status: str,
     ) -> str:
-        guardrails = self.config.spend_guardrails
-        normalized_spend_status = str(spend_gate_status or "").strip()
-        if stage == "watch" or budget_amount <= 0.0:
-            return "observe_only"
-        if normalized_spend_status in set(guardrails.blocked_spend_statuses):
-            return "blocked"
-        confidence_floor = (
-            float(guardrails.min_confidence_for_activate)
-            if stage == "activate"
-            else float(guardrails.min_confidence_for_prepare)
+        return campaign_recommendation_scoring.guardrail_status(
+            self.config,
+            stage=stage,
+            budget_share=budget_share,
+            budget_amount=budget_amount,
+            confidence=confidence,
+            spend_gate_status=spend_gate_status,
         )
-        if confidence < confidence_floor:
-            return "low_confidence_review"
-        if (
-            budget_amount < float(guardrails.min_budget_amount_eur)
-            or budget_share < float(guardrails.min_budget_share)
-        ):
-            return "bundle_with_neighbor_region"
-        return "ready"
 
     @staticmethod
     def _evidence_class(allocation_item: Mapping[str, Any]) -> str:
-        evidence_status = str(allocation_item.get("evidence_status") or "").strip()
-        if evidence_status:
-            return evidence_status
-        if allocation_item.get("truth_layer_enabled"):
-            return "truth_layer_pending"
-        return "epidemiological_only"
+        return campaign_recommendation_scoring.evidence_class(allocation_item)
 
     def _rationale(
         self,
@@ -499,180 +403,21 @@ class CampaignRecommendationService:
         budget_share: float,
         budget_amount: float,
     ) -> CampaignRecommendationRationale:
-        region_name = str(
-            allocation_item.get("bundesland_name")
-            or allocation_item.get("region_name")
-            or allocation_item.get("bundesland")
-            or ""
-        )
-        confidence = float(allocation_item.get("confidence") or 0.0)
-        why = [
-            f"{region_name} stays on {stage} with budget share {budget_share:.2%}.",
-            f"Allocation confidence {confidence:.2f} and priority rank {int(allocation_item.get('priority_rank') or 0)} keep the region in the current wave plan.",
-        ]
-        why_details = [
-            self._reason_detail(
-                "campaign_stage_budget_share",
-                why[0],
-                region_name=region_name,
-                stage=stage,
-                budget_share=round(budget_share, 6),
-            ),
-            self._reason_detail(
-                "campaign_wave_plan_support",
-                why[1],
-                confidence=round(confidence, 4),
-                priority_rank=int(allocation_item.get("priority_rank") or 0),
-            ),
-        ]
-        product_fit = [
-            f"{product_cluster.label} scores {float(product_cluster.fit_score):.2f} for the available product set {product_cluster.products or allocation_item.get('products') or []}.",
-        ]
-        product_fit_details = [
-            self._reason_detail(
-                "campaign_product_cluster_fit",
-                product_fit[0],
-                cluster_label=product_cluster.label,
-                fit_score=round(float(product_cluster.fit_score), 4),
-                products=product_cluster.products or allocation_item.get("products") or [],
-            ),
-        ]
-        region_multiplier = float(product_cluster.metadata.get("region_fit_multiplier") or 1.0)
-        if region_multiplier > 1.0:
-            message = f"Region/product fit boosts this cluster by {region_multiplier:.2f}."
-            product_fit.append(message)
-            product_fit_details.append(
-                self._reason_detail(
-                    "campaign_region_product_fit_boost",
-                    message,
-                    region_fit_multiplier=round(region_multiplier, 4),
-                )
-            )
-        keyword_fit = [
-            f"{keyword_cluster.label} translates the product cluster into concrete search intent with fit {float(keyword_cluster.fit_score):.2f}.",
-        ]
-        keyword_fit_details = [
-            self._reason_detail(
-                "campaign_keyword_cluster_fit",
-                keyword_fit[0],
-                cluster_label=keyword_cluster.label,
-                fit_score=round(float(keyword_cluster.fit_score), 4),
-            ),
-        ]
-        budget_notes = [
-            f"Suggested campaign budget is {budget_amount:.2f} EUR.",
-        ]
-        budget_note_details = [
-            self._reason_detail(
-                "campaign_budget_amount",
-                budget_notes[0],
-                budget_amount=round(budget_amount, 2),
-            ),
-        ]
-        if budget_share > 0.0:
-            message = f"Budget share contribution is {budget_share:.2%}."
-            budget_notes.append(message)
-            budget_note_details.append(
-                self._reason_detail(
-                    "campaign_budget_share",
-                    message,
-                    budget_share=round(budget_share, 6),
-                )
-            )
-
-        evidence_notes = [
-            f"Evidence class is {evidence_class}.",
-        ]
-        evidence_note_details = [
-            self._reason_detail(
-                "campaign_evidence_class",
-                evidence_notes[0],
-                evidence_class=evidence_class,
-            ),
-        ]
-        signal_outcome_agreement = allocation_item.get("signal_outcome_agreement") or {}
-        if signal_outcome_agreement.get("status"):
-            message = (
-                f"Signal/outcome agreement is {signal_outcome_agreement.get('status')}."
-            )
-            evidence_notes.append(message)
-            evidence_note_details.append(
-                self._reason_detail(
-                    "campaign_signal_outcome_agreement",
-                    message,
-                    status=str(signal_outcome_agreement.get("status")),
-                )
-            )
-
-        guardrails: list[str] = []
-        guardrail_details: list[dict[str, Any]] = []
-        if guardrail_status == "ready":
-            message = "Spend guardrails are currently satisfied."
-            guardrails.append(message)
-            guardrail_details.append(
-                self._reason_detail("campaign_guardrail_ready", message)
-            )
-        elif guardrail_status == "bundle_with_neighbor_region":
-            message = "Budget is below the standalone threshold and should be bundled with a neighboring region or shared flight."
-            guardrails.append(message)
-            guardrail_details.append(
-                self._reason_detail("campaign_guardrail_bundle_neighbor", message)
-            )
-        elif guardrail_status == "low_confidence_review":
-            message = "Confidence is below the stage-specific guardrail, so the recommendation needs manual PEIX review."
-            guardrails.append(message)
-            guardrail_details.append(
-                self._reason_detail(
-                    "campaign_guardrail_low_confidence_review",
-                    message,
-                    confidence=round(confidence, 4),
-                )
-            )
-        elif guardrail_status == "blocked":
-            message = "Operational or commercial spend gate is still blocking execution."
-            guardrails.append(message)
-            guardrail_details.append(
-                self._reason_detail("campaign_guardrail_blocked", message)
-            )
-        else:
-            message = "Recommendation stays discussion-only for now."
-            guardrails.append(message)
-            guardrail_details.append(
-                self._reason_detail("campaign_guardrail_discussion_only", message)
-            )
-
-        return CampaignRecommendationRationale(
-            why=why,
-            why_details=why_details,
-            product_fit=product_fit,
-            product_fit_details=product_fit_details,
-            keyword_fit=keyword_fit,
-            keyword_fit_details=keyword_fit_details,
-            budget_notes=budget_notes,
-            budget_note_details=budget_note_details,
-            evidence_notes=evidence_notes,
-            evidence_note_details=evidence_note_details,
-            guardrails=guardrails,
-            guardrail_details=guardrail_details,
+        return campaign_recommendation_rationale.build_rationale(
+            reason_detail_builder=self._reason_detail,
+            stage=stage,
+            allocation_item=allocation_item,
+            product_cluster=product_cluster,
+            keyword_cluster=keyword_cluster,
+            evidence_class=evidence_class,
+            guardrail_status=guardrail_status,
+            budget_share=budget_share,
+            budget_amount=budget_amount,
         )
 
     @staticmethod
     def _sort_key(item: Mapping[str, Any]) -> tuple[float, float, float, float]:
-        stage = str(item.get("activation_level") or "Watch").strip().lower()
-        stage_order = {"activate": 3, "prepare": 2, "watch": 1}.get(stage, 0)
-        guardrail_order = {
-            "ready": 3,
-            "bundle_with_neighbor_region": 2,
-            "low_confidence_review": 1.5,
-            "observe_only": 1,
-            "blocked": 0,
-        }.get(str(item.get("spend_guardrail_status") or ""), 0)
-        return (
-            float(stage_order),
-            float(guardrail_order),
-            float(item.get("suggested_budget_share") or 0.0),
-            float(item.get("confidence") or 0.0),
-        )
+        return campaign_recommendation_scoring.sort_key(item)
 
     @staticmethod
     def _headline(
@@ -680,9 +425,7 @@ class CampaignRecommendationService:
         virus_typ: str,
         recommendations: Sequence[Mapping[str, Any]],
     ) -> str:
-        if not recommendations:
-            return f"{virus_typ}: keine Campaign Recommendations verfügbar"
-        lead = recommendations[0]
-        region = str(lead.get("region") or lead.get("bundesland") or "")
-        cluster = ((lead.get("recommended_product_cluster") or {}).get("label")) or "Campaign Cluster"
-        return f"{virus_typ}: {region} jetzt mit {cluster} diskutieren"
+        return campaign_recommendation_scoring.headline(
+            virus_typ=virus_typ,
+            recommendations=recommendations,
+        )

@@ -8,6 +8,72 @@ from app.services.ml.forecast_contracts import HEURISTIC_EVENT_SCORE_SOURCE
 
 
 class BacktesterRefactorGuardTests(unittest.TestCase):
+    @patch("app.services.ml.backtester_reporting.run_global_calibration")
+    def test_run_global_calibration_wrapper_delegates_to_module(
+        self,
+        reporting_mock,
+    ) -> None:
+        reporting_mock.return_value = {"status": "success", "data_points": 52}
+        service = BacktestService(db=None)
+
+        result = service.run_global_calibration(
+            virus_typ="RSV A",
+            days_back=730,
+        )
+
+        self.assertEqual(result, {"status": "success", "data_points": 52})
+        reporting_mock.assert_called_once_with(
+            service,
+            virus_typ="RSV A",
+            days_back=730,
+        )
+
+    @patch("app.services.ml.backtester_reporting.save_global_defaults")
+    def test_save_global_defaults_wrapper_delegates_to_module(
+        self,
+        reporting_mock,
+    ) -> None:
+        service = BacktestService(db=None)
+
+        service._save_global_defaults(
+            {"bio": 0.4, "market": 0.3, "psycho": 0.1, "context": 0.2},
+            0.82,
+            300,
+        )
+
+        reporting_mock.assert_called_once_with(
+            service,
+            {"bio": 0.4, "market": 0.3, "psycho": 0.1, "context": 0.2},
+            0.82,
+            300,
+        )
+
+    @patch("app.services.ml.backtester_reporting.generate_business_pitch_report")
+    def test_generate_business_pitch_report_wrapper_delegates_to_module(
+        self,
+        reporting_mock,
+    ) -> None:
+        reporting_mock.return_value = {"status": "success", "ttd_advantage_days": 9}
+        service = BacktestService(db=None)
+
+        result = service.generate_business_pitch_report(
+            disease=["Influenza, saisonal", "RSV (Meldepflicht gemäß IfSG)"],
+            virus_typ="Influenza A",
+            season_start="2024-10-01",
+            season_end="2025-03-31",
+            output_path="/tmp/report.csv",
+        )
+
+        self.assertEqual(result, {"status": "success", "ttd_advantage_days": 9})
+        reporting_mock.assert_called_once_with(
+            service,
+            disease=["Influenza, saisonal", "RSV (Meldepflicht gemäß IfSG)"],
+            virus_typ="Influenza A",
+            season_start="2024-10-01",
+            season_end="2025-03-31",
+            output_path="/tmp/report.csv",
+        )
+
     @patch("app.services.ml.backtester_workflows.run_market_simulation")
     def test_run_market_simulation_wrapper_delegates_to_module(
         self,

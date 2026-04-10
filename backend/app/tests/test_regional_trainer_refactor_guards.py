@@ -176,3 +176,74 @@ class RegionalTrainerRefactorGuardTests(unittest.TestCase):
             reg_upper="upper-reg",
             regressor_config=ANY,
         )
+
+    @patch("app.services.ml.regional_trainer_artifacts.build_hierarchy_metadata")
+    def test_build_hierarchy_metadata_wrapper_delegates_to_module(self, metadata_mock) -> None:
+        metadata_mock.return_value = {"enabled": True, "state_order": ["BY"]}
+        trainer = RegionalModelTrainer(db=None)
+
+        result = trainer._build_hierarchy_metadata(
+            panel="panel-frame",
+            oof_frame="oof-frame",
+        )
+
+        self.assertEqual(result, {"enabled": True, "state_order": ["BY"]})
+        metadata_mock.assert_called_once_with(
+            trainer,
+            panel="panel-frame",
+            oof_frame="oof-frame",
+        )
+
+    @patch("app.services.ml.regional_trainer_artifacts.fit_final_models")
+    def test_fit_final_models_wrapper_delegates_to_module(self, final_models_mock) -> None:
+        final_models_mock.return_value = {"classifier": "clf", "calibration_mode": "guarded"}
+        trainer = RegionalModelTrainer(db=None)
+
+        result = trainer._fit_final_models(
+            panel="panel-frame",
+            feature_columns=["f1"],
+            hierarchy_feature_columns=["h1"],
+            oof_frame="oof-frame",
+            action_threshold=0.55,
+        )
+
+        self.assertEqual(result, {"classifier": "clf", "calibration_mode": "guarded"})
+        final_models_mock.assert_called_once_with(
+            trainer,
+            panel="panel-frame",
+            feature_columns=["f1"],
+            hierarchy_feature_columns=["h1"],
+            oof_frame="oof-frame",
+            action_threshold=0.55,
+            regressor_config=ANY,
+            supported_quantiles=ANY,
+            quantile_regressor_config_fn=ANY,
+            learned_event_model_cls=ANY,
+            calibration_holdout_fraction=ANY,
+        )
+
+    @patch("app.services.ml.regional_trainer_artifacts.persist_artifacts")
+    def test_persist_artifacts_wrapper_delegates_to_module(self, persist_mock) -> None:
+        trainer = RegionalModelTrainer(db=None)
+
+        trainer._persist_artifacts(
+            model_dir="model-dir",
+            final_artifacts={"classifier": "clf"},
+            metadata={"selected_tau": 1.0},
+            backtest_payload={"status": "ok"},
+            dataset_manifest={"dataset": "v1"},
+            point_in_time_manifest={"snapshot": "v1"},
+        )
+
+        persist_mock.assert_called_once_with(
+            model_dir="model-dir",
+            final_artifacts={"classifier": "clf"},
+            metadata={"selected_tau": 1.0},
+            backtest_payload={"status": "ok"},
+            dataset_manifest={"dataset": "v1"},
+            point_in_time_manifest={"snapshot": "v1"},
+            json_safe_fn=ANY,
+            quantile_key_fn=ANY,
+            event_definition_version=ANY,
+            target_window_days=ANY,
+        )

@@ -762,6 +762,41 @@ def test_calibration_version_wrapper_delegates_to_module() -> None:
     mocked.assert_called_once_with(metadata)
 
 
+def test_predict_all_regions_wrapper_delegates_to_module() -> None:
+    service = RegionalForecastService(db=None)
+    sentinel = {"predictions": []}
+
+    with patch(
+        "app.services.ml.regional_forecast_prediction.predict_all_regions",
+        return_value=sentinel,
+    ) as mocked:
+        result = service.predict_all_regions(
+            virus_typ="Influenza A",
+            horizon_days=7,
+        )
+
+    assert result is sentinel
+    mocked.assert_called_once_with(
+        service,
+        virus_typ="Influenza A",
+        horizon_days=7,
+        ensure_supported_horizon_fn=regional_forecast_module.ensure_supported_horizon,
+        regional_horizon_support_status_fn=regional_forecast_module.regional_horizon_support_status,
+        supported_forecast_horizons=regional_forecast_module.SUPPORTED_FORECAST_HORIZONS,
+        target_window_days_default=regional_forecast_module.TARGET_WINDOW_DAYS,
+        signal_bundle_version_for_virus_fn=regional_forecast_module.signal_bundle_version_for_virus,
+        rollout_mode_for_virus_fn=regional_forecast_module.rollout_mode_for_virus,
+        activation_policy_for_virus_fn=regional_forecast_module.activation_policy_for_virus,
+        event_definition_version=regional_forecast_module.EVENT_DEFINITION_VERSION,
+        artifact_source_coverage_scope=regional_forecast_module.ARTIFACT_SOURCE_COVERAGE_SCOPE,
+        geo_hierarchy_helper_cls=regional_forecast_module.GeoHierarchyHelper,
+        tsfm_adapter_cls=regional_forecast_module.TSFMAdapter,
+        pd_module=regional_forecast_module.pd,
+        np_module=regional_forecast_module.np,
+        utc_now_fn=regional_forecast_module.utc_now,
+    )
+
+
 def test_generate_media_allocation_wrapper_delegates_to_module() -> None:
     service = RegionalForecastService(db=None)
     sentinel = {"recommendations": []}

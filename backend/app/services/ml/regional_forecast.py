@@ -19,6 +19,7 @@ from app.models.database import BacktestPoint, BacktestRun, MLForecast
 from app.services.media.business_validation_service import BusinessValidationService
 from app.services.media.campaign_recommendation_service import CampaignRecommendationService
 from app.services.media.truth_layer_service import TruthLayerService
+from app.services.ml import regional_forecast_media
 from app.services.ml.forecast_decision_service import ForecastDecisionService
 from app.services.ml.forecast_orchestrator import ForecastOrchestrator
 from app.services.ml.forecast_horizon_utils import (
@@ -1677,51 +1678,15 @@ class RegionalForecastService:
 
     @staticmethod
     def _decision_stage_sort_value(stage: str | None) -> int:
-        return {
-            "activate": 3,
-            "prepare": 2,
-            "watch": 1,
-        }.get(str(stage or "watch").strip().lower(), 0)
+        return regional_forecast_media.decision_stage_sort_value(stage)
 
     @classmethod
     def _decision_priority_sort_key(cls, item: dict[str, Any]) -> tuple[float, float, float, float]:
-        decision = item.get("decision") or {}
-        return (
-            float(cls._decision_stage_sort_value(decision.get("stage"))),
-            float(item.get("priority_score") or 0.0),
-            float(item.get("event_probability_calibrated") or 0.0),
-            float(item.get("change_pct") or 0.0),
-        )
+        return regional_forecast_media.decision_priority_sort_key(item)
 
     @classmethod
     def _decision_summary(cls, predictions: list[dict[str, Any]]) -> dict[str, Any]:
-        if not predictions:
-            return {
-                "watch_regions": 0,
-                "prepare_regions": 0,
-                "activate_regions": 0,
-                "avg_priority_score": 0.0,
-                "top_region": None,
-                "top_region_decision": None,
-            }
-
-        ranked_decisions = sorted(
-            predictions,
-            key=cls._decision_priority_sort_key,
-            reverse=True,
-        )
-        top_region = ranked_decisions[0]
-        return {
-            "watch_regions": sum(1 for item in predictions if str(item.get("decision_label") or "").lower() == "watch"),
-            "prepare_regions": sum(1 for item in predictions if str(item.get("decision_label") or "").lower() == "prepare"),
-            "activate_regions": sum(1 for item in predictions if str(item.get("decision_label") or "").lower() == "activate"),
-            "avg_priority_score": round(
-                sum(float(item.get("priority_score") or 0.0) for item in predictions) / len(predictions),
-                4,
-            ),
-            "top_region": top_region.get("bundesland"),
-            "top_region_decision": top_region.get("decision_label"),
-        }
+        return regional_forecast_media.decision_summary(predictions)
 
     @staticmethod
     def _media_spend_gate(
@@ -1730,14 +1695,11 @@ class RegionalForecastService:
         business_gate: dict[str, Any],
         activation_policy: str,
     ) -> tuple[bool, list[str]]:
-        blockers: list[str] = []
-        if activation_policy == "watch_only":
-            blockers.append("Activation policy 'watch_only' forces observation mode.")
-        if not business_gate.get("validated_for_budget_activation"):
-            blockers.append("Business-Gate noch nicht validiert.")
-        if not quality_gate.get("overall_passed"):
-            blockers.append("Quality Gate blockiert Aktivierung.")
-        return len(blockers) == 0, blockers
+        return regional_forecast_media.media_spend_gate(
+            quality_gate=quality_gate,
+            business_gate=business_gate,
+            activation_policy=activation_policy,
+        )
 
     @staticmethod
     def _media_action(
@@ -1745,19 +1707,14 @@ class RegionalForecastService:
         recommended_level: str,
         spend_enabled: bool,
     ) -> str:
-        if not spend_enabled:
-            return "watch"
-        stage = str(recommended_level or "Watch").strip().lower()
-        if stage in {"activate", "prepare"}:
-            return stage
-        return "watch"
+        return regional_forecast_media.media_action(
+            recommended_level=recommended_level,
+            spend_enabled=spend_enabled,
+        )
 
     @staticmethod
     def _media_intensity(action: str) -> str:
-        return {
-            "activate": "high",
-            "prepare": "medium",
-        }.get(str(action or "watch").strip().lower(), "low")
+        return regional_forecast_media.media_intensity(action)
 
     @staticmethod
     def _products_from_allocation(
@@ -1765,13 +1722,11 @@ class RegionalForecastService:
         allocation_item: dict[str, Any],
         virus_typ: str,
     ) -> list[str]:
-        product_clusters = allocation_item.get("product_clusters") or []
-        if product_clusters:
-            cluster = product_clusters[0] or {}
-            products = [str(item) for item in cluster.get("products") or [] if str(item).strip()]
-            if products:
-                return products
-        return GELO_PRODUCTS.get(virus_typ, ["GeloMyrtol forte"])
+        return regional_forecast_media.products_from_allocation(
+            allocation_item=allocation_item,
+            virus_typ=virus_typ,
+            gelo_products=GELO_PRODUCTS,
+        )
 
     @staticmethod
     def _media_timeline(
@@ -1782,21 +1737,14 @@ class RegionalForecastService:
         business_gate: dict[str, Any],
         quality_gate: dict[str, Any],
     ) -> str:
-        if not spend_enabled:
-            return (
-                "Nur beobachten — Shadow-Policy blockiert Aktivierung"
-                if activation_policy == "watch_only"
-                else "Nur beobachten — Business-Gate noch nicht validiert"
-                if not business_gate.get("validated_for_budget_activation")
-                else "Nur beobachten — Quality Gate blockiert Aktivierung"
-                if not quality_gate.get("overall_passed")
-                else "Nur beobachten — Spend aktuell blockiert"
-            )
-        if action == "activate":
-            return f"Sofort aktivieren — Wellenfenster in {TARGET_WINDOW_DAYS[0]}-{TARGET_WINDOW_DAYS[1]} Tagen"
-        if action == "prepare":
-            return "In 1-2 Tagen vorbereiten — Signal für regionale Aktivierung vorhanden"
-        return "Beobachten — unterhalb des operationalen Spend-Niveaus"
+        return regional_forecast_media.media_timeline(
+            action=action,
+            spend_enabled=spend_enabled,
+            activation_policy=activation_policy,
+            business_gate=business_gate,
+            quality_gate=quality_gate,
+            target_window_days=TARGET_WINDOW_DAYS,
+        )
 
     @staticmethod
     def _media_headline(
@@ -1805,47 +1753,19 @@ class RegionalForecastService:
         recommendations: list[dict[str, Any]],
         spend_enabled: bool,
     ) -> str:
-        prioritized = [
-            item["bundesland"]
-            for item in recommendations
-            if item["action"] in {"activate", "prepare"} and float(item.get("suggested_budget_share") or 0.0) > 0.0
-        ]
-        if prioritized and spend_enabled:
-            return f"{virus_typ}: Budget auf {', '.join(prioritized[:3])} fokussieren"
-        return f"{virus_typ}: aktuell kein validierter Aktivierungs-Case"
+        return regional_forecast_media.media_headline(
+            virus_typ=virus_typ,
+            recommendations=recommendations,
+            spend_enabled=spend_enabled,
+        )
 
     @staticmethod
     def _metric_delta(candidate: dict[str, Any], reference: dict[str, Any]) -> dict[str, float]:
-        delta: dict[str, float] = {}
-        for metric in (
-            "precision_at_top3",
-            "precision_at_top5",
-            "pr_auc",
-            "brier_score",
-            "ece",
-            "activation_false_positive_rate",
-        ):
-            if metric in candidate and metric in reference:
-                delta[metric] = round(float(candidate[metric]) - float(reference[metric]), 6)
-        return delta
+        return regional_forecast_media.metric_delta(candidate, reference)
 
     @staticmethod
     def _benchmark_score(item: dict[str, Any]) -> float:
-        metrics = item.get("aggregate_metrics") or {}
-        quality_gate = item.get("quality_gate") or {}
-        precision = float(metrics.get("precision_at_top3") or 0.0)
-        pr_auc = float(metrics.get("pr_auc") or 0.0)
-        ece = float(metrics.get("ece") or 1.0)
-        fp_rate = float(metrics.get("activation_false_positive_rate") or 1.0)
-        score = (
-            precision * 0.4
-            + pr_auc * 0.35
-            + max(0.0, 1.0 - min(ece, 1.0)) * 0.15
-            + max(0.0, 1.0 - min(fp_rate, 1.0)) * 0.10
-        )
-        if quality_gate.get("overall_passed"):
-            score += 0.1
-        return round(score * 100.0, 2)
+        return regional_forecast_media.benchmark_score(item)
 
     def _portfolio_priority_score(
         self,
@@ -1853,20 +1773,10 @@ class RegionalForecastService:
         prediction: dict[str, Any],
         benchmark_item: dict[str, Any],
     ) -> float:
-        probability = float(prediction.get("event_probability_calibrated") or 0.0)
-        change_pct = float(prediction.get("change_pct") or 0.0)
-        benchmark_score = float(benchmark_item.get("benchmark_score") or 0.0) / 100.0
-        quality_gate = prediction.get("quality_gate") or {}
-        activation_policy = str(prediction.get("activation_policy") or "quality_gate")
-        business_gate = prediction.get("business_gate") or benchmark_item.get("business_gate") or {}
-        if activation_policy == "watch_only":
-            readiness_multiplier = 0.78
-        elif not business_gate.get("validated_for_budget_activation"):
-            readiness_multiplier = 0.84 if quality_gate.get("overall_passed") else 0.68
-        else:
-            readiness_multiplier = 1.0 if quality_gate.get("overall_passed") else 0.72
-        momentum_multiplier = 1.0 + min(max(change_pct, 0.0), 80.0) / 200.0
-        return round(probability * max(benchmark_score, 0.05) * readiness_multiplier * momentum_multiplier * 100.0, 2)
+        return regional_forecast_media.portfolio_priority_score(
+            prediction=prediction,
+            benchmark_item=benchmark_item,
+        )
 
     def _portfolio_action(
         self,
@@ -1874,68 +1784,14 @@ class RegionalForecastService:
         prediction: dict[str, Any],
         benchmark_item: dict[str, Any],
     ) -> tuple[str, str]:
-        probability = float(prediction.get("event_probability_calibrated") or 0.0)
-        change_pct = float(prediction.get("change_pct") or 0.0)
-        threshold = float(prediction.get("action_threshold") or 0.6)
-        quality_gate = prediction.get("quality_gate") or {}
-        activation_policy = str(prediction.get("activation_policy") or "quality_gate")
-        business_gate = prediction.get("business_gate") or benchmark_item.get("business_gate") or {}
-
-        if activation_policy == "watch_only":
-            if float(benchmark_item.get("benchmark_score") or 0.0) >= 35.0 and probability >= max(0.45, threshold * 0.8):
-                return "prioritize", "medium"
-            return "watch", "low"
-
-        if not business_gate.get("validated_for_budget_activation"):
-            if float(benchmark_item.get("benchmark_score") or 0.0) >= 35.0 and probability >= max(0.45, threshold * 0.8):
-                return "prioritize", "medium"
-            return "watch", "low"
-        if quality_gate.get("overall_passed") and probability >= threshold and change_pct >= 20:
-            return "activate", "high"
-        if quality_gate.get("overall_passed") and probability >= threshold:
-            return "prepare", "medium"
-        if float(benchmark_item.get("benchmark_score") or 0.0) >= 35.0 and probability >= max(0.45, threshold * 0.8):
-            return "prioritize", "medium"
-        return "watch", "low"
+        return regional_forecast_media.portfolio_action(
+            prediction=prediction,
+            benchmark_item=benchmark_item,
+        )
 
     @staticmethod
     def _region_rollup(opportunities: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        grouped: dict[str, list[dict[str, Any]]] = {}
-        for item in opportunities:
-            grouped.setdefault(item["bundesland"], []).append(item)
-
-        region_rollup: list[dict[str, Any]] = []
-        for bundesland, items in grouped.items():
-            ranked_items = sorted(
-                items,
-                key=lambda item: float(item.get("portfolio_priority_score") or 0.0),
-                reverse=True,
-            )
-            leader = ranked_items[0]
-            region_rollup.append(
-                {
-                    "bundesland": bundesland,
-                    "bundesland_name": leader["bundesland_name"],
-                    "leading_virus": leader["virus_typ"],
-                    "leading_probability": leader["event_probability_calibrated"],
-                    "leading_priority_score": leader["portfolio_priority_score"],
-                    "top_signals": [
-                        {
-                            "virus_typ": item["virus_typ"],
-                            "portfolio_action": item["portfolio_action"],
-                            "portfolio_priority_score": item["portfolio_priority_score"],
-                            "event_probability_calibrated": item["event_probability_calibrated"],
-                        }
-                        for item in ranked_items[:3]
-                    ],
-                }
-            )
-
-        region_rollup.sort(
-            key=lambda item: float(item.get("leading_priority_score") or 0.0),
-            reverse=True,
-        )
-        return region_rollup
+        return regional_forecast_media.region_rollup(opportunities)
 
     def _truth_readiness(self, *, brand: str = "gelo") -> dict[str, Any]:
         if self.db is None:

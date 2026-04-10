@@ -49,12 +49,27 @@ REGION_CODE_TO_NAME = {
     "SH": "Schleswig-Holstein",
     "TH": "Thüringen",
 }
+REGION_NAME_TO_CODE = {name.lower(): code for code, name in REGION_CODE_TO_NAME.items()}
 
 VIRUS_WEIGHTS = {
     "Influenza A": 0.35,
     "Influenza B": 0.15,
     "SARS-CoV-2": 0.25,
     "RSV A": 0.25,
+}
+
+_NOTAUFNAHME_BY_VIRUS = {
+    "Influenza A": "ILI",
+    "Influenza B": "ILI",
+    "SARS-CoV-2": "COVID",
+    "RSV A": "ARI",
+}
+
+_SURVSTAT_BY_VIRUS: dict[str, list[str]] = {
+    "Influenza A": ["influenza, saisonal"],
+    "Influenza B": ["influenza, saisonal"],
+    "SARS-CoV-2": ["covid-19"],
+    "RSV A": ["rsv (meldepflicht gemäß ifsg)"],
 }
 
 # Dimension weights (sum = 1.00)
@@ -76,10 +91,20 @@ PEIX_CONFIG = {
     "weather_temp_divisor": 25.0,
     # Wetter: UV < 8 erhöht Risiko (UV 8 = "sehr hoch" lt. DWD-Skala).
     "weather_uv_threshold": 8.0,
+    # Wetter: Gewichtung der 3 Wetter-Faktoren (Summe = 1.0)
+    "weather_temp_weight": 0.40,
+    "weather_uv_weight": 0.35,
+    "weather_humidity_weight": 0.25,
     # Schulstart-Multiplikator: Erhöhte Kontaktrate nach Ferien.
     # Empirisch geschätzt, nicht validiert. 1.0 = deaktiviert.
     "school_start_multiplier": 1.15,
     "school_start_weather_min": 0.6,
+    # Engpass-Signal: Normierung auf max. 20 "High-Demand" Meldungen.
+    # 20 = oberes Ende des typischen Bereichs lt. BfArM-Daten 2023-2025.
+    "shortage_norm_divisor": 20.0,
+    "shortage_fieber_weight": 0.5,
+    # Notaufnahme Fallback: Wenn <14 historische Werte, normiere auf /20.
+    "notaufnahme_fallback_divisor": 20.0,
     # Epi-Score Komponentengewichte (4-Signale vorhanden)
     "epi_weights_4": {"wastewater": 0.35, "are": 0.25, "notaufnahme": 0.20, "survstat": 0.20},
     # Risk-Band Schwellwerte (Score 0-100)
@@ -95,6 +120,12 @@ def _clamp(value: float, lo: float = 0.0, hi: float = 1.0) -> float:
 
 class PeixEpiScoreService:
     """PeixEpiScore v2.0 — Unified Score auf Basis bestehender Modelle."""
+
+    PEIX_CONFIG = PEIX_CONFIG
+    REGION_CODE_TO_NAME = REGION_CODE_TO_NAME
+    REGION_NAME_TO_CODE = REGION_NAME_TO_CODE
+    _SURVSTAT_BY_VIRUS = _SURVSTAT_BY_VIRUS
+    _NOTAUFNAHME_BY_VIRUS = _NOTAUFNAHME_BY_VIRUS
 
     def __init__(self, db: Session):
         self.db = db

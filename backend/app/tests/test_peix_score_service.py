@@ -174,6 +174,76 @@ class PeixScoreServiceTests(unittest.TestCase):
 
         self.assertGreater(score, 0.9)
 
+    def test_weather_by_region_still_uses_service_peix_config_override(self) -> None:
+        service = PeixEpiScoreService.__new__(PeixEpiScoreService)
+        service.PEIX_CONFIG = {
+            "weather_temp_threshold": 10.0,
+            "weather_temp_divisor": 10.0,
+            "weather_uv_threshold": 8.0,
+            "weather_temp_weight": 1.0,
+            "weather_uv_weight": 0.0,
+            "weather_humidity_weight": 0.0,
+        }
+        weather_row = type(
+            "WeatherRow",
+            (),
+            {
+                "city": "Berlin",
+                "temperatur": 0.0,
+                "uv_index": 8.0,
+                "luftfeuchtigkeit": 0.0,
+            },
+        )()
+        service.db = MagicMock()
+        service.db.query.return_value.filter.return_value.all.return_value = [weather_row]
+
+        signal = service._weather_by_region()
+
+        self.assertEqual(signal["BE"], 1.0)
+
+    def test_survstat_by_region_still_uses_service_disease_mapping_override(self) -> None:
+        service = PeixEpiScoreService.__new__(PeixEpiScoreService)
+        service._SURVSTAT_BY_VIRUS = {"Custom Virus": ["influenza, saisonal"]}
+        latest_week_query = MagicMock()
+        latest_week_query.filter.return_value.scalar.return_value = datetime(2026, 2, 2)
+        rows_query = MagicMock()
+        rows_query.filter.return_value.all.return_value = [
+            type(
+                "SurvstatRow",
+                (),
+                {"week": 6, "bundesland": "Berlin", "incidence": 42.0},
+            )()
+        ]
+        historical_query = MagicMock()
+        historical_query.filter.return_value.group_by.return_value.all.return_value = [
+            (10.0,),
+            (20.0,),
+            (30.0,),
+        ]
+        service.db = MagicMock()
+        service.db.query.side_effect = [latest_week_query, rows_query, historical_query]
+
+        signal = service._survstat_by_region("Custom Virus")
+
+        self.assertIn("BE", signal)
+        self.assertGreater(signal["BE"], 0.0)
+
+    def test_wastewater_by_region_still_uses_service_region_mapping_override(self) -> None:
+        service = PeixEpiScoreService.__new__(PeixEpiScoreService)
+        service.REGION_CODE_TO_NAME = {"XX": "Override Region"}
+        latest_query = MagicMock()
+        latest_query.filter.return_value.scalar.return_value = datetime(2026, 2, 2)
+        rows_query = MagicMock()
+        rows_query.filter.return_value.group_by.return_value.all.return_value = [
+            type("WastewaterRow", (), {"bundesland": "XX", "avg_viruslast": 25.0})()
+        ]
+        service.db = MagicMock()
+        service.db.query.side_effect = [latest_query, rows_query]
+
+        signal = service._wastewater_by_region("Influenza A")
+
+        self.assertEqual(signal, {"XX": 1.0})
+
     def test_build_marks_peix_as_ranking_signal_and_deprecates_probability_alias(self) -> None:
         payload = _stub_peix_service().build("Influenza A")
 

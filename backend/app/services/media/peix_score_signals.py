@@ -25,60 +25,36 @@ from app.services.data_ingest.weather_service import CITY_STATE_MAP
 from app.services.ml.forecast_contracts import DEFAULT_DECISION_HORIZON_DAYS
 from app.services.ml.forecast_horizon_utils import DEFAULT_FORECAST_REGION
 
-REGION_CODE_TO_NAME = {
-    "BW": "Baden-Württemberg",
-    "BY": "Bayern",
-    "BE": "Berlin",
-    "BB": "Brandenburg",
-    "HB": "Bremen",
-    "HH": "Hamburg",
-    "HE": "Hessen",
-    "MV": "Mecklenburg-Vorpommern",
-    "NI": "Niedersachsen",
-    "NW": "Nordrhein-Westfalen",
-    "RP": "Rheinland-Pfalz",
-    "SL": "Saarland",
-    "SN": "Sachsen",
-    "ST": "Sachsen-Anhalt",
-    "SH": "Schleswig-Holstein",
-    "TH": "Thüringen",
-}
-REGION_NAME_TO_CODE = {name.lower(): code for code, name in REGION_CODE_TO_NAME.items()}
-
-_NOTAUFNAHME_BY_VIRUS = {
-    "Influenza A": "ILI",
-    "Influenza B": "ILI",
-    "SARS-CoV-2": "COVID",
-    "RSV A": "ARI",
-}
-
-_SURVSTAT_BY_VIRUS: dict[str, list[str]] = {
-    "Influenza A": ["influenza, saisonal"],
-    "Influenza B": ["influenza, saisonal"],
-    "SARS-CoV-2": ["covid-19"],
-    "RSV A": ["rsv (meldepflicht gemäß ifsg)"],
-}
-
-PEIX_CONFIG = {
-    "weather_temp_threshold": 20.0,
-    "weather_temp_divisor": 25.0,
-    "weather_uv_threshold": 8.0,
-    "weather_temp_weight": 0.40,
-    "weather_uv_weight": 0.35,
-    "weather_humidity_weight": 0.25,
-    "school_start_multiplier": 1.15,
-    "school_start_weather_min": 0.6,
-    "shortage_norm_divisor": 20.0,
-    "shortage_fieber_weight": 0.5,
-    "notaufnahme_fallback_divisor": 20.0,
-}
-
 
 def _clamp(value: float, lo: float = 0.0, hi: float = 1.0) -> float:
     return max(lo, min(hi, value))
 
 
+def _service_config(service) -> dict:
+    return getattr(service, "PEIX_CONFIG", {})
+
+
+def _region_code_to_name(service) -> dict[str, str]:
+    return getattr(service, "REGION_CODE_TO_NAME", {})
+
+
+def _region_name_to_code(service) -> dict[str, str]:
+    mapping = getattr(service, "REGION_NAME_TO_CODE", None)
+    if mapping is not None:
+        return mapping
+    return {name.lower(): code for code, name in _region_code_to_name(service).items()}
+
+
+def _survstat_by_virus(service) -> dict[str, list[str]]:
+    return getattr(service, "_SURVSTAT_BY_VIRUS", {})
+
+
+def _notaufnahme_by_virus(service) -> dict[str, str]:
+    return getattr(service, "_NOTAUFNAHME_BY_VIRUS", {})
+
+
 def _wastewater_by_region(service, virus_typ: str) -> dict[str, float]:
+    region_code_to_name = _region_code_to_name(service)
     latest = service.db.query(func.max(WastewaterData.datum)).filter(
         WastewaterData.virus_typ == virus_typ
     ).scalar()
@@ -102,13 +78,14 @@ def _wastewater_by_region(service, virus_typ: str) -> dict[str, float]:
     out: dict[str, float] = {}
     for row in rows:
         code = str(row.bundesland or "").strip().upper()
-        if code not in REGION_CODE_TO_NAME:
+        if code not in region_code_to_name:
             continue
         out[code] = _clamp(float(row.avg_viruslast or 0.0) / max_val)
     return out
 
 
 def _are_by_region(service) -> dict[str, float]:
+    region_name_to_code = _region_name_to_code(service)
     latest = service.db.query(func.max(AREKonsultation.datum)).filter(
         AREKonsultation.altersgruppe == "00+",
     ).scalar()
@@ -129,7 +106,7 @@ def _are_by_region(service) -> dict[str, float]:
     out: dict[str, float] = {}
     for row in rows:
         name = str(row.bundesland or "").strip().lower()
-        code = REGION_NAME_TO_CODE.get(name)
+        code = region_name_to_code.get(name)
         if not code:
             continue
         current_value = float(row.konsultationsinzidenz or 0.0)
@@ -152,7 +129,8 @@ def _are_by_region(service) -> dict[str, float]:
 
 
 def _survstat_by_region(service, virus_typ: str) -> dict[str, float]:
-    diseases = _SURVSTAT_BY_VIRUS.get(virus_typ)
+    region_name_to_code = _region_name_to_code(service)
+    diseases = _survstat_by_virus(service).get(virus_typ)
     if not diseases:
         return {}
 
@@ -188,7 +166,7 @@ def _survstat_by_region(service, virus_typ: str) -> dict[str, float]:
 
     out: dict[str, float] = {}
     for bundesland, current_incidence in per_bl.items():
-        code = REGION_NAME_TO_CODE.get(bundesland.lower())
+        code = region_name_to_code.get(bundesland.lower())
         if not code:
             continue
 
@@ -217,6 +195,8 @@ def _survstat_by_region(service, virus_typ: str) -> dict[str, float]:
 
 
 def _weather_by_region(service) -> dict[str, float]:
+    config = _service_config(service)
+    region_name_to_code = _region_name_to_code(service)
     cutoff = utc_now() - timedelta(days=2)
     rows = service.db.query(WeatherData).filter(
         WeatherData.datum >= cutoff,
@@ -229,19 +209,19 @@ def _weather_by_region(service) -> dict[str, float]:
         state_name = CITY_STATE_MAP.get(row.city)
         if not state_name:
             continue
-        code = REGION_NAME_TO_CODE.get(state_name.lower())
+        code = region_name_to_code.get(state_name.lower())
         if not code:
             continue
         temp = float(row.temperatur) if row.temperatur is not None else 7.0
         uv = float(row.uv_index) if row.uv_index is not None else 2.5
         humidity = float(row.luftfeuchtigkeit) if row.luftfeuchtigkeit is not None else 70.0
-        temp_factor = _clamp((PEIX_CONFIG["weather_temp_threshold"] - temp) / PEIX_CONFIG["weather_temp_divisor"])
-        uv_factor = _clamp((PEIX_CONFIG["weather_uv_threshold"] - uv) / PEIX_CONFIG["weather_uv_threshold"])
+        temp_factor = _clamp((config["weather_temp_threshold"] - temp) / config["weather_temp_divisor"])
+        uv_factor = _clamp((config["weather_uv_threshold"] - uv) / config["weather_uv_threshold"])
         humidity_factor = _clamp(humidity / 100.0)
         risk = (
-            temp_factor * PEIX_CONFIG["weather_temp_weight"]
-            + uv_factor * PEIX_CONFIG["weather_uv_weight"]
-            + humidity_factor * PEIX_CONFIG["weather_humidity_weight"]
+            temp_factor * config["weather_temp_weight"]
+            + uv_factor * config["weather_uv_weight"]
+            + humidity_factor * config["weather_humidity_weight"]
         )
         per_region.setdefault(code, []).append(_clamp(risk))
 
@@ -249,7 +229,8 @@ def _weather_by_region(service) -> dict[str, float]:
 
 
 def _notaufnahme_signal(service, virus_typ: str) -> float:
-    syndrome = _NOTAUFNAHME_BY_VIRUS.get(virus_typ, "ARI")
+    config = _service_config(service)
+    syndrome = _notaufnahme_by_virus(service).get(virus_typ, "ARI")
     latest = (
         service.db.query(NotaufnahmeSyndromData)
         .filter(
@@ -290,7 +271,7 @@ def _notaufnahme_signal(service, virus_typ: str) -> float:
     values = sorted(values)
 
     if len(values) < 14:
-        return _clamp(float(current_value) / PEIX_CONFIG["notaufnahme_fallback_divisor"])
+        return _clamp(float(current_value) / config["notaufnahme_fallback_divisor"])
 
     rank = bisect_right(values, current_value)
     return _clamp(rank / len(values))
@@ -327,12 +308,13 @@ def _search_signal(service) -> float:
 
 
 def _shortage_signal(service) -> float:
+    config = _service_config(service)
     signals = get_cached_signals() or {}
     by_cat = signals.get("by_category", {})
     atemwege = float((by_cat.get("Atemwege") or {}).get("high_demand", 0) or 0)
     fieber = float((by_cat.get("Fieber_Schmerz") or {}).get("high_demand", 0) or 0)
-    count = atemwege + fieber * PEIX_CONFIG["shortage_fieber_weight"]
-    return _clamp(count / PEIX_CONFIG["shortage_norm_divisor"])
+    count = atemwege + fieber * config["shortage_fieber_weight"]
+    return _clamp(count / config["shortage_norm_divisor"])
 
 
 def _forecast_signal(service, virus_typ: str) -> float:

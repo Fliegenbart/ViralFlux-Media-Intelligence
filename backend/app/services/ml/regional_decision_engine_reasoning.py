@@ -115,15 +115,15 @@ def reason_trace(
         )
     elif signal_stage == "prepare_early":
         message = (
-            f"Event probability {event_probability:.2f} is below the full Prepare threshold {float(thresholds['prepare_probability']):.2f}, but early-warning signals are strong enough for a visible Prepare stage."
+            f"Early warning: trend, freshness and confidence support preparation, even though event probability {event_probability:.2f} is still below the hard Prepare threshold."
         )
         why.append(message)
         why_details.append(
             reason_detail(
-                "event_probability_prepare_early_threshold",
+                "prepare_early_signal",
                 message,
                 event_probability=round(event_probability, 4),
-                threshold=round(float(thresholds["prepare_probability"]), 4),
+                prepare_probability_threshold=round(float(thresholds["prepare_probability"]), 4),
             )
         )
     else:
@@ -316,11 +316,17 @@ def explanation_summary(
     *,
     bundesland_name: str,
     stage: str,
+    signal_stage: str | None = None,
     event_probability: float,
     forecast_confidence: float,
     trend_bundle: Mapping[str, Any],
     agreement_bundle: Mapping[str, Any],
 ) -> str:
+    if stage == "prepare" and signal_stage == "prepare_early":
+        return (
+            f"{bundesland_name} shows an early warning pattern. Prepare assets and monitoring, "
+            "but do not release paid budget yet."
+        )
     trend_raw = float(trend_bundle.get("raw") or 0.0)
     agreement_direction = str(agreement_bundle.get("direction") or "flat")
     return (
@@ -334,6 +340,7 @@ def explanation_summary_detail(
     *,
     bundesland_name: str,
     stage: str,
+    signal_stage: str | None = None,
     event_probability: float,
     forecast_confidence: float,
     trend_bundle: Mapping[str, Any],
@@ -345,6 +352,7 @@ def explanation_summary_detail(
         message,
         bundesland_name=bundesland_name,
         stage=stage,
+        signal_stage=signal_stage,
         event_probability=round(event_probability, 4),
         forecast_confidence=round(forecast_confidence, 4),
         trend_raw=round(float(trend_bundle.get("raw") or 0.0), 4),

@@ -270,6 +270,7 @@ class RegionalDecisionEngine:
         explanation_summary = self._explanation_summary(
             bundesland_name=str(prediction.get("bundesland_name") or prediction.get("bundesland") or ""),
             stage=stage,
+            signal_stage=signal_stage,
             event_probability=event_probability,
             forecast_confidence=forecast_confidence,
             trend_bundle=trend_bundle,
@@ -278,6 +279,7 @@ class RegionalDecisionEngine:
         explanation_summary_detail = self._explanation_summary_detail(
             bundesland_name=str(prediction.get("bundesland_name") or prediction.get("bundesland") or ""),
             stage=stage,
+            signal_stage=signal_stage,
             event_probability=event_probability,
             forecast_confidence=forecast_confidence,
             trend_bundle=trend_bundle,
@@ -334,6 +336,13 @@ class RegionalDecisionEngine:
                 "avg_source_freshness_days": round(freshness_days, 2),
                 "source_prefixes": list(prefixes),
                 "quality_gate_passed": bool(quality_gate.get("overall_passed")),
+                "prepare_mode": (
+                    "early_warning"
+                    if signal_stage == "prepare_early"
+                    else "standard_prepare"
+                    if signal_stage == "prepare"
+                    else None
+                ),
             },
         )
 
@@ -545,6 +554,7 @@ class RegionalDecisionEngine:
         *,
         bundesland_name: str,
         stage: str,
+        signal_stage: str | None = None,
         event_probability: float,
         forecast_confidence: float,
         trend_bundle: Mapping[str, Any],
@@ -553,6 +563,7 @@ class RegionalDecisionEngine:
         return regional_decision_engine_reasoning.explanation_summary(
             bundesland_name=bundesland_name,
             stage=stage,
+            signal_stage=signal_stage,
             event_probability=event_probability,
             forecast_confidence=forecast_confidence,
             trend_bundle=trend_bundle,
@@ -565,6 +576,7 @@ class RegionalDecisionEngine:
         *,
         bundesland_name: str,
         stage: str,
+        signal_stage: str | None = None,
         event_probability: float,
         forecast_confidence: float,
         trend_bundle: Mapping[str, Any],
@@ -574,6 +586,7 @@ class RegionalDecisionEngine:
         return regional_decision_engine_reasoning.explanation_summary_detail(
             bundesland_name=bundesland_name,
             stage=stage,
+            signal_stage=signal_stage,
             event_probability=event_probability,
             forecast_confidence=forecast_confidence,
             trend_bundle=trend_bundle,

@@ -133,6 +133,56 @@ class ForecastApiTests(unittest.TestCase):
         self.assertEqual(first_prediction["decision"]["stage"], "prepare")
         self.assertIn("expected_target_incidence", first_prediction)
 
+    def test_regional_predict_response_exposes_prepare_early_signal_but_prepare_stage(self) -> None:
+        payload = {
+            "virus_typ": "Influenza A",
+            "horizon_days": 7,
+            "decision_summary": {
+                "watch_regions": 0,
+                "prepare_regions": 1,
+                "activate_regions": 0,
+                "avg_priority_score": 0.58,
+                "top_region": "BY",
+                "top_region_decision": "Prepare",
+            },
+            "predictions": [
+                {
+                    "bundesland": "BY",
+                    "bundesland_name": "Bayern",
+                    "horizon_days": 7,
+                    "event_probability_calibrated": 0.004,
+                    "decision_label": "Prepare",
+                    "priority_score": 0.58,
+                    "uncertainty_summary": "Residual uncertainty is currently limited.",
+                    "decision": {
+                        "stage": "prepare",
+                        "signal_stage": "prepare_early",
+                        "decision_score": 0.58,
+                        "metadata": {"prepare_mode": "early_warning"},
+                    },
+                }
+            ],
+            "top_5": [],
+            "top_decisions": [],
+            "generated_at": "2026-04-10T12:00:00",
+        }
+
+        with patch(
+            "app.services.ml.regional_forecast.RegionalForecastService.predict_all_regions",
+            return_value=payload,
+        ):
+            response = self.client.get(
+                "/api/v1/forecast/regional/predict?virus_typ=Influenza%20A&horizon_days=7",
+                headers=self.admin_headers,
+            )
+
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        first_prediction = body["predictions"][0]
+        self.assertEqual(first_prediction["decision"]["stage"], "prepare")
+        self.assertEqual(first_prediction["decision"]["signal_stage"], "prepare_early")
+        self.assertEqual(first_prediction["decision"]["metadata"]["prepare_mode"], "early_warning")
+
     def test_regional_hero_overview_returns_lightweight_snapshot_rollup(self) -> None:
         payload = {
             "generated_at": "2026-04-08T20:00:00",

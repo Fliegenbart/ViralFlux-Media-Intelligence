@@ -256,11 +256,10 @@ class RegionalDecisionEngineTests(unittest.TestCase):
         self.assertEqual(decision.stage, "prepare")
         self.assertTrue(decision.reason_trace.why)
         self.assertTrue(
-            any(
-                item["code"] == "event_probability_prepare_early_threshold"
-                for item in decision.reason_trace.why_details
-            )
+            any(item["code"] == "prepare_early_signal" for item in decision.reason_trace.why_details)
         )
+        self.assertEqual(decision.reason_trace.why_details[0]["code"], "prepare_early_signal")
+        self.assertIn("early warning", decision.explanation_summary.lower())
         self.assertEqual(decision.reason_trace.policy_overrides, [])
         self.assertFalse(
             any(
@@ -435,6 +434,7 @@ class RegionalDecisionEngineTests(unittest.TestCase):
             result = self.engine._explanation_summary(
                 bundesland_name="Bayern",
                 stage="activate",
+                signal_stage="activate",
                 event_probability=0.8,
                 forecast_confidence=0.7,
                 trend_bundle={"raw": 0.2},
@@ -445,6 +445,7 @@ class RegionalDecisionEngineTests(unittest.TestCase):
         mocked.assert_called_once_with(
             bundesland_name="Bayern",
             stage="activate",
+            signal_stage="activate",
             event_probability=0.8,
             forecast_confidence=0.7,
             trend_bundle={"raw": 0.2},

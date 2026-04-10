@@ -246,7 +246,7 @@ class ProductionReadinessService:
             }
         warnings = list(summary.get("warnings") or [])
         status = "warning" if warnings else str(summary.get("status") or "ok")
-        if status not in _STATUS_SEVERITY:
+        if status not in _HEALTH_BY_STATUS:
             status = "warning"
         return {
             "status": status,

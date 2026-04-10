@@ -55,9 +55,9 @@ class SmokeTestReleaseTests(unittest.TestCase):
                         {
                             "bundesland": "BY",
                             "recommended_activation_level": "Prepare",
-                            "suggested_budget_share": 0.12,
-                            "suggested_budget_amount": 6000.0,
-                            "allocation_reason_trace": {"drivers": ["decision_score"]},
+                            "suggested_budget_share": 0.0,
+                            "suggested_budget_amount": 0.0,
+                            "allocation_reason_trace": {"drivers": ["early_prepare_signal"]},
                             "confidence": 0.66,
                         }
                     ],
@@ -79,10 +79,14 @@ class SmokeTestReleaseTests(unittest.TestCase):
                             "recommended_product_cluster": {"label": "Respiratory Core Demand"},
                             "recommended_keyword_cluster": {"label": "Respiratory Relief Search"},
                             "activation_level": "Prepare",
-                            "suggested_budget_amount": 6000.0,
+                            "suggested_budget_amount": 0.0,
                             "confidence": 0.66,
                             "evidence_class": "moderate",
-                            "recommendation_rationale": {"summary": ["Signal and budget support activation."]},
+                            "recommendation_rationale": {
+                                "summary": [
+                                    "Early warning supports preparation, but no paid activation budget is released yet."
+                                ]
+                            },
                         }
                     ],
                 },
@@ -158,9 +162,9 @@ class SmokeTestReleaseTests(unittest.TestCase):
                         {
                             "bundesland": "BY",
                             "recommended_activation_level": "Prepare",
-                            "suggested_budget_share": 0.12,
-                            "suggested_budget_amount": 6000.0,
-                            "allocation_reason_trace": {"drivers": ["decision_score"]},
+                            "suggested_budget_share": 0.0,
+                            "suggested_budget_amount": 0.0,
+                            "allocation_reason_trace": {"drivers": ["early_prepare_signal"]},
                             "confidence": 0.66,
                         }
                     ],
@@ -182,10 +186,14 @@ class SmokeTestReleaseTests(unittest.TestCase):
                             "recommended_product_cluster": {"label": "Respiratory Core Demand"},
                             "recommended_keyword_cluster": {"label": "Respiratory Relief Search"},
                             "activation_level": "Prepare",
-                            "suggested_budget_amount": 6000.0,
+                            "suggested_budget_amount": 0.0,
                             "confidence": 0.66,
                             "evidence_class": "moderate",
-                            "recommendation_rationale": {"summary": ["Signal and budget support activation."]},
+                            "recommendation_rationale": {
+                                "summary": [
+                                    "Early warning supports preparation, but no paid activation budget is released yet."
+                                ]
+                            },
                         }
                     ],
                 },
@@ -244,9 +252,9 @@ class SmokeTestReleaseTests(unittest.TestCase):
                         {
                             "bundesland": "BY",
                             "recommended_activation_level": "Prepare",
-                            "suggested_budget_share": 0.12,
-                            "suggested_budget_amount": 6000.0,
-                            "allocation_reason_trace": {},
+                            "suggested_budget_share": 0.0,
+                            "suggested_budget_amount": 0.0,
+                            "allocation_reason_trace": {"drivers": ["early_prepare_signal"]},
                             "confidence": 0.66,
                         }
                     ],
@@ -264,10 +272,14 @@ class SmokeTestReleaseTests(unittest.TestCase):
                             "recommended_product_cluster": {"label": "Respiratory Core Demand"},
                             "recommended_keyword_cluster": {"label": "Respiratory Relief Search"},
                             "activation_level": "Prepare",
-                            "suggested_budget_amount": 6000.0,
+                            "suggested_budget_amount": 0.0,
                             "confidence": 0.66,
                             "evidence_class": "moderate",
-                            "recommendation_rationale": {"summary": ["Signal and budget support activation."]},
+                            "recommendation_rationale": {
+                                "summary": [
+                                    "Early warning supports preparation, but no paid activation budget is released yet."
+                                ]
+                            },
                         }
                     ],
                 },
@@ -309,9 +321,9 @@ class SmokeTestReleaseTests(unittest.TestCase):
                         {
                             "bundesland": "BY",
                             "recommended_activation_level": "Prepare",
-                            "suggested_budget_share": 0.12,
-                            "suggested_budget_amount": 6000.0,
-                            "allocation_reason_trace": {},
+                            "suggested_budget_share": 0.0,
+                            "suggested_budget_amount": 0.0,
+                            "allocation_reason_trace": {"drivers": ["early_prepare_signal"]},
                             "confidence": 0.66,
                         }
                     ],
@@ -329,10 +341,14 @@ class SmokeTestReleaseTests(unittest.TestCase):
                             "recommended_product_cluster": {"label": "Respiratory Core Demand"},
                             "recommended_keyword_cluster": {"label": "Respiratory Relief Search"},
                             "activation_level": "Prepare",
-                            "suggested_budget_amount": 6000.0,
+                            "suggested_budget_amount": 0.0,
                             "confidence": 0.66,
                             "evidence_class": "moderate",
-                            "recommendation_rationale": {"summary": ["Signal and budget support activation."]},
+                            "recommendation_rationale": {
+                                "summary": [
+                                    "Early warning supports preparation, but no paid activation budget is released yet."
+                                ]
+                            },
                         }
                     ],
                 },
@@ -390,9 +406,9 @@ class SmokeTestReleaseTests(unittest.TestCase):
                         {
                             "bundesland": "BY",
                             "recommended_activation_level": "Prepare",
-                            "suggested_budget_share": 0.12,
-                            "suggested_budget_amount": 6000.0,
-                            "allocation_reason_trace": {"drivers": ["decision_score"]},
+                            "suggested_budget_share": 0.0,
+                            "suggested_budget_amount": 0.0,
+                            "allocation_reason_trace": {"drivers": ["early_prepare_signal"]},
                             "confidence": 0.66,
                         }
                     ],
@@ -414,10 +430,14 @@ class SmokeTestReleaseTests(unittest.TestCase):
                             "recommended_product_cluster": {"label": "Respiratory Core Demand"},
                             "recommended_keyword_cluster": {"label": "Respiratory Relief Search"},
                             "activation_level": "Prepare",
-                            "suggested_budget_amount": 6000.0,
+                            "suggested_budget_amount": 0.0,
                             "confidence": 0.66,
                             "evidence_class": "moderate",
-                            "recommendation_rationale": {"summary": ["Signal and budget support activation."]},
+                            "recommendation_rationale": {
+                                "summary": [
+                                    "Early warning supports preparation, but no paid activation budget is released yet."
+                                ]
+                            },
                         }
                     ],
                 },

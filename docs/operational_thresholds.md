@@ -164,7 +164,7 @@ Those mappings are currently encoded in `PRIMARY_SOURCE_PREFIXES` and `SOURCE_PR
 ## Typical Output Semantics
 
 - `Watch`: the signal is not yet strong or reliable enough for preparation or activation
-- `Prepare`: the signal is operationally relevant, but not yet at full activation strength
-- `Activate`: the signal is strong enough across probability, confidence and supporting evidence to prioritize the region operationally
+- `Prepare`: early-warning stage for operational preparation only; no paid budget release
+- `Activate`: strong signal that can release budget if business and quality gates are open
 
 The API exposes the final stage as `decision.stage` and as the convenience label `decision_label`.

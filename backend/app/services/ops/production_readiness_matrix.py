@@ -67,6 +67,10 @@ def regional_matrix_item(
             "horizon_days": horizon_days,
             "status": "warning",
             "model_availability": "unsupported",
+            "regional_artifacts_ready": False,
+            "regional_artifact_blockers": [],
+            "regional_artifact_bootstrap_command": None,
+            "artifact_diagnostic": None,
             "load_error": None,
             "artifact_transition_mode": None,
             "quality_gate": {"overall_passed": False, "forecast_readiness": "UNSUPPORTED"},
@@ -118,6 +122,14 @@ def regional_matrix_item(
     quality_gate = metadata.get("quality_gate") or {"overall_passed": False, "forecast_readiness": "NO_MODEL"}
     load_error = str(artifacts.get("load_error") or "").strip()
     feature_columns = metadata.get("feature_columns") or []
+    artifact_diagnostic = dict(artifacts.get("artifact_diagnostic") or {})
+    bootstrap_command = str(artifact_diagnostic.get("bootstrap_command") or "").strip() or None
+    operator_message = str(artifact_diagnostic.get("operator_message") or "").strip() or None
+    diagnostic_missing_files = [
+        str(name)
+        for name in (artifact_diagnostic.get("missing_files") or [])
+        if str(name)
+    ]
     artifact_transition_mode = str(
         artifacts.get("artifact_transition_mode")
         or metadata.get("artifact_transition_mode")
@@ -209,6 +221,14 @@ def regional_matrix_item(
     blockers: list[str] = []
     if not model_available:
         blockers.append(load_error or "Regional model artifacts missing.")
+        if operator_message and operator_message not in blockers:
+            blockers.append(operator_message)
+        if diagnostic_missing_files:
+            missing_files_message = (
+                "Missing regional artifact files: " + ", ".join(diagnostic_missing_files)
+            )
+            if missing_files_message not in blockers:
+                blockers.append(missing_files_message)
     blockers.extend(live_source_blockers)
     if source_freshness_status == "critical" and source_freshness_message and source_freshness_message not in blockers:
         blockers.append(source_freshness_message)
@@ -226,6 +246,10 @@ def regional_matrix_item(
         "horizon_days": horizon_days,
         "status": overall_status,
         "model_availability": model_availability,
+        "regional_artifacts_ready": model_available,
+        "regional_artifact_blockers": list(dict.fromkeys(blockers)),
+        "regional_artifact_bootstrap_command": bootstrap_command,
+        "artifact_diagnostic": artifact_diagnostic or None,
         "load_error": load_error or None,
         "artifact_transition_mode": artifact_transition_mode,
         "quality_gate": quality_gate,

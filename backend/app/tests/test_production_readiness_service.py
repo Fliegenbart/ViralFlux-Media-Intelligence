@@ -990,6 +990,64 @@ class ProductionReadinessServiceTests(unittest.TestCase):
         self.assertGreater(regional["summary"]["stale_sources"], 0)
         self.assertTrue(snapshot["blockers"])
 
+    def test_build_snapshot_exposes_regional_artifact_bootstrap_blocker(self) -> None:
+        now = datetime(2026, 3, 17, 10, 0, 0)
+        self._seed_wastewater(available_time=now - timedelta(days=1))
+
+        def fake_artifacts(_self, virus_typ: str, horizon_days: int = 7):
+            return {
+                "artifact_diagnostic": {
+                    "status": "missing",
+                    "artifact_scope": {"virus_typ": virus_typ, "horizon_days": horizon_days},
+                    "artifact_dir": f"/tmp/{virus_typ}/horizon_{horizon_days}",
+                    "missing_files": [],
+                    "bootstrap_required": True,
+                    "operator_message": "Regionales Modell fehlt.",
+                    "bootstrap_command": "cd backend && python scripts/backfill_regional_model_artifacts.py --horizon 3 --horizon 5 --horizon 7",
+                    "artifact_transition_mode": None,
+                    "load_error": None,
+                }
+            }
+
+        with patch(
+            "app.services.ml.regional_forecast.RegionalForecastService._load_artifacts",
+            new=fake_artifacts,
+        ), patch(
+            "app.services.ml.forecast_decision_service.ForecastDecisionService.build_monitoring_snapshot",
+            return_value={
+                "monitoring_status": "healthy",
+                "forecast_readiness": "GO",
+                "freshness_status": "fresh",
+                "accuracy_freshness_status": "fresh",
+                "backtest_freshness_status": "fresh",
+                "model_version": "national:v1",
+            },
+        ):
+            service = ProductionReadinessService(
+                session_factory=self._session_factory,
+                now_provider=lambda: now,
+            )
+            service._broker_component = lambda: {"status": "ok", "message": "mocked"}  # type: ignore[method-assign]
+            service._schema_bootstrap_component = lambda: {"status": "ok", "message": "mocked"}  # type: ignore[method-assign]
+            snapshot = service.build_snapshot()
+
+        regional = snapshot["components"]["regional_operational"]
+        item = next(
+            entry
+            for entry in regional["matrix"]
+            if entry["virus_typ"] == "Influenza A" and entry["horizon_days"] == 5
+        )
+
+        self.assertEqual(snapshot["status"], "unhealthy")
+        self.assertEqual(regional["status"], "critical")
+        self.assertGreater(regional["summary"]["regional_artifacts_missing"], 0)
+        self.assertGreater(len(regional["summary"]["regional_artifact_blockers"]), 0)
+        self.assertEqual(item["model_availability"], "missing")
+        self.assertFalse(item["regional_artifacts_ready"])
+        self.assertEqual(item["artifact_diagnostic"]["status"], "missing")
+        self.assertIn("backfill_regional_model_artifacts.py", item["regional_artifact_bootstrap_command"])
+        self.assertIn("Regionales Modell fehlt.", item["regional_artifact_blockers"])
+
     def test_operational_run_recorder_persists_audit_log_metadata(self) -> None:
         recorder = OperationalRunRecorder(self.db)
         payload = recorder.record_event(

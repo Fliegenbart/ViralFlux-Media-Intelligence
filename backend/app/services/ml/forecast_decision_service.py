@@ -33,7 +33,6 @@ from app.services.ml.forecast_contracts import (
     heuristic_event_score_from_forecast,
     normalize_event_forecast_payload,
     normalized_decision_priority_index,
-    normalized_expected_value_index,
 )
 from app.services.ml.forecast_horizon_utils import DEFAULT_FORECAST_REGION, reliability_score_from_metrics
 

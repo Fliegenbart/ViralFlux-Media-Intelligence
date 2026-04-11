@@ -1,4 +1,5 @@
 import os
+import shutil
 import sqlite3
 import subprocess
 import tempfile
@@ -7,10 +8,25 @@ from pathlib import Path
 
 
 class AlembicSQLitePortabilityTests(unittest.TestCase):
+    def _alembic_command(self) -> list[str]:
+        repo_root = Path(__file__).resolve().parents[3]
+        candidate_paths = [
+            repo_root / ".venv-backend311" / "bin" / "alembic",
+            repo_root / "backend" / ".venv" / "bin" / "alembic",
+        ]
+        for candidate in candidate_paths:
+            if candidate.exists():
+                return [str(candidate)]
+
+        alembic_bin = shutil.which("alembic")
+        if alembic_bin:
+            return [alembic_bin]
+
+        self.skipTest("Alembic executable is not available in this test environment.")
+
     def test_forecast_accuracy_log_migration_runs_on_sqlite(self) -> None:
         repo_root = Path(__file__).resolve().parents[3]
         backend_dir = repo_root / "backend"
-        alembic_bin = repo_root / ".venv-backend311" / "bin" / "alembic"
 
         with tempfile.TemporaryDirectory() as tmp_dir:
             db_path = Path(tmp_dir) / "sqlite-migration-check.db"
@@ -18,7 +34,7 @@ class AlembicSQLitePortabilityTests(unittest.TestCase):
             env["DATABASE_URL"] = f"sqlite:///{db_path}"
 
             result = subprocess.run(
-                [str(alembic_bin), "upgrade", "e6a1b4c8d2f3"],
+                [*self._alembic_command(), "upgrade", "e6a1b4c8d2f3"],
                 cwd=backend_dir,
                 env=env,
                 capture_output=True,
@@ -44,7 +60,6 @@ class AlembicSQLitePortabilityTests(unittest.TestCase):
     def test_mlforecast_scope_migration_runs_on_sqlite(self) -> None:
         repo_root = Path(__file__).resolve().parents[3]
         backend_dir = repo_root / "backend"
-        alembic_bin = repo_root / ".venv-backend311" / "bin" / "alembic"
 
         with tempfile.TemporaryDirectory() as tmp_dir:
             db_path = Path(tmp_dir) / "sqlite-mlforecast-scope.db"
@@ -52,7 +67,7 @@ class AlembicSQLitePortabilityTests(unittest.TestCase):
             env["DATABASE_URL"] = f"sqlite:///{db_path}"
 
             result = subprocess.run(
-                [str(alembic_bin), "upgrade", "f1a2b3c4d5e6"],
+                [*self._alembic_command(), "upgrade", "f1a2b3c4d5e6"],
                 cwd=backend_dir,
                 env=env,
                 capture_output=True,
@@ -77,7 +92,6 @@ class AlembicSQLitePortabilityTests(unittest.TestCase):
     def test_full_migration_chain_reaches_head_on_sqlite(self) -> None:
         repo_root = Path(__file__).resolve().parents[3]
         backend_dir = repo_root / "backend"
-        alembic_bin = repo_root / ".venv-backend311" / "bin" / "alembic"
 
         with tempfile.TemporaryDirectory() as tmp_dir:
             db_path = Path(tmp_dir) / "sqlite-head.db"
@@ -85,7 +99,7 @@ class AlembicSQLitePortabilityTests(unittest.TestCase):
             env["DATABASE_URL"] = f"sqlite:///{db_path}"
 
             result = subprocess.run(
-                [str(alembic_bin), "upgrade", "head"],
+                [*self._alembic_command(), "upgrade", "head"],
                 cwd=backend_dir,
                 env=env,
                 capture_output=True,

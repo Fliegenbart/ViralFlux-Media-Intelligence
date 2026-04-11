@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 import pandas as pd
-from sqlalchemy import func, text
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.core.celery_app import celery_app

@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom';
 import React from 'react';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
 const mockRehydrateAuth = jest.fn<Promise<boolean>, []>();
 const mockLogout = jest.fn();
@@ -15,7 +15,11 @@ jest.mock('./lib/api', () => ({
 
 jest.mock('./pages/LoginPage', () => ({
   __esModule: true,
-  default: () => <div>Login Mock</div>,
+  default: ({ onLogin }: { onLogin: () => void }) => (
+    <button type="button" onClick={onLogin}>
+      Login Mock
+    </button>
+  ),
 }));
 
 jest.mock('./pages/LandingPage', () => ({
@@ -45,6 +49,11 @@ jest.mock('./pages/media/VirusRadarPage', () => ({
 jest.mock('./pages/media/TimegraphPage', () => ({
   __esModule: true,
   default: () => <div>Zeitgraph Mock</div>,
+}));
+
+jest.mock('./pages/media/CampaignsPage', () => ({
+  __esModule: true,
+  default: () => <div>Kampagnen Mock</div>,
 }));
 
 import App from './App';
@@ -140,6 +149,34 @@ describe('App routing', () => {
 
       expect(await screen.findByText('Login Mock')).toBeInTheDocument();
       expect(window.location.pathname).toBe('/login');
+    });
+
+    it('returns to the requested deep link after login', async () => {
+      window.history.pushState({}, '', '/kampagnen/123');
+
+      render(<App />);
+
+      expect(await screen.findByText('Login Mock')).toBeInTheDocument();
+      expect(window.location.pathname).toBe('/login');
+
+      fireEvent.click(screen.getByRole('button', { name: 'Login Mock' }));
+
+      expect(await screen.findByText('Kampagnen Mock')).toBeInTheDocument();
+      expect(window.location.pathname).toBe('/kampagnen/123');
+    });
+
+    it('returns to the canonical destination after logging in from a legacy alias', async () => {
+      window.history.pushState({}, '', '/dashboard/recommendations/123');
+
+      render(<App />);
+
+      expect(await screen.findByText('Login Mock')).toBeInTheDocument();
+      expect(window.location.pathname).toBe('/login');
+
+      fireEvent.click(screen.getByRole('button', { name: 'Login Mock' }));
+
+      expect(await screen.findByText('Kampagnen Mock')).toBeInTheDocument();
+      expect(window.location.pathname).toBe('/kampagnen/123');
     });
   });
 

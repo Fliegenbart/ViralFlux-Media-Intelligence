@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState, Suspense, lazy } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, Outlet, useParams } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, Outlet, useLocation, useParams } from 'react-router-dom';
 import LoginPage from './pages/LoginPage';
 import ErrorBoundary from './components/ErrorBoundary';
 import LoadingSkeleton from './components/LoadingSkeleton';
@@ -133,12 +133,22 @@ const RootRedirect: React.FC<{ authenticated: boolean }> = ({ authenticated }) =
 const LoginRoute: React.FC<{ authenticated: boolean; onLogin: () => void }> = ({
   authenticated,
   onLogin,
-}) => (authenticated ? <Navigate to="/virus-radar" replace /> : <LoginPage onLogin={onLogin} />);
+}) => {
+  const location = useLocation();
+  const from = (location.state as { from?: { pathname: string; search: string; hash: string } } | null)?.from;
+  const target = from ? `${from.pathname}${from.search}${from.hash}` : '/virus-radar';
+
+  return authenticated ? <Navigate to={target} replace /> : <LoginPage onLogin={onLogin} />;
+};
 
 const ProtectedRoute: React.FC<{ authenticated: boolean; children: React.ReactElement }> = ({
   authenticated,
   children,
-}) => (authenticated ? children : <Navigate to="/login" replace />);
+}) => {
+  const location = useLocation();
+
+  return authenticated ? children : <Navigate to="/login" replace state={{ from: location }} />;
+};
 
 /* ── Auth Context ──────────────────────────────────────────────── */
 interface AuthContextValue {

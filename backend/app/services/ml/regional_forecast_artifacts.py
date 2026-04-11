@@ -108,26 +108,10 @@ def load_artifacts(
             payload["load_error"] = (
                 f"Metadaten für {virus_typ}/h{horizon} fehlen das Pflichtfeld 'horizon_days'."
             )
-            payload["artifact_diagnostic"] = build_artifact_diagnostic(
-                virus_typ=virus_typ,
-                horizon_days=horizon,
-                artifact_dir=model_dir,
-                missing_files=[],
-                load_error=payload["load_error"],
-                supported_horizons=list(supported_forecast_horizons),
-            )
             return payload
         if int(metadata_horizon) != horizon:
             payload["load_error"] = (
                 f"Metadaten-Horizon {metadata_horizon} passt nicht zur Anfrage h{horizon}."
-            )
-            payload["artifact_diagnostic"] = build_artifact_diagnostic(
-                virus_typ=virus_typ,
-                horizon_days=horizon,
-                artifact_dir=model_dir,
-                missing_files=[],
-                load_error=payload["load_error"],
-                supported_horizons=list(supported_forecast_horizons),
             )
             return payload
         metadata.setdefault("target_window_days", service._target_window_for_horizon(horizon))
@@ -140,15 +124,6 @@ def load_artifacts(
                 f"Artefakt-Bundle für {virus_typ}/h{horizon} enthält trainingsinterne "
                 f"Feature-Spalten: {', '.join(invalid_feature_columns)}. "
                 "Bitte horizon-spezifisches Retraining durchführen."
-            )
-            payload["artifact_diagnostic"] = build_artifact_diagnostic(
-                virus_typ=virus_typ,
-                horizon_days=horizon,
-                artifact_dir=model_dir,
-                missing_files=[],
-                load_error=payload["load_error"],
-                supported_horizons=list(supported_forecast_horizons),
-                artifact_transition_mode=payload.get("artifact_transition_mode"),
             )
             return payload
         payload["metadata"] = metadata
@@ -217,15 +192,6 @@ def load_artifacts(
             f"Legacy-Artefakt-Bundle für {virus_typ}/h{horizon} enthält trainingsinterne "
             f"Feature-Spalten: {', '.join(invalid_feature_columns)}. "
             "Bitte horizon-spezifisches Retraining durchführen."
-        )
-        legacy_payload["artifact_diagnostic"] = build_artifact_diagnostic(
-            virus_typ=virus_typ,
-            horizon_days=horizon,
-            artifact_dir=legacy_dir,
-            missing_files=[],
-            load_error=legacy_payload["load_error"],
-            supported_horizons=list(supported_forecast_horizons),
-            artifact_transition_mode="legacy_default_window_fallback",
         )
     return legacy_payload
 

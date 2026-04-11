@@ -18,6 +18,11 @@ jest.mock('./pages/LoginPage', () => ({
   default: () => <div>Login Mock</div>,
 }));
 
+jest.mock('./pages/LandingPage', () => ({
+  __esModule: true,
+  default: () => <div>Landing Mock</div>,
+}));
+
 jest.mock('framer-motion', () => ({
   AnimatePresence: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
@@ -105,6 +110,37 @@ describe('App routing', () => {
     expect(within(operatorNav).getByRole('button', { name: /Kampagnen/i })).toBeInTheDocument();
     expect(within(operatorNav).getByRole('button', { name: /Evidenz/i })).toBeInTheDocument();
     expect(within(operatorNav).queryByRole('button', { name: /Dashboard/i })).not.toBeInTheDocument();
+  });
+
+  describe('when logged out', () => {
+    beforeEach(() => {
+      mockRehydrateAuth.mockResolvedValue(false);
+    });
+
+    it('redirects / to /welcome', async () => {
+      render(<App />);
+
+      expect(await screen.findByText('Landing Mock')).toBeInTheDocument();
+      expect(window.location.pathname).toBe('/welcome');
+    });
+
+    it('renders the landing page at /welcome', async () => {
+      window.history.pushState({}, '', '/welcome');
+
+      render(<App />);
+
+      expect(await screen.findByText('Landing Mock')).toBeInTheDocument();
+      expect(window.location.pathname).toBe('/welcome');
+    });
+
+    it('redirects /virus-radar to /login', async () => {
+      window.history.pushState({}, '', '/virus-radar');
+
+      render(<App />);
+
+      expect(await screen.findByText('Login Mock')).toBeInTheDocument();
+      expect(window.location.pathname).toBe('/login');
+    });
   });
 
   it('keeps legacy buyer-facing aliases for decision, pilot, and report on supported pages', async () => {

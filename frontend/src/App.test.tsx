@@ -160,6 +160,15 @@ describe('App routing', () => {
       expect(window.location.pathname).toBe('/login');
     });
 
+    it('renders the login page at /login and keeps the URL on /login', async () => {
+      window.history.pushState({}, '', '/login');
+
+      render(<App />);
+
+      expect(await screen.findByText('Login Mock')).toBeInTheDocument();
+      expect(window.location.pathname).toBe('/login');
+    });
+
     it('returns to the requested deep link after login', async () => {
       window.history.pushState({}, '', '/kampagnen/123');
 
@@ -172,6 +181,20 @@ describe('App routing', () => {
 
       expect(await screen.findByText('Kampagnen Mock')).toBeInTheDocument();
       expect(window.location.pathname).toBe('/kampagnen/123');
+    });
+
+    it('lands on /virus-radar after login when there is no stored from destination', async () => {
+      window.history.pushState({}, '', '/login');
+
+      render(<App />);
+
+      expect(await screen.findByText('Login Mock')).toBeInTheDocument();
+      expect(window.location.pathname).toBe('/login');
+
+      fireEvent.click(screen.getByRole('button', { name: 'Login Mock' }));
+
+      expect(await screen.findByText('Virus-Radar Mock')).toBeInTheDocument();
+      expect(window.location.pathname).toBe('/virus-radar');
     });
 
     it('preserves search and hash when returning to the requested deep link after login', async () => {

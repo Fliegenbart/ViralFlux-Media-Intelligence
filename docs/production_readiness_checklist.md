@@ -98,6 +98,22 @@ python scripts/smoke_test_release.py \
   --top-n 3
 ```
 
+## Missing Regional Artifacts
+
+If the regional forecast response reports `missing_artifacts=true` or readiness shows
+`regional_artifacts_ready=false`, use the exact runtime bootstrap command first. The same
+command is exposed in readiness as `regional_artifact_bootstrap_command`:
+
+```bash
+cd backend && python scripts/backfill_regional_model_artifacts.py --horizon 3 --horizon 5 --horizon 7
+```
+
+After that:
+
+1. recompute operational views
+2. rerun the smoke test
+3. confirm readiness no longer reports regional artifact blockers
+
 ## Health Endpoint Expectations
 
 ### `/health/live`

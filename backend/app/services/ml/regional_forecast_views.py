@@ -13,16 +13,24 @@ def empty_forecast_response(
     status: str,
     message: str,
     artifact_transition_mode: str | None = None,
+    artifact_diagnostic: dict[str, Any] | None = None,
     supported_horizon_days_for_virus: list[int] | None = None,
     ensure_supported_horizon_fn,
     supported_forecast_horizons,
     utc_now_fn,
 ) -> dict[str, Any]:
     horizon = ensure_supported_horizon_fn(horizon_days)
+    diagnostic = dict(artifact_diagnostic or {})
+    artifact_scope = diagnostic.get("artifact_scope")
     return {
         "virus_typ": virus_typ,
         "status": status,
         "message": message,
+        "operator_message": diagnostic.get("operator_message"),
+        "bootstrap_command": diagnostic.get("bootstrap_command"),
+        "missing_artifacts": bool(diagnostic.get("bootstrap_required")),
+        "missing_scopes": [artifact_scope] if artifact_scope else [],
+        "artifact_diagnostic": diagnostic or None,
         "horizon_days": horizon,
         "supported_horizon_days": list(supported_forecast_horizons),
         "supported_horizon_days_for_virus": list(

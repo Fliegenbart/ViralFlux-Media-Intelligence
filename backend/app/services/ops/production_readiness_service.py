@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 import pandas as pd
-from sqlalchemy import func, text
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.core.celery_app import celery_app
@@ -341,6 +341,11 @@ class ProductionReadinessService:
                 )
 
         overall_status = self._worst_status(item["status"] for item in matrix)
+        supported_matrix = [
+            item
+            for item in matrix
+            if item["model_availability"] != "unsupported"
+        ]
         return {
             "status": overall_status,
             "message": "Regional operational readiness evaluated.",
@@ -349,6 +354,19 @@ class ProductionReadinessService:
                 "warning": sum(1 for item in matrix if item["status"] == "warning"),
                 "critical": sum(1 for item in matrix if item["status"] == "critical"),
                 "missing_models": sum(1 for item in matrix if item["model_availability"] == "missing"),
+                "regional_artifacts_ready": sum(
+                    1 for item in supported_matrix if item.get("regional_artifacts_ready")
+                ),
+                "regional_artifacts_missing": sum(
+                    1 for item in supported_matrix if item.get("regional_artifacts_ready") is False
+                ),
+                "regional_artifact_blockers": sorted(
+                    {
+                        blocker
+                        for item in supported_matrix
+                        for blocker in item.get("regional_artifact_blockers") or []
+                    }
+                ),
                 "unsupported": sum(1 for item in matrix if item["model_availability"] == "unsupported"),
                 "stale_forecasts": sum(1 for item in matrix if item["forecast_recency_status"] == "critical"),
                 "stale_sources": sum(1 for item in matrix if item["source_freshness_status"] == "critical"),

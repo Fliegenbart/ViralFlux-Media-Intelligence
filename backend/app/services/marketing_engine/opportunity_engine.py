@@ -5,8 +5,7 @@ persistiert Opportunities und liefert CRM-fähiges JSON.
 """
 
 from __future__ import annotations
-from datetime import datetime, timedelta
-import time
+from datetime import datetime
 from typing import Any
 import logging
 
@@ -14,12 +13,10 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.models.database import AuditLog, BacktestRun, MarketingOpportunity
+from app.models.database import BacktestRun, MarketingOpportunity
 from app.services.media.ai_campaign_planner import AiCampaignPlanner
 from app.services.media.campaign_guardrails import CampaignGuardrails
-from app.services.media.message_library import select_gelo_message_pack
 from app.services.media.product_catalog_service import ProductCatalogService
-from app.services.media.ranking_signal_service import RankingSignalService
 from app.services.media.playbook_engine import PlaybookEngine
 
 from .detectors.market_supply_monitor import MarketSupplyMonitor

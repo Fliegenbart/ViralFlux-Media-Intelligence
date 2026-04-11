@@ -6,7 +6,7 @@ from app.core.time import utc_now
 import json
 import logging
 import pickle
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -39,8 +39,6 @@ from app.services.ml.regional_media_allocation_engine import RegionalMediaAlloca
 from app.services.ml.models.geo_hierarchy import GeoHierarchyHelper
 from app.services.ml.models.tsfm_adapter import TSFMAdapter
 from app.services.ml.regional_panel_utils import (
-    ALL_BUNDESLAENDER,
-    BUNDESLAND_NAMES,
     EVENT_DEFINITION_VERSION,
     TARGET_WINDOW_DAYS,
     activation_policy_for_virus,

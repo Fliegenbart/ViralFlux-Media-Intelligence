@@ -1,35 +1,19 @@
 from __future__ import annotations
-from app.core.time import utc_now
 
-from datetime import datetime, timedelta
 from types import SimpleNamespace
 from typing import Any
 
 from sqlalchemy.orm import Session
 
 from app.models.database import (
-    GoogleTrendsData,
-    MarketingOpportunity,
     MediaOutcomeImportBatch,
     MediaOutcomeImportIssue,
     MediaOutcomeRecord,
-    SurvstatWeeklyData,
 )
 from app.services.marketing_engine.opportunity_engine import MarketingOpportunityEngine
 from app.services.media.business_validation_service import BusinessValidationService
 from app.services.media.cockpit_service import MediaCockpitService
 from app.services.media.outcome_signal_service import OutcomeSignalService
-from app.services.media.recommendation_contracts import (
-    enrich_card_v2,
-)
-from app.services.media.semantic_contracts import (
-    business_gate_contract,
-    evidence_tier_contract,
-    forecast_probability_contract,
-    priority_score_contract,
-    ranking_signal_contract,
-    signal_confidence_contract,
-)
 from app.services.media.truth_gate_service import TruthGateService
 from app.services.ml.forecast_decision_service import ForecastDecisionService
 from app.services.media.v2.campaigns import build_campaigns_payload

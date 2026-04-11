@@ -358,7 +358,6 @@ class CockpitBentoSectionContractTests(unittest.TestCase):
         self.assertEqual(tiles_by_id["map_top_region"]["field_contracts"]["signal_score"]["source"], "RankingSignal")
 
     def test_bento_section_keeps_pollen_tile_as_stale_fallback_without_recent_pollen_data(self) -> None:
-        current_date = datetime(2026, 3, 10)
         source_status = {"items": [{"source_key": "pollen", "is_live": False, "last_updated": None}]}
 
         with patch(

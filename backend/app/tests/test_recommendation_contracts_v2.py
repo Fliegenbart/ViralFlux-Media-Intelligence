@@ -1,5 +1,5 @@
 import unittest
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from app.services.media.recommendation_contracts import (
     dedupe_group_id,

@@ -3,7 +3,6 @@
 from __future__ import annotations
 from app.core.time import utc_now
 
-from datetime import datetime
 from typing import Any
 
 
@@ -53,6 +52,7 @@ CONNECTOR_CATALOG: tuple[dict[str, Any], ...] = (
         "supported_objectives": ["Awareness", "Reach", "Consideration"],
     },
 )
+APPROVAL_REQUIRED_BLOCKER = "Die Kampagne muss vor einer Übergabe zuerst freigegeben werden."
 
 
 class ConnectorPayloadService:
@@ -200,7 +200,7 @@ class ConnectorPayloadService:
 
         workflow_status = str(normalized_package.get("workflow_status") or "DRAFT").upper()
         if workflow_status not in {"APPROVED", "ACTIVATED"}:
-            blockers.append("Die Kampagne muss vor einer Übergabe zuerst freigegeben werden.")
+            blockers.append(APPROVAL_REQUIRED_BLOCKER)
 
         if not normalized_package.get("campaign_name"):
             blockers.append("Kampagnenname fehlt.")
@@ -230,7 +230,7 @@ class ConnectorPayloadService:
         can_sync_now = not blockers
         if can_sync_now:
             state = "ready"
-        elif blockers == ["Kampagne muss vor einem Tool-Sync zuerst freigegeben werden."]:
+        elif blockers == [APPROVAL_REQUIRED_BLOCKER]:
             state = "approval_required"
         else:
             state = "needs_work"

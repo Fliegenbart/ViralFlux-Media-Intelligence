@@ -89,7 +89,7 @@ class OpportunityEngineMaintenanceTests(unittest.TestCase):
         self.db.commit()
 
         with patch(
-            "app.services.marketing_engine.opportunity_engine_maintenance.PeixEpiScoreService"
+            "app.services.marketing_engine.opportunity_engine_maintenance.RankingSignalService"
         ) as service_cls:
             service_cls.return_value.build.return_value = {
                 "regions": {
@@ -112,6 +112,14 @@ class OpportunityEngineMaintenanceTests(unittest.TestCase):
         self.assertEqual(result["updated"], 1)
         self.assertEqual(refreshed.campaign_payload["peix_context"]["region_code"], "SH")
         self.assertEqual(refreshed.campaign_payload["peix_context"]["score"], 66.0)
+        self.assertEqual(
+            refreshed.campaign_payload["ranking_signal_context"]["ranking_signal_score"],
+            66.0,
+        )
+        self.assertEqual(
+            refreshed.campaign_payload["ranking_signal_context"]["signal_band"],
+            "ready",
+        )
 
     def test_backfill_product_mapping_updates_mapping_and_suggested_products(self) -> None:
         now = datetime.now(timezone.utc)

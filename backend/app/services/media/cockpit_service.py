@@ -26,7 +26,7 @@ from app.services.media.cockpit.signals import (
     normalize_recommendation_ref as cockpit_normalize_recommendation_ref,
     primary_signal_score as cockpit_primary_signal_score,
 )
-from app.services.media.peix_score_service import PeixEpiScoreService
+from app.services.media.ranking_signal_service import RankingSignalService
 
 class MediaCockpitService:
     """Aggregierter Read-Service für das map-first Media Cockpit."""
@@ -40,19 +40,19 @@ class MediaCockpitService:
         target_source: str = "RKI_ARE",
     ) -> dict:
         """Liefert einen einzigen Payload für Dashboard-Tabstruktur."""
-        peix = PeixEpiScoreService(self.db).build(virus_typ=virus_typ)
+        ranking_signal = RankingSignalService(self.db).build(virus_typ=virus_typ)
         data_freshness = self._data_freshness()
         source_status = self._source_status(data_freshness)
         region_refs = self._region_recommendation_refs()
 
         map_section = self._map_section(
             virus_typ=virus_typ,
-            peix_score=peix,
+            peix_score=ranking_signal,
             region_recommendations=region_refs,
         )
         signal_snapshot = self._signal_snapshot_section(
             virus_typ=virus_typ,
-            peix_score=peix,
+            peix_score=ranking_signal,
             map_section=map_section,
         )
 
@@ -62,10 +62,11 @@ class MediaCockpitService:
             "bento": self._bento_section(
                 virus_typ=virus_typ,
                 map_section=map_section,
-                peix_score=peix,
+                peix_score=ranking_signal,
                 source_status=source_status,
             ),
-            "peix_epi_score": peix,
+            "ranking_signal": ranking_signal,
+            "peix_epi_score": ranking_signal,
             "signal_snapshot": signal_snapshot,
             "source_status": source_status,
             "source_freshness": self._source_freshness_summary(source_status),

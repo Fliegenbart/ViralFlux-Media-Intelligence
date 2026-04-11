@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import importlib
 import tempfile
 import unittest
 from pathlib import Path
@@ -287,6 +286,11 @@ class PilotReadoutServiceTests(unittest.TestCase):
             payload["executive_summary"]["what_should_we_do_now"],
         )
         self.assertIn("Validierte inkrementelle Lift-Metriken fehlen noch.", payload["run_context"]["gate_snapshot"]["missing_requirements"])
+        self.assertNotIn("GELO", payload["run_context"]["validation_disclaimer"])
+        self.assertNotIn("GELO", payload["empty_state"]["body"])
+        self.assertTrue(
+            all("GELO" not in item for item in payload["run_context"]["gate_snapshot"]["missing_requirements"])
+        )
         self.assertFalse(_scan_for_key(payload, "impact_probability"))
 
     def test_build_readout_returns_go_when_scope_and_business_gate_both_pass(self) -> None:

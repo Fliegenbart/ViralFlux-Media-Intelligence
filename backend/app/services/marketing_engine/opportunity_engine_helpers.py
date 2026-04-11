@@ -77,17 +77,17 @@ def extract_region_codes_from_opportunity(opportunity: dict[str, Any]) -> list[s
     return sorted(region_codes)
 
 
-def derive_peix_context(
-    peix_regions: dict[str, Any],
+def derive_ranking_signal_context(
+    ranking_signal_regions: dict[str, Any],
     selected_region: str,
     opportunity: dict[str, Any],
     *,
-    peix_national: dict[str, Any] | None = None,
+    ranking_signal_national: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     trigger = opportunity.get("trigger_context") or {}
 
     if selected_region == "Gesamt":
-        nat = peix_national or {}
+        nat = ranking_signal_national or {}
         score = nat.get("national_score")
         if score is None:
             return {}
@@ -95,22 +95,43 @@ def derive_peix_context(
             "region_code": "Gesamt",
             "score": score,
             "signal_score": score,
+            "ranking_signal_score": score,
             "band": nat.get("national_band"),
+            "signal_band": nat.get("national_band"),
             "impact_probability": nat.get("national_impact_probability"),
             "drivers": nat.get("top_drivers") or [],
+            "signal_drivers": nat.get("top_drivers") or [],
             "trigger_event": trigger.get("event"),
         }
 
-    peix_entry = peix_regions.get(selected_region) or {}
+    ranking_signal_entry = ranking_signal_regions.get(selected_region) or {}
     return {
         "region_code": selected_region,
-        "score": peix_entry.get("score_0_100"),
-        "signal_score": peix_entry.get("score_0_100"),
-        "band": peix_entry.get("risk_band"),
-        "impact_probability": peix_entry.get("impact_probability"),
-        "drivers": peix_entry.get("top_drivers") or [],
+        "score": ranking_signal_entry.get("score_0_100"),
+        "signal_score": ranking_signal_entry.get("score_0_100"),
+        "ranking_signal_score": ranking_signal_entry.get("score_0_100"),
+        "band": ranking_signal_entry.get("risk_band"),
+        "signal_band": ranking_signal_entry.get("risk_band"),
+        "impact_probability": ranking_signal_entry.get("impact_probability"),
+        "drivers": ranking_signal_entry.get("top_drivers") or [],
+        "signal_drivers": ranking_signal_entry.get("top_drivers") or [],
         "trigger_event": trigger.get("event"),
     }
+
+
+def derive_peix_context(
+    peix_regions: dict[str, Any],
+    selected_region: str,
+    opportunity: dict[str, Any],
+    *,
+    peix_national: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    return derive_ranking_signal_context(
+        peix_regions,
+        selected_region,
+        opportunity,
+        ranking_signal_national=peix_national,
+    )
 
 
 def fact_label(key: str) -> str:
@@ -129,7 +150,8 @@ def fact_label(key: str) -> str:
         "pollen_score": "Pollenlage",
         "allergy_search_level": "Allergie-Suche",
         "allergy_search_delta": "Allergie-Trend",
-        "peix_score": "PeixEpiScore",
+        "peix_score": "Ranking-Signal",
+        "ranking_signal_score": "Ranking-Signal",
         "event_probability_pct": "Event-Wahrscheinlichkeit",
         "expected_value_index": "Opportunity-Index",
         "forecast_readiness": "Forecast-Readiness",

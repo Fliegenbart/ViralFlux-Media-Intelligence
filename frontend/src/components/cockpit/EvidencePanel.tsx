@@ -122,14 +122,14 @@ const EvidencePanel: React.FC<Props> = ({
       ? 'Noch nicht vollständig frei'
       : canUseWithCaution
         ? 'Mit Vorsicht nutzbar'
-        : 'GELO-Datenbasis im Aufbau';
+        : 'Kundendatenbasis im Aufbau';
   const heroTitle = readyForWeeklyPlanning
-    ? 'Die GELO-Planung ist für diese Woche belastbar genug.'
+    ? 'Die Datengrundlage ist für diese Woche belastbar genug.'
     : hasBlockers
       ? 'Die Datenlage ist sichtbar, aber offene Punkte bremsen die Freigabe.'
       : canUseWithCaution
         ? 'Die Empfehlungen sind nutzbar, aber noch nicht überall gleich stark belegt.'
-        : 'Für GELO fehlen noch Daten, bevor die Empfehlungen wirklich belastbar werden.';
+        : 'Für die Wochenplanung fehlen noch Daten, bevor die Empfehlungen wirklich belastbar werden.';
   const heroSummary = firstNonEmpty(
     workspaceStatus?.summary,
     businessValidation?.guidance,
@@ -139,12 +139,12 @@ const EvidencePanel: React.FC<Props> = ({
     'Hier steht kompakt, was bereits belastbar ist, was noch fehlt und was als Nächstes geklärt werden sollte.',
   );
   const trustedNow = readyForWeeklyPlanning
-    ? 'Vorhersage, frische Quellen und GELO-Kundendaten stützen die Wochenplanung gemeinsam.'
+    ? 'Vorhersage, frische Quellen und Kundendaten stützen die Wochenplanung gemeinsam.'
     : reliabilityItem?.tone === 'success'
       ? 'Vorhersage und Quellen geben eine gute Richtung, auch wenn Kundendaten noch nicht überall gleich stark tragen.'
       : 'Es gibt erste Signale, aber noch nicht genug belastbare Belege für jede Empfehlung.';
   const missingNow = !hasTruthData
-    ? 'Es fehlen noch GELO-Kundendaten mit Wochen-, Produkt- und Bundesland-Bezug.'
+    ? 'Es fehlen noch Kundendaten mit Wochen-, Produkt- und Bundesland-Bezug.'
     : !hasOutcomeLearning
       ? 'Erkenntnisse aus Kundendaten sind noch im Aufbau und stützen die Priorisierung bisher nur begrenzt.'
       : sourceAttentionCount > 0
@@ -172,7 +172,7 @@ const EvidencePanel: React.FC<Props> = ({
   const trustCards: EvidenceSummaryCard[] = [
     {
       label: 'Datenvollständigkeit',
-      value: hasTruthData ? `${truthStatus?.coverage_weeks ?? 0} Wochen verbunden` : 'GELO-Daten fehlen noch',
+      value: hasTruthData ? `${truthStatus?.coverage_weeks ?? 0} Wochen verbunden` : 'Kundendaten fehlen noch',
       detail: completenessDetail,
       tone: hasTruthData ? (customerItem?.tone || 'success') : 'warning',
     },
@@ -193,12 +193,12 @@ const EvidencePanel: React.FC<Props> = ({
   ];
   const connectedItems = uniqueNonEmpty([
     `Kundendatenstatus: ${truthLayerLabel(truthStatus)}`,
-    hasTruthData && latestImportAt ? `Letzter GELO-Import: ${formatDateTime(latestImportAt)}` : '',
+    hasTruthData && latestImportAt ? `Letzter Kundendaten-Import: ${formatDateTime(latestImportAt)}` : '',
     `Verbunden: ${truthStatus?.coverage_weeks ?? 0} Wochen · ${truthStatus?.regions_covered ?? 0} Bundesländer · ${truthStatus?.products_covered ?? 0} Produkte`,
     `Live-Quellen: ${(evidence?.source_status?.live_count || 0)}/${evidence?.source_status?.total || 0} aktuell`,
   ]);
   const missingItems = uniqueNonEmpty([
-    !hasTruthData ? 'Für GELO fehlen noch passende Kundendaten für eine saubere Wochenplanung.' : '',
+    !hasTruthData ? 'Für eine saubere Wochenplanung fehlen noch passende Kundendaten.' : '',
     !hasOutcomeLearning ? 'Erkenntnisse aus Kundendaten sind noch im Aufbau.' : '',
     sourceAttentionCount > 0 ? `${sourceAttentionCount} Datenquellen brauchen noch eine Prüfung (Qualität oder Frische).` : '',
     ...blockerPreview.map((item) => sanitizeEvidenceCopy(item)),
@@ -211,7 +211,7 @@ const EvidencePanel: React.FC<Props> = ({
         title="Evidenz wird aufgebaut"
         tone="muted"
       >
-        <div className="evidence-briefing-skeleton" role="status" aria-live="polite" aria-label="GELO-Datenlage wird geladen">
+        <div className="evidence-briefing-skeleton" role="status" aria-live="polite" aria-label="Kundendatenlage wird geladen">
           <div className="workspace-note-card evidence-briefing-skeleton__hero" />
           <div className="evidence-briefing-skeleton__grid">
             <div className="workspace-note-card evidence-briefing-skeleton__block" />
@@ -264,7 +264,7 @@ const EvidencePanel: React.FC<Props> = ({
                 <span className="campaign-focus-label">Aktueller Evidenzstatus</span>
                 <h3 className="campaign-focus-title">{heroTitle}</h3>
                 <div className="campaign-focus-context">
-                  {[hasTruthData && latestImportAt ? `Letzter GELO-Import ${formatDateTime(latestImportAt)}` : null, truthLayerLabel(truthStatus), truthFreshnessLabel(truthStatus?.truth_freshness_state)].filter(Boolean).join(' · ')}
+                  {[hasTruthData && latestImportAt ? `Letzter Kundendaten-Import ${formatDateTime(latestImportAt)}` : null, truthLayerLabel(truthStatus), truthFreshnessLabel(truthStatus?.truth_freshness_state)].filter(Boolean).join(' · ')}
                 </div>
               </div>
               <span className={`campaign-confidence-chip campaign-confidence-chip--${heroTone}`}>
@@ -510,7 +510,7 @@ function buildCompletenessDetail(
   totalSources: number,
 ): string {
   if (!truthStatus) {
-    return 'Noch keine GELO-Kundendaten verbunden. Live-Quellen allein reichen nur für eine vorsichtige Planung.';
+    return 'Noch keine Kundendaten verbunden. Live-Quellen allein reichen nur für eine vorsichtige Planung.';
   }
 
   const connected = `${truthStatus.regions_covered ?? 0} Bundesländer · ${truthStatus.products_covered ?? 0} Produkte`;

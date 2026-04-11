@@ -4,11 +4,11 @@
 
 The currently active thresholds and weights are centralized in:
 
-- `/Users/davidwegener/Desktop/viralflux/backend/app/services/ml/regional_decision_engine.py`
+- `backend/app/services/ml/regional_decision_engine.py`
 
 The typed config contract lives in:
 
-- `/Users/davidwegener/Desktop/viralflux/backend/app/services/ml/regional_decision_contracts.py`
+- `backend/app/services/ml/regional_decision_contracts.py`
 
 There are two implemented rule configs today:
 
@@ -17,7 +17,7 @@ There are two implemented rule configs today:
 
 Dedicated direct rule coverage lives in:
 
-- `/Users/davidwegener/Desktop/viralflux/backend/app/tests/test_regional_decision_engine.py`
+- `backend/app/tests/test_regional_decision_engine.py`
 
 ## Weighted Score Components
 

@@ -1,5 +1,5 @@
 import unittest
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from app.services.media.recommendation_contracts import (
     dedupe_group_id,
@@ -220,6 +220,56 @@ class RecommendationContractsV2Tests(unittest.TestCase):
         self.assertEqual(response["priority_score"], 92.0)
         self.assertEqual(response["field_contracts"]["signal_score"]["semantics"], "ranking_signal")
         self.assertEqual(response["field_contracts"]["priority_score"]["semantics"], "activation_priority")
+
+    def test_to_card_response_exposes_neutral_ranking_signal_aliases(self) -> None:
+        response = to_card_response(
+            _sample_card(
+                peix_context={
+                    "score": 67.0,
+                    "signal_score": 69.0,
+                    "impact_probability": 71.0,
+                },
+                campaign_payload={
+                    "peix_context": {
+                        "score": 67.0,
+                        "signal_score": 69.0,
+                        "impact_probability": 71.0,
+                    },
+                    "message_framework": {
+                        "hero_message": "Norddeutschland jetzt vorbereiten.",
+                    },
+                    "channel_plan": [
+                        {"channel": "search", "share_pct": 40.0},
+                    ],
+                    "guardrail_report": {
+                        "passed": True,
+                    },
+                },
+            ),
+            include_preview=True,
+        )
+
+        self.assertEqual(response["ranking_signal_context"], response["peix_context"])
+        self.assertEqual(
+            response["campaign_payload"]["ranking_signal_context"],
+            response["campaign_payload"]["peix_context"],
+        )
+        self.assertEqual(
+            response["campaign_preview"]["ranking_signal_context"],
+            response["campaign_preview"]["peix_context"],
+        )
+        self.assertEqual(response["field_contracts"]["signal_score"]["source"], "RankingSignal")
+        self.assertEqual(response["field_contracts"]["impact_probability"]["source"], "RankingSignal")
+
+    def test_to_card_response_uses_neutral_partner_brand_fallback(self) -> None:
+        response = to_card_response(
+            _sample_card(
+                brand=None,
+            ),
+            include_preview=True,
+        )
+
+        self.assertEqual(response["brand"], "Partner Brand")
 
 
 if __name__ == "__main__":

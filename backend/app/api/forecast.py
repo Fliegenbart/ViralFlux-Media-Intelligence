@@ -454,7 +454,7 @@ async def get_campaign_recommendations(
     top_n: int = 12,
     db: Session = Depends(get_db),
 ):
-    """Turn allocation into discussion-ready campaign recommendations for PEIX / GELO.
+    """Turn allocation into discussion-ready campaign recommendations for a customer pilot.
 
     Returns per region:
     - recommended product cluster

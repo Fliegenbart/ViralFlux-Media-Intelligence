@@ -4,11 +4,11 @@
 
 This document describes the implemented nowcast and revision layer in:
 
-- `/Users/davidwegener/Desktop/viralflux/backend/app/services/ml/nowcast_revision.py`
-- `/Users/davidwegener/Desktop/viralflux/backend/app/services/ml/nowcast_contracts.py`
-- `/Users/davidwegener/Desktop/viralflux/backend/app/services/ml/regional_features.py`
-- `/Users/davidwegener/Desktop/viralflux/backend/app/models/database.py`
-- `/Users/davidwegener/Desktop/viralflux/backend/alembic/versions/c3f2a1b4d5e6_add_source_nowcast_snapshots.py`
+- `backend/app/services/ml/nowcast_revision.py`
+- `backend/app/services/ml/nowcast_contracts.py`
+- `backend/app/services/ml/regional_features.py`
+- `backend/app/models/database.py`
+- `backend/alembic/versions/c3f2a1b4d5e6_add_source_nowcast_snapshots.py`
 
 The goal of the layer is practical and transparent:
 
@@ -208,11 +208,11 @@ There is no hidden fallback that silently invents adjusted values for raw-only s
 
 The table is defined in:
 
-- `/Users/davidwegener/Desktop/viralflux/backend/app/models/database.py`
+- `backend/app/models/database.py`
 
 and created by:
 
-- `/Users/davidwegener/Desktop/viralflux/backend/alembic/versions/c3f2a1b4d5e6_add_source_nowcast_snapshots.py`
+- `backend/alembic/versions/c3f2a1b4d5e6_add_source_nowcast_snapshots.py`
 
 Each snapshot record stores:
 
@@ -242,7 +242,7 @@ The layer is intentionally simple and has known boundaries:
 
 Direct unit coverage now lives in:
 
-- `/Users/davidwegener/Desktop/viralflux/backend/app/tests/test_nowcast_revision.py`
+- `backend/app/tests/test_nowcast_revision.py`
 
 The suite covers:
 

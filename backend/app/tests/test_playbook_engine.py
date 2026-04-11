@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from app.services.media.playbook_engine import PlaybookEngine
 
@@ -190,6 +190,49 @@ class PlaybookEngineWrapperTests(unittest.TestCase):
 
         self.assertIs(payload, expected)
         build_mock.assert_called_once_with(self.engine, ["husten", "bronchitis"])
+
+    def test_select_candidates_uses_neutral_ranking_signal_service(self) -> None:
+        ranking_service = Mock()
+        ranking_service.build.return_value = {
+            "regions": {"SH": {"score_0_100": 77.0}},
+            "generated_at": "2026-04-10T09:00:00Z",
+        }
+
+        with (
+            patch("app.services.media.playbook_engine.RankingSignalService", return_value=ranking_service),
+            patch.object(self.engine, "_mycoplasma_candidates", return_value=[]),
+            patch.object(self.engine, "_supply_candidates", return_value=[]),
+            patch.object(self.engine, "_wetter_candidates", return_value=[]),
+            patch.object(self.engine, "_allergy_candidates", return_value=[]),
+            patch.object(self.engine, "_halsschmerz_candidates", return_value=[]),
+            patch.object(self.engine, "_erkaeltungswelle_candidates", return_value=[]),
+            patch.object(self.engine, "_sinus_candidates", return_value=[]),
+        ):
+            payload = self.engine.select_candidates(virus_typ="Influenza A")
+
+        self.assertEqual(payload["selected"], [])
+        self.assertEqual(payload["peix_generated_at"], "2026-04-10T09:00:00Z")
+        self.assertEqual(payload["ranking_signal_generated_at"], "2026-04-10T09:00:00Z")
+
+    def test_candidate_payload_exposes_neutral_signal_aliases(self) -> None:
+        payload = self.engine._candidate_payload(
+            playbook_key="SUPPLY_SHOCK_ATTACK",
+            region_code="SH",
+            peix_entry={
+                "score_0_100": 78.0,
+                "risk_band": "high",
+                "top_drivers": [{"label": "AMELAG"}],
+            },
+            trigger_strength=66.0,
+            confidence=81.0,
+            priority_score=72.0,
+            budget_shift_pct=18.0,
+            trigger_snapshot={"event": "SUPPLY_SHOCK_WINDOW"},
+        )
+
+        self.assertEqual(payload["ranking_signal_score"], 78.0)
+        self.assertEqual(payload["signal_band"], "high")
+        self.assertEqual(payload["signal_drivers"], [{"label": "AMELAG"}])
 
 
 if __name__ == "__main__":

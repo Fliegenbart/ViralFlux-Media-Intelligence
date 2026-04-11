@@ -734,7 +734,7 @@ class RegionalMediaAllocationEngine:
             return []
         return [
             ClusterRecommendation(
-                cluster_key="gelo_core_respiratory",
+                cluster_key="respiratory_core_support",
                 label=f"{virus_typ} core demand cluster",
                 priority_rank=1,
                 fit_score=round(_clamp(0.45 + (allocation_score * 0.55)), 4),

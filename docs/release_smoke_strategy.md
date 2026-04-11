@@ -88,7 +88,7 @@ Grund:
 Lokal oder gegen Live:
 
 ```bash
-cd /Users/davidwegener/Desktop/viralflux/backend
+cd backend
 python scripts/smoke_test_release.py \
   --base-url https://fluxengine.labpulse.ai \
   --virus "Influenza A" \
@@ -136,5 +136,5 @@ Genau deshalb trennt der aktuelle Smoke sauber zwischen `live_failed`, `ready_bl
 Wichtig:
 
 - `ready_blocked` ist inzwischen die ehrliche Restkategorie für einen lebenden, aber noch nicht fachlich freigegebenen regionalen Produktkern
-- für PEIX / GELO bedeutet ein `ready_blocked` nicht automatisch, dass der Deploy kaputt ist
+- fuer einen Design-Partner-Pilot bedeutet ein `ready_blocked` nicht automatisch, dass der Deploy kaputt ist
 - es bedeutet, dass Uptime und Produktnutzbarkeit weiter sind als die operative Pilotfreigabe

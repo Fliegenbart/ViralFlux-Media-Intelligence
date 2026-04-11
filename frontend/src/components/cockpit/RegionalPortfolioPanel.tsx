@@ -122,7 +122,7 @@ const RegionalPortfolioPanel: React.FC<Props> = ({
                       #{item.rank} {item.bundesland_name}
                     </div>
                     <div style={{ marginTop: 4, fontSize: 12, color: 'var(--text-muted)' }}>
-                      {item.virus_typ} · {item.products?.join(' / ') || 'GELO Portfolio'}
+                      {item.virus_typ} · {item.products?.join(' / ') || 'Portfolio-Fokus'}
                     </div>
                     <div style={{ marginTop: 8, fontSize: 13, color: 'var(--text-secondary)' }}>
                       {item.portfolio_action === 'prioritize'

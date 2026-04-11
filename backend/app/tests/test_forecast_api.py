@@ -517,7 +517,7 @@ class ForecastApiTests(unittest.TestCase):
                     "confidence": 0.78,
                     "evidence_class": "truth_backed",
                     "recommended_product_cluster": {
-                        "cluster_key": "gelo_core_respiratory",
+                        "cluster_key": "respiratory_core_support",
                         "label": "Respiratory Core Demand",
                         "fit_score": 0.91,
                         "products": ["GeloMyrtol forte"],
@@ -555,7 +555,7 @@ class ForecastApiTests(unittest.TestCase):
         self.assertEqual(body["summary"]["campaign_recommendation_policy_version"], "campaign_recommendation_v1")
         first = body["recommendations"][0]
         self.assertEqual(first["region"], "BY")
-        self.assertEqual(first["recommended_product_cluster"]["cluster_key"], "gelo_core_respiratory")
+        self.assertEqual(first["recommended_product_cluster"]["cluster_key"], "respiratory_core_support")
         self.assertEqual(first["recommended_keyword_cluster"]["cluster_key"], "respiratory_relief_search")
         self.assertEqual(first["spend_guardrail_status"], "ready")
         self.assertTrue(first["recommendation_rationale"]["guardrails"])

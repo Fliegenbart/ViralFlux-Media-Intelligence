@@ -41,6 +41,8 @@ describe('plain language helpers', () => {
       .toBe('Die Vorhersage ist noch unsicher (41 %).');
     expect(explainInPlainGerman('Spend guardrails are currently satisfied.'))
       .toBe('Budget-Regeln: ok. Nächster Schritt möglich.');
+    expect(explainInPlainGerman('Confidence is below the stage-specific guardrail, so the recommendation needs manual review.'))
+      .toBe('Das Signal ist noch nicht sicher genug; vor dem nächsten Schritt ist eine manuelle Prüfung sinnvoll.');
     expect(explainInPlainGerman('Remaining uncertainty: revision risk 0.33, no positive cross-source agreement, quality gate not passed.'))
       .toBe('Noch offen: Zahlen können sich noch ändern (33 %), kein klarer Abgleich über mehrere Quellen und Qualitätscheck noch nicht bestanden.');
   });

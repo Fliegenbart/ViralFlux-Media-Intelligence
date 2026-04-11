@@ -1,18 +1,18 @@
-# PEIX / GELO Pilot Output Surface
+# Operator Output Surface
 
 Stand: 2026-03-17
 
 ## Zweck
 
-Diese Oberfläche übersetzt die bestehenden Forecast-, Allocation-, Recommendation- und Pilot-Evidence-Outputs in eine management-taugliche Sicht für PEIX und GELO.
+Diese Oberfläche übersetzt die bestehenden Forecast-, Allocation-, Recommendation- und Pilot-Evidence-Outputs in eine management-taugliche Sicht für den aktuellen Partner- und Pilot-Scope.
 
 Sie ist bewusst keine neue Scoring- oder Decision-Engine. Die Seite liest nur vorhandene Backend-Outputs und ordnet sie so, dass ein Kunde die aktuelle Lage schnell versteht.
 
 Seit dem Forecast-First-Update gilt:
 
-- die Seite darf bereits ohne GELO-Outcome-Daten einen echten Forecast zeigen
+- die Seite darf bereits ohne verbundene Outcome-Daten einen echten Forecast zeigen
 - Forecast-Readiness und Commercial-Validation werden bewusst getrennt dargestellt
-- Budget wird ohne GELO-Daten als `scenario_split` und nicht als bewiesene ROI-Freigabe gezeigt
+- Budget wird ohne Outcome-Daten als `scenario_split` und nicht als bewiesene ROI-Freigabe gezeigt
 
 ## Route
 
@@ -53,7 +53,7 @@ Legacy-/Backoffice-Kontexte bleiben getrennt:
 - `POST /api/v1/media/outcomes/import`
   Nur noch manueller Backoffice-Fallback.
 - `POST /api/v1/media/outcomes/ingest`
-  Offizielle GELO M2M-Ingestion für Outcome-Daten.
+  Offizielle Machine-to-Machine-Ingestion für Outcome-Daten.
 
 ## Screen-Struktur
 
@@ -132,7 +132,7 @@ Wichtig:
 - rohe technische Begriffe nur dort, wo sie wirklich als Evidenz helfen
 - GO / WATCH / NO_GO bleibt als operative Sprache sichtbar
 - `priority_score` statt Pseudo-Probability, solange keine echte Kalibrierung vorliegt
-- kein ROI- oder Lift-Claim ohne echte GELO-Outcome-Daten
+- kein ROI- oder Lift-Claim ohne echte Outcome-Daten
 
 ## Nutzungslogik
 
@@ -143,7 +143,7 @@ Die Oberflaeche ist für den Pilot-Review gedacht:
 3. Empfehlung und Evidenz nachvollziehen
 4. Readiness beurteilen
 
-Die Seite ist damit die kundennahe Leseschicht für PEIX, die GELO in Meetings eine klare und nachvollziehbare Budget- und Priorisierungsstory liefert.
+Die Seite ist damit die kundennahe Leseschicht für den aktuellen Pilotbetrieb und liefert in Meetings eine klare und nachvollziehbare Budget- und Priorisierungsstory.
 
 Die ehrliche Standardsprache ist:
 

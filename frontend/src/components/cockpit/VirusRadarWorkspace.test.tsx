@@ -218,7 +218,7 @@ describe('VirusRadarWorkspace', () => {
       />,
     );
 
-    expect(screen.getByText('PEIX / GELO / VIRUS-RADAR')).toBeInTheDocument();
+    expect(screen.getByText('VIRALFLUX / VIRUS-RADAR')).toBeInTheDocument();
     expect(screen.getByText('Virus-Verlauf · Influenza A')).toBeInTheDocument();
     expect(screen.getByText('Influenza A · letzte Wochen und nächste 7 Tage.')).toBeInTheDocument();
     expect(screen.getByText('Durchgezogen siehst du die letzten Wochen, gestrichelt die Prognose.')).toBeInTheDocument();

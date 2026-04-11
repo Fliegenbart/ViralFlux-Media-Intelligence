@@ -167,6 +167,44 @@ def test_render_action_page_wrapper_delegates_to_pages_module():
     mocked.assert_called_once_with(service, pdf, region_list=[], top_cards=[])
 
 
+def test_action_brief_pdf_header_and_footer_use_viralflux_branding():
+    pdf = _ActionBriefPDF("2026-W15")
+    pdf.set_compression(False)
+    pdf.add_page()
+
+    raw = pdf.output(dest="S")
+    text = raw.decode("latin1", errors="ignore") if not isinstance(raw, str) else raw
+
+    assert "ViralFlux Frühwarnung" in text
+    assert "ViralFlux Wochenbericht | Vertraulich" in text
+    assert "PEIX x GELO" not in text
+
+
+def test_render_signal_page_uses_neutral_viralflux_intro_copy():
+    service = WeeklyBriefService(db=None)
+    pdf = _ActionBriefPDF("2026-W15")
+    pdf.set_compression(False)
+
+    service._render_signal_page(
+        pdf,
+        calendar_week="2026-W15",
+        now=datetime(2026, 4, 10, 9, 0, 0),
+        iso_week=15,
+        iso_year=2026,
+        virus_typ="Influenza A",
+        peix={},
+        tiles=[],
+        region_list=[],
+    )
+
+    raw = pdf.output(dest="S")
+    text = raw.decode("latin1", errors="ignore") if not isinstance(raw, str) else raw
+
+    assert "ViralFlux Wochenbericht" in text
+    assert "Automatisierte Lageeinschätzung für das Team." in text
+    assert "PEIX x GELO" not in text
+
+
 def test_render_evidence_page_wrapper_delegates_to_pages_module():
     service = WeeklyBriefService(db=None)
     pdf = _ActionBriefPDF("2026-W15")

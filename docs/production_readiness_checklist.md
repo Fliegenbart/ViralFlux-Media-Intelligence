@@ -2,17 +2,17 @@
 
 ## Scope
 
-This checklist is the release gate for the operational ViralFlux stack used for PEIX / GELO pilots.
+This checklist is the release gate for the operational ViralFlux stack used for customer pilot scopes.
 
 Relevant runtime files:
 
-- `/Users/davidwegener/Desktop/viralflux/backend/app/main.py`
-- `/Users/davidwegener/Desktop/viralflux/backend/app/db/session.py`
-- `/Users/davidwegener/Desktop/viralflux/backend/app/core/celery_app.py`
-- `/Users/davidwegener/Desktop/viralflux/backend/app/services/ops/production_readiness_service.py`
-- `/Users/davidwegener/Desktop/viralflux/backend/scripts/backfill_regional_model_artifacts.py`
-- `/Users/davidwegener/Desktop/viralflux/backend/scripts/recompute_operational_views.py`
-- `/Users/davidwegener/Desktop/viralflux/backend/scripts/smoke_test_release.py`
+- `backend/app/main.py`
+- `backend/app/db/session.py`
+- `backend/app/core/celery_app.py`
+- `backend/app/services/ops/production_readiness_service.py`
+- `backend/scripts/backfill_regional_model_artifacts.py`
+- `backend/scripts/recompute_operational_views.py`
+- `backend/scripts/smoke_test_release.py`
 
 ## Release Gate
 
@@ -75,21 +75,21 @@ The stack is only release-ready when all P1 items below are green.
 ### 1. Backfill regional artifacts
 
 ```bash
-cd /Users/davidwegener/Desktop/viralflux/backend
+cd backend
 python scripts/backfill_regional_model_artifacts.py --horizon 3 --horizon 5 --horizon 7
 ```
 
 ### 2. Recompute operational views
 
 ```bash
-cd /Users/davidwegener/Desktop/viralflux/backend
+cd backend
 python scripts/recompute_operational_views.py --virus "Influenza A" --horizon 7 --weekly-budget-eur 50000
 ```
 
 ### 3. Smoke test a running backend
 
 ```bash
-cd /Users/davidwegener/Desktop/viralflux/backend
+cd backend
 python scripts/smoke_test_release.py \
   --base-url http://127.0.0.1:8000 \
   --virus "Influenza A" \

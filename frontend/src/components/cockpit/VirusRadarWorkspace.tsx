@@ -283,7 +283,7 @@ const VirusRadarWorkspace: React.FC<Props> = ({
       >
         <section className="virus-radar-hero" aria-label="Wochenentscheidung">
           <div className="virus-radar-hero__topline">
-            <span className="virus-radar-hero__product">PEIX / GELO / VIRUS-RADAR</span>
+            <span className="virus-radar-hero__product">VIRALFLUX / VIRUS-RADAR</span>
             <div className="virus-radar-hero__topline-meta">
               <span>Stand {dataTimestamp}</span>
               <span>{heroRegionName || 'Fokus offen'}</span>

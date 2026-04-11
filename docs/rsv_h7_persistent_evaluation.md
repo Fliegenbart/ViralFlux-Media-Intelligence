@@ -17,7 +17,7 @@ Ziel ist nicht ein weiterer lokaler Testlauf, sondern ein Server-Run mit dauerha
 
 Der dedizierte Entry-Point ist:
 
-- [backend/scripts/run_rsv_h7_live_evaluation.py](/Users/davidwegener/Desktop/viralflux/backend/scripts/run_rsv_h7_live_evaluation.py)
+- [backend/scripts/run_rsv_h7_live_evaluation.py](../backend/scripts/run_rsv_h7_live_evaluation.py)
 
 Empfohlener Server-Run:
 
@@ -161,6 +161,6 @@ Es kann für andere h7-Pilot-Scopes wiederverwendet werden, solange diese drei P
 
 ## Verwandte Dokumente
 
-- [rsv_h7_live_evaluation_runbook.md](/Users/davidwegener/Desktop/viralflux/docs/rsv_h7_live_evaluation_runbook.md)
-- [h7_pilot_only_training_path.md](/Users/davidwegener/Desktop/viralflux/docs/h7_pilot_only_training_path.md)
-- [rsv_h7_go_no_go.md](/Users/davidwegener/Desktop/viralflux/docs/rsv_h7_go_no_go.md)
+- [rsv_h7_live_evaluation_runbook.md](./rsv_h7_live_evaluation_runbook.md)
+- [h7_pilot_only_training_path.md](./h7_pilot_only_training_path.md)
+- [rsv_h7_go_no_go.md](./rsv_h7_go_no_go.md)

@@ -157,7 +157,7 @@ describe('EvidencePanel', () => {
     expect(trust.compareDocumentPosition(technical) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  it('shows the GELO trust and onboarding briefing before the technical sections', () => {
+  it('shows the trust and onboarding briefing before the technical sections', () => {
     render(
       <EvidencePanel
         evidence={{
@@ -263,7 +263,7 @@ describe('EvidencePanel', () => {
     expect(screen.getByRole('link', { name: 'Evidenzlage prüfen' })).toHaveAttribute('href', '#evidence-onboarding');
   });
 
-  it('announces the loading state for GELO trust data', () => {
+  it('announces the loading state for customer evidence data', () => {
     render(
       <EvidencePanel
         evidence={null}
@@ -282,11 +282,11 @@ describe('EvidencePanel', () => {
       />,
     );
 
-    expect(screen.getByRole('status', { name: 'GELO-Datenlage wird geladen' })).toBeInTheDocument();
+    expect(screen.getByRole('status', { name: 'Kundendatenlage wird geladen' })).toBeInTheDocument();
     expect(screen.getByText('Evidenz wird aufgebaut')).toBeInTheDocument();
   });
 
-  it('does not show a GELO import date when no customer data is actually connected', () => {
+  it('does not show a customer import date when no customer data is actually connected', () => {
     render(
       <EvidencePanel
         evidence={{
@@ -321,6 +321,6 @@ describe('EvidencePanel', () => {
       />,
     );
 
-    expect(screen.queryByText(/GELO-Import/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Kundendaten-Import/i)).not.toBeInTheDocument();
   });
 });

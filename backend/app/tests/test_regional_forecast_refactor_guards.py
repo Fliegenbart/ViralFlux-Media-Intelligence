@@ -108,7 +108,7 @@ def test_products_from_allocation_wrapper_delegates_to_module() -> None:
     mocked.assert_called_once_with(
         allocation_item=allocation_item,
         virus_typ="Influenza A",
-        gelo_products=regional_forecast_module.GELO_PRODUCTS,
+        portfolio_products=regional_forecast_module.DEFAULT_PORTFOLIO_PRODUCTS,
     )
 
 
@@ -618,7 +618,7 @@ def test_empty_media_allocation_response_wrapper_delegates_to_module() -> None:
         business_gate={"validated_for_budget_activation": False},
         rollout_mode="gated",
         activation_policy="quality_gate",
-        gelo_products=regional_forecast_module.GELO_PRODUCTS,
+        portfolio_products=regional_forecast_module.DEFAULT_PORTFOLIO_PRODUCTS,
         supported_forecast_horizons=regional_forecast_module.SUPPORTED_FORECAST_HORIZONS,
         utc_now_fn=regional_forecast_module.utc_now,
     )
@@ -673,7 +673,7 @@ def test_build_hero_overview_wrapper_delegates_to_module() -> None:
         reference_virus="Influenza A",
         ensure_supported_horizon_fn=ANY,
         supported_virus_types=regional_forecast_module.SUPPORTED_VIRUS_TYPES,
-        gelo_products=regional_forecast_module.GELO_PRODUCTS,
+        portfolio_products=regional_forecast_module.DEFAULT_PORTFOLIO_PRODUCTS,
         utc_now_fn=regional_forecast_module.utc_now,
     )
 
@@ -700,7 +700,7 @@ def test_build_portfolio_view_wrapper_delegates_to_module() -> None:
         reference_virus="Influenza A",
         ensure_supported_horizon_fn=ANY,
         supported_virus_types=regional_forecast_module.SUPPORTED_VIRUS_TYPES,
-        gelo_products=regional_forecast_module.GELO_PRODUCTS,
+        portfolio_products=regional_forecast_module.DEFAULT_PORTFOLIO_PRODUCTS,
         media_channels=regional_forecast_module.MEDIA_CHANNELS,
         utc_now_fn=regional_forecast_module.utc_now,
     )
@@ -819,7 +819,7 @@ def test_generate_media_allocation_wrapper_delegates_to_module() -> None:
         horizon_days=7,
         rollout_mode_for_virus_fn=regional_forecast_module.rollout_mode_for_virus,
         activation_policy_for_virus_fn=regional_forecast_module.activation_policy_for_virus,
-        gelo_products=regional_forecast_module.GELO_PRODUCTS,
+        portfolio_products=regional_forecast_module.DEFAULT_PORTFOLIO_PRODUCTS,
         media_channels=regional_forecast_module.MEDIA_CHANNELS,
         utc_now_fn=regional_forecast_module.utc_now,
     )

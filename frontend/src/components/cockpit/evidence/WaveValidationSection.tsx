@@ -78,7 +78,7 @@ const WaveValidationSection: React.FC<Props> = ({
     <>
       <section className="card subsection-card" style={{ padding: 24 }}>
         <div className="section-heading">
-          <span className="section-kicker">GELO-Kundendaten</span>
+          <span className="section-kicker">Kundendaten</span>
           <h2 className="subsection-title">Tatsächliche regionale Wirkung (Actual Regional Impact)</h2>
           <p className="subsection-copy">
             Dieser Bereich zeigt, ob Kundendaten die Empfehlungen in der Region bereits sichtbar stützen. Wenn hier noch wenig steht, ist das kein Fehler, sondern meist ein Import- oder Abdeckungs-Thema.

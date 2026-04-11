@@ -4,8 +4,15 @@ import { fireEvent, render, screen } from '@testing-library/react';
 
 import ImportValidationSection from './ImportValidationSection';
 
+jest.mock('../cockpitUtils', () => ({
+  formatDateShort: (value?: string | null) => value || '-',
+  formatDateTime: (value?: string | null) => value || '-',
+  truthFreshnessLabel: () => 'Aktuell',
+  truthLayerLabel: () => 'Verbunden',
+}));
+
 describe('ImportValidationSection', () => {
-  it('separates validation-only batches from real GELO imports', () => {
+  it('separates validation-only batches from real customer-data imports', () => {
     render(
       <ImportValidationSection
         truthSnapshot={{
@@ -55,7 +62,7 @@ describe('ImportValidationSection', () => {
       />,
     );
 
-    expect(screen.getByText('Noch keine echten GELO-Importe vorhanden.')).toBeInTheDocument();
+    expect(screen.getByText('Noch keine echten Kundendaten-Importe vorhanden.')).toBeInTheDocument();
     expect(screen.getByText('Prüf- und Validierungsläufe')).toBeInTheDocument();
     expect(screen.getByText('Diese Läufe haben Daten geprüft, aber noch nichts produktiv importiert.')).toBeInTheDocument();
     expect(screen.getByText('gelo_truth_sample_30_weeks.csv')).toBeInTheDocument();

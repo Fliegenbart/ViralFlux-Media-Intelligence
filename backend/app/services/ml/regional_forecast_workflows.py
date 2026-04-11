@@ -13,7 +13,7 @@ def generate_media_allocation(
     horizon_days: int = 7,
     rollout_mode_for_virus_fn,
     activation_policy_for_virus_fn,
-    gelo_products,
+    portfolio_products,
     media_channels,
     utc_now_fn,
 ) -> dict[str, Any]:
@@ -54,7 +54,7 @@ def generate_media_allocation(
         total_budget_eur=weekly_budget_eur,
         spend_enabled=spend_enabled,
         spend_blockers=spend_blockers,
-        default_products=gelo_products.get(virus_typ, ["GeloMyrtol forte"]),
+        default_products=portfolio_products.get(virus_typ, ["GeloMyrtol forte"]),
     )
     allocation_by_region = {
         item["bundesland"]: item

@@ -8,6 +8,10 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from app.services.media.ranking_signal_service import (
+    DEFAULT_RANKING_SIGNAL_CONFIG,
+    RankingSignalService,
+)
 from app.models.database import Base, MLForecast
 from app.services.media.peix_score_service import DEFAULT_WEIGHTS, PeixEpiScoreService
 
@@ -313,6 +317,45 @@ class PeixScoreServiceTests(unittest.TestCase):
         self.assertTrue(payload["regions"]["BE"]["impact_probability_deprecated"])
         self.assertIn("national_impact_probability", payload)
         self.assertIn("impact_probability", payload["regions"]["BE"])
+
+    def test_build_exposes_neutral_ranking_signal_aliases(self) -> None:
+        payload = _stub_peix_service().build("Influenza A")
+
+        self.assertEqual(payload["ranking_signal_score"], payload["national_score"])
+        self.assertEqual(payload["signal_band"], payload["national_band"])
+        self.assertEqual(payload["signal_drivers"], payload["top_drivers"])
+        self.assertEqual(payload["signal_context"], payload["context_signals"])
+        self.assertEqual(
+            payload["regions"]["BE"]["ranking_signal_score"],
+            payload["regions"]["BE"]["score_0_100"],
+        )
+
+    def test_build_uses_neutral_ranking_signal_contract_source(self) -> None:
+        payload = _stub_peix_service().build("Influenza A")
+
+        self.assertEqual(
+            payload["field_contracts"]["national_score"]["source"],
+            "RankingSignal",
+        )
+        self.assertEqual(
+            payload["field_contracts"]["national_impact_probability"]["source"],
+            "RankingSignal",
+        )
+        self.assertEqual(
+            payload["regions"]["BE"]["field_contracts"]["score_0_100"]["source"],
+            "RankingSignal",
+        )
+        self.assertEqual(
+            payload["regions"]["BE"]["field_contracts"]["impact_probability"]["source"],
+            "RankingSignal",
+        )
+
+    def test_ranking_signal_service_is_legacy_compatible_alias(self) -> None:
+        self.assertTrue(issubclass(RankingSignalService, PeixEpiScoreService))
+        self.assertEqual(DEFAULT_RANKING_SIGNAL_CONFIG, PeixEpiScoreService.PEIX_CONFIG)
+
+    def test_legacy_peix_service_symbol_is_alias_of_ranking_signal_service(self) -> None:
+        self.assertIs(PeixEpiScoreService, RankingSignalService)
 
     def test_build_uses_honest_weight_source_labels_for_policy_weights(self) -> None:
         default_payload = _stub_peix_service().build("Influenza A")

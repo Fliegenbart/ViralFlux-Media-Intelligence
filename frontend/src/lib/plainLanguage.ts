@@ -700,7 +700,7 @@ export function explainInPlainGerman(value?: string | StructuredReasonItem | nul
     return 'Das Budget ist für eine einzelne Region noch zu klein; sinnvoll ist eine Bündelung mit einer Nachbarregion.';
   }
 
-  if (/^Confidence is below the stage-specific guardrail, so the recommendation needs manual PEIX review\.$/i.test(compactRaw)) {
+  if (/^Confidence is below the stage-specific guardrail, so the recommendation needs manual review\.$/i.test(compactRaw)) {
     return 'Das Signal ist noch nicht sicher genug; vor dem nächsten Schritt ist eine manuelle Prüfung sinnvoll.';
   }
 

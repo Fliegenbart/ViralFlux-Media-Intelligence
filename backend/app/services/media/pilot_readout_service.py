@@ -30,7 +30,7 @@ def _utc_now_iso() -> str:
 
 
 class PilotReadoutService:
-    """Single-source customer readout for the PEIX / GELO pilot surface."""
+    """Single-source customer readout for the forecast-first pilot surface."""
 
     def __init__(
         self,

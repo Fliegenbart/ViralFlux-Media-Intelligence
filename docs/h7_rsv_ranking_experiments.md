@@ -96,8 +96,8 @@ backend/app/ml_models/regional_panel_h7_pilot_only/rsv_ranking_summary.json
 For the server-side live evaluation with archived JSON and Markdown
 outputs, use:
 
-- [rsv_h7_live_evaluation_runbook.md](/Users/davidwegener/Desktop/viralflux/docs/rsv_h7_live_evaluation_runbook.md)
-- [rsv_h7_persistent_evaluation.md](/Users/davidwegener/Desktop/viralflux/docs/rsv_h7_persistent_evaluation.md)
+- [rsv_h7_live_evaluation_runbook.md](./rsv_h7_live_evaluation_runbook.md)
+- [rsv_h7_persistent_evaluation.md](./rsv_h7_persistent_evaluation.md)
 
 ## Bottom Line
 

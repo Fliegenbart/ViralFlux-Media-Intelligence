@@ -471,6 +471,9 @@ describe('NowWorkspace', () => {
     const { container } = renderNowWorkspace();
 
     expect(screen.getByText('Fokus diese Woche')).toBeInTheDocument();
+    expect(
+      screen.getByText('Was diese Woche zu tun ist. Nächste Schritte, Evidenz und Detailansichten folgen darunter.'),
+    ).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Berlin jetzt priorisieren.' })).toBeInTheDocument();
     expect(screen.getByText('Bayern')).toBeInTheDocument();
     expect(screen.getByText('Sachsen')).toBeInTheDocument();

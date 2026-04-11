@@ -4,7 +4,7 @@ Stand: 2026-03-17
 
 ## Ziel
 
-Dieses Dokument beschreibt, wie ViralFlux realistisch von einem strengen PEIX-/GELO-Pilot in einen größeren Plattformvertrag wachsen kann, ohne mehr zu versprechen als das System heute hergibt.
+Dieses Dokument beschreibt, wie ViralFlux realistisch von einem bewusst engen Partnerpilot in einen größeren Plattformvertrag wachsen kann, ohne mehr zu versprechen als das System heute hergibt.
 
 ## Ausgangspunkt heute
 
@@ -50,7 +50,7 @@ Das System ist sichtbar, technisch deploybar und in seiner Zielarchitektur erken
 
 ### Ziel
 
-PEIX, GELO und das Produktteam nutzen ViralFlux intern parallel zu ihrem bestehenden Entscheidungsprozess, ohne externe Aktivierungen direkt daraus abzuleiten.
+Pilotpartner und Produktteam nutzen ViralFlux intern parallel zu ihrem bestehenden Entscheidungsprozess, ohne externe Aktivierungen direkt daraus abzuleiten.
 
 ### Was geliefert wird
 
@@ -83,7 +83,7 @@ Ein bewusst enger Pilot-Scope wird extern genutzt, aber mit manueller Governance
 - 1 bis 2 Viren
 - 1 bis 2 Horizonte
 - begrenzte regionale Nutzung
-- manuelle Freigabe durch ViralFlux + PEIX + GELO
+- manuelle Freigabe durch Produktteam und Pilotpartner
 
 ### Was offiziell unterstuetzt sein muss
 
@@ -197,7 +197,7 @@ Deshalb ist die ehrliche Reihenfolge:
 
 ## Die ehrliche Vertriebslogik
 
-Heute sollte ViralFlux für PEIX / GELO so verkauft werden:
+Heute sollte ViralFlux für einen engen Partnerpilot so verkauft werden:
 
 - nicht als "fertige Plattform, die nur noch eingeschaltet werden muss"
 - sondern als hochwertiger, streng gefuehrter Pilot mit klarer Plattform-Perspektive

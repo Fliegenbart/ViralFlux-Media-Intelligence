@@ -155,7 +155,7 @@ Erfüllt erst, wenn:
 
 ## Empfehlung heute
 
-Interne Position für PEIX / GELO:
+Interne Position fuer den aktuellen Design-Partner-Scope:
 
 - Das System ist live sichtbar und technisch belastbarer als zuvor.
 - Der Produktkern ist wieder benutzbar.

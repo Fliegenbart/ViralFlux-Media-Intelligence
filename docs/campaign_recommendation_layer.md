@@ -6,17 +6,17 @@ This document describes the operational campaign recommendation layer built on t
 
 Relevant files:
 
-- `/Users/davidwegener/Desktop/viralflux/backend/app/services/media/campaign_recommendation_service.py`
-- `/Users/davidwegener/Desktop/viralflux/backend/app/services/media/campaign_recommendation_contracts.py`
-- `/Users/davidwegener/Desktop/viralflux/backend/app/services/ml/regional_forecast.py`
-- `/Users/davidwegener/Desktop/viralflux/backend/app/api/forecast.py`
+- `backend/app/services/media/campaign_recommendation_service.py`
+- `backend/app/services/media/campaign_recommendation_contracts.py`
+- `backend/app/services/ml/regional_forecast.py`
+- `backend/app/api/forecast.py`
 
 Canonical upstream remains:
 
 - `RegionalForecastService.predict_all_regions()`
 - `RegionalForecastService.generate_media_allocation()`
 
-This layer does not replace forecast, decision or allocation. It translates those outputs into discussion-ready campaign recommendations for PEIX / GELO.
+This layer does not replace forecast, decision or allocation. It translates those outputs into discussion-ready campaign recommendations for a customer pilot.
 
 ## Business Purpose
 
@@ -277,12 +277,12 @@ That is acceptable for V1 because the goal is operational clarity, not automatio
 
 Direct layer tests live in:
 
-- `/Users/davidwegener/Desktop/viralflux/backend/app/tests/test_campaign_recommendation_service.py`
+- `backend/app/tests/test_campaign_recommendation_service.py`
 
 Integration coverage lives in:
 
-- `/Users/davidwegener/Desktop/viralflux/backend/app/tests/test_regional_forecast_service.py`
-- `/Users/davidwegener/Desktop/viralflux/backend/app/tests/test_forecast_api.py`
+- `backend/app/tests/test_regional_forecast_service.py`
+- `backend/app/tests/test_forecast_api.py`
 
 Covered behaviors:
 

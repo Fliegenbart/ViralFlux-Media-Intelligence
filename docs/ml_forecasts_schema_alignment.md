@@ -24,7 +24,7 @@ Die dazugehörige Alembic-Migration ist:
 Der Produktionsfehler `ml_forecasts.region does not exist` entsteht nicht durch ein falsches ORM-Modell,
 sondern durch eine Datenbank, die hinter dem Repo-Migrationsstand liegt.
 
-Der aktuelle ORM-Vertrag in [database.py](/Users/davidwegener/Desktop/viralflux/backend/app/models/database.py)
+Der aktuelle ORM-Vertrag in [database.py](../backend/app/models/database.py)
 enthält `region` und `horizon_days` auf `MLForecast`.
 Wenn diese Spalten in der DB fehlen, generiert SQLAlchemy bereits beim normalen Query-Load ein fehlerhaftes `SELECT`.
 
@@ -66,8 +66,8 @@ Wichtig:
 
 Folgende Services lesen nationale `MLForecast`-Daten jetzt explizit mit `DE/h7`:
 
-- [forecast_decision_service.py](/Users/davidwegener/Desktop/viralflux/backend/app/services/ml/forecast_decision_service.py)
-- [peix_score_service.py](/Users/davidwegener/Desktop/viralflux/backend/app/services/media/peix_score_service.py)
+- [forecast_decision_service.py](../backend/app/services/ml/forecast_decision_service.py)
+- [peix_score_service.py](../backend/app/services/media/peix_score_service.py)
 
 Damit werden regionale Forecasts oder alternative Horizonte nicht versehentlich in nationale Monitoring- oder PEIX-Signale gemischt.
 

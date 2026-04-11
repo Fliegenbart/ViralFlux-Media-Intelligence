@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Callable
+from typing import Any
 
 from fpdf import FPDF
 
@@ -26,7 +26,7 @@ def render_signal_page(
     pdf.cell(
         0,
         12,
-        service._safe(f"PEIX x GELO Wochenbericht  -  KW {iso_week}/{iso_year}"),
+        service._safe(f"ViralFlux Wochenbericht  -  KW {iso_week}/{iso_year}"),
         new_x="LMARGIN",
         new_y="NEXT",
     )
@@ -38,7 +38,7 @@ def render_signal_page(
         0,
         6,
         service._safe(
-            f"Automatisierte Lageeinschätzung für PEIX und GELO. "
+            f"Automatisierte Lageeinschätzung für das Team. "
             f"Sie zeigt, wo in den nächsten 3 bis 7 Tagen die frühesten regionalen Signale einer Atemwegswelle entstehen könnten. "
             f"Generiert: {now.strftime('%d.%m.%Y %H:%M')} UTC."
         ),

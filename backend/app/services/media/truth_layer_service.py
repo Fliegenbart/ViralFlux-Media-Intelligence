@@ -1,4 +1,4 @@
-"""Optional truth/outcome validation layer for GELO business release logic."""
+"""Optional truth/outcome validation layer for business release logic."""
 
 from __future__ import annotations
 
@@ -602,7 +602,7 @@ class TruthLayerService:
         if holdout.eligible:
             return "Scope is ready for a future holdout design, but current decisions should still treat outcomes as supportive evidence."
         if readiness.status == "missing":
-            return "No GELO outcome data is connected for this scope yet."
+            return "No outcome data is connected for this scope yet."
         return "Outcome data can inform prioritization, but not yet release budget decisions."
 
     @staticmethod

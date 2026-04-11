@@ -923,7 +923,7 @@ class RegionalForecastServiceTests(unittest.TestCase):
         }
         service._business_gate = lambda quality_gate, truth_readiness=None, brand="gelo": {
             "brand": brand,
-            "operator_context": {"operator": "peix", "truth_partner": brand},
+            "operator_context": {"operator": "platform", "truth_partner": brand},
             "validation_status": "pending_holdout_validation",
             "decision_scope": "decision_support_only",
             "validated_for_budget_activation": False,
@@ -933,7 +933,7 @@ class RegionalForecastServiceTests(unittest.TestCase):
         result = service.get_validation_summary(virus_typ="Influenza A", brand="gelo")
 
         self.assertEqual(result["brand"], "gelo")
-        self.assertEqual(result["business_gate"]["operator_context"]["operator"], "peix")
+        self.assertEqual(result["business_gate"]["operator_context"]["operator"], "platform")
         self.assertEqual(result["evidence_tier"], "holdout_ready")
         self.assertEqual(result["source_coverage"]["wastewater"]["coverage_ratio"], 0.92)
         self.assertEqual(result["source_coverage_scope"], "artifact")
@@ -1448,7 +1448,7 @@ class RegionalCampaignRecommendationIntegrationTests(unittest.TestCase):
                     },
                     "product_clusters": [
                         {
-                            "cluster_key": "gelo_core_respiratory",
+                            "cluster_key": "respiratory_core_support",
                             "label": "Influenza A core demand cluster",
                             "priority_rank": 1,
                             "fit_score": 0.82,
@@ -1471,7 +1471,7 @@ class RegionalCampaignRecommendationIntegrationTests(unittest.TestCase):
         self.assertEqual(result["summary"]["total_recommendations"], 1)
         first = result["recommendations"][0]
         self.assertEqual(first["region"], "BY")
-        self.assertEqual(first["recommended_product_cluster"]["cluster_key"], "gelo_core_respiratory")
+        self.assertEqual(first["recommended_product_cluster"]["cluster_key"], "respiratory_core_support")
         self.assertIn("recommended_keyword_cluster", first)
         self.assertIn("recommendation_rationale", first)
 

@@ -229,7 +229,7 @@ const RecommendationDrawer: React.FC<Props> = ({
                     </span>
                   ) : null}
                 </div>
-                <span className="section-kicker">GELO-Freigabe-Memo</span>
+                <span className="section-kicker">Freigabe-Memo</span>
                 <h2 id={titleId} className="review-sheet-title">
                   {normalizeGermanText(detail.display_title || detail.campaign_name || 'Kampagnenvorschlag')}
                 </h2>

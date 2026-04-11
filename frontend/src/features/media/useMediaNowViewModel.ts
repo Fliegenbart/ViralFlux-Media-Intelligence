@@ -140,7 +140,7 @@ export function buildNowPageViewModel(
     focusCampaign?.recommended_product_cluster?.label,
     focusAllocation?.products?.[0],
     weeklyDecision?.top_products?.[0],
-    'GELO Portfolio',
+    'Portfolio-Fokus',
   );
   const decisionState = decisionStateLabel(weeklyDecision?.decision_state);
   const trustValue = truthLayerLabel(decision?.truth_coverage || evidence?.truth_coverage || evidence?.truth_snapshot?.coverage);

@@ -6,11 +6,11 @@ This document describes the current integration of the optional commercial truth
 
 Relevant files:
 
-- `/Users/davidwegener/Desktop/viralflux/backend/app/services/media/truth_layer_service.py`
-- `/Users/davidwegener/Desktop/viralflux/backend/app/services/media/truth_layer_contracts.py`
-- `/Users/davidwegener/Desktop/viralflux/backend/app/services/ml/regional_forecast.py`
-- `/Users/davidwegener/Desktop/viralflux/backend/app/tests/test_truth_layer_service.py`
-- `/Users/davidwegener/Desktop/viralflux/backend/app/tests/test_regional_forecast_service.py`
+- `backend/app/services/media/truth_layer_service.py`
+- `backend/app/services/media/truth_layer_contracts.py`
+- `backend/app/services/ml/regional_forecast.py`
+- `backend/app/tests/test_truth_layer_service.py`
+- `backend/app/tests/test_regional_forecast_service.py`
 
 ## Separation Of Concerns
 
@@ -185,12 +185,12 @@ This integration intentionally does not:
 
 Direct truth service behavior remains covered in:
 
-- `/Users/davidwegener/Desktop/viralflux/backend/app/tests/test_truth_layer_service.py`
+- `backend/app/tests/test_truth_layer_service.py`
 
 Operational integration behavior is covered in:
 
-- `/Users/davidwegener/Desktop/viralflux/backend/app/tests/test_regional_forecast_service.py`
-- `/Users/davidwegener/Desktop/viralflux/backend/app/tests/test_forecast_api.py`
+- `backend/app/tests/test_regional_forecast_service.py`
+- `backend/app/tests/test_forecast_api.py`
 
 The integration tests cover:
 

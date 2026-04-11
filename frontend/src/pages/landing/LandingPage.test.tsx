@@ -84,7 +84,7 @@ describe('LandingPage', () => {
     });
 
     expect(
-      screen.getByRole('heading', { name: 'Was PEIX x GELO diese Woche entscheiden sollte' }),
+      screen.getByRole('heading', { name: 'Was diese Woche entschieden werden sollte' }),
     ).toBeInTheDocument();
     expect(
       screen.getByText(
@@ -92,7 +92,7 @@ describe('LandingPage', () => {
       ),
     ).toBeInTheDocument();
     const hero = screen.getByRole('region', { name: 'Wochenbriefing Einstieg' });
-    expect(within(hero).getByRole('heading', { name: 'Was PEIX x GELO diese Woche entscheiden sollte' })).toBeInTheDocument();
+    expect(within(hero).getByRole('heading', { name: 'Was diese Woche entschieden werden sollte' })).toBeInTheDocument();
     expect(within(hero).getAllByRole('button', { name: 'Wochenplan öffnen' })).toHaveLength(1);
     expect(screen.getByRole('button', { name: 'Wochenplan' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Evidenz' })).toBeInTheDocument();

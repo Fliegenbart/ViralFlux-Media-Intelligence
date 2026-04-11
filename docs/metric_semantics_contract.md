@@ -1,7 +1,7 @@
 # Metric Semantics Contract
 
 Basis:
-- [backend/app/services/media/semantic_contracts.py](/Users/davidwegener/Desktop/viralflux/backend/app/services/media/semantic_contracts.py)
+- [backend/app/services/media/semantic_contracts.py](../backend/app/services/media/semantic_contracts.py)
 
 Stand: 2026-03-24
 

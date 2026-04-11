@@ -2,21 +2,21 @@
 
 ## Scope
 
-This document describes the pilot reporting and audit layer for PEIX / GELO readouts.
+This document describes the pilot reporting and audit layer for customer pilot readouts.
 
 Important:
 
-- the customer-facing product can now run in **Forecast-First** mode without GELO outcome data
+- the customer-facing product can now run in **Forecast-First** mode without outcome data
 - this reporting and ROI layer is therefore the **second layer**, not the first product claim
-- before GELO data existed, `/pilot` could already show forecast, prioritization, and scenario splits
-- only after GELO data flows does this reporting layer become the commercial validation surface
+- before outcome data existed, `/pilot` could already show forecast, prioritization, and scenario splits
+- only after outcome data flows does this reporting layer become the commercial validation surface
 
 Relevant files:
 
-- `/Users/davidwegener/Desktop/viralflux/backend/app/services/media/pilot_reporting_service.py`
-- `/Users/davidwegener/Desktop/viralflux/backend/app/api/media.py`
-- `/Users/davidwegener/Desktop/viralflux/backend/app/models/database.py`
-- `/Users/davidwegener/Desktop/viralflux/backend/app/services/media/truth_layer_service.py`
+- `backend/app/services/media/pilot_reporting_service.py`
+- `backend/app/api/media.py`
+- `backend/app/models/database.py`
+- `backend/app/services/media/truth_layer_service.py`
 
 The goal is not media mix modeling. The goal is a reproducible audit layer that answers:
 
@@ -44,7 +44,7 @@ The reporting layer does not rewrite epidemiological or allocation logic. It rea
 
 ### Forecast-First
 
-This was the first product layer for PEIX / GELO.
+This was the first product layer for the initial pilot scope.
 
 It was valid when:
 
@@ -57,7 +57,7 @@ It was valid when:
 
 This reporting layer became commercially relevant when:
 
-- GELO spend and outcome data are ingested
+- spend and outcome data are ingested
 - activations and holdouts are visible
 - before/after and lift evidence can be attached to the same recommendation chain
 
@@ -227,7 +227,7 @@ Includes at least:
 
 ### 5. `pilot_kpi_summary`
 
-Compact KPI block for PEIX / GELO review rounds.
+Compact KPI block for customer review rounds.
 
 Current KPI set:
 
@@ -311,7 +311,7 @@ Reproducibility comes from:
 
 Practical guidance:
 
-- use explicit `window_start` and `window_end` for PEIX / GELO readout snapshots
+- use explicit `window_start` and `window_end` for customer readout snapshots
 - avoid relying only on the rolling `lookback_weeks` window when exporting a final pilot deck
 
 ## Empty-State Behavior
@@ -338,7 +338,7 @@ Known limits:
 - region scopes are as good as the persisted campaign targeting information
 - outcome evidence remains optional; missing evidence does not break the payload
 
-## Recommended PEIX / GELO Readout Flow
+## Recommended Customer Readout Flow
 
 For a pilot review:
 

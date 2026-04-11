@@ -60,6 +60,10 @@ class TruthLayerServiceTests(unittest.TestCase):
         self.assertEqual(result["outcome_readiness"]["status"], "missing")
         self.assertEqual(result["signal_outcome_agreement"]["status"], "no_outcome_support")
         self.assertEqual(result["metadata"]["source_mode"], "empty")
+        self.assertEqual(
+            result["commercial_gate"]["message"],
+            "No outcome data is connected for this scope yet.",
+        )
 
     def test_assess_with_generic_observations_returns_truth_backed_scope(self) -> None:
         start = datetime(2026, 1, 5)

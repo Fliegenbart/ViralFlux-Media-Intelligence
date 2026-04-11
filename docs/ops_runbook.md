@@ -113,7 +113,7 @@ Action:
 Command:
 
 ```bash
-cd /Users/davidwegener/Desktop/viralflux/backend
+cd backend
 python scripts/backfill_regional_model_artifacts.py --horizon 3 --horizon 5 --horizon 7
 ```
 
@@ -152,7 +152,7 @@ Action:
 Command:
 
 ```bash
-cd /Users/davidwegener/Desktop/viralflux/backend
+cd backend
 python scripts/recompute_operational_views.py --virus "Influenza A" --horizon 7
 ```
 
@@ -199,7 +199,7 @@ Action:
 Run against the target environment:
 
 ```bash
-cd /Users/davidwegener/Desktop/viralflux/backend
+cd backend
 python scripts/smoke_test_release.py \
   --base-url https://your-backend.example.com \
   --virus "Influenza A" \

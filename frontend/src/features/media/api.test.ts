@@ -29,6 +29,8 @@ describe('mediaApi authentication', () => {
     logout();
     window.localStorage.clear();
     window.sessionStorage.clear();
+    document.cookie = 'viralflux_csrf_token=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/';
+    document.cookie = 'viralflux_csrf_token=test-csrf-token; path=/';
   });
 
   afterEach(() => {

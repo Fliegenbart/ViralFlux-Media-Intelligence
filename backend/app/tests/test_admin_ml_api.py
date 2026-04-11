@@ -27,6 +27,42 @@ class AdminMLApiTests(unittest.TestCase):
         self.client.close()
         self.app.dependency_overrides.clear()
 
+    def test_training_status_requires_admin_authentication(self) -> None:
+        app = FastAPI()
+        app.state.limiter = limiter
+        app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+        app.include_router(router, prefix="/api/v1/admin/ml")
+        client = TestClient(app)
+
+        try:
+            with patch(
+                "app.api.admin_ml.celery_app.AsyncResult",
+                return_value=SimpleNamespace(status="SUCCESS", result={"ok": True}, info=None),
+            ):
+                response = client.get("/api/v1/admin/ml/status/task-123")
+
+            self.assertEqual(response.status_code, 401)
+        finally:
+            client.close()
+
+    def test_training_status_returns_task_details_for_admins(self) -> None:
+        with patch(
+            "app.api.admin_ml.celery_app.AsyncResult",
+            return_value=SimpleNamespace(status="SUCCESS", result={"ok": True}, info=None),
+        ) as async_result_mock:
+            response = self.client.get("/api/v1/admin/ml/status/task-123")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json(),
+            {
+                "task_id": "task-123",
+                "status": "SUCCESS",
+                "result": {"ok": True},
+            },
+        )
+        async_result_mock.assert_called_once_with("task-123")
+
     def test_empty_request_normalizes_to_all_supported_viruses(self) -> None:
         with patch(
             "app.services.ml.tasks.train_xgboost_model_task.delay",

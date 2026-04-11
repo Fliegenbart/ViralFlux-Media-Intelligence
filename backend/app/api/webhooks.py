@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
+from app.api.deps import get_current_admin
 from app.api.m2m_auth import verify_m2m_api_key
 from app.core.celery_app import celery_app
 from app.db.session import get_db
@@ -55,7 +56,7 @@ async def erp_sales_sync(
     }
 
 
-@router.get("/integrations/status")
+@router.get("/integrations/status", dependencies=[Depends(get_current_admin)])
 async def get_integration_status(db: Session = Depends(get_db)):
     """Read-only status endpoint for the UI (no secrets).
 

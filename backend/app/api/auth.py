@@ -7,7 +7,13 @@ from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.api.deps import AUTH_COOKIE_NAME, get_current_user, get_optional_current_user
+from app.api.deps import (
+    AUTH_COOKIE_NAME,
+    CSRF_COOKIE_NAME,
+    create_csrf_token,
+    get_current_user,
+    get_optional_current_user,
+)
 from app.core.rate_limit import limiter
 from app.core.time import utc_now
 from app.core.security import create_access_token, get_password_hash, verify_password
@@ -133,10 +139,41 @@ def _set_auth_cookie(response: Response, token: str, remember_me: bool) -> None:
     )
 
 
+def _set_csrf_cookie(response: Response, token: str, remember_me: bool) -> None:
+    max_age = _ACCESS_TOKEN_LIFETIME_MINUTES * 60 if remember_me else None
+    response.set_cookie(
+        key=CSRF_COOKIE_NAME,
+        value=token,
+        httponly=False,
+        secure=_COOKIE_SECURE,
+        samesite=_COOKIE_SAMESITE,
+        max_age=max_age,
+        path="/",
+    )
+
+
+def _ensure_csrf_cookie(request: Request, response: Response, remember_me: bool = True) -> str:
+    csrf_token = str(request.cookies.get(CSRF_COOKIE_NAME) or "").strip()
+    if not csrf_token:
+        csrf_token = create_csrf_token()
+    _set_csrf_cookie(response, csrf_token, remember_me)
+    return csrf_token
+
+
 def _clear_auth_cookie(response: Response) -> None:
     response.delete_cookie(
         key=AUTH_COOKIE_NAME,
         httponly=True,
+        secure=_COOKIE_SECURE,
+        samesite=_COOKIE_SAMESITE,
+        path="/",
+    )
+
+
+def _clear_csrf_cookie(response: Response) -> None:
+    response.delete_cookie(
+        key=CSRF_COOKIE_NAME,
+        httponly=False,
         secure=_COOKIE_SECURE,
         samesite=_COOKIE_SAMESITE,
         path="/",
@@ -181,6 +218,7 @@ async def login(
         expires_delta=timedelta(minutes=_ACCESS_TOKEN_LIFETIME_MINUTES),
     )
     _set_auth_cookie(response, access_token, remember_me)
+    _ensure_csrf_cookie(request, response, remember_me)
     _record_auth_event(
         db,
         user=username,
@@ -195,7 +233,12 @@ async def login(
 
 
 @router.get("/session", response_model=SessionState)
-async def get_session(current_user: dict | None = Depends(get_optional_current_user)):
+async def get_session(
+    request: Request,
+    response: Response,
+    current_user: dict | None = Depends(get_optional_current_user),
+):
+    _ensure_csrf_cookie(request, response)
     if not current_user:
         return SessionState(
             authenticated=False,
@@ -208,6 +251,12 @@ async def get_session(current_user: dict | None = Depends(get_optional_current_u
         subject=current_user.get("sub"),
         role=current_user.get("role"),
     )
+
+
+@router.get("/csrf")
+async def get_csrf_token(request: Request, response: Response):
+    csrf_token = _ensure_csrf_cookie(request, response)
+    return {"csrf_token": csrf_token}
 
 
 @router.post("/logout", response_model=SessionState)
@@ -227,4 +276,5 @@ async def logout(
             reason=session_id,
         )
     _clear_auth_cookie(response)
+    _clear_csrf_cookie(response)
     return SessionState(authenticated=False)

@@ -25,6 +25,7 @@ The stack is only release-ready when all P1 items below are green.
 - `/health/live` returns `200`.
 - `/health/ready` returns `200`.
 - Production startup does not rely on runtime schema mutation.
+- The clean live checkout is free of stray debug, export, and experiment files.
 
 ### P1 Schema and Migrations
 
@@ -62,13 +63,15 @@ The stack is only release-ready when all P1 items below are green.
 
 ## Recommended Release Sequence
 
-1. Verify schema and migrations.
-2. Backfill all required regional artifacts.
-3. Recompute forecast/allocation/recommendation outputs.
-4. Check `/health/ready`.
-5. Run smoke test against the live backend.
-6. Review regional validation and benchmark outputs.
-7. Sign off release.
+1. Verify `git status --short` on the live checkout is clean enough for release.
+2. Verify schema and migrations.
+3. Backfill all required regional artifacts.
+4. Recompute forecast/allocation/recommendation outputs.
+5. Check `/health/ready`.
+6. Run smoke test against the live backend.
+7. Run the public surface check.
+8. Review regional validation and benchmark outputs.
+9. Sign off release.
 
 ## Commands
 
@@ -96,6 +99,13 @@ python scripts/smoke_test_release.py \
   --horizon 7 \
   --budget-eur 50000 \
   --top-n 3
+```
+
+### 4. Public surface check
+
+```bash
+python backend/scripts/check_public_surface.py \
+  --base-url https://fluxengine.labpulse.ai
 ```
 
 ## Missing Regional Artifacts
@@ -155,6 +165,7 @@ Do not release if any of these are true:
 - source freshness critical
 - forecast recency critical
 - smoke test fails
+- public surface check fails
 
 ## Sign-Off Template
 

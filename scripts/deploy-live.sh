@@ -16,8 +16,8 @@ SMOKE_HORIZON="${SMOKE_HORIZON:-7}"
 SMOKE_WEEKLY_BUDGET_EUR="${SMOKE_WEEKLY_BUDGET_EUR:-50000}"
 SMOKE_TOP_N="${SMOKE_TOP_N:-3}"
 SMOKE_CHECK_COCKPIT="${SMOKE_CHECK_COCKPIT:-false}"
-MAX_HEALTH_RETRIES=15
-HEALTH_INTERVAL=4
+MAX_HEALTH_RETRIES="${MAX_HEALTH_RETRIES:-15}"
+HEALTH_INTERVAL="${HEALTH_INTERVAL:-4}"
 REQUIRED_COMPOSE_BASENAME="docker-compose.prod.yml"
 
 APP_CONTAINERS=(
@@ -38,7 +38,7 @@ INFRA_SERVICES=(
 )
 
 # ── Lock: prevent concurrent deploys ───────────────────────────
-LOCKFILE="/var/run/viralflux-deploy.lock"
+LOCKFILE="${LOCKFILE:-/var/run/viralflux-deploy.lock}"
 exec 200>"$LOCKFILE"
 if ! flock -n 200; then
     echo "ERROR: Another deployment is already in progress." >&2
@@ -72,6 +72,21 @@ fi
 
 compose() {
     docker compose --project-directory "$REPO" -p "$PROJECT" -f "$COMPOSE_FILE" "$@"
+}
+
+build_frontend_image() {
+    echo "[$(date)] Building frontend image..."
+    docker build -t viralflux-media-frontend -f docker/Dockerfile.frontend .
+}
+
+build_backend_runtime_images() {
+    echo "[$(date)] Building backend runtime images..."
+    compose build backend celery_worker celery_beat
+}
+
+build_release_images() {
+    build_frontend_image
+    build_backend_runtime_images
 }
 
 assert_live_mode_guards() {
@@ -142,9 +157,15 @@ start_app_services_sequentially() {
 rollback_to_previous_commit() {
     echo "[$(date)] Rolling back to $PREV_COMMIT..." >&2
     git reset --hard "$PREV_COMMIT"
+    build_release_images
     docker rm -f "${APP_CONTAINERS[@]}" >/dev/null 2>&1 || true
     start_app_services_sequentially
     echo "[$(date)] Rollback complete. Deployed commit: $PREV_COMMIT" >&2
+}
+
+apply_database_migrations() {
+    echo "[$(date)] Applying database migrations..."
+    compose run --rm --no-deps backend alembic upgrade head
 }
 
 run_release_smoke() {
@@ -204,18 +225,20 @@ run_release_smoke() {
     return 0
 }
 
-# ── Build frontend image ───────────────────────────────────────
-echo "[$(date)] Building frontend image..."
-docker build -t viralflux-media-frontend -f docker/Dockerfile.frontend .
-
-# ── Build backend/runtime images ───────────────────────────────
-echo "[$(date)] Building backend runtime images..."
-compose build backend celery_worker celery_beat
+# ── Build release images ───────────────────────────────────────
+build_release_images
 
 # ── Bring up infra first ───────────────────────────────────────
 echo "[$(date)] Ensuring infra services are up..."
 ensure_infra_service db virusradar_db
 ensure_infra_service redis viralflux_redis
+
+# ── Apply DB migrations before replacing live app containers ───
+if ! apply_database_migrations; then
+    echo "[$(date)] ERROR: Database migration failed. Keeping currently running app containers untouched." >&2
+    git reset --hard "$PREV_COMMIT"
+    exit 1
+fi
 
 # ── Deploy app containers ─────────────────────────────────────
 echo "[$(date)] Deploying app containers..."

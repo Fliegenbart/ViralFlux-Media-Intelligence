@@ -49,14 +49,20 @@ Wichtig:
 3. Es erzwingt fuer Live das Produktions-Manifest `docker-compose.prod.yml`.
 4. Es baut Frontend und Backend-Images neu.
 5. Es startet zuerst `db` und `redis`.
-6. Es startet danach `frontend-prod`, `backend`, `celery_worker` und `celery_beat`.
-7. Es prueft Sicherheits-Guards wie:
+6. Es fuehrt danach **vor dem Container-Umschalten** `alembic upgrade head` im Backend-Image aus.
+7. Erst wenn diese Migration sauber durchlaeuft, ersetzt es `frontend-prod`, `backend`, `celery_worker` und `celery_beat`.
+8. Es prueft Sicherheits-Guards wie:
    - `ENVIRONMENT=production`
    - keine Runtime-Schema-Aenderungen
    - keine Host-Bind-Mounts im Live-Modus
-8. Es prueft `/health/live`.
-9. Es fuehrt den Release-Smoke gegen die Kernpfade aus.
-10. Wenn der Kern fehlschlaegt, rollt es auf den vorherigen Commit zurueck.
+9. Es prueft `/health/live`.
+10. Es fuehrt den Release-Smoke gegen die Kernpfade aus.
+11. Wenn der Kern fehlschlaegt, setzt es den Git-Stand zurueck, baut die alten Images neu und startet den vorherigen Release erneut.
+
+Wichtig in einfachen Worten:
+- eine fehlende Migration darf den laufenden Dienst nicht erst nach dem Abschalten treffen
+- deshalb liegt die Migration jetzt **vor** dem Umschalten
+- ein Rollback baut die alten Images jetzt wirklich neu, statt nur Git zurueckzusetzen
 
 ## Das richtige Compose-Manifest fuer Live
 
@@ -85,17 +91,17 @@ In einfachen Worten:
 
 ## Pflichtschritt fuer Datenbankschema
 
-Wenn ein Release Schema-Aenderungen enthaelt, musst du die Migration bewusst ausfuehren, bevor oder waehrend du das Backend neu startest:
+Wenn ein Release Schema-Aenderungen enthaelt, fuehrt `scripts/deploy-live.sh` jetzt den Pflichtschritt selbst aus:
 
 ```bash
-cd backend
-alembic upgrade head
+docker compose -f docker-compose.prod.yml run --rm --no-deps backend alembic upgrade head
 ```
 
 Wichtig:
 - der aktuelle Backend-Startup erstellt keine Tabellen mehr selbst
 - der aktuelle Backend-Startup fuehrt keine Runtime-Schema-Reparaturen mehr aus
-- diese Migration ist daher ein expliziter Betriebs-Schritt und nicht mehr implizit im App-Start versteckt
+- wenn diese Migration fehlschlaegt, bleibt der laufende Dienst unberuehrt
+- fuer manuelle Notfaelle kannst du denselben Alembic-Befehl direkt auf dem Deploy-Host ausfuehren
 
 ## BfArM-Import bewusst ausloesen
 
@@ -230,6 +236,27 @@ git reset --hard <COMMIT_HASH>
 Wichtig:
 - der Rollback passiert ebenfalls ueber den clean Checkout
 - auch hier gilt: nicht manuell an einzelnen Containern herumoperieren, wenn es vermeidbar ist
+- der neue automatische Rollback baut die alten Images jetzt neu auf
+- wenn eine DB-Migration **nicht rueckwaertskompatibel** ist, bleibt ein Rollback trotzdem ein bewusster Betriebsentscheid und kein Zaubertrick
+
+## Clean Checkout Hygiene
+
+Der Deploy-Checkout auf dem Server muss git-seitig sauber bleiben.
+
+Das bedeutet:
+- keine Debug-Skripte im Repo-Verzeichnis liegen lassen
+- keine Rohdaten- oder Exportordner im Live-Checkout liegen lassen
+- keine Modell-Experimente im Deploy-Checkout sammeln
+- solche Dinge gehoeren in einen separaten Archiv- oder Arbeitsordner ausserhalb des clean Checkouts
+
+Ein schneller Kontrollblick:
+
+```bash
+cd <deploy-root>
+git status --short
+```
+
+Wenn dort mehr als absichtlich bekannte Betriebsdateien auftauchen, ist das ein Ops-Problem und ein Buyer-Risiko.
 
 ## Haeufige Probleme
 

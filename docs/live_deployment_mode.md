@@ -78,6 +78,12 @@ Ein non-prod Compose-Deploy ist nur mit explizitem Override `ALLOW_DEV_COMPOSE_L
 
 Bestehende Infra-Container für Postgres und Redis werden im Migrationspfad bewusst wiederverwendet, falls sie bereits unter den kanonischen Namen `virusradar_db` und `viralflux_redis` laufen. Dadurch wird die Umstellung vom alten dev-lastigen Live-Stack auf den neuen Prod-Pfad ohne unnötige Datenbank-Neuanlage möglich.
 
+Vor dem Ersetzen der Live-App-Container läuft jetzt ausserdem immer:
+
+- `alembic upgrade head` im Backend-Image
+
+Das verhindert, dass ein Release erst die laufenden Container abschiesst und dann an einer fehlenden Pflichtmigration scheitert.
+
 ## Failure Modes
 
 Wenn der Live-Pfad falsch konfiguriert ist, soll der Deploy hart scheitern statt still zu starten.
@@ -90,3 +96,29 @@ Typische harte Fehler:
 - Liveness-Fehler nach dem Rollout
 
 Readiness bleibt bewusst advisory im Deploy-Script, damit ein Release nicht wegen bereits bekannter fachlicher Blocker automatisch zurückrollt. Die Readiness-Antwort muss aber explizit geprüft werden.
+
+## Rollback-Verhalten
+
+Der automatische Rollback setzt nicht mehr nur Git zurueck, sondern baut fuer den vorherigen Commit die App-Images neu und startet sie erneut.
+
+Das ist wichtig, weil ein nacktes `git reset --hard` den Host-Checkout zwar zuruecksetzt, aber bereits gebaute Docker-Images sonst auf dem neueren Stand bleiben koennen.
+
+Grenze dieses Mechanismus:
+
+- Nicht jede Datenbankmigration ist rueckwaertskompatibel.
+- Wenn ein Release die Datenbankstruktur bewusst veraendert, muss im Incident-Fall geprueft werden, ob der alte Commit mit dem neuen Schema noch lauffaehig ist.
+
+## Worktree-Hygiene
+
+Der Live-Checkout ist kein Ablageort fuer:
+
+- Debug-Skripte
+- Exportdaten
+- Experiment-Artefakte
+- lokale Modellordner
+
+Der Grund ist simpel:
+
+- ein schmutziger Checkout macht Deploys schwerer pruefbar
+- unversionierte Dateien wirken in Due Diligence unprofessionell
+- Debug- und Datenreste vergroessern Drift zwischen Repo, Server und Laufzeit

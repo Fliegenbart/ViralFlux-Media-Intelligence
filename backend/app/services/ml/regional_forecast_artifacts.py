@@ -6,6 +6,54 @@ from pathlib import Path
 from typing import Any
 
 
+def bootstrap_command(*, supported_horizons: list[int]) -> str:
+    horizon_args = " ".join(f"--horizon {int(h)}" for h in sorted(set(supported_horizons)))
+    return f"cd backend && python scripts/backfill_regional_model_artifacts.py {horizon_args}".strip()
+
+
+def build_artifact_diagnostic(
+    *,
+    virus_typ: str,
+    horizon_days: int,
+    artifact_dir: Path,
+    missing_files: list[str],
+    load_error: str,
+    supported_horizons: list[int],
+    artifact_transition_mode: str | None = None,
+) -> dict[str, Any]:
+    status = "missing"
+    if missing_files:
+        status = "incomplete"
+    elif load_error:
+        status = "invalid"
+
+    bootstrap = bootstrap_command(supported_horizons=supported_horizons)
+    operator_message = (
+        f"Regionales Modellartefakt für {virus_typ}/h{horizon_days} fehlt. "
+        f"Bitte den Bootstrap ausführen: {bootstrap}"
+    )
+    if status == "incomplete":
+        operator_message = (
+            f"Artefakt-Bundle für {virus_typ}/h{horizon_days} ist unvollständig: "
+            f"{', '.join(missing_files)}. "
+            f"Bitte den Bootstrap ausführen: {bootstrap}"
+        )
+    if status == "invalid" and load_error:
+        operator_message = f"{load_error} Bootstrap: {bootstrap}"
+
+    return {
+        "status": status,
+        "artifact_scope": {"virus_typ": virus_typ, "horizon_days": int(horizon_days)},
+        "artifact_dir": str(artifact_dir),
+        "missing_files": list(missing_files),
+        "bootstrap_required": True,
+        "operator_message": operator_message,
+        "bootstrap_command": bootstrap,
+        "artifact_transition_mode": artifact_transition_mode,
+        "load_error": load_error or None,
+    }
+
+
 def load_artifacts(
     service,
     *,
@@ -24,15 +72,34 @@ def load_artifacts(
         virus_typ=virus_typ,
         horizon_days=horizon,
     )
-    if model_dir.exists():
-        missing_files = service._missing_artifact_files(model_dir)
-        if missing_files:
-            return {
-                "load_error": (
-                    f"Artefakt-Bundle für {virus_typ}/h{horizon} ist unvollständig: "
-                    f"{', '.join(missing_files)}"
-                ),
-            }
+    if not model_dir.exists():
+        return {
+            "artifact_diagnostic": build_artifact_diagnostic(
+                virus_typ=virus_typ,
+                horizon_days=horizon,
+                artifact_dir=model_dir,
+                missing_files=[],
+                load_error="",
+                supported_horizons=list(supported_forecast_horizons),
+            )
+        }
+
+    missing_files = service._missing_artifact_files(model_dir)
+    if missing_files:
+        return {
+            "load_error": (
+                f"Artefakt-Bundle für {virus_typ}/h{horizon} ist unvollständig: "
+                f"{', '.join(missing_files)}"
+            ),
+            "artifact_diagnostic": build_artifact_diagnostic(
+                virus_typ=virus_typ,
+                horizon_days=horizon,
+                artifact_dir=model_dir,
+                missing_files=missing_files,
+                load_error=f"Artefakt-Bundle für {virus_typ}/h{horizon} ist unvollständig.",
+                supported_horizons=list(supported_forecast_horizons),
+            ),
+        }
     payload = service._artifact_payload_from_dir(model_dir)
     if payload:
         metadata = dict(payload.get("metadata") or {})
@@ -41,10 +108,26 @@ def load_artifacts(
             payload["load_error"] = (
                 f"Metadaten für {virus_typ}/h{horizon} fehlen das Pflichtfeld 'horizon_days'."
             )
+            payload["artifact_diagnostic"] = build_artifact_diagnostic(
+                virus_typ=virus_typ,
+                horizon_days=horizon,
+                artifact_dir=model_dir,
+                missing_files=[],
+                load_error=payload["load_error"],
+                supported_horizons=list(supported_forecast_horizons),
+            )
             return payload
         if int(metadata_horizon) != horizon:
             payload["load_error"] = (
                 f"Metadaten-Horizon {metadata_horizon} passt nicht zur Anfrage h{horizon}."
+            )
+            payload["artifact_diagnostic"] = build_artifact_diagnostic(
+                virus_typ=virus_typ,
+                horizon_days=horizon,
+                artifact_dir=model_dir,
+                missing_files=[],
+                load_error=payload["load_error"],
+                supported_horizons=list(supported_forecast_horizons),
             )
             return payload
         metadata.setdefault("target_window_days", service._target_window_for_horizon(horizon))
@@ -58,12 +141,30 @@ def load_artifacts(
                 f"Feature-Spalten: {', '.join(invalid_feature_columns)}. "
                 "Bitte horizon-spezifisches Retraining durchführen."
             )
+            payload["artifact_diagnostic"] = build_artifact_diagnostic(
+                virus_typ=virus_typ,
+                horizon_days=horizon,
+                artifact_dir=model_dir,
+                missing_files=[],
+                load_error=payload["load_error"],
+                supported_horizons=list(supported_forecast_horizons),
+                artifact_transition_mode=payload.get("artifact_transition_mode"),
+            )
             return payload
         payload["metadata"] = metadata
         return payload
 
     if horizon != 7:
-        return {}
+        return {
+            "artifact_diagnostic": build_artifact_diagnostic(
+                virus_typ=virus_typ,
+                horizon_days=horizon,
+                artifact_dir=model_dir,
+                missing_files=[],
+                load_error="",
+                supported_horizons=list(supported_forecast_horizons),
+            )
+        }
 
     legacy_dir = service.models_dir / virus_slug_fn(virus_typ)
     if legacy_dir.exists():
@@ -74,10 +175,31 @@ def load_artifacts(
                     f"Legacy-Artefakt-Bundle für {virus_typ}/h{horizon} ist unvollständig: "
                     f"{', '.join(missing_files)}"
                 ),
+                "artifact_diagnostic": build_artifact_diagnostic(
+                    virus_typ=virus_typ,
+                    horizon_days=horizon,
+                    artifact_dir=legacy_dir,
+                    missing_files=missing_files,
+                    load_error=(
+                        f"Legacy-Artefakt-Bundle für {virus_typ}/h{horizon} ist unvollständig."
+                    ),
+                    supported_horizons=list(supported_forecast_horizons),
+                    artifact_transition_mode="legacy_default_window_fallback",
+                ),
             }
     legacy_payload = service._artifact_payload_from_dir(legacy_dir)
     if not legacy_payload:
-        return {}
+        return {
+            "artifact_diagnostic": build_artifact_diagnostic(
+                virus_typ=virus_typ,
+                horizon_days=horizon,
+                artifact_dir=legacy_dir,
+                missing_files=[],
+                load_error="",
+                supported_horizons=list(supported_forecast_horizons),
+                artifact_transition_mode="legacy_default_window_fallback",
+            )
+        }
 
     metadata = dict(legacy_payload.get("metadata") or {})
     metadata["horizon_days"] = horizon
@@ -95,6 +217,15 @@ def load_artifacts(
             f"Legacy-Artefakt-Bundle für {virus_typ}/h{horizon} enthält trainingsinterne "
             f"Feature-Spalten: {', '.join(invalid_feature_columns)}. "
             "Bitte horizon-spezifisches Retraining durchführen."
+        )
+        legacy_payload["artifact_diagnostic"] = build_artifact_diagnostic(
+            virus_typ=virus_typ,
+            horizon_days=horizon,
+            artifact_dir=legacy_dir,
+            missing_files=[],
+            load_error=legacy_payload["load_error"],
+            supported_horizons=list(supported_forecast_horizons),
+            artifact_transition_mode="legacy_default_window_fallback",
         )
     return legacy_payload
 

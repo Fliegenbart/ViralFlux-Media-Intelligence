@@ -67,7 +67,7 @@ def regional_matrix_item(
             "horizon_days": horizon_days,
             "status": "warning",
             "model_availability": "unsupported",
-            "regional_artifacts_ready": False,
+            "regional_artifacts_ready": None,
             "regional_artifact_blockers": [],
             "regional_artifact_bootstrap_command": None,
             "artifact_diagnostic": None,
@@ -218,17 +218,22 @@ def regional_matrix_item(
         ]
     )
 
-    blockers: list[str] = []
+    artifact_blockers: list[str] = []
     if not model_available:
-        blockers.append(load_error or "Regional model artifacts missing.")
-        if operator_message and operator_message not in blockers:
-            blockers.append(operator_message)
+        artifact_blockers.append(load_error or "Regional model artifacts missing.")
+        if operator_message and operator_message not in artifact_blockers:
+            artifact_blockers.append(operator_message)
         if diagnostic_missing_files:
             missing_files_message = (
                 "Missing regional artifact files: " + ", ".join(diagnostic_missing_files)
             )
-            if missing_files_message not in blockers:
-                blockers.append(missing_files_message)
+            if missing_files_message not in artifact_blockers:
+                artifact_blockers.append(missing_files_message)
+    if artifact_transition_mode:
+        artifact_blockers.append("Legacy artifact fallback is still active.")
+    artifact_blockers = list(dict.fromkeys(artifact_blockers))
+
+    blockers = list(artifact_blockers)
     blockers.extend(live_source_blockers)
     if source_freshness_status == "critical" and source_freshness_message and source_freshness_message not in blockers:
         blockers.append(source_freshness_message)
@@ -237,8 +242,6 @@ def regional_matrix_item(
             blockers.append("Operational forecast snapshot lags behind latest available source data.")
         else:
             blockers.append("Model snapshot lags behind latest available source data.")
-    if artifact_transition_mode:
-        blockers.append("Legacy artifact fallback is still active.")
     blockers = list(dict.fromkeys(blockers))
 
     return {
@@ -247,7 +250,7 @@ def regional_matrix_item(
         "status": overall_status,
         "model_availability": model_availability,
         "regional_artifacts_ready": model_available,
-        "regional_artifact_blockers": list(dict.fromkeys(blockers)),
+        "regional_artifact_blockers": artifact_blockers,
         "regional_artifact_bootstrap_command": bootstrap_command,
         "artifact_diagnostic": artifact_diagnostic or None,
         "load_error": load_error or None,

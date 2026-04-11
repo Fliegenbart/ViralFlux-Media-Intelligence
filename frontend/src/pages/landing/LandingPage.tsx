@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import packageJson from '../../../package.json';
 
-import { useTheme } from '../../App';
+import { useAuth, useTheme } from '../../App';
 import {
   OperatorPanel,
   OperatorSection,
@@ -121,6 +121,7 @@ const formatDataStatus = (value?: string | null) => {
 
 const LandingPage: React.FC = () => {
   const { theme, toggle: toggleTheme } = useTheme();
+  const { authenticated } = useAuth();
   const palette = createThemePalette(theme);
   const navigate = useNavigate();
   const [topRegions, setTopRegions] = useState<RegionItem[]>(DEFAULT_REGIONS);
@@ -156,7 +157,7 @@ const LandingPage: React.FC = () => {
     };
   }, []);
 
-  const openCockpit = () => navigate('/jetzt');
+  const openCockpit = () => navigate(authenticated ? '/jetzt' : '/login');
   const liveStatusLabel = apiLive ? 'Live-Daten verbunden' : 'Wird geladen';
   const topRegion = topRegions[0];
 

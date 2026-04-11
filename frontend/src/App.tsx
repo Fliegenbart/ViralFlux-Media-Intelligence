@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState, Suspense, lazy } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, useParams } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, Outlet, useLocation, useParams } from 'react-router-dom';
 import LoginPage from './pages/LoginPage';
 import ErrorBoundary from './components/ErrorBoundary';
 import LoadingSkeleton from './components/LoadingSkeleton';
@@ -126,6 +126,30 @@ const LegacyRecommendationRedirect: React.FC = () => {
   return <Navigate to={id ? `/kampagnen/${id}` : '/kampagnen'} replace />;
 };
 
+const RootRedirect: React.FC<{ authenticated: boolean }> = ({ authenticated }) => (
+  <Navigate to={authenticated ? '/virus-radar' : '/welcome'} replace />
+);
+
+const LoginRoute: React.FC<{ authenticated: boolean; onLogin: () => void }> = ({
+  authenticated,
+  onLogin,
+}) => {
+  const location = useLocation();
+  const from = (location.state as { from?: { pathname: string; search: string; hash: string } } | null)?.from;
+  const target = from ? `${from.pathname}${from.search}${from.hash}` : '/virus-radar';
+
+  return authenticated ? <Navigate to={target} replace /> : <LoginPage onLogin={onLogin} />;
+};
+
+const ProtectedRoute: React.FC<{ authenticated: boolean; children: React.ReactElement }> = ({
+  authenticated,
+  children,
+}) => {
+  const location = useLocation();
+
+  return authenticated ? children : <Navigate to="/login" replace state={{ from: location }} />;
+};
+
 /* ── Auth Context ──────────────────────────────────────────────── */
 interface AuthContextValue {
   authenticated: boolean;
@@ -194,49 +218,53 @@ const App: React.FC = () => {
     );
   }
 
-  if (!authenticated) {
-    return (
-      <ThemeProvider>
-        <LoginPage onLogin={handleLogin} />
-      </ThemeProvider>
-    );
-  }
-
   return (
     <ThemeProvider>
       <ErrorBoundary>
-      <ToastProvider>
-        <AuthContext.Provider value={{ authenticated, handleLogin, handleLogout }}>
-          <Router>
-            <Suspense fallback={<PageFallback />}>
-              <Routes>
-                <Route path="/" element={<Navigate to="/virus-radar" replace />} />
-                <Route path="/welcome" element={<LandingPage />} />
-                <Route element={<MediaShell />}>
-                  <Route path="/virus-radar" element={<VirusRadarPage />} />
-                  <Route path="/jetzt" element={<NowPage />} />
-                  <Route path="/zeitgraph" element={<TimegraphPage />} />
-                  <Route path="/regionen" element={<RegionsPage />} />
-                  <Route path="/kampagnen" element={<CampaignsPage />} />
-                  <Route path="/kampagnen/:id" element={<CampaignsPage />} />
-                  <Route path="/evidenz" element={<EvidencePage />} />
-                </Route>
-                {/* Legacy redirects */}
-                <Route path="/dashboard" element={<Navigate to="/virus-radar" replace />} />
-                <Route path="/entscheidung" element={<Navigate to="/virus-radar" replace />} />
-                <Route path="/lagebild" element={<Navigate to="/virus-radar" replace />} />
-                <Route path="/pilot" element={<Navigate to="/virus-radar" replace />} />
-                <Route path="/bericht" element={<Navigate to="/virus-radar" replace />} />
-                <Route path="/empfehlungen" element={<Navigate to="/kampagnen" replace />} />
-                <Route path="/empfehlungen/:id" element={<LegacyRecommendationRedirect />} />
-                <Route path="/validierung" element={<Navigate to="/evidenz" replace />} />
-                <Route path="/dashboard/recommendations/:id" element={<LegacyRecommendationRedirect />} />
-                <Route path="/backtest" element={<Navigate to="/evidenz" replace />} />
-              </Routes>
-            </Suspense>
-          </Router>
-        </AuthContext.Provider>
-      </ToastProvider>
+        <ToastProvider>
+          <AuthContext.Provider value={{ authenticated, handleLogin, handleLogout }}>
+            <Router>
+              <Suspense fallback={<PageFallback />}>
+                <Routes>
+                  <Route path="/" element={<RootRedirect authenticated={authenticated} />} />
+                  <Route path="/welcome" element={<LandingPage />} />
+                  <Route
+                    path="/login"
+                    element={<LoginRoute authenticated={authenticated} onLogin={handleLogin} />}
+                  />
+                  <Route
+                    element={(
+                      <ProtectedRoute authenticated={authenticated}>
+                        <Outlet />
+                      </ProtectedRoute>
+                    )}
+                  >
+                    <Route element={<MediaShell />}>
+                      <Route path="/virus-radar" element={<VirusRadarPage />} />
+                      <Route path="/jetzt" element={<NowPage />} />
+                      <Route path="/zeitgraph" element={<TimegraphPage />} />
+                      <Route path="/regionen" element={<RegionsPage />} />
+                      <Route path="/kampagnen" element={<CampaignsPage />} />
+                      <Route path="/kampagnen/:id" element={<CampaignsPage />} />
+                      <Route path="/evidenz" element={<EvidencePage />} />
+                    </Route>
+                    {/* Legacy redirects */}
+                    <Route path="/dashboard" element={<Navigate to="/virus-radar" replace />} />
+                    <Route path="/entscheidung" element={<Navigate to="/virus-radar" replace />} />
+                    <Route path="/lagebild" element={<Navigate to="/virus-radar" replace />} />
+                    <Route path="/pilot" element={<Navigate to="/virus-radar" replace />} />
+                    <Route path="/bericht" element={<Navigate to="/virus-radar" replace />} />
+                    <Route path="/empfehlungen" element={<Navigate to="/kampagnen" replace />} />
+                    <Route path="/empfehlungen/:id" element={<LegacyRecommendationRedirect />} />
+                    <Route path="/validierung" element={<Navigate to="/evidenz" replace />} />
+                    <Route path="/dashboard/recommendations/:id" element={<LegacyRecommendationRedirect />} />
+                    <Route path="/backtest" element={<Navigate to="/evidenz" replace />} />
+                  </Route>
+                </Routes>
+              </Suspense>
+            </Router>
+          </AuthContext.Provider>
+        </ToastProvider>
       </ErrorBoundary>
     </ThemeProvider>
   );

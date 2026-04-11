@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom';
 import React from 'react';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
 const mockRehydrateAuth = jest.fn<Promise<boolean>, []>();
 const mockLogout = jest.fn();
@@ -15,7 +15,16 @@ jest.mock('./lib/api', () => ({
 
 jest.mock('./pages/LoginPage', () => ({
   __esModule: true,
-  default: () => <div>Login Mock</div>,
+  default: ({ onLogin }: { onLogin: () => void }) => (
+    <button type="button" onClick={onLogin}>
+      Login Mock
+    </button>
+  ),
+}));
+
+jest.mock('./pages/LandingPage', () => ({
+  __esModule: true,
+  default: () => <div>Landing Mock</div>,
 }));
 
 jest.mock('framer-motion', () => ({
@@ -40,6 +49,11 @@ jest.mock('./pages/media/VirusRadarPage', () => ({
 jest.mock('./pages/media/TimegraphPage', () => ({
   __esModule: true,
   default: () => <div>Zeitgraph Mock</div>,
+}));
+
+jest.mock('./pages/media/CampaignsPage', () => ({
+  __esModule: true,
+  default: () => <div>Kampagnen Mock</div>,
 }));
 
 import App from './App';
@@ -105,6 +119,122 @@ describe('App routing', () => {
     expect(within(operatorNav).getByRole('button', { name: /Kampagnen/i })).toBeInTheDocument();
     expect(within(operatorNav).getByRole('button', { name: /Evidenz/i })).toBeInTheDocument();
     expect(within(operatorNav).queryByRole('button', { name: /Dashboard/i })).not.toBeInTheDocument();
+  });
+
+  describe('when logged out', () => {
+    beforeEach(() => {
+      mockRehydrateAuth.mockResolvedValue(false);
+    });
+
+    it('redirects / to /welcome', async () => {
+      render(<App />);
+
+      expect(await screen.findByText('Landing Mock')).toBeInTheDocument();
+      expect(window.location.pathname).toBe('/welcome');
+    });
+
+    it('renders the landing page at /welcome', async () => {
+      window.history.pushState({}, '', '/welcome');
+
+      render(<App />);
+
+      expect(await screen.findByText('Landing Mock')).toBeInTheDocument();
+      expect(window.location.pathname).toBe('/welcome');
+    });
+
+    it('redirects /virus-radar to /login', async () => {
+      window.history.pushState({}, '', '/virus-radar');
+
+      render(<App />);
+
+      expect(await screen.findByText('Login Mock')).toBeInTheDocument();
+      expect(window.location.pathname).toBe('/login');
+    });
+
+    it('redirects /dashboard to /login', async () => {
+      window.history.pushState({}, '', '/dashboard');
+
+      render(<App />);
+
+      expect(await screen.findByText('Login Mock')).toBeInTheDocument();
+      expect(window.location.pathname).toBe('/login');
+    });
+
+    it('renders the login page at /login and keeps the URL on /login', async () => {
+      window.history.pushState({}, '', '/login');
+
+      render(<App />);
+
+      expect(await screen.findByText('Login Mock')).toBeInTheDocument();
+      expect(window.location.pathname).toBe('/login');
+    });
+
+    it('returns to the requested deep link after login', async () => {
+      window.history.pushState({}, '', '/kampagnen/123');
+
+      render(<App />);
+
+      expect(await screen.findByText('Login Mock')).toBeInTheDocument();
+      expect(window.location.pathname).toBe('/login');
+
+      fireEvent.click(screen.getByRole('button', { name: 'Login Mock' }));
+
+      expect(await screen.findByText('Kampagnen Mock')).toBeInTheDocument();
+      expect(window.location.pathname).toBe('/kampagnen/123');
+    });
+
+    it('lands on /virus-radar after login when there is no stored from destination', async () => {
+      window.history.pushState({}, '', '/login');
+
+      render(<App />);
+
+      expect(await screen.findByText('Login Mock')).toBeInTheDocument();
+      expect(window.location.pathname).toBe('/login');
+
+      fireEvent.click(screen.getByRole('button', { name: 'Login Mock' }));
+
+      expect(await screen.findByText('Virus-Radar Mock')).toBeInTheDocument();
+      expect(window.location.pathname).toBe('/virus-radar');
+    });
+
+    it('preserves search and hash when returning to the requested deep link after login', async () => {
+      window.history.pushState({}, '', '/kampagnen/123?tab=history#details');
+
+      render(<App />);
+
+      expect(await screen.findByText('Login Mock')).toBeInTheDocument();
+      expect(window.location.pathname).toBe('/login');
+
+      fireEvent.click(screen.getByRole('button', { name: 'Login Mock' }));
+
+      expect(await screen.findByText('Kampagnen Mock')).toBeInTheDocument();
+      expect(window.location.pathname).toBe('/kampagnen/123');
+      expect(window.location.search).toBe('?tab=history');
+      expect(window.location.hash).toBe('#details');
+    });
+
+    it('returns to the canonical destination after logging in from a legacy alias', async () => {
+      window.history.pushState({}, '', '/dashboard/recommendations/123');
+
+      render(<App />);
+
+      expect(await screen.findByText('Login Mock')).toBeInTheDocument();
+      expect(window.location.pathname).toBe('/login');
+
+      fireEvent.click(screen.getByRole('button', { name: 'Login Mock' }));
+
+      expect(await screen.findByText('Kampagnen Mock')).toBeInTheDocument();
+      expect(window.location.pathname).toBe('/kampagnen/123');
+    });
+  });
+
+  it('redirects authenticated visitors away from /login to /virus-radar', async () => {
+    window.history.pushState({}, '', '/login');
+
+    render(<App />);
+
+    expect(await screen.findByText('Virus-Radar Mock')).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/virus-radar');
   });
 
   it('keeps legacy buyer-facing aliases for decision, pilot, and report on supported pages', async () => {

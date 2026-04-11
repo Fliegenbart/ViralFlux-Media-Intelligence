@@ -1,14 +1,21 @@
 import '@testing-library/jest-dom';
 import React from 'react';
 import { act, render, screen, waitFor, within } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 
 import LandingPage from './LandingPage';
+
+let mockAuthenticated = false;
 
 jest.mock('../../App', () => ({
   useTheme: () => ({
     theme: 'light',
     toggle: jest.fn(),
+  }),
+  useAuth: () => ({
+    authenticated: mockAuthenticated,
+    handleLogin: jest.fn(),
+    handleLogout: jest.fn(),
   }),
 }));
 
@@ -29,6 +36,12 @@ jest.mock('./LandingWidgets', () => ({
     rule: '#eee',
   }),
 }));
+
+const LocationProbe: React.FC = () => {
+  const location = useLocation();
+
+  return <div data-testid="location-probe">{location.pathname}</div>;
+};
 
 describe('LandingPage', () => {
   const landingPayload = {
@@ -70,12 +83,21 @@ describe('LandingPage', () => {
     });
   };
 
-  it('prioritizes the weekly decision and demotes feature marketing copy', async () => {
+  const renderLandingPage = () =>
     render(
-      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-        <LandingPage />
+      <MemoryRouter initialEntries={['/welcome']} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <LocationProbe />
+        <Routes>
+          <Route path="/welcome" element={<LandingPage />} />
+          <Route path="/login" element={<div>Login page</div>} />
+          <Route path="/jetzt" element={<div>Now page</div>} />
+        </Routes>
       </MemoryRouter>,
     );
+
+  it('prioritizes the weekly decision and demotes feature marketing copy', async () => {
+    mockAuthenticated = false;
+    renderLandingPage();
 
     await resolveLandingFetch();
 
@@ -105,11 +127,8 @@ describe('LandingPage', () => {
   });
 
   it('shows footer status, version and docs link', async () => {
-    render(
-      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-        <LandingPage />
-      </MemoryRouter>,
-    );
+    mockAuthenticated = false;
+    renderLandingPage();
 
     await resolveLandingFetch();
 
@@ -122,5 +141,43 @@ describe('LandingPage', () => {
       'href',
       'https://github.com/Fliegenbart/ViralFlux-Media-Intelligence/blob/main/docs/OPERATORS_GUIDE.md',
     );
+  });
+
+  it('sends logged-out visitors from the hero CTA to /login', async () => {
+    mockAuthenticated = false;
+    renderLandingPage();
+
+    await resolveLandingFetch();
+
+    await waitFor(() => {
+      expect(screen.getByText(/Datenstatus:/i)).toBeInTheDocument();
+    });
+
+    const hero = screen.getByRole('region', { name: 'Wochenbriefing Einstieg' });
+
+    await act(async () => {
+      within(hero).getByRole('button', { name: 'Wochenplan öffnen' }).click();
+    });
+
+    expect(screen.getByTestId('location-probe')).toHaveTextContent('/login');
+  });
+
+  it('sends logged-in visitors from the hero CTA to /jetzt', async () => {
+    mockAuthenticated = true;
+    renderLandingPage();
+
+    await resolveLandingFetch();
+
+    await waitFor(() => {
+      expect(screen.getByText(/Datenstatus:/i)).toBeInTheDocument();
+    });
+
+    const hero = screen.getByRole('region', { name: 'Wochenbriefing Einstieg' });
+
+    await act(async () => {
+      within(hero).getByRole('button', { name: 'Wochenplan öffnen' }).click();
+    });
+
+    expect(screen.getByTestId('location-probe')).toHaveTextContent('/jetzt');
   });
 });

@@ -37,6 +37,7 @@ def predict_all_regions(
         )
     target_window_days = service._target_window_for_horizon(horizon)
     artifacts = service._load_artifacts(virus_typ, horizon_days=horizon)
+    artifact_diagnostic = artifacts.get("artifact_diagnostic")
     metadata = artifacts.get("metadata") or {}
     artifact_transition_mode = str(
         artifacts.get("artifact_transition_mode")
@@ -52,6 +53,7 @@ def predict_all_regions(
             status="no_model",
             message=load_error,
             artifact_transition_mode=artifact_transition_mode,
+            artifact_diagnostic=artifact_diagnostic,
             supported_horizon_days_for_virus=support["supported_horizons"],
         )
     if not artifacts or not feature_columns:
@@ -70,6 +72,7 @@ def predict_all_regions(
             status="no_model",
             message=message,
             artifact_transition_mode=artifact_transition_mode,
+            artifact_diagnostic=artifact_diagnostic,
             supported_horizon_days_for_virus=support["supported_horizons"],
         )
 

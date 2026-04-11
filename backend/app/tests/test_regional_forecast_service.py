@@ -496,6 +496,72 @@ class RegionalForecastServiceTests(unittest.TestCase):
         self.assertEqual(result["target_window_days"], [3, 3])
         self.assertIn("Horizon 3", result["message"])
 
+    def test_predict_all_regions_includes_bootstrap_guidance_for_missing_artifacts(self) -> None:
+        service = self._make_service()
+        service._load_artifacts = lambda virus_typ, horizon_days=7: {
+            "artifact_diagnostic": {
+                "status": "missing",
+                "artifact_scope": {"virus_typ": virus_typ, "horizon_days": horizon_days},
+                "artifact_dir": f"/tmp/{virus_typ}/horizon_{horizon_days}",
+                "missing_files": [],
+                "bootstrap_required": True,
+                "operator_message": "Regionales Modell fehlt. Bitte Bootstrap ausführen.",
+                "bootstrap_command": "cd backend && python scripts/backfill_regional_model_artifacts.py --horizon 3 --horizon 5 --horizon 7",
+                "artifact_transition_mode": None,
+                "load_error": None,
+            }
+        }
+
+        result = service.predict_all_regions(virus_typ="Influenza A", horizon_days=5)
+
+        self.assertEqual(result["status"], "no_model")
+        self.assertTrue(result["missing_artifacts"])
+        self.assertEqual(
+            result["missing_scopes"],
+            [{"virus_typ": "Influenza A", "horizon_days": 5}],
+        )
+        self.assertIn("backfill_regional_model_artifacts.py", result["bootstrap_command"])
+        self.assertEqual(
+            result["artifact_diagnostic"]["artifact_scope"],
+            {"virus_typ": "Influenza A", "horizon_days": 5},
+        )
+        self.assertEqual(
+            result["artifact_diagnostic"]["operator_message"],
+            "Regionales Modell fehlt. Bitte Bootstrap ausführen.",
+        )
+
+    def test_predict_all_regions_surfaces_missing_files_for_incomplete_bundle(self) -> None:
+        service = self._make_service()
+        service._load_artifacts = lambda virus_typ, horizon_days=7: {
+            "load_error": "Artefakt-Bundle für Influenza A/h7 ist unvollständig.",
+            "artifact_diagnostic": {
+                "status": "incomplete",
+                "artifact_scope": {"virus_typ": virus_typ, "horizon_days": horizon_days},
+                "artifact_dir": f"/tmp/{virus_typ}/horizon_{horizon_days}",
+                "missing_files": ["classifier.json", "calibration.pkl"],
+                "bootstrap_required": True,
+                "operator_message": "Artefakt-Bundle für Influenza A/h7 ist unvollständig: classifier.json, calibration.pkl. Bitte Bootstrap ausführen.",
+                "bootstrap_command": "cd backend && python scripts/backfill_regional_model_artifacts.py --horizon 3 --horizon 5 --horizon 7",
+                "artifact_transition_mode": None,
+                "load_error": "Artefakt-Bundle für Influenza A/h7 ist unvollständig.",
+            },
+        }
+
+        result = service.predict_all_regions(virus_typ="Influenza A", horizon_days=7)
+
+        self.assertEqual(result["status"], "no_model")
+        self.assertEqual(
+            result["artifact_diagnostic"]["missing_files"],
+            ["classifier.json", "calibration.pkl"],
+        )
+        self.assertIn("classifier.json", result["operator_message"])
+        self.assertTrue(result["missing_artifacts"])
+        self.assertEqual(
+            result["missing_scopes"],
+            [{"virus_typ": "Influenza A", "horizon_days": 7}],
+        )
+        self.assertIn("backfill_regional_model_artifacts.py", result["bootstrap_command"])
+
     def test_predict_all_regions_returns_no_model_when_artifact_features_do_not_match_panel(self) -> None:
         service = self._make_service()
         service._load_artifacts = lambda virus_typ, horizon_days=7: {

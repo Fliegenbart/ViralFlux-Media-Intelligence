@@ -298,20 +298,23 @@ class RegionalForecastService:
         status: str,
         message: str,
         artifact_transition_mode: str | None = None,
+        artifact_diagnostic: dict[str, Any] | None = None,
         supported_horizon_days_for_virus: list[int] | None = None,
     ) -> dict[str, Any]:
-        return regional_forecast_views.empty_forecast_response(
-            self,
-            virus_typ=virus_typ,
-            horizon_days=horizon_days,
-            status=status,
-            message=message,
-            artifact_transition_mode=artifact_transition_mode,
-            supported_horizon_days_for_virus=supported_horizon_days_for_virus,
-            ensure_supported_horizon_fn=ensure_supported_horizon,
-            supported_forecast_horizons=SUPPORTED_FORECAST_HORIZONS,
-            utc_now_fn=utc_now,
-        )
+        kwargs = {
+            "virus_typ": virus_typ,
+            "horizon_days": horizon_days,
+            "status": status,
+            "message": message,
+            "artifact_transition_mode": artifact_transition_mode,
+            "supported_horizon_days_for_virus": supported_horizon_days_for_virus,
+            "ensure_supported_horizon_fn": ensure_supported_horizon,
+            "supported_forecast_horizons": SUPPORTED_FORECAST_HORIZONS,
+            "utc_now_fn": utc_now,
+        }
+        if artifact_diagnostic is not None:
+            kwargs["artifact_diagnostic"] = artifact_diagnostic
+        return regional_forecast_views.empty_forecast_response(self, **kwargs)
 
     def _empty_media_allocation_response(
         self,

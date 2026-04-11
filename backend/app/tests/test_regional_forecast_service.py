@@ -1,5 +1,7 @@
 import unittest
 from datetime import datetime, timedelta
+from pathlib import Path
+import tempfile
 
 import numpy as np
 import pandas as pd
@@ -560,6 +562,44 @@ class RegionalForecastServiceTests(unittest.TestCase):
             result["missing_scopes"],
             [{"virus_typ": "Influenza A", "horizon_days": 7}],
         )
+        self.assertIn("backfill_regional_model_artifacts.py", result["bootstrap_command"])
+
+    def test_predict_all_regions_surfaces_bootstrap_guidance_for_missing_legacy_h7_scope(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            service = RegionalForecastService(db=None, models_dir=Path(tmp_dir))
+
+            result = service.predict_all_regions(virus_typ="Influenza A", horizon_days=7)
+
+        self.assertEqual(result["status"], "no_model")
+        self.assertTrue(result["missing_artifacts"])
+        self.assertEqual(
+            result["missing_scopes"],
+            [{"virus_typ": "Influenza A", "horizon_days": 7}],
+        )
+        self.assertIn("backfill_regional_model_artifacts.py", result["bootstrap_command"])
+        self.assertEqual(
+            result["artifact_diagnostic"]["artifact_transition_mode"],
+            "legacy_default_window_fallback",
+        )
+        self.assertIn("fehlt", result["message"])
+        self.assertNotIn("nutzt noch Legacy", result["message"])
+
+    def test_predict_all_regions_surfaces_bootstrap_guidance_for_incomplete_legacy_h7_bundle(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            (base / "influenza_a").mkdir(parents=True)
+            service = RegionalForecastService(db=None, models_dir=base)
+
+            result = service.predict_all_regions(virus_typ="Influenza A", horizon_days=7)
+
+        self.assertEqual(result["status"], "no_model")
+        self.assertTrue(result["missing_artifacts"])
+        self.assertEqual(result["artifact_diagnostic"]["status"], "incomplete")
+        self.assertEqual(
+            result["artifact_diagnostic"]["artifact_transition_mode"],
+            "legacy_default_window_fallback",
+        )
+        self.assertIn("classifier.json", result["artifact_diagnostic"]["missing_files"])
         self.assertIn("backfill_regional_model_artifacts.py", result["bootstrap_command"])
 
     def test_predict_all_regions_returns_no_model_when_artifact_features_do_not_match_panel(self) -> None:

@@ -61,7 +61,9 @@ def predict_all_regions(
             f"Kein regionales Panel-Modell für Horizon {horizon} verfügbar. "
             "Bitte horizon-spezifisches Training starten."
         )
-        if artifact_transition_mode == "legacy_default_window_fallback":
+        if artifact_diagnostic and artifact_diagnostic.get("operator_message"):
+            message = str(artifact_diagnostic["operator_message"])
+        elif artifact_transition_mode == "legacy_default_window_fallback":
             message = (
                 f"Horizon {horizon} nutzt noch Legacy-3-7-Tage-Artefakte. "
                 "Bitte horizon-spezifisches Retraining durchführen."

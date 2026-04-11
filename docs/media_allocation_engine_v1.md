@@ -4,12 +4,12 @@
 
 This document describes the first production-near heuristic media allocation layer implemented in:
 
-- `/Users/davidwegener/Desktop/viralflux/backend/app/services/ml/regional_media_allocation_engine.py`
-- `/Users/davidwegener/Desktop/viralflux/backend/app/services/ml/regional_media_allocation_contracts.py`
-- `/Users/davidwegener/Desktop/viralflux/backend/app/services/ml/regional_forecast.py`
-- `/Users/davidwegener/Desktop/viralflux/backend/app/api/forecast.py`
+- `backend/app/services/ml/regional_media_allocation_engine.py`
+- `backend/app/services/ml/regional_media_allocation_contracts.py`
+- `backend/app/services/ml/regional_forecast.py`
+- `backend/app/api/forecast.py`
 
-The engine converts regional decision output into explainable budget and prioritization recommendations for PEIX / GELO.
+The engine converts regional decision output into explainable budget and prioritization recommendations for a customer pilot.
 
 This is not MMM, attribution or ROI modeling. It is an explicit heuristic layer.
 
@@ -304,9 +304,9 @@ For empty states, the payload additionally includes:
 
 The current implementation is covered by:
 
-- `/Users/davidwegener/Desktop/viralflux/backend/app/tests/test_regional_media_allocation_engine.py`
-- `/Users/davidwegener/Desktop/viralflux/backend/app/tests/test_regional_forecast_service.py`
-- `/Users/davidwegener/Desktop/viralflux/backend/app/tests/test_forecast_api.py`
+- `backend/app/tests/test_regional_media_allocation_engine.py`
+- `backend/app/tests/test_regional_forecast_service.py`
+- `backend/app/tests/test_forecast_api.py`
 
 Covered cases include:
 

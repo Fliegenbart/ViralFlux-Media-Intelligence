@@ -166,7 +166,7 @@ def build_rationale(
             reason_detail_builder("campaign_guardrail_bundle_neighbor", message)
         )
     elif guardrail_status == "low_confidence_review":
-        message = "Confidence is below the stage-specific guardrail, so the recommendation needs manual PEIX review."
+        message = "Confidence is below the stage-specific guardrail, so the recommendation needs manual review."
         guardrails.append(message)
         guardrail_details.append(
             reason_detail_builder(

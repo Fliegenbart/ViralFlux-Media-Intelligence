@@ -4,7 +4,7 @@ from typing import Any
 
 from app.services.media.semantic_contracts import priority_score_contract, ranking_signal_contract
 
-from .shared import JsonDict, generated_at
+from .shared import JsonDict, cockpit_ranking_signal, generated_at
 
 
 def build_regions_payload(
@@ -15,7 +15,7 @@ def build_regions_payload(
     brand: str = "gelo",
 ) -> JsonDict:
     cockpit = service.cockpit_service.get_cockpit_payload(virus_typ=virus_typ, target_source=target_source)
-    peix = cockpit.get("peix_epi_score") or {}
+    ranking_signal = cockpit_ranking_signal(cockpit)
     map_section = cockpit.get("map") or {}
     suggestions = {
         item.get("region"): item
@@ -25,12 +25,12 @@ def build_regions_payload(
 
     enriched_regions: dict[str, dict[str, Any]] = {}
     for code, region in (map_section.get("regions") or {}).items():
-        peix_region = (peix.get("regions") or {}).get(code, {})
+        ranking_signal_region = (ranking_signal.get("regions") or {}).get(code, {})
         suggestion = suggestions.get(code) or {}
         forecast_direction = service._forecast_direction(region)
         severity_score = service._severity_score(region)
         momentum_score = service._momentum_score(region=region, forecast_direction=forecast_direction)
-        decision_mode = service._region_decision_mode(peix_region)
+        decision_mode = service._region_decision_mode(ranking_signal_region)
         actionability_score = service._actionability_score(
             region=region,
             suggestion=suggestion,
@@ -39,14 +39,15 @@ def build_regions_payload(
         )
         enriched_regions[code] = {
             **region,
-            "signal_score": region.get("signal_score") or region.get("peix_score") or peix_region.get("score_0_100") or region.get("impact_probability"),
-            "peix_score": region.get("peix_score") or peix_region.get("score_0_100"),
+            "signal_score": region.get("signal_score") or region.get("peix_score") or ranking_signal_region.get("score_0_100") or region.get("impact_probability"),
+            "ranking_signal_score": region.get("signal_score") or ranking_signal_region.get("score_0_100"),
+            "peix_score": region.get("peix_score") or ranking_signal_region.get("score_0_100"),
             "severity_score": severity_score,
             "momentum_score": momentum_score,
             "actionability_score": actionability_score,
             "forecast_direction": forecast_direction,
-            "signal_drivers": peix_region.get("top_drivers") or [],
-            "layer_contributions": peix_region.get("layer_contributions") or {},
+            "signal_drivers": ranking_signal_region.get("top_drivers") or [],
+            "layer_contributions": ranking_signal_region.get("layer_contributions") or {},
             "budget_logic": suggestion.get("reason") or region.get("tooltip", {}).get("recommendation_text"),
             "decision_mode": decision_mode["key"],
             "decision_mode_label": decision_mode["label"],
@@ -60,9 +61,9 @@ def build_regions_payload(
                 actionability_score=actionability_score,
                 decision_mode=decision_mode["key"],
             ),
-            "source_trace": service._region_source_trace(peix_region),
+            "source_trace": service._region_source_trace(ranking_signal_region),
             "field_contracts": {
-                "signal_score": ranking_signal_contract(source="PeixEpiScore"),
+                "signal_score": ranking_signal_contract(source="RankingSignal"),
                 "priority_score": priority_score_contract(source="MediaV2Service"),
             },
         }

@@ -84,7 +84,7 @@ const ForecastMonitoringSection: React.FC<Props> = ({
             </div>
           </div>
           <p className="section-copy">
-            Hier sehen wir, wie gut frühe Signale tatsächlich zu späteren Marktbewegungen passen. Das stützt den Vorlauf für GELO, ersetzt aber noch keinen Kundendaten-Nachweis.
+            Hier sehen wir, wie gut frühe Signale tatsächlich zu späteren Marktbewegungen passen. Das stützt den Vorlauf für die Planung, ersetzt aber noch keinen Kundendaten-Nachweis.
           </p>
         </div>
 
@@ -110,7 +110,7 @@ const ForecastMonitoringSection: React.FC<Props> = ({
             </div>
           </div>
           <p className="section-copy">
-            Dieser Block zeigt, ob die aktuelle Modellrichtung schon tragfähig genug ist oder ob PEIX sie GELO nur mit Vorsicht erklären sollte.
+            Dieser Block zeigt, ob die aktuelle Modellrichtung schon tragfähig genug ist oder ob sie nur mit Vorsicht erklärt werden sollte.
           </p>
           <div className="review-chip-row">
             <span className="step-chip">Rückblicktest: {monitoringFreshnessLabel(forecastMonitoring?.backtest_freshness_status)}</span>
@@ -130,7 +130,7 @@ const ForecastMonitoringSection: React.FC<Props> = ({
             {eventProbabilityNote}
           </div>
           <div className="soft-panel" style={{ padding: 16, marginTop: 16, display: 'grid', gap: 8 }}>
-            <div className="campaign-focus-label">Was das für GELO bedeutet</div>
+            <div className="campaign-focus-label">Was das aktuell bedeutet</div>
             <div className="review-body-copy">
               {COCKPIT_SEMANTICS.eventProbability.label} ist hier eine eigene Vorhersage-Metrik. Sie ist nicht dasselbe wie {COCKPIT_SEMANTICS.rankingSignal.label} oder {COCKPIT_SEMANTICS.decisionPriority.label}.
             </div>
@@ -150,7 +150,7 @@ const ForecastMonitoringSection: React.FC<Props> = ({
       <section style={{ display: 'grid', gap: 20 }}>
         <ValidationSection
           title="Markt-Validierung im Verlauf"
-          subtitle="Hier siehst du, ob der Forecast eine Welle früh genug erkennt, um GELO zeitlich sinnvoll zu unterstützen."
+          subtitle="Hier siehst du, ob der Forecast eine Welle früh genug erkennt, um die Planung zeitlich sinnvoll zu unterstützen."
           result={marketValidation}
           loading={marketValidationLoading}
           emptyMessage="Noch keine detaillierten Daten für den Marktvergleich verfügbar."
@@ -158,7 +158,7 @@ const ForecastMonitoringSection: React.FC<Props> = ({
         {truthStatus?.coverage_weeks ? (
           <ValidationSection
             title="Kunden-Validierung im Verlauf"
-            subtitle="Marktvergleich und GELO-Kundendaten bleiben getrennt. Dieser Bereich zeigt nur, wie gut das Modell an echte Outcome-Daten anschließt."
+            subtitle="Marktvergleich und Kundendaten bleiben getrennt. Dieser Bereich zeigt nur, wie gut das Modell an echte Outcome-Daten anschließt."
             result={customerValidation}
             loading={customerValidationLoading}
             emptyMessage="Noch keine ausreichend langen Kundenreihen für eine belastbare Validierung der Kundendaten verfügbar."
@@ -168,7 +168,7 @@ const ForecastMonitoringSection: React.FC<Props> = ({
             <div className="section-heading" style={{ gap: 6 }}>
               <h2 className="subsection-title">Kunden-Validierung im Verlauf</h2>
               <p className="subsection-copy">
-                Dieser Block bleibt leer, bis echte GELO-Kundendaten angeschlossen sind. Frühere Läufe erscheinen separat nur als Hinweis.
+                Dieser Block bleibt leer, bis echte Kundendaten angeschlossen sind. Frühere Läufe erscheinen separat nur als Hinweis.
               </p>
             </div>
             {legacyCustomer ? (

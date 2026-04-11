@@ -93,7 +93,7 @@ def products_from_allocation(
     *,
     allocation_item: dict[str, Any],
     virus_typ: str,
-    gelo_products: dict[str, list[str]],
+    portfolio_products: dict[str, list[str]],
 ) -> list[str]:
     product_clusters = allocation_item.get("product_clusters") or []
     if product_clusters:
@@ -101,7 +101,7 @@ def products_from_allocation(
         products = [str(item) for item in cluster.get("products") or [] if str(item).strip()]
         if products:
             return products
-    return gelo_products.get(virus_typ, ["GeloMyrtol forte"])
+    return portfolio_products.get(virus_typ, ["GeloMyrtol forte"])
 
 
 def media_timeline(

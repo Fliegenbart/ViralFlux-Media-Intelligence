@@ -1,7 +1,7 @@
-"""PEIX x GELO Wochenbericht als automatisierter PDF-Report.
+"""ViralFlux Wochenbericht als automatisierter PDF-Report.
 
 Generiert jeden Montag ein 3-seitiges PDF:
-  Seite 1: Lagebild Deutschland (PeixEpiScore, Bento-Tiles, Regionen mit frühem Signal)
+  Seite 1: Lagebild Deutschland (Ranking-Signal, Bento-Tiles, Regionen mit frühem Signal)
   Seite 2: Arbeitsvorschlag (regionale Allokation + Produkt-Priorisierung)
   Seite 3: Begründung (Rückblicktest + Stabilität der Vorhersage)
 """
@@ -37,7 +37,7 @@ def _safe(text: Any) -> str:
 
 
 class _ActionBriefPDF(FPDF):
-    """Custom FPDF for the PEIX x GELO weekly brief."""
+    """Custom FPDF for the ViralFlux weekly brief."""
 
     def __init__(self, calendar_week: str):
         super().__init__()
@@ -46,7 +46,7 @@ class _ActionBriefPDF(FPDF):
     def header(self):
         self.set_font("Helvetica", "B", 9)
         self.set_text_color(*_SLATE_400)
-        self.cell(0, 6, "PEIX x GELO Frühwarnung", align="L")
+        self.cell(0, 6, "ViralFlux Frühwarnung", align="L")
         self.cell(
             0, 6,
             f"Wochenbericht - {self._calendar_week} - {datetime.now().strftime('%d.%m.%Y')}",
@@ -63,7 +63,7 @@ class _ActionBriefPDF(FPDF):
         self.set_text_color(*_SLATE_400)
         self.cell(
             0, 8,
-            f"Seite {self.page_no()} | PEIX x GELO Wochenbericht | Vertraulich",
+            f"Seite {self.page_no()} | ViralFlux Wochenbericht | Vertraulich",
             align="C",
         )
 

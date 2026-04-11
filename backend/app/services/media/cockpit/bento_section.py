@@ -166,7 +166,7 @@ def build_bento_section(
             unit="/100",
             subtitle=f"Band: {peix_score.get('national_band', 'n/a')}",
             signal_score=peix_score.get("national_score"),
-            source="PeixEpiScore",
+            source="RankingSignal",
             data_source="Fusion",
         ),
         build_tile(
@@ -179,7 +179,7 @@ def build_bento_section(
                 if top_region else "Keine Daten"
             ),
             signal_score=top_region.get("signal_score") if top_region else 0.0,
-            source="PeixEpiScore",
+            source="RankingSignal",
             data_source="Karte + Score",
         ),
         build_tile(

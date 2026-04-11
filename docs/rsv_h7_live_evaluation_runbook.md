@@ -28,7 +28,7 @@ Der dedizierte Live-Entrypoint:
 
 Der Entry-Point ist:
 
-- [backend/scripts/run_rsv_h7_live_evaluation.py](/Users/davidwegener/Desktop/viralflux/backend/scripts/run_rsv_h7_live_evaluation.py)
+- [backend/scripts/run_rsv_h7_live_evaluation.py](../backend/scripts/run_rsv_h7_live_evaluation.py)
 
 ## Server Voraussetzungen
 
@@ -161,7 +161,7 @@ Der Lauf ist reproduzierbar, weil
 
 ## Verwandte Dokumente
 
-- [h7_rsv_ranking_experiments.md](/Users/davidwegener/Desktop/viralflux/docs/h7_rsv_ranking_experiments.md)
-- [rsv_h7_persistent_evaluation.md](/Users/davidwegener/Desktop/viralflux/docs/rsv_h7_persistent_evaluation.md)
-- [h7_pilot_only_training_path.md](/Users/davidwegener/Desktop/viralflux/docs/h7_pilot_only_training_path.md)
-- [model_release_process.md](/Users/davidwegener/Desktop/viralflux/docs/model_release_process.md)
+- [h7_rsv_ranking_experiments.md](./h7_rsv_ranking_experiments.md)
+- [rsv_h7_persistent_evaluation.md](./rsv_h7_persistent_evaluation.md)
+- [h7_pilot_only_training_path.md](./h7_pilot_only_training_path.md)
+- [model_release_process.md](./model_release_process.md)

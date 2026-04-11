@@ -3,11 +3,11 @@
 Stand: 2026-03-24
 
 Basis:
-- [backend/app/services/ml/regional_decision_engine.py](/Users/davidwegener/Desktop/viralflux/backend/app/services/ml/regional_decision_engine.py)
-- [backend/app/services/ml/regional_media_allocation_engine.py](/Users/davidwegener/Desktop/viralflux/backend/app/services/ml/regional_media_allocation_engine.py)
-- [backend/app/services/media/campaign_recommendation_service.py](/Users/davidwegener/Desktop/viralflux/backend/app/services/media/campaign_recommendation_service.py)
-- [backend/app/services/media/pilot_readout_service.py](/Users/davidwegener/Desktop/viralflux/backend/app/services/media/pilot_readout_service.py)
-- [frontend/src/lib/plainLanguage.ts](/Users/davidwegener/Desktop/viralflux/frontend/src/lib/plainLanguage.ts)
+- [backend/app/services/ml/regional_decision_engine.py](../backend/app/services/ml/regional_decision_engine.py)
+- [backend/app/services/ml/regional_media_allocation_engine.py](../backend/app/services/ml/regional_media_allocation_engine.py)
+- [backend/app/services/media/campaign_recommendation_service.py](../backend/app/services/media/campaign_recommendation_service.py)
+- [backend/app/services/media/pilot_readout_service.py](../backend/app/services/media/pilot_readout_service.py)
+- [frontend/src/lib/plainLanguage.ts](../frontend/src/lib/plainLanguage.ts)
 
 ## Ziel
 
@@ -222,5 +222,5 @@ Die UI soll immer so arbeiten:
 Wenn ein neuer Reason-Code eingefuehrt wird, müssen immer drei Dinge mitgezogen werden:
 
 1. Backend-Code mit `code`, `message` und `params`
-2. Frontend-Übersetzung in [plainLanguage.ts](/Users/davidwegener/Desktop/viralflux/frontend/src/lib/plainLanguage.ts)
+2. Frontend-Übersetzung in [plainLanguage.ts](../frontend/src/lib/plainLanguage.ts)
 3. Ein Test im betroffenen Layer

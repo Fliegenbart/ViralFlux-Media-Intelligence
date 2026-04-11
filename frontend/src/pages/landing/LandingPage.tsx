@@ -34,7 +34,7 @@ const BRIEFING_CARDS = [
   {
     label: 'Nächster Schritt',
     value: 'Direkt in den Wochenplan statt in Produkt-Erklärungen',
-    meta: 'Der wichtigste Weg führt ohne Umwege in die Arbeitsfläche, in der PEIX x GELO die Wochenentscheidung vorbereitet.',
+    meta: 'Der wichtigste Weg führt ohne Umwege in die Arbeitsfläche, in der das Team die Wochenentscheidung vorbereitet.',
     tone: 'muted' as const,
   },
   {
@@ -204,10 +204,10 @@ const LandingPage: React.FC = () => {
             >
               <div className="landing-hero-grid">
                 <div className="landing-hero-copy">
-                  <span className="landing-hero-kicker">PEIX x GELO</span>
+                  <span className="landing-hero-kicker">Wochenbriefing</span>
 
                   <h1 className="landing-hero-title">
-                    Was PEIX x GELO diese Woche entscheiden sollte
+                    Was diese Woche entschieden werden sollte
                   </h1>
 
                   <p className="operator-section-shell__copy landing-hero-copytext">

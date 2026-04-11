@@ -19,7 +19,6 @@ from app.services.marketing_engine.opportunity_engine import MarketingOpportunit
 from app.services.media.business_validation_service import BusinessValidationService
 from app.services.media.cockpit_service import MediaCockpitService
 from app.services.media.outcome_signal_service import OutcomeSignalService
-from app.services.media.peix_score_service import PeixEpiScoreService
 from app.services.media.recommendation_contracts import (
     enrich_card_v2,
 )

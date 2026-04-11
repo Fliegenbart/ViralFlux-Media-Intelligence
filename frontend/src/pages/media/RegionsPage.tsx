@@ -62,7 +62,7 @@ const RegionsPage: React.FC = () => {
       const data = await mediaApi.openRegionCampaign({
         region_code: regionCode,
         brand,
-        product: 'Alle Gelo-Produkte',
+        product: 'Alle Produkte',
         campaign_goal: campaignGoal,
         weekly_budget: weeklyBudget,
         virus_typ: virus,

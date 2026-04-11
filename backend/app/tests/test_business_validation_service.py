@@ -114,7 +114,7 @@ class BusinessValidationServiceTests(unittest.TestCase):
             outcome_learning_summary=outcome_learning,
         )
 
-        self.assertEqual(result["operator_context"]["operator"], "peix")
+        self.assertEqual(result["operator_context"]["operator"], "platform")
         self.assertEqual(result["operator_context"]["truth_partner"], "gelo")
         self.assertEqual(result["coverage_weeks"], 30)
         self.assertEqual(result["activation_cycles"], 2)
@@ -123,6 +123,8 @@ class BusinessValidationServiceTests(unittest.TestCase):
         self.assertEqual(result["validation_status"], "pending_holdout_design")
         self.assertEqual(result["decision_scope"], "decision_support_only")
         self.assertEqual(result["evidence_tier"], "truth_backed")
+        self.assertNotIn("GELO", result["message"])
+        self.assertNotIn("GELO", result["guidance"])
 
     def test_business_validation_passes_with_holdout_and_lift_metrics(self) -> None:
         self._import_outcomes(with_holdout=True, with_lift=True)
@@ -151,6 +153,8 @@ class BusinessValidationServiceTests(unittest.TestCase):
         self.assertEqual(result["evidence_tier"], "commercially_validated")
         self.assertTrue(result["expected_units_lift_enabled"])
         self.assertIn("business_gate", result["field_contracts"])
+        self.assertNotIn("GELO", result["message"])
+        self.assertNotIn("GELO", result["guidance"])
 
 
 if __name__ == "__main__":

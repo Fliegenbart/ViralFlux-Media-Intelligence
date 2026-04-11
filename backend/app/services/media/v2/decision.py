@@ -168,7 +168,7 @@ def build_decision_payload(
             "operator_context": business_validation.get("operator_context"),
             "field_contracts": {
                 "event_probability": forecast_probability_contract(),
-                "signal_score": ranking_signal_contract(source="PeixEpiScore"),
+                "signal_score": ranking_signal_contract(source="RankingSignal"),
                 "priority_score": top_card_contracts.get("priority_score")
                 or priority_score_contract(source="MarketingOpportunityEngine"),
                 "signal_confidence_pct": top_card_contracts.get("signal_confidence_pct")

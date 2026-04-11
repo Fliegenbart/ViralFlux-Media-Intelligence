@@ -6,12 +6,12 @@ This document describes how regional model artifacts move from training to opera
 
 Relevant code paths:
 
-- `/Users/davidwegener/Desktop/viralflux/backend/app/services/ml/regional_trainer.py`
-- `/Users/davidwegener/Desktop/viralflux/backend/app/services/ml/regional_forecast.py`
-- `/Users/davidwegener/Desktop/viralflux/backend/app/services/ops/production_readiness_service.py`
-- `/Users/davidwegener/Desktop/viralflux/backend/app/services/ops/regional_operational_snapshot_store.py`
-- `/Users/davidwegener/Desktop/viralflux/backend/scripts/backfill_regional_model_artifacts.py`
-- `/Users/davidwegener/Desktop/viralflux/backend/scripts/recompute_operational_views.py`
+- `backend/app/services/ml/regional_trainer.py`
+- `backend/app/services/ml/regional_forecast.py`
+- `backend/app/services/ops/production_readiness_service.py`
+- `backend/app/services/ops/regional_operational_snapshot_store.py`
+- `backend/scripts/backfill_regional_model_artifacts.py`
+- `backend/scripts/recompute_operational_views.py`
 
 ## Release Unit
 
@@ -81,7 +81,7 @@ docker exec viralflux_celery_worker python /app/scripts/backfill_regional_model_
 Local dev path:
 
 ```bash
-cd /Users/davidwegener/Desktop/viralflux/backend
+cd backend
 python scripts/backfill_regional_model_artifacts.py --horizon 3 --horizon 5 --horizon 7
 ```
 
@@ -264,7 +264,7 @@ docker exec viralflux_celery_worker python /app/scripts/recompute_operational_vi
 Local dev path:
 
 ```bash
-cd /Users/davidwegener/Desktop/viralflux/backend
+cd backend
 python scripts/recompute_operational_views.py --virus "Influenza A" --horizon 7
 ```
 
@@ -276,7 +276,7 @@ This records:
 ### Step 4. Smoke test the running backend
 
 ```bash
-cd /Users/davidwegener/Desktop/viralflux/backend
+cd backend
 python scripts/smoke_test_release.py \
   --base-url http://127.0.0.1:8000 \
   --virus "Influenza A" \

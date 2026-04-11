@@ -29,17 +29,17 @@ describe('LoginPage', () => {
     render(<LoginPage onLogin={onLogin} />);
 
     expect(
-      screen.getByRole('heading', { name: 'Die Wochensteuerung für PEIX x GELO' }),
+      screen.getByRole('heading', { name: 'Die Wochensteuerung für die aktuelle Lage' }),
     ).toBeInTheDocument();
     expect(
       screen.getByRole('heading', { name: 'In den Wochenplan' }),
     ).toBeInTheDocument();
     expect(
       screen.getByText(
-        'Melde dich an, um Wochenfokus, Bundesländer und Evidenz für PEIX x GELO zu öffnen.',
+        'Melde dich an, um Wochenfokus, Bundesländer und Evidenz zu öffnen.',
       ),
     ).toBeInTheDocument();
-    expect(screen.getByText('PEIX x GELO Wochenbriefing')).toBeInTheDocument();
+    expect(screen.getByText('ViralFlux Wochenbriefing')).toBeInTheDocument();
     expect(
       screen.getByText('Bundesländer, Richtung und Evidenz für diese Woche in einer Arbeitsfläche.'),
     ).toBeInTheDocument();

@@ -19,7 +19,7 @@ In einfachen Worten läuft das System so:
 2. Es baut daraus für jedes Virus und jedes Bundesland einen sauberen Datenstand auf.
 3. Es schätzt die Entwicklung für die nächsten Tage.
 4. Es bewertet, wie relevant ein Bundesland gerade ist.
-5. Es zeigt das Ergebnis in einer operativen Oberfläche für PEIX / GELO.
+5. Es zeigt das Ergebnis in einer operativen Oberfläche für den aktuellen Partner- und Pilot-Scope.
 
 Die aktive Live-Navigation in der UI ist:
 

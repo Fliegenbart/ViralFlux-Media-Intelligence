@@ -44,9 +44,9 @@ def mycoplasma_candidates(
         p75 = engine._p75(history)
         seasonal_hit = latest >= p75 and latest > 0
 
-        peix_entry = peix_regions.get(code) or {}
-        peix_score = float(peix_entry.get("score_0_100") or 0.0)
-        damp = 0.78 if peix_score > 85 else 1.0
+        ranking_signal_entry = peix_regions.get(code) or {}
+        ranking_signal_score = float(ranking_signal_entry.get("score_0_100") or 0.0)
+        damp = 0.78 if ranking_signal_score > 85 else 1.0
 
         trigger_active = wow >= 0.30 or seasonal_hit
         if not trigger_active:
@@ -67,7 +67,7 @@ def mycoplasma_candidates(
             engine._candidate_payload(
                 playbook_key="MYCOPLASMA_JAEGER",
                 region_code=code,
-                peix_entry=peix_entry,
+                peix_entry=ranking_signal_entry,
                 trigger_strength=strength,
                 confidence=confidence,
                 priority_score=priority,
@@ -112,7 +112,7 @@ def supply_candidates(
     are_growth = engine._are_growth_by_region()
     candidates: list[dict[str, Any]] = []
     for code in allowed_regions:
-        peix_entry = peix_regions.get(code) or {}
+        ranking_signal_entry = peix_regions.get(code) or {}
         growth = are_growth.get(code, 0.0)
         growth_score = min(100.0, max(0.0, growth * 100.0))
         if growth_score < 10.0 and respiratory_shortage <= 0:
@@ -131,7 +131,7 @@ def supply_candidates(
             engine._candidate_payload(
                 playbook_key="SUPPLY_SHOCK_ATTACK",
                 region_code=code,
-                peix_entry=peix_entry,
+                peix_entry=ranking_signal_entry,
                 trigger_strength=strength,
                 confidence=confidence,
                 priority_score=priority,
@@ -171,7 +171,7 @@ def weather_candidates(
     candidates: list[dict[str, Any]] = []
     for code in allowed_regions:
         burden = float(weather_burden.get(code) or 0.0)
-        peix_entry = peix_regions.get(code) or {}
+        ranking_signal_entry = peix_regions.get(code) or {}
         if burden < 45.0:
             continue
 
@@ -190,7 +190,7 @@ def weather_candidates(
             engine._candidate_payload(
                 playbook_key="WETTER_REFLEX",
                 region_code=code,
-                peix_entry=peix_entry,
+                peix_entry=ranking_signal_entry,
                 trigger_strength=strength,
                 confidence=confidence,
                 priority_score=priority,
@@ -231,17 +231,17 @@ def allergy_candidates(
         if pollen_score < 45.0:
             continue
 
-        peix_entry = peix_regions.get(code) or {}
-        peix_score = float(peix_entry.get("score_0_100") or 0.0)
+        ranking_signal_entry = peix_regions.get(code) or {}
+        ranking_signal_score = float(ranking_signal_entry.get("score_0_100") or 0.0)
         allergy_level = float(allergy.get("current") or 0.0)
         allergy_delta = float(allergy.get("delta") or 0.0)
         allergy_score = max(0.0, min(100.0, allergy_level + max(0.0, allergy_delta) * 1.2))
-        if peix_score >= 60.0 and allergy_score < 60.0:
+        if ranking_signal_score >= 60.0 and allergy_score < 60.0:
             continue
 
         strength = min(
             100.0,
-            max(0.0, pollen_score * 0.45 + allergy_score * 0.35 + (100.0 - peix_score) * 0.20),
+            max(0.0, pollen_score * 0.45 + allergy_score * 0.35 + (100.0 - ranking_signal_score) * 0.20),
         )
         if strength < 50.0:
             continue
@@ -254,7 +254,7 @@ def allergy_candidates(
             engine._candidate_payload(
                 playbook_key="ALLERGIE_BREMSE",
                 region_code=code,
-                peix_entry=peix_entry,
+                peix_entry=ranking_signal_entry,
                 trigger_strength=strength,
                 confidence=confidence,
                 priority_score=priority,
@@ -264,14 +264,14 @@ def allergy_candidates(
                     "event": "ALLERGY_FALSE_POSITIVE_FILTER",
                     "details": (
                         f"Pollen {pollen_score:.1f}/100, Allergie-Suche {allergy_level:.1f}/100 "
-                        f"({allergy_delta:+.1f}), Peix {peix_score:.1f}/100."
+                        f"({allergy_delta:+.1f}), Peix {ranking_signal_score:.1f}/100."
                     ),
                     "lead_time_days": 2,
                     "values": {
                         "pollen_score": round(pollen_score, 2),
                         "allergy_search_level": round(allergy_level, 2),
                         "allergy_search_delta": round(allergy_delta, 2),
-                        "peix_score": round(peix_score, 2),
+                        "peix_score": round(ranking_signal_score, 2),
                     },
                 },
             )
@@ -310,7 +310,7 @@ def halsschmerz_candidates(
         if growth < 0.10 and avg_recent < 50:
             continue
 
-        peix_entry = peix_regions.get(code) or {}
+        ranking_signal_entry = peix_regions.get(code) or {}
         strength = min(100.0, max(0.0, 40.0 + growth * 80.0 + min(20.0, avg_recent / 10.0)))
         confidence = min(90.0, 55.0 + min(25.0, len(values) / 3.0))
         priority = engine._priority_score(trigger_strength=strength, confidence=confidence)
@@ -320,7 +320,7 @@ def halsschmerz_candidates(
             engine._candidate_payload(
                 playbook_key="HALSSCHMERZ_HUNTER",
                 region_code=code,
-                peix_entry=peix_entry,
+                peix_entry=ranking_signal_entry,
                 trigger_strength=strength,
                 confidence=confidence,
                 priority_score=priority,

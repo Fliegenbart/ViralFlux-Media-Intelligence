@@ -136,7 +136,7 @@ describe('AppLayout theme rendering', () => {
     expect(screen.getByRole('link', { name: 'Direkt zum Inhalt springen' })).toHaveAttribute('href', '#main-content');
     expect(screen.queryByText('Wochenbericht exportieren')).not.toBeInTheDocument();
     expect(screen.getByRole('main')).toHaveAttribute('aria-labelledby', 'operator-page-title');
-    expect(screen.getByRole('heading', { name: 'Was PEIX diese Woche tun sollte' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Was diese Woche zu tun ist' })).toBeInTheDocument();
   });
 
   it('shows the light-mode activation label in dark theme', () => {
@@ -232,7 +232,7 @@ describe('AppLayout theme rendering', () => {
     expect(sectionFrame).toHaveTextContent('ViralFlux');
     expect(sectionFrame).toHaveTextContent('Wochenplan');
     expect(sectionFrame).not.toHaveTextContent('Arbeitsbereich');
-    expect(screen.getByRole('heading', { name: 'Was PEIX diese Woche tun sollte' })).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Was diese Woche zu tun ist' })).toBeVisible();
     expect(primaryAction).toBeVisible();
     expect(primaryAction).toHaveClass('operator-page-action--primary');
     expect(secondaryAction).toHaveClass('operator-page-action--secondary');

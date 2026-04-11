@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 from app.core.time import utc_now
 from app.models.database import AuditLog, MarketingOpportunity
 from app.services.media.message_library import select_gelo_message_pack
-from app.services.media.peix_score_service import PeixEpiScoreService
+from app.services.media.ranking_signal_service import RankingSignalService
 from app.services.media.playbook_engine import PLAYBOOK_CATALOG
 from app.services.media.semantic_contracts import (
     forecast_probability_contract,
@@ -157,17 +157,20 @@ def generate_playbook_ai_cards(
 
         activation_days = int(ai_plan.get("activation_window_days") or 10)
         activation_window = engine._derive_activation_window_from_days(activation_days)
-        peix_context = {
+        ranking_signal_context = {
             "region_code": region_code,
             "score": round(urgency, 1),
             "signal_score": round(float(candidate.get("signal_score") or candidate.get("impact_probability") or urgency), 1),
+            "ranking_signal_score": round(float(candidate.get("signal_score") or candidate.get("impact_probability") or urgency), 1),
             "band": "ready" if model_readiness_status == "GO" else "watch",
+            "signal_band": "ready" if model_readiness_status == "GO" else "watch",
             "impact_probability": (
                 round(float(candidate.get("impact_probability") or 0.0), 1)
                 if candidate.get("impact_probability") is not None
                 else None
             ),
             "drivers": exploratory_signals,
+            "signal_drivers": exploratory_signals,
             "trigger_event": str(trigger_snapshot.get("event") or ""),
             "model_readiness_status": model_readiness_status,
             "model_backtest_run_id": latest_market_backtest.run_id if latest_market_backtest else None,
@@ -197,7 +200,7 @@ def generate_playbook_ai_cards(
             activation_window=activation_window,
             product_mapping={**product_mapping, "condition_key": condition_key},
             region_codes=[region_code] if region_code != "Gesamt" else [],
-            peix_context=peix_context,
+            peix_context=ranking_signal_context,
         )
         campaign_payload["forecast_assessment"] = {
             "forecast_quality": forecast_quality,
@@ -269,7 +272,8 @@ def generate_playbook_ai_cards(
                 "condition_label": product_mapping.get("condition_label"),
                 "mapping_candidate_product": product_mapping.get("candidate_product"),
                 "rule_source": product_mapping.get("rule_source"),
-                "peix_context": peix_context,
+                "peix_context": ranking_signal_context,
+                "ranking_signal_context": ranking_signal_context,
                 "campaign_payload": campaign_payload,
                 "detail_url": f"/kampagnen/{opp_id}",
                 "playbook_key": playbook_key,
@@ -307,7 +311,7 @@ def generate_legacy_action_cards(
     ]
     allowed_region_set = {item for item in allowed_regions if item}
     channels = channel_pool or ["programmatic", "social", "search", "ctv"]
-    peix_build = PeixEpiScoreService(engine.db).build()
+    peix_build = RankingSignalService(engine.db).build()
     peix_regions = peix_build.get("regions") or {}
 
     cards: list[dict[str, Any]] = []
@@ -328,7 +332,12 @@ def generate_legacy_action_cards(
             selected_region = region_codes[0] if region_codes else "Gesamt"
 
         region_name = engine._region_label(selected_region)
-        peix_context = engine._derive_peix_context(peix_regions, selected_region, opp, peix_national=peix_build)
+        ranking_signal_context = engine._derive_ranking_signal_context(
+            peix_regions,
+            selected_region,
+            opp,
+            ranking_signal_national=peix_build,
+        )
 
         urgency = float(opp.get("urgency_score") or 50.0)
         budget_shift_pct = round(max(8.0, min(45.0, urgency * 0.4)), 1)
@@ -362,7 +371,7 @@ def generate_legacy_action_cards(
             activation_window=activation_window,
             product_mapping=product_mapping,
             region_codes=region_codes or ([selected_region] if selected_region != "Gesamt" else []),
-            peix_context=peix_context,
+            peix_context=ranking_signal_context,
         )
 
         opp_id = opp.get("id")
@@ -409,7 +418,8 @@ def generate_legacy_action_cards(
                 "condition_label": product_mapping.get("condition_label"),
                 "mapping_candidate_product": product_mapping.get("candidate_product"),
                 "rule_source": product_mapping.get("rule_source"),
-                "peix_context": peix_context,
+                "peix_context": ranking_signal_context,
+                "ranking_signal_context": ranking_signal_context,
                 "detail_url": f"/kampagnen/{opp_id}",
                 "strategy_mode": "LEGACY",
             }
@@ -460,7 +470,7 @@ def regenerate_ai_plan(engine: "MarketingOpportunityEngine", opportunity_id: str
     else:
         region_code = "DE"
 
-    peix_context = payload.get("peix_context") or {}
+    ranking_signal_context = payload.get("ranking_signal_context") or payload.get("peix_context") or {}
     trigger_snapshot = payload.get("trigger_snapshot") or payload.get("trigger_evidence") or {}
     budget_plan = payload.get("budget_plan") or {}
     channel_plan = payload.get("channel_plan") or []
@@ -497,10 +507,13 @@ def regenerate_ai_plan(engine: "MarketingOpportunityEngine", opportunity_id: str
         "message_direction": pack.message_direction,
         "region_code": region_code,
         "region_name": engine._region_label(region_code),
-        "impact_probability": float(peix_context.get("impact_probability") or 0.0),
-        "peix_score": float(peix_context.get("score") or 0.0),
-        "peix_band": peix_context.get("band"),
-        "peix_drivers": peix_context.get("drivers") or [],
+        "impact_probability": float(ranking_signal_context.get("impact_probability") or 0.0),
+        "ranking_signal_score": float(ranking_signal_context.get("score") or 0.0),
+        "peix_score": float(ranking_signal_context.get("score") or 0.0),
+        "signal_band": ranking_signal_context.get("band"),
+        "peix_band": ranking_signal_context.get("band"),
+        "signal_drivers": ranking_signal_context.get("drivers") or [],
+        "peix_drivers": ranking_signal_context.get("drivers") or [],
         "trigger_strength": float((trigger_snapshot.get("values") or {}).get("signal_strength") or 55.0),
         "confidence": float((trigger_snapshot.get("confidence") or 0.65) * 100.0),
         "priority_score": float(row.urgency_score or 55.0),
@@ -746,6 +759,7 @@ def build_campaign_pack(
     peix_context: dict[str, Any] | None = None,
 ) -> dict:
     trigger = opportunity.get("trigger_context", {})
+    ranking_signal_context = dict(peix_context or {})
     channel_plan = engine._build_channel_plan(channel_mix, budget_shift_value, campaign_goal)
     measurement_plan = engine._build_measurement_plan(campaign_goal, channel_plan)
     flight_days = int(activation_window.get("flight_days") or 7)
@@ -801,7 +815,8 @@ def build_campaign_pack(
             "candidate_product": product_mapping.get("candidate_product"),
             "rule_source": product_mapping.get("rule_source"),
         },
-        "peix_context": peix_context or {},
+        "peix_context": ranking_signal_context,
+        "ranking_signal_context": ranking_signal_context,
         "measurement_plan": measurement_plan,
         "execution_checklist": [
             {"task": "Media-Flight in DSP/Ads Manager anlegen", "owner": "Media Ops", "eta": "T+0", "status": "open"},
@@ -822,7 +837,8 @@ def campaign_preview_from_payload(
     measurement = payload.get("measurement_plan") or {}
     window = payload.get("activation_window") or {}
     product_mapping = payload.get("product_mapping") or {}
-    peix_context = payload.get("peix_context") or {}
+    ranking_signal_context = payload.get("ranking_signal_context") or payload.get("peix_context") or {}
+    peix_context = ranking_signal_context
     forecast_assessment = payload.get("forecast_assessment") or {}
     opportunity_assessment = payload.get("opportunity_assessment") or {}
     playbook = payload.get("playbook") or {}
@@ -844,6 +860,7 @@ def campaign_preview_from_payload(
         "mapping_status": product_mapping.get("mapping_status"),
         "mapping_confidence": product_mapping.get("mapping_confidence"),
         "peix_context": peix_context,
+        "ranking_signal_context": ranking_signal_context,
         "forecast_assessment": forecast_assessment,
         "opportunity_assessment": opportunity_assessment,
         "playbook_key": playbook.get("key"),

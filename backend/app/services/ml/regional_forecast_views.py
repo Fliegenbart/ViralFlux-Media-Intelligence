@@ -51,7 +51,7 @@ def empty_media_allocation_response(
     business_gate: dict[str, Any],
     rollout_mode: str,
     activation_policy: str,
-    gelo_products,
+    portfolio_products,
     supported_forecast_horizons,
     utc_now_fn,
 ) -> dict[str, Any]:
@@ -61,7 +61,7 @@ def empty_media_allocation_response(
         total_budget_eur=weekly_budget_eur,
         spend_enabled=False,
         spend_blockers=[],
-        default_products=gelo_products.get(virus_typ, ["GeloMyrtol forte"]),
+        default_products=portfolio_products.get(virus_typ, ["GeloMyrtol forte"]),
     )
     summary = dict(allocation.get("summary") or {})
     summary.update(
@@ -234,7 +234,7 @@ def build_hero_overview(
     reference_virus: str = "Influenza A",
     ensure_supported_horizon_fn,
     supported_virus_types,
-    gelo_products,
+    portfolio_products,
     utc_now_fn,
 ) -> dict[str, Any]:
     horizon = ensure_supported_horizon_fn(horizon_days)
@@ -290,7 +290,7 @@ def build_hero_overview(
                 "top_event_probability": metadata.get("top_event_probability"),
                 "top_change_pct": top_change_pct,
                 "top_trend": metadata.get("top_trend"),
-                "products": gelo_products.get(virus_typ, ["GeloMyrtol forte"]),
+                "products": portfolio_products.get(virus_typ, ["GeloMyrtol forte"]),
             }
         )
 
@@ -333,7 +333,7 @@ def build_portfolio_view(
     reference_virus: str = "Influenza A",
     ensure_supported_horizon_fn,
     supported_virus_types,
-    gelo_products,
+    portfolio_products,
     media_channels,
     utc_now_fn,
 ) -> dict[str, Any]:
@@ -379,7 +379,7 @@ def build_portfolio_view(
                 "top_region_name": top_prediction.get("bundesland_name"),
                 "top_event_probability": top_prediction.get("event_probability_calibrated"),
                 "top_change_pct": top_prediction.get("change_pct"),
-                "products": gelo_products.get(virus_typ, ["GeloMyrtol forte"]),
+                "products": portfolio_products.get(virus_typ, ["GeloMyrtol forte"]),
             }
         )
 
@@ -390,7 +390,7 @@ def build_portfolio_view(
             )
             truth_overlay = service._truth_layer_assessment_for_products(
                 region_code=prediction["bundesland"],
-                products=gelo_products.get(virus_typ, ["GeloMyrtol forte"]),
+                products=portfolio_products.get(virus_typ, ["GeloMyrtol forte"]),
                 target_week_start=prediction["target_week_start"],
                 signal_context=service._truth_signal_context(prediction=prediction),
                 operational_action=action,
@@ -425,7 +425,7 @@ def build_portfolio_view(
                     "benchmark_rank": benchmark_item.get("rank"),
                     "benchmark_score": benchmark_item.get("benchmark_score"),
                     "aggregate_metrics": benchmark_item.get("aggregate_metrics"),
-                    "products": gelo_products.get(virus_typ, ["GeloMyrtol forte"]),
+                    "products": portfolio_products.get(virus_typ, ["GeloMyrtol forte"]),
                     "channels": media_channels[intensity],
                     "as_of_date": prediction["as_of_date"],
                     "target_week_start": prediction["target_week_start"],

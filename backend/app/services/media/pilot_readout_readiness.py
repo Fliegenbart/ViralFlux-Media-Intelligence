@@ -75,13 +75,13 @@ def _missing_requirements(
     requirements: list[str] = []
     coverage_weeks = int(truth_coverage.get("coverage_weeks") or 0)
     if coverage_weeks <= 0:
-        requirements.append("Es sind noch keine GELO-Outcome-Daten angeschlossen.")
+        requirements.append("Es sind noch keine Outcome-Daten angeschlossen.")
     elif coverage_weeks < 26:
-        requirements.append("Es fehlen noch mindestens 26 Wochen GELO-Outcome-Historie.")
+        requirements.append("Es fehlen noch mindestens 26 Wochen Outcome-Historie.")
     if not truth_coverage.get("required_fields_present"):
-        requirements.append("Wöchentliche Media-Spend-Daten fehlen noch in der GELO-Outcome-Schicht.")
+        requirements.append("Wöchentliche Media-Spend-Daten fehlen noch in der Outcome-Schicht.")
     if not truth_coverage.get("conversion_fields_present"):
-        requirements.append("Sales-, Orders- oder Revenue-Metriken fehlen noch in der GELO-Outcome-Schicht.")
+        requirements.append("Sales-, Orders- oder Revenue-Metriken fehlen noch in der Outcome-Schicht.")
     if int(business_validation.get("activation_cycles") or 0) < 2:
         requirements.append("Es werden noch mindestens zwei klar markierte Aktivierungszyklen benötigt.")
     if not business_validation.get("holdout_ready"):
@@ -301,7 +301,7 @@ def _validation_disclaimer(
         return "Forecast und kommerzielle Validierung greifen für diesen Scope bereits sauber zusammen."
     return (
         "Diese Budgetsicht ist ein forecast-basierter Szenario-Split. "
-        "Die kommerzielle Validierung für die Budgetfreigabe von GELO steht noch aus."
+        "Die kommerzielle Validierung für die Budgetfreigabe steht noch aus."
     )
 
 
@@ -363,5 +363,5 @@ def _empty_state(
     return {
         "code": "watch_only",
         "title": "Der Forecast ist nutzbar, die kommerzielle Validierung steht aber noch aus.",
-        "body": "Nutze die aktuelle Verteilung als Szenario-Split für die Planung und erkläre, dass GELO-Outcome-Daten später die kommerzielle Validierung freischalten.",
+        "body": "Nutze die aktuelle Verteilung als Szenario-Split für die Planung und erkläre, dass spätere Outcome-Daten die kommerzielle Validierung freischalten.",
     }

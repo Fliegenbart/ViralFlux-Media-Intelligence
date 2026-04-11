@@ -10,8 +10,8 @@ Tabelle: `outcome_observations`
 
 Implementierung:
 
-- [backend/app/models/database.py](/Users/davidwegener/Desktop/viralflux/backend/app/models/database.py)
-- [backend/alembic/versions/d7e4c9a1b2f3_add_outcome_observations.py](/Users/davidwegener/Desktop/viralflux/backend/alembic/versions/d7e4c9a1b2f3_add_outcome_observations.py)
+- [backend/app/models/database.py](../backend/app/models/database.py)
+- [backend/alembic/versions/d7e4c9a1b2f3_add_outcome_observations.py](../backend/alembic/versions/d7e4c9a1b2f3_add_outcome_observations.py)
 
 ## Pflichtfelder
 

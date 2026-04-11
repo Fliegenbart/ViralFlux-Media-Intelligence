@@ -3,7 +3,7 @@ import { OPERATOR_LABELS } from '../constants/operatorLabels';
 export const UI_COPY = {
   ai: 'KI',
   signalScore: OPERATOR_LABELS.ranking_signal,
-  signalScoreWithSource: `${OPERATOR_LABELS.ranking_signal} (PeixEpiScore)`,
+  signalScoreWithSource: `${OPERATOR_LABELS.ranking_signal} (Ranking-Signal)`,
   eventProbability: OPERATOR_LABELS.forecast_event_probability,
   decisionPriority: OPERATOR_LABELS.activation_priority,
   uncertainty: 'Unsicherheit',

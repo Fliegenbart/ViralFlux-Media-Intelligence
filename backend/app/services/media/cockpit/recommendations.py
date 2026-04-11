@@ -37,7 +37,12 @@ def build_recommendation_section(db: Session) -> dict[str, Any]:
         measurement = campaign_payload.get("measurement_plan") or {}
         activation = campaign_payload.get("activation_window") or {}
         product_mapping = campaign_payload.get("product_mapping") or {}
-        peix_context = campaign_payload.get("peix_context") or {}
+        ranking_signal_context = (
+            campaign_payload.get("ranking_signal_context")
+            or campaign_payload.get("peix_context")
+            or {}
+        )
+        peix_context = ranking_signal_context
         playbook = campaign_payload.get("playbook") or {}
         ai_meta = campaign_payload.get("ai_meta") or {}
         status = LEGACY_TO_WORKFLOW.get(str(row.status or "").upper(), row.status or "DRAFT")
@@ -61,7 +66,7 @@ def build_recommendation_section(db: Session) -> dict[str, Any]:
             "type": row.opportunity_type,
             "urgency_score": row.urgency_score,
             "priority_score": row.urgency_score,
-            "brand": row.brand or "PEIX Partner",
+            "brand": row.brand or "Partner Brand",
             "product": recommended_product,
             "recommended_product": recommended_product,
             "region": primary_region,
@@ -100,6 +105,7 @@ def build_recommendation_section(db: Session) -> dict[str, Any]:
             "ai_generation_status": ai_meta.get("status"),
             "campaign_name": campaign.get("campaign_name"),
             "primary_kpi": measurement.get("primary_kpi"),
+            "ranking_signal_context": ranking_signal_context,
             "peix_context": peix_context,
             "campaign_payload": campaign_payload,
             "campaign_preview": {

@@ -31,7 +31,7 @@ DEFAULT_CAMPAIGN_RECOMMENDATION_CONFIG = CampaignRecommendationConfig(
     max_recommendations=12,
     product_clusters=(
         ProductClusterConfig(
-            cluster_key="gelo_core_respiratory",
+            cluster_key="respiratory_core_support",
             label="Respiratory Core Demand",
             products=("GeloMyrtol forte",),
             supported_viruses=("Influenza A", "Influenza B", "SARS-CoV-2", "RSV A"),
@@ -43,7 +43,7 @@ DEFAULT_CAMPAIGN_RECOMMENDATION_CONFIG = CampaignRecommendationConfig(
             },
         ),
         ProductClusterConfig(
-            cluster_key="gelo_voice_recovery",
+            cluster_key="voice_recovery_support",
             label="Voice And Throat Support",
             products=("GeloRevoice",),
             supported_viruses=("Influenza A", "Influenza B"),
@@ -55,7 +55,7 @@ DEFAULT_CAMPAIGN_RECOMMENDATION_CONFIG = CampaignRecommendationConfig(
             },
         ),
         ProductClusterConfig(
-            cluster_key="gelo_bronchial_support",
+            cluster_key="bronchial_support",
             label="Bronchial Recovery Support",
             products=("GeloBronchial", "GeloMyrtol forte"),
             supported_viruses=("RSV A", "Influenza A", "Influenza B"),
@@ -71,7 +71,7 @@ DEFAULT_CAMPAIGN_RECOMMENDATION_CONFIG = CampaignRecommendationConfig(
         KeywordClusterConfig(
             cluster_key="respiratory_relief_search",
             label="Respiratory Relief Search",
-            product_cluster_key="gelo_core_respiratory",
+            product_cluster_key="respiratory_core_support",
             keywords=("husten schleim loesen", "bronchitis schleim", "atemwege befreien"),
             supported_viruses=("Influenza A", "Influenza B", "SARS-CoV-2", "RSV A"),
             base_fit=0.84,
@@ -81,7 +81,7 @@ DEFAULT_CAMPAIGN_RECOMMENDATION_CONFIG = CampaignRecommendationConfig(
         KeywordClusterConfig(
             cluster_key="voice_relief_search",
             label="Voice Recovery Search",
-            product_cluster_key="gelo_voice_recovery",
+            product_cluster_key="voice_recovery_support",
             keywords=("heiserkeit schnell loswerden", "stimme weg erkaltung", "hals und stimme beruhigen"),
             supported_viruses=("Influenza A", "Influenza B"),
             base_fit=0.80,
@@ -91,7 +91,7 @@ DEFAULT_CAMPAIGN_RECOMMENDATION_CONFIG = CampaignRecommendationConfig(
         KeywordClusterConfig(
             cluster_key="bronchial_recovery_search",
             label="Bronchial Recovery Search",
-            product_cluster_key="gelo_bronchial_support",
+            product_cluster_key="bronchial_support",
             keywords=("bronchien verschleimt", "husten bronchien loesen", "atemwege beruhigen"),
             supported_viruses=("RSV A", "Influenza A", "Influenza B"),
             base_fit=0.82,
@@ -100,15 +100,15 @@ DEFAULT_CAMPAIGN_RECOMMENDATION_CONFIG = CampaignRecommendationConfig(
         ),
     ),
     region_product_fit={
-        "BE": {"gelo_voice_recovery": 1.18, "gelo_core_respiratory": 0.96},
-        "HH": {"gelo_voice_recovery": 1.16, "gelo_core_respiratory": 0.97},
-        "HB": {"gelo_voice_recovery": 1.12},
-        "BY": {"gelo_core_respiratory": 1.08},
-        "BW": {"gelo_core_respiratory": 1.06},
-        "NW": {"gelo_core_respiratory": 1.05},
-        "BB": {"gelo_bronchial_support": 1.06},
-        "MV": {"gelo_bronchial_support": 1.04},
-        "SN": {"gelo_bronchial_support": 1.04},
+        "BE": {"voice_recovery_support": 1.18, "respiratory_core_support": 0.96},
+        "HH": {"voice_recovery_support": 1.16, "respiratory_core_support": 0.97},
+        "HB": {"voice_recovery_support": 1.12},
+        "BY": {"respiratory_core_support": 1.08},
+        "BW": {"respiratory_core_support": 1.06},
+        "NW": {"respiratory_core_support": 1.05},
+        "BB": {"bronchial_support": 1.06},
+        "MV": {"bronchial_support": 1.04},
+        "SN": {"bronchial_support": 1.04},
     },
     spend_guardrails=CampaignSpendGuardrails(
         min_budget_share=0.06,

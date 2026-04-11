@@ -44,6 +44,7 @@ def decision_facts(
 ) -> list[dict[str, Any]]:
     del engine
     facts: list[dict[str, Any]] = []
+    ranking_signal_source = "RankingSignal"
     raw_source = (
         trigger_evidence.get("source")
         or trigger_snapshot.get("source")
@@ -93,7 +94,7 @@ def decision_facts(
                 "key": "signal_score",
                 "label": "Signal-Score",
                 "value": score,
-                "source": "PeixEpiScore",
+                "source": ranking_signal_source,
             }
         )
 
@@ -104,7 +105,7 @@ def decision_facts(
                 "key": "impact_probability",
                 "label": "Signal-Score (%)",
                 "value": impact,
-                "source": "PeixEpiScore",
+                "source": ranking_signal_source,
             }
         )
 
@@ -183,6 +184,7 @@ def build_decision_brief(
     forecast_assessment: dict[str, Any] | None = None,
     opportunity_assessment: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    ranking_signal_source = "RankingSignal"
     primary_region_code = region_codes[0] if region_codes else "Gesamt"
     primary_region = (
         "Deutschland"
@@ -280,9 +282,9 @@ def build_decision_brief(
             "expected_value_index": (opportunity_assessment or {}).get("expected_value_index"),
             "rationale": rationale,
             "field_contracts": {
-                "signal_score": ranking_signal_contract(source="PeixEpiScore"),
+                "signal_score": ranking_signal_contract(source=ranking_signal_source),
                 "impact_probability": ranking_signal_contract(
-                    source="PeixEpiScore",
+                    source=ranking_signal_source,
                     label="Legacy Signal-Score",
                 ),
                 "signal_confidence_pct": signal_confidence_contract(
@@ -315,7 +317,12 @@ def model_to_dict(
     campaign_payload = model.campaign_payload or {}
     campaign_preview = engine._campaign_preview_from_payload(campaign_payload) if campaign_payload else None
     product_mapping = campaign_payload.get("product_mapping") or {}
-    peix_context = campaign_payload.get("peix_context") or {}
+    ranking_signal_context = (
+        campaign_payload.get("ranking_signal_context")
+        or campaign_payload.get("peix_context")
+        or {}
+    )
+    peix_context = ranking_signal_context
     forecast_assessment = campaign_payload.get("forecast_assessment") or {}
     opportunity_assessment = campaign_payload.get("opportunity_assessment") or {}
     playbook = campaign_payload.get("playbook") or {}
@@ -389,6 +396,7 @@ def model_to_dict(
         "mapping_candidate_product": product_mapping.get("candidate_product"),
         "rule_source": product_mapping.get("rule_source"),
         "peix_context": peix_context,
+        "ranking_signal_context": ranking_signal_context,
         "signal_score": peix_context.get("signal_score") or peix_context.get("score"),
         "forecast_assessment": forecast_assessment,
         "opportunity_assessment": opportunity_assessment,

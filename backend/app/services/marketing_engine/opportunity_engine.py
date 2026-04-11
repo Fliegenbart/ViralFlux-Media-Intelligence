@@ -19,7 +19,7 @@ from app.services.media.ai_campaign_planner import AiCampaignPlanner
 from app.services.media.campaign_guardrails import CampaignGuardrails
 from app.services.media.message_library import select_gelo_message_pack
 from app.services.media.product_catalog_service import ProductCatalogService
-from app.services.media.peix_score_service import PeixEpiScoreService
+from app.services.media.ranking_signal_service import RankingSignalService
 from app.services.media.playbook_engine import PlaybookEngine
 
 from .detectors.market_supply_monitor import MarketSupplyMonitor
@@ -48,6 +48,7 @@ from .opportunity_engine_helpers import (
     clean_for_output,
     confidence_pct,
     derive_peix_context,
+    derive_ranking_signal_context,
     extract_region_codes_from_opportunity,
     fact_label,
     normalize_region_token,
@@ -144,7 +145,11 @@ class MarketingOpportunityEngine:
 
     @staticmethod
     def _derive_playbook_workflow_status(peix_score: float, model_ready: bool) -> str:
-        return "READY" if (peix_score >= 80.0 and model_ready) else "DRAFT"
+        return MarketingOpportunityEngine._derive_activation_workflow_status(peix_score, model_ready)
+
+    @staticmethod
+    def _derive_activation_workflow_status(ranking_signal_score: float, model_ready: bool) -> str:
+        return "READY" if (ranking_signal_score >= 80.0 and model_ready) else "DRAFT"
 
     @staticmethod
     def _extract_improvement_vs_baselines(imp: dict | None) -> tuple[float, float]:
@@ -636,6 +641,21 @@ class MarketingOpportunityEngine:
             selected_region,
             opportunity,
             peix_national=peix_national,
+        )
+
+    def _derive_ranking_signal_context(
+        self,
+        ranking_signal_regions: dict[str, Any],
+        selected_region: str,
+        opportunity: dict[str, Any],
+        *,
+        ranking_signal_national: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        return derive_ranking_signal_context(
+            ranking_signal_regions,
+            selected_region,
+            opportunity,
+            ranking_signal_national=ranking_signal_national,
         )
 
     @staticmethod

@@ -86,7 +86,7 @@ def build_signal_snapshot_section(
     national.update(build_ranking_signal_fields(
         signal_score=peix_score.get("national_score"),
         legacy_alias=peix_score.get("national_impact_probability"),
-        source="PeixEpiScore",
+        source="RankingSignal",
     ))
 
     top_region = (map_section.get("top_regions") or [None])[0]
@@ -100,7 +100,7 @@ def build_signal_snapshot_section(
         top_region_snapshot.update(build_ranking_signal_fields(
             signal_score=top_region.get("signal_score") or top_region.get("peix_score"),
             legacy_alias=top_region.get("impact_probability"),
-            source="PeixEpiScore",
+            source="RankingSignal",
         ))
 
     return {

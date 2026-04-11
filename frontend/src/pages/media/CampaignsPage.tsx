@@ -46,7 +46,7 @@ const CampaignsPage: React.FC = () => {
     try {
       const data = await mediaApi.generateRecommendations({
         brand,
-        product: 'Alle Gelo-Produkte',
+        product: 'Alle Produkte',
         campaign_goal: campaignGoal,
         weekly_budget: weeklyBudget,
         channel_pool: ['programmatic', 'social', 'search', 'ctv'],

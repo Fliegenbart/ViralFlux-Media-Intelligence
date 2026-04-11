@@ -4,7 +4,7 @@ Stand: 2026-03-17
 
 ## Zweck
 
-Dieses Dokument definiert die ehrliche Freigabelogik für einen PEIX-/GELO-Pilot auf Basis des real laufenden Systems.
+Dieses Dokument definiert die ehrliche Freigabelogik für einen bewusst engen Pilotbetrieb auf Basis des real laufenden Systems.
 
 Es trennt bewusst:
 

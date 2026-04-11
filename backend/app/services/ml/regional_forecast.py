@@ -63,7 +63,7 @@ MEDIA_CHANNELS = {
     "low": ["Meta (national awareness)"],
 }
 
-GELO_PRODUCTS = {
+DEFAULT_PORTFOLIO_PRODUCTS = {
     "Influenza A": ["GeloMyrtol forte", "GeloRevoice"],
     "Influenza B": ["GeloMyrtol forte", "GeloRevoice"],
     "SARS-CoV-2": ["GeloMyrtol forte"],
@@ -254,7 +254,7 @@ class RegionalForecastService:
             horizon_days=horizon_days,
             rollout_mode_for_virus_fn=rollout_mode_for_virus,
             activation_policy_for_virus_fn=activation_policy_for_virus,
-            gelo_products=GELO_PRODUCTS,
+            portfolio_products=DEFAULT_PORTFOLIO_PRODUCTS,
             media_channels=MEDIA_CHANNELS,
             utc_now_fn=utc_now,
         )
@@ -339,7 +339,7 @@ class RegionalForecastService:
             business_gate=business_gate,
             rollout_mode=rollout_mode,
             activation_policy=activation_policy,
-            gelo_products=GELO_PRODUCTS,
+            portfolio_products=DEFAULT_PORTFOLIO_PRODUCTS,
             supported_forecast_horizons=SUPPORTED_FORECAST_HORIZONS,
             utc_now_fn=utc_now,
         )
@@ -376,7 +376,7 @@ class RegionalForecastService:
             reference_virus=reference_virus,
             ensure_supported_horizon_fn=ensure_supported_horizon,
             supported_virus_types=SUPPORTED_VIRUS_TYPES,
-            gelo_products=GELO_PRODUCTS,
+            portfolio_products=DEFAULT_PORTFOLIO_PRODUCTS,
             utc_now_fn=utc_now,
         )
 
@@ -394,7 +394,7 @@ class RegionalForecastService:
             reference_virus=reference_virus,
             ensure_supported_horizon_fn=ensure_supported_horizon,
             supported_virus_types=SUPPORTED_VIRUS_TYPES,
-            gelo_products=GELO_PRODUCTS,
+            portfolio_products=DEFAULT_PORTFOLIO_PRODUCTS,
             media_channels=MEDIA_CHANNELS,
             utc_now_fn=utc_now,
         )
@@ -522,7 +522,7 @@ class RegionalForecastService:
         return regional_forecast_media.products_from_allocation(
             allocation_item=allocation_item,
             virus_typ=virus_typ,
-            gelo_products=GELO_PRODUCTS,
+            portfolio_products=DEFAULT_PORTFOLIO_PRODUCTS,
         )
 
     @staticmethod

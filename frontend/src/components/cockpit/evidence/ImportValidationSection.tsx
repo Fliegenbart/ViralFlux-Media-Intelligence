@@ -52,10 +52,10 @@ const ImportValidationSection: React.FC<Props> = ({
       <section className="truth-analyst-grid">
         <div className="card subsection-card" style={{ padding: 24 }}>
           <div className="section-heading">
-            <span className="section-kicker">GELO-Import</span>
-            <h2 className="subsection-title">GELO-Kundendaten vorbereiten</h2>
+            <span className="section-kicker">Daten-Import</span>
+            <h2 className="subsection-title">Kundendaten vorbereiten</h2>
             <p className="subsection-copy">
-              Für einen belastbaren GELO-Truth-Import brauchen wir `week_start`, `product`, `region_code`, `media_spend_eur` und mindestens eine Wirkungszahl wie `sales_units`, `order_count` oder `revenue_eur`.
+              Für einen belastbaren Kundendaten-Import brauchen wir `week_start`, `product`, `region_code`, `media_spend_eur` und mindestens eine Wirkungszahl wie `sales_units`, `order_count` oder `revenue_eur`.
             </p>
           </div>
 
@@ -115,7 +115,7 @@ const ImportValidationSection: React.FC<Props> = ({
                 disabled={!file || truthActionLoading}
                 onClick={() => file && onSubmitTruthCsv({ file, sourceLabel, replaceExisting, validateOnly: false })}
               >
-                {truthActionLoading ? 'Import läuft...' : 'GELO-Daten importieren'}
+                {truthActionLoading ? 'Import läuft...' : 'Kundendaten importieren'}
               </button>
             </div>
           </div>
@@ -126,7 +126,7 @@ const ImportValidationSection: React.FC<Props> = ({
             <span className="section-kicker">Import-Vorschau</span>
             <h2 className="subsection-title">Was der nächste Import ändern würde</h2>
             <p className="subsection-copy">
-              Erst prüfen, dann importieren. So sieht GELO sofort, was ein neuer Datenstand an Abdeckung und Trust verändern würde.
+              Erst prüfen, dann importieren. So sieht das Team sofort, was ein neuer Datenstand an Abdeckung und Trust verändern würde.
             </p>
           </div>
 
@@ -174,7 +174,7 @@ const ImportValidationSection: React.FC<Props> = ({
         <div className="card subsection-card" style={{ padding: 24 }}>
           <div className="section-heading">
             <span className="section-kicker">Import-Historie</span>
-            <h2 className="subsection-title">Bisherige GELO-Importe</h2>
+            <h2 className="subsection-title">Bisherige Kundendaten-Importe</h2>
           </div>
           <div className="truth-history-list">
             {recentImportedBatches.length > 0 ? recentImportedBatches.map((batch: TruthImportBatchSummary) => (
@@ -191,7 +191,7 @@ const ImportValidationSection: React.FC<Props> = ({
                 <small>{batch.rows_imported}/{batch.rows_total} importiert</small>
               </button>
             )) : (
-              <div className="review-muted-copy">Noch keine echten GELO-Importe vorhanden.</div>
+              <div className="review-muted-copy">Noch keine echten Kundendaten-Importe vorhanden.</div>
             )}
 
             {validationOnlyBatches.length > 0 ? (
@@ -219,7 +219,7 @@ const ImportValidationSection: React.FC<Props> = ({
         <div className="card subsection-card" style={{ padding: 24 }}>
           <div className="section-heading">
             <span className="section-kicker">Import-Details</span>
-            <h2 className="subsection-title">Ausgewählter GELO-Import</h2>
+            <h2 className="subsection-title">Ausgewählter Kundendaten-Import</h2>
           </div>
           {truthBatchDetailLoading ? (
             <div className="review-muted-copy">Import-Details laden…</div>

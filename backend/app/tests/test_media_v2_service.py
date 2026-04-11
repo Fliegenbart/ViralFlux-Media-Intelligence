@@ -354,6 +354,29 @@ class MediaV2ServiceTruthCoverageTests(unittest.TestCase):
             ["override-family"],
         )
 
+    def test_signal_stack_prefers_neutral_ranking_signal_alias(self) -> None:
+        service = MediaV2Service(self.db)
+        service.cockpit_service.get_cockpit_payload = lambda **_: {
+            "data_freshness": {},
+            "source_status": {"items": []},
+            "ranking_signal": {
+                "national_score": 61.3,
+                "national_band": "high",
+                "top_drivers": [{"label": "AMELAG"}],
+                "context_signals": {"forecast": {"contribution": 18.0}},
+                "virus_scores": {
+                    "Influenza A": {"contribution": 20.0},
+                },
+            },
+        }
+
+        payload = service.get_signal_stack(virus_typ="Influenza A")
+
+        self.assertEqual(payload["summary"]["national_signal_score"], 61.3)
+        self.assertEqual(payload["summary"]["signal_band"], "high")
+        self.assertEqual(payload["summary"]["signal_drivers"][0]["label"], "AMELAG")
+        self.assertEqual(payload["summary"]["peix_epi_score"], 61.3)
+
     def test_get_truth_coverage_delegates_to_outcomes_module(self) -> None:
         with patch(
             "app.services.media.v2.outcomes.build_truth_coverage",
@@ -950,12 +973,12 @@ class MediaV2ServiceTruthCoverageTests(unittest.TestCase):
             }),
             patch.object(self.service, "_campaign_cards", return_value=cards),
             patch.object(self.service.business_validation_service, "evaluate", return_value={
-                "operator_context": {"operator": "peix", "truth_partner": "gelo"},
+                "operator_context": {"operator": "platform", "truth_partner": "gelo"},
                 "validated_for_budget_activation": False,
                 "validation_status": "pending_holdout_design",
                 "decision_scope": "decision_support_only",
                 "evidence_tier": "truth_backed",
-                "message": "GELO-Outcome-Daten sind vorhanden, aber Holdout fehlt noch.",
+                "message": "Outcome-Daten sind vorhanden, aber Holdout fehlt noch.",
                 "guidance": "Kontrollgruppen für kommende Aktivierungen markieren.",
             }),
         ):
@@ -966,7 +989,7 @@ class MediaV2ServiceTruthCoverageTests(unittest.TestCase):
         self.assertIn("Kundendaten", weekly_decision["truth_risk_flag"])
         self.assertEqual(weekly_decision["business_readiness"], "pending_holdout_design")
         self.assertEqual(weekly_decision["business_evidence_tier"], "truth_backed")
-        self.assertEqual(weekly_decision["operator_context"]["operator"], "peix")
+        self.assertEqual(weekly_decision["operator_context"]["operator"], "platform")
         self.assertIsNone(weekly_decision["budget_shift"])
         self.assertEqual(
             weekly_decision["field_contracts"]["event_probability"]["semantics"],
@@ -975,6 +998,10 @@ class MediaV2ServiceTruthCoverageTests(unittest.TestCase):
         self.assertEqual(
             weekly_decision["field_contracts"]["signal_score"]["semantics"],
             "ranking_signal",
+        )
+        self.assertEqual(
+            weekly_decision["field_contracts"]["signal_score"]["source"],
+            "RankingSignal",
         )
         self.assertEqual(
             weekly_decision["field_contracts"]["business_gate"]["semantics"],
@@ -1157,6 +1184,7 @@ class MediaV2ServiceTruthCoverageTests(unittest.TestCase):
         self.assertEqual(top_region["priority_rank"], 1)
         self.assertIn(top_region["decision_mode"], {"epidemic_wave", "mixed", "supply_window"})
         self.assertEqual(top_region["field_contracts"]["signal_score"]["semantics"], "ranking_signal")
+        self.assertEqual(top_region["field_contracts"]["signal_score"]["source"], "RankingSignal")
 
     def test_regions_payload_prefers_signal_score_over_legacy_impact_probability(self) -> None:
         cockpit_payload = {
@@ -1213,6 +1241,54 @@ class MediaV2ServiceTruthCoverageTests(unittest.TestCase):
         self.assertEqual(payload["map"]["regions"]["HH"]["signal_score"], 81.0)
         self.assertEqual(payload["map"]["regions"]["HH"]["impact_probability"], 64.0)
 
+    def test_get_regions_payload_prefers_neutral_ranking_signal_alias(self) -> None:
+        cockpit_payload = {
+            "ranking_signal": {
+                "regions": {
+                    "HH": {
+                        "score_0_100": 73.0,
+                        "top_drivers": [{"label": "AMELAG", "strength_pct": 55.0}],
+                        "layer_contributions": {"forecast": 22.0},
+                    },
+                },
+            },
+            "map": {
+                "regions": {
+                    "HH": {
+                        "name": "Hamburg",
+                        "impact_probability": 64.0,
+                        "signal_score": 79.0,
+                        "intensity": 0.45,
+                        "trend": "stabil",
+                        "change_pct": 0.0,
+                    },
+                },
+                "top_regions": [
+                    {
+                        "code": "HH",
+                        "name": "Hamburg",
+                        "impact_probability": 64.0,
+                        "signal_score": 79.0,
+                    },
+                ],
+                "activation_suggestions": [],
+            },
+        }
+
+        with (
+            patch.object(self.service.cockpit_service, "get_cockpit_payload", return_value=cockpit_payload),
+            patch.object(self.service, "get_decision_payload", return_value={"weekly_decision": {"decision_state": "WATCH"}}),
+        ):
+            payload = self.service.get_regions_payload()
+
+        self.assertEqual(payload["map"]["regions"]["HH"]["signal_drivers"][0]["label"], "AMELAG")
+        self.assertEqual(payload["map"]["regions"]["HH"]["layer_contributions"]["forecast"], 22.0)
+        self.assertEqual(payload["map"]["regions"]["HH"]["signal_score"], 79.0)
+        self.assertEqual(
+            payload["map"]["regions"]["HH"]["field_contracts"]["signal_score"]["source"],
+            "RankingSignal",
+        )
+
     def test_signal_stack_uses_feature_families_from_model_lineage(self) -> None:
         cockpit_payload = {
             "data_freshness": {},
@@ -1239,6 +1315,7 @@ class MediaV2ServiceTruthCoverageTests(unittest.TestCase):
             payload["summary"]["math_stack"]["feature_families"],
             ["AMELAG-Lags", "Google Trends", "Interne Historie"],
         )
+        self.assertEqual(payload["summary"]["national_signal_score"], 61.3)
 
 
 if __name__ == "__main__":

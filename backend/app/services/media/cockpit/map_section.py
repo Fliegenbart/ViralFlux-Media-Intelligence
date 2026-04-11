@@ -85,7 +85,7 @@ def build_map_section(
         signal_fields = build_ranking_signal_fields(
             signal_score=peix_entry.get("score_0_100"),
             legacy_alias=peix_entry.get("impact_probability"),
-            source="PeixEpiScore",
+            source="RankingSignal",
         )
         tooltip_signal_score = primary_signal_score(signal_fields)
 
@@ -112,6 +112,7 @@ def build_map_section(
             "intensity": round(float(row.avg_viruslast) / max_value, 2) if max_value else 0.0,
             "trend": trend,
             "change_pct": round(float(change_pct), 1),
+            "ranking_signal_score": peix_entry.get("score_0_100"),
             "peix_score": peix_entry.get("score_0_100"),
             "peix_band": peix_entry.get("risk_band"),
             "recommendation_ref": recommendation_ref,
@@ -140,7 +141,7 @@ def build_map_section(
         signal_fields = build_ranking_signal_fields(
             signal_score=peix_entry.get("score_0_100"),
             legacy_alias=peix_entry.get("impact_probability"),
-            source="PeixEpiScore",
+            source="RankingSignal",
         )
         tooltip_signal_score = primary_signal_score(signal_fields)
         fallback_payload = {
@@ -152,6 +153,7 @@ def build_map_section(
             "intensity": round(primary_signal_score(peix_entry) / 100.0, 2),
             "trend": "stabil",
             "change_pct": 0.0,
+            "ranking_signal_score": peix_entry.get("score_0_100"),
             "peix_score": peix_entry.get("score_0_100"),
             "peix_band": peix_entry.get("risk_band"),
             "recommendation_ref": normalize_recommendation_ref(region_recommendations.get(code)),
@@ -216,10 +218,10 @@ def build_map_section(
                 "impact_probability_semantics": "ranking_signal",
                 "impact_probability_deprecated": True,
                 "field_contracts": {
-                    "signal_score": ranking_signal_contract(source="PeixEpiScore"),
+                    "signal_score": ranking_signal_contract(source="RankingSignal"),
                     "priority_score": priority_score_contract(source="MediaCockpitService"),
                     "impact_probability": ranking_signal_contract(
-                        source="PeixEpiScore",
+                        source="RankingSignal",
                         label="Legacy Signal-Score",
                     ),
                 },

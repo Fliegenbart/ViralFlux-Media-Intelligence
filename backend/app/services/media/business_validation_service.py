@@ -93,21 +93,21 @@ class BusinessValidationService:
             decision_scope = "validated_budget_activation"
             evidence_tier = "commercially_validated"
             action_class = "customer_lift_ready"
-            message = "Die GELO-Kundendaten zeigen belastbare Aktivierungszyklen und eine belastbare Validierung mit Vergleichsgruppe."
+            message = "Die Kundendaten zeigen belastbare Aktivierungszyklen und eine belastbare Validierung mit Vergleichsgruppe."
             guidance = "Budgetempfehlungen dürfen jetzt epidemiologisches Signal und belastbare Geschäftsdaten gemeinsam nutzen."
         elif int(coverage.get("coverage_weeks") or 0) <= 0:
             validation_status = "pending_truth_connection"
             decision_scope = "decision_support_only"
             evidence_tier = "no_truth"
             action_class = "watch_only"
-            message = "Es fehlen noch echte GELO-Kundendaten für eine kommerzielle Validierung."
+            message = "Es fehlen noch echte Kundendaten für eine kommerzielle Validierung."
             guidance = "Zuerst Mediabudget sowie Verkaufs- oder Bestelldaten importieren, bevor Budgetfreigaben bewertet werden."
         elif int(coverage.get("coverage_weeks") or 0) < _MIN_COVERAGE_WEEKS:
             validation_status = "building_truth_layer"
             decision_scope = "decision_support_only"
             evidence_tier = "observational"
             action_class = "market_watch"
-            message = "Die GELO-Kundendatenhistorie ist angeschlossen, für kommerzielle Freigaben aber noch zu kurz."
+            message = "Die Kundendatenhistorie ist angeschlossen, für kommerzielle Freigaben aber noch zu kurz."
             guidance = "Mindestens 26 Wochen Kundendaten aufbauen, bevor die Validierung mit Vergleichsgruppe bewertet wird."
         elif summary.activation_cycles < _MIN_ACTIVATION_CYCLES:
             validation_status = "pending_activation_history"
@@ -121,7 +121,7 @@ class BusinessValidationService:
             decision_scope = "decision_support_only"
             evidence_tier = "truth_backed"
             action_class = "market_watch"
-            message = "GELO-Kundendaten sind vorhanden, aber es fehlt noch ein klares Design mit Vergleichsgruppe."
+            message = "Kundendaten sind vorhanden, aber es fehlt noch ein klares Design mit Vergleichsgruppe."
             guidance = "Zukünftige Aktivierungen mit Test- und Vergleichsgruppen markieren, damit die zusätzliche Wirkung sauber geprüft werden kann."
         else:
             validation_status = "pending_holdout_validation"
@@ -135,8 +135,8 @@ class BusinessValidationService:
             "brand": brand_value,
             "virus_typ": virus_typ,
             "operator_context": {
-                "operator": "peix",
-                "product_mode": "brand_aware_media_tool",
+                "operator": "platform",
+                "product_mode": "portfolio_media_tool",
                 "truth_partner": brand_value,
             },
             "truth_readiness": str(

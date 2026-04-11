@@ -66,7 +66,7 @@ async def get_media_pilot_readout(
     top_n: int = Query(default=12, ge=1, le=24),
     db: Session = Depends(get_db),
 ):
-    """Single-source customer readout for the PEIX / GELO pilot surface."""
+    """Single-source customer readout for the customer pilot surface."""
     from app.services.media.pilot_readout_service import PilotReadoutService
 
     try:

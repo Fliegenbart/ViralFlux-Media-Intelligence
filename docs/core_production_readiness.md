@@ -96,16 +96,16 @@ Neue operative Consumer sollen deshalb nicht `source_coverage` lesen, sondern di
 - `live_source_coverage_status`
 - `live_source_freshness_status`
 
-## Zielbild für PEIX / GELO
+## Zielbild für den aktuellen Partner-Scope
 
-Für den aktuellen PEIX/GELO-Kern bedeutet grün:
+Für den aktuellen Kern-Scope bedeutet grün:
 
 - `RSV A / h7` ist im Forecast-First-Betrieb produktionsfähig
 - nicht-pilotige und unsupported Scopes ziehen diese Kernampel nicht mehr mit nach unten
 
 Commercial Validation bleibt weiterhin getrennt:
 
-- GELO-Outcome-Daten und Lift-/Holdout-Evidenz gehoeren nicht in `core-ready`
+- verbundene Outcome-Daten und Lift-/Holdout-Evidenz gehoeren nicht in `core-ready`
 - sie gehoeren weiter in den Commercial-/Pilot-Layer
 
 ## Quick Checks

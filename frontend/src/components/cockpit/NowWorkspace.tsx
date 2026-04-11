@@ -177,7 +177,7 @@ const NowWorkspace: React.FC<Props> = ({
     <div className="page-stack now-template-page">
       <OperatorSection
         title="Fokus diese Woche"
-        description="Was PEIX und GELO diese Woche tun sollten. Nächste Schritte, Trust und Detailansichten folgen darunter."
+        description="Was diese Woche zu tun ist. Nächste Schritte, Evidenz und Detailansichten folgen darunter."
         tone="accent"
         className="now-workspace-shell"
       >

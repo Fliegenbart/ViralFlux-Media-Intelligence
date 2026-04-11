@@ -38,14 +38,14 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
         <section className="login-brand-panel" aria-label="ViralFlux Einordnung">
           <div className="login-brand-panel__brand">
             <span className="login-brand-panel__wordmark">ViralFlux</span>
-            <p className="login-brand-panel__subtitle">PEIX x GELO</p>
+            <p className="login-brand-panel__subtitle">Pilot-Scope</p>
           </div>
 
           <div className="login-brand-panel__copy">
-            <h1 className="login-brand-panel__headline">Die Wochensteuerung für PEIX x GELO</h1>
+            <h1 className="login-brand-panel__headline">Die Wochensteuerung für die aktuelle Lage</h1>
             <p className="login-brand-panel__text">
               Der Einstieg führt direkt in den Wochenplan: mit Fokus auf Bundesländer,
-              empfohlene Richtung und der Evidenz, auf die sich PEIX x GELO diese Woche
+              empfohlene Richtung und der Evidenz, auf die sich das Team diese Woche
               stützen kann.
             </p>
           </div>
@@ -60,7 +60,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
           <div className="login-card">
             <div className="login-card__mobile-brand">
               <span className="login-card__mobile-wordmark">ViralFlux</span>
-              <p className="login-card__mobile-kicker">PEIX x GELO Wochenbriefing</p>
+              <p className="login-card__mobile-kicker">ViralFlux Wochenbriefing</p>
               <p className="login-card__mobile-copy">
                 Bundesländer, Richtung und Evidenz für diese Woche in einer Arbeitsfläche.
               </p>
@@ -68,7 +68,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
 
             <header className="login-card__header">
               <h2>In den Wochenplan</h2>
-              <p>Melde dich an, um Wochenfokus, Bundesländer und Evidenz für PEIX x GELO zu öffnen.</p>
+              <p>Melde dich an, um Wochenfokus, Bundesländer und Evidenz zu öffnen.</p>
             </header>
 
             <form className="login-form" onSubmit={handleSubmit}>

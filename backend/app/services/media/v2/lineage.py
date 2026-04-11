@@ -8,9 +8,10 @@ from typing import Any
 from sqlalchemy import func
 
 from app.models.database import BacktestRun, ForecastAccuracyLog, MLForecast, WastewaterAggregated
-from app.services.media.peix_score_service import PeixEpiScoreService
+from app.services.media.ranking_signal_service import RankingSignalService
 from app.services.media.semantic_contracts import infer_feature_families
 from app.services.ml.forecast_service import _ML_MODELS_DIR, _virus_slug
+from .shared import cockpit_ranking_signal
 
 SIGNAL_GROUPS: dict[str, dict[str, str]] = {
     "wastewater": {
@@ -67,8 +68,8 @@ def build_signal_stack_payload(service, *, virus_typ: str = "Influenza A") -> di
         item.get("source_key"): item
         for item in (cockpit.get("source_status") or {}).get("items", [])
     }
-    peix = cockpit.get("peix_epi_score") or PeixEpiScoreService(service.db).build(virus_typ=virus_typ)
-    signal_groups = service._signal_group_summary(peix)
+    ranking_signal = cockpit_ranking_signal(cockpit) or RankingSignalService(service.db).build(virus_typ=virus_typ)
+    signal_groups = service._signal_group_summary(ranking_signal)
     model_lineage = service.get_model_lineage(virus_typ=virus_typ)
 
     items = []
@@ -92,10 +93,14 @@ def build_signal_stack_payload(service, *, virus_typ: str = "Influenza A") -> di
 
     items.sort(key=lambda item: (not item["is_core_signal"], item["label"]))
     summary = {
-        "peix_epi_score": peix.get("national_score"),
-        "national_band": peix.get("national_band"),
-        "top_drivers": peix.get("top_drivers") or [],
-        "context_signals": peix.get("context_signals") or {},
+        "national_signal_score": ranking_signal.get("national_score"),
+        "signal_band": ranking_signal.get("national_band"),
+        "signal_drivers": ranking_signal.get("top_drivers") or [],
+        "signal_context": ranking_signal.get("context_signals") or {},
+        "peix_epi_score": ranking_signal.get("national_score"),
+        "national_band": ranking_signal.get("national_band"),
+        "top_drivers": ranking_signal.get("top_drivers") or [],
+        "context_signals": ranking_signal.get("context_signals") or {},
         "math_stack": {
             "base_models": ["Holt-Winters", "Ridge", "Prophet"],
             "meta_learner": "XGBoost",

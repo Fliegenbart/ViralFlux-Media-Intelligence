@@ -6,6 +6,7 @@ from sqlalchemy import func
 
 from app.models.database import WastewaterAggregated
 from app.services.media.v2 import lineage
+from app.services.media.v2.shared import cockpit_ranking_signal
 
 
 def _decision_freshness_state(service, source_status: dict[str, Any]) -> str:
@@ -47,7 +48,7 @@ def _build_why_now(
     if signal_summary.get("decision_mode_reason"):
         reasons.append(str(signal_summary["decision_mode_reason"]))
     else:
-        top_drivers = (cockpit.get("peix_epi_score") or {}).get("top_drivers") or []
+        top_drivers = cockpit_ranking_signal(cockpit).get("top_drivers") or []
         if top_drivers:
             driver_labels = ", ".join(driver.get("label") for driver in top_drivers[:2] if driver.get("label"))
             reasons.append(f"Treiber dieser Woche: {driver_labels}.")

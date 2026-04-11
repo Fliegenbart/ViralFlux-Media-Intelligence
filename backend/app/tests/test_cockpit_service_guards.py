@@ -86,6 +86,14 @@ class CockpitServiceGuardTests(unittest.TestCase):
         self.assertEqual(snapshot["national"]["impact_probability"], 84.0)
         self.assertEqual(snapshot["top_region"]["signal_score"], 68.0)
         self.assertEqual(snapshot["top_region"]["impact_probability"], 91.0)
+        self.assertEqual(
+            snapshot["national"]["field_contracts"]["signal_score"]["source"],
+            "RankingSignal",
+        )
+        self.assertEqual(
+            snapshot["top_region"]["field_contracts"]["signal_score"]["source"],
+            "RankingSignal",
+        )
 
     def test_campaign_refs_section_normalizes_and_sorts_references(self) -> None:
         payload = MediaCockpitService(None)._campaign_refs_section({
@@ -153,6 +161,30 @@ class CockpitServiceGuardTests(unittest.TestCase):
 
         self.assertIs(payload, expected)
         extract_mock.assert_called_once_with(row)
+
+    def test_get_cockpit_payload_exposes_neutral_ranking_signal_alias(self) -> None:
+        service = MediaCockpitService(db=object())
+        ranking_signal = {"national_score": 71.0, "national_band": "high"}
+        peix_service = unittest.mock.Mock()
+        peix_service.build.return_value = ranking_signal
+
+        with (
+            patch("app.services.media.cockpit_service.RankingSignalService", return_value=peix_service),
+            patch.object(service, "_data_freshness", return_value={}),
+            patch.object(service, "_source_status", return_value={"items": []}),
+            patch.object(service, "_region_recommendation_refs", return_value={}),
+            patch.object(service, "_map_section", return_value={}),
+            patch.object(service, "_signal_snapshot_section", return_value={}),
+            patch.object(service, "_bento_section", return_value={}),
+            patch.object(service, "_source_freshness_summary", return_value={}),
+            patch.object(service, "_campaign_refs_section", return_value={}),
+            patch.object(service, "_recommendation_section", return_value={}),
+            patch.object(service, "_backtest_summary", return_value={}),
+        ):
+            payload = service.get_cockpit_payload(virus_typ="Influenza A")
+
+        self.assertEqual(payload["ranking_signal"], ranking_signal)
+        self.assertEqual(payload["peix_epi_score"], ranking_signal)
 
 
 class CockpitMapSectionContractTests(unittest.TestCase):
@@ -233,6 +265,13 @@ class CockpitMapSectionContractTests(unittest.TestCase):
         self.assertIn("BE", payload["regions"])
         self.assertEqual(payload["regions"]["BE"]["avg_viruslast"], 0.0)
         self.assertTrue(any(item["region"] == "SH" for item in payload["activation_suggestions"]))
+        self.assertEqual(payload["regions"]["SH"]["ranking_signal_score"], 78.0)
+        self.assertEqual(payload["regions"]["SH"]["tooltip"]["ranking_signal_score"], 78.0)
+        self.assertEqual(payload["regions"]["SH"]["tooltip"]["signal_band"], "high")
+        self.assertEqual(
+            payload["activation_suggestions"][0]["field_contracts"]["signal_score"]["source"],
+            "RankingSignal",
+        )
 
 
 class CockpitBentoSectionContractTests(unittest.TestCase):
@@ -315,6 +354,8 @@ class CockpitBentoSectionContractTests(unittest.TestCase):
         self.assertTrue(tiles_by_id["map_top_region"]["is_live"])
         self.assertEqual(tiles_by_id["map_top_region"]["last_updated"], current_date.isoformat())
         self.assertEqual(tiles_by_id["bfarm"]["subtitle"], "Versorgungslage")
+        self.assertEqual(tiles_by_id["peix_national"]["field_contracts"]["signal_score"]["source"], "RankingSignal")
+        self.assertEqual(tiles_by_id["map_top_region"]["field_contracts"]["signal_score"]["source"], "RankingSignal")
 
     def test_bento_section_keeps_pollen_tile_as_stale_fallback_without_recent_pollen_data(self) -> None:
         current_date = datetime(2026, 3, 10)
@@ -391,6 +432,7 @@ class CockpitRecommendationSectionContractTests(unittest.TestCase):
         self.assertEqual(card["region_codes"], ["SH"])
         self.assertEqual(card["campaign_preview"]["recommended_product"], "GeloMyrtol forte")
         self.assertEqual(card["field_contracts"]["signal_confidence_pct"]["source"], "Abwasser")
+        self.assertEqual(card["ranking_signal_context"], card["peix_context"])
 
     def test_region_recommendation_refs_skip_archived_cards_and_expand_national_scope(self) -> None:
         created_at = datetime(2026, 3, 10, 8, 0, 0)
@@ -426,6 +468,34 @@ class CockpitRecommendationSectionContractTests(unittest.TestCase):
         self.assertEqual(len(refs), 16)
         self.assertEqual(refs["SH"]["card_id"], "opp-national")
         self.assertEqual(refs["SH"]["status"], "READY")
+
+    def test_recommendation_section_uses_neutral_partner_brand_fallback(self) -> None:
+        created_at = datetime(2026, 3, 10, 8, 0, 0)
+        self.db.add(
+            MarketingOpportunity(
+                opportunity_id="opp-no-brand",
+                opportunity_type="regional_push",
+                status="READY",
+                urgency_score=54.0,
+                brand=None,
+                product="GeloMyrtol",
+                region_target={"states": ["Hamburg"]},
+                created_at=created_at,
+                campaign_payload={
+                    "campaign": {"campaign_name": "Nordfenster nutzen"},
+                    "product_mapping": {
+                        "recommended_product": "GeloMyrtol forte",
+                        "mapping_status": "approved",
+                    },
+                    "trigger_snapshot": {"source": "Abwasser", "event": "peak"},
+                },
+            )
+        )
+        self.db.commit()
+
+        payload = build_recommendation_section(self.db)
+
+        self.assertEqual(payload["cards"][0]["brand"], "Partner Brand")
 
 
 if __name__ == "__main__":

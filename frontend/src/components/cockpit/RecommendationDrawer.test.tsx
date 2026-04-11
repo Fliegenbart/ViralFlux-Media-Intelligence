@@ -4,6 +4,28 @@ import { fireEvent, render, screen } from '@testing-library/react';
 
 import RecommendationDrawer from './RecommendationDrawer';
 
+jest.mock('./cockpitUtils', () => ({
+  STATUS_ACTION_LABELS: {
+    APPROVED: 'Freigeben',
+  },
+  aiModelLabel: () => 'GPT',
+  formatCurrency: (value?: number | null) => (value == null ? '-' : `${value} EUR`),
+  formatDateShort: (value?: string | null) => value || '-',
+  formatDateTime: (value?: string | null) => value || '-',
+  formatPercent: (value?: number | null) => (value == null ? '-' : `${Math.round(value * 100)}%`),
+  kpiLabel: () => 'sales',
+  learningStateLabel: () => 'Aktiv',
+  metricContractBadge: (_contracts: unknown, _field: string, fallback: string) => fallback,
+  metricContractDisplayLabel: (_contracts: unknown, _field: string, fallback: string) => fallback,
+  metricContractNote: () => 'Hinweis ist sichtbar.',
+  nextWorkflowStatus: () => 'APPROVED',
+  primarySignalScore: () => 81,
+  readinessStateLabel: () => 'Freigabe auf einen Blick',
+  signalConfidencePercent: () => 74,
+  statusTone: () => ({ backgroundColor: '#ddd', color: '#111' }),
+  workflowLabel: () => 'Zur Freigabe',
+}));
+
 function buildDetail() {
   return {
     id: 'rec-1',
@@ -96,7 +118,7 @@ describe('RecommendationDrawer', () => {
 
     expect(screen.getByRole('dialog', { name: 'Berlin jetzt priorisieren' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Kampagnen-Detail schließen' })).toHaveFocus();
-    expect(screen.getByText('GELO-Freigabe-Memo')).toBeInTheDocument();
+    expect(screen.getByText('Freigabe-Memo')).toBeInTheDocument();
     expect(screen.getAllByText('Freigabe auf einen Blick').length).toBeGreaterThan(0);
     expect(screen.getByText('Was diese Empfehlung trägt')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Freigeben' })).toBeInTheDocument();

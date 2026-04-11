@@ -45,7 +45,7 @@ def _allocation_item(
         "truth_layer_enabled": True,
         "product_clusters": [
             {
-                "cluster_key": "gelo_core_respiratory",
+                "cluster_key": "respiratory_core_support",
                 "label": "Influenza A core demand cluster",
                 "priority_rank": 1,
                 "fit_score": 0.84,
@@ -93,7 +93,7 @@ class CampaignRecommendationServiceTests(unittest.TestCase):
         first = payload["recommendations"][0]
         self.assertEqual(first["region"], "BY")
         self.assertEqual(first["activation_level"], "Activate")
-        self.assertEqual(first["recommended_product_cluster"]["cluster_key"], "gelo_core_respiratory")
+        self.assertEqual(first["recommended_product_cluster"]["cluster_key"], "respiratory_core_support")
         self.assertEqual(first["recommended_keyword_cluster"]["cluster_key"], "respiratory_relief_search")
         self.assertEqual(first["spend_guardrail_status"], "ready")
         self.assertTrue(first["recommendation_rationale"]["why"])
@@ -123,7 +123,7 @@ class CampaignRecommendationServiceTests(unittest.TestCase):
         )
 
         first = payload["recommendations"][0]
-        self.assertEqual(first["recommended_product_cluster"]["cluster_key"], "gelo_voice_recovery")
+        self.assertEqual(first["recommended_product_cluster"]["cluster_key"], "voice_recovery_support")
         self.assertEqual(first["recommended_keyword_cluster"]["cluster_key"], "voice_relief_search")
         self.assertIn("boosts this cluster", " ".join(first["recommendation_rationale"]["product_fit"]))
 
@@ -152,6 +152,46 @@ class CampaignRecommendationServiceTests(unittest.TestCase):
         self.assertIn(
             "bundled with a neighboring region",
             " ".join(first["recommendation_rationale"]["guardrails"]),
+        )
+
+    def test_low_confidence_guardrail_uses_generic_manual_review_wording(self) -> None:
+        allocation_item = _allocation_item(
+            bundesland="BE",
+            bundesland_name="Berlin",
+            activation_level="Prepare",
+            budget_share=0.18,
+            budget_amount=9000.0,
+            confidence=0.52,
+            products=["GeloRevoice"],
+        )
+        product_cluster = CampaignClusterSelection(
+            cluster_key="voice_cluster",
+            label="Voice Cluster",
+            fit_score=0.9,
+        )
+        keyword_cluster = CampaignClusterSelection(
+            cluster_key="voice_keywords",
+            label="Voice Keywords",
+            fit_score=0.88,
+            keywords=["voice help"],
+        )
+
+        rationale = self.service._rationale(
+            stage="Prepare",
+            allocation_item=allocation_item,
+            product_cluster=product_cluster,
+            keyword_cluster=keyword_cluster,
+            evidence_class="truth_backed",
+            guardrail_status="low_confidence_review",
+            budget_share=0.18,
+            budget_amount=9000.0,
+        )
+
+        self.assertEqual(
+            rationale.guardrails,
+            [
+                "Confidence is below the stage-specific guardrail, so the recommendation needs manual review."
+            ],
         )
 
     def test_prepare_recommendation_without_budget_stays_discussion_only(self) -> None:

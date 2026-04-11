@@ -415,13 +415,22 @@ def to_card_response(opp: dict[str, Any], include_preview: bool = True) -> dict[
     campaign_pack = opp.get("campaign_payload") or {}
     measurement = campaign_pack.get("measurement_plan") or {}
     product_mapping = campaign_pack.get("product_mapping") or {}
-    peix_context = campaign_pack.get("peix_context") or {}
+    ranking_signal_context = (
+        campaign_pack.get("ranking_signal_context")
+        or campaign_pack.get("peix_context")
+        or {}
+    )
+    peix_context = ranking_signal_context
     playbook = campaign_pack.get("playbook") or {}
     ai_meta = campaign_pack.get("ai_meta") or {}
     region_codes = extract_region_codes_from_card_payload(opp, campaign_pack)
     trigger_snapshot = _humanize_trigger_payload(opp.get("trigger_snapshot") or campaign_pack.get("trigger_snapshot"))
     trigger_context = _humanize_trigger_payload(opp.get("trigger_context") or {})
-    cleaned_peix_context = _humanize_peix_context(opp.get("peix_context") or peix_context)
+    cleaned_peix_context = _humanize_peix_context(
+        opp.get("ranking_signal_context")
+        or opp.get("peix_context")
+        or peix_context
+    )
     cleaned_campaign_pack = dict(campaign_pack)
     cleaned_playbook = _humanize_playbook(playbook)
     preview_campaign_name = _humanize_campaign_name(
@@ -441,6 +450,7 @@ def to_card_response(opp: dict[str, Any], include_preview: bool = True) -> dict[
     cleaned_campaign_pack["trigger_snapshot"] = _humanize_trigger_payload(campaign_pack.get("trigger_snapshot"))
     cleaned_campaign_pack["trigger_evidence"] = _humanize_trigger_payload(campaign_pack.get("trigger_evidence"))
     cleaned_campaign_pack["peix_context"] = _humanize_peix_context(peix_context)
+    cleaned_campaign_pack["ranking_signal_context"] = _humanize_peix_context(ranking_signal_context)
     cleaned_campaign_pack["playbook"] = cleaned_playbook
     cleaned_campaign_pack["signal_contracts"] = campaign_pack.get("signal_contracts") or {}
     if campaign_pack.get("campaign"):
@@ -471,9 +481,9 @@ def to_card_response(opp: dict[str, Any], include_preview: bool = True) -> dict[
     )
     priority_score = opp.get("priority_score") or opp.get("urgency_score")
     field_contracts = {
-        "signal_score": ranking_signal_contract(source="PeixEpiScore"),
+        "signal_score": ranking_signal_contract(source="RankingSignal"),
         "impact_probability": ranking_signal_contract(
-            source="PeixEpiScore",
+            source="RankingSignal",
             label="Legacy Signal-Score",
         ),
         "priority_score": priority_score_contract(source="MarketingOpportunityEngine"),
@@ -508,7 +518,7 @@ def to_card_response(opp: dict[str, Any], include_preview: bool = True) -> dict[
         "status_label": STATUS_LABELS.get(opp.get("status", ""), opp.get("status")),
         "type": opp.get("type"),
         "urgency_score": opp.get("urgency_score"),
-        "brand": opp.get("brand") or "PEIX Partner",
+        "brand": opp.get("brand") or "Partner Brand",
         "product": recommended_product or "Atemwegslinie",
         "recommended_product": recommended_product,
         "region": opp.get("region") or (
@@ -554,6 +564,7 @@ def to_card_response(opp: dict[str, Any], include_preview: bool = True) -> dict[
         "mapping_candidate_product": opp.get("mapping_candidate_product") or product_mapping.get("candidate_product"),
         "mapping_rule_source": opp.get("rule_source") or product_mapping.get("rule_source"),
         "peix_context": cleaned_peix_context,
+        "ranking_signal_context": cleaned_peix_context,
         "signal_score": signal_score,
         "priority_score": priority_score,
         "signal_confidence_pct": signal_confidence_pct,
@@ -582,6 +593,7 @@ def to_card_response(opp: dict[str, Any], include_preview: bool = True) -> dict[
             "recommended_product": recommended_product,
             "mapping_status": card.get("mapping_status"),
             "peix_context": card.get("peix_context"),
+            "ranking_signal_context": card.get("ranking_signal_context"),
             "forecast_assessment": card.get("forecast_assessment"),
             "opportunity_assessment": card.get("opportunity_assessment"),
             "playbook_key": card.get("playbook_key"),

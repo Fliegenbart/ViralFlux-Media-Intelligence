@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any
 
 from app.core.time import utc_now
 from app.models.database import MarketingOpportunity
-from app.services.media.peix_score_service import PeixEpiScoreService
+from app.services.media.ranking_signal_service import RankingSignalService
 
 if TYPE_CHECKING:
     from .opportunity_engine import MarketingOpportunityEngine
@@ -82,14 +82,14 @@ def backfill_peix_context(
     force: bool = False,
     limit: int = 1000,
 ) -> dict[str, Any]:
-    """Backfill missing peix_context blocks for existing recommendations."""
+    """Backfill missing ranking-signal context blocks for existing recommendations."""
     query = engine.db.query(MarketingOpportunity).order_by(MarketingOpportunity.created_at.desc())
     if limit > 0:
         query = query.limit(limit)
     rows = query.all()
 
-    peix_build = PeixEpiScoreService(engine.db).build()
-    peix_regions = peix_build.get("regions") or {}
+    ranking_signal_build = RankingSignalService(engine.db).build()
+    ranking_signal_regions = ranking_signal_build.get("regions") or {}
 
     scanned = 0
     updated = 0
@@ -123,18 +123,19 @@ def backfill_peix_context(
 
         region_codes = engine._extract_region_codes_from_opportunity(opportunity)
         selected_region = region_codes[0] if region_codes else "Gesamt"
-        peix_context = engine._derive_peix_context(
-            peix_regions,
+        ranking_signal_context = engine._derive_ranking_signal_context(
+            ranking_signal_regions,
             selected_region,
             opportunity,
-            peix_national=peix_build,
+            ranking_signal_national=ranking_signal_build,
         )
 
-        if not peix_context:
+        if not ranking_signal_context:
             skipped_no_region += 1
             continue
 
-        payload["peix_context"] = peix_context
+        payload["peix_context"] = ranking_signal_context
+        payload["ranking_signal_context"] = ranking_signal_context
         row.campaign_payload = payload
         row.updated_at = utc_now()
         updated += 1

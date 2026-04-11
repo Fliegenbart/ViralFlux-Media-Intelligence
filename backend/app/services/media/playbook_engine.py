@@ -1,7 +1,7 @@
 """Playbook Engine für KI-gestützte Kampagnenkarten.
 
 Erzeugt regionalspezifische Playbook-Kandidaten aus:
-- PeixEpiScore (safe projection)
+- Ranking-Signal (safe projection)
 - SURVSTAT (Mycoplasma)
 - BfArM Lieferengpass-Signalen
 - Wetter + Google Trends
@@ -16,7 +16,7 @@ from typing import Any
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.services.media.peix_score_service import PeixEpiScoreService
+from app.services.media.ranking_signal_service import RankingSignalService
 
 
 BUNDESLAND_NAMES = {
@@ -153,7 +153,7 @@ class PlaybookEngine:
         region_scope: list[str] | None = None,
         max_cards: int = 4,
     ) -> dict[str, Any]:
-        peix = PeixEpiScoreService(self.db).build(virus_typ=virus_typ)
+        peix = RankingSignalService(self.db).build(virus_typ=virus_typ)
         normalized_scope = self._normalize_region_scope(region_scope)
         allowed_regions = normalized_scope or sorted(BUNDESLAND_NAMES.keys())
 
@@ -169,6 +169,7 @@ class PlaybookEngine:
             return {
                 "selected": [],
                 "all_candidates": [],
+                "ranking_signal_generated_at": peix.get("generated_at"),
                 "peix_generated_at": peix.get("generated_at"),
                 "debug": {"reason": "no_trigger_data"},
             }
@@ -210,6 +211,7 @@ class PlaybookEngine:
         return {
             "selected": selected,
             "all_candidates": ranked,
+            "ranking_signal_generated_at": peix.get("generated_at"),
             "peix_generated_at": peix.get("generated_at"),
             "debug": {
                 "counts": {
@@ -344,8 +346,11 @@ class PlaybookEngine:
             "region_code": region_code,
             "region_name": BUNDESLAND_NAMES.get(region_code, region_code),
             "impact_probability": round(float(peix_entry.get("impact_probability") or 0.0), 2),
+            "ranking_signal_score": round(float(peix_entry.get("score_0_100") or 0.0), 2),
             "peix_score": round(float(peix_entry.get("score_0_100") or 0.0), 2),
+            "signal_band": peix_entry.get("risk_band"),
             "peix_band": peix_entry.get("risk_band"),
+            "signal_drivers": peix_entry.get("top_drivers") or [],
             "peix_drivers": peix_entry.get("top_drivers") or [],
             "trigger_strength": round(trigger_strength, 2),
             "confidence": round(confidence, 2),

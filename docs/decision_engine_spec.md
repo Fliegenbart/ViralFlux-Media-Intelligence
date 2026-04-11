@@ -4,10 +4,10 @@
 
 This document describes the currently implemented regional decision layer in:
 
-- `/Users/davidwegener/Desktop/viralflux/backend/app/services/ml/regional_decision_engine.py`
-- `/Users/davidwegener/Desktop/viralflux/backend/app/services/ml/regional_forecast.py`
-- `/Users/davidwegener/Desktop/viralflux/backend/app/api/forecast.py`
-- `/Users/davidwegener/Desktop/viralflux/backend/app/tests/test_regional_decision_engine.py`
+- `backend/app/services/ml/regional_decision_engine.py`
+- `backend/app/services/ml/regional_forecast.py`
+- `backend/app/api/forecast.py`
+- `backend/app/tests/test_regional_decision_engine.py`
 
 The engine is a deterministic, audit-ready rule layer that maps regional forecast output to one of three operational stages:
 
@@ -21,15 +21,15 @@ This step does not include truth-layer gating or media allocation logic.
 
 The operational rule contract is now explicit in `RegionalDecisionRuleConfig` inside:
 
-- `/Users/davidwegener/Desktop/viralflux/backend/app/services/ml/regional_decision_contracts.py`
+- `backend/app/services/ml/regional_decision_contracts.py`
 
 The runtime defaults and virus-specific overrides are instantiated in:
 
-- `/Users/davidwegener/Desktop/viralflux/backend/app/services/ml/regional_decision_engine.py`
+- `backend/app/services/ml/regional_decision_engine.py`
 
 Direct unit coverage for the rule engine lives in:
 
-- `/Users/davidwegener/Desktop/viralflux/backend/app/tests/test_regional_decision_engine.py`
+- `backend/app/tests/test_regional_decision_engine.py`
 
 ## Integration Points
 

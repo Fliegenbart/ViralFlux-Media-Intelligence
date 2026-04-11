@@ -22,10 +22,10 @@ jobs:
         with:
           python-version: "3.11"
           cache: "pip"
-          cache-dependency-path: backend/requirements.txt
+          cache-dependency-path: backend/requirements-dev.txt
 
       - name: Install backend dependencies
-        run: pip install -r backend/requirements.txt
+        run: pip install -r backend/requirements-dev.txt
 
       - name: Compile operational scripts
         run: >
@@ -56,5 +56,8 @@ jobs:
           POSTGRES_PASSWORD: test
           POSTGRES_DB: test
           OPENWEATHER_API_KEY: test
-          SECRET_KEY: test
+          SECRET_KEY: ci-test-secret-key-minimum-32-chars
+          ADMIN_EMAIL: ci@test.de
+          ADMIN_PASSWORD: ci-test-password-12chars
+          ENVIRONMENT: test
         run: python -m pytest app/tests -q

@@ -1,5 +1,4 @@
 from datetime import UTC, datetime
-import secrets
 
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
@@ -12,41 +11,10 @@ from app.core.security import ALGORITHM, SECRET_KEY
 from app.schemas.token import TokenPayload
 
 AUTH_COOKIE_NAME = "viralflux_session"
-CSRF_COOKIE_NAME = "viralflux_csrf_token"
-CSRF_HEADER_NAME = "X-CSRF-Token"
 AUTH_SESSION_ENTITY = "auth_session"
 AUTH_LOGOUT_ACTION = "logout"
-_CSRF_SAFE_METHODS = {"GET", "HEAD", "OPTIONS", "TRACE"}
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login", auto_error=False)
-
-
-def create_csrf_token() -> str:
-    return secrets.token_urlsafe(32)
-
-
-def validate_csrf_request(request: Request, token: str | None = None) -> None:
-    if request.method.upper() in _CSRF_SAFE_METHODS:
-        return
-    if token:
-        return
-
-    auth_cookie = str(request.cookies.get(AUTH_COOKIE_NAME) or "").strip()
-    if not auth_cookie:
-        return
-
-    csrf_cookie = str(request.cookies.get(CSRF_COOKIE_NAME) or "").strip()
-    csrf_header = str(request.headers.get(CSRF_HEADER_NAME) or "").strip()
-    if not csrf_cookie or not csrf_header:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="CSRF token missing or invalid",
-        )
-    if not secrets.compare_digest(csrf_cookie, csrf_header):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="CSRF token missing or invalid",
-        )
 
 
 def _supports_audit_queries(db: Session | None) -> bool:
@@ -104,7 +72,6 @@ async def get_current_user(
     )
 
     auth_token = token or request.cookies.get(AUTH_COOKIE_NAME)
-    validate_csrf_request(request, token)
     if not auth_token:
         raise credentials_exception
 

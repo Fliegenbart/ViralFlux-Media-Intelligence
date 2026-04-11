@@ -33,11 +33,9 @@ describe('auth session handling', () => {
     logout();
     window.localStorage.clear();
     window.sessionStorage.clear();
-    document.cookie = 'viralflux_csrf_token=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/';
   });
 
   it('logs in with credentials include and stores no token in browser storage', async () => {
-    document.cookie = 'viralflux_csrf_token=test-csrf-token; path=/';
     fetchMock.mockResolvedValueOnce(mockJsonResponse({ authenticated: true }));
 
     await login('test@example.com', 'secret', true);
@@ -45,9 +43,6 @@ describe('auth session handling', () => {
     expect(fetchMock).toHaveBeenCalledWith('/api/auth/login?remember_me=true', expect.objectContaining({
       method: 'POST',
       credentials: 'include',
-      headers: expect.objectContaining({
-        'x-csrf-token': 'test-csrf-token',
-      }),
     }));
     expect(window.localStorage.length).toBe(0);
     expect(window.sessionStorage.length).toBe(0);
@@ -66,7 +61,6 @@ describe('auth session handling', () => {
   });
 
   it('clears auth state on logout and 401 responses', async () => {
-    document.cookie = 'viralflux_csrf_token=test-csrf-token; path=/';
     fetchMock
       .mockResolvedValueOnce(mockJsonResponse({ authenticated: true }))
       .mockResolvedValueOnce(mockJsonResponse({ detail: 'expired' }, 401));
@@ -86,35 +80,13 @@ describe('auth session handling', () => {
     await login('test@example.com', 'secret', false);
 
     logout();
-    await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(fetchMock).toHaveBeenLastCalledWith('/api/auth/logout', expect.objectContaining({
       credentials: 'include',
       method: 'POST',
-      headers: expect.objectContaining({
-        'x-csrf-token': 'test-csrf-token',
-      }),
     }));
     expect(window.localStorage.length).toBe(0);
     expect(window.sessionStorage.length).toBe(0);
     expect(isAuthenticated()).toBe(false);
-  });
-
-  it('adds the csrf header to authenticated state-changing api requests', async () => {
-    document.cookie = 'viralflux_csrf_token=test-csrf-token; path=/';
-    fetchMock
-      .mockResolvedValueOnce(mockJsonResponse({ authenticated: true }))
-      .mockResolvedValueOnce(mockJsonResponse({ ok: true }));
-
-    await login('test@example.com', 'secret', true);
-    await apiFetch('/api/v1/protected', { method: 'PATCH' });
-
-    expect(fetchMock).toHaveBeenLastCalledWith('/api/v1/protected', expect.objectContaining({
-      method: 'PATCH',
-      credentials: 'include',
-      headers: expect.objectContaining({
-        'x-csrf-token': 'test-csrf-token',
-      }),
-    }));
   });
 });

@@ -16,7 +16,7 @@ from app.core.celery_app import celery_app
 from app.services.ml.training_contract import normalize_training_selection
 
 logger = logging.getLogger(__name__)
-router = APIRouter(dependencies=[Depends(get_current_admin)])
+router = APIRouter()
 
 
 class TrainXGBoostRequest(BaseModel):
@@ -64,6 +64,7 @@ class TrainRegionalModelsRequest(BaseModel):
 async def train_xgboost(
     request: Request,
     body: TrainXGBoostRequest = Body(default_factory=TrainXGBoostRequest),
+    current_user: dict = Depends(get_current_admin),
 ):
     """Trigger XGBoost meta-learner training (async via Celery).
 
@@ -122,6 +123,7 @@ async def get_training_status(task_id: str):
 async def train_regional_models(
     request: Request,
     body: TrainRegionalModelsRequest = Body(default_factory=TrainRegionalModelsRequest),
+    current_user: dict = Depends(get_current_admin),
 ):
     """Train pooled regional panel models for one, many, or all supported virus types."""
     selection = body.normalized_selection()
@@ -149,6 +151,7 @@ async def train_regional_models(
 @router.get("/regional/accuracy")
 async def get_regional_accuracy(
     virus_typ: str = "Influenza A",
+    current_user: dict = Depends(get_current_admin),
 ):
     """Get per-state accuracy summaries from the pooled regional panel backtest."""
     from app.db.session import get_db_context

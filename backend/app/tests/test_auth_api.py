@@ -48,10 +48,6 @@ class AuthApiTests(unittest.TestCase):
         async def protected(current_user: dict = Depends(get_current_user)):
             return {"subject": current_user["sub"]}
 
-        @app.post("/api/protected-update")
-        async def protected_update(current_user: dict = Depends(get_current_user)):
-            return {"subject": current_user["sub"], "updated": True}
-
         self.client = TestClient(app)
 
     def tearDown(self) -> None:
@@ -134,42 +130,6 @@ class AuthApiTests(unittest.TestCase):
             },
         )
 
-    def test_csrf_endpoint_sets_readable_cookie_for_browser_clients(self) -> None:
-        response = self.client.get("/api/auth/csrf")
-
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["csrf_token"], self.client.cookies.get("viralflux_csrf_token"))
-        set_cookie = response.headers.get("set-cookie", "")
-        self.assertIn("viralflux_csrf_token=", set_cookie)
-        self.assertNotIn("HttpOnly", set_cookie)
-
-    def test_cookie_authenticated_state_change_requires_csrf_header(self) -> None:
-        self._login("admin@example.com", "CorrectHorseBatteryStaple123!")
-
-        response = self.client.post("/api/protected-update")
-
-        self.assertEqual(response.status_code, 403)
-        self.assertEqual(response.json()["detail"], "CSRF token missing or invalid")
-
-    def test_cookie_authenticated_state_change_accepts_matching_csrf_header(self) -> None:
-        self._login("admin@example.com", "CorrectHorseBatteryStaple123!")
-        csrf_response = self.client.get("/api/auth/csrf")
-        csrf_token = csrf_response.json()["csrf_token"]
-
-        response = self.client.post(
-            "/api/protected-update",
-            headers={"X-CSRF-Token": csrf_token},
-        )
-
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(
-            response.json(),
-            {
-                "subject": "admin@example.com",
-                "updated": True,
-            },
-        )
-
     def test_logout_clears_auth_cookie_and_session(self) -> None:
         login_response = self._login("admin@example.com", "CorrectHorseBatteryStaple123!")
         set_cookie = login_response.headers.get("set-cookie", "")
@@ -181,13 +141,7 @@ class AuthApiTests(unittest.TestCase):
         )
         self.assertEqual(protected_before_logout.status_code, 200)
 
-        csrf_response = self.client.get("/api/auth/csrf")
-        csrf_token = csrf_response.json()["csrf_token"]
-
-        logout_response = self.client.post(
-            "/api/auth/logout",
-            headers={"X-CSRF-Token": csrf_token},
-        )
+        logout_response = self.client.post("/api/auth/logout")
         session_response = self.client.get("/api/auth/session")
         stolen_token_response = self.client.get(
             "/api/protected",

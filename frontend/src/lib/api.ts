@@ -12,9 +12,6 @@
  */
 
 const AUTH_CHANGE_EVENT = 'viralflux-auth-change';
-const CSRF_COOKIE_NAME = 'viralflux_csrf_token';
-const CSRF_HEADER_NAME = 'X-CSRF-Token';
-const CSRF_PROTECTED_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
 interface SessionState {
   authenticated: boolean;
@@ -25,79 +22,6 @@ interface SessionState {
 let _authenticated = false;
 let _hydrated = false;
 let _rehydratePromise: Promise<boolean> | null = null;
-
-function readCookie(name: string): string | null {
-  if (typeof document === 'undefined') {
-    return null;
-  }
-
-  const prefix = `${name}=`;
-  const cookie = document.cookie
-    .split(';')
-    .map((part) => part.trim())
-    .find((part) => part.startsWith(prefix));
-
-  if (!cookie) {
-    return null;
-  }
-
-  return decodeURIComponent(cookie.slice(prefix.length));
-}
-
-function buildHeaders(
-  headers?: HeadersInit,
-  extraHeaders?: Record<string, string>,
-): Record<string, string> | undefined {
-  const merged = new Headers(headers);
-  if (extraHeaders) {
-    Object.entries(extraHeaders).forEach(([key, value]) => {
-      merged.set(key, value);
-    });
-  }
-  const normalized = Object.fromEntries(merged.entries());
-  return Object.keys(normalized).length > 0 ? normalized : undefined;
-}
-
-async function ensureCsrfToken(): Promise<string> {
-  const existingToken = readCookie(CSRF_COOKIE_NAME);
-  if (existingToken) {
-    return existingToken;
-  }
-
-  const response = await fetch('/api/auth/csrf', {
-    credentials: 'include',
-  });
-  if (!response.ok) {
-    throw new Error(await readErrorMessage(response, `CSRF-Token konnte nicht geladen werden (${response.status})`));
-  }
-
-  const cookieToken = readCookie(CSRF_COOKIE_NAME);
-  if (cookieToken) {
-    return cookieToken;
-  }
-
-  const data = await response.json().catch(() => null) as { csrf_token?: string } | null;
-  if (data && typeof data.csrf_token === 'string' && data.csrf_token.trim()) {
-    return data.csrf_token;
-  }
-
-  throw new Error('CSRF-Token konnte nicht geladen werden.');
-}
-
-async function withCsrfProtection(init: RequestInit = {}): Promise<RequestInit> {
-  const method = String(init.method || 'GET').toUpperCase();
-  if (!CSRF_PROTECTED_METHODS.has(method)) {
-    return init;
-  }
-
-  const csrfToken = await ensureCsrfToken();
-  return {
-    ...init,
-    headers: buildHeaders(init.headers, {
-      [CSRF_HEADER_NAME]: csrfToken,
-    }),
-  };
-}
 
 function notifyAuthChange(authenticated: boolean): void {
   if (typeof window === 'undefined') return;
@@ -189,12 +113,11 @@ export async function login(email: string, password: string, rememberMe = true):
   form.append('username', email);
   form.append('password', password);
 
-  const requestInit = await withCsrfProtection({
+  const res = await fetch(`/api/auth/login?remember_me=${rememberMe ? 'true' : 'false'}`, {
     method: 'POST',
     body: form,
     credentials: 'include',
   });
-  const res = await fetch(`/api/auth/login?remember_me=${rememberMe ? 'true' : 'false'}`, requestInit);
 
   if (!res.ok) {
     throw new Error(await readErrorMessage(res, `Login fehlgeschlagen (${res.status})`));
@@ -213,12 +136,10 @@ export function logout(): void {
     return;
   }
 
-  void Promise.resolve(withCsrfProtection({
+  void Promise.resolve(fetch('/api/auth/logout', {
     method: 'POST',
     credentials: 'include',
-  }))
-    .then((requestInit) => fetch('/api/auth/logout', requestInit))
-    .catch(() => undefined);
+  })).catch(() => undefined);
 }
 
 /**
@@ -237,11 +158,10 @@ export async function apiFetch(
     throw new Error('Nicht eingeloggt. Bitte zuerst anmelden.');
   }
 
-  const requestInit = await withCsrfProtection({
+  const res = await fetch(url, {
     ...init,
     credentials: 'include',
   });
-  const res = await fetch(url, requestInit);
 
   if (res.status === 401) {
     clearAuthState(true);

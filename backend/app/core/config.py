@@ -53,6 +53,13 @@ class Settings(BaseSettings):
     SECRET_KEY: str
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    ADMIN_EMAIL: str | None = None
+    ADMIN_PASSWORD: str | None = None
+    AUTH_USER_REGISTRY_JSON: str | None = None
+    API_DOCS_ENABLED: bool | None = None
+    PUBLIC_HEALTH_DETAILS_ENABLED: bool | None = None
+    PUBLIC_METRICS_ENABLED: bool | None = None
+    METRICS_AUTH_TOKEN: str | None = None
     
     # CORS
     ALLOWED_ORIGINS: str = "http://localhost:3000"
@@ -171,6 +178,24 @@ class Settings(BaseSettings):
         if self.READINESS_REQUIRE_BROKER is not None:
             return bool(self.READINESS_REQUIRE_BROKER)
         return self.ENVIRONMENT == "production"
+
+    @property
+    def EFFECTIVE_API_DOCS_ENABLED(self) -> bool:
+        if self.API_DOCS_ENABLED is not None:
+            return bool(self.API_DOCS_ENABLED)
+        return self.ENVIRONMENT != "production"
+
+    @property
+    def EFFECTIVE_PUBLIC_HEALTH_DETAILS_ENABLED(self) -> bool:
+        if self.PUBLIC_HEALTH_DETAILS_ENABLED is not None:
+            return bool(self.PUBLIC_HEALTH_DETAILS_ENABLED)
+        return self.ENVIRONMENT != "production"
+
+    @property
+    def EFFECTIVE_PUBLIC_METRICS_ENABLED(self) -> bool:
+        if self.PUBLIC_METRICS_ENABLED is not None:
+            return bool(self.PUBLIC_METRICS_ENABLED)
+        return self.ENVIRONMENT != "production"
 
     @property
     def EFFECTIVE_CORE_PRODUCTION_SCOPES(self) -> list[tuple[str, int]]:

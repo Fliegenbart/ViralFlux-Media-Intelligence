@@ -1,11 +1,12 @@
 from app.core.time import utc_now
 import asyncio
 import logging
+import secrets
 import time
 from datetime import datetime
 from typing import Any
 
-from fastapi import FastAPI, Depends, Request, Response
+from fastapi import FastAPI, Depends, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
@@ -39,7 +40,7 @@ from app.startup_runtime import (
     launch_bfarm_startup_import_thread,
     safe_record_startup_readiness_once,
 )
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, get_optional_current_user
 
 # Setup structured logging BEFORE anything else
 settings = get_settings()
@@ -55,11 +56,88 @@ logger = logging.getLogger(__name__)
 _STARTUP_READINESS_LOCK = "startup:readiness:record"
 _STARTUP_BFARM_IMPORT_LOCK = "startup:bfarm:import"
 
+
+def _api_surface_urls(settings_obj: Any | None = None) -> dict[str, str | None]:
+    active_settings = settings_obj or settings
+    if getattr(active_settings, "EFFECTIVE_API_DOCS_ENABLED", False):
+        return {
+            "docs_url": "/docs",
+            "redoc_url": "/redoc",
+            "openapi_url": "/openapi.json",
+        }
+    return {
+        "docs_url": None,
+        "redoc_url": None,
+        "openapi_url": None,
+    }
+
+
+def _public_readiness_payload(
+    snapshot: dict[str, Any],
+    *,
+    settings_obj: Any | None = None,
+    expose_details: bool | None = None,
+) -> dict[str, Any]:
+    active_settings = settings_obj or settings
+    should_expose_details = (
+        getattr(active_settings, "EFFECTIVE_PUBLIC_HEALTH_DETAILS_ENABLED", False)
+        if expose_details is None
+        else expose_details
+    )
+    if should_expose_details:
+        return snapshot
+
+    blockers = list(snapshot.get("blockers") or [])
+    warnings = list(snapshot.get("warnings") or [])
+    payload = {
+        "status": snapshot.get("status"),
+        "checked_at": snapshot.get("checked_at"),
+        "app_version": getattr(active_settings, "APP_VERSION", None),
+        "blocker_count": len(blockers),
+        "warning_count": len(warnings),
+    }
+    environment = str(getattr(active_settings, "ENVIRONMENT", "") or "").strip()
+    if environment and environment != "production":
+        payload["environment"] = environment
+    return payload
+
+
+def _extract_metrics_token(request: Request) -> str:
+    header_token = str(request.headers.get("X-Metrics-Token") or "").strip()
+    if header_token:
+        return header_token
+    auth_header = str(request.headers.get("Authorization") or "").strip()
+    if auth_header.lower().startswith("bearer "):
+        return auth_header[7:].strip()
+    return ""
+
+
+def _enforce_metrics_access(
+    *,
+    request: Request,
+    current_user: dict | None,
+    settings_obj: Any | None = None,
+) -> None:
+    active_settings = settings_obj or settings
+    if getattr(active_settings, "EFFECTIVE_PUBLIC_METRICS_ENABLED", False):
+        return
+    if current_user and current_user.get("role") == "admin":
+        return
+
+    configured_token = str(getattr(active_settings, "METRICS_AUTH_TOKEN", "") or "").strip()
+    provided_token = _extract_metrics_token(request)
+    if configured_token and provided_token and secrets.compare_digest(provided_token, configured_token):
+        return
+
+    raise HTTPException(status_code=404, detail="Not found")
+
+
 # FastAPI App
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
-    description="Behördlich getriebene Media-Intelligence für Pharma-Marken mit 14-Tage-Frühsignal"
+    description="Behördlich getriebene Media-Intelligence für Pharma-Marken mit 14-Tage-Frühsignal",
+    **_api_surface_urls(settings),
 )
 
 # Publish app info to Prometheus
@@ -396,16 +474,18 @@ async def shutdown_event():
 @app.get("/")
 async def root():
     """Root endpoint with API info."""
-    return {
+    payload = {
         "app": settings.APP_NAME,
         "version": settings.APP_VERSION,
         "environment": settings.ENVIRONMENT,
-        "docs": "/docs",
         "health_live": "/health/live",
         "health_ready": "/health/ready",
         "health_core_ready": "/health/core-ready",
-        "status": "operational"
+        "status": "operational",
     }
+    if settings.EFFECTIVE_API_DOCS_ENABLED:
+        payload["docs"] = "/docs"
+    return payload
 
 
 def _readiness_payload() -> dict:
@@ -445,13 +525,33 @@ async def health_ready():
     snapshot = _readiness_payload()
     return JSONResponse(
         status_code=ProductionReadinessService.http_status_code(snapshot),
-        content=snapshot,
+        content=_public_readiness_payload(snapshot),
     )
 
 
 @app.get("/health/core-ready")
 async def health_core_ready():
     """Core production readiness for explicitly supported live scopes."""
+    snapshot = _core_readiness_payload()
+    return JSONResponse(
+        status_code=ProductionReadinessService.http_status_code(snapshot),
+        content=_public_readiness_payload(snapshot),
+    )
+
+
+@app.get("/health/ready/internal", dependencies=[Depends(get_current_user)])
+async def health_ready_internal():
+    """Detailed readiness payload for authenticated operators."""
+    snapshot = _readiness_payload()
+    return JSONResponse(
+        status_code=ProductionReadinessService.http_status_code(snapshot),
+        content=snapshot,
+    )
+
+
+@app.get("/health/core-ready/internal", dependencies=[Depends(get_current_user)])
+async def health_core_ready_internal():
+    """Detailed core readiness payload for authenticated operators."""
     snapshot = _core_readiness_payload()
     return JSONResponse(
         status_code=ProductionReadinessService.http_status_code(snapshot),
@@ -466,8 +566,12 @@ async def health_check():
 
 
 @app.get("/metrics")
-async def prometheus_metrics():
+async def prometheus_metrics(
+    request: Request,
+    current_user: dict | None = Depends(get_optional_current_user),
+):
     """Prometheus metrics endpoint."""
+    _enforce_metrics_access(request=request, current_user=current_user)
     return Response(
         content=generate_latest(),
         media_type=CONTENT_TYPE_LATEST,

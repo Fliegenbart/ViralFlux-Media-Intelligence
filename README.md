@@ -103,22 +103,26 @@ Dabei ist:
 
 Zusätzlich werden Unsicherheitsintervalle berechnet.
 
-### 3. Ereigniswahrscheinlichkeit
+### 3. Ereignissignal oder Ereigniswahrscheinlichkeit
 
-Die Plattform trennt **Punktprognose** und **Wahrscheinlichkeit eines relevanten Ereignisses** bewusst voneinander.
+Die Plattform trennt **Punktprognose** und **Entscheidungssignal** bewusst voneinander.
 
-Die Event-Wahrscheinlichkeit wird nicht einfach aus dem Punktforecast geraten, sondern über ein eigenes Exceedance-/Probability-Modell geschätzt:
+Es gibt dabei zwei Pfade:
+- **Regional / kalibriert**: Wenn ein gelerntes Exceedance-Modell mit Kalibrierung verfuegbar ist, wird eine echte `event_probability` ausgegeben.
+- **Einfach / nationaler Fallback**: Wenn kein belastbares Wahrscheinlichkeitsmodell verfuegbar ist, wird **keine** echte Wahrscheinlichkeit behauptet. Stattdessen gibt die Plattform einen heuristischen `event_signal_score` aus.
+
+Nur der erste Pfad darf als Wahrscheinlichkeit gelesen werden:
 
 ```text
 P(Ereignis in 7 Tagen | x_t)
 ```
 
-Diese Wahrscheinlichkeit wird kalibriert, damit sie besser zu realen Häufigkeiten passt.
+Diese Wahrscheinlichkeit wird kalibriert, damit sie besser zu realen Haefigkeiten passt.
 
 Vereinfacht:
 - bevorzugt `isotonic`
 - bei kleinerem Sample `logistic / Platt`
-- sonst klar markierter Fallback
+- sonst klar markierter Fallback auf Signal- statt Wahrscheinlichkeitssemantik
 
 ### 4. Hero-Graph auf `Virus-Radar`
 

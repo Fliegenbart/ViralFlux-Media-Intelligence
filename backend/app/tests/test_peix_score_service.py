@@ -10,17 +10,17 @@ from sqlalchemy.pool import StaticPool
 
 from app.services.media.ranking_signal_service import (
     DEFAULT_RANKING_SIGNAL_CONFIG,
+    DEFAULT_WEIGHTS,
     RankingSignalService,
 )
 from app.models.database import Base, MLForecast
-from app.services.media.peix_score_service import DEFAULT_WEIGHTS, PeixEpiScoreService
 
 
-def _stub_peix_service(
+def _stub_ranking_signal_service(
     *,
     weights: dict[str, float] | None = None,
-) -> PeixEpiScoreService:
-    service = PeixEpiScoreService.__new__(PeixEpiScoreService)
+) -> RankingSignalService:
+    service = RankingSignalService.__new__(RankingSignalService)
     service.db = MagicMock()
     service._weights = dict(weights or DEFAULT_WEIGHTS)
     service._wastewater_by_region = lambda _virus: {"BE": 0.9}
@@ -36,9 +36,9 @@ def _stub_peix_service(
     return service
 
 
-class PeixScoreServiceTests(unittest.TestCase):
+class RankingSignalServiceTests(unittest.TestCase):
     def test_search_signal_delegates_to_signals_module(self) -> None:
-        service = PeixEpiScoreService.__new__(PeixEpiScoreService)
+        service = RankingSignalService.__new__(RankingSignalService)
 
         with patch(
             "app.services.media.peix_score_signals._search_signal",
@@ -50,7 +50,7 @@ class PeixScoreServiceTests(unittest.TestCase):
         self.assertEqual(result, 0.42)
 
     def test_forecast_signal_delegates_to_signals_module(self) -> None:
-        service = PeixEpiScoreService.__new__(PeixEpiScoreService)
+        service = RankingSignalService.__new__(RankingSignalService)
 
         with patch(
             "app.services.media.peix_score_signals._forecast_signal",
@@ -74,7 +74,7 @@ class PeixScoreServiceTests(unittest.TestCase):
         db = MagicMock()
         db.query.side_effect = [config_query, recent_query, previous_query]
 
-        score = PeixEpiScoreService(db)._search_signal()
+        score = RankingSignalService(db)._search_signal()
 
         self.assertIsInstance(score, float)
         self.assertAlmostEqual(score, 0.8)
@@ -142,7 +142,7 @@ class PeixScoreServiceTests(unittest.TestCase):
             ])
             db.commit()
 
-            score = PeixEpiScoreService(db)._forecast_signal("Influenza A")
+            score = RankingSignalService(db)._forecast_signal("Influenza A")
 
             self.assertGreater(score, 0.5)
         finally:
@@ -151,7 +151,7 @@ class PeixScoreServiceTests(unittest.TestCase):
             engine.dispose()
 
     def test_baseline_adjustment_still_uses_service_override_for_positivity_rate(self) -> None:
-        class OverrideService(PeixEpiScoreService):
+        class OverrideService(RankingSignalService):
             def _get_positivity_rate(self, virus_typ: str) -> float:
                 return 0.9
 
@@ -179,7 +179,7 @@ class PeixScoreServiceTests(unittest.TestCase):
         self.assertGreater(score, 0.9)
 
     def test_weather_by_region_still_uses_service_peix_config_override(self) -> None:
-        service = PeixEpiScoreService.__new__(PeixEpiScoreService)
+        service = RankingSignalService.__new__(RankingSignalService)
         service.PEIX_CONFIG = {
             "weather_temp_threshold": 10.0,
             "weather_temp_divisor": 10.0,
@@ -206,7 +206,7 @@ class PeixScoreServiceTests(unittest.TestCase):
         self.assertEqual(signal["BE"], 1.0)
 
     def test_survstat_by_region_still_uses_service_disease_mapping_override(self) -> None:
-        service = PeixEpiScoreService.__new__(PeixEpiScoreService)
+        service = RankingSignalService.__new__(RankingSignalService)
         service._SURVSTAT_BY_VIRUS = {"Custom Virus": ["influenza, saisonal"]}
         latest_week_query = MagicMock()
         latest_week_query.filter.return_value.scalar.return_value = datetime(2026, 2, 2)
@@ -233,7 +233,7 @@ class PeixScoreServiceTests(unittest.TestCase):
         self.assertGreater(signal["BE"], 0.0)
 
     def test_wastewater_by_region_still_uses_service_region_mapping_override(self) -> None:
-        service = PeixEpiScoreService.__new__(PeixEpiScoreService)
+        service = RankingSignalService.__new__(RankingSignalService)
         service.REGION_CODE_TO_NAME = {"XX": "Override Region"}
         latest_query = MagicMock()
         latest_query.filter.return_value.scalar.return_value = datetime(2026, 2, 2)
@@ -249,7 +249,7 @@ class PeixScoreServiceTests(unittest.TestCase):
         self.assertEqual(signal, {"XX": 1.0})
 
     def test_build_still_uses_service_region_mapping_override(self) -> None:
-        service = _stub_peix_service()
+        service = _stub_ranking_signal_service()
         service.REGION_CODE_TO_NAME = {"XX": "Override Region"}
         service._wastewater_by_region = lambda _virus: {"XX": 0.9}
         service._are_by_region = lambda: {"XX": 0.8}
@@ -262,9 +262,9 @@ class PeixScoreServiceTests(unittest.TestCase):
         self.assertEqual(payload["regions"]["XX"]["region_name"], "Override Region")
 
     def test_build_still_uses_service_peix_config_override_for_school_start_multiplier(self) -> None:
-        service = _stub_peix_service()
+        service = _stub_ranking_signal_service()
         service.PEIX_CONFIG = {
-            **PeixEpiScoreService.PEIX_CONFIG,
+            **RankingSignalService.PEIX_CONFIG,
             "school_start_multiplier": 2.0,
             "school_start_weather_min": 0.0,
         }
@@ -275,9 +275,9 @@ class PeixScoreServiceTests(unittest.TestCase):
         self.assertEqual(payload["regions"]["BE"]["score_0_100"], 100.0)
 
     def test_compute_epi_score_still_uses_service_peix_config_override(self) -> None:
-        service = PeixEpiScoreService.__new__(PeixEpiScoreService)
+        service = RankingSignalService.__new__(RankingSignalService)
         service.PEIX_CONFIG = {
-            **PeixEpiScoreService.PEIX_CONFIG,
+            **RankingSignalService.PEIX_CONFIG,
             "epi_weights_4": {
                 "wastewater": 1.0,
                 "are": 0.0,
@@ -296,9 +296,9 @@ class PeixScoreServiceTests(unittest.TestCase):
         self.assertEqual(score, 0.9)
 
     def test_score_to_band_still_uses_service_peix_config_override(self) -> None:
-        service = PeixEpiScoreService.__new__(PeixEpiScoreService)
+        service = RankingSignalService.__new__(RankingSignalService)
         service.PEIX_CONFIG = {
-            **PeixEpiScoreService.PEIX_CONFIG,
+            **RankingSignalService.PEIX_CONFIG,
             "risk_band_high": 90,
             "risk_band_elevated": 80,
             "risk_band_moderate": 70,
@@ -307,7 +307,7 @@ class PeixScoreServiceTests(unittest.TestCase):
         self.assertEqual(service._score_to_band(56.3), "low")
 
     def test_build_marks_peix_as_ranking_signal_and_deprecates_probability_alias(self) -> None:
-        payload = _stub_peix_service().build("Influenza A")
+        payload = _stub_ranking_signal_service().build("Influenza A")
 
         self.assertEqual(payload["score_semantics"], "ranking_signal")
         self.assertEqual(payload["impact_probability_semantics"], "ranking_signal")
@@ -319,7 +319,7 @@ class PeixScoreServiceTests(unittest.TestCase):
         self.assertIn("impact_probability", payload["regions"]["BE"])
 
     def test_build_exposes_neutral_ranking_signal_aliases(self) -> None:
-        payload = _stub_peix_service().build("Influenza A")
+        payload = _stub_ranking_signal_service().build("Influenza A")
 
         self.assertEqual(payload["ranking_signal_score"], payload["national_score"])
         self.assertEqual(payload["signal_band"], payload["national_band"])
@@ -331,7 +331,7 @@ class PeixScoreServiceTests(unittest.TestCase):
         )
 
     def test_build_uses_neutral_ranking_signal_contract_source(self) -> None:
-        payload = _stub_peix_service().build("Influenza A")
+        payload = _stub_ranking_signal_service().build("Influenza A")
 
         self.assertEqual(
             payload["field_contracts"]["national_score"]["source"],
@@ -350,16 +350,12 @@ class PeixScoreServiceTests(unittest.TestCase):
             "RankingSignal",
         )
 
-    def test_ranking_signal_service_is_legacy_compatible_alias(self) -> None:
-        self.assertTrue(issubclass(RankingSignalService, PeixEpiScoreService))
-        self.assertEqual(DEFAULT_RANKING_SIGNAL_CONFIG, PeixEpiScoreService.PEIX_CONFIG)
-
-    def test_legacy_peix_service_symbol_is_alias_of_ranking_signal_service(self) -> None:
-        self.assertIs(PeixEpiScoreService, RankingSignalService)
+    def test_ranking_signal_service_keeps_legacy_config_alias(self) -> None:
+        self.assertEqual(DEFAULT_RANKING_SIGNAL_CONFIG, RankingSignalService.PEIX_CONFIG)
 
     def test_build_uses_honest_weight_source_labels_for_policy_weights(self) -> None:
-        default_payload = _stub_peix_service().build("Influenza A")
-        translated_payload = _stub_peix_service(weights={
+        default_payload = _stub_ranking_signal_service().build("Influenza A")
+        translated_payload = _stub_ranking_signal_service(weights={
             "bio": 0.40,
             "forecast": 0.20,
             "weather": 0.10,

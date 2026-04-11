@@ -149,12 +149,12 @@ def decision_facts(
                 "source": "Outcome-Coverage",
             }
         )
-    if opportunity_assessment and opportunity_assessment.get("expected_value_index") is not None:
+    if opportunity_assessment and opportunity_assessment.get("decision_priority_index") is not None:
         facts.append(
             {
-                "key": "expected_value_index",
-                "label": "Opportunity-Index",
-                "value": float(opportunity_assessment.get("expected_value_index") or 0.0),
+                "key": "decision_priority_index",
+                "label": "Decision-Priority-Index",
+                "value": float(opportunity_assessment.get("decision_priority_index") or 0.0),
                 "source": "Forecast-first Ranking",
             }
         )
@@ -279,7 +279,7 @@ def build_decision_brief(
             ),
             "forecast_readiness": (forecast_assessment or {}).get("forecast_quality", {}).get("forecast_readiness"),
             "truth_readiness": (opportunity_assessment or {}).get("truth_readiness"),
-            "expected_value_index": (opportunity_assessment or {}).get("expected_value_index"),
+            "decision_priority_index": (opportunity_assessment or {}).get("decision_priority_index"),
             "rationale": rationale,
             "field_contracts": {
                 "signal_score": ranking_signal_contract(source=ranking_signal_source),

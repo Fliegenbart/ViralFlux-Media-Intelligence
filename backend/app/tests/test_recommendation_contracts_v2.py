@@ -92,6 +92,32 @@ class RecommendationContractsV2Tests(unittest.TestCase):
         self.assertTrue(enriched["is_publishable"])
         self.assertEqual(enriched["evidence_strength"], "hoch")
 
+    def test_enrich_card_uses_event_signal_score_when_no_calibrated_probability_exists(self) -> None:
+        enriched = enrich_card_v2(
+            _sample_card(
+                status="APPROVED",
+                peix_context={},
+                campaign_payload={
+                    "forecast_assessment": {
+                        "event_forecast": {"event_signal_score": 0.66},
+                        "forecast_quality": {"forecast_readiness": "GO"},
+                    },
+                    "message_framework": {
+                        "hero_message": "Norddeutschland jetzt vorbereiten.",
+                    },
+                    "channel_plan": [
+                        {"channel": "search", "share_pct": 40.0},
+                    ],
+                    "guardrail_report": {
+                        "passed": True,
+                    },
+                },
+            ),
+            now=datetime(2026, 3, 6, 12, 0, 0),
+        )
+
+        self.assertEqual(enriched["evidence_strength"], "hoch")
+
     def test_placeholder_title_adds_product_release_blocker(self) -> None:
         card = _sample_card(
             display_title="Produktfreigabe ausstehend: Resource Scarcity",

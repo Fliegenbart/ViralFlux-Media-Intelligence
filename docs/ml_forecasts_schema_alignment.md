@@ -67,7 +67,7 @@ Wichtig:
 Folgende Services lesen nationale `MLForecast`-Daten jetzt explizit mit `DE/h7`:
 
 - [forecast_decision_service.py](../backend/app/services/ml/forecast_decision_service.py)
-- [peix_score_service.py](../backend/app/services/media/peix_score_service.py)
+- [ranking_signal_service.py](../backend/app/services/media/ranking_signal_service.py)
 
 Damit werden regionale Forecasts oder alternative Horizonte nicht versehentlich in nationale Monitoring- oder PEIX-Signale gemischt.
 

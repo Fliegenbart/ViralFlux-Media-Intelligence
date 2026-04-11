@@ -73,6 +73,32 @@ export interface PilotReadoutPayload {
 const DEFAULT_FETCH_TIMEOUT_MS = 20000;
 const HEAVY_FETCH_TIMEOUT_MS = 45000;
 
+function normalizeOptionalBrand(brand?: string): string | null {
+  const normalized = String(brand || '').trim();
+  return normalized ? normalized : null;
+}
+
+function withOptionalBrandQuery(
+  params: Record<string, string>,
+  brand?: string,
+): URLSearchParams {
+  const qs = new URLSearchParams(params);
+  const normalizedBrand = normalizeOptionalBrand(brand);
+  if (normalizedBrand) {
+    qs.set('brand', normalizedBrand);
+  }
+  return qs;
+}
+
+function withoutEmptyBrand<T extends { brand?: string }>(payload: T): Omit<T, 'brand'> & Partial<Pick<T, 'brand'>> {
+  const normalizedBrand = normalizeOptionalBrand(payload.brand);
+  if (normalizedBrand) {
+    return { ...payload, brand: normalizedBrand };
+  }
+  const { brand: _brand, ...rest } = payload;
+  return rest;
+}
+
 function mapVirusToWaveRadarDisease(virus: string): string {
   const normalized = String(virus || '').trim().toLowerCase();
 
@@ -136,18 +162,18 @@ export function sortRecommendations(cards: RecommendationCard[]): Recommendation
 }
 
 export const mediaApi = {
-  async getDecision(virus: string, brand: string): Promise<MediaDecisionResponse> {
-    const qs = new URLSearchParams({ virus_typ: virus, brand });
+  async getDecision(virus: string, brand?: string): Promise<MediaDecisionResponse> {
+    const qs = withOptionalBrandQuery({ virus_typ: virus }, brand);
     return fetchJson<MediaDecisionResponse>(`/api/v1/media/decision?${qs.toString()}`, undefined, DEFAULT_FETCH_TIMEOUT_MS);
   },
 
-  async getRegions(virus: string, brand: string): Promise<MediaRegionsResponse> {
-    const qs = new URLSearchParams({ virus_typ: virus, brand });
+  async getRegions(virus: string, brand?: string): Promise<MediaRegionsResponse> {
+    const qs = withOptionalBrandQuery({ virus_typ: virus }, brand);
     return fetchJson<MediaRegionsResponse>(`/api/v1/media/regions?${qs.toString()}`);
   },
 
-  async getCampaigns(brand: string): Promise<MediaCampaignsResponse> {
-    const qs = new URLSearchParams({ brand, limit: '120' });
+  async getCampaigns(brand?: string): Promise<MediaCampaignsResponse> {
+    const qs = withOptionalBrandQuery({ limit: '120' }, brand);
     const data = await fetchJson<MediaCampaignsResponse>(
       `/api/v1/media/campaigns?${qs.toString()}`,
       undefined,
@@ -159,8 +185,8 @@ export const mediaApi = {
     };
   },
 
-  async getEvidence(virus: string, brand: string): Promise<MediaEvidenceResponse> {
-    const qs = new URLSearchParams({ virus_typ: virus, brand });
+  async getEvidence(virus: string, brand?: string): Promise<MediaEvidenceResponse> {
+    const qs = withOptionalBrandQuery({ virus_typ: virus }, brand);
     return fetchJson<MediaEvidenceResponse>(`/api/v1/media/evidence?${qs.toString()}`, undefined, DEFAULT_FETCH_TIMEOUT_MS);
   },
 
@@ -303,7 +329,7 @@ export const mediaApi = {
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(withoutEmptyBrand(payload)),
       },
       30000,
     );
@@ -315,7 +341,7 @@ export const mediaApi = {
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(withoutEmptyBrand(payload)),
       },
       30000,
     );

@@ -18,6 +18,10 @@ branch_labels = None
 depends_on = None
 
 
+def _is_sqlite() -> bool:
+    return op.get_bind().dialect.name == "sqlite"
+
+
 def upgrade() -> None:
     op.add_column(
         "media_outcome_import_batches",
@@ -54,24 +58,38 @@ def upgrade() -> None:
         ["ingestion_mode"],
         unique=False,
     )
-    op.create_unique_constraint(
-        "uq_media_outcome_batch_external",
-        "media_outcome_import_batches",
-        ["source_system", "external_batch_id"],
-    )
-    op.alter_column(
-        "media_outcome_import_batches",
-        "ingestion_mode",
-        server_default=None,
-    )
+    if _is_sqlite():
+        op.create_index(
+            "uq_media_outcome_batch_external",
+            "media_outcome_import_batches",
+            ["source_system", "external_batch_id"],
+            unique=True,
+        )
+    else:
+        op.create_unique_constraint(
+            "uq_media_outcome_batch_external",
+            "media_outcome_import_batches",
+            ["source_system", "external_batch_id"],
+        )
+        op.alter_column(
+            "media_outcome_import_batches",
+            "ingestion_mode",
+            server_default=None,
+        )
 
 
 def downgrade() -> None:
-    op.drop_constraint(
-        "uq_media_outcome_batch_external",
-        "media_outcome_import_batches",
-        type_="unique",
-    )
+    if _is_sqlite():
+        op.drop_index(
+            "uq_media_outcome_batch_external",
+            table_name="media_outcome_import_batches",
+        )
+    else:
+        op.drop_constraint(
+            "uq_media_outcome_batch_external",
+            "media_outcome_import_batches",
+            type_="unique",
+        )
     op.drop_index(
         "ix_media_outcome_import_batches_ingestion_mode",
         table_name="media_outcome_import_batches",

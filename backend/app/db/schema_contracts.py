@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 
 ML_FORECAST_REGION_SCOPE_MIGRATION = "f1a2b3c4d5e6"
+OUTBREAK_SCORE_SIGNAL_SEMANTICS_MIGRATION = "c8d1e2f3a4b5"
 
 _REQUIRED_SCHEMA_CONTRACTS: dict[str, dict[str, Any]] = {
     "ml_forecasts": {
@@ -18,6 +19,19 @@ _REQUIRED_SCHEMA_CONTRACTS: dict[str, dict[str, Any]] = {
             "ix_ml_forecasts_horizon_days",
             "idx_forecast_scope_date",
             "idx_forecast_scope_created",
+        ),
+    },
+    "outbreak_scores": {
+        "migration_revision": OUTBREAK_SCORE_SIGNAL_SEMANTICS_MIGRATION,
+        "columns": (
+            "decision_signal_index",
+            "signal_level",
+            "signal_source",
+            "reliability_label",
+            "reliability_score",
+        ),
+        "indexes": (
+            "idx_outbreak_date_virus",
         ),
     },
 }
@@ -34,6 +48,10 @@ class SchemaContractMismatchError(RuntimeError):
 
 class MLForecastSchemaMismatchError(SchemaContractMismatchError):
     """Raised when ml_forecasts misses region/horizon scope fields or indexes."""
+
+
+class OutbreakScoreSchemaMismatchError(SchemaContractMismatchError):
+    """Raised when outbreak_scores still uses legacy risk/confidence columns."""
 
 
 def _resolve_bind(bind: Session | Engine | Connection) -> Engine | Connection:
@@ -124,3 +142,38 @@ def ensure_ml_forecast_schema_aligned(
         parts.append("Missing indexes: " + ", ".join(gaps["missing_indexes"]))
 
     raise MLForecastSchemaMismatchError(" ".join(parts))
+
+
+def ensure_outbreak_score_schema_aligned(
+    bind: Session | Engine | Connection,
+) -> None:
+    gaps = get_required_schema_contract_gaps(bind)
+    outbreak_gaps = {
+        "missing_tables": [
+            item for item in gaps["missing_tables"] if item == "outbreak_scores"
+        ],
+        "missing_columns": [
+            item for item in gaps["missing_columns"] if item.startswith("outbreak_scores.")
+        ],
+        "missing_indexes": [
+            item for item in gaps["missing_indexes"] if item.startswith("outbreak_scores.")
+        ],
+    }
+    if not any(outbreak_gaps.values()):
+        return
+
+    parts: list[str] = [
+        "OutbreakScore schema mismatch detected.",
+        (
+            f"Apply Alembic migration {OUTBREAK_SCORE_SIGNAL_SEMANTICS_MIGRATION} "
+            "or upgrade the database to head."
+        ),
+    ]
+    if outbreak_gaps["missing_tables"]:
+        parts.append("Missing tables: " + ", ".join(outbreak_gaps["missing_tables"]))
+    if outbreak_gaps["missing_columns"]:
+        parts.append("Missing columns: " + ", ".join(outbreak_gaps["missing_columns"]))
+    if outbreak_gaps["missing_indexes"]:
+        parts.append("Missing indexes: " + ", ".join(outbreak_gaps["missing_indexes"]))
+
+    raise OutbreakScoreSchemaMismatchError(" ".join(parts))

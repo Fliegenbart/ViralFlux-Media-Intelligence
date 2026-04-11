@@ -49,7 +49,6 @@ from app.models.database import (
 )
 from app.services.ml.forecast_contracts import (
     BACKTEST_RELIABILITY_PROXY_SOURCE,
-    CONFIDENCE_SEMANTICS_ALIAS,
     DEFAULT_DECISION_EVENT_THRESHOLD_PCT,
     DEFAULT_DECISION_HORIZON_DAYS,
     BurdenForecast,
@@ -315,7 +314,6 @@ class ForecastService:
     def __init__(self, db: Session) -> None:
         self.db = db
         self.forecast_days: int = settings.FORECAST_DAYS
-        self.confidence_level: float = settings.CONFIDENCE_LEVEL
 
     # ═══════════════════════════════════════════════════════════════════
     #  DATA PREPARATION
@@ -865,7 +863,6 @@ class ForecastService:
             interval_coverage=interval_coverage,
             promotion_gate=promotion_gate,
             reliability_score_from_metrics_fn=reliability_score_from_metrics,
-            confidence_semantics_alias=CONFIDENCE_SEMANTICS_ALIAS,
             backtest_reliability_proxy_source=BACKTEST_RELIABILITY_PROXY_SOURCE,
         )
 
@@ -914,7 +911,6 @@ class ForecastService:
             forecast_quality_cls=ForecastQuality,
             confidence_label_fn=confidence_label,
             backtest_reliability_proxy_source=BACKTEST_RELIABILITY_PROXY_SOURCE,
-            confidence_semantics_alias=CONFIDENCE_SEMANTICS_ALIAS,
             default_decision_event_threshold_pct=DEFAULT_DECISION_EVENT_THRESHOLD_PCT,
             utc_now_fn=utc_now,
             np_module=np,

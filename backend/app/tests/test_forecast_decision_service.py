@@ -17,7 +17,6 @@ from app.models.database import (
 from app.services.marketing_engine.opportunity_engine import MarketingOpportunityEngine
 from app.services.ml.forecast_contracts import (
     BACKTEST_RELIABILITY_PROXY_SOURCE,
-    CONFIDENCE_SEMANTICS_ALIAS,
     HEURISTIC_EVENT_SCORE_SOURCE,
 )
 from app.services.ml.forecast_decision_service import ForecastDecisionService
@@ -148,11 +147,20 @@ class ForecastDecisionServiceTests(unittest.TestCase):
         )
 
         self.assertEqual(bundle["forecast_quality"]["forecast_readiness"], "GO")
-        self.assertIsNone(bundle["event_forecast"]["event_probability"])
-        self.assertIsNotNone(bundle["event_forecast"]["heuristic_event_score"])
-        self.assertEqual(bundle["event_forecast"]["probability_source"], HEURISTIC_EVENT_SCORE_SOURCE)
-        self.assertIsNone(bundle["event_forecast"]["calibration_passed"])
-        self.assertGreater(bundle["compatibility"]["final_risk_score"], 0.0)
+        event = bundle["event_forecast"]
+        self.assertIsNone(event["event_probability"])
+        self.assertIsNotNone(event["heuristic_event_score"])
+        self.assertEqual(event["event_signal_score"], event["heuristic_event_score"])
+        self.assertEqual(event["signal_source"], HEURISTIC_EVENT_SCORE_SOURCE)
+        self.assertIsNone(event["probability_source"])
+        self.assertIsNone(event["calibration_passed"])
+        self.assertNotIn("confidence", event)
+        self.assertNotIn("confidence_label", event)
+        self.assertNotIn("confidence_semantics", event)
+        self.assertIsNotNone(event["reliability_score"])
+        self.assertIsNotNone(event["reliability_label"])
+        self.assertGreater(bundle["decision_summary"]["decision_signal_index"], 0.0)
+        self.assertNotIn("compatibility", bundle)
         self.assertEqual(len(bundle["burden_forecast"]["points"]), 14)
 
     def test_build_forecast_bundle_prefers_stored_learned_event_probability(self) -> None:
@@ -181,13 +189,17 @@ class ForecastDecisionServiceTests(unittest.TestCase):
             target_source="RKI_ARE",
         )
 
-        self.assertEqual(bundle["event_forecast"]["event_probability"], 0.64)
-        self.assertEqual(bundle["event_forecast"]["heuristic_event_score"], 0.58)
+        event = bundle["event_forecast"]
+        self.assertEqual(event["event_probability"], 0.64)
+        self.assertEqual(event["event_signal_score"], 0.64)
+        self.assertEqual(event["heuristic_event_score"], 0.58)
+        self.assertEqual(event["signal_source"], "learned_exceedance_logistic_regression")
         self.assertEqual(
-            bundle["event_forecast"]["probability_source"],
+            event["probability_source"],
             "learned_exceedance_logistic_regression",
         )
-        self.assertTrue(bundle["event_forecast"]["calibration_passed"])
+        self.assertTrue(event["calibration_passed"])
+        self.assertNotIn("confidence", event)
 
     def test_save_load_bundle_round_trip_preserves_event_semantics_fields(self) -> None:
         now = utc_now().replace(microsecond=0)
@@ -229,7 +241,6 @@ class ForecastDecisionServiceTests(unittest.TestCase):
                         "calibration_mode": "platt",
                         "uncertainty_source": "backtest_interval_coverage",
                         "fallback_reason": None,
-                        "confidence_semantics": CONFIDENCE_SEMANTICS_ALIAS,
                         "learned_model_version": "xgb_stack_direct_h7_inline",
                         "fallback_used": False,
                     },
@@ -251,9 +262,7 @@ class ForecastDecisionServiceTests(unittest.TestCase):
         self.assertTrue(stored_rows)
         self.assertEqual(stored_rows[0].confidence, 0.77)
         stored_event = (stored_rows[0].features_used or {}).get("event_forecast") or {}
-        self.assertEqual(stored_event.get("confidence"), 0.77)
         self.assertEqual(stored_event.get("reliability_score"), 0.77)
-        self.assertEqual(stored_event.get("confidence_semantics"), CONFIDENCE_SEMANTICS_ALIAS)
         self.assertEqual(stored_event.get("uncertainty_source"), BACKTEST_RELIABILITY_PROXY_SOURCE)
 
         bundle = ForecastDecisionService(self.db).build_forecast_bundle(
@@ -263,14 +272,17 @@ class ForecastDecisionServiceTests(unittest.TestCase):
 
         event = bundle["event_forecast"]
         self.assertEqual(event["event_probability"], 0.67)
-        self.assertEqual(event["confidence"], 0.77)
+        self.assertEqual(event["event_signal_score"], 0.67)
         self.assertEqual(event["reliability_score"], 0.77)
+        self.assertEqual(event["reliability_label"], "Hoch")
         self.assertEqual(event["backtest_quality_score"], 0.83)
         self.assertEqual(event["probability_source"], "learned_exceedance_logistic_regression")
+        self.assertEqual(event["signal_source"], "learned_exceedance_logistic_regression")
         self.assertEqual(event["calibration_mode"], "platt")
         self.assertEqual(event["uncertainty_source"], BACKTEST_RELIABILITY_PROXY_SOURCE)
         self.assertIsNone(event["fallback_reason"])
-        self.assertEqual(event["confidence_semantics"], CONFIDENCE_SEMANTICS_ALIAS)
+        self.assertNotIn("confidence", event)
+        self.assertNotIn("confidence_semantics", event)
 
     def test_build_monitoring_snapshot_carries_semantics_fields(self) -> None:
         self._seed_forecast_bundle_inputs()
@@ -291,7 +303,6 @@ class ForecastDecisionServiceTests(unittest.TestCase):
                 "probability_source": "learned_exceedance_logistic_regression",
                 "calibration_mode": "isotonic",
                 "uncertainty_source": "backtest_interval_coverage",
-                "confidence_semantics": CONFIDENCE_SEMANTICS_ALIAS,
                 "fallback_used": False,
             }
         }
@@ -303,11 +314,12 @@ class ForecastDecisionServiceTests(unittest.TestCase):
         )
 
         event = snapshot["event_forecast"]
-        self.assertEqual(event["confidence"], 0.71)
+        self.assertEqual(event["event_signal_score"], 0.64)
         self.assertEqual(event["reliability_score"], 0.71)
+        self.assertEqual(event["reliability_label"], "Hoch")
         self.assertEqual(event["backtest_quality_score"], 0.79)
-        self.assertEqual(event["confidence_semantics"], CONFIDENCE_SEMANTICS_ALIAS)
         self.assertEqual(event["uncertainty_source"], BACKTEST_RELIABILITY_PROXY_SOURCE)
+        self.assertNotIn("confidence", event)
 
     def test_build_monitoring_snapshot_returns_healthy_state_for_green_stack(self) -> None:
         self._seed_forecast_bundle_inputs()
@@ -334,6 +346,35 @@ class ForecastDecisionServiceTests(unittest.TestCase):
         self.assertEqual(snapshot["monitoring_status"], "warning")
         self.assertEqual(snapshot["drift_status"], "warning")
         self.assertTrue(any("Drift" in alert for alert in snapshot["alerts"]))
+
+    def test_build_legacy_outbreak_score_exposes_honest_signal_fields(self) -> None:
+        self._seed_forecast_bundle_inputs()
+
+        result = ForecastDecisionService(self.db).build_legacy_outbreak_score(
+            virus_typ="Influenza A",
+            target_source="RKI_ARE",
+        )
+
+        self.assertIn("decision_signal_index", result)
+        self.assertIn("reliability_label", result)
+        self.assertNotIn("confidence_level", result)
+        self.assertNotIn("final_risk_score", result)
+        self.assertGreater(result["decision_signal_index"], 0.0)
+
+    def test_get_legacy_score_history_uses_signal_fields_without_score_alias(self) -> None:
+        self._seed_forecast_bundle_inputs()
+
+        history_payload = ForecastDecisionService(self.db).get_legacy_score_history(
+            virus_typ="Influenza A",
+            days=30,
+        )
+
+        self.assertTrue(history_payload["history"])
+        first = history_payload["history"][0]
+        self.assertIn("decision_signal_index", first)
+        self.assertIn("event_signal_score", first)
+        self.assertIn("signal_source", first)
+        self.assertNotIn("score", first)
 
     def test_latest_forecasts_are_scoped_to_national_default_horizon(self) -> None:
         now = utc_now().replace(microsecond=0)

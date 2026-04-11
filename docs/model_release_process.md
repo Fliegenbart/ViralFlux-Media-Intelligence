@@ -329,6 +329,6 @@ It does not:
 - auto-promote models
 - auto-publish recommendations to ad platforms
 - hide degraded quality or stale data conditions
-- treat legacy fallback as invisible
+- treat the rule-based fallback as invisible
 
 The goal is a transparent release process, not a black-box MLOps layer.

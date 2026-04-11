@@ -7,7 +7,6 @@ from sklearn.isotonic import IsotonicRegression
 
 from app.services.ml.forecast_contracts import (
     BACKTEST_RELIABILITY_PROXY_SOURCE,
-    CONFIDENCE_SEMANTICS_ALIAS,
     EventForecast,
     HEURISTIC_EVENT_SCORE_SOURCE,
 )
@@ -264,20 +263,67 @@ class LegacyForecastProbabilityStackTests(unittest.TestCase):
         self.assertIn("event_probability", event)
         self.assertIn("confidence", event)
         self.assertIn("reliability_score", event)
+        self.assertIn("reliability_label", event)
         self.assertIn("backtest_quality_score", event)
+        self.assertIn("event_signal_score", event)
+        self.assertIn("signal_source", event)
         self.assertIn("probability_source", event)
         self.assertIn("calibration_mode", event)
         self.assertIn("uncertainty_source", event)
-        self.assertIn("confidence_semantics", event)
         self.assertIn("fallback_reason", event)
         self.assertEqual(event["event_probability"], 0.63)
+        self.assertEqual(event["event_signal_score"], 0.63)
         self.assertEqual(event["confidence"], 0.74)
         self.assertEqual(event["reliability_score"], 0.74)
+        self.assertEqual(event["reliability_label"], "Hoch")
         self.assertEqual(event["backtest_quality_score"], 0.81)
+        self.assertEqual(event["signal_source"], "learned_exceedance_logistic_regression")
         self.assertEqual(event["probability_source"], "learned_exceedance_logistic_regression")
         self.assertEqual(event["calibration_mode"], "platt")
         self.assertEqual(event["uncertainty_source"], BACKTEST_RELIABILITY_PROXY_SOURCE)
-        self.assertEqual(event["confidence_semantics"], CONFIDENCE_SEMANTICS_ALIAS)
+        self.assertNotIn("confidence_semantics", event)
+
+    def test_build_contracts_uses_heuristic_signal_when_probability_is_missing(self) -> None:
+        service = ForecastService(db=None)
+
+        contracts = service._build_contracts(
+            virus_typ="Influenza A",
+            region="DE",
+            horizon_days=7,
+            forecast_records=[
+                {
+                    "ds": pd.Timestamp("2026-03-21"),
+                    "yhat": 130.0,
+                    "yhat_lower": 120.0,
+                    "yhat_upper": 140.0,
+                }
+            ],
+            model_version="xgb_stack_direct_h7_inline",
+            y_history=np.array([80.0, 90.0, 100.0, 110.0], dtype=float),
+            issue_date=pd.Timestamp("2026-03-14").to_pydatetime(),
+            quality_meta={
+                "event_probability": None,
+                "forecast_ready": False,
+                "drift_status": "warning",
+                "reliability_score": 0.52,
+                "backtest_quality_score": 0.48,
+                "probability_source": HEURISTIC_EVENT_SCORE_SOURCE,
+                "calibration_mode": "raw_probability",
+                "uncertainty_source": "backtest_interval_coverage",
+                "fallback_reason": "no_learned_model",
+                "fallback_used": True,
+                "learned_model_version": None,
+            },
+        )
+
+        event = contracts["event_forecast"]
+        self.assertIsNone(event["event_probability"])
+        self.assertIsNotNone(event["heuristic_event_score"])
+        self.assertEqual(event["event_signal_score"], event["heuristic_event_score"])
+        self.assertEqual(event["signal_source"], HEURISTIC_EVENT_SCORE_SOURCE)
+        self.assertIsNone(event["probability_source"])
+        self.assertEqual(event["reliability_label"], "Mittel")
+        self.assertNotIn("confidence_semantics", event)
 
     def test_event_forecast_contract_keeps_existing_fields_and_adds_heuristic_score(self) -> None:
         event = EventForecast(
@@ -296,9 +342,12 @@ class LegacyForecastProbabilityStackTests(unittest.TestCase):
         self.assertIn("event_probability", event)
         self.assertIn("heuristic_event_score", event)
         self.assertIn("probability_source", event)
+        self.assertIn("signal_source", event)
         self.assertIsNone(event["event_probability"])
         self.assertEqual(event["heuristic_event_score"], 0.68)
-        self.assertEqual(event["probability_source"], HEURISTIC_EVENT_SCORE_SOURCE)
+        self.assertIsNone(event["probability_source"])
+        self.assertEqual(event["event_signal_score"], 0.68)
+        self.assertEqual(event["signal_source"], HEURISTIC_EVENT_SCORE_SOURCE)
         self.assertTrue(event["fallback_used"])
 
     def test_event_forecast_contract_uses_confidence_as_reliability_alias(self) -> None:
@@ -315,9 +364,11 @@ class LegacyForecastProbabilityStackTests(unittest.TestCase):
             uncertainty_source="backtest_interval_coverage",
         ).to_dict()
 
+        self.assertEqual(event["event_signal_score"], 0.61)
         self.assertEqual(event["confidence"], 0.73)
         self.assertEqual(event["reliability_score"], 0.73)
-        self.assertEqual(event["confidence_semantics"], CONFIDENCE_SEMANTICS_ALIAS)
+        self.assertEqual(event["reliability_label"], "Hoch")
+        self.assertNotIn("confidence_semantics", event)
         self.assertEqual(event["uncertainty_source"], BACKTEST_RELIABILITY_PROXY_SOURCE)
 
 

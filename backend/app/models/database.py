@@ -428,17 +428,17 @@ class InventoryLevel(Base):
 
 
 class OutbreakScore(Base):
-    """Ganz Immun Outbreak Risk Score — Fusion Engine Ergebnis."""
+    """Persisted outbreak signal snapshot with honest signal semantics."""
     __tablename__ = "outbreak_scores"
 
     id = Column(Integer, primary_key=True, index=True)
     datum = Column(DateTime, nullable=False, index=True)
     virus_typ = Column(String, nullable=False)
-    final_risk_score = Column(Float, nullable=False)
-    risk_level = Column(String)          # GREEN, YELLOW, RED
-    leading_indicator = Column(String)
-    confidence_level = Column(String)    # Sehr Hoch, Hoch, Mittel, Niedrig
-    confidence_numeric = Column(Float)
+    decision_signal_index = Column(Float, nullable=False)
+    signal_level = Column(String)
+    signal_source = Column(String)
+    reliability_label = Column(String)
+    reliability_score = Column(Float)
     component_scores = Column(JSON)      # Aufschlüsselung aller Signale
     data_source_mode = Column(String)    # FULL, ESTIMATED_FROM_ORDERS
     phase = Column(String)               # A (heuristisch) oder B (KI-gesteuert)

@@ -25,7 +25,7 @@ const MediaWorkflowContext = createContext<MediaWorkflowContextValue | null>(nul
 
 export const MediaWorkflowProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [virus, setVirus] = useState('Influenza A');
-  const [brand, setBrand] = useState('gelo');
+  const [brand, setBrand] = useState('');
   const [weeklyBudget, setWeeklyBudget] = useState(120000);
   const [campaignGoal, setCampaignGoal] = useState<string>(UI_COPY.defaultCampaignGoal);
   const [dataVersion, setDataVersion] = useState(0);

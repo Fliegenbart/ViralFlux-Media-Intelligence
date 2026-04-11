@@ -181,6 +181,44 @@ class AiCampaignPlannerNormalizationTests(unittest.TestCase):
         self.assertTrue(result["ai_meta"]["fallback_used"])
         self.assertIn("ai_plan", result)
 
+    def test_build_prompt_uses_event_probability_when_calibrated_probability_exists(self) -> None:
+        prompt = self.planner._build_prompt(
+            playbook_candidate={
+                **self.candidate,
+                "forecast_assessment": {
+                    "event_forecast": {"event_probability": 0.42},
+                    "forecast_quality": {"forecast_readiness": "GO"},
+                },
+                "opportunity_assessment": {"decision_priority_index": 58.0},
+            },
+            brand="Brand",
+            product="Product",
+            campaign_goal="Awareness",
+            weekly_budget=1000.0,
+        )
+
+        self.assertIn("Event-Wahrscheinlichkeit 7T: 42.0%", prompt)
+        self.assertNotIn("Event-Signal-Score 7T (heuristisch)", prompt)
+
+    def test_build_prompt_uses_heuristic_signal_label_when_probability_is_missing(self) -> None:
+        prompt = self.planner._build_prompt(
+            playbook_candidate={
+                **self.candidate,
+                "forecast_assessment": {
+                    "event_forecast": {"event_signal_score": 0.42},
+                    "forecast_quality": {"forecast_readiness": "WATCH"},
+                },
+                "opportunity_assessment": {"decision_priority_index": 34.0},
+            },
+            brand="Brand",
+            product="Product",
+            campaign_goal="Awareness",
+            weekly_budget=1000.0,
+        )
+
+        self.assertIn("Event-Signal-Score 7T (heuristisch): 42.0/100", prompt)
+        self.assertNotIn("Event-Wahrscheinlichkeit 7T: 0.0%", prompt)
+
 
 if __name__ == "__main__":
     unittest.main()

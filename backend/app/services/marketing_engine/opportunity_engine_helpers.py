@@ -153,7 +153,7 @@ def fact_label(key: str) -> str:
         "peix_score": "Ranking-Signal",
         "ranking_signal_score": "Ranking-Signal",
         "event_probability_pct": "Event-Wahrscheinlichkeit",
-        "expected_value_index": "Opportunity-Index",
+        "decision_priority_index": "Decision-Priority-Index",
         "forecast_readiness": "Forecast-Readiness",
         "truth_readiness": "Truth-Readiness",
         "avg_recent_incidence": "aktuelle Durchschnitts-Inzidenz",

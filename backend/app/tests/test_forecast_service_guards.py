@@ -6,7 +6,6 @@ import pandas as pd
 
 from app.services.ml.forecast_service import (
     BACKTEST_RELIABILITY_PROXY_SOURCE,
-    CONFIDENCE_SEMANTICS_ALIAS,
     DEFAULT_DECISION_EVENT_THRESHOLD_PCT,
     BurdenForecast,
     BurdenForecastPoint,
@@ -27,6 +26,11 @@ from app.services.ml.forecast_service import (
 
 
 class ForecastServiceGuardTests(unittest.TestCase):
+    def test_forecast_service_does_not_keep_dead_confidence_level_state(self) -> None:
+        service = ForecastService(db=None)
+
+        self.assertFalse(hasattr(service, "confidence_level"))
+
     @patch("app.services.ml.forecast_service_model_cache.load_cached_models")
     def test_load_cached_models_wrapper_delegates_to_module(self, delegated) -> None:
         delegated.return_value = ("med", "lo", "hi", {"version": "v1"}, None)
@@ -562,7 +566,6 @@ class ForecastServiceGuardTests(unittest.TestCase):
             interval_coverage={"p50": 0.7},
             promotion_gate={"status": "go"},
             reliability_score_from_metrics_fn=reliability_score_from_metrics,
-            confidence_semantics_alias=CONFIDENCE_SEMANTICS_ALIAS,
             backtest_reliability_proxy_source=BACKTEST_RELIABILITY_PROXY_SOURCE,
         )
 
@@ -615,7 +618,6 @@ class ForecastServiceGuardTests(unittest.TestCase):
             forecast_quality_cls=ForecastQuality,
             confidence_label_fn=confidence_label,
             backtest_reliability_proxy_source=BACKTEST_RELIABILITY_PROXY_SOURCE,
-            confidence_semantics_alias=CONFIDENCE_SEMANTICS_ALIAS,
             default_decision_event_threshold_pct=DEFAULT_DECISION_EVENT_THRESHOLD_PCT,
             utc_now_fn=utc_now,
             np_module=ANY,

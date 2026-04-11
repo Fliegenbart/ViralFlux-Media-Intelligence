@@ -117,7 +117,17 @@ def _forecast_first_candidates(
     region_codes = [item for item in normalized_scope if item] or ["Gesamt"]
     playbook_key = engine._select_forecast_playbook_key(virus_typ)
     playbook_cfg = PLAYBOOK_CATALOG.get(playbook_key) or {}
-    event_probability = float(event_forecast.get("event_probability") or 0.0)
+    event_probability = (
+        float(event_forecast["event_probability"])
+        if event_forecast.get("event_probability") is not None
+        else None
+    )
+    event_signal_score = float(
+        event_forecast.get("event_signal_score")
+        or event_forecast.get("heuristic_event_score")
+        or event_probability
+        or 0.0
+    )
     calibration_passed = bool(event_forecast.get("calibration_passed"))
     forecast_readiness = str(forecast_quality.get("forecast_readiness") or "WATCH")
     primary_threshold = event_forecast.get("threshold_value")
@@ -135,10 +145,10 @@ def _forecast_first_candidates(
             brand=brand,
             secondary_modifier=modifier,
         )
-        expected_value_index = float(opportunity_assessment.get("expected_value_index") or 0.0)
+        decision_priority_index = float(opportunity_assessment.get("decision_priority_index") or 0.0)
         action_class = str(opportunity_assessment.get("action_class") or "watch_only")
         if action_class == "customer_lift_ready":
-            budget_shift_pct = round(max(10.0, min(35.0, expected_value_index * 0.35)), 1)
+            budget_shift_pct = round(max(10.0, min(35.0, decision_priority_index * 0.35)), 1)
         else:
             budget_shift_pct = 0.0
 
@@ -147,12 +157,12 @@ def _forecast_first_candidates(
                 "playbook_key": playbook_key,
                 "region_code": region_code,
                 "region_name": engine._region_label(region_code) if region_code != "Gesamt" else "Deutschland",
-                "signal_score": round(event_probability * 100.0, 1),
-                "trigger_strength": round(event_probability * 100.0, 2),
-                "confidence": round(float(event_forecast.get("confidence") or event_probability) * 100.0, 2),
-                "signal_confidence_pct": normalize_confidence_pct(event_forecast.get("confidence")),
-                "priority_score": round(expected_value_index, 2),
-                "impact_probability": round(event_probability * 100.0, 1) if calibration_passed else None,
+                "signal_score": round(event_signal_score * 100.0, 1),
+                "trigger_strength": round(event_signal_score * 100.0, 2),
+                "confidence": round(float(event_forecast.get("reliability_score") or event_signal_score) * 100.0, 2),
+                "signal_confidence_pct": normalize_confidence_pct(event_forecast.get("reliability_score")),
+                "priority_score": round(decision_priority_index, 2),
+                "impact_probability": round(event_probability * 100.0, 1) if calibration_passed and event_probability is not None else None,
                 "budget_shift_pct": budget_shift_pct,
                 "channel_mix": playbook_cfg.get("default_mix") or {},
                 "shift_bounds": {
@@ -170,21 +180,34 @@ def _forecast_first_candidates(
                     "source": "ForecastDecisionService",
                     "event": f"{virus_typ} Forecast Event Window",
                     "details": (
-                        f"7-Tage Event-Forecast für {virus_typ}: "
-                        f"{round(event_probability * 100.0, 1)}% "
-                        f"bei Baseline {baseline_value} und Schwelle {primary_threshold}."
+                        (
+                            f"7-Tage Event-Wahrscheinlichkeit für {virus_typ}: "
+                            f"{round(event_probability * 100.0, 1)}% "
+                            f"bei Baseline {baseline_value} und Schwelle {primary_threshold}."
+                        )
+                        if event_probability is not None
+                        else (
+                            f"7-Tage Event-Signal-Score für {virus_typ}: "
+                            f"{round(event_signal_score * 100.0, 1)} "
+                            f"bei Baseline {baseline_value} und Schwelle {primary_threshold}."
+                        )
                     ),
                     "lead_time_days": (
                         (forecast_quality.get("timing_metrics") or {}).get("best_lag_days")
                         or DEFAULT_DECISION_HORIZON_DAYS
                     ),
-                    "confidence": float(event_forecast.get("confidence") or event_probability),
+                    "confidence": float(event_forecast.get("reliability_score") or event_signal_score),
                     "values": {
-                        "event_probability_pct": round(event_probability * 100.0, 1),
+                        "event_probability_pct": (
+                            round(event_probability * 100.0, 1)
+                            if event_probability is not None
+                            else None
+                        ),
+                        "event_signal_pct": round(event_signal_score * 100.0, 1),
                         "threshold_pct": event_forecast.get("threshold_pct"),
                         "baseline_value": baseline_value,
                         "threshold_value": primary_threshold,
-                        "expected_value_index": expected_value_index,
+                        "decision_priority_index": decision_priority_index,
                         "secondary_modifier": modifier,
                     },
                 },

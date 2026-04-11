@@ -408,15 +408,6 @@ class MediaV2Service:
     def _latest_import_batch(self, *, brand: str) -> MediaOutcomeImportBatch | None:
         return outcomes_module._latest_import_batch(self, brand=brand)
 
-    def _uses_legacy_outcome_batch_schema(self) -> bool:
-        return outcomes_module._uses_legacy_outcome_batch_schema(self)
-
-    def _legacy_import_batch_rows(self, *, brand: str, limit: int) -> list[SimpleNamespace]:
-        return outcomes_module._legacy_import_batch_rows(self, brand=brand, limit=limit)
-
-    def _legacy_import_batch_detail(self, *, batch_id: str) -> SimpleNamespace | None:
-        return outcomes_module._legacy_import_batch_detail(self, batch_id=batch_id)
-
     def _latest_epi_reference_week(self, *, virus_typ: str | None = None) -> datetime | None:
         return outcomes_module._latest_epi_reference_week(self, virus_typ=virus_typ)
 

@@ -170,6 +170,23 @@ class AdminMLApiTests(unittest.TestCase):
                 )
                 self.assertEqual(response.status_code, 422)
 
+    def test_status_endpoint_requires_admin_authentication(self) -> None:
+        app = FastAPI()
+        app.state.limiter = limiter
+        app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+        app.include_router(router, prefix="/api/v1/admin/ml")
+        client = TestClient(app)
+        try:
+            with patch(
+                "app.api.admin_ml.celery_app.AsyncResult",
+                return_value=SimpleNamespace(status="PENDING", info=None, result=None),
+            ):
+                response = client.get("/api/v1/admin/ml/status/task-123")
+        finally:
+            client.close()
+
+        self.assertEqual(response.status_code, 401)
+
 
 if __name__ == "__main__":
     unittest.main()

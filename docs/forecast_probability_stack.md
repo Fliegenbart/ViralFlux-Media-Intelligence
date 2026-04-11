@@ -10,16 +10,24 @@ Die `event_probability` wurde aus einer Heuristik nachgelagert über eine Sigmoi
 
 ### Jetzt
 
-Die `event_probability` kommt aus einem gelernten `Exceedance-Modell`, das auf dem horizon-spezifischen `event_target` trainiert wird und nur issue-date-saubere Out-of-Fold-Vorhersagen für Backtest und Kalibrierung nutzt.
+Der einfache beziehungsweise nationale Fallback-Pfad behauptet **keine** echte `event_probability` mehr, wenn dafuer kein gelerntes und kalibriertes Modell vorliegt.
+
+Stattdessen gilt:
+- `event_probability` nur fuer den gelernten und kalibrierten Pfad
+- `event_signal_score` fuer den heuristischen Fallback-Pfad
+
+Nur der kalibrierte Pfad kommt aus einem gelernten `Exceedance-Modell`, das auf dem horizon-spezifischen `event_target` trainiert wird und nur issue-date-saubere Out-of-Fold-Vorhersagen fuer Backtest und Kalibrierung nutzt.
 
 ### Kalibrierung
 
-Bevorzugt wird `isotonic`, bei kleineren Kalibrierungs-Samples `Platt/logistic`, sonst rohe Modellwahrscheinlichkeit als klar gekennzeichneter Fallback.
+Bevorzugt wird `isotonic`, bei kleineren Kalibrierungs-Samples `Platt/logistic`, sonst **kein Umetikettieren zur Wahrscheinlichkeit**, sondern ein klar gekennzeichneter Signal-Fallback.
 
 ### Feld-Semantik
 
-`confidence` ist nicht mehr als Fehler-Proxy gedacht.  
-Zusätzlich gibt es additive Metadaten wie `reliability_score`, `backtest_quality_score`, `probability_source`, `calibration_mode`, `uncertainty_source` und `fallback_reason`.
+`confidence` wird im bereinigten Entscheidungspfad nicht mehr als eigenstaendiger Prognosebegriff verkauft.  
+Stattdessen werden `reliability_score` und `reliability_label` als Signal- und Backtest-Metadaten ausgewiesen.
+
+Zusaetzlich gibt es additive Metadaten wie `backtest_quality_score`, `probability_source`, `signal_source`, `calibration_mode`, `uncertainty_source` und `fallback_reason`.
 
 ### Was bewusst getrennt bleibt
 

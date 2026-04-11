@@ -10,6 +10,13 @@ from app.models.database import Base, BrandProduct, MediaOutcomeImportBatch, Med
 from app.services.media.v2_service import MediaV2Service
 
 
+class MediaV2ServiceLegacyWrapperTests(unittest.TestCase):
+    def test_service_no_longer_exposes_unused_legacy_outcome_schema_wrappers(self) -> None:
+        self.assertFalse(hasattr(MediaV2Service, "_uses_legacy_outcome_batch_schema"))
+        self.assertFalse(hasattr(MediaV2Service, "_legacy_import_batch_rows"))
+        self.assertFalse(hasattr(MediaV2Service, "_legacy_import_batch_detail"))
+
+
 class MediaV2ServiceTruthCoverageTests(unittest.TestCase):
     def setUp(self) -> None:
         self.engine = create_engine("sqlite:///:memory:")

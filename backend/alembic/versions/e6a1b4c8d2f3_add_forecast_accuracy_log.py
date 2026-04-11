@@ -33,15 +33,20 @@ def upgrade() -> None:
         op.create_table(
             'forecast_accuracy_log',
             sa.Column('id', sa.Integer(), nullable=False),
-            sa.Column('computed_at', sa.DateTime(), nullable=False, server_default=sa.text('now()')),
+            sa.Column(
+                'computed_at',
+                sa.DateTime(),
+                nullable=False,
+                server_default=sa.text('CURRENT_TIMESTAMP'),
+            ),
             sa.Column('virus_typ', sa.String(), nullable=False),
-            sa.Column('window_days', sa.Integer(), nullable=False, server_default='14'),
+            sa.Column('window_days', sa.Integer(), nullable=False, server_default=sa.text('14')),
             sa.Column('samples', sa.Integer(), nullable=False),
             sa.Column('mae', sa.Float(), nullable=True),
             sa.Column('rmse', sa.Float(), nullable=True),
             sa.Column('mape', sa.Float(), nullable=True),
             sa.Column('correlation', sa.Float(), nullable=True),
-            sa.Column('drift_detected', sa.Boolean(), server_default='false'),
+            sa.Column('drift_detected', sa.Boolean(), server_default=sa.false()),
             sa.Column('details', sa.JSON(), nullable=True),
             sa.PrimaryKeyConstraint('id'),
         )

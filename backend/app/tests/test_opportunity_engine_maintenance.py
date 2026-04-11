@@ -179,6 +179,85 @@ class OpportunityEngineMaintenanceTests(unittest.TestCase):
         self.assertIn("GeloMyrtol forte", suggested_names)
         self.assertIn("GeloBronchial", suggested_names)
 
+    def test_generate_action_cards_labels_playbook_fallback_as_rule_based(self) -> None:
+        opportunity = {
+            "id": "opp-fallback-1",
+            "type": "RESOURCE_SCARCITY",
+            "status": "DRAFT",
+            "urgency_score": 72.0,
+            "trigger_context": {"event": "SUPPLY_SHOCK_WINDOW"},
+            "region_target": {"states": ["SH"]},
+            "sales_pitch": {"headline": "Signal erkannt"},
+            "suggested_products": [{"product_name": "GeloProsed"}],
+        }
+
+        with patch.object(
+            self.service,
+            "generate_opportunities",
+            return_value={"meta": {"source": "test"}, "opportunities": [opportunity]},
+        ), patch.object(
+            self.service,
+            "_generate_playbook_ai_cards",
+            return_value=[],
+        ), patch(
+            "app.services.marketing_engine.opportunity_engine_playbooks.RankingSignalService.build",
+            return_value={"regions": {}},
+        ), patch.object(
+            self.service,
+            "_derive_ranking_signal_context",
+            return_value={"region_code": "SH", "score": 72.0},
+        ), patch.object(
+            self.service.product_catalog_service,
+            "resolve_product_for_opportunity",
+            return_value={
+                "mapping_status": "approved",
+                "recommended_product": "GeloProsed",
+                "mapping_confidence": 0.91,
+            },
+        ), patch.object(
+            self.service,
+            "_build_channel_mix",
+            return_value={"search": 100.0},
+        ), patch.object(
+            self.service,
+            "_derive_activation_window",
+            return_value={
+                "start": "2026-04-11T00:00:00",
+                "end": "2026-04-18T00:00:00",
+            },
+        ), patch.object(
+            self.service,
+            "_build_campaign_pack",
+            return_value={},
+        ), patch.object(
+            self.service,
+            "_enrich_opportunity_for_media",
+            return_value=None,
+        ), patch.object(
+            self.service,
+            "_campaign_preview_from_payload",
+            return_value={"budget": {}},
+        ), patch.object(
+            self.service,
+            "_parse_iso_datetime",
+            return_value=None,
+        ):
+            result = self.service.generate_action_cards(
+                brand="gelo",
+                product="GeloProsed",
+                campaign_goal="Awareness",
+                weekly_budget=100000.0,
+                strategy_mode="PLAYBOOK_AI",
+                max_cards=4,
+                virus_typ="Influenza A",
+            )
+
+        self.assertEqual(result["meta"]["strategy_mode"], "RULE_BASED_FALLBACK")
+        self.assertEqual(result["cards"][0]["strategy_mode"], "RULE_BASED")
+
+    def test_service_no_longer_exposes_legacy_action_card_wrapper(self) -> None:
+        self.assertFalse(hasattr(MarketingOpportunityEngine, "_generate_legacy_action_cards"))
+
 
 if __name__ == "__main__":
     unittest.main()

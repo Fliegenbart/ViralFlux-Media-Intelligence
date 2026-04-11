@@ -342,9 +342,18 @@ def derive_evidence_strength(card: dict[str, Any]) -> str:
     forecast_assessment = (card.get("campaign_payload") or {}).get("forecast_assessment") or {}
     event_forecast = forecast_assessment.get("event_forecast") or {}
     quality = forecast_assessment.get("forecast_quality") or {}
-    event_strength = float(event_forecast.get("event_probability") or 0.0) * 100.0
+    forecast_signal_strength = (
+        float(event_forecast["event_probability"]) * 100.0
+        if event_forecast.get("event_probability") is not None
+        else float(
+            event_forecast.get("event_signal_score")
+            or event_forecast.get("heuristic_event_score")
+            or 0.0
+        )
+        * 100.0
+    )
     peix_score = float(
-        event_strength
+        forecast_signal_strength
         or (card.get("peix_context") or {}).get("score")
         or (card.get("peix_context") or {}).get("impact_probability")
         or 0.0

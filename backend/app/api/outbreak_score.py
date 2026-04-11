@@ -12,6 +12,7 @@ import logging
 
 from app.api.deps import get_current_admin, get_current_user
 from app.db.session import get_db
+from app.services.media.ranking_signal_service import RankingSignalService
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -128,9 +129,7 @@ async def get_peix_score(
     db: Session = Depends(get_db),
 ):
     """Öffentliche Kurzfassung des PeixEpiScore für die Landing-Page."""
-    from app.services.media.peix_score_service import PeixEpiScoreService
-
-    service = PeixEpiScoreService(db)
+    service = RankingSignalService(db)
     return _to_public_peix_payload(service.build(virus_typ=virus_typ))
 
 
@@ -140,18 +139,14 @@ async def get_peix_score_full(
     db: Session = Depends(get_db),
 ):
     """Vollständiger PeixEpiScore für authentifizierte Innenansichten."""
-    from app.services.media.peix_score_service import PeixEpiScoreService
-
-    service = PeixEpiScoreService(db)
+    service = RankingSignalService(db)
     return service.build(virus_typ=virus_typ)
 
 
 @router.get("/all", dependencies=[Depends(get_current_user)])
 async def get_all_outbreak_scores(db: Session = Depends(get_db)):
     """Outbreak Scores für alle Virus-Typen (delegiert an PeixEpiScore)."""
-    from app.services.media.peix_score_service import PeixEpiScoreService
-
-    service = PeixEpiScoreService(db)
+    service = RankingSignalService(db)
     peix = service.build()
 
     # Backward-kompatible Response-Struktur

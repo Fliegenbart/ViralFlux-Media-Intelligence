@@ -164,7 +164,7 @@ Use this minimal sign-off block in the release note:
 - broker reachable: yes/no
 - health ready: yes/no
 - horizons available: 3/5/7 yes/no
-- legacy fallback active: yes/no
+- rule-based fallback active: yes/no
 - smoke test passed: yes/no
 - release approved by engineering: yes/no
 - release approved by product/ops: yes/no

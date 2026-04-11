@@ -77,4 +77,49 @@ describe('mediaApi authentication', () => {
 
     expect(setTimeoutMock).toHaveBeenCalledWith(expect.any(Function), 45000);
   });
+
+  it('omits empty brand query params for neutral frontend defaults', async () => {
+    fetchMock
+      .mockResolvedValueOnce(mockJsonResponse({ authenticated: true }))
+      .mockResolvedValueOnce(mockJsonResponse({ generated_at: '2026-04-11T10:00:00Z' }))
+      .mockResolvedValueOnce(mockJsonResponse({ cards: [] }));
+
+    await login('test@example.com', 'secret', true);
+    await mediaApi.getDecision('Influenza A', '');
+    await mediaApi.getCampaigns('');
+
+    expect(String(fetchMock.mock.calls.at(-2)?.[0])).toBe('/api/v1/media/decision?virus_typ=Influenza+A');
+    expect(String(fetchMock.mock.calls.at(-1)?.[0])).toBe('/api/v1/media/campaigns?limit=120');
+  });
+
+  it('omits an empty brand from recommendation generation payloads', async () => {
+    fetchMock
+      .mockResolvedValueOnce(mockJsonResponse({ ok: true }))
+      .mockResolvedValueOnce(mockJsonResponse({ cards: [] }));
+
+    await login('test@example.com', 'secret', true);
+    await mediaApi.generateRecommendations({
+      brand: '',
+      product: 'Alle Produkte',
+      campaign_goal: 'Awareness',
+      weekly_budget: 1000,
+      channel_pool: ['search'],
+      strategy_mode: 'PLAYBOOK_AI',
+      max_cards: 3,
+      virus_typ: 'Influenza A',
+    });
+
+    const [, requestInit] = fetchMock.mock.calls.at(-1) || [];
+    expect(requestInit?.body).toBe(
+      JSON.stringify({
+        product: 'Alle Produkte',
+        campaign_goal: 'Awareness',
+        weekly_budget: 1000,
+        channel_pool: ['search'],
+        strategy_mode: 'PLAYBOOK_AI',
+        max_cards: 3,
+        virus_typ: 'Influenza A',
+      }),
+    );
+  });
 });

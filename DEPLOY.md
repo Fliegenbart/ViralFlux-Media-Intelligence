@@ -149,6 +149,26 @@ Der Smoke-Test prueft vor allem:
 - `/api/v1/forecast/regional/media-allocation`
 - `/api/v1/forecast/regional/campaign-recommendations`
 
+## Oeffentliche Surface nach dem Deploy pruefen
+
+Zusätzlich zum fachlichen Release-Smoke solltest du die oeffentliche Angriffs- und Leak-Flaeche pruefen:
+
+```bash
+python backend/scripts/check_public_surface.py \
+  --base-url https://<your-domain>
+```
+
+Der Check faellt bewusst hart, wenn einer dieser Punkte noch offen ist:
+- `/docs`
+- `/openapi.json`
+- oeffentliche Frontend-Source-Maps
+- oeffentliche Admin-Status-Endpunkte
+- zu detailreiche oeffentliche `/health/ready`-Antworten
+
+In einfachen Worten:
+- der normale Release-Smoke prueft, ob der Produktkern lebt
+- dieser Surface-Check prueft, ob der Server von aussen noch zu viel verraet
+
 Fuer geschuetzte Umgebungen nutzt der Test bevorzugt:
 - `SMOKE_BEARER_TOKEN`
 - oder `SMOKE_ADMIN_EMAIL` plus `SMOKE_ADMIN_PASSWORD`

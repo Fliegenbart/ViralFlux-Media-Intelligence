@@ -29,6 +29,10 @@ def _index_exists(table_name: str, index_name: str) -> bool:
     return index_name in {item["name"] for item in inspector.get_indexes(table_name)}
 
 
+def _is_sqlite() -> bool:
+    return op.get_bind().dialect.name == "sqlite"
+
+
 def upgrade() -> None:
     if not _table_exists("ml_forecasts"):
         raise RuntimeError("ml_forecasts table is missing; cannot apply scope migration.")
@@ -47,8 +51,9 @@ def upgrade() -> None:
     op.execute("UPDATE ml_forecasts SET region = 'DE' WHERE region IS NULL")
     op.execute("UPDATE ml_forecasts SET horizon_days = 7 WHERE horizon_days IS NULL")
 
-    op.alter_column("ml_forecasts", "region", server_default=None)
-    op.alter_column("ml_forecasts", "horizon_days", server_default=None)
+    if not _is_sqlite():
+        op.alter_column("ml_forecasts", "region", server_default=None)
+        op.alter_column("ml_forecasts", "horizon_days", server_default=None)
 
     if not _index_exists("ml_forecasts", "ix_ml_forecasts_region"):
         op.create_index("ix_ml_forecasts_region", "ml_forecasts", ["region"])

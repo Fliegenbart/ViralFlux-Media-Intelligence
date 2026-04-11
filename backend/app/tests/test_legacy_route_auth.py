@@ -157,7 +157,7 @@ class LegacyRouteAuthTests(unittest.TestCase):
                 }
             },
         }
-        with patch("app.services.media.peix_score_service.PeixEpiScoreService.build", return_value=payload):
+        with patch("app.api.outbreak_score.RankingSignalService.build", return_value=payload):
             response = self.client.get("/api/v1/outbreak-score/peix-score")
 
         self.assertEqual(response.status_code, 200)

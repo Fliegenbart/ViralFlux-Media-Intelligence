@@ -293,7 +293,7 @@ def generate_playbook_ai_cards(
     return cards
 
 
-def generate_legacy_action_cards(
+def generate_rule_based_action_cards(
     engine: "MarketingOpportunityEngine",
     *,
     opportunities: list[dict[str, Any]],
@@ -421,7 +421,7 @@ def generate_legacy_action_cards(
                 "peix_context": ranking_signal_context,
                 "ranking_signal_context": ranking_signal_context,
                 "detail_url": f"/kampagnen/{opp_id}",
-                "strategy_mode": "LEGACY",
+                "strategy_mode": "RULE_BASED",
             }
         )
 

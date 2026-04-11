@@ -99,7 +99,10 @@ async def train_xgboost(
 
 
 @router.get("/status/{task_id}")
-async def get_training_status(task_id: str):
+async def get_training_status(
+    task_id: str,
+    current_user: dict = Depends(get_current_admin),
+):
     """Poll Celery task status for a training run."""
     task_result = celery_app.AsyncResult(task_id)
 

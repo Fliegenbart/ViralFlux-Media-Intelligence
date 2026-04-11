@@ -1,5 +1,5 @@
 import logging
-import os
+import json
 from datetime import timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
@@ -8,6 +8,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.api.deps import AUTH_COOKIE_NAME, get_current_user, get_optional_current_user
+from app.core.config import get_settings
 from app.core.rate_limit import limiter
 from app.core.time import utc_now
 from app.core.security import create_access_token, get_password_hash, verify_password
@@ -17,10 +18,15 @@ from app.schemas.token import SessionState
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+settings = get_settings()
 
-_ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "")
-_ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "")
-_ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
+_SUPPORTED_AUTH_ROLES = {
+    "admin",
+    "analyst",
+    "operator",
+    "user",
+    "viewer",
+}
 
 _WEAK_PASSWORDS = {
     "admin", "password", "123456", "test", "changeme",
@@ -30,39 +36,130 @@ _FAILED_LOGIN_WINDOW_SECONDS = 15 * 60
 _MAX_FAILED_LOGIN_ATTEMPTS = 5
 _ACCESS_TOKEN_LIFETIME_MINUTES = 60
 _COOKIE_SAMESITE = "lax"
-_COOKIE_SECURE = _ENVIRONMENT.lower() in {"production", "staging"}
 _AUTH_ENTITY_TYPE = "auth_session"
 _LOGIN_SUCCESS_ACTION = "login_success"
 _LOGIN_FAILED_ACTION = "login_failed"
 _LOGOUT_ACTION = "logout"
 
-if not _ADMIN_EMAIL or not _ADMIN_PASSWORD:
-    raise RuntimeError(
-        "FATAL: ADMIN_EMAIL and ADMIN_PASSWORD must be set via environment "
-        "variables. Generate a strong password with: openssl rand -base64 24"
-    )
-
-if len(_ADMIN_PASSWORD) < 12:
-    raise RuntimeError(
-        "FATAL: ADMIN_PASSWORD must be at least 12 characters long."
-    )
-
-if _ADMIN_PASSWORD.lower() in _WEAK_PASSWORDS:
-    raise RuntimeError(
-        "FATAL: ADMIN_PASSWORD is a known weak/default password. "
-        "Set a strong password via environment variable."
-    )
-
-_USERS = {
-    _ADMIN_EMAIL: {
-        "password": get_password_hash(_ADMIN_PASSWORD),
-        "role": "admin",
-    }
-}
-
 
 def _normalized_username(username: str) -> str:
     return str(username or "").strip().lower()
+
+
+def _cookie_secure(settings_obj=settings) -> bool:
+    return str(getattr(settings_obj, "ENVIRONMENT", "development") or "").lower() in {
+        "production",
+        "staging",
+    }
+
+
+def _validate_password_strength(password: str, *, source_label: str) -> str:
+    normalized_password = str(password or "")
+    if len(normalized_password) < 12:
+        raise RuntimeError(f"FATAL: {source_label} must be at least 12 characters long.")
+    if normalized_password.lower() in _WEAK_PASSWORDS:
+        raise RuntimeError(
+            f"FATAL: {source_label} is a known weak/default password. Set a strong password."
+        )
+    return normalized_password
+
+
+def _canonical_role(role: str | None) -> str:
+    normalized_role = str(role or "user").strip().lower()
+    if normalized_role not in _SUPPORTED_AUTH_ROLES:
+        supported = ", ".join(sorted(_SUPPORTED_AUTH_ROLES))
+        raise RuntimeError(
+            f"FATAL: Unsupported auth role '{normalized_role}'. Supported roles: {supported}."
+        )
+    return normalized_role
+
+
+def _register_auth_user(
+    users: dict[str, dict[str, str]],
+    *,
+    subject: str,
+    password: str,
+    role: str,
+    source_label: str,
+) -> None:
+    normalized_subject = _normalized_username(subject)
+    if not normalized_subject:
+        raise RuntimeError(f"FATAL: {source_label} is missing a usable email/username.")
+    if normalized_subject in users:
+        raise RuntimeError(
+            f"FATAL: Duplicate auth user '{normalized_subject}' in auth configuration."
+        )
+    normalized_password = _validate_password_strength(password, source_label=source_label)
+    users[normalized_subject] = {
+        "subject": normalized_subject,
+        "password": get_password_hash(normalized_password),
+        "role": _canonical_role(role),
+    }
+
+
+def _registry_entries(raw_registry: str) -> list[dict]:
+    try:
+        parsed = json.loads(raw_registry)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError("FATAL: AUTH_USER_REGISTRY_JSON is invalid JSON.") from exc
+
+    if isinstance(parsed, dict):
+        entries = parsed.get("users")
+    else:
+        entries = parsed
+    if not isinstance(entries, list) or not entries:
+        raise RuntimeError(
+            "FATAL: AUTH_USER_REGISTRY_JSON must contain a non-empty user list."
+        )
+    for entry in entries:
+        if not isinstance(entry, dict):
+            raise RuntimeError(
+                "FATAL: AUTH_USER_REGISTRY_JSON entries must be JSON objects."
+            )
+    return entries
+
+
+def _build_auth_users(settings_obj=settings) -> dict[str, dict[str, str]]:
+    users: dict[str, dict[str, str]] = {}
+
+    raw_registry = str(getattr(settings_obj, "AUTH_USER_REGISTRY_JSON", "") or "").strip()
+    if raw_registry:
+        for index, entry in enumerate(_registry_entries(raw_registry), start=1):
+            subject = (
+                entry.get("email")
+                or entry.get("username")
+                or entry.get("subject")
+                or ""
+            )
+            password = str(entry.get("password") or "")
+            role = str(entry.get("role") or "user")
+            _register_auth_user(
+                users,
+                subject=subject,
+                password=password,
+                role=role,
+                source_label=f"AUTH_USER_REGISTRY_JSON entry #{index}",
+            )
+        return users
+
+    admin_email = str(getattr(settings_obj, "ADMIN_EMAIL", "") or "").strip()
+    admin_password = str(getattr(settings_obj, "ADMIN_PASSWORD", "") or "").strip()
+    if not admin_email or not admin_password:
+        raise RuntimeError(
+            "FATAL: Configure AUTH_USER_REGISTRY_JSON or set ADMIN_EMAIL and ADMIN_PASSWORD."
+        )
+
+    _register_auth_user(
+        users,
+        subject=admin_email,
+        password=admin_password,
+        role="admin",
+        source_label="ADMIN_PASSWORD",
+    )
+    return users
+
+
+_AUTH_USERS = _build_auth_users(settings)
 
 
 def _client_host(request: Request) -> str:
@@ -126,7 +223,7 @@ def _set_auth_cookie(response: Response, token: str, remember_me: bool) -> None:
         key=AUTH_COOKIE_NAME,
         value=token,
         httponly=True,
-        secure=_COOKIE_SECURE,
+        secure=_cookie_secure(),
         samesite=_COOKIE_SAMESITE,
         max_age=max_age,
         path="/",
@@ -137,7 +234,7 @@ def _clear_auth_cookie(response: Response) -> None:
     response.delete_cookie(
         key=AUTH_COOKIE_NAME,
         httponly=True,
-        secure=_COOKIE_SECURE,
+        secure=_cookie_secure(),
         samesite=_COOKIE_SAMESITE,
         path="/",
     )
@@ -162,7 +259,7 @@ async def login(
             detail="Too many failed login attempts. Please try again later.",
         )
 
-    user = _USERS.get(form_data.username)
+    user = _AUTH_USERS.get(username)
     if not user or not verify_password(form_data.password, user["password"]):
         _record_auth_event(
             db,
@@ -177,7 +274,7 @@ async def login(
         )
 
     access_token = create_access_token(
-        data={"sub": form_data.username, "role": user.get("role")},
+        data={"sub": user["subject"], "role": user["role"]},
         expires_delta=timedelta(minutes=_ACCESS_TOKEN_LIFETIME_MINUTES),
     )
     _set_auth_cookie(response, access_token, remember_me)
@@ -189,8 +286,8 @@ async def login(
     )
     return SessionState(
         authenticated=True,
-        subject=form_data.username,
-        role=user.get("role"),
+        subject=user["subject"],
+        role=user["role"],
     )
 
 

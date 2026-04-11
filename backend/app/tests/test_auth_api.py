@@ -92,6 +92,19 @@ class AuthApiTests(unittest.TestCase):
             },
         )
 
+    def test_login_is_case_insensitive_and_returns_canonical_subject(self) -> None:
+        success = self._login(self.admin_email.upper(), self.admin_password)
+
+        self.assertEqual(success.status_code, 200)
+        self.assertEqual(
+            success.json(),
+            {
+                "authenticated": True,
+                "subject": self.admin_email.lower(),
+                "role": "admin",
+            },
+        )
+
     def test_login_sets_http_only_cookie_and_cookie_authenticates_requests(self) -> None:
         response = self._login(self.admin_email, self.admin_password)
 

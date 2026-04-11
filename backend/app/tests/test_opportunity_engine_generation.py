@@ -114,7 +114,8 @@ class OpportunityEngineGenerationBehaviorTests(unittest.TestCase):
                     "burden_forecast": {"points": [{"forecast_date": "2026-01-01", "predicted_value": 1}]},
                     "event_forecast": {
                         "event_probability": 0.42,
-                        "confidence": 0.61,
+                        "event_signal_score": 0.42,
+                        "reliability_score": 0.61,
                         "calibration_passed": True,
                         "threshold_value": 10.0,
                         "baseline_value": 8.0,
@@ -124,7 +125,7 @@ class OpportunityEngineGenerationBehaviorTests(unittest.TestCase):
 
             def build_opportunity_assessment(self, *, virus_typ, target_source, brand, secondary_modifier):
                 return {
-                    "expected_value_index": 57.0,
+                    "decision_priority_index": 57.0,
                     "action_class": "market_watch",
                     "secondary_modifier_seen": secondary_modifier,
                 }
@@ -147,6 +148,12 @@ class OpportunityEngineGenerationBehaviorTests(unittest.TestCase):
             candidates[0]["opportunity_assessment"]["secondary_modifier_seen"],
             1.15,
         )
+        self.assertEqual(candidates[0]["priority_score"], 57.0)
+        self.assertEqual(
+            candidates[0]["trigger_snapshot"]["values"]["decision_priority_index"],
+            57.0,
+        )
+        self.assertNotIn("expected_value_index", candidates[0]["trigger_snapshot"]["values"])
         self.assertEqual(candidates[0]["exploratory_signals"][0]["type"], "override")
 
     def test_kreis_bundesland_still_respects_engine_override_map(self) -> None:

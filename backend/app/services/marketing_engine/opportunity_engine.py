@@ -66,8 +66,8 @@ from .opportunity_engine_playbooks import (
     campaign_preview_from_payload as campaign_preview_from_payload_impl,
     enrich_opportunity_for_media as enrich_opportunity_for_media_impl,
     ensure_synthetic_opportunity_row as ensure_synthetic_opportunity_row_impl,
-    generate_legacy_action_cards as generate_legacy_action_cards_impl,
     generate_playbook_ai_cards as generate_playbook_ai_cards_impl,
+    generate_rule_based_action_cards as generate_rule_based_action_cards_impl,
     get_playbook_catalog as get_playbook_catalog_impl,
     merge_ai_playbook_payload as merge_ai_playbook_payload_impl,
     regenerate_ai_plan as regenerate_ai_plan_impl,
@@ -301,7 +301,8 @@ class MarketingOpportunityEngine:
                     "auto_open_url": f"/kampagnen/{top_card_id}" if top_card_id else None,
                 }
 
-        legacy = self._generate_legacy_action_cards(
+        fallback = generate_rule_based_action_cards_impl(
+            self,
             opportunities=opportunities,
             brand=brand,
             product=product,
@@ -310,10 +311,12 @@ class MarketingOpportunityEngine:
             channel_pool=channel_pool,
             region_scope=region_scope,
         )
-        legacy_meta = legacy.get("meta", {})
-        legacy_meta["strategy_mode"] = normalized_mode if normalized_mode != "PLAYBOOK_AI" else "LEGACY_FALLBACK"
-        legacy["meta"] = legacy_meta
-        return legacy
+        fallback_meta = fallback.get("meta", {})
+        fallback_meta["strategy_mode"] = (
+            normalized_mode if normalized_mode != "PLAYBOOK_AI" else "RULE_BASED_FALLBACK"
+        )
+        fallback["meta"] = fallback_meta
+        return fallback
 
     def _generate_playbook_ai_cards(
         self,
@@ -337,28 +340,6 @@ class MarketingOpportunityEngine:
             region_scope=region_scope,
             max_cards=max_cards,
             virus_typ=virus_typ,
-        )
-
-    def _generate_legacy_action_cards(
-        self,
-        *,
-        opportunities: list[dict[str, Any]],
-        brand: str,
-        product: str,
-        campaign_goal: str,
-        weekly_budget: float,
-        channel_pool: list[str] | None,
-        region_scope: list[str] | None,
-    ) -> dict[str, Any]:
-        return generate_legacy_action_cards_impl(
-            self,
-            opportunities=opportunities,
-            brand=brand,
-            product=product,
-            campaign_goal=campaign_goal,
-            weekly_budget=weekly_budget,
-            channel_pool=channel_pool,
-            region_scope=region_scope,
         )
 
     @staticmethod

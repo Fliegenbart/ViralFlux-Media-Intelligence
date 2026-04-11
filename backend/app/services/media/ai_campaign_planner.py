@@ -182,8 +182,8 @@ class AiCampaignPlanner:
             f"Playbook: {playbook_candidate.get('playbook_title')} ({playbook_candidate.get('playbook_key')})\n"
             f"Region: {playbook_candidate.get('region_name')} ({playbook_candidate.get('region_code')})\n"
             f"Forecast-Readiness: {readiness}\n"
-            f"Event-Wahrscheinlichkeit 7T: {round(float(event_forecast.get('event_probability') or 0.0) * 100.0, 1)}%\n"
-            f"Opportunity-Index: {opportunity_assessment.get('expected_value_index')}\n"
+            f"{self._event_signal_prompt_line(event_forecast)}\n"
+            f"Decision-Priority-Index: {opportunity_assessment.get('decision_priority_index')}\n"
             f"Trigger: {trigger.get('event')} | {trigger.get('details')}\n"
             f"Message-Direction (fix): {direction}\n"
             f"Hero-Message (fix): {hero}\n"
@@ -199,6 +199,27 @@ class AiCampaignPlanner:
             "\"channel_plan\":[{\"channel\":\"programmatic\",\"share_pct\":35.0,"
             "\"message_angle\":\"...\",\"kpi_primary\":\"CTR\",\"kpi_secondary\":[\"CPM\"]}]}\n"
         )
+
+    @staticmethod
+    def _event_signal_prompt_line(event_forecast: dict[str, Any]) -> str:
+        event_probability = event_forecast.get("event_probability")
+        if event_probability is not None:
+            return (
+                "Event-Wahrscheinlichkeit 7T: "
+                f"{round(float(event_probability) * 100.0, 1)}%"
+            )
+
+        event_signal_score = (
+            event_forecast.get("event_signal_score")
+            or event_forecast.get("heuristic_event_score")
+        )
+        if event_signal_score is not None:
+            return (
+                "Event-Signal-Score 7T (heuristisch): "
+                f"{round(float(event_signal_score) * 100.0, 1)}/100"
+            )
+
+        return "Event-Signal 7T: nicht verfuegbar"
 
     def _call_vllm(self, prompt: str) -> str:
         messages = [

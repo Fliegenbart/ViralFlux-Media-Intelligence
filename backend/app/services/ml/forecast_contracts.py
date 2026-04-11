@@ -77,7 +77,7 @@ def event_probability_from_forecast(
     )
 
 
-def normalized_expected_value_index(
+def normalized_decision_priority_index(
     *,
     event_probability: float | None,
     modifier: float = 1.0,
@@ -87,6 +87,18 @@ def normalized_expected_value_index(
     return round(adjusted * 100.0, 1)
 
 
+def normalized_expected_value_index(
+    *,
+    event_probability: float | None,
+    modifier: float = 1.0,
+) -> float:
+    """Deprecated alias for the decision-priority index."""
+    return normalized_decision_priority_index(
+        event_probability=event_probability,
+        modifier=modifier,
+    )
+
+
 def normalize_event_forecast_payload(payload: dict[str, Any] | None) -> dict[str, Any]:
     """Keep event-forecast semantics explicit at the contract boundary.
 
@@ -94,6 +106,23 @@ def normalize_event_forecast_payload(payload: dict[str, Any] | None) -> dict[str
     independent certainty concept. It is a numeric alias of `reliability_score`.
     """
     normalized = dict(payload or {})
+    event_probability = normalized.get("event_probability")
+    heuristic_event_score = normalized.get("heuristic_event_score")
+    event_signal_score = normalized.get("event_signal_score")
+
+    if event_probability is not None:
+        event_signal_score = float(event_probability)
+    elif event_signal_score is not None:
+        event_signal_score = float(event_signal_score)
+        if heuristic_event_score is None:
+            heuristic_event_score = event_signal_score
+    elif heuristic_event_score is not None:
+        event_signal_score = float(heuristic_event_score)
+
+    if heuristic_event_score is not None:
+        normalized["heuristic_event_score"] = float(heuristic_event_score)
+    normalized["event_signal_score"] = event_signal_score
+
     reliability_value = normalized.get("reliability_score")
     if reliability_value is None:
         reliability_value = normalized.get("confidence")
@@ -102,9 +131,22 @@ def normalize_event_forecast_payload(payload: dict[str, Any] | None) -> dict[str
         normalized["reliability_score"] = reliability_value
         normalized["confidence"] = reliability_value
         normalized["confidence_label"] = normalized.get("confidence_label") or confidence_label(reliability_value)
-    normalized["confidence_semantics"] = str(
-        normalized.get("confidence_semantics") or CONFIDENCE_SEMANTICS_ALIAS
-    )
+        normalized["reliability_label"] = confidence_label(reliability_value)
+    else:
+        normalized.pop("reliability_label", None)
+
+    if event_probability is not None:
+        signal_source = normalized.get("signal_source") or normalized.get("probability_source")
+    else:
+        signal_source = (
+            normalized.get("signal_source")
+            or normalized.get("probability_source")
+            or HEURISTIC_EVENT_SCORE_SOURCE
+        )
+        normalized["probability_source"] = None
+    normalized["signal_source"] = str(signal_source) if signal_source is not None else None
+
+    normalized.pop("confidence_semantics", None)
     if normalized.get("uncertainty_source") in {None, "", "backtest_interval_coverage"}:
         normalized["uncertainty_source"] = BACKTEST_RELIABILITY_PROXY_SOURCE
     if normalized.get("fallback_used") is None and normalized.get("event_probability") is None:
@@ -158,7 +200,6 @@ class EventForecast:
     probability_source: str | None = None
     calibration_mode: str | None = None
     uncertainty_source: str | None = None
-    confidence_semantics: str | None = None
     fallback_reason: str | None = None
     learned_model_version: str | None = None
     fallback_used: bool | None = None
@@ -207,7 +248,7 @@ class OpportunityAssessment:
     action_class: str
     truth_readiness: str
     forecast_readiness: str
-    expected_value_index: float
+    decision_priority_index: float
     expected_units_lift: float | None = None
     expected_revenue_lift: float | None = None
     lift_interval: dict[str, Any] | None = None

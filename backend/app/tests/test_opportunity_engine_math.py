@@ -140,13 +140,15 @@ class OpportunityEngineMathTests(unittest.TestCase):
             budget_shift_pct=18.0,
             budget_shift_pct_fallback=None,
             forecast_assessment={"event_forecast": {"event_probability": 0.42}},
-            opportunity_assessment={"truth_readiness": "im_aufbau", "expected_value_index": 58.0},
+            opportunity_assessment={"truth_readiness": "im_aufbau", "decision_priority_index": 58.0},
         )
 
         self.assertEqual(
             brief["expectation"]["field_contracts"]["signal_confidence_pct"]["source"],
             "BfArM Engpassmonitor",
         )
+        self.assertEqual(brief["expectation"]["decision_priority_index"], 58.0)
+        self.assertNotIn("expected_value_index", brief["expectation"])
 
     def test_build_decision_brief_uses_neutral_ranking_signal_contract_source(self) -> None:
         engine = MarketingOpportunityEngine.__new__(MarketingOpportunityEngine)
@@ -170,7 +172,7 @@ class OpportunityEngineMathTests(unittest.TestCase):
             budget_shift_pct=18.0,
             budget_shift_pct_fallback=None,
             forecast_assessment={"event_forecast": {"event_probability": 0.42}},
-            opportunity_assessment={"truth_readiness": "im_aufbau", "expected_value_index": 58.0},
+            opportunity_assessment={"truth_readiness": "im_aufbau", "decision_priority_index": 58.0},
         )
 
         self.assertEqual(
@@ -181,6 +183,8 @@ class OpportunityEngineMathTests(unittest.TestCase):
             brief["expectation"]["field_contracts"]["impact_probability"]["source"],
             "RankingSignal",
         )
+        self.assertEqual(brief["expectation"]["decision_priority_index"], 58.0)
+        self.assertNotIn("expected_value_index", brief["expectation"])
 
     def test_build_campaign_pack_and_preview_expose_ranking_signal_context_alias(self) -> None:
         engine = MarketingOpportunityEngine.__new__(MarketingOpportunityEngine)

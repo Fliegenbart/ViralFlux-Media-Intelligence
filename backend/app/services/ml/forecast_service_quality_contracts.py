@@ -3,6 +3,8 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
+from app.services.ml.forecast_contracts import HEURISTIC_EVENT_SCORE_SOURCE, heuristic_event_score_from_forecast
+
 
 def compute_regression_metrics(
     predicted: list[float],
@@ -71,7 +73,6 @@ def quality_meta_from_backtest(
     interval_coverage: dict[str, Any] | None = None,
     promotion_gate: dict[str, Any] | None = None,
     reliability_score_from_metrics_fn: Any,
-    confidence_semantics_alias: str,
     backtest_reliability_proxy_source: str,
 ) -> dict[str, Any]:
     metrics = dict(backtest_metrics or {})
@@ -91,7 +92,6 @@ def quality_meta_from_backtest(
         "promotion_gate": promotion_gate or {},
         "confidence": reliability_score,
         "reliability_score": reliability_score,
-        "confidence_semantics": confidence_semantics_alias,
         "backtest_quality_score": service._backtest_quality_score(metrics),
         "brier_score": metrics.get("brier_score"),
         "ece": metrics.get("ece"),
@@ -142,7 +142,6 @@ def build_contracts(
     forecast_quality_cls: Any,
     confidence_label_fn: Any,
     backtest_reliability_proxy_source: str,
-    confidence_semantics_alias: str,
     default_decision_event_threshold_pct: float,
     utc_now_fn: Any,
     np_module: Any,
@@ -179,6 +178,30 @@ def build_contracts(
     calibration_mode = (quality_meta.get("calibration_mode") if quality_meta else None) or "raw_probability"
     probability_source = (quality_meta.get("probability_source") if quality_meta else None) or "empirical_event_prevalence"
     fallback_reason = quality_meta.get("fallback_reason") if quality_meta else None
+    first_forecast = forecast_records[0] if forecast_records else {}
+    heuristic_event_score = (
+        quality_meta.get("heuristic_event_score")
+        if quality_meta and quality_meta.get("heuristic_event_score") is not None
+        else None
+    )
+    if event_probability is None and heuristic_event_score is None and baseline > 0 and first_forecast:
+        heuristic_event_score = heuristic_event_score_from_forecast(
+            prediction=float(first_forecast.get("yhat") or 0.0),
+            baseline=baseline,
+            lower_bound=first_forecast.get("yhat_lower"),
+            upper_bound=first_forecast.get("yhat_upper"),
+            threshold_pct=default_decision_event_threshold_pct,
+        )
+    signal_source = (
+        probability_source
+        if event_probability is not None
+        else (
+            quality_meta.get("signal_source")
+            if quality_meta and quality_meta.get("signal_source") is not None
+            else HEURISTIC_EVENT_SCORE_SOURCE
+        )
+    )
+    probability_source_value = probability_source if event_probability is not None else None
 
     event = event_forecast_cls(
         event_key=f"{virus_typ.lower().replace(' ', '_')}_growth_h{horizon}",
@@ -189,6 +212,7 @@ def build_contracts(
         threshold_value=round(baseline * 1.25, 3) if baseline > 0 else None,
         calibration_method=(quality_meta.get("calibration_method") if quality_meta else None)
         or f"{probability_source}:{calibration_mode}",
+        heuristic_event_score=heuristic_event_score,
         brier_score=quality_meta.get("brier_score") if quality_meta else None,
         ece=quality_meta.get("ece") if quality_meta else None,
         calibration_passed=quality_meta.get("calibration_passed") if quality_meta else None,
@@ -196,16 +220,16 @@ def build_contracts(
         confidence_label=(confidence_label_fn(confidence_value) if confidence_value is not None else None),
         reliability_score=reliability_score,
         backtest_quality_score=backtest_quality_score_value,
-        probability_source=probability_source,
+        probability_source=probability_source_value,
         calibration_mode=calibration_mode,
         uncertainty_source=(quality_meta.get("uncertainty_source") if quality_meta else None)
         or backtest_reliability_proxy_source,
-        confidence_semantics=(quality_meta.get("confidence_semantics") if quality_meta else None)
-        or confidence_semantics_alias,
         fallback_reason=fallback_reason,
         learned_model_version=(quality_meta.get("learned_model_version") if quality_meta else None),
         fallback_used=bool((quality_meta.get("fallback_used") if quality_meta else fallback_reason is not None)),
     )
+    event_payload = event.to_dict()
+    event_payload["signal_source"] = signal_source
     forecast_quality = forecast_quality_cls(
         forecast_readiness="GO" if quality_meta and quality_meta.get("forecast_ready") else "WATCH",
         drift_status=str(quality_meta.get("drift_status") or "unknown") if quality_meta else "unknown",
@@ -217,6 +241,6 @@ def build_contracts(
     )
     return {
         "burden_forecast": burden.to_dict(),
-        "event_forecast": event.to_dict(),
+        "event_forecast": event_payload,
         "forecast_quality": forecast_quality.to_dict(),
     }

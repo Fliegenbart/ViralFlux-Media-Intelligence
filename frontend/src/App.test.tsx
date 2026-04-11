@@ -151,6 +151,15 @@ describe('App routing', () => {
       expect(window.location.pathname).toBe('/login');
     });
 
+    it('redirects /dashboard to /login', async () => {
+      window.history.pushState({}, '', '/dashboard');
+
+      render(<App />);
+
+      expect(await screen.findByText('Login Mock')).toBeInTheDocument();
+      expect(window.location.pathname).toBe('/login');
+    });
+
     it('returns to the requested deep link after login', async () => {
       window.history.pushState({}, '', '/kampagnen/123');
 
@@ -163,6 +172,22 @@ describe('App routing', () => {
 
       expect(await screen.findByText('Kampagnen Mock')).toBeInTheDocument();
       expect(window.location.pathname).toBe('/kampagnen/123');
+    });
+
+    it('preserves search and hash when returning to the requested deep link after login', async () => {
+      window.history.pushState({}, '', '/kampagnen/123?tab=history#details');
+
+      render(<App />);
+
+      expect(await screen.findByText('Login Mock')).toBeInTheDocument();
+      expect(window.location.pathname).toBe('/login');
+
+      fireEvent.click(screen.getByRole('button', { name: 'Login Mock' }));
+
+      expect(await screen.findByText('Kampagnen Mock')).toBeInTheDocument();
+      expect(window.location.pathname).toBe('/kampagnen/123');
+      expect(window.location.search).toBe('?tab=history');
+      expect(window.location.hash).toBe('#details');
     });
 
     it('returns to the canonical destination after logging in from a legacy alias', async () => {
@@ -178,6 +203,15 @@ describe('App routing', () => {
       expect(await screen.findByText('Kampagnen Mock')).toBeInTheDocument();
       expect(window.location.pathname).toBe('/kampagnen/123');
     });
+  });
+
+  it('redirects authenticated visitors away from /login to /virus-radar', async () => {
+    window.history.pushState({}, '', '/login');
+
+    render(<App />);
+
+    expect(await screen.findByText('Virus-Radar Mock')).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/virus-radar');
   });
 
   it('keeps legacy buyer-facing aliases for decision, pilot, and report on supported pages', async () => {

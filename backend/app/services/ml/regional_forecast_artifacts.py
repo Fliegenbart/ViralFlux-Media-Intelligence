@@ -73,33 +73,34 @@ def load_artifacts(
         horizon_days=horizon,
     )
     if not model_dir.exists():
-        return {
-            "artifact_diagnostic": build_artifact_diagnostic(
-                virus_typ=virus_typ,
-                horizon_days=horizon,
-                artifact_dir=model_dir,
-                missing_files=[],
-                load_error="",
-                supported_horizons=list(supported_forecast_horizons),
-            )
-        }
-
-    missing_files = service._missing_artifact_files(model_dir)
-    if missing_files:
-        return {
-            "load_error": (
-                f"Artefakt-Bundle für {virus_typ}/h{horizon} ist unvollständig: "
-                f"{', '.join(missing_files)}"
-            ),
-            "artifact_diagnostic": build_artifact_diagnostic(
-                virus_typ=virus_typ,
-                horizon_days=horizon,
-                artifact_dir=model_dir,
-                missing_files=missing_files,
-                load_error=f"Artefakt-Bundle für {virus_typ}/h{horizon} ist unvollständig.",
-                supported_horizons=list(supported_forecast_horizons),
-            ),
-        }
+        if horizon != 7:
+            return {
+                "artifact_diagnostic": build_artifact_diagnostic(
+                    virus_typ=virus_typ,
+                    horizon_days=horizon,
+                    artifact_dir=model_dir,
+                    missing_files=[],
+                    load_error="",
+                    supported_horizons=list(supported_forecast_horizons),
+                )
+            }
+    else:
+        missing_files = service._missing_artifact_files(model_dir)
+        if missing_files:
+            return {
+                "load_error": (
+                    f"Artefakt-Bundle für {virus_typ}/h{horizon} ist unvollständig: "
+                    f"{', '.join(missing_files)}"
+                ),
+                "artifact_diagnostic": build_artifact_diagnostic(
+                    virus_typ=virus_typ,
+                    horizon_days=horizon,
+                    artifact_dir=model_dir,
+                    missing_files=missing_files,
+                    load_error=f"Artefakt-Bundle für {virus_typ}/h{horizon} ist unvollständig.",
+                    supported_horizons=list(supported_forecast_horizons),
+                ),
+            }
     payload = service._artifact_payload_from_dir(model_dir)
     if payload:
         metadata = dict(payload.get("metadata") or {})

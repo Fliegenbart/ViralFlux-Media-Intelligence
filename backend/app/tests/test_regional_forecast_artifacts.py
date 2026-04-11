@@ -4,15 +4,35 @@ from app.services.ml import regional_forecast_artifacts
 
 
 class _FakeArtifactService:
-    def __init__(self, *, models_dir: Path, missing_files: list[str] | None = None, payload=None) -> None:
+    def __init__(
+        self,
+        *,
+        models_dir: Path,
+        missing_files: list[str] | None = None,
+        payload=None,
+        missing_files_by_dir: dict[str, list[str]] | None = None,
+        payload_by_dir: dict[str, dict] | None = None,
+    ) -> None:
         self.models_dir = models_dir
         self._missing_files = list(missing_files or [])
         self._payload = payload
+        self._missing_files_by_dir = {
+            str(path): list(files)
+            for path, files in (missing_files_by_dir or {}).items()
+        }
+        self._payload_by_dir = {
+            str(path): dict(value)
+            for path, value in (payload_by_dir or {}).items()
+        }
 
     def _missing_artifact_files(self, model_dir: Path) -> list[str]:
+        if str(model_dir) in self._missing_files_by_dir:
+            return list(self._missing_files_by_dir[str(model_dir)])
         return list(self._missing_files)
 
     def _artifact_payload_from_dir(self, model_dir: Path):
+        if str(model_dir) in self._payload_by_dir:
+            return dict(self._payload_by_dir[str(model_dir)])
         return dict(self._payload or {})
 
     def _target_window_for_horizon(self, horizon: int):
@@ -107,3 +127,41 @@ def test_invalid_scope_keeps_only_load_error(tmp_path: Path) -> None:
 
     assert "load_error" in payload
     assert "artifact_diagnostic" not in payload
+
+
+def test_missing_h7_scope_reports_legacy_transition_bootstrap(tmp_path: Path) -> None:
+    regional_dir = tmp_path / "influenza_a" / "horizon_7"
+    service = _FakeArtifactService(models_dir=tmp_path)
+
+    payload = _load_artifacts(
+        service=service,
+        virus_typ="Influenza A",
+        horizon_days=7,
+        regional_dir=regional_dir,
+    )
+
+    diagnostic = payload["artifact_diagnostic"]
+    assert diagnostic["status"] == "missing"
+    assert diagnostic["artifact_transition_mode"] == "legacy_default_window_fallback"
+
+
+def test_incomplete_h7_legacy_scope_reports_transition_bootstrap(tmp_path: Path) -> None:
+    regional_dir = tmp_path / "influenza_a" / "horizon_7"
+    legacy_dir = tmp_path / "influenza_a"
+    legacy_dir.mkdir(parents=True)
+    service = _FakeArtifactService(
+        models_dir=tmp_path,
+        missing_files_by_dir={str(legacy_dir): ["classifier.json"]},
+    )
+
+    payload = _load_artifacts(
+        service=service,
+        virus_typ="Influenza A",
+        horizon_days=7,
+        regional_dir=regional_dir,
+    )
+
+    diagnostic = payload["artifact_diagnostic"]
+    assert diagnostic["status"] == "incomplete"
+    assert diagnostic["artifact_transition_mode"] == "legacy_default_window_fallback"
+    assert payload["load_error"].startswith("Legacy-Artefakt-Bundle")

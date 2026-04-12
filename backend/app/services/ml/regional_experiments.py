@@ -22,6 +22,7 @@ from app.services.ml.regional_trainer import (
     _json_safe,
     _virus_slug,
 )
+from app.services.ml.xgboost_runtime import resolve_xgboost_runtime_config
 
 logger = logging.getLogger(__name__)
 
@@ -88,6 +89,7 @@ class RegionalExperimentTrainer(RegionalModelTrainer):
         negatives = max(int(np.sum(y == 0)), 1)
         config = dict(self.classifier_config)
         config["scale_pos_weight"] = float(negatives / positives)
+        config = resolve_xgboost_runtime_config(config)
         model = __import__("xgboost").XGBClassifier(**config)
         fit_kwargs: dict[str, Any] = {}
         if sample_weight is not None:
@@ -104,6 +106,7 @@ class RegionalExperimentTrainer(RegionalModelTrainer):
         sample_weight: np.ndarray | None = None,
     ):
         merged_config = deepcopy(config)
+        merged_config = resolve_xgboost_runtime_config(merged_config)
         model = __import__("xgboost").XGBRegressor(**merged_config)
         fit_kwargs: dict[str, Any] = {}
         if sample_weight is not None:
@@ -123,11 +126,15 @@ class RegionalExperimentTrainer(RegionalModelTrainer):
         weights = np.power(0.5, age_days / half_life)
         return np.clip(weights.astype(float), 0.05, 1.0)
 
-    def _fit_classifier_from_frame(self, frame, feature_columns):
+    def _fit_classifier_from_frame(self, frame, feature_columns, sample_weight=None):
         return self._fit_classifier(
             frame[feature_columns].to_numpy(),
             frame["event_label"].to_numpy(),
-            sample_weight=self._sample_weights(frame["as_of_date"].to_numpy()),
+            sample_weight=(
+                sample_weight
+                if sample_weight is not None
+                else self._sample_weights(frame["as_of_date"].to_numpy())
+            ),
         )
 
     def _fit_regressor_from_frame(self, frame, feature_columns, config):

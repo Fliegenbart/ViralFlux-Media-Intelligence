@@ -132,6 +132,157 @@ def monotone_quantiles(quantile_predictions: dict[float, Sequence[float]]) -> di
     return {quantile: monotone[idx] for idx, quantile in enumerate(ordered)}
 
 
+def _reliability_bin_state(
+    probabilities: np.ndarray,
+    labels: np.ndarray,
+) -> dict[str, float]:
+    count = int(len(probabilities))
+    sum_probability = float(np.sum(probabilities)) if count else 0.0
+    sum_label = float(np.sum(labels)) if count else 0.0
+    return {
+        "count": count,
+        "sum_probability": sum_probability,
+        "sum_label": sum_label,
+        "lower_probability": float(np.min(probabilities)) if count else 0.0,
+        "upper_probability": float(np.max(probabilities)) if count else 0.0,
+    }
+
+
+def _merge_reliability_bin_states(
+    left: dict[str, float],
+    right: dict[str, float],
+) -> dict[str, float]:
+    return {
+        "count": int(left["count"] + right["count"]),
+        "sum_probability": float(left["sum_probability"] + right["sum_probability"]),
+        "sum_label": float(left["sum_label"] + right["sum_label"]),
+        "lower_probability": float(min(left["lower_probability"], right["lower_probability"])),
+        "upper_probability": float(max(left["upper_probability"], right["upper_probability"])),
+    }
+
+
+def _finalize_reliability_bin_state(
+    state: dict[str, float],
+    *,
+    index: int,
+) -> dict[str, float]:
+    count = max(int(state["count"]), 1)
+    mean_probability = float(state["sum_probability"]) / count
+    observed_rate = float(state["sum_label"]) / count
+    return {
+        "bin": int(index),
+        "count": int(state["count"]),
+        "lower_probability": round(float(state["lower_probability"]), 6),
+        "upper_probability": round(float(state["upper_probability"]), 6),
+        "mean_probability": round(mean_probability, 6),
+        "observed_rate": round(observed_rate, 6),
+        "gap": round(mean_probability - observed_rate, 6),
+    }
+
+
+def reliability_curve_bins(
+    y_true: Sequence[int],
+    probabilities: Sequence[float],
+    *,
+    target_bins: int = 10,
+    min_bin_size: int = 20,
+) -> list[dict[str, float]]:
+    y_arr = np.asarray(y_true, dtype=float)
+    p_arr = np.clip(np.asarray(probabilities, dtype=float), 0.001, 0.999)
+    if len(y_arr) == 0:
+        return []
+
+    order = np.argsort(p_arr, kind="mergesort")
+    sorted_probs = p_arr[order]
+    sorted_labels = y_arr[order]
+    bin_count = min(max(int(target_bins), 1), len(sorted_probs))
+    states = [
+        _reliability_bin_state(sorted_probs[indexes], sorted_labels[indexes])
+        for indexes in np.array_split(np.arange(len(sorted_probs)), bin_count)
+        if len(indexes) > 0
+    ]
+    if len(sorted_probs) < max(int(min_bin_size), 1):
+        return [
+            _finalize_reliability_bin_state(state, index=idx)
+            for idx, state in enumerate(states, start=1)
+        ]
+
+    threshold = max(int(min_bin_size), 1)
+    while len(states) > 1 and any(int(state["count"]) < threshold for state in states):
+        small_index = next(
+            idx for idx, state in enumerate(states)
+            if int(state["count"]) < threshold
+        )
+        if small_index == 0:
+            states[1] = _merge_reliability_bin_states(states[0], states[1])
+            del states[0]
+            continue
+        if small_index == len(states) - 1:
+            states[-2] = _merge_reliability_bin_states(states[-2], states[-1])
+            states.pop()
+            continue
+        left_mean = float(states[small_index - 1]["sum_probability"]) / max(int(states[small_index - 1]["count"]), 1)
+        center_mean = float(states[small_index]["sum_probability"]) / max(int(states[small_index]["count"]), 1)
+        right_mean = float(states[small_index + 1]["sum_probability"]) / max(int(states[small_index + 1]["count"]), 1)
+        if abs(center_mean - left_mean) <= abs(right_mean - center_mean):
+            states[small_index - 1] = _merge_reliability_bin_states(
+                states[small_index - 1],
+                states[small_index],
+            )
+            del states[small_index]
+        else:
+            states[small_index + 1] = _merge_reliability_bin_states(
+                states[small_index],
+                states[small_index + 1],
+            )
+            del states[small_index]
+
+    return [
+        _finalize_reliability_bin_state(state, index=idx)
+        for idx, state in enumerate(states, start=1)
+    ]
+
+
+def brier_decomposition(
+    y_true: Sequence[int],
+    probabilities: Sequence[float],
+    *,
+    target_bins: int = 10,
+    min_bin_size: int = 20,
+) -> dict[str, Any]:
+    y_arr = np.asarray(y_true, dtype=float)
+    if len(y_arr) == 0:
+        return {
+            "reliability_curve_bins": [],
+            "brier_reliability": 0.0,
+            "brier_resolution": 0.0,
+            "brier_uncertainty": 0.0,
+        }
+    bins = reliability_curve_bins(
+        y_arr,
+        probabilities,
+        target_bins=target_bins,
+        min_bin_size=min_bin_size,
+    )
+    overall_rate = float(np.mean(y_arr))
+    total = float(len(y_arr))
+    reliability = 0.0
+    resolution = 0.0
+    for item in bins:
+        weight = float(item["count"]) / max(total, 1.0)
+        mean_probability = float(item["mean_probability"])
+        observed_rate = float(item["observed_rate"])
+        reliability += weight * ((mean_probability - observed_rate) ** 2)
+        resolution += weight * ((observed_rate - overall_rate) ** 2)
+    uncertainty = overall_rate * (1.0 - overall_rate)
+    return {
+        "reliability_curve_bins": bins,
+        "brier_reliability": round(float(reliability), 6),
+        "brier_resolution": round(float(resolution), 6),
+        "brier_uncertainty": round(float(uncertainty), 6),
+    }
+
+
 def summarize_probabilistic_metrics(
     *,
     y_true: Sequence[float],
@@ -150,9 +301,13 @@ def summarize_probabilistic_metrics(
     }
 
     if baseline_quantiles:
-        baseline_wis = weighted_interval_score(y_true_arr, monotone_quantiles(baseline_quantiles))
+        baseline_monotone = monotone_quantiles(baseline_quantiles)
+        baseline_wis = weighted_interval_score(y_true_arr, baseline_monotone)
+        baseline_crps = quantile_crps(y_true_arr, baseline_monotone)
         metrics["baseline_wis"] = round(float(baseline_wis), 6)
         metrics["relative_wis"] = round(float(metrics["wis"]) / max(float(baseline_wis), 1e-9), 6)
+        metrics["baseline_crps"] = round(float(baseline_crps), 6)
+        metrics["relative_crps"] = round(float(metrics["crps"]) / max(float(baseline_crps), 1e-9), 6)
 
     for lower_q, upper_q, name in (
         (0.25, 0.75, "coverage_50"),
@@ -207,6 +362,14 @@ def summarize_probabilistic_metrics(
         metrics["brier_score"] = round(brier_score_safe(labels, probs), 6)
         metrics["ece"] = round(compute_ece(labels, probs), 6)
         metrics["pr_auc"] = round(average_precision_safe(labels, probs), 6)
+        metrics.update(
+            brier_decomposition(
+                labels,
+                probs,
+                target_bins=10,
+                min_bin_size=20,
+            )
+        )
         threshold = float(action_threshold if action_threshold is not None else 0.5)
         activated = probs >= threshold
         positives = labels == 1

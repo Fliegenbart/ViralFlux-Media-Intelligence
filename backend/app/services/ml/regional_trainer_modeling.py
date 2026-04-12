@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from app.services.ml.xgboost_runtime import resolve_xgboost_runtime_config
+
 
 def fit_classifier(
     *,
@@ -15,6 +17,7 @@ def fit_classifier(
     negatives = max(int(sum(label == 0 for label in y)), 1)
     config = dict(classifier_config)
     config["scale_pos_weight"] = float(negatives / positives)
+    config = resolve_xgboost_runtime_config(config)
     model = classifier_cls(**config)
     fit_kwargs = {}
     if sample_weight is not None:
@@ -31,7 +34,8 @@ def fit_regressor(
     sample_weight=None,
     regressor_cls,
 ):
-    model = regressor_cls(**config)
+    resolved_config = resolve_xgboost_runtime_config(config)
+    model = regressor_cls(**resolved_config)
     fit_kwargs = {}
     if sample_weight is not None:
         fit_kwargs["sample_weight"] = sample_weight
@@ -39,11 +43,11 @@ def fit_regressor(
     return model
 
 
-def fit_classifier_from_frame(service, frame, feature_columns):
+def fit_classifier_from_frame(service, frame, feature_columns, *, sample_weight=None):
     return service._fit_classifier(
         frame[feature_columns].to_numpy(),
         frame["event_label"].to_numpy(),
-        sample_weight=service._sample_weights(frame),
+        sample_weight=sample_weight if sample_weight is not None else service._sample_weights(frame),
     )
 
 

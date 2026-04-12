@@ -26,7 +26,7 @@ export function useVirusRadarHeroForecast(
 
     setLoading(true);
     try {
-      const portfolio = await mediaApi.getRegionalHeroOverview('Influenza A', 7);
+      const portfolio = await mediaApi.getRegionalHeroOverview('Influenza A', 7, brand);
 
       if (!isCurrentLoad()) return;
 
@@ -45,7 +45,7 @@ export function useVirusRadarHeroForecast(
         setLoading(false);
       }
     }
-  }, [toast]);
+  }, [brand, toast]);
 
   useEffect(() => {
     loadHeroForecast();

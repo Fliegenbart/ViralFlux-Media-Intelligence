@@ -11,7 +11,7 @@ import { useMediaWorkflow } from '../../features/media/workflowContext';
 const TimegraphPage: React.FC = () => {
   const { toast } = useToast();
   const { clearPageHeader } = usePageHeader();
-  const { virus, setVirus, dataVersion } = useMediaWorkflow();
+  const { virus, setVirus, brand, dataVersion } = useMediaWorkflow();
   const {
     selectedRegion,
     setSelectedRegion,
@@ -21,7 +21,7 @@ const TimegraphPage: React.FC = () => {
     loading,
     backtestLoading,
     horizonDays,
-  } = useTimegraphPageData(virus, dataVersion, toast);
+  } = useTimegraphPageData(virus, brand, dataVersion, toast);
 
   useEffect(() => {
     return clearPageHeader;

@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
+from app.api.brand_defaults import resolve_request_brand
 from app.api.deps import get_current_admin, get_current_user
 from app.api.m2m_auth import verify_m2m_api_key
 from app.api.media_contracts import OutcomeImportRequest, OutcomeIngestRequest, json_safe_response
@@ -19,17 +20,22 @@ router = APIRouter()
 
 @router.get("/outcomes/coverage", dependencies=[Depends(get_current_user)])
 async def get_media_outcomes_coverage(
-    brand: str = Query(..., min_length=1),
+    brand: str | None = Query(default=None),
     virus_typ: str = "Influenza A",
     db: Session = Depends(get_db),
 ):
     """Truth-Layer Coverage über importierte Outcome-Daten."""
-    return json_safe_response(MediaV2Service(db).get_truth_coverage(brand=brand, virus_typ=virus_typ))
+    return json_safe_response(
+        MediaV2Service(db).get_truth_coverage(
+            brand=resolve_request_brand(brand),
+            virus_typ=virus_typ,
+        )
+    )
 
 
 @router.get("/pilot-reporting", dependencies=[Depends(get_current_user)])
 async def get_media_pilot_reporting(
-    brand: str = Query(..., min_length=1),
+    brand: str | None = Query(default=None),
     lookback_weeks: int = Query(default=26, ge=1, le=104),
     window_start: datetime | None = None,
     window_end: datetime | None = None,
@@ -44,7 +50,7 @@ async def get_media_pilot_reporting(
     try:
         return json_safe_response(
             PilotReportingService(db).build_pilot_report(
-                brand=brand,
+                brand=resolve_request_brand(brand),
                 lookback_weeks=lookback_weeks,
                 window_start=window_start,
                 window_end=window_end,
@@ -59,7 +65,7 @@ async def get_media_pilot_reporting(
 
 @router.get("/pilot-readout", dependencies=[Depends(get_current_user)])
 async def get_media_pilot_readout(
-    brand: str = Query(..., min_length=1),
+    brand: str | None = Query(default=None),
     virus_typ: str = "RSV A",
     horizon_days: int = Query(default=7, ge=3, le=14),
     weekly_budget_eur: float = Query(default=120000.0, ge=0),
@@ -72,7 +78,7 @@ async def get_media_pilot_readout(
     try:
         return json_safe_response(
             PilotReadoutService(db).build_readout(
-                brand=brand,
+                brand=resolve_request_brand(brand),
                 virus_typ=virus_typ,
                 horizon_days=horizon_days,
                 weekly_budget_eur=weekly_budget_eur,
@@ -85,24 +91,30 @@ async def get_media_pilot_readout(
 
 @router.get("/evidence/truth", dependencies=[Depends(get_current_user)])
 async def get_media_truth_evidence(
-    brand: str = Query(..., min_length=1),
+    brand: str | None = Query(default=None),
     virus_typ: str = "Influenza A",
     db: Session = Depends(get_db),
 ):
     """Truth-Evidence Snapshot für Analysten-Ansicht, Coverage und Import-Historie."""
-    return json_safe_response(MediaV2Service(db).get_truth_evidence(brand=brand, virus_typ=virus_typ))
+    return json_safe_response(
+        MediaV2Service(db).get_truth_evidence(
+            brand=resolve_request_brand(brand),
+            virus_typ=virus_typ,
+        )
+    )
 
 
 @router.get("/outcomes/import-batches", dependencies=[Depends(get_current_user)])
 async def list_media_outcome_import_batches(
-    brand: str = Query(..., min_length=1),
+    brand: str | None = Query(default=None),
     limit: int = Query(default=20, ge=1, le=100),
     db: Session = Depends(get_db),
 ):
     """Listet die letzten Truth-Import-Batches mit Status und Coverage-Snapshot."""
+    brand_value = resolve_request_brand(brand)
     return json_safe_response({
-        "brand": brand,
-        "batches": MediaV2Service(db).list_outcome_import_batches(brand=brand, limit=limit),
+        "brand": brand_value,
+        "batches": MediaV2Service(db).list_outcome_import_batches(brand=brand_value, limit=limit),
     })
 
 

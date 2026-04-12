@@ -18,6 +18,7 @@ export interface TimegraphRegionOption {
 
 export function useTimegraphPageData(
   virus: string,
+  brand: string,
   dataVersion: number,
   toast: ToastLike = noop,
 ) {
@@ -53,7 +54,7 @@ export function useTimegraphPageData(
     setBacktestLoading(false);
 
     try {
-      const result = await mediaApi.getRegionalForecast(virus, horizonDays);
+      const result = await mediaApi.getRegionalForecast(virus, horizonDays, brand);
       if (!isCurrentLoad()) return;
       const predictions = sortRegionalPredictions(result);
       setForecast(result);
@@ -73,7 +74,7 @@ export function useTimegraphPageData(
         setLoading(false);
       }
     }
-  }, [toast, virus]);
+  }, [brand, toast, virus]);
 
   useEffect(() => {
     loadTimegraph();

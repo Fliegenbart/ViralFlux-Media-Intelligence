@@ -33,15 +33,15 @@ describe('plain language helpers', () => {
   it('translates raw backend explanations into plain German', () => {
     expect(explainInPlainGerman('Event probability 0.81 clears the Activate threshold 0.70.'))
       .toBe('Event-Wahrscheinlichkeit: 81 %. Das passt zu Aktivieren.');
-    expect(explainInPlainGerman('Berlin: Activate because event probability is 0.81, forecast confidence is 0.78, trend acceleration is 0.76, and cross-source direction is up.'))
+    expect(explainInPlainGerman('Berlin: Activate because event probability is 0.81, signal support is 0.78, trend acceleration is 0.76, and cross-source direction is up.'))
       .toContain('Empfehlung für Berlin: Aktivieren');
     expect(explainInPlainGerman('Priority score and event probability drive the ranking.'))
       .toBe('Prioritäts-Score (Entscheidungs-Priorität) und Event-Wahrscheinlichkeit (Forecast) bestimmen hier die Reihenfolge.');
-    expect(explainInPlainGerman('Forecast confidence is only 0.41.'))
-      .toBe('Die Vorhersage ist noch unsicher (41 %).');
+    expect(explainInPlainGerman('Signal support is only 0.41.'))
+      .toBe('Das Signal ist noch unsicher (41 %).');
     expect(explainInPlainGerman('Spend guardrails are currently satisfied.'))
       .toBe('Budget-Regeln: ok. Nächster Schritt möglich.');
-    expect(explainInPlainGerman('Confidence is below the stage-specific guardrail, so the recommendation needs manual review.'))
+    expect(explainInPlainGerman('Allocation support score is below the stage-specific guardrail, so the recommendation needs manual review.'))
       .toBe('Das Signal ist noch nicht sicher genug; vor dem nächsten Schritt ist eine manuelle Prüfung sinnvoll.');
     expect(explainInPlainGerman('Remaining uncertainty: revision risk 0.33, no positive cross-source agreement, quality gate not passed.'))
       .toBe('Noch offen: Zahlen können sich noch ändern (33 %), kein klarer Abgleich über mehrere Quellen und Qualitätscheck noch nicht bestanden.');
@@ -55,7 +55,7 @@ describe('plain language helpers', () => {
         bundesland_name: 'Berlin',
         stage: 'activate',
         event_probability: 0.81,
-        forecast_confidence: 0.78,
+        signal_support_score: 0.78,
         agreement_direction: 'up',
       },
     })).toContain('Empfehlung für Berlin: Aktivieren');

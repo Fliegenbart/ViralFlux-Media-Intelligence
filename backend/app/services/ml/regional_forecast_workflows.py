@@ -95,7 +95,7 @@ def generate_media_allocation(
             target_week_start=item["target_week_start"],
             signal_context=service._truth_signal_context(
                 prediction=item,
-                confidence=allocation_item.get("confidence"),
+                confidence=allocation_item.get("allocation_support_score") or allocation_item.get("confidence"),
                 stage=recommended_level,
             ),
             operational_action=action,
@@ -113,11 +113,17 @@ def generate_media_allocation(
                 "intensity": intensity,
                 "recommended_activation_level": recommended_level,
                 "spend_readiness": allocation_item.get("spend_readiness"),
-                "event_probability": item["event_probability_calibrated"],
+                "event_probability": (
+                    item.get("event_probability")
+                    or item.get("event_probability_calibrated")
+                ),
                 "decision_label": item.get("decision_label"),
-                "priority_score": item.get("priority_score"),
+                "decision_priority_index": item.get("decision_priority_index") or item.get("priority_score"),
                 "allocation_score": allocation_item.get("allocation_score"),
-                "confidence": allocation_item.get("confidence"),
+                "allocation_support_score": (
+                    allocation_item.get("allocation_support_score")
+                    or allocation_item.get("confidence")
+                ),
                 "reason_trace": allocation_reason_trace,
                 "allocation_reason_trace": allocation_reason_trace,
                 "uncertainty_summary": item.get("uncertainty_summary"),

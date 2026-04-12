@@ -445,7 +445,7 @@ def predict_all_regions(
             "target_window_days": list(target_window_days),
             "horizon_days": horizon,
             "event_definition_version": metadata.get("event_definition_version", event_definition_version),
-            "event_probability_calibrated": round(event_probability, 4),
+            "event_probability": round(event_probability, 4),
             "expected_next_week_incidence": round(expected_next, 2),
             "expected_target_incidence": round(expected_next, 2),
             "prediction_interval": {
@@ -499,13 +499,17 @@ def predict_all_regions(
         ).to_dict()
         prediction["decision"] = decision
         prediction["decision_label"] = str(decision.get("stage") or "watch").title()
-        prediction["priority_score"] = float(decision.get("decision_score") or 0.0)
+        prediction["decision_priority_index"] = float(
+            decision.get("decision_priority_index")
+            or decision.get("decision_score")
+            or 0.0
+        )
         prediction["reason_trace"] = decision.get("reason_trace") or {}
         prediction["uncertainty_summary"] = str(decision.get("uncertainty_summary") or "")
         prediction["decision_rank"] = None
         predictions.append(prediction)
 
-    predictions.sort(key=lambda item: item["event_probability_calibrated"], reverse=True)
+    predictions.sort(key=lambda item: float(item.get("event_probability") or 0.0), reverse=True)
     for rank, item in enumerate(predictions, start=1):
         item["rank"] = rank
 

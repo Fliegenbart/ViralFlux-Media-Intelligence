@@ -231,7 +231,8 @@ class RegionalForecastServiceTests(unittest.TestCase):
         self.assertEqual(top["horizon_days"], 7)
         self.assertEqual(top["target_window_days"], [7, 7])
         self.assertIn("target_date", top)
-        self.assertIn("event_probability_calibrated", top)
+        self.assertIn("event_probability", top)
+        self.assertNotIn("event_probability_calibrated", top)
         self.assertIn("expected_next_week_incidence", top)
         self.assertEqual(top["expected_target_incidence"], top["expected_next_week_incidence"])
         self.assertEqual(top["prediction_interval"], {"lower": 24.0, "upper": 32.0})
@@ -259,9 +260,14 @@ class RegionalForecastServiceTests(unittest.TestCase):
         self.assertEqual(top["source_coverage_scope"], "artifact")
         self.assertIn("decision", top)
         self.assertIn("decision_label", top)
-        self.assertIn("priority_score", top)
+        self.assertIn("decision_priority_index", top)
+        self.assertNotIn("priority_score", top)
         self.assertIn("reason_trace", top)
         self.assertIn("uncertainty_summary", top)
+        self.assertIn("decision_priority_index", top["decision"])
+        self.assertIn("signal_support_score", top["decision"])
+        self.assertNotIn("decision_score", top["decision"])
+        self.assertNotIn("forecast_confidence", top["decision"])
 
     def test_predict_all_regions_exposes_regime_sensitive_blend_metadata(self) -> None:
         service = self._make_service(
@@ -352,7 +358,7 @@ class RegionalForecastServiceTests(unittest.TestCase):
 
         top = result["predictions"][0]
         self.assertEqual(top["decision_label"], "Activate")
-        self.assertGreater(top["priority_score"], 0.72)
+        self.assertGreater(top["decision_priority_index"], 0.72)
         self.assertEqual(top["decision"]["stage"], "activate")
         self.assertGreaterEqual(top["decision_rank"], 1)
         self.assertTrue(top["reason_trace"]["why"])
@@ -376,7 +382,7 @@ class RegionalForecastServiceTests(unittest.TestCase):
         top = result["predictions"][0]
         self.assertEqual(top["decision_label"], "Prepare")
         self.assertEqual(top["decision"]["stage"], "prepare")
-        self.assertGreater(top["priority_score"], 0.54)
+        self.assertGreater(top["decision_priority_index"], 0.54)
 
     def test_predict_all_regions_marks_sparse_region_as_watch_with_uncertainty(self) -> None:
         service = self._make_service(
@@ -444,8 +450,11 @@ class RegionalForecastServiceTests(unittest.TestCase):
         self.assertIn("recommended_activation_level", first)
         self.assertIn("suggested_budget_share", first)
         self.assertIn("suggested_budget_eur", first)
-        self.assertIn("confidence", first)
+        self.assertIn("allocation_support_score", first)
+        self.assertNotIn("confidence", first)
         self.assertIn("allocation_score", first)
+        self.assertIn("decision_priority_index", first)
+        self.assertNotIn("priority_score", first)
         self.assertIn("reason_trace", first)
         self.assertIn("allocation_reason_trace", first)
         self.assertEqual(first["allocation_reason_trace"], first["reason_trace"])
@@ -484,7 +493,7 @@ class RegionalForecastServiceTests(unittest.TestCase):
         self.assertEqual(result["status"], "no_model")
         self.assertEqual(result["recommendations"], [])
         self.assertIn("Horizon 7", result["message"])
-        self.assertEqual(result["summary"]["allocation_policy_version"], "regional_media_allocation_v1")
+        self.assertEqual(result["summary"]["allocation_policy_version"], "regional_media_policy_engine_v1")
         self.assertEqual(result["summary"]["total_budget_allocated"], 0.0)
 
     def test_predict_all_regions_returns_explicit_no_model_for_missing_horizon(self) -> None:
@@ -1538,7 +1547,7 @@ class RegionalCampaignRecommendationIntegrationTests(unittest.TestCase):
                     "suggested_budget_share": 0.24,
                     "suggested_budget_eur": 12000.0,
                     "suggested_budget_amount": 12000.0,
-                    "confidence": 0.78,
+                    "allocation_support_score": 0.78,
                     "products": ["GeloMyrtol forte", "GeloRevoice"],
                     "channels": ["Banner (programmatic)", "Meta (regional)"],
                     "timeline": "Sofort aktivieren",
@@ -1577,6 +1586,8 @@ class RegionalCampaignRecommendationIntegrationTests(unittest.TestCase):
         self.assertEqual(result["summary"]["total_recommendations"], 1)
         first = result["recommendations"][0]
         self.assertEqual(first["region"], "BY")
+        self.assertIn("allocation_support_score", first)
+        self.assertNotIn("confidence", first)
         self.assertEqual(first["recommended_product_cluster"]["cluster_key"], "respiratory_core_support")
         self.assertIn("recommended_keyword_cluster", first)
         self.assertIn("recommendation_rationale", first)

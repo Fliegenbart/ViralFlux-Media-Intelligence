@@ -5,6 +5,27 @@ from __future__ import annotations
 from typing import Any
 
 
+def prediction_event_probability(item: dict[str, Any]) -> float:
+    decision = item.get("decision") or {}
+    return float(
+        item.get("event_probability")
+        or item.get("event_probability_calibrated")
+        or decision.get("event_probability")
+        or 0.0
+    )
+
+
+def prediction_decision_priority_index(item: dict[str, Any]) -> float:
+    decision = item.get("decision") or {}
+    return float(
+        item.get("decision_priority_index")
+        or item.get("priority_score")
+        or decision.get("decision_priority_index")
+        or decision.get("decision_score")
+        or 0.0
+    )
+
+
 def decision_stage_sort_value(stage: str | None) -> int:
     return {
         "activate": 3,
@@ -17,8 +38,8 @@ def decision_priority_sort_key(item: dict[str, Any]) -> tuple[float, float, floa
     decision = item.get("decision") or {}
     return (
         float(decision_stage_sort_value(decision.get("stage"))),
-        float(item.get("priority_score") or 0.0),
-        float(item.get("event_probability_calibrated") or 0.0),
+        prediction_decision_priority_index(item),
+        prediction_event_probability(item),
         float(item.get("change_pct") or 0.0),
     )
 
@@ -29,7 +50,7 @@ def decision_summary(predictions: list[dict[str, Any]]) -> dict[str, Any]:
             "watch_regions": 0,
             "prepare_regions": 0,
             "activate_regions": 0,
-            "avg_priority_score": 0.0,
+            "avg_decision_priority_index": 0.0,
             "top_region": None,
             "top_region_decision": None,
         }
@@ -44,8 +65,8 @@ def decision_summary(predictions: list[dict[str, Any]]) -> dict[str, Any]:
         "watch_regions": sum(1 for item in predictions if str(item.get("decision_label") or "").lower() == "watch"),
         "prepare_regions": sum(1 for item in predictions if str(item.get("decision_label") or "").lower() == "prepare"),
         "activate_regions": sum(1 for item in predictions if str(item.get("decision_label") or "").lower() == "activate"),
-        "avg_priority_score": round(
-            sum(float(item.get("priority_score") or 0.0) for item in predictions) / len(predictions),
+        "avg_decision_priority_index": round(
+            sum(prediction_decision_priority_index(item) for item in predictions) / len(predictions),
             4,
         ),
         "top_region": top_region.get("bundesland"),
@@ -192,7 +213,7 @@ def portfolio_priority_score(
     prediction: dict[str, Any],
     benchmark_item: dict[str, Any],
 ) -> float:
-    probability = float(prediction.get("event_probability_calibrated") or 0.0)
+    probability = prediction_event_probability(prediction)
     change_pct = float(prediction.get("change_pct") or 0.0)
     benchmark_score_value = float(benchmark_item.get("benchmark_score") or 0.0) / 100.0
     quality_gate = prediction.get("quality_gate") or {}
@@ -213,7 +234,7 @@ def portfolio_action(
     prediction: dict[str, Any],
     benchmark_item: dict[str, Any],
 ) -> tuple[str, str]:
-    probability = float(prediction.get("event_probability_calibrated") or 0.0)
+    probability = prediction_event_probability(prediction)
     change_pct = float(prediction.get("change_pct") or 0.0)
     threshold = float(prediction.get("action_threshold") or 0.6)
     quality_gate = prediction.get("quality_gate") or {}
@@ -256,14 +277,14 @@ def region_rollup(opportunities: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "bundesland": bundesland,
                 "bundesland_name": leader["bundesland_name"],
                 "leading_virus": leader["virus_typ"],
-                "leading_probability": leader["event_probability_calibrated"],
+                "leading_probability": prediction_event_probability(leader),
                 "leading_priority_score": leader["portfolio_priority_score"],
                 "top_signals": [
                     {
                         "virus_typ": item["virus_typ"],
                         "portfolio_action": item["portfolio_action"],
                         "portfolio_priority_score": item["portfolio_priority_score"],
-                        "event_probability_calibrated": item["event_probability_calibrated"],
+                        "event_probability": prediction_event_probability(item),
                     }
                     for item in ranked_items[:3]
                 ],

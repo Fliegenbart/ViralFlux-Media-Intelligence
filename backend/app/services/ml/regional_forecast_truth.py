@@ -202,11 +202,15 @@ def truth_signal_context(
         or prediction.get("decision_label")
         or ""
     ).strip().lower()
-    event_probability = float(prediction.get("event_probability_calibrated") or 0.0)
+    event_probability = float(
+        prediction.get("event_probability")
+        or prediction.get("event_probability_calibrated")
+        or 0.0
+    )
     forecast_confidence = (
         confidence
         if confidence is not None
-        else decision.get("forecast_confidence")
+        else decision.get("signal_support_score") or decision.get("forecast_confidence")
     )
     signal_present = decision_stage in {"activate", "prepare"} or event_probability >= 0.5
     context = {
@@ -216,6 +220,7 @@ def truth_signal_context(
     }
     if forecast_confidence is not None:
         context["confidence"] = float(forecast_confidence)
+        context["signal_support_score"] = float(forecast_confidence)
         context["forecast_confidence"] = float(forecast_confidence)
     return context
 

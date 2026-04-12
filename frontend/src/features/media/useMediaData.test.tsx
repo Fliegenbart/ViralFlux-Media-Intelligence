@@ -176,7 +176,7 @@ function buildForecast(predictions?: Array<Record<string, unknown>>) {
       {
         bundesland: 'BE',
         bundesland_name: 'Berlin',
-        event_probability_calibrated: 0.81,
+        event_probability: 0.81,
         decision_label: 'Prepare',
         decision_rank: 1,
         expected_target_incidence: 160,
@@ -186,7 +186,7 @@ function buildForecast(predictions?: Array<Record<string, unknown>>) {
       {
         bundesland: 'BY',
         bundesland_name: 'Bayern',
-        event_probability_calibrated: 0.56,
+        event_probability: 0.56,
         decision_label: 'Prepare',
         decision_rank: 2,
         expected_target_incidence: 130,
@@ -196,7 +196,7 @@ function buildForecast(predictions?: Array<Record<string, unknown>>) {
       {
         bundesland: 'SN',
         bundesland_name: 'Sachsen',
-        event_probability_calibrated: 0.43,
+        event_probability: 0.43,
         decision_label: 'Watch',
         decision_rank: 3,
         expected_target_incidence: 115,
@@ -206,7 +206,7 @@ function buildForecast(predictions?: Array<Record<string, unknown>>) {
       {
         bundesland: 'NW',
         bundesland_name: 'Nordrhein-Westfalen',
-        event_probability_calibrated: 0.31,
+        event_probability: 0.31,
         decision_label: 'Watch',
         decision_rank: 4,
         expected_target_incidence: 108,

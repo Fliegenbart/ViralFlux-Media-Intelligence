@@ -32,7 +32,7 @@ describe('virusRadarWorkspace.utils', () => {
         },
       } as any,
       topPrediction: {
-        event_probability_calibrated: 0.82,
+        event_probability: 0.82,
         trend: 'steigend',
       },
     });

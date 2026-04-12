@@ -205,11 +205,26 @@ class RegionalMediaAllocationEngine:
             or prediction.get("decision_label")
             or "watch"
         ).strip().lower()
-        priority_score = _clamp(float(prediction.get("priority_score") or decision.get("decision_score") or 0.0))
-        event_probability = _clamp(
-            float(prediction.get("event_probability_calibrated") or decision.get("event_probability") or 0.0)
+        priority_score = _clamp(
+            float(
+                prediction.get("decision_priority_index")
+                or prediction.get("priority_score")
+                or decision.get("decision_priority_index")
+                or decision.get("decision_score")
+                or 0.0
+            )
         )
-        forecast_confidence = _clamp(float(decision.get("forecast_confidence") or 0.0))
+        event_probability = _clamp(
+            float(
+                prediction.get("event_probability")
+                or prediction.get("event_probability_calibrated")
+                or decision.get("event_probability")
+                or 0.0
+            )
+        )
+        forecast_confidence = _clamp(
+            float(decision.get("signal_support_score") or decision.get("forecast_confidence") or 0.0)
+        )
         source_freshness = _clamp(float(decision.get("source_freshness_score") or 0.0))
         usable_share = _clamp(float(decision.get("usable_source_share") or 0.0))
         coverage_score = _clamp(float(decision.get("source_coverage_score") or 0.0))
@@ -474,7 +489,10 @@ class RegionalMediaAllocationEngine:
         stage = str(item["recommended_activation_level"])
         why = [
             f"{stage} from the decision engine sets the base activation level.",
-            f"Priority score {float(item['priority_score']):.2f} and event probability {float(item['event_probability']):.2f} drive the ranking.",
+            (
+                f"Decision priority index {float(item['priority_score']):.2f} and "
+                f"event probability {float(item['event_probability']):.2f} drive the ranking."
+            ),
         ]
         why_details = [
             self._reason_detail(
@@ -485,7 +503,7 @@ class RegionalMediaAllocationEngine:
             self._reason_detail(
                 "ranking_priority_and_probability",
                 why[1],
-                priority_score=round(float(item["priority_score"]), 4),
+                decision_priority_index=round(float(item["priority_score"]), 4),
                 event_probability=round(float(item["event_probability"]), 4),
             ),
         ]
@@ -511,33 +529,39 @@ class RegionalMediaAllocationEngine:
             )
 
         if float(item["confidence"]) >= float(self.config.confidence_thresholds.get("medium") or 0.60):
-            message = f"Confidence {float(item['confidence']):.2f} keeps the allocation penalty low."
+            message = (
+                f"Allocation support score {float(item['confidence']):.2f} keeps the allocation penalty low."
+            )
             budget_drivers.append(message)
             budget_driver_details.append(
                 self._reason_detail(
                     "budget_driver_confidence_low_penalty",
                     message,
-                    confidence=round(float(item["confidence"]), 4),
+                    allocation_support_score=round(float(item["confidence"]), 4),
                 )
             )
         elif float(item["confidence"]) >= float(self.config.confidence_thresholds.get("low") or 0.45):
-            message = f"Confidence {float(item['confidence']):.2f} leads to a moderate spend penalty."
+            message = (
+                f"Allocation support score {float(item['confidence']):.2f} leads to a moderate spend penalty."
+            )
             budget_drivers.append(message)
             budget_driver_details.append(
                 self._reason_detail(
                     "budget_driver_confidence_moderate_penalty",
                     message,
-                    confidence=round(float(item["confidence"]), 4),
+                    allocation_support_score=round(float(item["confidence"]), 4),
                 )
             )
         else:
-            message = f"Low confidence {float(item['confidence']):.2f} sharply reduces allocation."
+            message = (
+                f"Low allocation support score {float(item['confidence']):.2f} sharply reduces allocation."
+            )
             budget_drivers.append(message)
             budget_driver_details.append(
                 self._reason_detail(
                     "budget_driver_confidence_high_penalty",
                     message,
-                    confidence=round(float(item["confidence"]), 4),
+                    allocation_support_score=round(float(item["confidence"]), 4),
                 )
             )
 

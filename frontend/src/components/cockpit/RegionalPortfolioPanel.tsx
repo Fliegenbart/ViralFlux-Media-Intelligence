@@ -137,10 +137,10 @@ const RegionalPortfolioPanel: React.FC<Props> = ({
                       Bundesland-Level · {businessValidationLabel(item.business_gate?.validation_status)} · {evidenceTierLabel(item.evidence_tier)}
                     </div>
                   </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--accent-violet)' }}>
-                      {formatPercent(item.event_probability_calibrated * 100, 1)}
-                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--accent-violet)' }}>
+                      {formatPercent(item.event_probability * 100, 1)}
+                      </div>
                     <div style={{ marginTop: 4, fontSize: 12, color: 'var(--text-muted)' }}>
                       Score {item.portfolio_priority_score.toFixed(1)}
                     </div>

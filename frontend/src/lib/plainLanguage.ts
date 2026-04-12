@@ -244,11 +244,11 @@ function translateStructuredReason(item: StructuredReasonItem): string | null {
       const region = normalizeGermanText(reasonString(item, 'bundesland_name') || 'Die Region');
       const stage = reasonString(item, 'stage') || 'watch';
       const eventProbability = reasonNumber(item, 'event_probability');
-      const forecastConfidence = reasonNumber(item, 'forecast_confidence');
+      const signalSupport = reasonNumber(item, 'signal_support_score') ?? reasonNumber(item, 'forecast_confidence');
       const agreementDirection = reasonString(item, 'agreement_direction');
       const details: string[] = [];
       if (eventProbability != null) details.push(`${OPERATOR_LABELS.forecast_event_probability} ${percentFromModelValue(String(eventProbability))}`);
-      if (forecastConfidence != null) details.push(`Vorhersage-Stabilität ${percentFromModelValue(String(forecastConfidence))}`);
+      if (signalSupport != null) details.push(`${OPERATOR_LABELS.signal_confidence} ${percentFromModelValue(String(signalSupport))}`);
       if (agreementDirection) details.push(`Quellen eher ${directionLabel(agreementDirection)}`);
       const detailText = details.length > 0 ? ` (${details.join(', ')})` : '';
       return `${stageSentence(region, stage)}${detailText}.`;
@@ -265,11 +265,11 @@ function translateStructuredReason(item: StructuredReasonItem): string | null {
     case 'event_probability_below_prepare_threshold':
       return `${OPERATOR_LABELS.forecast_event_probability}: ${percentFromModelValue(String(reasonNumber(item, 'event_probability') ?? 0))}. Noch zu früh für Vorbereiten oder Aktivieren.`;
     case 'forecast_confidence_strong':
-      return `Die Vorhersage wirkt stabil (${percentFromModelValue(String(reasonNumber(item, 'forecast_confidence') ?? 0))}).`;
+      return `Das Signal wirkt stabil (${percentFromModelValue(String(reasonNumber(item, 'signal_support_score') ?? reasonNumber(item, 'forecast_confidence') ?? 0))}).`;
     case 'forecast_confidence_usable':
-      return `Die Vorhersage wirkt brauchbar (${percentFromModelValue(String(reasonNumber(item, 'forecast_confidence') ?? 0))}).`;
+      return `Das Signal wirkt brauchbar (${percentFromModelValue(String(reasonNumber(item, 'signal_support_score') ?? reasonNumber(item, 'forecast_confidence') ?? 0))}).`;
     case 'forecast_confidence_low':
-      return `Die Vorhersage ist noch unsicher (${percentFromModelValue(String(reasonNumber(item, 'forecast_confidence') ?? 0))}).`;
+      return `Das Signal ist noch unsicher (${percentFromModelValue(String(reasonNumber(item, 'signal_support_score') ?? reasonNumber(item, 'forecast_confidence') ?? 0))}).`;
     case 'primary_sources_fresh':
       return `Die wichtigsten Quellen sind aktuell (Ø ${localizedNumber(reasonNumber(item, 'freshness_days') ?? 0, 1)} Tage).`;
     case 'primary_sources_stale':
@@ -318,11 +318,11 @@ function translateStructuredReason(item: StructuredReasonItem): string | null {
     case 'budget_driver_watch_observe_only':
       return 'Beobachten bleibt vorerst prüfend und bekommt meist kein zusätzliches Budget.';
     case 'budget_driver_confidence_low_penalty':
-      return `Hohe ${OPERATOR_LABELS.signal_confidence} (${percentFromModelValue(String(reasonNumber(item, 'confidence') ?? 0))}): Budget wird nur leicht reduziert.`;
+      return `Hohe ${OPERATOR_LABELS.signal_confidence} (${percentFromModelValue(String(reasonNumber(item, 'allocation_support_score') ?? reasonNumber(item, 'confidence') ?? 0))}): Budget wird nur leicht reduziert.`;
     case 'budget_driver_confidence_moderate_penalty':
-      return `Mittlere ${OPERATOR_LABELS.signal_confidence} (${percentFromModelValue(String(reasonNumber(item, 'confidence') ?? 0))}): Budget wird moderat reduziert.`;
+      return `Mittlere ${OPERATOR_LABELS.signal_confidence} (${percentFromModelValue(String(reasonNumber(item, 'allocation_support_score') ?? reasonNumber(item, 'confidence') ?? 0))}): Budget wird moderat reduziert.`;
     case 'budget_driver_confidence_high_penalty':
-      return `Geringe ${OPERATOR_LABELS.signal_confidence} (${percentFromModelValue(String(reasonNumber(item, 'confidence') ?? 0))}): Budget wird deutlich reduziert.`;
+      return `Geringe ${OPERATOR_LABELS.signal_confidence} (${percentFromModelValue(String(reasonNumber(item, 'allocation_support_score') ?? reasonNumber(item, 'confidence') ?? 0))}): Budget wird deutlich reduziert.`;
     case 'budget_driver_population_weight':
       return 'Die Reichweite der Region stärkt den Vorschlag.';
     case 'budget_driver_region_weight_boost':
@@ -342,7 +342,7 @@ function translateStructuredReason(item: StructuredReasonItem): string | null {
     case 'campaign_stage_budget_share':
       return `${normalizeGermanText(reasonString(item, 'region_name') || 'Die Region')}: ${stageLabel(reasonString(item, 'stage'))} (Budgetanteil ${percentFromModelValue(String(reasonNumber(item, 'budget_share') ?? 0))}).`;
     case 'campaign_wave_plan_support':
-      return `Die Region bleibt im Wochenplan, weil Sicherheit und Rang im Vergleich gut genug sind (Sicherheit ${percentFromModelValue(String(reasonNumber(item, 'confidence') ?? 0))}, Rang ${localizedNumber(reasonNumber(item, 'priority_rank') ?? 0, 0)}).`;
+      return `Die Region bleibt im Wochenplan, weil Signalstärke und Rang im Vergleich gut genug sind (Signalstärke ${percentFromModelValue(String(reasonNumber(item, 'allocation_support_score') ?? reasonNumber(item, 'confidence') ?? 0))}, Rang ${localizedNumber(reasonNumber(item, 'priority_rank') ?? 0, 0)}).`;
     case 'campaign_product_cluster_fit': {
       const cluster = normalizeGermanText(reasonString(item, 'cluster_label'));
       const fitScore = reasonNumber(item, 'fit_score');
@@ -478,13 +478,13 @@ export function explainInPlainGerman(value?: string | StructuredReasonItem | nul
   }
 
   const explanationMatch = compactRaw.match(
-    /^(.+?): (Activate|Prepare|Watch) because event probability is ([\d.]+), forecast confidence is ([\d.]+), trend acceleration is ([-\d.]+), and cross-source direction is (up|down|flat)\.$/i,
+    /^(.+?): (Activate|Prepare|Watch) because event probability is ([\d.]+), (?:signal support|forecast confidence) is ([\d.]+), trend acceleration is ([-\d.]+), and cross-source direction is (up|down|flat)\.$/i,
   );
   if (explanationMatch) {
     const region = normalizeGermanText(explanationMatch[1]);
     const details = [
       `${OPERATOR_LABELS.forecast_event_probability} ${percentFromModelValue(explanationMatch[3])}`,
-      `Vorhersage-Stabilität ${percentFromModelValue(explanationMatch[4])}`,
+      `${OPERATOR_LABELS.signal_confidence} ${percentFromModelValue(explanationMatch[4])}`,
       `Quellen eher ${directionLabel(explanationMatch[6])}`,
     ];
     return `${stageSentence(region, explanationMatch[2])} (${details.join(', ')}).`;
@@ -506,19 +506,19 @@ export function explainInPlainGerman(value?: string | StructuredReasonItem | nul
     return `${stageSentence(region, 'watch')} (${OPERATOR_LABELS.forecast_event_probability} und Dynamik reichen noch nicht aus).`;
   }
 
-  const strongConfidenceMatch = compactRaw.match(/^Forecast confidence is strong at ([\d.]+)\.$/i);
+  const strongConfidenceMatch = compactRaw.match(/^(?:Signal support|Forecast confidence) is strong at ([\d.]+)\.$/i);
   if (strongConfidenceMatch) {
-    return `Die Vorhersage wirkt stabil (${percentFromModelValue(strongConfidenceMatch[1])}).`;
+    return `Das Signal wirkt stabil (${percentFromModelValue(strongConfidenceMatch[1])}).`;
   }
 
-  const usableConfidenceMatch = compactRaw.match(/^Forecast confidence is usable at ([\d.]+)\.$/i);
+  const usableConfidenceMatch = compactRaw.match(/^(?:Signal support|Forecast confidence) is usable at ([\d.]+)\.$/i);
   if (usableConfidenceMatch) {
-    return `Die Vorhersage wirkt brauchbar (${percentFromModelValue(usableConfidenceMatch[1])}).`;
+    return `Das Signal wirkt brauchbar (${percentFromModelValue(usableConfidenceMatch[1])}).`;
   }
 
-  const weakConfidenceMatch = compactRaw.match(/^Forecast confidence is only ([\d.]+)\.$/i);
+  const weakConfidenceMatch = compactRaw.match(/^(?:Signal support|Forecast confidence) is only ([\d.]+)\.$/i);
   if (weakConfidenceMatch) {
-    return `Die Vorhersage ist noch unsicher (${percentFromModelValue(weakConfidenceMatch[1])}).`;
+    return `Das Signal ist noch unsicher (${percentFromModelValue(weakConfidenceMatch[1])}).`;
   }
 
   const revisionHighMatch = compactRaw.match(/^Revision risk is high at ([\d.]+)\.$/i);
@@ -596,17 +596,17 @@ export function explainInPlainGerman(value?: string | StructuredReasonItem | nul
     return 'Beobachten bleibt vorerst prüfend und bekommt meist kein zusätzliches Budget.';
   }
 
-  const confidenceLowPenaltyMatch = compactRaw.match(/^Confidence ([\d.]+) keeps the allocation penalty low\.$/i);
+  const confidenceLowPenaltyMatch = compactRaw.match(/^(?:Allocation support score|Confidence) ([\d.]+) keeps the allocation penalty low\.$/i);
   if (confidenceLowPenaltyMatch) {
     return `Hohe ${OPERATOR_LABELS.signal_confidence} (${percentFromModelValue(confidenceLowPenaltyMatch[1])}): Budget wird nur leicht reduziert.`;
   }
 
-  const confidenceModeratePenaltyMatch = compactRaw.match(/^Confidence ([\d.]+) leads to a moderate spend penalty\.$/i);
+  const confidenceModeratePenaltyMatch = compactRaw.match(/^(?:Allocation support score|Confidence) ([\d.]+) leads to a moderate spend penalty\.$/i);
   if (confidenceModeratePenaltyMatch) {
     return `Mittlere ${OPERATOR_LABELS.signal_confidence} (${percentFromModelValue(confidenceModeratePenaltyMatch[1])}): Budget wird moderat reduziert.`;
   }
 
-  const lowConfidenceMatch = compactRaw.match(/^Low confidence ([\d.]+) sharply reduces allocation\.$/i);
+  const lowConfidenceMatch = compactRaw.match(/^Low (?:allocation support score|confidence) ([\d.]+) sharply reduces allocation\.$/i);
   if (lowConfidenceMatch) {
     return `Geringe ${OPERATOR_LABELS.signal_confidence} (${percentFromModelValue(lowConfidenceMatch[1])}): Budget wird deutlich reduziert.`;
   }
@@ -650,10 +650,10 @@ export function explainInPlainGerman(value?: string | StructuredReasonItem | nul
   }
 
   const allocationConfidenceMatch = compactRaw.match(
-    /^Allocation confidence ([\d.]+) and priority rank (\d+) keep the region in the current wave plan\.$/i,
+    /^Allocation (?:support score|confidence) ([\d.]+) and priority rank (\d+) keep the region in the current wave plan\.$/i,
   );
   if (allocationConfidenceMatch) {
-    return `Die Region bleibt im Wochenplan (Sicherheit ${percentFromModelValue(allocationConfidenceMatch[1])}, Rang ${allocationConfidenceMatch[2]}).`;
+    return `Die Region bleibt im Wochenplan (Signalstärke ${percentFromModelValue(allocationConfidenceMatch[1])}, Rang ${allocationConfidenceMatch[2]}).`;
   }
 
   const productFitMatch = compactRaw.match(/^(.+?) scores ([\d.]+) for the available product set (.+)\.$/i);
@@ -700,7 +700,7 @@ export function explainInPlainGerman(value?: string | StructuredReasonItem | nul
     return 'Das Budget ist für eine einzelne Region noch zu klein; sinnvoll ist eine Bündelung mit einer Nachbarregion.';
   }
 
-  if (/^Confidence is below the stage-specific guardrail, so the recommendation needs manual review\.$/i.test(compactRaw)) {
+  if (/^(?:Allocation support score|Confidence) is below the stage-specific guardrail, so the recommendation needs manual review\.$/i.test(compactRaw)) {
     return 'Das Signal ist noch nicht sicher genug; vor dem nächsten Schritt ist eine manuelle Prüfung sinnvoll.';
   }
 

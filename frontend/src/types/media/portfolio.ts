@@ -57,7 +57,7 @@ export interface RegionalPortfolioOpportunity {
   portfolio_action: 'activate' | 'prepare' | 'prioritize' | 'watch' | string;
   portfolio_intensity: 'high' | 'medium' | 'low' | string;
   portfolio_priority_score: number;
-  event_probability_calibrated: number;
+  event_probability: number;
   expected_next_week_incidence: number;
   prediction_interval?: {
     lower?: number;
@@ -91,7 +91,7 @@ export interface RegionalPortfolioRegionRollup {
     virus_typ: string;
     portfolio_action: string;
     portfolio_priority_score: number;
-    event_probability_calibrated: number;
+    event_probability: number;
   }>;
 }
 

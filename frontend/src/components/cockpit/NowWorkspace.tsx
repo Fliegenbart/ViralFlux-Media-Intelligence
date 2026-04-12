@@ -71,12 +71,12 @@ const NowWorkspace: React.FC<Props> = ({
       regions[pred.bundesland] = {
         name: pred.bundesland_name,
         avg_viruslast: pred.current_known_incidence || 0,
-        intensity: pred.event_probability_calibrated || 0,
+        intensity: pred.event_probability || 0,
         trend: pred.trend || '',
         change_pct: pred.change_pct || 0,
         n_standorte: 0,
-        signal_score: pred.event_probability_calibrated || 0,
-        impact_probability: pred.event_probability_calibrated || 0,
+        signal_score: pred.event_probability || 0,
+        impact_probability: pred.event_probability || 0,
         forecast_direction: pred.trend || '',
         priority_rank: pred.decision_rank ?? pred.rank ?? undefined,
       };
@@ -144,7 +144,7 @@ const NowWorkspace: React.FC<Props> = ({
   };
 
   const heroState = (() => {
-    const prob = focusPrediction?.event_probability_calibrated ?? 0;
+    const prob = focusPrediction?.event_probability ?? 0;
     if (prob > 0.7) return 'critical';
     if (prob > 0.4) return 'elevated';
     if (prob > 0.1) return 'watch';
@@ -189,7 +189,7 @@ const NowWorkspace: React.FC<Props> = ({
                 <div className="answer-hero__signal">
                   <span className="answer-hero__dot" />
                   <span className="answer-hero__probability">
-                    {Math.round((focusPrediction?.event_probability_calibrated ?? 0) * 100)}%
+                    {Math.round((focusPrediction?.event_probability ?? 0) * 100)}%
                   </span>
                 </div>
                 <h2 className="answer-hero__title">{decisionTitle}</h2>

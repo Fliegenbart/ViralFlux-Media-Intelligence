@@ -231,7 +231,13 @@ class CampaignRecommendationService:
             or allocation_item.get("region_name")
             or region
         )
-        confidence = _clamp(float(allocation_item.get("confidence") or 0.0))
+        confidence = _clamp(
+            float(
+                allocation_item.get("allocation_support_score")
+                or allocation_item.get("confidence")
+                or 0.0
+            )
+        )
         evidence_class = self._evidence_class(allocation_item)
         available_products = self._available_products(allocation_item)
         recommended_product_cluster = self._select_product_cluster(

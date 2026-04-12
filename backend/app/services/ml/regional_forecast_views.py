@@ -371,6 +371,10 @@ def build_portfolio_view(
             continue
 
         top_prediction = predictions[0]
+        top_event_probability = (
+            top_prediction.get("event_probability")
+            or top_prediction.get("event_probability_calibrated")
+        )
         latest_as_of_date = str(max(filter(None, [latest_as_of_date, forecast.get("as_of_date")])))
         virus_rollup.append(
             {
@@ -385,7 +389,7 @@ def build_portfolio_view(
                 "aggregate_metrics": benchmark_item.get("aggregate_metrics"),
                 "top_region": top_prediction.get("bundesland"),
                 "top_region_name": top_prediction.get("bundesland_name"),
-                "top_event_probability": top_prediction.get("event_probability_calibrated"),
+                "top_event_probability": top_event_probability,
                 "top_change_pct": top_prediction.get("change_pct"),
                 "products": portfolio_products.get(virus_typ, ["GeloMyrtol forte"]),
             }
@@ -416,7 +420,10 @@ def build_portfolio_view(
                         prediction=prediction,
                         benchmark_item=benchmark_item,
                     ),
-                    "event_probability_calibrated": prediction["event_probability_calibrated"],
+                    "event_probability": (
+                        prediction.get("event_probability")
+                        or prediction.get("event_probability_calibrated")
+                    ),
                     "expected_next_week_incidence": prediction["expected_next_week_incidence"],
                     "prediction_interval": prediction["prediction_interval"],
                     "current_known_incidence": prediction["current_known_incidence"],
@@ -453,7 +460,7 @@ def build_portfolio_view(
     opportunities.sort(
         key=lambda item: (
             float(item.get("portfolio_priority_score") or 0.0),
-            float(item.get("event_probability_calibrated") or 0.0),
+            float(item.get("event_probability") or 0.0),
             float(item.get("change_pct") or 0.0),
         ),
         reverse=True,

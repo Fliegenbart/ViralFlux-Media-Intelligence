@@ -29,12 +29,16 @@ def build_rationale(
         or allocation_item.get("bundesland")
         or ""
     )
-    confidence = float(allocation_item.get("confidence") or 0.0)
+    confidence = float(
+        allocation_item.get("allocation_support_score")
+        or allocation_item.get("confidence")
+        or 0.0
+    )
     stage_key = str(stage or "").strip().lower()
     if stage_key == "prepare" and budget_amount <= 0.0:
         why = [
             f"{region_name} is an early-warning Prepare region. Operative preparation is justified, but no paid activation budget is released yet.",
-            f"Allocation confidence {confidence:.2f} is good enough for preparation work, not for live spend release.",
+            f"Allocation support score {confidence:.2f} is good enough for preparation work, not for live spend release.",
         ]
         why_details = [
             reason_detail_builder(
@@ -54,7 +58,7 @@ def build_rationale(
     else:
         why = [
             f"{region_name} stays on {stage} with budget share {budget_share:.2%}.",
-            f"Allocation confidence {confidence:.2f} and priority rank {int(allocation_item.get('priority_rank') or 0)} keep the region in the current wave plan.",
+            f"Allocation support score {confidence:.2f} and priority rank {int(allocation_item.get('priority_rank') or 0)} keep the region in the current wave plan.",
         ]
         why_details = [
             reason_detail_builder(
@@ -166,7 +170,7 @@ def build_rationale(
             reason_detail_builder("campaign_guardrail_bundle_neighbor", message)
         )
     elif guardrail_status == "low_confidence_review":
-        message = "Confidence is below the stage-specific guardrail, so the recommendation needs manual review."
+        message = "Allocation support score is below the stage-specific guardrail, so the recommendation needs manual review."
         guardrails.append(message)
         guardrail_details.append(
             reason_detail_builder(

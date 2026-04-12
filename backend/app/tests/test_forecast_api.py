@@ -73,7 +73,7 @@ class ForecastApiTests(unittest.TestCase):
                 "watch_regions": 0,
                 "prepare_regions": 1,
                 "activate_regions": 0,
-                "avg_priority_score": 0.64,
+                "avg_decision_priority_index": 0.64,
                 "top_region": "BY",
                 "top_region_decision": "Prepare",
             },
@@ -85,9 +85,9 @@ class ForecastApiTests(unittest.TestCase):
                     "target_date": "2026-03-21 00:00:00",
                     "target_window_days": [7, 7],
                     "horizon_days": 7,
-                    "event_probability_calibrated": 0.61,
+                    "event_probability": 0.61,
                     "decision_label": "Prepare",
-                    "priority_score": 0.64,
+                    "decision_priority_index": 0.64,
                     "reason_trace": {
                         "why": ["Event probability clears the Prepare threshold."],
                         "contributing_signals": [],
@@ -98,7 +98,8 @@ class ForecastApiTests(unittest.TestCase):
                     "decision": {
                         "stage": "prepare",
                         "signal_stage": "prepare",
-                        "decision_score": 0.64,
+                        "decision_priority_index": 0.64,
+                        "signal_support_score": 0.71,
                     },
                     "expected_target_incidence": 18.2,
                 }
@@ -128,9 +129,12 @@ class ForecastApiTests(unittest.TestCase):
         self.assertEqual(first_prediction["decision_label"], "Prepare")
         self.assertEqual(first_prediction["horizon_days"], 7)
         self.assertEqual(first_prediction["target_window_days"], [7, 7])
-        self.assertIn("priority_score", first_prediction)
+        self.assertIn("decision_priority_index", first_prediction)
+        self.assertNotIn("priority_score", first_prediction)
         self.assertIn("reason_trace", first_prediction)
         self.assertEqual(first_prediction["decision"]["stage"], "prepare")
+        self.assertIn("decision_priority_index", first_prediction["decision"])
+        self.assertIn("signal_support_score", first_prediction["decision"])
         self.assertIn("expected_target_incidence", first_prediction)
 
     def test_regional_predict_response_exposes_prepare_early_signal_but_prepare_stage(self) -> None:
@@ -141,7 +145,7 @@ class ForecastApiTests(unittest.TestCase):
                 "watch_regions": 0,
                 "prepare_regions": 1,
                 "activate_regions": 0,
-                "avg_priority_score": 0.58,
+                "avg_decision_priority_index": 0.58,
                 "top_region": "BY",
                 "top_region_decision": "Prepare",
             },
@@ -150,14 +154,15 @@ class ForecastApiTests(unittest.TestCase):
                     "bundesland": "BY",
                     "bundesland_name": "Bayern",
                     "horizon_days": 7,
-                    "event_probability_calibrated": 0.004,
+                    "event_probability": 0.004,
                     "decision_label": "Prepare",
-                    "priority_score": 0.58,
+                    "decision_priority_index": 0.58,
                     "uncertainty_summary": "Residual uncertainty is currently limited.",
                     "decision": {
                         "stage": "prepare",
                         "signal_stage": "prepare_early",
-                        "decision_score": 0.58,
+                        "decision_priority_index": 0.58,
+                        "signal_support_score": 0.63,
                         "explanation_summary": (
                             "Bayern shows an early warning pattern. Prepare assets and monitoring, "
                             "but do not release paid budget yet."
@@ -320,7 +325,7 @@ class ForecastApiTests(unittest.TestCase):
                     "suggested_budget_share": 1.0,
                     "suggested_budget_eur": 50000.0,
                     "suggested_budget_amount": 50000.0,
-                    "confidence": 0.79,
+                    "allocation_support_score": 0.79,
                     "reason_trace": {
                         "why": ["Activate from the decision engine sets the base activation level."],
                         "budget_drivers": ["Activate regions receive the strongest label multiplier."],
@@ -363,7 +368,8 @@ class ForecastApiTests(unittest.TestCase):
         self.assertEqual(first["recommended_activation_level"], "Activate")
         self.assertEqual(first["suggested_budget_share"], 1.0)
         self.assertEqual(first["suggested_budget_amount"], first["suggested_budget_eur"])
-        self.assertIn("confidence", first)
+        self.assertIn("allocation_support_score", first)
+        self.assertNotIn("confidence", first)
         self.assertIn("reason_trace", first)
         self.assertEqual(first["allocation_reason_trace"], first["reason_trace"])
         self.assertEqual(first["evidence_status"], "commercially_validated")
@@ -397,7 +403,7 @@ class ForecastApiTests(unittest.TestCase):
                     "suggested_budget_share": 0.0,
                     "suggested_budget_eur": 0.0,
                     "suggested_budget_amount": 0.0,
-                    "confidence": 0.42,
+                    "allocation_support_score": 0.42,
                     "reason_trace": {
                         "why": ["Watch from the decision engine sets the base activation level."],
                         "budget_drivers": ["Watch regions are observation-first and usually receive no spend."],
@@ -514,7 +520,7 @@ class ForecastApiTests(unittest.TestCase):
                     "priority_rank": 1,
                     "suggested_budget_share": 0.24,
                     "suggested_budget_amount": 12000.0,
-                    "confidence": 0.78,
+                    "allocation_support_score": 0.78,
                     "evidence_class": "truth_backed",
                     "recommended_product_cluster": {
                         "cluster_key": "respiratory_core_support",
@@ -555,6 +561,8 @@ class ForecastApiTests(unittest.TestCase):
         self.assertEqual(body["summary"]["campaign_recommendation_policy_version"], "campaign_recommendation_v1")
         first = body["recommendations"][0]
         self.assertEqual(first["region"], "BY")
+        self.assertIn("allocation_support_score", first)
+        self.assertNotIn("confidence", first)
         self.assertEqual(first["recommended_product_cluster"]["cluster_key"], "respiratory_core_support")
         self.assertEqual(first["recommended_keyword_cluster"]["cluster_key"], "respiratory_relief_search")
         self.assertEqual(first["spend_guardrail_status"], "ready")

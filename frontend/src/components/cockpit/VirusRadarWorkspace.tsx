@@ -101,12 +101,12 @@ const VirusRadarWorkspace: React.FC<Props> = ({
       fallback[item.bundesland] = {
         name: item.bundesland_name,
         avg_viruslast: item.current_known_incidence || 0,
-        intensity: item.event_probability_calibrated || 0,
+        intensity: item.event_probability || 0,
         trend: item.trend || '',
         change_pct: item.change_pct || 0,
         n_standorte: 0,
-        signal_score: item.event_probability_calibrated || 0,
-        impact_probability: item.event_probability_calibrated || 0,
+        signal_score: item.event_probability || 0,
+        impact_probability: item.event_probability || 0,
         forecast_direction: item.trend || '',
         priority_rank: item.decision_rank ?? item.rank ?? undefined,
       };
@@ -121,8 +121,8 @@ const VirusRadarWorkspace: React.FC<Props> = ({
       code: item.bundesland,
       name: item.bundesland_name || item.bundesland,
       trend: item.trend || '',
-      impact_probability: item.event_probability_calibrated || 0,
-      signal_score: item.event_probability_calibrated || 0,
+      impact_probability: item.event_probability || 0,
+      signal_score: item.event_probability || 0,
       recommendation_ref: undefined,
       tooltip: undefined,
     }));
@@ -165,7 +165,7 @@ const VirusRadarWorkspace: React.FC<Props> = ({
     || null
   );
   const heroSignalProbability = (
-    heroPrediction?.event_probability_calibrated
+    heroPrediction?.event_probability
     ?? heroRegion?.impact_probability
     ?? heroRegion?.signal_score
     ?? heroRegionLeaderboardEntry?.impact_probability
@@ -204,7 +204,7 @@ const VirusRadarWorkspace: React.FC<Props> = ({
     evidence: evidenceData.evidence,
     campaigns: campaignsData.campaignsView,
     topPrediction: {
-      event_probability_calibrated: heroSignalProbability,
+      event_probability: heroSignalProbability,
       trend: heroTrend,
     },
   });
@@ -220,7 +220,7 @@ const VirusRadarWorkspace: React.FC<Props> = ({
     stage: selectedRegionStage,
     trend: selectedRegion?.trend || selectedPrediction?.trend || null,
     changePct: selectedRegion?.change_pct ?? selectedPrediction?.change_pct ?? null,
-    signalScore: selectedRegion?.signal_score ?? selectedRegion?.impact_probability ?? selectedPrediction?.event_probability_calibrated ?? null,
+    signalScore: selectedRegion?.signal_score ?? selectedRegion?.impact_probability ?? selectedPrediction?.event_probability ?? null,
     reason: selectedActivation?.reason || selectedRegion?.priority_explanation || null,
   });
   const whyNowItems = buildWhyNowItems(nowData.view.reasons, evidenceData.evidence?.signal_stack?.summary?.top_drivers);

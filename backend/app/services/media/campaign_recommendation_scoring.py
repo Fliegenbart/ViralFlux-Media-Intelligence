@@ -218,7 +218,7 @@ def sort_key(item: Mapping[str, Any]) -> tuple[float, float, float, float]:
         float(stage_order),
         float(guardrail_order),
         float(item.get("suggested_budget_share") or 0.0),
-        float(item.get("confidence") or 0.0),
+        float(item.get("allocation_support_score") or item.get("confidence") or 0.0),
     )
 
 

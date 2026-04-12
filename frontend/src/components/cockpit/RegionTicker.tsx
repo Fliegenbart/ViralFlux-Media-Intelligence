@@ -12,7 +12,7 @@ export interface RegionTickerRegion {
   target_week_start: string;
   target_window_days: number[];
   horizon_days: number;
-  event_probability_calibrated: number;
+  event_probability: number;
   current_known_incidence: number;
   change_pct?: number | null;
   trend?: string;

@@ -33,9 +33,9 @@ export interface RegionalDecisionPayload {
   horizon_days: number;
   signal_stage: string;
   stage: string;
-  decision_score: number;
+  decision_priority_index: number;
   event_probability: number;
-  forecast_confidence: number;
+  signal_support_score: number;
   source_freshness_score: number;
   source_freshness_days: number;
   source_revision_risk: number;
@@ -63,7 +63,7 @@ export interface RegionalForecastPrediction {
   target_week_start: string;
   target_window_days: number[];
   horizon_days: number;
-  event_probability_calibrated: number;
+  event_probability: number;
   expected_next_week_incidence?: number;
   expected_target_incidence?: number;
   prediction_interval?: {
@@ -96,7 +96,7 @@ export interface RegionalForecastPrediction {
   state_population_millions?: number;
   decision?: RegionalDecisionPayload;
   decision_label?: RegionalDecisionStage;
-  priority_score?: number;
+  decision_priority_index?: number;
   reason_trace?: RegionalDecisionReasonTrace;
   uncertainty_summary?: string;
   decision_rank?: number | null;
@@ -107,7 +107,7 @@ export interface RegionalDecisionSummary {
   watch_regions: number;
   prepare_regions: number;
   activate_regions: number;
-  avg_priority_score: number;
+  avg_decision_priority_index: number;
   top_region: string | null;
   top_region_decision: string | null;
 }
@@ -235,9 +235,9 @@ export interface RegionalAllocationRecommendation {
   spend_readiness?: string;
   event_probability?: number;
   decision_label?: RegionalDecisionStage;
-  priority_score?: number;
+  decision_priority_index?: number;
   allocation_score?: number;
-  confidence?: number;
+  allocation_support_score?: number;
   reason_trace?: RegionalDecisionReasonTrace | Record<string, unknown> | string[] | string;
   allocation_reason_trace?: RegionalDecisionReasonTrace | Record<string, unknown> | string[] | string;
   uncertainty_summary?: string;
@@ -352,7 +352,7 @@ export interface RegionalCampaignRecommendation {
   priority_rank: number;
   suggested_budget_share: number;
   suggested_budget_amount: number;
-  confidence: number;
+  allocation_support_score: number;
   evidence_class: string;
   recommended_product_cluster: CampaignClusterSelection;
   recommended_keyword_cluster: CampaignClusterSelection;

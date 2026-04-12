@@ -99,14 +99,14 @@ describe('VirusRadarWorkspace', () => {
             risks: ['Kundendaten bleiben noch im Aufbau.'],
             summary: 'Berlin ist diese Woche der klarste Fokusfall.',
           },
-          forecast: {
-            predictions: [
-              {
-                bundesland: 'BE',
-                bundesland_name: 'Berlin',
-                event_probability_calibrated: 0.81,
-                trend: 'steigend',
-                change_pct: 12.4,
+            forecast: {
+              predictions: [
+                {
+                  bundesland: 'BE',
+                  bundesland_name: 'Berlin',
+                  event_probability: 0.81,
+                  trend: 'steigend',
+                  change_pct: 12.4,
                 decision_rank: 1,
               },
             ],

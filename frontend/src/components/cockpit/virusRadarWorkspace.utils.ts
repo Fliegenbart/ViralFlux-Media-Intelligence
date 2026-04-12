@@ -6,7 +6,7 @@ import {
 } from './cockpitUtils';
 
 export type SignalPrediction = {
-  event_probability_calibrated?: number | null;
+  event_probability?: number | null;
   trend?: string | null;
 } | null;
 
@@ -165,9 +165,9 @@ export function buildSignalTiles({
   return [
     {
       label: 'Signalstärke',
-      value: formatProbability(topPrediction?.event_probability_calibrated),
+      value: formatProbability(topPrediction?.event_probability),
       detail: topPrediction?.trend ? `Trend ${topPrediction.trend}` : 'Trend wird eingeordnet',
-      tone: scoreTone(topPrediction?.event_probability_calibrated),
+      tone: scoreTone(topPrediction?.event_probability),
     },
     {
       label: 'Evidenz',

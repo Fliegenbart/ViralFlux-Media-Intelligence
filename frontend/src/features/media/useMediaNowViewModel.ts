@@ -107,7 +107,7 @@ export function buildNowPageViewModel(
     || 'Watch';
   const focusStage = stageLabel(focusStageValue);
   const focusProbabilityLabel = formatPercent(
-    probabilityPercent(focusPrediction?.event_probability_calibrated ?? weeklyDecision?.event_forecast?.event_probability),
+    probabilityPercent(focusPrediction?.event_probability ?? weeklyDecision?.event_forecast?.event_probability),
     1,
   );
   const focusBudgetLabel = formatCurrency(
@@ -298,7 +298,7 @@ export function buildNowPageViewModel(
         name: firstCleanText(item.name, relatedPrediction?.bundesland_name),
         stage: stageLabel(relatedPrediction?.decision_label || focusStageValue),
         probabilityLabel: relatedPrediction
-          ? formatPercent(probabilityPercent(relatedPrediction.event_probability_calibrated), 1)
+          ? formatPercent(probabilityPercent(relatedPrediction.event_probability), 1)
           : item.signal_score != null
             ? `${Math.round(item.signal_score)}/100`
             : '-',
@@ -321,7 +321,7 @@ export function buildNowPageViewModel(
       code: item.bundesland,
       name: cleanCopy(item.bundesland_name),
       stage: stageLabel(item.decision_label),
-      probabilityLabel: formatPercent(probabilityPercent(item.event_probability_calibrated), 1),
+      probabilityLabel: formatPercent(probabilityPercent(item.event_probability), 1),
       reason: firstCleanText(
         item.reason_trace?.why_details?.[0],
         item.reason_trace?.why?.[0],

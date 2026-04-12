@@ -224,7 +224,7 @@ describe('FocusRegionOutlookPanel', () => {
           target_week_start: '2026-03-23',
           target_window_days: [7],
           horizon_days: 7,
-          event_probability_calibrated: 0.81,
+          event_probability: 0.81,
           expected_target_incidence: 165,
           current_known_incidence: 110,
           prediction_interval: { lower: 150, upper: 185 },

@@ -6,6 +6,24 @@ from dataclasses import asdict, dataclass, field
 from typing import Any
 
 
+def _normalize_campaign_structure(value: Any) -> Any:
+    if isinstance(value, dict):
+        normalized: dict[str, Any] = {}
+        for key, item in value.items():
+            target_key = str(key)
+            if target_key == "confidence":
+                target_key = "allocation_support_score"
+            elif target_key == "min_confidence_for_activate":
+                target_key = "min_allocation_support_for_activate"
+            elif target_key == "min_confidence_for_prepare":
+                target_key = "min_allocation_support_for_prepare"
+            normalized[target_key] = _normalize_campaign_structure(item)
+        return normalized
+    if isinstance(value, list):
+        return [_normalize_campaign_structure(item) for item in value]
+    return value
+
+
 @dataclass(frozen=True)
 class CampaignSpendGuardrails:
     min_budget_share: float
@@ -15,7 +33,7 @@ class CampaignSpendGuardrails:
     blocked_spend_statuses: tuple[str, ...] = ("blocked_operational_gate", "not_applicable")
 
     def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
+        return _normalize_campaign_structure(asdict(self))
 
 
 @dataclass(frozen=True)
@@ -68,7 +86,7 @@ class CampaignRecommendationConfig:
         payload["product_clusters"] = [item.to_dict() for item in self.product_clusters]
         payload["keyword_clusters"] = [item.to_dict() for item in self.keyword_clusters]
         payload["spend_guardrails"] = self.spend_guardrails.to_dict()
-        return payload
+        return _normalize_campaign_structure(payload)
 
 
 @dataclass(frozen=True)
@@ -133,4 +151,4 @@ class CampaignRecommendation:
         payload["recommendation_rationale"] = self.recommendation_rationale.to_dict()
         payload["bundesland"] = self.region
         payload["bundesland_name"] = self.region_name
-        return payload
+        return _normalize_campaign_structure(payload)

@@ -6,6 +6,30 @@ from dataclasses import asdict, dataclass, field
 from typing import Any
 
 
+def _normalize_allocation_structure(value: Any) -> Any:
+    if isinstance(value, dict):
+        normalized: dict[str, Any] = {}
+        for key, item in value.items():
+            target_key = str(key)
+            if target_key == "confidence":
+                target_key = "allocation_support_score"
+            elif target_key == "confidence_thresholds":
+                target_key = "allocation_support_thresholds"
+            elif target_key == "confidence_penalties":
+                target_key = "allocation_support_penalties"
+            normalized[target_key] = _normalize_allocation_structure(item)
+        component_weights = normalized.get("component_weights")
+        if isinstance(component_weights, dict):
+            if "priority_score" in component_weights:
+                component_weights["decision_priority_index"] = component_weights.pop("priority_score")
+            if "forecast_confidence" in component_weights:
+                component_weights["signal_support_score"] = component_weights.pop("forecast_confidence")
+        return normalized
+    if isinstance(value, list):
+        return [_normalize_allocation_structure(item) for item in value]
+    return value
+
+
 @dataclass(frozen=True)
 class AllocationReasonTrace:
     why: list[str] = field(default_factory=list)
@@ -39,7 +63,7 @@ class RegionalMediaAllocationConfig:
     region_weights: dict[str, float] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
+        return _normalize_allocation_structure(asdict(self))
 
 
 @dataclass(frozen=True)
@@ -81,4 +105,4 @@ class RegionalAllocationRecommendation:
         payload["keyword_clusters"] = [item.to_dict() for item in self.keyword_clusters]
         payload["allocation_reason_trace"] = payload["reason_trace"]
         payload["suggested_budget_amount"] = payload["suggested_budget_eur"]
-        return payload
+        return _normalize_allocation_structure(payload)

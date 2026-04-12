@@ -190,7 +190,13 @@ class RegionalDecisionEngine:
         usable_share = source_snapshot["usable_share"]
         coverage_score = source_snapshot["coverage_score"]
 
-        event_probability = _clamp(float(prediction.get("event_probability_calibrated") or 0.0))
+        event_probability = _clamp(
+            float(
+                prediction.get("event_probability")
+                or prediction.get("event_probability_calibrated")
+                or 0.0
+            )
+        )
         forecast_confidence = self._forecast_confidence_score(
             prediction=prediction,
             metadata=metadata,

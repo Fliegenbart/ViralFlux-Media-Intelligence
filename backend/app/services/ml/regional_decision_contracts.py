@@ -6,6 +6,52 @@ from dataclasses import asdict, dataclass, field
 from typing import Any
 
 
+_DECISION_KEY_RENAMES = {
+    "decision_score": "decision_priority_index",
+    "forecast_confidence": "signal_support_score",
+    "activate_forecast_confidence": "activate_signal_support",
+    "prepare_forecast_confidence": "prepare_signal_support",
+}
+
+_DECISION_TEXT_REPLACEMENTS = (
+    ("Forecast confidence", "Signal support"),
+    ("forecast confidence", "signal support"),
+    (
+        "Confidence combines interval width, backtest quality and live source usability",
+        "Signal support combines interval width, backtest quality and live source usability",
+    ),
+    (
+        "trend, freshness and confidence support preparation",
+        "trend, freshness and signal support justify preparation",
+    ),
+)
+
+
+def _normalize_decision_text(value: Any) -> Any:
+    if not isinstance(value, str):
+        return value
+    normalized = value
+    for source, target in _DECISION_TEXT_REPLACEMENTS:
+        normalized = normalized.replace(source, target)
+    if normalized.startswith("forecast_confidence_"):
+        return "signal_support_" + normalized[len("forecast_confidence_"):]
+    return normalized
+
+
+def _normalize_decision_structure(value: Any) -> Any:
+    if isinstance(value, dict):
+        normalized: dict[str, Any] = {}
+        for key, item in value.items():
+            target_key = _DECISION_KEY_RENAMES.get(str(key), str(key))
+            normalized[target_key] = _normalize_decision_structure(item)
+        if normalized.get("key") == "forecast_confidence":
+            normalized["key"] = "signal_support_score"
+        return normalized
+    if isinstance(value, list):
+        return [_normalize_decision_structure(item) for item in value]
+    return _normalize_decision_text(value)
+
+
 @dataclass(frozen=True)
 class DecisionComponentScore:
     key: str
@@ -100,4 +146,4 @@ class RegionalDecision:
     def to_dict(self) -> dict[str, Any]:
         payload = asdict(self)
         payload["reason_trace"] = self.reason_trace.to_dict()
-        return payload
+        return _normalize_decision_structure(payload)

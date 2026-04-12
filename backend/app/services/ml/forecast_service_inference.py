@@ -249,7 +249,7 @@ def inference_from_loaded_models(
         "feature_names": feature_names,
         "feature_importance": metadata.get("feature_importance", {}),
         "model_version": model_version,
-        "confidence": contracts["event_forecast"].get("confidence"),
+        "confidence": contracts["event_forecast"].get("reliability_score"),
         "training_window": metadata.get("training_window"),
         "backtest_metrics": backtest_metrics,
         "contracts": contracts,

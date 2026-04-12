@@ -434,7 +434,7 @@ class OutbreakScore(Base):
     id = Column(Integer, primary_key=True, index=True)
     datum = Column(DateTime, nullable=False, index=True)
     virus_typ = Column(String, nullable=False)
-    decision_signal_index = Column(Float, nullable=False)
+    decision_priority_index = Column(Float, nullable=False)
     signal_level = Column(String)
     signal_source = Column(String)
     reliability_label = Column(String)

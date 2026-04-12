@@ -205,7 +205,7 @@ class AiCampaignPlannerNormalizationTests(unittest.TestCase):
             playbook_candidate={
                 **self.candidate,
                 "forecast_assessment": {
-                    "event_forecast": {"event_signal_score": 0.42},
+                    "event_forecast": {"heuristic_event_score": 0.42},
                     "forecast_quality": {"forecast_readiness": "WATCH"},
                 },
                 "opportunity_assessment": {"decision_priority_index": 34.0},

@@ -7,7 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field
 class OutbreakScoreBase(BaseModel):
     datum: datetime
     virus_typ: str = Field(..., min_length=1)
-    decision_signal_index: float = Field(..., ge=0, le=100)
+    decision_priority_index: float = Field(..., ge=0, le=100)
     signal_level: str | None = None
     signal_source: str | None = None
     reliability_label: str | None = None
@@ -26,7 +26,7 @@ class OutbreakScoreCreate(OutbreakScoreBase):
 class OutbreakScoreUpdate(BaseModel):
     datum: datetime | None = None
     virus_typ: str | None = Field(default=None, min_length=1)
-    decision_signal_index: float | None = Field(default=None, ge=0, le=100)
+    decision_priority_index: float | None = Field(default=None, ge=0, le=100)
     signal_level: str | None = None
     signal_source: str | None = None
     reliability_label: str | None = None

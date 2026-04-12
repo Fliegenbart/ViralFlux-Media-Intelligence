@@ -103,6 +103,8 @@ class RegionalDecisionEngineTests(unittest.TestCase):
         self.assertEqual(decision.uncertainty_summary, "Residual uncertainty is currently limited.")
         self.assertEqual(decision.explanation_summary_detail["code"], "decision_summary")
         self.assertEqual(decision.uncertainty_summary_detail["code"], "uncertainty_summary")
+        self.assertEqual(decision.metadata["engine_type"], "policy_rule_engine")
+        self.assertTrue(str(decision.metadata["config_version"]).startswith("regional_policy_engine"))
 
     def test_evaluate_assigns_prepare_for_mid_strength_signal_bundle(self) -> None:
         decision = self.engine.evaluate(
@@ -354,7 +356,7 @@ class RegionalDecisionEngineTests(unittest.TestCase):
         default_config = self.engine.get_config("Influenza A")
         sars_config = self.engine.get_config("SARS-CoV-2")
 
-        self.assertEqual(sars_config.version, "regional_decision_sars_v1")
+        self.assertEqual(sars_config.version, "regional_policy_engine_sars_v1")
         self.assertGreater(sars_config.activate_probability_threshold, default_config.activate_probability_threshold)
         self.assertGreater(sars_config.activate_score_threshold, default_config.activate_score_threshold)
 

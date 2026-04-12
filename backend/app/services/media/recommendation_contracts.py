@@ -346,8 +346,7 @@ def derive_evidence_strength(card: dict[str, Any]) -> str:
         float(event_forecast["event_probability"]) * 100.0
         if event_forecast.get("event_probability") is not None
         else float(
-            event_forecast.get("event_signal_score")
-            or event_forecast.get("heuristic_event_score")
+            event_forecast.get("heuristic_event_score")
             or 0.0
         )
         * 100.0

@@ -10,7 +10,6 @@ DEFAULT_DECISION_BASELINE_WINDOW_DAYS = 84
 DEFAULT_DECISION_EVENT_THRESHOLD_PCT = 25.0
 HEURISTIC_EVENT_SCORE_SOURCE = "heuristic_sigmoid_fallback_score"
 BACKTEST_RELIABILITY_PROXY_SOURCE = "backtest_reliability_proxy"
-CONFIDENCE_SEMANTICS_ALIAS = "alias_of_reliability_score"
 
 
 def clamp(value: float, lower: float, upper: float) -> float:
@@ -59,69 +58,72 @@ def heuristic_event_score_from_forecast(
     return round(clamp(sigmoid(z_score), 0.001, 0.999), 4)
 
 
-def event_probability_from_forecast(
-    *,
-    prediction: float,
-    baseline: float,
-    lower_bound: float | None = None,
-    upper_bound: float | None = None,
-    threshold_pct: float = DEFAULT_DECISION_EVENT_THRESHOLD_PCT,
-) -> float:
-    """Deprecated compatibility wrapper for the heuristic event score."""
-    return heuristic_event_score_from_forecast(
-        prediction=prediction,
-        baseline=baseline,
-        lower_bound=lower_bound,
-        upper_bound=upper_bound,
-        threshold_pct=threshold_pct,
-    )
-
-
 def normalized_decision_priority_index(
     *,
-    event_probability: float | None,
+    decision_basis_score: float | None,
     modifier: float = 1.0,
 ) -> float:
-    probability = float(event_probability or 0.0)
-    adjusted = clamp(probability * float(modifier), 0.0, 1.0)
+    basis_score = float(decision_basis_score or 0.0)
+    adjusted = clamp(basis_score * float(modifier), 0.0, 1.0)
     return round(adjusted * 100.0, 1)
 
 
 def normalized_expected_value_index(
     *,
-    event_probability: float | None,
+    decision_basis_score: float | None,
     modifier: float = 1.0,
 ) -> float:
     """Deprecated alias for the decision-priority index."""
     return normalized_decision_priority_index(
-        event_probability=event_probability,
+        decision_basis_score=decision_basis_score,
         modifier=modifier,
     )
 
 
-def normalize_event_forecast_payload(payload: dict[str, Any] | None) -> dict[str, Any]:
-    """Keep event-forecast semantics explicit at the contract boundary.
-
-    `confidence` stays for backward compatibility, but is no longer treated as an
-    independent certainty concept. It is a numeric alias of `reliability_score`.
-    """
-    normalized = dict(payload or {})
-    event_probability = normalized.get("event_probability")
-    heuristic_event_score = normalized.get("heuristic_event_score")
-    event_signal_score = normalized.get("event_signal_score")
-
+def resolve_decision_basis_score(
+    *,
+    event_probability: float | None,
+    heuristic_event_score: float | None,
+) -> float | None:
     if event_probability is not None:
-        event_signal_score = float(event_probability)
-    elif event_signal_score is not None:
-        event_signal_score = float(event_signal_score)
-        if heuristic_event_score is None:
-            heuristic_event_score = event_signal_score
-    elif heuristic_event_score is not None:
-        event_signal_score = float(heuristic_event_score)
-
+        return float(event_probability)
     if heuristic_event_score is not None:
-        normalized["heuristic_event_score"] = float(heuristic_event_score)
-    normalized["event_signal_score"] = event_signal_score
+        return float(heuristic_event_score)
+    return None
+
+
+def resolve_decision_basis_type(
+    *,
+    event_probability: float | None,
+    heuristic_event_score: float | None,
+) -> str | None:
+    if event_probability is not None:
+        return "learned_probability"
+    if heuristic_event_score is not None:
+        return "heuristic_signal"
+    return None
+
+
+def normalize_event_forecast_payload(payload: dict[str, Any] | None) -> dict[str, Any]:
+    """Keep event-forecast semantics explicit at the contract boundary."""
+    normalized = dict(payload or {})
+    event_probability = (
+        float(normalized["event_probability"])
+        if normalized.get("event_probability") is not None
+        else None
+    )
+    heuristic_event_score = normalized.get("heuristic_event_score")
+    if heuristic_event_score is None and event_probability is None and normalized.get("event_signal_score") is not None:
+        heuristic_event_score = normalized.get("event_signal_score")
+    heuristic_event_score = (
+        float(heuristic_event_score)
+        if heuristic_event_score is not None
+        else None
+    )
+
+    normalized["event_probability"] = event_probability
+    normalized["heuristic_event_score"] = heuristic_event_score
+    normalized.pop("event_signal_score", None)
 
     reliability_value = normalized.get("reliability_score")
     if reliability_value is None:
@@ -129,10 +131,9 @@ def normalize_event_forecast_payload(payload: dict[str, Any] | None) -> dict[str
     if reliability_value is not None:
         reliability_value = float(reliability_value)
         normalized["reliability_score"] = reliability_value
-        normalized["confidence"] = reliability_value
-        normalized["confidence_label"] = normalized.get("confidence_label") or confidence_label(reliability_value)
         normalized["reliability_label"] = confidence_label(reliability_value)
     else:
+        normalized.pop("reliability_score", None)
         normalized.pop("reliability_label", None)
 
     if event_probability is not None:
@@ -141,11 +142,13 @@ def normalize_event_forecast_payload(payload: dict[str, Any] | None) -> dict[str
         signal_source = (
             normalized.get("signal_source")
             or normalized.get("probability_source")
-            or HEURISTIC_EVENT_SCORE_SOURCE
+            or (HEURISTIC_EVENT_SCORE_SOURCE if heuristic_event_score is not None else None)
         )
         normalized["probability_source"] = None
     normalized["signal_source"] = str(signal_source) if signal_source is not None else None
 
+    normalized.pop("confidence", None)
+    normalized.pop("confidence_label", None)
     normalized.pop("confidence_semantics", None)
     if normalized.get("uncertainty_source") in {None, "", "backtest_interval_coverage"}:
         normalized["uncertainty_source"] = BACKTEST_RELIABILITY_PROXY_SOURCE
@@ -193,8 +196,6 @@ class EventForecast:
     brier_score: float | None = None
     ece: float | None = None
     calibration_passed: bool | None = None
-    confidence: float | None = None
-    confidence_label: str | None = None
     reliability_score: float | None = None
     backtest_quality_score: float | None = None
     probability_source: str | None = None
@@ -249,6 +250,8 @@ class OpportunityAssessment:
     truth_readiness: str
     forecast_readiness: str
     decision_priority_index: float
+    decision_basis_score: float | None = None
+    decision_basis_type: str | None = None
     expected_units_lift: float | None = None
     expected_revenue_lift: float | None = None
     lift_interval: dict[str, Any] | None = None

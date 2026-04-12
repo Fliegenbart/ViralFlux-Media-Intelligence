@@ -9,7 +9,11 @@ from sqlalchemy import func
 
 from app.services.media.playbook_engine import PLAYBOOK_CATALOG
 from app.services.media.semantic_contracts import normalize_confidence_pct
-from app.services.ml.forecast_contracts import DEFAULT_DECISION_HORIZON_DAYS
+from app.services.ml.forecast_contracts import (
+    DEFAULT_DECISION_HORIZON_DAYS,
+    resolve_decision_basis_score,
+    resolve_decision_basis_type,
+)
 from app.services.ml.forecast_decision_service import ForecastDecisionService
 
 logger = logging.getLogger(__name__)
@@ -122,11 +126,21 @@ def _forecast_first_candidates(
         if event_forecast.get("event_probability") is not None
         else None
     )
-    event_signal_score = float(
-        event_forecast.get("event_signal_score")
-        or event_forecast.get("heuristic_event_score")
-        or event_probability
+    heuristic_event_score = (
+        float(event_forecast["heuristic_event_score"])
+        if event_forecast.get("heuristic_event_score") is not None
+        else None
+    )
+    decision_basis_score = float(
+        resolve_decision_basis_score(
+            event_probability=event_probability,
+            heuristic_event_score=heuristic_event_score,
+        )
         or 0.0
+    )
+    decision_basis_type = resolve_decision_basis_type(
+        event_probability=event_probability,
+        heuristic_event_score=heuristic_event_score,
     )
     calibration_passed = bool(event_forecast.get("calibration_passed"))
     forecast_readiness = str(forecast_quality.get("forecast_readiness") or "WATCH")
@@ -157,9 +171,9 @@ def _forecast_first_candidates(
                 "playbook_key": playbook_key,
                 "region_code": region_code,
                 "region_name": engine._region_label(region_code) if region_code != "Gesamt" else "Deutschland",
-                "signal_score": round(event_signal_score * 100.0, 1),
-                "trigger_strength": round(event_signal_score * 100.0, 2),
-                "confidence": round(float(event_forecast.get("reliability_score") or event_signal_score) * 100.0, 2),
+                "signal_score": round(decision_basis_score * 100.0, 1),
+                "trigger_strength": round(decision_basis_score * 100.0, 2),
+                "confidence": round(float(event_forecast.get("reliability_score") or decision_basis_score) * 100.0, 2),
                 "signal_confidence_pct": normalize_confidence_pct(event_forecast.get("reliability_score")),
                 "priority_score": round(decision_priority_index, 2),
                 "impact_probability": round(event_probability * 100.0, 1) if calibration_passed and event_probability is not None else None,
@@ -175,6 +189,7 @@ def _forecast_first_candidates(
                 "forecast_quality": forecast_quality,
                 "event_forecast": event_forecast,
                 "opportunity_assessment": opportunity_assessment,
+                "decision_basis_type": decision_basis_type,
                 "exploratory_signals": exploratory_signals,
                 "trigger_snapshot": {
                     "source": "ForecastDecisionService",
@@ -187,8 +202,8 @@ def _forecast_first_candidates(
                         )
                         if event_probability is not None
                         else (
-                            f"7-Tage Event-Signal-Score für {virus_typ}: "
-                            f"{round(event_signal_score * 100.0, 1)} "
+                            f"7-Tage heuristisches Event-Signal für {virus_typ}: "
+                            f"{round(decision_basis_score * 100.0, 1)} "
                             f"bei Baseline {baseline_value} und Schwelle {primary_threshold}."
                         )
                     ),
@@ -196,14 +211,20 @@ def _forecast_first_candidates(
                         (forecast_quality.get("timing_metrics") or {}).get("best_lag_days")
                         or DEFAULT_DECISION_HORIZON_DAYS
                     ),
-                    "confidence": float(event_forecast.get("reliability_score") or event_signal_score),
+                    "confidence": float(event_forecast.get("reliability_score") or decision_basis_score),
                     "values": {
                         "event_probability_pct": (
                             round(event_probability * 100.0, 1)
                             if event_probability is not None
                             else None
                         ),
-                        "event_signal_pct": round(event_signal_score * 100.0, 1),
+                        "heuristic_event_signal_pct": (
+                            round(decision_basis_score * 100.0, 1)
+                            if decision_basis_type == "heuristic_signal"
+                            else None
+                        ),
+                        "decision_basis_score_pct": round(decision_basis_score * 100.0, 1),
+                        "decision_basis_type": decision_basis_type,
                         "threshold_pct": event_forecast.get("threshold_pct"),
                         "baseline_value": baseline_value,
                         "threshold_value": primary_threshold,

@@ -14,7 +14,7 @@ class PublicApiSemanticsTests(unittest.TestCase):
     def test_obfuscate_result_returns_signal_contract_without_trend_or_confidence(self) -> None:
         payload = obfuscate_result(
             {
-                "decision_signal_index": 72.4,
+                "decision_priority_index": 72.4,
                 "reliability_label": "Hoch",
                 "component_scores": {
                     "wastewater": 0.91,

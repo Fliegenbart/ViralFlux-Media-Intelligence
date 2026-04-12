@@ -18,7 +18,6 @@ from app.models.database import (
 )
 from app.services.ml.forecast_contracts import (
     BACKTEST_RELIABILITY_PROXY_SOURCE,
-    CONFIDENCE_SEMANTICS_ALIAS,
     DEFAULT_DECISION_BASELINE_WINDOW_DAYS,
     DEFAULT_DECISION_EVENT_THRESHOLD_PCT,
     DEFAULT_DECISION_HORIZON_DAYS,
@@ -29,10 +28,11 @@ from app.services.ml.forecast_contracts import (
     ForecastQuality,
     HEURISTIC_EVENT_SCORE_SOURCE,
     OpportunityAssessment,
-    confidence_label,
     heuristic_event_score_from_forecast,
     normalize_event_forecast_payload,
     normalized_decision_priority_index,
+    resolve_decision_basis_score,
+    resolve_decision_basis_type,
 )
 from app.services.ml.forecast_horizon_utils import DEFAULT_FORECAST_REGION, reliability_score_from_metrics
 
@@ -193,8 +193,6 @@ class ForecastDecisionService:
     ) -> float | None:
         if stored_event_forecast.get("reliability_score") is not None:
             return float(stored_event_forecast["reliability_score"])
-        if stored_event_forecast.get("confidence") is not None:
-            return float(stored_event_forecast["confidence"])
         if event_calibration.get("reliability_score") is not None:
             return float(event_calibration["reliability_score"])
         derived_reliability = reliability_score_from_metrics(event_calibration or {})
@@ -222,41 +220,7 @@ class ForecastDecisionService:
 
     @staticmethod
     def _clean_decision_event_forecast(payload: dict[str, Any]) -> dict[str, Any]:
-        event_probability = payload.get("event_probability")
-        heuristic_event_score = payload.get("heuristic_event_score")
-        event_signal_score = (
-            float(event_probability)
-            if event_probability is not None
-            else (
-                float(heuristic_event_score)
-                if heuristic_event_score is not None
-                else None
-            )
-        )
-        reliability_score = payload.get("reliability_score")
-        signal_source = (
-            payload.get("probability_source")
-            if event_probability is not None
-            else (payload.get("probability_source") or HEURISTIC_EVENT_SCORE_SOURCE)
-        )
-
-        cleaned = dict(payload or {})
-        cleaned.pop("confidence", None)
-        cleaned.pop("confidence_label", None)
-        cleaned.pop("confidence_semantics", None)
-        cleaned["event_signal_score"] = event_signal_score
-        cleaned["signal_source"] = str(signal_source) if signal_source is not None else None
-        cleaned["probability_source"] = (
-            str(payload.get("probability_source"))
-            if event_probability is not None and payload.get("probability_source") is not None
-            else None
-        )
-        cleaned["reliability_label"] = (
-            confidence_label(float(reliability_score))
-            if reliability_score is not None
-            else None
-        )
-        return cleaned
+        return normalize_event_forecast_payload(payload)
 
     def _resolve_live_event_probability(
         self,
@@ -278,11 +242,9 @@ class ForecastDecisionService:
                     stored.get("probability_source") or stored.get("calibration_method") or "learned"
                 ),
                 "reliability_score": stored.get("reliability_score"),
-                "confidence": stored.get("confidence"),
                 "backtest_quality_score": stored.get("backtest_quality_score"),
                 "calibration_mode": stored.get("calibration_mode"),
                 "uncertainty_source": stored.get("uncertainty_source"),
-                "confidence_semantics": stored.get("confidence_semantics"),
                 "fallback_reason": stored.get("fallback_reason"),
                 "learned_model_version": stored.get("learned_model_version"),
                 "fallback_used": bool(stored.get("fallback_used")),
@@ -295,11 +257,9 @@ class ForecastDecisionService:
                 "heuristic_event_score": float(stored_heuristic),
                 "probability_source": str(stored.get("probability_source") or HEURISTIC_EVENT_SCORE_SOURCE),
                 "reliability_score": stored.get("reliability_score"),
-                "confidence": stored.get("confidence"),
                 "backtest_quality_score": stored.get("backtest_quality_score"),
                 "calibration_mode": stored.get("calibration_mode"),
                 "uncertainty_source": stored.get("uncertainty_source"),
-                "confidence_semantics": stored.get("confidence_semantics"),
                 "fallback_reason": stored.get("fallback_reason"),
                 "learned_model_version": stored.get("learned_model_version"),
                 "fallback_used": True,
@@ -317,11 +277,9 @@ class ForecastDecisionService:
                 ),
                 "probability_source": HEURISTIC_EVENT_SCORE_SOURCE,
                 "reliability_score": None,
-                "confidence": None,
                 "backtest_quality_score": None,
                 "calibration_mode": None,
                 "uncertainty_source": BACKTEST_RELIABILITY_PROXY_SOURCE,
-                "confidence_semantics": CONFIDENCE_SEMANTICS_ALIAS,
                 "fallback_reason": "stored_event_probability_missing",
                 "learned_model_version": None,
                 "fallback_used": True,
@@ -331,11 +289,9 @@ class ForecastDecisionService:
             "heuristic_event_score": None,
             "probability_source": HEURISTIC_EVENT_SCORE_SOURCE,
             "reliability_score": None,
-            "confidence": None,
             "backtest_quality_score": None,
             "calibration_mode": None,
             "uncertainty_source": BACKTEST_RELIABILITY_PROXY_SOURCE,
-            "confidence_semantics": CONFIDENCE_SEMANTICS_ALIAS,
             "fallback_reason": "stored_event_probability_missing",
             "learned_model_version": None,
             "fallback_used": True,
@@ -404,14 +360,29 @@ class ForecastDecisionService:
         fallback_reason = resolved_event_signal.get("fallback_reason")
         learned_model_version = resolved_event_signal.get("learned_model_version")
         fallback_used = bool(resolved_event_signal.get("fallback_used"))
-        decision_signal = (
-            float(event_probability)
-            if event_probability is not None
-            else (
+        decision_basis_score = resolve_decision_basis_score(
+            event_probability=(
+                float(event_probability)
+                if event_probability is not None
+                else None
+            ),
+            heuristic_event_score=(
                 float(heuristic_event_score)
                 if heuristic_event_score is not None
                 else None
-            )
+            ),
+        )
+        decision_basis_type = resolve_decision_basis_type(
+            event_probability=(
+                float(event_probability)
+                if event_probability is not None
+                else None
+            ),
+            heuristic_event_score=(
+                float(heuristic_event_score)
+                if heuristic_event_score is not None
+                else None
+            ),
         )
         probability_is_learned = event_probability is not None
 
@@ -482,8 +453,6 @@ class ForecastDecisionService:
                 if probability_is_learned and event_calibration
                 else None
             ),
-            confidence=reliability_score,
-            confidence_label=confidence_label(reliability_score) if reliability_score is not None else None,
             reliability_score=reliability_score,
             backtest_quality_score=backtest_quality_score,
             probability_source=probability_source,
@@ -508,12 +477,12 @@ class ForecastDecisionService:
             promotion_gate=quality_gate,
         )
 
-        compatibility_score = normalized_decision_priority_index(
-            event_probability=decision_signal,
+        decision_priority_index = normalized_decision_priority_index(
+            decision_basis_score=decision_basis_score,
             modifier=1.0 if forecast_ready else 0.75,
         )
         component_scores = {
-            "wastewater": round(min(1.0, max(0.0, (decision_signal or 0.0) * 1.05)), 4),
+            "wastewater": round(min(1.0, max(0.0, (decision_basis_score or 0.0) * 1.05)), 4),
             "notaufnahme": round(
                 min(1.0, max(0.0, float(timing_metrics.get("corr_at_best_lag", 0.0) or 0.0))),
                 4,
@@ -530,13 +499,15 @@ class ForecastDecisionService:
             ),
             "drug_shortage": 0.0,
             "order_velocity": round(
-                min(1.0, max(0.0, compatibility_score / 100.0)),
+                min(1.0, max(0.0, decision_priority_index / 100.0)),
                 4,
             ),
         }
 
         decision_summary = {
-            "decision_signal_index": compatibility_score,
+            "decision_priority_index": decision_priority_index,
+            "decision_basis_score": decision_basis_score,
+            "decision_basis_type": decision_basis_type,
             "reliability_label": event_forecast.get("reliability_label"),
             "component_scores": component_scores,
             "signal_source": event_forecast.get("signal_source"),
@@ -664,8 +635,15 @@ class ForecastDecisionService:
             model_version=burden_forecast.get("model_version"),
             event_forecast={
                 "event_probability": event_forecast.get("event_probability"),
-                "event_signal_score": event_forecast.get("event_signal_score"),
                 "heuristic_event_score": event_forecast.get("heuristic_event_score"),
+                "decision_basis_score": resolve_decision_basis_score(
+                    event_probability=event_forecast.get("event_probability"),
+                    heuristic_event_score=event_forecast.get("heuristic_event_score"),
+                ),
+                "decision_basis_type": resolve_decision_basis_type(
+                    event_probability=event_forecast.get("event_probability"),
+                    heuristic_event_score=event_forecast.get("heuristic_event_score"),
+                ),
                 "reliability_score": event_forecast.get("reliability_score"),
                 "reliability_label": event_forecast.get("reliability_label"),
                 "backtest_quality_score": event_forecast.get("backtest_quality_score"),
@@ -746,13 +724,16 @@ class ForecastDecisionService:
         quality = bundle.get("forecast_quality") or {}
         event_forecast = bundle.get("event_forecast") or {}
         truth = self.get_truth_readiness(brand=brand)
-        event_probability = (
-            event_forecast.get("event_probability")
-            if event_forecast.get("event_probability") is not None
-            else event_forecast.get("event_signal_score")
+        decision_basis_score = resolve_decision_basis_score(
+            event_probability=event_forecast.get("event_probability"),
+            heuristic_event_score=event_forecast.get("heuristic_event_score"),
+        )
+        decision_basis_type = resolve_decision_basis_type(
+            event_probability=event_forecast.get("event_probability"),
+            heuristic_event_score=event_forecast.get("heuristic_event_score"),
         )
         decision_priority_index = normalized_decision_priority_index(
-            event_probability=event_probability,
+            decision_basis_score=decision_basis_score,
             modifier=secondary_modifier,
         )
 
@@ -768,6 +749,8 @@ class ForecastDecisionService:
             truth_readiness=str(truth.get("truth_readiness") or "noch_nicht_angeschlossen"),
             forecast_readiness=str(quality.get("forecast_readiness") or "WATCH"),
             decision_priority_index=decision_priority_index,
+            decision_basis_score=decision_basis_score,
+            decision_basis_type=decision_basis_type,
             expected_units_lift=None,
             expected_revenue_lift=None,
             lift_interval=None,
@@ -790,7 +773,9 @@ class ForecastDecisionService:
         decision_summary = bundle.get("decision_summary") or {}
         return {
             "virus_typ": virus_typ,
-            "decision_signal_index": decision_summary.get("decision_signal_index", 0.0),
+            "decision_priority_index": decision_summary.get("decision_priority_index", 0.0),
+            "decision_basis_score": decision_summary.get("decision_basis_score"),
+            "decision_basis_type": decision_summary.get("decision_basis_type"),
             "reliability_label": decision_summary.get("reliability_label", "Mittel"),
             "signal_source": (bundle.get("event_forecast") or {}).get("signal_source"),
             "component_scores": decision_summary.get("component_scores", {}),
@@ -813,7 +798,7 @@ class ForecastDecisionService:
             for virus_typ in virus_types
         }
         overall = max(
-            (float(item.get("decision_signal_index") or 0.0) for item in per_virus.values()),
+            (float(item.get("decision_priority_index") or 0.0) for item in per_virus.values()),
             default=0.0,
         )
         return {
@@ -852,7 +837,6 @@ class ForecastDecisionService:
                 probability_source = str(
                     stored.get("probability_source") or stored.get("calibration_method") or "learned"
                 )
-                score_input = probability
             else:
                 probability = None
                 heuristic_score = (
@@ -867,13 +851,23 @@ class ForecastDecisionService:
                     else None
                 )
                 probability_source = HEURISTIC_EVENT_SCORE_SOURCE
-                score_input = heuristic_score
+            decision_basis_score = resolve_decision_basis_score(
+                event_probability=probability,
+                heuristic_event_score=heuristic_score,
+            )
+            decision_basis_type = resolve_decision_basis_type(
+                event_probability=probability,
+                heuristic_event_score=heuristic_score,
+            )
             history.append(
                 {
                     "date": row.forecast_date.isoformat() if row.forecast_date else None,
-                    "decision_signal_index": normalized_decision_priority_index(event_probability=score_input),
+                    "decision_priority_index": normalized_decision_priority_index(
+                        decision_basis_score=decision_basis_score
+                    ),
+                    "decision_basis_score": decision_basis_score,
+                    "decision_basis_type": decision_basis_type,
                     "event_probability": probability,
-                    "event_signal_score": score_input,
                     "heuristic_event_score": heuristic_score,
                     "signal_source": probability_source,
                     "probability_source": (probability_source if probability is not None else None),

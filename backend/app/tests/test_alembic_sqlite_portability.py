@@ -116,9 +116,15 @@ class AlembicSQLitePortabilityTests(unittest.TestCase):
                 version_row = conn.execute(
                     "SELECT version_num FROM alembic_version"
                 ).fetchone()
+                outbreak_columns = {
+                    row[1]
+                    for row in conn.execute("PRAGMA table_info('outbreak_scores')")
+                }
 
             self.assertIsNotNone(version_row)
-            self.assertEqual(version_row[0], "c8d1e2f3a4b5")
+            self.assertEqual(version_row[0], "d9e8f7a6b5c4")
+            self.assertIn("decision_priority_index", outbreak_columns)
+            self.assertNotIn("decision_signal_index", outbreak_columns)
 
 
 if __name__ == "__main__":

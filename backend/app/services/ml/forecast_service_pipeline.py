@@ -150,7 +150,7 @@ def train_and_forecast(
         "feature_names": feature_names,
         "feature_importance": feature_importance,
         "model_version": model_version,
-        "confidence": contracts["event_forecast"].get("confidence"),
+        "confidence": contracts["event_forecast"].get("reliability_score"),
         "training_window": {
             "start": df["ds"].min().isoformat(),
             "end": df["ds"].max().isoformat(),
@@ -193,11 +193,11 @@ def save_forecast(
     contracts_payload = forecast_data.get("contracts") or {}
     raw_event_forecast = contracts_payload.get("event_forecast") or {}
     normalized_event_forecast = normalize_event_forecast_payload_fn(raw_event_forecast)
-    stored_confidence = normalized_event_forecast.get("confidence")
+    stored_confidence = normalized_event_forecast.get("reliability_score")
     if stored_confidence is None and forecast_data.get("confidence") is not None:
-        normalized_event_forecast["confidence"] = float(forecast_data["confidence"])
+        normalized_event_forecast["reliability_score"] = float(forecast_data["confidence"])
         normalized_event_forecast = normalize_event_forecast_payload_fn(normalized_event_forecast)
-        stored_confidence = normalized_event_forecast.get("confidence")
+        stored_confidence = normalized_event_forecast.get("reliability_score")
     if stored_confidence is None:
         stored_confidence = forecast_data.get("confidence", 0.95)
 

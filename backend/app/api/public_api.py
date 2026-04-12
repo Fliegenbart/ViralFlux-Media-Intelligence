@@ -96,7 +96,7 @@ def obfuscate_result(internal: dict) -> PublicRiskResponse:
     All weights, thresholds and formulas are stripped.
     Only qualitative signal assessments are emitted.
     """
-    score = internal.get("decision_signal_index", 0)
+    score = internal.get("decision_priority_index", 0)
     components = internal.get("component_scores", {})
 
     meta = ResponseMeta(

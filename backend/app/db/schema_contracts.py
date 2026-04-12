@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 
 ML_FORECAST_REGION_SCOPE_MIGRATION = "f1a2b3c4d5e6"
-OUTBREAK_SCORE_SIGNAL_SEMANTICS_MIGRATION = "c8d1e2f3a4b5"
+OUTBREAK_SCORE_PRIORITY_INDEX_MIGRATION = "d9e8f7a6b5c4"
 
 _REQUIRED_SCHEMA_CONTRACTS: dict[str, dict[str, Any]] = {
     "ml_forecasts": {
@@ -22,9 +22,9 @@ _REQUIRED_SCHEMA_CONTRACTS: dict[str, dict[str, Any]] = {
         ),
     },
     "outbreak_scores": {
-        "migration_revision": OUTBREAK_SCORE_SIGNAL_SEMANTICS_MIGRATION,
+        "migration_revision": OUTBREAK_SCORE_PRIORITY_INDEX_MIGRATION,
         "columns": (
-            "decision_signal_index",
+            "decision_priority_index",
             "signal_level",
             "signal_source",
             "reliability_label",
@@ -51,7 +51,7 @@ class MLForecastSchemaMismatchError(SchemaContractMismatchError):
 
 
 class OutbreakScoreSchemaMismatchError(SchemaContractMismatchError):
-    """Raised when outbreak_scores still uses legacy risk/confidence columns."""
+    """Raised when outbreak_scores is missing the required signal semantics contract."""
 
 
 def _resolve_bind(bind: Session | Engine | Connection) -> Engine | Connection:
@@ -165,7 +165,7 @@ def ensure_outbreak_score_schema_aligned(
     parts: list[str] = [
         "OutbreakScore schema mismatch detected.",
         (
-            f"Apply Alembic migration {OUTBREAK_SCORE_SIGNAL_SEMANTICS_MIGRATION} "
+            f"Apply Alembic migration {OUTBREAK_SCORE_PRIORITY_INDEX_MIGRATION} "
             "or upgrade the database to head."
         ),
     ]

@@ -1,4 +1,4 @@
-"""Heuristic, audit-ready regional media allocation on top of decision output."""
+"""Heuristic, audit-ready regional media policy allocation on top of decision output."""
 
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ def _clamp(value: float, lower: float = 0.0, upper: float = 1.0) -> float:
 
 
 DEFAULT_MEDIA_ALLOCATION_CONFIG = RegionalMediaAllocationConfig(
-    version="regional_media_allocation_v1",
+    version="regional_media_policy_engine_v1",
     baseline_total_budget_eur=50_000.0,
     min_budget_per_active_region_eur=3_000.0,
     max_budget_share_per_region=0.55,
@@ -54,7 +54,7 @@ DEFAULT_MEDIA_ALLOCATION_CONFIG = RegionalMediaAllocationConfig(
 
 
 class RegionalMediaAllocationEngine:
-    """Deterministic budget ranking and allocation from regional decision output."""
+    """Deterministic budget ranking and allocation from regional policy output."""
 
     def __init__(self, config: RegionalMediaAllocationConfig = DEFAULT_MEDIA_ALLOCATION_CONFIG) -> None:
         self.config = config
@@ -132,6 +132,7 @@ class RegionalMediaAllocationEngine:
                 keyword_clusters=[],
                 decision=dict(item["decision"]),
                 metadata={
+                    "engine_type": "policy_rule_engine",
                     "config_version": self.config.version,
                     "event_probability": round(item["event_probability"], 4),
                     "priority_score": round(item["priority_score"], 4),
@@ -157,6 +158,7 @@ class RegionalMediaAllocationEngine:
             "allocation_policy_version": self.config.version,
             "headline": headline,
             "summary": {
+                "allocation_engine_type": "policy_rule_engine",
                 "activate_regions": sum(
                     1
                     for item in recommendations

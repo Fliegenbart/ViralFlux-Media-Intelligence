@@ -1,4 +1,4 @@
-"""Explicit, audit-ready regional Watch/Prepare/Activate decision rules."""
+"""Explicit, audit-ready regional policy rules."""
 
 from __future__ import annotations
 
@@ -107,7 +107,7 @@ TREND_SIGNAL_KEYS: dict[str, tuple[tuple[str, str], ...]] = {
 }
 
 DEFAULT_RULE_CONFIG = RegionalDecisionRuleConfig(
-    version="regional_decision_v1",
+    version="regional_policy_engine_v1",
     weights={
         "event_probability": 0.32,
         "forecast_confidence": 0.20,
@@ -135,7 +135,7 @@ DEFAULT_RULE_CONFIG = RegionalDecisionRuleConfig(
 SARS_RULE_CONFIG = RegionalDecisionRuleConfig(
     **{
         **DEFAULT_RULE_CONFIG.to_dict(),
-        "version": "regional_decision_sars_v1",
+        "version": "regional_policy_engine_sars_v1",
         "activate_probability_threshold": 0.68,
         "prepare_probability_threshold": 0.52,
         "activate_score_threshold": 0.74,
@@ -157,7 +157,7 @@ def _clamp(value: float, lower: float = 0.0, upper: float = 1.0) -> float:
 
 
 class RegionalDecisionEngine:
-    """Deterministic regional decision rules based on forecast and source quality."""
+    """Deterministic regional policy engine based on forecast and source quality."""
 
     def __init__(
         self,
@@ -328,6 +328,7 @@ class RegionalDecisionEngine:
             thresholds={key: round(float(value), 4) for key, value in thresholds.items()},
             reason_trace=reason_trace,
             metadata={
+                "engine_type": "policy_rule_engine",
                 "config_version": config.version,
                 "action_threshold": round(float(prediction.get("action_threshold") or 0.6), 4),
                 "agreement_signal_count": int(agreement_bundle["signal_count"]),

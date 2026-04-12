@@ -92,14 +92,14 @@ class RecommendationContractsV2Tests(unittest.TestCase):
         self.assertTrue(enriched["is_publishable"])
         self.assertEqual(enriched["evidence_strength"], "hoch")
 
-    def test_enrich_card_uses_event_signal_score_when_no_calibrated_probability_exists(self) -> None:
+    def test_enrich_card_uses_heuristic_event_score_when_no_calibrated_probability_exists(self) -> None:
         enriched = enrich_card_v2(
             _sample_card(
                 status="APPROVED",
                 peix_context={},
                 campaign_payload={
                     "forecast_assessment": {
-                        "event_forecast": {"event_signal_score": 0.66},
+                        "event_forecast": {"heuristic_event_score": 0.66},
                         "forecast_quality": {"forecast_readiness": "GO"},
                     },
                     "message_framework": {

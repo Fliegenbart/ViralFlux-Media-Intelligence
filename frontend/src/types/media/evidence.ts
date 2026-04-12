@@ -220,10 +220,17 @@ export interface ForecastMonitoring {
   model_version?: string | null;
   event_forecast?: {
     event_probability?: number | null;
-    confidence?: number | null;
-    confidence_label?: string | null;
+    heuristic_event_score?: number | null;
+    decision_basis_score?: number | null;
+    decision_basis_type?: 'learned_probability' | 'heuristic_signal' | string | null;
+    reliability_score?: number | null;
+    reliability_label?: string | null;
+    backtest_quality_score?: number | null;
     calibration_passed?: boolean | null;
     probability_source?: string | null;
+    signal_source?: string | null;
+    uncertainty_source?: string | null;
+    fallback_reason?: string | null;
     fallback_used?: boolean | null;
   };
   latest_accuracy?: {

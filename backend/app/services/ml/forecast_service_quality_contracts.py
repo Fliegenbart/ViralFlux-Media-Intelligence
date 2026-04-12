@@ -90,7 +90,6 @@ def quality_meta_from_backtest(
         "timing_metrics": timing_metrics or {},
         "interval_coverage": interval_coverage or {},
         "promotion_gate": promotion_gate or {},
-        "confidence": reliability_score,
         "reliability_score": reliability_score,
         "backtest_quality_score": service._backtest_quality_score(metrics),
         "brier_score": metrics.get("brier_score"),
@@ -173,7 +172,6 @@ def build_contracts(
         if quality_meta and quality_meta.get("reliability_score") is not None
         else (quality_meta.get("confidence") if quality_meta else None)
     )
-    confidence_value = reliability_score
     backtest_quality_score_value = quality_meta.get("backtest_quality_score") if quality_meta else None
     calibration_mode = (quality_meta.get("calibration_mode") if quality_meta else None) or "raw_probability"
     probability_source = (quality_meta.get("probability_source") if quality_meta else None) or "empirical_event_prevalence"
@@ -216,8 +214,6 @@ def build_contracts(
         brier_score=quality_meta.get("brier_score") if quality_meta else None,
         ece=quality_meta.get("ece") if quality_meta else None,
         calibration_passed=quality_meta.get("calibration_passed") if quality_meta else None,
-        confidence=confidence_value,
-        confidence_label=(confidence_label_fn(confidence_value) if confidence_value is not None else None),
         reliability_score=reliability_score,
         backtest_quality_score=backtest_quality_score_value,
         probability_source=probability_source_value,

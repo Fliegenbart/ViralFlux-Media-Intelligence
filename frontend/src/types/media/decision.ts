@@ -51,10 +51,19 @@ export interface WeeklyDecision {
   forecast_quality?: Record<string, unknown>;
   event_forecast?: {
     event_probability?: number | null;
-    confidence?: number | null;
+    heuristic_event_score?: number | null;
+    decision_basis_score?: number | null;
+    decision_basis_type?: 'learned_probability' | 'heuristic_signal' | string | null;
+    reliability_score?: number | null;
+    reliability_label?: string | null;
+    backtest_quality_score?: number | null;
     alert_level?: string;
     lead_time_days?: number | null;
     probability_band?: string;
+    calibration_passed?: boolean | null;
+    probability_source?: string | null;
+    signal_source?: string | null;
+    fallback_used?: boolean | null;
   };
   signal_stack_summary?: {
     peix_epi_score?: number;

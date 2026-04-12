@@ -117,6 +117,9 @@ class RegionalMediaAllocationEngineTests(unittest.TestCase):
             recommendations[1]["suggested_budget_share"],
         )
         self.assertEqual(recommendations[2]["suggested_budget_share"], 0.0)
+        self.assertEqual(payload["summary"]["allocation_engine_type"], "policy_rule_engine")
+        self.assertEqual(recommendations[0]["metadata"]["engine_type"], "policy_rule_engine")
+        self.assertTrue(str(recommendations[0]["metadata"]["config_version"]).startswith("regional_media_policy_engine"))
 
     def test_prepare_regions_stay_ranked_but_receive_zero_budget(self) -> None:
         payload = self.engine.allocate(

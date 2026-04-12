@@ -114,7 +114,6 @@ class OpportunityEngineGenerationBehaviorTests(unittest.TestCase):
                     "burden_forecast": {"points": [{"forecast_date": "2026-01-01", "predicted_value": 1}]},
                     "event_forecast": {
                         "event_probability": 0.42,
-                        "event_signal_score": 0.42,
                         "reliability_score": 0.61,
                         "calibration_passed": True,
                         "threshold_value": 10.0,

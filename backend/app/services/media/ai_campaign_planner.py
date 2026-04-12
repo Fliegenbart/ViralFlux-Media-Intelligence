@@ -209,14 +209,11 @@ class AiCampaignPlanner:
                 f"{round(float(event_probability) * 100.0, 1)}%"
             )
 
-        event_signal_score = (
-            event_forecast.get("event_signal_score")
-            or event_forecast.get("heuristic_event_score")
-        )
-        if event_signal_score is not None:
+        heuristic_event_score = event_forecast.get("heuristic_event_score")
+        if heuristic_event_score is not None:
             return (
                 "Event-Signal-Score 7T (heuristisch): "
-                f"{round(float(event_signal_score) * 100.0, 1)}/100"
+                f"{round(float(heuristic_event_score) * 100.0, 1)}/100"
             )
 
         return "Event-Signal 7T: nicht verfuegbar"

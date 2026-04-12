@@ -48,7 +48,7 @@ class OutbreakScoreSchemaAlignmentTests(unittest.TestCase):
 
             gaps = get_required_schema_contract_gaps(engine)
 
-            self.assertIn("outbreak_scores.decision_signal_index", gaps["missing_columns"])
+            self.assertIn("outbreak_scores.decision_priority_index", gaps["missing_columns"])
             self.assertIn("outbreak_scores.signal_level", gaps["missing_columns"])
             self.assertIn("outbreak_scores.signal_source", gaps["missing_columns"])
             self.assertIn("outbreak_scores.reliability_label", gaps["missing_columns"])
@@ -70,7 +70,7 @@ class OutbreakScoreSchemaAlignmentTests(unittest.TestCase):
             gaps = get_required_schema_contract_gaps(engine)
 
             self.assertNotIn("outbreak_scores", gaps["missing_tables"])
-            self.assertNotIn("outbreak_scores.decision_signal_index", gaps["missing_columns"])
+            self.assertNotIn("outbreak_scores.decision_priority_index", gaps["missing_columns"])
             self.assertNotIn("outbreak_scores.signal_level", gaps["missing_columns"])
             self.assertNotIn("outbreak_scores.signal_source", gaps["missing_columns"])
             self.assertNotIn("outbreak_scores.reliability_label", gaps["missing_columns"])

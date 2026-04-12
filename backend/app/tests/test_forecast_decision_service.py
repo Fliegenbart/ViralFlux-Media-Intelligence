@@ -150,16 +150,21 @@ class ForecastDecisionServiceTests(unittest.TestCase):
         event = bundle["event_forecast"]
         self.assertIsNone(event["event_probability"])
         self.assertIsNotNone(event["heuristic_event_score"])
-        self.assertEqual(event["event_signal_score"], event["heuristic_event_score"])
         self.assertEqual(event["signal_source"], HEURISTIC_EVENT_SCORE_SOURCE)
         self.assertIsNone(event["probability_source"])
         self.assertIsNone(event["calibration_passed"])
         self.assertNotIn("confidence", event)
         self.assertNotIn("confidence_label", event)
+        self.assertNotIn("event_signal_score", event)
         self.assertNotIn("confidence_semantics", event)
         self.assertIsNotNone(event["reliability_score"])
         self.assertIsNotNone(event["reliability_label"])
-        self.assertGreater(bundle["decision_summary"]["decision_signal_index"], 0.0)
+        self.assertGreater(bundle["decision_summary"]["decision_priority_index"], 0.0)
+        self.assertEqual(bundle["decision_summary"]["decision_basis_type"], "heuristic_signal")
+        self.assertEqual(
+            bundle["decision_summary"]["decision_basis_score"],
+            event["heuristic_event_score"],
+        )
         self.assertNotIn("compatibility", bundle)
         self.assertEqual(len(bundle["burden_forecast"]["points"]), 14)
 
@@ -191,7 +196,6 @@ class ForecastDecisionServiceTests(unittest.TestCase):
 
         event = bundle["event_forecast"]
         self.assertEqual(event["event_probability"], 0.64)
-        self.assertEqual(event["event_signal_score"], 0.64)
         self.assertEqual(event["heuristic_event_score"], 0.58)
         self.assertEqual(event["signal_source"], "learned_exceedance_logistic_regression")
         self.assertEqual(
@@ -200,6 +204,9 @@ class ForecastDecisionServiceTests(unittest.TestCase):
         )
         self.assertTrue(event["calibration_passed"])
         self.assertNotIn("confidence", event)
+        self.assertNotIn("event_signal_score", event)
+        self.assertEqual(bundle["decision_summary"]["decision_basis_type"], "learned_probability")
+        self.assertEqual(bundle["decision_summary"]["decision_basis_score"], 0.64)
 
     def test_save_load_bundle_round_trip_preserves_event_semantics_fields(self) -> None:
         now = utc_now().replace(microsecond=0)
@@ -272,7 +279,6 @@ class ForecastDecisionServiceTests(unittest.TestCase):
 
         event = bundle["event_forecast"]
         self.assertEqual(event["event_probability"], 0.67)
-        self.assertEqual(event["event_signal_score"], 0.67)
         self.assertEqual(event["reliability_score"], 0.77)
         self.assertEqual(event["reliability_label"], "Hoch")
         self.assertEqual(event["backtest_quality_score"], 0.83)
@@ -282,6 +288,7 @@ class ForecastDecisionServiceTests(unittest.TestCase):
         self.assertEqual(event["uncertainty_source"], BACKTEST_RELIABILITY_PROXY_SOURCE)
         self.assertIsNone(event["fallback_reason"])
         self.assertNotIn("confidence", event)
+        self.assertNotIn("event_signal_score", event)
         self.assertNotIn("confidence_semantics", event)
 
     def test_build_monitoring_snapshot_carries_semantics_fields(self) -> None:
@@ -314,12 +321,13 @@ class ForecastDecisionServiceTests(unittest.TestCase):
         )
 
         event = snapshot["event_forecast"]
-        self.assertEqual(event["event_signal_score"], 0.64)
+        self.assertEqual(event["event_probability"], 0.64)
         self.assertEqual(event["reliability_score"], 0.71)
         self.assertEqual(event["reliability_label"], "Hoch")
         self.assertEqual(event["backtest_quality_score"], 0.79)
         self.assertEqual(event["uncertainty_source"], BACKTEST_RELIABILITY_PROXY_SOURCE)
         self.assertNotIn("confidence", event)
+        self.assertNotIn("event_signal_score", event)
 
     def test_build_monitoring_snapshot_returns_healthy_state_for_green_stack(self) -> None:
         self._seed_forecast_bundle_inputs()
@@ -355,11 +363,14 @@ class ForecastDecisionServiceTests(unittest.TestCase):
             target_source="RKI_ARE",
         )
 
-        self.assertIn("decision_signal_index", result)
+        self.assertIn("decision_priority_index", result)
         self.assertIn("reliability_label", result)
         self.assertNotIn("confidence_level", result)
         self.assertNotIn("final_risk_score", result)
-        self.assertGreater(result["decision_signal_index"], 0.0)
+        self.assertGreater(result["decision_priority_index"], 0.0)
+        self.assertIn("decision_basis_type", result)
+        self.assertIn("decision_basis_score", result)
+        self.assertNotIn("decision_signal_index", result)
 
     def test_get_legacy_score_history_uses_signal_fields_without_score_alias(self) -> None:
         self._seed_forecast_bundle_inputs()
@@ -371,10 +382,13 @@ class ForecastDecisionServiceTests(unittest.TestCase):
 
         self.assertTrue(history_payload["history"])
         first = history_payload["history"][0]
-        self.assertIn("decision_signal_index", first)
-        self.assertIn("event_signal_score", first)
+        self.assertIn("decision_priority_index", first)
+        self.assertIn("decision_basis_score", first)
+        self.assertIn("decision_basis_type", first)
         self.assertIn("signal_source", first)
         self.assertNotIn("score", first)
+        self.assertNotIn("decision_signal_index", first)
+        self.assertNotIn("event_signal_score", first)
 
     def test_latest_forecasts_are_scoped_to_national_default_horizon(self) -> None:
         now = utc_now().replace(microsecond=0)

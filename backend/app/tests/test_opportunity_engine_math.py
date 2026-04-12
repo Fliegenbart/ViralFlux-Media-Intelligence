@@ -118,6 +118,11 @@ class OpportunityEngineMathTests(unittest.TestCase):
         self.assertEqual(context["signal_drivers"], [{"label": "Nordsignal"}])
         self.assertEqual(context["trigger_event"], "SUPPLY_SHOCK_WINDOW")
 
+    def test_canonical_brand_keeps_explicit_brand_identity(self) -> None:
+        self.assertEqual(MarketingOpportunityEngine._canonical_brand("gelo"), "gelo")
+        self.assertEqual(MarketingOpportunityEngine._canonical_brand("gelo-health"), "gelo-health")
+        self.assertEqual(MarketingOpportunityEngine._canonical_brand("  ACME  "), "acme")
+
     def test_build_decision_brief_sets_signal_confidence_contract_source(self) -> None:
         engine = MarketingOpportunityEngine.__new__(MarketingOpportunityEngine)
 

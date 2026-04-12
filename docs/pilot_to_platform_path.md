@@ -1,32 +1,38 @@
 # Pilot To Platform Path
 
-Stand: 2026-03-17
+Stand: 2026-04-12
 
-## Ziel
+## Zweck dieses Dokuments
 
-Dieses Dokument beschreibt, wie ViralFlux realistisch von einem bewusst engen Partnerpilot in einen größeren Plattformvertrag wachsen kann, ohne mehr zu versprechen als das System heute hergibt.
+Dieses Dokument ist eine interne Go-to-Market- und Rollout-Notiz.
 
-## Ausgangspunkt heute
+Es ist **nicht** die maßgebliche Quelle für den aktuellen Produktionszustand.
+Für den nachweisbaren Live-Stand siehe
+[docs/live_release_evidence_2026-04-12.md](./live_release_evidence_2026-04-12.md).
 
-Der Stand des laufenden Systems ist:
+## Aktueller Live-Stand
+
+Am 12. April 2026 ist der laufende Stand:
 
 - Live erreichbar: ja
-- Pilot-ready: nein
-- Fully production-grade: nein
+- `health/live`: `200`
+- `health/ready`: `200`
+- moderner Kernpfad-Smoke: grün
+- regionale Forecast-, Allocation- und Campaign-Endpoints: live `200`
+- Public-Risk-API lehnt kaputte Eingaben sauber mit `422` ab
 
-Technische Realitaet heute:
+Das ist ein klarer Fortschritt gegenüber dem früheren Stand, bei dem Repo, Doku und Server nicht sauber übereinstimmten.
 
-- `health/live` ist grün
-- `health/ready` ist `503`
-- der moderne Kernpfad-Smoke endet mit `business_smoke_failed`
-- die regionalen Kernendpunkte liefern aktuell live `500`
-- Artefaktseitig ist der Horizon-Scope weitgehend aufgebaut
-- `RSV A / h3` ist bewusst unsupported
+## Was daraus **nicht** folgt
 
-Das bedeutet:
+Der grüne Live-Stand bedeutet noch nicht automatisch:
 
-- ein Plattformvertrag kann heute argumentativ vorbereitet werden
-- ein echter externer Pilot darf aber noch nicht als freigegebener Routinebetrieb dargestellt werden
+- vollständig generisches Multi-Tenant-Produkt
+- kausal validiertes Outcome-System
+- völlig bereinigtes internes Pilot-Vokabular im gesamten Repo
+- endgültig käuferfertige Dokumentation ohne interne Altlasten
+
+In einfachen Worten: Der operative Kern ist jetzt deutlich glaubwürdiger, aber die Käuferhygiene ist noch nicht vollständig fertig.
 
 ## Die vier Stufen
 
@@ -34,172 +40,80 @@ Das bedeutet:
 
 ### Was diese Stufe ist
 
-Das System ist sichtbar, technisch deploybar und in seiner Zielarchitektur erkennbar.
+Das System ist live, überprüfbar und technisch als Produktkern erkennbar.
 
 ### Was diese Stufe noch nicht ist
 
-- kein freigegebener Pilot
-- keine externe operative Handlungsempfehlung
-- keine belastbare Always-on Nutzung
+- kein voll standardisierter Plattformvertrag
+- keine unbegrenzte Scope-Freigabe
+- keine Aussage, dass alle internen Altlasten bereinigt sind
 
 ### Aktueller Stand
 
 - diese Stufe ist erreicht
 
-## Stufe 1: Internal Shadow Pilot
+## Stufe 1: Internal Shadow Or Guided Pilot
 
 ### Ziel
 
-Pilotpartner und Produktteam nutzen ViralFlux intern parallel zu ihrem bestehenden Entscheidungsprozess, ohne externe Aktivierungen direkt daraus abzuleiten.
+Ein enger Partner oder das interne Team arbeitet regelmäßig mit dem System, aber noch mit bewusst engem Scope und klarer Governance.
 
 ### Was geliefert wird
 
-- Dashboard
+- Dashboard und Wochensteuerung
 - regionale Forecast-/Decision-Views
 - Allocation- und Recommendation-Outputs
-- Readiness- und Smoke-Checks
-- Pilot-Reporting als interne Review-Basis
+- Truth-/Outcome-Readouts
+- nachvollziehbare Release- und Smoke-Checks
 
 ### Eintrittskriterien
 
-- Kernpfad liefert keine `500` mehr
-- Release-Smoke faellt nicht mehr mit `business_smoke_failed`
-- mindestens ein begrenzter Virus-/Horizon-Scope ist technisch stabil
+- Kernpfad bleibt grün
+- Support-Scope ist schriftlich begrenzt
+- bekannte fachliche Grenzen sind dokumentiert
 
-### Geschaeftlicher Nutzen
-
-- Teams lernen das System kennen
-- Explainability wird gegen echte Operatorfragen getestet
-- false confidence wird vermieden
-
-## Stufe 2: Guided External Pilot
+## Stufe 2: Paid Operational Pilot
 
 ### Ziel
 
-Ein bewusst enger Pilot-Scope wird extern genutzt, aber mit manueller Governance und klaren Vorbehalten.
+ViralFlux wird im Wochenrhythmus operativ genutzt und nicht nur als Demo oder Einmal-Readout.
 
-### Typischer Scope
+### Zusätzliche Anforderungen
 
-- 1 bis 2 Viren
-- 1 bis 2 Horizonte
-- begrenzte regionale Nutzung
-- manuelle Freigabe durch Produktteam und Pilotpartner
-
-### Was offiziell unterstuetzt sein muss
-
-- `health/live`
-- `health/ready` nicht `unhealthy`
-- Forecast, Allocation und Campaign Recommendations für den Pilot-Scope
-- dokumentierte Support-Matrix
-- Runbook und Freigabelogik
-
-### Was noch bewusst manuell bleibt
-
-- Spend-Freigabe
-- finale Kampagnenentscheidung
-- Truth-/Outcome-Interpretation
-
-### Geschaeftlicher Wert
-
-- der Pilot liefert nicht nur Empfehlungen, sondern auch eine auditierbare Geschichte:
-  - was wurde gesehen
-  - was wurde priorisiert
-  - was wurde empfohlen
-  - was wurde aktiviert
-  - was ist danach passiert
-
-## Stufe 3: Paid Operational Pilot
-
-### Ziel
-
-ViralFlux wird nicht mehr nur als Experiment genutzt, sondern als regelmäßiger Bestandteil regionaler Aktivierungsplanung.
-
-### Merkmale
-
-- fester Weekly oder Twice-Weekly Operating Cadence
-- definierter Support-Scope
-- klarer Go/No-Go Prozess
+- klarer Go/No-Go-Prozess
+- definierte Rollen und Freigaben
 - dokumentierte Known Limitations
-- Pilot-Reporting und ROI-Readouts für Steering-Runden
+- wiederholbare Reporting- und Review-Schleife
 
-### Zusätzlicher Vertragsspielraum
-
-- mehr Produkte / Cluster
-- mehr Regionen
-- mehr Regelmäßigkeit
-- stärkere Outcome- und Reporting-Bindung
-
-## Stufe 4: Platform Contract
+## Stufe 3: Platform Contract
 
 ### Ziel
 
-Aus dem Pilot wird eine laufende Decision- und Activation-Plattform.
+Aus dem Pilot wird ein dauerhaftes Decision- und Activation-Layer mit belastbarer Betriebsroutine.
 
 ### Was dafür zusätzlich nötig ist
 
-- stabil grüner Kernpfad
-- Forecast-Recency über operative Snapshots statt Trainings-Lag
-- reduzierte Quality-/Coverage-Blocker im verkauften Scope
-- konsistente Release-, Smoke- und Rollback-Routine
-- saubere Governance für Rollen, Freigaben und Auditability
+- saubere Release-Provenienz
+- weniger brand-/pilot-spezifische Altlasten im Daten- und Admin-Layer
+- belastbare Käuferdoku statt verstreuter interner Fachdokumente
+- klarer Sprachvertrag zwischen Signal, Forecast, Priorität und Recommendation
 
-### Was dann verkauft wird
+## Ehrliche Vertriebslogik
 
-- Always-on Regional Activation Intelligence
-- nicht nur ein Projekt, sondern ein Operating Layer
-- mit klaren Support- und Governance-Grenzen
+Heute lässt sich ViralFlux glaubwürdig als:
 
-## Pilot-zu-Plattform Übersetzung
+- live laufender,
+- technisch überprüfbarer,
+- aber noch nicht vollständig auspolierter
 
-Der größte Fehler waere, so zu tun, als sei der Schritt vom Pilot zur Plattform rein "mehr vom Gleichen".
+operativer Produktkern darstellen.
 
-Tatsaechlich verschiebt sich der Wert in drei Richtungen:
+Nicht glaubwürdig wäre es, schon jetzt so zu verkaufen, als sei das System in jedem Layer vollständig ent-pilotisiert und generisch standardisiert.
 
-### 1. Von Insights zu Governance
+## Nächster Schritt
 
-Am Anfang kauft der Kunde Einsicht und Priorisierung.
+Der richtige nächste Schritt ist nicht „größer behaupten“, sondern:
 
-Später kauft er:
-
-- Release-Sicherheit
-- Freigabelogik
-- belastbare Betriebsfähigkeit
-
-### 2. Von einer Empfehlung zu einem Entscheidungsprozess
-
-Am Anfang ist die Frage:
-
-- "Ist diese Empfehlung nuetzlich?"
-
-Später ist die Frage:
-
-- "Können wir darauf regelmäßig und teamübergreifend arbeiten?"
-
-### 3. Von Pilot-Evidenz zu Vertragsvertrauen
-
-Pilot-Reporting, Outcome-Overlay und Recommendation-History sind nicht nur Add-ons. Sie sind das Material, aus dem ein größerer Vertrag intern begründet wird.
-
-## Was den Sprung aktuell blockiert
-
-Heute fehlen für den nächsten Schritt vor allem:
-
-1. grüner moderner Kernpfad-Smoke
-2. stabile `200` auf den regionalen Produktendpunkten
-3. bessere operative Forecast-Recency
-4. weniger rote regionale Readiness-Blocker
-
-Deshalb ist die ehrliche Reihenfolge:
-
-1. Kernpfad stabilisieren
-2. enger externer Pilot
-3. Pilot-Readouts mit harter Evidenz
-4. Ausbau zum Plattformvertrag
-
-## Die ehrliche Vertriebslogik
-
-Heute sollte ViralFlux für einen engen Partnerpilot so verkauft werden:
-
-- nicht als "fertige Plattform, die nur noch eingeschaltet werden muss"
-- sondern als hochwertiger, streng gefuehrter Pilot mit klarer Plattform-Perspektive
-
-Der Plattformvertrag ist damit keine Fantasie-Stufe, sondern die nächste Ausbaustufe, sobald der operative Kernpfad technisch und fachlich die Pilot-Freigabe wirklich erfüllt.
+1. Repo- und Käuferdoku weiter bereinigen
+2. verbliebene brand-spezifische Admin-/Backoffice-Reste entfernen
+3. Release-Nachweise und Known Limitations kompakt und belastbar dokumentieren

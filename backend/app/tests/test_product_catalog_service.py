@@ -490,6 +490,72 @@ class ProductCatalogServiceTests(unittest.TestCase):
         self.assertEqual(self.service._normalize_brand("  ACME  "), "acme")
         self.assertEqual(self.service._normalize_brand("gelo-health"), "gelo-health")
 
+    def test_create_product_uses_brand_specific_manual_source_url_when_missing(self) -> None:
+        payload = self.service.create_product(
+            brand="Acme Health",
+            product_name="Acme Akut",
+        )
+
+        self.assertEqual(payload["brand"], "acme health")
+        self.assertEqual(payload["source_url"], "manual://product-upload/acme health")
+
+    def test_preview_matches_filters_exact_brand_identity(self) -> None:
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        self.db.add_all(
+            [
+                MarketingOpportunity(
+                    opportunity_id="opp-gelo",
+                    opportunity_type="RESOURCE_SCARCITY",
+                    status="READY",
+                    brand="gelo",
+                    urgency_score=81.0,
+                    created_at=now,
+                ),
+                MarketingOpportunity(
+                    opportunity_id="opp-gelo-health",
+                    opportunity_type="RESOURCE_SCARCITY",
+                    status="READY",
+                    brand="gelo-health",
+                    urgency_score=82.0,
+                    created_at=now,
+                ),
+            ]
+        )
+        self.db.commit()
+
+        with patch.object(
+            self.service,
+            "resolve_product_for_opportunity",
+            return_value={
+                "candidate_product": None,
+                "recommended_product": None,
+                "mapping_status": "unmapped",
+                "mapping_confidence": 0.0,
+                "mapping_reason": "Kein Mapping",
+                "condition_key": None,
+                "condition_label": None,
+                "rule_source": None,
+            },
+        ):
+            payload = self.service.preview_matches(brand="gelo", limit=10)
+
+        self.assertEqual(payload["brand"], "gelo")
+        self.assertEqual(payload["total"], 1)
+        self.assertEqual(payload["items"][0]["opportunity_id"], "opp-gelo")
+
+    def test_seed_missing_products_uses_brand_specific_seed_source_url(self) -> None:
+        self.service.seed_missing_products(brand="Acme Health")
+
+        rows = (
+            self.db.query(BrandProduct)
+            .filter(BrandProduct.brand == "acme health")
+            .order_by(BrandProduct.product_name.asc())
+            .all()
+        )
+
+        self.assertGreater(len(rows), 0)
+        self.assertTrue(all(row.source_url == "seed://catalog/acme health" for row in rows))
+
 
 if __name__ == "__main__":
     unittest.main()

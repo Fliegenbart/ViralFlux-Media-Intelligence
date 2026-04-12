@@ -127,6 +127,37 @@ class OpportunityEngineRetrospectiveTests(unittest.TestCase):
         self.assertEqual(result["model_accuracy"]["best_lag_days"], 14)
         self.assertEqual(result["missed_opportunity_value"]["high_urgency_missed"], 1)
 
+    def test_brand_filtered_opportunity_queries_require_exact_brand_match(self) -> None:
+        now = datetime.now(timezone.utc).replace(microsecond=0)
+        self.db.add_all(
+            [
+                MarketingOpportunity(
+                    opportunity_id="opp-gelo",
+                    opportunity_type="RESOURCE_SCARCITY",
+                    status="READY",
+                    brand="gelo",
+                    urgency_score=82.0,
+                    created_at=now,
+                ),
+                MarketingOpportunity(
+                    opportunity_id="opp-gelo-health",
+                    opportunity_type="RESOURCE_SCARCITY",
+                    status="READY",
+                    brand="gelo-health",
+                    urgency_score=79.0,
+                    created_at=now,
+                ),
+            ]
+        )
+        self.db.commit()
+
+        rows = self.service.get_opportunities(brand_filter="gelo")
+        count = self.service.count_opportunities(brand_filter="gelo")
+
+        self.assertEqual(count, 1)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["id"], "opp-gelo")
+
 
 if __name__ == "__main__":
     unittest.main()

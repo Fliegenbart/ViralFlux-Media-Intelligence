@@ -49,7 +49,7 @@ def create_product(
     if existing:
         raise ValueError("Produkt existiert bereits. Bitte bearbeiten statt neu anlegen.")
 
-    normalized_source_url = (source_url or "manual://gelo-product-upload").strip()
+    normalized_source_url = (source_url or f"manual://product-upload/{brand_key}").strip()
     normalized_source_hash = source_hash or service._default_source_hash(
         product_name=product_name,
         source_url=normalized_source_url,
@@ -129,7 +129,7 @@ def update_product(
     if source_hash is not None:
         row.source_hash = source_hash.strip() or service._default_source_hash(
             product_name=row.product_name,
-            source_url=row.source_url or "manual://gelo-product-upload",
+            source_url=row.source_url or f"manual://product-upload/{row.brand}",
             now=now,
         )
         row.updated_at = now
@@ -265,10 +265,7 @@ def preview_matches(
     if opportunity_id:
         query = query.filter(MarketingOpportunity.opportunity_id == opportunity_id)
     if brand_key:
-        if brand_key == "gelo":
-            query = query.filter(func.lower(MarketingOpportunity.brand).like("%gelo%"))
-        else:
-            query = query.filter(func.lower(MarketingOpportunity.brand) == brand_key)
+        query = query.filter(func.lower(MarketingOpportunity.brand) == brand_key)
 
     rows = query.limit(max(1, min(100, limit))).all()
     candidates: list[dict[str, Any]] = []
@@ -433,7 +430,7 @@ def seed_missing_products(service, *, brand: str) -> dict[str, Any]:
         product = BrandProduct(
             brand=brand_key,
             product_name=name,
-            source_url="seed://gelo-katalog",
+            source_url=f"seed://catalog/{brand_key}",
             source_hash=f"seed-{seed['sku']}-{now.isoformat()}",
             active=True,
             extra_data={"sku": seed["sku"], "category": seed.get("category")},

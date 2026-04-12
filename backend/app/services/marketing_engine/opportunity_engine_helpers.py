@@ -40,8 +40,6 @@ def normalize_region_token(value: str | None) -> str | None:
 
 def canonical_brand(value: str | None) -> str:
     raw = str(value or "").strip().lower()
-    if "gelo" in raw:
-        return "gelo"
     return raw
 
 

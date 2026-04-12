@@ -37,10 +37,7 @@ def get_opportunities(
         query = query.filter(MarketingOpportunity.status.in_(engine._status_filter_values(status_filter)))
     if brand_filter:
         canonical_brand = engine._canonical_brand(brand_filter)
-        if canonical_brand == "gelo":
-            query = query.filter(func.lower(MarketingOpportunity.brand).like("%gelo%"))
-        else:
-            query = query.filter(func.lower(MarketingOpportunity.brand) == canonical_brand)
+        query = query.filter(func.lower(MarketingOpportunity.brand) == canonical_brand)
     if min_urgency is not None:
         query = query.filter(MarketingOpportunity.urgency_score >= min_urgency)
 
@@ -65,10 +62,7 @@ def count_opportunities(
         query = query.filter(MarketingOpportunity.status.in_(engine._status_filter_values(status_filter)))
     if brand_filter:
         canonical_brand = engine._canonical_brand(brand_filter)
-        if canonical_brand == "gelo":
-            query = query.filter(func.lower(MarketingOpportunity.brand).like("%gelo%"))
-        else:
-            query = query.filter(func.lower(MarketingOpportunity.brand) == canonical_brand)
+        query = query.filter(func.lower(MarketingOpportunity.brand) == canonical_brand)
     if min_urgency is not None:
         query = query.filter(MarketingOpportunity.urgency_score >= min_urgency)
 

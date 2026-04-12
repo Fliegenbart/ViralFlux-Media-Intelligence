@@ -38,6 +38,8 @@ class SmokeTestReleaseTests(unittest.TestCase):
                         {
                             "bundesland": "BY",
                             "decision_label": "Prepare",
+                            "event_probability": 0.52,
+                            "decision_priority_index": 0.71,
                             "priority_score": 0.71,
                             "reason_trace": {"drivers": ["signal"]},
                             "uncertainty_summary": "Moderate uncertainty.",
@@ -55,6 +57,8 @@ class SmokeTestReleaseTests(unittest.TestCase):
                         {
                             "bundesland": "BY",
                             "recommended_activation_level": "Prepare",
+                            "event_probability": 0.52,
+                            "decision_priority_index": 0.71,
                             "suggested_budget_share": 0.0,
                             "suggested_budget_amount": 0.0,
                             "allocation_reason_trace": {
@@ -69,6 +73,7 @@ class SmokeTestReleaseTests(unittest.TestCase):
                                     "Prepare is an early-warning stage. Keep the region visible, but do not release paid budget yet.",
                                 ],
                             },
+                            "allocation_support_score": 0.5,
                             "confidence": 0.66,
                         }
                     ],
@@ -92,6 +97,7 @@ class SmokeTestReleaseTests(unittest.TestCase):
                             "recommended_keyword_cluster": {"label": "Respiratory Relief Search"},
                             "activation_level": "Prepare",
                             "suggested_budget_amount": 0.0,
+                            "allocation_support_score": 0.5,
                             "confidence": 0.66,
                             "evidence_class": "moderate",
                             "recommendation_rationale": {
@@ -133,6 +139,7 @@ class SmokeTestReleaseTests(unittest.TestCase):
                 base_url="http://127.0.0.1:8000",
                 timeout=5.0,
                 virus="Influenza A",
+                brand="gelo",
                 horizon=7,
                 budget_eur=50_000.0,
                 top_n=3,
@@ -148,6 +155,108 @@ class SmokeTestReleaseTests(unittest.TestCase):
             calls[2]["kwargs"]["headers"],
             {"Cookie": "viralflux_session=token-123"},
         )
+        self.assertIn("brand=gelo", calls[2]["path"])
+        self.assertIn("brand=gelo", calls[3]["path"])
+        self.assertIn("brand=gelo", calls[4]["path"])
+
+    def test_run_smoke_accepts_explicit_brand_for_regional_core_paths(self) -> None:
+        responses = [
+            (200, {"status": "alive", "environment": "production"}),
+            (200, {"status": "healthy", "components": {}, "blockers": []}),
+            (
+                200,
+                {
+                    "virus_typ": "Influenza A",
+                    "horizon_days": 7,
+                    "predictions": [
+                        {
+                            "bundesland": "BY",
+                            "decision_label": "Prepare",
+                            "event_probability": 0.52,
+                            "decision_priority_index": 0.71,
+                            "priority_score": 0.71,
+                            "reason_trace": {},
+                            "uncertainty_summary": "Moderate uncertainty.",
+                        }
+                    ],
+                },
+            ),
+            (
+                200,
+                {
+                    "virus_typ": "Influenza A",
+                    "horizon_days": 7,
+                    "summary": {},
+                    "recommendations": [
+                        {
+                            "bundesland": "BY",
+                            "recommended_activation_level": "Prepare",
+                            "event_probability": 0.52,
+                            "decision_priority_index": 0.71,
+                            "suggested_budget_share": 0.0,
+                            "suggested_budget_amount": 0.0,
+                            "allocation_reason_trace": {
+                                "why": [],
+                                "budget_drivers": [],
+                                "uncertainty": [],
+                                "blockers": [],
+                            },
+                            "allocation_support_score": 0.5,
+                            "confidence": 0.66,
+                        }
+                    ],
+                },
+            ),
+            (
+                200,
+                {
+                    "virus_typ": "Influenza A",
+                    "horizon_days": 7,
+                    "summary": {},
+                    "recommendations": [
+                        {
+                            "region": "BY",
+                            "recommended_product_cluster": {"label": "Respiratory Core Demand"},
+                            "recommended_keyword_cluster": {"label": "Respiratory Relief Search"},
+                            "activation_level": "Prepare",
+                            "suggested_budget_amount": 0.0,
+                            "allocation_support_score": 0.5,
+                            "confidence": 0.66,
+                            "evidence_class": "moderate",
+                            "recommendation_rationale": {"why": [], "budget_notes": [], "guardrails": []},
+                        }
+                    ],
+                },
+            ),
+        ]
+        calls: list[str] = []
+
+        def fake_request_json(base_url: str, path: str, timeout: float, **kwargs):
+            del base_url, timeout, kwargs
+            calls.append(path)
+            return responses[len(calls) - 1]
+
+        with (
+            patch.object(smoke_test_release, "_request_json", side_effect=fake_request_json),
+            patch.object(smoke_test_release, "_authenticate_headers", return_value=({}, None)),
+        ):
+            exit_code, result = smoke_test_release.run_smoke(
+                base_url="http://127.0.0.1:8000",
+                timeout=5.0,
+                virus="Influenza A",
+                brand="acme-health",
+                horizon=7,
+                budget_eur=50_000.0,
+                top_n=3,
+                target_source="RKI_ARE",
+                check_cockpit=False,
+            )
+
+        self.assertEqual(exit_code, smoke_test_release.EXIT_OK)
+        self.assertEqual(result["status"], "pass")
+        self.assertIn("brand=acme-health", calls[2])
+        self.assertIn("brand=acme-health", calls[3])
+        self.assertIn("brand=acme-health", calls[4])
 
     def test_run_smoke_passes_on_healthy_core_path(self) -> None:
         responses = [
@@ -163,6 +272,8 @@ class SmokeTestReleaseTests(unittest.TestCase):
                         {
                             "bundesland": "BY",
                             "decision_label": "Prepare",
+                            "event_probability": 0.52,
+                            "decision_priority_index": 0.71,
                             "priority_score": 0.71,
                             "reason_trace": {"drivers": ["signal"]},
                             "uncertainty_summary": "Moderate uncertainty.",
@@ -180,6 +291,8 @@ class SmokeTestReleaseTests(unittest.TestCase):
                         {
                             "bundesland": "BY",
                             "recommended_activation_level": "Prepare",
+                            "event_probability": 0.52,
+                            "decision_priority_index": 0.71,
                             "suggested_budget_share": 0.0,
                             "suggested_budget_amount": 0.0,
                             "allocation_reason_trace": {
@@ -194,6 +307,7 @@ class SmokeTestReleaseTests(unittest.TestCase):
                                     "Prepare is an early-warning stage. Keep the region visible, but do not release paid budget yet.",
                                 ],
                             },
+                            "allocation_support_score": 0.5,
                             "confidence": 0.66,
                         }
                     ],
@@ -217,6 +331,7 @@ class SmokeTestReleaseTests(unittest.TestCase):
                             "recommended_keyword_cluster": {"label": "Respiratory Relief Search"},
                             "activation_level": "Prepare",
                             "suggested_budget_amount": 0.0,
+                            "allocation_support_score": 0.5,
                             "confidence": 0.66,
                             "evidence_class": "moderate",
                             "recommendation_rationale": {
@@ -244,6 +359,7 @@ class SmokeTestReleaseTests(unittest.TestCase):
                 base_url="http://127.0.0.1:8000",
                 timeout=5.0,
                 virus="Influenza A",
+                brand="gelo",
                 horizon=7,
                 budget_eur=50_000.0,
                 top_n=3,
@@ -272,6 +388,8 @@ class SmokeTestReleaseTests(unittest.TestCase):
                         {
                             "bundesland": "BY",
                             "decision_label": "Prepare",
+                            "event_probability": 0.52,
+                            "decision_priority_index": 0.71,
                             "priority_score": 0.71,
                             "reason_trace": {},
                             "uncertainty_summary": "Moderate uncertainty.",
@@ -289,6 +407,8 @@ class SmokeTestReleaseTests(unittest.TestCase):
                         {
                             "bundesland": "BY",
                             "recommended_activation_level": "Prepare",
+                            "event_probability": 0.52,
+                            "decision_priority_index": 0.71,
                             "suggested_budget_share": 0.0,
                             "suggested_budget_amount": 0.0,
                             "allocation_reason_trace": {
@@ -303,6 +423,7 @@ class SmokeTestReleaseTests(unittest.TestCase):
                                     "Prepare is an early-warning stage. Keep the region visible, but do not release paid budget yet.",
                                 ],
                             },
+                            "allocation_support_score": 0.5,
                             "confidence": 0.66,
                         }
                     ],
@@ -321,6 +442,7 @@ class SmokeTestReleaseTests(unittest.TestCase):
                             "recommended_keyword_cluster": {"label": "Respiratory Relief Search"},
                             "activation_level": "Prepare",
                             "suggested_budget_amount": 0.0,
+                            "allocation_support_score": 0.5,
                             "confidence": 0.66,
                             "evidence_class": "moderate",
                             "recommendation_rationale": {
@@ -348,6 +470,7 @@ class SmokeTestReleaseTests(unittest.TestCase):
                 base_url="http://127.0.0.1:8000",
                 timeout=5.0,
                 virus="Influenza A",
+                brand="gelo",
                 horizon=7,
                 budget_eur=50_000.0,
                 top_n=3,
@@ -434,6 +557,7 @@ class SmokeTestReleaseTests(unittest.TestCase):
                 base_url="http://127.0.0.1:8000",
                 timeout=5.0,
                 virus="Influenza A",
+                brand="gelo",
                 horizon=7,
                 budget_eur=50_000.0,
                 top_n=3,
@@ -460,6 +584,8 @@ class SmokeTestReleaseTests(unittest.TestCase):
                         {
                             "bundesland": "BY",
                             "decision_label": "Prepare",
+                            "event_probability": 0.52,
+                            "decision_priority_index": 0.71,
                             "priority_score": 0.71,
                             "reason_trace": {"drivers": ["signal"]},
                             "uncertainty_summary": "Moderate uncertainty.",
@@ -477,6 +603,8 @@ class SmokeTestReleaseTests(unittest.TestCase):
                         {
                             "bundesland": "BY",
                             "recommended_activation_level": "Prepare",
+                            "event_probability": 0.52,
+                            "decision_priority_index": 0.71,
                             "suggested_budget_share": 0.0,
                             "suggested_budget_amount": 0.0,
                             "allocation_reason_trace": {
@@ -491,6 +619,7 @@ class SmokeTestReleaseTests(unittest.TestCase):
                                     "Prepare is an early-warning stage. Keep the region visible, but do not release paid budget yet.",
                                 ],
                             },
+                            "allocation_support_score": 0.5,
                             "confidence": 0.66,
                         }
                     ],
@@ -514,6 +643,7 @@ class SmokeTestReleaseTests(unittest.TestCase):
                             "recommended_keyword_cluster": {"label": "Respiratory Relief Search"},
                             "activation_level": "Prepare",
                             "suggested_budget_amount": 0.0,
+                            "allocation_support_score": 0.5,
                             "confidence": 0.66,
                             "evidence_class": "moderate",
                             "recommendation_rationale": {
@@ -569,6 +699,7 @@ class SmokeTestReleaseTests(unittest.TestCase):
                 base_url="http://127.0.0.1:8000",
                 timeout=5.0,
                 virus="Influenza A",
+                brand="gelo",
                 horizon=7,
                 budget_eur=50_000.0,
                 top_n=3,
@@ -603,6 +734,7 @@ class SmokeTestReleaseTests(unittest.TestCase):
                 base_url="http://127.0.0.1:8000",
                 timeout=5.0,
                 virus="Influenza A",
+                brand="gelo",
                 horizon=7,
                 budget_eur=50_000.0,
                 top_n=3,

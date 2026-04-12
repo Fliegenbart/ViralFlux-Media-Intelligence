@@ -30,6 +30,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--base-url", default="http://127.0.0.1:8000")
     parser.add_argument("--timeout", type=float, default=5.0)
     parser.add_argument("--virus", default="Influenza A")
+    parser.add_argument("--brand", default=os.getenv("SMOKE_BRAND", "gelo"))
     parser.add_argument("--horizon", type=int, default=7)
     parser.add_argument("--budget-eur", type=float, default=50_000.0)
     parser.add_argument("--top-n", type=int, default=3)
@@ -430,19 +431,21 @@ def run_smoke(
     base_url: str,
     timeout: float,
     virus: str,
+    brand: str,
     horizon: int,
     budget_eur: float,
     top_n: int,
     target_source: str,
     check_cockpit: bool,
 ) -> tuple[int, dict[str, Any]]:
-    forecast_query = _build_query({"virus_typ": virus, "horizon_days": horizon})
+    forecast_query = _build_query({"virus_typ": virus, "brand": brand, "horizon_days": horizon})
     allocation_query = _build_query(
-        {"virus_typ": virus, "horizon_days": horizon, "weekly_budget_eur": budget_eur}
+        {"virus_typ": virus, "brand": brand, "horizon_days": horizon, "weekly_budget_eur": budget_eur}
     )
     campaign_query = _build_query(
         {
             "virus_typ": virus,
+            "brand": brand,
             "horizon_days": horizon,
             "weekly_budget_eur": budget_eur,
             "top_n": top_n,
@@ -540,6 +543,7 @@ def run_smoke(
         "checks": checks,
         "business_core_scope": {
             "virus_typ": virus,
+            "brand": brand,
             "horizon_days": horizon,
             "weekly_budget_eur": round(float(budget_eur), 2),
             "top_n": int(top_n),
@@ -559,6 +563,7 @@ def main() -> int:
         base_url=args.base_url,
         timeout=args.timeout,
         virus=args.virus,
+        brand=args.brand,
         horizon=args.horizon,
         budget_eur=args.budget_eur,
         top_n=args.top_n,

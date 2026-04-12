@@ -20,16 +20,26 @@ class OutcomeSignalService:
     def __init__(self, db: Session):
         self.db = db
 
+    @staticmethod
+    def _normalize_brand(brand: str) -> str:
+        if brand is None:
+            raise ValueError("brand must be provided")
+        brand_value = str(brand).strip().lower()
+        if not brand_value:
+            raise ValueError("brand must be a non-empty string")
+        return brand_value
+
     def build_learning_bundle(
         self,
         *,
-        brand: str = "gelo",
+        brand: str,
         truth_coverage: dict[str, Any] | None = None,
         truth_gate: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
+        brand_value = self._normalize_brand(brand)
         rows = (
             self.db.query(MediaOutcomeRecord)
-            .filter(func.lower(MediaOutcomeRecord.brand) == str(brand or "gelo").strip().lower())
+            .filter(func.lower(MediaOutcomeRecord.brand) == brand_value)
             .order_by(MediaOutcomeRecord.week_start.asc(), MediaOutcomeRecord.id.asc())
             .all()
         )

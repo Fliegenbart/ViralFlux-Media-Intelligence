@@ -239,6 +239,23 @@ class MediaV2ServiceTruthCoverageTests(unittest.TestCase):
         self.assertEqual(stored.region_code, "SH")
         self.assertEqual(stored.media_spend_eur, 15000)
 
+    def test_truth_outcome_methods_reject_blank_brand(self) -> None:
+        with self.assertRaises(ValueError):
+            self.service.get_truth_coverage(brand="   ", virus_typ="Influenza A")
+
+        with self.assertRaises(ValueError):
+            self.service.get_truth_evidence(brand="   ", virus_typ="Influenza A")
+
+        with self.assertRaises(ValueError):
+            self.service.import_outcomes(
+                source_label="manual_csv",
+                brand="   ",
+                records=[],
+            )
+
+        with self.assertRaises(ValueError):
+            self.service.list_outcome_import_batches(brand="   ", limit=5)
+
     def test_get_decision_payload_delegates_to_decision_builder(self) -> None:
         with patch(
             "app.services.media.v2_service.build_decision_payload",
@@ -826,7 +843,7 @@ class MediaV2ServiceTruthCoverageTests(unittest.TestCase):
                 decision_state="GO",
                 signal_summary=signal_summary,
             )
-            limits = self.service._known_limits(cockpit, "Influenza A")
+            limits = self.service._known_limits(cockpit, "Influenza A", brand="gelo")
 
         self.assertEqual(freshness, "fresh")
         self.assertEqual(why_now, ["Grund 1", "Grund 2", "Grund 3"])
@@ -844,6 +861,7 @@ class MediaV2ServiceTruthCoverageTests(unittest.TestCase):
             self.service,
             cockpit,
             "Influenza A",
+            brand="gelo",
             truth_coverage=None,
             truth_validation_legacy=None,
         )
@@ -853,7 +871,7 @@ class MediaV2ServiceTruthCoverageTests(unittest.TestCase):
             def get_truth_coverage(
                 self,
                 *,
-                brand: str = "gelo",
+                brand: str,
                 virus_typ: str | None = None,
             ) -> dict[str, object]:
                 return {
@@ -873,7 +891,7 @@ class MediaV2ServiceTruthCoverageTests(unittest.TestCase):
             }
         }
 
-        limits = service._known_limits(cockpit, "Influenza A")
+        limits = service._known_limits(cockpit, "Influenza A", brand="gelo")
 
         self.assertNotIn("Kundennahe Daten decken noch keine 26 Wochen ab.", limits)
         self.assertNotIn(
@@ -989,7 +1007,7 @@ class MediaV2ServiceTruthCoverageTests(unittest.TestCase):
                 "guidance": "Kontrollgruppen für kommende Aktivierungen markieren.",
             }),
         ):
-            payload = self.service.get_decision_payload()
+            payload = self.service.get_decision_payload(brand="gelo")
 
         weekly_decision = payload["weekly_decision"]
         self.assertEqual(weekly_decision["decision_state"], "WATCH")
@@ -1038,7 +1056,7 @@ class MediaV2ServiceTruthCoverageTests(unittest.TestCase):
             })
 
         with patch.object(self.service, "_campaign_cards", return_value=cards):
-            payload = self.service.get_campaigns_payload(limit=120)
+            payload = self.service.get_campaigns_payload(brand="gelo", limit=120)
 
         self.assertEqual(len(payload["cards"]), 8)
         self.assertEqual(payload["summary"]["visible_cards"], 8)
@@ -1122,7 +1140,7 @@ class MediaV2ServiceTruthCoverageTests(unittest.TestCase):
             patch.object(self.service, "get_model_lineage", return_value={"drift_state": "warning"}),
             patch.object(self.service, "get_forecast_monitoring", return_value={"monitoring_status": "warning", "alerts": ["Drift aktiv"]}),
         ):
-            payload = self.service.get_evidence_payload()
+            payload = self.service.get_evidence_payload(brand="gelo")
 
         self.assertIsNone(payload["truth_validation"])
         self.assertEqual(payload["truth_validation_legacy"]["run_id"], "customer-legacy")
@@ -1182,7 +1200,7 @@ class MediaV2ServiceTruthCoverageTests(unittest.TestCase):
             patch.object(self.service.cockpit_service, "get_cockpit_payload", return_value=cockpit_payload),
             patch.object(self.service, "get_decision_payload", return_value={"weekly_decision": {"decision_state": "WATCH"}}),
         ):
-            payload = self.service.get_regions_payload()
+            payload = self.service.get_regions_payload(brand="gelo")
 
         top_region = payload["top_regions"][0]
         self.assertIn("severity_score", top_region)
@@ -1242,7 +1260,7 @@ class MediaV2ServiceTruthCoverageTests(unittest.TestCase):
             patch.object(self.service.cockpit_service, "get_cockpit_payload", return_value=cockpit_payload),
             patch.object(self.service, "get_decision_payload", return_value={"weekly_decision": {"decision_state": "WATCH"}}),
         ):
-            payload = self.service.get_regions_payload()
+            payload = self.service.get_regions_payload(brand="gelo")
 
         self.assertEqual(payload["top_regions"][0]["code"], "HH")
         self.assertEqual(payload["map"]["regions"]["HH"]["signal_score"], 81.0)
@@ -1286,7 +1304,7 @@ class MediaV2ServiceTruthCoverageTests(unittest.TestCase):
             patch.object(self.service.cockpit_service, "get_cockpit_payload", return_value=cockpit_payload),
             patch.object(self.service, "get_decision_payload", return_value={"weekly_decision": {"decision_state": "WATCH"}}),
         ):
-            payload = self.service.get_regions_payload()
+            payload = self.service.get_regions_payload(brand="gelo")
 
         self.assertEqual(payload["map"]["regions"]["HH"]["signal_drivers"][0]["label"], "AMELAG")
         self.assertEqual(payload["map"]["regions"]["HH"]["layer_contributions"]["forecast"], 22.0)

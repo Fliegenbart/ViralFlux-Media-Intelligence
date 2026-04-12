@@ -207,21 +207,29 @@ class RegionalForecastService:
     def predict_region(
         self,
         virus_typ: str,
+        brand: str,
         bundesland: str,
         horizon_days: int = 7,
     ) -> dict[str, Any] | None:
         horizon = ensure_supported_horizon(horizon_days)
-        payload = self.predict_all_regions(virus_typ=virus_typ, horizon_days=horizon)
+        payload = self.predict_all_regions(
+            virus_typ=virus_typ,
+            brand=brand,
+            horizon_days=horizon,
+        )
         return next((item for item in payload["predictions"] if item["bundesland"] == bundesland.upper()), None)
 
     def predict_all_regions(
         self,
+        *,
         virus_typ: str = "Influenza A",
+        brand: str,
         horizon_days: int = 7,
     ) -> dict[str, Any]:
         return regional_forecast_prediction.predict_all_regions(
             self,
             virus_typ=virus_typ,
+            brand=brand,
             horizon_days=horizon_days,
             ensure_supported_horizon_fn=ensure_supported_horizon,
             regional_horizon_support_status_fn=regional_horizon_support_status,
@@ -241,13 +249,16 @@ class RegionalForecastService:
 
     def generate_media_allocation(
         self,
+        *,
         virus_typ: str = "Influenza A",
+        brand: str,
         weekly_budget_eur: float = 50000,
         horizon_days: int = 7,
     ) -> dict[str, Any]:
         return regional_forecast_workflows.generate_media_allocation(
             self,
             virus_typ=virus_typ,
+            brand=brand,
             weekly_budget_eur=weekly_budget_eur,
             horizon_days=horizon_days,
             rollout_mode_for_virus_fn=rollout_mode_for_virus,
@@ -259,20 +270,25 @@ class RegionalForecastService:
 
     def generate_media_activation(
         self,
+        *,
         virus_typ: str = "Influenza A",
+        brand: str,
         weekly_budget_eur: float = 50000,
         horizon_days: int = 7,
     ) -> dict[str, Any]:
         return regional_forecast_workflows.generate_media_activation(
             self,
             virus_typ=virus_typ,
+            brand=brand,
             weekly_budget_eur=weekly_budget_eur,
             horizon_days=horizon_days,
         )
 
     def generate_campaign_recommendations(
         self,
+        *,
         virus_typ: str = "Influenza A",
+        brand: str,
         weekly_budget_eur: float = 50000,
         horizon_days: int = 7,
         top_n: int | None = None,
@@ -280,6 +296,7 @@ class RegionalForecastService:
         return regional_forecast_workflows.generate_campaign_recommendations(
             self,
             virus_typ=virus_typ,
+            brand=brand,
             weekly_budget_eur=weekly_budget_eur,
             horizon_days=horizon_days,
             top_n=top_n,
@@ -348,11 +365,13 @@ class RegionalForecastService:
     def benchmark_supported_viruses(
         self,
         *,
+        brand: str,
         reference_virus: str = "Influenza A",
         horizon_days: int = 7,
     ) -> dict[str, Any]:
         return regional_forecast_views.benchmark_supported_viruses(
             self,
+            brand=brand,
             reference_virus=reference_virus,
             horizon_days=horizon_days,
             ensure_supported_horizon_fn=ensure_supported_horizon,
@@ -368,11 +387,13 @@ class RegionalForecastService:
     def build_hero_overview(
         self,
         *,
+        brand: str,
         horizon_days: int = 7,
         reference_virus: str = "Influenza A",
     ) -> dict[str, Any]:
         return regional_forecast_views.build_hero_overview(
             self,
+            brand=brand,
             horizon_days=horizon_days,
             reference_virus=reference_virus,
             ensure_supported_horizon_fn=ensure_supported_horizon,
@@ -384,12 +405,14 @@ class RegionalForecastService:
     def build_portfolio_view(
         self,
         *,
+        brand: str,
         horizon_days: int = 7,
         top_n: int = 12,
         reference_virus: str = "Influenza A",
     ) -> dict[str, Any]:
         return regional_forecast_views.build_portfolio_view(
             self,
+            brand=brand,
             horizon_days=horizon_days,
             top_n=top_n,
             reference_virus=reference_virus,
@@ -404,7 +427,7 @@ class RegionalForecastService:
         self,
         *,
         virus_typ: str = "Influenza A",
-        brand: str = "gelo",
+        brand: str,
         horizon_days: int = 7,
     ) -> dict[str, Any]:
         return regional_forecast_views.get_validation_summary(
@@ -591,7 +614,7 @@ class RegionalForecastService:
     def _region_rollup(opportunities: list[dict[str, Any]]) -> list[dict[str, Any]]:
         return regional_forecast_media.region_rollup(opportunities)
 
-    def _truth_readiness(self, *, brand: str = "gelo") -> dict[str, Any]:
+    def _truth_readiness(self, *, brand: str) -> dict[str, Any]:
         return regional_forecast_truth.truth_readiness(
             self,
             brand=brand,
@@ -603,7 +626,7 @@ class RegionalForecastService:
         *,
         quality_gate: dict[str, Any],
         truth_readiness: dict[str, Any] | None = None,
-        brand: str = "gelo",
+        brand: str,
     ) -> dict[str, Any]:
         return regional_forecast_truth.business_gate(
             self,
@@ -622,7 +645,7 @@ class RegionalForecastService:
         signal_context: dict[str, Any],
         operational_action: str,
         operational_gate_open: bool,
-        brand: str = "gelo",
+        brand: str,
     ) -> dict[str, Any]:
         return regional_forecast_truth.truth_layer_assessment_for_products(
             self,

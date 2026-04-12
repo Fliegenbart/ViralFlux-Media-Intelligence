@@ -36,6 +36,15 @@ router = APIRouter()
 settings = get_settings()
 
 
+def _normalize_card_brand(value: Any) -> str:
+    if value is None:
+        raise ValueError("brand must be provided")
+    brand = str(value).strip().lower()
+    if brand:
+        return brand
+    raise ValueError("brand must be provided")
+
+
 def _decorate_card_response(
     service: MediaV2Service,
     opp: dict[str, Any],
@@ -43,10 +52,11 @@ def _decorate_card_response(
     include_preview: bool = True,
 ) -> dict[str, Any]:
     card = contract_to_card_response(opp, include_preview=include_preview)
-    truth_coverage = service.get_truth_coverage(brand=str(card.get("brand") or "gelo"))
+    brand = _normalize_card_brand(card.get("brand"))
+    truth_coverage = service.get_truth_coverage(brand=brand)
     truth_gate = service.truth_gate_service.evaluate(truth_coverage)
     learning_bundle = service.outcome_signal_service.build_learning_bundle(
-        brand=str(card.get("brand") or "gelo"),
+        brand=brand,
         truth_coverage=truth_coverage,
         truth_gate=truth_gate,
     )
@@ -409,7 +419,7 @@ async def prepare_media_recommendation_sync(
 
 @router.post("/products/refresh", dependencies=[Depends(get_current_admin)])
 async def refresh_media_products(
-    brand: str = Query(default="gelo"),
+    brand: str = Query(..., min_length=1),
     source_url: str = Query(default=DEFAULT_GELO_SOURCE_URL),
     overwrite_rules: bool = Query(default=False),
     db: Session = Depends(get_db),
@@ -553,7 +563,7 @@ async def add_media_product_condition_link(
 
 @router.get("/products/match-preview", dependencies=[Depends(get_current_user)])
 async def preview_media_product_match(
-    brand: str = Query(default="gelo"),
+    brand: str = Query(..., min_length=1),
     opportunity_id: str | None = Query(default=None),
     limit: int = Query(default=50, ge=1, le=200),
     db: Session = Depends(get_db),
@@ -572,7 +582,7 @@ async def preview_media_product_match(
 
 @router.get("/products", dependencies=[Depends(get_current_user)])
 async def list_media_products(
-    brand: str = Query(default="gelo"),
+    brand: str = Query(..., min_length=1),
     db: Session = Depends(get_db),
 ):
     """Aktueller Produktkatalog inklusive Aktivstatus."""
@@ -586,7 +596,7 @@ async def list_media_products(
 
 @router.get("/product-mapping", dependencies=[Depends(get_current_user)])
 async def list_media_product_mapping(
-    brand: str = Query(default="gelo"),
+    brand: str = Query(..., min_length=1),
     include_inactive_products: bool = Query(default=False),
     only_pending: bool = Query(default=False),
     db: Session = Depends(get_db),
@@ -606,7 +616,7 @@ async def list_media_product_mapping(
 
 @router.post("/seed-products", dependencies=[Depends(get_current_admin)])
 async def seed_missing_products(
-    brand: str = Query(default="gelo"),
+    brand: str = Query(..., min_length=1),
     db: Session = Depends(get_db),
 ):
     """Fehlende SEED_PRODUCTS als BrandProduct + Mappings anlegen (idempotent)."""

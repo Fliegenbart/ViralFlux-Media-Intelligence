@@ -1,7 +1,7 @@
 import sys
 import types
 from datetime import datetime
-from unittest.mock import patch
+from unittest.mock import ANY, patch
 
 from app.services.media.weekly_brief_service import (
     WeeklyBriefService,
@@ -256,7 +256,41 @@ def test_generate_uses_national_impact_probability_in_summary():
         with patch("app.services.media.weekly_brief_service.utc_now", return_value=datetime(2026, 4, 10, 9, 0, 0)):
             with patch.object(service, "_run_backtest_pitches", return_value=[]):
                 with patch.object(service, "_save_to_db") as save_mock:
-                    result = service.generate(virus_typ="Influenza A")
+                    result = service.generate(brand="gelo", virus_typ="Influenza A")
 
     assert result["summary"]["national_impact"] == 84.0
     save_mock.assert_called_once()
+
+
+def test_generate_requires_explicit_brand_and_persists_it():
+    service = WeeklyBriefService(db=None)
+
+    cockpit_module = types.ModuleType("app.services.media.cockpit_service")
+
+    class DummyCockpitService:
+        def __init__(self, db):
+            self.db = db
+
+        def get_cockpit_payload(self, *, virus_typ: str):
+            return {
+                "peix_epi_score": {
+                    "national_score": 71.0,
+                    "national_band": "hoch",
+                    "national_impact_probability": 84.0,
+                },
+                "bento": {"tiles": []},
+                "map": {"regions": {}},
+                "recommendations": {"cards": []},
+                "data_freshness": {},
+            }
+
+    cockpit_module.MediaCockpitService = DummyCockpitService
+
+    with patch.dict(sys.modules, {"app.services.media.cockpit_service": cockpit_module}):
+        with patch("app.services.media.weekly_brief_service.utc_now", return_value=datetime(2026, 4, 10, 9, 0, 0)):
+            with patch.object(service, "_run_backtest_pitches", return_value=[]):
+                with patch.object(service, "_save_to_db") as save_mock:
+                    result = service.generate(brand="acme", virus_typ="Influenza A")
+
+    assert result["summary"]["brand"] == "acme"
+    save_mock.assert_called_once_with(ANY, ANY, ANY, "Influenza A", "acme")

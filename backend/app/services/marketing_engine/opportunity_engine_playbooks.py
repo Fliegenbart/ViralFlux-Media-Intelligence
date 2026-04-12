@@ -22,6 +22,13 @@ if TYPE_CHECKING:
     from .opportunity_engine import MarketingOpportunityEngine
 
 
+def _require_brand(engine: "MarketingOpportunityEngine", value: Any) -> str:
+    brand = engine._canonical_brand(value)
+    if brand:
+        return brand
+    raise ValueError("brand must be provided")
+
+
 def generate_playbook_ai_cards(
     engine: "MarketingOpportunityEngine",
     *,
@@ -490,8 +497,10 @@ def regenerate_ai_plan(engine: "MarketingOpportunityEngine", opportunity_id: str
         or "erkaltung_akut"
     )
 
+    brand_value = _require_brand(engine, row.brand)
+
     pack = select_gelo_message_pack(
-        brand=row.brand or "gelo",
+        brand=brand_value,
         product=row.product or "gelomyrtol forte",
         condition_key=str(condition_key),
         playbook_key=playbook_key,
@@ -540,7 +549,7 @@ def regenerate_ai_plan(engine: "MarketingOpportunityEngine", opportunity_id: str
     objective = ((payload.get("campaign") or {}).get("objective") or "Media-Optimierung")
     generated = engine.ai_planner.generate_plan(
         playbook_candidate=candidate,
-        brand=row.brand or "PEIX Partner",
+        brand=brand_value,
         product=row.product or "Atemwegslinie",
         campaign_goal=objective,
         weekly_budget=weekly_budget,
@@ -896,7 +905,7 @@ def enrich_opportunity_for_media(
         return
 
     now = utc_now()
-    row.brand = engine._canonical_brand(brand) or "gelo"
+    row.brand = _require_brand(engine, brand)
     row.product = product
     row.status = status
     row.budget_shift_pct = budget_shift_pct

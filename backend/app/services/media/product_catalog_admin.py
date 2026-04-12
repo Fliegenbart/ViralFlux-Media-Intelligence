@@ -10,7 +10,7 @@ from app.core.time import utc_now
 from app.models.database import BrandProduct, MarketingOpportunity, ProductConditionMapping
 
 
-def list_products(service, *, brand: str = "gelo") -> list[dict[str, Any]]:
+def list_products(service, *, brand: str) -> list[dict[str, Any]]:
     brand_key = service._normalize_brand(brand)
     rows = (
         service.db.query(BrandProduct)
@@ -254,7 +254,7 @@ def upsert_condition_link(
 def preview_matches(
     service,
     *,
-    brand: str = "gelo",
+    brand: str,
     opportunity_id: str | None = None,
     limit: int = 50,
 ) -> dict[str, Any]:
@@ -312,7 +312,7 @@ def preview_matches(
 def list_mappings(
     service,
     *,
-    brand: str = "gelo",
+    brand: str,
     include_inactive_products: bool = False,
     only_pending: bool = False,
 ) -> list[dict[str, Any]]:
@@ -411,7 +411,7 @@ def update_mapping(
     }
 
 
-def seed_missing_products(service, *, brand: str = "gelo") -> dict[str, Any]:
+def seed_missing_products(service, *, brand: str) -> dict[str, Any]:
     from app.services.marketing_engine.product_matcher import SEED_PRODUCTS
 
     brand_key = service._normalize_brand(brand)

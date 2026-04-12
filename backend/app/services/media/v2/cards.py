@@ -10,7 +10,7 @@ from app.services.media.semantic_contracts import (
 )
 
 
-def _campaign_cards(service, *, brand: str = "gelo", limit: int = 120) -> list[dict[str, Any]]:
+def _campaign_cards(service, *, brand: str, limit: int = 120) -> list[dict[str, Any]]:
     opportunities = service.engine.get_opportunities(
         brand_filter=brand,
         limit=limit,

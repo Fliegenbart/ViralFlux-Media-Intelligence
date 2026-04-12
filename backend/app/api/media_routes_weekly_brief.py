@@ -35,7 +35,7 @@ async def get_media_cockpit(
 async def get_media_decision(
     virus_typ: str = "Influenza A",
     target_source: str = "RKI_ARE",
-    brand: str = "gelo",
+    brand: str = Query(..., min_length=1),
     db: Session = Depends(get_db),
 ):
     """V2 Decision-View Payload mit WeeklyDecision, Gate-Mix und Model/Truth-Kontext."""
@@ -55,7 +55,7 @@ async def get_media_decision(
 async def get_media_regions(
     virus_typ: str = "Influenza A",
     target_source: str = "RKI_ARE",
-    brand: str = "gelo",
+    brand: str = Query(..., min_length=1),
     db: Session = Depends(get_db),
 ):
     """V2 Regionen-Workbench Payload mit Signal-Treibern und Prioritätslogik."""
@@ -73,7 +73,7 @@ async def get_media_regions(
 
 @router.get("/campaigns", dependencies=[Depends(get_current_user)])
 async def get_media_campaigns(
-    brand: str = "gelo",
+    brand: str = Query(..., min_length=1),
     limit: int = Query(default=120, ge=1, le=500),
     db: Session = Depends(get_db),
 ):
@@ -85,7 +85,7 @@ async def get_media_campaigns(
 async def get_media_evidence(
     virus_typ: str = "Influenza A",
     target_source: str = "RKI_ARE",
-    brand: str = "gelo",
+    brand: str = Query(..., min_length=1),
     db: Session = Depends(get_db),
 ):
     """V2 Evidenz-View mit Proxy, Truth, SignalStack und ModelLineage."""
@@ -121,6 +121,7 @@ async def get_media_model_lineage(
 
 @router.post("/weekly-brief/generate", dependencies=[Depends(get_current_admin)])
 async def generate_weekly_brief(
+    brand: str = Query(..., min_length=1),
     virus_typ: str = Query(default="Influenza A"),
     db: Session = Depends(get_db),
 ):
@@ -128,7 +129,7 @@ async def generate_weekly_brief(
     from app.services.media.weekly_brief_service import WeeklyBriefService
 
     service = WeeklyBriefService(db)
-    result = service.generate(virus_typ=virus_typ)
+    result = service.generate(brand=brand, virus_typ=virus_typ)
     return {
         "status": "success",
         "calendar_week": result["calendar_week"],
@@ -139,7 +140,7 @@ async def generate_weekly_brief(
 
 @router.get("/weekly-brief/latest", dependencies=[Depends(get_current_user)])
 async def get_latest_weekly_brief(
-    brand: str = Query(default="gelo"),
+    brand: str = Query(..., min_length=1),
     db: Session = Depends(get_db),
 ):
     """Download des neuesten Action Brief als PDF."""
@@ -154,7 +155,7 @@ async def get_latest_weekly_brief(
     if not brief or not brief.pdf_bytes:
         raise HTTPException(status_code=404, detail="Kein Weekly Brief vorhanden. Bitte zuerst generieren.")
 
-    filename = f"Gelo_Action_Brief_{brief.calendar_week}.pdf"
+    filename = f"weekly-brief-{str(brand).strip().lower()}-{brief.calendar_week}.pdf"
     return StreamingResponse(
         io.BytesIO(brief.pdf_bytes),
         media_type="application/pdf",
@@ -165,7 +166,7 @@ async def get_latest_weekly_brief(
 @router.get("/weekly-brief/{calendar_week}", dependencies=[Depends(get_current_user)])
 async def get_weekly_brief_by_week(
     calendar_week: str,
-    brand: str = Query(default="gelo"),
+    brand: str = Query(..., min_length=1),
     db: Session = Depends(get_db),
 ):
     """Download eines spezifischen Action Brief nach Kalenderwoche."""
@@ -179,7 +180,7 @@ async def get_weekly_brief_by_week(
     if not brief or not brief.pdf_bytes:
         raise HTTPException(status_code=404, detail=f"Kein Brief für {calendar_week} vorhanden.")
 
-    filename = f"Gelo_Action_Brief_{calendar_week}.pdf"
+    filename = f"weekly-brief-{str(brand).strip().lower()}-{calendar_week}.pdf"
     return StreamingResponse(
         io.BytesIO(brief.pdf_bytes),
         media_type="application/pdf",

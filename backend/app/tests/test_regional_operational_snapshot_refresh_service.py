@@ -101,11 +101,13 @@ class RegionalOperationalSnapshotRefreshServiceTests(unittest.TestCase):
                 now_provider=lambda: observed_at,
             )
             result = service.refresh_supported_scopes(
+                brand="gelo",
                 virus_types=["Influenza A"],
                 horizon_days_list=[7],
             )
 
         self.assertEqual(result["records_written"], 1)
+        self.assertEqual(result["brand"], "gelo")
         row = self.db.query(AuditLog).filter(AuditLog.action == "REGIONAL_OPERATIONAL_SNAPSHOT").one()
         self.assertEqual(row.entity_type, "RegionalOperationalSnapshot")
         metadata = dict((row.new_value or {}).get("metadata") or {})

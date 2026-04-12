@@ -44,6 +44,12 @@ def test_startup_bfarm_import_default_is_disabled() -> None:
     assert settings.STARTUP_ENABLE_BFARM_IMPORT is False
 
 
+def test_operational_default_brand_is_normalized() -> None:
+    settings = build_settings(OPERATIONAL_DEFAULT_BRAND="  ACME Health  ")
+
+    assert settings.NORMALIZED_OPERATIONAL_DEFAULT_BRAND == "acme health"
+
+
 def test_init_db_warns_when_runtime_schema_updates_flag_is_requested_but_ignored(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

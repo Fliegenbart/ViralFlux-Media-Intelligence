@@ -470,6 +470,26 @@ class ProductCatalogServiceTests(unittest.TestCase):
         self.assertIs(payload, expected)
         seed_mock.assert_called_once_with(self.service, brand="gelo")
 
+    def test_brand_scoped_catalog_methods_require_explicit_brand(self) -> None:
+        with self.assertRaises(TypeError):
+            self.service.list_products()
+
+        with self.assertRaises(TypeError):
+            self.service.preview_matches(limit=5)
+
+        with self.assertRaises(TypeError):
+            self.service.list_mappings()
+
+        with self.assertRaises(TypeError):
+            self.service.seed_missing_products()
+
+    def test_normalize_brand_rejects_blank_and_keeps_explicit_brand_identity(self) -> None:
+        with self.assertRaises(ValueError):
+            self.service._normalize_brand("   ")
+
+        self.assertEqual(self.service._normalize_brand("  ACME  "), "acme")
+        self.assertEqual(self.service._normalize_brand("gelo-health"), "gelo-health")
+
 
 if __name__ == "__main__":
     unittest.main()

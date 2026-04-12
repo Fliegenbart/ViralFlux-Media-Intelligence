@@ -48,19 +48,23 @@ class PilotReadoutService:
     def build_readout(
         self,
         *,
-        brand: str = "gelo",
+        brand: str,
         virus_typ: str = "RSV A",
         horizon_days: int = 7,
         weekly_budget_eur: float = 120000.0,
         top_n: int = 12,
     ) -> dict[str, Any]:
-        brand_value = str(brand or "gelo").strip().lower()
+        brand_value = str(brand).strip().lower()
+        if not brand_value:
+            raise ValueError("brand must be provided")
         forecast = self.regional_service.predict_all_regions(
             virus_typ=virus_typ,
+            brand=brand_value,
             horizon_days=horizon_days,
         )
         allocation = self.regional_service.generate_media_allocation(
             virus_typ=virus_typ,
+            brand=brand_value,
             weekly_budget_eur=weekly_budget_eur,
             horizon_days=horizon_days,
         )

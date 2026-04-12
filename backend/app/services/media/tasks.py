@@ -1,6 +1,7 @@
 import logging
 
 from app.core.celery_app import celery_app
+from app.core.config import get_settings
 from app.db.session import get_db_context
 from app.services.marketing_engine.opportunity_engine import MarketingOpportunityEngine
 
@@ -33,18 +34,19 @@ def refine_recommendation_ai_task(self, opportunity_id: str):
 
 @celery_app.task(bind=True, name="generate_weekly_brief_task")
 def generate_weekly_brief_task(self):
-    """Generiert den wöchentlichen Gelo Media Action Brief (PDF).
+    """Generiert den wöchentlichen Media Action Brief (PDF).
 
     Läuft montags 08:30 via Celery Beat.
     """
-    logger.info("Starting weekly brief generation")
+    brand = get_settings().NORMALIZED_OPERATIONAL_DEFAULT_BRAND
+    logger.info("Starting weekly brief generation for brand=%s", brand)
 
     try:
         with get_db_context() as db:
             from app.services.media.weekly_brief_service import WeeklyBriefService
 
             service = WeeklyBriefService(db)
-            result = service.generate()
+            result = service.generate(brand=brand)
 
             logger.info(
                 "Weekly brief generated: %s, %d pages",
@@ -52,6 +54,7 @@ def generate_weekly_brief_task(self):
             )
             return {
                 "success": True,
+                "brand": brand,
                 "calendar_week": result["calendar_week"],
                 "pages": result["pages"],
             }

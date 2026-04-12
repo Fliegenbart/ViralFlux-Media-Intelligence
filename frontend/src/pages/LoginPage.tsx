@@ -38,7 +38,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
         <section className="login-brand-panel" aria-label="ViralFlux Einordnung">
           <div className="login-brand-panel__brand">
             <span className="login-brand-panel__wordmark">ViralFlux</span>
-            <p className="login-brand-panel__subtitle">Pilot-Scope</p>
+            <p className="login-brand-panel__subtitle">Operational Access</p>
           </div>
 
           <div className="login-brand-panel__copy">
@@ -130,7 +130,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
 
             <footer className="login-card__footer">
               <p>
-                Noch kein Zugang? <span>Bitte intern freischalten lassen.</span>
+                Noch kein Zugang? <span>Demo-Zugang über das Produktteam anfragen.</span>
               </p>
             </footer>
           </div>

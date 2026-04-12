@@ -207,7 +207,7 @@ class RegionalForecastServiceTests(unittest.TestCase):
     def test_predict_all_regions_returns_calibrated_panel_payload(self) -> None:
         service = self._make_service(quality_gate_passed=True)
 
-        result = service.predict_all_regions(virus_typ="Influenza A", horizon_days=7)
+        result = service.predict_all_regions(virus_typ="Influenza A", brand="gelo", horizon_days=7)
 
         self.assertEqual(result["virus_typ"], "Influenza A")
         self.assertEqual(result["horizon_days"], 7)
@@ -292,7 +292,7 @@ class RegionalForecastServiceTests(unittest.TestCase):
             },
         )
 
-        result = service.predict_all_regions(virus_typ="Influenza A", horizon_days=7)
+        result = service.predict_all_regions(virus_typ="Influenza A", brand="gelo", horizon_days=7)
 
         self.assertEqual(result["blend_regime"], "respiratory_peak")
         self.assertAlmostEqual(float(result["aggregate_blend_weights_resolved"]["cluster"]), 0.55, places=6)
@@ -301,7 +301,7 @@ class RegionalForecastServiceTests(unittest.TestCase):
     def test_predict_all_regions_passes_horizon_five_through_to_inference_and_contract(self) -> None:
         service = self._make_service(quality_gate_passed=True)
 
-        result = service.predict_all_regions(virus_typ="Influenza A", horizon_days=5)
+        result = service.predict_all_regions(virus_typ="Influenza A", brand="gelo", horizon_days=5)
 
         self.assertEqual(result["horizon_days"], 5)
         self.assertEqual(result["target_window_days"], [5, 5])
@@ -326,7 +326,7 @@ class RegionalForecastServiceTests(unittest.TestCase):
             },
         )
 
-        result = service.predict_all_regions(virus_typ="Influenza A", horizon_days=7)
+        result = service.predict_all_regions(virus_typ="Influenza A", brand="gelo", horizon_days=7)
 
         self.assertEqual(result["reconciliation_method"], "mint_projection_residual_covariance")
         self.assertEqual(result["hierarchy_consistency_status"], "coherent")
@@ -338,7 +338,7 @@ class RegionalForecastServiceTests(unittest.TestCase):
         service = self._make_service(quality_gate_passed=True)
 
         with self.assertRaises(ValueError):
-            service.predict_all_regions(virus_typ="Influenza A", horizon_days=4)
+            service.predict_all_regions(virus_typ="Influenza A", brand="gelo", horizon_days=4)
 
     def test_predict_all_regions_assigns_activate_when_signals_are_strong(self) -> None:
         service = self._make_service(
@@ -354,7 +354,7 @@ class RegionalForecastServiceTests(unittest.TestCase):
             },
         )
 
-        result = service.predict_all_regions(virus_typ="Influenza A", horizon_days=7)
+        result = service.predict_all_regions(virus_typ="Influenza A", brand="gelo", horizon_days=7)
 
         top = result["predictions"][0]
         self.assertEqual(top["decision_label"], "Activate")
@@ -377,7 +377,7 @@ class RegionalForecastServiceTests(unittest.TestCase):
             },
         )
 
-        result = service.predict_all_regions(virus_typ="Influenza A", horizon_days=7)
+        result = service.predict_all_regions(virus_typ="Influenza A", brand="gelo", horizon_days=7)
 
         top = result["predictions"][0]
         self.assertEqual(top["decision_label"], "Prepare")
@@ -393,7 +393,7 @@ class RegionalForecastServiceTests(unittest.TestCase):
             upper_values=[12.0],
         )
 
-        result = service.predict_all_regions(virus_typ="Influenza A", horizon_days=7)
+        result = service.predict_all_regions(virus_typ="Influenza A", brand="gelo", horizon_days=7)
 
         top = result["predictions"][0]
         self.assertEqual(top["decision_label"], "Watch")
@@ -413,6 +413,7 @@ class RegionalForecastServiceTests(unittest.TestCase):
 
         result = service.generate_media_activation(
             virus_typ="Influenza A",
+            brand="gelo",
             weekly_budget_eur=50000,
             horizon_days=7,
         )
@@ -442,6 +443,7 @@ class RegionalForecastServiceTests(unittest.TestCase):
 
         result = service.generate_media_activation(
             virus_typ="Influenza A",
+            brand="gelo",
             weekly_budget_eur=50000,
             horizon_days=7,
         )
@@ -469,6 +471,7 @@ class RegionalForecastServiceTests(unittest.TestCase):
 
         result = service.generate_media_activation(
             virus_typ="Influenza A",
+            brand="gelo",
             weekly_budget_eur=50000,
             horizon_days=7,
         )
@@ -486,6 +489,7 @@ class RegionalForecastServiceTests(unittest.TestCase):
 
         result = service.generate_media_activation(
             virus_typ="Influenza A",
+            brand="gelo",
             weekly_budget_eur=50000,
             horizon_days=7,
         )
@@ -500,7 +504,7 @@ class RegionalForecastServiceTests(unittest.TestCase):
         service = self._make_service()
         service._load_artifacts = lambda virus_typ, horizon_days=7: {}
 
-        result = service.predict_all_regions(virus_typ="Influenza A", horizon_days=3)
+        result = service.predict_all_regions(virus_typ="Influenza A", brand="gelo", horizon_days=3)
 
         self.assertEqual(result["status"], "no_model")
         self.assertEqual(result["horizon_days"], 3)
@@ -523,7 +527,7 @@ class RegionalForecastServiceTests(unittest.TestCase):
             }
         }
 
-        result = service.predict_all_regions(virus_typ="Influenza A", horizon_days=5)
+        result = service.predict_all_regions(virus_typ="Influenza A", brand="gelo", horizon_days=5)
 
         self.assertEqual(result["status"], "no_model")
         self.assertTrue(result["missing_artifacts"])
@@ -558,7 +562,7 @@ class RegionalForecastServiceTests(unittest.TestCase):
             },
         }
 
-        result = service.predict_all_regions(virus_typ="Influenza A", horizon_days=7)
+        result = service.predict_all_regions(virus_typ="Influenza A", brand="gelo", horizon_days=7)
 
         self.assertEqual(result["status"], "no_model")
         self.assertEqual(
@@ -577,7 +581,7 @@ class RegionalForecastServiceTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp_dir:
             service = RegionalForecastService(db=None, models_dir=Path(tmp_dir))
 
-            result = service.predict_all_regions(virus_typ="Influenza A", horizon_days=7)
+            result = service.predict_all_regions(virus_typ="Influenza A", brand="gelo", horizon_days=7)
 
         self.assertEqual(result["status"], "no_model")
         self.assertTrue(result["missing_artifacts"])
@@ -599,7 +603,7 @@ class RegionalForecastServiceTests(unittest.TestCase):
             (base / "influenza_a").mkdir(parents=True)
             service = RegionalForecastService(db=None, models_dir=base)
 
-            result = service.predict_all_regions(virus_typ="Influenza A", horizon_days=7)
+            result = service.predict_all_regions(virus_typ="Influenza A", brand="gelo", horizon_days=7)
 
         self.assertEqual(result["status"], "no_model")
         self.assertTrue(result["missing_artifacts"])
@@ -628,7 +632,7 @@ class RegionalForecastServiceTests(unittest.TestCase):
             },
         }
 
-        result = service.predict_all_regions(virus_typ="Influenza A", horizon_days=7)
+        result = service.predict_all_regions(virus_typ="Influenza A", brand="gelo", horizon_days=7)
 
         self.assertEqual(result["status"], "no_model")
         self.assertEqual(result["predictions"], [])
@@ -647,6 +651,7 @@ class RegionalForecastServiceTests(unittest.TestCase):
 
         result = service.generate_media_activation(
             virus_typ="Influenza A",
+            brand="gelo",
             weekly_budget_eur=50000,
             horizon_days=7,
         )
@@ -676,7 +681,7 @@ class RegionalForecastServiceTests(unittest.TestCase):
             upper_values=[32.0],
         )
 
-        forecast = service.predict_all_regions(virus_typ="SARS-CoV-2", horizon_days=7)
+        forecast = service.predict_all_regions(virus_typ="SARS-CoV-2", brand="gelo", horizon_days=7)
         top = forecast["predictions"][0]
         self.assertEqual(top["rollout_mode"], "shadow")
         self.assertEqual(top["activation_policy"], "watch_only")
@@ -685,6 +690,7 @@ class RegionalForecastServiceTests(unittest.TestCase):
 
         media = service.generate_media_activation(
             virus_typ="SARS-CoV-2",
+            brand="gelo",
             weekly_budget_eur=50000,
             horizon_days=7,
         )
@@ -753,7 +759,7 @@ class RegionalForecastServiceTests(unittest.TestCase):
         )()
         service._sars_h7_promotion_enabled = lambda: False
 
-        forecast = service.predict_all_regions(virus_typ="SARS-CoV-2", horizon_days=7)
+        forecast = service.predict_all_regions(virus_typ="SARS-CoV-2", brand="gelo", horizon_days=7)
 
         top = forecast["predictions"][0]
         self.assertEqual(top["rollout_mode"], "shadow")
@@ -813,7 +819,7 @@ class RegionalForecastServiceTests(unittest.TestCase):
         )()
         service._sars_h7_promotion_enabled = lambda: True
 
-        forecast = service.predict_all_regions(virus_typ="SARS-CoV-2", horizon_days=7)
+        forecast = service.predict_all_regions(virus_typ="SARS-CoV-2", brand="gelo", horizon_days=7)
 
         top = forecast["predictions"][0]
         self.assertEqual(top["rollout_mode"], "gated")
@@ -873,7 +879,7 @@ class RegionalForecastServiceTests(unittest.TestCase):
         )()
         service._sars_h7_promotion_enabled = lambda: True
 
-        forecast = service.predict_all_regions(virus_typ="SARS-CoV-2", horizon_days=7)
+        forecast = service.predict_all_regions(virus_typ="SARS-CoV-2", brand="gelo", horizon_days=7)
 
         top = forecast["predictions"][0]
         self.assertEqual(top["rollout_mode"], "shadow")
@@ -937,7 +943,7 @@ class RegionalForecastServiceTests(unittest.TestCase):
         )()
         service._sars_h7_promotion_enabled = lambda: True
 
-        forecast = service.predict_all_regions(virus_typ="SARS-CoV-2", horizon_days=7)
+        forecast = service.predict_all_regions(virus_typ="SARS-CoV-2", brand="gelo", horizon_days=7)
 
         self.assertFalse(forecast["sars_h7_promotion"]["eligible"])
         self.assertIn("snapshot_operational_gate_failed", forecast["sars_h7_promotion"]["promotion_blockers"])
@@ -1000,7 +1006,7 @@ class RegionalForecastServiceTests(unittest.TestCase):
         }
         service._load_artifacts = lambda virus_typ, horizon_days=7: artifact_payloads.get(virus_typ, {})
 
-        result = service.benchmark_supported_viruses(reference_virus="Influenza A")
+        result = service.benchmark_supported_viruses(brand="gelo", reference_virus="Influenza A")
 
         self.assertEqual(result["reference_virus"], "Influenza A")
         self.assertEqual(result["trained_viruses"], 3)
@@ -1102,7 +1108,7 @@ class RegionalForecastServiceTests(unittest.TestCase):
             },
         }
         service._load_artifacts = lambda virus_typ, horizon_days=7: artifact_payloads.get(virus_typ, {})
-        service.predict_all_regions = lambda virus_typ, horizon_days=7: {
+        service.predict_all_regions = lambda virus_typ, brand="gelo", horizon_days=7: {
             "virus_typ": virus_typ,
             "as_of_date": "2026-03-06 00:00:00",
             "predictions": [
@@ -1145,7 +1151,7 @@ class RegionalForecastServiceTests(unittest.TestCase):
             ],
         }
 
-        result = service.build_portfolio_view(top_n=6, reference_virus="Influenza A")
+        result = service.build_portfolio_view(brand="gelo", top_n=6, reference_virus="Influenza A")
 
         self.assertEqual(result["summary"]["trained_viruses"], 3)
         self.assertIn("business_gate", result)
@@ -1396,11 +1402,12 @@ class RegionalTruthLayerIntegrationTests(unittest.TestCase):
     def test_generate_media_allocation_adds_truth_validation_and_release_guidance(self) -> None:
         self._seed_commercially_validated_truth()
         service = RegionalForecastService(db=self.db)
-        service.predict_all_regions = lambda virus_typ, horizon_days=7: self._allocation_forecast()
+        service.predict_all_regions = lambda virus_typ, brand="gelo", horizon_days=7: self._allocation_forecast()
         service.media_allocation_engine.allocate = lambda **kwargs: self._allocation_payload()
 
         result = service.generate_media_allocation(
             virus_typ="Influenza A",
+            brand="gelo",
             weekly_budget_eur=50000,
             horizon_days=7,
         )
@@ -1421,7 +1428,7 @@ class RegionalTruthLayerIntegrationTests(unittest.TestCase):
 
     def test_generate_media_allocation_stays_stable_when_truth_scope_has_no_data(self) -> None:
         service = RegionalForecastService(db=self.db)
-        service.predict_all_regions = lambda virus_typ, horizon_days=7: self._allocation_forecast(
+        service.predict_all_regions = lambda virus_typ, brand="gelo", horizon_days=7: self._allocation_forecast(
             business_gate={
                 "validated_for_budget_activation": True,
                 "evidence_tier": "commercially_validated",
@@ -1432,6 +1439,7 @@ class RegionalTruthLayerIntegrationTests(unittest.TestCase):
 
         result = service.generate_media_allocation(
             virus_typ="Influenza A",
+            brand="gelo",
             weekly_budget_eur=50000,
             horizon_days=7,
         )
@@ -1446,10 +1454,11 @@ class RegionalTruthLayerIntegrationTests(unittest.TestCase):
     def test_build_portfolio_view_exposes_truth_overlay_without_changing_epidemiological_action(self) -> None:
         self._seed_commercially_validated_truth()
         service = RegionalForecastService(db=self.db)
-        service.benchmark_supported_viruses = lambda reference_virus="Influenza A", horizon_days=7: self._benchmark_payload()
-        service.predict_all_regions = lambda virus_typ, horizon_days=7: self._allocation_forecast()
+        service.benchmark_supported_viruses = lambda brand="gelo", reference_virus="Influenza A", horizon_days=7: self._benchmark_payload()
+        service.predict_all_regions = lambda virus_typ, brand="gelo", horizon_days=7: self._allocation_forecast()
 
         result = service.build_portfolio_view(
+            brand="gelo",
             top_n=3,
             reference_virus="Influenza A",
             horizon_days=7,
@@ -1505,7 +1514,7 @@ class RegionalTruthLayerIntegrationTests(unittest.TestCase):
             }
         }
 
-        result = service.build_hero_overview(horizon_days=7, reference_virus="Influenza A")
+        result = service.build_hero_overview(brand="gelo", horizon_days=7, reference_virus="Influenza A")
 
         self.assertEqual(result["virus_rollup"][0]["virus_typ"], "Influenza A")
         self.assertIn("hero_timeseries", result)
@@ -1526,7 +1535,7 @@ class RegionalTruthLayerIntegrationTests(unittest.TestCase):
 class RegionalCampaignRecommendationIntegrationTests(unittest.TestCase):
     def test_generate_campaign_recommendations_consumes_allocation_output(self) -> None:
         service = RegionalForecastService(db=None)
-        service.generate_media_allocation = lambda virus_typ="Influenza A", weekly_budget_eur=50000, horizon_days=7: {
+        service.generate_media_allocation = lambda virus_typ="Influenza A", brand="gelo", weekly_budget_eur=50000, horizon_days=7: {
             "virus_typ": virus_typ,
             "horizon_days": horizon_days,
             "target_window_days": [horizon_days, horizon_days],
@@ -1576,6 +1585,7 @@ class RegionalCampaignRecommendationIntegrationTests(unittest.TestCase):
 
         result = service.generate_campaign_recommendations(
             virus_typ="Influenza A",
+            brand="gelo",
             weekly_budget_eur=50000,
             horizon_days=7,
             top_n=6,

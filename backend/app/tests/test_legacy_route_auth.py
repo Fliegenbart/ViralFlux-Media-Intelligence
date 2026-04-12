@@ -166,10 +166,7 @@ class LegacyRouteAuthTests(unittest.TestCase):
             {
                 "national_score": 0.42,
                 "national_band": "elevated",
-                "national_impact_probability": 58.0,
                 "score_semantics": "ranking_signal",
-                "impact_probability_semantics": "ranking_signal",
-                "impact_probability_deprecated": True,
                 "generated_at": "2026-04-08T10:00:00Z",
                 "regions": {
                     "BE": {
@@ -177,14 +174,12 @@ class LegacyRouteAuthTests(unittest.TestCase):
                         "region_name": "Berlin",
                         "score_0_100": 77.0,
                         "risk_band": "high",
-                        "impact_probability": 84.0,
                         "score_semantics": "ranking_signal",
-                        "impact_probability_semantics": "ranking_signal",
-                        "impact_probability_deprecated": True,
                     }
                 },
             },
         )
+        self.assertNotIn("impact_probability", str(response.json()))
 
     def test_outbreak_peix_score_full_requires_authentication(self) -> None:
         response = self.client.get("/api/v1/outbreak-score/peix-score/full")

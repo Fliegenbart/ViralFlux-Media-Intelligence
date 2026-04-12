@@ -9,6 +9,7 @@ def predict_all_regions(
     service,
     *,
     virus_typ: str = "Influenza A",
+    brand: str,
     horizon_days: int = 7,
     ensure_supported_horizon_fn,
     regional_horizon_support_status_fn,
@@ -418,7 +419,7 @@ def predict_all_regions(
     dataset_manifest = artifacts.get("dataset_manifest") or metadata.get("dataset_manifest") or {}
     point_in_time_snapshot = artifacts.get("point_in_time_snapshot") or metadata.get("point_in_time_snapshot") or {}
     source_coverage = dataset_manifest.get("source_coverage") or {}
-    business_gate = service._business_gate(quality_gate=quality_gate)
+    business_gate = service._business_gate(quality_gate=quality_gate, brand=brand)
     cluster_forecast_quantiles = hierarchy_meta.get("cluster_quantiles") or {}
     national_forecast_quantiles = hierarchy_meta.get("national_quantiles") or {}
     predictions = []

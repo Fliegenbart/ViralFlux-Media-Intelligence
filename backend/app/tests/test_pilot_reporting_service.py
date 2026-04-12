@@ -325,6 +325,14 @@ class PilotReportingServiceTests(unittest.TestCase):
         self.assertEqual(report["pilot_kpi_summary"]["hit_rate"]["assessed"], 0)
         self.assertIsNone(report["pilot_kpi_summary"]["early_warning_lead_time_days"]["average"])
 
+    def test_build_pilot_report_rejects_blank_brand(self) -> None:
+        with self.assertRaises(ValueError):
+            self.service.build_pilot_report(
+                brand="   ",
+                window_start=datetime(2025, 12, 1),
+                window_end=datetime(2026, 3, 31),
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

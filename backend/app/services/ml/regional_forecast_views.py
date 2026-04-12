@@ -101,6 +101,7 @@ def empty_media_allocation_response(
 def benchmark_supported_viruses(
     service,
     *,
+    brand: str,
     reference_virus: str = "Influenza A",
     horizon_days: int = 7,
     ensure_supported_horizon_fn,
@@ -115,7 +116,7 @@ def benchmark_supported_viruses(
     horizon = ensure_supported_horizon_fn(horizon_days)
     items: list[dict[str, Any]] = []
     reference_metrics: dict[str, Any] | None = None
-    truth_readiness = service._truth_readiness()
+    truth_readiness = service._truth_readiness(brand=brand)
 
     for virus_typ in supported_virus_types:
         support = regional_horizon_support_status_fn(virus_typ, horizon)
@@ -123,6 +124,7 @@ def benchmark_supported_viruses(
             unsupported_business_gate = service._business_gate(
                 quality_gate={"overall_passed": False},
                 truth_readiness=truth_readiness,
+                brand=brand,
             )
             items.append(
                 {
@@ -160,6 +162,7 @@ def benchmark_supported_viruses(
         business_gate = service._business_gate(
             quality_gate=quality_gate,
             truth_readiness=truth_readiness,
+            brand=brand,
         )
 
         item = {
@@ -216,8 +219,10 @@ def benchmark_supported_viruses(
     summary_business_gate = service._business_gate(
         quality_gate={"overall_passed": any((item.get("quality_gate") or {}).get("overall_passed") for item in ranked)},
         truth_readiness=truth_readiness,
+        brand=brand,
     )
     return {
+        "brand": str(brand).strip().lower(),
         "reference_virus": reference_virus,
         "horizon_days": horizon,
         "target_window_days": service._target_window_for_horizon(horizon),
@@ -238,6 +243,7 @@ def benchmark_supported_viruses(
 def build_hero_overview(
     service,
     *,
+    brand: str,
     horizon_days: int = 7,
     reference_virus: str = "Influenza A",
     ensure_supported_horizon_fn,
@@ -323,6 +329,7 @@ def build_hero_overview(
         },
         "business_gate": service._business_gate(
             quality_gate={"overall_passed": bool(go_viruses)},
+            brand=brand,
         ),
         "evidence_tier": None,
         "benchmark": [],
@@ -336,6 +343,7 @@ def build_hero_overview(
 def build_portfolio_view(
     service,
     *,
+    brand: str,
     horizon_days: int = 7,
     top_n: int = 12,
     reference_virus: str = "Influenza A",
@@ -347,6 +355,7 @@ def build_portfolio_view(
 ) -> dict[str, Any]:
     horizon = ensure_supported_horizon_fn(horizon_days)
     benchmark_payload = service.benchmark_supported_viruses(
+        brand=brand,
         reference_virus=reference_virus,
         horizon_days=horizon,
     )
@@ -365,7 +374,11 @@ def build_portfolio_view(
         if not benchmark_item:
             continue
 
-        forecast = service.predict_all_regions(virus_typ=virus_typ, horizon_days=horizon)
+        forecast = service.predict_all_regions(
+            virus_typ=virus_typ,
+            brand=brand,
+            horizon_days=horizon,
+        )
         predictions = forecast.get("predictions") or []
         if not predictions:
             continue
@@ -407,6 +420,7 @@ def build_portfolio_view(
                 signal_context=service._truth_signal_context(prediction=prediction),
                 operational_action=action,
                 operational_gate_open=action in {"activate", "prepare"},
+                brand=brand,
             )
             opportunities.append(
                 {
@@ -483,7 +497,10 @@ def build_portfolio_view(
             "priority_opportunities": sum(1 for item in opportunities if item["portfolio_action"] == "prioritize"),
             "validated_opportunities": sum(1 for item in opportunities if item["portfolio_action"] in {"activate", "prepare"}),
         },
-        "business_gate": benchmark_payload.get("business_gate") or service._business_gate(quality_gate={"overall_passed": False}),
+        "business_gate": benchmark_payload.get("business_gate") or service._business_gate(
+            quality_gate={"overall_passed": False},
+            brand=brand,
+        ),
         "evidence_tier": benchmark_payload.get("evidence_tier"),
         "truth_layer": service._truth_layer_rollup(opportunities),
         "benchmark": benchmark_payload.get("benchmark", []),
@@ -497,7 +514,7 @@ def get_validation_summary(
     service,
     *,
     virus_typ: str = "Influenza A",
-    brand: str = "gelo",
+    brand: str,
     horizon_days: int = 7,
     ensure_supported_horizon_fn,
     regional_horizon_support_status_fn,
@@ -516,7 +533,7 @@ def get_validation_summary(
         )
         return {
             "virus_typ": virus_typ,
-            "brand": str(brand or "gelo").strip().lower(),
+            "brand": str(brand).strip().lower(),
             "horizon_days": horizon,
             "target_window_days": service._target_window_for_horizon(horizon),
             "status": "unsupported",
@@ -548,7 +565,7 @@ def get_validation_summary(
     dataset_manifest = artifacts.get("dataset_manifest") or metadata.get("dataset_manifest") or {}
     return {
         "virus_typ": virus_typ,
-        "brand": str(brand or "gelo").strip().lower(),
+        "brand": str(brand).strip().lower(),
         "horizon_days": int(metadata.get("horizon_days") or horizon),
         "target_window_days": metadata.get("target_window_days") or service._target_window_for_horizon(horizon),
         "status": "trained" if not load_error and metadata.get("aggregate_metrics") else "no_model",

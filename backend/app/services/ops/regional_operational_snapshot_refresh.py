@@ -16,6 +16,13 @@ from app.services.ops.production_readiness_service import ProductionReadinessSer
 from app.services.ops.regional_operational_snapshot_store import RegionalOperationalSnapshotStore
 
 
+def _normalize_brand(brand: str) -> str:
+    value = str(brand).strip().lower()
+    if value:
+        return value
+    raise ValueError("brand must be provided")
+
+
 class RegionalOperationalSnapshotRefreshService:
     """Create fresh per-scope operational snapshots for readiness evaluation."""
 
@@ -39,11 +46,13 @@ class RegionalOperationalSnapshotRefreshService:
     def refresh_supported_scopes(
         self,
         *,
+        brand: str,
         virus_types: Iterable[str] | None = None,
         horizon_days_list: Iterable[int] | None = None,
         weekly_budget_eur: float = 50000.0,
         top_n: int = 12,
     ) -> dict[str, Any]:
+        brand_value = _normalize_brand(brand)
         observed_at = self.now_provider().replace(tzinfo=None)
         selected_viruses = [
             virus_typ
@@ -70,10 +79,12 @@ class RegionalOperationalSnapshotRefreshService:
 
                 forecast = self.regional_service.predict_all_regions(
                     virus_typ=virus_typ,
+                    brand=brand_value,
                     horizon_days=horizon_days,
                 )
                 allocation = self.regional_service.generate_media_allocation(
                     virus_typ=virus_typ,
+                    brand=brand_value,
                     weekly_budget_eur=weekly_budget_eur,
                     horizon_days=horizon_days,
                 )
@@ -127,6 +138,7 @@ class RegionalOperationalSnapshotRefreshService:
 
         return {
             "status": "success",
+            "brand": brand_value,
             "virus_types": list(selected_viruses),
             "horizon_days_list": sorted(selected_horizons) if selected_horizons else None,
             "scope_count": len(records),

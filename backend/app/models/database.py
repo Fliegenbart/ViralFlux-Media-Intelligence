@@ -805,7 +805,7 @@ class SourceNowcastSnapshot(Base):
 
 
 class WeeklyBrief(Base):
-    """Wöchentlicher Gelo Media Action Brief (PDF)."""
+    """Wöchentlicher brand-spezifischer Media Action Brief (PDF)."""
     __tablename__ = "weekly_briefs"
 
     id = Column(Integer, primary_key=True, index=True)

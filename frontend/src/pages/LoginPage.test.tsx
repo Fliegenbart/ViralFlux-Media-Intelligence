@@ -43,10 +43,14 @@ describe('LoginPage', () => {
     expect(
       screen.getByText('Bundesländer, Richtung und Evidenz für diese Woche in einer Arbeitsfläche.'),
     ).toBeInTheDocument();
+    expect(screen.getByText('Operational Access')).toBeInTheDocument();
+    expect(screen.getByText('Demo-Zugang über das Produktteam anfragen.')).toBeInTheDocument();
     expect(screen.queryByText('Oder mit Firmenkonto fortfahren')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Google' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Azure AD' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Passwort vergessen?' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Pilot-Scope')).not.toBeInTheDocument();
+    expect(screen.queryByText('Bitte intern freischalten lassen.')).not.toBeInTheDocument();
     expect(screen.getByText(/Noch kein Zugang\?/i)).toBeInTheDocument();
 
     fireEvent.change(screen.getByPlaceholderText('name@firma.de'), {

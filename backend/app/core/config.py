@@ -147,6 +147,7 @@ class Settings(BaseSettings):
     FORECAST_TSFM_PROVIDER: str = "timesfm"
     FORECAST_BENCHMARK_MIN_RELATIVE_WIS_IMPROVEMENT: float = 0.01
     FORECAST_ENABLE_ADAPTIVE_REVISION_POLICY: bool = True
+    OPERATIONAL_DEFAULT_BRAND: str = "gelo"
     
     # Rate Limiting
     RATE_LIMIT_REQUESTS: int = 100
@@ -221,6 +222,13 @@ class Settings(BaseSettings):
             seen.add(scope)
             scopes.append(scope)
         return scopes
+
+    @property
+    def NORMALIZED_OPERATIONAL_DEFAULT_BRAND(self) -> str:
+        value = str(self.OPERATIONAL_DEFAULT_BRAND).strip().lower()
+        if value:
+            return value
+        raise RuntimeError("OPERATIONAL_DEFAULT_BRAND must not be empty.")
     
     model_config = SettingsConfigDict(
         env_file=_DEFAULT_ENV_FILE,

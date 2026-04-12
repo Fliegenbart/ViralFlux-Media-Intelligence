@@ -159,10 +159,18 @@ class ForecastDecisionServiceTests(unittest.TestCase):
         self.assertNotIn("confidence_semantics", event)
         self.assertIsNotNone(event["reliability_score"])
         self.assertIsNotNone(event["reliability_label"])
+        self.assertIn("signal_index", bundle["decision_summary"])
+        self.assertIn("signal_basis_type", bundle["decision_summary"])
+        self.assertIn("signal_basis_score", bundle["decision_summary"])
         self.assertGreater(bundle["decision_summary"]["decision_priority_index"], 0.0)
         self.assertEqual(bundle["decision_summary"]["decision_basis_type"], "heuristic_signal")
         self.assertEqual(
             bundle["decision_summary"]["decision_basis_score"],
+            event["heuristic_event_score"],
+        )
+        self.assertEqual(bundle["decision_summary"]["signal_basis_type"], "heuristic_signal")
+        self.assertEqual(
+            bundle["decision_summary"]["signal_basis_score"],
             event["heuristic_event_score"],
         )
         self.assertNotIn("compatibility", bundle)
@@ -368,6 +376,9 @@ class ForecastDecisionServiceTests(unittest.TestCase):
         self.assertNotIn("confidence_level", result)
         self.assertNotIn("final_risk_score", result)
         self.assertGreater(result["decision_priority_index"], 0.0)
+        self.assertIn("signal_index", result)
+        self.assertIn("signal_basis_type", result)
+        self.assertIn("signal_basis_score", result)
         self.assertIn("decision_basis_type", result)
         self.assertIn("decision_basis_score", result)
         self.assertNotIn("decision_signal_index", result)
@@ -383,6 +394,9 @@ class ForecastDecisionServiceTests(unittest.TestCase):
         self.assertTrue(history_payload["history"])
         first = history_payload["history"][0]
         self.assertIn("decision_priority_index", first)
+        self.assertIn("signal_index", first)
+        self.assertIn("signal_basis_score", first)
+        self.assertIn("signal_basis_type", first)
         self.assertIn("decision_basis_score", first)
         self.assertIn("decision_basis_type", first)
         self.assertIn("signal_source", first)
@@ -474,6 +488,19 @@ class ForecastDecisionServiceTests(unittest.TestCase):
         self.assertEqual(readiness["truth_readiness"], "im_aufbau")
         self.assertTrue(readiness["truth_ready"])
         self.assertTrue(readiness["expected_units_lift_enabled"])
+
+    def test_truth_readiness_rejects_blank_brand(self) -> None:
+        with self.assertRaises(ValueError):
+            ForecastDecisionService(self.db).get_truth_readiness(brand="   ")
+
+    def test_build_opportunity_assessment_rejects_blank_brand(self) -> None:
+        self._seed_forecast_bundle_inputs()
+
+        with self.assertRaises(ValueError):
+            ForecastDecisionService(self.db).build_opportunity_assessment(
+                virus_typ="Influenza A",
+                brand="   ",
+            )
 
 
 class ForecastFirstOpportunityTests(unittest.TestCase):

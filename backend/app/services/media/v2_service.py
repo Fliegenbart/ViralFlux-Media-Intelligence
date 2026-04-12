@@ -44,7 +44,7 @@ class MediaV2Service:
         *,
         virus_typ: str = "Influenza A",
         target_source: str = "RKI_ARE",
-        brand: str = "gelo",
+        brand: str,
     ) -> dict[str, Any]:
         return build_decision_payload(
             self,
@@ -58,7 +58,7 @@ class MediaV2Service:
         *,
         virus_typ: str = "Influenza A",
         target_source: str = "RKI_ARE",
-        brand: str = "gelo",
+        brand: str,
     ) -> dict[str, Any]:
         return build_regions_payload(
             self,
@@ -70,7 +70,7 @@ class MediaV2Service:
     def get_campaigns_payload(
         self,
         *,
-        brand: str = "gelo",
+        brand: str,
         limit: int = 120,
     ) -> dict[str, Any]:
         return build_campaigns_payload(self, brand=brand, limit=limit)
@@ -80,7 +80,7 @@ class MediaV2Service:
         *,
         virus_typ: str = "Influenza A",
         target_source: str = "RKI_ARE",
-        brand: str = "gelo",
+        brand: str,
     ) -> dict[str, Any]:
         return build_evidence_payload(
             self,
@@ -109,7 +109,7 @@ class MediaV2Service:
     def get_truth_coverage(
         self,
         *,
-        brand: str = "gelo",
+        brand: str,
         virus_typ: str | None = None,
     ) -> dict[str, Any]:
         return outcomes_module.build_truth_coverage(
@@ -121,7 +121,7 @@ class MediaV2Service:
     def get_truth_evidence(
         self,
         *,
-        brand: str = "gelo",
+        brand: str,
         virus_typ: str | None = None,
     ) -> dict[str, Any]:
         return outcomes_module.build_truth_evidence(
@@ -136,7 +136,7 @@ class MediaV2Service:
         source_label: str,
         records: list[dict[str, Any]] | None = None,
         csv_payload: str | None = None,
-        brand: str = "gelo",
+        brand: str,
         replace_existing: bool = False,
         validate_only: bool = False,
         file_name: str | None = None,
@@ -155,7 +155,7 @@ class MediaV2Service:
     def list_outcome_import_batches(
         self,
         *,
-        brand: str = "gelo",
+        brand: str,
         limit: int = 20,
     ) -> list[dict[str, Any]]:
         return outcomes_module.list_outcome_import_batches(
@@ -173,7 +173,7 @@ class MediaV2Service:
     def outcome_template_csv(self) -> str:
         return outcomes_module.outcome_template_csv(self)
 
-    def _campaign_cards(self, *, brand: str = "gelo", limit: int = 120) -> list[dict[str, Any]]:
+    def _campaign_cards(self, *, brand: str, limit: int = 120) -> list[dict[str, Any]]:
         return cards_module._campaign_cards(self, brand=brand, limit=limit)
 
     def _attach_outcome_learning_to_card(
@@ -303,6 +303,7 @@ class MediaV2Service:
         cockpit: dict[str, Any],
         virus_typ: str,
         *,
+        brand: str | None = None,
         truth_coverage: dict[str, Any] | None = None,
         truth_validation_legacy: dict[str, Any] | None = None,
     ) -> list[str]:
@@ -310,6 +311,7 @@ class MediaV2Service:
             self,
             cockpit,
             virus_typ,
+            brand=brand,
             truth_coverage=truth_coverage,
             truth_validation_legacy=truth_validation_legacy,
         )

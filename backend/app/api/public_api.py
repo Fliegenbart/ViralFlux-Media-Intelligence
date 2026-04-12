@@ -4,7 +4,7 @@ Black-box endpoint: input = parameters, output = qualitative signal assessment.
 """
 
 from app.core.time import utc_now
-from fastapi import APIRouter, Depends, Request, Query
+from fastapi import APIRouter, Depends, Request, Query, HTTPException
 from sqlalchemy.orm import Session
 import re
 import logging
@@ -64,14 +64,14 @@ def _build_signal_factors(components: dict) -> list[SignalFactor]:
     factor_map = [
         ("Wastewater Load", "wastewater"),
         ("Emergency Visits", "notaufnahme"),
-        ("Drug Availability", "drug_shortage"),
         ("Search Behavior", "search_trends"),
         ("Weather Conditions", "environment"),
-        ("Order Patterns", "order_velocity"),
     ]
 
     factors = []
     for display_name, key in factor_map:
+        if key not in components or components.get(key) is None:
+            continue
         value = components.get(key, 0.0)
         factors.append(SignalFactor(
             factor=display_name,
@@ -96,7 +96,9 @@ def obfuscate_result(internal: dict) -> PublicRiskResponse:
     All weights, thresholds and formulas are stripped.
     Only qualitative signal assessments are emitted.
     """
-    score = internal.get("decision_priority_index", 0)
+    score = internal.get("signal_index")
+    if score is None:
+        score = internal.get("decision_priority_index", 0)
     components = internal.get("component_scores", {})
 
     meta = ResponseMeta(
@@ -136,8 +138,8 @@ def _get_shortage_signals() -> dict | None:
 @router.get(
     "/risk",
     response_model=PublicRiskResponse,
-    summary="Current risk assessment",
-    description="Returns a qualitative risk assessment for a given pathogen. "
+    summary="Current signal assessment",
+    description="Returns a qualitative signal assessment for a given pathogen. "
                 "No raw weights, formulas, or threshold values are exposed.",
 )
 @limiter.limit("50/minute")
@@ -156,10 +158,10 @@ async def get_public_risk(
 ):
     # Input sanitization — strict whitelist
     if virus not in VALID_VIRUS_TYPES:
-        virus = "Influenza A"
+        raise HTTPException(status_code=422, detail="Unsupported virus")
 
     if plz is not None and not PLZ_PATTERN.match(plz):
-        plz = None  # silently ignore invalid PLZ
+        raise HTTPException(status_code=422, detail="Invalid PLZ")
 
     from app.services.ml.forecast_decision_service import ForecastDecisionService
 

@@ -13,6 +13,13 @@ if TYPE_CHECKING:
     from .opportunity_engine import MarketingOpportunityEngine
 
 
+def _require_brand(engine: "MarketingOpportunityEngine", value: Any) -> str:
+    brand = engine._canonical_brand(value)
+    if brand:
+        return brand
+    raise ValueError("brand must be provided")
+
+
 def save_opportunity(engine: "MarketingOpportunityEngine", opp: dict[str, Any]) -> bool:
     """Persist a marketing opportunity with simple dedup handling."""
     opp_id = opp.get("id", "")
@@ -181,7 +188,7 @@ def backfill_product_mapping(
             continue
 
         condition_key = old_pm.get("condition_key")
-        brand = str(row.brand or "gelo").strip().lower()
+        brand = _require_brand(engine, row.brand)
 
         opp_dict = {
             "region_target": row.region_target or {},

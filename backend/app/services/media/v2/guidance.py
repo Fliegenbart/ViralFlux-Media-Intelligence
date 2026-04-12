@@ -62,11 +62,14 @@ def _known_limits(
     cockpit: dict[str, Any],
     virus_typ: str,
     *,
+    brand: str | None = None,
     truth_coverage: dict[str, Any] | None = None,
     truth_validation_legacy: dict[str, Any] | None = None,
 ) -> list[str]:
     limits: list[str] = []
-    truth = truth_coverage or service.get_truth_coverage()
+    if truth_coverage is None and brand is None:
+        raise TypeError("brand is required when truth_coverage is not provided")
+    truth = truth_coverage or service.get_truth_coverage(brand=brand)
     if truth.get("coverage_weeks", 0) < 26:
         limits.append("Kundennahe Daten decken noch keine 26 Wochen ab.")
     if truth.get("truth_freshness_state") == "stale":

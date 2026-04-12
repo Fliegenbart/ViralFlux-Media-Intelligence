@@ -56,16 +56,25 @@ class BusinessValidationService:
         self.truth_gate_service = TruthGateService()
         self.outcome_signal_service = OutcomeSignalService(db)
 
+    @staticmethod
+    def _normalize_brand(brand: str) -> str:
+        if brand is None:
+            raise ValueError("brand must be provided")
+        brand_value = str(brand).strip().lower()
+        if not brand_value:
+            raise ValueError("brand must be a non-empty string")
+        return brand_value
+
     def evaluate(
         self,
         *,
-        brand: str = "gelo",
+        brand: str,
         virus_typ: str | None = None,
         truth_coverage: dict[str, Any] | None = None,
         truth_gate: dict[str, Any] | None = None,
         outcome_learning_summary: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        brand_value = str(brand or "gelo").strip().lower()
+        brand_value = self._normalize_brand(brand)
         coverage = self._normalize_truth_coverage(truth_coverage) if truth_coverage else self._fallback_truth_coverage(brand=brand_value)
         gate = truth_gate or self.truth_gate_service.evaluate(coverage)
         learning_summary = outcome_learning_summary or self.outcome_signal_service.build_learning_bundle(

@@ -60,6 +60,13 @@ class ConnectorPayloadService:
 
     DEFAULT_CONNECTOR = "meta_ads"
 
+    @staticmethod
+    def _normalize_brand(value: Any) -> str:
+        brand = str(value).strip().lower()
+        if brand:
+            return brand
+        raise ValueError("brand must be provided")
+
     @classmethod
     def get_catalog(cls) -> dict[str, Any]:
         return {
@@ -139,7 +146,7 @@ class ConnectorPayloadService:
         return {
             "campaign_name": campaign.get("campaign_name") or opportunity.get("campaign_name") or "Kampagnenvorschlag",
             "workflow_status": str(opportunity.get("status") or campaign.get("status") or "DRAFT").upper(),
-            "brand": opportunity.get("brand") or "gelo",
+            "brand": cls._normalize_brand(opportunity.get("brand")),
             "objective": campaign.get("objective") or ai_plan.get("objective") or "Awareness",
             "recommended_product": recommended_product,
             "region_codes": region_codes,

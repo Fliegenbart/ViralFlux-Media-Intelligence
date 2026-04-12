@@ -31,6 +31,7 @@ from app.services.ml.forecast_contracts import (
     heuristic_event_score_from_forecast,
     normalize_event_forecast_payload,
     normalized_decision_priority_index,
+    normalized_signal_index,
     resolve_decision_basis_score,
     resolve_decision_basis_type,
 )
@@ -46,6 +47,15 @@ class ForecastDecisionService:
 
     def __init__(self, db: Session) -> None:
         self.db = db
+
+    @staticmethod
+    def _normalize_brand(brand: str) -> str:
+        if brand is None:
+            raise ValueError("brand must be provided")
+        brand_value = str(brand).strip().lower()
+        if not brand_value:
+            raise ValueError("brand must be a non-empty string")
+        return brand_value
 
     def _latest_forecasts(self, virus_typ: str) -> list[MLForecast]:
         ensure_ml_forecast_schema_aligned(self.db)
@@ -477,6 +487,9 @@ class ForecastDecisionService:
             promotion_gate=quality_gate,
         )
 
+        signal_index = normalized_signal_index(
+            signal_basis_score=decision_basis_score,
+        )
         decision_priority_index = normalized_decision_priority_index(
             decision_basis_score=decision_basis_score,
             modifier=1.0 if forecast_ready else 0.75,
@@ -505,6 +518,9 @@ class ForecastDecisionService:
         }
 
         decision_summary = {
+            "signal_index": signal_index,
+            "signal_basis_score": decision_basis_score,
+            "signal_basis_type": decision_basis_type,
             "decision_priority_index": decision_priority_index,
             "decision_basis_score": decision_basis_score,
             "decision_basis_type": decision_basis_type,
@@ -664,9 +680,9 @@ class ForecastDecisionService:
     def get_truth_readiness(
         self,
         *,
-        brand: str = "gelo",
+        brand: str,
     ) -> dict[str, Any]:
-        brand_value = str(brand or "gelo").strip().lower()
+        brand_value = self._normalize_brand(brand)
         rows = (
             self.db.query(MediaOutcomeRecord)
             .filter(func.lower(MediaOutcomeRecord.brand) == brand_value)
@@ -717,13 +733,14 @@ class ForecastDecisionService:
         *,
         virus_typ: str,
         target_source: str = "RKI_ARE",
-        brand: str = "gelo",
+        brand: str,
         secondary_modifier: float = 1.0,
     ) -> dict[str, Any]:
+        brand_value = self._normalize_brand(brand)
         bundle = self.build_forecast_bundle(virus_typ=virus_typ, target_source=target_source)
         quality = bundle.get("forecast_quality") or {}
         event_forecast = bundle.get("event_forecast") or {}
-        truth = self.get_truth_readiness(brand=brand)
+        truth = self.get_truth_readiness(brand=brand_value)
         decision_basis_score = resolve_decision_basis_score(
             event_probability=event_forecast.get("event_probability"),
             heuristic_event_score=event_forecast.get("heuristic_event_score"),
@@ -773,6 +790,9 @@ class ForecastDecisionService:
         decision_summary = bundle.get("decision_summary") or {}
         return {
             "virus_typ": virus_typ,
+            "signal_index": decision_summary.get("signal_index", 0.0),
+            "signal_basis_score": decision_summary.get("signal_basis_score"),
+            "signal_basis_type": decision_summary.get("signal_basis_type"),
             "decision_priority_index": decision_summary.get("decision_priority_index", 0.0),
             "decision_basis_score": decision_summary.get("decision_basis_score"),
             "decision_basis_type": decision_summary.get("decision_basis_type"),
@@ -862,6 +882,11 @@ class ForecastDecisionService:
             history.append(
                 {
                     "date": row.forecast_date.isoformat() if row.forecast_date else None,
+                    "signal_index": normalized_signal_index(
+                        signal_basis_score=decision_basis_score
+                    ),
+                    "signal_basis_score": decision_basis_score,
+                    "signal_basis_type": decision_basis_type,
                     "decision_priority_index": normalized_decision_priority_index(
                         decision_basis_score=decision_basis_score
                     ),

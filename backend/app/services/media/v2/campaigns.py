@@ -8,7 +8,7 @@ from .shared import JsonDict, generated_at
 def build_campaigns_payload(
     service: Any,
     *,
-    brand: str = "gelo",
+    brand: str,
     limit: int = 120,
 ) -> JsonDict:
     cards = service._campaign_cards(brand=brand, limit=limit)

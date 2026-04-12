@@ -65,6 +65,30 @@ class TruthLayerServiceTests(unittest.TestCase):
             "No outcome data is connected for this scope yet.",
         )
 
+    def test_assess_rejects_blank_brand(self) -> None:
+        with self.assertRaises(ValueError):
+            self.service.assess(
+                brand="   ",
+                region_code="BY",
+                product="GeloMyrtol forte",
+            )
+
+    def test_upsert_observations_rejects_blank_brand(self) -> None:
+        with self.assertRaises(ValueError):
+            self.service.upsert_observations([
+                OutcomeObservationInput(
+                    brand="   ",
+                    product="GeloMyrtol forte",
+                    region_code="BY",
+                    metric_name="media_spend",
+                    metric_value=1200.0,
+                    window_start=datetime(2026, 1, 5),
+                    window_end=datetime(2026, 1, 11),
+                    source_label="manual",
+                    metadata={},
+                )
+            ])
+
     def test_assess_with_generic_observations_returns_truth_backed_scope(self) -> None:
         start = datetime(2026, 1, 5)
         observations: list[OutcomeObservationInput] = []

@@ -32,6 +32,13 @@ _RED = (220, 38, 38)
 _WHITE = (255, 255, 255)
 _BG = (248, 250, 252)
 
+
+def _normalize_brand(value: Any) -> str:
+    brand = str(value).strip().lower()
+    if brand:
+        return brand
+    raise ValueError("brand must be provided")
+
 def _safe(text: Any) -> str:
     return weekly_brief_formatting.safe(text)
 
@@ -147,10 +154,11 @@ class WeeklyBriefService:
         self._format_signal_score = _format_signal_score
         self._action_card_title = _action_card_title
 
-    def generate(self, *, virus_typ: str = "Influenza A") -> dict[str, Any]:
+    def generate(self, *, brand: str, virus_typ: str = "Influenza A") -> dict[str, Any]:
         """Generate the weekly brief PDF. Returns dict with pdf_bytes + metadata."""
         from app.services.media.cockpit_service import MediaCockpitService
 
+        brand_value = _normalize_brand(brand)
         now = utc_now()
         iso_cal = now.isocalendar()
         calendar_week = f"{iso_cal.year}-W{iso_cal.week:02d}"
@@ -226,6 +234,7 @@ class WeeklyBriefService:
 
         summary = {
             "calendar_week": calendar_week,
+            "brand": brand_value,
             "generated_at": now.isoformat(),
             "national_score": national_score,
             "national_band": national_band,
@@ -236,7 +245,7 @@ class WeeklyBriefService:
         }
 
         # Persist to DB
-        self._save_to_db(calendar_week, pdf_bytes, summary, virus_typ)
+        self._save_to_db(calendar_week, pdf_bytes, summary, virus_typ, brand_value)
 
         logger.info(
             "Weekly brief generated: %s, %d pages, %d bytes",
@@ -336,13 +345,15 @@ class WeeklyBriefService:
         pdf_bytes: bytes,
         summary: dict[str, Any],
         virus_typ: str,
+        brand: str,
     ) -> None:
         """Persist the brief to the weekly_briefs table."""
         from app.models.database import WeeklyBrief
 
+        brand_value = _normalize_brand(brand)
         existing = (
             self.db.query(WeeklyBrief)
-            .filter_by(calendar_week=calendar_week, brand="gelo")
+            .filter_by(calendar_week=calendar_week, brand=brand_value)
             .first()
         )
         if existing:
@@ -357,7 +368,7 @@ class WeeklyBriefService:
                 pdf_bytes=pdf_bytes,
                 summary_json=summary,
                 virus_typ=virus_typ,
-                brand="gelo",
+                brand=brand_value,
             )
             self.db.add(brief)
 

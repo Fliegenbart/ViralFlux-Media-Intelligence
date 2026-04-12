@@ -19,7 +19,7 @@ router = APIRouter()
 
 @router.get("/outcomes/coverage", dependencies=[Depends(get_current_user)])
 async def get_media_outcomes_coverage(
-    brand: str = "gelo",
+    brand: str = Query(..., min_length=1),
     virus_typ: str = "Influenza A",
     db: Session = Depends(get_db),
 ):
@@ -29,7 +29,7 @@ async def get_media_outcomes_coverage(
 
 @router.get("/pilot-reporting", dependencies=[Depends(get_current_user)])
 async def get_media_pilot_reporting(
-    brand: str = "gelo",
+    brand: str = Query(..., min_length=1),
     lookback_weeks: int = Query(default=26, ge=1, le=104),
     window_start: datetime | None = None,
     window_end: datetime | None = None,
@@ -59,7 +59,7 @@ async def get_media_pilot_reporting(
 
 @router.get("/pilot-readout", dependencies=[Depends(get_current_user)])
 async def get_media_pilot_readout(
-    brand: str = "gelo",
+    brand: str = Query(..., min_length=1),
     virus_typ: str = "RSV A",
     horizon_days: int = Query(default=7, ge=3, le=14),
     weekly_budget_eur: float = Query(default=120000.0, ge=0),
@@ -85,7 +85,7 @@ async def get_media_pilot_readout(
 
 @router.get("/evidence/truth", dependencies=[Depends(get_current_user)])
 async def get_media_truth_evidence(
-    brand: str = "gelo",
+    brand: str = Query(..., min_length=1),
     virus_typ: str = "Influenza A",
     db: Session = Depends(get_db),
 ):
@@ -95,7 +95,7 @@ async def get_media_truth_evidence(
 
 @router.get("/outcomes/import-batches", dependencies=[Depends(get_current_user)])
 async def list_media_outcome_import_batches(
-    brand: str = "gelo",
+    brand: str = Query(..., min_length=1),
     limit: int = Query(default=20, ge=1, le=100),
     db: Session = Depends(get_db),
 ):

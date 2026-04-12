@@ -56,6 +56,13 @@ class TruthLayerService:
     def __init__(self, db: Session):
         self.db = db
 
+    @staticmethod
+    def _normalize_brand(value: Any) -> str:
+        brand = str(value).strip().lower()
+        if brand:
+            return brand
+        raise ValueError("brand must be provided")
+
     def upsert_observations(
         self,
         observations: list[OutcomeObservationInput],
@@ -116,15 +123,16 @@ class TruthLayerService:
     def assess(
         self,
         *,
-        brand: str = "gelo",
+        brand: str,
         region_code: str | None = None,
         product: str | None = None,
         window_start: datetime | None = None,
         window_end: datetime | None = None,
         signal_context: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
+        brand_value = self._normalize_brand(brand)
         observations, source_mode = self._load_scope_observations(
-            brand=brand,
+            brand=brand_value,
             region_code=region_code,
             product=product,
             window_start=window_start,
@@ -146,7 +154,7 @@ class TruthLayerService:
         )
         assessment = TruthLayerAssessment(
             scope={
-                "brand": str(brand or "gelo").strip().lower(),
+                "brand": brand_value,
                 "region_code": str(region_code).upper() if region_code else None,
                 "product": str(product).strip() if product else None,
                 "window_start": window_start.isoformat() if window_start else None,
@@ -186,7 +194,7 @@ class TruthLayerService:
         if observation.window_end < observation.window_start:
             raise ValueError("window_end must be on or after window_start")
         return OutcomeObservationInput(
-            brand=str(observation.brand or "gelo").strip().lower(),
+            brand=self._normalize_brand(observation.brand),
             product=str(observation.product or "").strip(),
             region_code=str(observation.region_code or "").strip().upper(),
             metric_name=metric_name,
@@ -223,7 +231,7 @@ class TruthLayerService:
         window_start: datetime | None,
         window_end: datetime | None,
     ) -> tuple[list[dict[str, Any]], str]:
-        normalized_brand = str(brand or "gelo").strip().lower()
+        normalized_brand = self._normalize_brand(brand)
         query = self.db.query(OutcomeObservation).filter(
             func.lower(OutcomeObservation.brand) == normalized_brand
         )
@@ -259,7 +267,7 @@ class TruthLayerService:
     @staticmethod
     def _observation_to_dict(row: OutcomeObservation) -> dict[str, Any]:
         return {
-            "brand": str(row.brand or "gelo").strip().lower(),
+            "brand": str(row.brand or "").strip().lower() or None,
             "product": str(row.product or "").strip(),
             "region_code": str(row.region_code or "").strip().upper(),
             "window_start": row.window_start,
@@ -289,7 +297,7 @@ class TruthLayerService:
         for row in rows:
             extra_data = dict(row.extra_data or {})
             base = {
-                "brand": str(row.brand or "gelo").strip().lower(),
+                "brand": str(row.brand or "").strip().lower() or None,
                 "product": str(row.product or "").strip(),
                 "region_code": str(row.region_code or "").strip().upper(),
                 "window_start": row.week_start,

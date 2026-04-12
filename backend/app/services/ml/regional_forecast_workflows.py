@@ -9,6 +9,7 @@ def generate_media_allocation(
     service,
     *,
     virus_typ: str = "Influenza A",
+    brand: str,
     weekly_budget_eur: float = 50000,
     horizon_days: int = 7,
     rollout_mode_for_virus_fn,
@@ -17,10 +18,13 @@ def generate_media_allocation(
     media_channels,
     utc_now_fn,
 ) -> dict[str, Any]:
-    forecast = service.predict_all_regions(virus_typ=virus_typ, horizon_days=horizon_days)
+    forecast = service.predict_all_regions(virus_typ=virus_typ, brand=brand, horizon_days=horizon_days)
     predictions = forecast.get("predictions") or []
     quality_gate = forecast.get("quality_gate") or {"overall_passed": False}
-    business_gate = forecast.get("business_gate") or service._business_gate(quality_gate=quality_gate)
+    business_gate = forecast.get("business_gate") or service._business_gate(
+        quality_gate=quality_gate,
+        brand=brand,
+    )
     threshold = float(forecast.get("action_threshold") or 0.6)
     rollout_mode = str(forecast.get("rollout_mode") or rollout_mode_for_virus_fn(virus_typ))
     activation_policy = str(
@@ -100,6 +104,7 @@ def generate_media_allocation(
             ),
             operational_action=action,
             operational_gate_open=spend_enabled,
+            brand=brand,
         )
 
         recommendations.append(
@@ -197,6 +202,7 @@ def generate_media_allocation(
     truth_layer = service._truth_layer_rollup(recommendations)
 
     return {
+        "brand": str(brand).strip().lower(),
         "virus_typ": virus_typ,
         "headline": service._media_headline(
             virus_typ=virus_typ,
@@ -216,11 +222,13 @@ def generate_media_activation(
     service,
     *,
     virus_typ: str = "Influenza A",
+    brand: str,
     weekly_budget_eur: float = 50000,
     horizon_days: int = 7,
 ) -> dict[str, Any]:
     return service.generate_media_allocation(
         virus_typ=virus_typ,
+        brand=brand,
         weekly_budget_eur=weekly_budget_eur,
         horizon_days=horizon_days,
     )
@@ -230,12 +238,14 @@ def generate_campaign_recommendations(
     service,
     *,
     virus_typ: str = "Influenza A",
+    brand: str,
     weekly_budget_eur: float = 50000,
     horizon_days: int = 7,
     top_n: int | None = None,
 ) -> dict[str, Any]:
     allocation_payload = service.generate_media_allocation(
         virus_typ=virus_typ,
+        brand=brand,
         weekly_budget_eur=weekly_budget_eur,
         horizon_days=horizon_days,
     )

@@ -1,5 +1,6 @@
 import unittest
 from contextlib import nullcontext
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from app.core.celery_app import celery_app
@@ -133,6 +134,9 @@ class MLTrainingTaskContractTests(unittest.TestCase):
             "app.services.ml.tasks.get_db_context",
             return_value=nullcontext(object()),
         ), patch(
+            "app.services.ml.tasks.get_settings",
+            return_value=SimpleNamespace(NORMALIZED_OPERATIONAL_DEFAULT_BRAND="acme-health"),
+        ), patch(
             "app.services.ops.regional_operational_snapshot_refresh.RegionalOperationalSnapshotRefreshService",
         ) as refresh_service_cls, patch.object(
             refresh_regional_operational_snapshots_task,
@@ -147,11 +151,13 @@ class MLTrainingTaskContractTests(unittest.TestCase):
             result = refresh_regional_operational_snapshots_task.run()
 
         refresh_service_cls.return_value.refresh_supported_scopes.assert_called_once_with(
+            brand="acme-health",
             virus_types=list(SUPPORTED_VIRUS_TYPES),
             horizon_days_list=None,
             weekly_budget_eur=50000.0,
             top_n=12,
         )
+        self.assertEqual(result["brand"], "acme-health")
         self.assertEqual(result["virus_types"], list(SUPPORTED_VIRUS_TYPES))
         self.assertEqual(result["selection_mode"], "all")
         self.assertIsNone(result["virus_typ"])

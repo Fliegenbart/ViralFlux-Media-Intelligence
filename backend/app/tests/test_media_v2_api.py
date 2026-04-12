@@ -114,6 +114,27 @@ class MediaV2ApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 403)
         self.assertEqual(response.json()["detail"], "Not enough privileges")
 
+    def test_outcome_import_requires_explicit_brand(self) -> None:
+        response = self.client.post(
+            "/api/v1/media/outcomes/import",
+            json={
+                "source_label": "manual",
+                "validate_only": True,
+                "records": [],
+            },
+            headers=self.admin_headers,
+        )
+
+        self.assertEqual(response.status_code, 422)
+
+    def test_decision_endpoint_requires_explicit_brand_query(self) -> None:
+        response = self.client.get(
+            "/api/v1/media/decision?virus_typ=Influenza%20A",
+            headers=self.admin_headers,
+        )
+
+        self.assertEqual(response.status_code, 422)
+
     def test_outcome_import_validate_history_and_template_endpoints(self) -> None:
         validate_response = self.client.post(
             "/api/v1/media/outcomes/import",
@@ -288,7 +309,7 @@ class MediaV2ApiTests(unittest.TestCase):
             side_effect=ValueError("window_end must be on or after window_start"),
         ):
             response = self.client.get(
-                "/api/v1/media/pilot-reporting?window_start=2026-03-31T00:00:00&window_end=2026-03-01T00:00:00",
+                "/api/v1/media/pilot-reporting?brand=gelo&window_start=2026-03-31T00:00:00&window_end=2026-03-01T00:00:00",
                 headers=self.admin_headers,
             )
 
@@ -496,7 +517,7 @@ class MediaV2ApiTests(unittest.TestCase):
             side_effect=MLForecastSchemaMismatchError("MLForecast schema mismatch detected."),
         ):
             response = self.client.get(
-                "/api/v1/media/decision?virus_typ=Influenza%20A",
+                "/api/v1/media/decision?brand=gelo&virus_typ=Influenza%20A",
                 headers=self.admin_headers,
             )
 
@@ -509,7 +530,7 @@ class MediaV2ApiTests(unittest.TestCase):
             side_effect=MLForecastSchemaMismatchError("MLForecast schema mismatch detected."),
         ):
             response = self.client.get(
-                "/api/v1/media/regions?virus_typ=Influenza%20A",
+                "/api/v1/media/regions?brand=gelo&virus_typ=Influenza%20A",
                 headers=self.admin_headers,
             )
 
@@ -522,7 +543,7 @@ class MediaV2ApiTests(unittest.TestCase):
             side_effect=MLForecastSchemaMismatchError("MLForecast schema mismatch detected."),
         ):
             response = self.client.get(
-                "/api/v1/media/evidence?virus_typ=Influenza%20A",
+                "/api/v1/media/evidence?brand=gelo&virus_typ=Influenza%20A",
                 headers=self.admin_headers,
             )
 

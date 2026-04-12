@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
 
@@ -178,6 +179,114 @@ class OpportunityEngineMaintenanceTests(unittest.TestCase):
         )
         self.assertIn("GeloMyrtol forte", suggested_names)
         self.assertIn("GeloBronchial", suggested_names)
+
+    def test_backfill_product_mapping_rejects_missing_brand(self) -> None:
+        now = datetime.now(timezone.utc)
+        row = MarketingOpportunity(
+            opportunity_id="opp-map-blank-brand",
+            opportunity_type="RESOURCE_SCARCITY",
+            status="DRAFT",
+            urgency_score=68.0,
+            region_target={"states": ["SH"]},
+            trigger_details={"source": "BfArM_API", "event": "SUPPLY_SHOCK_WINDOW"},
+            brand=None,
+            product="Alle Gelo-Produkte",
+            campaign_payload={
+                "product_mapping": {
+                    "mapping_status": "needs_review",
+                }
+            },
+            created_at=now,
+            updated_at=now,
+        )
+        self.db.add(row)
+        self.db.commit()
+
+        with self.assertRaises(ValueError):
+            self.service.backfill_product_mapping(limit=10)
+
+    def test_enrich_opportunity_for_media_rejects_blank_brand(self) -> None:
+        now = datetime.now(timezone.utc)
+        row = MarketingOpportunity(
+            opportunity_id="opp-enrich-blank-brand",
+            opportunity_type="RESPIRATORY_ALERT",
+            status="DRAFT",
+            urgency_score=55.0,
+            created_at=now,
+            updated_at=now,
+        )
+        self.db.add(row)
+        self.db.commit()
+
+        with self.assertRaises(ValueError):
+            self.service._enrich_opportunity_for_media(
+                opportunity_id="opp-enrich-blank-brand",
+                brand="   ",
+                product="GeloProsed",
+                budget_shift_pct=10.0,
+                channel_mix={"search": 100.0},
+                reason="test",
+                campaign_payload={},
+                status="READY",
+                activation_start=None,
+                activation_end=None,
+            )
+
+    def test_regenerate_ai_plan_rejects_missing_brand(self) -> None:
+        now = datetime.now(timezone.utc)
+        row = MarketingOpportunity(
+            opportunity_id="opp-regen-missing-brand",
+            opportunity_type="PLAYBOOK_AI",
+            status="DRAFT",
+            urgency_score=55.0,
+            brand=None,
+            product="GeloProsed",
+            playbook_key="WETTER_REFLEX",
+            campaign_payload={
+                "playbook": {"key": "WETTER_REFLEX"},
+                "targeting": {"region_scope": ["SH"]},
+                "trigger_snapshot": {"event": "Influenza A Forecast Event Window"},
+                "campaign": {"objective": "Awareness"},
+                "budget_plan": {"weekly_budget_eur": 10000.0},
+            },
+            created_at=now,
+            updated_at=now,
+        )
+        self.db.add(row)
+        self.db.commit()
+
+        pack = SimpleNamespace(
+            status="ready",
+            message_direction="north",
+            hero_message="Signal erkannt",
+            support_points=[],
+            creative_angles=[],
+            keyword_clusters=[],
+            cta="Mehr erfahren",
+            compliance_note="ok",
+            library_version="v1",
+            library_source="test",
+            to_framework=lambda: {},
+        )
+
+        with patch(
+            "app.services.marketing_engine.opportunity_engine_playbooks.select_gelo_message_pack",
+            return_value=pack,
+        ), patch.object(
+            self.service.ai_planner,
+            "generate_plan",
+            return_value={"ai_plan": {}, "ai_generation_status": "generated", "ai_meta": {}},
+        ), patch.object(
+            self.service.guardrails,
+            "apply",
+            return_value={"ai_plan": {}, "guardrail_report": {}},
+        ), patch.object(
+            self.service,
+            "_model_to_dict",
+            return_value={"id": "opp-regen-missing-brand"},
+        ):
+            with self.assertRaises(ValueError):
+                self.service.regenerate_ai_plan("opp-regen-missing-brand")
 
     def test_generate_action_cards_labels_playbook_fallback_as_rule_based(self) -> None:
         opportunity = {

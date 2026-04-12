@@ -32,7 +32,7 @@ class ProductCatalogService:
     def refresh_brand_catalog(
         self,
         *,
-        brand: str = "gelo",
+        brand: str,
         source_url: str = DEFAULT_GELO_SOURCE_URL,
         timeout_seconds: int = 20,
         overwrite_rules: bool = False,
@@ -166,7 +166,7 @@ class ProductCatalogService:
             },
         }
 
-    def list_products(self, *, brand: str = "gelo") -> list[dict[str, Any]]:
+    def list_products(self, *, brand: str) -> list[dict[str, Any]]:
         return product_catalog_admin.list_products(self, brand=brand)
 
     def create_product(
@@ -246,7 +246,7 @@ class ProductCatalogService:
     def preview_matches(
         self,
         *,
-        brand: str = "gelo",
+        brand: str,
         opportunity_id: str | None = None,
         limit: int = 50,
     ) -> dict[str, Any]:
@@ -260,7 +260,7 @@ class ProductCatalogService:
     def list_mappings(
         self,
         *,
-        brand: str = "gelo",
+        brand: str,
         include_inactive_products: bool = False,
         only_pending: bool = False,
     ) -> list[dict[str, Any]]:
@@ -287,7 +287,7 @@ class ProductCatalogService:
             notes=notes,
         )
 
-    def seed_missing_products(self, *, brand: str = "gelo") -> dict[str, Any]:
+    def seed_missing_products(self, *, brand: str) -> dict[str, Any]:
         return product_catalog_admin.seed_missing_products(self, brand=brand)
 
     def resolve_product_for_opportunity(
@@ -485,7 +485,9 @@ class ProductCatalogService:
 
     @staticmethod
     def _normalize_brand(brand: str | None) -> str:
-        raw = (brand or "").strip().lower()
-        if "gelo" in raw:
-            return "gelo"
-        return raw or "generic"
+        if brand is None:
+            raise ValueError("brand must be provided")
+        raw = str(brand).strip().lower()
+        if not raw:
+            raise ValueError("brand must be a non-empty string")
+        return raw

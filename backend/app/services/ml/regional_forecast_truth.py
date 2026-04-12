@@ -5,6 +5,15 @@ from __future__ import annotations
 from typing import Any
 
 
+def _normalize_brand(brand: str) -> str:
+    if brand is None:
+        raise ValueError("brand must be provided")
+    brand_value = str(brand).strip().lower()
+    if not brand_value:
+        raise ValueError("brand must be a non-empty string")
+    return brand_value
+
+
 def truth_readiness(
     service,
     *,
@@ -27,7 +36,7 @@ def business_gate(
     *,
     quality_gate: dict[str, Any],
     truth_readiness: dict[str, Any] | None = None,
-    brand: str = "gelo",
+    brand: str,
     business_validation_service_cls,
 ) -> dict[str, Any]:
     forecast_ready = bool((quality_gate or {}).get("overall_passed"))
@@ -63,7 +72,7 @@ def truth_layer_assessment_for_products(
     signal_context: dict[str, Any],
     operational_action: str,
     operational_gate_open: bool,
-    brand: str = "gelo",
+    brand: str,
 ) -> dict[str, Any]:
     normalized_products = [
         str(product).strip()
@@ -106,7 +115,7 @@ def truth_layer_assessment_for_products(
     return {
         "truth_layer_enabled": bool(service.db is not None),
         "truth_scope": {
-            "brand": str(brand or "gelo").strip().lower(),
+            "brand": _normalize_brand(brand),
             "region_code": str(region_code or "").strip().upper() or None,
             "window_start": window_start.isoformat(),
             "window_end": window_end.isoformat(),
@@ -244,7 +253,7 @@ def fallback_truth_assessment(
         normalized_confidence = 0.0
     return {
         "scope": {
-            "brand": str(brand or "gelo").strip().lower(),
+            "brand": _normalize_brand(brand),
             "region_code": str(region_code or "").strip().upper() or None,
             "product": str(product).strip() if product else None,
             "window_start": window_start.isoformat(),

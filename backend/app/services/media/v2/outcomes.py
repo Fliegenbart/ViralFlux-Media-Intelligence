@@ -42,19 +42,27 @@ OUTCOME_TEMPLATE_HEADERS = (
 )
 
 
+def _normalize_brand(value: Any) -> str:
+    brand = str(value).strip().lower()
+    if brand:
+        return brand
+    raise ValueError("brand must be provided")
+
+
 def build_truth_coverage(
     service: Any,
     *,
-    brand: str = "gelo",
+    brand: str,
     virus_typ: str | None = None,
 ) -> dict[str, Any]:
+    brand_value = _normalize_brand(brand)
     rows = (
         service.db.query(MediaOutcomeRecord)
-        .filter(func.lower(MediaOutcomeRecord.brand) == str(brand).lower())
+        .filter(func.lower(MediaOutcomeRecord.brand) == brand_value)
         .order_by(MediaOutcomeRecord.week_start.asc())
         .all()
     )
-    latest_import_batch = _latest_import_batch(service, brand=brand)
+    latest_import_batch = _latest_import_batch(service, brand=brand_value)
     reference_week = _latest_epi_reference_week(service, virus_typ=virus_typ)
     if not rows:
         return {
@@ -128,24 +136,25 @@ def build_truth_coverage(
 def build_truth_evidence(
     service: Any,
     *,
-    brand: str = "gelo",
+    brand: str,
     virus_typ: str | None = None,
 ) -> dict[str, Any]:
-    coverage = build_truth_coverage(service, brand=brand, virus_typ=virus_typ)
+    brand_value = _normalize_brand(brand)
+    coverage = build_truth_coverage(service, brand=brand_value, virus_typ=virus_typ)
     truth_gate = service.truth_gate_service.evaluate(coverage)
     outcome_learning = service.outcome_signal_service.build_learning_bundle(
-        brand=brand,
+        brand=brand_value,
         truth_coverage=coverage,
         truth_gate=truth_gate,
     )["summary"]
     business_validation = service.business_validation_service.evaluate(
-        brand=brand,
+        brand=brand_value,
         virus_typ=virus_typ,
         truth_coverage=coverage,
         truth_gate=truth_gate,
         outcome_learning_summary=outcome_learning,
     )
-    recent_batches = list_outcome_import_batches(service, brand=brand, limit=8)
+    recent_batches = list_outcome_import_batches(service, brand=brand_value, limit=8)
     latest_batch = recent_batches[0] if recent_batches else None
     issue_count = int(latest_batch.get("rows_rejected") or 0) if latest_batch else 0
     limits: list[str] = []
@@ -158,7 +167,7 @@ def build_truth_evidence(
     if coverage.get("truth_freshness_state") == "stale":
         limits.append("Der letzte Import der Kundendaten liegt zu weit hinter der aktuellen epidemiologischen Woche.")
     return {
-        "brand": str(brand or "gelo").strip().lower(),
+        "brand": brand_value,
         "coverage": coverage,
         "truth_gate": truth_gate,
         "business_validation": business_validation,
@@ -179,12 +188,12 @@ def import_outcomes(
     source_label: str,
     records: list[dict[str, Any]] | None = None,
     csv_payload: str | None = None,
-    brand: str = "gelo",
+    brand: str,
     replace_existing: bool = False,
     validate_only: bool = False,
     file_name: str | None = None,
 ) -> dict[str, Any]:
-    brand_value = str(brand or "gelo").strip().lower()
+    brand_value = _normalize_brand(brand)
     source_value = str(source_label or "manual").strip() or "manual"
     batch_id = uuid.uuid4().hex[:12]
 
@@ -353,14 +362,18 @@ def import_outcomes(
 def list_outcome_import_batches(
     service: Any,
     *,
-    brand: str = "gelo",
+    brand: str,
     limit: int = 20,
 ) -> list[dict[str, Any]]:
+    brand_value = _normalize_brand(brand)
     if _uses_legacy_outcome_batch_schema(service):
-        return [_batch_to_dict(service, row) for row in _legacy_import_batch_rows(service, brand=brand, limit=limit)]
+        return [
+            _batch_to_dict(service, row)
+            for row in _legacy_import_batch_rows(service, brand=brand_value, limit=limit)
+        ]
     rows = (
         service.db.query(MediaOutcomeImportBatch)
-        .filter(func.lower(MediaOutcomeImportBatch.brand) == str(brand or "gelo").lower())
+        .filter(func.lower(MediaOutcomeImportBatch.brand) == brand_value)
         .order_by(MediaOutcomeImportBatch.uploaded_at.desc(), MediaOutcomeImportBatch.id.desc())
         .limit(limit)
         .all()
@@ -507,13 +520,14 @@ def _truth_gate(service: Any, truth_coverage: dict[str, Any]) -> dict[str, Any]:
 
 
 def _latest_import_batch(service: Any, *, brand: str) -> MediaOutcomeImportBatch | SimpleNamespace | None:
+    brand_value = _normalize_brand(brand)
     if _uses_legacy_outcome_batch_schema(service):
-        rows = _legacy_import_batch_rows(service, brand=brand, limit=1)
+        rows = _legacy_import_batch_rows(service, brand=brand_value, limit=1)
         return rows[0] if rows else None
     return (
         service.db.query(MediaOutcomeImportBatch)
         .filter(
-            func.lower(MediaOutcomeImportBatch.brand) == str(brand or "gelo").lower(),
+            func.lower(MediaOutcomeImportBatch.brand) == brand_value,
             MediaOutcomeImportBatch.status.in_(("imported", "partial_success")),
         )
         .order_by(MediaOutcomeImportBatch.uploaded_at.desc(), MediaOutcomeImportBatch.id.desc())
@@ -532,6 +546,7 @@ def _uses_legacy_outcome_batch_schema(service: Any) -> bool:
 
 
 def _legacy_import_batch_rows(service: Any, *, brand: str, limit: int) -> list[SimpleNamespace]:
+    brand_value = _normalize_brand(brand)
     result = service.db.execute(
         text(
             """
@@ -543,7 +558,7 @@ def _legacy_import_batch_rows(service: Any, *, brand: str, limit: int) -> list[S
             LIMIT :limit
             """
         ),
-        {"brand": str(brand or "gelo").lower(), "limit": int(limit)},
+        {"brand": brand_value, "limit": int(limit)},
     )
     return [SimpleNamespace(**dict(row)) for row in result.mappings().all()]
 
@@ -707,7 +722,7 @@ def _normalize_outcome_product(
     products = (
         service.db.query(BrandProduct)
         .filter(
-            func.lower(BrandProduct.brand) == str(brand or "gelo").lower(),
+            func.lower(BrandProduct.brand) == _normalize_brand(brand),
             BrandProduct.active.is_(True),
         )
         .all()
@@ -793,9 +808,10 @@ def _project_truth_coverage(
     replace_existing: bool,
     validate_only: bool,
 ) -> dict[str, Any]:
+    brand_value = _normalize_brand(brand)
     existing_rows = (
         service.db.query(MediaOutcomeRecord)
-        .filter(func.lower(MediaOutcomeRecord.brand) == str(brand or "gelo").lower())
+        .filter(func.lower(MediaOutcomeRecord.brand) == brand_value)
         .all()
     )
     synthetic_rows = [
@@ -829,7 +845,7 @@ def _project_truth_coverage(
 
     for row in normalized_rows:
         key = (
-            str(brand).lower(),
+            brand_value,
             str(row["source_label"]),
             row["week_start"],
             row["product"],
@@ -839,13 +855,13 @@ def _project_truth_coverage(
             continue
         keyed_rows[key] = {
             "week_start": row["week_start"],
-            "brand": brand,
+            "brand": brand_value,
             "product": row["product"],
             "region_code": row["region_code"],
             "source_label": row["source_label"],
             "metrics": row["metrics"],
         }
-    return _coverage_from_rows(service, list(keyed_rows.values()), brand=brand, virus_typ=virus_typ)
+    return _coverage_from_rows(service, list(keyed_rows.values()), brand=brand_value, virus_typ=virus_typ)
 
 
 def _coverage_from_rows(

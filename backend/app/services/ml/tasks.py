@@ -12,6 +12,7 @@ from decimal import Decimal
 from typing import Any, Dict
 
 from app.core.celery_app import celery_app
+from app.core.config import get_settings
 from app.db.session import get_db_context
 from app.services.ml.training_contract import (
     SUPPORTED_VIRUS_TYPES,
@@ -231,6 +232,7 @@ def refresh_regional_operational_snapshots_task(
     self,
     virus_typ: str | None = None,
     virus_types: list[str] | None = None,
+    brand: str | None = None,
     horizon_days_list: list[int] | None = None,
     weekly_budget_eur: float = 50000.0,
     top_n: int = 12,
@@ -244,8 +246,16 @@ def refresh_regional_operational_snapshots_task(
         virus_typ=virus_typ,
         virus_types=virus_types,
     )
+    brand_value = (
+        str(brand).strip().lower()
+        if brand is not None
+        else get_settings().NORMALIZED_OPERATIONAL_DEFAULT_BRAND
+    )
+    if not brand_value:
+        raise ValueError("brand must be provided")
     logger.info(
-        "Celery: refreshing regional operational snapshots (virus_types=%s, horizons=%s)",
+        "Celery: refreshing regional operational snapshots (brand=%s, virus_types=%s, horizons=%s)",
+        brand_value,
         list(selection.virus_types),
         horizon_days_list,
     )
@@ -261,6 +271,7 @@ def refresh_regional_operational_snapshots_task(
             meta={"step": "Refreshing regional operational snapshots...", "progress": 40},
         )
         result = service.refresh_supported_scopes(
+            brand=brand_value,
             virus_types=list(selection.virus_types),
             horizon_days_list=horizon_days_list,
             weekly_budget_eur=weekly_budget_eur,
@@ -274,6 +285,7 @@ def refresh_regional_operational_snapshots_task(
     return _json_safe({
         "status": "success",
         "result": result,
+        "brand": brand_value,
         "virus_typ": selection.virus_typ,
         "virus_types": list(selection.virus_types),
         "selection_mode": selection.mode,

@@ -12,7 +12,7 @@ def build_regions_payload(
     *,
     virus_typ: str = "Influenza A",
     target_source: str = "RKI_ARE",
-    brand: str = "gelo",
+    brand: str,
 ) -> JsonDict:
     cockpit = service.cockpit_service.get_cockpit_payload(virus_typ=virus_typ, target_source=target_source)
     ranking_signal = cockpit_ranking_signal(cockpit)

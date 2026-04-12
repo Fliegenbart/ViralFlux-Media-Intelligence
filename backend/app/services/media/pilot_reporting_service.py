@@ -23,7 +23,10 @@ _EXCLUDED_NON_RECOMMENDED_STATUSES = {"DISMISSED", "DRAFT"}
 
 
 def _normalize_brand(value: str) -> str:
-    return str(value or "gelo").strip().lower()
+    brand = str(value).strip().lower()
+    if brand:
+        return brand
+    raise ValueError("brand must be provided")
 
 
 def _parse_datetime(value: str | datetime | None) -> datetime | None:
@@ -55,7 +58,7 @@ class PilotReportingService:
     def build_pilot_report(
         self,
         *,
-        brand: str = "gelo",
+        brand: str,
         lookback_weeks: int = 26,
         window_start: datetime | None = None,
         window_end: datetime | None = None,

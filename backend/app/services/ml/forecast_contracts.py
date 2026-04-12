@@ -68,6 +68,14 @@ def normalized_decision_priority_index(
     return round(adjusted * 100.0, 1)
 
 
+def normalized_signal_index(
+    *,
+    signal_basis_score: float | None,
+) -> float:
+    basis_score = clamp(float(signal_basis_score or 0.0), 0.0, 1.0)
+    return round(basis_score * 100.0, 1)
+
+
 def normalized_expected_value_index(
     *,
     decision_basis_score: float | None,

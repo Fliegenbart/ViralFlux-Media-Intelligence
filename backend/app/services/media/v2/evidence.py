@@ -10,7 +10,7 @@ def build_evidence_payload(
     *,
     virus_typ: str = "Influenza A",
     target_source: str = "RKI_ARE",
-    brand: str = "gelo",
+    brand: str,
 ) -> JsonDict:
     cockpit = service.cockpit_service.get_cockpit_payload(virus_typ=virus_typ, target_source=target_source)
     backtest_summary = cockpit.get("backtest_summary") or {}

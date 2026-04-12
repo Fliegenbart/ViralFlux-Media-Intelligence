@@ -41,6 +41,15 @@ class OutcomeIngestionService:
         self.media_service = MediaV2Service(db)
         self.truth_layer_service = TruthLayerService(db)
 
+    @staticmethod
+    def _normalize_brand(brand: str) -> str:
+        if brand is None:
+            raise ValueError("brand must be provided")
+        brand_value = str(brand).strip().lower()
+        if not brand_value:
+            raise ValueError("brand must be a non-empty string")
+        return brand_value
+
     def ingest_outcomes(
         self,
         *,
@@ -49,7 +58,7 @@ class OutcomeIngestionService:
         external_batch_id: str,
         observations: list[dict[str, Any]],
     ) -> dict[str, Any]:
-        brand_value = str(brand or "gelo").strip().lower()
+        brand_value = self._normalize_brand(brand)
         source_value = str(source_system or "").strip().lower()
         external_id_value = str(external_batch_id or "").strip()
         existing_batch = self._existing_batch(

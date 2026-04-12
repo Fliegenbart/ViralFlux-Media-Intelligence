@@ -552,7 +552,11 @@ class RegionalHorizonSemanticsTests(unittest.TestCase):
             {"Influenza A": {3: "Pilot supports only h5/h7 for this virus."}},
             clear=False,
         ):
-            payload = service.predict_all_regions("Influenza A", horizon_days=3)
+            payload = service.predict_all_regions(
+                virus_typ="Influenza A",
+                brand="gelo",
+                horizon_days=3,
+            )
 
         self.assertEqual(payload["status"], "unsupported")
         self.assertEqual(payload["horizon_days"], 3)

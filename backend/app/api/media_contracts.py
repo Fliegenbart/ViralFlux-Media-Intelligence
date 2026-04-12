@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 
 
 class RecommendationGenerateRequest(BaseModel):
-    brand: str = Field(default="gelo")
+    brand: str = Field(..., min_length=1)
     product: str = Field(default="Alle Gelo-Produkte")
     campaign_goal: str = Field(default="Awareness + Abverkauf")
     weekly_budget: float = Field(default=100000.0, ge=0)
@@ -24,7 +24,7 @@ class RecommendationGenerateRequest(BaseModel):
 
 class RecommendationOpenRegionRequest(BaseModel):
     region_code: str = Field(..., min_length=2)
-    brand: str = Field(default="gelo")
+    brand: str = Field(..., min_length=1)
     product: str = Field(default="Alle Gelo-Produkte")
     campaign_goal: str = Field(default="Sichtbarkeit aufbauen, bevor die Nachfrage steigt")
     weekly_budget: float = Field(default=100000.0, ge=0)
@@ -92,7 +92,7 @@ class OutcomeImportRecord(BaseModel):
 
 
 class OutcomeImportRequest(BaseModel):
-    brand: str = Field(default="gelo")
+    brand: str = Field(..., min_length=1)
     source_label: str = Field(default="manual")
     replace_existing: bool = Field(default=False)
     validate_only: bool = Field(default=False)
@@ -117,7 +117,7 @@ class OutcomeIngestObservation(BaseModel):
 
 
 class OutcomeIngestRequest(BaseModel):
-    brand: str = Field(default="gelo")
+    brand: str = Field(..., min_length=1)
     source_system: str = Field(..., min_length=1)
     external_batch_id: str = Field(..., min_length=1)
     observations: list[OutcomeIngestObservation] = Field(default_factory=list)

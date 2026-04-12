@@ -98,6 +98,16 @@ class ConnectorPayloadServiceTests(unittest.TestCase):
         self.assertGreaterEqual(len(preview["connector_payload"]["ad_groups"]), 2)
         self.assertIn("husten wetterumschwung", preview["connector_payload"]["ad_groups"][0]["keywords"])
 
+    def test_prepare_sync_package_rejects_missing_brand(self) -> None:
+        opportunity = _sample_opportunity(status="APPROVED")
+        opportunity["brand"] = "   "
+
+        with self.assertRaises(ValueError):
+            ConnectorPayloadService.prepare_sync_package(
+                opportunity=opportunity,
+                connector_key="meta_ads",
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

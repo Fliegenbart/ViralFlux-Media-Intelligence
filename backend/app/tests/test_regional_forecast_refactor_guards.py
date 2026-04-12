@@ -1,6 +1,8 @@
 from pathlib import Path
 from unittest.mock import ANY, patch
 
+import pytest
+
 from app.services.ml import regional_forecast as regional_forecast_module
 from app.services.ml.regional_forecast import RegionalForecastService
 
@@ -633,6 +635,7 @@ def test_benchmark_supported_viruses_wrapper_delegates_to_module() -> None:
         return_value=sentinel,
     ) as mocked:
         result = service.benchmark_supported_viruses(
+            brand="gelo",
             reference_virus="Influenza A",
             horizon_days=7,
         )
@@ -640,6 +643,7 @@ def test_benchmark_supported_viruses_wrapper_delegates_to_module() -> None:
     assert result is sentinel
     mocked.assert_called_once_with(
         service,
+        brand="gelo",
         reference_virus="Influenza A",
         horizon_days=7,
         ensure_supported_horizon_fn=ANY,
@@ -662,6 +666,7 @@ def test_build_hero_overview_wrapper_delegates_to_module() -> None:
         return_value=sentinel,
     ) as mocked:
         result = service.build_hero_overview(
+            brand="gelo",
             horizon_days=7,
             reference_virus="Influenza A",
         )
@@ -669,6 +674,7 @@ def test_build_hero_overview_wrapper_delegates_to_module() -> None:
     assert result is sentinel
     mocked.assert_called_once_with(
         service,
+        brand="gelo",
         horizon_days=7,
         reference_virus="Influenza A",
         ensure_supported_horizon_fn=ANY,
@@ -687,6 +693,7 @@ def test_build_portfolio_view_wrapper_delegates_to_module() -> None:
         return_value=sentinel,
     ) as mocked:
         result = service.build_portfolio_view(
+            brand="gelo",
             horizon_days=7,
             top_n=12,
             reference_virus="Influenza A",
@@ -695,6 +702,7 @@ def test_build_portfolio_view_wrapper_delegates_to_module() -> None:
     assert result is sentinel
     mocked.assert_called_once_with(
         service,
+        brand="gelo",
         horizon_days=7,
         top_n=12,
         reference_virus="Influenza A",
@@ -736,6 +744,31 @@ def test_get_validation_summary_wrapper_delegates_to_module() -> None:
     )
 
 
+def test_regional_forecast_brand_scoped_methods_require_explicit_brand() -> None:
+    service = RegionalForecastService(db=None)
+
+    with patch(
+        "app.services.ml.regional_forecast_views.benchmark_supported_viruses",
+        return_value={"benchmark": []},
+    ):
+        with pytest.raises(TypeError):
+            service.benchmark_supported_viruses(reference_virus="Influenza A", horizon_days=7)
+
+    with patch(
+        "app.services.ml.regional_forecast_views.build_hero_overview",
+        return_value={"hero_timeseries": []},
+    ):
+        with pytest.raises(TypeError):
+            service.build_hero_overview(horizon_days=7, reference_virus="Influenza A")
+
+    with patch(
+        "app.services.ml.regional_forecast_views.build_portfolio_view",
+        return_value={"top_opportunities": []},
+    ):
+        with pytest.raises(TypeError):
+            service.build_portfolio_view(horizon_days=7, top_n=12, reference_virus="Influenza A")
+
+
 def test_model_version_wrapper_delegates_to_module() -> None:
     metadata = {"model_family": "regional_pooled_panel", "trained_at": "2026-01-01T00:00:00"}
 
@@ -772,6 +805,7 @@ def test_predict_all_regions_wrapper_delegates_to_module() -> None:
     ) as mocked:
         result = service.predict_all_regions(
             virus_typ="Influenza A",
+            brand="gelo",
             horizon_days=7,
         )
 
@@ -779,6 +813,7 @@ def test_predict_all_regions_wrapper_delegates_to_module() -> None:
     mocked.assert_called_once_with(
         service,
         virus_typ="Influenza A",
+        brand="gelo",
         horizon_days=7,
         ensure_supported_horizon_fn=regional_forecast_module.ensure_supported_horizon,
         regional_horizon_support_status_fn=regional_forecast_module.regional_horizon_support_status,
@@ -807,6 +842,7 @@ def test_generate_media_allocation_wrapper_delegates_to_module() -> None:
     ) as mocked:
         result = service.generate_media_allocation(
             virus_typ="Influenza A",
+            brand="gelo",
             weekly_budget_eur=1500.0,
             horizon_days=7,
         )
@@ -815,6 +851,7 @@ def test_generate_media_allocation_wrapper_delegates_to_module() -> None:
     mocked.assert_called_once_with(
         service,
         virus_typ="Influenza A",
+        brand="gelo",
         weekly_budget_eur=1500.0,
         horizon_days=7,
         rollout_mode_for_virus_fn=regional_forecast_module.rollout_mode_for_virus,
@@ -835,6 +872,7 @@ def test_generate_media_activation_wrapper_delegates_to_module() -> None:
     ) as mocked:
         result = service.generate_media_activation(
             virus_typ="Influenza A",
+            brand="gelo",
             weekly_budget_eur=1500.0,
             horizon_days=7,
         )
@@ -843,6 +881,7 @@ def test_generate_media_activation_wrapper_delegates_to_module() -> None:
     mocked.assert_called_once_with(
         service,
         virus_typ="Influenza A",
+        brand="gelo",
         weekly_budget_eur=1500.0,
         horizon_days=7,
     )
@@ -858,6 +897,7 @@ def test_generate_campaign_recommendations_wrapper_delegates_to_module() -> None
     ) as mocked:
         result = service.generate_campaign_recommendations(
             virus_typ="Influenza A",
+            brand="gelo",
             weekly_budget_eur=1500.0,
             horizon_days=7,
             top_n=5,
@@ -867,6 +907,7 @@ def test_generate_campaign_recommendations_wrapper_delegates_to_module() -> None
     mocked.assert_called_once_with(
         service,
         virus_typ="Influenza A",
+        brand="gelo",
         weekly_budget_eur=1500.0,
         horizon_days=7,
         top_n=5,

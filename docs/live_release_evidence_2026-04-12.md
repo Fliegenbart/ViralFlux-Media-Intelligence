@@ -10,7 +10,7 @@ Es ist bewusst knapp und prüfbar gehalten, damit Repo, Deploy und Live-System d
 
 - Datum: 2026-04-12
 - Branch: `main`
-- Live-Commit: `a97d085cb35aea81a79e1a26f17629411701f71c`
+- Live-Commit: `673d6d8fc7c9cec943ab7b649f859a3f1b21ef43`
 - Deployment-Host: `fluxengine.labpulse.ai`
 - Frontend-Bundle: `/static/js/main.af934dd9.js`
 - Frontend-CSS: `/static/css/main.952bcd57.css`

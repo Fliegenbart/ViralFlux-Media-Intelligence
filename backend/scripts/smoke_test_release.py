@@ -285,7 +285,14 @@ def _forecast_check(status_code: int, payload: dict[str, Any], path: str) -> dic
         first_prediction = predictions[0]
         missing = _missing_keys(
             first_prediction,
-            ["bundesland", "decision_label", "priority_score", "reason_trace", "uncertainty_summary"],
+            [
+                "bundesland",
+                "decision_label",
+                "event_probability",
+                "decision_priority_index",
+                "reason_trace",
+                "uncertainty_summary",
+            ],
         )
         if missing:
             errors.append(f"Forecast payload is missing required region keys: {', '.join(missing)}.")
@@ -323,10 +330,12 @@ def _allocation_check(status_code: int, payload: dict[str, Any], path: str) -> d
             [
                 "bundesland",
                 "recommended_activation_level",
+                "event_probability",
+                "decision_priority_index",
                 "suggested_budget_share",
                 "suggested_budget_amount",
                 "allocation_reason_trace",
-                "confidence",
+                "allocation_support_score",
             ],
         )
         if missing:
@@ -370,7 +379,7 @@ def _campaign_check(status_code: int, payload: dict[str, Any], path: str) -> dic
                 "recommended_keyword_cluster",
                 "activation_level",
                 "suggested_budget_amount",
-                "confidence",
+                "allocation_support_score",
                 "evidence_class",
                 "recommendation_rationale",
             ],

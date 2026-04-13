@@ -201,7 +201,6 @@ def build_map_section(
                 "priority": "high" if signal_score >= 70 else "medium",
                 "signal_score": round(signal_score, 1),
                 "priority_score": priority_score,
-                "impact_probability": round(signal_score, 1),
                 "budget_shift_pct": min(45.0, max(10.0, signal_score * 0.35)),
                 "channel_mix": {
                     "programmatic": 42,
@@ -215,15 +214,9 @@ def build_map_section(
                 ),
                 "recommendation_ref": item.get("recommendation_ref"),
                 "score_semantics": "ranking_signal",
-                "impact_probability_semantics": "ranking_signal",
-                "impact_probability_deprecated": True,
                 "field_contracts": {
                     "signal_score": ranking_signal_contract(source="RankingSignal"),
                     "priority_score": priority_score_contract(source="MediaCockpitService"),
-                    "impact_probability": ranking_signal_contract(
-                        source="RankingSignal",
-                        label="Legacy Signal-Score",
-                    ),
                 },
             })
 

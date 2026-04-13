@@ -51,7 +51,13 @@ def _priority_explanation(
 
 
 def _severity_score(service, region: dict[str, Any]) -> int:
-    impact = float(region.get("signal_score") or region.get("impact_probability") or region.get("peix_score") or 0.0)
+    impact = float(
+        region.get("signal_score")
+        or region.get("ranking_signal_score")
+        or region.get("peix_score")
+        or region.get("impact_probability")
+        or 0.0
+    )
     intensity = float(region.get("intensity") or 0.0) * 100.0
     return int(round(max(impact, intensity)))
 

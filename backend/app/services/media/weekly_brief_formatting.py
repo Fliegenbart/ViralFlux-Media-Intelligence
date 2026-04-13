@@ -104,7 +104,7 @@ def normalize_signal_score(value: Any) -> float:
 
 def primary_signal_score(item: dict[str, Any] | None) -> float:
     payload = item or {}
-    for key in ("signal_score", "peix_score", "score_0_100", "impact_probability"):
+    for key in ("signal_score", "ranking_signal_score", "peix_score", "score_0_100", "impact_probability"):
         if key in payload and payload.get(key) is not None:
             return round(normalize_signal_score(payload.get(key)), 1)
     return 0.0

@@ -1033,6 +1033,85 @@ class MediaV2ServiceTruthCoverageTests(unittest.TestCase):
             "business_validation_gate",
         )
 
+    def test_decision_payload_top_regions_prefers_ranking_signal_score_over_legacy_alias(self) -> None:
+        cockpit_payload = {
+            "map": {
+                "date": "2026-02-25T00:00:00",
+                "top_regions": [
+                    {
+                        "code": "HH",
+                        "name": "Hamburg",
+                        "ranking_signal_score": 79.0,
+                        "impact_probability": 64.0,
+                        "trend": "steigend",
+                    },
+                ],
+            },
+            "backtest_summary": {
+                "latest_market": {
+                    "quality_gate": {
+                        "overall_passed": False,
+                    },
+                },
+            },
+            "source_status": {
+                "items": [
+                    {"source_key": "wastewater", "is_live": True},
+                    {"source_key": "survstat", "is_live": True},
+                ],
+            },
+            "peix_epi_score": {
+                "top_drivers": [{"label": "AMELAG", "strength_pct": 44}],
+            },
+        }
+        cards = [
+            {
+                "id": "card-1",
+                "lifecycle_state": "REVIEW",
+                "is_publishable": False,
+                "recommended_product": "GeloProsed",
+                "product": "GeloProsed",
+                "budget_shift_pct": 18.0,
+                "decision_brief": {
+                    "summary_sentence": "Starke Aktivierung.",
+                    "recommendation": {"primary_region": "Hamburg"},
+                },
+            },
+        ]
+
+        with (
+            patch.object(self.service.cockpit_service, "get_cockpit_payload", return_value=cockpit_payload),
+            patch.object(self.service, "get_truth_coverage", return_value={
+                "coverage_weeks": 10,
+                "trust_readiness": "erste_signale",
+                "truth_freshness_state": "fresh",
+                "required_fields_present": ["Mediabudget"],
+                "conversion_fields_present": ["Verkäufe"],
+                "last_imported_at": "2026-03-01T00:00:00",
+                "latest_batch_id": "batch-1",
+            }),
+            patch.object(self.service, "get_model_lineage", return_value={"drift_state": "warning"}),
+            patch.object(self.service, "get_signal_stack", return_value={"summary": {"top_drivers": [], "math_stack": {}}}),
+            patch.object(self.service, "_build_campaign_queue", return_value={
+                "visible_cards": cards,
+                "primary_cards": cards,
+                "summary": {"visible_cards": 1, "hidden_backlog_cards": 0},
+            }),
+            patch.object(self.service, "_campaign_cards", return_value=cards),
+            patch.object(self.service.business_validation_service, "evaluate", return_value={
+                "operator_context": {"operator": "platform", "truth_partner": "gelo"},
+                "validated_for_budget_activation": False,
+                "validation_status": "pending_holdout_design",
+                "decision_scope": "decision_support_only",
+                "evidence_tier": "truth_backed",
+                "message": "Outcome-Daten sind vorhanden, aber Holdout fehlt noch.",
+                "guidance": "Kontrollgruppen für kommende Aktivierungen markieren.",
+            }),
+        ):
+            payload = self.service.get_decision_payload(brand="gelo")
+
+        self.assertEqual(payload["weekly_decision"]["top_regions"][0]["signal_score"], 79.0)
+
     def test_campaigns_payload_limits_visible_board_to_eight_cards(self) -> None:
         cards = []
         for index in range(10):
@@ -1245,6 +1324,48 @@ class MediaV2ServiceTruthCoverageTests(unittest.TestCase):
                         "name": "Hamburg",
                         "impact_probability": 64.0,
                         "signal_score": 81.0,
+                        "intensity": 0.45,
+                        "trend": "stabil",
+                        "change_pct": 0.0,
+                        "tooltip": {"recommended_product": "GeloProsed"},
+                        "recommendation_ref": {"urgency_score": 80, "card_id": "card-hh"},
+                    },
+                },
+                "activation_suggestions": [],
+            },
+        }
+
+        with (
+            patch.object(self.service.cockpit_service, "get_cockpit_payload", return_value=cockpit_payload),
+            patch.object(self.service, "get_decision_payload", return_value={"weekly_decision": {"decision_state": "WATCH"}}),
+        ):
+            payload = self.service.get_regions_payload(brand="gelo")
+
+        self.assertEqual(payload["top_regions"][0]["code"], "HH")
+        self.assertEqual(payload["map"]["regions"]["HH"]["signal_score"], 81.0)
+        self.assertEqual(payload["map"]["regions"]["HH"]["impact_probability"], 64.0)
+
+    def test_regions_payload_prefers_ranking_signal_score_over_legacy_impact_probability(self) -> None:
+        cockpit_payload = {
+            "peix_epi_score": {"regions": {}},
+            "map": {
+                "has_data": True,
+                "date": "2026-02-25T00:00:00",
+                "regions": {
+                    "SH": {
+                        "name": "Schleswig-Holstein",
+                        "ranking_signal_score": 48.0,
+                        "impact_probability": 91.0,
+                        "intensity": 0.45,
+                        "trend": "stabil",
+                        "change_pct": 0.0,
+                        "tooltip": {"recommended_product": "GeloProsed"},
+                        "recommendation_ref": {"urgency_score": 80, "card_id": "card-sh"},
+                    },
+                    "HH": {
+                        "name": "Hamburg",
+                        "ranking_signal_score": 81.0,
+                        "impact_probability": 64.0,
                         "intensity": 0.45,
                         "trend": "stabil",
                         "change_pct": 0.0,

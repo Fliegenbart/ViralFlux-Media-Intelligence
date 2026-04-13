@@ -47,7 +47,15 @@ class CockpitServiceGuardTests(unittest.TestCase):
 
         self.assertEqual(score, 67.0)
 
-    def test_ranking_signal_fields_mark_legacy_alias_as_deprecated(self) -> None:
+    def test_primary_signal_score_prefers_ranking_signal_score_over_legacy_alias(self) -> None:
+        score = MediaCockpitService._primary_signal_score({
+            "ranking_signal_score": 72.0,
+            "impact_probability": 88.0,
+        })
+
+        self.assertEqual(score, 72.0)
+
+    def test_ranking_signal_fields_expose_only_canonical_signal_fields(self) -> None:
         payload = MediaCockpitService(None)._ranking_signal_fields(
             signal_score=67.0,
             legacy_alias=88.0,
@@ -55,10 +63,11 @@ class CockpitServiceGuardTests(unittest.TestCase):
         )
 
         self.assertEqual(payload["score_semantics"], "ranking_signal")
-        self.assertEqual(payload["impact_probability_semantics"], "ranking_signal")
-        self.assertTrue(payload["impact_probability_deprecated"])
         self.assertEqual(payload["signal_score"], 67.0)
-        self.assertEqual(payload["impact_probability"], 88.0)
+        self.assertNotIn("impact_probability", payload)
+        self.assertNotIn("impact_probability_semantics", payload)
+        self.assertNotIn("impact_probability_deprecated", payload)
+        self.assertNotIn("impact_probability", payload["field_contracts"])
 
     def test_signal_snapshot_prefers_signal_score_for_top_region(self) -> None:
         snapshot = MediaCockpitService(None)._signal_snapshot_section(
@@ -83,9 +92,9 @@ class CockpitServiceGuardTests(unittest.TestCase):
         )
 
         self.assertEqual(snapshot["national"]["signal_score"], 72.0)
-        self.assertEqual(snapshot["national"]["impact_probability"], 84.0)
         self.assertEqual(snapshot["top_region"]["signal_score"], 68.0)
-        self.assertEqual(snapshot["top_region"]["impact_probability"], 91.0)
+        self.assertNotIn("impact_probability", snapshot["national"])
+        self.assertNotIn("impact_probability", snapshot["top_region"])
         self.assertEqual(
             snapshot["national"]["field_contracts"]["signal_score"]["source"],
             "RankingSignal",
@@ -268,6 +277,8 @@ class CockpitMapSectionContractTests(unittest.TestCase):
         self.assertEqual(payload["regions"]["SH"]["ranking_signal_score"], 78.0)
         self.assertEqual(payload["regions"]["SH"]["tooltip"]["ranking_signal_score"], 78.0)
         self.assertEqual(payload["regions"]["SH"]["tooltip"]["signal_band"], "high")
+        self.assertNotIn("impact_probability", payload["regions"]["SH"])
+        self.assertNotIn("impact_probability", payload["activation_suggestions"][0])
         self.assertEqual(
             payload["activation_suggestions"][0]["field_contracts"]["signal_score"]["source"],
             "RankingSignal",

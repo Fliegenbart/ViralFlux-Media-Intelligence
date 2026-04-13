@@ -73,7 +73,7 @@ function regionColor(region?: MapRegion): string {
   if (!region) return 'rgba(226, 232, 240, 0.5)';
   if (hasInsufficientEvidence(region)) return 'rgba(226, 232, 240, 0.5)';
 
-  const prob = region.impact_probability ?? primarySignalScore(region);
+  const prob = primarySignalScore(region) || region.impact_probability || 0;
   const normalized = prob <= 1 ? prob : prob / 100;
 
   if (normalized > 0.7) return '#dc2626';
@@ -195,11 +195,10 @@ const GermanyMap: React.FC<Props> = ({
           const isHovered = Boolean(code && hoveredRegion === code);
           const isTop = Boolean(code && topRegionCode === code);
           const insufficientEvidence = hasInsufficientEvidence(region);
-          const impactProbability = region?.impact_probability ?? null;
-          const impactProbabilityValue = impactProbability ?? 0;
+          const signalValue = region ? primarySignalScore(region) : 0;
           const shouldShowProbability = Boolean(
             showProbability
-            && impactProbability != null
+            && signalValue > 0
             && (!radarVariant || isSelected || isTop || isHovered),
           );
           const badgeRadius = radarVariant ? ((isSelected || isTop) ? 12 : 8.5) : 10;
@@ -292,11 +291,11 @@ const GermanyMap: React.FC<Props> = ({
                       x={shape.cx}
                       y={shape.cy + 6.5}
                       textAnchor="middle"
-                      fill={impactProbabilityValue > 0.7 ? 'var(--status-danger)' : impactProbabilityValue > 0.4 ? 'var(--status-warning)' : 'var(--text-secondary)'}
+                      fill={signalValue > 70 ? 'var(--status-danger)' : signalValue > 40 ? 'var(--status-warning)' : 'var(--text-secondary)'}
                       fontSize="10"
                       fontWeight="800"
                     >
-                      {formatFractionPercent(impactProbabilityValue, 0)}
+                      {formatFractionPercent(signalValue, 0)}
                     </text>
                   )}
                 </>

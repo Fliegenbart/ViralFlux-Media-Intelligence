@@ -8,8 +8,8 @@ jest.mock('./cockpitUtils', () => ({
     const normalized = value <= 1 ? value * 100 : value;
     return `${normalized.toFixed(digits)}/100`;
   },
-  primarySignalScore: (region: { signal_score?: number | null; impact_probability?: number | null }) => (
-    region.signal_score ?? region.impact_probability ?? 0
+  primarySignalScore: (region: { signal_score?: number | null; ranking_signal_score?: number | null; impact_probability?: number | null }) => (
+    region.signal_score ?? region.ranking_signal_score ?? region.impact_probability ?? 0
   ),
 }));
 
@@ -65,8 +65,7 @@ describe('GermanyMap', () => {
             name: 'Mecklenburg-Vorpommern',
             trend: 'steigend',
             change_pct: 199.1,
-            signal_score: 0.55,
-            impact_probability: 0.55,
+            ranking_signal_score: 0.55,
             signal_drivers: [{ label: 'ARE', strength_pct: 62 }],
             source_trace: ['RKI', 'Abwasser'],
           } as any,
@@ -74,8 +73,7 @@ describe('GermanyMap', () => {
             name: 'Baden-Württemberg',
             trend: 'steigend',
             change_pct: 78,
-            signal_score: 0.49,
-            impact_probability: 0.49,
+            ranking_signal_score: 0.49,
             signal_drivers: [{ label: 'ARE', strength_pct: 48 }],
             source_trace: ['RKI', 'Abwasser'],
           } as any,

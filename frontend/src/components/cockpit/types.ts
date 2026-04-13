@@ -19,6 +19,7 @@ export interface MapRegion {
   peix_band?: string;
   impact_probability?: number;
   signal_score?: number;
+  ranking_signal_score?: number;
   recommendation_ref?: RegionRecommendationRef | null;
   tooltip?: RegionTooltipData | null;
   forecast_direction?: string;

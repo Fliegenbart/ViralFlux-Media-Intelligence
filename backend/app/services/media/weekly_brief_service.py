@@ -180,7 +180,9 @@ class WeeklyBriefService:
         national_score = peix.get("national_score", 0)
         national_band = peix.get("national_band", "-")
         national_impact = round(
-            _normalize_signal_score(peix.get("national_impact_probability", peix.get("national_score", 0))),
+            _normalize_signal_score(
+                peix.get("national_score", peix.get("ranking_signal_score", peix.get("national_impact_probability", 0)))
+            ),
             1,
         )
 

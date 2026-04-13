@@ -228,7 +228,7 @@ def test_render_evidence_page_wrapper_delegates_to_pages_module():
     )
 
 
-def test_generate_uses_national_impact_probability_in_summary():
+def test_generate_prefers_national_score_over_legacy_alias_in_summary():
     service = WeeklyBriefService(db=None)
 
     cockpit_module = types.ModuleType("app.services.media.cockpit_service")
@@ -258,7 +258,7 @@ def test_generate_uses_national_impact_probability_in_summary():
                 with patch.object(service, "_save_to_db") as save_mock:
                     result = service.generate(brand="gelo", virus_typ="Influenza A")
 
-    assert result["summary"]["national_impact"] == 84.0
+    assert result["summary"]["national_impact"] == 71.0
     save_mock.assert_called_once()
 
 

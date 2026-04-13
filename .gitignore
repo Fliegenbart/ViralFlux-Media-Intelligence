@@ -61,6 +61,7 @@ backend/app/services/marketing_engine/conquesting_matrix.json
 
 # ML Model Artifacts
 backend/app/ml_models/**/*.json
+backend/app/ml_models/**/*.pkl
 backend/app/ml_models/**/*.ubj
 !backend/app/ml_models/.gitkeep
 

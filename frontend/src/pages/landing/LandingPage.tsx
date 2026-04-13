@@ -15,32 +15,51 @@ import {
 } from './LandingWidgets';
 
 const NAV_ITEMS = [
-  { label: 'Virus-Radar', path: '/virus-radar' },
-  { label: 'Wochenplan', path: '/jetzt' },
-  { label: 'Regionen', path: '/regionen' },
-  { label: 'Kampagnen', path: '/kampagnen' },
-  { label: 'Evidenz', path: '/evidenz' },
+  { label: 'Nutzen', sectionId: 'landing-value' },
+  { label: 'Produktkern', sectionId: 'landing-surface' },
+  { label: 'Einsatzgrenzen', sectionId: 'landing-scope' },
 ] as const;
 
-const DOCS_URL = 'https://github.com/Fliegenbart/ViralFlux-Media-Intelligence/blob/main/docs/OPERATORS_GUIDE.md';
+const PRODUCT_SCOPE_URL = 'https://github.com/Fliegenbart/ViralFlux-Media-Intelligence/blob/main/docs/current_product_scope.md';
 
-const BRIEFING_CARDS = [
+const VALUE_CARDS = [
   {
-    label: 'Wochenfokus für Bundesländer',
-    value: 'Welche Länder jetzt zuerst geprüft werden sollten',
-    meta: 'Die Einstiegsseite verdichtet die Lage auf wenige Bundesländer, statt schon hier in Details oder Kampagnenlogik abzutauchen.',
+    label: 'Regionen schneller priorisieren',
+    value: 'Welche Regionen jetzt zuerst geprüft werden sollten',
+    meta: 'ViralFlux zeigt nicht nur Rohdaten, sondern macht sichtbar, wo zuerst hingeschaut werden sollte.',
     tone: 'accent' as const,
   },
   {
-    label: 'Nächster Schritt',
-    value: 'Direkt in den Wochenplan statt in Produkt-Erklärungen',
-    meta: 'Der wichtigste Weg führt ohne Umwege in die Arbeitsfläche, in der das Team die Wochenentscheidung vorbereitet.',
+    label: 'Forecast, Lage und Empfehlung getrennt sehen',
+    value: 'Vergangenheit, Forecast und Empfehlung bleiben unterscheidbar',
+    meta: 'Dadurch wird klarer, was schon beobachtet wurde und was nur als Entscheidungshilfe dient.',
     tone: 'muted' as const,
   },
   {
-    label: 'Evidenz bleibt sichtbar',
-    value: 'Live-Daten und Belastbarkeit bleiben im Blick',
-    meta: 'Signale, Aktualität und Nachvollziehbarkeit bleiben sichtbar, aber deutlich hinter der eigentlichen Wochenentscheidung.',
+    label: 'Im Wochenrhythmus arbeiten',
+    value: 'Regelmäßige Steuerung statt punktueller Einzelauswertung',
+    meta: 'Der Produktkern ist für wiederholbare Reviews und Priorisierung gedacht, nicht nur für einen einzelnen Blick auf Daten.',
+    tone: 'default' as const,
+  },
+] as const;
+
+const SCOPE_CARDS = [
+  {
+    label: 'Bewusst klar begrenzt',
+    value: 'Nicht jede sichtbare Kombination wird automatisch als produktionsreif behauptet',
+    meta: 'Der fachliche Scope wird vorab definiert und bleibt im aktuellen Stand bewusst eng geführt.',
+    tone: 'muted' as const,
+  },
+  {
+    label: 'Menschliche Freigabe bleibt',
+    value: 'Empfehlungen ersetzen keine finale Entscheidung',
+    meta: 'Forecasts bleiben Entscheidungshilfen. Freigaben und operative Schritte werden weiterhin bewusst geprüft.',
+    tone: 'accent' as const,
+  },
+  {
+    label: 'Technisch überprüfbar',
+    value: 'Readiness- und Release-Prüfungen sichern den laufenden Kernbetrieb',
+    meta: 'Damit lässt sich nicht nur eine Oberfläche zeigen, sondern ein nachvollziehbarer Live-Stand.',
     tone: 'default' as const,
   },
 ] as const;
@@ -119,6 +138,13 @@ const formatDataStatus = (value?: string | null) => {
   }).format(parsed)}`;
 };
 
+const scrollToSection = (sectionId: string) => {
+  const element = document.getElementById(sectionId);
+  if (element && typeof element.scrollIntoView === 'function') {
+    element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+};
+
 const LandingPage: React.FC = () => {
   const { theme, toggle: toggleTheme } = useTheme();
   const { authenticated } = useAuth();
@@ -157,7 +183,7 @@ const LandingPage: React.FC = () => {
     };
   }, []);
 
-  const openCockpit = () => navigate(authenticated ? '/jetzt' : '/login');
+  const openProductCore = () => navigate(authenticated ? '/virus-radar' : '/login');
   const liveStatusLabel = apiLive ? 'Live-Daten verbunden' : 'Wird geladen';
   const topRegion = topRegions[0];
 
@@ -171,8 +197,8 @@ const LandingPage: React.FC = () => {
           </Link>
 
           <nav className="shell-nav" aria-label="Hauptnavigation">
-            {NAV_ITEMS.map(({ label, path }) => (
-              <button key={path} type="button" onClick={() => navigate(path)} className="shell-nav-item">
+            {NAV_ITEMS.map(({ label, sectionId }) => (
+              <button key={sectionId} type="button" onClick={() => scrollToSection(sectionId)} className="shell-nav-item">
                 {label}
               </button>
             ))}
@@ -181,8 +207,8 @@ const LandingPage: React.FC = () => {
           <div className="shell-header-spacer" />
 
           <div className="lp-nav-actions">
-            <button type="button" onClick={openCockpit} className="media-button">
-              Wochenplan öffnen
+            <button type="button" onClick={openProductCore} className="media-button">
+              Produktkern ansehen
             </button>
             <button
               type="button"
@@ -201,33 +227,36 @@ const LandingPage: React.FC = () => {
           <RevealSection>
             <section
               className="operator-section-shell operator-section-shell--accent landing-hero-shell"
-              aria-label="Wochenbriefing Einstieg"
+              aria-label="Produktkern Einstieg"
             >
               <div className="landing-hero-grid">
                 <div className="landing-hero-copy">
-                  <span className="landing-hero-kicker">Wochenbriefing</span>
+                  <span className="landing-hero-kicker">Regionale Frühwarnung</span>
 
                   <h1 className="landing-hero-title">
-                    Was diese Woche entschieden werden sollte
+                    Erkennen, welche Regionen jetzt zuerst geprüft werden sollten
                   </h1>
 
                   <p className="operator-section-shell__copy landing-hero-copytext">
-                    Die Einstiegsseite zeigt die Wochenlage in wenigen Signalen. Die eigentliche
-                    Arbeitsfläche öffnet direkt den Wochenplan mit Fokusländern, Richtung und
-                    Evidenz.
+                    ViralFlux hilft Teams dabei, regionale Virus-Signale früher zu erkennen,
+                    die Lage für die nächsten Tage besser einzuordnen und daraus eine verständliche
+                    Wochensteuerung abzuleiten.
                   </p>
 
                   <div className="landing-action-row">
-                    <button type="button" onClick={openCockpit} className="media-button">
-                      Wochenplan öffnen
+                    <button type="button" onClick={openProductCore} className="media-button">
+                      Produktkern ansehen
                     </button>
+                    <a href={PRODUCT_SCOPE_URL} target="_blank" rel="noreferrer" className="media-button secondary">
+                      Aktuellen Produktumfang lesen
+                    </a>
                   </div>
                 </div>
 
                 <OperatorPanel
                   eyebrow="Heute sichtbar"
-                  title={topRegion ? `${topRegion.name} zuerst prüfen` : 'Lage im Überblick'}
-                  description="Die Startseite zeigt nur die Richtung. Die eigentliche Wochenentscheidung folgt direkt in der Arbeitsfläche."
+                  title={topRegion ? `${topRegion.name} jetzt zuerst prüfen` : 'Regionale Lage im Überblick'}
+                  description="Der Produktkern macht sichtbar, wo zuerst hingeschaut werden sollte und wie belastbar die aktuelle Einordnung wirkt."
                   tone="accent"
                   className="landing-live-panel"
                 >
@@ -269,23 +298,48 @@ const LandingPage: React.FC = () => {
           </RevealSection>
 
           <RevealSection delay={0.04}>
-            <OperatorSection
-              kicker="Vor dem Einstieg sichtbar"
-              title="Ruhige Orientierung vor der Arbeitsfläche"
-              description="Die Landeseite beantwortet nur drei Fragen: Wo zuerst schauen, wie direkt in den Wochenplan gehen und worauf sich die Einordnung stützt."
-            >
-              <div className="operator-stat-grid">
-                {BRIEFING_CARDS.map((feature) => (
-                  <OperatorStat
-                    key={feature.label}
-                    label={feature.label}
-                    value={feature.value}
-                    meta={feature.meta}
-                    tone={feature.tone}
-                  />
-                ))}
-              </div>
-            </OperatorSection>
+            <div id="landing-value">
+              <OperatorSection
+                kicker="Was der Produktkern heute schon leistet"
+                title="Klare Priorisierung statt verstreuter Einzelsignale"
+                description="ViralFlux macht aus Gesundheits- und Kontextsignalen eine lesbare Arbeitsgrundlage für die nächste Entscheidung."
+              >
+                <div className="operator-stat-grid">
+                  {VALUE_CARDS.map((feature) => (
+                    <OperatorStat
+                      key={feature.label}
+                      label={feature.label}
+                      value={feature.value}
+                      meta={feature.meta}
+                      tone={feature.tone}
+                    />
+                  ))}
+                </div>
+              </OperatorSection>
+            </div>
+          </RevealSection>
+
+          <RevealSection delay={0.08}>
+            <div id="landing-surface">
+              <OperatorSection
+                kicker="Produktkern"
+                title="Bewusst klar begrenzt statt zu viel versprochen"
+                description="Der aktuelle Einsatz ist als eng geführter operativer Kern gedacht: mit definiertem Scope, menschlicher Freigabe und nachvollziehbarem Betriebsstand."
+                tone="muted"
+              >
+                <div id="landing-scope" className="operator-stat-grid">
+                  {SCOPE_CARDS.map((feature) => (
+                    <OperatorStat
+                      key={feature.label}
+                      label={feature.label}
+                      value={feature.value}
+                      meta={feature.meta}
+                      tone={feature.tone}
+                    />
+                  ))}
+                </div>
+              </OperatorSection>
+            </div>
           </RevealSection>
         </div>
       </main>
@@ -295,8 +349,8 @@ const LandingPage: React.FC = () => {
           <span className="shell-footer-note">{formatDataStatus(generatedAt)}</span>
           <div className="landing-footer-meta">
             <span className="landing-footer-version">Version {packageJson.version}</span>
-            <a href={DOCS_URL} target="_blank" rel="noreferrer" className="landing-footer-link">
-              Docs
+            <a href={PRODUCT_SCOPE_URL} target="_blank" rel="noreferrer" className="landing-footer-link">
+              Produktumfang
             </a>
           </div>
         </div>

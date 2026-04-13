@@ -219,6 +219,8 @@ describe('VirusRadarWorkspace', () => {
     );
 
     expect(screen.getByText('VIRALFLUX / VIRUS-RADAR')).toBeInTheDocument();
+    expect(screen.getByText('Empfohlener nächster Schritt')).toBeInTheDocument();
+    expect(screen.getByText('Berlin zeigt die stärkste Dynamik für GELO in dieser Woche.')).toBeInTheDocument();
     expect(screen.getByText('Virus-Verlauf · Influenza A')).toBeInTheDocument();
     expect(screen.getByText('Influenza A · letzte Wochen und nächste 7 Tage.')).toBeInTheDocument();
     expect(screen.getByText('Durchgezogen siehst du die letzten Wochen, gestrichelt die Prognose.')).toBeInTheDocument();
@@ -238,6 +240,12 @@ describe('VirusRadarWorkspace', () => {
     expect(screen.getByText('Fokusregion')).toBeInTheDocument();
     expect(screen.getAllByText('Aktivieren').length).toBeGreaterThan(0);
     expect(screen.getAllByText(/88\/100 Signalwert/i).length).toBeGreaterThan(0);
+
+    const decisionBlock = screen.getByText('Empfohlener nächster Schritt');
+    const chartLegend = screen.getByText('Letzte Wochen');
+    expect(
+      decisionBlock.compareDocumentPosition(chartLegend) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 
   it('prefers ranking signal scores from the regions payload over the legacy alias in the focus ladder', () => {

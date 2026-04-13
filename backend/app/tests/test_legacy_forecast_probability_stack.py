@@ -11,6 +11,7 @@ from app.services.ml.forecast_contracts import (
     HEURISTIC_EVENT_SCORE_SOURCE,
 )
 from app.services.ml.forecast_horizon_utils import (
+    apply_probability_calibration,
     build_direct_target_frame,
     build_walk_forward_splits,
     select_probability_calibration,
@@ -40,6 +41,12 @@ class _ConstantProbabilityCalibrator:
     def predict_proba(self, X: np.ndarray) -> np.ndarray:
         probs = np.full(len(np.asarray(X)), self.probability, dtype=float)
         return np.column_stack([1.0 - probs, probs])
+
+
+class _PredictOnlyCalibrator:
+    def predict(self, X: np.ndarray) -> np.ndarray:
+        probs = np.asarray(X, dtype=float).reshape(-1)
+        return np.clip(probs * 0.5, 0.001, 0.999)
 
 
 class LegacyForecastProbabilityStackTests(unittest.TestCase):
@@ -185,6 +192,14 @@ class LegacyForecastProbabilityStackTests(unittest.TestCase):
         self.assertIn("guard_metrics_worsened", str(result["fallback_reason"]))
         self.assertIn("isotonic", str(result["fallback_reason"]))
         self.assertIn("platt", str(result["fallback_reason"]))
+
+    def test_apply_probability_calibration_supports_predict_only_calibrators(self) -> None:
+        calibrated = apply_probability_calibration(
+            _PredictOnlyCalibrator(),
+            np.array([0.2, 0.8], dtype=float),
+        )
+
+        np.testing.assert_allclose(calibrated, np.array([0.1, 0.4], dtype=float))
 
     def test_event_oof_predictions_never_train_on_future_issue_dates(self) -> None:
         service = ForecastService(db=None)

@@ -408,6 +408,8 @@ def apply_probability_calibration(
         calibrated = calibration.predict(probs.astype(float))
     elif hasattr(calibration, "predict_proba"):
         calibrated = calibration.predict_proba(probs.reshape(-1, 1))[:, 1]
+    elif hasattr(calibration, "predict"):
+        calibrated = calibration.predict(probs.astype(float))
     else:
         calibrated = probs
     return np.clip(np.asarray(calibrated, dtype=float), 0.001, 0.999)

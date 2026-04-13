@@ -99,6 +99,10 @@ class RegionalForecastServiceTests(unittest.TestCase):
             "feature_columns": ["f1", "f2"],
             "action_threshold": 0.6,
             "event_definition_version": "regional_survstat_v1",
+            "science_contract_version": "regional_h7_science_contract_v1",
+            "quantile_grid_version": "canonical_quantile_grid_v1",
+            "calibration_mode": "isotonic",
+            "forecast_quantiles": [0.025, 0.1, 0.25, 0.5, 0.75, 0.9, 0.975],
             "quality_gate": quality_gate,
             "rollout_mode": rollout_mode,
             "activation_policy": activation_policy,
@@ -221,6 +225,10 @@ class RegionalForecastServiceTests(unittest.TestCase):
         self.assertIn("blend_regime", result)
         self.assertEqual(result["benchmark_metrics"], {})
         self.assertIn("tsfm_metadata", result)
+        self.assertEqual(result["science_contract_version"], "regional_h7_science_contract_v1")
+        self.assertEqual(result["quantile_grid_version"], "canonical_quantile_grid_v1")
+        self.assertEqual(result["calibration_mode"], "isotonic")
+        self.assertEqual(result["forecast_quantiles"], [0.025, 0.1, 0.25, 0.5, 0.75, 0.9, 0.975])
         self.assertEqual(result["total_regions"], 2)
         self.assertEqual(result["source_coverage_scope"], "artifact")
         self.assertEqual(result["top_5"][0]["bundesland"], "BY")

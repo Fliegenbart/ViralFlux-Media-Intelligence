@@ -102,7 +102,7 @@ class RegionalExperimentRunnerTests(unittest.TestCase):
 
     def test_regional_fit_final_models_passes_tail_calibration_dates_to_learned_event_model(self) -> None:
         trainer = object.__new__(RegionalModelTrainer)
-        trainer._fit_classifier_from_frame = lambda frame, feature_columns: "classifier"
+        trainer._fit_classifier_from_frame = lambda frame, feature_columns, sample_weight=None: "classifier"
         trainer._select_guarded_calibration = lambda **kwargs: ("regional_calibration", "isotonic_guarded")
         trainer._fit_regressor_from_frame = lambda frame, feature_columns, config: str(config.get("objective") or "regressor")
         trainer._fit_hierarchy_models = lambda **kwargs: ({"cluster": "hier"}, {"cluster": "mode"})
@@ -155,7 +155,7 @@ class RegionalExperimentRunnerTests(unittest.TestCase):
             "lower": {"name": "lower"},
             "upper": {"name": "upper"},
         }
-        trainer._fit_classifier_from_frame = lambda frame, feature_columns: "classifier"
+        trainer._fit_classifier_from_frame = lambda frame, feature_columns, sample_weight=None: "classifier"
         trainer._fit_regressor_from_frame = lambda frame, feature_columns, config: config["name"]
 
         observed: dict[str, list[float]] = {}

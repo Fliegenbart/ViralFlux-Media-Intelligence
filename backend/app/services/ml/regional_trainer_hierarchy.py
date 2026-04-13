@@ -8,6 +8,7 @@ from xgboost import XGBRegressor
 
 from app.services.ml.benchmarking.metrics import summarize_probabilistic_metrics
 from app.services.ml.models.geo_hierarchy import GeoHierarchyHelper
+from app.services.ml import regional_residual_forecast
 
 
 def hierarchy_reconciled_benchmark_frame(
@@ -1023,6 +1024,7 @@ def hierarchy_state_baseline_features(
     reg_lower: XGBRegressor,
     reg_median: XGBRegressor,
     reg_upper: XGBRegressor,
+    residual_baseline_weights: dict[str, float] | None = None,
 ) -> tuple[dict[str, dict[str, float]], dict[str, float]]:
     if date_slice.empty:
         return {}, {}
@@ -1036,11 +1038,22 @@ def hierarchy_state_baseline_features(
         else {}
     )
     X = date_slice[state_feature_columns].to_numpy(dtype=float)
-    state_quantiles = {
-        0.1: np.expm1(reg_lower.predict(X)),
-        0.5: np.expm1(reg_median.predict(X)),
-        0.9: np.expm1(reg_upper.predict(X)),
-    }
+    if residual_baseline_weights:
+        baseline_log = regional_residual_forecast.baseline_center_log(
+            date_slice,
+            weights=residual_baseline_weights,
+        )
+        state_quantiles = {
+            0.1: np.maximum(np.expm1(baseline_log + reg_lower.predict(X)), 0.0),
+            0.5: np.maximum(np.expm1(baseline_log + reg_median.predict(X)), 0.0),
+            0.9: np.maximum(np.expm1(baseline_log + reg_upper.predict(X)), 0.0),
+        }
+    else:
+        state_quantiles = {
+            0.1: np.expm1(reg_lower.predict(X)),
+            0.5: np.expm1(reg_median.predict(X)),
+            0.9: np.expm1(reg_upper.predict(X)),
+        }
     cluster_quantiles, national_quantiles, cluster_order = GeoHierarchyHelper.derived_aggregate_quantiles(
         state_quantiles,
         state_order=state_order,

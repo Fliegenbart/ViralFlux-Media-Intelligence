@@ -6,6 +6,8 @@ from typing import Any
 
 import numpy as np
 
+from app.services.ml import regional_residual_forecast
+
 
 EVENT_ANCHOR_COLUMNS: tuple[str, ...] = (
     "current_known_incidence",
@@ -428,32 +430,18 @@ def forecast_implied_event_probability(
         absolute_incidence_threshold_fn=absolute_incidence_threshold_fn,
     )
     stacked = np_module.vstack(
-        [
-            np_module.asarray(quantile_predictions[quantile], dtype=float)
-            for quantile in ordered_quantiles
-        ]
+        [np_module.asarray(quantile_predictions[quantile], dtype=float) for quantile in ordered_quantiles]
     )
     monotone = np_module.maximum.accumulate(stacked, axis=0)
     exceedance = np_module.zeros(monotone.shape[1], dtype=float)
     for idx in range(monotone.shape[1]):
-        values = monotone[:, idx]
-        current_threshold = float(threshold[idx])
-        unique_values, unique_indices = np_module.unique(values, return_index=True)
-        quantiles_for_values = np_module.asarray(
-            [ordered_quantiles[int(index)] for index in unique_indices],
-            dtype=float,
+        sample_quantiles = {
+            float(quantile): float(monotone[q_idx, idx])
+            for q_idx, quantile in enumerate(ordered_quantiles)
+        }
+        cdf_value = regional_residual_forecast.quantile_cdf(
+            float(threshold[idx]),
+            sample_quantiles,
         )
-        if len(unique_values) == 1:
-            cdf_value = float(quantiles_for_values[0])
-        else:
-            cdf_value = float(
-                np_module.interp(
-                    current_threshold,
-                    unique_values,
-                    quantiles_for_values,
-                    left=float(quantiles_for_values[0]),
-                    right=float(quantiles_for_values[-1]),
-                )
-            )
         exceedance[idx] = 1.0 - cdf_value
-    return np_module.clip(exceedance, 0.025, 0.975)
+    return np_module.clip(exceedance, 0.001, 0.999)

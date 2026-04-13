@@ -4,6 +4,11 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.services.ml.benchmarking.baselines import persistence_quantiles
+from app.services.ml import regional_residual_forecast
+from app.services.ml import regional_trainer_events
+from app.services.ml.regional_panel_utils import absolute_incidence_threshold
+
 
 def predict_all_regions(
     service,
@@ -142,18 +147,53 @@ def predict_all_regions(
     reg_upper = artifacts["regressor_upper"]
     quantile_regressors = artifacts.get("quantile_regressors") or {}
     hierarchy_models = artifacts.get("hierarchy_models") or {}
+    forecast_core_mode = str(metadata.get("forecast_core_mode") or "direct_log_quantiles")
+    baseline_component_weights = metadata.get("baseline_component_weights") or {}
+    persistence_mix_weight = float(metadata.get("persistence_mix_weight") or 1.0)
 
     raw_prob = classifier.predict_proba(X)[:, 1]
-    calibrated_prob = service._apply_calibration(calibration, raw_prob)
-    quantile_predictions: dict[float, Any] = {
-        0.1: np_module.expm1(reg_lower.predict(X)),
-        0.5: np_module.expm1(reg_median.predict(X)),
-        0.9: np_module.expm1(reg_upper.predict(X)),
-    }
+    shadow_calibrated_prob = service._apply_calibration(calibration, raw_prob)
+    if forecast_core_mode == "residual_baseline_v2":
+        baseline_log = regional_residual_forecast.baseline_center_log(
+            panel,
+            weights={
+                "current_log": float(baseline_component_weights.get("current_log") or 0.0),
+                "seasonal_log": float(baseline_component_weights.get("seasonal_log") or 0.0),
+                "pooled_log": float(baseline_component_weights.get("pooled_log") or 0.0),
+            },
+        )
+        quantile_predictions: dict[float, Any] = {
+            0.1: np_module.maximum(np_module.expm1(baseline_log + reg_lower.predict(X)), 0.0),
+            0.5: np_module.maximum(np_module.expm1(baseline_log + reg_median.predict(X)), 0.0),
+            0.9: np_module.maximum(np_module.expm1(baseline_log + reg_upper.predict(X)), 0.0),
+        }
+    else:
+        quantile_predictions = {
+            0.1: np_module.expm1(reg_lower.predict(X)),
+            0.5: np_module.expm1(reg_median.predict(X)),
+            0.9: np_module.expm1(reg_upper.predict(X)),
+        }
     for quantile, model in sorted(quantile_regressors.items()):
         if quantile in quantile_predictions:
             continue
-        quantile_predictions[float(quantile)] = np_module.expm1(model.predict(X))
+        if forecast_core_mode == "residual_baseline_v2":
+            quantile_predictions[float(quantile)] = np_module.maximum(
+                np_module.expm1(baseline_log + model.predict(X)),
+                0.0,
+            )
+        else:
+            quantile_predictions[float(quantile)] = np_module.expm1(model.predict(X))
+    if persistence_mix_weight < 0.999:
+        persistence_baseline_quantiles = persistence_quantiles(
+            current_values=panel["current_known_incidence"].to_numpy(dtype=float),
+            residual_scale=np.maximum(panel["seasonal_mad"].to_numpy(dtype=float), 1.0),
+        )
+        quantile_predictions = regional_residual_forecast.mixture_quantiles_via_cdf(
+            model_quantiles=quantile_predictions,
+            baseline_quantiles=persistence_baseline_quantiles,
+            mixture_weight=persistence_mix_weight,
+            output_quantiles=tuple(sorted(float(q) for q in quantile_predictions)),
+        )
 
     hierarchy_meta = metadata.get("hierarchy_reconciliation") or {}
     hierarchy_feature_columns = metadata.get("hierarchy_feature_columns") or feature_columns
@@ -376,6 +416,30 @@ def predict_all_regions(
     pred_next = np_module.maximum(np_module.asarray(quantile_predictions.get(0.5), dtype=float), 0.0)
     pred_low = np_module.maximum(np_module.asarray(quantile_predictions.get(0.1, pred_next), dtype=float), 0.0)
     pred_high = np_module.maximum(np_module.asarray(quantile_predictions.get(0.9, pred_next), dtype=float), 0.0)
+    selected_tau = float(metadata.get("selected_tau") or 0.2)
+    selected_kappa = float(metadata.get("selected_kappa") or 0.5)
+    min_event_absolute_incidence = float(metadata.get("min_event_absolute_incidence") or 5.0)
+    forecast_implied_raw = regional_trainer_events.forecast_implied_event_probability(
+        quantile_predictions=quantile_predictions,
+        current_known=panel["current_known_incidence"].to_numpy(dtype=float),
+        baseline=panel["seasonal_baseline"].to_numpy(dtype=float),
+        mad=panel["seasonal_mad"].to_numpy(dtype=float),
+        tau=selected_tau,
+        kappa=selected_kappa,
+        min_absolute_incidence=min_event_absolute_incidence,
+        np_module=np_module,
+        absolute_incidence_threshold_fn=absolute_incidence_threshold,
+    )
+    forecast_implied_calibration = artifacts.get("forecast_implied_calibration")
+    calibrated_prob = service._apply_calibration(
+        forecast_implied_calibration,
+        forecast_implied_raw,
+    )
+    event_probability_source = (
+        "forecast_implied_calibrated"
+        if forecast_implied_calibration is not None
+        else "forecast_implied"
+    )
 
     action_threshold = float(metadata.get("action_threshold") or 0.6)
     quality_gate = metadata.get("quality_gate") or {"overall_passed": False, "forecast_readiness": "WATCH"}
@@ -428,6 +492,7 @@ def predict_all_regions(
         expected_next = max(float(pred_next[idx]), 0.0)
         change_pct = ((expected_next - current_incidence) / max(current_incidence, 1.0)) * 100.0
         event_probability = float(calibrated_prob[idx])
+        event_shadow_probability = float(shadow_calibrated_prob[idx])
         target_date = pd_module.Timestamp(
             row.get("target_date") or (pd_module.Timestamp(row["as_of_date"]) + pd_module.Timedelta(days=horizon))
         ).normalize()
@@ -447,6 +512,9 @@ def predict_all_regions(
             "horizon_days": horizon,
             "event_definition_version": metadata.get("event_definition_version", event_definition_version),
             "event_probability": round(event_probability, 4),
+            "event_probability_source": event_probability_source,
+            "event_shadow_probability": round(event_shadow_probability, 4),
+            "event_shadow_model_source": "shadow_classifier",
             "expected_next_week_incidence": round(expected_next, 2),
             "expected_target_incidence": round(expected_next, 2),
             "prediction_interval": {
@@ -463,6 +531,10 @@ def predict_all_regions(
             "rollout_mode": rollout_mode,
             "activation_policy": activation_policy,
             "signal_bundle_version": signal_bundle_version,
+            "forecast_core_mode": forecast_core_mode,
+            "baseline_components": baseline_component_weights,
+            "baseline_weight_source": metadata.get("baseline_weight_source"),
+            "persistence_mix_weight": round(persistence_mix_weight, 4),
             "champion_model_family": champion_model_family,
             "component_model_family": component_model_family,
             "ensemble_component_weights": ensemble_component_weights,
@@ -535,6 +607,10 @@ def predict_all_regions(
         "rollout_mode": rollout_mode,
         "activation_policy": activation_policy,
         "signal_bundle_version": signal_bundle_version,
+        "forecast_core_mode": forecast_core_mode,
+        "baseline_components": baseline_component_weights,
+        "baseline_weight_source": metadata.get("baseline_weight_source"),
+        "persistence_mix_weight": round(persistence_mix_weight, 4),
         "champion_model_family": champion_model_family,
         "component_model_family": component_model_family,
         "ensemble_component_weights": ensemble_component_weights,
@@ -556,6 +632,8 @@ def predict_all_regions(
         "metric_semantics_version": metadata.get("metric_semantics_version"),
         "promotion_evidence": metadata.get("promotion_evidence") or {},
         "registry_status": metadata.get("registry_status"),
+        "event_probability_source": event_probability_source,
+        "event_shadow_model_source": "shadow_classifier",
         "artifact_transition_mode": artifact_transition_mode,
         "point_in_time_snapshot": point_in_time_snapshot,
         "source_coverage": source_coverage,

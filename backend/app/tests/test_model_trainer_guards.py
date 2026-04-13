@@ -1,9 +1,18 @@
+import os
 import unittest
+from pathlib import Path
+from unittest.mock import patch
 
 from app.services.ml.model_trainer import XGBoostTrainer
 
 
 class ModelTrainerGuardTests(unittest.TestCase):
+    def test_registry_root_uses_environment_override(self) -> None:
+        with patch.dict(os.environ, {"FORECAST_REGISTRY_DIR": "/tmp/viralflux-registry"}, clear=False):
+            trainer = XGBoostTrainer(db=None)
+
+        self.assertEqual(trainer.registry.registry_root, Path("/tmp/viralflux-registry"))
+
     def test_should_promote_when_no_existing_metrics(self) -> None:
         self.assertTrue(
             XGBoostTrainer._should_promote_candidate(

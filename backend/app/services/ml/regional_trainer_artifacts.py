@@ -10,6 +10,8 @@ import pandas as pd
 from xgboost import XGBRegressor
 
 from app.services.ml.models.geo_hierarchy import GeoHierarchyHelper
+from app.services.ml.benchmarking.contracts import CANONICAL_FORECAST_QUANTILES
+from app.services.ml.regional_residual_forecast import baseline_center_log, optimize_baseline_weights
 
 
 def build_hierarchy_metadata(
@@ -167,48 +169,128 @@ def fit_final_models(
         effective_event_feature_columns,
         sample_weight=trainer._event_sample_weights(panel, virus_typ=event_virus_typ),
     )
+    shadow_raw_probability_col = (
+        "shadow_event_probability_raw"
+        if "shadow_event_probability_raw" in calibration_frame.columns
+        else "event_probability_raw"
+    )
     calibration, calibration_mode = trainer._select_guarded_calibration(
         calibration_frame=calibration_frame[
-            ["as_of_date", "event_label", "event_probability_raw"]
-        ].copy(),
+            ["as_of_date", "event_label", shadow_raw_probability_col]
+        ].rename(columns={shadow_raw_probability_col: "event_probability_raw"}),
         raw_probability_col="event_probability_raw",
         action_threshold=action_threshold,
     )
+
+    supported_quantile_values = tuple(float(value) for value in (supported_quantiles or CANONICAL_FORECAST_QUANTILES))
+    residual_core_columns = {"as_of_date", "next_week_incidence", "current_known_incidence", "seasonal_baseline"}
+    use_residual_core = residual_core_columns.issubset(panel.columns)
+    training_panel = panel.copy()
+    baseline_component_weights = {
+        "current_log": 0.0,
+        "seasonal_log": 0.0,
+        "pooled_log": 0.0,
+    }
+    baseline_weight_diagnostics: dict[str, Any] = {
+        "evaluated_candidates": 0,
+        "used_splits": 0,
+        "fallback_used": True,
+    }
+    baseline_residual_quantiles = {
+        float(quantile): 0.0 for quantile in supported_quantile_values
+    }
+    forecast_core_mode = "direct_log_quantiles"
+
+    if use_residual_core:
+        if "y_next_log" not in training_panel.columns:
+            training_panel["y_next_log"] = np.log1p(
+                np.maximum(training_panel["next_week_incidence"].astype(float).to_numpy(), 0.0)
+            )
+        baseline_fit = optimize_baseline_weights(
+            training_panel,
+            quantiles=supported_quantile_values,
+        )
+        baseline_component_weights = {
+            "current_log": float((baseline_fit.get("weights") or {}).get("current_log") or 0.0),
+            "seasonal_log": float((baseline_fit.get("weights") or {}).get("seasonal_log") or 0.0),
+            "pooled_log": float((baseline_fit.get("weights") or {}).get("pooled_log") or 0.0),
+        }
+        baseline_weight_diagnostics = baseline_fit.get("diagnostics") or baseline_weight_diagnostics
+        baseline_residual_quantiles = {
+            float(key): float(value)
+            for key, value in (baseline_fit.get("residual_quantiles") or {}).items()
+        }
+        training_panel["residual_target_log"] = (
+            training_panel["y_next_log"].to_numpy(dtype=float)
+            - baseline_center_log(training_panel, weights=baseline_component_weights)
+        )
+        forecast_core_mode = "residual_baseline_v2"
+
+    regressor_target_col = "residual_target_log" if use_residual_core else "y_next_log"
     reg_median = trainer._fit_regressor_from_frame(
-        panel,
+        training_panel,
         feature_columns,
         regressor_config["median"],
+        target_col=regressor_target_col,
     )
     reg_lower = trainer._fit_regressor_from_frame(
-        panel,
+        training_panel,
         feature_columns,
         regressor_config["lower"],
+        target_col=regressor_target_col,
     )
     reg_upper = trainer._fit_regressor_from_frame(
-        panel,
+        training_panel,
         feature_columns,
         regressor_config["upper"],
+        target_col=regressor_target_col,
     )
-    hierarchy_models, hierarchy_model_modes = trainer._fit_hierarchy_models(
-        panel=panel,
-        feature_columns=hierarchy_feature_columns,
-        state_feature_columns=feature_columns,
-        reg_lower=reg_lower,
-        reg_median=reg_median,
-        reg_upper=reg_upper,
-    )
+    previous_baseline_weights = getattr(trainer, "_active_residual_baseline_weights", None)
+    if use_residual_core:
+        trainer._active_residual_baseline_weights = baseline_component_weights
+    try:
+        hierarchy_models, hierarchy_model_modes = trainer._fit_hierarchy_models(
+            panel=training_panel,
+            feature_columns=hierarchy_feature_columns,
+            state_feature_columns=feature_columns,
+            reg_lower=reg_lower,
+            reg_median=reg_median,
+            reg_upper=reg_upper,
+        )
+    finally:
+        if use_residual_core:
+            if previous_baseline_weights is None:
+                delattr(trainer, "_active_residual_baseline_weights")
+            else:
+                trainer._active_residual_baseline_weights = previous_baseline_weights
     quantile_regressors: dict[float, XGBRegressor] = {
         0.1: reg_lower,
         0.5: reg_median,
         0.9: reg_upper,
     }
-    for quantile in supported_quantiles:
+    for quantile in supported_quantile_values:
         if quantile in quantile_regressors:
             continue
         quantile_regressors[float(quantile)] = trainer._fit_regressor_from_frame(
-            panel,
+            training_panel,
             feature_columns,
             quantile_regressor_config_fn(float(quantile)),
+            target_col=regressor_target_col,
+        )
+    forecast_implied_calibration = None
+    forecast_implied_calibration_mode = "raw_passthrough"
+    forecast_probability_col = (
+        "forecast_implied_event_probability"
+        if "forecast_implied_event_probability" in calibration_frame.columns
+        else "event_probability_raw"
+    )
+    if {"as_of_date", "event_label", forecast_probability_col}.issubset(calibration_frame.columns):
+        forecast_implied_calibration, forecast_implied_calibration_mode = trainer._select_guarded_calibration(
+            calibration_frame=calibration_frame[
+                ["as_of_date", "event_label", forecast_probability_col]
+            ].rename(columns={forecast_probability_col: "forecast_implied_event_probability"}),
+            raw_probability_col="forecast_implied_event_probability",
+            action_threshold=action_threshold,
         )
     learned_event_model = None
     if "event_label" in panel.columns and panel["event_label"].nunique() >= 2:
@@ -249,6 +331,8 @@ def fit_final_models(
         "classifier": classifier,
         "calibration": calibration,
         "calibration_mode": calibration_mode,
+        "forecast_implied_calibration": forecast_implied_calibration,
+        "forecast_implied_calibration_mode": forecast_implied_calibration_mode,
         "regressor_median": reg_median,
         "regressor_lower": reg_lower,
         "regressor_upper": reg_upper,
@@ -256,6 +340,12 @@ def fit_final_models(
         "learned_event_model": learned_event_model,
         "hierarchy_models": hierarchy_models,
         "hierarchy_model_modes": hierarchy_model_modes,
+        "forecast_core_mode": forecast_core_mode,
+        "baseline_component_weights": baseline_component_weights,
+        "baseline_weight_diagnostics": baseline_weight_diagnostics,
+        "baseline_residual_quantiles": baseline_residual_quantiles,
+        "persistence_mix_weight": float(oof_frame.attrs.get("persistence_mix_weight") or 1.0),
+        "persistence_mix_diagnostics": oof_frame.attrs.get("persistence_mix_diagnostics") or {},
     }
 
 
@@ -294,6 +384,9 @@ def persist_artifacts(
 
     with open(model_dir / "calibration.pkl", "wb") as handle:
         pickle.dump(final_artifacts["calibration"], handle)
+    if "forecast_implied_calibration" in final_artifacts:
+        with open(model_dir / "forecast_implied_calibration.pkl", "wb") as handle:
+            pickle.dump(final_artifacts.get("forecast_implied_calibration"), handle)
 
     with open(model_dir / "metadata.json", "w") as handle:
         json.dump(json_safe_fn(metadata), handle, indent=2)

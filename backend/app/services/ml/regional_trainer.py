@@ -23,6 +23,7 @@ from app.services.ml.benchmarking.registry import (
     DEFAULT_METRIC_SEMANTICS_VERSION,
     DEFAULT_PROMOTION_MIN_SAMPLE_COUNT,
     ForecastRegistry,
+    configured_forecast_registry_root,
 )
 from app.services.ml.forecast_orchestrator import ForecastOrchestrator
 from app.services.ml.forecast_horizon_utils import (
@@ -217,8 +218,9 @@ class RegionalModelTrainer:
         self.db = db
         self.models_dir = models_dir or _ML_MODELS_DIR
         self.feature_builder = RegionalFeatureBuilder(db)
-        self.registry = ForecastRegistry(registry_root=_REGISTRY_DIR)
-        self.orchestrator = ForecastOrchestrator(registry_root=_REGISTRY_DIR)
+        self.registry_root = configured_forecast_registry_root(default_root=_REGISTRY_DIR)
+        self.registry = ForecastRegistry(registry_root=self.registry_root)
+        self.orchestrator = ForecastOrchestrator(registry_root=self.registry_root)
 
     def train_region(
         self,
@@ -873,6 +875,7 @@ class RegionalModelTrainer:
             reg_lower=reg_lower,
             reg_median=reg_median,
             reg_upper=reg_upper,
+            residual_baseline_weights=getattr(self, "_active_residual_baseline_weights", None),
         )
 
     @staticmethod
@@ -1202,17 +1205,30 @@ class RegionalModelTrainer:
         )
 
     @staticmethod
-    def _aggregate_metrics(frame: pd.DataFrame, *, action_threshold: float) -> dict[str, float]:
+    def _aggregate_metrics(
+        frame: pd.DataFrame,
+        *,
+        action_threshold: float,
+        fold_viability: dict[str, Any] | None = None,
+    ) -> dict[str, float]:
         return regional_trainer_backtest.aggregate_metrics(
             frame,
             action_threshold=action_threshold,
+            fold_viability=fold_viability,
         )
 
-    def _baseline_metrics(self, frame: pd.DataFrame, *, action_threshold: float) -> dict[str, dict[str, float]]:
+    def _baseline_metrics(
+        self,
+        frame: pd.DataFrame,
+        *,
+        action_threshold: float,
+        fold_viability: dict[str, Any] | None = None,
+    ) -> dict[str, dict[str, float]]:
         return regional_trainer_backtest.baseline_metrics(
             self,
             frame,
             action_threshold=action_threshold,
+            fold_viability=fold_viability,
         )
 
     def _build_backtest_payload(

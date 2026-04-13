@@ -650,6 +650,7 @@ def quality_gate_from_metrics(
     horizon_days: int | None = None,
 ) -> dict[str, object]:
     profile = quality_gate_profile_for_scope(virus_typ=virus_typ, horizon_days=horizon_days)
+    discrimination_available = bool(metrics.get("event_discrimination_available", True))
     baseline_pr_auc = max(
         float((baseline_metrics.get(name) or {}).get("pr_auc") or 0.0)
         for name in ("persistence", "climatology", "amelag_only")
@@ -674,6 +675,11 @@ def quality_gate_from_metrics(
         ),
         "ece_passed": float(metrics.get("ece") or 1.0) <= profile.ece_max,
     }
+    skipped_checks: list[str] = []
+    if not discrimination_available:
+        for check_name in ("precision_at_top3_passed", "pr_auc_passed"):
+            checks[check_name] = True
+            skipped_checks.append(check_name)
     overall_passed = all(checks.values())
     failed_checks = [key for key, passed in checks.items() if not passed]
     return {
@@ -682,6 +688,7 @@ def quality_gate_from_metrics(
         "profile": profile.name,
         "checks": checks,
         "failed_checks": failed_checks,
+        "skipped_checks": skipped_checks,
         "thresholds": profile.thresholds(),
         "baseline_metrics": baseline_metrics,
     }

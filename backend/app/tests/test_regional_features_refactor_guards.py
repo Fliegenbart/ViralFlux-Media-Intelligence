@@ -1,4 +1,4 @@
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import pandas as pd
 
@@ -277,6 +277,82 @@ def test_build_feature_row_wrapper_delegates_to_module() -> None:
 
     assert result is sentinel
     mocked.assert_called_once_with(builder, **kwargs)
+
+
+def test_build_rows_reuses_wastewater_snapshots_per_as_of_date() -> None:
+    builder = RegionalFeatureBuilder(db=None)
+    builder.nowcast_service.evaluate_frame = Mock(return_value={"value": 1.0})
+    builder.nowcast_service.preferred_value = Mock(return_value=1.0)
+    builder._use_revision_adjusted_for_source = Mock(return_value=False)
+    builder._target_date = Mock(side_effect=lambda as_of, horizon: pd.Timestamp(as_of) + pd.Timedelta(days=horizon))
+    builder._target_week_start = Mock(return_value=pd.Timestamp("2026-01-08"))
+    builder._build_feature_row = Mock(return_value={"ww_level": 1.0})
+    builder._latest_wastewater_snapshot_by_state = Mock(
+        side_effect=lambda wastewater_by_state, as_of: {
+            state: {"viral_load": 1.0, "slope7d": 0.0, "acceleration7d": 0.0}
+            for state in wastewater_by_state
+        }
+    )
+
+    wastewater = pd.DataFrame(
+        [
+            {
+                "bundesland": state,
+                "datum": pd.Timestamp("2025-12-25") + pd.Timedelta(days=offset),
+                "available_time": pd.Timestamp("2025-12-25") + pd.Timedelta(days=offset),
+                "viral_load": 1.0 + offset + (1.0 if state == "BE" else 0.0),
+                "site_count": 1,
+                "under_bg_share": 0.0,
+                "viral_std": 0.0,
+            }
+            for state in ("BY", "BE")
+            for offset in range(8)
+        ]
+    )
+    wastewater_context = {"RSV A": wastewater.copy()}
+    truth = pd.DataFrame(
+        [
+            {
+                "bundesland": state,
+                "week_start": pd.Timestamp("2025-11-13") + pd.Timedelta(days=7 * offset),
+                "available_date": pd.Timestamp("2025-11-13") + pd.Timedelta(days=7 * offset),
+                "incidence": 1.0 + offset + (0.5 if state == "BE" else 0.0),
+                "truth_source": "survstat_weekly",
+            }
+            for state in ("BY", "BE")
+            for offset in range(9)
+        ]
+    )
+
+    rows = builder._build_rows(
+        virus_typ="Influenza A",
+        wastewater=wastewater,
+        wastewater_context=wastewater_context,
+        truth=truth,
+        grippeweb=pd.DataFrame(),
+        influenza_ifsg=pd.DataFrame(),
+        rsv_ifsg=pd.DataFrame(),
+        are=pd.DataFrame(),
+        notaufnahme=pd.DataFrame(),
+        trends=pd.DataFrame(),
+        weather=pd.DataFrame(),
+        pollen=pd.DataFrame(),
+        holidays={},
+        state_populations={},
+        start_date=pd.Timestamp("2026-01-01"),
+        end_date=pd.Timestamp("2026-01-01"),
+        horizon_days=7,
+        include_targets=True,
+        include_nowcast=False,
+        use_revision_adjusted=False,
+        revision_policy="none",
+        source_revision_policy=None,
+        weather_forecast_vintage_mode="disabled",
+        weather_forecast_metadata={},
+    )
+
+    assert len(rows) == 2
+    assert builder._latest_wastewater_snapshot_by_state.call_count == 2
 
 
 def test_relative_delta_wrapper_delegates_to_module() -> None:

@@ -109,16 +109,16 @@ describe('App routing', () => {
     expect(window.location.pathname).toBe('/virus-radar');
 
     const operatorNav = screen.getByRole('navigation', { name: 'Arbeitsbereiche' });
-    const navButtons = within(operatorNav).getAllByRole('button');
+    const navLinks = within(operatorNav).getAllByRole('link');
 
-    expect(navButtons).toHaveLength(6);
-    expect(within(operatorNav).getByRole('button', { name: /Virus-Radar/i })).toBeInTheDocument();
-    expect(within(operatorNav).getByRole('button', { name: /Diese Woche/i })).toBeInTheDocument();
-    expect(within(operatorNav).getByRole('button', { name: /Zeitgraph/i })).toBeInTheDocument();
-    expect(within(operatorNav).getByRole('button', { name: /Regionen/i })).toBeInTheDocument();
-    expect(within(operatorNav).getByRole('button', { name: /Kampagnen/i })).toBeInTheDocument();
-    expect(within(operatorNav).getByRole('button', { name: /Evidenz/i })).toBeInTheDocument();
-    expect(within(operatorNav).queryByRole('button', { name: /Dashboard/i })).not.toBeInTheDocument();
+    expect(navLinks).toHaveLength(6);
+    expect(within(operatorNav).getByRole('link', { name: /Virus-Radar/i })).toBeInTheDocument();
+    expect(within(operatorNav).getByRole('link', { name: /Diese Woche/i })).toBeInTheDocument();
+    expect(within(operatorNav).getByRole('link', { name: /Zeitgraph/i })).toBeInTheDocument();
+    expect(within(operatorNav).getByRole('link', { name: /Regionen/i })).toBeInTheDocument();
+    expect(within(operatorNav).getByRole('link', { name: /Kampagnen/i })).toBeInTheDocument();
+    expect(within(operatorNav).getByRole('link', { name: /Evidenz/i })).toBeInTheDocument();
+    expect(within(operatorNav).queryByRole('link', { name: /Dashboard/i })).not.toBeInTheDocument();
   });
 
   describe('when logged out', () => {
@@ -260,7 +260,7 @@ describe('App routing', () => {
     expect(await screen.findByText('Zeitgraph Mock')).toBeInTheDocument();
 
     const operatorNav = screen.getByRole('navigation', { name: 'Arbeitsbereiche' });
-    expect(within(operatorNav).getByRole('button', { name: /Zeitgraph/i })).toHaveAttribute('aria-current', 'page');
+    expect(within(operatorNav).getByRole('link', { name: /Zeitgraph/i })).toHaveAttribute('aria-current', 'page');
   });
 
   it('keeps an explicit virus-radar URL after auth instead of redirecting elsewhere', async () => {

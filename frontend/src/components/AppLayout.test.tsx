@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom';
 import React, { useEffect } from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 
 import AppLayout, { usePageHeader } from './AppLayout';
@@ -226,8 +226,10 @@ describe('AppLayout theme rendering', () => {
 
     const sectionFrame = screen.getByLabelText('Aktueller Bereich');
     const pageActions = screen.getByLabelText('Seitenaktionen');
+    const navigation = screen.getByRole('navigation', { name: 'Arbeitsbereiche' });
     const primaryAction = screen.getByRole('button', { name: 'Wochenbericht exportieren' });
-    const secondaryAction = screen.getByRole('button', { name: 'Zum Virus-Radar' });
+    const secondaryAction = screen.getByRole('link', { name: 'Zum Virus-Radar' });
+    const virusRadarNavItem = within(navigation).getByRole('link', { name: /Virus-Radar/ });
 
     expect(sectionFrame).toHaveTextContent('ViralFlux');
     expect(sectionFrame).toHaveTextContent('Diese Woche');
@@ -236,6 +238,8 @@ describe('AppLayout theme rendering', () => {
     expect(primaryAction).toBeVisible();
     expect(primaryAction).toHaveClass('operator-page-action--primary');
     expect(secondaryAction).toHaveClass('operator-page-action--secondary');
+    expect(secondaryAction).toHaveAttribute('href', '/virus-radar');
+    expect(virusRadarNavItem).toHaveAttribute('href', '/virus-radar');
     expect(pageActions).toContainElement(primaryAction);
     expect(pageActions.lastElementChild).toBe(primaryAction);
 

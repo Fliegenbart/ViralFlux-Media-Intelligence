@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import React, { useCallback, useEffect, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 
 import RegionWorkbench from '../../components/cockpit/RegionWorkbench';
 import { useToast } from '../../App';
@@ -11,7 +11,6 @@ import { useMediaWorkflow } from '../../features/media/workflowContext';
 
 const RegionsPage: React.FC = () => {
   const location = useLocation();
-  const navigate = useNavigate();
   const { toast } = useToast();
   const { setPageHeader, clearPageHeader } = usePageHeader();
   const {
@@ -41,22 +40,7 @@ const RegionsPage: React.FC = () => {
     }
   }, [location.state]);
 
-  useEffect(() => {
-    setPageHeader({
-      primaryAction: {
-        label: 'Kampagnen öffnen',
-        onClick: () => navigate('/kampagnen'),
-      },
-      secondaryAction: {
-        label: 'Zum Virus-Radar',
-        onClick: () => navigate('/virus-radar'),
-      },
-    });
-
-    return clearPageHeader;
-  }, [clearPageHeader, navigate, setPageHeader]);
-
-  const openOrCreateRegionCampaign = async (regionCode: string) => {
+  const openOrCreateRegionCampaign = useCallback(async (regionCode: string) => {
     setRegionActionLoading(true);
     try {
       const data = await mediaApi.openRegionCampaign({
@@ -80,7 +64,46 @@ const RegionsPage: React.FC = () => {
     } finally {
       setRegionActionLoading(false);
     }
-  };
+  }, [brand, campaignGoal, invalidateData, loadRegions, openRecommendation, toast, virus, weeklyBudget]);
+
+  const focusRegionCode = selectedRegion || regionsView?.map?.top_regions?.[0]?.code || null;
+  const focusRegion = focusRegionCode ? regionsView?.map?.regions?.[focusRegionCode] || null : null;
+  const focusRecommendationId = focusRegion?.recommendation_ref?.card_id || null;
+  const focusHasThinEvidence = hasThinRegionEvidence(focusRegion);
+
+  useEffect(() => {
+    const primaryAction = focusRecommendationId ? {
+      label: 'Regionalen Vorschlag öffnen',
+      onClick: () => openRecommendation(focusRecommendationId, 'overlay'),
+    } : {
+      label: regionActionLoading ? 'Regionale Maßnahme wird geprüft...' : 'Regionale Maßnahme prüfen',
+      onClick: () => {
+        if (focusRegionCode) {
+          void openOrCreateRegionCampaign(focusRegionCode);
+        }
+      },
+      disabled: regionActionLoading || !focusRegionCode || focusHasThinEvidence,
+    };
+
+    setPageHeader({
+      primaryAction,
+      secondaryAction: {
+        label: 'Zum Virus-Radar',
+        to: '/virus-radar',
+      },
+    });
+
+    return clearPageHeader;
+  }, [
+    clearPageHeader,
+    focusHasThinEvidence,
+    focusRecommendationId,
+    focusRegionCode,
+    openOrCreateRegionCampaign,
+    openRecommendation,
+    regionActionLoading,
+    setPageHeader,
+  ]);
 
   return (
     <AnimatedPage>
@@ -101,3 +124,17 @@ const RegionsPage: React.FC = () => {
 };
 
 export default RegionsPage;
+
+function hasThinRegionEvidence(region?: {
+  source_trace?: string[];
+  signal_drivers?: Array<{ label: string; strength_pct: number }>;
+  signal_score?: number;
+  peix_score?: number;
+  impact_probability?: number;
+} | null): boolean {
+  if (!region) return true;
+  const sourceCount = region.source_trace?.length || 0;
+  const driverCount = region.signal_drivers?.length || 0;
+  const signalScore = region.signal_score ?? region.peix_score ?? region.impact_probability ?? 0;
+  return signalScore <= 0 || (sourceCount < 2 && driverCount === 0);
+}

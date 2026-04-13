@@ -43,7 +43,7 @@ const NowPage: React.FC = () => {
       },
       secondaryAction: {
         label: 'Zum Virus-Radar',
-        onClick: () => navigate('/virus-radar'),
+        to: '/virus-radar',
       },
     });
 

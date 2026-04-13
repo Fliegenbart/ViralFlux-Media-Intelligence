@@ -8,6 +8,7 @@ import { usePageHeader } from '../../components/AppLayout';
 import { mediaApi } from '../../features/media/api';
 import { useCampaignsPageData } from '../../features/media/useMediaData';
 import { useMediaWorkflow } from '../../features/media/workflowContext';
+import { RecommendationCard } from '../../types/media/recommendations';
 
 const CampaignsPage: React.FC = () => {
   const navigate = useNavigate();
@@ -41,6 +42,11 @@ const CampaignsPage: React.FC = () => {
     }
   }, [closeRecommendation, openRecommendation, recommendationOverlayMode, routeRecommendationId]);
 
+  const focusCard = (campaignsView?.cards || []).find((card) => (
+    ['review', 'approve', 'sync'].includes(headerRecommendationLane(card))
+  )) || campaignsView?.cards?.[0] || null;
+  const focusActionLabel = focusCard ? headerCampaignActionLabel(focusCard) : null;
+
   const generateRecommendations = useCallback(async () => {
     setGenerationLoading(true);
     try {
@@ -70,17 +76,21 @@ const CampaignsPage: React.FC = () => {
     setPageHeader({
       secondaryAction: {
         label: 'Zum Virus-Radar',
-        onClick: () => navigate('/virus-radar'),
+        to: '/virus-radar',
       },
       primaryAction: {
-        label: generationLoading ? 'Vorschläge werden erstellt...' : 'Vorschläge erstellen',
-        onClick: generateRecommendations,
-        disabled: generationLoading,
+        label: focusCard
+          ? focusActionLabel || 'Empfehlung prüfen'
+          : (generationLoading ? 'Vorschläge werden erstellt...' : 'Vorschläge erstellen'),
+        onClick: focusCard
+          ? () => navigate(`/kampagnen/${focusCard.id}`)
+          : generateRecommendations,
+        disabled: generationLoading && !focusCard,
       },
     });
 
     return clearPageHeader;
-  }, [clearPageHeader, generateRecommendations, generationLoading, navigate, setPageHeader]);
+  }, [clearPageHeader, focusActionLabel, focusCard, generateRecommendations, generationLoading, navigate, setPageHeader]);
 
   return (
     <AnimatedPage>
@@ -106,3 +116,29 @@ const CampaignsPage: React.FC = () => {
 };
 
 export default CampaignsPage;
+
+function headerCampaignActionLabel(card: RecommendationCard): string {
+  const lane = headerRecommendationLane(card);
+  if ((card.publish_blockers || []).length > 0) return 'Blocker prüfen';
+  if (lane === 'sync') return 'Übergabe vorbereiten';
+  if (lane === 'approve') return 'Zur Freigabe öffnen';
+  if (lane === 'live') return 'Aktiven Fall öffnen';
+  return 'Empfehlung prüfen';
+}
+
+function headerRecommendationLane(card: RecommendationCard): 'prepare' | 'review' | 'approve' | 'sync' | 'live' {
+  const lifecycle = String(card.lifecycle_state || '').toUpperCase();
+  if (lifecycle === 'LIVE') return 'live';
+  if (lifecycle === 'SYNC_READY') return 'sync';
+  if (lifecycle === 'APPROVE') return 'approve';
+  if (lifecycle === 'REVIEW') return 'review';
+  if (lifecycle === 'EXPIRED' || lifecycle === 'ARCHIVED') return 'prepare';
+
+  const status = String(card.status || '').toUpperCase();
+  if (status === 'ACTIVATED') return 'live';
+  if (status === 'APPROVED') return 'sync';
+  if (status === 'READY') return 'approve';
+  if (status === 'NEW' || status === 'URGENT') return 'review';
+  if (String(card.mapping_status || '').toLowerCase() === 'needs_review') return 'review';
+  return 'prepare';
+}

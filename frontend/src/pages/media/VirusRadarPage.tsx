@@ -56,7 +56,7 @@ const VirusRadarPage: React.FC = () => {
       },
       secondaryAction: {
         label: 'Regionen öffnen',
-        onClick: () => navigate('/regionen'),
+        to: '/regionen',
       },
     });
 

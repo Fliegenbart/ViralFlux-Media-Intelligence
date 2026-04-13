@@ -17,7 +17,7 @@ import { useMediaWorkflow } from '../../features/media/workflowContext';
 const VirusRadarPage: React.FC = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { setPageHeader, clearPageHeader, exportBriefingPdf, pdfLoading } = usePageHeader();
+  const { setPageHeader, clearPageHeader } = usePageHeader();
   const {
     virus,
     setVirus,
@@ -46,22 +46,30 @@ const VirusRadarPage: React.FC = () => {
   );
   const campaignsData = useCampaignsPageData(virus, brand, dataVersion, toast);
   const evidenceData = useEvidencePageData(virus, brand, dataVersion, toast);
+  const focusRegionCode = nowData.view.focusRegion?.code || preferredHeroRegionCode || undefined;
+  const focusRecommendationId = nowData.view.focusRegion?.recommendationId || null;
 
   useEffect(() => {
+    const openRegions = () => navigate('/regionen', { state: focusRegionCode ? { regionCode: focusRegionCode } : undefined });
     setPageHeader({
-      primaryAction: {
-        label: pdfLoading ? 'Bericht wird erstellt...' : 'Wochenbericht exportieren',
-        onClick: exportBriefingPdf,
-        disabled: pdfLoading,
+      primaryAction: focusRecommendationId ? {
+        label: 'Empfehlung prüfen',
+        onClick: () => openRecommendation(focusRecommendationId, 'overlay'),
+      } : {
+        label: 'Regionen öffnen',
+        onClick: openRegions,
       },
-      secondaryAction: {
+      secondaryAction: focusRecommendationId ? {
         label: 'Regionen öffnen',
         to: '/regionen',
+      } : {
+        label: 'Kampagnen öffnen',
+        to: '/kampagnen',
       },
     });
 
     return clearPageHeader;
-  }, [clearPageHeader, exportBriefingPdf, navigate, pdfLoading, setPageHeader]);
+  }, [clearPageHeader, focusRecommendationId, focusRegionCode, navigate, openRecommendation, setPageHeader]);
 
   return (
     <AnimatedPage>

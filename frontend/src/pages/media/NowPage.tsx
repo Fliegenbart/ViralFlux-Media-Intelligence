@@ -11,7 +11,7 @@ import { useMediaWorkflow } from '../../features/media/workflowContext';
 const NowPage: React.FC = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { setPageHeader, clearPageHeader, exportBriefingPdf, pdfLoading } = usePageHeader();
+  const { setPageHeader, clearPageHeader } = usePageHeader();
   const {
     virus,
     setVirus,
@@ -33,14 +33,24 @@ const NowPage: React.FC = () => {
     waveRadar,
     waveRadarLoading,
   } = useNowPageData(virus, brand, horizonDays, weeklyBudget, dataVersion, toast);
+  const heroRecommendation = view?.heroRecommendation;
+  const focusRegionCode = view?.focusRegion?.code || undefined;
+  const primaryRecommendationId = view?.primaryRecommendationId || null;
 
   useEffect(() => {
+    const primaryAction = primaryRecommendationId && !heroRecommendation?.ctaDisabled ? {
+      label: heroRecommendation?.actionLabel || view?.primaryActionLabel || 'Top-Empfehlung prüfen',
+      onClick: () => openRecommendation(primaryRecommendationId, 'overlay'),
+    } : focusRegionCode ? {
+      label: 'Fokusregion öffnen',
+      onClick: () => navigate('/regionen', { state: { regionCode: focusRegionCode } }),
+    } : {
+      label: 'Kampagnen öffnen',
+      onClick: () => navigate('/kampagnen'),
+    };
+
     setPageHeader({
-      primaryAction: {
-        label: pdfLoading ? 'Bericht wird erstellt...' : 'Wochenbericht exportieren',
-        onClick: exportBriefingPdf,
-        disabled: pdfLoading,
-      },
+      primaryAction,
       secondaryAction: {
         label: 'Zum Virus-Radar',
         to: '/virus-radar',
@@ -48,7 +58,17 @@ const NowPage: React.FC = () => {
     });
 
     return clearPageHeader;
-  }, [clearPageHeader, exportBriefingPdf, navigate, pdfLoading, setPageHeader]);
+  }, [
+    clearPageHeader,
+    focusRegionCode,
+    heroRecommendation?.actionLabel,
+    heroRecommendation?.ctaDisabled,
+    navigate,
+    openRecommendation,
+    primaryRecommendationId,
+    setPageHeader,
+    view?.primaryActionLabel,
+  ]);
 
   return (
     <AnimatedPage>

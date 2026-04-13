@@ -288,6 +288,11 @@ def artifact_payload_from_dir(
         quantile_regressors[float(quantile)] = model
     with open(required_paths["calibration"], "rb") as handle:
         calibration = pickle_module.load(handle)
+    forecast_implied_calibration_path = model_dir / "forecast_implied_calibration.pkl"
+    forecast_implied_calibration = None
+    if forecast_implied_calibration_path.exists():
+        with open(forecast_implied_calibration_path, "rb") as handle:
+            forecast_implied_calibration = pickle_module.load(handle)
     dataset_manifest_path = model_dir / "dataset_manifest.json"
     point_in_time_path = model_dir / "point_in_time_snapshot.json"
     return {
@@ -298,6 +303,7 @@ def artifact_payload_from_dir(
         "quantile_regressors": quantile_regressors,
         "hierarchy_models": hierarchy_models,
         "calibration": calibration,
+        "forecast_implied_calibration": forecast_implied_calibration,
         "metadata": metadata,
         "dataset_manifest": json_module.loads(dataset_manifest_path.read_text()) if dataset_manifest_path.exists() else None,
         "point_in_time_snapshot": json_module.loads(point_in_time_path.read_text()) if point_in_time_path.exists() else None,

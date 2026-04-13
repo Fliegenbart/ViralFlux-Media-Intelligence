@@ -109,9 +109,9 @@ export function useNowPageData(
 
     setWaveRadarLoading(true);
     const [forecastResult, allocationResult, recommendationResult, waveRadarResult] = await Promise.allSettled([
-      mediaApi.getRegionalForecast(virus, horizonDays),
-      mediaApi.getRegionalAllocation(virus, weeklyBudget, horizonDays),
-      mediaApi.getRegionalCampaignRecommendations(virus, weeklyBudget, horizonDays),
+      mediaApi.getRegionalForecast(virus, horizonDays, brand),
+      mediaApi.getRegionalAllocation(virus, weeklyBudget, horizonDays, brand),
+      mediaApi.getRegionalCampaignRecommendations(virus, weeklyBudget, horizonDays, 12, brand),
       mediaApi.getWaveRadar(virus),
     ]);
 

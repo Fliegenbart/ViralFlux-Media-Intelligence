@@ -134,6 +134,106 @@ class RegionalTrainerPromotionTests(unittest.TestCase):
             ["quality_gate_not_passed"],
         )
 
+    def test_train_single_horizon_blocks_promotion_for_inactive_rsv_scope(self) -> None:
+        trainer = RegionalModelTrainer(db=None)
+        panel = pd.DataFrame(
+            {
+                "as_of_date": pd.date_range("2026-01-01", periods=200, freq="D"),
+                "target_date": pd.date_range("2026-01-08", periods=200, freq="D"),
+                "current_known_incidence": np.linspace(1.0, 200.0, 200),
+                "next_week_incidence": np.linspace(2.0, 201.0, 200),
+                "bundesland": ["BY"] * 200,
+                "bundesland_name": ["Bayern"] * 200,
+                "f1": np.linspace(0.0, 1.0, 200),
+            }
+        )
+
+        class _Registry:
+            def load_scope(self, **_kwargs):
+                return {"champion": None}
+
+            def evaluate_promotion(self, **_kwargs):
+                return {
+                    "quality_gate_overall_passed": True,
+                    "metric_semantics_version": DEFAULT_METRIC_SEMANTICS_VERSION,
+                    "minimum_sample_count": 12,
+                    "candidate_metrics_present": True,
+                    "champion_metrics_present": False,
+                    "promotion_allowed": True,
+                    "promotion_blockers": [],
+                }
+
+            def record_evaluation(self, **kwargs):
+                return {"metadata": kwargs.get("metadata") or {}, "champion": None, "history": []}
+
+        trainer.registry = _Registry()
+        trainer.feature_builder = SimpleNamespace(
+            build_panel_training_data=lambda **_kwargs: panel.copy(),
+            dataset_manifest=lambda **_kwargs: {"rows": 200, "states": 1, "source_coverage": {}},
+            point_in_time_snapshot_manifest=lambda **_kwargs: {
+                "snapshot_type": "training_panel_visible_data",
+                "captured_at": "2026-03-17T08:00:00",
+                "unique_as_of_dates": 200,
+            },
+        )
+        trainer.load_artifacts = lambda **_kwargs: {}
+        trainer._prepare_horizon_panel = lambda frame, horizon_days: frame.copy()
+        trainer._feature_columns = lambda frame: ["f1"]
+        trainer._ww_only_feature_columns = lambda feature_columns: []
+        trainer._select_event_definition = lambda **_kwargs: {
+            "tau": 1.0,
+            "kappa": 0.5,
+            "action_threshold": 0.6,
+        }
+        trainer._event_labels = lambda frame, **_kwargs: np.zeros(len(frame), dtype=int)
+        trainer._build_backtest_bundle = lambda **_kwargs: {
+            "oof_frame": panel.copy(),
+            "aggregate_metrics": {"relative_wis": 0.94, "crps": 1.2},
+            "benchmark_summary": {
+                "metrics": {"relative_wis": 0.94, "crps": 1.2},
+                "candidate_summaries": [
+                    {"candidate": "regional_pooled_panel", "metrics": {"relative_wis": 0.94}, "samples": 24}
+                ],
+                "fold_viability": {"passed": True},
+            },
+            "quality_gate": {
+                "overall_passed": True,
+                "forecast_readiness": "GO",
+                "profile": "strict_v1",
+                "failed_checks": [],
+            },
+            "backtest_payload": {"details": {"BY": {"bundesland_name": "Bayern"}}},
+        }
+        trainer._rollout_metadata = lambda **_kwargs: {
+            "signal_bundle_version": "core_panel_v1",
+            "rollout_mode": "gated",
+            "activation_policy": "quality_gate",
+            "shadow_evaluation": None,
+        }
+        trainer._fit_final_models = lambda **_kwargs: {
+            "calibration_mode": "isotonic",
+            "calibration": object(),
+            "learned_event_model": None,
+            "hierarchy_model_modes": {},
+        }
+        trainer._build_hierarchy_metadata = lambda **_kwargs: {
+            "hierarchy_driver_attribution": {"state": 1.0, "cluster": 0.0, "national": 0.0},
+            "reconciliation_method": "none",
+            "hierarchy_consistency_status": "coherent",
+        }
+
+        result = trainer._train_single_horizon(
+            virus_typ="RSV A",
+            lookback_days=900,
+            persist=False,
+            horizon_days=7,
+        )
+
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(result["registry_status"], "challenger")
+        self.assertFalse(result["promotion_evidence"]["promotion_allowed"])
+        self.assertIn("champion_scope_inactive", result["promotion_evidence"]["promotion_blockers"])
+
     def test_train_single_horizon_weather_vintage_comparison_runs_shadow_mode_only_when_enabled(self) -> None:
         trainer = RegionalModelTrainer(db=None)
         base_panel = pd.DataFrame(

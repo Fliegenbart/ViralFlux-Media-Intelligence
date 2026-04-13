@@ -5,8 +5,10 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+from app.services.ml.forecast_science_contract import default_science_contract_metadata
 from app.services.ml.models.geo_hierarchy import GeoHierarchyHelper
 from app.services.ml.regional_panel_utils import event_definition_config_for_virus
+from app.services.ml.weather_forecast_vintage import WEATHER_FORECAST_VINTAGE_RUN_TIMESTAMP_V1
 
 
 def train_single_horizon(
@@ -69,6 +71,10 @@ def train_single_horizon(
         panel = panel.copy()
         panel["y_next_log"] = np.log1p(panel["next_week_incidence"].astype(float).clip(lower=0.0))
         feature_columns = trainer._feature_columns(panel)
+        event_feature_columns = trainer._event_feature_columns(
+            panel,
+            base_feature_columns=feature_columns,
+        )
         hierarchy_feature_columns = GeoHierarchyHelper.hierarchy_feature_columns(feature_columns)
         ww_only_columns = trainer._ww_only_feature_columns(feature_columns)
         event_config = event_definition_config_for_virus(virus_typ)
@@ -76,7 +82,7 @@ def train_single_horizon(
         selection = trainer._select_event_definition(
             virus_typ=virus_typ,
             panel=panel,
-            feature_columns=feature_columns,
+            feature_columns=event_feature_columns,
             event_config=event_config,
         )
         tau = float(selection["tau"])
@@ -94,6 +100,7 @@ def train_single_horizon(
             virus_typ=virus_typ,
             panel=panel,
             feature_columns=feature_columns,
+            event_feature_columns=event_feature_columns,
             hierarchy_feature_columns=hierarchy_feature_columns,
             ww_only_columns=ww_only_columns,
             tau=tau,
@@ -116,6 +123,7 @@ def train_single_horizon(
         final_artifacts = trainer._fit_final_models(
             panel=panel,
             feature_columns=feature_columns,
+            event_feature_columns=event_feature_columns,
             hierarchy_feature_columns=hierarchy_feature_columns,
             oof_frame=backtest_bundle["oof_frame"],
             action_threshold=action_threshold,
@@ -123,6 +131,14 @@ def train_single_horizon(
         calibration_mode = str(
             final_artifacts.get("calibration_mode")
             or ("isotonic" if final_artifacts.get("calibration") is not None else "raw_passthrough")
+        )
+        forecast_implied_calibration_mode = str(
+            final_artifacts.get("forecast_implied_calibration_mode")
+            or (
+                "isotonic"
+                if final_artifacts.get("forecast_implied_calibration") is not None
+                else "raw_passthrough"
+            )
         )
 
         dataset_manifest = {
@@ -143,6 +159,22 @@ def train_single_horizon(
             backtest_bundle=backtest_bundle,
             selection=selection,
             calibration_mode=calibration_mode,
+        )
+        weather_vintage_mode = normalize_weather_forecast_vintage_mode_fn(
+            dataset_manifest.get("weather_forecast_vintage_mode")
+        )
+        weather_vintage_discipline_passed = (
+            weather_vintage_mode != WEATHER_FORECAST_VINTAGE_RUN_TIMESTAMP_V1
+            or bool(dataset_manifest.get("weather_forecast_run_identity_present"))
+        )
+        forecast_quantiles = [float(value) for value in canonical_forecast_quantiles]
+        science_contract_metadata = default_science_contract_metadata(
+            virus_typ=virus_typ,
+            horizon_days=horizon,
+            calibration_mode=calibration_mode,
+            event_definition_version=event_definition_version,
+            metric_semantics_version=default_metric_semantics_version,
+            forecast_quantiles=forecast_quantiles,
         )
         weather_vintage_comparison_payload = (
             trainer._build_weather_vintage_comparison(
@@ -210,6 +242,7 @@ def train_single_horizon(
         metadata = {
             "virus_typ": virus_typ,
             "model_family": "regional_pooled_panel",
+            "champion_model_family": "regional_pooled_panel",
             "trained_at": utc_now_fn().isoformat(),
             "model_version": None,
             "calibration_version": None,
@@ -218,20 +251,43 @@ def train_single_horizon(
             "supported_horizon_days": list(supported_forecast_horizons),
             "forecast_target_semantics": "current_known_incidence_at_as_of_plus_horizon_days",
             "metric_semantics_version": default_metric_semantics_version,
+            "science_contract_version": science_contract_metadata["science_contract_version"],
+            "quantile_grid_version": science_contract_metadata["quantile_grid_version"],
             "weather_forecast_vintage_mode": dataset_manifest.get("weather_forecast_vintage_mode"),
             "exogenous_feature_semantics_version": dataset_manifest.get("exogenous_feature_semantics_version"),
             "feature_columns": feature_columns,
+            "event_feature_columns": event_feature_columns,
             "hierarchy_feature_columns": hierarchy_feature_columns,
             "ww_only_feature_columns": ww_only_columns,
             "selected_tau": tau,
             "selected_kappa": kappa,
             "action_threshold": action_threshold,
+            "selection_brier_score": float(selection.get("brier_score") or 0.0),
+            "selection_ece": float(selection.get("ece") or 0.0),
             "event_definition_version": event_definition_version,
             "min_event_absolute_incidence": event_config.min_absolute_incidence,
             "event_definition_config": event_config.to_manifest(),
             "dataset_manifest": dataset_manifest,
             "nowcast_features_enabled": True,
-            "forecast_quantiles": [float(value) for value in canonical_forecast_quantiles],
+            "forecast_quantiles": forecast_quantiles,
+            "calibration_mode": science_contract_metadata["calibration_mode"],
+            "forecast_implied_calibration_mode": forecast_implied_calibration_mode,
+            "calibration_evidence_mode": science_contract_metadata["calibration_evidence_mode"],
+            "champion_scope_active": science_contract_metadata["champion_scope_active"],
+            "champion_scope_reason": science_contract_metadata["champion_scope_reason"],
+            "oof_calibration_only": True,
+            "quantile_monotonicity_passed": forecast_quantiles == sorted(forecast_quantiles),
+            "weather_vintage_discipline_passed": weather_vintage_discipline_passed,
+            "forecast_core_mode": str(final_artifacts.get("forecast_core_mode") or "direct_log_quantiles"),
+            "baseline_component_weights": final_artifacts.get("baseline_component_weights") or {},
+            "baseline_components": final_artifacts.get("baseline_component_weights") or {},
+            "baseline_weight_source": "oof_wis_simplex_v1",
+            "baseline_weight_diagnostics": final_artifacts.get("baseline_weight_diagnostics") or {},
+            "baseline_residual_quantiles": final_artifacts.get("baseline_residual_quantiles") or {},
+            "persistence_mix_weight": float(final_artifacts.get("persistence_mix_weight") or 1.0),
+            "persistence_mix_diagnostics": final_artifacts.get("persistence_mix_diagnostics") or {},
+            "event_probability_source": "forecast_implied",
+            "event_shadow_model_source": "shadow_classifier",
             "signal_bundle_version": rollout_info["signal_bundle_version"],
             "rollout_mode": rollout_info["rollout_mode"],
             "activation_policy": rollout_info["activation_policy"],
@@ -278,6 +334,12 @@ def train_single_horizon(
             **(backtest_bundle.get("benchmark_summary") or {}).get("metrics", {}),
             **backtest_bundle["aggregate_metrics"],
         }
+        fold_viability_passed = (
+            (backtest_bundle.get("benchmark_summary") or {}).get("fold_viability") or {}
+        ).get("passed")
+        fold_viability_summary = (backtest_bundle.get("benchmark_summary") or {}).get("fold_viability") or {}
+        if fold_viability_passed is None:
+            fold_viability_passed = True
         oof_frame = backtest_bundle.get("oof_frame")
         candidate_sample_count = next(
             (
@@ -291,13 +353,41 @@ def train_single_horizon(
             candidate_metrics=promotion_candidate_metrics,
             champion_metrics=current_champion_metrics,
             candidate_metadata={
+                "virus_typ": virus_typ,
+                "horizon_days": horizon,
                 "quality_gate_overall_passed": bool(backtest_bundle["quality_gate"].get("overall_passed")),
                 "metric_semantics_version": metadata["metric_semantics_version"],
+                "event_definition_version": metadata["event_definition_version"],
+                "quantile_grid_version": metadata["quantile_grid_version"],
+                "calibration_mode": metadata["calibration_mode"],
+                "forecast_implied_calibration_mode": metadata["forecast_implied_calibration_mode"],
+                "science_contract_version": metadata["science_contract_version"],
+                "champion_scope_active": metadata["champion_scope_active"],
+                "weather_vintage_discipline_passed": metadata["weather_vintage_discipline_passed"],
+                "oof_calibration_only": metadata["oof_calibration_only"],
+                "quantile_monotonicity_passed": metadata["quantile_monotonicity_passed"],
+                "fold_viability_passed": bool(fold_viability_passed),
+                "event_evaluation_mode": fold_viability_summary.get("mode"),
+                "event_viable_fold_count": int(fold_viability_summary.get("viable_fold_count") or 0),
+                "event_non_viable_fold_count": int(fold_viability_summary.get("non_viable_fold_count") or 0),
+                "minimum_viable_event_folds": int(fold_viability_summary.get("minimum_viable_folds") or 0),
                 "sample_count": candidate_sample_count,
             },
             champion_metadata=current_champion_metadata,
             minimum_sample_count=default_promotion_min_sample_count,
         )
+        if not metadata["champion_scope_active"]:
+            blockers = list(promotion_evidence.get("promotion_blockers") or [])
+            if "champion_scope_inactive" not in blockers:
+                blockers.append("champion_scope_inactive")
+            promotion_evidence["promotion_allowed"] = False
+            promotion_evidence["promotion_blockers"] = blockers
+        if not bool(fold_viability_passed):
+            blockers = list(promotion_evidence.get("promotion_blockers") or [])
+            if "fold_viability_not_met" not in blockers:
+                blockers.append("fold_viability_not_met")
+            promotion_evidence["promotion_allowed"] = False
+            promotion_evidence["promotion_blockers"] = blockers
         promote = bool(promotion_evidence.get("promotion_allowed"))
         registry_payload = trainer.registry.record_evaluation(
             virus_typ=virus_typ,
@@ -308,9 +398,27 @@ def train_single_horizon(
                 "model_version": metadata["model_version"],
                 "calibration_version": metadata["calibration_version"],
                 "rollout_mode": metadata["rollout_mode"],
+                "registry_status": "champion" if promote else "challenger",
                 "metric_semantics_version": metadata["metric_semantics_version"],
+                "event_definition_version": metadata["event_definition_version"],
+                "quantile_grid_version": metadata["quantile_grid_version"],
+                "science_contract_version": metadata["science_contract_version"],
+                "calibration_mode": metadata["calibration_mode"],
+                "forecast_implied_calibration_mode": metadata["forecast_implied_calibration_mode"],
+                "calibration_evidence_mode": metadata["calibration_evidence_mode"],
+                "champion_scope_active": metadata["champion_scope_active"],
+                "champion_scope_reason": metadata["champion_scope_reason"],
+                "oof_calibration_only": metadata["oof_calibration_only"],
+                "weather_vintage_discipline_passed": metadata["weather_vintage_discipline_passed"],
+                "quantile_monotonicity_passed": metadata["quantile_monotonicity_passed"],
+                "fold_viability_passed": bool(fold_viability_passed),
+                "event_evaluation_mode": fold_viability_summary.get("mode"),
+                "event_viable_fold_count": int(fold_viability_summary.get("viable_fold_count") or 0),
+                "event_non_viable_fold_count": int(fold_viability_summary.get("non_viable_fold_count") or 0),
+                "minimum_viable_event_folds": int(fold_viability_summary.get("minimum_viable_folds") or 0),
                 "sample_count": candidate_sample_count,
                 "quality_gate_overall_passed": bool(backtest_bundle["quality_gate"].get("overall_passed")),
+                "quality_gate": backtest_bundle["quality_gate"],
                 "promotion_evidence": promotion_evidence,
             },
             promote=promote,

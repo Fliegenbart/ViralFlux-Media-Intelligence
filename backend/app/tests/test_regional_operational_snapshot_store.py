@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import unittest
 
+import numpy as np
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.models.database import AuditLog, Base
 from app.services.ops.regional_operational_snapshot_store import RegionalOperationalSnapshotStore
+from app.services.ops.run_metadata_service import OperationalRunRecorder
 
 
 class RegionalOperationalSnapshotStoreTests(unittest.TestCase):
@@ -207,6 +209,24 @@ class RegionalOperationalSnapshotStoreTests(unittest.TestCase):
         self.assertEqual(latest["artifact_source_coverage"]["wastewater_available"], 0.91)
         self.assertNotIn("live_source_coverage_status", latest)
         self.assertNotIn("live_source_freshness_status", latest)
+
+    def test_operational_run_recorder_serializes_numpy_scalars_in_metadata(self) -> None:
+        recorder = OperationalRunRecorder(self.db)
+
+        payload = recorder.record_event(
+            action="BACKFILL_REGIONAL_MODEL_ARTIFACTS",
+            status="success",
+            summary="Serialized numpy payload",
+            metadata={
+                "successful_scopes": np.int64(1),
+                "results": {"Influenza A": {"trained": np.int64(16)}},
+            },
+        )
+
+        row = self.db.query(AuditLog).order_by(AuditLog.id.desc()).first()
+        self.assertIsNotNone(row)
+        self.assertEqual(payload["metadata"]["successful_scopes"], 1)
+        self.assertEqual(payload["metadata"]["results"]["Influenza A"]["trained"], 16)
 
 
 if __name__ == "__main__":

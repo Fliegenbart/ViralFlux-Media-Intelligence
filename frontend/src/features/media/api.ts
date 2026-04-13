@@ -237,21 +237,21 @@ export const mediaApi = {
     return fetchJson<WaveRadarResponse>(`/api/v1/backtest/wave-radar?${qs.toString()}`, undefined, HEAVY_FETCH_TIMEOUT_MS);
   },
 
-  async getRegionalBenchmark(referenceVirus = 'Influenza A'): Promise<RegionalBenchmarkResponse> {
-    const qs = new URLSearchParams({ reference_virus: referenceVirus });
+  async getRegionalBenchmark(referenceVirus = 'Influenza A', brand?: string): Promise<RegionalBenchmarkResponse> {
+    const qs = withOptionalBrandQuery({ reference_virus: referenceVirus }, brand);
     return fetchJson<RegionalBenchmarkResponse>(`/api/v1/forecast/regional/benchmark?${qs.toString()}`);
   },
 
-  async getRegionalPortfolio(referenceVirus = 'Influenza A', topN = 12): Promise<RegionalPortfolioResponse> {
-    const qs = new URLSearchParams({ reference_virus: referenceVirus, top_n: String(topN) });
+  async getRegionalPortfolio(referenceVirus = 'Influenza A', topN = 12, brand?: string): Promise<RegionalPortfolioResponse> {
+    const qs = withOptionalBrandQuery({ reference_virus: referenceVirus, top_n: String(topN) }, brand);
     return fetchJson<RegionalPortfolioResponse>(`/api/v1/forecast/regional/portfolio?${qs.toString()}`, undefined, HEAVY_FETCH_TIMEOUT_MS);
   },
 
-  async getRegionalHeroOverview(referenceVirus = 'Influenza A', horizonDays = 7): Promise<RegionalPortfolioResponse> {
-    const qs = new URLSearchParams({
+  async getRegionalHeroOverview(referenceVirus = 'Influenza A', horizonDays = 7, brand?: string): Promise<RegionalPortfolioResponse> {
+    const qs = withOptionalBrandQuery({
       reference_virus: referenceVirus,
       horizon_days: String(horizonDays),
-    });
+    }, brand);
     return fetchJson<RegionalPortfolioResponse>(
       `/api/v1/forecast/regional/hero-overview?${qs.toString()}`,
       undefined,
@@ -262,11 +262,12 @@ export const mediaApi = {
   async getRegionalForecast(
     virus: string,
     horizonDays: number,
+    brand?: string,
   ): Promise<RegionalForecastResponse> {
-    const qs = new URLSearchParams({
+    const qs = withOptionalBrandQuery({
       virus_typ: virus,
       horizon_days: String(horizonDays),
-    });
+    }, brand);
     return fetchJson<RegionalForecastResponse>(`/api/v1/forecast/regional/decisions?${qs.toString()}`, undefined, HEAVY_FETCH_TIMEOUT_MS);
   },
 
@@ -290,12 +291,13 @@ export const mediaApi = {
     virus: string,
     weeklyBudgetEur: number,
     horizonDays: number,
+    brand?: string,
   ): Promise<RegionalAllocationResponse> {
-    const qs = new URLSearchParams({
+    const qs = withOptionalBrandQuery({
       virus_typ: virus,
       weekly_budget_eur: String(weeklyBudgetEur),
       horizon_days: String(horizonDays),
-    });
+    }, brand);
     return fetchJson<RegionalAllocationResponse>(`/api/v1/forecast/regional/media-allocation?${qs.toString()}`, undefined, HEAVY_FETCH_TIMEOUT_MS);
   },
 
@@ -304,13 +306,14 @@ export const mediaApi = {
     weeklyBudgetEur: number,
     horizonDays: number,
     topN = 12,
+    brand?: string,
   ): Promise<RegionalCampaignRecommendationsResponse> {
-    const qs = new URLSearchParams({
+    const qs = withOptionalBrandQuery({
       virus_typ: virus,
       weekly_budget_eur: String(weeklyBudgetEur),
       horizon_days: String(horizonDays),
       top_n: String(topN),
-    });
+    }, brand);
     return fetchJson<RegionalCampaignRecommendationsResponse>(`/api/v1/forecast/regional/campaign-recommendations?${qs.toString()}`, undefined, HEAVY_FETCH_TIMEOUT_MS);
   },
 

@@ -34,6 +34,15 @@ class _DummyRegressor:
         return self._outputs[: len(X)]
 
 
+class _OffsetCalibration:
+    def __init__(self, offset: float):
+        self._offset = float(offset)
+
+    def predict(self, raw_probabilities):
+        values = np.asarray(raw_probabilities, dtype=float)
+        return np.clip(values + self._offset, 0.001, 0.999)
+
+
 class _FakeFeatureBuilder:
     def __init__(self, frame: pd.DataFrame, as_of_date: str):
         self._frame = frame
@@ -99,6 +108,10 @@ class RegionalForecastServiceTests(unittest.TestCase):
             "feature_columns": ["f1", "f2"],
             "action_threshold": 0.6,
             "event_definition_version": "regional_survstat_v1",
+            "selected_tau": 0.2,
+            "selected_kappa": 0.5,
+            "min_event_absolute_incidence": 5.0,
+            "forecast_quantiles": [0.025, 0.1, 0.25, 0.5, 0.75, 0.9, 0.975],
             "quality_gate": quality_gate,
             "rollout_mode": rollout_mode,
             "activation_policy": activation_policy,
@@ -367,9 +380,9 @@ class RegionalForecastServiceTests(unittest.TestCase):
         service = self._make_service(
             inference_panel=self._decision_ready_panel(),
             probabilities=[0.57],
-            median_values=[21.0],
-            lower_values=[18.0],
-            upper_values=[24.0],
+            median_values=[12.0],
+            lower_values=[10.0],
+            upper_values=[15.0],
             aggregate_metrics={
                 "pr_auc": 0.64,
                 "ece": 0.06,
@@ -383,6 +396,101 @@ class RegionalForecastServiceTests(unittest.TestCase):
         self.assertEqual(top["decision_label"], "Prepare")
         self.assertEqual(top["decision"]["stage"], "prepare")
         self.assertGreater(top["decision_priority_index"], 0.54)
+
+    def test_predict_all_regions_uses_forecast_implied_probability_as_primary_event_source(self) -> None:
+        service = self._make_service(
+            quality_gate_passed=True,
+            probabilities=[0.05, 0.05],
+            median_values=[28.0, 12.0],
+            lower_values=[24.0, 10.0],
+            upper_values=[32.0, 15.0],
+        )
+
+        result = service.predict_all_regions(virus_typ="Influenza A", brand="gelo", horizon_days=7)
+
+        top = result["predictions"][0]
+        self.assertGreater(top["event_probability"], 0.6)
+        self.assertEqual(top["event_probability_source"], "forecast_implied")
+        self.assertEqual(top["event_shadow_model_source"], "shadow_classifier")
+        self.assertTrue(top["activation_candidate"])
+
+    def test_predict_all_regions_marks_calibrated_forecast_implied_source_when_available(self) -> None:
+        service = self._make_service(
+            quality_gate_passed=True,
+            probabilities=[0.05, 0.05],
+            median_values=[28.0, 12.0],
+            lower_values=[24.0, 10.0],
+            upper_values=[32.0, 15.0],
+        )
+        original_loader = service._load_artifacts
+        service._load_artifacts = lambda virus_typ, horizon_days=7: {
+            **original_loader(virus_typ, horizon_days),
+            "forecast_implied_calibration": _OffsetCalibration(0.08),
+        }
+
+        result = service.predict_all_regions(virus_typ="Influenza A", brand="gelo", horizon_days=7)
+
+        top = result["predictions"][0]
+        self.assertEqual(top["event_probability_source"], "forecast_implied_calibrated")
+        self.assertGreater(top["event_probability"], 0.65)
+
+    def test_predict_all_regions_projects_residual_quantiles_onto_the_baseline(self) -> None:
+        inference_panel = pd.DataFrame(
+            {
+                "bundesland": ["BY"],
+                "bundesland_name": ["Bayern"],
+                "as_of_date": [pd.Timestamp("2026-03-14")],
+                "target_week_start": [pd.Timestamp("2026-03-16")],
+                "current_known_incidence": [10.0],
+                "seasonal_baseline": [8.0],
+                "seasonal_mad": [2.0],
+                "pollen_context_score": [1.5],
+                "f1": [1.0],
+                "f2": [0.1],
+            }
+        )
+        service = RegionalForecastService(db=None)
+        service.feature_builder = _FakeFeatureBuilder(inference_panel, as_of_date="2026-03-14")
+        service._business_gate = lambda quality_gate, truth_readiness=None, brand="gelo": {
+            "truth_ready": True,
+            "validated_for_budget_activation": True,
+        }
+        residual_median = np.log1p(28.0) - np.log1p(10.0)
+        residual_lower = np.log1p(24.0) - np.log1p(10.0)
+        residual_upper = np.log1p(32.0) - np.log1p(10.0)
+        service._load_artifacts = lambda virus_typ, horizon_days=7: {
+            "classifier": _DummyClassifier([0.05]),
+            "regressor_median": _DummyRegressor([residual_median]),
+            "regressor_lower": _DummyRegressor([residual_lower]),
+            "regressor_upper": _DummyRegressor([residual_upper]),
+            "calibration": None,
+            "metadata": {
+                "feature_columns": ["f1", "f2"],
+                "action_threshold": 0.6,
+                "event_definition_version": "regional_survstat_v1",
+                "selected_tau": 0.2,
+                "selected_kappa": 0.5,
+                "min_event_absolute_incidence": 5.0,
+                "quality_gate": {"overall_passed": True, "forecast_readiness": "GO"},
+                "forecast_core_mode": "residual_baseline_v2",
+                "baseline_component_weights": {
+                    "current_log": 1.0,
+                    "seasonal_log": 0.0,
+                    "pooled_log": 0.0,
+                },
+                "persistence_mix_weight": 1.0,
+                "horizon_days": horizon_days,
+                "target_window_days": [horizon_days, horizon_days],
+                "supported_horizon_days": [3, 5, 7],
+            },
+        }
+
+        result = service.predict_all_regions(virus_typ="Influenza A", brand="gelo", horizon_days=7)
+
+        top = result["predictions"][0]
+        self.assertEqual(top["expected_target_incidence"], 28.0)
+        self.assertEqual(top["prediction_interval"], {"lower": 24.0, "upper": 32.0})
+        self.assertEqual(top["forecast_core_mode"], "residual_baseline_v2")
 
     def test_predict_all_regions_marks_sparse_region_as_watch_with_uncertainty(self) -> None:
         service = self._make_service(

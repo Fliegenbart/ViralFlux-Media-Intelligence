@@ -31,6 +31,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.services.ml.benchmarking.registry import ForecastRegistry
+from app.services.ml.benchmarking.registry import configured_forecast_registry_root
 from app.services.ml.forecast_horizon_utils import (
     DEFAULT_FORECAST_REGION,
     ensure_supported_horizon,
@@ -101,7 +102,9 @@ class XGBoostTrainer:
         self.db = db
         self.models_dir = models_dir or _ML_MODELS_DIR
         self._forecast_svc = ForecastService(db)
-        self.registry = ForecastRegistry(registry_root=_REGISTRY_DIR)
+        self.registry = ForecastRegistry(
+            registry_root=configured_forecast_registry_root(default_root=_REGISTRY_DIR)
+        )
 
     # ------------------------------------------------------------------
     # Public API

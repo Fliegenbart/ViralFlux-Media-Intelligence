@@ -98,6 +98,7 @@ describe('useVirusRadarHeroForecast', () => {
     await waitFor(() => expect(screen.getByTestId('hero-loading')).toHaveTextContent('ready'));
 
     expect(mockedMediaApi.getRegionalHeroOverview).toHaveBeenCalledTimes(1);
+    expect(mockedMediaApi.getRegionalHeroOverview).toHaveBeenCalledWith('Influenza A', 7, 'gelo');
     expect(screen.getByTestId('hero-top-virus')).toHaveTextContent('RSV A');
     expect(screen.getByTestId('hero-headline')).toHaveTextContent('RSV A');
   });

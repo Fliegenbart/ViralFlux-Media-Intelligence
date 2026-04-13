@@ -1,5 +1,10 @@
 # RSV A / h7 Go / No-Go
 
+> Superseded on 2026-04-12 by [h7_math_memo_v2.md](./h7_math_memo_v2.md).
+> This document remains a historical run note, not the current mathematical decision source.
+> The current archived `backtest.json` evidence in `backend/app/ml_models/regional_panel/rsv_a/horizon_7/backtest.json`
+> places `RSV A / h7` at `WATCH`, with persistence still ahead on `PR-AUC`, `precision_at_top3`, and `Brier`.
+
 Stand: 2026-03-17
 
 ## Entscheidung

@@ -103,6 +103,8 @@ def build_rows(
         state: max(int(frame["site_count"].max() or 0), 1)
         for state, frame in wastewater_by_state.items()
     }
+    latest_ww_snapshot_cache: dict[pd.Timestamp, dict[str, dict[str, float]]] = {}
+    latest_cross_virus_snapshot_cache: dict[tuple[str, pd.Timestamp], dict[str, dict[str, float]]] = {}
 
     rows: list[dict[str, Any]] = []
     for state in sorted(set(wastewater_by_state) & set(truth_by_state)):
@@ -205,12 +207,23 @@ def build_rows(
                 max_history_weeks=event_config.baseline_max_history_weeks,
                 upper_quantile_cap=event_config.baseline_upper_quantile_cap,
             )
-            latest_ww_snapshot = builder._latest_wastewater_snapshot_by_state(wastewater_by_state, as_of)
-            latest_cross_virus_snapshots = {
-                candidate_virus: builder._latest_wastewater_snapshot_by_state(candidate_frames, as_of)
-                for candidate_virus, candidate_frames in wastewater_context_by_virus_state.items()
-                if candidate_virus != virus_typ
-            }
+            if as_of not in latest_ww_snapshot_cache:
+                latest_ww_snapshot_cache[as_of] = builder._latest_wastewater_snapshot_by_state(
+                    wastewater_by_state,
+                    as_of,
+                )
+            latest_ww_snapshot = latest_ww_snapshot_cache[as_of]
+            latest_cross_virus_snapshots: dict[str, dict[str, dict[str, float]]] = {}
+            for candidate_virus, candidate_frames in wastewater_context_by_virus_state.items():
+                if candidate_virus == virus_typ:
+                    continue
+                cache_key = (candidate_virus, as_of)
+                if cache_key not in latest_cross_virus_snapshot_cache:
+                    latest_cross_virus_snapshot_cache[cache_key] = builder._latest_wastewater_snapshot_by_state(
+                        candidate_frames,
+                        as_of,
+                    )
+                latest_cross_virus_snapshots[candidate_virus] = latest_cross_virus_snapshot_cache[cache_key]
             feature_row = builder._build_feature_row(
                 virus_typ=virus_typ,
                 state=state,

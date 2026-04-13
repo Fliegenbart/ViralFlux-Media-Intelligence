@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import Any
 
@@ -8,6 +9,7 @@ from app.services.ml.benchmarking.contracts import RegistryEntry
 
 DEFAULT_PROMOTION_MIN_SAMPLE_COUNT = 12
 DEFAULT_METRIC_SEMANTICS_VERSION = "regional_probabilistic_metrics_v1"
+DEFAULT_FORECAST_REGISTRY_ROOT = Path(__file__).resolve().parent.parent.parent / "ml_models" / "forecast_registry"
 
 
 def _slug(value: str) -> str:
@@ -44,13 +46,24 @@ def _metrics_present(metrics: dict[str, Any] | None) -> bool:
     return bool(metrics) and "error" not in (metrics or {})
 
 
+def configured_forecast_registry_root(*, default_root: Path | None = None) -> Path:
+    override = str(
+        os.getenv("FORECAST_REGISTRY_DIR")
+        or os.getenv("ML_FORECAST_REGISTRY_DIR")
+        or ""
+    ).strip()
+    if override:
+        return Path(override)
+    if default_root is not None:
+        return Path(default_root)
+    return DEFAULT_FORECAST_REGISTRY_ROOT
+
+
 class ForecastRegistry:
     """Filesystem-backed champion/challenger registry for forecast scopes."""
 
     def __init__(self, registry_root: Path | None = None) -> None:
-        self.registry_root = registry_root or (
-            Path(__file__).resolve().parent.parent.parent / "ml_models" / "forecast_registry"
-        )
+        self.registry_root = configured_forecast_registry_root(default_root=registry_root)
 
     def scope_dir(self, *, virus_typ: str, horizon_days: int) -> Path:
         return self.registry_root / _slug(virus_typ) / f"horizon_{int(horizon_days)}"

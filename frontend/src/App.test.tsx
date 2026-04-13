@@ -113,7 +113,7 @@ describe('App routing', () => {
 
     expect(navButtons).toHaveLength(6);
     expect(within(operatorNav).getByRole('button', { name: /Virus-Radar/i })).toBeInTheDocument();
-    expect(within(operatorNav).getByRole('button', { name: /Wochenplan/i })).toBeInTheDocument();
+    expect(within(operatorNav).getByRole('button', { name: /Diese Woche/i })).toBeInTheDocument();
     expect(within(operatorNav).getByRole('button', { name: /Zeitgraph/i })).toBeInTheDocument();
     expect(within(operatorNav).getByRole('button', { name: /Regionen/i })).toBeInTheDocument();
     expect(within(operatorNav).getByRole('button', { name: /Kampagnen/i })).toBeInTheDocument();

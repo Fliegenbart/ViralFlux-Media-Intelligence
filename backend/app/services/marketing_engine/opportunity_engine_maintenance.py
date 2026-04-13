@@ -206,7 +206,7 @@ def backfill_product_mapping(
             new_pm["condition_label"] = old_pm.get("condition_label")
 
         selected = engine._select_product_for_opportunity(
-            fallback_product=row.product or "Alle Gelo-Produkte",
+            fallback_product=row.product or "Alle Produkte",
             product_mapping=new_pm,
         )
 

@@ -136,7 +136,7 @@ describe('AppLayout theme rendering', () => {
     expect(screen.getByRole('link', { name: 'Direkt zum Inhalt springen' })).toHaveAttribute('href', '#main-content');
     expect(screen.queryByText('Wochenbericht exportieren')).not.toBeInTheDocument();
     expect(screen.getByRole('main')).toHaveAttribute('aria-labelledby', 'operator-page-title');
-    expect(screen.getByRole('heading', { name: 'Was diese Woche zu tun ist' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Die aktuelle Wochenentscheidung im Detail' })).toBeInTheDocument();
   });
 
   it('shows the light-mode activation label in dark theme', () => {
@@ -227,12 +227,12 @@ describe('AppLayout theme rendering', () => {
     const sectionFrame = screen.getByLabelText('Aktueller Bereich');
     const pageActions = screen.getByLabelText('Seitenaktionen');
     const primaryAction = screen.getByRole('button', { name: 'Wochenbericht exportieren' });
-    const secondaryAction = screen.getByRole('button', { name: 'Evidenz öffnen' });
+    const secondaryAction = screen.getByRole('button', { name: 'Zum Virus-Radar' });
 
     expect(sectionFrame).toHaveTextContent('ViralFlux');
-    expect(sectionFrame).toHaveTextContent('Wochenplan');
+    expect(sectionFrame).toHaveTextContent('Diese Woche');
     expect(sectionFrame).not.toHaveTextContent('Arbeitsbereich');
-    expect(screen.getByRole('heading', { name: 'Was diese Woche zu tun ist' })).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Die aktuelle Wochenentscheidung im Detail' })).toBeVisible();
     expect(primaryAction).toBeVisible();
     expect(primaryAction).toHaveClass('operator-page-action--primary');
     expect(secondaryAction).toHaveClass('operator-page-action--secondary');

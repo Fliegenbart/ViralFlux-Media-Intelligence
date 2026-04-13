@@ -102,6 +102,7 @@ describe('media page defaults', () => {
 
     const latestHeader = mockSetPageHeader.mock.calls.at(-1)?.[0];
     expect(latestHeader?.primaryAction?.label).toBe('Vorschläge erstellen');
+    expect(latestHeader?.secondaryAction?.label).toBe('Zum Virus-Radar');
 
     await act(async () => {
       await latestHeader.primaryAction.onClick();
@@ -118,6 +119,10 @@ describe('media page defaults', () => {
 
   it('uses a neutral all-products default when opening a region campaign', async () => {
     render(<RegionsPage />);
+
+    const latestHeader = mockSetPageHeader.mock.calls.at(-1)?.[0];
+    expect(latestHeader?.primaryAction?.label).toBe('Kampagnen öffnen');
+    expect(latestHeader?.secondaryAction?.label).toBe('Zum Virus-Radar');
 
     fireEvent.click(screen.getByRole('button', { name: 'Region öffnen' }));
 

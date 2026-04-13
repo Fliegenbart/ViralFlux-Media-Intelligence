@@ -44,12 +44,12 @@ const RegionsPage: React.FC = () => {
   useEffect(() => {
     setPageHeader({
       primaryAction: {
-        label: 'Zum Wochenplan',
-        onClick: () => navigate('/jetzt'),
+        label: 'Kampagnen öffnen',
+        onClick: () => navigate('/kampagnen'),
       },
       secondaryAction: {
-        label: 'Evidenz öffnen',
-        onClick: () => navigate('/evidenz'),
+        label: 'Zum Virus-Radar',
+        onClick: () => navigate('/virus-radar'),
       },
     });
 

@@ -42,8 +42,8 @@ const NowPage: React.FC = () => {
         disabled: pdfLoading,
       },
       secondaryAction: {
-        label: 'Evidenz öffnen',
-        onClick: () => navigate('/evidenz'),
+        label: 'Zum Virus-Radar',
+        onClick: () => navigate('/virus-radar'),
       },
     });
 

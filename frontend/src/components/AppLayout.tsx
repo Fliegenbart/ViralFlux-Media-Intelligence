@@ -54,7 +54,7 @@ const ICON_SIZE = 18;
 
 const PRIMARY_NAV_ITEMS = [
   { label: 'Virus-Radar', path: '/virus-radar', helper: 'Alles für die Media-Entscheidung auf einer Seite', Icon: Activity },
-  { label: 'Wochenplan', path: '/jetzt', helper: 'Was diese Woche zuerst zu tun ist', Icon: Zap },
+  { label: 'Diese Woche', path: '/jetzt', helper: 'Die aktuelle Wochenentscheidung im Detail', Icon: Zap },
   { label: 'Zeitgraph', path: '/zeitgraph', helper: 'Nur Verlauf und 7-Tage-Ausblick', Icon: TrendingUp },
   { label: 'Regionen', path: '/regionen', helper: 'Wo sich diese Woche genaueres Hinsehen lohnt', Icon: MapPin },
   { label: 'Kampagnen', path: '/kampagnen', helper: 'Welcher Fall als Nächstes geprüft werden sollte', Icon: Sparkles },
@@ -63,7 +63,7 @@ const PRIMARY_NAV_ITEMS = [
 
 const SECTION_META = [
   { path: '/virus-radar', kicker: 'Virus-Radar', title: 'Die zentrale Media-Entscheidungsseite' },
-  { path: '/jetzt', kicker: 'Wochenplan', title: 'Was diese Woche zu tun ist' },
+  { path: '/jetzt', kicker: 'Diese Woche', title: 'Die aktuelle Wochenentscheidung im Detail' },
   { path: '/zeitgraph', kicker: 'Zeitgraph', title: 'Nur Verlauf und 7-Tage-Ausblick' },
   { path: '/regionen', kicker: 'Regionen', title: 'Wo diese Woche genauer hingesehen werden sollte' },
   { path: '/kampagnen', kicker: 'Kampagnen', title: 'Welcher Fall als Nächstes geprüft werden sollte' },

@@ -8,7 +8,11 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.api.deps import get_current_admin, get_current_user
-from app.api.media_contracts import OutcomeImportRequest
+from app.api.media_contracts import (
+    OutcomeImportRequest,
+    RecommendationGenerateRequest,
+    RecommendationOpenRegionRequest,
+)
 from app.api.media_routes_outcomes import router as outcomes_router
 from app.api.media_routes_weekly_brief import router as weekly_brief_router
 from app.db.session import get_db
@@ -48,6 +52,16 @@ class MediaBrandContractTests(unittest.TestCase):
                 validate_only=True,
                 records=[],
             )
+
+    def test_recommendation_requests_use_brand_neutral_default_product_label(self) -> None:
+        generate_request = RecommendationGenerateRequest(brand="acme")
+        open_region_request = RecommendationOpenRegionRequest(
+            brand="acme",
+            region_code="BY",
+        )
+
+        self.assertEqual(generate_request.product, "Alle Produkte")
+        self.assertEqual(open_region_request.product, "Alle Produkte")
 
     def test_decision_endpoint_defaults_brand_query_when_missing(self) -> None:
         with patch("app.api.media_routes_weekly_brief.MediaV2Service") as service_cls:

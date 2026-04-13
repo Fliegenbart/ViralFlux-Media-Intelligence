@@ -49,6 +49,16 @@ class ForecastApiTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 401)
 
+    def test_media_activation_openapi_description_is_brand_neutral(self) -> None:
+        response = self.client.get("/openapi.json")
+
+        self.assertEqual(response.status_code, 200)
+        description = (
+            response.json()["paths"]["/api/v1/forecast/regional/media-activation"]["get"]["description"]
+        )
+        self.assertNotIn("GELO", description)
+        self.assertIn("selected brand", description)
+
     def test_forecast_run_requires_admin_role(self) -> None:
         response = self.client.post("/api/v1/forecast/run", headers=self.user_headers)
 

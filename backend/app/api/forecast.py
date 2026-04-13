@@ -424,7 +424,7 @@ async def get_media_activation(
     horizon_days: int = Depends(_validated_regional_horizon),
     db: Session = Depends(get_db),
 ):
-    """Generate gated regional media recommendations for GELO products.
+    """Generate gated regional media recommendations for the selected brand.
 
     Returns per-Bundesland recommendations with:
     - Action: activate / prepare / watch

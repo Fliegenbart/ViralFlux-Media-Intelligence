@@ -36,8 +36,8 @@ const EvidencePage: React.FC = () => {
         onClick: () => document.getElementById('evidence-import')?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
       },
       secondaryAction: {
-        label: 'Zum Wochenplan',
-        onClick: () => navigate('/jetzt'),
+        label: 'Zum Virus-Radar',
+        onClick: () => navigate('/virus-radar'),
       },
     });
 

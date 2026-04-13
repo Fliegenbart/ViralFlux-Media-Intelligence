@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 
 class RecommendationGenerateRequest(BaseModel):
     brand: str = Field(..., min_length=1)
-    product: str = Field(default="Alle Gelo-Produkte")
+    product: str = Field(default="Alle Produkte")
     campaign_goal: str = Field(default="Awareness + Abverkauf")
     weekly_budget: float = Field(default=100000.0, ge=0)
     channel_pool: list[str] = Field(default_factory=lambda: ["programmatic", "social", "search", "ctv"])
@@ -25,7 +25,7 @@ class RecommendationGenerateRequest(BaseModel):
 class RecommendationOpenRegionRequest(BaseModel):
     region_code: str = Field(..., min_length=2)
     brand: str = Field(..., min_length=1)
-    product: str = Field(default="Alle Gelo-Produkte")
+    product: str = Field(default="Alle Produkte")
     campaign_goal: str = Field(default="Sichtbarkeit aufbauen, bevor die Nachfrage steigt")
     weekly_budget: float = Field(default=100000.0, ge=0)
     virus_typ: str = Field(default="Influenza A")

@@ -69,8 +69,8 @@ const CampaignsPage: React.FC = () => {
   useEffect(() => {
     setPageHeader({
       secondaryAction: {
-        label: 'Zum Wochenplan',
-        onClick: () => navigate('/jetzt'),
+        label: 'Zum Virus-Radar',
+        onClick: () => navigate('/virus-radar'),
       },
       primaryAction: {
         label: generationLoading ? 'Vorschläge werden erstellt...' : 'Vorschläge erstellen',

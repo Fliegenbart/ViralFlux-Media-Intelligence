@@ -55,8 +55,8 @@ const VirusRadarPage: React.FC = () => {
         disabled: pdfLoading,
       },
       secondaryAction: {
-        label: 'Kampagnen öffnen',
-        onClick: () => navigate('/kampagnen'),
+        label: 'Regionen öffnen',
+        onClick: () => navigate('/regionen'),
       },
     });
 

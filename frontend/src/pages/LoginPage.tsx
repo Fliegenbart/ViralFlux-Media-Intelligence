@@ -42,9 +42,9 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
           </div>
 
           <div className="login-brand-panel__copy">
-            <h1 className="login-brand-panel__headline">Die Wochensteuerung für die aktuelle Lage</h1>
+            <h1 className="login-brand-panel__headline">Der zentrale Einstieg in die aktuelle Lage</h1>
             <p className="login-brand-panel__text">
-              Der Einstieg führt direkt in den Wochenplan: mit Fokus auf Bundesländer,
+              Der Einstieg führt direkt ins Virus-Radar: mit Fokus auf Bundesländer,
               empfohlene Richtung und der Evidenz, auf die sich das Team diese Woche
               stützen kann.
             </p>
@@ -60,15 +60,15 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
           <div className="login-card">
             <div className="login-card__mobile-brand">
               <span className="login-card__mobile-wordmark">ViralFlux</span>
-              <p className="login-card__mobile-kicker">ViralFlux Wochenbriefing</p>
+              <p className="login-card__mobile-kicker">ViralFlux Radarzugang</p>
               <p className="login-card__mobile-copy">
-                Bundesländer, Richtung und Evidenz für diese Woche in einer Arbeitsfläche.
+                Radar, Regionen, Kampagnen und Evidenz in einer Arbeitsfläche.
               </p>
             </div>
 
             <header className="login-card__header">
-              <h2>In den Wochenplan</h2>
-              <p>Melde dich an, um Wochenfokus, Bundesländer und Evidenz zu öffnen.</p>
+              <h2>Ins Virus-Radar</h2>
+              <p>Melde dich an, um Radar, Bundesländer und Evidenz zu öffnen.</p>
             </header>
 
             <form className="login-form" onSubmit={handleSubmit}>
@@ -123,7 +123,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
               </label>
 
               <button type="submit" disabled={loading} className="login-submit">
-                <span>{loading ? 'Wird geöffnet...' : 'Wochenplan öffnen'}</span>
+                <span>{loading ? 'Wird geöffnet...' : 'Radar öffnen'}</span>
                 <LogIn size={18} aria-hidden="true" />
               </button>
             </form>

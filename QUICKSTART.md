@@ -26,6 +26,10 @@ Für Live gilt immer:
 4. auf `main` pushen
 5. den Server über das Deploy-Script aktualisieren
 
+Wichtig:
+- dieses Projekt wird **nicht** über Vercel deployed
+- der vorgesehene Live-Weg läuft über GitHub, den Server-Checkout und `scripts/deploy-live.sh`
+
 ## Der schnellste gute Start
 
 Wenn du nur schnell lokal arbeiten willst, ist das der beste Weg:

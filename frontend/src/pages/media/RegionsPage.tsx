@@ -76,7 +76,7 @@ const RegionsPage: React.FC = () => {
       label: 'Regionalen Vorschlag öffnen',
       onClick: () => openRecommendation(focusRecommendationId, 'overlay'),
     } : {
-      label: regionActionLoading ? 'Regionale Maßnahme wird geprüft...' : 'Regionale Maßnahme prüfen',
+      label: regionActionLoading ? 'Regionaler Vorschlag wird vorbereitet...' : 'Regionalen Vorschlag vorbereiten',
       onClick: () => {
         if (focusRegionCode) {
           void openOrCreateRegionCampaign(focusRegionCode);

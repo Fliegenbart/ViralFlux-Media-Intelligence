@@ -226,7 +226,7 @@ describe('media page defaults', () => {
     render(<RegionsPage />);
 
     const latestHeader = mockSetPageHeader.mock.calls.at(-1)?.[0];
-    expect(latestHeader?.primaryAction?.label).toBe('Regionale Maßnahme prüfen');
+    expect(latestHeader?.primaryAction?.label).toBe('Regionalen Vorschlag vorbereiten');
 
     await act(async () => {
       await latestHeader.primaryAction.onClick();

@@ -326,7 +326,7 @@ describe('RegionWorkbench', () => {
 
     expect(screen.getByRole('heading', { name: 'In Sachsen vorerst zurückhaltend bleiben' })).toBeInTheDocument();
     expect(screen.getAllByText('Zu wenig Belege (Evidenz)').length).toBeGreaterThan(0);
-    expect(screen.getByRole('button', { name: 'Regionale Maßnahme prüfen' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Regionalen Vorschlag vorbereiten' })).toBeDisabled();
     expect(
       screen.getAllByText('Für dieses Bundesland reicht die aktuelle Evidenz noch nicht für einen neuen regionalen Vorschlag.').length,
     ).toBeGreaterThan(0);
@@ -396,5 +396,32 @@ describe('RegionWorkbench', () => {
 
     expect(screen.getByText('Noch keine klare regionale Reihenfolge')).toBeInTheDocument();
     expect(screen.getByText('Die Regionen sind sichtbar, aber noch ohne belastbare Priorisierung.')).toBeInTheDocument();
+  });
+
+  it('explains in plain language what the regional action button will do before there is a click', () => {
+    const view = buildRegionsView();
+    if (view.map?.regions?.BE) {
+      delete view.map.regions.BE.recommendation_ref;
+    }
+
+    render(
+      <RegionWorkbench
+        virus="Influenza A"
+        onVirusChange={noop}
+        regionsView={view}
+        workspaceStatus={buildWorkspaceStatus()}
+        loading={false}
+        selectedRegion="BE"
+        onSelectRegion={noop}
+        onOpenRecommendation={noop}
+        onGenerateRegionCampaign={noop}
+        regionActionLoading={false}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Regionalen Vorschlag vorbereiten' })).toBeInTheDocument();
+    expect(
+      screen.getByText(/Du legst noch nichts live fest\./i),
+    ).toBeInTheDocument();
   });
 });

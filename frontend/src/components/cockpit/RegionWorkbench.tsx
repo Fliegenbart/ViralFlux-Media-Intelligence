@@ -261,7 +261,10 @@ const RegionWorkbench: React.FC<Props> = ({
       : (!hasRecommendation && workspaceStatus?.blocker_count)
         ? workspaceStatus.blockers[0] || 'Vor dem nächsten Schritt müssen offene Punkte geklärt werden.'
         : null;
-  const primaryActionLabel = hasRecommendation ? 'Regionalen Vorschlag öffnen' : 'Regionale Maßnahme prüfen';
+  const primaryActionLabel = hasRecommendation ? 'Regionalen Vorschlag öffnen' : 'Regionalen Vorschlag vorbereiten';
+  const primaryActionHint = hasRecommendation
+    ? 'Du öffnest den vorhandenen regionalen Vorschlag für dieses Bundesland. Es wird nichts neu live geschaltet.'
+    : 'Du legst noch nichts live fest. Es wird nur ein regionaler Vorschlag für dieses Bundesland vorbereitet oder geöffnet.';
   const primaryAction = () => {
     if (!fallbackRegionCode) return;
     const recommendationId = region?.recommendation_ref?.card_id || primaryRegion?.recommendation_ref?.card_id;
@@ -478,7 +481,7 @@ const RegionWorkbench: React.FC<Props> = ({
                 {regionActionLoading ? 'Wird vorbereitet...' : primaryActionLabel}
               </button>
               <p className="regions-next-step__hint">
-                Vergleich, Karte und Details stehen weiter unten, wenn du die Einordnung vertiefen willst.
+                {primaryActionHint} Vergleich, Karte und Details stehen weiter unten, wenn du die Einordnung vertiefen willst.
               </p>
             </div>
           </OperatorPanel>

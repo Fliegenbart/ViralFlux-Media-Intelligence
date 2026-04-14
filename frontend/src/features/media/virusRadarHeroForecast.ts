@@ -40,6 +40,11 @@ export interface VirusRadarHeroForecastData {
   summary: string;
 }
 
+export interface VirusRadarHeroDateBounds {
+  observedThroughDate: string | null;
+  forecastThroughDate: string | null;
+}
+
 type ForecastPoint = {
   date: string;
   value: number;
@@ -82,6 +87,28 @@ function buildProjectionSeries(today: string, deltaPct: number): ForecastPoint[]
 
 function normalizeSeriesValue(value: number, baseline: number): number {
   return Number(((value / baseline) * 100).toFixed(2));
+}
+
+function isFiniteValue(value: number | null | undefined): value is number {
+  return typeof value === 'number' && Number.isFinite(value);
+}
+
+export function getVirusRadarHeroDateBounds(
+  chartData: VirusRadarHeroChartRow[],
+  virus: string,
+): VirusRadarHeroDateBounds {
+  const observedThroughDate = [...chartData]
+    .reverse()
+    .find((row) => isFiniteValue(row.actualSeries[virus]))?.date || null;
+  const forecastThroughDate = [...chartData]
+    .reverse()
+    .find((row) => isFiniteValue(row.forecastSeries[virus]) && row.date !== observedThroughDate)?.date
+    || null;
+
+  return {
+    observedThroughDate,
+    forecastThroughDate,
+  };
 }
 
 function buildChartFromHeroTimeseries(
@@ -200,9 +227,9 @@ function buildSummary(summaries: VirusRadarHeroSummary[]): string {
   const second = summaries[1];
   const topPrefix = `${top.virus} liegt in der 7-Tage-Richtung bei ${top.deltaPct >= 0 ? '+' : ''}${top.deltaPct.toFixed(0)} %.`;
   if (!second) {
-    return `${topPrefix} Alle Linien sind auf Heute = 100 normiert und zeigen die erwartete 7-Tage-Richtung je Virus.`;
+    return `${topPrefix} Alle Linien sind auf Letzter Stand = 100 normiert und zeigen die erwartete 7-Tage-Richtung je Virus.`;
   }
-  return `${topPrefix} Dahinter folgt ${second.virus} mit ${second.deltaPct >= 0 ? '+' : ''}${second.deltaPct.toFixed(0)} %. Alle Linien sind auf Heute = 100 normiert und zeigen die erwartete 7-Tage-Richtung je Virus.`;
+  return `${topPrefix} Dahinter folgt ${second.virus} mit ${second.deltaPct >= 0 ? '+' : ''}${second.deltaPct.toFixed(0)} %. Alle Linien sind auf Letzter Stand = 100 normiert und zeigen die erwartete 7-Tage-Richtung je Virus.`;
 }
 
 export function buildVirusRadarHeroForecastData(

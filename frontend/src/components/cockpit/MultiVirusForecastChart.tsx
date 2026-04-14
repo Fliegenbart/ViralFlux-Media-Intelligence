@@ -90,7 +90,7 @@ const MultiVirusForecastChart: React.FC<MultiVirusForecastChartProps> = ({
     chartData.flatMap((row) => [row.actual, row.forecast]),
   ), [chartData]);
 
-  const todayLabel = useMemo(() => {
+  const latestObservedLabel = useMemo(() => {
     const latestActual = [...chartData].reverse().find((row) => typeof row.actual === 'number' && Number.isFinite(row.actual));
     return latestActual?.dateLabel || null;
   }, [chartData]);
@@ -137,9 +137,9 @@ const MultiVirusForecastChart: React.FC<MultiVirusForecastChartProps> = ({
             )}
           />
 
-          {todayLabel && forecastEndLabel && todayLabel !== forecastEndLabel ? (
+          {latestObservedLabel && forecastEndLabel && latestObservedLabel !== forecastEndLabel ? (
             <ReferenceArea
-              x1={todayLabel}
+              x1={latestObservedLabel}
               x2={forecastEndLabel}
               fill={virusColor}
               fillOpacity={0.05}
@@ -147,15 +147,15 @@ const MultiVirusForecastChart: React.FC<MultiVirusForecastChartProps> = ({
             />
           ) : null}
 
-          {todayLabel ? (
+          {latestObservedLabel ? (
             <ReferenceLine
-              x={todayLabel}
+              x={latestObservedLabel}
               stroke="#8a9794"
               strokeWidth={1.2}
               strokeDasharray="2 3"
               strokeOpacity={0.72}
               label={{
-                value: 'Heute',
+                value: 'Letzter Stand',
                 position: 'insideTopLeft',
                 fill: '#8a9794',
                 fontSize: 11,

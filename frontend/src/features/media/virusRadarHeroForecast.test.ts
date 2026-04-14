@@ -2,6 +2,7 @@ import { RegionalPortfolioResponse } from '../../types/media';
 import {
   VIRUS_RADAR_HERO_VIRUSES,
   buildVirusRadarHeroForecastData,
+  getVirusRadarHeroDateBounds,
 } from './virusRadarHeroForecast';
 
 function buildPortfolioRollup(
@@ -68,5 +69,20 @@ describe('buildVirusRadarHeroForecastData', () => {
     expect(result.summaries[3].direction).toBe('fallend');
     expect(result.headlineSecondary).toContain('RSV A');
     expect(result.headlinePrimary).toContain('letzten Wochen');
+  });
+
+  it('returns the last observed point and forecast end for the selected virus', () => {
+    const result = buildVirusRadarHeroForecastData(
+      buildPortfolioRollup([
+        { virus_typ: 'Influenza A', top_change_pct: 8, top_region_name: 'Berlin' },
+        { virus_typ: 'Influenza B', top_change_pct: -6, top_region_name: 'Hamburg' },
+      ]),
+      '2026-04-08',
+    );
+
+    expect(getVirusRadarHeroDateBounds(result.chartData, 'Influenza A')).toEqual({
+      observedThroughDate: '2026-03-25',
+      forecastThroughDate: '2026-04-01',
+    });
   });
 });

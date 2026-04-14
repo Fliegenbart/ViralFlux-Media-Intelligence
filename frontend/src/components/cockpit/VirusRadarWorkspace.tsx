@@ -9,6 +9,7 @@ import {
 import {
   VIRUS_RADAR_HERO_COLORS,
   VIRUS_RADAR_HERO_VIRUSES,
+  getVirusRadarHeroDateBounds,
   VirusRadarHeroForecastData,
 } from '../../features/media/virusRadarHeroForecast';
 import { RecommendationCard } from '../../types/media';
@@ -18,6 +19,7 @@ import { MultiVirusForecastChart } from './MultiVirusForecastChart';
 import { MapRegion } from './types';
 import {
   formatCurrency,
+  formatDateShort,
   formatDateTime,
   formatSignalScore,
   primarySignalScore,
@@ -247,7 +249,13 @@ const VirusRadarWorkspace: React.FC<Props> = ({
     publishableCards: campaignsData.campaignsView?.summary?.publishable_cards,
     activeCards: campaignsData.campaignsView?.summary?.active_cards,
   });
-  const dataTimestamp = formatDateTime(nowData.view.generatedAt);
+  const dashboardTimestamp = formatDateTime(nowData.view.generatedAt);
+  const heroDateBounds = useMemo(
+    () => getVirusRadarHeroDateBounds(heroForecast.chartData, selectedHeroVirus),
+    [heroForecast.chartData, selectedHeroVirus],
+  );
+  const chartObservedLabel = formatDateShort(heroDateBounds.observedThroughDate);
+  const chartForecastLabel = formatDateShort(heroDateBounds.forecastThroughDate);
   const trendInsight = buildTrendInsight({
     regionName: chartRegionName,
     changePct: heroChangePct,
@@ -263,11 +271,11 @@ const VirusRadarWorkspace: React.FC<Props> = ({
     : `${selectedHeroVirus} · letzte Wochen und nächste ${horizonDays} Tage.`;
   const heroHeadlineSecondary = heroIsLoading
     ? 'Die Prognose wird gerade aufgebaut.'
-    : 'Durchgezogen siehst du die letzten Wochen, gestrichelt die Prognose.';
+    : 'Durchgezogen siehst du den gemessenen Verlauf, gestrichelt die Prognose.';
   const heroSummary = heroIsLoading
     ? 'Der Verlauf wird im Hintergrund geladen. Sobald die Daten da sind, siehst du hier wieder die letzten Wochen plus die 7-Tage-Prognose.'
     : selectedHeroSummary
-      ? `${selectedHeroVirus} wird aktuell für die nächsten ${horizonDays} Tage bei ${formatSignedPercent(selectedHeroSummary.deltaPct)} erwartet. Der Graph basiert auf den letzten vorhandenen Wochenwerten und der aktuellen Prognose, nicht auf erfundenen Demo-Daten.`
+      ? `${selectedHeroVirus} wird aktuell für die nächsten ${horizonDays} Tage bei ${formatSignedPercent(selectedHeroSummary.deltaPct)} erwartet. Gemessener Verlauf bis ${chartObservedLabel}${heroDateBounds.forecastThroughDate ? `, Prognose bis ${chartForecastLabel}` : ''}.`
       : 'Sobald frische Kurven vorliegen, siehst du hier wieder die letzten Wochen plus die 7-Tage-Prognose.';
   const decisionRegionName = heroRecommendation?.region || focusRegion?.name || heroRegionName || 'Fokusregion';
   const decisionHeadline = heroIsLoading
@@ -318,7 +326,7 @@ const VirusRadarWorkspace: React.FC<Props> = ({
           <div className="virus-radar-hero__topline">
             <span className="virus-radar-hero__product">VIRALFLUX / VIRUS-RADAR</span>
             <div className="virus-radar-hero__topline-meta">
-              <span>Stand {dataTimestamp}</span>
+              <span>Aktualisiert {dashboardTimestamp}</span>
               <span>{heroRegionName || 'Fokus offen'}</span>
               <span>{nowData.workspaceStatus?.data_freshness || 'Datenlage offen'}</span>
             </div>
@@ -382,12 +390,15 @@ const VirusRadarWorkspace: React.FC<Props> = ({
                   Nächste 7 Tage
                 </div>
                 <div className="virus-radar-hero-chart-card__legend-item virus-radar-hero-chart-card__legend-item--explain">
-                  Heute = 100
+                  Letzter Stand = 100
                 </div>
               </div>
               <div className="virus-radar-hero-chart-card__stamp">
                 <strong>{selectedHeroVirus}</strong>
-                <span>Stand {dataTimestamp}</span>
+                <span>Datenstand {chartObservedLabel}</span>
+                {heroDateBounds.forecastThroughDate ? (
+                  <span>Prognose bis {chartForecastLabel}</span>
+                ) : null}
               </div>
             </div>
             <MultiVirusForecastChart
@@ -398,7 +409,7 @@ const VirusRadarWorkspace: React.FC<Props> = ({
             />
             <div className="virus-radar-hero-chart-card__footer">
               <span className="virus-radar-hero-chart-card__hint">
-                Links siehst du die letzten Wochen, rechts die nächsten 7 Tage. Alle Werte sind auf Heute = 100 normiert, damit die Richtung sauber vergleichbar bleibt.
+                Links siehst du den gemessenen Verlauf bis zum letzten verfügbaren Stand, rechts die nächsten 7 Tage Prognose. Alle Werte sind auf Letzter Stand = 100 normiert, damit die Richtung sauber vergleichbar bleibt.
               </span>
               <div className="virus-radar-virus-switcher virus-radar-virus-switcher--hero" aria-label="Virus im Verlauf wechseln">
                 {VIRUS_RADAR_HERO_VIRUSES.map((option) => (

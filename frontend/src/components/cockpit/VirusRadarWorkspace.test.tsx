@@ -24,6 +24,12 @@ jest.mock('./MultiVirusForecastChart', () => ({
 jest.mock('./cockpitUtils', () => ({
   formatCurrency: (value: number | null | undefined) => (value == null ? '-' : `${value} EUR`),
   formatDateTime: () => '04.04.2026 · 08:00',
+  formatDateShort: (value?: string | null) => {
+    if (!value) return '-';
+    const iso = String(value).slice(0, 10);
+    const [year, month, day] = iso.split('-');
+    return `${day}.${month}.${year}`;
+  },
   formatPercent: (value: number) => `${Math.round(value)}%`,
   formatSignalScore: (value: number | null | undefined, digits = 0) => {
     if (value == null || Number.isNaN(value)) return '-';
@@ -56,8 +62,24 @@ describe('VirusRadarWorkspace', () => {
           availableViruses: ['Influenza A', 'Influenza B', 'SARS-CoV-2', 'RSV A'],
           chartData: [
             {
-              date: '2026-04-08',
-              dateLabel: '08.04',
+              date: '2026-03-18',
+              dateLabel: '18.03',
+              actualSeries: {
+                'Influenza A': 84,
+                'Influenza B': 104,
+                'SARS-CoV-2': 91,
+                'RSV A': 70,
+              },
+              forecastSeries: {
+                'Influenza A': null,
+                'Influenza B': null,
+                'SARS-CoV-2': null,
+                'RSV A': null,
+              },
+            },
+            {
+              date: '2026-03-30',
+              dateLabel: '30.03',
               actualSeries: {
                 'Influenza A': 100,
                 'Influenza B': 100,
@@ -69,6 +91,22 @@ describe('VirusRadarWorkspace', () => {
                 'Influenza B': 100,
                 'SARS-CoV-2': 100,
                 'RSV A': 100,
+              },
+            },
+            {
+              date: '2026-04-01',
+              dateLabel: '01.04',
+              actualSeries: {
+                'Influenza A': null,
+                'Influenza B': null,
+                'SARS-CoV-2': null,
+                'RSV A': null,
+              },
+              forecastSeries: {
+                'Influenza A': 108,
+                'Influenza B': 94,
+                'SARS-CoV-2': 121,
+                'RSV A': 145,
               },
             },
           ],
@@ -223,13 +261,17 @@ describe('VirusRadarWorkspace', () => {
     expect(screen.getByText('Berlin zeigt die stärkste Dynamik für GELO in dieser Woche.')).toBeInTheDocument();
     expect(screen.getByText('Virus-Verlauf · Influenza A')).toBeInTheDocument();
     expect(screen.getByText('Influenza A · letzte Wochen und nächste 7 Tage.')).toBeInTheDocument();
-    expect(screen.getByText('Durchgezogen siehst du die letzten Wochen, gestrichelt die Prognose.')).toBeInTheDocument();
+    expect(screen.getByText('Durchgezogen siehst du den gemessenen Verlauf, gestrichelt die Prognose.')).toBeInTheDocument();
     expect(screen.getByText('Hero virus forecast chart Influenza A')).toBeInTheDocument();
+    expect(screen.getByText('Aktualisiert 04.04.2026 · 08:00')).toBeInTheDocument();
     expect(screen.getAllByText('Mecklenburg-Vorpommern').length).toBeGreaterThan(0);
     expect(screen.getByText('Letzte Wochen')).toBeInTheDocument();
     expect(screen.getByText('Nächste 7 Tage')).toBeInTheDocument();
-    expect(screen.getByText('Heute = 100')).toBeInTheDocument();
-    expect(screen.getByText('Links siehst du die letzten Wochen, rechts die nächsten 7 Tage. Alle Werte sind auf Heute = 100 normiert, damit die Richtung sauber vergleichbar bleibt.')).toBeInTheDocument();
+    expect(screen.getByText('Letzter Stand = 100')).toBeInTheDocument();
+    expect(screen.queryByText('Heute = 100')).not.toBeInTheDocument();
+    expect(screen.getByText('Datenstand 30.03.2026')).toBeInTheDocument();
+    expect(screen.getByText('Prognose bis 01.04.2026')).toBeInTheDocument();
+    expect(screen.getByText('Links siehst du den gemessenen Verlauf bis zum letzten verfügbaren Stand, rechts die nächsten 7 Tage Prognose. Alle Werte sind auf Letzter Stand = 100 normiert, damit die Richtung sauber vergleichbar bleibt.')).toBeInTheDocument();
     expect(screen.queryByText('Eine zentrale Entscheidungsseite für Media. Was jetzt wichtig ist, wo gehandelt werden sollte und welche Risiken oder Blocker noch sichtbar bleiben.')).not.toBeInTheDocument();
     expect(screen.queryByText('Entscheidung diese Woche')).not.toBeInTheDocument();
     expect(screen.getByText('Radar-Tape')).toBeInTheDocument();

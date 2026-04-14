@@ -1,7 +1,6 @@
 import unittest
 from dataclasses import replace
 
-from app.services.ml.regional_media_allocation_contracts import RegionalMediaAllocationConfig
 from app.services.ml.regional_media_allocation_engine import (
     DEFAULT_MEDIA_ALLOCATION_CONFIG,
     RegionalMediaAllocationEngine,

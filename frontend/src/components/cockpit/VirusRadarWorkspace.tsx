@@ -64,6 +64,7 @@ type RegionLeaderboardRow = {
   trend?: string;
   impact_probability?: number;
   signal_score?: number;
+  ranking_signal_score?: number;
   recommendation_ref?: { card_id?: string } | null;
   tooltip?: unknown;
 };
@@ -123,6 +124,7 @@ const VirusRadarWorkspace: React.FC<Props> = ({
       trend: item.trend || '',
       impact_probability: item.event_probability || 0,
       signal_score: item.event_probability || 0,
+      ranking_signal_score: item.event_probability || 0,
       recommendation_ref: undefined,
       tooltip: undefined,
     }));
@@ -166,10 +168,13 @@ const VirusRadarWorkspace: React.FC<Props> = ({
   );
   const heroSignalProbability = (
     heroPrediction?.event_probability
+    ?? heroRegion?.signal_score
+    ?? heroRegion?.ranking_signal_score
     ?? heroRegion?.impact_probability
+    ?? heroRegionLeaderboardEntry?.signal_score
+    ?? heroRegionLeaderboardEntry?.ranking_signal_score
     ?? heroRegion?.signal_score
     ?? heroRegionLeaderboardEntry?.impact_probability
-    ?? heroRegionLeaderboardEntry?.signal_score
     ?? null
   );
   const heroTrend = heroPrediction?.trend || heroRegion?.trend || heroRegionLeaderboardEntry?.trend || null;
@@ -212,7 +217,7 @@ const VirusRadarWorkspace: React.FC<Props> = ({
   const selectedRegionStage = resolveRegionStage(
     selectedActivation?.priority,
     selectedPrediction?.decision_label,
-    selectedRegion?.impact_probability ?? selectedRegion?.signal_score ?? null,
+    selectedRegion?.signal_score ?? selectedRegion?.ranking_signal_score ?? selectedRegion?.impact_probability ?? null,
   );
   const selectedRegionStageTone = regionStageTone(selectedRegionStage);
   const selectedRegionDetail = buildRegionDetail({
@@ -220,7 +225,7 @@ const VirusRadarWorkspace: React.FC<Props> = ({
     stage: selectedRegionStage,
     trend: selectedRegion?.trend || selectedPrediction?.trend || null,
     changePct: selectedRegion?.change_pct ?? selectedPrediction?.change_pct ?? null,
-    signalScore: selectedRegion?.signal_score ?? selectedRegion?.impact_probability ?? selectedPrediction?.event_probability ?? null,
+    signalScore: selectedRegion?.signal_score ?? selectedRegion?.ranking_signal_score ?? selectedRegion?.impact_probability ?? selectedPrediction?.event_probability ?? null,
     reason: selectedActivation?.reason || selectedRegion?.priority_explanation || null,
   });
   const whyNowItems = buildWhyNowItems(nowData.view.reasons, evidenceData.evidence?.signal_stack?.summary?.top_drivers);
@@ -264,6 +269,34 @@ const VirusRadarWorkspace: React.FC<Props> = ({
     : selectedHeroSummary
       ? `${selectedHeroVirus} wird aktuell für die nächsten ${horizonDays} Tage bei ${formatSignedPercent(selectedHeroSummary.deltaPct)} erwartet. Der Graph basiert auf den letzten vorhandenen Wochenwerten und der aktuellen Prognose, nicht auf erfundenen Demo-Daten.`
       : 'Sobald frische Kurven vorliegen, siehst du hier wieder die letzten Wochen plus die 7-Tage-Prognose.';
+  const decisionRegionName = heroRecommendation?.region || focusRegion?.name || heroRegionName || 'Fokusregion';
+  const decisionHeadline = heroIsLoading
+    ? 'Die Wochenempfehlung wird gerade vorbereitet.'
+    : recommendationId
+      ? `${heroRecommendation?.direction || 'Prüfen'} · ${decisionRegionName}`
+      : `${decisionRegionName} zuerst prüfen`;
+  const decisionSummary = heroIsLoading
+    ? 'Sobald die Daten da sind, siehst du hier wieder den empfohlenen nächsten Schritt für diese Woche.'
+    : heroRecommendation?.whyNow
+      || nowData.view.summary
+      || whyNowModel.copy;
+  const decisionStats = [
+    {
+      label: 'Fokus',
+      value: decisionRegionName,
+      detail: recommendationId ? 'Mit verknüpfter Empfehlung' : 'Noch ohne verknüpfte Empfehlung',
+    },
+    {
+      label: 'Signal',
+      value: heroSignalProbability != null ? formatSignalScore(heroSignalProbability) : 'Noch offen',
+      detail: heroTrend || 'Trend wird geladen',
+    },
+    {
+      label: 'Blocker',
+      value: nowData.workspaceStatus?.open_blockers || '0 offen',
+      detail: nowData.workspaceStatus?.summary || 'Noch keine offenen Hinweise.',
+    },
+  ];
   const heroPrimaryStat = heroIsLoading
     ? 'Wird geladen'
     : selectedHeroSummary
@@ -302,6 +335,37 @@ const VirusRadarWorkspace: React.FC<Props> = ({
           <p className="virus-radar-hero__summary virus-radar-hero__summary--lead">
             {heroSummary}
           </p>
+
+          <div className="virus-radar-secondary-lead virus-radar-secondary-lead--decision">
+            <span className="virus-radar-secondary-lead__eyebrow">Empfohlener nächster Schritt</span>
+            <strong className="virus-radar-secondary-lead__headline">{decisionHeadline}</strong>
+            <p className="virus-radar-secondary-lead__copy">{decisionSummary}</p>
+            <div className="virus-radar-hero__decision-facts" aria-label="Entscheidungsfakten">
+              {decisionStats.map((item) => (
+                <div key={item.label} className="virus-radar-stat virus-radar-stat--decision">
+                  <span className="virus-radar-stat__label">{item.label}</span>
+                  <strong className="virus-radar-stat__value">{item.value}</strong>
+                  <span className="virus-radar-stat__detail">{item.detail}</span>
+                </div>
+              ))}
+            </div>
+            <div className="virus-radar-hero__actions virus-radar-hero__actions--decision">
+              <button
+                type="button"
+                className="media-button"
+                onClick={() => recommendationId && onOpenRecommendation(recommendationId)}
+                disabled={!recommendationId}
+              >
+                Empfehlung prüfen
+              </button>
+              <button type="button" className="media-button secondary" onClick={onOpenEvidence}>
+                Evidenz ansehen
+              </button>
+              <button type="button" className="media-button secondary" onClick={onOpenCampaigns}>
+                Kampagnen öffnen
+              </button>
+            </div>
+          </div>
 
           <div className="virus-radar-hero-chart-card">
             <div className="virus-radar-hero-chart-card__meta">
@@ -366,22 +430,6 @@ const VirusRadarWorkspace: React.FC<Props> = ({
                 <span className="virus-radar-stat__label">Datenlage</span>
                 <strong className="virus-radar-stat__value">{nowData.workspaceStatus?.data_freshness || 'Noch offen'}</strong>
               </div>
-            </div>
-            <div className="virus-radar-hero__actions">
-              <button
-                type="button"
-                className="media-button"
-                onClick={() => recommendationId && onOpenRecommendation(recommendationId)}
-                disabled={!recommendationId}
-              >
-                Empfehlung prüfen
-              </button>
-              <button type="button" className="media-button secondary" onClick={onOpenEvidence}>
-                Evidenz ansehen
-              </button>
-              <button type="button" className="media-button secondary" onClick={onOpenCampaigns}>
-                Kampagnen öffnen
-              </button>
             </div>
             <div className="virus-radar-hero__support">
               <p className="virus-radar-hero__support-copy">

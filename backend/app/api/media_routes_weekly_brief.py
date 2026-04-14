@@ -1,12 +1,12 @@
 """Dashboard and weekly brief routes for the media API."""
 
 import io
-from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
+from app.api.brand_defaults import resolve_request_brand
 from app.api.deps import get_current_admin, get_current_user
 from app.api.media_contracts import json_safe_response
 from app.db.schema_contracts import MLForecastSchemaMismatchError
@@ -35,7 +35,7 @@ async def get_media_cockpit(
 async def get_media_decision(
     virus_typ: str = "Influenza A",
     target_source: str = "RKI_ARE",
-    brand: str = Query(..., min_length=1),
+    brand: str | None = Query(default=None),
     db: Session = Depends(get_db),
 ):
     """V2 Decision-View Payload mit WeeklyDecision, Gate-Mix und Model/Truth-Kontext."""
@@ -44,7 +44,7 @@ async def get_media_decision(
             MediaV2Service(db).get_decision_payload(
                 virus_typ=virus_typ,
                 target_source=target_source,
-                brand=brand,
+                brand=resolve_request_brand(brand),
             )
         )
     except MLForecastSchemaMismatchError as exc:
@@ -55,7 +55,7 @@ async def get_media_decision(
 async def get_media_regions(
     virus_typ: str = "Influenza A",
     target_source: str = "RKI_ARE",
-    brand: str = Query(..., min_length=1),
+    brand: str | None = Query(default=None),
     db: Session = Depends(get_db),
 ):
     """V2 Regionen-Workbench Payload mit Signal-Treibern und Prioritätslogik."""
@@ -64,7 +64,7 @@ async def get_media_regions(
             MediaV2Service(db).get_regions_payload(
                 virus_typ=virus_typ,
                 target_source=target_source,
-                brand=brand,
+                brand=resolve_request_brand(brand),
             )
         )
     except MLForecastSchemaMismatchError as exc:
@@ -73,19 +73,24 @@ async def get_media_regions(
 
 @router.get("/campaigns", dependencies=[Depends(get_current_user)])
 async def get_media_campaigns(
-    brand: str = Query(..., min_length=1),
+    brand: str | None = Query(default=None),
     limit: int = Query(default=120, ge=1, le=500),
     db: Session = Depends(get_db),
 ):
     """V2 Campaign-Queue mit Deduplizierung, Lifecycle-State und Publish-Blockern."""
-    return json_safe_response(MediaV2Service(db).get_campaigns_payload(brand=brand, limit=limit))
+    return json_safe_response(
+        MediaV2Service(db).get_campaigns_payload(
+            brand=resolve_request_brand(brand),
+            limit=limit,
+        )
+    )
 
 
 @router.get("/evidence", dependencies=[Depends(get_current_user)])
 async def get_media_evidence(
     virus_typ: str = "Influenza A",
     target_source: str = "RKI_ARE",
-    brand: str = Query(..., min_length=1),
+    brand: str | None = Query(default=None),
     db: Session = Depends(get_db),
 ):
     """V2 Evidenz-View mit Proxy, Truth, SignalStack und ModelLineage."""
@@ -94,7 +99,7 @@ async def get_media_evidence(
             MediaV2Service(db).get_evidence_payload(
                 virus_typ=virus_typ,
                 target_source=target_source,
-                brand=brand,
+                brand=resolve_request_brand(brand),
             )
         )
     except MLForecastSchemaMismatchError as exc:
@@ -121,7 +126,7 @@ async def get_media_model_lineage(
 
 @router.post("/weekly-brief/generate", dependencies=[Depends(get_current_admin)])
 async def generate_weekly_brief(
-    brand: str = Query(..., min_length=1),
+    brand: str | None = Query(default=None),
     virus_typ: str = Query(default="Influenza A"),
     db: Session = Depends(get_db),
 ):
@@ -129,7 +134,7 @@ async def generate_weekly_brief(
     from app.services.media.weekly_brief_service import WeeklyBriefService
 
     service = WeeklyBriefService(db)
-    result = service.generate(brand=brand, virus_typ=virus_typ)
+    result = service.generate(brand=resolve_request_brand(brand), virus_typ=virus_typ)
     return {
         "status": "success",
         "calendar_week": result["calendar_week"],
@@ -140,22 +145,23 @@ async def generate_weekly_brief(
 
 @router.get("/weekly-brief/latest", dependencies=[Depends(get_current_user)])
 async def get_latest_weekly_brief(
-    brand: str = Query(..., min_length=1),
+    brand: str | None = Query(default=None),
     db: Session = Depends(get_db),
 ):
     """Download des neuesten Action Brief als PDF."""
     from app.models.database import WeeklyBrief
 
+    brand_value = resolve_request_brand(brand)
     brief = (
         db.query(WeeklyBrief)
-        .filter_by(brand=brand)
+        .filter_by(brand=brand_value)
         .order_by(WeeklyBrief.generated_at.desc())
         .first()
     )
     if not brief or not brief.pdf_bytes:
         raise HTTPException(status_code=404, detail="Kein Weekly Brief vorhanden. Bitte zuerst generieren.")
 
-    filename = f"weekly-brief-{str(brand).strip().lower()}-{brief.calendar_week}.pdf"
+    filename = f"weekly-brief-{str(brand_value).strip().lower()}-{brief.calendar_week}.pdf"
     return StreamingResponse(
         io.BytesIO(brief.pdf_bytes),
         media_type="application/pdf",
@@ -166,21 +172,22 @@ async def get_latest_weekly_brief(
 @router.get("/weekly-brief/{calendar_week}", dependencies=[Depends(get_current_user)])
 async def get_weekly_brief_by_week(
     calendar_week: str,
-    brand: str = Query(..., min_length=1),
+    brand: str | None = Query(default=None),
     db: Session = Depends(get_db),
 ):
     """Download eines spezifischen Action Brief nach Kalenderwoche."""
     from app.models.database import WeeklyBrief
 
+    brand_value = resolve_request_brand(brand)
     brief = (
         db.query(WeeklyBrief)
-        .filter_by(calendar_week=calendar_week, brand=brand)
+        .filter_by(calendar_week=calendar_week, brand=brand_value)
         .first()
     )
     if not brief or not brief.pdf_bytes:
         raise HTTPException(status_code=404, detail=f"Kein Brief für {calendar_week} vorhanden.")
 
-    filename = f"weekly-brief-{str(brand).strip().lower()}-{calendar_week}.pdf"
+    filename = f"weekly-brief-{str(brand_value).strip().lower()}-{calendar_week}.pdf"
     return StreamingResponse(
         io.BytesIO(brief.pdf_bytes),
         media_type="application/pdf",

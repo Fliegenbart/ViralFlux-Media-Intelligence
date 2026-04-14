@@ -37,10 +37,22 @@ def build_regions_payload(
             severity_score=severity_score,
             momentum_score=momentum_score,
         )
+        resolved_signal_score = (
+            region.get("signal_score")
+            or region.get("ranking_signal_score")
+            or region.get("peix_score")
+            or ranking_signal_region.get("score_0_100")
+            or region.get("impact_probability")
+        )
+        resolved_ranking_signal_score = (
+            region.get("ranking_signal_score")
+            or region.get("signal_score")
+            or ranking_signal_region.get("score_0_100")
+        )
         enriched_regions[code] = {
             **region,
-            "signal_score": region.get("signal_score") or region.get("peix_score") or ranking_signal_region.get("score_0_100") or region.get("impact_probability"),
-            "ranking_signal_score": region.get("signal_score") or ranking_signal_region.get("score_0_100"),
+            "signal_score": resolved_signal_score,
+            "ranking_signal_score": resolved_ranking_signal_score,
             "peix_score": region.get("peix_score") or ranking_signal_region.get("score_0_100"),
             "severity_score": severity_score,
             "momentum_score": momentum_score,
@@ -74,7 +86,13 @@ def build_regions_payload(
             float(item.get("actionability_score") or 0.0),
             float(item.get("severity_score") or 0.0),
             float(item.get("momentum_score") or 0.0),
-            float(item.get("signal_score") or item.get("peix_score") or item.get("impact_probability") or 0.0),
+            float(
+                item.get("signal_score")
+                or item.get("ranking_signal_score")
+                or item.get("peix_score")
+                or item.get("impact_probability")
+                or 0.0
+            ),
         ),
         reverse=True,
     )

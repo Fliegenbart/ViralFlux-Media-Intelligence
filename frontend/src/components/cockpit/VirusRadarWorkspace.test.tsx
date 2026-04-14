@@ -30,9 +30,9 @@ jest.mock('./cockpitUtils', () => ({
     const normalized = value <= 1 ? value * 100 : value;
     return `${normalized.toFixed(digits)}/100`;
   },
-  primarySignalScore: (item: { signal_score?: number | null; peix_score?: number | null; impact_probability?: number | null } | null | undefined) => {
+  primarySignalScore: (item: { signal_score?: number | null; ranking_signal_score?: number | null; peix_score?: number | null; impact_probability?: number | null } | null | undefined) => {
     if (!item) return 0;
-    const raw = item.signal_score ?? item.peix_score ?? item.impact_probability ?? 0;
+    const raw = item.signal_score ?? item.ranking_signal_score ?? item.peix_score ?? item.impact_probability ?? 0;
     return raw <= 1 ? raw * 100 : raw;
   },
   statusTone: () => ({
@@ -219,6 +219,8 @@ describe('VirusRadarWorkspace', () => {
     );
 
     expect(screen.getByText('VIRALFLUX / VIRUS-RADAR')).toBeInTheDocument();
+    expect(screen.getByText('Empfohlener nächster Schritt')).toBeInTheDocument();
+    expect(screen.getByText('Berlin zeigt die stärkste Dynamik für GELO in dieser Woche.')).toBeInTheDocument();
     expect(screen.getByText('Virus-Verlauf · Influenza A')).toBeInTheDocument();
     expect(screen.getByText('Influenza A · letzte Wochen und nächste 7 Tage.')).toBeInTheDocument();
     expect(screen.getByText('Durchgezogen siehst du die letzten Wochen, gestrichelt die Prognose.')).toBeInTheDocument();
@@ -238,6 +240,125 @@ describe('VirusRadarWorkspace', () => {
     expect(screen.getByText('Fokusregion')).toBeInTheDocument();
     expect(screen.getAllByText('Aktivieren').length).toBeGreaterThan(0);
     expect(screen.getAllByText(/88\/100 Signalwert/i).length).toBeGreaterThan(0);
+
+    const decisionBlock = screen.getByText('Empfohlener nächster Schritt');
+    const chartLegend = screen.getByText('Letzte Wochen');
+    expect(
+      decisionBlock.compareDocumentPosition(chartLegend) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it('prefers ranking signal scores from the regions payload over the legacy alias in the focus ladder', () => {
+    render(
+      <VirusRadarWorkspace
+        virus="Influenza A"
+        onVirusChange={noop}
+        horizonDays={7}
+        heroForecastLoading={false}
+        heroForecast={{
+          availableViruses: ['Influenza A'],
+          chartData: [],
+          summaries: [{ virus: 'Influenza A', currentIndex: 100, projectedIndex: 108, deltaPct: 8, direction: 'steigend' }],
+          headlinePrimary: 'Kurzfristiger Blick',
+          headlineSecondary: 'Eine Region steht vorne.',
+          summary: 'Die Fokusregion wird aus dem Regionsmodell gezogen.',
+        }}
+        nowData={{
+          view: {
+            generatedAt: '2026-04-04T08:00:00Z',
+            heroRecommendation: {
+              direction: 'Aktivieren',
+              region: 'Hamburg',
+              whyNow: 'Hamburg ist die Fokusregion.',
+            },
+            focusRegion: {
+              code: 'HH',
+              name: 'Hamburg',
+              recommendationId: 'rec-1',
+            },
+            reasons: ['Hamburg steht im Ranking vorn.'],
+            risks: [],
+            summary: 'Hamburg ist diese Woche im Fokus.',
+          },
+          forecast: { predictions: [] },
+          workspaceStatus: {
+            data_freshness: 'Aktuell',
+            summary: 'Die wichtigsten Daten sind aktuell genug für die Wochenentscheidung.',
+            blocker_count: 0,
+            blockers: [],
+            open_blockers: 'Keine',
+          },
+          focusRegionBacktest: { timeline: [] },
+        } as any}
+        regionsData={{
+          regionsView: {
+            map: {
+              regions: {
+                HH: {
+                  name: 'Hamburg',
+                  trend: 'steigend',
+                  change_pct: 14.2,
+                  ranking_signal_score: 0.79,
+                },
+              },
+              top_regions: [
+                {
+                  code: 'HH',
+                  name: 'Hamburg',
+                  trend: 'steigend',
+                  ranking_signal_score: 0.79,
+                  impact_probability: 0.64,
+                  recommendation_ref: { card_id: 'rec-1' },
+                },
+              ],
+              activation_suggestions: [
+                {
+                  region: 'HH',
+                  region_name: 'Hamburg',
+                  priority: 'Aktivieren',
+                  signal_score: 0.79,
+                  reason: 'Hamburg steht vorne.',
+                  budget_shift_pct: 20,
+                  channel_mix: { search: 0.5 },
+                },
+              ],
+            },
+          },
+        } as any}
+        campaignsData={{
+          campaignsView: {
+            summary: {
+              publishable_cards: 1,
+              active_cards: 1,
+            },
+            cards: [],
+          },
+        } as any}
+        evidenceData={{
+          evidence: {
+            truth_gate: {
+              state: 'Aktiv',
+              passed: true,
+              message: 'Evidenz ist ausreichend sichtbar.',
+            },
+            business_validation: {},
+            signal_stack: {
+              summary: {
+                top_drivers: [],
+              },
+            },
+            known_limits: [],
+          },
+        } as any}
+        onOpenRecommendation={noop}
+        onOpenRegions={noop}
+        onOpenCampaigns={noop}
+        onOpenEvidence={noop}
+      />,
+    );
+
+    expect(screen.getAllByText(/79\/100 Signalwert/i).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/64\/100 Signalwert/i)).not.toBeInTheDocument();
   });
 
   it('shows an honest loading state while the shared hero outlook is still loading', () => {

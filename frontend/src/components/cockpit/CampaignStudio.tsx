@@ -105,14 +105,14 @@ const CampaignStudio: React.FC<Props> = ({
     {
       id: 'prepare',
       label: 'Vorbereitung',
-      description: 'Frühe oder noch nicht freigabereife Fälle.',
+      description: 'Frühe Fälle oder Vorschläge, die noch nicht entscheidungsreif sind.',
       cards: prepareCards,
       total: prepareCount,
     },
     {
       id: 'approval',
-      label: 'Prüfen & Freigeben',
-      description: 'Fälle, die als Nächstes geprüft, freigegeben oder übergeben werden können.',
+      label: 'Prüfen & Entscheiden',
+      description: 'Fälle, die als Nächstes geprüft, entschieden oder übergeben werden können.',
       cards: approvalCards,
       total: approvalCount,
     },
@@ -211,7 +211,7 @@ const CampaignStudio: React.FC<Props> = ({
               <OperatorPanel
                 eyebrow="Nächster Schritt"
                 title="Warum dieser Fall jetzt vorne liegt"
-                description="Hier wird sichtbar, ob gerade eher Prüfung, Freigabe, Klärung oder Übergabe im Vordergrund steht."
+                description="Hier wird sichtbar, ob der Fall jetzt geprüft werden sollte, ob noch etwas fehlt oder ob er schon weitergegeben werden kann."
                 tone="muted"
                 className="workspace-zone workspace-zone--support campaign-command-rail campaign-approval-summary"
               >
@@ -410,7 +410,7 @@ const CampaignStudio: React.FC<Props> = ({
             </div>
             <div className="campaign-setup-footer">
               <div className="campaign-setup-note">
-                Neue Vorschläge starten als Entwurf und wandern danach in Prüfung, Freigabe oder operative Übergabe.
+                Neue Vorschläge starten als Entwurf und gehen danach in Prüfung, Entscheidung oder operative Übergabe.
               </div>
               <button className="media-button" type="button" onClick={onGenerate} disabled={generationLoading}>
                 {generationLoading ? 'Vorschläge werden erstellt...' : 'Vorschläge erstellen'}
@@ -551,15 +551,15 @@ function laneStateCount(
 
 function phaseTitle(id: 'prepare' | 'approval' | 'active'): string {
   if (id === 'prepare') return 'In Vorbereitung';
-  if (id === 'approval') return 'Prüfen & Freigeben';
+  if (id === 'approval') return 'Prüfen & Entscheiden';
   return 'Aktive Fälle';
 }
 
 function recommendationActionLabel(card: RecommendationCard): string {
   const lane = recommendationLane(card);
-  if (hasPublishBlockers(card)) return 'Blocker prüfen';
+  if (hasPublishBlockers(card)) return 'Offene Punkte klären';
   if (lane === 'sync') return 'Übergabe vorbereiten';
-  if (lane === 'approve') return 'Zur Freigabe öffnen';
+  if (lane === 'approve') return 'Zur Entscheidung öffnen';
   if (lane === 'live') return 'Aktiven Fall öffnen';
   return 'Empfehlung prüfen';
 }
@@ -617,8 +617,8 @@ function approvalReadiness(card: RecommendationCard): { label: string; detail: s
 
   if (lane === 'approve') {
     return {
-      label: 'Bereit für Freigabe',
-      detail: 'Die Empfehlung ist entscheidungsreif und wartet auf den nächsten Freigabeschritt.',
+      label: 'Bereit zur Entscheidung',
+      detail: 'Die Empfehlung ist entscheidungsreif und wartet auf die nächste fachliche Entscheidung.',
       tone: 'success',
     };
   }

@@ -40,14 +40,24 @@ class ForecastApiTests(unittest.TestCase):
         return {"Authorization": f"Bearer {token}"}
 
     def test_forecast_read_endpoint_requires_authentication(self) -> None:
-        response = self.client.get("/api/v1/forecast/regional/predict?virus_typ=Influenza%20A&horizon_days=7")
+        response = self.client.get("/api/v1/forecast/regional/predict?virus_typ=Influenza%20A&horizon_days=7&brand=gelo")
 
         self.assertEqual(response.status_code, 401)
 
     def test_regional_hero_overview_requires_authentication(self) -> None:
-        response = self.client.get("/api/v1/forecast/regional/hero-overview?horizon_days=7")
+        response = self.client.get("/api/v1/forecast/regional/hero-overview?horizon_days=7&brand=gelo")
 
         self.assertEqual(response.status_code, 401)
+
+    def test_media_activation_openapi_description_is_brand_neutral(self) -> None:
+        response = self.client.get("/openapi.json")
+
+        self.assertEqual(response.status_code, 200)
+        description = (
+            response.json()["paths"]["/api/v1/forecast/regional/media-activation"]["get"]["description"]
+        )
+        self.assertNotIn("GELO", description)
+        self.assertIn("selected brand", description)
 
     def test_forecast_run_requires_admin_role(self) -> None:
         response = self.client.post("/api/v1/forecast/run", headers=self.user_headers)
@@ -60,6 +70,8 @@ class ForecastApiTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["status"], "forecast_started")
+        self.assertEqual(response.json()["path_role"], "legacy_benchmark_admin")
+        self.assertIn("legacy", response.json()["message"].lower())
 
     def test_regional_predict_response_contains_decision_payload(self) -> None:
         payload = {
@@ -114,7 +126,7 @@ class ForecastApiTests(unittest.TestCase):
             return_value=payload,
         ):
             response = self.client.get(
-                "/api/v1/forecast/regional/predict?virus_typ=Influenza%20A&horizon_days=7",
+                "/api/v1/forecast/regional/predict?virus_typ=Influenza%20A&horizon_days=7&brand=gelo",
                 headers=self.admin_headers,
             )
 
@@ -136,6 +148,31 @@ class ForecastApiTests(unittest.TestCase):
         self.assertIn("decision_priority_index", first_prediction["decision"])
         self.assertIn("signal_support_score", first_prediction["decision"])
         self.assertIn("expected_target_incidence", first_prediction)
+
+    def test_regional_decisions_defaults_brand_when_query_is_missing(self) -> None:
+        payload = {
+            "virus_typ": "Influenza A",
+            "horizon_days": 7,
+            "decision_summary": {},
+            "predictions": [],
+            "generated_at": "2026-04-12T12:00:00",
+        }
+
+        with patch(
+            "app.services.ml.regional_forecast.RegionalForecastService.predict_all_regions",
+            return_value=payload,
+        ) as predict_mock:
+            response = self.client.get(
+                "/api/v1/forecast/regional/decisions?virus_typ=Influenza%20A&horizon_days=7",
+                headers=self.admin_headers,
+            )
+
+        self.assertEqual(response.status_code, 200)
+        predict_mock.assert_called_once_with(
+            virus_typ="Influenza A",
+            brand="gelo",
+            horizon_days=7,
+        )
 
     def test_regional_predict_response_exposes_prepare_early_signal_but_prepare_stage(self) -> None:
         payload = {
@@ -181,7 +218,7 @@ class ForecastApiTests(unittest.TestCase):
             return_value=payload,
         ):
             response = self.client.get(
-                "/api/v1/forecast/regional/predict?virus_typ=Influenza%20A&horizon_days=7",
+                "/api/v1/forecast/regional/predict?virus_typ=Influenza%20A&horizon_days=7&brand=gelo",
                 headers=self.admin_headers,
             )
 
@@ -225,7 +262,7 @@ class ForecastApiTests(unittest.TestCase):
             return_value=payload,
         ):
             response = self.client.get(
-                "/api/v1/forecast/regional/hero-overview?horizon_days=7",
+                "/api/v1/forecast/regional/hero-overview?horizon_days=7&brand=gelo",
                 headers=self.admin_headers,
             )
 
@@ -234,6 +271,33 @@ class ForecastApiTests(unittest.TestCase):
         self.assertEqual(body["summary"]["trained_viruses"], 4)
         self.assertEqual(body["virus_rollup"][0]["virus_typ"], "SARS-CoV-2")
         self.assertEqual(body["virus_rollup"][0]["top_change_pct"], 73.7)
+
+    def test_regional_hero_overview_defaults_brand_when_query_is_missing(self) -> None:
+        payload = {
+            "generated_at": "2026-04-08T20:00:00",
+            "reference_virus": "Influenza A",
+            "summary": {"trained_viruses": 4},
+            "benchmark": [],
+            "virus_rollup": [],
+            "region_rollup": [],
+            "top_opportunities": [],
+        }
+
+        with patch(
+            "app.services.ml.regional_forecast.RegionalForecastService.build_hero_overview",
+            return_value=payload,
+        ) as hero_mock:
+            response = self.client.get(
+                "/api/v1/forecast/regional/hero-overview?horizon_days=7",
+                headers=self.admin_headers,
+            )
+
+        self.assertEqual(response.status_code, 200)
+        hero_mock.assert_called_once_with(
+            brand="gelo",
+            horizon_days=7,
+            reference_virus="Influenza A",
+        )
 
     def test_experimental_geo_predict_response_stays_shadow_and_cluster_only(self) -> None:
         payload = {
@@ -357,7 +421,7 @@ class ForecastApiTests(unittest.TestCase):
             return_value=payload,
         ):
             response = self.client.get(
-                "/api/v1/forecast/regional/media-allocation?virus_typ=Influenza%20A&weekly_budget_eur=50000&horizon_days=7",
+                "/api/v1/forecast/regional/media-allocation?virus_typ=Influenza%20A&weekly_budget_eur=50000&horizon_days=7&brand=gelo",
                 headers=self.admin_headers,
             )
 
@@ -426,7 +490,7 @@ class ForecastApiTests(unittest.TestCase):
             return_value=payload,
         ):
             response = self.client.get(
-                "/api/v1/forecast/regional/media-activation?virus_typ=Influenza%20A&weekly_budget_eur=50000&horizon_days=7",
+                "/api/v1/forecast/regional/media-activation?virus_typ=Influenza%20A&weekly_budget_eur=50000&horizon_days=7&brand=gelo",
                 headers=self.admin_headers,
             )
 
@@ -479,7 +543,7 @@ class ForecastApiTests(unittest.TestCase):
             return_value=payload,
         ):
             response = self.client.get(
-                "/api/v1/forecast/regional/media-allocation?virus_typ=Influenza%20A&weekly_budget_eur=50000&horizon_days=7",
+                "/api/v1/forecast/regional/media-allocation?virus_typ=Influenza%20A&weekly_budget_eur=50000&horizon_days=7&brand=gelo",
                 headers=self.admin_headers,
             )
 
@@ -552,7 +616,7 @@ class ForecastApiTests(unittest.TestCase):
             return_value=payload,
         ):
             response = self.client.get(
-                "/api/v1/forecast/regional/campaign-recommendations?virus_typ=Influenza%20A&weekly_budget_eur=50000&horizon_days=7",
+                "/api/v1/forecast/regional/campaign-recommendations?virus_typ=Influenza%20A&weekly_budget_eur=50000&horizon_days=7&brand=gelo",
                 headers=self.admin_headers,
             )
 
@@ -570,7 +634,7 @@ class ForecastApiTests(unittest.TestCase):
 
     def test_regional_predict_rejects_invalid_horizon(self) -> None:
         response = self.client.get(
-            "/api/v1/forecast/regional/predict?virus_typ=Influenza%20A&horizon_days=4",
+            "/api/v1/forecast/regional/predict?virus_typ=Influenza%20A&horizon_days=4&brand=gelo",
             headers=self.admin_headers,
         )
 

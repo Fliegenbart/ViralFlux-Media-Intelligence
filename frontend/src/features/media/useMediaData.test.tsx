@@ -81,7 +81,7 @@ function TimegraphHarness() {
     regionOptions,
     selectedPrediction,
     regionalBacktest,
-  } = useTimegraphPageData('Influenza A', 0);
+  } = useTimegraphPageData('Influenza A', 'gelo', 0);
 
   return (
     <div>
@@ -489,7 +489,7 @@ describe('useTimegraphPageData', () => {
     await waitFor(() => expect(screen.getByTestId('timegraph-loading')).toHaveTextContent('ready'));
     await waitFor(() => expect(screen.getByTestId('timegraph-backtest')).toHaveTextContent('Berlin'));
 
-    expect(mockedMediaApi.getRegionalForecast).toHaveBeenCalledWith('Influenza A', 7);
+    expect(mockedMediaApi.getRegionalForecast).toHaveBeenCalledWith('Influenza A', 7, 'gelo');
     expect(mockedMediaApi.getRegionalBacktest).toHaveBeenCalledWith('Influenza A', 'BE', 7);
     expect(screen.getByTestId('timegraph-region')).toHaveTextContent('BE');
     expect(screen.getByTestId('timegraph-region-options')).toHaveTextContent('BE,BY');

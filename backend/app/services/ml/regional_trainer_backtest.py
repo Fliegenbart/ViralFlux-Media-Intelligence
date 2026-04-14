@@ -7,9 +7,10 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+from app.services.ml.benchmarking.baselines import persistence_quantiles, seasonal_quantiles
 from app.core.time import utc_now
 from app.services.ml.benchmarking.leaderboard import build_leaderboard
-from app.services.ml.benchmarking.metrics import summarize_probabilistic_metrics
+from app.services.ml.benchmarking.metrics import brier_decomposition, summarize_probabilistic_metrics
 from app.services.ml.models.geo_hierarchy import GeoHierarchyHelper
 from app.services.ml.regional_panel_utils import (
     ALL_BUNDESLAENDER,
@@ -26,6 +27,24 @@ from app.services.ml.regional_panel_utils import (
     quality_gate_from_metrics,
     time_based_panel_splits,
 )
+
+EVENT_DELTA_METRICS: tuple[str, ...] = (
+    "pr_auc",
+    "brier_score",
+    "ece",
+    "precision_at_top3",
+)
+LOSS_METRICS: frozenset[str] = frozenset(
+    {
+        "wis",
+        "crps",
+        "brier_score",
+        "ece",
+        "activation_false_positive_rate",
+    }
+)
+BOOTSTRAP_RANDOM_SEED = 42
+BOOTSTRAP_ITERATIONS = 2000
 
 
 def _json_safe(value: Any) -> Any:
@@ -57,6 +76,7 @@ def build_backtest_bundle(
     virus_typ: str,
     panel: pd.DataFrame,
     feature_columns: list[str],
+    event_feature_columns: list[str] | None = None,
     hierarchy_feature_columns: list[str],
     ww_only_columns: list[str],
     tau: float,
@@ -68,6 +88,7 @@ def build_backtest_bundle(
     quality_gate_from_metrics_fn=quality_gate_from_metrics,
 ) -> dict[str, Any]:
     config = event_config or event_definition_config_for_virus(virus_typ)
+    effective_event_feature_columns = list(event_feature_columns or feature_columns)
     working = panel.copy()
     working["event_label"] = trainer._event_labels(
         working,
@@ -100,7 +121,7 @@ def build_backtest_bundle(
         fold_selection = trainer._select_event_definition(
             virus_typ=virus_typ,
             panel=train_df,
-            feature_columns=feature_columns,
+            feature_columns=effective_event_feature_columns,
             event_config=config,
         )
         fold_tau = float(fold_selection["tau"])
@@ -133,21 +154,25 @@ def build_backtest_bundle(
         if model_train_df.empty or cal_df.empty or model_train_df["event_label"].nunique() < 2:
             continue
 
-        classifier = trainer._fit_classifier_from_frame(model_train_df, feature_columns)
+        classifier = trainer._fit_classifier_from_frame(
+            model_train_df,
+            effective_event_feature_columns,
+            sample_weight=trainer._event_sample_weights(model_train_df, virus_typ=virus_typ),
+        )
         calibration, calibration_mode = trainer._select_guarded_calibration(
             calibration_frame=pd.DataFrame(
                 {
                     "as_of_date": cal_df["as_of_date"].values,
                     "event_label": cal_df["event_label"].values.astype(int),
                     "event_probability_raw": classifier.predict_proba(
-                        cal_df[feature_columns].to_numpy()
+                        cal_df[effective_event_feature_columns].to_numpy()
                     )[:, 1],
                 }
             ),
             raw_probability_col="event_probability_raw",
             action_threshold=fold_threshold,
         )
-        raw_prob = classifier.predict_proba(test_df[feature_columns].to_numpy())[:, 1]
+        raw_prob = classifier.predict_proba(test_df[effective_event_feature_columns].to_numpy())[:, 1]
         calibrated_prob = trainer._apply_calibration(calibration, raw_prob)
 
         ww_prob = trainer._amelag_only_probabilities(
@@ -205,6 +230,19 @@ def build_backtest_bundle(
         pred_next = np.expm1(pred_log)
         pred_next_lo = np.expm1(pred_lo)
         pred_next_hi = np.expm1(pred_hi)
+        forecast_implied_prob = trainer._forecast_implied_event_probability(
+            quantile_predictions={
+                0.1: pred_next_lo,
+                0.5: pred_next,
+                0.9: pred_next_hi,
+            },
+            current_known=test_df["current_known_incidence"].to_numpy(),
+            baseline=test_df["seasonal_baseline"].to_numpy(),
+            mad=test_df["seasonal_mad"].to_numpy(),
+            tau=fold_tau,
+            kappa=fold_kappa,
+            min_absolute_incidence=config.min_absolute_incidence,
+        )
         hierarchy_inputs = trainer._predict_hierarchy_aggregate_quantiles(
             frame=test_df,
             source_panel=working,
@@ -249,6 +287,8 @@ def build_backtest_bundle(
                 "selection_precision": fold_selection.get("precision"),
                 "selection_recall": fold_selection.get("recall"),
                 "selection_pr_auc": fold_selection.get("pr_auc"),
+                "selection_brier_score": fold_selection.get("brier_score"),
+                "selection_ece": fold_selection.get("ece"),
                 "calibration_mode": calibration_mode,
             }
         )
@@ -270,10 +310,13 @@ def build_backtest_bundle(
                     "event_label": test_df["event_label"].values.astype(int),
                     "event_probability_calibrated": calibrated_prob,
                     "event_probability_raw": raw_prob,
+                    "forecast_implied_event_probability": forecast_implied_prob,
                     "amelag_only_probability": ww_prob,
                     "persistence_probability": persistence_prob,
                     "climatology_probability": climatology_prob,
                     "current_known_incidence": test_df["current_known_incidence"].values.astype(float),
+                    "seasonal_baseline": test_df["seasonal_baseline"].values.astype(float),
+                    "seasonal_mad": test_df["seasonal_mad"].values.astype(float),
                     "next_week_incidence": test_df["next_week_incidence"].values.astype(float),
                     "expected_next_week_incidence": pred_next,
                     "expected_target_incidence": pred_next,
@@ -320,10 +363,21 @@ def build_backtest_bundle(
     benchmark_frame["q_0.5"] = benchmark_frame["expected_target_incidence"].astype(float)
     benchmark_frame["q_0.9"] = benchmark_frame["prediction_interval_upper"].astype(float)
     benchmark_frame["event_probability"] = benchmark_frame["event_probability_calibrated"].astype(float)
+    benchmark_frame = _attach_persistence_baseline_quantiles(benchmark_frame)
+    persistence_baseline_quantile_predictions = {
+        0.1: benchmark_frame["baseline_q_0.1"].to_numpy(dtype=float),
+        0.5: benchmark_frame["baseline_q_0.5"].to_numpy(dtype=float),
+        0.9: benchmark_frame["baseline_q_0.9"].to_numpy(dtype=float),
+    }
+    climatology_baseline_quantile_predictions = seasonal_quantiles(
+        seasonal_baseline=benchmark_frame["seasonal_baseline"].to_numpy(dtype=float),
+        seasonal_scale=np.maximum(benchmark_frame["seasonal_mad"].to_numpy(dtype=float), 1.0),
+    )
     hierarchy_benchmark_frame = trainer._hierarchy_reconciled_benchmark_frame(
         oof_frame=oof_frame,
         source_panel=working,
     )
+    hierarchy_benchmark_frame = _attach_persistence_baseline_quantiles(hierarchy_benchmark_frame)
     combined_benchmark_frame = pd.concat(
         [benchmark_frame, hierarchy_benchmark_frame],
         ignore_index=True,
@@ -335,9 +389,18 @@ def build_backtest_bundle(
             0.5: benchmark_frame["q_0.5"].to_numpy(dtype=float),
             0.9: benchmark_frame["q_0.9"].to_numpy(dtype=float),
         },
+        baseline_quantiles=persistence_baseline_quantile_predictions,
         event_labels=benchmark_frame["event_label"].to_numpy(dtype=int),
         event_probabilities=benchmark_frame["event_probability"].to_numpy(dtype=float),
         action_threshold=action_threshold,
+    )
+    persistence_forecast_metrics = summarize_probabilistic_metrics(
+        y_true=benchmark_frame["y_true"].to_numpy(dtype=float),
+        quantile_predictions=persistence_baseline_quantile_predictions,
+    )
+    climatology_forecast_metrics = summarize_probabilistic_metrics(
+        y_true=benchmark_frame["y_true"].to_numpy(dtype=float),
+        quantile_predictions=climatology_baseline_quantile_predictions,
     )
     benchmark_leaderboard = build_leaderboard(
         combined_benchmark_frame,
@@ -353,6 +416,11 @@ def build_backtest_bundle(
                 0.5: candidate_frame["q_0.5"].to_numpy(dtype=float),
                 0.9: candidate_frame["q_0.9"].to_numpy(dtype=float),
             },
+            baseline_quantiles={
+                0.1: candidate_frame["baseline_q_0.1"].to_numpy(dtype=float),
+                0.5: candidate_frame["baseline_q_0.5"].to_numpy(dtype=float),
+                0.9: candidate_frame["baseline_q_0.9"].to_numpy(dtype=float),
+            } if {"baseline_q_0.1", "baseline_q_0.5", "baseline_q_0.9"}.issubset(candidate_frame.columns) else None,
             event_labels=candidate_frame["event_label"].to_numpy(dtype=int),
             event_probabilities=candidate_frame["event_probability"].to_numpy(dtype=float),
             action_threshold=action_threshold,
@@ -423,6 +491,15 @@ def build_backtest_bundle(
             "primary_metric": "relative_wis",
             "leaderboard": benchmark_leaderboard,
             "metrics": benchmark_metrics,
+            "forecast_baselines": {
+                "persistence": persistence_forecast_metrics,
+                "climatology": climatology_forecast_metrics,
+            },
+            "forecast_core_deltas": _forecast_core_delta_summary(
+                candidate_metrics=benchmark_metrics,
+                persistence_metrics=persistence_forecast_metrics,
+                climatology_metrics=climatology_forecast_metrics,
+            ),
             "candidate_summaries": candidate_summaries,
             "hierarchy_diagnostics": hierarchy_diagnostics,
             "cluster_homogeneity": cluster_homogeneity,
@@ -449,28 +526,247 @@ def build_backtest_bundle(
 
 def aggregate_metrics(frame: pd.DataFrame, *, action_threshold: float) -> dict[str, float]:
     effective_threshold = None if "action_threshold" in frame.columns else action_threshold
-    return {
-        "precision_at_top3": precision_at_k(frame, k=3),
-        "precision_at_top5": precision_at_k(frame, k=5),
+    metrics = _event_probability_metrics(
+        frame,
+        score_col="event_probability_calibrated",
+        action_threshold=effective_threshold,
+    )
+    metrics.update(
+        {
+            "precision_at_top5": precision_at_k(frame, k=5),
+            "median_lead_days": median_lead_days(frame, threshold=effective_threshold),
+            "action_threshold": round(float(action_threshold), 4),
+        }
+    )
+    return metrics
+
+
+def _event_probability_metrics(
+    frame: pd.DataFrame,
+    *,
+    score_col: str,
+    action_threshold: float | None,
+) -> dict[str, Any]:
+    score_frame = frame if score_col in frame.columns else frame.assign(**{score_col: 0.0})
+    labels = score_frame["event_label"].to_numpy(dtype=int)
+    probabilities = score_frame[score_col].to_numpy(dtype=float)
+    metrics: dict[str, Any] = {
+        "precision_at_top3": precision_at_k(score_frame, k=3, score_col=score_col),
         "pr_auc": round(
-            average_precision_safe(frame["event_label"], frame["event_probability_calibrated"]),
+            average_precision_safe(labels, probabilities),
             6,
         ),
         "brier_score": round(
-            brier_score_safe(frame["event_label"], frame["event_probability_calibrated"]),
+            brier_score_safe(labels, probabilities),
             6,
         ),
         "ece": round(
-            compute_ece(frame["event_label"], frame["event_probability_calibrated"]),
+            compute_ece(labels, probabilities),
             6,
         ),
-        "median_lead_days": median_lead_days(frame, threshold=effective_threshold),
         "activation_false_positive_rate": activation_false_positive_rate(
-            frame,
-            threshold=effective_threshold,
+            score_frame,
+            threshold=action_threshold,
+            score_col=score_col,
         ),
-        "action_threshold": round(float(action_threshold), 4),
     }
+    metrics.update(
+        brier_decomposition(
+            labels,
+            probabilities,
+            target_bins=10,
+            min_bin_size=20,
+        )
+    )
+    return metrics
+
+
+def _metric_delta(candidate_value: float | None, baseline_value: float | None, metric_name: str) -> float:
+    candidate = float(candidate_value or 0.0)
+    baseline = float(baseline_value or 0.0)
+    if metric_name in LOSS_METRICS:
+        return round(baseline - candidate, 6)
+    return round(candidate - baseline, 6)
+
+
+def _event_metric_deltas(
+    *,
+    candidate_metrics: dict[str, Any],
+    baseline_metrics: dict[str, Any],
+    metric_names: tuple[str, ...] = EVENT_DELTA_METRICS,
+) -> dict[str, float]:
+    return {
+        metric_name: _metric_delta(
+            candidate_metrics.get(metric_name),
+            baseline_metrics.get(metric_name),
+            metric_name,
+        )
+        for metric_name in metric_names
+    }
+
+
+def _fold_metric_deltas(
+    frame: pd.DataFrame,
+    *,
+    candidate_col: str,
+    baseline_col: str,
+    action_threshold: float | None,
+    metric_names: tuple[str, ...] = EVENT_DELTA_METRICS,
+) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for fold, fold_frame in frame.groupby("fold", dropna=False):
+        candidate_metrics = _event_probability_metrics(
+            fold_frame,
+            score_col=candidate_col,
+            action_threshold=action_threshold,
+        )
+        baseline_metrics = _event_probability_metrics(
+            fold_frame,
+            score_col=baseline_col,
+            action_threshold=action_threshold,
+        )
+        row = {"fold": int(fold)}
+        row.update(
+            {
+                metric_name: _metric_delta(
+                    candidate_metrics.get(metric_name),
+                    baseline_metrics.get(metric_name),
+                    metric_name,
+                )
+                for metric_name in metric_names
+            }
+        )
+        rows.append(row)
+    return rows
+
+
+def _bootstrap_metric_confidence_intervals(
+    frame: pd.DataFrame,
+    *,
+    candidate_col: str,
+    baseline_col: str,
+    action_threshold: float | None,
+    metric_names: tuple[str, ...] = EVENT_DELTA_METRICS,
+    iterations: int = BOOTSTRAP_ITERATIONS,
+    seed: int = BOOTSTRAP_RANDOM_SEED,
+) -> dict[str, list[float]]:
+    if frame.empty:
+        return {metric_name: [0.0, 0.0] for metric_name in metric_names}
+    rng = np.random.default_rng(int(seed))
+    fold_frames = [fold_frame.reset_index(drop=True) for _, fold_frame in frame.groupby("fold", dropna=False)]
+    samples_by_metric: dict[str, list[float]] = {metric_name: [] for metric_name in metric_names}
+    for _ in range(max(int(iterations), 1)):
+        sampled_parts = []
+        for fold_frame in fold_frames:
+            choices = rng.integers(0, len(fold_frame), size=len(fold_frame))
+            sampled_parts.append(fold_frame.iloc[choices].copy())
+        sampled = pd.concat(sampled_parts, ignore_index=True)
+        candidate_metrics = _event_probability_metrics(
+            sampled,
+            score_col=candidate_col,
+            action_threshold=action_threshold,
+        )
+        baseline_metrics = _event_probability_metrics(
+            sampled,
+            score_col=baseline_col,
+            action_threshold=action_threshold,
+        )
+        for metric_name in metric_names:
+            samples_by_metric[metric_name].append(
+                _metric_delta(
+                    candidate_metrics.get(metric_name),
+                    baseline_metrics.get(metric_name),
+                    metric_name,
+                )
+            )
+    return {
+        metric_name: [
+            round(float(np.quantile(samples_by_metric[metric_name], 0.025)), 6),
+            round(float(np.quantile(samples_by_metric[metric_name], 0.975)), 6),
+        ]
+        for metric_name in metric_names
+    }
+
+
+def _event_path_delta_summary(
+    frame: pd.DataFrame,
+    *,
+    candidate_col: str,
+    baseline_map: dict[str, str],
+    action_threshold: float | None,
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+    delta_summary: dict[str, Any] = {}
+    ci_summary: dict[str, Any] = {}
+    fold_summary: dict[str, Any] = {}
+    candidate_metrics = _event_probability_metrics(
+        frame,
+        score_col=candidate_col,
+        action_threshold=action_threshold,
+    )
+    for baseline_name, baseline_col in baseline_map.items():
+        baseline_metrics = _event_probability_metrics(
+            frame,
+            score_col=baseline_col,
+            action_threshold=action_threshold,
+        )
+        delta_summary[baseline_name] = _event_metric_deltas(
+            candidate_metrics=candidate_metrics,
+            baseline_metrics=baseline_metrics,
+        )
+        ci_summary[baseline_name] = _bootstrap_metric_confidence_intervals(
+            frame,
+            candidate_col=candidate_col,
+            baseline_col=baseline_col,
+            action_threshold=action_threshold,
+        )
+        fold_summary[baseline_name] = _fold_metric_deltas(
+            frame,
+            candidate_col=candidate_col,
+            baseline_col=baseline_col,
+            action_threshold=action_threshold,
+        )
+    return delta_summary, ci_summary, fold_summary
+
+
+def _attach_persistence_baseline_quantiles(frame: pd.DataFrame) -> pd.DataFrame:
+    if frame.empty or "current_known_incidence" not in frame.columns:
+        return frame
+    result = frame.copy()
+    scale = (
+        pd.to_numeric(result.get("seasonal_mad"), errors="coerce")
+        .fillna(1.0)
+        .clip(lower=1.0)
+        .to_numpy(dtype=float)
+        if "seasonal_mad" in result.columns
+        else np.full(len(result), 1.0, dtype=float)
+    )
+    persistence = persistence_quantiles(
+        current_values=result["current_known_incidence"].to_numpy(dtype=float),
+        residual_scale=scale,
+    )
+    for quantile, values in persistence.items():
+        result[f"baseline_q_{quantile:g}"] = np.asarray(values, dtype=float)
+    return result
+
+
+def _forecast_core_delta_summary(
+    *,
+    candidate_metrics: dict[str, Any],
+    persistence_metrics: dict[str, Any],
+    climatology_metrics: dict[str, Any],
+) -> dict[str, dict[str, float]]:
+    summary = {
+        "persistence": {
+            "wis": _metric_delta(candidate_metrics.get("wis"), persistence_metrics.get("wis"), "wis"),
+            "crps": _metric_delta(candidate_metrics.get("crps"), persistence_metrics.get("crps"), "crps"),
+        },
+        "climatology": {
+            "wis": _metric_delta(candidate_metrics.get("wis"), climatology_metrics.get("wis"), "wis"),
+            "crps": _metric_delta(candidate_metrics.get("crps"), climatology_metrics.get("crps"), "crps"),
+        },
+    }
+    return summary
+    
 
 
 def baseline_metrics(trainer, frame: pd.DataFrame, *, action_threshold: float) -> dict[str, dict[str, float]]:
@@ -481,23 +777,11 @@ def baseline_metrics(trainer, frame: pd.DataFrame, *, action_threshold: float) -
         "climatology": "climatology_probability",
         "amelag_only": "amelag_only_probability",
     }.items():
-        baseline_frame = frame.copy()
-        baseline_frame["baseline_probability"] = baseline_frame[column]
-        baselines[name] = {
-            "pr_auc": round(average_precision_safe(frame["event_label"], frame[column]), 6),
-            "brier_score": round(brier_score_safe(frame["event_label"], frame[column]), 6),
-            "ece": round(compute_ece(frame["event_label"], frame[column]), 6),
-            "precision_at_top3": precision_at_k(
-                baseline_frame,
-                k=3,
-                score_col="baseline_probability",
-            ),
-            "activation_false_positive_rate": activation_false_positive_rate(
-                baseline_frame,
-                threshold=effective_threshold,
-                score_col="baseline_probability",
-            ),
-        }
+        baselines[name] = _event_probability_metrics(
+            frame,
+            score_col=column,
+            action_threshold=effective_threshold,
+        )
     return baselines
 
 
@@ -569,12 +853,23 @@ def build_backtest_payload(
 
     ranking.sort(key=lambda item: (item["precision"], item["pr_auc"]), reverse=True)
     horizon = int(frame["horizon_days"].iloc[0]) if "horizon_days" in frame.columns else TARGET_WINDOW_DAYS[1]
+    effective_threshold = None if "action_threshold" in frame.columns else action_threshold
     fold_diagnostics = []
     for fold, fold_frame in frame.groupby("fold"):
+        positive_mask = fold_frame["event_label"] == 1
+        positive_count = int(np.sum(positive_mask))
+        positive_regions = int(fold_frame.loc[positive_mask, "bundesland"].astype(str).nunique())
         fold_diagnostics.append(
             {
                 "fold": int(fold),
                 "rows": int(len(fold_frame)),
+                "positive_count": positive_count,
+                "prevalence": round(float(positive_count / max(len(fold_frame), 1)), 6),
+                "positive_regions": positive_regions,
+                "degeneration_flag": bool(
+                    fold_frame["event_label"].nunique() < 2 or positive_regions <= 1
+                ),
+                "low_information_flag": bool(0 < positive_count < 5),
                 "mean_absolute_error": round(float(fold_frame["absolute_error"].mean() or 0.0), 6)
                 if "absolute_error" in fold_frame.columns
                 else None,
@@ -584,6 +879,73 @@ def build_backtest_payload(
                 "calibration_mode": str(fold_frame["calibration_mode"].iloc[0]) if "calibration_mode" in fold_frame.columns else None,
             }
         )
+    event_benchmark_paths = {
+        "event_model": _event_probability_metrics(
+            frame,
+            score_col="event_probability_calibrated",
+            action_threshold=effective_threshold,
+        ),
+        "persistence": _event_probability_metrics(
+            frame,
+            score_col="persistence_probability",
+            action_threshold=effective_threshold,
+        ),
+        "climatology": _event_probability_metrics(
+            frame,
+            score_col="climatology_probability",
+            action_threshold=effective_threshold,
+        ),
+        "amelag_only": _event_probability_metrics(
+            frame,
+            score_col="amelag_only_probability",
+            action_threshold=effective_threshold,
+        ),
+    }
+    if "forecast_implied_event_probability" in frame.columns:
+        event_benchmark_paths["forecast_implied"] = _event_probability_metrics(
+            frame,
+            score_col="forecast_implied_event_probability",
+            action_threshold=effective_threshold,
+        )
+
+    baseline_map = {
+        "persistence": "persistence_probability",
+        "climatology": "climatology_probability",
+        "amelag_only": "amelag_only_probability",
+    }
+    event_model_deltas, event_model_ci, event_model_fold_deltas = _event_path_delta_summary(
+        frame,
+        candidate_col="event_probability_calibrated",
+        baseline_map=baseline_map,
+        action_threshold=effective_threshold,
+    )
+    delta_vs_persistence: dict[str, Any] = {
+        "event_model": event_model_deltas["persistence"],
+    }
+    delta_vs_climatology: dict[str, Any] = {
+        "event_model": event_model_deltas["climatology"],
+    }
+    delta_vs_amelag_only: dict[str, Any] = {
+        "event_model": event_model_deltas["amelag_only"],
+    }
+    delta_ci_95: dict[str, Any] = {
+        "event_model": event_model_ci,
+    }
+    fold_metric_deltas: dict[str, Any] = {
+        "event_model": event_model_fold_deltas,
+    }
+    if "forecast_implied_event_probability" in frame.columns:
+        forecast_implied_deltas, forecast_implied_ci, forecast_implied_fold_deltas = _event_path_delta_summary(
+            frame,
+            candidate_col="forecast_implied_event_probability",
+            baseline_map=baseline_map,
+            action_threshold=effective_threshold,
+        )
+        delta_vs_persistence["forecast_implied"] = forecast_implied_deltas["persistence"]
+        delta_vs_climatology["forecast_implied"] = forecast_implied_deltas["climatology"]
+        delta_vs_amelag_only["forecast_implied"] = forecast_implied_deltas["amelag_only"]
+        delta_ci_95["forecast_implied"] = forecast_implied_ci
+        fold_metric_deltas["forecast_implied"] = forecast_implied_fold_deltas
     return {
         "virus_typ": str(frame["virus_typ"].iloc[0]),
         "horizon_days": horizon,
@@ -601,6 +963,12 @@ def build_backtest_payload(
         "failed": max(0, len(ALL_BUNDESLAENDER) - len(details)),
         "ranking": _json_safe(ranking),
         "fold_diagnostics": _json_safe(fold_diagnostics),
+        "event_benchmark_paths": _json_safe(event_benchmark_paths),
+        "delta_vs_persistence": _json_safe(delta_vs_persistence),
+        "delta_vs_climatology": _json_safe(delta_vs_climatology),
+        "delta_vs_amelag_only": _json_safe(delta_vs_amelag_only),
+        "delta_ci_95": _json_safe(delta_ci_95),
+        "fold_metric_deltas": _json_safe(fold_metric_deltas),
         "details": _json_safe(details),
         "generated_at": utc_now().isoformat(),
     }

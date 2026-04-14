@@ -129,6 +129,15 @@ class RegionalTrainerPromotionTests(unittest.TestCase):
             trainer.registry.evidence_kwargs["candidate_metadata"]["metric_semantics_version"],
             DEFAULT_METRIC_SEMANTICS_VERSION,
         )
+        self.assertTrue(trainer.registry.evidence_kwargs["candidate_metadata"]["champion_scope_active"])
+        self.assertEqual(
+            trainer.registry.evidence_kwargs["candidate_metadata"]["quantile_grid_version"],
+            "canonical_quantile_grid_v1",
+        )
+        self.assertTrue(trainer.registry.evidence_kwargs["candidate_metadata"]["oof_calibration_only"])
+        self.assertTrue(
+            trainer.registry.evidence_kwargs["candidate_metadata"]["weather_vintage_discipline_passed"]
+        )
         self.assertEqual(
             trainer.registry.record_metadata["promotion_evidence"]["promotion_blockers"],
             ["quality_gate_not_passed"],

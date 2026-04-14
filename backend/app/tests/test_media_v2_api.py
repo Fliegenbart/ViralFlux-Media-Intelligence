@@ -127,13 +127,35 @@ class MediaV2ApiTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 422)
 
-    def test_decision_endpoint_requires_explicit_brand_query(self) -> None:
-        response = self.client.get(
-            "/api/v1/media/decision?virus_typ=Influenza%20A",
-            headers=self.admin_headers,
+    def test_decision_endpoint_defaults_brand_query_when_missing(self) -> None:
+        with patch(
+            "app.services.media.v2_service.MediaV2Service.get_decision_payload",
+            return_value={"brand": "gelo", "generated_at": "2026-04-12T10:00:00Z"},
+        ) as decision_mock:
+            response = self.client.get(
+                "/api/v1/media/decision?virus_typ=Influenza%20A",
+                headers=self.admin_headers,
+            )
+
+        self.assertEqual(response.status_code, 200)
+        decision_mock.assert_called_once_with(
+            virus_typ="Influenza A",
+            target_source="RKI_ARE",
+            brand="gelo",
         )
 
-        self.assertEqual(response.status_code, 422)
+    def test_campaigns_endpoint_defaults_brand_query_when_missing(self) -> None:
+        with patch(
+            "app.services.media.v2_service.MediaV2Service.get_campaigns_payload",
+            return_value={"cards": [], "generated_at": "2026-04-12T10:00:00Z"},
+        ) as campaigns_mock:
+            response = self.client.get(
+                "/api/v1/media/campaigns?limit=120",
+                headers=self.admin_headers,
+            )
+
+        self.assertEqual(response.status_code, 200)
+        campaigns_mock.assert_called_once_with(brand="gelo", limit=120)
 
     def test_outcome_import_validate_history_and_template_endpoints(self) -> None:
         validate_response = self.client.post(

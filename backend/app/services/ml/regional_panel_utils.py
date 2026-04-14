@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Any, Iterable, Mapping, Sequence
 
 import numpy as np
@@ -96,6 +96,18 @@ PILOT_QUALITY_GATE_PROFILE = RegionalQualityGateProfile(
 
 DEFAULT_EVENT_DEFINITION_CONFIG = EventDefinitionConfig()
 VIRUS_EVENT_DEFINITION_OVERRIDES: dict[str, EventDefinitionConfig] = {
+    "Influenza B": EventDefinitionConfig(
+        min_absolute_incidence=4.0,
+        tau_grid=(0.05, 0.10, 0.15, 0.20, 0.25),
+        kappa_grid=(0.0, 0.25, 0.50),
+        min_recall_for_selection=0.25,
+    ),
+    "RSV A": EventDefinitionConfig(
+        min_absolute_incidence=3.0,
+        tau_grid=(0.05, 0.10, 0.15, 0.20, 0.25),
+        kappa_grid=(0.0, 0.25, 0.50),
+        min_recall_for_selection=0.25,
+    ),
     "SARS-CoV-2": EventDefinitionConfig(
         tau_grid=(0.05, 0.10, 0.15, 0.20, 0.25),
         kappa_grid=(0.0, 0.25, 0.50),
@@ -525,7 +537,7 @@ def choose_action_threshold(
     best_precision = 0.0
     best_recall = 0.0
 
-    candidate_thresholds = [round(value, 2) for value in np.arange(0.35, 0.91, 0.05)]
+    candidate_thresholds = [round(value, 2) for value in np.arange(0.05, 0.91, 0.05)]
     for threshold in candidate_thresholds:
         precision, recall = precision_recall_for_threshold(probabilities, labels, threshold)
         if recall < min_recall:
@@ -649,6 +661,10 @@ def quality_gate_from_metrics(
     virus_typ: str | None = None,
     horizon_days: int | None = None,
 ) -> dict[str, object]:
+    def _metric_value(name: str, default: float) -> float:
+        value = metrics.get(name)
+        return default if value is None else float(value)
+
     profile = quality_gate_profile_for_scope(virus_typ=virus_typ, horizon_days=horizon_days)
     baseline_pr_auc = max(
         float((baseline_metrics.get(name) or {}).get("pr_auc") or 0.0)
@@ -658,21 +674,18 @@ def quality_gate_from_metrics(
 
     checks = {
         "precision_at_top3_passed": (
-            float(metrics.get("precision_at_top3") or 0.0) >= profile.precision_at_top3_min
+            _metric_value("precision_at_top3", 0.0) >= profile.precision_at_top3_min
         ),
         "activation_fp_rate_passed": (
-            float(metrics.get("activation_false_positive_rate") or 1.0)
-            <= profile.activation_false_positive_rate_max
+            _metric_value("activation_false_positive_rate", 1.0) <= profile.activation_false_positive_rate_max
         ),
         "pr_auc_passed": (
-            float(metrics.get("pr_auc") or 0.0)
-            >= baseline_pr_auc * profile.pr_auc_vs_best_baseline_multiplier
+            _metric_value("pr_auc", 0.0) >= baseline_pr_auc * profile.pr_auc_vs_best_baseline_multiplier
         ),
         "brier_passed": (
-            float(metrics.get("brier_score") or 1.0)
-            <= climatology_brier * profile.brier_vs_climatology_multiplier
+            _metric_value("brier_score", 1.0) <= climatology_brier * profile.brier_vs_climatology_multiplier
         ),
-        "ece_passed": float(metrics.get("ece") or 1.0) <= profile.ece_max,
+        "ece_passed": _metric_value("ece", 1.0) <= profile.ece_max,
     }
     overall_passed = all(checks.values())
     failed_checks = [key for key, passed in checks.items() if not passed]

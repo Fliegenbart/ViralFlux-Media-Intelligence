@@ -132,7 +132,12 @@ def build_decision_payload(
                 {
                     "code": item.get("code"),
                     "name": item.get("name"),
-                    "signal_score": item.get("signal_score") or item.get("peix_score") or item.get("impact_probability"),
+                    "signal_score": (
+                        item.get("signal_score")
+                        or item.get("ranking_signal_score")
+                        or item.get("peix_score")
+                        or item.get("impact_probability")
+                    ),
                     "trend": item.get("trend"),
                 }
                 for item in top_regions

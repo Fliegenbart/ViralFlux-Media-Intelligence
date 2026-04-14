@@ -91,11 +91,12 @@ describe('LandingPage', () => {
           <Route path="/welcome" element={<LandingPage />} />
           <Route path="/login" element={<div>Login page</div>} />
           <Route path="/jetzt" element={<div>Now page</div>} />
+          <Route path="/virus-radar" element={<div>Virus radar page</div>} />
         </Routes>
       </MemoryRouter>,
     );
 
-  it('prioritizes the weekly decision and demotes feature marketing copy', async () => {
+  it('shows customer-facing product-core copy instead of internal weekly-planning language', async () => {
     mockAuthenticated = false;
     renderLandingPage();
 
@@ -106,27 +107,30 @@ describe('LandingPage', () => {
     });
 
     expect(
-      screen.getByRole('heading', { name: 'Was diese Woche entschieden werden sollte' }),
+      screen.getByRole('heading', { name: 'Erkennen, welche Regionen jetzt zuerst geprüft werden sollten' }),
     ).toBeInTheDocument();
     expect(
       screen.getByText(
-        'Die Einstiegsseite zeigt die Wochenlage in wenigen Signalen. Die eigentliche Arbeitsfläche öffnet direkt den Wochenplan mit Fokusländern, Richtung und Evidenz.',
+        'ViralFlux hilft Teams dabei, regionale Virus-Signale früher zu erkennen, die Lage für die nächsten Tage besser einzuordnen und daraus eine verständliche Wochensteuerung abzuleiten.',
       ),
     ).toBeInTheDocument();
-    const hero = screen.getByRole('region', { name: 'Wochenbriefing Einstieg' });
-    expect(within(hero).getByRole('heading', { name: 'Was diese Woche entschieden werden sollte' })).toBeInTheDocument();
-    expect(within(hero).getAllByRole('button', { name: 'Wochenplan öffnen' })).toHaveLength(1);
-    expect(screen.getByRole('button', { name: 'Wochenplan' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Evidenz' })).toBeInTheDocument();
-    expect(screen.getByText('Vor dem Einstieg sichtbar')).toBeInTheDocument();
-    expect(screen.getByText('Wochenfokus für Bundesländer')).toBeInTheDocument();
-    expect(screen.getByText('Evidenz bleibt sichtbar')).toBeInTheDocument();
-    expect(screen.queryByText('Wo zuerst hinschauen')).not.toBeInTheDocument();
-    expect(screen.queryByText('Was diese Woche tun')).not.toBeInTheDocument();
-    expect(screen.queryByText('Warum wir das vertreten')).not.toBeInTheDocument();
+    const hero = screen.getByRole('region', { name: 'Produktkern Einstieg' });
+    expect(within(hero).getByRole('heading', { name: 'Erkennen, welche Regionen jetzt zuerst geprüft werden sollten' })).toBeInTheDocument();
+    expect(within(hero).getAllByRole('button', { name: 'Produktkern ansehen' })).toHaveLength(1);
+    expect(within(hero).getByRole('link', { name: 'Aktuellen Produktumfang lesen' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Nutzen' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Produktkern' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Einsatzgrenzen' })).toBeInTheDocument();
+    expect(screen.getByText('Was der Produktkern heute schon leistet')).toBeInTheDocument();
+    expect(screen.getByText('Regionen schneller priorisieren')).toBeInTheDocument();
+    expect(screen.getByText('Forecast, Lage und Empfehlung getrennt sehen')).toBeInTheDocument();
+    expect(screen.getByText('Bewusst klar begrenzt statt zu viel versprochen')).toBeInTheDocument();
+    expect(screen.queryByText('Was diese Woche entschieden werden sollte')).not.toBeInTheDocument();
+    expect(screen.queryByText('Wochenfokus für Bundesländer')).not.toBeInTheDocument();
+    expect(screen.queryByText('Evidenz bleibt sichtbar')).not.toBeInTheDocument();
   });
 
-  it('shows footer status, version and docs link', async () => {
+  it('shows footer status, version and product-scope link', async () => {
     mockAuthenticated = false;
     renderLandingPage();
 
@@ -137,9 +141,9 @@ describe('LandingPage', () => {
     });
 
     expect(screen.getByText('Version 1.0.0')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Docs' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Produktumfang' })).toHaveAttribute(
       'href',
-      'https://github.com/Fliegenbart/ViralFlux-Media-Intelligence/blob/main/docs/OPERATORS_GUIDE.md',
+      'https://github.com/Fliegenbart/ViralFlux-Media-Intelligence/blob/main/docs/current_product_scope.md',
     );
   });
 
@@ -153,16 +157,16 @@ describe('LandingPage', () => {
       expect(screen.getByText(/Datenstatus:/i)).toBeInTheDocument();
     });
 
-    const hero = screen.getByRole('region', { name: 'Wochenbriefing Einstieg' });
+    const hero = screen.getByRole('region', { name: 'Produktkern Einstieg' });
 
     await act(async () => {
-      within(hero).getByRole('button', { name: 'Wochenplan öffnen' }).click();
+      within(hero).getByRole('button', { name: 'Produktkern ansehen' }).click();
     });
 
     expect(screen.getByTestId('location-probe')).toHaveTextContent('/login');
   });
 
-  it('sends logged-in visitors from the hero CTA to /jetzt', async () => {
+  it('sends logged-in visitors from the hero CTA to /virus-radar', async () => {
     mockAuthenticated = true;
     renderLandingPage();
 
@@ -172,12 +176,12 @@ describe('LandingPage', () => {
       expect(screen.getByText(/Datenstatus:/i)).toBeInTheDocument();
     });
 
-    const hero = screen.getByRole('region', { name: 'Wochenbriefing Einstieg' });
+    const hero = screen.getByRole('region', { name: 'Produktkern Einstieg' });
 
     await act(async () => {
-      within(hero).getByRole('button', { name: 'Wochenplan öffnen' }).click();
+      within(hero).getByRole('button', { name: 'Produktkern ansehen' }).click();
     });
 
-    expect(screen.getByTestId('location-probe')).toHaveTextContent('/jetzt');
+    expect(screen.getByTestId('location-probe')).toHaveTextContent('/virus-radar');
   });
 });

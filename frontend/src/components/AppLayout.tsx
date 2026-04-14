@@ -7,7 +7,7 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import { useLocation, useNavigate, Link } from 'react-router-dom';
+import { useLocation, Link } from 'react-router-dom';
 import { useTheme, useAuth } from '../App';
 import { apiFetch } from '../lib/api';
 import {
@@ -29,7 +29,9 @@ interface Props {
 
 export interface PageHeaderAction {
   label: string;
-  onClick: () => void | Promise<void>;
+  onClick?: () => void | Promise<void>;
+  to?: string;
+  href?: string;
   disabled?: boolean;
 }
 
@@ -54,7 +56,7 @@ const ICON_SIZE = 18;
 
 const PRIMARY_NAV_ITEMS = [
   { label: 'Virus-Radar', path: '/virus-radar', helper: 'Alles für die Media-Entscheidung auf einer Seite', Icon: Activity },
-  { label: 'Wochenplan', path: '/jetzt', helper: 'Was diese Woche zuerst zu tun ist', Icon: Zap },
+  { label: 'Diese Woche', path: '/jetzt', helper: 'Die aktuelle Wochenentscheidung im Detail', Icon: Zap },
   { label: 'Zeitgraph', path: '/zeitgraph', helper: 'Nur Verlauf und 7-Tage-Ausblick', Icon: TrendingUp },
   { label: 'Regionen', path: '/regionen', helper: 'Wo sich diese Woche genaueres Hinsehen lohnt', Icon: MapPin },
   { label: 'Kampagnen', path: '/kampagnen', helper: 'Welcher Fall als Nächstes geprüft werden sollte', Icon: Sparkles },
@@ -63,7 +65,7 @@ const PRIMARY_NAV_ITEMS = [
 
 const SECTION_META = [
   { path: '/virus-radar', kicker: 'Virus-Radar', title: 'Die zentrale Media-Entscheidungsseite' },
-  { path: '/jetzt', kicker: 'Wochenplan', title: 'Was diese Woche zu tun ist' },
+  { path: '/jetzt', kicker: 'Diese Woche', title: 'Die aktuelle Wochenentscheidung im Detail' },
   { path: '/zeitgraph', kicker: 'Zeitgraph', title: 'Nur Verlauf und 7-Tage-Ausblick' },
   { path: '/regionen', kicker: 'Regionen', title: 'Wo diese Woche genauer hingesehen werden sollte' },
   { path: '/kampagnen', kicker: 'Kampagnen', title: 'Welcher Fall als Nächstes geprüft werden sollte' },
@@ -199,12 +201,11 @@ const AppLayout: React.FC<Props> = ({ children }) => {
   const { theme, toggle } = useTheme();
   const { handleLogout } = useAuth();
   const location = useLocation();
-  const navigate = useNavigate();
   const [pdfLoading, setPdfLoading] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [pageHeader, setPageHeaderState] = useState<PageHeaderConfig | null>(null);
   const mobileToggleRef = useRef<HTMLButtonElement>(null);
-  const firstNavItemRef = useRef<HTMLButtonElement>(null);
+  const firstNavItemRef = useRef<HTMLAnchorElement>(null);
 
   const isActive = (path: string) => location.pathname.startsWith(path);
   const currentSection = SECTION_META.find(({ path }) => location.pathname.startsWith(path)) || {
@@ -238,11 +239,6 @@ const AppLayout: React.FC<Props> = ({ children }) => {
   const clearPageHeader = useCallback(() => {
     setPageHeaderState(null);
   }, []);
-
-  const handleNavClick = (path: string) => {
-    navigate(path);
-    setMobileMenuOpen(false);
-  };
 
   useEffect(() => {
     if (!mobileMenuOpen) {
@@ -280,10 +276,44 @@ const AppLayout: React.FC<Props> = ({ children }) => {
   ) => {
     if (!action) return null;
 
+    const className = `operator-page-action operator-page-action--${variant}`;
+
+    if (action.disabled && (action.to || action.href)) {
+      return (
+        <button type="button" className={className} disabled>
+          {action.label}
+        </button>
+      );
+    }
+
+    if (action.to) {
+      return (
+        <Link
+          to={action.to}
+          className={className}
+          onClick={action.onClick}
+        >
+          {action.label}
+        </Link>
+      );
+    }
+
+    if (action.href) {
+      return (
+        <a
+          href={action.href}
+          className={className}
+          onClick={action.onClick}
+        >
+          {action.label}
+        </a>
+      );
+    }
+
     return (
       <button
         type="button"
-        className={`operator-page-action operator-page-action--${variant}`}
+        className={className}
         onClick={action.onClick}
         disabled={action.disabled}
       >
@@ -326,11 +356,11 @@ const AppLayout: React.FC<Props> = ({ children }) => {
               {PRIMARY_NAV_ITEMS.map(({ label, path, helper, Icon }) => {
                 const active = isActive(path);
                 return (
-                  <button
+                  <Link
                     key={path}
                     ref={path === PRIMARY_NAV_ITEMS[0].path ? firstNavItemRef : undefined}
-                    type="button"
-                    onClick={() => handleNavClick(path)}
+                    to={path}
+                    onClick={() => setMobileMenuOpen(false)}
                     className={`operator-nav-item ${active ? 'active' : ''}`}
                     aria-current={active ? 'page' : undefined}
                     title={helper}
@@ -339,7 +369,7 @@ const AppLayout: React.FC<Props> = ({ children }) => {
                       <Icon size={ICON_SIZE} className="operator-nav-item__icon" aria-hidden="true" />
                       <span className="operator-nav-item__label">{label}</span>
                     </span>
-                  </button>
+                  </Link>
                 );
               })}
             </nav>

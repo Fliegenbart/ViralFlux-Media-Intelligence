@@ -8,6 +8,7 @@ Internal planning notes, agent workflows, and working cleanup plans are intentio
 
 - [README.md](../README.md)
 - [ARCHITECTURE.md](../ARCHITECTURE.md)
+- [docs/forecast_h7_science_contract.md](./forecast_h7_science_contract.md)
 - [docs/information-architecture-audit.md](./information-architecture-audit.md)
 - [docs/operator_output_surface.md](./operator_output_surface.md)
 

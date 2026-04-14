@@ -1,5 +1,4 @@
 import React, { useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 
 import EvidencePanel from '../../components/cockpit/EvidencePanel';
 import { useToast } from '../../App';
@@ -9,7 +8,6 @@ import { useEvidencePageData } from '../../features/media/useMediaData';
 import { useMediaWorkflow } from '../../features/media/workflowContext';
 
 const EvidencePage: React.FC = () => {
-  const navigate = useNavigate();
   const { toast } = useToast();
   const { setPageHeader, clearPageHeader } = usePageHeader();
   const { virus, brand, dataVersion, invalidateData } = useMediaWorkflow();
@@ -28,21 +26,30 @@ const EvidencePage: React.FC = () => {
     submitTruthCsv,
     loadTruthBatchDetail,
   } = useEvidencePageData(virus, brand, dataVersion, toast);
+  const sourceAttentionCount = (evidence?.source_status?.items || []).filter((item) => (
+    String(item.status_color || '').toLowerCase() !== 'green'
+  )).length;
+  const truthStatus = evidence?.truth_snapshot?.coverage || evidence?.truth_coverage;
+  const hasTruthData = Boolean((truthStatus?.coverage_weeks || 0) > 0);
+  const hasBlockers = Boolean(workspaceStatus?.blocker_count);
+  const importNeedsAttention = !hasTruthData || hasBlockers || sourceAttentionCount > 0;
+  const primaryActionLabel = importNeedsAttention ? 'Fehlende Daten klären' : 'Datenlage prüfen';
+  const primaryActionHref = importNeedsAttention ? '#evidence-import' : '#evidence-onboarding';
 
   useEffect(() => {
     setPageHeader({
       primaryAction: {
-        label: 'Importbereich öffnen',
-        onClick: () => document.getElementById('evidence-import')?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
+        label: primaryActionLabel,
+        href: primaryActionHref,
       },
       secondaryAction: {
-        label: 'Zum Wochenplan',
-        onClick: () => navigate('/jetzt'),
+        label: 'Zum Virus-Radar',
+        to: '/virus-radar',
       },
     });
 
     return clearPageHeader;
-  }, [clearPageHeader, navigate, setPageHeader]);
+  }, [clearPageHeader, primaryActionHref, primaryActionLabel, setPageHeader]);
 
   return (
     <AnimatedPage>

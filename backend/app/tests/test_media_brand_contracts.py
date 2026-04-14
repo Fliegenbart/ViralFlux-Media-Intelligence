@@ -8,7 +8,11 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.api.deps import get_current_admin, get_current_user
-from app.api.media_contracts import OutcomeImportRequest
+from app.api.media_contracts import (
+    OutcomeImportRequest,
+    RecommendationGenerateRequest,
+    RecommendationOpenRegionRequest,
+)
 from app.api.media_routes_outcomes import router as outcomes_router
 from app.api.media_routes_weekly_brief import router as weekly_brief_router
 from app.db.session import get_db
@@ -49,20 +53,59 @@ class MediaBrandContractTests(unittest.TestCase):
                 records=[],
             )
 
-    def test_decision_endpoint_requires_explicit_brand_query(self) -> None:
-        response = self.client.get("/api/v1/media/decision?virus_typ=Influenza%20A")
+    def test_recommendation_requests_use_brand_neutral_default_product_label(self) -> None:
+        generate_request = RecommendationGenerateRequest(brand="acme")
+        open_region_request = RecommendationOpenRegionRequest(
+            brand="acme",
+            region_code="BY",
+        )
 
-        self.assertEqual(response.status_code, 422)
+        self.assertEqual(generate_request.product, "Alle Produkte")
+        self.assertEqual(open_region_request.product, "Alle Produkte")
 
-    def test_outcomes_coverage_requires_explicit_brand_query(self) -> None:
-        response = self.client.get("/api/v1/media/outcomes/coverage?virus_typ=Influenza%20A")
+    def test_decision_endpoint_defaults_brand_query_when_missing(self) -> None:
+        with patch("app.api.media_routes_weekly_brief.MediaV2Service") as service_cls:
+            service_cls.return_value.get_decision_payload.return_value = {
+                "brand": "gelo",
+                "decision": "watch",
+            }
+            response = self.client.get("/api/v1/media/decision?virus_typ=Influenza%20A")
 
-        self.assertEqual(response.status_code, 422)
+        self.assertEqual(response.status_code, 200)
+        service_cls.return_value.get_decision_payload.assert_called_once_with(
+            virus_typ="Influenza A",
+            target_source="RKI_ARE",
+            brand="gelo",
+        )
 
-    def test_weekly_brief_generate_requires_explicit_brand_query(self) -> None:
-        response = self.client.post("/api/v1/media/weekly-brief/generate?virus_typ=Influenza%20A")
+    def test_outcomes_coverage_defaults_brand_query_when_missing(self) -> None:
+        with patch("app.api.media_routes_outcomes.MediaV2Service") as service_cls:
+            service_cls.return_value.get_truth_coverage.return_value = {
+                "brand": "gelo",
+                "coverage_weeks": 0,
+            }
+            response = self.client.get("/api/v1/media/outcomes/coverage?virus_typ=Influenza%20A")
 
-        self.assertEqual(response.status_code, 422)
+        self.assertEqual(response.status_code, 200)
+        service_cls.return_value.get_truth_coverage.assert_called_once_with(
+            brand="gelo",
+            virus_typ="Influenza A",
+        )
+
+    def test_weekly_brief_generate_defaults_brand_query_when_missing(self) -> None:
+        with patch.object(
+            WeeklyBriefService,
+            "generate",
+            return_value={
+                "calendar_week": "2026-W15",
+                "pages": 3,
+                "summary": {"brand": "gelo"},
+            },
+        ) as mocked_generate:
+            response = self.client.post("/api/v1/media/weekly-brief/generate?virus_typ=Influenza%20A")
+
+        self.assertEqual(response.status_code, 200)
+        mocked_generate.assert_called_once_with(brand="gelo", virus_typ="Influenza A")
 
     def test_decision_endpoint_accepts_explicit_brand_query(self) -> None:
         with patch("app.api.media_routes_weekly_brief.MediaV2Service") as service_cls:

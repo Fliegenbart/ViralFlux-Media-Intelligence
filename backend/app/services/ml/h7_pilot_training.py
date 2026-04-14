@@ -7,7 +7,6 @@ import json
 import logging
 from copy import deepcopy
 from dataclasses import dataclass
-from datetime import datetime
 from pathlib import Path
 from typing import Any, Sequence
 
@@ -27,6 +26,7 @@ from app.services.ml.regional_trainer import (
     _json_safe,
     _virus_slug,
 )
+from app.services.ml.xgboost_runtime import resolve_xgboost_runtime_config
 
 logger = logging.getLogger(__name__)
 
@@ -394,6 +394,7 @@ class PilotH7ExperimentTrainer(RegionalModelTrainer):
         negatives = max(int(np.sum(y == 0)), 1)
         config = deepcopy(self.classifier_config)
         config["scale_pos_weight"] = float(negatives / positives)
+        config = resolve_xgboost_runtime_config(config)
         model = XGBClassifier(**config)
         fit_kwargs: dict[str, Any] = {}
         if sample_weight is not None:
@@ -416,6 +417,7 @@ class PilotH7ExperimentTrainer(RegionalModelTrainer):
                 override = candidate
                 break
         merged_config = deepcopy(override or config)
+        merged_config = resolve_xgboost_runtime_config(merged_config)
         model = XGBRegressor(**merged_config)
         fit_kwargs: dict[str, Any] = {}
         if sample_weight is not None:

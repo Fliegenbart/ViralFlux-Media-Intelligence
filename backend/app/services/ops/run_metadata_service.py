@@ -13,6 +13,24 @@ from app.core.config import get_settings
 from app.models.database import AuditLog
 
 
+def _json_safe(value: Any) -> Any:
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    if isinstance(value, datetime):
+        return value.isoformat()
+    if isinstance(value, dict):
+        return {str(key): _json_safe(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple, set)):
+        return [_json_safe(item) for item in value]
+    item_method = getattr(value, "item", None)
+    if callable(item_method):
+        try:
+            return _json_safe(item_method())
+        except Exception:
+            pass
+    return str(value)
+
+
 class OperationalRunRecorder:
     """Persist operational run metadata into the existing audit trail."""
 
@@ -40,7 +58,7 @@ class OperationalRunRecorder:
             "timestamp": utc_now().isoformat(),
             "environment": self.settings.ENVIRONMENT,
             "app_version": self.settings.APP_VERSION,
-            "metadata": dict(metadata or {}),
+            "metadata": _json_safe(dict(metadata or {})),
         }
         self.db.add(
             AuditLog(

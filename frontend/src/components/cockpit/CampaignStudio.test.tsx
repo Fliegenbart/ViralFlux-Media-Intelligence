@@ -2,6 +2,34 @@ import '@testing-library/jest-dom';
 import React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 
+jest.mock('./cockpitUtils', () => ({
+  __esModule: true,
+  formatDateShort: () => '18.03.2026',
+  learningStateLabel: () => 'im Aufbau',
+  recommendationLane: (card: { lifecycle_state?: string | null; status?: string | null }) => {
+    const normalized = String(card.lifecycle_state || card.status || '').toLowerCase();
+    if (normalized === 'review') return 'review';
+    if (normalized === 'approve' || normalized === 'approved') return 'approve';
+    if (normalized === 'sync' || normalized === 'sync_ready') return 'sync';
+    if (normalized === 'live' || normalized === 'activated') return 'live';
+    return 'prepare';
+  },
+  signalConfidencePercent: () => 81,
+  statusTone: () => ({
+    background: 'rgba(31, 122, 102, 0.12)',
+    color: '#1f7a66',
+    border: '1px solid rgba(31, 122, 102, 0.18)',
+  }),
+  workflowLabel: (status?: string | null) => {
+    const normalized = String(status || '').toUpperCase();
+    if (normalized === 'APPROVE' || normalized === 'APPROVED') return 'Zur Entscheidung';
+    if (normalized === 'SYNC' || normalized === 'SYNC_READY') return 'Bereit zur Übergabe';
+    if (normalized === 'LIVE' || normalized === 'ACTIVATED') return 'Aktiv';
+    if (normalized === 'REVIEW') return 'Zur Prüfung';
+    return 'In Vorbereitung';
+  },
+}));
+
 import CampaignStudio from './CampaignStudio';
 import { MediaCampaignsResponse, WorkspaceStatusSummary } from '../../types/media';
 
@@ -167,13 +195,13 @@ describe('CampaignStudio', () => {
     expect(screen.getAllByText('Empfohlene Aktion').length).toBeGreaterThan(0);
     expect(screen.getByText('Nächster Schritt')).toBeInTheDocument();
     expect(screen.getByText('Warum dieser Fall jetzt vorne liegt')).toBeInTheDocument();
-    expect(screen.getByText('Hier wird sichtbar, ob gerade eher Prüfung, Freigabe, Klärung oder Übergabe im Vordergrund steht.')).toBeInTheDocument();
+    expect(screen.getByText('Hier wird sichtbar, ob der Fall jetzt geprüft werden sollte, ob noch etwas fehlt oder ob er schon weitergegeben werden kann.')).toBeInTheDocument();
     expect(screen.getAllByText('Belastbarkeit').length).toBeGreaterThan(0);
     expect(screen.getByText('Was diesen Fokusfall trägt')).toBeInTheDocument();
     expect(screen.getAllByText('Danach').length).toBeGreaterThan(0);
     expect(screen.getByText('Arbeitsphasen')).toBeInTheDocument();
     expect(screen.getAllByText('Weitere Vorschläge erstellen').length).toBeGreaterThan(0);
-    expect(screen.getByText(/Blocker prüfen/)).toBeInTheDocument();
+    expect(screen.getByText(/Offene Punkte klären/)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Empfehlung prüfen' }));
 

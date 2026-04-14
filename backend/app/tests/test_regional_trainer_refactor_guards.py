@@ -31,6 +31,7 @@ class RegionalTrainerRefactorGuardTests(unittest.TestCase):
             virus_typ="Influenza A",
             panel="panel-frame",
             feature_columns=["f1", "f2"],
+            event_feature_columns=None,
             hierarchy_feature_columns=["h1"],
             ww_only_columns=["ww_1"],
             tau=1.2,
@@ -212,6 +213,7 @@ class RegionalTrainerRefactorGuardTests(unittest.TestCase):
             trainer,
             panel="panel-frame",
             feature_columns=["f1"],
+            event_feature_columns=None,
             hierarchy_feature_columns=["h1"],
             oof_frame="oof-frame",
             action_threshold=0.55,
@@ -599,6 +601,8 @@ class RegionalTrainerRefactorGuardTests(unittest.TestCase):
             event_definition_config_for_virus_fn=ANY,
             choose_action_threshold_fn=ANY,
             average_precision_safe_fn=ANY,
+            brier_score_safe_fn=ANY,
+            compute_ece_fn=ANY,
         )
 
     @patch("app.services.ml.regional_trainer_events.oof_classification_predictions")
@@ -618,6 +622,7 @@ class RegionalTrainerRefactorGuardTests(unittest.TestCase):
             trainer,
             panel="panel-frame",
             labels=[0, 1, 1],
+            virus_typ=None,
             feature_columns=["f1", "f2"],
             min_recall_for_threshold=0.4,
             pd_module=ANY,
@@ -665,6 +670,33 @@ class RegionalTrainerRefactorGuardTests(unittest.TestCase):
             baseline=[8.0, 9.0],
             mad=[2.0, 3.0],
             tau=1.0,
+            kappa=0.5,
+            min_absolute_incidence=5.0,
+            np_module=ANY,
+            absolute_incidence_threshold_fn=ANY,
+        )
+
+    @patch("app.services.ml.regional_trainer_events.forecast_implied_event_probability")
+    def test_forecast_implied_event_probability_wrapper_delegates_to_module(self, event_mock) -> None:
+        event_mock.return_value = [0.2, 0.8]
+
+        result = RegionalModelTrainer._forecast_implied_event_probability(
+            quantile_predictions={0.1: [12.0, 10.0], 0.5: [18.0, 16.0], 0.9: [24.0, 22.0]},
+            current_known=[10.0, 9.0],
+            baseline=[8.0, 7.5],
+            mad=[2.0, 1.5],
+            tau=0.2,
+            kappa=0.5,
+            min_absolute_incidence=5.0,
+        )
+
+        self.assertEqual(result, [0.2, 0.8])
+        event_mock.assert_called_once_with(
+            quantile_predictions={0.1: [12.0, 10.0], 0.5: [18.0, 16.0], 0.9: [24.0, 22.0]},
+            current_known=[10.0, 9.0],
+            baseline=[8.0, 7.5],
+            mad=[2.0, 1.5],
+            tau=0.2,
             kappa=0.5,
             min_absolute_incidence=5.0,
             np_module=ANY,
@@ -722,6 +754,7 @@ class RegionalTrainerRefactorGuardTests(unittest.TestCase):
             trainer,
             "panel-frame",
             ["f1", "f2"],
+            sample_weight=None,
         )
 
     @patch("app.services.ml.regional_trainer_modeling.fit_regressor_from_frame")

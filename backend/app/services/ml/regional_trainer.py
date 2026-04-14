@@ -5,7 +5,6 @@ from app.core.time import utc_now
 
 import json
 import logging
-import pickle
 import traceback
 from datetime import datetime
 from pathlib import Path
@@ -17,8 +16,6 @@ from sklearn.isotonic import IsotonicRegression
 from xgboost import XGBClassifier, XGBRegressor
 
 from app.services.ml.benchmarking.contracts import CANONICAL_FORECAST_QUANTILES, quantile_key
-from app.services.ml.benchmarking.leaderboard import build_leaderboard
-from app.services.ml.benchmarking.metrics import summarize_probabilistic_metrics
 from app.services.ml.benchmarking.registry import (
     DEFAULT_METRIC_SEMANTICS_VERSION,
     DEFAULT_PROMOTION_MIN_SAMPLE_COUNT,
@@ -30,13 +27,13 @@ from app.services.ml.forecast_horizon_utils import (
     build_calibration_guard_split_dates,
     build_calibration_split_dates,
     fit_isotonic_calibrator,
+    fit_platt_calibrator,
     SUPPORTED_FORECAST_HORIZONS,
     ensure_supported_horizon,
     regional_horizon_support_status,
     regional_model_artifact_dir,
 )
 from app.services.ml.models.event_classifier import LearnedEventModel
-from app.services.ml.models.geo_hierarchy import GeoHierarchyHelper
 from app.services.ml.regional_features import RegionalFeatureBuilder
 from app.services.ml.regional_panel_utils import (
     ALL_BUNDESLAENDER,
@@ -52,7 +49,6 @@ from app.services.ml.regional_panel_utils import (
     choose_action_threshold,
     compute_ece,
     event_definition_config_for_virus,
-    median_lead_days,
     precision_at_k,
     quality_gate_from_metrics,
     rollout_mode_for_virus,
@@ -612,6 +608,17 @@ class RegionalModelTrainer:
             event_definition_config_for_virus_fn=event_definition_config_for_virus,
         )
 
+    @staticmethod
+    def _event_feature_columns(
+        panel: pd.DataFrame,
+        *,
+        base_feature_columns: list[str],
+    ) -> list[str]:
+        return regional_trainer_events.event_feature_columns(
+            panel,
+            base_feature_columns=base_feature_columns,
+        )
+
     def _select_event_definition(
         self,
         *,
@@ -629,6 +636,8 @@ class RegionalModelTrainer:
             event_definition_config_for_virus_fn=event_definition_config_for_virus,
             choose_action_threshold_fn=choose_action_threshold,
             average_precision_safe_fn=average_precision_safe,
+            brier_score_safe_fn=brier_score_safe,
+            compute_ece_fn=compute_ece,
         )
 
     def _oof_classification_predictions(
@@ -636,6 +645,7 @@ class RegionalModelTrainer:
         *,
         panel: pd.DataFrame,
         labels: np.ndarray,
+        virus_typ: str | None = None,
         feature_columns: list[str],
         min_recall_for_threshold: float = 0.35,
     ) -> pd.DataFrame | None:
@@ -643,6 +653,7 @@ class RegionalModelTrainer:
             self,
             panel=panel,
             labels=labels,
+            virus_typ=virus_typ,
             feature_columns=feature_columns,
             min_recall_for_threshold=min_recall_for_threshold,
             pd_module=pd,
@@ -655,6 +666,7 @@ class RegionalModelTrainer:
         virus_typ: str,
         panel: pd.DataFrame,
         feature_columns: list[str],
+        event_feature_columns: list[str] | None = None,
         hierarchy_feature_columns: list[str],
         ww_only_columns: list[str],
         tau: float,
@@ -668,6 +680,7 @@ class RegionalModelTrainer:
             virus_typ=virus_typ,
             panel=panel,
             feature_columns=feature_columns,
+            event_feature_columns=event_feature_columns,
             hierarchy_feature_columns=hierarchy_feature_columns,
             ww_only_columns=ww_only_columns,
             tau=tau,
@@ -918,6 +931,7 @@ class RegionalModelTrainer:
         *,
         panel: pd.DataFrame,
         feature_columns: list[str],
+        event_feature_columns: list[str] | None = None,
         hierarchy_feature_columns: list[str],
         oof_frame: pd.DataFrame,
         action_threshold: float = 0.5,
@@ -926,6 +940,7 @@ class RegionalModelTrainer:
             self,
             panel=panel,
             feature_columns=feature_columns,
+            event_feature_columns=event_feature_columns,
             hierarchy_feature_columns=hierarchy_feature_columns,
             oof_frame=oof_frame,
             action_threshold=action_threshold,
@@ -1012,11 +1027,30 @@ class RegionalModelTrainer:
     def _sample_weights(self, frame: pd.DataFrame) -> np.ndarray | None:
         return None
 
-    def _fit_classifier_from_frame(self, frame: pd.DataFrame, feature_columns: list[str]) -> XGBClassifier:
+    def _event_sample_weights(
+        self,
+        frame: pd.DataFrame,
+        *,
+        virus_typ: str,
+    ) -> np.ndarray | None:
+        return regional_trainer_events.event_sample_weights(
+            frame,
+            virus_typ=virus_typ,
+            pd_module=pd,
+            np_module=np,
+        )
+
+    def _fit_classifier_from_frame(
+        self,
+        frame: pd.DataFrame,
+        feature_columns: list[str],
+        sample_weight: np.ndarray | None = None,
+    ) -> XGBClassifier:
         return regional_trainer_modeling.fit_classifier_from_frame(
             self,
             frame,
             feature_columns,
+            sample_weight=sample_weight,
         )
 
     def _fit_regressor_from_frame(
@@ -1040,6 +1074,13 @@ class RegionalModelTrainer:
             raw_probabilities,
             labels,
             fit_isotonic_calibrator_fn=fit_isotonic_calibrator,
+        )
+
+    @staticmethod
+    def _fit_platt(raw_probabilities: np.ndarray, labels: np.ndarray):
+        return fit_platt_calibrator(
+            raw_probabilities,
+            labels,
         )
 
     @staticmethod
@@ -1122,6 +1163,29 @@ class RegionalModelTrainer:
     ) -> np.ndarray:
         return regional_trainer_events.event_probability_from_prediction(
             predicted_next=predicted_next,
+            current_known=current_known,
+            baseline=baseline,
+            mad=mad,
+            tau=tau,
+            kappa=kappa,
+            min_absolute_incidence=min_absolute_incidence,
+            np_module=np,
+            absolute_incidence_threshold_fn=absolute_incidence_threshold,
+        )
+
+    @staticmethod
+    def _forecast_implied_event_probability(
+        *,
+        quantile_predictions: dict[float, Any],
+        current_known: np.ndarray,
+        baseline: np.ndarray,
+        mad: np.ndarray,
+        tau: float,
+        kappa: float,
+        min_absolute_incidence: float,
+    ) -> np.ndarray:
+        return regional_trainer_events.forecast_implied_event_probability(
+            quantile_predictions=quantile_predictions,
             current_known=current_known,
             baseline=baseline,
             mad=mad,

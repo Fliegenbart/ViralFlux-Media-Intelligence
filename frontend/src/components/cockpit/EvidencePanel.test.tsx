@@ -149,10 +149,10 @@ describe('EvidencePanel', () => {
 
     const nextStep = screen.getByText('Nächster Schritt');
     const trust = screen.getByText('Was diese Aussage gerade trägt');
-    const technical = screen.getByText('Technische Tiefe (optional)');
+    const technical = screen.getByText('Für Technik und Details');
 
-    expect(screen.getByText('Ist die Empfehlung diese Woche belastbar?')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Fehlende Evidenz klären' })).toBeInTheDocument();
+    expect(screen.getByText('Ist die Empfehlung diese Woche gut genug belegt?')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Fehlende Daten klären' })).toBeInTheDocument();
     expect(nextStep.compareDocumentPosition(trust) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(trust.compareDocumentPosition(technical) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
@@ -197,26 +197,26 @@ describe('EvidencePanel', () => {
       />,
     );
 
-    expect(screen.getByText('Ist die Empfehlung diese Woche belastbar?')).toBeInTheDocument();
-    expect(screen.getByText('Aktueller Evidenzstatus')).toBeInTheDocument();
+    expect(screen.getByText('Ist die Empfehlung diese Woche gut genug belegt?')).toBeInTheDocument();
+    expect(screen.getByText('Aktueller Datenstatus')).toBeInTheDocument();
     expect(screen.getByText('Belastbarkeit')).toBeInTheDocument();
     expect(screen.getByText('Was diese Aussage gerade trägt')).toBeInTheDocument();
     expect(screen.getByText('Arbeitskontext')).toBeInTheDocument();
     expect(screen.getByText('Was bereits verbunden ist und was noch fehlt')).toBeInTheDocument();
     expect(screen.getByText('Bereits verbunden')).toBeInTheDocument();
     expect(screen.getByText('Fehlend oder offen')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Fehlende Evidenz klären' })).toHaveAttribute('href', '#evidence-import');
+    expect(screen.getByRole('link', { name: 'Fehlende Daten klären' })).toHaveAttribute('href', '#evidence-import');
     expect(screen.getByRole('link', { name: 'CSV-Vorlage laden' })).toHaveAttribute('href', 'https://example.com/template.csv');
     expect(screen.getByText('Datenvollständigkeit')).toBeInTheDocument();
     expect(screen.getByText('Modell-Belastbarkeit')).toBeInTheDocument();
     expect(screen.getByText('Operative Einsatzreife')).toBeInTheDocument();
-    expect(screen.getByText('Mit Vorsicht lesen')).toBeInTheDocument();
+    expect(screen.getByText('Noch vorsichtig einordnen')).toBeInTheDocument();
     expect(screen.getAllByText('Ein Importfeld ist noch nicht sauber zugeordnet.').length).toBeGreaterThan(0);
-    expect(screen.getByText('Kundendaten und Wirkung (optional)')).toBeInTheDocument();
+    expect(screen.getByText('Kundendaten und Wirkung')).toBeInTheDocument();
     expect(screen.getByText('Import und Validierung')).toBeInTheDocument();
     expect(screen.getByText('Vorhersage und Monitoring (Details)')).toBeInTheDocument();
     expect(screen.getByText('Quellen & Grenzen')).toBeInTheDocument();
-    expect(screen.getByText('Technische Tiefe (optional)')).toBeInTheDocument();
+    expect(screen.getByText('Für Technik und Details')).toBeInTheDocument();
     expect(screen.getByText(/Gilt auf Bundesland-Ebene, nicht für einzelne Städte/i)).toBeInTheDocument();
     expect(screen.getAllByText(/nicht für einzelne Städte/i).length).toBeGreaterThan(0);
   });
@@ -260,7 +260,7 @@ describe('EvidencePanel', () => {
       />,
     );
 
-    expect(screen.getByRole('link', { name: 'Evidenzlage prüfen' })).toHaveAttribute('href', '#evidence-onboarding');
+    expect(screen.getByRole('link', { name: 'Datenlage prüfen' })).toHaveAttribute('href', '#evidence-onboarding');
   });
 
   it('announces the loading state for customer evidence data', () => {
@@ -282,8 +282,8 @@ describe('EvidencePanel', () => {
       />,
     );
 
-    expect(screen.getByRole('status', { name: 'Kundendatenlage wird geladen' })).toBeInTheDocument();
-    expect(screen.getByText('Evidenz wird aufgebaut')).toBeInTheDocument();
+    expect(screen.getByRole('status', { name: 'Kundendaten werden geladen' })).toBeInTheDocument();
+    expect(screen.getByText('Daten werden geladen')).toBeInTheDocument();
   });
 
   it('does not show a customer import date when no customer data is actually connected', () => {

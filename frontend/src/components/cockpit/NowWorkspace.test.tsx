@@ -442,32 +442,35 @@ function renderNowWorkspace(
 }
 
 describe('NowWorkspace', () => {
-  it('keeps the laptop-first layout hooks for answer-hero, prediction-hero and trust-bar', () => {
+  it('keeps the laptop-first layout hooks for answer-hero, trust-bar and checklist focus', () => {
     const { container } = renderNowWorkspace();
 
     expect(container.querySelector('.answer-hero')).toBeTruthy();
-    expect(container.querySelector('.prediction-hero')).toBeTruthy();
     expect(container.querySelector('.trust-bar')).toBeTruthy();
     expect(container.querySelector('.next-regions')).toBeTruthy();
+    expect(container.querySelector('.now-checklist-grid')).toBeTruthy();
   });
 
-  it('keeps only one direct action in the hero and moves virus switching out of the main CTA row', () => {
+  it('keeps only one direct action in the hero and makes the top recommendation the next click', () => {
     const { container } = renderNowWorkspace();
 
     const hero = container.querySelector('.answer-hero') as HTMLElement | null;
+    const supportRail = container.querySelector('.now-weekly-layout__rail') as HTMLElement | null;
     expect(hero).toBeTruthy();
+    expect(supportRail).toBeTruthy();
 
-    if (!hero) {
+    if (!hero || !supportRail) {
       return;
     }
 
-    expect(within(hero).getByRole('button', { name: 'Regionen öffnen' })).toBeInTheDocument();
+    expect(within(hero).getByRole('button', { name: 'Top-Empfehlung prüfen' })).toBeInTheDocument();
     expect(within(hero).queryByRole('button', { name: 'Kampagnen öffnen' })).not.toBeInTheDocument();
     expect(within(hero).queryByRole('button', { name: 'Evidenz öffnen' })).not.toBeInTheDocument();
+    expect(supportRail.querySelector('.now-virus-switcher')).toBeNull();
     expect(screen.getByLabelText('Virus wechseln')).toBeInTheDocument();
   });
 
-  it('keeps maps and charts below the weekly decision layer', () => {
+  it('turns the page into a decision checklist instead of a second overview page', () => {
     const { container } = renderNowWorkspace();
 
     expect(screen.getByText('Fokus diese Woche')).toBeInTheDocument();
@@ -482,26 +485,31 @@ describe('NowWorkspace', () => {
     expect(screen.getByText('Daten & Evidenz')).toBeInTheDocument();
     expect(screen.getByText('Handlung & Blocker')).toBeInTheDocument();
     expect(screen.getByText('Nächste Regionen')).toBeInTheDocument();
-    expect(screen.getByText('Karten und Verlauf als Unterstützung')).toBeInTheDocument();
+    expect(screen.getByText('Warum genau jetzt')).toBeInTheDocument();
+    expect(screen.getByText('Was noch vor dem Klick geprüft werden sollte')).toBeInTheDocument();
+    expect(screen.getByText('Wenn du tiefer prüfen willst')).toBeInTheDocument();
     expect(screen.getByText('Vertiefung (optional)')).toBeInTheDocument();
+    expect(screen.queryByText('Karten und Verlauf als Unterstützung')).not.toBeInTheDocument();
+    expect(screen.queryByText('Germany map')).not.toBeInTheDocument();
+    expect(screen.queryByText('Forecast chart')).not.toBeInTheDocument();
 
     const hero = container.querySelector('.answer-hero') as HTMLElement | null;
-    const support = container.querySelector('.now-supporting-visuals') as HTMLElement | null;
+    const checklist = container.querySelector('.now-checklist-grid') as HTMLElement | null;
     expect(hero).toBeTruthy();
-    expect(support).toBeTruthy();
-    if (hero && support) {
-      expect(hero.compareDocumentPosition(support) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(checklist).toBeTruthy();
+    if (hero && checklist) {
+      expect(hero.compareDocumentPosition(checklist) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     }
   });
 
-  it('opens the focus region from the hero action', () => {
-    const onOpenRegions = jest.fn();
+  it('opens the top recommendation from the hero action', () => {
+    const onOpenRecommendation = jest.fn();
 
-    renderNowWorkspace({ onOpenRegions });
+    renderNowWorkspace({ onOpenRecommendation });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Regionen öffnen' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Top-Empfehlung prüfen' }));
 
-    expect(onOpenRegions).toHaveBeenCalledWith('BE');
+    expect(onOpenRecommendation).toHaveBeenCalledWith('rec-1');
   });
 
   it('shows an honest blocked state and disables the primary action when review is blocked', () => {
@@ -531,7 +539,7 @@ describe('NowWorkspace', () => {
     });
 
     expect(screen.getByText(/Vor Review blockiert/)).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Top-Empfehlung prüfen' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Top-Empfehlung prüfen' })).toBeDisabled();
   });
 
   it('shows a briefing-style loading skeleton before data is available', () => {

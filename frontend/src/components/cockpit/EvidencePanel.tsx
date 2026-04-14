@@ -122,7 +122,7 @@ const EvidencePanel: React.FC<Props> = ({
       ? 'Noch nicht vollständig frei'
       : canUseWithCaution
         ? 'Mit Vorsicht nutzbar'
-        : 'Kundendatenbasis im Aufbau';
+        : 'Kundendaten werden noch aufgebaut';
   const heroTitle = readyForWeeklyPlanning
     ? 'Die Datengrundlage ist für diese Woche belastbar genug.'
     : hasBlockers
@@ -161,8 +161,8 @@ const EvidencePanel: React.FC<Props> = ({
         ? 'Ohne Kundendaten bleibt die Planung eher richtungsgebend als vollständig belastbar.'
         : `${COCKPIT_SEMANTICS.stateLevelScope.helper} ${COCKPIT_SEMANTICS.noCityForecast.helper}`;
   const primaryCtaLabel = (!hasTruthData || hasBlockers || sourceAttentionCount > 0)
-    ? 'Fehlende Evidenz klären'
-    : 'Evidenzlage prüfen';
+    ? 'Fehlende Daten klären'
+    : 'Datenlage prüfen';
   const primaryCtaHref = (!hasTruthData || hasBlockers || sourceAttentionCount > 0)
     ? '#evidence-import'
     : '#evidence-onboarding';
@@ -208,10 +208,10 @@ const EvidencePanel: React.FC<Props> = ({
   if (loading && !evidence) {
     return (
       <OperatorSection
-        title="Evidenz wird aufgebaut"
+        title="Daten werden geladen"
         tone="muted"
       >
-        <div className="evidence-briefing-skeleton" role="status" aria-live="polite" aria-label="Kundendatenlage wird geladen">
+        <div className="evidence-briefing-skeleton" role="status" aria-live="polite" aria-label="Kundendaten werden geladen">
           <div className="workspace-note-card evidence-briefing-skeleton__hero" />
           <div className="evidence-briefing-skeleton__grid">
             <div className="workspace-note-card evidence-briefing-skeleton__block" />
@@ -253,7 +253,7 @@ const EvidencePanel: React.FC<Props> = ({
   return (
     <div className="page-stack evidence-template-page">
       <OperatorSection
-        title="Ist die Empfehlung diese Woche belastbar?"
+        title="Ist die Empfehlung diese Woche gut genug belegt?"
         tone="accent"
         className="evidence-briefing-shell"
       >
@@ -261,7 +261,7 @@ const EvidencePanel: React.FC<Props> = ({
           <OperatorPanel tone="accent" className="workspace-zone workspace-zone--hero evidence-briefing-hero">
             <div id="evidence-trust" className="evidence-briefing-hero__header">
               <div>
-                <span className="campaign-focus-label">Aktueller Evidenzstatus</span>
+                <span className="campaign-focus-label">Aktueller Datenstatus</span>
                 <h3 className="campaign-focus-title">{heroTitle}</h3>
                 <div className="campaign-focus-context">
                   {[hasTruthData && latestImportAt ? `Letzter Kundendaten-Import ${formatDateTime(latestImportAt)}` : null, truthLayerLabel(truthStatus), truthFreshnessLabel(truthStatus?.truth_freshness_state)].filter(Boolean).join(' · ')}
@@ -282,7 +282,7 @@ const EvidencePanel: React.FC<Props> = ({
                 <p>{missingNow}</p>
               </div>
               <div className="workspace-note-card evidence-briefing-note">
-                <strong>Mit Vorsicht lesen</strong>
+                <strong>Noch vorsichtig einordnen</strong>
                 <p>{cautionAndBlocker}</p>
               </div>
             </div>
@@ -377,7 +377,7 @@ const EvidencePanel: React.FC<Props> = ({
 
       <CollapsibleSection
         className="workspace-zone workspace-zone--detail"
-        title="Kundendaten und Wirkung (optional)"
+        title="Kundendaten und Wirkung"
         subtitle="Zeigt, wie stark Kundendaten die Empfehlungen zusätzlich stützen und absichern."
       >
         <div id="evidence-data">
@@ -414,7 +414,7 @@ const EvidencePanel: React.FC<Props> = ({
       <CollapsibleSection
         className="workspace-zone workspace-zone--detail"
         title="Vorhersage und Monitoring (Details)"
-        subtitle="Diese Details helfen, die Vorhersage einzuordnen und bleiben bewusst eine zweite Ebene hinter der Evidenzlage."
+        subtitle="Diese Details helfen, die Vorhersage einzuordnen und bleiben bewusst eine zweite Ebene hinter der Datenlage."
       >
         <div id="evidence-support">
           <ForecastMonitoringSection
@@ -454,13 +454,13 @@ const EvidencePanel: React.FC<Props> = ({
 
       <CollapsibleSection
         className="workspace-zone workspace-zone--detail"
-        title="Technische Tiefe (optional)"
+        title="Für Technik und Details"
         subtitle="Nur relevant, wenn ein technischer Blick in Signalsystem, Prüfmarker oder Import-Historie nötig ist."
       >
         <div className="workspace-two-column">
           <OperatorPanel
             title="Signale und Felder"
-            description="Zeigt, welche Datenfelder und Signale aktuell in die Evidenzlage einfließen."
+            description="Zeigt, welche Datenfelder und Signale aktuell in die Einschätzung einfließen."
           >
             <div className="workspace-note-list">
               {(sourceStatusLabels.length ? sourceStatusLabels : ['Noch keine markierten Pflicht- oder Wirkungsfelder vorhanden.']).slice(0, 6).map((item) => (

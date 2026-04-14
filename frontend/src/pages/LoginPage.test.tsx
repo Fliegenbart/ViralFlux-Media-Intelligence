@@ -29,19 +29,19 @@ describe('LoginPage', () => {
     render(<LoginPage onLogin={onLogin} />);
 
     expect(
-      screen.getByRole('heading', { name: 'Die Wochensteuerung für die aktuelle Lage' }),
+      screen.getByRole('heading', { name: 'Der zentrale Einstieg in die aktuelle Lage' }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole('heading', { name: 'In den Wochenplan' }),
+      screen.getByRole('heading', { name: 'Ins Virus-Radar' }),
     ).toBeInTheDocument();
     expect(
       screen.getByText(
-        'Melde dich an, um Wochenfokus, Bundesländer und Evidenz zu öffnen.',
+        'Melde dich an, um Radar, Bundesländer und Evidenz zu öffnen.',
       ),
     ).toBeInTheDocument();
-    expect(screen.getByText('ViralFlux Wochenbriefing')).toBeInTheDocument();
+    expect(screen.getByText('ViralFlux Radarzugang')).toBeInTheDocument();
     expect(
-      screen.getByText('Bundesländer, Richtung und Evidenz für diese Woche in einer Arbeitsfläche.'),
+      screen.getByText('Radar, Regionen, Kampagnen und Evidenz in einer Arbeitsfläche.'),
     ).toBeInTheDocument();
     expect(screen.getByText('Operational Access')).toBeInTheDocument();
     expect(screen.getByText('Demo-Zugang über das Produktteam anfragen.')).toBeInTheDocument();
@@ -59,7 +59,7 @@ describe('LoginPage', () => {
     fireEvent.change(screen.getByPlaceholderText('••••••••'), {
       target: { value: 'secret123' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Wochenplan öffnen' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Radar öffnen' }));
 
     await waitFor(() => {
       expect(login).toHaveBeenCalledWith('test@example.com', 'secret123', true);

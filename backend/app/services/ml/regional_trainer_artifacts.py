@@ -142,6 +142,7 @@ def fit_final_models(
     *,
     panel: pd.DataFrame,
     feature_columns: list[str],
+    event_feature_columns: list[str] | None = None,
     hierarchy_feature_columns: list[str],
     oof_frame: pd.DataFrame,
     action_threshold: float,
@@ -151,6 +152,8 @@ def fit_final_models(
     learned_event_model_cls,
     calibration_holdout_fraction: float,
 ) -> dict[str, Any]:
+    effective_event_feature_columns = list(event_feature_columns or feature_columns)
+    event_virus_typ = str(panel["virus_typ"].iloc[0]) if "virus_typ" in panel.columns and not panel.empty else ""
     calibration_frame = oof_frame.copy()
     if "as_of_date" not in calibration_frame.columns:
         calibration_frame["as_of_date"] = pd.date_range(
@@ -159,7 +162,11 @@ def fit_final_models(
             freq="D",
         )
 
-    classifier = trainer._fit_classifier_from_frame(panel, feature_columns)
+    classifier = trainer._fit_classifier_from_frame(
+        panel,
+        effective_event_feature_columns,
+        sample_weight=trainer._event_sample_weights(panel, virus_typ=event_virus_typ),
+    )
     calibration, calibration_mode = trainer._select_guarded_calibration(
         calibration_frame=calibration_frame[
             ["as_of_date", "event_label", "event_probability_raw"]
@@ -218,10 +225,14 @@ def fit_final_models(
                 else None
             )
             learned_event_model = learned_event_model_cls.fit(
-                X_train=train_frame_full[feature_columns].to_numpy(),
+                X_train=train_frame_full[effective_event_feature_columns].to_numpy(),
                 y_train=train_frame_full["event_label"].to_numpy(),
+                sample_weight_train=trainer._event_sample_weights(
+                    train_frame_full,
+                    virus_typ=event_virus_typ,
+                ),
                 X_calibration=(
-                    calibration_frame_full[feature_columns].to_numpy()
+                    calibration_frame_full[effective_event_feature_columns].to_numpy()
                     if not calibration_frame_full.empty
                     and calibration_frame_full["event_label"].nunique() >= 2
                     else None

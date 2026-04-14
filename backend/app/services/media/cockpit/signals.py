@@ -16,7 +16,7 @@ def coerce_float(value: Any) -> float | None:
 
 def primary_signal_score(item: dict[str, Any] | None) -> float:
     payload = item or {}
-    for key in ("signal_score", "peix_score", "score_0_100", "impact_probability"):
+    for key in ("signal_score", "ranking_signal_score", "peix_score", "score_0_100", "impact_probability"):
         score = coerce_float(payload.get(key))
         if score is not None:
             return round(score, 1)
@@ -34,25 +34,15 @@ def build_ranking_signal_fields(
     normalized_alias = coerce_float(legacy_alias)
     if normalized_signal is None:
         normalized_signal = normalized_alias
-    if normalized_alias is None:
-        normalized_alias = normalized_signal
 
     payload: dict[str, Any] = {
         "score_semantics": "ranking_signal",
-        "impact_probability_semantics": "ranking_signal",
-        "impact_probability_deprecated": True,
         "field_contracts": {
             "signal_score": ranking_signal_contract(source=source, label=label),
-            "impact_probability": ranking_signal_contract(
-                source=source,
-                label="Legacy Signal-Score",
-            ),
         },
     }
     if normalized_signal is not None:
         payload["signal_score"] = round(normalized_signal, 1)
-    if normalized_alias is not None:
-        payload["impact_probability"] = round(normalized_alias, 1)
     return payload
 
 
@@ -84,7 +74,7 @@ def build_signal_snapshot_section(
         "top_drivers": peix_score.get("top_drivers") or [],
     }
     national.update(build_ranking_signal_fields(
-        signal_score=peix_score.get("national_score"),
+        signal_score=peix_score.get("national_score") or peix_score.get("ranking_signal_score"),
         legacy_alias=peix_score.get("national_impact_probability"),
         source="RankingSignal",
     ))
@@ -98,7 +88,11 @@ def build_signal_snapshot_section(
             "trend": top_region.get("trend"),
         }
         top_region_snapshot.update(build_ranking_signal_fields(
-            signal_score=top_region.get("signal_score") or top_region.get("peix_score"),
+            signal_score=(
+                top_region.get("signal_score")
+                or top_region.get("ranking_signal_score")
+                or top_region.get("peix_score")
+            ),
             legacy_alias=top_region.get("impact_probability"),
             source="RankingSignal",
         ))

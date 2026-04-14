@@ -104,10 +104,10 @@ export function formatSignalScore(value?: number | null, digits = 0): string {
 }
 
 export function primarySignalScore(
-  item?: { signal_score?: number | null; peix_score?: number | null; impact_probability?: number | null } | null,
+  item?: { signal_score?: number | null; ranking_signal_score?: number | null; peix_score?: number | null; impact_probability?: number | null } | null,
 ): number {
   if (!item) return 0;
-  const raw = Number(item.signal_score ?? item.peix_score ?? item.impact_probability ?? 0);
+  const raw = Number(item.signal_score ?? item.ranking_signal_score ?? item.peix_score ?? item.impact_probability ?? 0);
   if (Number.isNaN(raw)) return 0;
   return raw <= 1 ? raw * 100 : raw;
 }

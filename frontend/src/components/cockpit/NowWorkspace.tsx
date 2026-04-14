@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React from 'react';
 
 import {
   BacktestResponse,
@@ -10,10 +10,7 @@ import {
 import CollapsibleSection from '../CollapsibleSection';
 import { NowPageViewModel } from '../../features/media/useMediaData';
 import { FocusRegionOutlookPanel, WaveOutlookPanel, WaveSpreadPanel } from './BacktestVisuals';
-import { ForecastChart } from './ForecastChart';
-import GermanyMap from './GermanyMap';
 import Sparkline from './Sparkline';
-import { MapRegion } from './types';
 import { formatDateTime, VIRUS_OPTIONS } from './cockpitUtils';
 import {
   OperatorPanel,
@@ -64,29 +61,12 @@ const NowWorkspace: React.FC<Props> = ({
 }) => {
   const focusRegion = view.focusRegion;
 
-  // Build regions Record for GermanyMap from forecast predictions
-  const mapRegions = useMemo<Record<string, MapRegion>>(() => {
-    const regions: Record<string, MapRegion> = {};
-    for (const pred of forecast?.predictions || []) {
-      regions[pred.bundesland] = {
-        name: pred.bundesland_name,
-        avg_viruslast: pred.current_known_incidence || 0,
-        intensity: pred.event_probability || 0,
-        trend: pred.trend || '',
-        change_pct: pred.change_pct || 0,
-        n_standorte: 0,
-        signal_score: pred.event_probability || 0,
-        impact_probability: pred.event_probability || 0,
-        forecast_direction: pred.trend || '',
-        priority_rank: pred.decision_rank ?? pred.rank ?? undefined,
-      };
-    }
-    return regions;
-  }, [forecast]);
-
   const heroRecommendation = view.heroRecommendation;
-  const nextStepLabel = focusRegion?.code ? 'Regionen öffnen' : 'Kampagnen öffnen';
-  const handleNextStep = () => {
+  const handlePrimaryAction = () => {
+    if (view.primaryRecommendationId && !heroRecommendation?.ctaDisabled) {
+      onOpenRecommendation(view.primaryRecommendationId);
+      return;
+    }
     if (focusRegion?.code) {
       onOpenRegions(focusRegion.code || undefined);
       return;
@@ -113,8 +93,6 @@ const NowWorkspace: React.FC<Props> = ({
     || sortedPredictions[0]
     || null
   );
-  const [selectedRegionCode, setSelectedRegionCode] = useState<string | null>(null);
-  const effectiveRegionCode = selectedRegionCode || focusPrediction?.bundesland || null;
   const qualityStats = (view.quality.length ? view.quality : [{ label: 'Qualität', value: 'Noch offen' }]).slice(0, 4);
   const confidenceItems = [
     normalizedTrustChecks[0] || { key: 'forecast', label: 'Belastbarkeit', value: 'Noch offen', detail: 'Die Vorhersage wird gerade neu eingeordnet.', tone: 'muted' },
@@ -132,6 +110,23 @@ const NowWorkspace: React.FC<Props> = ({
       label: 'Kontext',
       value: heroRecommendation?.context || view.primaryCampaignContext || 'Noch ohne Einordnung',
       detail: `Stand ${formatDateTime(view.generatedAt)}`,
+    },
+  ];
+  const checklistReason = heroRecommendation?.whyNow || view.summary || view.note;
+  const checklistEvidence = confidenceItems[1]?.detail || confidenceItems[1]?.value || 'Die Evidenzlage wird gerade aktualisiert.';
+  const checklistBlockers = blockers.length > 0 ? blockers : ['Aktuell blockiert nichts.'];
+  const deepDiveLinks = [
+    {
+      label: focusRegion?.code ? 'Fokusregion öffnen' : 'Regionen öffnen',
+      detail: focusRegion?.code
+        ? `${focusRegion.name} als Arbeitsansicht im Regionenbereich öffnen.`
+        : 'Die Regionenansicht zeigt, wo diese Woche als Nächstes hingeschaut werden sollte.',
+      onClick: () => onOpenRegions(focusRegion?.code || undefined),
+    },
+    {
+      label: 'Evidenz prüfen',
+      detail: 'Öffnet die Datengrundlage, Belegstufe und offenen Freigabefragen.',
+      onClick: onOpenEvidence,
     },
   ];
 
@@ -214,9 +209,10 @@ const NowWorkspace: React.FC<Props> = ({
                     <button
                       type="button"
                       className="media-button now-next-step__button"
-                      onClick={handleNextStep}
+                      onClick={handlePrimaryAction}
+                      disabled={heroRecommendation?.ctaDisabled}
                     >
-                      {nextStepLabel}
+                      {heroRecommendation?.actionLabel || view.primaryActionLabel || (focusRegion?.code ? 'Regionen öffnen' : 'Kampagnen öffnen')}
                     </button>
                   </div>
                 </div>
@@ -259,23 +255,6 @@ const NowWorkspace: React.FC<Props> = ({
               </div>
             )}
 
-            <div className="now-virus-switcher" aria-label="Virus wechseln">
-              <span className="now-virus-switcher__label">Virus wechseln</span>
-              <div className="now-virus-switcher__chips">
-                {VIRUS_OPTIONS.map((option) => (
-                  <button
-                    key={option}
-                    type="button"
-                    onClick={() => onVirusChange(option)}
-                    className={`tab-chip ${option === virus ? 'active' : ''}`}
-                    aria-pressed={option === virus}
-                  >
-                    {option}
-                  </button>
-                ))}
-              </div>
-            </div>
-
             {secondaryMoves.length > 0 && (
               <div className="next-regions">
                 <h3 className="next-regions__title">Nächste Regionen</h3>
@@ -293,25 +272,73 @@ const NowWorkspace: React.FC<Props> = ({
           </aside>
         </div>
 
-        <div className="now-supporting-visuals">
-          <span className="now-supporting-visuals__label">Karten und Verlauf als Unterstützung</span>
-          <div className="prediction-hero">
-            <div className="prediction-hero__map">
-              <GermanyMap
-                regions={mapRegions}
-                selectedRegion={effectiveRegionCode}
-                onSelectRegion={setSelectedRegionCode}
-                showProbability
-                topRegionCode={sortedPredictions[0]?.bundesland || null}
-              />
+        <div className="now-checklist-grid">
+          <OperatorPanel
+            title="Warum genau jetzt"
+            description="Der eine Satz, der die aktuelle Wochenentscheidung erklärt."
+          >
+            <div className="workspace-note-list">
+              <div className="workspace-note-card">
+                {checklistReason || 'Noch keine klare Kurzbegründung vorhanden.'}
+              </div>
+              {view.reasons.slice(0, 2).map((item) => (
+                <div key={item} className="workspace-note-card">
+                  {item}
+                </div>
+              ))}
             </div>
-            <div className="prediction-hero__chart">
-              <ForecastChart
-                timeline={focusRegionBacktest?.timeline || []}
-                regionName={focusPrediction?.bundesland_name || ''}
-              />
+          </OperatorPanel>
+
+          <OperatorPanel
+            title="Was noch vor dem Klick geprüft werden sollte"
+            description="Nur die Punkte, die vor dem nächsten Schritt bewusst sichtbar bleiben sollen."
+          >
+            <div className="workspace-note-list">
+              <div className="workspace-note-card">
+                {checklistEvidence}
+              </div>
+              {checklistBlockers.map((item) => (
+                <div key={item} className="workspace-note-card">
+                  {item}
+                </div>
+              ))}
             </div>
-          </div>
+          </OperatorPanel>
+
+          <OperatorPanel
+            title="Wenn du tiefer prüfen willst"
+            description="Die wichtigsten Detailwege von hier aus, ohne die Hauptentscheidung zu verdoppeln."
+          >
+            <div className="workspace-note-list">
+              {deepDiveLinks.map((item) => (
+                <button
+                  key={item.label}
+                  type="button"
+                  className="workspace-note-card workspace-note-card--action"
+                  onClick={item.onClick}
+                >
+                  <strong>{item.label}</strong>
+                  <span>{item.detail}</span>
+                </button>
+              ))}
+            </div>
+            <div className="now-virus-switcher" aria-label="Virus wechseln">
+              <span className="now-virus-switcher__label">Virus wechseln</span>
+              <div className="now-virus-switcher__chips">
+                {VIRUS_OPTIONS.map((option) => (
+                  <button
+                    key={option}
+                    type="button"
+                    onClick={() => onVirusChange(option)}
+                    className={`tab-chip ${option === virus ? 'active' : ''}`}
+                    aria-pressed={option === virus}
+                  >
+                    {option}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </OperatorPanel>
         </div>
       </OperatorSection>
 

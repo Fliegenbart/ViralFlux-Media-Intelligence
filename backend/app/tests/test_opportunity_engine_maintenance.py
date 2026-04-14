@@ -132,7 +132,7 @@ class OpportunityEngineMaintenanceTests(unittest.TestCase):
             region_target={"states": ["SH"]},
             trigger_details={"source": "BfArM_API", "event": "SUPPLY_SHOCK_WINDOW"},
             brand="gelo",
-            product="Alle Gelo-Produkte",
+            product="Alle Produkte",
             suggested_products=[{"product_name": "Bestandsprodukt"}],
             campaign_payload={
                 "product_mapping": {
@@ -190,7 +190,7 @@ class OpportunityEngineMaintenanceTests(unittest.TestCase):
             region_target={"states": ["SH"]},
             trigger_details={"source": "BfArM_API", "event": "SUPPLY_SHOCK_WINDOW"},
             brand=None,
-            product="Alle Gelo-Produkte",
+            product="Alle Produkte",
             campaign_payload={
                 "product_mapping": {
                     "mapping_status": "needs_review",
@@ -204,6 +204,58 @@ class OpportunityEngineMaintenanceTests(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             self.service.backfill_product_mapping(limit=10)
+
+    def test_backfill_product_mapping_uses_brand_neutral_fallback_label_when_product_missing(self) -> None:
+        now = datetime.now(timezone.utc)
+        row = MarketingOpportunity(
+            opportunity_id="opp-map-missing-product",
+            opportunity_type="RESOURCE_SCARCITY",
+            status="DRAFT",
+            urgency_score=68.0,
+            region_target={"states": ["SH"]},
+            trigger_details={"source": "BfArM_API", "event": "SUPPLY_SHOCK_WINDOW"},
+            brand="gelo",
+            product=None,
+            suggested_products=[],
+            campaign_payload={
+                "product_mapping": {
+                    "mapping_status": "needs_review",
+                    "condition_key": "bronchitis_husten",
+                    "condition_label": "Bronchitis / Husten",
+                }
+            },
+            created_at=now,
+            updated_at=now,
+        )
+        self.db.add(row)
+        self.db.commit()
+
+        self.service.product_catalog_service.resolve_product_for_opportunity = Mock(
+            return_value={
+                "mapping_status": "needs_review",
+                "recommended_product": None,
+                "candidate_product": None,
+                "mapping_confidence": 0.5,
+                "mapping_reason": "Noch offen.",
+            }
+        )
+        self.service._select_product_for_opportunity = Mock(return_value="Freigabe ausstehend")
+
+        result = self.service.backfill_product_mapping(limit=10)
+
+        self.assertEqual(result["updated"], 1)
+        self.service._select_product_for_opportunity.assert_called_once_with(
+            fallback_product="Alle Produkte",
+            product_mapping={
+                "mapping_status": "needs_review",
+                "recommended_product": None,
+                "candidate_product": None,
+                "mapping_confidence": 0.5,
+                "mapping_reason": "Noch offen.",
+                "condition_key": "bronchitis_husten",
+                "condition_label": "Bronchitis / Husten",
+            },
+        )
 
     def test_enrich_opportunity_for_media_rejects_blank_brand(self) -> None:
         now = datetime.now(timezone.utc)

@@ -190,7 +190,7 @@ class CampaignRecommendationServiceTests(unittest.TestCase):
         self.assertEqual(
             rationale.guardrails,
             [
-                "Confidence is below the stage-specific guardrail, so the recommendation needs manual review."
+                "Allocation support score is below the stage-specific guardrail, so the recommendation needs manual review."
             ],
         )
 

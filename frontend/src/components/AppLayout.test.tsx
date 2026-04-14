@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom';
 import React, { useEffect } from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 
 import AppLayout, { usePageHeader } from './AppLayout';
@@ -44,6 +44,7 @@ const mockedUseToast = useToast as jest.MockedFunction<typeof useToast>;
 const mockedApiFetch = apiFetch as jest.MockedFunction<typeof apiFetch>;
 const mockedUseNowPageData = useNowPageData as jest.MockedFunction<typeof useNowPageData>;
 const mockedUseMediaWorkflow = useMediaWorkflow as jest.MockedFunction<typeof useMediaWorkflow>;
+const mockWorkflowOpenRecommendation = jest.fn();
 
 const SimplePage: React.FC = () => {
   const { clearPageHeader } = usePageHeader();
@@ -82,7 +83,7 @@ describe('AppLayout theme rendering', () => {
       campaignGoal: 'Awareness',
       setCampaignGoal: jest.fn(),
       invalidateData: jest.fn(),
-      openRecommendation: jest.fn(),
+      openRecommendation: mockWorkflowOpenRecommendation,
       closeRecommendation: jest.fn(),
       recommendationOverlayMode: 'overlay',
       openDrawer: jest.fn(),
@@ -92,7 +93,19 @@ describe('AppLayout theme rendering', () => {
     mockedUseNowPageData.mockReturnValue({
       loading: false,
       workspaceStatus: null,
-      view: null,
+      view: {
+        generatedAt: '2026-04-13T08:00:00Z',
+        primaryActionLabel: 'Top-Empfehlung prüfen',
+        primaryRecommendationId: 'rec-1',
+        heroRecommendation: {
+          actionLabel: 'Top-Empfehlung prüfen',
+          ctaDisabled: false,
+        },
+        focusRegion: {
+          code: 'BE',
+          name: 'Berlin',
+        },
+      },
       decision: null,
       evidence: null,
       forecast: null,
@@ -136,7 +149,7 @@ describe('AppLayout theme rendering', () => {
     expect(screen.getByRole('link', { name: 'Direkt zum Inhalt springen' })).toHaveAttribute('href', '#main-content');
     expect(screen.queryByText('Wochenbericht exportieren')).not.toBeInTheDocument();
     expect(screen.getByRole('main')).toHaveAttribute('aria-labelledby', 'operator-page-title');
-    expect(screen.getByRole('heading', { name: 'Was diese Woche zu tun ist' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Die aktuelle Wochenentscheidung im Detail' })).toBeInTheDocument();
   });
 
   it('shows the light-mode activation label in dark theme', () => {
@@ -206,15 +219,6 @@ describe('AppLayout theme rendering', () => {
       theme: 'light',
       toggle: jest.fn(),
     });
-    let resolveGenerate: (() => void) | undefined;
-    const generateRequest = new Promise<Response>((resolve) => {
-      resolveGenerate = () => resolve({ ok: true } as Response);
-    });
-    mockedApiFetch
-      .mockImplementationOnce(() => generateRequest)
-      .mockResolvedValueOnce({
-        blob: jest.fn().mockResolvedValue(new Blob(['pdf'], { type: 'application/pdf' })),
-      } as unknown as Response);
 
     render(
       <MemoryRouter initialEntries={['/jetzt']} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
@@ -226,33 +230,24 @@ describe('AppLayout theme rendering', () => {
 
     const sectionFrame = screen.getByLabelText('Aktueller Bereich');
     const pageActions = screen.getByLabelText('Seitenaktionen');
-    const primaryAction = screen.getByRole('button', { name: 'Wochenbericht exportieren' });
-    const secondaryAction = screen.getByRole('button', { name: 'Evidenz öffnen' });
+    const navigation = screen.getByRole('navigation', { name: 'Arbeitsbereiche' });
+    const primaryAction = screen.getByRole('button', { name: 'Top-Empfehlung prüfen' });
+    const secondaryAction = screen.getByRole('link', { name: 'Zum Virus-Radar' });
+    const virusRadarNavItem = within(navigation).getByRole('link', { name: /Virus-Radar/ });
 
     expect(sectionFrame).toHaveTextContent('ViralFlux');
-    expect(sectionFrame).toHaveTextContent('Wochenplan');
+    expect(sectionFrame).toHaveTextContent('Diese Woche');
     expect(sectionFrame).not.toHaveTextContent('Arbeitsbereich');
-    expect(screen.getByRole('heading', { name: 'Was diese Woche zu tun ist' })).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Die aktuelle Wochenentscheidung im Detail' })).toBeVisible();
     expect(primaryAction).toBeVisible();
     expect(primaryAction).toHaveClass('operator-page-action--primary');
     expect(secondaryAction).toHaveClass('operator-page-action--secondary');
+    expect(secondaryAction).toHaveAttribute('href', '/virus-radar');
+    expect(virusRadarNavItem).toHaveAttribute('href', '/virus-radar');
     expect(pageActions).toContainElement(primaryAction);
     expect(pageActions.lastElementChild).toBe(primaryAction);
 
     fireEvent.click(primaryAction);
-
-    await waitFor(() => {
-      expect(mockedApiFetch).toHaveBeenCalledWith('/api/v1/media/weekly-brief/generate', { method: 'POST' });
-    });
-    expect(screen.getByRole('button', { name: 'Bericht wird erstellt...' })).toBeDisabled();
-
-    resolveGenerate?.();
-
-    await waitFor(() => {
-      expect(mockedApiFetch).toHaveBeenCalledWith('/api/v1/media/weekly-brief/latest');
-    });
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Wochenbericht exportieren' })).toBeEnabled();
-    });
+    expect(mockWorkflowOpenRecommendation).toHaveBeenCalledWith('rec-1', 'overlay');
   });
 });

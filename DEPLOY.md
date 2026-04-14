@@ -12,6 +12,7 @@ Nicht machen:
 - nicht direkt aus dem lokalen Arbeitsbaum deployen
 - nicht manuell im Live-Checkout herumeditieren
 - nicht `docker-compose.yml` als Live-Manifest benutzen
+- nicht über Vercel deployen
 
 ## Was ein guter Live-Deploy erreichen soll
 
@@ -39,6 +40,7 @@ Wichtig:
 - `<deploy-root>` ist der **saubere Server-Checkout**
 - deployt wird immer der Stand von `origin/main`
 - lokale Sonderstaende werden dabei bewusst ignoriert
+- Vercel ist fuer dieses Projekt **kein** offizieller Deploy-Weg
 
 ## Was das Deploy-Script wirklich macht
 

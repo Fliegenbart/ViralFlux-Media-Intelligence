@@ -11,6 +11,7 @@ from app.services.ml.forecast_horizon_utils import (
     select_probability_calibration_from_raw,
 )
 from app.services.ml.regional_panel_utils import choose_action_threshold
+from app.services.ml.xgboost_runtime import resolve_xgboost_runtime_config
 
 
 DEFAULT_EVENT_CLASSIFIER_CONFIG: dict[str, Any] = {
@@ -40,6 +41,7 @@ class LearnedEventModel:
         *,
         X_train: np.ndarray,
         y_train: np.ndarray,
+        sample_weight_train: np.ndarray | None = None,
         X_calibration: np.ndarray | None = None,
         y_calibration: np.ndarray | None = None,
         calibration_dates: Any | None = None,
@@ -53,8 +55,12 @@ class LearnedEventModel:
         if config:
             clf_config.update(config)
         clf_config["scale_pos_weight"] = float(negatives / positives)
+        clf_config = resolve_xgboost_runtime_config(clf_config)
         classifier = XGBClassifier(**clf_config)
-        classifier.fit(X_train, labels)
+        fit_kwargs: dict[str, Any] = {}
+        if sample_weight_train is not None:
+            fit_kwargs["sample_weight"] = np.asarray(sample_weight_train, dtype=float)
+        classifier.fit(X_train, labels, **fit_kwargs)
 
         calibration = None
         calibration_mode = "raw_passthrough"

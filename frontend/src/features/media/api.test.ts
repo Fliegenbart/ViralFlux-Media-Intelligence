@@ -92,6 +92,32 @@ describe('mediaApi authentication', () => {
     expect(String(fetchMock.mock.calls.at(-1)?.[0])).toBe('/api/v1/media/campaigns?limit=120');
   });
 
+  it('passes the brand through to regional forecast endpoints when one is selected', async () => {
+    fetchMock
+      .mockResolvedValueOnce(mockJsonResponse({ authenticated: true }))
+      .mockResolvedValueOnce(mockJsonResponse({ generated_at: '2026-04-11T10:00:00Z', predictions: [] }));
+
+    await login('test@example.com', 'secret', true);
+    await mediaApi.getRegionalForecast('Influenza A', 7, 'gelo');
+
+    expect(String(fetchMock.mock.calls.at(-1)?.[0])).toBe(
+      '/api/v1/forecast/regional/decisions?virus_typ=Influenza+A&horizon_days=7&brand=gelo',
+    );
+  });
+
+  it('omits an empty brand on regional overview requests so the backend default can take over', async () => {
+    fetchMock
+      .mockResolvedValueOnce(mockJsonResponse({ authenticated: true }))
+      .mockResolvedValueOnce(mockJsonResponse({ generated_at: '2026-04-11T10:00:00Z', summary: {}, virus_rollup: [] }));
+
+    await login('test@example.com', 'secret', true);
+    await mediaApi.getRegionalHeroOverview('Influenza A', 7, '');
+
+    expect(String(fetchMock.mock.calls.at(-1)?.[0])).toBe(
+      '/api/v1/forecast/regional/hero-overview?reference_virus=Influenza+A&horizon_days=7',
+    );
+  });
+
   it('omits an empty brand from recommendation generation payloads', async () => {
     fetchMock
       .mockResolvedValueOnce(mockJsonResponse({ ok: true }))

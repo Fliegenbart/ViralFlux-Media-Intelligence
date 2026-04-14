@@ -4,6 +4,13 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.services.ml.benchmarking.contracts import CANONICAL_FORECAST_QUANTILES
+from app.services.ml.forecast_science_contract import (
+    CALIBRATION_EVIDENCE_MODE,
+    QUANTILE_GRID_VERSION,
+    SCIENCE_CONTRACT_VERSION,
+)
+
 
 def predict_all_regions(
     service,
@@ -113,6 +120,8 @@ def predict_all_regions(
             supported_horizon_days_for_virus=support["supported_horizons"],
         )
 
+    event_feature_columns = metadata.get("event_feature_columns") or feature_columns
+
     missing_feature_columns = sorted(
         {
             str(column)
@@ -120,14 +129,22 @@ def predict_all_regions(
             if str(column) not in panel.columns
         }
     )
-    if missing_feature_columns:
+    missing_event_feature_columns = sorted(
+        {
+            str(column)
+            for column in event_feature_columns
+            if str(column) not in panel.columns
+        }
+    )
+    if missing_feature_columns or missing_event_feature_columns:
+        missing_columns = sorted({*missing_feature_columns, *missing_event_feature_columns})
         return service._empty_forecast_response(
             virus_typ=virus_typ,
             horizon_days=horizon,
             status="no_model",
             message=(
                 f"Artefakt-Bundle für {virus_typ}/h{horizon} referenziert Inferenz-Features, "
-                f"die im aktuellen Panel fehlen: {', '.join(missing_feature_columns)}. "
+                f"die im aktuellen Panel fehlen: {', '.join(missing_columns)}. "
                 "Bitte horizon-spezifisches Retraining durchführen."
             ),
             artifact_transition_mode=artifact_transition_mode,
@@ -135,6 +152,7 @@ def predict_all_regions(
         )
 
     X = panel[feature_columns].to_numpy()
+    X_event = panel[event_feature_columns].to_numpy()
     classifier = artifacts["classifier"]
     calibration = artifacts.get("calibration")
     reg_median = artifacts["regressor_median"]
@@ -143,7 +161,7 @@ def predict_all_regions(
     quantile_regressors = artifacts.get("quantile_regressors") or {}
     hierarchy_models = artifacts.get("hierarchy_models") or {}
 
-    raw_prob = classifier.predict_proba(X)[:, 1]
+    raw_prob = classifier.predict_proba(X_event)[:, 1]
     calibrated_prob = service._apply_calibration(calibration, raw_prob)
     quantile_predictions: dict[float, Any] = {
         0.1: np_module.expm1(reg_lower.predict(X)),
@@ -387,6 +405,19 @@ def predict_all_regions(
     signal_bundle_version = metadata.get("signal_bundle_version") or signal_bundle_version_for_virus_fn(virus_typ)
     model_version = metadata.get("model_version") or service._model_version(metadata)
     calibration_version = metadata.get("calibration_version") or service._calibration_version(metadata)
+    science_contract_version = str(metadata.get("science_contract_version") or SCIENCE_CONTRACT_VERSION)
+    quantile_grid_version = str(metadata.get("quantile_grid_version") or QUANTILE_GRID_VERSION)
+    forecast_quantiles = [
+        float(value)
+        for value in (
+            metadata.get("forecast_quantiles")
+            or list(CANONICAL_FORECAST_QUANTILES)
+        )
+    ]
+    calibration_mode = str(
+        metadata.get("calibration_mode")
+        or ((metadata.get("learned_event_model") or {}).get("calibration_mode") or "raw_passthrough")
+    )
     champion_model_family = str(metadata.get("model_family") or "regional_pooled_panel")
     component_model_family = str(metadata.get("component_model_family") or champion_model_family)
     ensemble_component_weights = metadata.get("ensemble_component_weights") or {champion_model_family: 1.0}
@@ -554,6 +585,14 @@ def predict_all_regions(
         "model_version": model_version,
         "calibration_version": calibration_version,
         "metric_semantics_version": metadata.get("metric_semantics_version"),
+        "event_definition_version": metadata.get("event_definition_version", event_definition_version),
+        "science_contract_version": science_contract_version,
+        "quantile_grid_version": quantile_grid_version,
+        "forecast_quantiles": forecast_quantiles,
+        "calibration_mode": calibration_mode,
+        "calibration_evidence_mode": str(
+            metadata.get("calibration_evidence_mode") or CALIBRATION_EVIDENCE_MODE
+        ),
         "promotion_evidence": metadata.get("promotion_evidence") or {},
         "registry_status": metadata.get("registry_status"),
         "artifact_transition_mode": artifact_transition_mode,

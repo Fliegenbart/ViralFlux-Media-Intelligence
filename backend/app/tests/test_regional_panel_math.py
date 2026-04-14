@@ -116,6 +116,26 @@ class RegionalPanelMathTests(unittest.TestCase):
         self.assertEqual(sars_config.baseline_upper_quantile_cap, 0.75)
         self.assertIn(0.05, sars_config.tau_grid)
 
+    def test_event_definition_config_exposes_influenza_b_and_rsv_specific_overrides(self) -> None:
+        influenza_a_config = event_definition_config_for_virus("Influenza A")
+        influenza_b_config = event_definition_config_for_virus("Influenza B")
+        rsv_config = event_definition_config_for_virus("RSV A")
+
+        self.assertEqual(influenza_a_config.min_absolute_incidence, 5.0)
+        self.assertEqual(influenza_a_config.tau_grid, (0.10, 0.15, 0.20, 0.25, 0.30))
+        self.assertEqual(influenza_a_config.kappa_grid, (0.0, 0.5, 1.0))
+        self.assertEqual(influenza_a_config.min_recall_for_selection, 0.35)
+
+        self.assertEqual(influenza_b_config.min_absolute_incidence, 4.0)
+        self.assertIn(0.05, influenza_b_config.tau_grid)
+        self.assertEqual(influenza_b_config.kappa_grid, (0.0, 0.25, 0.5))
+        self.assertEqual(influenza_b_config.min_recall_for_selection, 0.25)
+
+        self.assertEqual(rsv_config.min_absolute_incidence, 3.0)
+        self.assertIn(0.05, rsv_config.tau_grid)
+        self.assertEqual(rsv_config.kappa_grid, (0.0, 0.25, 0.5))
+        self.assertEqual(rsv_config.min_recall_for_selection, 0.25)
+
     def test_time_based_panel_splits_never_use_future_dates_in_training(self) -> None:
         dates = pd.date_range("2024-01-01", periods=180, freq="D")
         splits = time_based_panel_splits(dates, n_splits=4, min_train_periods=90, min_test_periods=14)
@@ -129,7 +149,17 @@ class RegionalPanelMathTests(unittest.TestCase):
         threshold, precision, recall = choose_action_threshold(probabilities, labels, min_recall=0.5)
         self.assertGreaterEqual(recall, 0.5)
         self.assertGreaterEqual(precision, 0.5)
-        self.assertGreaterEqual(threshold, 0.35)
+        self.assertGreaterEqual(threshold, 0.05)
+
+    def test_choose_action_threshold_can_select_below_legacy_floor_when_needed(self) -> None:
+        probabilities = [0.22, 0.18, 0.07, 0.05]
+        labels = [1, 1, 0, 0]
+
+        threshold, precision, recall = choose_action_threshold(probabilities, labels, min_recall=0.5)
+
+        self.assertLess(threshold, 0.35)
+        self.assertGreaterEqual(recall, 0.5)
+        self.assertGreaterEqual(precision, 0.5)
 
     def test_precision_at_k_and_false_positive_rate_work_per_snapshot(self) -> None:
         frame = pd.DataFrame(
@@ -191,6 +221,25 @@ class RegionalPanelMathTests(unittest.TestCase):
         self.assertEqual(result["forecast_readiness"], "GO")
         self.assertEqual(result["profile"], "strict_v1")
         self.assertEqual(result["failed_checks"], [])
+
+    def test_quality_gate_treats_zero_false_positive_rate_as_valid_signal(self) -> None:
+        result = quality_gate_from_metrics(
+            metrics={
+                "precision_at_top3": 0.70,
+                "activation_false_positive_rate": 0.0,
+                "pr_auc": 0.60,
+                "brier_score": 0.09,
+                "ece": 0.05,
+            },
+            baseline_metrics={
+                "persistence": {"pr_auc": 0.52},
+                "climatology": {"pr_auc": 0.50, "brier_score": 0.10},
+                "amelag_only": {"pr_auc": 0.48},
+            },
+        )
+
+        self.assertTrue(result["checks"]["activation_fp_rate_passed"])
+        self.assertTrue(result["overall_passed"])
 
     def test_quality_gate_uses_pilot_profile_only_for_day_one_pilot_scope(self) -> None:
         metrics = {

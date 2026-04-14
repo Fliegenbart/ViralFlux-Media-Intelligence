@@ -19,6 +19,7 @@ export interface MediaRegionsResponse {
       peix_band?: string;
       impact_probability?: number;
       signal_score?: number;
+      ranking_signal_score?: number;
       recommendation_ref?: RegionRecommendationRef | null;
       tooltip?: RegionTooltipData | null;
       forecast_direction?: string;
@@ -42,6 +43,7 @@ export interface MediaRegionsResponse {
       trend: string;
       impact_probability?: number;
       signal_score?: number;
+      ranking_signal_score?: number;
       peix_score?: number;
       severity_score?: number;
       momentum_score?: number;
@@ -58,6 +60,7 @@ export interface MediaRegionsResponse {
       region_name: string;
       priority: string;
       signal_score?: number;
+      ranking_signal_score?: number;
       priority_score?: number;
       impact_probability?: number;
       budget_shift_pct: number;
@@ -73,6 +76,7 @@ export interface MediaRegionsResponse {
     trend: string;
     impact_probability?: number;
     signal_score?: number;
+    ranking_signal_score?: number;
     peix_score?: number;
     recommendation_ref?: RegionRecommendationRef | null;
     tooltip?: RegionTooltipData | null;

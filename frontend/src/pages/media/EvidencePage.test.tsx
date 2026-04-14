@@ -81,7 +81,7 @@ describe('EvidencePage page header', () => {
     render(<EvidencePage />);
 
     const latestHeader = mockSetPageHeader.mock.calls.at(-1)?.[0];
-    expect(latestHeader?.primaryAction?.label).toBe('Fehlende Evidenz klären');
+    expect(latestHeader?.primaryAction?.label).toBe('Fehlende Daten klären');
     expect(latestHeader?.primaryAction?.href).toBe('#evidence-import');
     expect(latestHeader?.secondaryAction?.to).toBe('/virus-radar');
   });
@@ -111,7 +111,7 @@ describe('EvidencePage page header', () => {
     render(<EvidencePage />);
 
     const latestHeader = mockSetPageHeader.mock.calls.at(-1)?.[0];
-    expect(latestHeader?.primaryAction?.label).toBe('Evidenzlage prüfen');
+    expect(latestHeader?.primaryAction?.label).toBe('Datenlage prüfen');
     expect(latestHeader?.primaryAction?.href).toBe('#evidence-onboarding');
   });
 });

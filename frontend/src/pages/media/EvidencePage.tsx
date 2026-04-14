@@ -33,7 +33,7 @@ const EvidencePage: React.FC = () => {
   const hasTruthData = Boolean((truthStatus?.coverage_weeks || 0) > 0);
   const hasBlockers = Boolean(workspaceStatus?.blocker_count);
   const importNeedsAttention = !hasTruthData || hasBlockers || sourceAttentionCount > 0;
-  const primaryActionLabel = importNeedsAttention ? 'Fehlende Evidenz klären' : 'Evidenzlage prüfen';
+  const primaryActionLabel = importNeedsAttention ? 'Fehlende Daten klären' : 'Datenlage prüfen';
   const primaryActionHref = importNeedsAttention ? '#evidence-import' : '#evidence-onboarding';
 
   useEffect(() => {

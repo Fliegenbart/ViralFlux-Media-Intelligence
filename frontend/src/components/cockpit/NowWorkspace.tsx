@@ -255,23 +255,6 @@ const NowWorkspace: React.FC<Props> = ({
               </div>
             )}
 
-            <div className="now-virus-switcher" aria-label="Virus wechseln">
-              <span className="now-virus-switcher__label">Virus wechseln</span>
-              <div className="now-virus-switcher__chips">
-                {VIRUS_OPTIONS.map((option) => (
-                  <button
-                    key={option}
-                    type="button"
-                    onClick={() => onVirusChange(option)}
-                    className={`tab-chip ${option === virus ? 'active' : ''}`}
-                    aria-pressed={option === virus}
-                  >
-                    {option}
-                  </button>
-                ))}
-              </div>
-            </div>
-
             {secondaryMoves.length > 0 && (
               <div className="next-regions">
                 <h3 className="next-regions__title">Nächste Regionen</h3>
@@ -338,6 +321,22 @@ const NowWorkspace: React.FC<Props> = ({
                   <span>{item.detail}</span>
                 </button>
               ))}
+            </div>
+            <div className="now-virus-switcher" aria-label="Virus wechseln">
+              <span className="now-virus-switcher__label">Virus wechseln</span>
+              <div className="now-virus-switcher__chips">
+                {VIRUS_OPTIONS.map((option) => (
+                  <button
+                    key={option}
+                    type="button"
+                    onClick={() => onVirusChange(option)}
+                    className={`tab-chip ${option === virus ? 'active' : ''}`}
+                    aria-pressed={option === virus}
+                  >
+                    {option}
+                  </button>
+                ))}
+              </div>
             </div>
           </OperatorPanel>
         </div>

@@ -455,15 +455,18 @@ describe('NowWorkspace', () => {
     const { container } = renderNowWorkspace();
 
     const hero = container.querySelector('.answer-hero') as HTMLElement | null;
+    const supportRail = container.querySelector('.now-weekly-layout__rail') as HTMLElement | null;
     expect(hero).toBeTruthy();
+    expect(supportRail).toBeTruthy();
 
-    if (!hero) {
+    if (!hero || !supportRail) {
       return;
     }
 
     expect(within(hero).getByRole('button', { name: 'Top-Empfehlung prüfen' })).toBeInTheDocument();
     expect(within(hero).queryByRole('button', { name: 'Kampagnen öffnen' })).not.toBeInTheDocument();
     expect(within(hero).queryByRole('button', { name: 'Evidenz öffnen' })).not.toBeInTheDocument();
+    expect(supportRail.querySelector('.now-virus-switcher')).toBeNull();
     expect(screen.getByLabelText('Virus wechseln')).toBeInTheDocument();
   });
 

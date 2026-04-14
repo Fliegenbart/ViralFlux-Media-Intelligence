@@ -3,9 +3,6 @@ import tempfile
 import unittest
 from pathlib import Path
 
-import numpy as np
-import pandas as pd
-
 from app.services.ml.benchmarking.artifacts import write_benchmark_artifacts
 from app.services.ml.benchmarking.contracts import BenchmarkArtifactSummary
 from app.services.ml.benchmarking.metrics import summarize_probabilistic_metrics

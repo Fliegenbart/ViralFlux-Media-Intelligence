@@ -5,7 +5,6 @@ from app.core.time import utc_now
 
 import json
 import logging
-import pickle
 import traceback
 from datetime import datetime
 from pathlib import Path
@@ -17,8 +16,6 @@ from sklearn.isotonic import IsotonicRegression
 from xgboost import XGBClassifier, XGBRegressor
 
 from app.services.ml.benchmarking.contracts import CANONICAL_FORECAST_QUANTILES, quantile_key
-from app.services.ml.benchmarking.leaderboard import build_leaderboard
-from app.services.ml.benchmarking.metrics import summarize_probabilistic_metrics
 from app.services.ml.benchmarking.registry import (
     DEFAULT_METRIC_SEMANTICS_VERSION,
     DEFAULT_PROMOTION_MIN_SAMPLE_COUNT,
@@ -37,7 +34,6 @@ from app.services.ml.forecast_horizon_utils import (
     regional_model_artifact_dir,
 )
 from app.services.ml.models.event_classifier import LearnedEventModel
-from app.services.ml.models.geo_hierarchy import GeoHierarchyHelper
 from app.services.ml.regional_features import RegionalFeatureBuilder
 from app.services.ml.regional_panel_utils import (
     ALL_BUNDESLAENDER,
@@ -53,7 +49,6 @@ from app.services.ml.regional_panel_utils import (
     choose_action_threshold,
     compute_ece,
     event_definition_config_for_virus,
-    median_lead_days,
     precision_at_k,
     quality_gate_from_metrics,
     rollout_mode_for_virus,

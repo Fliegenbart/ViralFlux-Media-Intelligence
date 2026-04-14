@@ -1,4 +1,5 @@
 import unittest
+from dataclasses import replace
 
 from app.services.ml.regional_media_allocation_contracts import RegionalMediaAllocationConfig
 from app.services.ml.regional_media_allocation_engine import (
@@ -337,15 +338,13 @@ class RegionalMediaAllocationEngineTests(unittest.TestCase):
         by = next(item for item in payload["recommendations"] if item["bundesland"] == "BY")
         he = next(item for item in payload["recommendations"] if item["bundesland"] == "HE")
         self.assertGreater(by["suggested_budget_share"], he["suggested_budget_share"])
-        self.assertGreater(by["confidence"], he["confidence"])
+        self.assertGreater(by["allocation_support_score"], he["allocation_support_score"])
 
     def test_region_weights_shift_ranking_without_changing_stage_logic(self) -> None:
         weighted_engine = RegionalMediaAllocationEngine(
-            config=RegionalMediaAllocationConfig(
-                **{
-                    **DEFAULT_MEDIA_ALLOCATION_CONFIG.to_dict(),
-                    "region_weights": {"BE": 1.25, "BB": 0.85},
-                }
+            config=replace(
+                DEFAULT_MEDIA_ALLOCATION_CONFIG,
+                region_weights={"BE": 1.25, "BB": 0.85},
             )
         )
         payload = weighted_engine.allocate(

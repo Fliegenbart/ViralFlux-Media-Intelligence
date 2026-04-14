@@ -5,7 +5,6 @@ from typing import Any
 from typing import Sequence
 
 import numpy as np
-from app.services.ml.forecast_horizon_utils import fit_platt_calibrator
 
 
 def _clip_probabilities(raw_probabilities: Sequence[float]) -> np.ndarray:

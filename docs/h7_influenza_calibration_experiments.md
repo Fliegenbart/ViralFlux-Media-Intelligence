@@ -15,9 +15,10 @@ The experiment contract is strict:
 - do not weaken gates
 - prefer `raw_passthrough` if no candidate wins honestly
 
-## Baseline Before Local Experiments
+## Historical Live Baseline Reference
 
-Current live baseline after the guarded calibration rollout:
+The last documented live baseline after the earlier guarded calibration
+rollout was:
 
 | Virus | precision_at_top3 | activation_fp_rate | pr_auc | brier | ece | calibration_version | selected_calibration_mode | Gate |
 | --- | ---: | ---: | ---: | ---: | ---: | --- | --- | --- |
@@ -99,62 +100,78 @@ also keeps the nested `metrics` object:
 - `selected_calibration_mode`
 - `gate_summary`
 
-## Observed Comparison Results
+## Verified Local Reruns In This Workspace
 
-Comparison rule for retention in this document:
+Freshly re-run on `2026-04-14` with:
 
-- `ece` must improve versus the live baseline
-- `precision_at_top3` must not get worse
-- `activation_false_positive_rate` must not get worse
+```bash
+python backend/scripts/run_h7_pilot_only_training.py \
+  --preset influenza_calibration \
+  --virus "Influenza A" \
+  --output-root backend/app/ml_models/regional_panel_h7_pilot_only
+```
+
+and:
+
+```bash
+python backend/scripts/run_h7_pilot_only_training.py \
+  --preset influenza_calibration \
+  --virus "Influenza B" \
+  --output-root backend/app/ml_models/regional_panel_h7_pilot_only
+```
+
+Important local caveat:
+
+- the canonical live baseline artifact under
+  `backend/app/ml_models/regional_panel/influenza_a/horizon_7`
+  is currently missing in this workspace
+- the canonical live baseline artifact under
+  `backend/app/ml_models/regional_panel/influenza_b/horizon_7`
+  is also currently missing in this workspace
+- the generated summary therefore reports `live_baseline.status = missing`
+  for both reruns
+- for this rerun, the truthful local reference row is `baseline_guard`
 
 ### Influenza A / h7
 
 | Run | precision_at_top3 | activation_fp_rate | pr_auc | brier | ece | calibration_version | selected_calibration_mode | Retain? | Gate |
 | --- | ---: | ---: | ---: | ---: | ---: | --- | --- | --- | --- |
-| `live_baseline` | 0.724359 | 0.052283 | 0.568928 | 0.102847 | 0.095076 | `raw_passthrough:h7:2026-03-17T15:54:41.258955` | `raw_passthrough` | baseline | `WATCH` (`ece_passed`) |
-| `baseline_guard` | 0.724359 | 0.052283 | 0.568928 | 0.102847 | 0.095076 | `raw_passthrough:h7:2026-03-17T17:40:30.506556` | `raw_passthrough` | no | `WATCH` (`ece_passed`) |
-| `logit_temperature_grid` | 0.724359 | 0.052283 | 0.599340 | 0.096200 | 0.080051 | `logit_temp_guarded_t2:h7:2026-03-17T17:43:35.563395` | `logit_temp_guarded_t2` | yes | `WATCH` (`ece_passed`) |
-| `shrinkage_blend_grid` | 0.747917 | 0.048634 | 0.585018 | 0.104295 | 0.096889 | `shrinkage_guarded_a0p3:h7:2026-03-17T17:46:40.755849` | `shrinkage_guarded_a0p3` | no | `WATCH` (`ece_passed`) |
-| `quantile_smoothing_q8` | 0.724359 | 0.052283 | 0.567420 | 0.102847 | 0.095076 | `raw_passthrough:h7:2026-03-17T17:49:43.474191` | `raw_passthrough` | no | `WATCH` (`ece_passed`) |
+| `logit_temperature_grid` | 0.687943 | 0.013928 | 0.457293 | 0.160031 | 0.155023 | `logit_temp_guarded_t2:h7:2026-04-14T13:49:15.747379` | `logit_temp_guarded_t2` | yes | `WATCH` (`pr_auc_passed`, `ece_passed`) |
+| `shrinkage_blend_grid` | 0.687943 | 0.016713 | 0.342838 | 0.168499 | 0.161409 | `shrinkage_guarded_a0p3:h7:2026-04-14T13:54:14.153612` | `shrinkage_guarded_a0p3` | yes | `WATCH` (`pr_auc_passed`, `ece_passed`) |
+| `baseline_guard` | 0.687943 | 0.013928 | 0.335851 | 0.172629 | 0.171710 | `raw_passthrough:h7:2026-04-14T13:44:14.557767` | `raw_passthrough` | yes | `WATCH` (`pr_auc_passed`, `brier_passed`, `ece_passed`) |
+| `quantile_smoothing_q8` | 0.687943 | 0.013928 | 0.335851 | 0.172629 | 0.171710 | `raw_passthrough:h7:2026-04-14T13:59:22.084250` | `raw_passthrough` | yes | `WATCH` (`pr_auc_passed`, `brier_passed`, `ece_passed`) |
 
-Verdict for Influenza A:
+Verdict for the verified local Influenza A rerun:
 
-- `logit_temperature_grid` is the only honest improvement versus the live baseline.
-- It lowers `ece` by `0.015025` and `brier` by `0.006647` while leaving `precision_at_top3` and `activation_false_positive_rate` unchanged.
-- The scope still does not clear `ece_passed`, so this is an honest improvement, not a promotion to `GO`.
+- `baseline_guard` now truthfully stays on `raw_passthrough`
+- `logit_temperature_grid` remains the strongest candidate in the rerun
+- `shrinkage_blend_grid` improves over `baseline_guard`, but not as much as `logit_temperature_grid`
+- `quantile_smoothing_q8` collapses back to the same effective result as `baseline_guard`
+- the scope remains `WATCH`
 
 ### Influenza B / h7
 
 | Run | precision_at_top3 | activation_fp_rate | pr_auc | brier | ece | calibration_version | selected_calibration_mode | Retain? | Gate |
 | --- | ---: | ---: | ---: | ---: | ---: | --- | --- | --- | --- |
-| `live_baseline` | 0.737179 | 0.049768 | 0.632008 | 0.098856 | 0.079591 | `raw_passthrough:h7:2026-03-17T16:02:46.339488` | `raw_passthrough` | baseline | `WATCH` (`ece_passed`) |
-| `baseline_guard` | 0.737179 | 0.049768 | 0.632008 | 0.098856 | 0.079591 | `raw_passthrough:h7:2026-03-17T17:52:45.294072` | `raw_passthrough` | no | `WATCH` (`ece_passed`) |
-| `logit_temperature_grid` | 0.741453 | 0.049768 | 0.656558 | 0.094915 | 0.074984 | `logit_temp_guarded_t2:h7:2026-03-17T17:55:48.413897` | `logit_temp_guarded_t2` | yes | `WATCH` (`ece_passed`) |
-| `shrinkage_blend_grid` | 0.743750 | 0.044147 | 0.643951 | 0.098757 | 0.078599 | `shrinkage_guarded_a0p3:h7:2026-03-17T17:58:52.027940` | `shrinkage_guarded_a0p3` | yes | `WATCH` (`ece_passed`) |
-| `quantile_smoothing_q8` | 0.737179 | 0.049768 | 0.632008 | 0.098856 | 0.079591 | `raw_passthrough:h7:2026-03-17T18:01:53.403389` | `raw_passthrough` | no | `WATCH` (`ece_passed`) |
+| `logit_temperature_grid` | 0.771605 | 0.009036 | 0.394168 | 0.221548 | 0.226309 | `logit_temp_guarded_t1p1:h7:2026-04-14T16:16:42.909833` | `logit_temp_guarded_t1p1` | yes | `WATCH` (`pr_auc_passed`, `ece_passed`) |
+| `shrinkage_blend_grid` | 0.771605 | 0.019578 | 0.300215 | 0.232895 | 0.224214 | `shrinkage_guarded_a0p3:h7:2026-04-14T16:21:59.681194` | `shrinkage_guarded_a0p3` | yes | `WATCH` (`pr_auc_passed`, `brier_passed`, `ece_passed`) |
+| `baseline_guard` | 0.771605 | 0.009036 | 0.278340 | 0.234560 | 0.235023 | `raw_passthrough:h7:2026-04-14T16:10:41.525201` | `raw_passthrough` | yes | `WATCH` (`pr_auc_passed`, `brier_passed`, `ece_passed`) |
+| `quantile_smoothing_q8` | 0.771605 | 0.000000 | 0.278340 | 0.234560 | 0.235023 | `raw_passthrough:h7:2026-04-14T16:27:17.014374` | `raw_passthrough` | yes | `WATCH` (`pr_auc_passed`, `brier_passed`, `ece_passed`) |
 
-Verdict for Influenza B:
+Verdict for the verified local Influenza B rerun:
 
-- `logit_temperature_grid` is the strongest honest improvement.
-- It lowers `ece` by `0.004607` and `brier` by `0.003941`, keeps `activation_false_positive_rate` flat, and slightly improves `precision_at_top3`.
-- `shrinkage_blend_grid` also qualifies as an honest improvement, but the `ece` gain is smaller at `0.000992`.
-- The scope remains `WATCH` because `ece_passed` is still not green.
+- `baseline_guard` now truthfully stays on `raw_passthrough`
+- `logit_temperature_grid` is the strongest candidate in the rerun
+- `shrinkage_blend_grid` improves over `baseline_guard`, but it raises `activation_false_positive_rate`
+- `quantile_smoothing_q8` collapses back to `raw_passthrough` again
+- the scope remains `WATCH`
 
-## Final Finding
+## Current Takeaway
 
-The h7-only pilot path now proves two useful points without weakening any
-gate:
+After the verified `2026-04-14` local reruns:
 
-- Influenza A/h7 has one honest calibration winner: `logit_temp_guarded_t2`.
-- Influenza B/h7 has two honest winners, with `logit_temp_guarded_t2` clearly stronger than `shrinkage_guarded_a0p3`.
-- `quantile_smoothing_q8` did not beat `raw_passthrough` for either virus.
-- None of the honest improvements is yet large enough to move either
-  scope from `WATCH` to `GO`.
-
-That means the correct operational interpretation is:
-
-- keep the gates unchanged
-- treat `logit_temperature_grid` as the leading next-step candidate for
-  any isolated h7 promotion test
-- keep `raw_passthrough` as the truthful fallback wherever the local
-  experiment does not produce a real gain
+- Influenza A/h7 points to `logit_temp_guarded_t2` as the leading candidate
+- Influenza B/h7 points to `logit_temp_guarded_t1p1` as the leading candidate
+- the `baseline_guard` path is now verified to stay on `raw_passthrough` in both local reruns
+- `quantile_smoothing_q8` still does not beat the truthful fallback in either virus
+- the local workspace still lacks the canonical live Influenza-A and Influenza-B baseline artifacts, so these reruns are best read as internal candidate ranking, not as final promotion proof against the live bundle

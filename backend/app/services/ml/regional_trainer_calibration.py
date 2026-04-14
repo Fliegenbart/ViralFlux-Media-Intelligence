@@ -180,6 +180,8 @@ def select_guarded_calibration(
     date_col: str = "as_of_date",
     calibration_guard_epsilon: float,
     choose_action_threshold_fn,
+    include_platt: bool = True,
+    include_extra_candidates: bool = True,
 ) -> tuple[Any | None, str]:
     if calibration_frame.empty:
         return None, "raw_passthrough"
@@ -222,18 +224,20 @@ def select_guarded_calibration(
     )
     if isotonic is not None:
         candidate_payloads.append(("isotonic_guarded", isotonic))
-    platt = trainer._fit_platt(
-        fit_df[raw_probability_col].to_numpy(),
-        fit_df[label_col].to_numpy(),
-    )
-    if platt is not None:
-        candidate_payloads.append(("platt_guarded", platt))
-    candidate_payloads.extend(
-        _extra_guarded_calibration_candidates(
-            raw_probabilities=fit_df[raw_probability_col].to_numpy(dtype=float),
-            labels=fit_df[label_col].to_numpy(dtype=int),
+    if include_platt:
+        platt = trainer._fit_platt(
+            fit_df[raw_probability_col].to_numpy(),
+            fit_df[label_col].to_numpy(),
         )
-    )
+        if platt is not None:
+            candidate_payloads.append(("platt_guarded", platt))
+    if include_extra_candidates:
+        candidate_payloads.extend(
+            _extra_guarded_calibration_candidates(
+                raw_probabilities=fit_df[raw_probability_col].to_numpy(dtype=float),
+                labels=fit_df[label_col].to_numpy(dtype=int),
+            )
+        )
 
     best_mode: str | None = None
     best_calibration: Any | None = None

@@ -162,6 +162,26 @@ The JSON summary is written to:
 <output-root>/<preset>_summary.json
 ```
 
+Sibling per-virus summaries are also written automatically:
+
+```text
+<output-root>/<preset>_summary.<virus_slug>.json
+```
+
+Important local note:
+
+- the summary contains only the viruses selected for that run
+- a single-virus rerun therefore overwrites the default summary path
+  with a single-virus view unless `--summary-output` is set explicitly
+- if the canonical live artifact directory under
+  `backend/app/ml_models/regional_panel/<virus_slug>/horizon_7/`
+  is missing in the current workspace, the summary will surface
+  `baseline.status = missing`
+- in that case, the local comparison should use the `baseline_guard`
+  row as the truthful in-run fallback reference
+- this does not mean the preset is broken; it only means the local
+  workspace does not currently contain the canonical live bundle
+
 Per virus, the summary contains:
 
 - `baseline`

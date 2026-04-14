@@ -18,6 +18,7 @@ from app.services.ml.forecast_horizon_utils import (
     regional_horizon_pilot_status,
     regional_model_artifact_dir,
 )
+from app.services.ml.regional_panel_utils import choose_action_threshold
 from app.services.ml.regional_trainer import (
     REGIONAL_CLASSIFIER_CONFIG,
     REGIONAL_REGRESSOR_CONFIG,
@@ -26,6 +27,7 @@ from app.services.ml.regional_trainer import (
     _json_safe,
     _virus_slug,
 )
+from app.services.ml import regional_trainer_calibration
 from app.services.ml.xgboost_runtime import resolve_xgboost_runtime_config
 
 logger = logging.getLogger(__name__)
@@ -544,13 +546,18 @@ class PilotH7ExperimentTrainer(RegionalModelTrainer):
         date_col: str = "as_of_date",
     ):
         if not self.calibration_experiments:
-            return super()._select_guarded_calibration(
+            return regional_trainer_calibration.select_guarded_calibration(
+                self,
                 calibration_frame=calibration_frame,
                 raw_probability_col=raw_probability_col,
                 action_threshold=action_threshold,
                 min_recall_for_threshold=min_recall_for_threshold,
                 label_col=label_col,
                 date_col=date_col,
+                calibration_guard_epsilon=CALIBRATION_GUARD_EPSILON,
+                choose_action_threshold_fn=choose_action_threshold,
+                include_platt=False,
+                include_extra_candidates=False,
             )
 
         if calibration_frame.empty:
@@ -732,6 +739,12 @@ def _flatten_comparison_metrics(metrics: dict[str, Any] | None) -> dict[str, Any
     }
 
 
+def _per_virus_summary_output_path(summary_output: Path, virus_typ: str) -> Path:
+    suffix = "".join(summary_output.suffixes)
+    stem = summary_output.name[: -len(suffix)] if suffix else summary_output.name
+    return summary_output.with_name(f"{stem}.{_virus_slug(virus_typ)}{suffix}")
+
+
 class H7PilotExperimentRunner:
     """Run h7-only pilot training and comparison output per virus."""
 
@@ -771,9 +784,22 @@ class H7PilotExperimentRunner:
             },
         }
         if summary_output is not None:
-            summary_output.parent.mkdir(parents=True, exist_ok=True)
-            summary_output.write_text(json.dumps(_json_safe(summary), indent=2))
+            self._write_summary_outputs(summary=summary, summary_output=summary_output)
         return summary
+
+    @staticmethod
+    def _write_summary_outputs(*, summary: dict[str, Any], summary_output: Path) -> None:
+        summary_output.parent.mkdir(parents=True, exist_ok=True)
+        summary_output.write_text(json.dumps(_json_safe(summary), indent=2))
+        for virus_typ, virus_summary in (summary.get("viruses") or {}).items():
+            per_virus_summary = {
+                **summary,
+                "pilot_viruses": [virus_typ],
+                "viruses": {virus_typ: virus_summary},
+            }
+            _per_virus_summary_output_path(summary_output, virus_typ).write_text(
+                json.dumps(_json_safe(per_virus_summary), indent=2)
+            )
 
     def _run_single_virus(
         self,

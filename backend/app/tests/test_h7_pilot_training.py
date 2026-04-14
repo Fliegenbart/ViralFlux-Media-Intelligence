@@ -1,3 +1,4 @@
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -108,6 +109,84 @@ class H7PilotTrainingTests(unittest.TestCase):
             raw_probability_col="event_probability_raw",
             action_threshold=0.6,
         )
+
+        self.assertIsNone(calibration)
+        self.assertEqual(mode, "raw_passthrough")
+
+    def test_baseline_guard_does_not_promote_platt_when_no_extra_experiments_are_configured(self) -> None:
+        trainer = PilotH7ExperimentTrainer(db=None)
+        dates = pd.date_range("2026-01-01", periods=20, freq="D")
+        labels = np.array([0, 1] * 10, dtype=int)
+        calibration_frame = pd.DataFrame(
+            {
+                "as_of_date": dates,
+                "event_label": labels,
+                "event_probability_raw": np.where(labels == 1, 0.58, 0.42),
+            }
+        )
+
+        platt = object()
+        trainer._fit_isotonic = lambda *_args, **_kwargs: None
+        trainer._fit_platt = lambda *_args, **_kwargs: platt
+
+        def _apply(calibration, raw_probabilities):
+            raw = np.asarray(raw_probabilities, dtype=float)
+            if calibration is None:
+                return np.clip(raw, 0.001, 0.999)
+            if calibration is platt:
+                return np.where(raw >= 0.5, 0.60, 0.40)
+            raise AssertionError("unexpected calibration")
+
+        trainer._apply_calibration = _apply
+
+        with patch(
+            "app.services.ml.regional_trainer_calibration._extra_guarded_calibration_candidates",
+            return_value=[],
+        ):
+            calibration, mode = trainer._select_guarded_calibration(
+                calibration_frame=calibration_frame,
+                raw_probability_col="event_probability_raw",
+                action_threshold=0.6,
+            )
+
+        self.assertIsNone(calibration)
+        self.assertEqual(mode, "raw_passthrough")
+
+    def test_baseline_guard_does_not_use_default_extra_candidates(self) -> None:
+        trainer = PilotH7ExperimentTrainer(db=None)
+        dates = pd.date_range("2026-01-01", periods=20, freq="D")
+        labels = np.array([0, 1] * 10, dtype=int)
+        calibration_frame = pd.DataFrame(
+            {
+                "as_of_date": dates,
+                "event_label": labels,
+                "event_probability_raw": np.where(labels == 1, 0.58, 0.42),
+            }
+        )
+
+        extra_candidate = object()
+        trainer._fit_isotonic = lambda *_args, **_kwargs: None
+        trainer._fit_platt = lambda *_args, **_kwargs: None
+
+        def _apply(calibration, raw_probabilities):
+            raw = np.asarray(raw_probabilities, dtype=float)
+            if calibration is None:
+                return np.clip(raw, 0.001, 0.999)
+            if calibration is extra_candidate:
+                return np.where(raw >= 0.5, 0.60, 0.40)
+            raise AssertionError("unexpected calibration")
+
+        trainer._apply_calibration = _apply
+
+        with patch(
+            "app.services.ml.regional_trainer_calibration._extra_guarded_calibration_candidates",
+            return_value=[("extra_candidate", extra_candidate)],
+        ):
+            calibration, mode = trainer._select_guarded_calibration(
+                calibration_frame=calibration_frame,
+                raw_probability_col="event_probability_raw",
+                action_threshold=0.6,
+            )
 
         self.assertIsNone(calibration)
         self.assertEqual(mode, "raw_passthrough")
@@ -249,6 +328,104 @@ class H7PilotTrainingTests(unittest.TestCase):
         self.assertEqual(virus_summary["best_retained_experiment"], "logit_temperature_grid")
         self.assertEqual(virus_summary["comparison_table"][1]["name"], "logit_temperature_grid")
         self.assertEqual(virus_summary["comparison_table"][1]["brier_score"], 0.085)
+
+    def test_runner_writes_split_summary_files_per_virus(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            base_dir = Path(tmp_dir) / "baseline"
+            exp_dir = Path(tmp_dir) / "experiments"
+            summary_output = Path(tmp_dir) / "influenza_calibration_summary.json"
+
+            class _BaselineTrainer:
+                def __init__(self, db, models_dir=None):
+                    self.models_dir = models_dir
+
+                def load_artifacts(self, virus_typ: str, horizon_days: int = 7):
+                    return {
+                        "metadata": {
+                            "aggregate_metrics": {
+                                "precision_at_top3": 0.70,
+                                "activation_false_positive_rate": 0.05,
+                                "pr_auc": 0.60,
+                                "brier_score": 0.09,
+                                "ece": 0.08,
+                            },
+                            "quality_gate": {
+                                "overall_passed": False,
+                                "forecast_readiness": "WATCH",
+                                "failed_checks": ["ece_passed"],
+                                "profile": "pilot_v1",
+                            },
+                            "calibration_version": "raw_passthrough:h7:baseline",
+                        }
+                    }
+
+            class _ExperimentTrainer:
+                def __init__(self, db, **kwargs):
+                    self.kwargs = kwargs
+
+                def train_all_regions(self, **kwargs):
+                    virus_slug = str(kwargs["virus_typ"]).lower().replace(" ", "_")
+                    return {
+                        "status": "success",
+                        "aggregate_metrics": {
+                            "precision_at_top3": 0.72,
+                            "activation_false_positive_rate": 0.04,
+                            "pr_auc": 0.62,
+                            "brier_score": 0.085,
+                            "ece": 0.07,
+                        },
+                        "quality_gate": {
+                            "overall_passed": False,
+                            "forecast_readiness": "WATCH",
+                            "failed_checks": ["ece_passed"],
+                            "profile": "pilot_v1",
+                        },
+                        "calibration_version": "logit_temp_guarded_t1p25:h7:experiment",
+                        "selected_calibration_mode": "logit_temp_guarded_t1p25",
+                        "model_dir": str(exp_dir / virus_slug / "logit_temperature_grid"),
+                    }
+
+            with patch("app.services.ml.h7_pilot_training.RegionalModelTrainer", _BaselineTrainer), patch(
+                "app.services.ml.h7_pilot_training.PilotH7ExperimentTrainer",
+                _ExperimentTrainer,
+            ):
+                runner = H7PilotExperimentRunner(
+                    db=None,
+                    baseline_models_dir=base_dir,
+                    experiment_models_dir=exp_dir,
+                )
+                runner.run(
+                    virus_types=["Influenza A", "Influenza B"],
+                    specs_by_virus={
+                        "Influenza A": (
+                            PilotExperimentSpec(
+                                name="logit_temperature_grid",
+                                description="test experiment",
+                            ),
+                        ),
+                        "Influenza B": (
+                            PilotExperimentSpec(
+                                name="logit_temperature_grid",
+                                description="test experiment",
+                            ),
+                        ),
+                    },
+                    summary_output=summary_output,
+                )
+
+            self.assertTrue(summary_output.exists())
+            influenza_a_output = summary_output.with_name("influenza_calibration_summary.influenza_a.json")
+            influenza_b_output = summary_output.with_name("influenza_calibration_summary.influenza_b.json")
+            self.assertTrue(influenza_a_output.exists())
+            self.assertTrue(influenza_b_output.exists())
+
+            influenza_a_summary = json.loads(influenza_a_output.read_text())
+            influenza_b_summary = json.loads(influenza_b_output.read_text())
+
+            self.assertEqual(influenza_a_summary["pilot_viruses"], ["Influenza A"])
+            self.assertEqual(sorted(influenza_a_summary["viruses"]), ["Influenza A"])
+            self.assertEqual(influenza_b_summary["pilot_viruses"], ["Influenza B"])
+            self.assertEqual(sorted(influenza_b_summary["viruses"]), ["Influenza B"])
 
 
 if __name__ == "__main__":

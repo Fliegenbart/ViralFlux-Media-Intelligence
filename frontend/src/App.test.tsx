@@ -22,11 +22,6 @@ jest.mock('./pages/LoginPage', () => ({
   ),
 }));
 
-jest.mock('./pages/LandingPage', () => ({
-  __esModule: true,
-  default: () => <div>Landing Mock</div>,
-}));
-
 jest.mock('framer-motion', () => ({
   AnimatePresence: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
@@ -126,20 +121,20 @@ describe('App routing', () => {
       mockRehydrateAuth.mockResolvedValue(false);
     });
 
-    it('renders the landing page at /', async () => {
+    it('redirects / to /login', async () => {
       render(<App />);
 
-      expect(await screen.findByText('Landing Mock')).toBeInTheDocument();
-      expect(window.location.pathname).toBe('/');
+      expect(await screen.findByText('Login Mock')).toBeInTheDocument();
+      expect(window.location.pathname).toBe('/login');
     });
 
-    it('redirects /welcome to / and renders the landing page there', async () => {
+    it('redirects /welcome to /login', async () => {
       window.history.pushState({}, '', '/welcome');
 
       render(<App />);
 
-      expect(await screen.findByText('Landing Mock')).toBeInTheDocument();
-      expect(window.location.pathname).toBe('/');
+      expect(await screen.findByText('Login Mock')).toBeInTheDocument();
+      expect(window.location.pathname).toBe('/login');
     });
 
     it('redirects /virus-radar to /login', async () => {

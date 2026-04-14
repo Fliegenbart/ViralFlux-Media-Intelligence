@@ -22,7 +22,7 @@ def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base-url", default="https://fluxengine.labpulse.ai")
     parser.add_argument("--timeout", type=float, default=5.0)
-    parser.add_argument("--welcome-path", default="/")
+    parser.add_argument("--entry-path", default="/login")
     parser.add_argument("--admin-status-path", default="/api/v1/admin/ml/status/test-task")
     return parser.parse_args()
 
@@ -93,19 +93,19 @@ def _readiness_check(path: str, status_code: int, payload: dict[str, Any]) -> di
 
 def _source_map_check(
     *,
-    welcome_path: str,
-    welcome_status: int,
-    welcome_html: str,
+    entry_path: str,
+    entry_status: int,
+    entry_html: str,
     source_map_status: int | None,
     source_map_path: str | None,
 ) -> dict[str, Any]:
     errors: list[str] = []
-    if welcome_status != 200:
-        errors.append(f"Landing page should be reachable to inspect assets (HTTP {welcome_status}).")
+    if entry_status != 200:
+        errors.append(f"Login entry should be reachable to inspect assets (HTTP {entry_status}).")
 
-    asset_path = _extract_main_asset_path(welcome_html)
+    asset_path = _extract_main_asset_path(entry_html)
     if not asset_path:
-        errors.append("Could not find the main frontend asset on the landing page.")
+        errors.append("Could not find the main frontend asset on the login entry.")
     elif source_map_status is None or source_map_path is None:
         errors.append("Could not derive the source-map path from the main frontend asset.")
     elif source_map_status == 200:
@@ -117,7 +117,7 @@ def _source_map_check(
         "passed": not errors,
         "errors": errors,
         "summary": {
-            "welcome_path": welcome_path,
+            "entry_path": entry_path,
             "asset_path": asset_path,
         },
     }
@@ -127,7 +127,7 @@ def run_check(
     *,
     base_url: str,
     timeout: float,
-    welcome_path: str,
+    entry_path: str,
     admin_status_path: str,
 ) -> tuple[int, dict[str, Any]]:
     checks: dict[str, dict[str, Any]] = {}
@@ -152,17 +152,17 @@ def run_check(
         ready_payload = {"raw_body": _decode_body(ready_body)}
     checks["public_readiness"] = _readiness_check("/health/ready", ready_status, ready_payload)
 
-    welcome_status, _, welcome_body = _request(base_url, welcome_path, timeout)
-    welcome_html = _decode_body(welcome_body)
-    asset_path = _extract_main_asset_path(welcome_html)
+    entry_status, _, entry_body = _request(base_url, entry_path, timeout)
+    entry_html = _decode_body(entry_body)
+    asset_path = _extract_main_asset_path(entry_html)
     source_map_path = f"{asset_path}.map" if asset_path else None
     source_map_status = None
     if source_map_path:
         source_map_status, _, _ = _request(base_url, source_map_path, timeout)
     checks["source_map"] = _source_map_check(
-        welcome_path=welcome_path,
-        welcome_status=welcome_status,
-        welcome_html=welcome_html,
+        entry_path=entry_path,
+        entry_status=entry_status,
+        entry_html=entry_html,
         source_map_status=source_map_status,
         source_map_path=source_map_path,
     )
@@ -182,7 +182,7 @@ def main() -> int:
     exit_code, payload = run_check(
         base_url=args.base_url,
         timeout=args.timeout,
-        welcome_path=args.welcome_path,
+        entry_path=args.entry_path,
         admin_status_path=args.admin_status_path,
     )
     print(json.dumps(payload, indent=2, ensure_ascii=False))

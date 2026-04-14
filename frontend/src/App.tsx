@@ -7,7 +7,6 @@ import { addAuthChangeListener, logout, rehydrateAuth } from './lib/api';
 import './index.css';
 
 /* ── Lazy-loaded pages (code splitting) ────────────────────────── */
-const LandingPage = lazy(() => import('./pages/LandingPage'));
 const MediaShell = lazy(() => import('./pages/media/MediaShell'));
 const VirusRadarPage = lazy(() => import('./pages/media/VirusRadarPage'));
 const NowPage = lazy(() => import('./pages/media/NowPage'));
@@ -127,7 +126,7 @@ const LegacyRecommendationRedirect: React.FC = () => {
 };
 
 const RootRoute: React.FC<{ authenticated: boolean }> = ({ authenticated }) => (
-  authenticated ? <Navigate to="/virus-radar" replace /> : <LandingPage />
+  authenticated ? <Navigate to="/virus-radar" replace /> : <Navigate to="/login" replace />
 );
 
 const LoginRoute: React.FC<{ authenticated: boolean; onLogin: () => void }> = ({
@@ -227,7 +226,7 @@ const App: React.FC = () => {
               <Suspense fallback={<PageFallback />}>
                 <Routes>
                   <Route path="/" element={<RootRoute authenticated={authenticated} />} />
-                  <Route path="/welcome" element={<Navigate to="/" replace />} />
+                  <Route path="/welcome" element={<Navigate to="/login" replace />} />
                   <Route
                     path="/login"
                     element={<LoginRoute authenticated={authenticated} onLogin={handleLogin} />}

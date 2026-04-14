@@ -44,9 +44,9 @@ class PublicSurfaceCheckTests(unittest.TestCase):
 
     def test_source_map_check_fails_when_map_is_public(self) -> None:
         result = _source_map_check(
-            welcome_path="/",
-            welcome_status=200,
-            welcome_html='<script defer src="/static/js/main.eaf46140.js"></script>',
+            entry_path="/login",
+            entry_status=200,
+            entry_html='<script defer src="/static/js/main.eaf46140.js"></script>',
             source_map_status=200,
             source_map_path="/static/js/main.eaf46140.js.map",
         )
@@ -56,9 +56,9 @@ class PublicSurfaceCheckTests(unittest.TestCase):
 
     def test_source_map_check_passes_when_map_is_hidden(self) -> None:
         result = _source_map_check(
-            welcome_path="/",
-            welcome_status=200,
-            welcome_html='<script defer src="/static/js/main.a724a176.js"></script>',
+            entry_path="/login",
+            entry_status=200,
+            entry_html='<script defer src="/static/js/main.a724a176.js"></script>',
             source_map_status=404,
             source_map_path="/static/js/main.a724a176.js.map",
         )

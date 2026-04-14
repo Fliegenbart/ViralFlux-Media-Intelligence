@@ -22,7 +22,7 @@ def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base-url", default="https://fluxengine.labpulse.ai")
     parser.add_argument("--timeout", type=float, default=5.0)
-    parser.add_argument("--welcome-path", default="/welcome")
+    parser.add_argument("--welcome-path", default="/")
     parser.add_argument("--admin-status-path", default="/api/v1/admin/ml/status/test-task")
     return parser.parse_args()
 
@@ -101,11 +101,11 @@ def _source_map_check(
 ) -> dict[str, Any]:
     errors: list[str] = []
     if welcome_status != 200:
-        errors.append(f"Welcome page should be reachable to inspect assets (HTTP {welcome_status}).")
+        errors.append(f"Landing page should be reachable to inspect assets (HTTP {welcome_status}).")
 
     asset_path = _extract_main_asset_path(welcome_html)
     if not asset_path:
-        errors.append("Could not find the main frontend asset on the welcome page.")
+        errors.append("Could not find the main frontend asset on the landing page.")
     elif source_map_status is None or source_map_path is None:
         errors.append("Could not derive the source-map path from the main frontend asset.")
     elif source_map_status == 200:

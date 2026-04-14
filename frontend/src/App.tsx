@@ -126,8 +126,8 @@ const LegacyRecommendationRedirect: React.FC = () => {
   return <Navigate to={id ? `/kampagnen/${id}` : '/kampagnen'} replace />;
 };
 
-const RootRedirect: React.FC<{ authenticated: boolean }> = ({ authenticated }) => (
-  <Navigate to={authenticated ? '/virus-radar' : '/welcome'} replace />
+const RootRoute: React.FC<{ authenticated: boolean }> = ({ authenticated }) => (
+  authenticated ? <Navigate to="/virus-radar" replace /> : <LandingPage />
 );
 
 const LoginRoute: React.FC<{ authenticated: boolean; onLogin: () => void }> = ({
@@ -226,8 +226,8 @@ const App: React.FC = () => {
             <Router>
               <Suspense fallback={<PageFallback />}>
                 <Routes>
-                  <Route path="/" element={<RootRedirect authenticated={authenticated} />} />
-                  <Route path="/welcome" element={<LandingPage />} />
+                  <Route path="/" element={<RootRoute authenticated={authenticated} />} />
+                  <Route path="/welcome" element={<Navigate to="/" replace />} />
                   <Route
                     path="/login"
                     element={<LoginRoute authenticated={authenticated} onLogin={handleLogin} />}

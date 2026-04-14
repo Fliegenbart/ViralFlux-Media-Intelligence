@@ -85,10 +85,10 @@ describe('LandingPage', () => {
 
   const renderLandingPage = () =>
     render(
-      <MemoryRouter initialEntries={['/welcome']} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <MemoryRouter initialEntries={['/']} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <LocationProbe />
         <Routes>
-          <Route path="/welcome" element={<LandingPage />} />
+          <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<div>Login page</div>} />
           <Route path="/jetzt" element={<div>Now page</div>} />
           <Route path="/virus-radar" element={<div>Virus radar page</div>} />

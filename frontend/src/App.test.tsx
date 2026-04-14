@@ -126,20 +126,20 @@ describe('App routing', () => {
       mockRehydrateAuth.mockResolvedValue(false);
     });
 
-    it('redirects / to /welcome', async () => {
+    it('renders the landing page at /', async () => {
       render(<App />);
 
       expect(await screen.findByText('Landing Mock')).toBeInTheDocument();
-      expect(window.location.pathname).toBe('/welcome');
+      expect(window.location.pathname).toBe('/');
     });
 
-    it('renders the landing page at /welcome', async () => {
+    it('redirects /welcome to / and renders the landing page there', async () => {
       window.history.pushState({}, '', '/welcome');
 
       render(<App />);
 
       expect(await screen.findByText('Landing Mock')).toBeInTheDocument();
-      expect(window.location.pathname).toBe('/welcome');
+      expect(window.location.pathname).toBe('/');
     });
 
     it('redirects /virus-radar to /login', async () => {

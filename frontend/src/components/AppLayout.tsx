@@ -344,7 +344,7 @@ const AppLayout: React.FC<Props> = ({ children }) => {
             aria-label="Navigation Arbeitsansicht"
           >
             <div className="operator-sidebar__brand-row">
-              <Link to="/welcome" className="operator-brand-lockup product-brand-lockup" aria-label="ViralFlux Startseite">
+              <Link to="/virus-radar" className="operator-brand-lockup product-brand-lockup" aria-label="ViralFlux Startseite">
                 <span className="operator-brand-lockup__mark product-brand-mark" aria-hidden="true">VF</span>
                 <span className="operator-brand-lockup__copy product-brand-copy">
                   <span className="operator-brand-lockup__wordmark">ViralFlux</span>

@@ -74,6 +74,7 @@ services:
       - DB_ALLOW_RUNTIME_SCHEMA_UPDATES=false
       - STARTUP_STRICT_READINESS=true
       - READINESS_REQUIRE_BROKER=true
+      - CORE_PRODUCTION_SCOPES=${CORE_PRODUCTION_SCOPES:-RSV A:h7}
       - ALLOWED_ORIGINS=https://fluxengine.labpulse.ai,https://www.fluxengine.labpulse.ai,https://labpulse.belegsync.com,http://5.9.106.75:8501
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -152,6 +153,7 @@ services:
       - ENVIRONMENT=production
       - DB_AUTO_CREATE_SCHEMA=false
       - DB_ALLOW_RUNTIME_SCHEMA_UPDATES=false
+      - CORE_PRODUCTION_SCOPES=${CORE_PRODUCTION_SCOPES:-RSV A:h7}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
@@ -201,6 +203,7 @@ services:
       - ENVIRONMENT=production
       - DB_AUTO_CREATE_SCHEMA=false
       - DB_ALLOW_RUNTIME_SCHEMA_UPDATES=false
+      - CORE_PRODUCTION_SCOPES=${CORE_PRODUCTION_SCOPES:-RSV A:h7}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:

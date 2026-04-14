@@ -46,9 +46,19 @@ jest.mock('./pages/media/TimegraphPage', () => ({
   default: () => <div>Zeitgraph Mock</div>,
 }));
 
+jest.mock('./pages/media/RegionsPage', () => ({
+  __esModule: true,
+  default: () => <div>Regionen Mock</div>,
+}));
+
 jest.mock('./pages/media/CampaignsPage', () => ({
   __esModule: true,
   default: () => <div>Kampagnen Mock</div>,
+}));
+
+jest.mock('./pages/media/EvidencePage', () => ({
+  __esModule: true,
+  default: () => <div>Evidenz Mock</div>,
 }));
 
 import App from './App';
@@ -89,7 +99,7 @@ describe('App routing', () => {
     expect(screen.getByRole('button', { name: /Navigation öffnen/i })).toBeInTheDocument();
   });
 
-  it('redirects root and legacy dashboard routes to /virus-radar and shows the five PEIX work areas', async () => {
+  it('redirects root and legacy dashboard routes to /virus-radar and shows one decision entry', async () => {
     const firstRender = render(<App />);
 
     expect(await screen.findByText('Virus-Radar Mock')).toBeInTheDocument();
@@ -103,17 +113,16 @@ describe('App routing', () => {
     expect(await screen.findByText('Virus-Radar Mock')).toBeInTheDocument();
     expect(window.location.pathname).toBe('/virus-radar');
 
-    const operatorNav = screen.getByRole('navigation', { name: 'Arbeitsbereiche' });
-    const navLinks = within(operatorNav).getAllByRole('link');
+    const navigation = screen.getByRole('navigation', { name: 'Hauptnavigation' });
+    const navLinks = within(navigation).getAllByRole('link');
 
-    expect(navLinks).toHaveLength(6);
-    expect(within(operatorNav).getByRole('link', { name: /Virus-Radar/i })).toBeInTheDocument();
-    expect(within(operatorNav).getByRole('link', { name: /Diese Woche/i })).toBeInTheDocument();
-    expect(within(operatorNav).getByRole('link', { name: /Zeitgraph/i })).toBeInTheDocument();
-    expect(within(operatorNav).getByRole('link', { name: /Regionen/i })).toBeInTheDocument();
-    expect(within(operatorNav).getByRole('link', { name: /Kampagnen/i })).toBeInTheDocument();
-    expect(within(operatorNav).getByRole('link', { name: /Evidenz/i })).toBeInTheDocument();
-    expect(within(operatorNav).queryByRole('link', { name: /Dashboard/i })).not.toBeInTheDocument();
+    expect(navLinks).toHaveLength(1);
+    expect(within(navigation).getByRole('link', { name: /Entscheidung/i })).toBeInTheDocument();
+    expect(within(navigation).queryByRole('link', { name: /Diese Woche/i })).not.toBeInTheDocument();
+    expect(within(navigation).queryByRole('link', { name: /Zeitgraph/i })).not.toBeInTheDocument();
+    expect(within(navigation).queryByRole('link', { name: /Regionen/i })).not.toBeInTheDocument();
+    expect(within(navigation).queryByRole('link', { name: /Kampagnen/i })).not.toBeInTheDocument();
+    expect(within(navigation).queryByRole('link', { name: /Evidenz/i })).not.toBeInTheDocument();
   });
 
   describe('when logged out', () => {
@@ -247,15 +256,28 @@ describe('App routing', () => {
     }
   });
 
-  it('renders the dedicated Zeitgraph route as its own work area', async () => {
+  it('redirects /zeitgraph to /virus-radar instead of exposing a separate work area', async () => {
     window.history.pushState({}, '', '/zeitgraph');
 
     render(<App />);
 
-    expect(await screen.findByText('Zeitgraph Mock')).toBeInTheDocument();
+    expect(await screen.findByText('Virus-Radar Mock')).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/virus-radar');
+  });
 
-    const operatorNav = screen.getByRole('navigation', { name: 'Arbeitsbereiche' });
-    expect(within(operatorNav).getByRole('link', { name: /Zeitgraph/i })).toHaveAttribute('aria-current', 'page');
+  it('redirects legacy media work-area routes back to the decision page', async () => {
+    const legacyPaths = ['/jetzt', '/zeitgraph', '/regionen', '/kampagnen', '/evidenz'];
+
+    for (const path of legacyPaths) {
+      window.history.pushState({}, '', path);
+
+      const view = render(<App />);
+
+      expect(await screen.findByText('Virus-Radar Mock')).toBeInTheDocument();
+      expect(window.location.pathname).toBe('/virus-radar');
+
+      view.unmount();
+    }
   });
 
   it('keeps an explicit virus-radar URL after auth instead of redirecting elsewhere', async () => {

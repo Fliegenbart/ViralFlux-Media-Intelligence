@@ -1,14 +1,14 @@
 import '@testing-library/jest-dom';
 import React from 'react';
-import { act, render } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 
 import VirusRadarPage from './VirusRadarPage';
 
 const mockSetPageHeader = jest.fn();
 const mockClearPageHeader = jest.fn();
 const mockToast = jest.fn();
-const mockNavigate = jest.fn();
 const mockOpenRecommendation = jest.fn();
+const mockWorkspaceProps = jest.fn();
 let mockNowPageData: Record<string, unknown>;
 
 jest.mock('../../components/AnimatedPage', () => ({
@@ -16,9 +16,12 @@ jest.mock('../../components/AnimatedPage', () => ({
   default: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
-jest.mock('../../components/cockpit/VirusRadarWorkspace', () => ({
+jest.mock('../../components/cockpit/SimplifiedDecisionWorkspace', () => ({
   __esModule: true,
-  default: () => <div>Virus-Radar-Ansicht</div>,
+  default: (props: Record<string, unknown>) => {
+    mockWorkspaceProps(props);
+    return <div>Entscheidungsansicht</div>;
+  },
 }));
 
 jest.mock('../../App', () => ({
@@ -35,25 +38,7 @@ jest.mock('../../components/AppLayout', () => ({
 }));
 
 jest.mock('../../features/media/useMediaData', () => ({
-  useRegionsPageData: () => ({
-    regionsView: {
-      map: {
-        activation_suggestions: [{ region: 'BE' }],
-        top_regions: [{ code: 'BE' }],
-      },
-    },
-  }),
-  useVirusRadarHeroForecast: () => ({
-    loading: false,
-    heroForecast: {
-      availableViruses: ['Influenza A'],
-      chartData: [],
-      summaries: [],
-    },
-  }),
   useNowPageData: () => mockNowPageData,
-  useCampaignsPageData: () => ({ campaignsView: null }),
-  useEvidencePageData: () => ({ evidence: null }),
 }));
 
 jest.mock('../../features/media/workflowContext', () => ({
@@ -67,11 +52,7 @@ jest.mock('../../features/media/workflowContext', () => ({
   }),
 }));
 
-jest.mock('react-router-dom', () => ({
-  useNavigate: () => mockNavigate,
-}));
-
-describe('VirusRadarPage page header', () => {
+describe('VirusRadarPage', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockNowPageData = {
@@ -80,52 +61,80 @@ describe('VirusRadarPage page header', () => {
           direction: 'Aktivieren',
           region: 'Berlin',
           whyNow: 'Berlin ist diese Woche der stärkste Fall.',
+          ctaDisabled: false,
         },
         focusRegion: {
           code: 'BE',
           name: 'Berlin',
           recommendationId: 'rec-1',
         },
+        primaryActionLabel: 'Empfehlung pruefen',
+        primaryRecommendationId: 'rec-1',
       },
+      forecast: null,
+      focusRegionBacktest: null,
+      focusRegionBacktestLoading: false,
+      workspaceStatus: null,
     };
   });
 
-  it('opens the focus recommendation from the header when one is already linked', async () => {
+  it('renders the simplified decision workspace and opens the linked recommendation', async () => {
     render(<VirusRadarPage />);
 
-    const latestHeader = mockSetPageHeader.mock.calls.at(-1)?.[0];
-    expect(latestHeader?.primaryAction?.label).toBe('Empfehlung prüfen');
-    expect(latestHeader?.secondaryAction?.label).toBe('Regionen öffnen');
-    expect(latestHeader?.secondaryAction?.to).toBe('/regionen');
+    expect(screen.getByText('Entscheidungsansicht')).toBeInTheDocument();
+    expect(mockSetPageHeader).not.toHaveBeenCalled();
+    expect(mockClearPageHeader).toHaveBeenCalledTimes(1);
+
+    const latestProps = mockWorkspaceProps.mock.calls.at(-1)?.[0] as {
+      primaryActionLabel: string;
+      onPrimaryAction: () => Promise<void> | void;
+    };
+
+    expect(latestProps.primaryActionLabel).toBe('Empfehlung pruefen');
 
     await act(async () => {
-      await latestHeader.primaryAction.onClick();
+      await latestProps.onPrimaryAction();
     });
 
     expect(mockOpenRecommendation).toHaveBeenCalledWith('rec-1', 'overlay');
   });
 
-  it('sends the user into the regions flow when no recommendation is linked yet', async () => {
+  it('falls back to a details action when no live recommendation can be opened', async () => {
     mockNowPageData = {
       view: {
-        heroRecommendation: null,
+        heroRecommendation: {
+          direction: 'Beobachten',
+          region: 'Berlin',
+          whyNow: 'Es gibt erste Signale, aber noch keine klare Freigabe.',
+          ctaDisabled: true,
+        },
         focusRegion: {
           code: 'BE',
           name: 'Berlin',
           recommendationId: null,
         },
+        primaryActionLabel: 'Empfehlung pruefen',
+        primaryRecommendationId: null,
       },
+      forecast: null,
+      focusRegionBacktest: null,
+      focusRegionBacktestLoading: false,
+      workspaceStatus: null,
     };
 
     render(<VirusRadarPage />);
 
-    const latestHeader = mockSetPageHeader.mock.calls.at(-1)?.[0];
-    expect(latestHeader?.primaryAction?.label).toBe('Regionen öffnen');
+    const latestProps = mockWorkspaceProps.mock.calls.at(-1)?.[0] as {
+      primaryActionLabel: string;
+      onPrimaryAction: () => Promise<void> | void;
+    };
+
+    expect(latestProps.primaryActionLabel).toBe('Details ansehen');
 
     await act(async () => {
-      await latestHeader.primaryAction.onClick();
+      await latestProps.onPrimaryAction();
     });
 
-    expect(mockNavigate).toHaveBeenCalledWith('/regionen', { state: { regionCode: 'BE' } });
+    expect(mockOpenRecommendation).not.toHaveBeenCalled();
   });
 });

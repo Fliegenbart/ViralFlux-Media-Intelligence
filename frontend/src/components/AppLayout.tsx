@@ -12,11 +12,6 @@ import { useTheme, useAuth } from '../App';
 import { apiFetch } from '../lib/api';
 import {
   Activity,
-  Zap,
-  TrendingUp,
-  MapPin,
-  Sparkles,
-  ShieldCheck,
   MoreHorizontal,
   Sun,
   Moon,
@@ -55,21 +50,17 @@ interface PageHeaderContextValue {
 const ICON_SIZE = 18;
 
 const PRIMARY_NAV_ITEMS = [
-  { label: 'Virus-Radar', path: '/virus-radar', helper: 'Alles für die Media-Entscheidung auf einer Seite', Icon: Activity },
-  { label: 'Diese Woche', path: '/jetzt', helper: 'Die aktuelle Wochenentscheidung im Detail', Icon: Zap },
-  { label: 'Zeitgraph', path: '/zeitgraph', helper: 'Nur Verlauf und 7-Tage-Ausblick', Icon: TrendingUp },
-  { label: 'Regionen', path: '/regionen', helper: 'Wo sich diese Woche genaueres Hinsehen lohnt', Icon: MapPin },
-  { label: 'Kampagnen', path: '/kampagnen', helper: 'Welcher Fall als Nächstes geprüft werden sollte', Icon: Sparkles },
-  { label: 'Evidenz', path: '/evidenz', helper: 'Ob die Empfehlung für diese Woche trägt', Icon: ShieldCheck },
+  {
+    label: 'Entscheidung',
+    path: '/virus-radar',
+    helper: 'Die eine Startseite fuer Empfehlung, Verlauf und 7-Tage-Prognose',
+    Icon: Activity,
+  },
 ] as const;
 
 const SECTION_META = [
-  { path: '/virus-radar', kicker: 'Virus-Radar', title: 'Die zentrale Media-Entscheidungsseite' },
-  { path: '/jetzt', kicker: 'Diese Woche', title: 'Die aktuelle Wochenentscheidung im Detail' },
-  { path: '/zeitgraph', kicker: 'Zeitgraph', title: 'Nur Verlauf und 7-Tage-Ausblick' },
-  { path: '/regionen', kicker: 'Regionen', title: 'Wo diese Woche genauer hingesehen werden sollte' },
-  { path: '/kampagnen', kicker: 'Kampagnen', title: 'Welcher Fall als Nächstes geprüft werden sollte' },
-  { path: '/evidenz', kicker: 'Evidenz', title: 'Ob die Empfehlung für diese Woche trägt' },
+  { path: '/virus-radar', kicker: 'Entscheidung', title: 'Die Entscheidung fuer diese Woche' },
+  { path: '/kampagnen', kicker: 'Details', title: 'Empfehlungsdetails' },
 ] as const;
 
 const PageHeaderContext = createContext<PageHeaderContextValue>({
@@ -352,7 +343,7 @@ const AppLayout: React.FC<Props> = ({ children }) => {
               </Link>
             </div>
 
-            <nav className="operator-nav" role="navigation" aria-label="Arbeitsbereiche">
+            <nav className="operator-nav" role="navigation" aria-label="Hauptnavigation">
               {PRIMARY_NAV_ITEMS.map(({ label, path, helper, Icon }) => {
                 const active = isActive(path);
                 return (

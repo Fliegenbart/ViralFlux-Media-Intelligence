@@ -1,0 +1,197 @@
+/* ═══ Decision Home ═══ */
+
+.decision-home {
+  display: grid;
+  gap: var(--space-lg);
+  align-items: start;
+}
+
+.decision-home__hero {
+  display: grid;
+  gap: 16px;
+  padding: clamp(20px, 3vw, 32px);
+  border-radius: 28px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(248, 250, 252, 0.96));
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  box-shadow: 0 18px 48px rgba(15, 23, 42, 0.08);
+}
+
+.decision-home__hero--go {
+  box-shadow: 0 18px 48px rgba(34, 197, 94, 0.1);
+}
+
+.decision-home__hero--watch {
+  box-shadow: 0 18px 48px rgba(59, 130, 246, 0.1);
+}
+
+.decision-home__hero--no_call {
+  box-shadow: 0 18px 48px rgba(148, 163, 184, 0.1);
+}
+
+.decision-home__eyebrow {
+  color: var(--color-primary);
+  font-size: var(--text-label);
+  font-weight: 800;
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+}
+
+.decision-home__copy {
+  display: grid;
+  gap: 12px;
+  max-width: 760px;
+}
+
+.decision-home__headline {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: clamp(2.15rem, 3.6vw, 3.5rem);
+  line-height: 1;
+  letter-spacing: var(--tracking-tight);
+  text-wrap: balance;
+}
+
+.decision-home__summary {
+  margin: 0;
+  max-width: 58ch;
+  color: var(--text-secondary);
+  font-size: 1rem;
+  line-height: 1.7;
+}
+
+.decision-home__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px 18px;
+}
+
+.decision-home__cta {
+  min-width: 180px;
+}
+
+.decision-home__timestamp {
+  color: var(--text-muted);
+  font-size: var(--text-small);
+  font-weight: 600;
+}
+
+.decision-home__graph {
+  display: grid;
+  gap: 14px;
+}
+
+.decision-home__facts {
+  display: grid;
+  gap: 18px;
+  padding: clamp(18px, 2.4vw, 28px);
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  box-shadow: 0 14px 40px rgba(15, 23, 42, 0.06);
+}
+
+.decision-home__section-head {
+  display: grid;
+  gap: 6px;
+}
+
+.decision-home__section-title {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 1.05rem;
+  font-weight: 800;
+  letter-spacing: var(--tracking-tight);
+}
+
+.decision-home__section-copy {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--text-small);
+  line-height: 1.6;
+}
+
+.decision-home__facts-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.decision-home__fact {
+  display: grid;
+  gap: 8px;
+  min-height: 100%;
+}
+
+.decision-home__fact-label {
+  color: var(--text-muted);
+  font-size: var(--text-label);
+  font-weight: 800;
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+}
+
+.decision-home__fact-value {
+  color: var(--text-primary);
+  font-size: 1.2rem;
+  line-height: 1.2;
+}
+
+.decision-home__fact-detail {
+  color: var(--text-secondary);
+  font-size: var(--text-small);
+  line-height: 1.6;
+}
+
+.decision-home__details {
+  display: grid;
+  gap: 14px;
+}
+
+.decision-home__note-list {
+  display: grid;
+  gap: 10px;
+}
+
+.decision-home__hero--go {
+  background:
+    radial-gradient(circle at top left, rgba(34, 197, 94, 0.08), transparent 24%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(247, 250, 252, 0.96));
+}
+
+.decision-home__hero--watch {
+  background:
+    radial-gradient(circle at top left, rgba(59, 130, 246, 0.08), transparent 24%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(247, 250, 252, 0.96));
+}
+
+.decision-home__hero--no_call {
+  background:
+    radial-gradient(circle at top left, rgba(148, 163, 184, 0.08), transparent 24%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(247, 250, 252, 0.96));
+}
+
+@media (max-width: 900px) {
+  .decision-home__facts-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .decision-home__headline {
+    font-size: clamp(1.9rem, 8vw, 3rem);
+  }
+}
+
+@media (max-width: 640px) {
+  .decision-home__hero,
+  .decision-home__facts {
+    padding: 18px;
+  }
+
+  .decision-home__actions {
+    align-items: stretch;
+  }
+
+  .decision-home__cta {
+    width: 100%;
+  }
+}

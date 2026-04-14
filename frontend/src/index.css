@@ -23,6 +23,7 @@
 @import './styles/pages/timegraph.css';
 @import './styles/pages/dashboard.css';
 @import './styles/pages/landing.css';
+@import './styles/pages/decision-home.css';
 
 /* ═══ Overrides ═══ */
 @import './styles/recharts.css';

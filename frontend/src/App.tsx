@@ -9,11 +9,7 @@ import './index.css';
 /* ── Lazy-loaded pages (code splitting) ────────────────────────── */
 const MediaShell = lazy(() => import('./pages/media/MediaShell'));
 const VirusRadarPage = lazy(() => import('./pages/media/VirusRadarPage'));
-const NowPage = lazy(() => import('./pages/media/NowPage'));
-const TimegraphPage = lazy(() => import('./pages/media/TimegraphPage'));
-const RegionsPage = lazy(() => import('./pages/media/RegionsPage'));
 const CampaignsPage = lazy(() => import('./pages/media/CampaignsPage'));
-const EvidencePage = lazy(() => import('./pages/media/EvidencePage'));
 
 /* ── Theme ──────────────────────────────────────────────────────── */
 type Theme = 'light' | 'dark';
@@ -240,12 +236,12 @@ const App: React.FC = () => {
                   >
                     <Route element={<MediaShell />}>
                       <Route path="/virus-radar" element={<VirusRadarPage />} />
-                      <Route path="/jetzt" element={<NowPage />} />
-                      <Route path="/zeitgraph" element={<TimegraphPage />} />
-                      <Route path="/regionen" element={<RegionsPage />} />
-                      <Route path="/kampagnen" element={<CampaignsPage />} />
+                      <Route path="/jetzt" element={<Navigate to="/virus-radar" replace />} />
+                      <Route path="/zeitgraph" element={<Navigate to="/virus-radar" replace />} />
+                      <Route path="/regionen" element={<Navigate to="/virus-radar" replace />} />
+                      <Route path="/kampagnen" element={<Navigate to="/virus-radar" replace />} />
                       <Route path="/kampagnen/:id" element={<CampaignsPage />} />
-                      <Route path="/evidenz" element={<EvidencePage />} />
+                      <Route path="/evidenz" element={<Navigate to="/virus-radar" replace />} />
                     </Route>
                     {/* Legacy redirects */}
                     <Route path="/dashboard" element={<Navigate to="/virus-radar" replace />} />

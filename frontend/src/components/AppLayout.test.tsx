@@ -149,7 +149,30 @@ describe('AppLayout theme rendering', () => {
     expect(screen.getByRole('link', { name: 'Direkt zum Inhalt springen' })).toHaveAttribute('href', '#main-content');
     expect(screen.queryByText('Wochenbericht exportieren')).not.toBeInTheDocument();
     expect(screen.getByRole('main')).toHaveAttribute('aria-labelledby', 'operator-page-title');
-    expect(screen.getByRole('heading', { name: 'Die aktuelle Wochenentscheidung im Detail' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Arbeitsansicht' })).toBeInTheDocument();
+  });
+
+  it('shows a single decision entry in the shell navigation', () => {
+    mockedUseTheme.mockReturnValue({
+      theme: 'light',
+      toggle: jest.fn(),
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/virus-radar']} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <AppLayout>
+          <div>Entscheidungsinhalt</div>
+        </AppLayout>
+      </MemoryRouter>,
+    );
+
+    const navigation = screen.getByRole('navigation', { name: 'Hauptnavigation' });
+    const links = within(navigation).getAllByRole('link');
+
+    expect(links).toHaveLength(1);
+    expect(within(navigation).getByRole('link', { name: /Entscheidung/i })).toHaveAttribute('href', '/virus-radar');
+    expect(within(navigation).queryByRole('link', { name: /Diese Woche/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Die Entscheidung fuer diese Woche' })).toBeInTheDocument();
   });
 
   it('shows the light-mode activation label in dark theme', () => {
@@ -230,20 +253,20 @@ describe('AppLayout theme rendering', () => {
 
     const sectionFrame = screen.getByLabelText('Aktueller Bereich');
     const pageActions = screen.getByLabelText('Seitenaktionen');
-    const navigation = screen.getByRole('navigation', { name: 'Arbeitsbereiche' });
+    const navigation = screen.getByRole('navigation', { name: 'Hauptnavigation' });
     const primaryAction = screen.getByRole('button', { name: 'Top-Empfehlung prüfen' });
     const secondaryAction = screen.getByRole('link', { name: 'Zum Virus-Radar' });
-    const virusRadarNavItem = within(navigation).getByRole('link', { name: /Virus-Radar/ });
+    const decisionNavItem = within(navigation).getByRole('link', { name: /Entscheidung/ });
 
     expect(sectionFrame).toHaveTextContent('ViralFlux');
-    expect(sectionFrame).toHaveTextContent('Diese Woche');
-    expect(sectionFrame).not.toHaveTextContent('Arbeitsbereich');
-    expect(screen.getByRole('heading', { name: 'Die aktuelle Wochenentscheidung im Detail' })).toBeVisible();
+    expect(sectionFrame).toHaveTextContent('Arbeitsbereich');
+    expect(sectionFrame).toHaveTextContent('Arbeitsansicht');
+    expect(screen.getByRole('heading', { name: 'Arbeitsansicht' })).toBeVisible();
     expect(primaryAction).toBeVisible();
     expect(primaryAction).toHaveClass('operator-page-action--primary');
     expect(secondaryAction).toHaveClass('operator-page-action--secondary');
     expect(secondaryAction).toHaveAttribute('href', '/virus-radar');
-    expect(virusRadarNavItem).toHaveAttribute('href', '/virus-radar');
+    expect(decisionNavItem).toHaveAttribute('href', '/virus-radar');
     expect(pageActions).toContainElement(primaryAction);
     expect(pageActions.lastElementChild).toBe(primaryAction);
 

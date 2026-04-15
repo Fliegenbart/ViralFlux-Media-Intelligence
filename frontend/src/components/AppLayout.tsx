@@ -12,6 +12,10 @@ import { useTheme, useAuth } from '../App';
 import { apiFetch } from '../lib/api';
 import {
   Activity,
+  LineChart,
+  Map,
+  Megaphone,
+  ShieldCheck,
   MoreHorizontal,
   Sun,
   Moon,
@@ -58,9 +62,40 @@ const PRIMARY_NAV_ITEMS = [
   },
 ] as const;
 
+const DETAIL_NAV_ITEMS = [
+  {
+    label: 'Zeitgraph',
+    path: '/zeitgraph',
+    helper: 'Verlauf und Prognose im Detail',
+    Icon: LineChart,
+  },
+  {
+    label: 'Regionen',
+    path: '/regionen',
+    helper: 'Vergleich aller geprueften Regionen',
+    Icon: Map,
+  },
+  {
+    label: 'Kampagnen',
+    path: '/kampagnen',
+    helper: 'Empfehlungen und vorbereitete Massnahmen',
+    Icon: Megaphone,
+  },
+  {
+    label: 'Evidenz',
+    path: '/evidenz',
+    helper: 'Datenlage, Quellen und Validierung',
+    Icon: ShieldCheck,
+  },
+] as const;
+
 const SECTION_META = [
   { path: '/virus-radar', kicker: 'Entscheidung', title: 'Die Entscheidung fuer diese Woche' },
+  { path: '/jetzt', kicker: 'Details', title: 'Diese Woche im Detail' },
+  { path: '/zeitgraph', kicker: 'Details', title: 'Verlauf und Prognose im Detail' },
+  { path: '/regionen', kicker: 'Details', title: 'Regionenvergleich und Fokusregion' },
   { path: '/kampagnen', kicker: 'Details', title: 'Empfehlungsdetails' },
+  { path: '/evidenz', kicker: 'Details', title: 'Evidenz und Datenlage' },
 ] as const;
 
 const PageHeaderContext = createContext<PageHeaderContextValue>({
@@ -353,6 +388,29 @@ const AppLayout: React.FC<Props> = ({ children }) => {
                     to={path}
                     onClick={() => setMobileMenuOpen(false)}
                     className={`operator-nav-item ${active ? 'active' : ''}`}
+                    aria-current={active ? 'page' : undefined}
+                    title={helper}
+                  >
+                    <span className="operator-nav-item__headline">
+                      <Icon size={ICON_SIZE} className="operator-nav-item__icon" aria-hidden="true" />
+                      <span className="operator-nav-item__label">{label}</span>
+                    </span>
+                  </Link>
+                );
+              })}
+            </nav>
+
+            <span className="operator-sidebar__section-label">Details</span>
+
+            <nav className="operator-nav operator-nav--secondary" aria-label="Detailansichten">
+              {DETAIL_NAV_ITEMS.map(({ label, path, helper, Icon }) => {
+                const active = isActive(path);
+                return (
+                  <Link
+                    key={path}
+                    to={path}
+                    onClick={() => setMobileMenuOpen(false)}
+                    className={`operator-nav-item operator-nav-item--secondary ${active ? 'active' : ''}`}
                     aria-current={active ? 'page' : undefined}
                     title={helper}
                   >

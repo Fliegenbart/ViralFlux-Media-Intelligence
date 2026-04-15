@@ -99,7 +99,7 @@ describe('App routing', () => {
     expect(screen.getByRole('button', { name: /Navigation öffnen/i })).toBeInTheDocument();
   });
 
-  it('redirects root and legacy dashboard routes to /virus-radar and shows one decision entry', async () => {
+  it('redirects root and legacy dashboard routes to /virus-radar and keeps detail routes visible in navigation', async () => {
     const firstRender = render(<App />);
 
     expect(await screen.findByText('Virus-Radar Mock')).toBeInTheDocument();
@@ -113,16 +113,14 @@ describe('App routing', () => {
     expect(await screen.findByText('Virus-Radar Mock')).toBeInTheDocument();
     expect(window.location.pathname).toBe('/virus-radar');
 
-    const navigation = screen.getByRole('navigation', { name: 'Hauptnavigation' });
-    const navLinks = within(navigation).getAllByRole('link');
+    const primaryNavigation = screen.getByRole('navigation', { name: 'Hauptnavigation' });
+    const detailNavigation = screen.getByRole('navigation', { name: 'Detailansichten' });
 
-    expect(navLinks).toHaveLength(1);
-    expect(within(navigation).getByRole('link', { name: /Entscheidung/i })).toBeInTheDocument();
-    expect(within(navigation).queryByRole('link', { name: /Diese Woche/i })).not.toBeInTheDocument();
-    expect(within(navigation).queryByRole('link', { name: /Zeitgraph/i })).not.toBeInTheDocument();
-    expect(within(navigation).queryByRole('link', { name: /Regionen/i })).not.toBeInTheDocument();
-    expect(within(navigation).queryByRole('link', { name: /Kampagnen/i })).not.toBeInTheDocument();
-    expect(within(navigation).queryByRole('link', { name: /Evidenz/i })).not.toBeInTheDocument();
+    expect(within(primaryNavigation).getByRole('link', { name: /Entscheidung/i })).toBeInTheDocument();
+    expect(within(detailNavigation).getByRole('link', { name: /Zeitgraph/i })).toBeInTheDocument();
+    expect(within(detailNavigation).getByRole('link', { name: /Regionen/i })).toBeInTheDocument();
+    expect(within(detailNavigation).getByRole('link', { name: /^Kampagnen$/i })).toBeInTheDocument();
+    expect(within(detailNavigation).getByRole('link', { name: /Evidenz/i })).toBeInTheDocument();
   });
 
   describe('when logged out', () => {
@@ -256,25 +254,30 @@ describe('App routing', () => {
     }
   });
 
-  it('redirects /zeitgraph to /virus-radar instead of exposing a separate work area', async () => {
+  it('keeps /zeitgraph as a reachable detail page', async () => {
     window.history.pushState({}, '', '/zeitgraph');
 
     render(<App />);
 
-    expect(await screen.findByText('Virus-Radar Mock')).toBeInTheDocument();
-    expect(window.location.pathname).toBe('/virus-radar');
+    expect(await screen.findByText('Zeitgraph Mock')).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/zeitgraph');
   });
 
-  it('redirects legacy media work-area routes back to the decision page', async () => {
-    const legacyPaths = ['/jetzt', '/zeitgraph', '/regionen', '/kampagnen', '/evidenz'];
+  it('keeps the detail work-area routes reachable next to the decision page', async () => {
+    const reachablePaths = [
+      ['/zeitgraph', 'Zeitgraph Mock'],
+      ['/regionen', 'Regionen Mock'],
+      ['/kampagnen', 'Kampagnen Mock'],
+      ['/evidenz', 'Evidenz Mock'],
+    ] as const;
 
-    for (const path of legacyPaths) {
+    for (const [path, text] of reachablePaths) {
       window.history.pushState({}, '', path);
 
       const view = render(<App />);
 
-      expect(await screen.findByText('Virus-Radar Mock')).toBeInTheDocument();
-      expect(window.location.pathname).toBe('/virus-radar');
+      expect(await screen.findByText(text)).toBeInTheDocument();
+      expect(window.location.pathname).toBe(path);
 
       view.unmount();
     }

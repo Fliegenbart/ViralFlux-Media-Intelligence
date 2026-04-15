@@ -149,10 +149,10 @@ describe('AppLayout theme rendering', () => {
     expect(screen.getByRole('link', { name: 'Direkt zum Inhalt springen' })).toHaveAttribute('href', '#main-content');
     expect(screen.queryByText('Wochenbericht exportieren')).not.toBeInTheDocument();
     expect(screen.getByRole('main')).toHaveAttribute('aria-labelledby', 'operator-page-title');
-    expect(screen.getByRole('heading', { name: 'Arbeitsansicht' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Diese Woche im Detail' })).toBeInTheDocument();
   });
 
-  it('shows a single decision entry in the shell navigation', () => {
+  it('shows the decision entry and keeps detail views reachable in the shell navigation', () => {
     mockedUseTheme.mockReturnValue({
       theme: 'light',
       toggle: jest.fn(),
@@ -166,12 +166,14 @@ describe('AppLayout theme rendering', () => {
       </MemoryRouter>,
     );
 
-    const navigation = screen.getByRole('navigation', { name: 'Hauptnavigation' });
-    const links = within(navigation).getAllByRole('link');
+    const primaryNavigation = screen.getByRole('navigation', { name: 'Hauptnavigation' });
+    const detailNavigation = screen.getByRole('navigation', { name: 'Detailansichten' });
 
-    expect(links).toHaveLength(1);
-    expect(within(navigation).getByRole('link', { name: /Entscheidung/i })).toHaveAttribute('href', '/virus-radar');
-    expect(within(navigation).queryByRole('link', { name: /Diese Woche/i })).not.toBeInTheDocument();
+    expect(within(primaryNavigation).getByRole('link', { name: /Entscheidung/i })).toHaveAttribute('href', '/virus-radar');
+    expect(within(detailNavigation).getByRole('link', { name: /Zeitgraph/i })).toHaveAttribute('href', '/zeitgraph');
+    expect(within(detailNavigation).getByRole('link', { name: /Regionen/i })).toHaveAttribute('href', '/regionen');
+    expect(within(detailNavigation).getByRole('link', { name: /^Kampagnen$/i })).toHaveAttribute('href', '/kampagnen');
+    expect(within(detailNavigation).getByRole('link', { name: /Evidenz/i })).toHaveAttribute('href', '/evidenz');
     expect(screen.getByRole('heading', { name: 'Die Entscheidung fuer diese Woche' })).toBeInTheDocument();
   });
 
@@ -259,9 +261,9 @@ describe('AppLayout theme rendering', () => {
     const decisionNavItem = within(navigation).getByRole('link', { name: /Entscheidung/ });
 
     expect(sectionFrame).toHaveTextContent('ViralFlux');
-    expect(sectionFrame).toHaveTextContent('Arbeitsbereich');
-    expect(sectionFrame).toHaveTextContent('Arbeitsansicht');
-    expect(screen.getByRole('heading', { name: 'Arbeitsansicht' })).toBeVisible();
+    expect(sectionFrame).toHaveTextContent('Details');
+    expect(sectionFrame).toHaveTextContent('Diese Woche im Detail');
+    expect(screen.getByRole('heading', { name: 'Diese Woche im Detail' })).toBeVisible();
     expect(primaryAction).toBeVisible();
     expect(primaryAction).toHaveClass('operator-page-action--primary');
     expect(secondaryAction).toHaveClass('operator-page-action--secondary');

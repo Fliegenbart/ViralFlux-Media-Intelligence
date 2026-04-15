@@ -7,7 +7,9 @@ from unittest.mock import MagicMock, patch
 from app.services.ml.tasks import (
     _compute_accuracy_metrics,
     _persist_historical_backfill_rows,
+    _resolve_accuracy_window_start,
     _select_forecast_accuracy_actual,
+    _select_missing_backfill_targets,
     compute_forecast_accuracy_task,
 )
 
@@ -83,11 +85,50 @@ class ForecastAccuracyTaskTests(unittest.TestCase):
         self.assertAlmostEqual(metrics["rmse"], 12.909944, places=5)
         self.assertAlmostEqual(metrics["mape"], 10.0)
 
-    def test_compute_forecast_accuracy_uses_midnight_window_start_for_boundary_day(self) -> None:
+    def test_select_missing_backfill_targets_respects_weekly_candidate_dates(self) -> None:
+        result = _select_missing_backfill_targets(
+            candidate_target_dates=[
+                datetime(2026, 4, 1, 0, 0, 0),
+                datetime(2026, 4, 8, 0, 0, 0),
+                datetime(2026, 4, 15, 0, 0, 0),
+            ],
+            existing_scope_dates={datetime(2026, 4, 1, 0, 0, 0)},
+            window_start=datetime(2026, 4, 1, 0, 0, 0),
+            window_end=datetime(2026, 4, 8, 0, 0, 0),
+        )
+
+        self.assertEqual(result, [datetime(2026, 4, 8, 0, 0, 0)])
+
+    def test_resolve_accuracy_window_start_expands_for_weekly_forecasts(self) -> None:
+        fixed_now = datetime(2026, 4, 15, 10, 14, 16)
+        recent_forecast_rows = [
+            SimpleNamespace(forecast_date=datetime(2026, 4, 15, 0, 0, 0)),
+            SimpleNamespace(forecast_date=datetime(2026, 4, 8, 0, 0, 0)),
+            SimpleNamespace(forecast_date=datetime(2026, 4, 1, 0, 0, 0)),
+            SimpleNamespace(forecast_date=datetime(2026, 3, 25, 0, 0, 0)),
+        ]
+
+        window_start = _resolve_accuracy_window_start(
+            cutoff=fixed_now,
+            recent_forecast_rows=recent_forecast_rows,
+            default_days=14,
+            minimum_pairs=3,
+        )
+
+        self.assertEqual(window_start, datetime(2026, 3, 25, 0, 0, 0))
+
+    def test_compute_forecast_accuracy_uses_frequency_aware_window_start(self) -> None:
         db = MagicMock()
+        recent_scope_query = MagicMock()
+        recent_scope_query.filter.return_value.order_by.return_value.limit.return_value.all.return_value = [
+            SimpleNamespace(forecast_date=datetime(2026, 4, 15, 0, 0, 0)),
+            SimpleNamespace(forecast_date=datetime(2026, 4, 8, 0, 0, 0)),
+            SimpleNamespace(forecast_date=datetime(2026, 4, 1, 0, 0, 0)),
+            SimpleNamespace(forecast_date=datetime(2026, 3, 25, 0, 0, 0)),
+        ]
         forecast_query = MagicMock()
         forecast_query.filter.return_value.order_by.return_value.all.return_value = []
-        db.query.return_value = forecast_query
+        db.query.side_effect = [recent_scope_query, forecast_query]
 
         @contextmanager
         def _db_context():
@@ -105,7 +146,7 @@ class ForecastAccuracyTaskTests(unittest.TestCase):
 
         filter_args = forecast_query.filter.call_args.args
         lower_bound = filter_args[2].right.value
-        self.assertEqual(lower_bound, datetime(2026, 4, 1, 0, 0, 0))
+        self.assertEqual(lower_bound, datetime(2026, 3, 25, 0, 0, 0))
 
 
 if __name__ == "__main__":

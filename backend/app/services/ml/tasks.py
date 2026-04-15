@@ -9,6 +9,7 @@ from app.core.time import utc_now
 import logging
 from datetime import date, datetime, timedelta
 from decimal import Decimal
+from statistics import median
 from typing import Any, Dict
 
 from app.core.celery_app import celery_app
@@ -195,6 +196,61 @@ def _extract_datetime_cell(row: Any, *, attribute_name: str) -> datetime | None:
     if isinstance(row, (tuple, list)) and row:
         return _naive_datetime(row[0])
     return None
+
+
+def _estimate_forecast_cadence_days(rows: list[Any], *, attribute_name: str = "forecast_date") -> int | None:
+    unique_dates = sorted(
+        {
+            extracted.replace(hour=0, minute=0, second=0, microsecond=0)
+            for row in rows
+            if (extracted := _extract_datetime_cell(row, attribute_name=attribute_name)) is not None
+        }
+    )
+    if len(unique_dates) < 2:
+        return None
+
+    deltas = [
+        (current - previous).days
+        for previous, current in zip(unique_dates, unique_dates[1:])
+        if (current - previous).days > 0
+    ]
+    if not deltas:
+        return None
+    return max(int(round(float(median(deltas)))), 1)
+
+
+def _resolve_accuracy_window_start(
+    *,
+    cutoff: datetime,
+    recent_forecast_rows: list[Any],
+    default_days: int = 14,
+    minimum_pairs: int = 3,
+) -> datetime:
+    cadence_days = _estimate_forecast_cadence_days(recent_forecast_rows)
+    window_days = max(int(default_days), int(cadence_days or 0) * int(minimum_pairs or 1))
+    return (cutoff - timedelta(days=window_days)).replace(
+        hour=0,
+        minute=0,
+        second=0,
+        microsecond=0,
+    )
+
+
+def _select_missing_backfill_targets(
+    *,
+    candidate_target_dates: list[datetime],
+    existing_scope_dates: set[datetime],
+    window_start: datetime,
+    window_end: datetime,
+) -> list[datetime]:
+    normalized_candidates = sorted(
+        {
+            target.replace(hour=0, minute=0, second=0, microsecond=0)
+            for target in candidate_target_dates
+            if window_start <= target.replace(hour=0, minute=0, second=0, microsecond=0) <= window_end
+        }
+    )
+    return [target for target in normalized_candidates if target not in existing_scope_dates]
 
 
 @celery_app.task(bind=True, name="train_xgboost_model_task")
@@ -432,13 +488,26 @@ def backfill_recent_forecast_history_task(
                     if (extracted := _extract_datetime_cell(row, attribute_name="forecast_date")) is not None
                 }
 
-                desired_dates: list[datetime] = []
-                current_day = window_start
-                while current_day <= backfill_end:
-                    normalized = current_day.replace(hour=0, minute=0, second=0, microsecond=0)
-                    if normalized not in existing_scope_dates:
-                        desired_dates.append(normalized)
-                    current_day += timedelta(days=1)
+                candidate_panel = service.build_direct_training_panel(
+                    virus_typ=virus,
+                    region=region,
+                    horizon_days=horizon_days,
+                    include_internal_history=include_internal_history,
+                )
+                candidate_target_dates = [
+                    extracted.replace(hour=0, minute=0, second=0, microsecond=0)
+                    for extracted in (
+                        _naive_datetime(value)
+                        for value in list(candidate_panel.get("target_date", []))
+                    )
+                    if extracted is not None
+                ]
+                desired_dates = _select_missing_backfill_targets(
+                    candidate_target_dates=candidate_target_dates,
+                    existing_scope_dates=existing_scope_dates,
+                    window_start=window_start,
+                    window_end=backfill_end,
+                )
 
                 if not desired_dates:
                     results[virus] = {
@@ -682,16 +751,27 @@ def compute_forecast_accuracy_task(self) -> Dict[str, Any]:
 
     with get_db_context() as db:
         from app.models.database import MLForecast, WastewaterAggregated, ForecastAccuracyLog
-        from datetime import timedelta
 
         for virus in virus_types:
-            # Forecasts der letzten 14 Tage, die jetzt in der Vergangenheit liegen
             cutoff = utc_now()
-            window_start = (cutoff - timedelta(days=14)).replace(
-                hour=0,
-                minute=0,
-                second=0,
-                microsecond=0,
+            recent_scope_rows = (
+                db.query(MLForecast.forecast_date)
+                .filter(
+                    MLForecast.virus_typ == virus,
+                    MLForecast.forecast_date < cutoff,
+                )
+                .order_by(MLForecast.forecast_date.desc())
+                .limit(8)
+                .all()
+            )
+
+            # Das Accuracy-Fenster muss zur echten Forecast-Frequenz passen.
+            # Bei wöchentlichen Forecasts wären 14 Tage mit mindestens 3 Paaren sonst unmöglich.
+            window_start = _resolve_accuracy_window_start(
+                cutoff=cutoff,
+                recent_forecast_rows=recent_scope_rows,
+                default_days=14,
+                minimum_pairs=3,
             )
             forecasts = (
                 db.query(MLForecast)
@@ -749,7 +829,7 @@ def compute_forecast_accuracy_task(self) -> Dict[str, Any]:
 
             log_entry = ForecastAccuracyLog(
                 virus_typ=virus,
-                window_days=14,
+                window_days=max(int((cutoff - window_start).days), 1),
                 samples=n,
                 mae=round(mae, 3),
                 rmse=round(rmse, 3),
@@ -762,6 +842,7 @@ def compute_forecast_accuracy_task(self) -> Dict[str, Any]:
 
             results[virus] = {
                 "samples": n,
+                "window_start": window_start.isoformat(),
                 "mae": round(mae, 3),
                 "rmse": round(rmse, 3),
                 "mape": round(mape, 1),

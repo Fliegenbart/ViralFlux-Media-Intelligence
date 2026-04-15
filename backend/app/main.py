@@ -608,11 +608,15 @@ def _run_startup_morning_catchup_once(readiness_snapshot: dict[str, Any]) -> dic
 
             with get_db_context() as db:
                 from app.models.database import AuditLog
+                from app.services.data_ingest.tasks import run_full_ingestion_pipeline
+                from app.services.media.tasks import generate_marketing_opportunities_task
                 from app.services.ml.tasks import (
                     compute_forecast_accuracy_task,
                     refresh_live_forecasts_task,
                     refresh_market_backtests_task,
                     refresh_regional_operational_snapshots_task,
+                    train_regional_models_task,
+                    train_xgboost_model_task,
                 )
 
                 existing_run = (
@@ -640,25 +644,33 @@ def _run_startup_morning_catchup_once(readiness_snapshot: dict[str, Any]) -> dic
                     )
 
                 workflow = chain(
+                    run_full_ingestion_pipeline.si(),
+                    train_xgboost_model_task.si(),
+                    train_regional_models_task.si(),
                     refresh_live_forecasts_task.si(),
                     refresh_market_backtests_task.si(),
                     compute_forecast_accuracy_task.si(),
                     refresh_regional_operational_snapshots_task.si(),
+                    generate_marketing_opportunities_task.si(),
                 )
                 async_result = workflow.apply_async()
                 run_metadata = OperationalRunRecorder(db).record_event(
                     action=_STARTUP_MORNING_CATCHUP_ACTION,
                     status="success",
-                    summary="Queued startup morning catch-up workflow after late startup.",
+                    summary="Queued startup morning pipeline catch-up workflow after late startup.",
                     metadata={
                         "local_time": local_now.isoformat(),
                         "local_day": local_day_start.date().isoformat(),
                         "reasons": reasons,
                         "queued_tasks": [
+                            "run_full_ingestion_pipeline",
+                            "train_xgboost_model_task",
+                            "train_regional_models_task",
                             "refresh_live_forecasts_task",
                             "refresh_market_backtests_task",
                             "compute_forecast_accuracy_task",
                             "refresh_regional_operational_snapshots_task",
+                            "generate_marketing_opportunities_task",
                         ],
                         "celery_chain_id": str(getattr(async_result, "id", "") or ""),
                     },

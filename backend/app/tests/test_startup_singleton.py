@@ -342,6 +342,12 @@ class StartupSingletonTests(unittest.TestCase):
             "status": "success",
             "action": "STARTUP_MORNING_CATCHUP",
         }
+        ingestion_task = MagicMock()
+        ingestion_task.si.return_value = "full-ingestion"
+        xgboost_task = MagicMock()
+        xgboost_task.si.return_value = "xgboost-training"
+        regional_training_task = MagicMock()
+        regional_training_task.si.return_value = "regional-training"
         live_task = MagicMock()
         live_task.si.return_value = "live-refresh"
         backtest_task = MagicMock()
@@ -350,12 +356,18 @@ class StartupSingletonTests(unittest.TestCase):
         accuracy_task.si.return_value = "accuracy-refresh"
         snapshot_task = MagicMock()
         snapshot_task.si.return_value = "snapshot-refresh"
-        fake_tasks_module = SimpleNamespace(
+        opportunities_task = MagicMock()
+        opportunities_task.si.return_value = "marketing-opportunities"
+        fake_ml_tasks_module = SimpleNamespace(
+            train_xgboost_model_task=xgboost_task,
+            train_regional_models_task=regional_training_task,
             refresh_live_forecasts_task=live_task,
             refresh_market_backtests_task=backtest_task,
             compute_forecast_accuracy_task=accuracy_task,
             refresh_regional_operational_snapshots_task=snapshot_task,
         )
+        fake_ingest_tasks_module = SimpleNamespace(run_full_ingestion_pipeline=ingestion_task)
+        fake_media_tasks_module = SimpleNamespace(generate_marketing_opportunities_task=opportunities_task)
         chain_runner = MagicMock()
 
         with (
@@ -363,17 +375,28 @@ class StartupSingletonTests(unittest.TestCase):
             patch.object(main, "try_advisory_lock", return_value=_lock_result(True)),
             patch.object(main, "get_db_context", return_value=_db_context(db)),
             patch.object(main, "OperationalRunRecorder", return_value=recorder),
-            patch.dict("sys.modules", {"app.services.ml.tasks": fake_tasks_module}),
+            patch.dict(
+                "sys.modules",
+                {
+                    "app.services.data_ingest.tasks": fake_ingest_tasks_module,
+                    "app.services.media.tasks": fake_media_tasks_module,
+                    "app.services.ml.tasks": fake_ml_tasks_module,
+                },
+            ),
             patch.object(main, "chain", return_value=chain_runner, create=True) as chain_mock,
             patch.object(main, "log_event"),
         ):
             run_metadata = main._run_startup_morning_catchup_once(readiness_snapshot)
 
         chain_mock.assert_called_once_with(
+            "full-ingestion",
+            "xgboost-training",
+            "regional-training",
             "live-refresh",
             "backtest-refresh",
             "accuracy-refresh",
             "snapshot-refresh",
+            "marketing-opportunities",
         )
         chain_runner.apply_async.assert_called_once_with()
         self.assertEqual(run_metadata["run_id"], "catchup-1")
@@ -444,6 +467,12 @@ class StartupSingletonTests(unittest.TestCase):
             "status": "success",
             "action": "STARTUP_MORNING_CATCHUP",
         }
+        ingestion_task = MagicMock()
+        ingestion_task.si.return_value = "full-ingestion"
+        xgboost_task = MagicMock()
+        xgboost_task.si.return_value = "xgboost-training"
+        regional_training_task = MagicMock()
+        regional_training_task.si.return_value = "regional-training"
         live_task = MagicMock()
         live_task.si.return_value = "live-refresh"
         backtest_task = MagicMock()
@@ -452,12 +481,18 @@ class StartupSingletonTests(unittest.TestCase):
         accuracy_task.si.return_value = "accuracy-refresh"
         snapshot_task = MagicMock()
         snapshot_task.si.return_value = "snapshot-refresh"
-        fake_tasks_module = SimpleNamespace(
+        opportunities_task = MagicMock()
+        opportunities_task.si.return_value = "marketing-opportunities"
+        fake_ml_tasks_module = SimpleNamespace(
+            train_xgboost_model_task=xgboost_task,
+            train_regional_models_task=regional_training_task,
             refresh_live_forecasts_task=live_task,
             refresh_market_backtests_task=backtest_task,
             compute_forecast_accuracy_task=accuracy_task,
             refresh_regional_operational_snapshots_task=snapshot_task,
         )
+        fake_ingest_tasks_module = SimpleNamespace(run_full_ingestion_pipeline=ingestion_task)
+        fake_media_tasks_module = SimpleNamespace(generate_marketing_opportunities_task=opportunities_task)
         chain_runner = MagicMock()
 
         with (
@@ -466,12 +501,28 @@ class StartupSingletonTests(unittest.TestCase):
             patch.object(main, "get_db_context", return_value=_db_context(db)),
             patch.object(main, "OperationalRunRecorder", return_value=recorder),
             patch.object(main, "ProductionReadinessService") as readiness_service_cls,
-            patch.dict("sys.modules", {"app.services.ml.tasks": fake_tasks_module}),
+            patch.dict(
+                "sys.modules",
+                {
+                    "app.services.data_ingest.tasks": fake_ingest_tasks_module,
+                    "app.services.media.tasks": fake_media_tasks_module,
+                    "app.services.ml.tasks": fake_ml_tasks_module,
+                },
+            ),
             patch.object(main, "chain", return_value=chain_runner, create=True) as chain_mock,
             patch.object(main, "log_event"),
         ):
             readiness_service_cls.return_value.build_snapshot.return_value = detailed_snapshot
             run_metadata = main._run_startup_morning_catchup_once(readiness_snapshot)
 
-        chain_mock.assert_called_once()
+        chain_mock.assert_called_once_with(
+            "full-ingestion",
+            "xgboost-training",
+            "regional-training",
+            "live-refresh",
+            "backtest-refresh",
+            "accuracy-refresh",
+            "snapshot-refresh",
+            "marketing-opportunities",
+        )
         self.assertEqual(run_metadata["run_id"], "catchup-2")

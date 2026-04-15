@@ -410,3 +410,68 @@ class StartupSingletonTests(unittest.TestCase):
         self.assertEqual(run_metadata["status"], "skipped")
         chain_mock.assert_not_called()
         recorder_cls.assert_not_called()
+
+    def test_startup_morning_catchup_uses_detailed_snapshot_when_startup_snapshot_is_shallow(self) -> None:
+        readiness_snapshot = {
+            "status": "degraded",
+            "components": {
+                "forecast_monitoring": {
+                    "status": "warning",
+                    "items": [],
+                }
+            },
+        }
+        detailed_snapshot = {
+            "status": "degraded",
+            "components": {
+                "forecast_monitoring": {
+                    "status": "warning",
+                    "items": [
+                        {
+                            "virus_typ": "Influenza A",
+                            "status": "warning",
+                            "accuracy_freshness_status": "expired",
+                        }
+                    ],
+                }
+            },
+        }
+        db = MagicMock()
+        db.query.return_value.filter.return_value.first.return_value = None
+        recorder = MagicMock()
+        recorder.record_event.return_value = {
+            "run_id": "catchup-2",
+            "status": "success",
+            "action": "STARTUP_MORNING_CATCHUP",
+        }
+        live_task = MagicMock()
+        live_task.si.return_value = "live-refresh"
+        backtest_task = MagicMock()
+        backtest_task.si.return_value = "backtest-refresh"
+        accuracy_task = MagicMock()
+        accuracy_task.si.return_value = "accuracy-refresh"
+        snapshot_task = MagicMock()
+        snapshot_task.si.return_value = "snapshot-refresh"
+        fake_tasks_module = SimpleNamespace(
+            refresh_live_forecasts_task=live_task,
+            refresh_market_backtests_task=backtest_task,
+            compute_forecast_accuracy_task=accuracy_task,
+            refresh_regional_operational_snapshots_task=snapshot_task,
+        )
+        chain_runner = MagicMock()
+
+        with (
+            patch.object(main, "utc_now", return_value=datetime(2026, 4, 15, 8, 30, 0)),
+            patch.object(main, "try_advisory_lock", return_value=_lock_result(True)),
+            patch.object(main, "get_db_context", return_value=_db_context(db)),
+            patch.object(main, "OperationalRunRecorder", return_value=recorder),
+            patch.object(main, "ProductionReadinessService") as readiness_service_cls,
+            patch.dict("sys.modules", {"app.services.ml.tasks": fake_tasks_module}),
+            patch.object(main, "chain", return_value=chain_runner, create=True) as chain_mock,
+            patch.object(main, "log_event"),
+        ):
+            readiness_service_cls.return_value.build_snapshot.return_value = detailed_snapshot
+            run_metadata = main._run_startup_morning_catchup_once(readiness_snapshot)
+
+        chain_mock.assert_called_once()
+        self.assertEqual(run_metadata["run_id"], "catchup-2")

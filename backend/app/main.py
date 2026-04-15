@@ -582,6 +582,9 @@ def _run_startup_morning_catchup_once(readiness_snapshot: dict[str, Any]) -> dic
 
             reasons = _startup_morning_catchup_reasons(readiness_snapshot)
             if not reasons:
+                detailed_snapshot = ProductionReadinessService().build_snapshot()
+                reasons = _startup_morning_catchup_reasons(detailed_snapshot)
+            if not reasons:
                 summary = (
                     "Startup morning catch-up skipped because forecast monitoring did "
                     "not show stale morning-job signals."

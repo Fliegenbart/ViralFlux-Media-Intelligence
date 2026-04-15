@@ -3,8 +3,8 @@ import React from 'react';
 import CollapsibleSection from '../CollapsibleSection';
 import type { NowPageViewModel } from '../../features/media/useMediaData';
 import type { RegionalBacktestResponse, RegionalForecastResponse } from '../../types/media';
-import { FocusRegionOutlookPanel } from './BacktestVisuals';
 import { formatDateTime } from './cockpitUtils';
+import { DecisionForecastChart } from './DecisionForecastChart';
 import { buildSimplifiedDecisionModel } from './simplifiedDecisionWorkspace.utils';
 
 interface Props {
@@ -73,13 +73,13 @@ const SimplifiedDecisionWorkspace: React.FC<Props> = ({
       </section>
 
       <section className="decision-home__graph">
-        <FocusRegionOutlookPanel
-          minimal
-          title="Verlauf bisher und Prognose"
-          subtitle="Links siehst du den bisherigen Verlauf, rechts die naechsten 7 Tage."
+        <div className="decision-home__section-head">
+          <h2 className="decision-home__section-title">Verlauf bisher und Prognose</h2>
+          <p className="decision-home__section-copy">Links siehst du den bisherigen Verlauf, rechts die naechsten 7 Tage.</p>
+        </div>
+        <DecisionForecastChart
           prediction={model.focusPrediction}
           backtest={focusRegionBacktest}
-          loading={focusRegionBacktestLoading}
           horizonDays={horizonDays}
         />
       </section>

@@ -9,12 +9,13 @@ jest.mock('./cockpitUtils', () => ({
   formatDateTime: (value?: string | null) => value || '-',
 }));
 
-jest.mock('./BacktestVisuals', () => ({
+jest.mock('./DecisionForecastChart', () => ({
   __esModule: true,
-  FocusRegionOutlookPanel: ({ title, subtitle }: { title?: string; subtitle?: string }) => (
+  DecisionForecastChart: () => (
     <div>
-      <div>{title || 'Verlauf bisher und Prognose'}</div>
-      {subtitle ? <div>{subtitle}</div> : null}
+      <div>DecisionForecastChart</div>
+      <div>Vergangenheit</div>
+      <div>Naechste 7 Tage</div>
     </div>
   ),
 }));
@@ -101,6 +102,7 @@ describe('SimplifiedDecisionWorkspace', () => {
     expect(screen.getByText('Diese Woche Budget in Sachsen erhoehen.')).toBeInTheDocument();
     expect(screen.getByText('Verlauf bisher und Prognose')).toBeInTheDocument();
     expect(screen.getByText('Links siehst du den bisherigen Verlauf, rechts die naechsten 7 Tage.')).toBeInTheDocument();
+    expect(screen.getByText('DecisionForecastChart')).toBeInTheDocument();
     expect(screen.getByText('Region')).toBeInTheDocument();
     expect(screen.getByText('Trend')).toBeInTheDocument();
     expect(screen.getByText('Vertrauen')).toBeInTheDocument();

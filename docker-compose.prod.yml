@@ -115,6 +115,7 @@ services:
       dockerfile: ../docker/Dockerfile.backend
     container_name: viralflux_celery_worker
     restart: unless-stopped
+    gpus: all
     command: celery -A app.core.celery_app worker --loglevel=info --concurrency=2
     stop_grace_period: 60s
     healthcheck:
@@ -154,6 +155,7 @@ services:
       - DB_AUTO_CREATE_SCHEMA=false
       - DB_ALLOW_RUNTIME_SCHEMA_UPDATES=false
       - CORE_PRODUCTION_SCOPES=${CORE_PRODUCTION_SCOPES:-RSV A:h7}
+      - REGIONAL_XGBOOST_DEVICE=${REGIONAL_XGBOOST_DEVICE:-cpu}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:

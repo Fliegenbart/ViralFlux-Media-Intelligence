@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.services.ml.xgboost_runtime import resolve_xgboost_runtime_config
+
 
 def build_direct_training_panel_from_frame(
     service,
@@ -150,6 +152,10 @@ def fit_xgboost_meta_from_panel(
     X = np_module.nan_to_num(X, nan=0.0, posinf=0.0, neginf=0.0)
 
     cfg = service._resolve_xgb_quantile_config(model_config)
+    cfg = {
+        name: resolve_xgboost_runtime_config(params)
+        for name, params in cfg.items()
+    }
 
     model_median = XGBRegressor(**cfg["median"])
     model_median.fit(X, y)
@@ -226,6 +232,10 @@ def fit_xgboost_meta(
     X = np_module.nan_to_num(X, nan=0.0, posinf=0.0, neginf=0.0)
 
     cfg = service._resolve_xgb_quantile_config(model_config)
+    cfg = {
+        name: resolve_xgboost_runtime_config(params)
+        for name, params in cfg.items()
+    }
 
     model_median = XGBRegressor(**cfg["median"])
     model_median.fit(X, y)

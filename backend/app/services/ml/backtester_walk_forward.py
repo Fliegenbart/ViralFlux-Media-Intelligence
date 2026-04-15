@@ -12,6 +12,7 @@ from app.services.ml.forecast_contracts import (
     HEURISTIC_EVENT_SCORE_SOURCE,
     heuristic_event_score_from_forecast,
 )
+from app.services.ml.xgboost_runtime import resolve_xgboost_runtime_config
 
 
 def seasonal_naive_baseline(train_df: pd.DataFrame, target_week: int, target_month: int) -> float:
@@ -81,16 +82,19 @@ def run_walk_forward_market_backtest(
 
         n_train = len(X_train)
         xgb_fold_count += 1
-        model = XGBRegressor(
-            n_estimators=min(200, max(50, n_train * 2)),
-            max_depth=4 if n_train >= 60 else 3,
-            learning_rate=0.05,
-            subsample=0.8,
-            colsample_bytree=0.8,
-            min_child_weight=3,
-            random_state=42,
-            verbosity=0,
+        model_config = resolve_xgboost_runtime_config(
+            {
+                "n_estimators": min(200, max(50, n_train * 2)),
+                "max_depth": 4 if n_train >= 60 else 3,
+                "learning_rate": 0.05,
+                "subsample": 0.8,
+                "colsample_bytree": 0.8,
+                "min_child_weight": 3,
+                "random_state": 42,
+                "verbosity": 0,
+            }
         )
+        model = XGBRegressor(**model_config)
         model.fit(X_train, y_train)
         importance_accumulator.append(model.feature_importances_)
 

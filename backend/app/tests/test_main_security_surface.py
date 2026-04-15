@@ -122,6 +122,10 @@ class MainSecuritySurfaceTests(unittest.TestCase):
         self.assertEqual(payload["blocker_count"], 0)
         self.assertEqual(payload["warning_count"], 2)
         self.assertIn("status_reasons", payload)
+        self.assertEqual(
+            payload["status_reasons"][0],
+            "Influenza A h7: Core scope quality gate is not at GO.",
+        )
         self.assertIn("Influenza A h7: Core scope quality gate is not at GO.", payload["status_reasons"])
         self.assertIn(
             "Influenza A: forecast readiness WATCH; accuracy freshness expired.",

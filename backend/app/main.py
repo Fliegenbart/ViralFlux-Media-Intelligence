@@ -165,6 +165,12 @@ def _public_warning_reasons(snapshot: dict[str, Any]) -> tuple[int, list[str]]:
         for name, component in components.items()
         if str((component or {}).get("status") or "").strip().lower() in {"warning", "unknown"}
     ]
+    component_priority = {
+        "core_regional_operational": 0,
+        "regional_operational": 1,
+        "forecast_monitoring": 2,
+    }
+    warning_components.sort(key=lambda item: component_priority.get(item[0], 99))
 
     reasons: list[str] = []
     for name, component in warning_components:
